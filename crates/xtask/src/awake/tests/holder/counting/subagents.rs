@@ -4,8 +4,8 @@
 
 use super::{
     FakeClaude, INTERRUPTED, REPLY, TURNED_DOWN, append, asked, calling, claim_file, ended,
-    holding, launched, long_ago, next_reading, planted, released, result, scratch, session, start,
-    stop_hooks_ran, stopped, subagent_transcript, transcript,
+    holding, launched, long_ago, marked, next_reading, planted, released, result, scratch, session,
+    start, stop_hooks_ran, stopped, subagent_transcript, transcript,
 };
 use crate::awake::claim::State;
 use crate::awake::{Mark, apply};
@@ -30,24 +30,12 @@ fn a_subagent_s_call_runs_until_its_stop_is_written() {
         &subagent_transcript(&dir, "a1", "toolu_ag"),
         &[&calling("mcp__docs__search", "toolu_x")],
     );
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
-    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("the session stops");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
+    marked(&dir, &claude.hook_with(&path), Mark::Idle);
     stop_hooks_ran(&path);
     let agent = || long_ago(claude.agent_hook_with("a1", &own));
     apply(&dir, &claim_file("s~a1"), &agent(), Mark::Working).expect("a subagent");
-    apply(
-        &dir,
-        &claim_file("s"),
-        &agent(),
-        start("toolu_x", "mcp__docs__search"),
-    )
-    .expect("its call");
+    marked(&dir, &agent(), start("toolu_x", "mcp__docs__search"));
     assert_eq!(
         next_reading(&dir),
         holding(),
@@ -57,7 +45,7 @@ fn a_subagent_s_call_runs_until_its_stop_is_written() {
     // The notice starts a turn of the session's, which stops before the
     // holder reads.
     append(&path, &[&stopped("a1", crate::awake::now_ms())]);
-    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("the turn stops");
+    marked(&dir, &claude.hook_with(&path), Mark::Idle);
     stop_hooks_ran(&path);
     assert_eq!(
         next_reading(&dir),
@@ -76,13 +64,7 @@ fn a_subagent_s_call_runs_until_its_stop_is_written() {
 
     let again = || claude.agent_hook_with("a1", &own);
     apply(&dir, &claim_file("s~a1"), &again(), Mark::Working).expect("sent on");
-    apply(
-        &dir,
-        &claim_file("s"),
-        &again(),
-        start("toolu_y", "mcp__docs__search"),
-    )
-    .expect("its next call");
+    marked(&dir, &again(), start("toolu_y", "mcp__docs__search"));
     assert_eq!(
         next_reading(&dir),
         holding(),
@@ -103,30 +85,12 @@ fn a_foreground_subagent_stops_with_the_result_of_its_call() {
         &subagent_transcript(&dir, "a1", "toolu_ag"),
         &[&calling("mcp__docs__search", "toolu_x")],
     );
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook(),
-        start("toolu_ag", "Agent"),
-    )
-    .expect("its start");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
+    marked(&dir, &claude.hook(), start("toolu_ag", "Agent"));
     let agent = || claude.agent_hook_with("a1", &own);
     apply(&dir, &claim_file("s~a1"), &agent(), Mark::Working).expect("a subagent");
-    apply(
-        &dir,
-        &claim_file("s"),
-        &agent(),
-        start("toolu_x", "mcp__docs__search"),
-    )
-    .expect("its call");
-    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("the session stops");
+    marked(&dir, &agent(), start("toolu_x", "mcp__docs__search"));
+    marked(&dir, &claude.hook_with(&path), Mark::Idle);
     stop_hooks_ran(&path);
     append(
         &path,
@@ -161,14 +125,8 @@ fn a_subagent_that_writes_nothing_of_its_own_stops_at_its_call() {
     let dir = scratch("agent-unwritten");
     let claude = FakeClaude::start(&dir);
     let path = transcript(&dir.join("s.jsonl"), &[REPLY]);
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
-    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("the session stops");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
+    marked(&dir, &claude.hook_with(&path), Mark::Idle);
     stop_hooks_ran(&path);
     let unwritten = dir.join("s").join("subagents").join("agent-a9.jsonl");
     let agent = || claude.agent_hook_with("a9", &unwritten);
@@ -178,13 +136,7 @@ fn a_subagent_that_writes_nothing_of_its_own_stops_at_its_call() {
         holding(),
         "a subagent starting, before anything of its own is written, ran unheld"
     );
-    apply(
-        &dir,
-        &claim_file("s"),
-        &agent(),
-        start("toolu_x", "ToolSearch"),
-    )
-    .expect("its call");
+    marked(&dir, &agent(), start("toolu_x", "ToolSearch"));
     assert_eq!(
         next_reading(&dir),
         released(),
@@ -194,7 +146,7 @@ fn a_subagent_that_writes_nothing_of_its_own_stops_at_its_call() {
     assert_eq!(session(&dir).calls, [], "its call was not ended");
     // Its call's end hook writes its claim again, working, with no call.
     apply(&dir, &claim_file("s~a9"), &agent(), Mark::Working).expect("its end hook");
-    apply(&dir, &claim_file("s"), &agent(), Mark::ToolEnd("toolu_x")).expect("its call's end");
+    marked(&dir, &agent(), Mark::ToolEnd("toolu_x"));
     assert_eq!(
         next_reading(&dir),
         released(),
@@ -208,13 +160,7 @@ fn a_subagent_that_writes_nothing_of_its_own_stops_at_its_call() {
     let unread = subagent_transcript(&dir, "a1", "toolu_ag");
     let agent = || claude.agent_hook_with("a1", &unread);
     apply(&dir, &claim_file("s~a1"), &agent(), Mark::Working).expect("the Agent tool's");
-    apply(
-        &dir,
-        &claim_file("s"),
-        &agent(),
-        start("toolu_y", "mcp__docs__search"),
-    )
-    .expect("its call");
+    marked(&dir, &agent(), start("toolu_y", "mcp__docs__search"));
     assert_eq!(
         next_reading(&dir),
         holding(),
@@ -230,20 +176,8 @@ fn a_subagent_of_a_session_that_keeps_no_transcript_runs_its_call() {
     let dir = scratch("agent-unkept");
     let claude = FakeClaude::start(&dir);
     let unkept = dir.join("s.jsonl");
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&unkept),
-        Mark::Prompt,
-    )
-    .expect("claimed");
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&unkept),
-        Mark::Idle,
-    )
-    .expect("the session stops");
+    marked(&dir, &claude.hook_with(&unkept), Mark::Prompt);
+    marked(&dir, &claude.hook_with(&unkept), Mark::Idle);
     let agent = || {
         claude.agent_hook_with(
             "a1",
@@ -251,13 +185,7 @@ fn a_subagent_of_a_session_that_keeps_no_transcript_runs_its_call() {
         )
     };
     apply(&dir, &claim_file("s~a1"), &agent(), Mark::Working).expect("a subagent");
-    apply(
-        &dir,
-        &claim_file("s"),
-        &agent(),
-        start("toolu_x", "mcp__docs__search"),
-    )
-    .expect("its call");
+    marked(&dir, &agent(), start("toolu_x", "mcp__docs__search"));
     assert_eq!(
         next_reading(&dir),
         holding(),
@@ -273,20 +201,8 @@ fn an_idle_subagent_of_a_compatible_build_takes_its_call_off_this_holder() {
     let dir = scratch("agent-elsewhere");
     let claude = FakeClaude::start(&dir);
     let path = transcript(&dir.join("s.jsonl"), &[&calling("Agent", "toolu_ag")]);
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook(),
-        start("toolu_ag", "Agent"),
-    )
-    .expect("its start");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
+    marked(&dir, &claude.hook(), start("toolu_ag", "Agent"));
     assert_eq!(
         next_reading(&dir),
         holding(),
@@ -323,24 +239,12 @@ fn a_subagent_s_command_holds_the_machine_apart_from_its_session() {
         &[&calling("AskUserQuestion", "toolu_q")],
     );
     let own = transcript(&dir.join("agent-a1.jsonl"), &[&calling("Bash", "toolu_b")]);
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook(),
-        start("toolu_q", "AskUserQuestion"),
-    )
-    .expect("a call");
-    apply(&dir, &claim_file("s"), &claude.hook(), asked("toolu_q")).expect("asked");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
+    marked(&dir, &claude.hook(), start("toolu_q", "AskUserQuestion"));
+    marked(&dir, &claude.hook(), asked("toolu_q"));
     let agent = || claude.agent_hook_with("a1", &own);
     apply(&dir, &claim_file("s~a1"), &agent(), Mark::Working).expect("a subagent");
-    apply(&dir, &claim_file("s"), &agent(), start("toolu_b", "Bash")).expect("its command");
+    marked(&dir, &agent(), start("toolu_b", "Bash"));
     assert_eq!(
         next_reading(&dir),
         holding(),
@@ -352,7 +256,7 @@ fn a_subagent_s_command_holds_the_machine_apart_from_its_session() {
     // end's.
     let later = claude.agent_hook_with("a1", &own);
     apply(&dir, &claim_file("s"), &later, Mark::ToolEnd("toolu_b")).expect("to the background");
-    apply(&dir, &claim_file("s"), &later, Mark::CallsEnd).expect("the subagent stops");
+    marked(&dir, &later, Mark::CallsEnd);
     apply(&dir, &claim_file("s~a1"), &later, Mark::Gone).expect("its claim goes");
     let standing = session(&dir);
     assert_eq!(
@@ -384,20 +288,8 @@ fn a_prompt_a_subagent_raised_holds_nothing_until_its_answer() {
     let claude = FakeClaude::start(&dir);
     let path = transcript(&dir.join("s.jsonl"), &[&calling("Agent", "toolu_ag")]);
     let own = transcript(&dir.join("agent-a1.jsonl"), &[&calling("Bash", "toolu_b")]);
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook(),
-        start("toolu_ag", "Agent"),
-    )
-    .expect("the subagent");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
+    marked(&dir, &claude.hook(), start("toolu_ag", "Agent"));
     assert_eq!(
         next_reading(&dir),
         holding(),
@@ -405,7 +297,7 @@ fn a_prompt_a_subagent_raised_holds_nothing_until_its_answer() {
     );
     let agent = || claude.agent_hook_with("a1", &own);
     apply(&dir, &claim_file("s~a1"), &agent(), Mark::Working).expect("its claim");
-    apply(&dir, &claim_file("s"), &agent(), start("toolu_b", "Bash")).expect("its call");
+    marked(&dir, &agent(), start("toolu_b", "Bash"));
     assert_eq!(next_reading(&dir), holding());
 
     let prompt = Mark::Asked {
@@ -413,7 +305,7 @@ fn a_prompt_a_subagent_raised_holds_nothing_until_its_answer() {
         name: "Bash",
         input: "i",
     };
-    apply(&dir, &claim_file("s"), &agent(), prompt).expect("asked");
+    marked(&dir, &agent(), prompt);
     assert_eq!(
         next_reading(&dir),
         released(),
@@ -435,7 +327,7 @@ fn a_subagent_s_transcript_is_not_read_for_an_interruption() {
     let dir = scratch("agent-interrupted");
     let claude = FakeClaude::start(&dir);
     let own = transcript(&dir.join("agent-a1.jsonl"), &[TURNED_DOWN, INTERRUPTED]);
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Idle).expect("the session stopped");
+    marked(&dir, &claude.hook(), Mark::Idle);
     let agent = claude.agent_hook_with("a1", &own);
     apply(&dir, &claim_file("s~a1"), &agent, Mark::Working).expect("a subagent");
     assert_eq!(

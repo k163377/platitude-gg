@@ -2,7 +2,7 @@
 //! request replaced by a recorder; the tests that start a holder process
 //! of their own exercise the real API, as the normal holder tests do.
 
-use super::{FakeClaude, claim_file, scratch};
+use super::{FakeClaude, claim_file, marked, scratch};
 
 /// A holder process a test started itself, ended with the test.
 struct StartedHolder(std::process::Child);
@@ -84,7 +84,7 @@ fn compatible_holders_apply_and_clear_real_windows_requests_together() {
     let dir = scratch("native-requests");
     let claude = FakeClaude::start(&dir);
     let since = crate::awake::now_ms();
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Prompt).expect("a turn starts");
+    marked(&dir, &claude.hook(), Mark::Prompt);
     let _other = other_build(&dir);
     for revision in [crate::awake::REVISION, crate::awake::REVISION + 1] {
         assert_eq!(
@@ -974,12 +974,10 @@ fn a_build_in_use_or_a_stale_holder_keeps_a_holder_standing() {
 /// go, and the other build's holder reads on.
 #[test]
 fn a_started_holder_of_a_quiet_build_quits() {
-    use crate::awake::{Mark, apply};
+    use crate::awake::Mark;
     let (dir, claude) = working("retire-started");
     let revision = crate::awake::REVISION;
-    let pid = apply(&dir, &claim_file("s"), &claude.hook(), Mark::Working)
-        .expect("a hook")
-        .expect("the holder it started");
+    let pid = marked(&dir, &claude.hook(), Mark::Working).expect("the holder it started");
     assert_eq!(super::next_reading(&dir), super::holding());
     let since = crate::awake::now_ms();
     let _other = other_build(&dir);
@@ -1014,11 +1012,11 @@ fn a_started_holder_of_a_quiet_build_quits() {
 /// a session still runs it.
 #[test]
 fn a_hook_stamps_its_build_as_heard() {
-    use crate::awake::{Mark, apply};
+    use crate::awake::Mark;
     let dir = scratch("heard");
     let claude = FakeClaude::start(&dir);
     let before = crate::awake::now_ms();
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Prompt).expect("a turn starts");
+    marked(&dir, &claude.hook(), Mark::Prompt);
     let said: u64 = std::fs::read_to_string(dir.join(format!("hooks-r{}", crate::awake::REVISION)))
         .expect("the stamp")
         .trim()

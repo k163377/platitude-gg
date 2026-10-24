@@ -1,7 +1,7 @@
 //! Desktop log fixtures preserve the observed 2026-09-29 grammar; IDs are
 //! anonymized. Tests own their log files and never read the user's logs.
 
-use super::{FakeClaude, claim_file, scratch};
+use super::{FakeClaude, claim_file, marked, scratch};
 
 const FIXTURE: &str = r#"
 $stamp='2026-09-29 18:58:35'
@@ -396,18 +396,16 @@ fn desktop_file_events_drive_real_windows_requests_without_changing_claims() {
     std::fs::remove_file(dir.join(crate::awake::DESKTOP_OFF)).expect("enable supplement");
     let claude = FakeClaude::start(&dir);
     let started = crate::awake::now_ms();
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Prompt).expect("a turn");
-    apply(
+    marked(&dir, &claude.hook(), Mark::Prompt);
+    marked(
         &dir,
-        &claim_file("s"),
         &claude.hook(),
         Mark::ToolStart {
             id: "browser1",
             name: "mcp__Claude_Browser__navigate",
             input: "fixture",
         },
-    )
-    .expect("the browser call");
+    );
     let revision = crate::awake::REVISION;
     observed(&dir, revision, "holding", started);
     let before = std::fs::read_to_string(dir.join(claim_file("s"))).unwrap();
@@ -435,9 +433,9 @@ fn desktop_file_events_drive_real_windows_requests_without_changing_claims() {
         before
     );
     let since = crate::awake::now_ms();
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Idle).expect("Stop");
+    marked(&dir, &claude.hook(), Mark::Idle);
     assert_eq!(observed(&dir, revision, "released", since) & 3, 1);
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Prompt).expect("a new turn");
+    marked(&dir, &claude.hook(), Mark::Prompt);
     apply(
         &dir,
         &claim_file("s"),
@@ -449,17 +447,15 @@ fn desktop_file_events_drive_real_windows_requests_without_changing_claims() {
         },
     )
     .expect("childless tool starts");
-    apply(
+    marked(
         &dir,
-        &claim_file("s"),
         &claude.hook(),
         Mark::Asked {
             id: Some("fetch1"),
             name: "WebFetch",
             input: "fixture",
         },
-    )
-    .expect("permission waits");
+    );
     assert_eq!(super::next_reading(&dir), super::released());
     let stamp = super::powershell("Get-Date -Format 'yyyy-MM-dd HH:mm:ss'")
         .trim()

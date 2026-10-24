@@ -4,8 +4,8 @@
 //! long a claim with no word counts.
 
 use super::{
-    FakeClaude, REPLY, alive, append, claim_file, ended, holding, next_reading, notice, planted,
-    released, scratch, session, stamped, stop_hooks_ran, summary, told, transcript,
+    FakeClaude, REPLY, alive, append, claim_file, ended, holding, marked, next_reading, notice,
+    planted, released, scratch, session, stamped, stop_hooks_ran, summary, told, transcript,
 };
 use crate::awake::claim::{State, Writer, digest};
 use crate::awake::{Mark, apply};
@@ -95,13 +95,7 @@ fn a_transcript_whose_path_runs_past_ascii_is_read() {
     let dir = scratch("wide-path");
     let claude = FakeClaude::start(&dir);
     let path = transcript(&dir.join("会話.jsonl"), &[REPLY, INTERRUPTED]);
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
     assert_eq!(
         next_reading(&dir),
         released(),
@@ -125,13 +119,7 @@ fn a_turn_silent_past_its_ttl_holds_nothing() {
     let dir = scratch("silent");
     let claude = FakeClaude::start(&dir);
     let path = transcript(&dir.join("s.jsonl"), &[REPLY]);
-    apply(
-        &dir,
-        &claim_file("s"),
-        &long_ago(claude.hook_with(&path)),
-        Mark::Prompt,
-    )
-    .expect("claimed");
+    marked(&dir, &long_ago(claude.hook_with(&path)), Mark::Prompt);
     assert_eq!(
         next_reading(&dir),
         released(),
@@ -156,30 +144,18 @@ fn sessions_and_a_subagent_hold_while_any_works() {
             &launched("toolu_ag", "a1", crate::awake::now_ms()),
         ],
     );
-    apply(
-        &dir,
-        &claim_file("s"),
-        &asking.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
+    marked(&dir, &asking.hook_with(&path), Mark::Prompt);
     for (id, name) in [("toolu_q", "AskUserQuestion"), ("toolu_ag", "Agent")] {
-        apply(&dir, &claim_file("s"), &asking.hook(), start(id, name)).expect("a call");
+        marked(&dir, &asking.hook(), start(id, name));
     }
-    apply(&dir, &claim_file("s"), &asking.hook(), asked("toolu_q")).expect("the question");
+    marked(&dir, &asking.hook(), asked("toolu_q"));
     let own = transcript(
         &subagent_transcript(&dir, "a1", "toolu_ag"),
         &[&calling("mcp__docs__search", "toolu_x")],
     );
     let agent = || asking.agent_hook_with("a1", &own);
     apply(&dir, &claim_file("s~a1"), &agent(), Mark::Working).expect("the subagent");
-    apply(
-        &dir,
-        &claim_file("s"),
-        &agent(),
-        start("toolu_x", "mcp__docs__search"),
-    )
-    .expect("its call");
+    marked(&dir, &agent(), start("toolu_x", "mcp__docs__search"));
 
     let other = transcript(&dir.join("t.jsonl"), &[&calling("Bash", "toolu_b")]);
     let hook = || stopped_one.hook_with(&other);
@@ -219,20 +195,8 @@ fn a_shell_call_whose_end_only_its_result_shows_ends_there() {
     let dir = scratch("result-end");
     let mut claude = FakeClaude::start(&dir);
     let path = transcript(&dir.join("s.jsonl"), &[&calling("Bash", "toolu_b")]);
-    apply(
-        &dir,
-        &claim_file("s"),
-        &long_ago(claude.hook_with(&path)),
-        Mark::Prompt,
-    )
-    .expect("claimed");
-    apply(
-        &dir,
-        &claim_file("s"),
-        &long_ago(claude.hook()),
-        start("toolu_b", "Bash"),
-    )
-    .expect("its call");
+    marked(&dir, &long_ago(claude.hook_with(&path)), Mark::Prompt);
+    marked(&dir, &long_ago(claude.hook()), start("toolu_b", "Bash"));
     append(&path, &[&result("toolu_b")]);
     let later = claude.run();
     assert_eq!(
@@ -264,29 +228,23 @@ fn a_command_sent_to_the_background_holds_until_it_ends() {
     let dir = scratch("backgrounded");
     let mut claude = FakeClaude::start(&dir);
     let server = claude.run();
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Prompt).expect("claimed");
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Idle).expect("stopped");
+    marked(&dir, &claude.hook(), Mark::Prompt);
+    marked(&dir, &claude.hook(), Mark::Idle);
     assert_eq!(
         next_reading(&dir),
         released(),
         "a server the session kept held the machine"
     );
 
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Prompt).expect("a prompt");
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook(),
-        start("toolu_long", "Bash"),
-    )
-    .expect("a command");
+    marked(&dir, &claude.hook(), Mark::Prompt);
+    marked(&dir, &claude.hook(), start("toolu_long", "Bash"));
     let command = claude.run();
     let later = Writer {
         now_ms: crate::awake::now_ms() + IN_THE_FOREGROUND_MS,
         ..claude.hook()
     };
     apply(&dir, &claim_file("s"), &later, Mark::ToolEnd("toolu_long")).expect("to the background");
-    apply(&dir, &claim_file("s"), &later, Mark::Idle).expect("the turn stops");
+    marked(&dir, &later, Mark::Idle);
     assert_eq!(
         next_reading(&dir),
         holding(),
@@ -320,26 +278,14 @@ fn the_command_a_person_lets_through_holds_the_machine() {
     let dir = scratch("let-through");
     let mut claude = FakeClaude::start(&dir);
     let path = transcript(&dir.join("s.jsonl"), &[&calling("Bash", "toolu_a")]);
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook(),
-        start("toolu_a", "Bash"),
-    )
-    .expect("the call");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
+    marked(&dir, &claude.hook(), start("toolu_a", "Bash"));
     let prompt = Mark::Asked {
         id: None,
         name: "Bash",
         input: "i",
     };
-    apply(&dir, &claim_file("s"), &claude.hook(), prompt).expect("asked");
+    marked(&dir, &claude.hook(), prompt);
     assert_eq!(
         next_reading(&dir),
         released(),
@@ -354,14 +300,8 @@ fn the_command_a_person_lets_through_holds_the_machine() {
     );
 
     ended(command);
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook(),
-        Mark::ToolEnd("toolu_a"),
-    )
-    .expect("its end");
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Idle).expect("stopped");
+    marked(&dir, &claude.hook(), Mark::ToolEnd("toolu_a"));
+    marked(&dir, &claude.hook(), Mark::Idle);
     stop_hooks_ran(&path);
     assert_eq!(next_reading(&dir), released());
 }
@@ -384,36 +324,24 @@ fn a_call_a_person_is_asked_about_holds_nothing_whatever_else_ends() {
             &calling("Bash", "toolu_bash"),
         ],
     );
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
     for (id, name) in [
         ("toolu_read", "Read"),
         ("toolu_mcp", "mcp__docs__search"),
         ("toolu_fetch", "WebFetch"),
         ("toolu_bash", "Bash"),
     ] {
-        apply(&dir, &claim_file("s"), &claude.hook(), start(id, name)).expect("a call");
+        marked(&dir, &claude.hook(), start(id, name));
     }
-    apply(&dir, &claim_file("s"), &claude.hook(), asked("toolu_read")).expect("asked");
-    apply(&dir, &claim_file("s"), &claude.hook(), asked("toolu_bash")).expect("asked");
+    marked(&dir, &claude.hook(), asked("toolu_read"));
+    marked(&dir, &claude.hook(), asked("toolu_bash"));
     assert_eq!(
         next_reading(&dir),
         holding(),
         "the holder let go while calls ran beside the questions"
     );
 
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook(),
-        Mark::ToolEnd("toolu_mcp"),
-    )
-    .expect("its end");
+    marked(&dir, &claude.hook(), Mark::ToolEnd("toolu_mcp"));
     assert_eq!(
         next_reading(&dir),
         holding(),
@@ -451,19 +379,13 @@ fn a_prompt_on_a_call_nothing_shows_holds_nothing() {
         &dir.join("s.jsonl"),
         &[&calling("mcp__docs__read", "toolu_m")],
     );
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
     let call = Mark::ToolStart {
         id: "toolu_m",
         name: "mcp__docs__read",
         input: &input,
     };
-    apply(&dir, &claim_file("s"), &claude.hook(), call).expect("the call");
+    marked(&dir, &claude.hook(), call);
     assert_eq!(next_reading(&dir), holding(), "a running call ran unheld");
 
     let prompt = Mark::Asked {
@@ -471,7 +393,7 @@ fn a_prompt_on_a_call_nothing_shows_holds_nothing() {
         name: "mcp__docs__read",
         input: &input,
     };
-    apply(&dir, &claim_file("s"), &claude.hook(), prompt).expect("asked");
+    marked(&dir, &claude.hook(), prompt);
     assert_eq!(
         next_reading(&dir),
         released(),
@@ -496,60 +418,42 @@ fn requests_for_input_hold_up_as_many_calls_as_they_number() {
             &calling("mcp__docs__delete", "toolu_c"),
         ],
     );
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
     for (id, name) in [
         ("toolu_a", "mcp__docs__write"),
         ("toolu_b", "mcp__docs__write"),
         ("toolu_c", "mcp__docs__delete"),
     ] {
-        apply(&dir, &claim_file("s"), &claude.hook(), start(id, name)).expect("a call");
+        marked(&dir, &claude.hook(), start(id, name));
     }
-    apply(&dir, &claim_file("s"), &claude.hook(), asked("toolu_c")).expect("a prompt");
+    marked(&dir, &claude.hook(), asked("toolu_c"));
     let elicited = |id, pending| Mark::Elicited {
         server: "docs",
         id: Some(id),
         pending,
     };
-    apply(&dir, &claim_file("s"), &claude.hook(), elicited("e1", true)).expect("a request");
+    marked(&dir, &claude.hook(), elicited("e1", true));
     assert_eq!(
         next_reading(&dir),
         holding(),
         "a call left over on the server ran unheld"
     );
 
-    apply(&dir, &claim_file("s"), &claude.hook(), elicited("e2", true)).expect("a request");
+    marked(&dir, &claude.hook(), elicited("e2", true));
     assert_eq!(
         next_reading(&dir),
         released(),
         "the requests held the machine with every call waiting on the person"
     );
 
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook(),
-        elicited("e1", false),
-    )
-    .expect("an answer");
+    marked(&dir, &claude.hook(), elicited("e1", false));
     assert_eq!(
         next_reading(&dir),
         holding(),
         "the call after its answer ran unheld"
     );
 
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook(),
-        Mark::ToolEnd("toolu_a"),
-    )
-    .expect("its end");
+    marked(&dir, &claude.hook(), Mark::ToolEnd("toolu_a"));
     assert_eq!(
         next_reading(&dir),
         released(),
@@ -573,21 +477,9 @@ fn a_tool_turned_down_at_a_prompt_takes_nothing_back() {
         &dir.join("s.jsonl"),
         &[&calling("mcp__docs__read", "toolu_a")],
     );
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook(),
-        start("toolu_a", "mcp__docs__read"),
-    )
-    .expect("a call");
-    apply(&dir, &claim_file("s"), &claude.hook(), asked("toolu_a")).expect("asked");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
+    marked(&dir, &claude.hook(), start("toolu_a", "mcp__docs__read"));
+    marked(&dir, &claude.hook(), asked("toolu_a"));
     assert_eq!(next_reading(&dir), released());
     append(&path, &[TURNED_DOWN, INTERRUPTED, BOOKKEEPING]);
     assert_eq!(
@@ -607,13 +499,7 @@ fn a_turn_the_user_interrupted_lets_go() {
     let dir = scratch("interrupted");
     let claude = FakeClaude::start(&dir);
     let path = transcript(&dir.join("s.jsonl"), &[&calling("Grep", "toolu_r"), QUOTED]);
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
     assert_eq!(
         next_reading(&dir),
         holding(),
@@ -647,14 +533,8 @@ fn a_notice_starts_a_turn_held_until_its_stop() {
     let claude = FakeClaude::start(&dir);
     let before = crate::awake::now_ms() - 5_000;
     let path = transcript(&dir.join("s.jsonl"), &[&notice(before)]);
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
-    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("stopped");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
+    marked(&dir, &claude.hook_with(&path), Mark::Idle);
     stop_hooks_ran(&path);
     assert_eq!(
         next_reading(&dir),
@@ -679,7 +559,7 @@ fn a_notice_starts_a_turn_held_until_its_stop() {
         "the claim was not rewritten as of the notice"
     );
 
-    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("the turn stops");
+    marked(&dir, &claude.hook_with(&path), Mark::Idle);
     stop_hooks_ran(&path);
     assert_eq!(
         next_reading(&dir),
@@ -723,14 +603,8 @@ fn a_stopped_session_counts_until_its_stop_hooks_have_run() {
     let claude = FakeClaude::start(&dir);
     let earlier = crate::awake::now_ms() - 5_000;
     let path = transcript(&dir.join("s.jsonl"), &[REPLY, &summary(earlier)]);
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
-    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("stopped");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
+    marked(&dir, &claude.hook_with(&path), Mark::Idle);
     assert_eq!(
         next_reading(&dir),
         holding(),
@@ -743,14 +617,8 @@ fn a_stopped_session_counts_until_its_stop_hooks_have_run() {
         "the turn held the machine once its Stop hooks had run"
     );
 
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("the next turn");
-    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("stopped");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
+    marked(&dir, &claude.hook_with(&path), Mark::Idle);
     assert_eq!(next_reading(&dir), holding());
     let ran = crate::awake::now_ms();
     append(&path, &[&queued(ran), &summary(ran)]);
@@ -778,7 +646,7 @@ fn a_stopped_session_counts_until_its_stop_hooks_have_run() {
         now_ms: stopped_at,
         ..claude.hook_with(&path)
     };
-    apply(&bound, &claim_file("s"), &stopped, Mark::Idle).expect("stopped");
+    marked(&bound, &stopped, Mark::Idle);
     assert_eq!(
         next_reading(&bound),
         released(),
@@ -803,14 +671,8 @@ fn a_stop_counts_until_its_record_with_none_in_sight() {
         &dir.join("s.jsonl"),
         &[REPLY, &summary(earlier), &large, REPLY],
     );
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
-    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("stopped");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
+    marked(&dir, &claude.hook_with(&path), Mark::Idle);
     assert_eq!(
         next_reading(&dir),
         holding(),
@@ -826,20 +688,8 @@ fn a_stop_counts_until_its_record_with_none_in_sight() {
     let first = scratch("stopping-first");
     let claude = FakeClaude::start(&first);
     let path = transcript(&first.join("s.jsonl"), &[REPLY]);
-    apply(
-        &first,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
-    apply(
-        &first,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Idle,
-    )
-    .expect("stopped");
+    marked(&first, &claude.hook_with(&path), Mark::Prompt);
+    marked(&first, &claude.hook_with(&path), Mark::Idle);
     assert_eq!(
         next_reading(&first),
         holding(),
@@ -866,15 +716,9 @@ fn a_notice_queued_during_the_last_reply_holds_until_it_is_taken() {
     let claude = FakeClaude::start(&dir);
     let earlier = crate::awake::now_ms() - 5_000;
     let path = transcript(&dir.join("s.jsonl"), &[REPLY, &summary(earlier)]);
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
     append(&path, &[&queued(crate::awake::now_ms()), REPLY]);
-    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("stopped");
+    marked(&dir, &claude.hook_with(&path), Mark::Idle);
     assert_eq!(next_reading(&dir), holding());
     stop_hooks_ran(&path);
     assert_eq!(
@@ -894,7 +738,7 @@ fn a_notice_queued_during_the_last_reply_holds_until_it_is_taken() {
         holding(),
         "the turn the notice began ran unheld"
     );
-    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("its turn stops");
+    marked(&dir, &claude.hook_with(&path), Mark::Idle);
     stop_hooks_ran(&path);
     assert_eq!(
         next_reading(&dir),
@@ -903,13 +747,7 @@ fn a_notice_queued_during_the_last_reply_holds_until_it_is_taken() {
     );
 
     for (taken, how) in [(ATTACHED, "attached"), (REMOVED, "removed")] {
-        apply(
-            &dir,
-            &claim_file("s"),
-            &claude.hook_with(&path),
-            Mark::Prompt,
-        )
-        .expect("a turn");
+        marked(&dir, &claude.hook_with(&path), Mark::Prompt);
         append(
             &path,
             &[
@@ -920,7 +758,7 @@ fn a_notice_queued_during_the_last_reply_holds_until_it_is_taken() {
                 REPLY,
             ],
         );
-        apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("it stops");
+        marked(&dir, &claude.hook_with(&path), Mark::Idle);
         stop_hooks_ran(&path);
         assert_eq!(
             next_reading(&dir),
@@ -937,15 +775,9 @@ fn past_the_record(stem: &str, during: &[&str], after: &[&str]) -> Option<String
     let claude = FakeClaude::start(&dir);
     let earlier = crate::awake::now_ms() - 5_000;
     let path = transcript(&dir.join("s.jsonl"), &[REPLY, &summary(earlier)]);
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
     append(&path, during);
-    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("stopped");
+    marked(&dir, &claude.hook_with(&path), Mark::Idle);
     stop_hooks_ran(&path);
     append(&path, after);
     next_reading(&dir)
@@ -1010,21 +842,9 @@ fn a_notice_during_an_open_call_is_no_turn_of_its_own() {
     let dir = scratch("notice-mid-turn");
     let claude = FakeClaude::start(&dir);
     let path = transcript(&dir.join("s.jsonl"), &[&calling("Bash", "toolu_a")]);
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed");
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook(),
-        start("toolu_a", "Bash"),
-    )
-    .expect("a call");
-    apply(&dir, &claim_file("s"), &claude.hook(), asked("toolu_a")).expect("a prompt");
+    marked(&dir, &claude.hook_with(&path), Mark::Prompt);
+    marked(&dir, &claude.hook(), start("toolu_a", "Bash"));
+    marked(&dir, &claude.hook(), asked("toolu_a"));
     assert_eq!(next_reading(&dir), released());
 
     append(&path, &[&notice(crate::awake::now_ms())]);
@@ -1042,18 +862,12 @@ fn a_notice_during_an_open_call_is_no_turn_of_its_own() {
 fn a_process_started_during_another_tool_s_call_is_no_work() {
     let dir = scratch("resident");
     let mut claude = FakeClaude::start(&dir);
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Prompt).expect("claimed");
+    marked(&dir, &claude.hook(), Mark::Prompt);
     let call = start("toolu_m", "mcp__docs__read");
-    apply(&dir, &claim_file("s"), &claude.hook(), call).expect("a call");
+    marked(&dir, &claude.hook(), call);
     let server = claude.run();
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook(),
-        Mark::ToolEnd("toolu_m"),
-    )
-    .expect("its end");
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Idle).expect("stopped");
+    marked(&dir, &claude.hook(), Mark::ToolEnd("toolu_m"));
+    marked(&dir, &claude.hook(), Mark::Idle);
     assert_eq!(
         next_reading(&dir),
         released(),
@@ -1069,16 +883,16 @@ fn a_process_started_during_another_tool_s_call_is_no_work() {
 fn a_scheduled_wake_holds_a_stopped_session() {
     let dir = scratch("wake");
     let claude = FakeClaude::start(&dir);
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::WakeIn(600)).expect("scheduled");
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Idle).expect("stopped");
+    marked(&dir, &claude.hook(), Mark::WakeIn(600));
+    marked(&dir, &claude.hook(), Mark::Idle);
     assert_eq!(
         next_reading(&dir),
         holding(),
         "the holder let go before the wake-up was due"
     );
 
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::NoWake).expect("called off");
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Idle).expect("stopped again");
+    marked(&dir, &claude.hook(), Mark::NoWake);
+    marked(&dir, &claude.hook(), Mark::Idle);
     assert_eq!(next_reading(&dir), released());
 }
 

@@ -1,7 +1,7 @@
 //! Explicitly authorized, unattended hardware experiment. Never part of a
 //! normal gate: it temporarily changes AC sleep and allows real S3 sleep.
 
-use super::{FakeClaude, claim_file, scratch};
+use super::{FakeClaude, claim_file, marked, scratch};
 
 #[test]
 #[ignore = "manual: needs unattended sleep permission and PGG_AWAKE_PHYSICAL_LOG"]
@@ -18,7 +18,7 @@ fn a_desktop_wait_allows_physical_sleep_after_a_protected_turn() {
     .unwrap();
     std::fs::remove_file(dir.join(crate::awake::DESKTOP_OFF)).unwrap();
     let claude = FakeClaude::start(&dir);
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Prompt).expect("a turn starts");
+    marked(&dir, &claude.hook(), Mark::Prompt);
     apply(
         &dir,
         &claim_file("s"),

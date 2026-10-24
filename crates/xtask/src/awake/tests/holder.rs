@@ -409,6 +409,16 @@ fn planted(dir: &Path, path: &Path, line: &str) {
     std::fs::write(path, line).expect("a claim");
 }
 
+/// The session's claim marked `mark` by `writer`, as its hook marks it:
+/// the pid of the holder the mark started, if it started one.
+#[track_caller]
+fn marked(dir: &Path, writer: &Writer, mark: Mark<'_>) -> Option<u32> {
+    match apply(dir, &claim_file("s"), writer, mark) {
+        Ok(started) => started,
+        Err(error) => panic!("the session's claim, marked {mark:?}: {error}"),
+    }
+}
+
 /// The session's claim, read under the lock: the holder rewrites it as it
 /// forgets a call.
 fn session(dir: &Path) -> Claim {
@@ -507,9 +517,7 @@ fn holders_of_two_revisions_ask_apart() {
     let claude = FakeClaude::start(&dir);
     let other = dir.join(format!("holder-r{}", crate::awake::REVISION + 1));
     std::fs::write(&other, "1 holding").expect("another revision's holder's name");
-    let pid = apply(&dir, &claim_file("s"), &claude.hook(), Mark::Prompt)
-        .expect("claimed")
-        .expect("this revision's holder started");
+    let pid = marked(&dir, &claude.hook(), Mark::Prompt).expect("this revision's holder started");
     assert_eq!(holder_pid(&dir), Some(pid));
     assert_eq!(next_reading(&dir), holding());
     assert_eq!(
@@ -526,9 +534,7 @@ fn holders_of_two_revisions_ask_apart() {
 fn a_claim_of_another_protocol_is_left_to_its_holder() {
     let dir = scratch("other-revision");
     let claude = FakeClaude::start(&dir);
-    let pid = apply(&dir, &claim_file("s"), &claude.hook(), Mark::Idle)
-        .expect("claimed")
-        .expect("a holder started");
+    let pid = marked(&dir, &claude.hook(), Mark::Idle).expect("a holder started");
     assert_eq!(next_reading(&dir), released());
 
     // Well formed but for its protocol, under its protocol's name: a holder
@@ -548,7 +554,7 @@ fn a_claim_of_another_protocol_is_left_to_its_holder() {
         "a claim of another revision held this revision's machine"
     );
 
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Gone).expect("the session's claim goes");
+    marked(&dir, &claude.hook(), Mark::Gone);
     quit(pid);
     assert_eq!(
         std::fs::read_to_string(&other).ok(),
@@ -562,15 +568,13 @@ fn a_claim_of_another_protocol_is_left_to_its_holder() {
 fn a_holder_whose_name_was_taken_quits() {
     let dir = scratch("name-taken");
     let claude = FakeClaude::start(&dir);
-    let pid = apply(&dir, &claim_file("s"), &claude.hook(), Mark::Prompt)
-        .expect("claimed")
-        .expect("a holder started");
+    let pid = marked(&dir, &claude.hook(), Mark::Prompt).expect("a holder started");
     assert_eq!(next_reading(&dir), holding());
     {
         let _held = crate::awake::lock(&dir).expect("the lock");
         std::fs::write(holder_path(&dir), "1 holding").expect("the name, taken");
     }
-    let started = apply(&dir, &claim_file("s"), &claude.hook(), Mark::Working).expect("a claim");
+    let started = marked(&dir, &claude.hook(), Mark::Working);
     assert_eq!(started, None, "a beating name started another holder");
     quit(pid);
 }
@@ -584,7 +588,7 @@ fn a_reserved_name_starts_no_second_holder_until_it_goes_stale() {
     let dir = scratch("reserved");
     let claude = FakeClaude::start(&dir);
     planted(&dir, &holder_path(&dir), "4 starting");
-    let started = apply(&dir, &claim_file("s"), &claude.hook(), Mark::Prompt).expect("claimed");
+    let started = marked(&dir, &claude.hook(), Mark::Prompt);
     assert_eq!(started, None, "a reserved name started another holder");
 
     std::fs::File::options()
@@ -594,8 +598,7 @@ fn a_reserved_name_starts_no_second_holder_until_it_goes_stale() {
             name.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(60))
         })
         .expect("the reservation, gone stale");
-    let pid = apply(&dir, &claim_file("s"), &claude.hook(), Mark::Working)
-        .expect("claimed")
+    let pid = marked(&dir, &claude.hook(), Mark::Working)
         .expect("a stale reservation let a holder start");
     assert_eq!(next_reading(&dir), holding());
     assert_eq!(holder_pid(&dir), Some(pid));
@@ -648,15 +651,8 @@ fn a_reader_holding_its_name_costs_the_holder_a_beat_not_its_run() {
     let dir = scratch("name-held-open");
     let claude = FakeClaude::start(&dir);
     let path = transcript(&dir.join("s.jsonl"), &[REPLY]);
-    let pid = apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Prompt,
-    )
-    .expect("claimed")
-    .expect("a holder started");
-    apply(&dir, &claim_file("s"), &claude.hook_with(&path), Mark::Idle).expect("stopped");
+    let pid = marked(&dir, &claude.hook_with(&path), Mark::Prompt).expect("a holder started");
+    marked(&dir, &claude.hook_with(&path), Mark::Idle);
     stop_hooks_ran(&path);
     assert_eq!(next_reading(&dir), released());
 
@@ -676,13 +672,7 @@ fn a_reader_holding_its_name_costs_the_holder_a_beat_not_its_run() {
     );
     drop(reader);
 
-    apply(
-        &dir,
-        &claim_file("s"),
-        &claude.hook_with(&path),
-        Mark::Working,
-    )
-    .expect("a claim");
+    marked(&dir, &claude.hook_with(&path), Mark::Working);
     assert_eq!(
         next_reading(&dir),
         holding(),
@@ -699,9 +689,7 @@ fn a_claim_held_open_costs_the_holder_a_reading_not_its_run() {
     use std::os::windows::fs::OpenOptionsExt;
     let dir = scratch("claim-held-open");
     let claude = FakeClaude::start(&dir);
-    let pid = apply(&dir, &claim_file("s"), &claude.hook(), Mark::Prompt)
-        .expect("claimed")
-        .expect("a holder started");
+    let pid = marked(&dir, &claude.hook(), Mark::Prompt).expect("a holder started");
     assert_eq!(next_reading(&dir), holding());
 
     let held = std::fs::OpenOptions::new()
@@ -727,7 +715,7 @@ fn a_claim_held_open_costs_the_holder_a_reading_not_its_run() {
     assert!(read < held_at, "a reading copied a claim held open");
     drop(held);
 
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Working).expect("a claim");
+    marked(&dir, &claude.hook(), Mark::Working);
     assert_eq!(
         next_reading(&dir),
         holding(),
@@ -743,9 +731,7 @@ fn a_claim_held_open_costs_the_holder_a_reading_not_its_run() {
 fn a_claim_whose_owner_is_no_claude_is_taken_down() {
     let dir = scratch("not-claude");
     let claude = FakeClaude::start(&dir);
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Idle)
-        .expect("claimed")
-        .expect("a holder started");
+    marked(&dir, &claude.hook(), Mark::Idle).expect("a holder started");
     assert_eq!(next_reading(&dir), released());
 
     let stray = dir.join(claim_file("t"));
@@ -768,9 +754,7 @@ fn a_holder_that_cannot_clear_its_name_stays_until_it_can() {
     const FILE_SHARE_READ: u32 = 1;
     let dir = scratch("name-kept");
     let claude = FakeClaude::start(&dir);
-    let pid = apply(&dir, &claim_file("s"), &claude.hook(), Mark::Prompt)
-        .expect("claimed")
-        .expect("a holder started");
+    let pid = marked(&dir, &claude.hook(), Mark::Prompt).expect("a holder started");
     assert_eq!(next_reading(&dir), holding());
 
     let reader = std::fs::OpenOptions::new()
@@ -921,9 +905,7 @@ fn a_holder_lets_the_pipes_of_its_hook_close() {
 fn a_working_claim_holds_until_its_claude_process_is_gone() {
     let dir = scratch("owner-gone");
     let claude = FakeClaude::start(&dir);
-    let pid = apply(&dir, &claim_file("s"), &claude.hook(), Mark::Prompt)
-        .expect("claimed")
-        .expect("the claim started a holder");
+    let pid = marked(&dir, &claude.hook(), Mark::Prompt).expect("the claim started a holder");
     assert_eq!(next_reading(&dir), holding());
 
     drop(claude);
@@ -1005,17 +987,15 @@ fn a_paced_holder_beats_inside_what_makes_its_name_stale() {
 fn the_history_tells_each_verdict_and_whose_work_it_stood_on() {
     let dir = scratch("history");
     let claude = FakeClaude::start(&dir);
-    let pid = apply(&dir, &claim_file("s"), &claude.hook(), Mark::Prompt)
-        .expect("claimed")
-        .expect("a holder started");
+    let pid = marked(&dir, &claude.hook(), Mark::Prompt).expect("a holder started");
     assert_eq!(next_reading(&dir), holding());
     apply(&dir, &claim_file("t"), &claude.hook(), Mark::Prompt).expect("another session");
     assert_eq!(next_reading(&dir), holding());
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Idle).expect("one stops");
+    marked(&dir, &claude.hook(), Mark::Idle);
     assert_eq!(next_reading(&dir), holding());
     apply(&dir, &claim_file("t"), &claude.hook(), Mark::Idle).expect("the other stops");
     assert_eq!(next_reading(&dir), released());
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Gone).expect("a claim goes");
+    marked(&dir, &claude.hook(), Mark::Gone);
     apply(&dir, &claim_file("t"), &claude.hook(), Mark::Gone).expect("the last claim goes");
     quit(pid);
     assert_eq!(
@@ -1071,11 +1051,9 @@ mod quiet;
 fn an_installed_holder_handles_unicode_and_quotes_and_removes_its_script() {
     let dir = scratch("holder-東京 '");
     let claude = FakeClaude::start(&dir);
-    let pid = apply(&dir, &claim_file("s"), &claude.hook(), Mark::Prompt)
-        .expect("the installed script starts")
-        .expect("its pid");
+    let pid = marked(&dir, &claude.hook(), Mark::Prompt).expect("its pid");
     assert_eq!(next_reading(&dir), holding());
-    apply(&dir, &claim_file("s"), &claude.hook(), Mark::Gone).expect("the claim goes");
+    marked(&dir, &claude.hook(), Mark::Gone);
     quit(pid);
     assert!(
         !std::fs::read_dir(&*dir).unwrap().flatten().any(|entry| {
