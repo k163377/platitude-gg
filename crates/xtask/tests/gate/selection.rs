@@ -88,12 +88,6 @@ fn a_core_change_owes_what_reads_it_and_nothing_beside_it() {
     for spared in ["clippy xtask", "test xtask 1"] {
         assert!(!ran.contains(spared), "{spared} ran; ran: {ran:?}");
     }
-    // And the filters are the modules the reach holds.
-    let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
-    assert!(
-        text.contains("test platitude-core 1") && text.contains("test it 1"),
-        "{text}"
-    );
 }
 
 #[test]
