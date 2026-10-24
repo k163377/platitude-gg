@@ -988,7 +988,7 @@ mod tests {
         let (_yard, repo) = repository("line-read");
         let seat_b = seat(&repo, "b", "claude-seat s1 pid 1 host h1");
         let seat_c = seat(&repo, "c", "claude-seat s2");
-        let seat_d = seat(&repo, "d", "claude-seat s5");
+        seat(&repo, "d", "claude-seat s5");
         // Seat e is nobody's: a session that typed /land there stands.
         let seat_e = format!("{repo}/.claude/worktrees/e");
         git(
@@ -1038,7 +1038,6 @@ mod tests {
                 .contains("left the line")
         );
         assert_eq!(super::read(&repo).expect("line").places.len(), 2);
-        let _unused = seat_d;
     }
 
     #[test]
