@@ -49,6 +49,9 @@ pub struct WorktreeModel {
     /// whether a rewrite leaves the old commits drawn or only in the
     /// reflog. False until told: the answer that asks more of the person.
     head_reached_elsewhere: bool,
+    /// An answer to `head_reached_elsewhere` has landed. Before this edge
+    /// its `false` is "not asked yet", not the answer.
+    head_reach_known: bool,
     /// The HEAD report number the last status's counts belong to
     /// (`StatusMsg::head_seq`). Not where HEAD is: after a write the refs
     /// read moves `head_seq` ahead of the status that follows. Read by
@@ -249,6 +252,11 @@ impl WorktreeModel {
         Member = head_reached_elsewhere,
         Notify = changed
     );
+    qproperty!(
+        "headReachKnown",
+        Member = head_reach_known,
+        Notify = changed
+    );
     qproperty!("statusSeq", Member = status_seq, Notify = changed);
     qproperty!("countsSettled", Member = counts_settled, Notify = changed);
     qproperty!("upstream", Member = upstream, Notify = changed);
@@ -373,6 +381,7 @@ impl WorktreeModel {
         self.head_published = false;
         self.head_published_oid = String::new();
         self.head_reached_elsewhere = false;
+        self.head_reach_known = false;
         self.status_seq = 0;
         self.status_branch = String::new();
         self.counts_settled = false;
@@ -452,6 +461,7 @@ impl WorktreeModel {
                 }
                 StateMsg::HeadReach { reached_elsewhere } => {
                     self.head_reached_elsewhere = reached_elsewhere;
+                    self.head_reach_known = true;
                 }
             }
         }
@@ -844,6 +854,21 @@ mod tests {
             published: true,
         }]);
         assert!(model.head_published);
+    }
+
+    /// A `false` answer is an answer: known from the first one, whatever
+    /// it says, until the tab stands in another worktree.
+    #[test]
+    fn the_reach_is_known_once_answered_and_until_the_worktree_is_left() {
+        let mut model = WorktreeModel::default();
+        assert!(!model.head_reach_known);
+        model.absorb(vec![StateMsg::HeadReach {
+            reached_elsewhere: false,
+        }]);
+        assert!(model.head_reach_known);
+        assert!(!model.head_reached_elsewhere);
+        model.forget_the_worktree();
+        assert!(!model.head_reach_known);
     }
 
     /// The first read after a write reports an unmoved HEAD, and it still
