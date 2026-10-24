@@ -1,6 +1,6 @@
 //! `patch`'s tests, split out for length alone (structure.md §分割).
 
-use super::super::testkit::patches;
+use super::super::testkit::{at, patches};
 use super::*;
 /// One changed line of Rust between two context lines, in the
 /// ordinary unified form.
@@ -19,7 +19,7 @@ diff --git a/src/main.rs b/src/main.rs
 fn context_lines_are_taken_apart() {
     let colors = colors(&patches(RUST), None);
     // ` fn main() {` is the first line of the only hunk.
-    let context = colors.line(0, 0, 0);
+    let context = colors.line(at(0, 0, 0));
     assert!(
         context.spans.len() > 1,
         "a line with a keyword in it is not one colour: {context:?}"
@@ -32,8 +32,8 @@ fn context_lines_are_taken_apart() {
 fn changed_lines_are_taken_apart_too() {
     // Both sides wear the theme (デザイン規約 §シンタックスハイライト).
     let colors = colors(&patches(RUST), None);
-    assert!(colors.line(0, 0, 1).spans.len() > 1, "deleted line");
-    assert!(colors.line(0, 0, 2).spans.len() > 1, "added line");
+    assert!(colors.line(at(0, 0, 1)).spans.len() > 1, "deleted line");
+    assert!(colors.line(at(0, 0, 2)).spans.len() > 1, "added line");
 }
 
 #[test]
@@ -48,7 +48,7 @@ diff --git a/src/new.rs b/src/new.rs
 +}
 ";
     let colors = colors(&patches(patch), None);
-    assert!(colors.line(0, 0, 0).spans.len() > 1);
+    assert!(colors.line(at(0, 0, 0)).spans.len() > 1);
 }
 
 #[test]
@@ -67,17 +67,17 @@ diff --git a/src/a.rs b/src/a.rs
 ";
     let colors = colors(&patches(patch), None);
     assert_eq!(
-        colors.line(0, 0, 1).spans.len(),
+        colors.line(at(0, 0, 1)).spans.len(),
         1,
         "the deleted line itself is the start of a comment"
     );
     assert!(
-        colors.line(0, 0, 2).spans.len() > 1,
+        colors.line(at(0, 0, 2)).spans.len() > 1,
         "the added line is code, not the inside of what the deletion opened: {:?}",
-        colors.line(0, 0, 2)
+        colors.line(at(0, 0, 2))
     );
     assert!(
-        colors.line(0, 0, 3).spans.len() > 1,
+        colors.line(at(0, 0, 3)).spans.len() > 1,
         "and neither is the context after it"
     );
 }
@@ -98,7 +98,7 @@ const COMMENTED_OUT: &str = "/* an old idea:\nlet x = 1;\nlet y = 3;\n*/\nfn mai
 #[test]
 fn the_file_is_walked_into_the_hunk() {
     let colors = colors(&patches(INSIDE_A_COMMENT), Some(COMMENTED_OUT));
-    let line = colors.line(0, 0, 0);
+    let line = colors.line(at(0, 0, 0));
     assert_eq!(
         line.spans.len(),
         1,
@@ -110,7 +110,7 @@ fn the_file_is_walked_into_the_hunk() {
 fn without_the_file_a_hunk_starts_cold() {
     // Cold, the lexer has no idea it is inside a comment.
     let colors = colors(&patches(INSIDE_A_COMMENT), None);
-    assert!(colors.line(0, 0, 0).spans.len() > 1);
+    assert!(colors.line(at(0, 0, 0)).spans.len() > 1);
 }
 
 #[test]
@@ -120,7 +120,7 @@ fn a_file_that_disagrees_with_the_hunk_is_not_used() {
     let elsewhere = "/* an old idea:\nsomething else entirely\n*/\nfn main() {}\n";
     let colors = colors(&patches(INSIDE_A_COMMENT), Some(elsewhere));
     assert!(
-        colors.line(0, 0, 0).spans.len() > 1,
+        colors.line(at(0, 0, 0)).spans.len() > 1,
         "fell back to the cold read rather than trusting the wrong file"
     );
 }
@@ -144,8 +144,8 @@ diff --git a/src/a.rs b/src/a.rs
 ";
     let source = "/* opened here\ntwo\nmid\nmid\nmid\nstill inside\nfour\nmid\n*/\n";
     let colors = colors(&patches(patch), Some(source));
-    let first = colors.line(0, 0, 0);
-    let second = colors.line(0, 1, 0);
+    let first = colors.line(at(0, 0, 0));
+    let second = colors.line(at(0, 1, 0));
     assert_eq!(second.spans.len(), 1, "one run, the comment's: {second:?}");
     assert_eq!(
         first.spans.first().map(|s| s.color),
@@ -204,7 +204,7 @@ diff --git a/big.groovy b/big.groovy
 #[test]
 fn the_quick_pass_answers_now() {
     let quick = colors_quick(&patches(RUST));
-    assert!(quick.line(0, 0, 0).spans.len() > 1);
+    assert!(quick.line(at(0, 0, 0)).spans.len() > 1);
 }
 
 #[test]
@@ -236,9 +236,9 @@ diff --git a/big.groovy b/big.groovy
     let (second, _) = colors_cached(&parsed, Some(&source), cache);
     assert_eq!(first, second, "a resumed walk answers what a full one did");
     assert!(
-        first.line(0, 0, 0).spans.len() > 1,
+        first.line(at(0, 0, 0)).spans.len() > 1,
         "line 603 is past the comment and reads as code: {:?}",
-        first.line(0, 0, 0)
+        first.line(at(0, 0, 0))
     );
 }
 
@@ -265,7 +265,7 @@ diff --git a/src/a.groovy b/src/a.groovy
     let (with_stale, _) = colors_cached(&parsed, Some(other), stale);
     assert_eq!(fresh, with_stale);
     assert!(
-        fresh.line(0, 0, 0).spans.len() > 1,
+        fresh.line(at(0, 0, 0)).spans.len() > 1,
         "in this file the context line is code, not comment"
     );
 }
@@ -282,7 +282,7 @@ diff --git a/notes.md b/notes.md
 +new body
 ";
     let colors = colors(&patches(patch), None);
-    let title = colors.line(0, 0, 0);
+    let title = colors.line(at(0, 0, 0));
     assert!(
         title
             .spans
@@ -314,9 +314,9 @@ diff --git a/A.qml b/A.qml
 ";
     let colors = colors(&patches(patch), Some(source));
     assert!(
-        colors.line(0, 0, 0).spans.len() > 1,
+        colors.line(at(0, 0, 0)).spans.len() > 1,
         "a QML row is taken apart: {:?}",
-        colors.line(0, 0, 0)
+        colors.line(at(0, 0, 0))
     );
 }
 
@@ -334,14 +334,14 @@ diff --git a/A.qml b/A.qml
 +Text { text: \"new\" }
 ";
     let colors = colors(&patches(patch), None);
-    let note = colors.line(0, 0, 0);
+    let note = colors.line(at(0, 0, 0));
     assert!(
         note.spans
             .iter()
             .any(|s| s.color != super::super::grammar::PLAIN),
         "a comment wears the comment colour: {note:?}"
     );
-    let added = colors.line(0, 0, 2);
+    let added = colors.line(at(0, 0, 2));
     assert!(
         added
             .spans
@@ -384,7 +384,7 @@ diff --git a/A.kt b/A.kt
      }
 ";
     let colors = colors(&patches(patch), Some(source));
-    let comment = colors.line(0, 0, 1);
+    let comment = colors.line(at(0, 0, 1));
     assert!(
         comment
             .spans
@@ -392,7 +392,7 @@ diff --git a/A.kt b/A.kt
             .any(|s| s.color != super::super::grammar::PLAIN),
         "a comment below the unlearned syntax wears the comment colour: {comment:?}"
     );
-    let added = colors.line(0, 0, 3);
+    let added = colors.line(at(0, 0, 3));
     assert!(
         added
             .spans
@@ -422,13 +422,63 @@ diff --git a/p.plist b/p.plist
 +<plist>
 ";
     let colors = colors(&patches(patch), Some(source));
-    let note = colors.line(0, 0, 0);
+    let note = colors.line(at(0, 0, 0));
     assert!(
         note.spans
             .iter()
             .any(|s| s.color != super::super::grammar::PLAIN),
         "the comment still wears what the grammar could read: {note:?}"
     );
+}
+
+/// Two files, the second with two hunks, every line a length of its own —
+/// so the runs that cover a line say which line they were read off.
+const TWO_FILES: &str = "\
+diff --git a/src/a.rs b/src/a.rs
+--- a/src/a.rs
++++ b/src/a.rs
+@@ -1,1 +1,1 @@
+-let x = 1;
++let xy = 1;
+diff --git a/src/b.rs b/src/b.rs
+--- a/src/b.rs
++++ b/src/b.rs
+@@ -1,1 +1,1 @@
+-fn a() {}
++fn three() {}
+@@ -9,1 +9,1 @@
+-let long_name = 1;
++let longer_name = 22;
+";
+
+#[test]
+fn each_part_of_a_location_picks_its_own_line() {
+    let colors = colors(&patches(TWO_FILES), None);
+    let covered = |patch, hunk, line| -> usize {
+        colors
+            .line(at(patch, hunk, line))
+            .spans
+            .iter()
+            .map(|s| s.len)
+            .sum()
+    };
+    assert_eq!(covered(0, 0, 1), "let xy = 1;".len(), "the first file");
+    assert_eq!(covered(1, 0, 1), "fn three() {}".len(), "another patch");
+    assert_eq!(
+        covered(1, 1, 1),
+        "let longer_name = 22;".len(),
+        "another hunk"
+    );
+    assert_eq!(covered(1, 1, 0), "let long_name = 1;".len(), "another line");
+}
+
+#[test]
+fn a_location_past_any_part_answers_nothing() {
+    let colors = colors(&patches(TWO_FILES), None);
+    let nothing = LineColors::default();
+    assert_eq!(colors.line(at(2, 0, 1)), &nothing, "no third patch");
+    assert_eq!(colors.line(at(1, 2, 1)), &nothing, "no third hunk");
+    assert_eq!(colors.line(at(1, 1, 2)), &nothing, "no third line");
 }
 
 #[test]

@@ -1,7 +1,7 @@
 //! How far a diff reaches sideways: the lines the pane measures to find out.
 
 use platitude_core::highlight::DiffColors;
-use platitude_core::parse::diff::{DiffLine, DiffLineKind, FilePatch};
+use platitude_core::parse::diff::{DiffLine, DiffLineKind, DiffLineLocation, FilePatch};
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::wire::{Fields, Listed, Record, field};
@@ -80,7 +80,11 @@ pub fn widest_lines(patches: &[FilePatch], colors: &DiffColors) -> Candidates {
             .into_iter()
             .map(|(_, patch_index, hunk_index, line_index)| {
                 let line = &patches[patch_index].hunks[hunk_index].lines[line_index];
-                let read = colors.line(patch_index, hunk_index, line_index);
+                let read = colors.line(DiffLineLocation {
+                    patch: patch_index,
+                    hunk: hunk_index,
+                    line: line_index,
+                });
                 Candidate {
                     bold: is_bold(line),
                     line: super::markup::styled(&line.text, &read.spans),

@@ -79,6 +79,17 @@ pub struct DiffLine {
     pub markers: String,
 }
 
+/// Where one [`DiffLine`] stands in a parsed diff: the 0-based index of its
+/// [`FilePatch`], of the [`DiffHunk`] in that patch, and of the line in that
+/// hunk. Not a row on screen, and not a line number of either file. Nothing
+/// says the line is there; whoever reads by it answers for one that is not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DiffLineLocation {
+    pub patch: usize,
+    pub hunk: usize,
+    pub line: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiffHunk {
     pub old_start: u32,

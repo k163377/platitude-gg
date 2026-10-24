@@ -35,6 +35,8 @@ mod walk;
 #[cfg(test)]
 mod testkit;
 
+use crate::parse::diff::DiffLineLocation;
+
 pub use patch::{colors, colors_cached, colors_quick, deep, knows};
 
 /// Lexer states remembered at intervals down one file, so the next
@@ -144,15 +146,15 @@ pub struct DiffColors {
 impl DiffColors {
     /// What was read off one line — nothing, where nothing was. Borrowed:
     /// asked once per row.
-    pub fn line(&self, patch: usize, hunk: usize, line: usize) -> &LineColors {
+    pub fn line(&self, location: DiffLineLocation) -> &LineColors {
         static NOTHING: LineColors = LineColors {
             spans: Vec::new(),
             fence: false,
         };
         self.patches
-            .get(patch)
-            .and_then(|p| p.get(hunk))
-            .and_then(|h| h.get(line))
+            .get(location.patch)
+            .and_then(|p| p.get(location.hunk))
+            .and_then(|h| h.get(location.line))
             .unwrap_or(&NOTHING)
     }
 

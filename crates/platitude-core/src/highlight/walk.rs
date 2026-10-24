@@ -224,7 +224,7 @@ fn conflict_marker(line: &str) -> Option<Marker> {
 #[cfg(test)]
 mod tests {
     use super::super::colors;
-    use super::super::testkit::patches;
+    use super::super::testkit::{at, patches};
     use super::*;
     /// A conflict as git prints it for a path it stopped on: the working
     /// tree against both stages at once, two marker columns per row. The
@@ -269,15 +269,15 @@ diff --cc src/main.rs
         // Rows: 0 ` fn main() {`, 1 `<<<<<<<`, 2 `/* ours`, 3 `=======`,
         // 4 `let x = 2;`, 5 `>>>>>>>`, 6 `}`.
         for row in [1, 3, 5] {
-            let fence = colors.line(0, 0, row);
+            let fence = colors.line(at(0, 0, row));
             assert!(fence.fence, "row {row} is one of git's fences");
             assert!(fence.spans.is_empty(), "and it is not read as code");
         }
         assert!(
-            !colors.line(0, 0, 4).fence,
+            !colors.line(at(0, 0, 4)).fence,
             "the side itself is not a fence"
         );
-        let theirs = colors.line(0, 0, 4).spans.clone();
+        let theirs = colors.line(at(0, 0, 4)).spans.clone();
         assert!(
             theirs.len() > 1,
             "`let x = 2;` is code, not the inside of the comment `ours` opened: {theirs:?}"
@@ -289,8 +289,8 @@ diff --cc src/main.rs
         // `ours` leaves a comment open and the file goes on in `ours`, so
         // the closing brace is one run in the comment's colour.
         let colors = colors(&patches(CONFLICTED), None);
-        let opened = colors.line(0, 0, 2);
-        let after = colors.line(0, 0, 6);
+        let opened = colors.line(at(0, 0, 2));
+        let after = colors.line(at(0, 0, 6));
         assert_eq!(
             after.spans.len(),
             1,
@@ -317,17 +317,17 @@ diff --cc notes.qqq
 ";
         let colors = colors(&patches(patch), None);
         assert!(
-            colors.line(0, 0, 0).fence,
+            colors.line(at(0, 0, 0)).fence,
             "the fence is git's, not the file's"
         );
-        assert!(colors.line(0, 0, 2).fence);
-        assert!(colors.line(0, 0, 4).fence);
+        assert!(colors.line(at(0, 0, 2)).fence);
+        assert!(colors.line(at(0, 0, 4)).fence);
         assert!(
-            !colors.line(0, 0, 1).fence,
+            !colors.line(at(0, 0, 1)).fence,
             "and what is between them is not"
         );
         assert!(
-            colors.line(0, 0, 1).spans.is_empty(),
+            colors.line(at(0, 0, 1)).spans.is_empty(),
             "nothing was found to colour it with"
         );
     }
@@ -350,7 +350,7 @@ diff --git a/notes.groovy b/notes.groovy
         assert!(!parsed[0].is_combined);
         let colors = colors(&parsed, None);
         // The context line of exactly seven `=`.
-        let line = colors.line(0, 0, 3);
+        let line = colors.line(at(0, 0, 3));
         assert!(!line.fence, "nothing here is a fence");
         assert!(
             !line.spans.is_empty(),

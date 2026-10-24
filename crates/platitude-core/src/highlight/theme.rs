@@ -143,7 +143,7 @@ pub(super) fn syntax_for<'a>(syntaxes: &'a SyntaxSet, path: &str) -> Option<&'a 
 #[cfg(test)]
 mod tests {
     use super::super::colors;
-    use super::super::testkit::patches;
+    use super::super::testkit::{at, patches};
     #[test]
     fn kotlin_is_in_the_set() {
         let patch = "\
@@ -157,7 +157,7 @@ diff --git a/A.kt b/A.kt
 ";
         let colors = colors(&patches(patch), None);
         assert!(
-            colors.line(0, 0, 0).spans.len() > 1,
+            colors.line(at(0, 0, 0)).spans.len() > 1,
             "Kotlin is one of the languages two-face adds to Sublime's own set"
         );
     }

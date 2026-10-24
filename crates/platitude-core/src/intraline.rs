@@ -9,7 +9,7 @@
 //! Worked out here rather than by `git diff --word-diff`, whose output
 //! replaces the line-based form the pane is built on.
 
-use crate::parse::diff::{DiffHunk, DiffLineKind, FilePatch};
+use crate::parse::diff::{DiffHunk, DiffLineKind, DiffLineLocation, FilePatch};
 
 /// Byte ranges into one row's text — `(start, len)`, ascending and
 /// disjoint.
@@ -24,12 +24,12 @@ pub struct IntraMarks {
 
 impl IntraMarks {
     /// The emphasised ranges of one row — none, where none are.
-    pub fn line(&self, patch: usize, hunk: usize, line: usize) -> &[(usize, usize)] {
+    pub fn line(&self, location: DiffLineLocation) -> &[(usize, usize)] {
         static NOTHING: Ranges = Vec::new();
         self.patches
-            .get(patch)
-            .and_then(|p| p.get(hunk))
-            .and_then(|h| h.get(line))
+            .get(location.patch)
+            .and_then(|p| p.get(location.hunk))
+            .and_then(|h| h.get(location.line))
             .unwrap_or(&NOTHING)
     }
 }
@@ -305,20 +305,61 @@ mod tests {
         parse_patch(format!("--- a/f.rs\n+++ b/f.rs\n{body}").as_bytes())
     }
 
+    fn at(patch: usize, hunk: usize, line: usize) -> DiffLineLocation {
+        DiffLineLocation { patch, hunk, line }
+    }
+
     #[test]
     fn a_tail_grown_on_a_line_is_the_only_emphasis() {
         let patches = one_hunk("@@ -1,1 +1,1 @@\n-let x = 1;\n+let x = 1; // c\n");
         let marks = marks(&patches);
-        assert_eq!(marks.line(0, 0, 0), &[], "the deletion lost nothing");
-        assert_eq!(marks.line(0, 0, 1), &[(10, 5)], "only the tail is new");
+        assert_eq!(marks.line(at(0, 0, 0)), &[], "the deletion lost nothing");
+        assert_eq!(marks.line(at(0, 0, 1)), &[(10, 5)], "only the tail is new");
     }
 
     #[test]
     fn a_renamed_identifier_is_cut_out_alone() {
         let patches = one_hunk("@@ -1,1 +1,1 @@\n-let x = 1;\n+let y = 1;\n");
         let marks = marks(&patches);
-        assert_eq!(marks.line(0, 0, 0), &[(4, 1)]);
-        assert_eq!(marks.line(0, 0, 1), &[(4, 1)]);
+        assert_eq!(marks.line(at(0, 0, 0)), &[(4, 1)]);
+        assert_eq!(marks.line(at(0, 0, 1)), &[(4, 1)]);
+    }
+
+    /// Two files, the second with two hunks, each pair changed somewhere
+    /// else: a renamed `x` at 4, a digit at 8, a tail grown at 10.
+    const TWO_FILES: &str = "\
+diff --git a/a.rs b/a.rs
+--- a/a.rs
++++ b/a.rs
+@@ -1,1 +1,1 @@
+-let x = 1;
++let y = 1;
+diff --git a/b.rs b/b.rs
+--- a/b.rs
++++ b/b.rs
+@@ -1,1 +1,1 @@
+-let a = 1;
++let a = 2;
+@@ -9,1 +9,1 @@
+-let z = 1;
++let z = 1; // c
+";
+
+    #[test]
+    fn each_part_of_a_location_picks_its_own_line() {
+        let marks = marks(&parse_patch(TWO_FILES.as_bytes()));
+        assert_eq!(marks.line(at(0, 0, 1)), &[(4, 1)], "the first file");
+        assert_eq!(marks.line(at(1, 0, 1)), &[(8, 1)], "another patch");
+        assert_eq!(marks.line(at(1, 1, 1)), &[(10, 5)], "another hunk");
+        assert_eq!(marks.line(at(1, 1, 0)), &[], "another line");
+    }
+
+    #[test]
+    fn a_location_past_any_part_answers_nothing() {
+        let marks = marks(&parse_patch(TWO_FILES.as_bytes()));
+        assert_eq!(marks.line(at(2, 0, 1)), &[], "no third patch");
+        assert_eq!(marks.line(at(1, 2, 1)), &[], "no third hunk");
+        assert_eq!(marks.line(at(1, 1, 2)), &[], "no third line");
     }
 
     #[test]
@@ -326,7 +367,7 @@ mod tests {
         let patches = one_hunk(
             "@@ -1,1 +1,1 @@\n-fn take(strip: f64, bottom: f64)\n+fn take(strips: f64, bottoms: f64)\n",
         );
-        let added = marks(&patches).line(0, 0, 1).to_vec();
+        let added = marks(&patches).line(at(0, 0, 1)).to_vec();
         assert!(
             added.len() >= 2,
             "an `s` grew in two places, not one: {added:?}"
@@ -337,17 +378,17 @@ mod tests {
     fn lines_that_mostly_disagree_are_emphasised_whole() {
         let patches = one_hunk("@@ -1,1 +1,1 @@\n-abc\n+wxyz nothing alike\n");
         let marks = marks(&patches);
-        assert_eq!(marks.line(0, 0, 0), &[(0, 3)]);
-        assert_eq!(marks.line(0, 0, 1), &[(0, "wxyz nothing alike".len())]);
+        assert_eq!(marks.line(at(0, 0, 0)), &[(0, 3)]);
+        assert_eq!(marks.line(at(0, 0, 1)), &[(0, "wxyz nothing alike".len())]);
     }
 
     #[test]
     fn the_tail_of_the_longer_run_changed_as_a_whole() {
         let patches = one_hunk("@@ -1,1 +1,2 @@\n-let x = 1;\n+let x = 2;\n+let y = 3;\n");
         let marks = marks(&patches);
-        assert_eq!(marks.line(0, 0, 1), &[(8, 1)], "the pair reads finely");
+        assert_eq!(marks.line(at(0, 0, 1)), &[(8, 1)], "the pair reads finely");
         assert_eq!(
-            marks.line(0, 0, 2),
+            marks.line(at(0, 0, 2)),
             &[(0, "let y = 3;".len())],
             "the unpaired line changed as a whole"
         );
@@ -359,11 +400,11 @@ mod tests {
         let patches = one_hunk("@@ -1,1 +1,3 @@\n context\n+alpha\n+beta\n");
         let added = marks(&patches);
         for line in 0..3 {
-            assert_eq!(added.line(0, 0, line), &[], "line {line}");
+            assert_eq!(added.line(at(0, 0, line)), &[], "line {line}");
         }
         // Pure removal, likewise.
         let gone = one_hunk("@@ -1,2 +1,1 @@\n context\n-doomed\n");
-        assert_eq!(marks(&gone).line(0, 0, 1), &[]);
+        assert_eq!(marks(&gone).line(at(0, 0, 1)), &[]);
     }
 
     #[test]
@@ -382,8 +423,8 @@ mod tests {
         let patches =
             one_hunk("@@ -1,1 +1,1 @@\n-old tail\n\\ No newline at end of file\n+old tails\n");
         let marks = marks(&patches);
-        assert_eq!(marks.line(0, 0, 0), &[], "still read as a pair");
-        assert_eq!(marks.line(0, 0, 2), &[(8, 1)]);
+        assert_eq!(marks.line(at(0, 0, 0)), &[], "still read as a pair");
+        assert_eq!(marks.line(at(0, 0, 2)), &[(8, 1)]);
     }
 
     #[test]
@@ -399,7 +440,7 @@ diff --cc s.txt
         let patches = parse_patch(patch.as_bytes());
         assert!(patches[0].is_combined);
         let marks = marks(&patches);
-        assert_eq!(marks.line(0, 0, 0), &[]);
-        assert_eq!(marks.line(0, 0, 1), &[]);
+        assert_eq!(marks.line(at(0, 0, 0)), &[]);
+        assert_eq!(marks.line(at(0, 0, 1)), &[]);
     }
 }

@@ -3,7 +3,7 @@
 use platitude_core::Oid;
 use platitude_core::highlight::DiffColors;
 use platitude_core::intraline::IntraMarks;
-use platitude_core::parse::diff::{DiffLineKind, FilePatch};
+use platitude_core::parse::diff::{DiffLineKind, DiffLineLocation, FilePatch};
 
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
@@ -306,7 +306,12 @@ pub fn flatten_patches(
                     // Folded above; a note never reaches here.
                     DiffLineKind::NoNewline => continue,
                 };
-                let read = colors.line(patch_index, hunk_index, line_index);
+                let location = DiffLineLocation {
+                    patch: patch_index,
+                    hunk: hunk_index,
+                    line: line_index,
+                };
+                let read = colors.line(location);
                 let markup = styled(&line.text, &read.spans);
 
                 rows.push(DiffRow {
@@ -316,7 +321,7 @@ pub fn flatten_patches(
                     text: markup,
 
                     emph: marks.map_or_else(Runs::default, |marks| {
-                        spelled_ranges(&line.text, marks.line(patch_index, hunk_index, line_index))
+                        spelled_ranges(&line.text, marks.line(location))
                     }),
                     fence: read.fence,
                     no_newline: false,
