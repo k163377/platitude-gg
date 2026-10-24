@@ -211,11 +211,9 @@ pub(crate) fn standing_for(dir: &str, session: &str) -> Option<String> {
 /// The landing verb's gate: a session whose entry stands behind another's
 /// is refused, and one that left is sent back to the user.
 pub(crate) fn must_be_head(dir: &str, me: &Identity) -> Result<(), String> {
-    if me.session.is_empty() {
-        return Ok(());
-    }
     let Some(entry) = file(dir, &me.session).and_then(|path| load(&path)) else {
-        // A permit from before the line, or a session the hook never saw.
+        // No session, a permit from before the line, or a session the hook
+        // never saw.
         return Ok(());
     };
     if !entry.left.is_empty() {
