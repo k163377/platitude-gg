@@ -61,9 +61,7 @@ impl RepoTab {
     /// the delete is leased to (`remote::delete_remote_branch`).
     pub(super) fn remote_branch_delete(&mut self, remote: String, branch: String, expect: String) {
         let row = format!("{remote}/{branch}");
-        let asked = self.ask_session(|s| {
-            s.delete_remote_branch(remote.clone(), branch.clone(), expect.clone())
-        });
+        let asked = self.ask_session(|s| s.delete_remote_branch(remote, branch, expect));
         self.ref_push_asked(&row, asked);
         self.took_away(&[(Row::Remote, &row)], asked);
     }
@@ -88,13 +86,7 @@ impl RepoTab {
     ) {
         let row = format!("{remote}/{remote_branch}");
         let asked = self.ask_session(|s| {
-            s.delete_branch_everywhere(
-                branch.clone(),
-                remote.clone(),
-                remote_branch.clone(),
-                force,
-                expect.clone(),
-            )
+            s.delete_branch_everywhere(branch.clone(), remote, remote_branch, force, expect)
         });
         self.ref_push_asked(&row, asked);
         self.took_away(&[(Row::Branch, &branch), (Row::Remote, &row)], asked);
@@ -121,9 +113,9 @@ impl RepoTab {
         row_goes: bool,
         expect: String,
     ) {
-        let asked =
-            self.ask_session(|s| s.delete_remote_tag(remote.clone(), tag.clone(), expect.clone()));
-        self.ref_push_asked(&format!("{remote}/{tag}"), asked);
+        let row = format!("{remote}/{tag}");
+        let asked = self.ask_session(|s| s.delete_remote_tag(remote, tag.clone(), expect));
+        self.ref_push_asked(&row, asked);
         let rows: &[(Row, &str)] = if row_goes { &[(Row::Tag, &tag)] } else { &[] };
         self.took_away(rows, asked);
     }
@@ -132,9 +124,9 @@ impl RepoTab {
     /// write: a lease the remote refuses stops it with nothing touched
     /// (`session::delete_tag_everywhere`).
     pub(super) fn tag_delete_everywhere(&mut self, tag: String, remote: String, expect: String) {
-        let asked = self
-            .ask_session(|s| s.delete_tag_everywhere(tag.clone(), remote.clone(), expect.clone()));
-        self.ref_push_asked(&format!("{remote}/{tag}"), asked);
+        let row = format!("{remote}/{tag}");
+        let asked = self.ask_session(|s| s.delete_tag_everywhere(tag.clone(), remote, expect));
+        self.ref_push_asked(&row, asked);
         self.took_away(&[(Row::Tag, &tag)], asked);
     }
 

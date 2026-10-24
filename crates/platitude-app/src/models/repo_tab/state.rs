@@ -311,9 +311,9 @@ impl RepoTab {
     ) {
         self.ask_session(|s| {
             if leaving {
-                s.checkout_leaving_operation(target.clone())
+                s.checkout_leaving_operation(target)
             } else {
-                s.checkout(target.clone())
+                s.checkout(target)
             }
         });
     }
@@ -336,7 +336,7 @@ impl RepoTab {
             allow_empty: false,
             reset_author: amend && reset_author,
         };
-        let asked = self.ask_session(|s| s.commit(message.clone(), options));
+        let asked = self.ask_session(|s| s.commit(message, options));
         self.commit_out.asked(asked);
     }
 
@@ -368,7 +368,7 @@ impl RepoTab {
                 return;
             }
         };
-        let asked = self.ask_session(|s| s.add_worktree(path.clone(), on.clone(), name.clone()));
+        let asked = self.ask_session(|s| s.add_worktree(path.clone(), on, name));
         self.worktree_out.asked(asked);
         self.worktree_answer_path = path;
     }
@@ -378,7 +378,7 @@ impl RepoTab {
     /// answer decides where the tab stands next (`worktreeMoveStanding`).
     /// Says whether the queue took it: only then does an answer come.
     pub(super) fn worktree_move(&mut self, from: String, to: String, name: String) -> bool {
-        let asked = self.ask_session(|s| s.move_worktree(from.clone(), to.clone(), name.clone()));
+        let asked = self.ask_session(|s| s.move_worktree(from.clone(), to.clone(), name));
         self.worktree_move_out.asked(asked);
         self.worktree_move_standing = platitude_core::session::same_path_key(&self.repo_path)
             == platitude_core::session::same_path_key(&from);
@@ -400,7 +400,7 @@ impl RepoTab {
                 return;
             }
         };
-        self.ask_session(|s| s.reset(rev.clone(), mode));
+        self.ask_session(|s| s.reset(rev, mode));
     }
 }
 

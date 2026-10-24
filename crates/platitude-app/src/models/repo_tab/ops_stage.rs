@@ -106,7 +106,7 @@ impl RepoTab {
             tracing::warn!(fingerprint, "selection staging without a diff fingerprint");
             return false;
         };
-        self.ask_session(|s| s.apply_partial(target.clone(), selects.clone(), seen))
+        self.ask_session(|s| s.apply_partial(target, selects, seen))
             .is_some()
     }
 
@@ -133,7 +133,7 @@ impl RepoTab {
             tracing::warn!(fingerprint, "selection discard without a diff fingerprint");
             return false;
         };
-        self.ask_session(|s| s.discard_partial(target.clone(), selects.clone(), seen))
+        self.ask_session(|s| s.discard_partial(target, selects, seen))
             .is_some()
     }
 }

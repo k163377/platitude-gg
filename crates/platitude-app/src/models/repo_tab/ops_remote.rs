@@ -18,7 +18,7 @@ impl RepoTab {
             keep_index: false,
             staged_only: false,
         };
-        let asked = self.ask_session(|s| s.stash_push(message.clone(), options, Vec::new()));
+        let asked = self.ask_session(|s| s.stash_push(message, options, Vec::new()));
         self.stash_out.asked(asked);
     }
 
@@ -34,7 +34,7 @@ impl RepoTab {
             keep_index: false,
             staged_only: false,
         };
-        let asked = self.ask_session(|s| s.stash_push(message.clone(), options, paths.clone()));
+        let asked = self.ask_session(|s| s.stash_push(message, options, paths));
         self.stash_out.asked(asked);
     }
 
@@ -45,14 +45,14 @@ impl RepoTab {
         self.remote_branch_tip = String::new();
         self.remote_branch_theirs = 0;
         self.changed();
-        self.with_session(|s| s.check_remote_branch(remote.clone(), branch.clone(), local.clone()));
+        self.with_session(|s| s.check_remote_branch(remote, branch, local));
     }
 
     pub(super) fn look_up_branch_delete(&mut self, branch: String) {
         self.branch_delete_asked = String::new();
         self.branch_delete_merged = String::new();
         self.changed();
-        self.with_session(|s| s.check_branch_delete(branch.clone()));
+        self.with_session(|s| s.check_branch_delete(branch));
     }
 
     /// `branch` pushed from its row's menu, where its marks and upstream
@@ -64,8 +64,7 @@ impl RepoTab {
     pub(super) fn named_push(&mut self, branch: String, force: String, lease_expect: String) {
         let fallback = self.default_remote.clone();
         let force = Self::push_force(&force, &lease_expect);
-        let asked =
-            self.ask_session(|s| s.push_named(branch.clone(), fallback.clone(), force.clone()));
+        let asked = self.ask_session(|s| s.push_named(branch.clone(), fallback, force));
         self.push_out.asked(asked, branch);
     }
 

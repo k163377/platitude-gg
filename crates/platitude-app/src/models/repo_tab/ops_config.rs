@@ -57,7 +57,7 @@ impl RepoTab {
         } else {
             platitude_core::identity::ConfigScope::Local
         };
-        self.ask_session(|s| s.set_identity(name.clone(), email.clone(), scope));
+        self.ask_session(|s| s.set_identity(name, email, scope));
     }
 
     pub(super) fn write_tags_shown(&mut self, shown: bool) {

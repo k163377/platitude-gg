@@ -702,12 +702,12 @@ impl RepoTab {
 
     #[qslot]
     fn stage_path(&mut self, path: String) {
-        self.ask_session(|s| s.stage_paths(vec![path.clone()]));
+        self.ask_session(|s| s.stage_paths(vec![path]));
     }
 
     #[qslot]
     fn unstage_path(&mut self, path: String) {
-        self.ask_session(|s| s.unstage_paths(vec![path.clone()]));
+        self.ask_session(|s| s.unstage_paths(vec![path]));
     }
 
     /// The same two over the gathered set: one git command however many
@@ -865,7 +865,7 @@ impl RepoTab {
     /// comes back as `moveAskSeq` for the UI to ask about.
     #[qslot]
     fn checkout_moving_branch(&mut self, local: String, start: String, leaving: bool) {
-        self.ask_session(|s| s.checkout_moving_branch(local.clone(), start.clone(), leaving));
+        self.ask_session(|s| s.checkout_moving_branch(local, start, leaving));
     }
 
     /// Moves an existing local branch to `start` and lands on it. What the
@@ -887,7 +887,7 @@ impl RepoTab {
     #[qslot]
     fn create_branch(&mut self, name: String, start_point: String, switch_to: bool) {
         let start = (!start_point.is_empty()).then_some(start_point);
-        self.ask_session(|s| s.create_branch(name.clone(), start.clone(), switch_to));
+        self.ask_session(|s| s.create_branch(name, start, switch_to));
     }
 
     /// Deletes a local branch, and takes its row off the screen behind the
@@ -901,7 +901,7 @@ impl RepoTab {
 
     #[qslot]
     fn rename_branch(&mut self, from: String, to: String, force: bool) {
-        self.ask_session(|s| s.rename_branch(from.clone(), to.clone(), force));
+        self.ask_session(|s| s.rename_branch(from, to, force));
     }
 
     /// Records the remote branch `branch` is measured against, as
@@ -912,7 +912,7 @@ impl RepoTab {
         if branch.is_empty() || remote.is_empty() || remote_branch.is_empty() {
             return;
         }
-        self.ask_session(|s| s.set_upstream(branch.clone(), remote.clone(), remote_branch.clone()));
+        self.ask_session(|s| s.set_upstream(branch, remote, remote_branch));
     }
 
     /// Leaves `branch` measured against nothing (`branch::unset_upstream`).
@@ -922,14 +922,14 @@ impl RepoTab {
         if branch.is_empty() {
             return;
         }
-        self.ask_session(|s| s.unset_upstream(branch.clone()));
+        self.ask_session(|s| s.unset_upstream(branch));
     }
 
     /// Puts a lightweight tag on `commit` (HEAD when empty). Always
     /// plain: a name already taken is git's to refuse.
     #[qslot]
     fn create_tag(&mut self, name: String, commit: String) {
-        self.ask_session(|s| s.create_tag(name.clone(), commit.clone()));
+        self.ask_session(|s| s.create_tag(name, commit));
     }
 
     /// Sends one tag to one remote. `lease_expect` pins a leased
@@ -937,7 +937,7 @@ impl RepoTab {
     /// on; empty sends it plain.
     #[qslot]
     fn push_tag(&mut self, remote: String, tag: String, lease_expect: String) {
-        self.ask_session(|s| s.push_tag(remote.clone(), tag.clone(), lease_expect.clone()));
+        self.ask_session(|s| s.push_tag(remote, tag, lease_expect));
     }
 
     /// Replaces a tag on a remote with one under a new name. git has no
@@ -947,12 +947,11 @@ impl RepoTab {
     /// its delete is leased to.
     #[qslot]
     fn replace_remote_tag(&mut self, remote: String, from: String, to: String, expect: String) {
-        let asked = self.ask_session(|s| {
-            s.replace_remote_tag(remote.clone(), from.clone(), to.clone(), expect.clone())
-        });
         // Keyed like every outgoing tag write (`ops_delete::remote_tag_delete`),
         // on the name that goes, so the page reports this press's answer.
-        self.ref_push_asked(&format!("{remote}/{from}"), asked);
+        let row = format!("{remote}/{from}");
+        let asked = self.ask_session(|s| s.replace_remote_tag(remote, from, to, expect));
+        self.ref_push_asked(&row, asked);
     }
 
     /// The remote's copy of a tag. `rowGoes` is whether the sidebar's row
@@ -974,7 +973,7 @@ impl RepoTab {
     /// the same object and a delete of the old one.
     #[qslot]
     fn rename_tag(&mut self, from: String, to: String) {
-        self.ask_session(|s| s.rename_tag(from.clone(), to.clone()));
+        self.ask_session(|s| s.rename_tag(from, to));
     }
 
     /// Deletes a tag: only the name goes.
@@ -989,7 +988,7 @@ impl RepoTab {
     /// there by the press.
     #[qslot]
     fn rename_stash(&mut self, selector: String, oid: String, message: String) {
-        self.ask_session(|s| s.rename_stash(selector.clone(), oid.clone(), message.clone()));
+        self.ask_session(|s| s.rename_stash(selector, oid, message));
     }
 
     /// `git stash push -u` over the whole worktree, straight off the
@@ -1015,7 +1014,7 @@ impl RepoTab {
     /// (`writeAnswerIndex`); zero where no session took it.
     #[qslot]
     fn pop_stash(&mut self, selector: String) -> i32 {
-        let asked = self.ask_session(|s| s.stash_pop(selector.clone()));
+        let asked = self.ask_session(|s| s.stash_pop(selector));
         asked.map_or(0, bridge_id)
     }
 
@@ -1023,7 +1022,7 @@ impl RepoTab {
     /// comes back: the entry stays, so nothing waits on this answer.
     #[qslot]
     fn apply_stash(&mut self, selector: String) {
-        self.ask_session(|s| s.stash_apply(selector.clone()));
+        self.ask_session(|s| s.stash_apply(selector));
     }
 
     /// Another worktree's uncommitted work, at `path` as its row names it,
@@ -1032,7 +1031,7 @@ impl RepoTab {
     /// any other.
     #[qslot]
     fn apply_carried(&mut self, path: String) {
-        self.ask_session(|s| s.apply_carried(path.clone()));
+        self.ask_session(|s| s.apply_carried(path));
     }
 
     /// `git stash drop` (destructive): the entry's row goes at the press.
@@ -1133,7 +1132,7 @@ impl RepoTab {
     #[qslot]
     fn fetch(&mut self, remote: String) {
         let remote = (!remote.is_empty()).then_some(remote);
-        self.ask_session(|s| s.fetch(remote.clone()));
+        self.ask_session(|s| s.fetch(remote));
     }
 
     /// The `pull` row's press (デザイン規約 §取り込んで合流させる). An empty
@@ -1146,7 +1145,7 @@ impl RepoTab {
         if branch.is_empty() {
             self.ask_session(platitude_core::session::RepoSession::pull);
         } else {
-            self.ask_session(|s| s.fast_forward(branch.clone()));
+            self.ask_session(|s| s.fast_forward(branch));
         }
     }
 
@@ -1159,7 +1158,7 @@ impl RepoTab {
     fn push_current(&mut self, branch: String, force: String, lease_expect: String) {
         let fallback = self.default_remote.clone();
         let force = Self::push_force(&force, &lease_expect);
-        let asked = self.ask_session(|s| s.push_current(fallback.clone(), force.clone()));
+        let asked = self.ask_session(|s| s.push_current(fallback, force));
         self.push_out.asked(asked, branch);
     }
 
@@ -1175,14 +1174,7 @@ impl RepoTab {
         remote_branch: String,
         expect: String,
     ) {
-        let asked = self.ask_session(|s| {
-            s.publish(
-                branch.clone(),
-                remote.clone(),
-                remote_branch.clone(),
-                expect.clone(),
-            )
-        });
+        let asked = self.ask_session(|s| s.publish(branch.clone(), remote, remote_branch, expect));
         self.push_out.asked(asked, branch);
     }
 
@@ -1190,7 +1182,7 @@ impl RepoTab {
     /// nowhere is recorded just the same, and the push finds out.
     #[qslot]
     fn add_remote(&mut self, name: String, url: String) {
-        self.ask_session(|s| s.add_remote(name.clone(), url.clone()));
+        self.ask_session(|s| s.add_remote(name, url));
     }
 
     /// The fetch URL a remote is written down with, empty for a name this
@@ -1211,13 +1203,13 @@ impl RepoTab {
     /// every repository stays, and marking another remote is what moves it.
     #[qslot]
     fn mark_origin(&mut self, name: String) {
-        self.ask_session(|s| s.mark_origin(name.clone()));
+        self.ask_session(|s| s.mark_origin(name));
     }
 
     /// `git remote set-url <name> <url>`.
     #[qslot]
     fn set_remote_url(&mut self, name: String, url: String) {
-        self.ask_session(|s| s.set_remote_url(name.clone(), url.clone()));
+        self.ask_session(|s| s.set_remote_url(name, url));
     }
 
     /// Asks what a push of `local` under this branch name would meet on
@@ -1269,9 +1261,7 @@ impl RepoTab {
             return;
         }
         let row = format!("{remote}/{remote_branch}");
-        let asked = self.ask_session(|s| {
-            s.point_upstream_and_push(branch.clone(), remote.clone(), remote_branch.clone())
-        });
+        let asked = self.ask_session(|s| s.point_upstream_and_push(branch, remote, remote_branch));
         self.ref_push_asked(&row, asked);
     }
 
@@ -1280,9 +1270,7 @@ impl RepoTab {
     #[qslot]
     fn replace_remote_branch(&mut self, remote: String, from: String, to: String, expect: String) {
         let row = format!("{remote}/{from}");
-        let asked = self.ask_session(|s| {
-            s.replace_remote_branch(remote.clone(), from.clone(), to.clone(), expect.clone())
-        });
+        let asked = self.ask_session(|s| s.replace_remote_branch(remote, from, to, expect));
         self.ref_push_asked(&row, asked);
     }
 
@@ -1318,7 +1306,7 @@ impl RepoTab {
             squash: false,
             message: (!message.trim().is_empty()).then_some(message),
         };
-        self.ask_session(|s| s.merge(rev.clone(), options.clone()));
+        self.ask_session(|s| s.merge(rev, options));
     }
 
     /// `git rebase <upstream>`; an empty `onto` uses `upstream` as the base.
@@ -1334,24 +1322,24 @@ impl RepoTab {
             update_refs,
             root: false,
         };
-        self.ask_session(|s| s.rebase(upstream.clone(), options.clone()));
+        self.ask_session(|s| s.rebase(upstream, options));
     }
 
     #[qslot]
     fn cherry_pick(&mut self, rev: String) {
-        self.ask_session(|s| s.cherry_pick(vec![rev.clone()]));
+        self.ask_session(|s| s.cherry_pick(vec![rev]));
     }
 
     /// Folds a commit into its parent (one-commit interactive rebase).
     #[qslot]
     fn squash_into_parent(&mut self, oid: String) {
-        self.ask_session(|s| s.squash_into_parent(oid.clone()));
+        self.ask_session(|s| s.squash_into_parent(oid));
     }
 
     /// Leaves one commit out of the history, replaying what came after it.
     #[qslot]
     fn drop_commit(&mut self, oid: String) {
-        self.ask_session(|s| s.drop_commit(oid.clone()));
+        self.ask_session(|s| s.drop_commit(oid));
     }
 
     /// Replaces one commit's message. HEAD is amended; anything older is
@@ -1362,12 +1350,12 @@ impl RepoTab {
         if message.is_empty() {
             return;
         }
-        self.ask_session(|s| s.reword(oid.clone(), message.clone()));
+        self.ask_session(|s| s.reword(oid, message));
     }
 
     #[qslot]
     fn revert(&mut self, rev: String) {
-        self.ask_session(|s| s.revert(vec![rev.clone()]));
+        self.ask_session(|s| s.revert(vec![rev]));
     }
 
     /// Continues / aborts / skips whatever is in progress. `how` is
@@ -1399,7 +1387,7 @@ impl RepoTab {
     /// Records which merge tool to launch; empty clears the choice.
     #[qslot]
     fn set_merge_tool(&mut self, tool: String) {
-        self.ask_session(|s| s.set_merge_tool(tool.clone()));
+        self.ask_session(|s| s.set_merge_tool(tool));
     }
 
     /// Asks for the configured merge tool; the answer arrives on the
