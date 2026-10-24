@@ -138,7 +138,8 @@ InkCanvas {
     }
     /// What a set mark is drawn against: `height`, the capitals' (a step over them for a heading), and `middle`, where
     /// the marks' middles stand from the baseline — the capitals' middle for a mark among the words, the face's own
-    /// `+`'s for a sign (`sign`).
+    /// `+`'s for a sign (`sign`). `null` for a mark not set — and what the bindings reading it ask, not `set`: when
+    /// `set` turns, a binding can hear of it before this one has, and would read a `target` still `null`.
     readonly property var target: {
         if (icon.set === "")
             return null
@@ -158,7 +159,7 @@ InkCanvas {
     /// has one em for every letter — the grid's own proportions between the marks are the drawing (a tall branch, a
     /// squat stash), and fitting each to one height would thin the one and fatten the other. 11.5 squares, line ends
     /// to line ends, are the capitals' height.
-    readonly property real unit: icon.set === "" ? icon.width / 16
+    readonly property real unit: !icon.target ? icon.width / 16
                                  : Math.max(0, icon.target.height - icon.pen) / 11.5
     /// The ink's box in the 16-grid, line included, before any move: `[left, top, right, bottom]`. A grid square is
     /// `unit` pixels and the line keeps its pixels, so the half line is worth more of the grid on a small mark.
@@ -176,7 +177,7 @@ InkCanvas {
     readonly property real shiftY: {
         if (!icon.centred)
             return 0
-        if (icon.set === "")
+        if (!icon.target)
             return 8 - (icon.inkBox[1] + icon.inkBox[3]) / 2
         // Every other mark on its middle line, whatever its height: a squat mark stood on the baseline reads as
         // dropped, a tall one centred runs past the capitals both ways. A sign never goes under the baseline — that

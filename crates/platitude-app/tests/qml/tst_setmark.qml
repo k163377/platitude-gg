@@ -50,6 +50,12 @@ Item {
         name: "SetMark"
         when: windowShown
 
+        // Every case sets its mark after it stands (`inks`), as a captioned toggle does, and the mark says nothing on
+        // the way — held on every case, as only the first mark a file builds says anything (`NavIcon.target`).
+        function init() {
+            failOnWarning(/NavIcon\.qml/)
+        }
+
         /// Where the ink starts and ends down the columns `from`–`to` of a picture, to a fraction of a pixel.
         function inkDown(picture, from, to, height) {
             const cover = new Array(height).fill(0)
