@@ -111,7 +111,7 @@ jobs:
         run: >
           cargo run --locked -p xtask -- replay
           --tier "${REPLAY_TIER}" --line "${REPLAY_LINES}" --out "${RUNNER_TEMP}/shots"
-      # always(), for both steps below: the pictures a run took before it
+      # always(), for the next two steps: the pictures a run took before it
       # was cut short — out of time, or cancelled — are still wanted.
       - name: Summary
         if: ${{ always() }}
@@ -133,3 +133,12 @@ jobs:
             ${{ runner.temp }}/shots/*/*.png
             ${{ runner.temp }}/shots/*/*.txt
           retention-days: 30
+      # As in ci.yml, and for one more reason: the cache's cleanup before it
+      # saves goes down every folder under target/ holding no build, deps or
+      # .fingerprint, and takes one named `tests` for a profile — it opens
+      # that folder's `target` and `trybuild` unawaited, two ENOENT errors on
+      # the run's page for each demo repository the replay left with a
+      # `tests/` (`demo::scale::long`), and empties the rest of it.
+      - name: Drop the throwaway trees before the cache saves
+        if: ${{ always() }}
+        run: rm -rf target/tmp
