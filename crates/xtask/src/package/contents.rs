@@ -439,7 +439,7 @@ pub(super) fn parted(carried: &Carried) -> Vec<String> {
     let mut frameworks = Vec::new();
     for entry in &carried.frameworks {
         match entry.strip_suffix(".framework") {
-            Some(name) => frameworks.push(name.to_string()),
+            Some(name) => frameworks.push(name),
             None => parted.push(format!("Frameworks holds {entry}, which is no framework")),
         }
     }
@@ -463,10 +463,10 @@ pub(super) fn parted(carried: &Carried) -> Vec<String> {
             )
         },
     ));
-    let modules: Vec<String> = carried
+    let modules: Vec<&str> = carried
         .modules
         .iter()
-        .map(|(name, _)| name.clone())
+        .map(|(name, _)| name.as_str())
         .collect();
     parted.extend(compare(
         (
@@ -484,7 +484,6 @@ pub(super) fn parted(carried: &Carried) -> Vec<String> {
         .iter()
         .filter_map(|(_, plugin)| plugin.as_deref().map(plugin_file))
         .collect();
-    let named: Vec<&str> = named.iter().map(String::as_str).collect();
     parted.extend(compare(
         (
             "a QML plugin no carried qmldir names",
@@ -502,21 +501,23 @@ pub(super) fn parted(carried: &Carried) -> Vec<String> {
 /// `said.1`, for each of `listed` not carried.
 fn compare<'a>(
     said: (&str, &str),
-    carried: &[String],
-    listed: &[&str],
+    carried: &[impl AsRef<str>],
+    listed: &[impl AsRef<str>],
     why_out: impl Fn(&str) -> Option<&'a str>,
 ) -> Vec<String> {
     let (extra, missing) = said;
     let extras = carried
         .iter()
-        .filter(|name| !listed.contains(&name.as_str()))
+        .map(AsRef::as_ref)
+        .filter(|name| !listed.iter().any(|listed| listed.as_ref() == *name))
         .map(|name| match why_out(name) {
             Some(why) => format!("{extra}: {name} — left out as {why}"),
             None => format!("{extra}: {name}"),
         });
     let lacking = listed
         .iter()
-        .filter(|name| !carried.iter().any(|carried| carried == *name))
+        .map(AsRef::as_ref)
+        .filter(|name| !carried.iter().any(|carried| carried.as_ref() == *name))
         .map(|name| format!("{missing}: {name}"));
     extras.chain(lacking).collect()
 }
