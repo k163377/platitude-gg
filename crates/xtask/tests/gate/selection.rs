@@ -378,13 +378,16 @@ fn a_component_no_verb_shows_stops_the_gate_by_name() {
     sb.commit_all(&sb.seat, "feat(app-ui): extra", &[]);
     let (ok, text) = sb.gate(&sb.seat, &[], &[]);
     assert!(!ok, "{text}");
+    // Main.qml is in the plan's list of changed files too: only the
+    // refusal's own list says which components no verb shows.
+    let refused = text
+        .split_once("no verb shows these components, so the gate cannot pass them:\n")
+        .and_then(|(_, rest)| rest.split_once("\nRun a verb"))
+        .map(|(named, _)| named)
+        .unwrap_or_else(|| panic!("no refusal by name: {text}"));
     assert!(
-        text.contains("no verb shows") && text.contains("ui/Extra.qml"),
-        "{text}"
-    );
-    assert!(
-        !text.contains("ui/Main.qml\n") || text.contains("Main"),
-        "{text}"
+        refused.contains("ui/Extra.qml") && !refused.contains("ui/Main.qml"),
+        "{refused}"
     );
     // The census is asked before anything runs, so `--verb` here records
     // too late and is no way out.
