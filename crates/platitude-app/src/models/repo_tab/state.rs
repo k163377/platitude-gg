@@ -226,6 +226,13 @@ impl RepoTab {
         self.diff_reread.read_after(after, self.tree_seen);
     }
 
+    /// Takes the header line down, whoever put it up.
+    pub(super) fn take_down_last_error(&mut self) {
+        self.last_error = String::new();
+        self.last_error_why = String::new();
+        self.last_error_from_fetch = false;
+    }
+
     /// A fetch ended, whoever asked for it: counts consecutive failures
     /// and stops the timer after enough (デザイン規約 §リモートから取り込む).
     ///
@@ -243,9 +250,7 @@ impl RepoTab {
             // (デザイン規約 §リモートから取り込む「成功が 1 回入れば数は 0 に戻る」).
             // Rows are history and stay.
             if self.last_error_from_fetch {
-                self.last_error = String::new();
-                self.last_error_why = String::new();
-                self.last_error_from_fetch = false;
+                self.take_down_last_error();
             }
             return;
         }

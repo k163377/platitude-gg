@@ -21,9 +21,7 @@ impl RepoTab {
         self.error = String::new();
         self.error_kind = String::new();
         self.error_path = String::new();
-        self.last_error = String::new();
-        self.last_error_why = String::new();
-        self.last_error_from_fetch = false;
+        self.take_down_last_error();
         self.busy_op = String::new();
         self.replaying = false;
         self.merge_tools_loading = false;

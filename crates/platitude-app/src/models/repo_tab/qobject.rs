@@ -671,9 +671,7 @@ impl RepoTab {
 
     #[qslot]
     fn clear_last_error(&mut self) {
-        self.last_error = String::new();
-        self.last_error_why = String::new();
-        self.last_error_from_fetch = false;
+        self.take_down_last_error();
         self.changed();
     }
 

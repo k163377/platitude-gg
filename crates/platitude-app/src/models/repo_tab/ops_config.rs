@@ -10,9 +10,7 @@ impl RepoTab {
         // Only the line fetch wrote: a background read's news is not
         // this button's to take down.
         if self.last_error_from_fetch {
-            self.last_error = String::new();
-            self.last_error_why = String::new();
-            self.last_error_from_fetch = false;
+            self.take_down_last_error();
         }
         self.with_session(|s| s.resume_auto_fetch());
         self.ask_session(|s| s.fetch(None));
