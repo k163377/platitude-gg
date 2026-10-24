@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use super::Chip;
 use super::at_hand;
 use super::ledger::{load, store};
-use crate::hook::payload::{deny, own_value_field, printable, string_field};
+use crate::hook::payload::{deny, own_value_field, string_field};
 
 /// The tool a chip is proposed with.
 const PROPOSE: &str = "mcp__ccd_session__start_session";
@@ -104,17 +104,18 @@ pub(crate) fn pre_spawn(input: &str) -> Result<(), String> {
 /// follows what the list actually holds. A chip is recorded only once the
 /// proposal went through; a withdrawal takes it off either way (the user
 /// may have got there first). A chip the user started keeps its number:
-/// the list goes on reading 1..N until the session withdraws it.
-pub(crate) fn post_chip(input: &str) -> Result<(), String> {
+/// the list goes on reading 1..N until the session withdraws it. Answers
+/// what the stacking leaves undone, for the hook's one answer to the call.
+pub(crate) fn post_chip(input: &str) -> Result<Vec<String>, String> {
     let tool = string_field(input, "tool_name").unwrap_or_default();
     if tool == WITHDRAW {
         dismissed(input);
     } else if proposes(input)
         && string_field(input, "hook_event_name").as_deref() == Some("PostToolUse")
     {
-        spawned(input);
+        return Ok(spawned(input));
     }
-    Ok(())
+    Ok(Vec::new())
 }
 
 /// Whether the call puts a new chip on the list: a proposal of this
@@ -129,36 +130,33 @@ fn proposes(input: &str) -> bool {
 
 /// Stop: a turn ends only on a live set that reads 1..N. Judged here, not
 /// per call: a renumbering stacks each replacement before dismissing the
-/// old one, so the set passes through duplicates.
-pub(crate) fn stop(input: &str) -> Result<bool, String> {
+/// old one, so the set passes through duplicates. Answers the reason the
+/// turn goes on, when it does.
+pub(crate) fn stop(input: &str) -> Result<Option<String>, String> {
     let live = load(input);
     let problems = problems(&live);
     if problems.is_empty() {
-        return Ok(false);
+        return Ok(None);
     }
-    println!(
-        "{{\"decision\":\"block\",\"reason\":\"{}\"}}",
-        printable(&format!(
-            "The task chips this session stacked are left out of order: {}. Live \
-             now: {}. The list is read by its numbers, so before a turn ends the \
-             live set reads 1..N, each number once and each chip once, \
-             1 being the most important. Re-stack whatever moved — propose the chip \
-             again under its new number, then dismiss its old task_id — and say in \
-             the reply which chips changed number.",
-            problems.join("; "),
-            roster(&live)
-        ))
-    );
-    Ok(true)
+    Ok(Some(format!(
+        "The task chips this session stacked are left out of order: {}. Live \
+         now: {}. The list is read by its numbers, so before a turn ends the \
+         live set reads 1..N, each number once and each chip once, \
+         1 being the most important. Re-stack whatever moved — propose the chip \
+         again under its new number, then dismiss its old task_id — and say in \
+         the reply which chips changed number.",
+        problems.join("; "),
+        roster(&live)
+    )))
 }
 
-/// Records a chip that was actually stacked, and says out loud what the
-/// stacking leaves undone.
-fn spawned(input: &str) {
+/// Records a chip that was actually stacked, and answers what the stacking
+/// leaves undone.
+fn spawned(input: &str) -> Vec<String> {
     let asked = section(input, "\"tool_input\"");
     let title = string_field(asked, "title").unwrap_or_default();
     let Some((priority, body, optional)) = numbered(&title) else {
-        return;
+        return Vec::new();
     };
     let chip = Chip {
         id: id_in(section(input, "\"tool_response\"")).unwrap_or_default(),
@@ -186,13 +184,7 @@ fn spawned(input: &str) {
     }
     live.push(chip);
     store(input, &live);
-    if !notes.is_empty() {
-        println!(
-            "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PostToolUse\",\
-             \"additionalContext\":\"{}\"}}}}",
-            printable(&notes.join(" "))
-        );
-    }
+    notes
 }
 
 /// Drops a chip the session withdrew — also when the harness refused the

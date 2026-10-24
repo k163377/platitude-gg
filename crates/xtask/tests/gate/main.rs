@@ -24,6 +24,7 @@ mod embedded;
 mod halt;
 mod hook;
 mod landing;
+mod language;
 mod leftovers;
 mod permit;
 mod pins;

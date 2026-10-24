@@ -85,6 +85,31 @@ pub(super) fn number_field(input: &str, key: &str) -> Option<u64> {
     digits.parse().ok()
 }
 
+/// The values of the JSON array `array` starts with, each as written
+/// ([`written_value`]); empty when it is no array or is cut short.
+pub(super) fn array_items(array: &str) -> Vec<&str> {
+    let Some(mut rest) = array.trim_start().strip_prefix('[') else {
+        return Vec::new();
+    };
+    let mut items = Vec::new();
+    loop {
+        rest = rest.trim_start();
+        if rest.starts_with(']') {
+            return items;
+        }
+        let Some(item) = written_value(rest) else {
+            return Vec::new();
+        };
+        items.push(item);
+        rest = rest[item.len()..].trim_start();
+        match rest.strip_prefix(',') {
+            Some(next) => rest = next,
+            None if rest.starts_with(']') => return items,
+            None => return Vec::new(),
+        }
+    }
+}
+
 /// The JSON value `value` starts with, as written — an object or an array
 /// with everything nested in it, a string with its quotes; `None` when cut
 /// short.
@@ -140,8 +165,21 @@ pub(super) fn printable(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{bool_field, number_field, own_string_field, own_value_field, string_field};
+    use super::{
+        array_items, bool_field, number_field, own_string_field, own_value_field, string_field,
+    };
     use crate::seats::worktree_root;
+
+    #[test]
+    fn reads_an_array_value_by_value() {
+        assert_eq!(
+            array_items(r#"[{"a":[1,"]"]}, "s,t" ,7]"#),
+            vec![r#"{"a":[1,"]"]}"#, r#""s,t""#, "7"]
+        );
+        assert_eq!(array_items(" [ ] "), Vec::<&str>::new());
+        assert_eq!(array_items(r#"[{"a":1}"#), Vec::<&str>::new());
+        assert_eq!(array_items(r#"{"a":1}"#), Vec::<&str>::new());
+    }
 
     #[test]
     fn reads_the_payload_s_own_field_past_nested_ones_of_its_name() {

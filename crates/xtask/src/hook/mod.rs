@@ -1,8 +1,8 @@
 //! Claude Code hook handlers (`cargo xtask hook <event>`), wired from
 //! .claude/settings.json: the git, launches, kills, seats, chips, board
-//! window and other sessions a session touches only when the user asks.
-//! Main moves on the permit the user's own `/land` opens (`permit`), and
-//! on that alone.
+//! window and other sessions a session touches only when the user asks,
+//! and the language of what the user reads (`language`). Main moves on the
+//! permit the user's own `/land` opens (`permit`), and on that alone.
 //!
 //! Each handler reads the hook's JSON payload from stdin and answers on
 //! stdout; printing nothing means "no objection".
@@ -21,6 +21,7 @@ mod dump;
 mod git;
 mod greeting;
 mod kill;
+mod language;
 mod launch;
 mod payload;
 pub(crate) mod permit;
@@ -74,7 +75,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "post-write" => write::post_write(&input),
         "pre-shell" => pre_shell(&input),
         "pre-tool" => pre_tool(&input),
-        "post-tool" => chips::post_chip(&input),
+        "post-tool" => post_tool(&input),
         "stop" => stop(&input),
         "pre-worktree" => seat::pre_worktree(&input),
         "post-worktree" => seat::post_worktree(&input),
@@ -92,13 +93,31 @@ pub fn run(args: &[String]) -> Result<(), String> {
 }
 
 /// PreToolUse, of any tool: the guards on tools no matcher names — the
-/// other sessions (`contact`), the board (`board`) and the chips. One
-/// decision per call.
+/// other sessions (`contact`), the board (`board`), the wrap-up box's
+/// language (`language`) and the chips. One decision per call.
 fn pre_tool(input: &str) -> Result<(), String> {
-    if contact::pre_tool(input) || board::pre_tool(input) {
+    if contact::pre_tool(input) || board::pre_tool(input) || language::pre_tool(input) {
         return Ok(());
     }
     chips::pre_spawn(input)
+}
+
+/// PostToolUse and PostToolUseFailure, of any tool: the chips' notes and
+/// the language's. Two JSON objects on stdout are read as plain text, so
+/// every note rides in one, named for the event that asked.
+fn post_tool(input: &str) -> Result<(), String> {
+    let mut notes = chips::post_chip(input)?;
+    notes.extend(language::post_tool(input).map(str::to_string));
+    if !notes.is_empty() {
+        let event = payload::own_string_field(input, "hook_event_name")
+            .unwrap_or_else(|| "PostToolUse".to_string());
+        println!(
+            "{{\"hookSpecificOutput\":{{\"hookEventName\":\"{}\",\"additionalContext\":\"{}\"}}}}",
+            payload::printable(&event),
+            payload::printable(&notes.join(" "))
+        );
+    }
+    Ok(())
 }
 
 /// UserPromptSubmit. A side session's report that is refused is answered
@@ -116,9 +135,27 @@ fn prompt_submit(input: &str) -> Result<(), String> {
 }
 
 /// Stop. Repository state cannot tell whether the request is complete;
-/// that is the session's to check against the user's instructions.
+/// that is the session's to check against the user's instructions. The
+/// reasons to go on — the chips' order, the closing's language — are
+/// judged together on the turn's first Stop: the next one comes with
+/// `stop_hook_active` and judges neither. The user's notice waits for the
+/// Stop that ends the turn, so a turn that goes on does not show it twice.
 fn stop(input: &str) -> Result<(), String> {
-    if payload::bool_field(input, "stop_hook_active") != Some(true) && chips::numbering(input)? {
+    let first = payload::bool_field(input, "stop_hook_active") != Some(true);
+    let chips = if first {
+        chips::numbering(input)?
+    } else {
+        None
+    };
+    let reasons = chips
+        .into_iter()
+        .chain(language::stop(input).map(str::to_string))
+        .collect::<Vec<_>>();
+    if !reasons.is_empty() {
+        println!(
+            "{{\"decision\":\"block\",\"reason\":\"{}\"}}",
+            payload::printable(&reasons.join(" "))
+        );
         return Ok(());
     }
     let cwd = payload::string_field(input, "cwd").unwrap_or_default();
@@ -127,10 +164,9 @@ fn stop(input: &str) -> Result<(), String> {
         .flatten()
         .collect::<Vec<_>>()
         .join(" ");
-    if message.is_empty() {
-        return Ok(());
+    if !message.is_empty() {
+        println!("{{\"systemMessage\":\"{}\"}}", payload::printable(&message));
     }
-    println!("{{\"systemMessage\":\"{}\"}}", payload::printable(&message));
     Ok(())
 }
 
