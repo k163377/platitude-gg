@@ -99,21 +99,11 @@ impl RepoSession {
             remote::PushForce::Force => Some(None),
         };
         let replaced = match expect {
-            Some(expect) => {
-                remote_tip(
-                    exec,
-                    &repo.workdir,
-                    &spec.remote,
-                    &spec.remote_branch,
-                    expect,
-                    cancel,
-                )
-                .await?
-            }
+            Some(expect) => remote_tip(exec, &repo.workdir, &spec.target, expect, cancel).await?,
             None => None,
         };
         let result = remote::push(exec, &repo.workdir, spec, timeout, cancel).await;
-        self.catch_up_after(&result, spec.remote.clone());
+        self.catch_up_after(&result, spec.target.remote.clone());
         result?;
         if let Some(replaced) = replaced {
             let keep = record_token();
@@ -205,8 +195,7 @@ impl RepoSession {
     pub fn publish(
         self: &Arc<Self>,
         branch: String,
-        remote_name: String,
-        remote_branch: String,
+        target: remote::RemoteBranch,
         expect: String,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
@@ -215,7 +204,7 @@ impl RepoSession {
             OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                let spec = remote::publish_spec(&branch, &remote_name, &remote_branch, &expect);
+                let spec = remote::publish_spec(&branch, &target, &expect);
                 s.push_recorded(&exec, &repo, &spec, timeout, &cancel).await
             },
         )
@@ -279,12 +268,7 @@ impl RepoSession {
     /// One at a time (`session::latest`): the name is asked as it is typed,
     /// a new ask cancels the last one's round trip, and a cancelled ask
     /// answers nothing.
-    pub fn check_remote_branch(
-        self: &Arc<Self>,
-        remote_name: String,
-        branch: String,
-        local: String,
-    ) {
+    pub fn check_remote_branch(self: &Arc<Self>, target: remote::RemoteBranch, local: String) {
         let Some(workdir) = self.workdir() else {
             return;
         };
@@ -297,15 +281,8 @@ impl RepoSession {
         self.runtime.spawn(async move {
             let mut far_tip = String::new();
             let mut theirs = 0;
-            let state = match remote::branch_tip(
-                &s.executor,
-                &workdir,
-                &remote_name,
-                &branch,
-                timeout,
-                &cancel,
-            )
-            .await
+            let state = match remote::branch_tip(&s.executor, &workdir, &target, timeout, &cancel)
+                .await
             {
                 Ok(None) => remote::RemoteBranchState::Free,
                 // Taken: git takes the push only when this history already
@@ -353,8 +330,7 @@ impl RepoSession {
                 return;
             }
             s.sink.event(SessionEvent::RemoteBranchChecked {
-                remote: remote_name,
-                branch,
+                target,
                 local,
                 state,
                 tip: far_tip,
@@ -371,39 +347,30 @@ impl RepoSession {
     /// upstream comes off what tracked it ([`Self::untrack_deleted`]).
     pub fn delete_remote_branch(
         self: &Arc<Self>,
-        remote_name: String,
-        branch_name: String,
+        target: remote::RemoteBranch,
         expect: String,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
-        let status = self.measures_head(None, Some((&remote_name, &branch_name)));
-        let (remote, branch) = (remote_name.clone(), branch_name.clone());
+        let status = self.measures_head(None, Some(&target));
+        let leaving = target.clone();
         let s = Arc::clone(self);
         self.write_taking(
             OperationKind::Push,
             AfterWrite::Name { status },
-            &[LeavingRef::Remote(&remote, &branch)],
+            &[LeavingRef::Remote(&leaving)],
             move |exec, repo, cancel| async move {
-                let before = remote_tip(
-                    &exec,
-                    &repo.workdir,
-                    &remote_name,
-                    &branch_name,
-                    Some(&expect),
-                    &cancel,
-                )
-                .await?;
+                let before =
+                    remote_tip(&exec, &repo.workdir, &target, Some(&expect), &cancel).await?;
                 let result = remote::delete_remote_branch(
                     &exec,
                     &repo.workdir,
-                    &remote_name,
-                    &branch_name,
+                    &target,
                     &expect,
                     timeout,
                     &cancel,
                 )
                 .await;
-                s.catch_up_after(&result, remote_name.clone());
+                s.catch_up_after(&result, target.remote.clone());
                 result?;
                 if let Some(before) = before {
                     let keep = record_token();
@@ -417,8 +384,7 @@ impl RepoSession {
                     .await;
                     s.recorded(written);
                 }
-                s.untrack_deleted(&exec, &repo, &remote_name, &branch_name, &cancel)
-                    .await;
+                s.untrack_deleted(&exec, &repo, &target, &cancel).await;
                 Ok(())
             },
         )
@@ -440,11 +406,10 @@ impl RepoSession {
         &self,
         exec: &GitExecutor,
         repo: &RepoInfo,
-        remote_name: &str,
-        branch_name: &str,
+        target: &remote::RemoteBranch,
         cancel: &CancellationToken,
     ) {
-        match remote::untrack_deleted(exec, &repo.workdir, remote_name, branch_name, cancel).await {
+        match remote::untrack_deleted(exec, &repo.workdir, target, cancel).await {
             Ok(untracked) if !untracked.is_empty() => self.own_config_rewrite(),
             Ok(_) => {}
             Err(error) => tracing::warn!(%error, "the upstream of a deleted remote branch"),
@@ -472,46 +437,37 @@ impl RepoSession {
     pub fn delete_branch_everywhere(
         self: &Arc<Self>,
         branch: String,
-        remote_name: String,
-        remote_branch: String,
+        target: remote::RemoteBranch,
         force: bool,
         expect: String,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
-        let status = self.measures_head(Some(&branch), Some((&remote_name, &remote_branch)));
-        let names = (branch.clone(), remote_name.clone(), remote_branch.clone());
+        let status = self.measures_head(Some(&branch), Some(&target));
+        let leaving = (branch.clone(), target.clone());
         let s = Arc::clone(self);
         self.write_taking(
             OperationKind::DeleteBranchEverywhere,
             AfterWrite::Name { status },
             &[
-                LeavingRef::Branch(&names.0),
-                LeavingRef::Remote(&names.1, &names.2),
+                LeavingRef::Branch(&leaving.0),
+                LeavingRef::Remote(&leaving.1),
             ],
             move |exec, repo, cancel| async move {
                 let here = discards::branch_before(&exec, &repo.workdir, &branch, &cancel).await?;
-                let there = remote_tip(
-                    &exec,
-                    &repo.workdir,
-                    &remote_name,
-                    &remote_branch,
-                    Some(&expect),
-                    &cancel,
-                )
-                .await?;
+                let there =
+                    remote_tip(&exec, &repo.workdir, &target, Some(&expect), &cancel).await?;
                 branch::delete(&exec, &repo.workdir, &branch, force, &cancel).await?;
                 s.own_config_rewrite();
                 let result = remote::delete_remote_branch(
                     &exec,
                     &repo.workdir,
-                    &remote_name,
-                    &remote_branch,
+                    &target,
                     &expect,
                     timeout,
                     &cancel,
                 )
                 .await;
-                s.catch_up_after(&result, remote_name.clone());
+                s.catch_up_after(&result, target.remote.clone());
                 // The branch here went whatever the remote said.
                 if let Some(here) = here {
                     let there = there.filter(|_| result.is_ok());
@@ -529,8 +485,7 @@ impl RepoSession {
                 }
                 result?;
                 // Other branches here may have tracked it too.
-                s.untrack_deleted(&exec, &repo, &remote_name, &remote_branch, &cancel)
-                    .await;
+                s.untrack_deleted(&exec, &repo, &target, &cancel).await;
                 Ok(())
             },
         )
@@ -550,8 +505,7 @@ impl RepoSession {
     pub fn point_upstream_and_push(
         self: &Arc<Self>,
         branch: String,
-        remote_name: String,
-        remote_branch: String,
+        target: remote::RemoteBranch,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
@@ -559,24 +513,15 @@ impl RepoSession {
             OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                branch::set_upstream(
-                    &exec,
-                    &repo.workdir,
-                    &branch,
-                    &remote_name,
-                    &remote_branch,
-                    &cancel,
-                )
-                .await?;
+                branch::set_upstream(&exec, &repo.workdir, &branch, &target, &cancel).await?;
                 let spec = remote::PushSpec {
-                    remote: remote_name,
+                    target,
                     local: format!("refs/heads/{branch}"),
-                    remote_branch,
                     set_upstream: false,
                     force: remote::PushForce::None,
                 };
                 let result = remote::push(&exec, &repo.workdir, &spec, timeout, &cancel).await;
-                s.catch_up_after(&result, spec.remote);
+                s.catch_up_after(&result, spec.target.remote);
                 result
             },
         )
@@ -599,15 +544,11 @@ impl RepoSession {
             OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                let before = remote_tip(
-                    &exec,
-                    &repo.workdir,
-                    &remote_name,
-                    &from,
-                    Some(&expect),
-                    &cancel,
-                )
-                .await?;
+                let old = remote::RemoteBranch {
+                    remote: remote_name.clone(),
+                    branch: from.clone(),
+                };
+                let before = remote_tip(&exec, &repo.workdir, &old, Some(&expect), &cancel).await?;
                 let result = remote::replace_remote_branch(
                     &exec,
                     &repo.workdir,

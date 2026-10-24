@@ -7,7 +7,7 @@ use std::sync::Arc;
 use platitude_core::session::{PaceBounds, PassStep, Recording, RepoSession, SessionEvent};
 
 use crate::support::TestRepo;
-use crate::support::remote::origin_and_clone;
+use crate::support::remote::{far, origin_and_clone};
 use crate::support::session::{CaptureSink, open_with_doors, opened, write_settled};
 use crate::support::wait::bounded;
 
@@ -208,7 +208,7 @@ async fn setting_an_upstream_walks_nothing() {
     let from = settled(&sink, &session).await;
 
     let id = session
-        .set_upstream("main".into(), "origin".into(), "main".into())
+        .set_upstream("main".into(), far("origin", "main"))
         .expect("accepted");
     assert_eq!(write_settled(&sink, id).await, []);
     let ran = commands_since(&sink, from);

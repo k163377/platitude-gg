@@ -12,6 +12,7 @@ use tokio_util::sync::CancellationToken;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
+use super::RemoteBranch;
 use super::list::current_branch;
 use super::marks::{PushMarks, push_marks};
 use super::refusal::{Sent, refusal};
@@ -33,14 +34,13 @@ pub enum PushForce {
 /// What to push where.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PushSpec {
-    pub remote: String,
+    /// Where it goes: the remote, and the branch's name over there.
+    pub target: RemoteBranch,
     /// What is sent, as git is to read it: a branch here goes by its full
     /// name (`refs/heads/<branch>` — beside a tag of the same name the
     /// bare one is ambiguous, which git refuses), and a remote-tracking
     /// ref by its own (`remote::replace_remote_branch`). Sent as written.
     pub local: String,
-    /// Branch name on the remote side.
-    pub remote_branch: String,
     /// Record the pushed branch as upstream (`--set-upstream`).
     pub set_upstream: bool,
     pub force: PushForce,
@@ -155,9 +155,11 @@ fn decide_push(
     let set_upstream = tracks.is_none() || merge.is_none();
 
     Ok(PushSpec {
-        remote,
+        target: RemoteBranch {
+            remote,
+            branch: remote_branch,
+        },
         local: format!("refs/heads/{branch}"),
-        remote_branch,
         set_upstream,
         force,
     })
@@ -171,10 +173,9 @@ fn decide_push(
 /// pushes fast-forward only; a commit makes it a lease pinned to what was
 /// on screen, so a remote that moved since is refused
 /// (デザイン規約 §相手の履歴を置き換える).
-pub fn publish_spec(branch: &str, remote: &str, remote_branch: &str, expect: &str) -> PushSpec {
+pub fn publish_spec(branch: &str, target: &RemoteBranch, expect: &str) -> PushSpec {
     PushSpec {
-        remote: remote.to_string(),
-        remote_branch: remote_branch.to_string(),
+        target: target.clone(),
         local: format!("refs/heads/{branch}"),
         set_upstream: true,
         force: if expect.is_empty() {
@@ -223,6 +224,7 @@ pub async fn push(
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
+    let sent = Sent::branch(&spec.target, false);
     let mut cmd = porcelain_push(workdir, timeout);
     if spec.set_upstream {
         cmd = cmd.arg("--set-upstream");
@@ -231,19 +233,18 @@ pub async fn push(
         PushForce::None => {}
         PushForce::WithLease { expect: None } => cmd = cmd.arg("--force-with-lease"),
         PushForce::WithLease { expect: Some(oid) } => {
-            cmd = cmd.arg(format!("--force-with-lease={}:{oid}", spec.remote_branch));
+            cmd = cmd.arg(format!("--force-with-lease={}:{oid}", spec.target.branch));
         }
         PushForce::Force => cmd = cmd.arg("--force"),
     }
-    let refspec = format!("{}:refs/heads/{}", spec.local, spec.remote_branch);
-    cmd = cmd.args(["--", &spec.remote, &refspec]);
+    let refspec = format!("{}:{}", spec.local, sent.refname);
+    cmd = cmd.args(["--", &spec.target.remote, &refspec]);
 
     let command = cmd.describe();
     let out = executor.run_unchecked(cmd, cancel).await?;
     if out.code == 0 {
         return Ok(());
     }
-    let sent = Sent::branch(&spec.remote, &spec.remote_branch, false);
     Err(refusal(command, &out, &sent))
 }
 
@@ -365,6 +366,13 @@ mod tests {
 
     const REMOTES: [&str; 2] = ["fork", "origin"];
 
+    fn far(remote: &str, branch: &str) -> RemoteBranch {
+        RemoteBranch {
+            remote: remote.to_string(),
+            branch: branch.to_string(),
+        }
+    }
+
     /// Empty stands for a key that is not set.
     fn decide(
         branch: &str,
@@ -405,26 +413,34 @@ mod tests {
     #[test]
     fn a_push_goes_where_git_would_send_it() {
         assert_eq!(
-            decide("main", "origin", "refs/heads/main", "", "").remote,
+            decide("main", "origin", "refs/heads/main", "", "")
+                .target
+                .remote,
             "origin"
         );
         assert_eq!(
-            decide("main", "origin", "refs/heads/main", "", "fork").remote,
+            decide("main", "origin", "refs/heads/main", "", "fork")
+                .target
+                .remote,
             "fork",
             "the repository's mark beats what the branch tracks"
         );
         assert_eq!(
-            decide("main", "origin", "refs/heads/main", "fork", "").remote,
+            decide("main", "origin", "refs/heads/main", "fork", "")
+                .target
+                .remote,
             "fork",
             "so does the branch's own"
         );
         assert_eq!(
-            decide("main", "fork", "refs/heads/main", "origin", "fork").remote,
+            decide("main", "fork", "refs/heads/main", "origin", "fork")
+                .target
+                .remote,
             "origin",
             "and the branch's own beats the repository's"
         );
         assert_eq!(
-            decide("topic", "", "", "", "").remote,
+            decide("topic", "", "", "", "").target.remote,
             "origin",
             "nothing set anywhere falls back to the caller's remote"
         );
@@ -433,20 +449,17 @@ mod tests {
     #[test]
     fn a_branch_keeps_its_upstreams_name_only_on_its_upstreams_remote() {
         let tracked = decide("topic", "origin", "refs/heads/elsewhere", "", "");
-        assert_eq!(
-            (tracked.remote.as_str(), tracked.remote_branch.as_str()),
-            ("origin", "elsewhere")
-        );
+        assert_eq!(tracked.target, far("origin", "elsewhere"));
 
         let marked = decide("topic", "origin", "refs/heads/elsewhere", "", "fork");
         assert_eq!(
-            (marked.remote.as_str(), marked.remote_branch.as_str()),
-            ("fork", "topic"),
+            marked.target,
+            far("fork", "topic"),
             "not the upstream's name"
         );
         // A merge ref that is not under refs/heads/ is taken as written.
         assert_eq!(
-            decide("topic", "origin", "trunk", "", "").remote_branch,
+            decide("topic", "origin", "trunk", "", "").target.branch,
             "trunk"
         );
     }
@@ -475,7 +488,7 @@ mod tests {
             "refs/heads/topic"
         );
         assert_eq!(
-            publish_spec("topic", "origin", "elsewhere", "").local,
+            publish_spec("topic", &far("origin", "elsewhere"), "").local,
             "refs/heads/topic"
         );
     }
@@ -611,12 +624,8 @@ mod tests {
                 push_default,
             );
             assert_eq!(
-                (
-                    spec.remote.as_str(),
-                    spec.remote_branch.as_str(),
-                    spec.set_upstream
-                ),
-                ("fork", "topic", false),
+                (spec.target, spec.set_upstream),
+                (far("fork", "topic"), false),
                 "pushRemote={push_remote:?} pushDefault={push_default:?}"
             );
         }
@@ -653,7 +662,7 @@ mod tests {
                 "refs/heads/main"
             };
             let sent = plan("main", tracks, merge, push_remote, push_default, "origin")
-                .map(|spec| format!("{}/{}", spec.remote, spec.remote_branch))
+                .map(|spec| format!("{}/{}", spec.target.remote, spec.target.branch))
                 .unwrap_or_default();
             // As the status shortens it: a branch here called `main` is
             // `main`, and only the configuration says it is here.

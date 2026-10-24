@@ -38,14 +38,14 @@ impl RepoTab {
         self.stash_out.asked(asked);
     }
 
-    pub(super) fn look_up_remote_branch(&mut self, remote: String, branch: String, local: String) {
+    pub(super) fn look_up_remote_branch(&mut self, target: RemoteBranch, local: String) {
         self.remote_branch_asked = Optional::none();
         self.remote_branch_revision = self.remote_branch_revision.wrapping_add(1);
         self.remote_branch_state = String::new();
         self.remote_branch_tip = String::new();
         self.remote_branch_theirs = 0;
         self.changed();
-        self.with_session(|s| s.check_remote_branch(remote, branch, local));
+        self.with_session(|s| s.check_remote_branch(target, local));
     }
 
     pub(super) fn look_up_branch_delete(&mut self, branch: String) {
@@ -80,25 +80,19 @@ impl RepoTab {
 
     /// The question's first push of `branch`, written down as
     /// [`Self::current_push`] writes its own.
-    pub(super) fn branch_publish(
-        &mut self,
-        branch: String,
-        remote: String,
-        remote_branch: String,
-        expect: String,
-    ) {
-        let asked = self.ask_session(|s| s.publish(branch.clone(), remote, remote_branch, expect));
+    pub(super) fn branch_publish(&mut self, branch: String, target: RemoteBranch, expect: String) {
+        let asked = self.ask_session(|s| s.publish(branch.clone(), target, expect));
         self.push_out.asked(asked, branch);
     }
 
     /// Points `branch` at the remote branch and sends it there; the answer
     /// is reported on that remote branch's row.
-    pub(super) fn point_and_push(&mut self, branch: String, remote: String, remote_branch: String) {
-        if branch.is_empty() || remote.is_empty() || remote_branch.is_empty() {
+    pub(super) fn point_and_push(&mut self, branch: String, target: RemoteBranch) {
+        if branch.is_empty() || target.remote.is_empty() || target.branch.is_empty() {
             return;
         }
-        let row = format!("{remote}/{remote_branch}");
-        let asked = self.ask_session(|s| s.point_upstream_and_push(branch, remote, remote_branch));
+        let row = super::ops_delete::remote_row(&target);
+        let asked = self.ask_session(|s| s.point_upstream_and_push(branch, target));
         self.ref_push_asked(&row, asked);
     }
 

@@ -244,8 +244,7 @@ pub enum SessionEvent {
     /// asking box may have moved on to another name, or the question to
     /// another branch (`local`, whose history the tip was weighed against).
     RemoteBranchChecked {
-        remote: String,
-        branch: String,
+        target: remote::RemoteBranch,
         local: String,
         state: remote::RemoteBranchState,
         /// The commit the remote advertised (hex; empty where none) —

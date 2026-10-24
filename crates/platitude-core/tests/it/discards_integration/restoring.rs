@@ -5,6 +5,7 @@
 use super::{begin, finish, git_dir, oid, read, same_dir};
 use crate::support::TestRepo;
 use crate::support::exec::env;
+use crate::support::remote::far;
 use platitude_core::discards::{self, CopyOf, CopyOperation, DiscardKind, Restore, Restored};
 
 /// What a discard of `tracked` and `untracked` copies when `discard` throws
@@ -730,7 +731,7 @@ async fn names_a_stash_and_a_worktree_come_back_as_git_writes_them() {
         Restore::Branch {
             name: "spike".to_string(),
             tip: oid(&c1),
-            upstream: Some(("origin".to_string(), "spike".to_string())),
+            upstream: Some(far("origin", "spike")),
         },
         Restore::Tag {
             name: "v1".to_string(),
@@ -764,5 +765,39 @@ async fn names_a_stash_and_a_worktree_come_back_as_git_writes_them() {
     assert_eq!(
         repo.git_in(&side, &["branch", "--show-current"]),
         "side-work"
+    );
+}
+
+/// A branch measured against a branch here (`branch.<name>.remote = .`)
+/// is read before its delete with that upstream, and comes back measured
+/// against it again: `.` has no remote-tracking ref, so the two keys are
+/// written as read.
+#[tokio::test]
+async fn a_branch_measured_against_one_here_comes_back_measured_against_it() {
+    let mut repo = TestRepo::init();
+    let c1 = repo.commit_file_id("a.txt", "1\n", "c1");
+    repo.git(&["branch", "--track", "topic", "main"]);
+    let (executor, cancel) = env();
+    let before = discards::branch_before(&executor, &repo.path, "topic", &cancel)
+        .await
+        .expect("read the branch")
+        .expect("the branch is there");
+    assert_eq!(before.upstream, Some(far(".", "main")));
+    repo.git(&["branch", "--delete", "topic"]);
+
+    let part = Restore::Branch {
+        name: "topic".to_string(),
+        tip: oid(&c1),
+        upstream: before.upstream,
+    };
+    assert_eq!(restored(&repo, &part).await, Restored::Whole);
+    assert_eq!(repo.git(&["config", "branch.topic.remote"]), ".");
+    assert_eq!(
+        repo.git(&["config", "branch.topic.merge"]),
+        "refs/heads/main"
+    );
+    assert_eq!(
+        repo.git(&["rev-parse", "--abbrev-ref", "topic@{upstream}"]),
+        "main"
     );
 }

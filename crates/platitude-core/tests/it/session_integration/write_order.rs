@@ -9,6 +9,7 @@
 
 use std::sync::Arc;
 
+use crate::support::remote::far;
 use crate::support::session::{opened, pass_of, write_answer, write_settled};
 use crate::support::{TestRepo, barrier_filter, barrier_hook};
 use platitude_core::session::{RefreshOutcome, RepoSession, SessionEvent};
@@ -310,9 +311,8 @@ async fn a_write_landing_inside_a_read_is_read_again_when_that_read_ends() {
     // supply the very wake this test must miss.
     let pushed = writer
         .push(platitude_core::remote::PushSpec {
-            remote: "origin".into(),
+            target: far("origin", "late"),
             local: "late".into(),
-            remote_branch: "late".into(),
             set_upstream: false,
             force: platitude_core::remote::PushForce::None,
         })
@@ -405,9 +405,8 @@ async fn a_read_owed_is_taken_when_this_session_s_own_write_ends() {
     write_settled(&writer_sink, late).await;
     let pushed = writer
         .push(platitude_core::remote::PushSpec {
-            remote: "origin".into(),
+            target: far("origin", "late"),
             local: "late".into(),
-            remote_branch: "late".into(),
             set_upstream: false,
             force: platitude_core::remote::PushForce::None,
         })
@@ -773,8 +772,7 @@ async fn a_composite_delete_takes_its_turn_for_the_half_that_is_here() {
     let removal = reopened
         .delete_branch_everywhere(
             "victim".into(),
-            "origin".into(),
-            "victim".into(),
+            far("origin", "victim"),
             false,
             String::new(),
         )

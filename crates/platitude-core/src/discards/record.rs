@@ -23,6 +23,7 @@ use super::RECORD_REF;
 use crate::error::GitError;
 use crate::oid::Oid;
 use crate::process::{GitCommand, GitExecutor};
+use crate::remote::RemoteBranch;
 use crate::scratch::ScratchFile;
 
 /// Who writes the record (§2): the name on every commit and line.
@@ -36,8 +37,7 @@ pub(super) const PATHS_PER_CALL: usize = 200;
 /// and its tip — the lease's commit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteTip {
-    pub remote: String,
-    pub branch: String,
+    pub target: RemoteBranch,
     pub tip: Oid,
 }
 
@@ -48,7 +48,7 @@ pub struct RemoteTip {
 pub struct BranchBefore {
     pub name: String,
     pub tip: Oid,
-    pub upstream: Option<(String, String)>,
+    pub upstream: Option<RemoteBranch>,
 }
 
 /// A tag as it stood: the object it names (an annotated tag's own), and
@@ -99,12 +99,12 @@ pub async fn branch_before(
             merge = Some(value);
         }
     }
-    let upstream = remote.zip(merge).map(|(remote, merge)| {
-        let branch = merge
+    let upstream = remote.zip(merge).map(|(remote, merge)| RemoteBranch {
+        remote,
+        branch: merge
             .strip_prefix("refs/heads/")
             .unwrap_or(&merge)
-            .to_string();
-        (remote, branch)
+            .to_string(),
     });
     Ok(Some(BranchBefore {
         name: name.to_string(),
@@ -184,12 +184,13 @@ pub async fn record_branch_delete(
         ("Operation", "delete branch".to_string()),
         ("Branch", before.name.clone()),
     ];
-    if let Some((remote, branch)) = &before.upstream {
-        trailers.push(("Upstream", format!("{remote} {branch}")));
+    if let Some(upstream) = &before.upstream {
+        let pair = format!("{} {}", upstream.remote, upstream.branch);
+        trailers.push(("Upstream", pair));
     }
     if let Some(remote) = remote {
-        trailers.push(("Remote", remote.remote.clone()));
-        trailers.push(("Remote-branch", remote.branch.clone()));
+        trailers.push(("Remote", remote.target.remote.clone()));
+        trailers.push(("Remote-branch", remote.target.branch.clone()));
         if remote.tip != before.tip {
             trailers.push(("Remote-tip", remote.tip.to_hex()));
         }
@@ -217,10 +218,10 @@ pub async fn record_remote_delete(
 ) -> Result<(), GitError> {
     let trailers = [
         ("Operation", "delete remote branch".to_string()),
-        ("Remote", remote.remote.clone()),
-        ("Branch", remote.branch.clone()),
+        ("Remote", remote.target.remote.clone()),
+        ("Branch", remote.target.branch.clone()),
     ];
-    let summary = format!("delete {}/{}", remote.remote, remote.branch);
+    let summary = format!("delete {}/{}", remote.target.remote, remote.target.branch);
     note(
         executor,
         workdir,
@@ -243,10 +244,13 @@ pub async fn record_force_push(
 ) -> Result<(), GitError> {
     let trailers = [
         ("Operation", "force push".to_string()),
-        ("Remote", remote.remote.clone()),
-        ("Branch", remote.branch.clone()),
+        ("Remote", remote.target.remote.clone()),
+        ("Branch", remote.target.branch.clone()),
     ];
-    let summary = format!("force-push {}/{}", remote.remote, remote.branch);
+    let summary = format!(
+        "force-push {}/{}",
+        remote.target.remote, remote.target.branch
+    );
     note(
         executor,
         workdir,

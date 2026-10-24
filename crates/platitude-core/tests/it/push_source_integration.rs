@@ -12,7 +12,7 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
-use crate::support::remote::origin_and_clone;
+use crate::support::remote::{far, origin_and_clone};
 use platitude_core::remote::{self, PushForce};
 
 /// A `file://` remote answers instantly; the budget just has to exist.
@@ -60,7 +60,7 @@ async fn a_first_push_sends_the_branch_and_not_the_tag_of_its_name() {
     let (mut bare, mut work) = topic_beside_its_tag();
     let (exec, cancel) = env();
 
-    let spec = remote::publish_spec("topic", "origin", "topic", "");
+    let spec = remote::publish_spec("topic", &far("origin", "topic"), "");
     remote::push(&exec, &work.path, &spec, NET, &cancel)
         .await
         .expect("publish");

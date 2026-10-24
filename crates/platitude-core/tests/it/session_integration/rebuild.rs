@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use crate::support::TestRepo;
+use crate::support::remote::far;
 use crate::support::session::{
     CaptureSink, TestSession, is_stream_event, open_unawaited, opened, scenario, write_answer,
     write_settled,
@@ -520,7 +521,7 @@ async fn setting_an_upstream_rebuilds_what_the_rows_read() {
     let (sink, session) = opened(&work).await;
     sink.opening_snapshots().await;
 
-    session.set_upstream("topic".into(), "origin".into(), "other".into());
+    session.set_upstream("topic".into(), far("origin", "other"));
 
     let upstream = sink
         .wait_for("the snapshot published after the upstream write", |evs| {

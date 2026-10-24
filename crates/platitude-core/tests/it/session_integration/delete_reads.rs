@@ -7,7 +7,7 @@ use std::sync::Arc;
 use platitude_core::session::{Recording, SessionEvent};
 
 use crate::support::TestRepo;
-use crate::support::remote::origin_and_clone;
+use crate::support::remote::{far, origin_and_clone};
 use crate::support::session::{CaptureSink, opened, scenario, write_settled};
 
 /// The commands started from event `from` on, as the log shows them.
@@ -135,7 +135,7 @@ async fn a_remote_branch_delete_reads_the_status_only_for_heads_upstream() {
     for (branch, shown, reads) in [("other", other, 0), ("topic", topic, 1)] {
         let from = sink.events.lock().unwrap().len();
         let id = session
-            .delete_remote_branch("origin".into(), branch.into(), shown)
+            .delete_remote_branch(far("origin", branch), shown)
             .expect("accepted");
         assert_eq!(write_settled(&sink, id).await, []);
         let ran = commands_since(&sink, from);
@@ -159,7 +159,7 @@ async fn a_remote_branch_delete_leaves_no_gone_upstream_behind() {
     sink.opening_settled(&session).await;
 
     let id = session
-        .delete_remote_branch("origin".into(), "topic".into(), shown)
+        .delete_remote_branch(far("origin", "topic"), shown)
         .expect("accepted");
     assert_eq!(write_settled(&sink, id).await, []);
 

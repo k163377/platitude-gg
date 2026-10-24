@@ -105,12 +105,12 @@ const MAIN_WORKTREE: &str = ".";
 /// `-pgg-restored` (and `-1`, `-2` …) after it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Restore {
-    /// A branch `name` at `tip`, measured against `upstream` (remote,
-    /// branch) where the record kept one.
+    /// A branch `name` at `tip`, measured against `upstream` where the
+    /// record kept one.
     Branch {
         name: String,
         tip: Oid,
-        upstream: Option<(String, String)>,
+        upstream: Option<crate::remote::RemoteBranch>,
     },
     /// A tag `name` on `object` (an annotated tag's object comes back as
     /// the same tag).

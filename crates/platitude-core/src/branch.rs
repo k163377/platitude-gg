@@ -251,7 +251,8 @@ pub(crate) async fn has_branch(
 /// `branch --set-upstream-to` when the remote-tracking ref is here; git
 /// refuses a name it has no ref for, so otherwise the pair is written with
 /// `config`, `.remote` first (rules-refs/core.md「upstream の書き込みは 2 通りで」;
-/// デザイン規約 §ブランチが測られる相手を決める).
+/// デザイン規約 §ブランチが測られる相手を決める). A branch here as the
+/// upstream (remote `.`) has no remote-tracking ref and goes the second way.
 ///
 /// The flag takes the full refname: the `origin/main` shorthand is
 /// ambiguous, and refused, when a local branch has that name.
@@ -261,11 +262,10 @@ pub async fn set_upstream(
     executor: &GitExecutor,
     workdir: &Path,
     name: &str,
-    remote: &str,
-    remote_branch: &str,
+    target: &crate::remote::RemoteBranch,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    let upstream = format!("refs/remotes/{remote}/{remote_branch}");
+    let upstream = format!("refs/remotes/{}/{}", target.remote, target.branch);
     if ref_is_here(executor, workdir, &upstream, cancel).await? {
         let cmd = GitCommand::new().cwd(workdir).args([
             "branch",
@@ -276,11 +276,8 @@ pub async fn set_upstream(
         return executor.run(cmd, cancel).await.map(drop);
     }
     for (key, value) in [
-        (format!("branch.{name}.remote"), remote.to_string()),
-        (
-            format!("branch.{name}.merge"),
-            format!("refs/heads/{remote_branch}"),
-        ),
+        (format!("branch.{name}.remote"), target.remote.clone()),
+        (format!("branch.{name}.merge"), target.head_ref()),
     ] {
         let cmd = GitCommand::new()
             .cwd(workdir)

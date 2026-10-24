@@ -152,18 +152,14 @@ impl RepoTab {
                     self.remote_urls = urls;
                 }
                 TabMsg::RemoteBranch {
-                    remote,
-                    branch,
+                    target,
                     local,
                     state,
                     tip,
                     theirs,
                 } => {
-                    self.remote_branch_asked = Optional::some(super::RemoteBranchAsked {
-                        remote,
-                        branch,
-                        local,
-                    });
+                    self.remote_branch_asked =
+                        Optional::some(super::RemoteBranchAsked { target, local });
                     self.remote_branch_revision = self.remote_branch_revision.wrapping_add(1);
                     self.remote_branch_state = state;
                     self.remote_branch_tip = tip;

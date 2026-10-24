@@ -10,7 +10,7 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
-use crate::support::remote::{a_branch_over_there, moved_over_there, origin_and_clone};
+use crate::support::remote::{a_branch_over_there, far, moved_over_there, origin_and_clone};
 use crate::support::session::{opened, write_answer, write_result};
 use platitude_core::GitError;
 use platitude_core::OperationKind;
@@ -112,10 +112,16 @@ async fn a_remote_branch_that_moved_since_the_last_fetch_is_not_deleted() {
     let shown = a_branch_over_there(&mut work, "topic");
     let theirs = moved_over_there(&bare, "topic", "theirs.txt", "pushed since our fetch");
 
-    let err =
-        remote::delete_remote_branch(&exec, &work.path, "origin", "topic", &shown, NET, &cancel)
-            .await
-            .expect_err("the remote is not where the screen showed it");
+    let err = remote::delete_remote_branch(
+        &exec,
+        &work.path,
+        &far("origin", "topic"),
+        &shown,
+        NET,
+        &cancel,
+    )
+    .await
+    .expect_err("the remote is not where the screen showed it");
     let Some(report) = err.report() else {
         panic!("a stale lease reads as any outdated push: {err}");
     };
@@ -132,9 +138,16 @@ async fn a_remote_branch_that_moved_since_the_last_fetch_is_not_deleted() {
 
     work.git(&["fetch", "origin"]);
     let seen = work.git(&["rev-parse", "origin/topic"]);
-    remote::delete_remote_branch(&exec, &work.path, "origin", "topic", &seen, NET, &cancel)
-        .await
-        .expect("leased to what is there, the delete goes");
+    remote::delete_remote_branch(
+        &exec,
+        &work.path,
+        &far("origin", "topic"),
+        &seen,
+        NET,
+        &cancel,
+    )
+    .await
+    .expect("leased to what is there, the delete goes");
     assert!(!bare.git_ok(&["rev-parse", "--verify", "refs/heads/topic"]));
 }
 
@@ -149,10 +162,16 @@ async fn a_remote_branch_dropped_since_the_last_fetch_is_the_leases_refusal() {
     let shown = a_branch_over_there(&mut work, "gone");
     bare.git(&["update-ref", "-d", "refs/heads/gone"]);
 
-    let err =
-        remote::delete_remote_branch(&exec, &work.path, "origin", "gone", &shown, NET, &cancel)
-            .await
-            .expect_err("nothing is there to hold the lease");
+    let err = remote::delete_remote_branch(
+        &exec,
+        &work.path,
+        &far("origin", "gone"),
+        &shown,
+        NET,
+        &cancel,
+    )
+    .await
+    .expect_err("nothing is there to hold the lease");
     assert_eq!(
         err.report().map(|report| report.kind),
         Some(ReportKind::MovedDelete),
@@ -161,9 +180,16 @@ async fn a_remote_branch_dropped_since_the_last_fetch_is_the_leases_refusal() {
 
     let tip = a_branch_over_there(&mut work, "twin");
     work.git(&["push", "origin", &format!("{tip}:refs/tags/twin")]);
-    remote::delete_remote_branch(&exec, &work.path, "origin", "twin", &tip, NET, &cancel)
-        .await
-        .expect("the qualified name picks the branch");
+    remote::delete_remote_branch(
+        &exec,
+        &work.path,
+        &far("origin", "twin"),
+        &tip,
+        NET,
+        &cancel,
+    )
+    .await
+    .expect("the qualified name picks the branch");
     assert!(!bare.git_ok(&["rev-parse", "--verify", "refs/heads/twin"]));
     assert_eq!(
         bare.git(&["rev-parse", "refs/tags/twin"]),
@@ -214,13 +240,7 @@ async fn delete_both_refused_by_the_lease_keeps_the_commit_under_the_remote_trac
     let (sink, session) = opened(&work).await;
 
     let id = session
-        .delete_branch_everywhere(
-            "topic".into(),
-            "origin".into(),
-            "topic".into(),
-            false,
-            shown.clone(),
-        )
+        .delete_branch_everywhere("topic".into(), far("origin", "topic"), false, shown.clone())
         .expect("accepted");
     let refused = write_answer(&sink, id).await;
 
@@ -257,7 +277,7 @@ async fn a_branch_the_worktree_is_not_on_is_published_and_weighed_as_itself() {
     work.git(&["switch", "main"]);
     let (sink, session) = opened(&work).await;
 
-    session.check_remote_branch("origin".into(), "shared".into(), "topic".into());
+    session.check_remote_branch(far("origin", "shared"), "topic".into());
     let (state, local) = sink
         .wait_for("the remote's answer", |evs| {
             evs.iter().find_map(|e| match e {
@@ -279,12 +299,7 @@ async fn a_branch_the_worktree_is_not_on_is_published_and_weighed_as_itself() {
     );
 
     let id = session
-        .publish(
-            "topic".into(),
-            "origin".into(),
-            "shared".into(),
-            String::new(),
-        )
+        .publish("topic".into(), far("origin", "shared"), String::new())
         .expect("the write is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
     assert_eq!(
@@ -315,20 +330,26 @@ async fn the_remote_branch_check_answers_for_the_exact_name_only() {
     work.git(&["push", "origin", "feature/topic"]);
 
     assert!(
-        remote::branch_tip(&exec, &work.path, "origin", "feature/topic", NET, &cancel)
-            .await
-            .expect("ask")
-            .is_some()
+        remote::branch_tip(
+            &exec,
+            &work.path,
+            &far("origin", "feature/topic"),
+            NET,
+            &cancel
+        )
+        .await
+        .expect("ask")
+        .is_some()
     );
     assert!(
-        remote::branch_tip(&exec, &work.path, "origin", "topic", NET, &cancel)
+        remote::branch_tip(&exec, &work.path, &far("origin", "topic"), NET, &cancel)
             .await
             .expect("ask")
             .is_none(),
         "`topic` is not taken just because `feature/topic` is"
     );
     assert!(
-        remote::branch_tip(&exec, &work.path, "origin", "feature", NET, &cancel)
+        remote::branch_tip(&exec, &work.path, &far("origin", "feature"), NET, &cancel)
             .await
             .expect("ask")
             .is_none()
@@ -347,7 +368,7 @@ async fn a_taken_name_holding_commits_of_its_own_is_refused() {
     work.git(&["switch", "-c", "ours"]);
     work.commit_file("c.txt", "ours\n", "ours");
 
-    let tip = remote::branch_tip(&exec, &work.path, "origin", "theirs", NET, &cancel)
+    let tip = remote::branch_tip(&exec, &work.path, &far("origin", "theirs"), NET, &cancel)
         .await
         .expect("ask")
         .expect("the name is taken");
@@ -358,7 +379,7 @@ async fn a_taken_name_holding_commits_of_its_own_is_refused() {
         "their commit is not one of ours, which is what makes this refusable"
     );
 
-    let spec = remote::publish_spec("ours", "origin", "theirs", "");
+    let spec = remote::publish_spec("ours", &far("origin", "theirs"), "");
     let sent = remote::push(&exec, &work.path, &spec, NET, &cancel).await;
     assert!(
         sent.as_ref().is_err_and(GitError::is_outdated),
@@ -372,7 +393,7 @@ async fn a_taken_name_holding_commits_of_its_own_is_refused() {
 
     // Only a leased overwrite can land here; a lease on a commit that is no
     // longer there is refused.
-    let stale = remote::publish_spec("ours", "origin", "theirs", &"0".repeat(40));
+    let stale = remote::publish_spec("ours", &far("origin", "theirs"), &"0".repeat(40));
     assert!(
         remote::push(&exec, &work.path, &stale, NET, &cancel)
             .await
@@ -381,7 +402,7 @@ async fn a_taken_name_holding_commits_of_its_own_is_refused() {
     );
     assert_eq!(bare.git(&["rev-parse", "theirs"]), theirs);
 
-    let leased = remote::publish_spec("ours", "origin", "theirs", &theirs);
+    let leased = remote::publish_spec("ours", &far("origin", "theirs"), &theirs);
     remote::push(&exec, &work.path, &leased, NET, &cancel)
         .await
         .expect("the overwrite the question offers, pinned to what it showed");
@@ -411,9 +432,8 @@ mod periodic {
             &exec,
             &work.path,
             &PushSpec {
-                remote: "origin".into(),
+                target: far("origin", "temp"),
                 local: "temp".into(),
-                remote_branch: "temp".into(),
                 set_upstream: false,
                 force: PushForce::None,
             },
@@ -425,9 +445,16 @@ mod periodic {
         assert!(bare.git(&["branch", "--list"]).contains("temp"));
         let tip = work.git(&["rev-parse", "temp"]);
 
-        remote::delete_remote_branch(&exec, &work.path, "origin", "temp", &tip, NET, &cancel)
-            .await
-            .expect("delete remote branch");
+        remote::delete_remote_branch(
+            &exec,
+            &work.path,
+            &far("origin", "temp"),
+            &tip,
+            NET,
+            &cancel,
+        )
+        .await
+        .expect("delete remote branch");
         assert!(!bare.git(&["branch", "--list"]).contains("temp"));
 
         remote::fetch(&exec, &work.path, Some("origin"), NET, &cancel)
@@ -452,9 +479,16 @@ mod periodic {
         let (exec, cancel) = env();
         let shown = a_branch_over_there(&mut work, "topic");
 
-        remote::delete_remote_branch(&exec, &work.path, "origin", "topic", &shown, NET, &cancel)
-            .await
-            .expect("the remote half goes");
+        remote::delete_remote_branch(
+            &exec,
+            &work.path,
+            &far("origin", "topic"),
+            &shown,
+            NET,
+            &cancel,
+        )
+        .await
+        .expect("the remote half goes");
         assert!(!work.git_ok(&["rev-parse", "--verify", "refs/remotes/origin/topic"]));
 
         let err = platitude_core::branch::delete(&exec, &work.path, "topic", false, &cancel)
@@ -488,7 +522,7 @@ mod periodic {
             .expect("correct the URL");
         assert_eq!(work.git(&["remote", "get-url", "fork"]), bare.file_url());
 
-        let spec = remote::publish_spec("main", "fork", "main", "");
+        let spec = remote::publish_spec("main", &far("fork", "main"), "");
         remote::push(&exec, &work.path, &spec, NET, &cancel)
             .await
             .expect("push to the corrected remote");
@@ -506,7 +540,7 @@ mod periodic {
         remote::add(&exec, &work.path, "fork", nowhere, &cancel)
             .await
             .expect("add");
-        let spec = remote::publish_spec("main", "fork", "main", "");
+        let spec = remote::publish_spec("main", &far("fork", "main"), "");
         let error = remote::push(&exec, &work.path, &spec, NET, &cancel)
             .await
             .expect_err("nothing answers there");
@@ -564,7 +598,7 @@ mod periodic {
         work.git(&["switch", "-c", "topic"]);
         work.commit_file("b.txt", "b\n", "topic work");
 
-        let spec = remote::publish_spec("topic", "origin", "topic", "");
+        let spec = remote::publish_spec("topic", &far("origin", "topic"), "");
         assert!(spec.set_upstream, "the answer is recorded, not re-asked");
         remote::push(&exec, &work.path, &spec, NET, &cancel)
             .await
@@ -599,7 +633,7 @@ mod periodic {
         let theirs = bare.git(&["rev-parse", "shared"]);
         work.commit_file("b.txt", "b2\n", "ours");
 
-        let tip = remote::branch_tip(&exec, &work.path, "origin", "shared", NET, &cancel)
+        let tip = remote::branch_tip(&exec, &work.path, &far("origin", "shared"), NET, &cancel)
             .await
             .expect("ask")
             .expect("the question the UI puts to the remote before it pushes");
@@ -610,7 +644,7 @@ mod periodic {
             "what makes this the fast-forward case: their commit is one of ours"
         );
 
-        let spec = remote::publish_spec("shared", "origin", "shared", "");
+        let spec = remote::publish_spec("shared", &far("origin", "shared"), "");
         remote::push(&exec, &work.path, &spec, NET, &cancel)
             .await
             .expect("git takes it — this is the hole the question covers");
@@ -643,9 +677,8 @@ mod periodic {
             &exec,
             &work.path,
             &PushSpec {
-                remote: "origin".into(),
+                target: far("origin", "main"),
                 local: "main".into(),
-                remote_branch: "main".into(),
                 set_upstream: false,
                 force: PushForce::None,
             },

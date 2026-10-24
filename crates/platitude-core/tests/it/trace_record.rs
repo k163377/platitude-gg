@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use crate::support::exec::env;
 use crate::support::integrate::{current_op, helper};
-use crate::support::remote::origin_and_clone;
+use crate::support::remote::{far, origin_and_clone};
 use crate::support::wait::bounded;
 use crate::support::{TestRepo, info};
 use platitude_core::commit::{self, CommitOptions};
@@ -154,9 +154,8 @@ async fn reword(
 async fn push_main(work: &Path) -> Result<(), platitude_core::GitError> {
     let (exec, cancel) = env();
     let spec = PushSpec {
-        remote: "origin".into(),
+        target: far("origin", "main"),
         local: "main".into(),
-        remote_branch: "main".into(),
         set_upstream: false,
         force: PushForce::None,
     };

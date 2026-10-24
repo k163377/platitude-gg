@@ -4,7 +4,7 @@
 //! [`SessionEvent::DiscardsChanged`].
 
 use crate::support::exec::env;
-use crate::support::remote::origin_and_clone;
+use crate::support::remote::{far, origin_and_clone};
 use crate::support::session::{opened, write_answer};
 use crate::support::stage::fp;
 use crate::support::{TestRepo, info};
@@ -750,7 +750,7 @@ async fn what_went_from_a_remote_is_on_the_record_and_comes_back_here() {
     let (sink, session) = opened(&work).await;
 
     let id = session
-        .delete_remote_branch("origin".into(), "gone".into(), gone.trim().into())
+        .delete_remote_branch(far("origin", "gone"), gone.trim().into())
         .expect("the delete is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
     let id = session

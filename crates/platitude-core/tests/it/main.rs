@@ -30,6 +30,7 @@ mod reachable_integration;
 mod refs_integration;
 mod relied_witnesses;
 mod remote_integration;
+mod remote_pair_integration;
 mod remote_tags_integration;
 mod remote_untrack_integration;
 mod rename_integration;

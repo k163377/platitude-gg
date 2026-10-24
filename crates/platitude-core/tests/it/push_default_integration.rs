@@ -19,6 +19,7 @@ use std::path::Path;
 
 use crate::support::TestRepo;
 use crate::support::exec::{env, logged_global};
+use crate::support::remote::far;
 use crate::support::session::{CaptureSink, opened, write_answer};
 use crate::support::wait::bounded;
 use platitude_core::GitError;
@@ -123,8 +124,11 @@ async fn a_metacharacter_branch_reads_its_own_mark() {
     let plan = remote::plan_current_push(&exec, &repo.path, "origin", PushForce::None, &cancel)
         .await
         .expect("a plan");
-    assert_eq!(plan.remote, "fork");
-    assert_eq!(plan.remote_branch, "wip.v2+x", "the branch's own name");
+    assert_eq!(
+        plan.target,
+        far("fork", "wip.v2+x"),
+        "the branch's own name"
+    );
 }
 
 /// The upstream is read through the same escaped pattern: the decoy's
@@ -144,8 +148,11 @@ async fn a_metacharacter_branch_reads_its_own_upstream() {
     let plan = remote::plan_current_push(&exec, &repo.path, "origin", PushForce::None, &cancel)
         .await
         .expect("a plan");
-    assert_eq!(plan.remote, "origin");
-    assert_eq!(plan.remote_branch, "far", "the branch's own upstream name");
+    assert_eq!(
+        plan.target,
+        far("origin", "far"),
+        "the branch's own upstream name"
+    );
     assert!(!plan.set_upstream, "it tracks something already");
 }
 
@@ -183,7 +190,7 @@ async fn a_global_mark_is_read_and_sent_alike() {
     );
     assert_eq!(
         label,
-        format!("{}/{}", plan.remote, plan.remote_branch),
+        format!("{}/{}", plan.target.remote, plan.target.branch),
         "the label and the send disagree at global scope"
     );
 
@@ -205,7 +212,7 @@ async fn a_global_mark_is_read_and_sent_alike() {
     let plan = remote::plan_current_push(&exec, &repo.path, "fork", PushForce::None, &cancel)
         .await
         .expect("a plan");
-    assert_eq!(plan.remote, "origin");
+    assert_eq!(plan.target.remote, "origin");
 }
 
 /// [`origin_fork_and_clone`] with the fork's `main` fetched and apart from

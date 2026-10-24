@@ -72,14 +72,17 @@ impl RepoSession {
     /// measured against, so the status behind the write is owed a read
     /// ([`AfterWrite::Name`]): its upstream — a remote branch, or under
     /// `remote = .` a branch here — or the remote branch of its own name a
-    /// push elsewhere counts against. `remote` comes as its two halves
-    /// (`origin`, `main`).
+    /// push elsewhere counts against.
     ///
     /// Off the snapshot on screen, which the menu offering the delete was
     /// read from; two binary searches, whatever the number of refs. With no
     /// snapshot, or HEAD on no branch, the answer is no: the next tick's
     /// status reads whatever there is.
-    pub(super) fn measures_head(&self, local: Option<&str>, remote: Option<(&str, &str)>) -> bool {
+    pub(super) fn measures_head(
+        &self,
+        local: Option<&str>,
+        remote: Option<&remote::RemoteBranch>,
+    ) -> bool {
         let Some(snapshot) = self.published_snapshot() else {
             return false;
         };
@@ -98,14 +101,14 @@ impl RepoSession {
                 && head.upstream_oid.is_some()
                 && snapshot.local_named(name).map(|b| b.oid) == head.upstream_oid
         });
-        let remote_upstream = remote.is_some_and(|(remote, branch)| {
-            branch == head.short.as_str()
+        let remote_upstream = remote.is_some_and(|target| {
+            target.branch == head.short.as_str()
                 || head
                     .upstream
                     .as_str()
-                    .strip_prefix(remote)
+                    .strip_prefix(target.remote.as_str())
                     .and_then(|rest| rest.strip_prefix('/'))
-                    == Some(branch)
+                    == Some(target.branch.as_str())
         });
         local_upstream || remote_upstream
     }
@@ -150,30 +153,21 @@ impl RepoSession {
 
     /// Points a local branch at the remote branch it is measured against.
     ///
-    /// `remote` and `remote_branch` arrive apart, as the question was
-    /// answered — a pair cannot be read two ways where `origin/x` can
+    /// `target` arrives as a pair, as the question was answered — a pair
+    /// cannot be read two ways where `origin/x` can
     /// ([`branch::set_upstream`]). Queued: the counts beside the branch,
     /// the delete's reference point and a push's target all come off this
     /// setting, and the refresh behind the write redraws them.
     pub fn set_upstream(
         self: &Arc<Self>,
         branch: String,
-        remote: String,
-        remote_branch: String,
+        target: remote::RemoteBranch,
     ) -> Option<OperationId> {
         self.write(
             OperationKind::Branch,
             AfterWrite::Config,
             move |exec, repo, cancel| async move {
-                branch::set_upstream(
-                    &exec,
-                    &repo.workdir,
-                    &branch,
-                    &remote,
-                    &remote_branch,
-                    &cancel,
-                )
-                .await
+                branch::set_upstream(&exec, &repo.workdir, &branch, &target, &cancel).await
             },
         )
     }

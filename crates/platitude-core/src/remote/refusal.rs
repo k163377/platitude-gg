@@ -22,11 +22,11 @@ pub(super) struct Sent<'a> {
 }
 
 impl<'a> Sent<'a> {
-    pub(super) fn branch(remote: &'a str, name: &'a str, deleting: bool) -> Self {
+    pub(super) fn branch(target: &'a super::RemoteBranch, deleting: bool) -> Self {
         Self {
-            remote,
-            name,
-            refname: format!("refs/heads/{name}"),
+            remote: &target.remote,
+            name: &target.branch,
+            refname: target.head_ref(),
             deleting,
         }
     }

@@ -447,16 +447,14 @@ impl SessionSink for BridgeSink {
             }
             SessionEvent::AuthorUnread => self.feeds.tab.push(TabMsg::AuthorUnread),
             SessionEvent::RemoteBranchChecked {
-                remote,
-                branch,
+                target,
                 local,
                 state,
                 tip,
                 theirs,
             } => {
                 self.feeds.tab.push(TabMsg::RemoteBranch {
-                    remote,
-                    branch,
+                    target,
                     local,
                     state: state.as_str().to_string(),
                     tip,

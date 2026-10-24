@@ -8,6 +8,7 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
+use crate::support::remote::far;
 use platitude_core::branch::{self, CheckoutTarget};
 use platitude_core::remote::{self, PushForce};
 
@@ -131,9 +132,15 @@ async fn the_upstream_is_named_by_the_one_spelling_that_reads_one_way() {
     clone.git(&["branch", "origin/feature/x", "origin/main"]);
     let (exec, cancel) = env();
 
-    branch::set_upstream(&exec, &clone.path, "topic", "origin", "feature/x", &cancel)
-        .await
-        .expect("set upstream");
+    branch::set_upstream(
+        &exec,
+        &clone.path,
+        "topic",
+        &far("origin", "feature/x"),
+        &cancel,
+    )
+    .await
+    .expect("set upstream");
     assert_eq!(
         upstream_of(&mut clone, "topic").as_deref(),
         Some("refs/remotes/origin/feature/x"),
@@ -169,9 +176,15 @@ async fn an_upstream_the_next_push_has_to_make_is_recorded_all_the_same() {
         "topic",
     ]);
 
-    branch::set_upstream(&exec, &clone.path, "topic", "origin", "brand-new", &cancel)
-        .await
-        .expect("a name not here is still an answer");
+    branch::set_upstream(
+        &exec,
+        &clone.path,
+        "topic",
+        &far("origin", "brand-new"),
+        &cancel,
+    )
+    .await
+    .expect("a name not here is still an answer");
 
     assert_eq!(
         upstream_of(&mut clone, "topic").as_deref(),
@@ -188,8 +201,8 @@ async fn an_upstream_the_next_push_has_to_make_is_recorded_all_the_same() {
         .await
         .expect("a plan off the keys just written");
     assert_eq!(
-        (plan.remote.as_str(), plan.remote_branch.as_str()),
-        ("origin", "brand-new"),
+        plan.target,
+        far("origin", "brand-new"),
         "the push goes where the branch says it belongs"
     );
     remote::push(&exec, &clone.path, &plan, NET, &cancel)
@@ -229,7 +242,7 @@ async fn a_push_the_far_side_turns_down_still_leaves_the_upstream_written() {
     );
 
     let (sink, session) = crate::support::session::opened(&repo).await;
-    session.point_upstream_and_push("main".into(), "origin".into(), "main-renamed".into());
+    session.point_upstream_and_push("main".into(), far("origin", "main-renamed"));
     let error = sink
         .wait_for("WriteFinished", |evs| {
             evs.iter().find_map(|e| match e {
@@ -410,7 +423,7 @@ mod periodic {
         clone.git(&["worktree", "add", &held_arg, "topic"]);
         let (exec, cancel) = env();
 
-        branch::set_upstream(&exec, &clone.path, "topic", "origin", "main", &cancel)
+        branch::set_upstream(&exec, &clone.path, "topic", &far("origin", "main"), &cancel)
             .await
             .expect("the other worktree is no refusal here");
         assert_eq!(

@@ -20,7 +20,7 @@ use std::path::Path;
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
-use crate::support::remote::origin_and_clone;
+use crate::support::remote::{far, origin_and_clone};
 use crate::support::session::{CaptureSink, opened, write_answer};
 use platitude_core::process::GitExecutor;
 use platitude_core::remote::{self, PushForce, PushStanding, PushTrack};
@@ -164,12 +164,8 @@ async fn the_mark_decides_where_the_branch_goes_and_what_it_is_counted_against()
         .await
         .expect("a plan");
     assert_eq!(
-        (
-            plan.remote.as_str(),
-            plan.remote_branch.as_str(),
-            plan.set_upstream
-        ),
-        ("origin", "topic", false)
+        (&plan.target, plan.set_upstream),
+        (&far("origin", "topic"), false)
     );
     let base = work.git(&["rev-parse", "refs/heads/origin/base"]);
     remote::push(&exec, &work.path, &plan, NET, &cancel)
@@ -251,7 +247,7 @@ async fn a_remote_upstream_is_named_as_the_send_names_it() {
             "origin",
             REMOTES
         ),
-        format!("{}/{}", plan.remote, plan.remote_branch),
+        format!("{}/{}", plan.target.remote, plan.target.branch),
         "the label and the send"
     );
     assert!(

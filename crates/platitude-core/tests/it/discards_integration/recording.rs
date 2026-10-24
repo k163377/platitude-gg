@@ -5,6 +5,7 @@
 use super::{begin, copy_and_record, finish, git_dir, oid, one, read, read_at, restores, same_dir};
 use crate::support::TestRepo;
 use crate::support::exec::env;
+use crate::support::remote::far;
 use platitude_core::discards::{
     self, CopyOf, CopyOperation, DiscardKind, Look, RemoteTip, Restore,
 };
@@ -370,8 +371,7 @@ async fn a_deleted_branch_comes_back_with_its_upstream_and_the_remotes_tip() {
         .expect("the branch is there");
     repo.git(&["branch", "--delete", "--force", "spike"]);
     let remote = RemoteTip {
-        remote: "origin".to_string(),
-        branch: "spike".to_string(),
+        target: far("origin", "spike"),
         tip: oid(&s1),
     };
 
@@ -388,7 +388,7 @@ async fn a_deleted_branch_comes_back_with_its_upstream_and_the_remotes_tip() {
             &Restore::Branch {
                 name: "spike".to_string(),
                 tip: oid(&s2),
-                upstream: Some(("origin".to_string(), "spike".to_string())),
+                upstream: Some(far("origin", "spike")),
             },
             &Restore::Branch {
                 name: "spike-pgg-restored".to_string(),
@@ -422,8 +422,7 @@ async fn a_remote_branch_deleted_or_pushed_over_comes_back_as_a_branch_here() {
     let (executor, cancel) = env();
     let dir = git_dir(&repo);
     let tip = RemoteTip {
-        remote: "origin".to_string(),
-        branch: "main".to_string(),
+        target: far("origin", "main"),
         tip: oid(&g1),
     };
 
@@ -431,7 +430,7 @@ async fn a_remote_branch_deleted_or_pushed_over_comes_back_as_a_branch_here() {
         .await
         .expect("note the push");
     let gone = RemoteTip {
-        branch: "gone".to_string(),
+        target: far("origin", "gone"),
         ..tip.clone()
     };
     discards::record_remote_delete(&executor, &repo.path, &dir, &gone, &cancel)

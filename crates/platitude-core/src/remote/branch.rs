@@ -15,6 +15,29 @@ use crate::process::{GitCommand, GitExecutor};
 use super::push::{PushForce, PushSpec, porcelain_push, push};
 use super::tags::split_ls_remote_line;
 
+/// A branch on a remote: the remote as git is handed it, and the branch's
+/// name over there — not the branch here it goes from or is measured for,
+/// nor the remote-tracking ref that mirrors it. The remote may be `.`,
+/// git's name for this repository: an upstream that is a branch here
+/// (`branch.<name>.remote = .`).
+///
+/// Built from the two names as they were given apart, never cut out of
+/// `origin/feature/x`: both may hold a slash. Nothing here checks them;
+/// git judges the names, and the callers refuse what they refuse.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteBranch {
+    pub remote: String,
+    pub branch: String,
+}
+
+impl RemoteBranch {
+    /// The branch's full name over there, `refs/heads/<branch>` — beside a
+    /// tag of the same name the bare one is ambiguous.
+    pub fn head_ref(&self) -> String {
+        format!("refs/heads/{}", self.branch)
+    }
+}
+
 /// What a remote carries under this exact branch name, if anything.
 ///
 /// Asked before a first push: git silently fast-forwards a same-named
@@ -26,15 +49,20 @@ use super::tags::split_ls_remote_line;
 pub async fn branch_tip(
     executor: &GitExecutor,
     workdir: &Path,
-    remote: &str,
-    branch: &str,
+    target: &RemoteBranch,
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<Option<Oid>, GitError> {
-    let refname = format!("refs/heads/{branch}");
+    let refname = target.head_ref();
     let cmd = GitCommand::new()
         .cwd(workdir)
-        .args(["ls-remote", "--heads", "--end-of-options", remote, &refname])
+        .args([
+            "ls-remote",
+            "--heads",
+            "--end-of-options",
+            &target.remote,
+            &refname,
+        ])
         .timeout(timeout)
         .paced_elsewhere();
     let out = executor.run(cmd, cancel).await?;
@@ -105,29 +133,30 @@ impl RemoteBranchState {
 pub async fn delete_remote_branch(
     executor: &GitExecutor,
     workdir: &Path,
-    remote: &str,
-    branch: &str,
+    target: &RemoteBranch,
     expect: &str,
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    let refname = format!("refs/heads/{branch}");
-    let lease = format!("--force-with-lease={refname}:{expect}");
-    let cmd = porcelain_push(workdir, timeout)
-        .arg(lease)
-        .args(["--delete", "--", remote, &refname]);
+    let sent = super::refusal::Sent::branch(target, true);
+    let lease = format!("--force-with-lease={}:{expect}", sent.refname);
+    let cmd = porcelain_push(workdir, timeout).arg(lease).args([
+        "--delete",
+        "--",
+        &target.remote,
+        &sent.refname,
+    ]);
     let command = cmd.describe();
     let out = executor.run_unchecked(cmd, cancel).await?;
     if out.code == 0 {
         return Ok(());
     }
-    let sent = super::refusal::Sent::branch(remote, branch, true);
     Err(super::refusal::refusal(command, &out, &sent))
 }
 
 /// After [`delete_remote_branch`] went: takes the upstream off the local
-/// branches that tracked `<remote>/<branch>` ([`crate::branch::unset_upstream`]),
-/// and returns them.
+/// branches that tracked `target` ([`crate::branch::unset_upstream`]), and
+/// returns them.
 ///
 /// An upstream left naming a deleted branch is what the `[gone]` warning
 /// reads, and that warning is for a branch the far side dropped on its own
@@ -135,8 +164,8 @@ pub async fn delete_remote_branch(
 /// forgotten. A delete asked for here is no such case: the warning would
 /// only nag about the reader's own act.
 ///
-/// Judged by the push alone: the delete went where `<remote>` pushes, and
-/// so does every branch tracking `<remote>/<branch>`. A `pushurl` naming
+/// Judged by the push alone: the delete went where `target.remote` pushes,
+/// and so does every branch tracking `target`. A `pushurl` naming
 /// another repository than the fetch URL changes nothing — the reader
 /// deleted the branch their pushes go to, and the next fetch reading the
 /// name back from the other side is that configuration's own doing.
@@ -150,8 +179,7 @@ pub async fn delete_remote_branch(
 pub async fn untrack_deleted(
     executor: &GitExecutor,
     workdir: &Path,
-    remote: &str,
-    branch: &str,
+    target: &RemoteBranch,
     cancel: &CancellationToken,
 ) -> Result<Vec<String>, GitError> {
     let out = config::get_regexp_at(
@@ -163,14 +191,14 @@ pub async fn untrack_deleted(
         cancel,
     )
     .await?;
-    let written_here = parse_tracking(&out, remote, branch);
+    let written_here = parse_tracking(&out, target);
     if written_here.is_empty() {
         return Ok(Vec::new());
     }
     // The file's own say is not the branch's: an include read after it, a
     // worktree's config, or a value the global file adds can make the
     // upstream another one, which stays.
-    let in_effect = tracking_branches(executor, workdir, remote, branch, cancel).await?;
+    let in_effect = tracking_branches(executor, workdir, target, cancel).await?;
     let tracking: Vec<String> = written_here
         .into_iter()
         .filter(|name| in_effect.contains(name))
@@ -202,30 +230,35 @@ pub async fn replace_remote_branch(
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    let spec = PushSpec {
+    let old = RemoteBranch {
         remote: remote.to_string(),
+        branch: from.to_string(),
+    };
+    let spec = PushSpec {
+        target: RemoteBranch {
+            remote: remote.to_string(),
+            branch: to.to_string(),
+        },
         local: format!("refs/remotes/{remote}/{from}"),
-        remote_branch: to.to_string(),
         set_upstream: false,
         force: PushForce::None,
     };
     push(executor, workdir, &spec, timeout, cancel).await?;
-    delete_remote_branch(executor, workdir, remote, from, expect, timeout, cancel).await?;
-    for branch in tracking_branches(executor, workdir, remote, from, cancel).await? {
-        crate::branch::set_upstream(executor, workdir, &branch, remote, to, cancel).await?;
+    delete_remote_branch(executor, workdir, &old, expect, timeout, cancel).await?;
+    for branch in tracking_branches(executor, workdir, &old, cancel).await? {
+        crate::branch::set_upstream(executor, workdir, &branch, &spec.target, cancel).await?;
     }
     Ok(())
 }
 
-/// Local branches configured to track `<remote>/<branch>`.
+/// Local branches configured to track `target`.
 ///
 /// One read of the whole `branch.` section: git has no direct query for
 /// it, and the section is small.
 async fn tracking_branches(
     executor: &GitExecutor,
     workdir: &Path,
-    remote: &str,
-    branch: &str,
+    target: &RemoteBranch,
     cancel: &CancellationToken,
 ) -> Result<Vec<String>, GitError> {
     let out = config::get_regexp(
@@ -236,18 +269,17 @@ async fn tracking_branches(
         cancel,
     )
     .await?;
-    Ok(parse_tracking(&out, remote, branch))
+    Ok(parse_tracking(&out, target))
 }
 
-/// Picks the branches whose `remote` and `merge` both name the same remote
-/// branch out of `git config -z --get-regexp ^branch\.` output, each once,
-/// in name order.
+/// Picks the branches whose `remote` and `merge` both name `target` out of
+/// `git config -z --get-regexp ^branch\.` output, each once, in name order.
 ///
 /// Read as git reads the setting: the last `remote` wins, and `merge` is
 /// multi-valued — a branch merging more than this one name (an octopus
 /// `pull`) does not track it alone, and is not picked.
-fn parse_tracking(bytes: &[u8], remote: &str, branch: &str) -> Vec<String> {
-    let merge_ref = format!("refs/heads/{branch}");
+fn parse_tracking(bytes: &[u8], target: &RemoteBranch) -> Vec<String> {
+    let merge_ref = target.head_ref();
     // Per branch: the last `remote` read, and every `merge`.
     let mut settings: BTreeMap<String, (String, Vec<String>)> = BTreeMap::new();
     for record in config::parse_z_records(bytes) {
@@ -274,7 +306,7 @@ fn parse_tracking(bytes: &[u8], remote: &str, branch: &str) -> Vec<String> {
     }
     settings
         .into_iter()
-        .filter(|(_, (last, merges))| last == remote && *merges == [merge_ref.as_str()])
+        .filter(|(_, (last, merges))| *last == target.remote && *merges == [merge_ref.as_str()])
         .map(|(name, _)| name)
         .collect()
 }
@@ -283,6 +315,41 @@ fn parse_tracking(bytes: &[u8], remote: &str, branch: &str) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::config::z;
+
+    fn far(remote: &str, branch: &str) -> RemoteBranch {
+        RemoteBranch {
+            remote: remote.to_string(),
+            branch: branch.to_string(),
+        }
+    }
+
+    #[test]
+    fn the_head_ref_names_the_branch_under_refs_heads() {
+        assert_eq!(
+            far("team/fork", "feature/x").head_ref(),
+            "refs/heads/feature/x"
+        );
+    }
+
+    /// `team/fork` + `feature/x` and `team` + `fork/feature/x` both read
+    /// `team/fork/feature/x` joined; only the pair tells them apart.
+    #[test]
+    fn tracking_reads_the_two_names_apart_where_both_hold_a_slash() {
+        let bytes = z(&[
+            "branch.mine.remote\nteam/fork",
+            "branch.mine.merge\nrefs/heads/feature/x",
+            "branch.lookalike.remote\nteam",
+            "branch.lookalike.merge\nrefs/heads/fork/feature/x",
+        ]);
+        assert_eq!(
+            parse_tracking(&bytes, &far("team/fork", "feature/x")),
+            ["mine"]
+        );
+        assert_eq!(
+            parse_tracking(&bytes, &far("team", "fork/feature/x")),
+            ["lookalike"]
+        );
+    }
 
     #[test]
     fn tracking_needs_both_halves_to_agree() {
@@ -298,7 +365,10 @@ mod tests {
             // Half a setting is no setting.
             "branch.orphan.remote\norigin",
         ]);
-        assert_eq!(parse_tracking(&bytes, "origin", "billing"), ["billing"]);
+        assert_eq!(
+            parse_tracking(&bytes, &far("origin", "billing")),
+            ["billing"]
+        );
     }
 
     #[test]
@@ -308,7 +378,7 @@ mod tests {
             "branch.release.8.4.merge\nrefs/heads/release.8.4",
         ]);
         assert_eq!(
-            parse_tracking(&bytes, "origin", "release.8.4"),
+            parse_tracking(&bytes, &far("origin", "release.8.4")),
             ["release.8.4"]
         );
     }
@@ -332,6 +402,6 @@ mod tests {
             "branch.twice.merge\nrefs/heads/topic",
             "branch.twice.remote\norigin",
         ]);
-        assert_eq!(parse_tracking(&bytes, "origin", "topic"), ["twice"]);
+        assert_eq!(parse_tracking(&bytes, &far("origin", "topic")), ["twice"]);
     }
 }

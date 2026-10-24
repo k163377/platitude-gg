@@ -89,7 +89,7 @@ fn part_row(part: &Part) -> DiscardPart {
             name.clone(),
             upstream
                 .as_ref()
-                .map(|(remote, branch)| format!("{remote}/{branch}"))
+                .map(|upstream| format!("{}/{}", upstream.remote, upstream.branch))
                 .unwrap_or_default(),
             String::new(),
         ),

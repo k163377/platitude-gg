@@ -48,9 +48,8 @@ pub async fn restore(
         } => {
             crate::branch::create(executor, workdir, name, Some(&tip.to_hex()), false, cancel)
                 .await?;
-            if let Some((remote, branch)) = upstream {
-                crate::branch::set_upstream(executor, workdir, name, remote, branch, cancel)
-                    .await?;
+            if let Some(upstream) = upstream {
+                crate::branch::set_upstream(executor, workdir, name, upstream, cancel).await?;
             }
             Ok(Restored::Whole)
         }

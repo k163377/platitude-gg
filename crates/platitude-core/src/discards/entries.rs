@@ -201,7 +201,10 @@ impl Reading<'_> {
         let upstream = line
             .get("Upstream")
             .split_once(' ')
-            .map(|(remote, branch)| (remote.to_string(), branch.to_string()));
+            .map(|(remote, branch)| crate::remote::RemoteBranch {
+                remote: remote.to_string(),
+                branch: branch.to_string(),
+            });
         let own = Recorded {
             line,
             part: 0,
@@ -388,7 +391,7 @@ impl Recorded<'_> {
     fn branch(
         &self,
         tip: Oid,
-        upstream: Option<(String, String)>,
+        upstream: Option<crate::remote::RemoteBranch>,
         names: &mut Names<'_>,
         here: &Here<'_>,
     ) -> Part {

@@ -3,7 +3,17 @@
 
 use std::path::PathBuf;
 
+use platitude_core::remote::RemoteBranch;
+
 use crate::support::TestRepo;
+
+/// A branch on a remote, by its two names.
+pub fn far(remote: &str, branch: &str) -> RemoteBranch {
+    RemoteBranch {
+        remote: remote.to_string(),
+        branch: branch.to_string(),
+    }
+}
 
 /// A bare repository serving as `origin`, plus a working clone of it.
 pub fn origin_and_clone() -> (TestRepo, TestRepo) {

@@ -127,8 +127,7 @@ pub enum TabMsg {
     /// along: the asking box may be on another name by now, or the
     /// question on another branch (`local`).
     RemoteBranch {
-        remote: String,
-        branch: String,
+        target: platitude_core::remote::RemoteBranch,
         local: String,
         /// `platitude_core::remote::RemoteBranchState` by its wire name.
         state: String,

@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use platitude_core::remote::RemoteBranch;
 use platitude_core::{OperationKind, ReportKind};
 use qtbridge::{QmlObject, qobject};
 
@@ -15,24 +16,25 @@ use super::qml_register;
 /// here whose history the answer weighed it against.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteBranchAsked {
-    pub remote: String,
-    pub branch: String,
+    pub target: RemoteBranch,
     pub local: String,
 }
 
 impl Record for RemoteBranchAsked {
     fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
         Fields::new()
-            .put("remote", &self.remote)
-            .put("branch", &self.branch)
+            .put("remote", &self.target.remote)
+            .put("branch", &self.target.branch)
             .put("local", &self.local)
             .done()
     }
 
     fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
         Ok(Self {
-            remote: field(map, "remote")?,
-            branch: field(map, "branch")?,
+            target: RemoteBranch {
+                remote: field(map, "remote")?,
+                branch: field(map, "branch")?,
+            },
             local: field(map, "local")?,
         })
     }

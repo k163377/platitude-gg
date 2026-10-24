@@ -904,7 +904,11 @@ impl RepoTab {
         if branch.is_empty() || remote.is_empty() || remote_branch.is_empty() {
             return;
         }
-        self.ask_session(|s| s.set_upstream(branch, remote, remote_branch));
+        let target = RemoteBranch {
+            remote,
+            branch: remote_branch,
+        };
+        self.ask_session(|s| s.set_upstream(branch, target));
     }
 
     /// Leaves `branch` measured against nothing (`branch::unset_upstream`).
@@ -1159,7 +1163,11 @@ impl RepoTab {
         remote_branch: String,
         expect: String,
     ) {
-        self.branch_publish(branch, remote, remote_branch, expect);
+        let target = RemoteBranch {
+            remote,
+            branch: remote_branch,
+        };
+        self.branch_publish(branch, target, expect);
     }
 
     /// `git remote add <name> <url>`. Contacts nothing — a URL that goes
@@ -1197,7 +1205,8 @@ impl RepoTab {
     /// `remoteBranchRevision`, with `remoteBranchState`.
     #[qslot]
     fn check_remote_branch(&mut self, remote: String, branch: String, local: String) {
-        self.look_up_remote_branch(remote, branch, local)
+        let target = RemoteBranch { remote, branch };
+        self.look_up_remote_branch(target, local)
     }
 
     /// What the last answer is about — what `checkRemoteBranch` was asked
@@ -1236,7 +1245,11 @@ impl RepoTab {
     /// there.
     #[qslot]
     fn point_upstream_and_push(&mut self, branch: String, remote: String, remote_branch: String) {
-        self.point_and_push(branch, remote, remote_branch);
+        let target = RemoteBranch {
+            remote,
+            branch: remote_branch,
+        };
+        self.point_and_push(branch, target);
     }
 
     /// Replaces a branch on a remote the way `replaceRemoteTag` replaces a
@@ -1250,7 +1263,8 @@ impl RepoTab {
     /// `expect`, the commit the row showed.
     #[qslot]
     fn delete_remote_branch(&mut self, remote: String, branch: String, expect: String) {
-        self.remote_branch_delete(remote, branch, expect);
+        let target = RemoteBranch { remote, branch };
+        self.remote_branch_delete(target, expect);
     }
 
     /// `git branch --delete` (`-D` under `force`) and then
@@ -1266,7 +1280,11 @@ impl RepoTab {
         force: bool,
         expect: String,
     ) {
-        self.branch_delete_everywhere(branch, remote, remote_branch, force, expect)
+        let target = RemoteBranch {
+            remote,
+            branch: remote_branch,
+        };
+        self.branch_delete_everywhere(branch, target, force, expect)
     }
 
     /// `git merge <rev>`.

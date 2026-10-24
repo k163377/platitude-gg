@@ -8,7 +8,7 @@
 
 use platitude_core::session::{FollowUp, PassStep, RefreshOutcome, RelaidRow, SessionEvent};
 
-use crate::support::remote::origin_and_clone;
+use crate::support::remote::{far, origin_and_clone};
 use crate::support::session::{
     CaptureSink, open_with_doors, opened, scenario, write_answer, write_settled,
 };
@@ -210,7 +210,7 @@ async fn a_remote_branch_delete_takes_what_only_the_remote_held() {
     crate::support::wait::bounded("the opening's graph", session.wait_for_graph_passes()).await;
 
     let id = session
-        .delete_remote_branch("origin".into(), "theirs".into(), theirs.clone())
+        .delete_remote_branch(far("origin", "theirs"), theirs.clone())
         .expect("accepted");
     let rows = relaid(&sink, 0).await;
     assert!(!answered(&sink, id), "the push was still held over there");

@@ -59,9 +59,9 @@ impl RepoTab {
     /// the configured names (`GitFacts.remoteOfRef`), since a remote's
     /// name may hold a slash. `expect` is the commit the row showed, which
     /// the delete is leased to (`remote::delete_remote_branch`).
-    pub(super) fn remote_branch_delete(&mut self, remote: String, branch: String, expect: String) {
-        let row = format!("{remote}/{branch}");
-        let asked = self.ask_session(|s| s.delete_remote_branch(remote, branch, expect));
+    pub(super) fn remote_branch_delete(&mut self, target: RemoteBranch, expect: String) {
+        let row = remote_row(&target);
+        let asked = self.ask_session(|s| s.delete_remote_branch(target, expect));
         self.ref_push_asked(&row, asked);
         self.took_away(&[(Row::Remote, &row)], asked);
     }
@@ -79,15 +79,13 @@ impl RepoTab {
     pub(super) fn branch_delete_everywhere(
         &mut self,
         branch: String,
-        remote: String,
-        remote_branch: String,
+        target: RemoteBranch,
         force: bool,
         expect: String,
     ) {
-        let row = format!("{remote}/{remote_branch}");
-        let asked = self.ask_session(|s| {
-            s.delete_branch_everywhere(branch.clone(), remote, remote_branch, force, expect)
-        });
+        let row = remote_row(&target);
+        let asked =
+            self.ask_session(|s| s.delete_branch_everywhere(branch.clone(), target, force, expect));
         self.ref_push_asked(&row, asked);
         self.took_away(&[(Row::Branch, &branch), (Row::Remote, &row)], asked);
     }
@@ -215,4 +213,11 @@ impl RepoTab {
         self.gone_worktree_branch = rows.worktree_branch;
         true
     }
+}
+
+/// The key a remote branch's row goes by, `<remote>/<branch>` as the row
+/// shows it — written from the pair, never cut back apart (both names may
+/// hold a slash).
+pub(super) fn remote_row(target: &RemoteBranch) -> String {
+    format!("{}/{}", target.remote, target.branch)
 }

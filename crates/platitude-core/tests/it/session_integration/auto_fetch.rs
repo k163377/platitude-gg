@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::support::TestRepo;
+use crate::support::remote::far;
 use crate::support::session::{CaptureSink, open_unawaited, opened, write_result};
 use platitude_core::OperationKind;
 use platitude_core::session::{AutoFetchTicker, OpenFetch, SessionEvent};
@@ -185,7 +186,7 @@ async fn a_rename_kept_over_there_refused_as_out_of_date_fetches_too() {
     let (mut origin, mut clone, known) = outrun();
 
     let (sink, session) = opened(&clone).await;
-    session.point_upstream_and_push("main".into(), "origin".into(), "main".into());
+    session.point_upstream_and_push("main".into(), far("origin", "main"));
 
     caught_up(&sink, &mut origin, &mut clone, &known).await;
     session.close_and_wait().await;

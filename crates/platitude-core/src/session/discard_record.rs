@@ -428,20 +428,18 @@ async fn copy(
 pub(super) async fn remote_tip(
     exec: &GitExecutor,
     workdir: &Path,
-    remote: &str,
-    branch: &str,
+    target: &remote::RemoteBranch,
     expect: Option<&str>,
     cancel: &CancellationToken,
 ) -> Result<Option<RemoteTip>, GitError> {
     let rev = match expect.filter(|expect| !expect.is_empty()) {
         Some(expect) => expect.to_string(),
-        None => format!("refs/remotes/{remote}/{branch}"),
+        None => format!("refs/remotes/{}/{}", target.remote, target.branch),
     };
     Ok(discards::commit_of(exec, workdir, &rev, cancel)
         .await?
         .map(|tip| RemoteTip {
-            remote: remote.to_string(),
-            branch: branch.to_string(),
+            target: target.clone(),
             tip,
         }))
 }

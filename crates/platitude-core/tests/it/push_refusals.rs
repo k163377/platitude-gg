@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use crate::support::TestRepo;
 use crate::support::exec::{Said, env, logged, observed_env};
-use crate::support::remote::{moved_over_there, origin_and_clone};
+use crate::support::remote::{far, moved_over_there, origin_and_clone};
 use platitude_core::GitError;
 use platitude_core::process::{CommandEnd, Kept};
 use platitude_core::remote::{self, PushForce, PushSpec};
@@ -33,9 +33,8 @@ async fn push_main_with(
     cancel: &tokio_util::sync::CancellationToken,
 ) -> Result<(), GitError> {
     let spec = PushSpec {
-        remote: remote.into(),
+        target: far(remote, "main"),
         local: "main".into(),
-        remote_branch: "main".into(),
         set_upstream: false,
         force,
     };
@@ -78,9 +77,16 @@ async fn a_push_the_pre_push_hook_turns_down_is_reported_as_the_hooks() {
     );
 
     let tip = work.git(&["rev-parse", "origin/main"]);
-    let err = remote::delete_remote_branch(&exec, &work.path, "origin", "main", &tip, NET, &cancel)
-        .await
-        .expect_err("the hook says no to a delete too");
+    let err = remote::delete_remote_branch(
+        &exec,
+        &work.path,
+        &far("origin", "main"),
+        &tip,
+        NET,
+        &cancel,
+    )
+    .await
+    .expect_err("the hook says no to a delete too");
     assert_eq!(kind_of(&err), Some(ReportKind::PrePushDelete), "{err}");
     drop(bare);
 }
@@ -93,9 +99,8 @@ async fn a_refspec_git_turned_down_is_not_the_hooks() {
     work.write_hook("pre-push", SAYS_NO);
     let (exec, cancel) = env();
     let spec = PushSpec {
-        remote: "origin".into(),
+        target: far("origin", "no-such-branch"),
         local: "no-such-branch".into(),
-        remote_branch: "no-such-branch".into(),
         set_upstream: false,
         force: PushForce::None,
     };
@@ -146,9 +151,16 @@ async fn a_far_side_that_keeps_a_branch_says_which_rule() {
     let (exec, cancel) = env();
 
     let tip = work.git(&["rev-parse", "origin/main"]);
-    let err = remote::delete_remote_branch(&exec, &work.path, "origin", "main", &tip, NET, &cancel)
-        .await
-        .expect_err("main is what its HEAD names");
+    let err = remote::delete_remote_branch(
+        &exec,
+        &work.path,
+        &far("origin", "main"),
+        &tip,
+        NET,
+        &cancel,
+    )
+    .await
+    .expect_err("main is what its HEAD names");
     assert_eq!(
         kind_of(&err),
         Some(ReportKind::RemoteDelete(RemoteWhy::Current)),
@@ -156,9 +168,16 @@ async fn a_far_side_that_keeps_a_branch_says_which_rule() {
     );
 
     bare.git(&["config", "receive.denyDeletes", "true"]);
-    let err = remote::delete_remote_branch(&exec, &work.path, "origin", "side", &tip, NET, &cancel)
-        .await
-        .expect_err("it deletes no branch");
+    let err = remote::delete_remote_branch(
+        &exec,
+        &work.path,
+        &far("origin", "side"),
+        &tip,
+        NET,
+        &cancel,
+    )
+    .await
+    .expect_err("it deletes no branch");
     assert_eq!(
         kind_of(&err),
         Some(ReportKind::RemoteDelete(RemoteWhy::NoDeletes)),
@@ -310,9 +329,16 @@ async fn a_branch_the_far_side_keeps_comes_back_as_a_refusal_with_its_words() {
     // Leased to what is there: the lease passes, so the hook is what says no.
     let tip = work.git(&["rev-parse", "origin/main"]);
 
-    let err = remote::delete_remote_branch(&exec, &work.path, "origin", "main", &tip, NET, &cancel)
-        .await
-        .expect_err("the far side keeps main");
+    let err = remote::delete_remote_branch(
+        &exec,
+        &work.path,
+        &far("origin", "main"),
+        &tip,
+        NET,
+        &cancel,
+    )
+    .await
+    .expect_err("the far side keeps main");
     let Some(report) = err.report() else {
         panic!("a refusal the far side made is told apart from a failure of ours: {err}");
     };
