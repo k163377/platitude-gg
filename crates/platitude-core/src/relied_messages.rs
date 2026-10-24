@@ -205,7 +205,7 @@ pub(crate) const CARRIED_TURNED_DOWN: Relied = Relied::any(&[
 /// - git: `builtin/merge.c` `would be overwritten`
 /// - git: `merge-ort-wrappers.c` `would be overwritten`
 /// - witness: `integrate_integration::merge::a_merge_refused_over_work_in_the_way_keeps_gits_words_in_the_log`
-/// - witness: `remote_integration::a_pull_refused_over_work_in_the_way_keeps_gits_words_in_the_log`
+/// - witness: `pull_integration::a_pull_refused_over_work_in_the_way_keeps_gits_words_in_the_log`
 /// - witness: `carried_apply::a_change_here_in_the_way_is_reported_and_nothing_is_written`
 pub(crate) const OVERWRITES_WORK: Words = Words("would be overwritten");
 
@@ -412,7 +412,7 @@ pub(crate) const WARNING_LEAD: Words = Words("warning: ");
 /// This end turned the ref down itself (`--porcelain`'s ref line).
 ///
 /// - git: `transport.c` `"[rejected]"`
-/// - witness: `remote_integration::a_push_that_is_only_out_of_date_reports_gits_own_advice`
+/// - witness: `push_refusals::a_push_that_is_only_out_of_date_reports_gits_own_advice`
 pub(crate) const REJECTED: Words = Words("[rejected]");
 
 /// The far side turned the ref down.
@@ -424,13 +424,13 @@ pub(crate) const REMOTE_REJECTED: Words = Words("[remote rejected]");
 /// Commits on the remote not here yet.
 ///
 /// - git: `transport.c` `"fetch first"`
-/// - witness: `remote_integration::a_push_that_is_only_out_of_date_reports_gits_own_advice`
+/// - witness: `push_refusals::a_push_that_is_only_out_of_date_reports_gits_own_advice`
 pub(crate) const FETCH_FIRST: Words = Words("(fetch first)");
 
 /// Commits on the remote, here but not in what was sent.
 ///
 /// - git: `transport.c` `"non-fast-forward"`
-/// - witness: `remote_integration::a_non_fast_forward_push_is_refused_until_forced`
+/// - witness: `push_refusals::a_non_fast_forward_push_is_refused_until_forced`
 pub(crate) const NOT_A_FAST_FORWARD: Words = Words("(non-fast-forward)");
 
 /// A lease with no oid under `push.useForceIfIncludes`.
@@ -461,7 +461,7 @@ pub(crate) const ALREADY_EXISTS: Words = Words("(already exists)");
 /// gives its rules (`protected branch hook declined`).
 ///
 /// - git: `builtin/receive-pack.c` `hook declined`
-/// - witness: `remote_integration::a_branch_the_far_side_keeps_comes_back_as_a_refusal_with_its_words`
+/// - witness: `push_refusals::a_branch_the_far_side_keeps_comes_back_as_a_refusal_with_its_words`
 pub(crate) const HOOK_DECLINED: Words = Words("hook declined");
 
 /// `receive.denyNonFastForwards` over there — the far side's reason, read

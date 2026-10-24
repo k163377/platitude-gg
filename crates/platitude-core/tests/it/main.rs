@@ -22,6 +22,7 @@ mod integrate_integration;
 mod lfs_integration;
 mod logparse;
 mod preview_integration;
+mod pull_integration;
 mod push_default_integration;
 mod push_refusals;
 mod push_source_integration;

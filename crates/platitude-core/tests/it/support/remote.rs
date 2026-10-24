@@ -47,3 +47,31 @@ pub fn shallow_clone(commits: usize, depth: usize) -> (TestRepo, PathBuf, Vec<St
     let held = held.lines().map(str::to_string).collect();
     (source, clone, held)
 }
+
+/// A branch of our own on the remote, pushed and tracked: its tip as the
+/// screen shows it (the remote-tracking ref).
+pub fn a_branch_over_there(work: &mut TestRepo, name: &str) -> String {
+    work.git(&["switch", "-c", name]);
+    work.commit_file(&format!("{name}.txt"), "ours\n", "our work");
+    work.git(&["push", "-u", "origin", name]);
+    work.git(&["switch", "main"]);
+    work.git(&["rev-parse", &format!("origin/{name}")])
+}
+
+/// Someone else's push to `branch` after our last fetch: `file`, committed
+/// as `message` in a clone of their own. Returns the tip it left over
+/// there, which this clone has never seen.
+pub fn moved_over_there(bare: &TestRepo, branch: &str, file: &str, message: &str) -> String {
+    let mut other = TestRepo::init();
+    other.git(&["remote", "add", "origin", &bare.file_url()]);
+    other.git(&["fetch", "origin"]);
+    other.git(&[
+        "switch",
+        "--force-create",
+        branch,
+        &format!("origin/{branch}"),
+    ]);
+    let tip = other.commit_file_id(file, "theirs\n", message);
+    other.git(&["push", "origin", branch]);
+    tip
+}

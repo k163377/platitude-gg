@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use crate::support::TestRepo;
 use crate::support::exec::{Said, env, logged, observed_env};
-use crate::support::remote::origin_and_clone;
+use crate::support::remote::{moved_over_there, origin_and_clone};
 const NET: std::time::Duration = remote::DEFAULT_NETWORK_TIMEOUT;
 use platitude_core::GitError;
 use platitude_core::process::{CommandEnd, Kept};
@@ -232,6 +232,294 @@ async fn naming_the_hook_runs_no_git_besides_the_push() {
     assert!(
         rows.iter().all(|row| row.starts_with("git push")),
         "no git but the push: {rows:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_non_fast_forward_push_is_refused_until_forced() {
+    let (mut bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    moved_over_there(&bare, "main", "theirs.txt", "their work");
+
+    work.git(&["commit", "--amend", "-m", "rewritten root"]);
+    let spec = PushSpec {
+        remote: "origin".into(),
+        local: "main".into(),
+        remote_branch: "main".into(),
+        set_upstream: false,
+        force: PushForce::None,
+    };
+    let err = remote::push(&exec, &work.path, &spec, NET, &cancel)
+        .await
+        .expect_err("non-fast-forward");
+    assert!(
+        err.to_string().contains("rejected") || err.to_string().contains("non-fast-forward"),
+        "git's own rejection is passed through: {err}"
+    );
+    assert!(
+        err.is_outdated(),
+        "a refusal a fetch would answer is told apart from one it would not: {err}"
+    );
+
+    // A stale lease is outdated too: this window is looking at an older remote.
+    let stale = work.git(&["rev-parse", "origin/main"]);
+    let leased = PushSpec {
+        force: PushForce::WithLease {
+            expect: Some(stale),
+        },
+        ..spec.clone()
+    };
+    let err = remote::push(&exec, &work.path, &leased, NET, &cancel)
+        .await
+        .expect_err("stale lease");
+    assert_eq!(
+        err.report().map(|report| report.kind),
+        Some(ReportKind::Moved),
+        "a lease the remote left says the branch moved, not that it is ahead: {err}"
+    );
+    assert!(err.is_outdated(), "and is caught up with all the same");
+
+    let forced = PushSpec {
+        force: PushForce::Force,
+        ..spec
+    };
+    remote::push(&exec, &work.path, &forced, NET, &cancel)
+        .await
+        .expect("forced push");
+    assert_eq!(
+        bare.git(&["log", "-1", "--format=%s", "main"]),
+        "rewritten root"
+    );
+}
+
+/// Writes a `pre-receive` hook into a bare repository that turns every
+/// push away, in the shape a forge writes its own refusals in.
+///
+/// Offline stand-in for any far-side refusal: a protected branch, a
+/// repository rule and a hook all arrive as the same `[remote rejected]`,
+/// differing only in the sentence underneath.
+fn decline_every_push(bare: &TestRepo, said: &str) {
+    decline_every_push_watched(bare, said, || {});
+}
+
+/// The same hook, telling `on_busy` if the install has to wait out a
+/// neighbour holding the file open ([`TestRepo::write_hook_watched`]).
+fn decline_every_push_watched(bare: &TestRepo, said: &str, on_busy: impl FnOnce()) {
+    bare.write_hook_watched(
+        "pre-receive",
+        &format!("echo \"error: {said}\" >&2\nexit 1\n"),
+        on_busy,
+    );
+}
+
+#[tokio::test]
+async fn a_branch_the_far_side_keeps_comes_back_as_a_refusal_with_its_words() {
+    let (bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    decline_every_push(
+        &bare,
+        "GH006: Protected branch update failed for refs/heads/main.",
+    );
+    // Leased to what is there: the lease passes, so the hook is what says no.
+    let tip = work.git(&["rev-parse", "origin/main"]);
+
+    let err = remote::delete_remote_branch(&exec, &work.path, "origin", "main", &tip, NET, &cancel)
+        .await
+        .expect_err("the far side keeps main");
+    let Some(report) = err.report() else {
+        panic!("a refusal the far side made is told apart from a failure of ours: {err}");
+    };
+    assert_eq!(report.remote, "origin");
+    assert_eq!(report.name, "main");
+    assert_eq!(
+        report.kind,
+        ReportKind::RemoteDelete(RemoteWhy::Rule),
+        "what was asked for was the removal, and a hook over there said no"
+    );
+    assert_eq!(report.fact, "", "the screen says it in its own words");
+    // Under `--porcelain` the per-ref result is on stdout and stderr keeps
+    // the prose: the far side's lines and git's own last word.
+    assert!(
+        err.to_string().contains("GH006") && err.to_string().contains("failed to push"),
+        "git's whole message is still there for the log: {err}"
+    );
+}
+
+#[tokio::test]
+async fn a_push_the_far_side_turns_down_is_not_one_a_fetch_would_answer() {
+    let (bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    decline_every_push(&bare, "Changes must be made through a pull request.");
+    work.commit_file("b.txt", "ours\n", "work of our own");
+
+    let err = remote::push(
+        &exec,
+        &work.path,
+        &PushSpec {
+            remote: "origin".into(),
+            local: "main".into(),
+            remote_branch: "main".into(),
+            set_upstream: false,
+            force: PushForce::None,
+        },
+        NET,
+        &cancel,
+    )
+    .await
+    .expect_err("the hook declines");
+    let Some(report) = err.report() else {
+        panic!("a fast-forward the far side declined is neither outdated nor ours: {err}");
+    };
+    assert_eq!(
+        report.kind,
+        ReportKind::RemoteUpdate(RemoteWhy::Rule),
+        "this one was sending, not removing"
+    );
+    assert!(
+        err.to_string()
+            .contains("Changes must be made through a pull request."),
+        "the far side's words are the log's: {err}"
+    );
+}
+
+/// A tag refusal is a report like a branch's (デザイン規約 §答えの要らない報せ).
+/// Both halves are checked: sending and deleting are different commands
+/// (`push` / `push --delete`), so one being classified says nothing of the other.
+#[tokio::test]
+async fn a_tag_the_far_side_keeps_is_reported_the_way_a_branch_is() {
+    let (bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    work.git(&["tag", "v1.0"]);
+    remote::push_tag(&exec, &work.path, "origin", "v1.0", "", NET, &cancel)
+        .await
+        .expect("the tag goes over while nothing is standing over it");
+    decline_every_push(&bare, "Tag protection rules prevent this.");
+    let shown = work.git(&["rev-parse", "v1.0"]);
+
+    let err = remote::delete_remote_tag(&exec, &work.path, "origin", "v1.0", &shown, NET, &cancel)
+        .await
+        .expect_err("the far side keeps the tag");
+    let Some(report) = err.report() else {
+        panic!("a tag the far side keeps is a report, not a failure of ours: {err}");
+    };
+    assert_eq!(report.kind, ReportKind::RemoteDelete(RemoteWhy::Rule));
+    assert_eq!(report.remote, "origin");
+    assert_eq!(report.name, "v1.0", "the tag names itself, not a branch");
+
+    work.commit_file("c.txt", "more\n", "something to tag");
+    work.git(&["tag", "v1.1"]);
+    let err = remote::push_tag(&exec, &work.path, "origin", "v1.1", "", NET, &cancel)
+        .await
+        .expect_err("the far side keeps its tags");
+    let Some(report) = err.report() else {
+        panic!("a tag the far side would not take is a report as well: {err}");
+    };
+    assert_eq!(report.kind, ReportKind::RemoteUpdate(RemoteWhy::Rule));
+    assert_eq!(report.name, "v1.1");
+    assert!(
+        !err.is_outdated(),
+        "nothing about a tag is answered by fetching, whatever the refusal was"
+    );
+}
+
+/// The same refusal, installed while a neighbour holds the hook open for
+/// writing — the window a `fork()` in another test opens over a file this
+/// one has just written. A hook git cannot execute declines silently, so
+/// the install is what has to wait (`TestRepo::write_hook`).
+///
+/// Linux only: POSIX only says `execve` *may* refuse a file open for
+/// writing, and Linux does.
+#[tokio::test]
+#[cfg(target_os = "linux")]
+async fn a_hook_a_neighbour_holds_open_still_says_why_the_push_was_refused() {
+    let (bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    work.git(&["tag", "v1.0"]);
+    remote::push_tag(&exec, &work.path, "origin", "v1.0", "", NET, &cancel)
+        .await
+        .expect("the tag goes over while nothing is standing over it");
+    decline_every_push(&bare, "Tag protection rules prevent this.");
+    let shown = work.git(&["rev-parse", "v1.0"]);
+
+    // The install below rewrites this same inode, so the handle stays on it.
+    let hook = bare.path.join(".git").join("hooks").join("pre-receive");
+    let handle = std::fs::OpenOptions::new()
+        .write(true)
+        .open(&hook)
+        .expect("hold the hook open for writing");
+
+    // Let go only once the install says it is waiting, inside the scope. An
+    // install that never looked leaves the handle held, so the push below
+    // meets the busy hook and loses the words.
+    let (busy, saw_busy) = std::sync::mpsc::channel();
+    let mut held = Some(handle);
+    let installing = &bare;
+    std::thread::scope(|scope| {
+        // `move`, so the thread owns the sender: an install that never
+        // finds the hook busy has to end the wait below by dropping it.
+        scope.spawn(move || {
+            decline_every_push_watched(
+                installing,
+                "Tag protection rules prevent this.",
+                move || busy.send(()).expect("report ETXTBSY"),
+            );
+        });
+        if saw_busy.recv().is_ok() {
+            held = None;
+        }
+    });
+
+    let err = remote::delete_remote_tag(&exec, &work.path, "origin", "v1.0", &shown, NET, &cancel)
+        .await
+        .expect_err("the far side keeps the tag");
+    assert!(
+        err.report().is_some(),
+        "a tag the far side keeps is a report, not a failure of ours: {err}"
+    );
+    assert!(
+        err.to_string()
+            .contains("Tag protection rules prevent this."),
+        "the hook ran and said its words, which the log keeps — not a hook git could not run: {err}"
+    );
+    drop(held);
+}
+
+/// git's own summary is what marks the refusal a fetch answers — the
+/// report with a move behind it.
+#[tokio::test]
+async fn a_push_that_is_only_out_of_date_reports_gits_own_advice() {
+    let (bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    moved_over_there(&bare, "main", "theirs.txt", "pushed while you slept");
+    work.commit_file("ours.txt", "ours\n", "work of our own");
+
+    let err = remote::push(
+        &exec,
+        &work.path,
+        &PushSpec {
+            remote: "origin".into(),
+            local: "main".into(),
+            remote_branch: "main".into(),
+            set_upstream: false,
+            force: PushForce::None,
+        },
+        NET,
+        &cancel,
+    )
+    .await
+    .expect_err("the remote holds what we have not got");
+    let Some(report) = err.report() else {
+        panic!("being out of date is a report of its own: {err}");
+    };
+    assert_eq!(report.kind, ReportKind::Outdated);
+    assert_eq!(report.remote, "origin");
+    assert_eq!(report.name, "main");
+    assert!(
+        report.fact.is_empty(),
+        "the line under the heading is the screen's own (`Words.writeReportedWhy`), and git's \
+         advice — written for somebody at a terminal — is read in the log with the command it \
+         came from. Carried: {}",
+        report.fact
     );
 }
 
