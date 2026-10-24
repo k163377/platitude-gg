@@ -110,11 +110,9 @@ async fn replacing_a_remote_branch_moves_the_name_and_the_tracking() {
     .await
     .expect("replace remote branch");
 
-    let listed = bare.git(&["branch", "--list"]);
-    assert!(listed.contains("billing-v2"), "{listed}");
     assert!(
-        !listed.contains("  billing\n"),
-        "the old name is gone: {listed}"
+        !bare.git_ok(&["rev-parse", "--verify", "refs/heads/billing"]),
+        "the old name is gone"
     );
     assert_eq!(
         bare.git(&["rev-parse", "billing-v2"]),
@@ -127,9 +125,7 @@ async fn replacing_a_remote_branch_moves_the_name_and_the_tracking() {
         "the branch that tracked it follows the name"
     );
     assert!(
-        !work
-            .git(&["branch", "-r", "--list"])
-            .contains("origin/billing\n"),
+        !work.git_ok(&["rev-parse", "--verify", "refs/remotes/origin/billing"]),
         "the tracking ref for the old name went with the delete"
     );
 }
@@ -165,8 +161,9 @@ async fn a_replace_whose_push_fails_deletes_nothing() {
         error.is_outdated() || matches!(error, GitError::Failed { .. }),
         "{error:?}"
     );
-    assert!(
-        bare.git(&["branch", "--list"]).contains("billing"),
+    assert_eq!(
+        bare.git(&["rev-parse", "billing"]),
+        tip,
         "the old name is still there"
     );
     assert_eq!(
