@@ -2,7 +2,7 @@
 //! the whole tier before a merge (反映前テストの機械化.md
 //! §版を動かす変更は段 3).
 
-use crate::support::{Sandbox, without_always};
+use crate::support::{Ran, Sandbox, without_always};
 
 /// A census with one line of each tier the whole gate adds.
 fn tiered(name: &str) -> Sandbox {
@@ -183,9 +183,7 @@ fn the_containers_base_image_is_its_version() {
     );
     sb.gate_ok(&sb.seat, &[]);
     let ran = without_always(&sb.ran());
-    for owed in ["verify-linux stash --preset basic", "bare", "qmltest-linux"] {
-        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
-    }
+    ran.holds(&["verify-linux stash --preset basic", "bare", "qmltest-linux"]);
     let on_the_host: Vec<&String> = ran
         .iter()
         .filter(|id| !(id.contains("linux") || *id == "bare"))

@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::support::{ALWAYS, Sandbox, set, without_always};
+use crate::support::{ALWAYS, Ran, Sandbox, set, without_always};
 
 #[test]
 fn a_docs_only_change_owes_the_always_steps_and_nothing_else() {
@@ -69,7 +69,7 @@ fn a_core_change_owes_what_reads_it_and_nothing_beside_it() {
     sb.commit_all(&sb.seat, "feat(core): stash", &[]);
     sb.gate_ok(&sb.seat, &[]);
     let ran = without_always(&sb.ran());
-    for owed in [
+    ran.holds(&[
         "clippy platitude-core",
         "clippy-linux platitude-core",
         "clippy platitude-app",
@@ -82,12 +82,8 @@ fn a_core_change_owes_what_reads_it_and_nothing_beside_it() {
         "verify stash --preset basic",
         "verify-linux stash --preset basic",
         "bare",
-    ] {
-        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
-    }
-    for spared in ["clippy xtask", "test xtask 1"] {
-        assert!(!ran.contains(spared), "{spared} ran; ran: {ran:?}");
-    }
+    ]);
+    ran.lacks(&["clippy xtask", "test xtask 1"]);
 }
 
 #[test]
@@ -232,13 +228,11 @@ fn a_harness_change_without_qml_edges_owes_every_recorded_verb() {
     );
     assert!(!ok && text.contains("nothing stamped"), "{text}");
     let ran = sb.ran();
-    for verb in [
+    ran.holds(&[
         red,
         "verify stash --preset basic",
         "verify-linux stash --preset basic",
-    ] {
-        assert!(ran.contains(verb), "{verb} not run; {ran:?}");
-    }
+    ]);
 }
 
 /// A singleton stands in no item tree, so no run reports it; the app's
@@ -262,9 +256,7 @@ fn a_singleton_and_the_apps_rust_owe_every_verb_the_census_holds() {
     sb.commit_all(&sb.seat, "feat(app-ui): a gap", &[]);
     sb.gate_ok(&sb.seat, &[]);
     let ran = sb.ran();
-    for verb in both {
-        assert!(ran.contains(verb), "{verb} did not run; ran: {ran:?}");
-    }
+    ran.holds(&both);
 
     sb.write(
         &sb.seat,
@@ -275,9 +267,7 @@ fn a_singleton_and_the_apps_rust_owe_every_verb_the_census_holds() {
     sb.commit_all(&sb.seat, "feat(app): a model", &[]);
     sb.gate_ok(&sb.seat, &[]);
     let ran = sb.ran();
-    for verb in both {
-        assert!(ran.contains(verb), "{verb} did not run; ran: {ran:?}");
-    }
+    ran.holds(&both);
 }
 
 #[test]
@@ -346,8 +336,7 @@ fn a_qtest_file_owes_the_qml_runner_and_nothing_the_app_is_built_for() {
     sb.commit_all(&sb.seat, "fix(xtask): stage it differently", &[]);
     sb.gate_ok(&sb.seat, &[]);
     let ran = sb.ran();
-    assert!(ran.contains("qmltest"), "{ran:?}");
-    assert!(ran.contains("qmltest-linux"), "{ran:?}");
+    ran.holds(&["qmltest", "qmltest-linux"]);
 }
 
 #[test]
@@ -513,9 +502,7 @@ fn a_module_compiled_on_windows_alone_owes_the_container_nothing() {
         .collect();
     assert!(on_the_container.is_empty(), "{on_the_container:?}");
     if cfg!(windows) {
-        for owed in ["clippy platitude-app", "verify stash --preset basic"] {
-            assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
-        }
+        ran.holds(&["clippy platitude-app", "verify stash --preset basic"]);
     } else {
         assert!(ran.is_empty(), "{ran:?}");
     }
@@ -536,14 +523,12 @@ fn a_source_taken_out_of_the_tree_owes_everything() {
     );
     sb.gate_ok(&sb.seat, &[]);
     let ran = without_always(&sb.ran());
-    for owed in [
+    ran.holds(&[
         "shipped",
         "verify stash --preset basic",
         "test xtask (all)",
         "clippy platitude-app",
-    ] {
-        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
-    }
+    ]);
 }
 
 /// Unlike a source: nothing outside its binary can name it, and the root
@@ -766,15 +751,13 @@ fn a_qtest_change_reaches_the_harness_as_data_and_owes_no_verb() {
     sb.gate_ok(&sb.seat, &["--main", &base]);
     let ran = without_always(&sb.ran());
     // The branch's reach holds the runner's tests as well as the seat's.
-    for owed in [
+    ran.holds(&[
         "clippy xtask",
         "test xtask 2",
         "verify stash --preset basic",
         "verify-linux stash --preset basic",
         "verify window",
-    ] {
-        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
-    }
+    ]);
 }
 
 /// The other path the real tree has: a tool reads the app's source tree,
@@ -809,17 +792,13 @@ fn a_product_change_reaching_a_tool_as_data_owes_its_tests_and_no_clippy() {
     );
     sb.gate_ok(&sb.seat, &["--main", &base]);
     let ran = without_always(&sb.ran());
-    for owed in [
+    ran.holds(&[
         "clippy platitude-core",
         "clippy platitude-app",
         "test xtask 1",
         "test xtask 1 linux",
-    ] {
-        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
-    }
-    for spared in ["clippy xtask", "clippy-linux xtask"] {
-        assert!(!ran.contains(spared), "{spared} ran; ran: {ran:?}");
-    }
+    ]);
+    ran.lacks(&["clippy xtask", "clippy-linux xtask"]);
 }
 
 /// An unreadable tier table is no empty table: empty, the selected lines
@@ -860,10 +839,8 @@ fn a_tier_table_that_cannot_be_read_stops_the_gate_before_anything_runs() {
     sb.commit_all(&sb.seat, "chore: the table back", &[]);
     sb.gate_ok(&sb.seat, &[]);
     let ran = sb.ran();
-    for owed in [
+    ran.holds(&[
         "verify stash --preset basic",
         "verify-linux stash --preset basic",
-    ] {
-        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
-    }
+    ]);
 }

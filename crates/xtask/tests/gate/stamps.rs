@@ -2,7 +2,7 @@
 //! earn, when they are reused and when they are not, and the one gate a
 //! tree holds while it runs.
 
-use crate::support::{ALWAYS, EXE, Sandbox, output_past_a_busy_image, set, without_always};
+use crate::support::{ALWAYS, EXE, Ran, Sandbox, output_past_a_busy_image, set, without_always};
 use crate::wait::{Budget, LOOK_AGAIN, Wait};
 
 #[test]
@@ -351,14 +351,12 @@ fn a_red_verb_stops_no_other_verb_and_the_rerun_owes_it_alone() {
     );
     assert!(!ok && text.contains("nothing stamped"), "{text}");
     let ran = sb.ran();
-    for verb in [
+    ran.holds(&[
         "verify stash --preset basic",
         "verify stash-menu --preset basic",
         red,
         "verify-linux stash --preset basic",
-    ] {
-        assert!(ran.contains(verb), "{verb} did not run; ran: {ran:?}");
-    }
+    ]);
     sb.gate_ok(&sb.seat, &["--jobs", "2"]);
     let again = without_always(&sb.ran());
     assert_eq!(again, set(&[red]));
@@ -680,9 +678,7 @@ fn a_file_the_product_opens_is_owed_though_no_scan_could_find_it() {
     // Green first, so the second run is about a stamp.
     let built = ["shipped", "bare", "verify stash --preset basic"];
     let first = without_always(&sb.ran());
-    for id in built {
-        assert!(first.contains(id), "{id} did not run: {first:?}");
-    }
+    first.holds(&built);
 
     sb.write(&sb.seat, &read, "Item {\n    property int x: 1\n}\n");
     sb.commit_all(&sb.seat, "test(app-ui): the file it opens", &[]);
@@ -727,9 +723,7 @@ fn a_tool_suites_green_stands_across_a_product_change_and_falls_with_what_it_rea
     sb.commit_all(&sb.seat, "feat(xtask): seats", &[]);
     sb.gate_ok(&sb.seat, &["--main", &base]);
     let ran = sb.ran();
-    for owed in suite {
-        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
-    }
+    ran.holds(&suite);
 
     // The product moved under the branch: the suite's green stands.
     sb.write_pane(&sb.seat, 5);
@@ -760,18 +754,14 @@ fn a_tool_suites_green_stands_across_a_product_change_and_falls_with_what_it_rea
     sb.commit_all(&sb.seat, "chore: the hook", &[]);
     sb.gate_ok(&sb.seat, &["--main", &base]);
     let ran = sb.ran();
-    for owed in suite {
-        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
-    }
+    ran.holds(&suite);
 
     // And so does the runner's own code.
     sb.write(&sb.seat, "crates/xtask/src/seats.rs", &reads(2));
     sb.commit_all(&sb.seat, "feat(xtask): seats again", &[]);
     sb.gate_ok(&sb.seat, &["--main", &base]);
     let ran = sb.ran();
-    for owed in suite {
-        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
-    }
+    ran.holds(&suite);
 }
 
 /// What each build step owes again for a change that no graph of the
@@ -808,9 +798,7 @@ fn a_patched_in_crate_s_code_asks_every_build_again_and_its_notes_do_not() {
     sb.commit_all(&sb.seat, "build(deps): a patched crate", &[]);
     sb.gate_ok(&sb.seat, &[]);
     let first = without_always(&sb.ran());
-    for id in EVERY_BUILD {
-        assert!(first.contains(id), "{id} did not run: {first:?}");
-    }
+    first.holds(&EVERY_BUILD);
 
     for (file, text) in [
         ("src/lib.rs", "pub fn f() { let _ = 1; }\n"),
@@ -851,9 +839,7 @@ fn a_cargo_config_change_asks_every_build_again() {
     sb.commit_all(&sb.seat, "build: a flag", &[]);
     sb.gate_ok(&sb.seat, &[]);
     let first = without_always(&sb.ran());
-    for id in EVERY_BUILD {
-        assert!(first.contains(id), "{id} did not run: {first:?}");
-    }
+    first.holds(&EVERY_BUILD);
 
     sb.write(&sb.seat, config, "[env]\nCFLAGS = \"-DSECOND\"\n");
     sb.commit_all(&sb.seat, "build: another flag", &[]);

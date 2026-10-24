@@ -2,7 +2,7 @@
 //! crate's manifest, clippy's settings, the dependency policy: each the
 //! steps that read it, and no more.
 
-use crate::support::{Sandbox, set, without_always};
+use crate::support::{Ran, Sandbox, set, without_always};
 
 #[test]
 fn a_build_input_change_owes_everything() {
@@ -14,7 +14,7 @@ fn a_build_input_change_owes_everything() {
     assert!(!text.contains("the whole tier"), "{text}");
     sb.gate_ok(&sb.seat, &[]);
     let ran = without_always(&sb.ran());
-    for owed in [
+    ran.holds(&[
         "test platitude-core (all)",
         "test platitude-app (all)",
         "test xtask (all)",
@@ -26,9 +26,7 @@ fn a_build_input_change_owes_everything() {
         "verify stash --preset basic",
         "bare",
         "deny",
-    ] {
-        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
-    }
+    ]);
 }
 
 /// clippy's configuration is read by clippy alone: every crate's, on
@@ -106,15 +104,13 @@ fn a_crates_manifest_owes_that_crate_and_its_readers() {
     assert!(!text.contains("everything"), "{text}");
     sb.gate_ok(&sb.seat, &["--main", &base]);
     let ran = without_always(&sb.ran());
-    for owed in [
+    ran.holds(&[
         "clippy platitude-core",
         "clippy-linux platitude-core",
         "clippy platitude-app",
         "test it (all)",
         "deny",
-    ] {
-        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
-    }
+    ]);
     let tool: Vec<&String> = ran.iter().filter(|id| id.contains("xtask")).collect();
     assert!(tool.is_empty(), "{tool:?}");
 }

@@ -636,3 +636,26 @@ pub fn without_always(ran: &BTreeSet<String>) -> BTreeSet<String> {
         .cloned()
         .collect()
 }
+
+/// Which steps a run's ids hold and lack; a miss names the id and the
+/// whole set.
+pub trait Ran {
+    fn holds(&self, ids: &[&str]);
+    fn lacks(&self, ids: &[&str]);
+}
+
+impl Ran for BTreeSet<String> {
+    #[track_caller]
+    fn holds(&self, ids: &[&str]) {
+        for id in ids {
+            assert!(self.contains(*id), "{id} not run; ran: {self:?}");
+        }
+    }
+
+    #[track_caller]
+    fn lacks(&self, ids: &[&str]) {
+        for id in ids {
+            assert!(!self.contains(*id), "{id} ran; ran: {self:?}");
+        }
+    }
+}

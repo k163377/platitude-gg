@@ -3,7 +3,7 @@
 //! that compile those readers; and, taken out, the builds that still
 //! name it, which break.
 
-use crate::support::{Sandbox, without_always};
+use crate::support::{Ran, Sandbox, without_always};
 
 /// The app's entry builds in the harness's QML module, which the stopped
 /// runs load through the app: a change to what it builds in owes them,
@@ -106,9 +106,7 @@ fn an_embedded_file_owes_what_embeds_it_and_taken_out_the_builds_that_name_it() 
     let renamed = sb.commit_all(&sb.seat, "refactor(app): the notes", &[]);
     sb.gate_ok(&sb.seat, &["--main", &drawn]);
     let ran = without_always(&sb.ran());
-    for owed in ["clippy platitude-app", "clippy-linux platitude-app"] {
-        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
-    }
+    ran.holds(&["clippy platitude-app", "clippy-linux platitude-app"]);
 
     // Taken out under a reader that still names it: every build of the
     // reader breaks, and every system's is owed.
@@ -118,9 +116,7 @@ fn an_embedded_file_owes_what_embeds_it_and_taken_out_the_builds_that_name_it() 
     assert!(!text.contains("everything"), "{text}");
     sb.gate_ok(&sb.seat, &["--main", &renamed]);
     let ran = without_always(&sb.ran());
-    for owed in ["clippy platitude-app", "clippy-linux platitude-app"] {
-        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
-    }
+    ran.holds(&["clippy platitude-app", "clippy-linux platitude-app"]);
 
     // The icon taken out: Windows' build breaks, and only it is owed.
     std::fs::remove_file(sb.seat.join("crates/platitude-app/assets/icon.png")).expect("rm");
