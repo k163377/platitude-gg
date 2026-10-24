@@ -7,12 +7,14 @@ use platitude_core::parse::diff::parse_patch;
 use super::{DiffModel, LayoutPosition, LineSpan, SourcePosition, Washed};
 use crate::encode::Optional;
 
+/// The two positions the way the slots build them, from the signed values
+/// QML hands.
 fn source(row: i32, byte: i32) -> SourcePosition {
-    SourcePosition { row, byte }
+    SourcePosition::new(row, byte).unwrap()
 }
 
 fn layout(row: i32, utf16: i32) -> LayoutPosition {
-    LayoutPosition { row, utf16 }
+    LayoutPosition::new(row, utf16).unwrap()
 }
 
 /// One side's wash the way the tests read it: `""` for none, `*` for
@@ -209,7 +211,7 @@ fn a_place_along_a_row_comes_back_as_a_byte_of_its_line() {
     assert_eq!(model.byte_at(0, layout(3, 9999)), 11);
     // A heading and a missing row answer 0.
     assert_eq!(model.byte_at(0, layout(0, 4)), 0);
-    assert_eq!(model.byte_at(0, layout(-1, 4)), 0);
+    assert_eq!(model.byte_at(0, layout(99, 4)), 0);
 }
 
 #[test]
@@ -296,26 +298,15 @@ fn a_drag_with_nothing_selected_starts_where_it_is() {
 }
 
 #[test]
-fn a_negative_place_or_byte_is_the_head_and_a_negative_row_is_no_line() {
+fn a_drag_that_stays_on_one_place_moves_nothing() {
     let mut model = tab_kanji_astral();
-    // A place before the line is its head; a row before the rows has no
-    // line.
-    assert_eq!(model.byte_at(0, layout(1, -3)), 0);
-    assert_eq!(model.byte_at(0, layout(-1, 4)), 0);
-    // A negative byte is the head of its row.
-    model.start_select(0, source(1, -5));
-    model.drag_select(0, source(1, 4));
-    assert_eq!(model.copied_new(), "\t日");
-    assert!(model.holds(0, source(1, 2)));
-    assert!(
-        !model.holds(0, source(1, -1)),
-        "a negative byte is held by nothing"
-    );
-    assert!(!model.holds(0, source(-1, 0)), "nor a negative row");
-    // An end with no row holds nothing.
-    model.start_select(0, source(-1, 0));
-    model.drag_select(0, source(2, 1));
-    assert!(model.copied_new().is_empty());
+    model.start_select(0, source(1, 4));
+    assert!(model.drag_select(0, source(1, 7)));
+    assert!(!model.drag_select(0, source(1, 7)), "the same place again");
+    assert!(model.drag_select(0, source(1, 11)));
+    assert_eq!(model.copied_new(), "本😀");
+    assert!(model.drop_selection());
+    assert!(!model.drop_selection(), "nothing is selected twice over");
 }
 
 /// The moving end as `(side, row, place)`, or nothing.

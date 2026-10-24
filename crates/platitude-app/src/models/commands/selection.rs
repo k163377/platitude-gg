@@ -126,13 +126,10 @@ impl CommandsModel {
     /// the place in that column's string. A gap's two places are the two
     /// sides of its tab.
     pub(super) fn hit(&self, column: i32, position: LayoutPosition) -> i32 {
-        let Some(line) = usize::try_from(position.row)
-            .ok()
-            .and_then(|row| self.line_at(row))
-        else {
+        let Some(line) = self.line_at(position.row) else {
             return 0;
         };
-        let place = usize::try_from(position.utf16).unwrap_or(0);
+        let place = position.utf16;
         let byte = match column {
             AT_CLOCK => plain_byte(&line.clock, place),
             AT_GAP_CMD if place == 0 => CLOCK_LEN,
@@ -159,14 +156,14 @@ impl CommandsModel {
         if !self.sel_active {
             return None;
         }
-        let end = |row: usize, at: i32| {
-            let at = usize::try_from(at).unwrap_or(0);
-            self.line_at(row).map_or(0, |line| at.min(line.len()))
+        let cut = |end: SourcePosition| {
+            let byte = self
+                .line_at(end.row)
+                .map_or(0, |line| end.byte.min(line.len()));
+            (end.row, byte)
         };
-        let from_row = usize::try_from(self.sel_from_row).ok()?;
-        let to_row = usize::try_from(self.sel_to_row).ok()?;
-        let from = (from_row, end(from_row, self.sel_from_at));
-        let to = (to_row, end(to_row, self.sel_to_at));
+        let from = cut(self.sel_anchor);
+        let to = cut(self.sel_focus);
         let (first, last) = if from <= to { (from, to) } else { (to, from) };
         Some((first.0, first.1, last.0, last.1))
     }
@@ -179,29 +176,18 @@ impl CommandsModel {
     pub(super) fn start_select(&mut self, position: SourcePosition) -> bool {
         let was = self.span();
         self.sel_active = true;
-        self.sel_from_row = position.row;
-        self.sel_from_at = position.byte;
-        self.sel_to_row = position.row;
-        self.sel_to_at = position.byte;
+        self.sel_anchor = position;
+        self.sel_focus = position;
         self.respell(was)
     }
 
     pub(super) fn drag_select(&mut self, position: SourcePosition) -> bool {
-        if !self.sel_active || self.focus() == position {
+        if !self.sel_active || self.sel_focus == position {
             return false;
         }
         let was = self.span();
-        self.sel_to_row = position.row;
-        self.sel_to_at = position.byte;
+        self.sel_focus = position;
         self.respell(was)
-    }
-
-    /// The moving end as it is kept, uncut.
-    fn focus(&self) -> SourcePosition {
-        SourcePosition {
-            row: self.sel_to_row,
-            byte: self.sel_to_at,
-        }
     }
 
     pub(super) fn drop_selection(&mut self) -> bool {
@@ -215,24 +201,22 @@ impl CommandsModel {
 
     pub(super) fn forget_selection(&mut self) {
         self.sel_active = false;
-        self.sel_from_row = -1;
-        self.sel_from_at = 0;
-        self.sel_to_row = -1;
-        self.sel_to_at = 0;
+        self.sel_anchor = SourcePosition::default();
+        self.sel_focus = SourcePosition::default();
     }
 
     /// Moves the ends (row numbers) up past the `gone` oldest rows that fell
     /// off; a selection with an end over the edge is dropped.
-    pub(super) fn shift_selection(&mut self, gone: i32) {
+    pub(super) fn shift_selection(&mut self, gone: usize) {
         if !self.sel_active {
             return;
         }
-        if self.sel_from_row < gone || self.sel_to_row < gone {
+        if self.sel_anchor.row < gone || self.sel_focus.row < gone {
             self.forget_selection();
             return;
         }
-        self.sel_from_row -= gone;
-        self.sel_to_row -= gone;
+        self.sel_anchor.row -= gone;
+        self.sel_focus.row -= gone;
     }
 
     // ---- what each row draws of it -----------------------------------

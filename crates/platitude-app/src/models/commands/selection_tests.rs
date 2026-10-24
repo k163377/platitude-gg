@@ -3,12 +3,14 @@
 use super::selection::{AT_CLOCK, AT_CMD, AT_GAP_CMD, AT_GAP_OUT, AT_OUT, clock_of};
 use super::*;
 
+/// The two positions the way the slots build them, from the signed values
+/// QML hands.
 fn source(row: i32, byte: i32) -> SourcePosition {
-    SourcePosition { row, byte }
+    SourcePosition::new(row, byte).unwrap()
 }
 
 fn layout(row: i32, utf16: i32) -> LayoutPosition {
-    LayoutPosition { row, utf16 }
+    LayoutPosition::new(row, utf16).unwrap()
 }
 
 /// One row's wash the way the tests read it: the three columns' runs as
@@ -71,10 +73,10 @@ fn take_all(model: &mut CommandsModel) {
     let last = model.rows.len() - 1;
     let end = model.line_at(last).map_or(0, |line| line.len());
     model.start_select(source(0, 0));
-    model.drag_select(source(
-        i32::try_from(last).unwrap(),
-        i32::try_from(end).unwrap(),
-    ));
+    model.drag_select(SourcePosition {
+        row: last,
+        byte: end,
+    });
 }
 
 #[test]
@@ -181,10 +183,8 @@ fn a_place_of_a_column_counts_utf16_units() {
     assert_eq!([cmd(11), cmd(12), cmd(14)], [20, 23, 27]);
     // Between the astral glyph's two units the nearer end wins, ties right.
     assert_eq!(cmd(13), 27);
-    // A place before the column is its head; a row before the rows is no
-    // line at all.
-    assert_eq!(cmd(-2), 9);
-    assert_eq!(model.hit(AT_CLOCK, layout(-1, 3)), 0);
+    // A row past the rows is no line at all.
+    assert_eq!(model.hit(AT_CLOCK, layout(9, 3)), 0);
 }
 
 #[test]
@@ -218,16 +218,13 @@ fn a_drag_with_nothing_selected_selects_nothing() {
 }
 
 #[test]
-fn a_negative_byte_is_the_head_of_its_row_and_a_negative_row_holds_nothing() {
+fn a_drag_that_stays_on_one_place_moves_nothing() {
     let mut model = kanji_astral();
-    // A negative byte is the head of its row.
-    model.start_select(source(0, -4));
-    model.drag_select(source(0, 8));
-    assert_eq!(model.copied(), "12:03:17");
-    // An end with no row holds nothing.
-    model.start_select(source(-1, 0));
-    model.drag_select(source(1, 5));
-    assert_eq!(model.copied(), "");
+    model.start_select(source(0, 9));
+    assert!(model.drag_select(source(0, 20)));
+    assert!(!model.drag_select(source(0, 20)), "the same place again");
+    assert!(model.drag_select(source(0, 23)));
+    assert_eq!(model.copied(), "git add -- 日");
 }
 
 #[test]
@@ -369,7 +366,7 @@ fn a_wash_names_places_and_leaves_the_pixels_to_the_row() {
     let mut model = log(vec![row("add -- 日本語.txt", "ok", "", "5 ms", "")]);
     let end = model.line_at(0).unwrap().len();
     model.start_select(source(0, 9));
-    model.drag_select(source(0, i32::try_from(end).unwrap()));
+    model.drag_select(SourcePosition { row: 0, byte: end });
     model.respell_row(0);
     // `git add -- ` is eleven places, the three kanji are one each, and
     // `.txt` is four.

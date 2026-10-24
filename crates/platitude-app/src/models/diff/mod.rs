@@ -280,14 +280,11 @@ pub struct DiffModel {
     /// Whether a picture stands in for the diff on screen — the other half
     /// of what `flatten_patches` is told.
     shown_has_preview: bool,
-    /// The selection's two ends, each a row and a byte offset into its
-    /// source line: `from` the press, `to` the pointer, in the order made
-    /// (`taken()` sorts). Meaningless unless `sel_active` — 0,0,0,0 is also
-    /// a valid empty selection.
-    sel_from_row: i32,
-    sel_from_at: i32,
-    sel_to_row: i32,
-    sel_to_at: i32,
+    /// The selection's two ends: `anchor` the press, `focus` the pointer, in
+    /// the order made (`taken()` sorts). Meaningless unless `sel_active` —
+    /// two ends at the head of row 0 are also a valid empty selection.
+    sel_anchor: SourcePosition,
+    sel_focus: SourcePosition,
     /// Which column the selection is of (`selection`).
     sel_side: i32,
     /// What the selection holds, so the menu can leave out a row that

@@ -112,13 +112,11 @@ pub struct CommandsModel {
     /// Minutes to add to local time to reach UTC
     /// (`Date.getTimezoneOffset()`); stamps the rows that arrive from here on.
     zone_minutes: i32,
-    /// Whether a selection stands; the four below are its two ends, press
-    /// first.
+    /// Whether a selection stands; the two below are its ends, `anchor` the
+    /// press and `focus` the pointer. Meaningless unless `sel_active`.
     sel_active: bool,
-    sel_from_row: i32,
-    sel_from_at: i32,
-    sel_to_row: i32,
-    sel_to_at: i32,
+    sel_anchor: SourcePosition,
+    sel_focus: SourcePosition,
     feed: Option<Arc<Feed<CommandMsg>>>,
     tab_id: i32,
 }
@@ -254,17 +252,22 @@ impl CommandsModel {
         self.column(row, at)
     }
 
+    // A negative row, byte or place names nothing (`text_position`): it
+    // answers 0, and moves nothing.
+
     /// Which byte of a row's line a press landed on, given the column and
     /// the place in it the pane measured; pixels stop at the pane.
     #[qslot]
     fn hit_at(&self, row: i32, at: i32, place: i32) -> i32 {
-        self.hit(at, LayoutPosition { row, utf16: place })
+        LayoutPosition::new(row, place).map_or(0, |position| self.hit(at, position))
     }
 
     /// A press landed: the selection starts here and holds nothing yet.
     #[qslot]
     fn begin_select(&mut self, row: i32, at: i32) {
-        let position = SourcePosition { row, byte: at };
+        let Some(position) = SourcePosition::new(row, at) else {
+            return;
+        };
         if self.start_select(position) {
             self.changed();
         }
@@ -273,7 +276,9 @@ impl CommandsModel {
     /// The hand has moved to here.
     #[qslot]
     fn extend_select(&mut self, row: i32, at: i32) {
-        let position = SourcePosition { row, byte: at };
+        let Some(position) = SourcePosition::new(row, at) else {
+            return;
+        };
         if self.drag_select(position) {
             self.changed();
         }

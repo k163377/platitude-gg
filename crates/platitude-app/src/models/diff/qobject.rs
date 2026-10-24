@@ -299,17 +299,22 @@ impl DiffModel {
 
     // ---- the reader's own selection of the text (`selection`) --------
 
+    // A negative row, byte or place names nothing (`text_position`): it
+    // answers 0 or false, and moves nothing.
+
     /// Which byte of row `row`'s source line the place `at` (in
     /// `LineRuler`'s units) stands on.
     #[qslot]
     fn source_byte_at(&self, side: i32, row: i32, at: i32) -> i32 {
-        self.byte_at(side, LayoutPosition { row, utf16: at })
+        LayoutPosition::new(row, at).map_or(0, |position| self.byte_at(side, position))
     }
 
     /// A press landed: the selection starts here, empty.
     #[qslot]
     fn begin_select(&mut self, side: i32, row: i32, at: i32) {
-        let position = SourcePosition { row, byte: at };
+        let Some(position) = SourcePosition::new(row, at) else {
+            return;
+        };
         if self.start_select(side, position) {
             self.changed();
         }
@@ -318,7 +323,9 @@ impl DiffModel {
     /// The pointer moved during a drag (`drag_select`).
     #[qslot]
     fn extend_select(&mut self, side: i32, row: i32, at: i32) {
-        let position = SourcePosition { row, byte: at };
+        let Some(position) = SourcePosition::new(row, at) else {
+            return;
+        };
         if self.drag_select(side, position) {
             self.changed();
         }
@@ -328,6 +335,9 @@ impl DiffModel {
     /// whatever was selected (デザイン規約 §diff の中身をコピーする).
     #[qslot]
     fn select_row(&mut self, side: i32, row: i32) {
+        let Ok(row) = usize::try_from(row) else {
+            return;
+        };
         if self.select_whole_row(side, row) {
             self.changed();
         }
@@ -338,7 +348,7 @@ impl DiffModel {
     /// other column is outside it.
     #[qslot]
     fn selection_holds(&self, side: i32, row: i32, at: i32) -> bool {
-        self.holds(side, SourcePosition { row, byte: at })
+        SourcePosition::new(row, at).is_some_and(|position| self.holds(side, position))
     }
 
     /// Where the selection's moving end stands (`moving_end`), or nothing
