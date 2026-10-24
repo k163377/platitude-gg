@@ -68,6 +68,68 @@ impl RepoTab {
         self.push_out.asked(asked, branch);
     }
 
+    /// The toolbar's push of the checked-out branch, `default_remote` where
+    /// it tracks nothing yet, written down under the branch the button
+    /// shows.
+    pub(super) fn current_push(&mut self, branch: String, force: String, lease_expect: String) {
+        let fallback = self.default_remote.clone();
+        let force = Self::push_force(&force, &lease_expect);
+        let asked = self.ask_session(|s| s.push_current(fallback, force));
+        self.push_out.asked(asked, branch);
+    }
+
+    /// The question's first push of `branch`, written down as
+    /// [`Self::current_push`] writes its own.
+    pub(super) fn branch_publish(
+        &mut self,
+        branch: String,
+        remote: String,
+        remote_branch: String,
+        expect: String,
+    ) {
+        let asked = self.ask_session(|s| s.publish(branch.clone(), remote, remote_branch, expect));
+        self.push_out.asked(asked, branch);
+    }
+
+    /// Points `branch` at the remote branch and sends it there; the answer
+    /// is reported on that remote branch's row.
+    pub(super) fn point_and_push(&mut self, branch: String, remote: String, remote_branch: String) {
+        if branch.is_empty() || remote.is_empty() || remote_branch.is_empty() {
+            return;
+        }
+        let row = format!("{remote}/{remote_branch}");
+        let asked = self.ask_session(|s| s.point_upstream_and_push(branch, remote, remote_branch));
+        self.ref_push_asked(&row, asked);
+    }
+
+    /// A tag replaced on a remote under a new name.
+    pub(super) fn remote_tag_replace(
+        &mut self,
+        remote: String,
+        from: String,
+        to: String,
+        expect: String,
+    ) {
+        // Keyed like every outgoing tag write (`ops_delete::remote_tag_delete`),
+        // on the name that goes, so the page reports this press's answer.
+        let row = format!("{remote}/{from}");
+        let asked = self.ask_session(|s| s.replace_remote_tag(remote, from, to, expect));
+        self.ref_push_asked(&row, asked);
+    }
+
+    /// The same for a branch, keyed on the remote row that goes.
+    pub(super) fn remote_branch_replace(
+        &mut self,
+        remote: String,
+        from: String,
+        to: String,
+        expect: String,
+    ) {
+        let row = format!("{remote}/{from}");
+        let asked = self.ask_session(|s| s.replace_remote_branch(remote, from, to, expect));
+        self.ref_push_asked(&row, asked);
+    }
+
     /// The commit asked about is written down first, so an answer for a
     /// selection already left can be dropped (`signature_wanted`).
     pub(super) fn look_up_signature(&mut self, oid_hex: String) {

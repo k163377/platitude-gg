@@ -927,11 +927,7 @@ impl RepoTab {
     /// its delete is leased to.
     #[qslot]
     fn replace_remote_tag(&mut self, remote: String, from: String, to: String, expect: String) {
-        // Keyed like every outgoing tag write (`ops_delete::remote_tag_delete`),
-        // on the name that goes, so the page reports this press's answer.
-        let row = format!("{remote}/{from}");
-        let asked = self.ask_session(|s| s.replace_remote_tag(remote, from, to, expect));
-        self.ref_push_asked(&row, asked);
+        self.remote_tag_replace(remote, from, to, expect);
     }
 
     /// The remote's copy of a tag. `rowGoes` is whether the sidebar's row
@@ -1136,10 +1132,7 @@ impl RepoTab {
     /// press's id so the answer comes back to it (`ops::PushOut`).
     #[qslot]
     fn push_current(&mut self, branch: String, force: String, lease_expect: String) {
-        let fallback = self.default_remote.clone();
-        let force = Self::push_force(&force, &lease_expect);
-        let asked = self.ask_session(|s| s.push_current(fallback, force));
-        self.push_out.asked(asked, branch);
+        self.current_push(branch, force, lease_expect);
     }
 
     /// The first push of `branch` — the one the question named, checked
@@ -1154,8 +1147,7 @@ impl RepoTab {
         remote_branch: String,
         expect: String,
     ) {
-        let asked = self.ask_session(|s| s.publish(branch.clone(), remote, remote_branch, expect));
-        self.push_out.asked(asked, branch);
+        self.branch_publish(branch, remote, remote_branch, expect);
     }
 
     /// `git remote add <name> <url>`. Contacts nothing — a URL that goes
@@ -1232,21 +1224,14 @@ impl RepoTab {
     /// there.
     #[qslot]
     fn point_upstream_and_push(&mut self, branch: String, remote: String, remote_branch: String) {
-        if branch.is_empty() || remote.is_empty() || remote_branch.is_empty() {
-            return;
-        }
-        let row = format!("{remote}/{remote_branch}");
-        let asked = self.ask_session(|s| s.point_upstream_and_push(branch, remote, remote_branch));
-        self.ref_push_asked(&row, asked);
+        self.point_and_push(branch, remote, remote_branch);
     }
 
     /// Replaces a branch on a remote the way `replaceRemoteTag` replaces a
     /// tag, the old name's delete leased to `expect`.
     #[qslot]
     fn replace_remote_branch(&mut self, remote: String, from: String, to: String, expect: String) {
-        let row = format!("{remote}/{from}");
-        let asked = self.ask_session(|s| s.replace_remote_branch(remote, from, to, expect));
-        self.ref_push_asked(&row, asked);
+        self.remote_branch_replace(remote, from, to, expect);
     }
 
     /// `git push <remote> --delete <branch>` (destructive), leased to
