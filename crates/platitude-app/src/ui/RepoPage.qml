@@ -2745,6 +2745,7 @@ FocusScope {
         page.pendingPopId = 0
         page.pendingRenameRemote = ""
         page.pendingRenameTo = ""
+        page.forgetRenameTagRemote()
         page.diffAwaits = false
         page.recoverAwaits = false
         page.moveLanding = ""

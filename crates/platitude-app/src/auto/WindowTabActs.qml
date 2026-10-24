@@ -419,7 +419,10 @@ Item {
 
     // …and away and back: unsent words are filed under the worktree they were written in
     // (デザイン規約 §タブの所作「未コミットのコミットメッセージは立ち位置ごとに憶える」). `kept=` (one page
-    // throughout) is what makes `back=` a put-back rather than never taken away.
+    // throughout) is what makes `back=` a put-back rather than never taken away. `waits=` is what the page still
+    // waits on in the worktree arrived at, of the renames left asking in the one left (`RepoPage.leaveWorktree`):
+    // their answers were that session's and do not come, so a wait left standing takes the next session's answer
+    // for its own.
     SampleTimer {
         id: worktreeDraftTimer
         running: Harness.autoAct === "worktree-draft"
@@ -431,6 +434,7 @@ Item {
         property string home: ""
         property string away: ""
         property bool awayEmpty: false
+        property string waits: ""
         /// Whether the tab has answered for where it now stands (`RepoTab.standing`).
         function settled(page, worktree) {
             return page !== null && page.pageTab.state === "open" && !page.pageTab.standing
@@ -463,6 +467,13 @@ Item {
                 worktreeDraftTimer.home = page.pageTab.repoPath
                 worktreeDraftTimer.away = full
                 page.pageWip.setMessage(worktreeDraftTimer.typed, "")
+                // A branch's and a tag's rename still asking when the tab moves, set as the ask leaves them: git
+                // answers a local rename well inside the beat a move takes, so only a held-up git opens the window.
+                page.pendingRenameRemote = "origin"
+                page.pendingRenameTo = "renamed"
+                page.pendingRenameTagRemote = "origin"
+                page.pendingRenameTagFrom = "v1"
+                page.pendingRenameTagTo = "v2"
                 acts.holdStand(page)
                 if (!worktreeDraftTimer.standIn(page, full))
                     return
@@ -473,6 +484,12 @@ Item {
                 if (!worktreeDraftTimer.settled(page, worktreeDraftTimer.away))
                     return
                 worktreeDraftTimer.awayEmpty = page.pageWip.subjectText === "" && page.pageWip.bodyText === ""
+                const held = []
+                if (page.pendingRenameRemote !== "")
+                    held.push("branch")
+                if (page.pendingRenameTagRemote !== "")
+                    held.push("tag")
+                worktreeDraftTimer.waits = held.length > 0 ? held.join("+") : "none"
                 if (!worktreeDraftTimer.standIn(page, worktreeDraftTimer.home))
                     return
                 worktreeDraftTimer.step = 2
@@ -486,6 +503,7 @@ Item {
                               // …and the pane holding them is the one on screen, the same half `tab-carry` reads.
                               + " wip=" + page.wipShown
                               + " kept=" + acts.standKept(page)
+                              + " waits=" + worktreeDraftTimer.waits
                               + " away=" + worktreeDraftTimer.away)
             window.finishAutoAct()
         }

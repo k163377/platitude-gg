@@ -89,11 +89,12 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // Away and back: `empty=` is the arrived worktree not wearing the words
     // typed in the one left, `back=` those words in the box again, `wip=`
-    // the pane holding them being the one on screen.
+    // the pane holding them being the one on screen, `waits=` no rename's
+    // wait carried over from the worktree left.
     Verb {
         name: "worktree-draft",
         when: &[],
-        plain: "worktree_draft empty=true back=true wip=true kept=true",
+        plain: "worktree_draft empty=true back=true wip=true kept=true waits=none",
     },
     // The worktree the tab stands in, its folder renamed: the tab stands in
     // the new folder (one tab, the page and its graph kept), the words written
