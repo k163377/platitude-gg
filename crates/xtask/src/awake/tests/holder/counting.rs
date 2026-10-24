@@ -205,7 +205,7 @@ fn a_shell_call_whose_end_only_its_result_shows_ends_there() {
         released(),
         "a process started after the call's result held the machine"
     );
-    assert!(super::alive(later));
+    assert!(alive(later));
     assert_eq!(
         session(&dir).calls,
         [],
@@ -611,7 +611,7 @@ fn a_stopped_session_counts_until_its_stop_hooks_have_run() {
         holding(),
         "the turn let go before its Stop hooks had run"
     );
-    append(&path, &[&summary(crate::awake::now_ms())]);
+    stop_hooks_ran(&path);
     assert_eq!(
         next_reading(&dir),
         released(),
@@ -696,7 +696,7 @@ fn a_stop_counts_until_its_record_with_none_in_sight() {
         holding(),
         "a first turn let go before its Stop hooks had run"
     );
-    append(&path, &[&summary(crate::awake::now_ms())]);
+    stop_hooks_ran(&path);
     assert_eq!(
         next_reading(&first),
         released(),

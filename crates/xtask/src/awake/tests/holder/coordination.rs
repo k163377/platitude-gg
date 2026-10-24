@@ -2,15 +2,19 @@
 //! request replaced by a recorder; the tests that start a holder process
 //! of their own exercise the real API, as the normal holder tests do.
 
-use super::{FakeClaude, claim_file, claim_of, marked, scratch};
+use super::{
+    FakeClaude, REPLY, Scratch, alive, append, claim_file, claim_of, end_tree, holding, marked,
+    next_reading, planted, quit, scratch, stamped, told, transcript,
+};
 use crate::awake::claim::State;
+use crate::awake::{Mark, apply};
 
 /// A holder process a test started itself, ended with the test.
 struct StartedHolder(std::process::Child);
 
 impl Drop for StartedHolder {
     fn drop(&mut self) {
-        super::end_tree(self.0.id());
+        end_tree(self.0.id());
         let _ = self.0.wait();
     }
 }
@@ -81,7 +85,6 @@ pub(super) fn observed(dir: &std::path::Path, revision: u32, verdict: &str, sinc
 
 #[test]
 fn compatible_holders_apply_and_clear_real_windows_requests_together() {
-    use crate::awake::{Mark, apply};
     let dir = scratch("native-requests");
     let claude = FakeClaude::start(&dir);
     let since = crate::awake::now_ms();
@@ -118,8 +121,8 @@ fn compatible_holders_apply_and_clear_real_windows_requests_together() {
     )
     .expect("the question waits for a person");
     assert_eq!(
-        super::next_reading(&dir),
-        super::holding(),
+        next_reading(&dir),
+        holding(),
         "the other session's question must not release s"
     );
     let since = crate::awake::now_ms();
@@ -362,7 +365,7 @@ fn a_held_machine_s_readings_are_paced_past_a_burst() {
 fn a_command_started_once_the_owners_are_listed_keeps_its_call() {
     let dir = scratch("late-process");
     let mut claude = FakeClaude::start(&dir);
-    let path = super::transcript(&dir.join("s.jsonl"), &[super::REPLY]);
+    let path = transcript(&dir.join("s.jsonl"), &[REPLY]);
     let start = crate::awake::now_ms();
     let claim = dir.join(claim_file("s"));
     std::fs::write(
@@ -388,16 +391,16 @@ fn a_command_started_once_the_owners_are_listed_keeps_its_call() {
         |listed| *listed,
     );
     let command = claude.run();
-    super::append(
+    append(
         &path,
         &[&format!(
             r#"{{"type":"user","message":{{"role":"user","content":[{{"tool_use_id":"toolu_b","type":"tool_result","content":"ok"}}]}},"timestamp":"{}"}}"#,
-            super::stamped(crate::awake::now_ms())
+            stamped(crate::awake::now_ms())
         )],
     );
     std::fs::write(dir.join("started"), "").expect("the go-ahead");
     let observed = probe.join().expect("the probe");
-    assert!(super::alive(command));
+    assert!(alive(command));
     assert!(
         observed.contains("REQUEST=2147483649"),
         "a command started during the reading was let go of: {observed}"
@@ -439,10 +442,7 @@ fn the_history_names_what_a_hold_stands_on() {
     }
     let observed = once(&dir, crate::awake::REVISION, "");
     assert!(observed.contains("REQUEST=2147483649"), "{observed}");
-    assert_eq!(
-        super::told(&dir),
-        ["holding process:p,turn:t,wake:w", "quit -"]
-    );
+    assert_eq!(told(&dir), ["holding process:p,turn:t,wake:w", "quit -"]);
 }
 
 /// The history is cut back to its newer half once it passes its bound, at
@@ -463,7 +463,7 @@ fn the_history_is_cut_back_to_its_newer_half() {
     );
     assert!(text.starts_with(old), "the cut fell inside a line");
     assert!(
-        super::told(&dir).ends_with(&["holding turn:s".to_string(), "quit -".to_string()]),
+        told(&dir).ends_with(&["holding turn:s".to_string(), "quit -".to_string()]),
         "the cut took the line it was written for"
     );
 }
@@ -551,7 +551,7 @@ fn readings(stem: &str, held: bool, before: &str, steps: &[&str]) -> (String, Ve
         steps.len()
     );
     let said = probe(&dir, crate::awake::REVISION, REAL_CLOCK, &stubs, &body);
-    (said, super::told(&dir))
+    (said, told(&dir))
 }
 
 /// The claim of `readings`' session written `state` under the lock, as a
@@ -736,7 +736,7 @@ fn a_real_request_let_go_of_behind_the_holder_is_asked_again() {
     };
     let first = set_at();
     // A claim rewritten wakes the reading that finds the request gone.
-    super::planted(
+    planted(
         &dir,
         &dir.join(claim_file("s")),
         &claim_of(State::Working, claude.pid()),
@@ -748,7 +748,7 @@ fn a_real_request_let_go_of_behind_the_holder_is_asked_again() {
     );
     let told = {
         let _held = crate::awake::lock(&dir).expect("the lock");
-        super::told(&dir)
+        told(&dir)
     };
     assert!(
         told.iter()
@@ -803,7 +803,7 @@ fn a_request_kept_apart_starts_and_ends_on_the_real_api() {
 
 /// A working claim of a live Claude process, so that no holder quits for
 /// want of claims, and the process that keeps it alive.
-fn working(stem: &str) -> (super::super::Scratch, FakeClaude) {
+fn working(stem: &str) -> (Scratch, FakeClaude) {
     let dir = scratch(stem);
     let claude = FakeClaude::start(&dir);
     std::fs::write(
@@ -949,11 +949,10 @@ fn a_build_in_use_or_a_stale_holder_keeps_a_holder_standing() {
 /// go, and the other build's holder reads on.
 #[test]
 fn a_started_holder_of_a_quiet_build_quits() {
-    use crate::awake::Mark;
     let (dir, claude) = working("retire-started");
     let revision = crate::awake::REVISION;
     let pid = marked(&dir, &claude.hook(), Mark::Working).expect("the holder it started");
-    assert_eq!(super::next_reading(&dir), super::holding());
+    assert_eq!(next_reading(&dir), holding());
     let since = crate::awake::now_ms();
     let _other = other_build(&dir);
     {
@@ -967,7 +966,7 @@ fn a_started_holder_of_a_quiet_build_quits() {
         )
         .expect("the other session's claim");
     }
-    super::quit(pid);
+    quit(pid);
     assert!(
         !dir.join(format!("holder-r{revision}")).exists(),
         "the holder that quit left its name"
@@ -983,7 +982,6 @@ fn a_started_holder_of_a_quiet_build_quits() {
 /// a session still runs it.
 #[test]
 fn a_hook_stamps_its_build_as_heard() {
-    use crate::awake::Mark;
     let dir = scratch("heard");
     let claude = FakeClaude::start(&dir);
     let before = crate::awake::now_ms();

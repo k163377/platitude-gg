@@ -5,7 +5,7 @@
 use std::io::Write;
 use std::path::Path;
 
-use super::{CHAIN_CLAUDE, CHAIN_DIR, claim_file, scratch};
+use super::{CHAIN_CLAUDE, CHAIN_DIR, Scratch, claim_file, scratch};
 use crate::awake::claim::{Claim, State, Writer, digest};
 use crate::awake::{Mark, apply, holder_path};
 
@@ -404,11 +404,12 @@ fn claim_of(state: State, pid: u32) -> String {
     )
 }
 
-/// Writes `line` as the claim at `path` under the lock, as a hook would —
-/// with none of a hook's checks, for a claim no hook would write.
+/// Writes `line` at `path` under the lock, as a hook or the holder would —
+/// with none of their checks, for a claim no hook would write or a
+/// holder's file no holder left.
 fn planted(dir: &Path, path: &Path, line: &str) {
     let _held = crate::awake::lock(dir).expect("the lock");
-    std::fs::write(path, line).expect("a claim");
+    std::fs::write(path, line).expect("the planted file");
 }
 
 /// The session's claim marked `mark` by `writer`, as its hook marks it:
@@ -604,10 +605,7 @@ fn a_holder_whose_name_was_taken_quits() {
     let claude = FakeClaude::start(&dir);
     let pid = marked(&dir, &claude.hook(), Mark::Prompt).expect("a holder started");
     assert_eq!(next_reading(&dir), holding());
-    {
-        let _held = crate::awake::lock(&dir).expect("the lock");
-        std::fs::write(holder_path(&dir), "1 holding").expect("the name, taken");
-    }
+    planted(&dir, &holder_path(&dir), "1 holding");
     let started = marked(&dir, &claude.hook(), Mark::Working);
     assert_eq!(started, None, "a beating name started another holder");
     quit(pid);
