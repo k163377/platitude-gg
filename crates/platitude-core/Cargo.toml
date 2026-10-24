@@ -48,7 +48,7 @@ tree-sitter-md = "0.5"
 tree-sitter-nix = "0.3"
 tree-sitter-objc = "3.0"
 tree-sitter-ocaml = "0.26"
-tree-sitter-php = "0.24"
+tree-sitter-php = "0.25"
 tree-sitter-powershell = "0.26"
 tree-sitter-properties = "0.3"
 tree-sitter-python = "0.25"
@@ -82,7 +82,7 @@ two-face = { version = "0.5", default-features = false, features = [
 # Test mocks as an attribute on a read that asks the machine
 # (`conflict::available_tools`), with no seam in the code. The mock half
 # is in debug builds only.
-mry = "0.15"
+mry = "0.16"
 
 [dev-dependencies]
 insta = "1"
