@@ -1,17 +1,29 @@
 //! The whole of what QML sees of `RepoTab`, and as short as this file
-//! gets without dropping slots.
+//! gets without a redesign.
 //!
 //! The `#[qobject]` block cannot be divided (structure.md §分割), so what
 //! is left is the face — `qproperty!`, slot and signal signatures, and
-//! their doc — over bodies that shape their arguments and forward once.
-//! Every body that could be delegated has been: the feed's answers to
+//! their doc — over bodies that shape their arguments and forward once,
+//! some raising the notify for what they moved. Every body that could be
+//! delegated has been: the feed's answers and the reads of one answer to
 //! `drain`, staging and discard to `ops_stage`, conflicts to
-//! `ops_conflict`, remotes to `ops_remote`, config to `ops_config`,
-//! deletes to `ops_delete`, standing in another worktree to `restand`, commit
-//! and reset to `state`, the awaited write to `write_watch`.
+//! `ops_conflict`, stash pushes, the remote and signature questions and
+//! every push that writes its id down to `ops_remote`, attaching the
+//! feed, config and the remote-name lookups to `ops_config`, deletes to
+//! `ops_delete`, standing in another worktree to `restand`, the write
+//! door, commit, checkout, reset, the worktree add and move and the header
+//! line (`lastError`) to `state`, the awaited write to `write_watch`. A
+//! slot whose rule reads nothing but its arguments belongs in `GitFacts`,
+//! not here.
 //!
-//! The only way shorter is fewer slots: a pure rule that reads nothing
-//! but its arguments belongs in `GitFacts`, not here.
+//! The one step left is a redesign, in either of two directions: the
+//! write answers reach QML one field per slot (the fifteen
+//! `writeAnswer*`), which could become one record per answer; and the tab
+//! answers for several subjects — the write queue and its answers, the
+//! remotes and their questions, the identity and signatures, the commit
+//! editor — any of which could be a QObject of its own. Both change the
+//! slots the QML callers name (`RepoPage`, `PublishFlow` and the harness
+//! verbs among them), so ask before starting either.
 
 use super::*;
 
