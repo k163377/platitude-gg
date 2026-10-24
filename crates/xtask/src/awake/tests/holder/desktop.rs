@@ -202,7 +202,7 @@ fn stale_reading(stem: &str, unchecked: bool) -> String {
         log = quoted(&log),
     );
     let revision = crate::awake::REVISION;
-    let mut body = super::coordination::shipped(&dir, revision, &race)
+    let mut body = super::probe::shipped(&dir, revision, &race)
         .replace("$holding = $false", "$holding = $true");
     let mut stubs = String::from(
         "$script:readings = 0\nfunction Wait-Event {\n  param($Timeout)\n  \
@@ -221,13 +221,7 @@ fn stale_reading(stem: &str, unchecked: bool) -> String {
              return (Test-NamedShipped)\n}\n",
         );
     }
-    super::coordination::probe(
-        &dir,
-        revision,
-        super::coordination::REAL_CLOCK,
-        &stubs,
-        &body,
-    )
+    super::probe::probe(&dir, revision, super::probe::REAL_CLOCK, &stubs, &body)
 }
 
 /// Ambiguity stands through a reading whose bindings were undone: chosen

@@ -276,7 +276,7 @@ if (-not $script:raced) {{
             root = quoted(&root)
         );
         let revision = crate::awake::REVISION;
-        let mut body = super::coordination::shipped(&dir, revision, &race)
+        let mut body = super::probe::shipped(&dir, revision, &race)
             .replace("$holding = $false", "$holding = $true");
         let mut stubs = String::from(
             r#"
@@ -303,13 +303,7 @@ function Test-Named {
 "#,
             );
         }
-        let said = super::coordination::probe(
-            &dir,
-            revision,
-            super::coordination::REAL_CLOCK,
-            &stubs,
-            &body,
-        );
+        let said = super::probe::probe(&dir, revision, super::probe::REAL_CLOCK, &stubs, &body);
         assert!(
             said.contains("READING1=2147483649 watching"),
             "stale reading released work: {said}"

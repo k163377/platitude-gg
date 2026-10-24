@@ -5,7 +5,7 @@
 //! of the shipped holder whose clock of time awake the steps move, the
 //! last thing to happen moved back past the bound with it.
 
-use super::coordination::{probe, shipped};
+use super::probe::{probe, shipped};
 use super::{FakeClaude, claim_file, scratch};
 use crate::awake::holder::{BUSY, TICK};
 

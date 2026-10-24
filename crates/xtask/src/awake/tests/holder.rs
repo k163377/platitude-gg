@@ -1109,4 +1109,5 @@ mod coordination;
 mod counting;
 mod desktop;
 mod physical;
+mod probe;
 mod quiet;
