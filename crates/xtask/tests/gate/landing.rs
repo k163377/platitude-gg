@@ -339,11 +339,7 @@ fn land_refuses_a_dirty_seat_and_a_rebase_that_stops_is_walked_back() {
 #[test]
 fn land_commits_the_census_its_gate_rewrote() {
     let sb = Sandbox::new("land-census");
-    sb.write(
-        &sb.seat,
-        "crates/platitude-app/src/ui/StashPane.qml",
-        "Item {\n    width: 4\n    property var model: StashModel\n}\n",
-    );
+    sb.write_pane(&sb.seat, 4);
     let before = sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
     let mut command = Command::new(EXE);
     command

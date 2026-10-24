@@ -393,6 +393,16 @@ impl Sandbox {
         );
     }
 
+    /// The pane the seeded census names, rewritten `n` wide: a QML change
+    /// that owes the census's verb.
+    pub fn write_pane(&self, dir: &Path, n: u32) {
+        self.write(
+            dir,
+            "crates/platitude-app/src/ui/StashPane.qml",
+            &format!("Item {{\n    width: {n}\n    property var model: StashModel\n}}\n"),
+        );
+    }
+
     pub fn commit_all(&self, dir: &Path, message: &str, extra: &[(&str, &str)]) -> String {
         self.git_ok(dir, &["add", "-A"]);
         self.git(dir, &["commit", "-q", "-m", message], extra)

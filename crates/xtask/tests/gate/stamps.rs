@@ -341,11 +341,7 @@ fn a_red_verb_stops_no_other_verb_and_the_rerun_owes_it_alone() {
          stash-menu --preset basic\tDriver Main StashPane\n\
          stash-open --preset basic\tDriver Main StashPane\n",
     );
-    sb.write(
-        &sb.seat,
-        "crates/platitude-app/src/ui/StashPane.qml",
-        "Item {\n    width: 2\n    property var model: StashModel\n}\n",
-    );
+    sb.write_pane(&sb.seat, 2);
     sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
     let red = "verify stash-open --preset basic";
     let (ok, text) = sb.gate(
@@ -382,11 +378,7 @@ fn a_verb_stamped_while_it_queued_does_not_earn_the_block_its_no_build() {
          stash-menu --preset basic\tDriver Main StashPane\n\
          stash-open --preset basic\tDriver Main StashPane\n",
     );
-    sb.write(
-        &sb.seat,
-        "crates/platitude-app/src/ui/StashPane.qml",
-        "Item {\n    width: 3\n    property var model: StashModel\n}\n",
-    );
+    sb.write_pane(&sb.seat, 3);
     sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
     // The host's first verb in plan order: the one that would build the
     // release for the rest.
@@ -589,11 +581,7 @@ fn a_lock_frees_the_tree_when_unlocked_and_not_when_merely_closed() {
 #[test]
 fn a_gate_whose_verbs_rewrote_the_census_stamps_nothing_until_it_is_committed() {
     let sb = Sandbox::new("rewrote");
-    sb.write(
-        &sb.seat,
-        "crates/platitude-app/src/ui/StashPane.qml",
-        "Item {\n    width: 3\n    property var model: StashModel\n}\n",
-    );
+    sb.write_pane(&sb.seat, 3);
     sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
     let (ok, text) = sb.gate(
         &sb.seat,
@@ -665,11 +653,7 @@ fn a_file_the_product_opens_is_owed_though_no_scan_could_find_it() {
     let read = format!("{package}/{root}/{under}/{name}");
     // A product change, so the steps below are selected at all; their key
     // is what is under test.
-    sb.write(
-        &sb.seat,
-        &format!("{package}/src/ui/StashPane.qml"),
-        "Item {\n    width: 7\n    property var model: StashModel\n}\n",
-    );
+    sb.write_pane(&sb.seat, 7);
     sb.write(
         &sb.seat,
         &format!("{package}/src/paths.rs"),
@@ -748,11 +732,7 @@ fn a_tool_suites_green_stands_across_a_product_change_and_falls_with_what_it_rea
     }
 
     // The product moved under the branch: the suite's green stands.
-    sb.write(
-        &sb.seat,
-        "crates/platitude-app/src/ui/StashPane.qml",
-        "Item {\n    width: 5\n    property var model: StashModel\n}\n",
-    );
+    sb.write_pane(&sb.seat, 5);
     sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
     let text = sb.gate_ok(&sb.seat, &["--main", &base]);
     let ran = sb.ran();

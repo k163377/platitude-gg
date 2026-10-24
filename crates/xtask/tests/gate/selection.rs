@@ -121,11 +121,7 @@ fn a_leaf_core_change_stays_narrow() {
 #[test]
 fn a_qml_change_owes_the_verbs_whose_census_names_it_and_no_rust_test() {
     let sb = Sandbox::new("qml");
-    sb.write(
-        &sb.seat,
-        "crates/platitude-app/src/ui/StashPane.qml",
-        "Item {\n    width: 1\n    property var model: StashModel\n}\n",
-    );
+    sb.write_pane(&sb.seat, 1);
     sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
     sb.gate_ok(&sb.seat, &[]);
     let ran = without_always(&sb.ran());
@@ -155,11 +151,7 @@ fn a_qml_leaf_keeps_reached_verbs_and_reports_the_shadow_selection() {
         "# census\nstash --preset basic\tDriver Main StashPane\n\
          window --preset basic\tDriver Main\n",
     );
-    sb.write(
-        &sb.seat,
-        "crates/platitude-app/src/ui/StashPane.qml",
-        "Item {\n    width: 3\n    property var model: StashModel\n}\n",
-    );
+    sb.write_pane(&sb.seat, 3);
     sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
     let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
     assert!(
@@ -639,11 +631,7 @@ fn the_tier_table_says_which_lines_each_gate_owes_and_where() {
          whole\tstash-menu --preset basic\tstash --preset basic\tpicture: the menu standing\n\
          twin\tstash-twin --preset basic\tstash --preset basic\tthe same run\n",
     );
-    sb.write(
-        &sb.seat,
-        "crates/platitude-app/src/ui/StashPane.qml",
-        "Item {\n    width: 4\n    property var model: StashModel\n}\n",
-    );
+    sb.write_pane(&sb.seat, 4);
     sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
     let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
     assert!(
@@ -854,11 +842,7 @@ fn a_product_change_reaching_a_tool_as_data_owes_its_tests_and_no_clippy() {
 fn a_tier_table_that_cannot_be_read_stops_the_gate_before_anything_runs() {
     let sb = Sandbox::new("tiers-unread");
     let table = sb.seat.join("crates/xtask/verb-tiers.txt");
-    sb.write(
-        &sb.seat,
-        "crates/platitude-app/src/ui/StashPane.qml",
-        "Item {\n    width: 6\n    property var model: StashModel\n}\n",
-    );
+    sb.write_pane(&sb.seat, 6);
     std::fs::write(&table, b"fonts\tstash --preset basic\t-\t\xff\n").expect("bytes");
     sb.commit_all(&sb.seat, "chore: a table that is not text", &[]);
     let (ok, text) = sb.gate(&sb.seat, &[], &[]);
