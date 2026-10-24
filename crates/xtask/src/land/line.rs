@@ -70,6 +70,18 @@ struct Entry {
     left_at: u64,
 }
 
+impl Entry {
+    /// The identity of `session` as its entry knows it: the id, and the
+    /// desktop app's session where the entry names one.
+    fn identity(&self, session: &str) -> Identity {
+        Identity {
+            session: session.to_string(),
+            pid: None,
+            host: (!self.host.is_empty()).then(|| self.host.clone()),
+        }
+    }
+}
+
 /// A session entering the line, written by the prompt hook when the
 /// user's message is `/land`, beside the permit it just wrote. `cwd` is
 /// where the session sat, `at` the message's time in milliseconds. The
@@ -186,11 +198,7 @@ pub(crate) fn standing_for(dir: &str, session: &str) -> Option<String> {
             ago(entry.left_at),
         ));
     }
-    let me = Identity {
-        session: session.to_string(),
-        pid: None,
-        host: (!entry.host.is_empty()).then(|| entry.host.clone()),
-    };
+    let me = entry.identity(session);
     let line = read(dir).ok()?;
     Some(match line.place_of(&me) {
         Some(place) => format!("line: {}.", line.place_said(place)),
@@ -367,11 +375,7 @@ pub(crate) struct Place {
 
 impl Place {
     fn identity(&self) -> Identity {
-        Identity {
-            session: self.session.clone(),
-            pid: None,
-            host: (!self.entry.host.is_empty()).then(|| self.entry.host.clone()),
-        }
+        self.entry.identity(&self.session)
     }
 }
 
@@ -495,11 +499,7 @@ pub(crate) fn read(dir: &str) -> Result<Line, String> {
                     .unwrap_or(&tree.path)
                     .to_string()
             });
-        let me = Identity {
-            session: session.clone(),
-            pid: None,
-            host: (!entry.host.is_empty()).then(|| entry.host.clone()),
-        };
+        let me = entry.identity(&session);
         // A seat nobody claims contradicts nothing; another conversation's
         // claim says the session that typed /land there is gone from it.
         let reason = tree.locked.then(|| tree.reason.clone());
