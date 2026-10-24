@@ -8,6 +8,8 @@
 //! / [`source_byte`]); a command log row is the characters themselves, a
 //! tab one place ([`plain_ranges`] / [`plain_byte`]).
 
+use std::ops::Range;
+
 use platitude_core::highlight::Span;
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
@@ -129,16 +131,17 @@ impl platitude_core::mem::Footprint for Run {
 }
 
 /// Where byte ranges of the source line (`platitude_core::intraline`, the
-/// reader's own selection) fall in the line as the row spells it. Places
-/// only (see the module): the wash and the press are read against the
-/// same layout, so they cannot disagree.
-pub fn spelled_ranges(text: &str, ranges: &[(usize, usize)]) -> Runs {
+/// reader's own selection) fall in the line as the row spells it. The
+/// ranges come in line order without overlapping, their ends on
+/// characters' boundaries. Places only (see the module): the wash and the
+/// press are read against the same layout, so they cannot disagree.
+pub fn spelled_ranges(text: &str, ranges: &[Range<usize>]) -> Runs {
     places_of(text, ranges, spelled_units)
 }
 
 /// [`spelled_ranges`] for a row drawn as the characters themselves
 /// (`CommandsModel::spell`); the tab is the difference ([`plain_units`]).
-pub fn plain_ranges(text: &str, ranges: &[(usize, usize)]) -> Runs {
+pub fn plain_ranges(text: &str, ranges: &[Range<usize>]) -> Runs {
     places_of(text, ranges, plain_units)
 }
 
@@ -158,29 +161,27 @@ pub fn spelled_place(text: &str, byte: usize) -> usize {
     here
 }
 
-fn places_of(text: &str, ranges: &[(usize, usize)], units: fn(char, usize) -> usize) -> Runs {
+fn places_of(text: &str, ranges: &[Range<usize>], units: fn(char, usize) -> usize) -> Runs {
     if ranges.is_empty() {
         return Runs::default();
     }
     let mut out: Vec<Run> = Vec::new();
-    let mut iter = ranges.iter().copied();
+    let mut iter = ranges.iter();
     let mut current = iter.next();
     let mut open: Option<usize> = None;
     let mut here = 0usize;
     let mut col = 0usize;
     for (at, ch) in text.char_indices() {
-        if let Some((start, len)) = current {
-            if open.is_none() && at == start {
+        if let Some(range) = current {
+            if open.is_none() && at == range.start {
                 open = Some(here);
             }
-            if at == start + len {
+            if at == range.end {
                 if let Some(from) = open.take() {
-                    push_span(&mut out, from, here);
+                    push_span(&mut out, from..here);
                 }
                 current = iter.next();
-                if let Some((next_start, _)) = current
-                    && at == next_start
-                {
+                if current.is_some_and(|next| at == next.start) {
                     open = Some(here);
                 }
             }
@@ -190,18 +191,20 @@ fn places_of(text: &str, ranges: &[(usize, usize)], units: fn(char, usize) -> us
     }
     // A range that runs to the line's end closes here.
     if let Some(from) = open {
-        push_span(&mut out, from, here);
+        push_span(&mut out, from..here);
     }
     Runs::new(out)
 }
 
-fn push_span(out: &mut Vec<Run>, from: usize, to: usize) {
-    if to <= from {
+/// Appends the run over `places` — UTF-16 units of the line as the row
+/// spells it, never bytes of the source line. An empty one adds nothing.
+fn push_span(out: &mut Vec<Run>, places: Range<usize>) {
+    if places.is_empty() {
         return;
     }
     out.push(Run {
-        from: i32::try_from(from).unwrap_or(i32::MAX),
-        len: i32::try_from(to - from).unwrap_or(i32::MAX),
+        from: i32::try_from(places.start).unwrap_or(i32::MAX),
+        len: i32::try_from(places.len()).unwrap_or(i32::MAX),
     });
 }
 
@@ -244,6 +247,10 @@ fn byte_of(text: &str, at: usize, units: fn(char, usize) -> usize) -> usize {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::single_range_in_vec_init,
+    reason = "the readers take a slice of ranges, and a case of one is a slice of one"
+)]
 mod tests {
     use super::*;
     use platitude_core::highlight::Rgb;
@@ -306,32 +313,44 @@ mod tests {
         // The tab is two `&nbsp;` to the stop at 4: 日 on places 0..1, the
         // tab 1..3, ab 3..5; bytes 0..3, 3..4 and 4..6 of the source.
         let text = "日\tab";
-        assert_eq!(places(&spelled_ranges(text, &[(0, 3)])), [(0, 1)]);
-        assert_eq!(places(&spelled_ranges(text, &[(3, 1)])), [(1, 2)]);
-        assert_eq!(places(&spelled_ranges(text, &[(4, 2)])), [(3, 2)]);
-        assert_eq!(places(&spelled_ranges(text, &[(0, 6)])), [(0, 5)]);
+        assert_eq!(places(&spelled_ranges(text, &[0..3])), [(0, 1)]);
+        assert_eq!(places(&spelled_ranges(text, &[3..4])), [(1, 2)]);
+        assert_eq!(places(&spelled_ranges(text, &[4..6])), [(3, 2)]);
+        assert_eq!(places(&spelled_ranges(text, &[0..6])), [(0, 5)]);
         assert_eq!(
-            places(&spelled_ranges(text, &[(0, 3), (4, 1)])),
+            places(&spelled_ranges(text, &[0..3, 4..5])),
             [(0, 1), (3, 1)]
         );
         assert!(spelled_ranges(text, &[]).is_empty());
-        let runs = spelled_ranges(text, &[(0, 3), (4, 1)]);
+        let runs = spelled_ranges(text, &[0..3, 4..5]);
         assert_eq!(
             <Runs as QVariantConvertible>::try_from_qvariant(&runs.to_qvariant()),
             Ok(runs)
         );
     }
 
+    /// A range that starts where the last one ends is a run of its own;
+    /// an empty one is none.
+    #[test]
+    fn ranges_that_meet_stay_two_runs_and_an_empty_one_is_none() {
+        let text = "日\tab";
+        assert_eq!(
+            places(&spelled_ranges(text, &[0..3, 3..4])),
+            [(0, 1), (1, 2)]
+        );
+        assert!(spelled_ranges(text, &[4..4]).is_empty());
+    }
+
     #[test]
     fn an_astral_glyph_is_two_of_the_units_a_place_is_counted_in() {
-        assert_eq!(places(&spelled_ranges("a\u{1f600}b", &[(1, 4)])), [(1, 2)]);
-        assert_eq!(places(&spelled_ranges("a\u{1f600}b", &[(5, 1)])), [(3, 1)]);
+        assert_eq!(places(&spelled_ranges("a\u{1f600}b", &[1..5])), [(1, 2)]);
+        assert_eq!(places(&spelled_ranges("a\u{1f600}b", &[5..6])), [(3, 1)]);
     }
 
     #[test]
     fn a_combining_mark_is_a_place_of_its_own() {
         // The font draws nothing for it, but the layout counts it.
-        assert_eq!(places(&spelled_ranges("e\u{301}x", &[(0, 3)])), [(0, 2)]);
+        assert_eq!(places(&spelled_ranges("e\u{301}x", &[0..3])), [(0, 2)]);
         assert_eq!(source_byte("e\u{301}x", 1), 1);
         assert_eq!(source_byte("e\u{301}x", 2), 3);
     }
@@ -384,12 +403,12 @@ mod tests {
     #[test]
     fn a_row_drawn_as_itself_counts_a_tab_once() {
         let text = "a\tb";
-        assert_eq!(places(&plain_ranges(text, &[(0, 3)])), [(0, 3)]);
-        assert_eq!(places(&plain_ranges(text, &[(1, 1)])), [(1, 1)]);
+        assert_eq!(places(&plain_ranges(text, &[0..3])), [(0, 3)]);
+        assert_eq!(places(&plain_ranges(text, &[1..2])), [(1, 1)]);
         assert_eq!(plain_byte(text, 1), 1);
         assert_eq!(plain_byte(text, 2), 2);
         // A diff row spells the same tab as three `&nbsp;` to the stop at 4.
-        assert_eq!(places(&spelled_ranges(text, &[(0, 3)])), [(0, 5)]);
+        assert_eq!(places(&spelled_ranges(text, &[0..3])), [(0, 5)]);
         assert_eq!(source_byte(text, 4), 2);
     }
 
@@ -397,12 +416,12 @@ mod tests {
     fn a_wide_glyph_is_one_place_of_a_row_drawn_as_itself() {
         // 日本語 is three places, one per character.
         let text = "日本語.txt";
-        assert_eq!(places(&plain_ranges(text, &[(0, 9)])), [(0, 3)]);
-        assert_eq!(places(&plain_ranges(text, &[(9, 4)])), [(3, 4)]);
+        assert_eq!(places(&plain_ranges(text, &[0..9])), [(0, 3)]);
+        assert_eq!(places(&plain_ranges(text, &[9..13])), [(3, 4)]);
         assert_eq!(plain_byte(text, 1), 3);
         assert_eq!(plain_byte(text, 3), 9);
         // An astral glyph is still two units.
-        assert_eq!(places(&plain_ranges("a\u{1f600}b", &[(1, 4)])), [(1, 2)]);
+        assert_eq!(places(&plain_ranges("a\u{1f600}b", &[1..5])), [(1, 2)]);
         assert_eq!(plain_byte("a\u{1f600}b", 3), 5);
     }
 

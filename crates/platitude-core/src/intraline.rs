@@ -9,11 +9,12 @@
 //! Worked out here rather than by `git diff --word-diff`, whose output
 //! replaces the line-based form the pane is built on.
 
+use std::ops::Range;
+
 use crate::parse::diff::{DiffHunk, DiffLineKind, DiffLineLocation, FilePatch};
 
-/// Byte ranges into one row's text — `(start, len)`, ascending and
-/// disjoint.
-type Ranges = Vec<(usize, usize)>;
+/// Byte ranges into one row's text, ascending, disjoint and none empty.
+type Ranges = Vec<Range<usize>>;
 
 /// What changed inside every row of a diff, addressed by patch, hunk and
 /// line. Empty where there is nothing to emphasise.
@@ -24,7 +25,7 @@ pub struct IntraMarks {
 
 impl IntraMarks {
     /// The emphasised ranges of one row — none, where none are.
-    pub fn line(&self, location: DiffLineLocation) -> &[(usize, usize)] {
+    pub fn line(&self, location: DiffLineLocation) -> &[Range<usize>] {
         static NOTHING: Ranges = Vec::new();
         self.patches
             .get(location.patch)
@@ -124,11 +125,7 @@ fn hunk_marks(hunk: &DiffHunk, budget: &mut usize) -> Vec<Ranges> {
 }
 
 fn whole(text: &str) -> Ranges {
-    if text.is_empty() {
-        Vec::new()
-    } else {
-        vec![(0, text.len())]
-    }
+    span_of(0..text.len())
 }
 
 /// What one pair of lines does not share: the common prefix and suffix
@@ -138,32 +135,32 @@ fn line_marks(old: &str, new: &str, budget: &mut usize) -> (Ranges, Ranges) {
     let prefix = common_prefix(old, new);
     // The suffix may not reach into the prefix.
     let suffix = common_suffix(&old[prefix..], &new[prefix..]);
-    let old_mid = (prefix, old.len() - suffix);
-    let new_mid = (prefix, new.len() - suffix);
-    if old_mid.0 == old_mid.1 && new_mid.0 == new_mid.1 {
+    let old_mid = prefix..old.len() - suffix;
+    let new_mid = prefix..new.len() - suffix;
+    if old_mid.is_empty() && new_mid.is_empty() {
         return (Vec::new(), Vec::new());
     }
     let chars = |s: &str| s.chars().count();
-    let shared = chars(&old[..prefix]) + chars(&old[old_mid.1..]);
+    let shared = chars(&old[..prefix]) + chars(&old[old_mid.end..]);
     let longer = chars(old).max(chars(new));
     if longer > 0 && shared * 1_000 < KINSHIP_FLOOR_PER_MILLE * longer {
         return (whole(old), whole(new));
     }
-    let om = &old[old_mid.0..old_mid.1];
-    let nm = &new[new_mid.0..new_mid.1];
+    let om = &old[old_mid.clone()];
+    let nm = &new[new_mid.clone()];
     let cells = chars(om).saturating_mul(chars(nm));
     if cells > 0 && cells <= REFINE_CELL_CAP && cells <= *budget {
         *budget -= cells;
-        return refined(om, nm, old_mid.0, new_mid.0);
+        return refined(om, nm, old_mid.start, new_mid.start);
     }
     (span_of(old_mid), span_of(new_mid))
 }
 
-fn span_of((start, end): (usize, usize)) -> Ranges {
-    if start == end {
+fn span_of(range: Range<usize>) -> Ranges {
+    if range.is_empty() {
         Vec::new()
     } else {
-        vec![(start, end - start)]
+        vec![range]
     }
 }
 
@@ -223,8 +220,8 @@ fn refined(om: &str, nm: &str, old_off: usize, new_off: usize) -> (Ranges, Range
                         i: usize,
                         j: usize| {
         if run > 0 && run < KEEP_RUN_CHARS {
-            push_range(old_ranges, byte_at(a, oi, om), byte_at(a, i, om));
-            push_range(new_ranges, byte_at(b, nj, nm), byte_at(b, j, nm));
+            push_range(old_ranges, byte_at(a, oi, om)..byte_at(a, i, om));
+            push_range(new_ranges, byte_at(b, nj, nm)..byte_at(b, j, nm));
         }
     };
     while i < n || j < m {
@@ -252,10 +249,10 @@ fn refined(om: &str, nm: &str, old_off: usize, new_off: usize) -> (Ranges, Range
         shared_run = 0;
         // Step the side whose skip keeps the subsequence longest.
         if j == m || (i < n && lcs[(i + 1) * (m + 1) + j] >= lcs[i * (m + 1) + j + 1]) {
-            push_range(&mut old_ranges, byte_at(&a, i, om), byte_at(&a, i + 1, om));
+            push_range(&mut old_ranges, byte_at(&a, i, om)..byte_at(&a, i + 1, om));
             i += 1;
         } else {
-            push_range(&mut new_ranges, byte_at(&b, j, nm), byte_at(&b, j + 1, nm));
+            push_range(&mut new_ranges, byte_at(&b, j, nm)..byte_at(&b, j + 1, nm));
             j += 1;
         }
     }
@@ -270,8 +267,13 @@ fn refined(om: &str, nm: &str, old_off: usize, new_off: usize) -> (Ranges, Range
         i,
         j,
     );
+    // Both ends lie inside the middle, which starts `off` into a `&str`:
+    // the sums stay within the line's length.
     let lift = |ranges: Ranges, off: usize| -> Ranges {
-        ranges.into_iter().map(|(s, l)| (s + off, l)).collect()
+        ranges
+            .into_iter()
+            .map(|range| range.start + off..range.end + off)
+            .collect()
     };
     (lift(old_ranges, old_off), lift(new_ranges, new_off))
 }
@@ -281,22 +283,27 @@ fn byte_at(chars: &[(usize, char)], i: usize, text: &str) -> usize {
     chars.get(i).map_or(text.len(), |(at, _)| *at)
 }
 
-/// Appends `[start, end)` to `ranges`, merging into the last range when
-/// they touch.
-fn push_range(ranges: &mut Ranges, start: usize, end: usize) {
-    if end <= start {
+/// Appends `range` to `ranges`, whose last range it does not start
+/// before, merging into that one where the two touch or overlap. An empty
+/// one adds nothing.
+fn push_range(ranges: &mut Ranges, range: Range<usize>) {
+    if range.is_empty() {
         return;
     }
     if let Some(last) = ranges.last_mut()
-        && last.0 + last.1 >= start
+        && last.end >= range.start
     {
-        last.1 = end - last.0;
+        last.end = last.end.max(range.end);
         return;
     }
-    ranges.push((start, end - start));
+    ranges.push(range);
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::single_range_in_vec_init,
+    reason = "a row's emphasis is a slice of ranges, and a row of one range is a slice of one"
+)]
 mod tests {
     use super::*;
     use crate::parse::diff::parse_patch;
@@ -313,16 +320,19 @@ mod tests {
     fn a_tail_grown_on_a_line_is_the_only_emphasis() {
         let patches = one_hunk("@@ -1,1 +1,1 @@\n-let x = 1;\n+let x = 1; // c\n");
         let marks = marks(&patches);
-        assert_eq!(marks.line(at(0, 0, 0)), &[], "the deletion lost nothing");
-        assert_eq!(marks.line(at(0, 0, 1)), &[(10, 5)], "only the tail is new");
+        assert!(
+            marks.line(at(0, 0, 0)).is_empty(),
+            "the deletion lost nothing"
+        );
+        assert_eq!(marks.line(at(0, 0, 1)), &[10..15], "only the tail is new");
     }
 
     #[test]
     fn a_renamed_identifier_is_cut_out_alone() {
         let patches = one_hunk("@@ -1,1 +1,1 @@\n-let x = 1;\n+let y = 1;\n");
         let marks = marks(&patches);
-        assert_eq!(marks.line(at(0, 0, 0)), &[(4, 1)]);
-        assert_eq!(marks.line(at(0, 0, 1)), &[(4, 1)]);
+        assert_eq!(marks.line(at(0, 0, 0)), &[4..5]);
+        assert_eq!(marks.line(at(0, 0, 1)), &[4..5]);
     }
 
     /// Two files, the second with two hunks, each pair changed somewhere
@@ -348,18 +358,18 @@ diff --git a/b.rs b/b.rs
     #[test]
     fn each_part_of_a_location_picks_its_own_line() {
         let marks = marks(&parse_patch(TWO_FILES.as_bytes()));
-        assert_eq!(marks.line(at(0, 0, 1)), &[(4, 1)], "the first file");
-        assert_eq!(marks.line(at(1, 0, 1)), &[(8, 1)], "another patch");
-        assert_eq!(marks.line(at(1, 1, 1)), &[(10, 5)], "another hunk");
-        assert_eq!(marks.line(at(1, 1, 0)), &[], "another line");
+        assert_eq!(marks.line(at(0, 0, 1)), &[4..5], "the first file");
+        assert_eq!(marks.line(at(1, 0, 1)), &[8..9], "another patch");
+        assert_eq!(marks.line(at(1, 1, 1)), &[10..15], "another hunk");
+        assert!(marks.line(at(1, 1, 0)).is_empty(), "another line");
     }
 
     #[test]
     fn a_location_past_any_part_answers_nothing() {
         let marks = marks(&parse_patch(TWO_FILES.as_bytes()));
-        assert_eq!(marks.line(at(2, 0, 1)), &[], "no third patch");
-        assert_eq!(marks.line(at(1, 2, 1)), &[], "no third hunk");
-        assert_eq!(marks.line(at(1, 1, 2)), &[], "no third line");
+        assert!(marks.line(at(2, 0, 1)).is_empty(), "no third patch");
+        assert!(marks.line(at(1, 2, 1)).is_empty(), "no third hunk");
+        assert!(marks.line(at(1, 1, 2)).is_empty(), "no third line");
     }
 
     #[test]
@@ -378,18 +388,18 @@ diff --git a/b.rs b/b.rs
     fn lines_that_mostly_disagree_are_emphasised_whole() {
         let patches = one_hunk("@@ -1,1 +1,1 @@\n-abc\n+wxyz nothing alike\n");
         let marks = marks(&patches);
-        assert_eq!(marks.line(at(0, 0, 0)), &[(0, 3)]);
-        assert_eq!(marks.line(at(0, 0, 1)), &[(0, "wxyz nothing alike".len())]);
+        assert_eq!(marks.line(at(0, 0, 0)), &[0..3]);
+        assert_eq!(marks.line(at(0, 0, 1)), &[0.."wxyz nothing alike".len()]);
     }
 
     #[test]
     fn the_tail_of_the_longer_run_changed_as_a_whole() {
         let patches = one_hunk("@@ -1,1 +1,2 @@\n-let x = 1;\n+let x = 2;\n+let y = 3;\n");
         let marks = marks(&patches);
-        assert_eq!(marks.line(at(0, 0, 1)), &[(8, 1)], "the pair reads finely");
+        assert_eq!(marks.line(at(0, 0, 1)), &[8..9], "the pair reads finely");
         assert_eq!(
             marks.line(at(0, 0, 2)),
-            &[(0, "let y = 3;".len())],
+            &[0.."let y = 3;".len()],
             "the unpaired line changed as a whole"
         );
     }
@@ -400,11 +410,11 @@ diff --git a/b.rs b/b.rs
         let patches = one_hunk("@@ -1,1 +1,3 @@\n context\n+alpha\n+beta\n");
         let added = marks(&patches);
         for line in 0..3 {
-            assert_eq!(added.line(at(0, 0, line)), &[], "line {line}");
+            assert!(added.line(at(0, 0, line)).is_empty(), "line {line}");
         }
         // Pure removal, likewise.
         let gone = one_hunk("@@ -1,2 +1,1 @@\n context\n-doomed\n");
-        assert_eq!(marks(&gone).line(at(0, 0, 1)), &[]);
+        assert!(marks(&gone).line(at(0, 0, 1)).is_empty());
     }
 
     #[test]
@@ -414,8 +424,27 @@ diff --git a/b.rs b/b.rs
         let mut budget = usize::MAX;
         let (old_marks, new_marks) =
             line_marks("Qlong ab1de tailW", "Qlong xb2dy tailW", &mut budget);
-        assert_eq!(old_marks, vec![(6, 5)]);
-        assert_eq!(new_marks, vec![(6, 5)]);
+        assert_eq!(old_marks, vec![6..11]);
+        assert_eq!(new_marks, vec![6..11]);
+    }
+
+    /// Touching, overlapping and held ranges run into the last one; one
+    /// that stands apart, or an empty one between them, does not join them.
+    #[test]
+    fn a_range_runs_into_the_last_only_where_the_two_meet() {
+        let pushed = |ranges: &[Range<usize>]| {
+            let mut out = Ranges::new();
+            for range in ranges {
+                push_range(&mut out, range.clone());
+            }
+            out
+        };
+        assert_eq!(pushed(&[0..2, 2..4]), [0..4], "touching");
+        assert_eq!(pushed(&[0..3, 2..5]), [0..5], "overlapping");
+        assert_eq!(pushed(&[0..5, 1..3]), [0..5], "held inside");
+        assert_eq!(pushed(&[0..2, 3..5]), [0..2, 3..5], "apart");
+        assert_eq!(pushed(&[0..2, 2..2, 3..5]), [0..2, 3..5], "nothing between");
+        assert!(pushed(&[4..4]).is_empty(), "nothing at all");
     }
 
     #[test]
@@ -423,8 +452,8 @@ diff --git a/b.rs b/b.rs
         let patches =
             one_hunk("@@ -1,1 +1,1 @@\n-old tail\n\\ No newline at end of file\n+old tails\n");
         let marks = marks(&patches);
-        assert_eq!(marks.line(at(0, 0, 0)), &[], "still read as a pair");
-        assert_eq!(marks.line(at(0, 0, 2)), &[(8, 1)]);
+        assert!(marks.line(at(0, 0, 0)).is_empty(), "still read as a pair");
+        assert_eq!(marks.line(at(0, 0, 2)), &[8..9]);
     }
 
     #[test]
@@ -440,7 +469,7 @@ diff --cc s.txt
         let patches = parse_patch(patch.as_bytes());
         assert!(patches[0].is_combined);
         let marks = marks(&patches);
-        assert_eq!(marks.line(at(0, 0, 0)), &[]);
-        assert_eq!(marks.line(at(0, 0, 1)), &[]);
+        assert!(marks.line(at(0, 0, 0)).is_empty());
+        assert!(marks.line(at(0, 0, 1)).is_empty());
     }
 }

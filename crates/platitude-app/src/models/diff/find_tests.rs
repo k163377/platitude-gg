@@ -211,6 +211,74 @@ fn a_split_row_wears_a_hit_in_the_column_whose_line_it_is() {
     );
 }
 
+/// Two hits that meet on a row are worn as one run, two that stand apart
+/// as two; the one the bar stands on is worn alone.
+#[test]
+fn hits_that_meet_are_worn_as_one_and_hits_apart_as_two() {
+    let mut m = model(
+        "\
+--- a/f
++++ b/f
+@@ -1,2 +1,2 @@
+ abab
+ ab ab
+",
+        false,
+    );
+    let (text, options) = plain("ab");
+    m.set_find_query(text, options);
+    assert_eq!(m.find_from_row(0), 1);
+    assert_eq!(
+        worn(&m),
+        [
+            (1, "0:4".into(), "0:2".into(), String::new(), String::new()),
+            (
+                2,
+                "0:2,3:2".into(),
+                String::new(),
+                String::new(),
+                String::new()
+            ),
+        ]
+    );
+}
+
+/// A hit over two rows is worn on each in its own places: the tab is
+/// spelled to its stop at 4, 日 and 本 are a place each, the astral
+/// glyph two. A match of the line break alone is no hit.
+#[test]
+fn a_hit_over_two_rows_is_worn_where_each_row_spells_it() {
+    let mut m = model(
+        "\
+--- a/f
++++ b/f
+@@ -1,2 +1,2 @@
+ \t日本\u{1f600}x
+ 語y
+",
+        false,
+    );
+    let (text, options) = plain("本\u{1f600}x\n語");
+    m.set_find_query(text, options);
+    assert_eq!(m.find_from_row(0), 1);
+    assert_eq!(
+        worn(&m),
+        [
+            (1, "5:4".into(), "5:4".into(), String::new(), String::new()),
+            (2, "0:1".into(), "0:1".into(), String::new(), String::new()),
+        ]
+    );
+    m.set_find_query(
+        "\\n".to_string(),
+        Options {
+            regex: true,
+            ..Options::default()
+        },
+    );
+    assert_eq!(m.find_count, 0);
+    assert!(worn(&m).is_empty());
+}
+
 #[test]
 fn hits_of_both_sides_overlapping_on_a_shared_line_are_worn_as_one() {
     let mut m = model(

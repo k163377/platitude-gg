@@ -18,18 +18,21 @@
 //! its tabs spelled out as `&nbsp;` (`encode::markup`), so a copy off the
 //! screen would paste spaces.
 
+use std::ops::Range;
+
 use super::*;
 
 /// One row's share of the selection before it is spelled out — so the rows
 /// a drag sweeps on every move compare without building strings.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 enum Wash {
     /// Not in the selection, or in it but not a line the plain copy takes.
     None,
     /// In it from end to end.
     Whole,
-    /// In it between these two byte offsets of the row's source line.
-    Part(usize, usize),
+    /// In it over these bytes of the row's source line — empty for an end
+    /// row the selection only touches the edge of.
+    Part(Range<usize>),
 }
 
 /// The rows a selection covers, first and last inclusive.
@@ -253,9 +256,9 @@ impl DiffModel {
         match self.wash_of(side, row) {
             Wash::None => Optional::none(),
             Wash::Whole => Optional::some(Washed::whole()),
-            Wash::Part(first, last) => Optional::new(
+            Wash::Part(bytes) => Optional::new(
                 self.source_line(side, row)
-                    .map(|text| Washed::runs(spelled_ranges(text, &[(first, last - first)]))),
+                    .map(|text| Washed::runs(spelled_ranges(text, &[bytes]))),
             ),
         }
     }
@@ -290,13 +293,13 @@ impl DiffModel {
             return if row == first_row && row == last_row {
                 Wash::None
             } else {
-                Wash::Part(first, first)
+                Wash::Part(first..first)
             };
         }
         if first == 0 && last == text.len() {
             Wash::Whole
         } else {
-            Wash::Part(first, last)
+            Wash::Part(first..last)
         }
     }
 
@@ -320,9 +323,9 @@ impl DiffModel {
                         takes += 1;
                         inked = true;
                     }
-                    Wash::Part(a, b) => {
+                    Wash::Part(bytes) => {
                         takes += 1;
-                        inked |= b > a;
+                        inked |= !bytes.is_empty();
                     }
                 }
                 // Removed lines are always in column 0, even on a row
@@ -343,19 +346,19 @@ impl DiffModel {
         let mut first_line = true;
         if let Some((first, last)) = self.span() {
             for row in first..=last {
-                let (from, to) = match self.wash_of(self.sel_side, row) {
-                    Wash::None => continue,
-                    Wash::Whole => (0, usize::MAX),
-                    Wash::Part(from, to) => (from, to),
-                };
                 let Some(text) = self.source_line(self.sel_side, row) else {
                     continue;
+                };
+                let bytes = match self.wash_of(self.sel_side, row) {
+                    Wash::None => continue,
+                    Wash::Whole => 0..text.len(),
+                    Wash::Part(bytes) => bytes,
                 };
                 if !first_line {
                     out.push('\n');
                 }
                 first_line = false;
-                out.push_str(text.get(from..to.min(text.len())).unwrap_or_default());
+                out.push_str(text.get(bytes).unwrap_or_default());
             }
         }
         out

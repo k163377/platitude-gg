@@ -276,7 +276,8 @@ impl CommandsModel {
             let start = from.max(base);
             let end = to.min(base + text.len());
             columns.push(if start < end {
-                plain_ranges(text, &[(start - base, end - start)])
+                let in_column = start - base..end - base;
+                plain_ranges(text, &[in_column])
             } else {
                 Runs::default()
             });

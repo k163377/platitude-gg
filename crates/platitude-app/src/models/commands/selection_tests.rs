@@ -209,6 +209,22 @@ fn a_drag_between_two_places_copies_what_lies_between_them() {
     assert_eq!(down.copied(), "5 ms\n12");
 }
 
+/// A cut inside a column is counted from that column's own start, and a
+/// column the cut only touches at its first byte wears nothing.
+#[test]
+fn a_wash_inside_a_column_counts_from_that_column() {
+    let mut model = kanji_astral();
+    model.start_select(source(0, 20));
+    model.drag_select(source(0, 27));
+    model.respell_row(0);
+    assert_eq!(said(&model.rows[0].sel), wash("", "11:3", "", false));
+    // Byte 32 is the first of the outcome column, `5 ms`.
+    model.drag_select(source(0, 32));
+    model.respell_row(0);
+    assert_eq!(said(&model.rows[0].sel), wash("", "11:7", "", false));
+    assert_eq!(model.copied(), "日😀.txt\t");
+}
+
 #[test]
 fn a_drag_with_nothing_selected_selects_nothing() {
     let mut model = kanji_astral();

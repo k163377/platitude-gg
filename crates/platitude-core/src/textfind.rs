@@ -13,6 +13,8 @@
 //! continue one). Nothing here knows rows or columns: a hit is spans of
 //! bytes on lines named by the caller's ids.
 
+use std::ops::Range;
+
 use crate::parse::diff::{DiffLineKind, FilePatch};
 
 /// How a query reads what was typed.
@@ -82,12 +84,12 @@ pub struct SideLine<'a> {
     pub text: &'a str,
 }
 
-/// What a hit covers of one line, in bytes of that line's text.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// What a hit covers of one line, in bytes of that line's text — never
+/// empty.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Span {
     pub id: usize,
-    pub start: usize,
-    pub end: usize,
+    pub bytes: Range<usize>,
 }
 
 /// One hit: its spans, one per line it runs over, in line order.
@@ -101,7 +103,7 @@ impl Hit {
     pub fn at(&self) -> (usize, usize) {
         self.spans
             .first()
-            .map_or((0, 0), |span| (span.id, span.start))
+            .map_or((0, 0), |span| (span.id, span.bytes.start))
     }
 }
 
@@ -127,17 +129,13 @@ pub fn search(query: &Query, lines: &[SideLine<'_>]) -> Vec<Hit> {
         let Some(found) = query.pattern.find_at(&text, from) else {
             break;
         };
-        if found.is_empty() || query.whole_word && !word_bounded(&text, found.start(), found.end())
-        {
-            from = found.start()
-                + text[found.start()..]
-                    .chars()
-                    .next()
-                    .map_or(1, char::len_utf8);
+        let bytes = found.range();
+        if bytes.is_empty() || query.whole_word && !word_bounded(&text, bytes.clone()) {
+            from = bytes.start + text[bytes.start..].chars().next().map_or(1, char::len_utf8);
             continue;
         }
-        from = found.end();
-        let hit = spans_of(lines, &starts, found.start(), found.end());
+        from = bytes.end;
+        let hit = spans_of(lines, &starts, bytes);
         if !hit.spans.is_empty() {
             hits.push(hit);
         }
@@ -145,38 +143,39 @@ pub fn search(query: &Query, lines: &[SideLine<'_>]) -> Vec<Hit> {
     hits
 }
 
-/// Whether a hit on `text[start..end]` stands as a word: where it begins
-/// on a word character the one before is not one, where it ends on one
-/// the one after is not one. A hit beginning or ending on punctuation
-/// asks nothing of that side (`clone(` is found before `clone(x)`).
-fn word_bounded(text: &str, start: usize, end: usize) -> bool {
+/// Whether a hit on `text[bytes]` stands as a word: where it begins on a
+/// word character the one before is not one, where it ends on one the one
+/// after is not one. A hit beginning or ending on punctuation asks nothing
+/// of that side (`clone(` is found before `clone(x)`).
+fn word_bounded(text: &str, bytes: Range<usize>) -> bool {
     let is_word = |c: char| c.is_alphanumeric() || c == '_';
-    let hit = &text[start..end];
+    let before = text[..bytes.start].chars().next_back();
+    let after = text[bytes.end..].chars().next();
+    let hit = &text[bytes];
     let starts_word = hit.chars().next().is_some_and(is_word);
     let ends_word = hit.chars().next_back().is_some_and(is_word);
-    let before = text[..start].chars().next_back();
-    let after = text[end..].chars().next();
     !(starts_word && before.is_some_and(is_word)) && !(ends_word && after.is_some_and(is_word))
 }
 
-/// The spans of one match over the lines it runs through — none for a
-/// match of the break alone.
-fn spans_of(lines: &[SideLine<'_>], starts: &[usize], start: usize, end: usize) -> Hit {
-    let first = starts.partition_point(|&s| s <= start).saturating_sub(1);
-    let last = starts.partition_point(|&s| s < end).saturating_sub(1);
+/// The spans of one match, `bytes` of the joined text, over the lines it
+/// runs through — none for a match of the break alone.
+fn spans_of(lines: &[SideLine<'_>], starts: &[usize], bytes: Range<usize>) -> Hit {
+    let first = starts
+        .partition_point(|&s| s <= bytes.start)
+        .saturating_sub(1);
+    let last = starts.partition_point(|&s| s < bytes.end).saturating_sub(1);
     let mut spans = Vec::with_capacity(last - first + 1);
     for (i, line) in lines.iter().enumerate().take(last + 1).skip(first) {
         let line_start = starts[i];
         let line_end = line_start + line.text.len();
-        let from = start.max(line_start) - line_start;
-        let to = end.min(line_end) - line_start;
+        let on_line =
+            bytes.start.max(line_start) - line_start..bytes.end.min(line_end) - line_start;
         // The break between two lines is nobody's: a match that begins on
         // it marks nothing on the line it closes.
-        if from < to {
+        if !on_line.is_empty() {
             spans.push(Span {
                 id: line.id,
-                start: from,
-                end: to,
+                bytes: on_line,
             });
         }
     }
@@ -239,9 +238,9 @@ mod tests {
         query(text, Options::default())
     }
 
-    fn spans(hits: &[Hit]) -> Vec<Vec<(usize, usize, usize)>> {
+    fn spans(hits: &[Hit]) -> Vec<Vec<(usize, Range<usize>)>> {
         hits.iter()
-            .map(|h| h.spans.iter().map(|s| (s.id, s.start, s.end)).collect())
+            .map(|h| h.spans.iter().map(|s| (s.id, s.bytes.clone())).collect())
             .collect()
     }
 
@@ -254,7 +253,7 @@ mod tests {
     #[test]
     fn a_line_is_found_wherever_it_stands_and_in_either_case() {
         let hits = search(&plain("note"), &lines(&["a Note of notes", "none"]));
-        assert_eq!(spans(&hits), [[(0, 2, 6)], [(0, 10, 14)]]);
+        assert_eq!(spans(&hits), [[(0, 2..6)], [(0, 10..14)]]);
     }
 
     #[test]
@@ -269,7 +268,7 @@ mod tests {
             ),
             &lines(&["a Note of notes"]),
         );
-        assert_eq!(spans(&hits), [[(0, 2, 6)]]);
+        assert_eq!(spans(&hits), [[(0, 2..6)]]);
     }
 
     #[test]
@@ -279,15 +278,15 @@ mod tests {
             ..Options::default()
         };
         let hits = search(&query("note", whole), &lines(&["notes note _note (note)"]));
-        assert_eq!(spans(&hits), [[(0, 6, 10)], [(0, 18, 22)]]);
+        assert_eq!(spans(&hits), [[(0, 6..10)], [(0, 18..22)]]);
         // A hit ending on punctuation asks nothing of what follows.
         let hits = search(&query("clone(", whole), &lines(&["x.clone(y)"]));
-        assert_eq!(spans(&hits), [[(0, 2, 8)]]);
+        assert_eq!(spans(&hits), [[(0, 2..8)]]);
         // A word hidden inside a refused hit (3..6 inside 1..4) is found:
         // the search goes on from the refused hit's second character, not
         // its end.
         let hits = search(&query("a-a", whole), &lines(&["ba-a-a"]));
-        assert_eq!(spans(&hits), [[(0, 3, 6)]]);
+        assert_eq!(spans(&hits), [[(0, 3..6)]]);
     }
 
     #[test]
@@ -299,7 +298,7 @@ mod tests {
         assert!(search(&query(r"\n", re), &lines(&["a", "b"])).is_empty());
         // One that ends on the break marks the line it closes.
         let hits = search(&query(r"a\n", re), &lines(&["a", "b"]));
-        assert_eq!(spans(&hits), [[(0, 0, 1)]]);
+        assert_eq!(spans(&hits), [[(0, 0..1)]]);
     }
 
     #[test]
@@ -309,9 +308,9 @@ mod tests {
             ..Options::default()
         };
         let hits = search(&query(r"no\w+", re), &lines(&["a note, none"]));
-        assert_eq!(spans(&hits), [[(0, 2, 6)], [(0, 8, 12)]]);
+        assert_eq!(spans(&hits), [[(0, 2..6)], [(0, 8..12)]]);
         let hits = search(&query("^a", re), &lines(&["ab", "ba", "a"]));
-        assert_eq!(spans(&hits), [[(0, 0, 1)], [(2, 0, 1)]]);
+        assert_eq!(spans(&hits), [[(0, 0..1)], [(2, 0..1)]]);
         let error = Query::new("(", re).unwrap_err();
         assert_eq!(error.to_string(), "Unclosed group");
         // An empty match is no hit.
@@ -324,10 +323,21 @@ mod tests {
             &plain("the file\n0"),
             &lines(&["down the file", "09: a line", "down the file", "1: x"]),
         );
-        assert_eq!(spans(&hits), [[(0, 5, 13), (1, 0, 1)]]);
+        assert_eq!(spans(&hits), [[(0, 5..13), (1, 0..1)]]);
         // Beginning on the break itself marks nothing on the line it closes.
         let hits = search(&plain("\n09"), &lines(&["down the file", "09: a line"]));
-        assert_eq!(spans(&hits), [[(1, 0, 2)]]);
+        assert_eq!(spans(&hits), [[(1, 0..2)]]);
+    }
+
+    /// Spans are bytes of each line's own text: a tab is one, 日 three, an
+    /// astral glyph four, and the second line counts from its own start.
+    #[test]
+    fn a_span_is_the_bytes_of_its_own_line() {
+        let hits = search(
+            &plain("本\u{1f600}b\n語"),
+            &lines(&["a\t日本\u{1f600}b", "語x"]),
+        );
+        assert_eq!(spans(&hits), [[(0, 5..13), (1, 0..3)]]);
     }
 
     fn patch(lines: &[(DiffLineKind, &str)]) -> FilePatch {
@@ -367,13 +377,13 @@ mod tests {
         // Context lines are reported once.
         assert_eq!(
             spans(&hits_in(&plain("keep"), &patches)),
-            [[(0, 0, 4)], [(3, 0, 4)]]
+            [[(0, 0..4)], [(3, 0..4)]]
         );
         // Each side's changed line runs into the shared context line, past
         // the other side's line between them.
         assert_eq!(
             spans(&hits_in(&plain("end\nkeep"), &patches)),
-            [[(1, 4, 7), (3, 0, 4)], [(2, 4, 7), (3, 0, 4)]]
+            [[(1, 4..7), (3, 0..4)], [(2, 4..7), (3, 0..4)]]
         );
     }
 }

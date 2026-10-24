@@ -4,6 +4,8 @@
 //! this end maps a hit's lines onto rows and columns and spells its bytes
 //! the way the row draws them (as the selection's wash does, `selection`).
 
+use std::ops::Range;
+
 use platitude_core::textfind::{self, Hit, Options, Query};
 
 use super::selection::RIGHT;
@@ -133,8 +135,8 @@ impl DiffModel {
     /// (`find_row`).
     fn lay_found(&mut self, places: &Places) {
         let rows = self.lines.len();
-        let mut all: Vec<[Vec<(usize, usize)>; 2]> = vec![Default::default(); rows];
-        let mut now: Vec<[Vec<(usize, usize)>; 2]> = vec![Default::default(); rows];
+        let mut all: Vec<[Vec<Range<usize>>; 2]> = vec![Default::default(); rows];
+        let mut now: Vec<[Vec<Range<usize>>; 2]> = vec![Default::default(); rows];
         let current = usize::try_from(self.find_at).unwrap_or(0);
         self.find_row = -1;
         for (ordinal, hit) in self.find_hits.iter().enumerate() {
@@ -145,9 +147,9 @@ impl DiffModel {
                 };
                 for &(row, side) in found {
                     let col = usize::from(side == RIGHT);
-                    all[row][col].push((span.start, span.end));
+                    all[row][col].push(span.bytes.clone());
                     if standing {
-                        now[row][col].push((span.start, span.end));
+                        now[row][col].push(span.bytes.clone());
                         if self.find_row < 0 {
                             self.find_row = i32::try_from(row).unwrap_or(-1);
                         }
@@ -183,14 +185,14 @@ impl DiffModel {
         self.notify_runs(runs);
     }
 
-    /// One column's hits on one row, `(start, end)` in the source line's
-    /// bytes, spelled the way the row draws the line.
+    /// One column's hits on one row, ranges of the source line's bytes,
+    /// spelled the way the row draws the line.
     fn spelled_found(
         &self,
         side: i32,
         row: usize,
-        all: &[(usize, usize)],
-        now: &[(usize, usize)],
+        all: &[Range<usize>],
+        now: &[Range<usize>],
     ) -> (Runs, Runs) {
         match self.source_line(side, row) {
             Some(text) if !all.is_empty() => (
@@ -202,18 +204,19 @@ impl DiffModel {
     }
 }
 
-/// Byte ranges `(start, end)` in line order, run together where they
-/// touch or overlap, as the `(start, len)` `spelled_ranges` reads one at
-/// a time. Both sides' hits can run into one shared line (`old end\nke`
-/// and `new end\nkeep` both end on `keep`), and the line wears the longer.
-fn joined(ranges: &[(usize, usize)]) -> Vec<(usize, usize)> {
+/// Byte ranges in line order, run together where they touch or overlap,
+/// as `spelled_ranges` reads them. Both sides' hits can run into one
+/// shared line (`old end\nke` and `new end\nkeep` both end on `keep`), and
+/// the line wears the longer. An empty range moves no end, so it never
+/// joins two that stand apart.
+fn joined(ranges: &[Range<usize>]) -> Vec<Range<usize>> {
     let mut sorted = ranges.to_vec();
-    sorted.sort_unstable();
-    let mut out: Vec<(usize, usize)> = Vec::with_capacity(sorted.len());
-    for (start, end) in sorted {
+    sorted.sort_unstable_by_key(|range| (range.start, range.end));
+    let mut out: Vec<Range<usize>> = Vec::with_capacity(sorted.len());
+    for range in sorted {
         match out.last_mut() {
-            Some(last) if start <= last.0 + last.1 => last.1 = last.1.max(end - last.0),
-            _ => out.push((start, end - start)),
+            Some(last) if range.start <= last.end => last.end = last.end.max(range.end),
+            _ => out.push(range),
         }
     }
     out
