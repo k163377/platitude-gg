@@ -4,8 +4,16 @@ use std::sync::Arc;
 
 use platitude_core::parse::diff::parse_patch;
 
-use super::{DiffModel, LineSpan, Washed};
+use super::{DiffModel, LayoutPosition, LineSpan, SourcePosition, Washed};
 use crate::encode::Optional;
+
+fn source(row: i32, byte: i32) -> SourcePosition {
+    SourcePosition { row, byte }
+}
+
+fn layout(row: i32, utf16: i32) -> LayoutPosition {
+    LayoutPosition { row, utf16 }
+}
 
 /// One side's wash the way the tests read it: `""` for none, `*` for
 /// the whole line, and the runs as `from:len,…` for a cut one.
@@ -59,8 +67,8 @@ fn one_change() -> DiffModel {
 #[test]
 fn a_drag_over_the_lot_takes_the_new_side_and_leaves_the_old_one() {
     let mut model = one_change();
-    model.start_select(0, 1, 0);
-    model.drag_select(0, 4, 1);
+    model.start_select(0, source(1, 0));
+    model.drag_select(0, source(4, 1));
     assert_eq!(model.copied_new(), "fn main() {\n    let a = 2;\n}");
     assert_eq!(model.copied_removed(), "    let a = 1;");
     assert!(model.sel_has_new);
@@ -70,8 +78,8 @@ fn a_drag_over_the_lot_takes_the_new_side_and_leaves_the_old_one() {
 #[test]
 fn only_the_rows_the_copy_takes_are_washed() {
     let mut model = one_change();
-    model.start_select(0, 0, 0);
-    model.drag_select(0, 4, 1);
+    model.start_select(0, source(0, 0));
+    model.drag_select(0, source(4, 1));
     let washed: Vec<String> = model.lines.iter().map(|row| said(&row.sel)).collect();
     // The heading and the removed line stay bare; the rest is whole.
     assert_eq!(washed, vec!["", "*", "", "*", "*"]);
@@ -80,8 +88,8 @@ fn only_the_rows_the_copy_takes_are_washed() {
 #[test]
 fn the_two_ends_are_cut_and_the_rows_between_them_are_not() {
     let mut model = one_change();
-    model.start_select(0, 1, 3);
-    model.drag_select(0, 3, 7);
+    model.start_select(0, source(1, 3));
+    model.drag_select(0, source(3, 7));
     assert_eq!(model.copied_new(), "main() {\n    let");
     assert_eq!(said(&model.lines[3].sel), "0:7");
 }
@@ -89,11 +97,11 @@ fn the_two_ends_are_cut_and_the_rows_between_them_are_not() {
 #[test]
 fn a_drag_made_upwards_reads_the_same_as_one_made_down() {
     let mut down = one_change();
-    down.start_select(0, 1, 3);
-    down.drag_select(0, 3, 7);
+    down.start_select(0, source(1, 3));
+    down.drag_select(0, source(3, 7));
     let mut up = one_change();
-    up.start_select(0, 3, 7);
-    up.drag_select(0, 1, 3);
+    up.start_select(0, source(3, 7));
+    up.drag_select(0, source(1, 3));
     assert_eq!(up.copied_new(), down.copied_new());
 }
 
@@ -111,7 +119,7 @@ fn one_removed_row_taken_whole_offers_the_old_line_and_nothing_new() {
 #[test]
 fn a_press_with_no_drag_behind_it_copies_nothing() {
     let mut model = one_change();
-    model.start_select(0, 1, 4);
+    model.start_select(0, source(1, 4));
     assert!(!model.sel_has_new);
     assert!(model.copied_new().is_empty());
 }
@@ -119,27 +127,31 @@ fn a_press_with_no_drag_behind_it_copies_nothing() {
 #[test]
 fn a_selection_says_which_places_it_holds() {
     let mut model = one_change();
-    model.start_select(0, 1, 2);
-    model.drag_select(0, 3, 4);
-    assert!(model.holds(0, 1, 2) && model.holds(0, 2, 0) && model.holds(0, 3, 4));
-    assert!(!model.holds(0, 1, 1));
-    assert!(!model.holds(0, 3, 5));
-    assert!(!model.holds(0, 4, 0));
+    model.start_select(0, source(1, 2));
+    model.drag_select(0, source(3, 4));
+    assert!(
+        model.holds(0, source(1, 2))
+            && model.holds(0, source(2, 0))
+            && model.holds(0, source(3, 4))
+    );
+    assert!(!model.holds(0, source(1, 1)));
+    assert!(!model.holds(0, source(3, 5)));
+    assert!(!model.holds(0, source(4, 0)));
 }
 
 #[test]
 fn the_rows_going_take_the_selection_with_them() {
     // What a re-read does before it swaps the rows.
     let mut model = one_change();
-    model.start_select(0, 1, 0);
-    model.drag_select(0, 4, 1);
+    model.start_select(0, source(1, 0));
+    model.drag_select(0, source(4, 1));
     model.forget_selection();
     assert!(!model.sel_active);
     assert!(!model.sel_has_new);
     assert_eq!(model.sel_removed, 0);
     assert!(model.copied_new().is_empty());
     assert!(model.copied_removed().is_empty());
-    assert!(!model.holds(0, 1, 0));
+    assert!(!model.holds(0, source(1, 0)));
 }
 
 #[test]
@@ -190,14 +202,14 @@ fn a_place_along_a_row_comes_back_as_a_byte_of_its_line() {
         ),
         false,
     );
-    assert_eq!(model.byte_at(0, 3, 0), 0);
-    assert_eq!(model.byte_at(0, 3, 4), 1);
-    assert_eq!(model.byte_at(0, 3, 5), 2);
+    assert_eq!(model.byte_at(0, layout(3, 0)), 0);
+    assert_eq!(model.byte_at(0, layout(3, 4)), 1);
+    assert_eq!(model.byte_at(0, layout(3, 5)), 2);
     // Past the end is the end — a press right of the last character.
-    assert_eq!(model.byte_at(0, 3, 9999), 11);
+    assert_eq!(model.byte_at(0, layout(3, 9999)), 11);
     // A heading and a missing row answer 0.
-    assert_eq!(model.byte_at(0, 0, 4), 0);
-    assert_eq!(model.byte_at(0, -1, 4), 0);
+    assert_eq!(model.byte_at(0, layout(0, 4)), 0);
+    assert_eq!(model.byte_at(0, layout(-1, 4)), 0);
 }
 
 #[test]
@@ -214,10 +226,96 @@ fn a_wash_on_a_wide_line_names_places_and_not_columns() {
 ",
         false,
     );
-    model.start_select(0, 2, 10);
-    model.drag_select(0, 2, 14);
+    model.start_select(0, source(2, 10));
+    model.drag_select(0, source(2, 14));
     assert_eq!(said(&model.lines[2].sel), "4:4");
     assert_eq!(model.copied_new(), "torn");
+}
+
+/// hunk / add / add on rows 0..2. Row 1 spells its tab as four places, a
+/// kanji as one and the astral glyph as two: places 4, 5, 6, 8 and 9 are
+/// bytes 1, 4, 7, 11 and 12.
+fn tab_kanji_astral() -> DiffModel {
+    model(
+        &format!(
+            "\
+--- a/f
++++ b/f
+@@ -0,0 +1,2 @@
++{TAB}日本😀x
++ab
+"
+        ),
+        false,
+    )
+}
+
+#[test]
+fn a_place_read_off_the_layout_is_the_byte_it_stands_at() {
+    let model = tab_kanji_astral();
+    let byte = |place| model.byte_at(0, layout(1, place));
+    assert_eq!(
+        [byte(4), byte(5), byte(6), byte(8), byte(9)],
+        [1, 4, 7, 11, 12]
+    );
+    // Inside one character's spelling the nearer end wins, ties right.
+    assert_eq!(byte(1), 0, "a quarter into the tab");
+    assert_eq!(byte(2), 1, "half way through the tab");
+    assert_eq!(byte(7), 11, "between the astral glyph's two units");
+}
+
+#[test]
+fn a_drag_between_two_places_copies_what_lies_between_them() {
+    let mut down = tab_kanji_astral();
+    let from = down.byte_at(0, layout(1, 5));
+    let to = down.byte_at(0, layout(1, 8));
+    down.start_select(0, source(1, from));
+    down.drag_select(0, source(1, to));
+    assert_eq!(down.copied_new(), "本😀");
+    let mut up = tab_kanji_astral();
+    up.start_select(0, source(1, to));
+    up.drag_select(0, source(1, from));
+    assert_eq!(up.copied_new(), "本😀", "dragged the other way");
+    // Onto the next row, and past the end of it.
+    let below = down.byte_at(0, layout(2, 1));
+    down.drag_select(0, source(2, below));
+    assert_eq!(down.copied_new(), "本😀x\na");
+    let past = down.byte_at(0, layout(2, 99));
+    down.drag_select(0, source(2, past));
+    assert_eq!(down.copied_new(), "本😀x\nab");
+}
+
+#[test]
+fn a_drag_with_nothing_selected_starts_where_it_is() {
+    let mut model = tab_kanji_astral();
+    assert!(model.drag_select(0, source(1, 4)));
+    assert!(model.sel_active);
+    assert!(model.copied_new().is_empty(), "it holds nothing yet");
+    model.drag_select(0, source(1, 7));
+    assert_eq!(model.copied_new(), "本");
+}
+
+#[test]
+fn a_negative_place_or_byte_is_the_head_and_a_negative_row_is_no_line() {
+    let mut model = tab_kanji_astral();
+    // A place before the line is its head; a row before the rows has no
+    // line.
+    assert_eq!(model.byte_at(0, layout(1, -3)), 0);
+    assert_eq!(model.byte_at(0, layout(-1, 4)), 0);
+    // A negative byte is the head of its row.
+    model.start_select(0, source(1, -5));
+    model.drag_select(0, source(1, 4));
+    assert_eq!(model.copied_new(), "\t日");
+    assert!(model.holds(0, source(1, 2)));
+    assert!(
+        !model.holds(0, source(1, -1)),
+        "a negative byte is held by nothing"
+    );
+    assert!(!model.holds(0, source(-1, 0)), "nor a negative row");
+    // An end with no row holds nothing.
+    model.start_select(0, source(-1, 0));
+    model.drag_select(0, source(2, 1));
+    assert!(model.copied_new().is_empty());
 }
 
 /// The moving end as `(side, row, place)`, or nothing.
@@ -247,14 +345,14 @@ fn the_moving_end_follows_the_hand_in_the_places_its_row_spells() {
         false,
     );
     assert_eq!(end_of(&model), None, "nothing selected, no end");
-    model.start_select(0, 1, 2);
-    model.drag_select(0, 3, 3);
+    model.start_select(0, source(1, 2));
+    model.drag_select(0, source(3, 3));
     assert_eq!(
         end_of(&model),
         Some((0, 3, 6)),
         "dragged down: the lower end"
     );
-    model.drag_select(0, 1, 0);
+    model.drag_select(0, source(1, 0));
     assert_eq!(
         end_of(&model),
         Some((0, 1, 0)),
@@ -321,8 +419,8 @@ fn a_drag_down_the_old_column_takes_the_old_file() {
     // The old column copies the old file, so `Copy removed lines` has
     // nothing left to offer.
     let mut model = one_change_split();
-    model.start_select(0, 1, 0);
-    model.drag_select(0, 3, 1);
+    model.start_select(0, source(1, 0));
+    model.drag_select(0, source(3, 1));
     assert_eq!(model.copied_new(), "fn main() {\n    let a = 1;\n}");
     assert!(model.sel_has_new);
     assert_eq!(model.sel_removed, 0);
@@ -336,8 +434,8 @@ fn a_drag_down_the_old_column_takes_the_old_file() {
 #[test]
 fn a_drag_down_the_new_column_takes_the_new_file_and_offers_the_removed_line_across() {
     let mut model = one_change_split();
-    model.start_select(1, 1, 0);
-    model.drag_select(1, 3, 1);
+    model.start_select(1, source(1, 0));
+    model.drag_select(1, source(3, 1));
     assert_eq!(model.copied_new(), "fn main() {\n    let a = 2;\n}");
     // The removed line across from the added one is offered, whole.
     assert_eq!(model.sel_removed, 1);
@@ -353,10 +451,10 @@ fn a_press_in_the_other_column_moves_the_whole_wash_across() {
     // The rows inside both selections are the ones that change column,
     // so the ends are not enough to revisit.
     let mut model = one_change_split();
-    model.start_select(0, 1, 0);
-    model.drag_select(0, 3, 1);
-    model.start_select(1, 2, 0);
-    model.drag_select(1, 2, 3);
+    model.start_select(0, source(1, 0));
+    model.drag_select(0, source(3, 1));
+    model.start_select(1, source(2, 0));
+    model.drag_select(1, source(2, 3));
     assert_eq!(
         washes(&model),
         sides(&["", "", "", ""], &["", "", "0:3", ""])
@@ -367,15 +465,15 @@ fn a_press_in_the_other_column_moves_the_whole_wash_across() {
 #[test]
 fn a_selection_is_of_one_column() {
     let mut model = one_change_split();
-    model.start_select(1, 1, 3);
-    model.drag_select(1, 3, 1);
-    assert!(model.holds(1, 2, 0));
+    model.start_select(1, source(1, 3));
+    model.drag_select(1, source(3, 1));
+    assert!(model.holds(1, source(2, 0)));
     assert!(
-        !model.holds(0, 2, 0),
+        !model.holds(0, source(2, 0)),
         "the same row in the other column is outside it"
     );
     // A drag that wandered into the other column stays in its own.
-    model.drag_select(0, 3, 0);
+    model.drag_select(0, source(3, 0));
     assert_eq!(model.sel_side, 1);
     assert_eq!(model.copied_new(), "main() {\n    let a = 2;\n");
 }
@@ -385,13 +483,39 @@ fn a_place_on_the_right_side_is_a_byte_of_the_line_on_the_right() {
     let model = one_change_split();
     // Row 2 holds `    let a = 1;` on the left and `    let a = 2;` on
     // the right; place 12 is the digit of each.
-    assert_eq!(model.byte_at(0, 2, 12), 12);
-    assert_eq!(model.byte_at(1, 2, 12), 12);
+    assert_eq!(model.byte_at(0, layout(2, 12)), 12);
+    assert_eq!(model.byte_at(1, layout(2, 12)), 12);
     assert_eq!(model.source_line(0, 2), Some("    let a = 1;"));
     assert_eq!(model.source_line(1, 2), Some("    let a = 2;"));
     // A context row is the same line on both sides; a heading is none.
     assert_eq!(model.source_line(1, 1), model.source_line(0, 1));
     assert_eq!(model.source_line(1, 0), None);
+}
+
+#[test]
+fn the_same_place_is_a_byte_of_each_side_s_own_line() {
+    // Row 1 holds `x\t日` on the left, whose tab stands at column 1 and
+    // spells three places, and `\t日本😀x` on the right: place 5 is just
+    // past the kanji on both, at byte 5 on the left and 4 on the right.
+    let mut model = split_model(&format!(
+        "\
+--- a/f
++++ b/f
+@@ -1,1 +1,1 @@
+-x{TAB}日
++{TAB}日本😀x
+"
+    ));
+    assert_eq!(model.byte_at(0, layout(1, 5)), 5);
+    assert_eq!(model.byte_at(1, layout(1, 5)), 4);
+    let from = model.byte_at(0, layout(1, 1));
+    model.start_select(0, source(1, from));
+    model.drag_select(0, source(1, model.byte_at(0, layout(1, 5))));
+    assert_eq!(model.copied_new(), "\t日", "the old column's line");
+    let from = model.byte_at(1, layout(1, 4));
+    model.start_select(1, source(1, from));
+    model.drag_select(1, source(1, model.byte_at(1, layout(1, 9))));
+    assert_eq!(model.copied_new(), "日本😀x", "the new column's line");
 }
 
 #[test]
@@ -410,14 +534,14 @@ fn an_empty_seat_takes_nothing_and_breaks_nothing() {
  same
 ",
     );
-    model.start_select(1, 1, 0);
-    model.drag_select(1, 3, 4);
+    model.start_select(1, source(1, 0));
+    model.drag_select(1, source(3, 4));
     assert_eq!(model.copied_new(), "uno\nsame");
     assert_eq!(model.sel_removed, 2);
     assert_eq!(model.copied_removed(), "one\ntwo");
     assert_eq!(washes(&model).1, vec!["", "*", "", "*"]);
     assert_eq!(
-        model.byte_at(1, 2, 3),
+        model.byte_at(1, layout(2, 3)),
         0,
         "the seat has no line to be a byte of"
     );
@@ -496,8 +620,8 @@ fn span(newer: bool, first: i32, last: i32) -> Option<LineSpan> {
 #[test]
 fn a_link_points_at_the_lines_the_copy_takes() {
     let mut model = model(NUMBERED, false);
-    model.start_select(0, 1, 0);
-    model.drag_select(0, 4, 1);
+    model.start_select(0, source(1, 0));
+    model.drag_select(0, source(4, 1));
     assert_eq!(
         model.line_span(),
         span(true, 12, 14),
@@ -518,8 +642,8 @@ fn a_link_points_at_the_lines_the_copy_takes() {
 #[test]
 fn a_link_from_a_split_diff_is_of_the_column_dragged_down() {
     let mut model = split_model(NUMBERED);
-    model.start_select(0, 1, 0);
-    model.drag_select(0, 3, 1);
+    model.start_select(0, source(1, 0));
+    model.drag_select(0, source(3, 1));
     assert_eq!(
         model.line_span(),
         span(false, 10, 12),
@@ -538,22 +662,22 @@ fn a_link_from_a_split_diff_is_of_the_column_dragged_down() {
 #[test]
 fn a_row_the_selection_only_touches_the_edge_of_is_not_linked() {
     let mut model = model(NUMBERED, false);
-    model.start_select(0, 1, 0);
-    model.drag_select(0, 3, 0);
+    model.start_select(0, source(1, 0));
+    model.drag_select(0, source(3, 0));
     assert_eq!(
         model.line_span(),
         span(true, 12, 12),
         "the added row only reached at its head"
     );
-    model.start_select(0, 2, 0);
-    model.drag_select(0, 3, 0);
+    model.start_select(0, source(2, 0));
+    model.drag_select(0, source(3, 0));
     assert_eq!(
         model.line_span(),
         span(false, 11, 11),
         "with no line of the new file left, the removed one it reaches over"
     );
-    model.start_select(0, 1, 99);
-    model.drag_select(0, 4, 1);
+    model.start_select(0, source(1, 99));
+    model.drag_select(0, source(4, 1));
     assert_eq!(
         model.line_span(),
         span(true, 13, 14),

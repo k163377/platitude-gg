@@ -82,9 +82,9 @@ impl DiffModel {
         kind == "ctx" || kind == own
     }
 
-    pub(super) fn byte_at(&self, side: i32, row: i32, at: i32) -> i32 {
-        let at = usize::try_from(at).unwrap_or(0);
-        let byte = usize::try_from(row)
+    pub(super) fn byte_at(&self, side: i32, position: LayoutPosition) -> i32 {
+        let at = usize::try_from(position.utf16).unwrap_or(0);
+        let byte = usize::try_from(position.row)
             .ok()
             .and_then(|row| self.source_line(side, row))
             .map_or(0, |text| source_byte(text, at));
@@ -116,14 +116,17 @@ impl DiffModel {
         (first <= end).then(|| (first, last.min(end)))
     }
 
-    pub(super) fn holds(&self, side: i32, row: i32, at: i32) -> bool {
+    pub(super) fn holds(&self, side: i32, position: SourcePosition) -> bool {
         let Some((first_row, first_at, last_row, last_at)) = self.taken() else {
             return false;
         };
         if side != self.sel_side {
             return false;
         }
-        let (Ok(row), Ok(at)) = (usize::try_from(row), usize::try_from(at)) else {
+        let (Ok(row), Ok(at)) = (
+            usize::try_from(position.row),
+            usize::try_from(position.byte),
+        ) else {
             return false;
         };
         (first_row, first_at) <= (row, at) && (row, at) <= (last_row, last_at)
@@ -151,18 +154,17 @@ impl DiffModel {
         })
     }
 
-    pub(super) fn start_select(&mut self, side: i32, row: i32, at: i32) -> bool {
-        self.move_ends(side, row, at, row, at, true)
+    pub(super) fn start_select(&mut self, side: i32, position: SourcePosition) -> bool {
+        self.move_ends(side, position, position, true)
     }
 
     /// The far end follows the pointer; the pressed end and its column
     /// stay — `side` is read only where no selection stands to extend.
-    pub(super) fn drag_select(&mut self, side: i32, row: i32, at: i32) -> bool {
+    pub(super) fn drag_select(&mut self, side: i32, position: SourcePosition) -> bool {
         if !self.sel_active {
-            return self.start_select(side, row, at);
+            return self.start_select(side, position);
         }
-        let (side, from_row, from_at) = (self.sel_side, self.sel_from_row, self.sel_from_at);
-        self.move_ends(side, from_row, from_at, row, at, true)
+        self.move_ends(self.sel_side, self.anchor(), position, true)
     }
 
     pub(super) fn select_whole_row(&mut self, side: i32, row: i32) -> bool {
@@ -170,12 +172,18 @@ impl DiffModel {
             .ok()
             .and_then(|row| self.source_line(side, row))
             .map_or(0, str::len);
-        self.move_ends(side, row, 0, row, i32::try_from(end).unwrap_or(0), true)
+        let head = SourcePosition { row, byte: 0 };
+        let tail = SourcePosition {
+            row,
+            byte: i32::try_from(end).unwrap_or(0),
+        };
+        self.move_ends(side, head, tail, true)
     }
 
     /// Nothing is selected any more (a plain click, or a press on nothing).
     pub(super) fn drop_selection(&mut self) -> bool {
-        self.move_ends(0, 0, 0, 0, 0, false)
+        let none = SourcePosition { row: 0, byte: 0 };
+        self.move_ends(0, none, none, false)
     }
 
     /// The same while the rows themselves go: no wash is written back.
@@ -190,43 +198,50 @@ impl DiffModel {
         self.sel_removed = 0;
     }
 
-    /// Moves the two ends and brings the rows and the counts along. Returns
-    /// whether anything moved — the slots fire `changed` only then, so a
-    /// drag that stays on one character costs no signal.
+    /// Moves the two ends — `anchor` the pressed one, `focus` the moving
+    /// one, kept in that order (`taken` sorts them) — and brings the rows
+    /// and the counts along. Returns whether anything moved — the slots
+    /// fire `changed` only then, so a drag that stays on one character
+    /// costs no signal.
     fn move_ends(
         &mut self,
         side: i32,
-        from_row: i32,
-        from_at: i32,
-        to_row: i32,
-        to_at: i32,
+        anchor: SourcePosition,
+        focus: SourcePosition,
         active: bool,
     ) -> bool {
         let before = self.span();
         let was_active = self.sel_active;
-        let was = (
-            self.sel_side,
-            self.sel_from_row,
-            self.sel_from_at,
-            self.sel_to_row,
-            self.sel_to_at,
-        );
-        self.sel_from_row = from_row;
-        self.sel_from_at = from_at;
-        self.sel_to_row = to_row;
-        self.sel_to_at = to_at;
+        let was = (self.sel_side, self.anchor(), self.focus());
+        self.sel_from_row = anchor.row;
+        self.sel_from_at = anchor.byte;
+        self.sel_to_row = focus.row;
+        self.sel_to_at = focus.byte;
         self.sel_side = side;
         self.sel_active = active;
         let after = self.span();
-        if before == after
-            && was_active == active
-            && was == (side, from_row, from_at, to_row, to_at)
-        {
+        if before == after && was_active == active && was == (side, anchor, focus) {
             return false;
         }
         self.lay_wash(before, after, was.0 != side);
         self.settle_counts();
         true
+    }
+
+    /// The pressed end as it is kept, unsorted and unchecked.
+    fn anchor(&self) -> SourcePosition {
+        SourcePosition {
+            row: self.sel_from_row,
+            byte: self.sel_from_at,
+        }
+    }
+
+    /// The moving end as it is kept, unsorted and unchecked.
+    fn focus(&self) -> SourcePosition {
+        SourcePosition {
+            row: self.sel_to_row,
+            byte: self.sel_to_at,
+        }
     }
 
     /// Rewrites the wash where it can have changed and notifies exactly

@@ -303,13 +303,14 @@ impl DiffModel {
     /// `LineRuler`'s units) stands on.
     #[qslot]
     fn source_byte_at(&self, side: i32, row: i32, at: i32) -> i32 {
-        self.byte_at(side, row, at)
+        self.byte_at(side, LayoutPosition { row, utf16: at })
     }
 
     /// A press landed: the selection starts here, empty.
     #[qslot]
     fn begin_select(&mut self, side: i32, row: i32, at: i32) {
-        if self.start_select(side, row, at) {
+        let position = SourcePosition { row, byte: at };
+        if self.start_select(side, position) {
             self.changed();
         }
     }
@@ -317,7 +318,8 @@ impl DiffModel {
     /// The pointer moved during a drag (`drag_select`).
     #[qslot]
     fn extend_select(&mut self, side: i32, row: i32, at: i32) {
-        if self.drag_select(side, row, at) {
+        let position = SourcePosition { row, byte: at };
+        if self.drag_select(side, position) {
             self.changed();
         }
     }
@@ -336,7 +338,7 @@ impl DiffModel {
     /// other column is outside it.
     #[qslot]
     fn selection_holds(&self, side: i32, row: i32, at: i32) -> bool {
-        self.holds(side, row, at)
+        self.holds(side, SourcePosition { row, byte: at })
     }
 
     /// Where the selection's moving end stands (`moving_end`), or nothing

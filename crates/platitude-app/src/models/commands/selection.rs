@@ -123,13 +123,17 @@ impl CommandsModel {
     }
 
     /// Which byte of a row's line a press landed on, given the column and
-    /// the place in it. A gap's two places are the two sides of its tab.
-    pub(super) fn hit(&self, row: i32, at: i32, place: i32) -> i32 {
-        let Some(line) = usize::try_from(row).ok().and_then(|row| self.line_at(row)) else {
+    /// the place in that column's string. A gap's two places are the two
+    /// sides of its tab.
+    pub(super) fn hit(&self, column: i32, position: LayoutPosition) -> i32 {
+        let Some(line) = usize::try_from(position.row)
+            .ok()
+            .and_then(|row| self.line_at(row))
+        else {
             return 0;
         };
-        let place = usize::try_from(place).unwrap_or(0);
-        let byte = match at {
+        let place = usize::try_from(position.utf16).unwrap_or(0);
+        let byte = match column {
             AT_CLOCK => plain_byte(&line.clock, place),
             AT_GAP_CMD if place == 0 => CLOCK_LEN,
             AT_GAP_CMD => line.at_cmd(),
@@ -172,24 +176,32 @@ impl CommandsModel {
         self.taken().map(|(first, _, last, _)| (first, last))
     }
 
-    pub(super) fn start_select(&mut self, row: i32, at: i32) -> bool {
+    pub(super) fn start_select(&mut self, position: SourcePosition) -> bool {
         let was = self.span();
         self.sel_active = true;
-        self.sel_from_row = row;
-        self.sel_from_at = at;
-        self.sel_to_row = row;
-        self.sel_to_at = at;
+        self.sel_from_row = position.row;
+        self.sel_from_at = position.byte;
+        self.sel_to_row = position.row;
+        self.sel_to_at = position.byte;
         self.respell(was)
     }
 
-    pub(super) fn drag_select(&mut self, row: i32, at: i32) -> bool {
-        if !self.sel_active || (self.sel_to_row == row && self.sel_to_at == at) {
+    pub(super) fn drag_select(&mut self, position: SourcePosition) -> bool {
+        if !self.sel_active || self.focus() == position {
             return false;
         }
         let was = self.span();
-        self.sel_to_row = row;
-        self.sel_to_at = at;
+        self.sel_to_row = position.row;
+        self.sel_to_at = position.byte;
         self.respell(was)
+    }
+
+    /// The moving end as it is kept, uncut.
+    fn focus(&self) -> SourcePosition {
+        SourcePosition {
+            row: self.sel_to_row,
+            byte: self.sel_to_at,
+        }
     }
 
     pub(super) fn drop_selection(&mut self) -> bool {

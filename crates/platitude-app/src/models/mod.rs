@@ -25,6 +25,7 @@ mod tab_name;
 mod tabs;
 #[cfg(test)]
 mod tabs_tests;
+mod text_position;
 mod worktree;
 
 pub use app_backend::{AppBackend, build_id, build_tree};

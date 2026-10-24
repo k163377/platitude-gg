@@ -17,6 +17,7 @@ use crate::encode::{
 };
 use crate::hub::{DiffMsg, Feed};
 
+use super::text_position::{LayoutPosition, SourcePosition};
 use super::{impl_extend_notified, impl_notify_runs, push_run, qml_register};
 
 mod find;

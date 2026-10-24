@@ -9,6 +9,7 @@ use qtbridge::qtbridge_type_lib::QVariantMap;
 use crate::encode::{Fields, Optional, Record, Runs, field, plain_byte, plain_ranges};
 use crate::hub::{CommandMsg, Feed};
 
+use super::text_position::{LayoutPosition, SourcePosition};
 use super::{impl_notify_runs, push_run, qml_register};
 
 mod selection;
@@ -257,13 +258,14 @@ impl CommandsModel {
     /// the place in it the pane measured; pixels stop at the pane.
     #[qslot]
     fn hit_at(&self, row: i32, at: i32, place: i32) -> i32 {
-        self.hit(row, at, place)
+        self.hit(at, LayoutPosition { row, utf16: place })
     }
 
     /// A press landed: the selection starts here and holds nothing yet.
     #[qslot]
     fn begin_select(&mut self, row: i32, at: i32) {
-        if self.start_select(row, at) {
+        let position = SourcePosition { row, byte: at };
+        if self.start_select(position) {
             self.changed();
         }
     }
@@ -271,7 +273,8 @@ impl CommandsModel {
     /// The hand has moved to here.
     #[qslot]
     fn extend_select(&mut self, row: i32, at: i32) {
-        if self.drag_select(row, at) {
+        let position = SourcePosition { row, byte: at };
+        if self.drag_select(position) {
             self.changed();
         }
     }
