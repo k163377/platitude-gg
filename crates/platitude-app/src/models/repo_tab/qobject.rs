@@ -378,9 +378,7 @@ impl RepoTab {
     /// `writeAnswerStopped` / `writeAnswerFailed` / `writeAnswerAtTip`.
     #[qslot]
     fn write_answer_op(&self, index: i32) -> String {
-        self.write_answer_at(index)
-            .map(|a| a.kind.label().to_string())
-            .unwrap_or_default()
+        self.write_answer_text(index, |a| a.kind.label())
     }
 
     /// Whether anybody pressed for that one, or it is a fetch the page
@@ -482,9 +480,7 @@ impl RepoTab {
     /// last in the drain.
     #[qslot]
     fn write_answer_error(&self, index: i32) -> String {
-        self.write_answer_at(index)
-            .map(|a| a.error.clone())
-            .unwrap_or_default()
+        self.write_answer_text(index, |a| &a.error)
     }
 
     /// It left a commit at the tip to go to.
@@ -502,34 +498,26 @@ impl RepoTab {
     /// press the later one's words.
     #[qslot]
     fn write_answer_report_kind(&self, index: i32) -> String {
-        self.write_answer_at(index)
-            .map(|a| a.report_kind.clone())
-            .unwrap_or_default()
+        self.write_answer_text(index, |a| &a.report_kind)
     }
 
     /// The remote it was about, where one was involved.
     #[qslot]
     fn write_answer_report_remote(&self, index: i32) -> String {
-        self.write_answer_at(index)
-            .map(|a| a.report_remote.clone())
-            .unwrap_or_default()
+        self.write_answer_text(index, |a| &a.report_remote)
     }
 
     /// The ref it was about, spelled the way the screen spells it.
     #[qslot]
     fn write_answer_report_name(&self, index: i32) -> String {
-        self.write_answer_at(index)
-            .map(|a| a.report_name.clone())
-            .unwrap_or_default()
+        self.write_answer_text(index, |a| &a.report_name)
     }
 
     /// The one thing the report's second line names beside the heading's
     /// names (`WriteReport::fact`) — never anybody's message.
     #[qslot]
     fn write_answer_report_fact(&self, index: i32) -> String {
-        self.write_answer_at(index)
-            .map(|a| a.report_fact.clone())
-            .unwrap_or_default()
+        self.write_answer_text(index, |a| &a.report_fact)
     }
 
     /// Local branch name a remote-tracking ref would take: the ref minus

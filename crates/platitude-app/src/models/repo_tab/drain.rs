@@ -284,6 +284,18 @@ impl RepoTab {
             .and_then(|i| self.write_answers.get(i))
     }
 
+    /// One text field of that answer, empty past the end.
+    pub(super) fn write_answer_text(
+        &self,
+        index: i32,
+        field: impl FnOnce(&WriteAnswer) -> &str,
+    ) -> String {
+        self.write_answer_at(index)
+            .map(field)
+            .unwrap_or_default()
+            .to_string()
+    }
+
     /// What git makes of one commit's signature, for the pane — dropped
     /// if the question moved on meanwhile (`signature_wanted`).
     pub(super) fn settle_signature(
