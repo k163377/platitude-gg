@@ -157,7 +157,7 @@ Item {
     }
 
     // The row pressed and its card read, then the right-click on the file's row once the list has built it — the row's
-    // own door (`FileRowDelegate.askMenu`), which reads the file first.
+    // own door (`FileRowDelegate.askMenu`), which reads the file first — and the card once that read has landed.
     SampleTimer {
         id: fileTimer
         property int row: 0
@@ -183,14 +183,25 @@ Item {
                 fileTimer.step = 1
                 return
             }
-            const file = detailsPane.filesWalk.rowFor("", fileTimer.path)
+            if (fileTimer.step === 1) {
+                const file = detailsPane.filesWalk.rowFor("", fileTimer.path)
+                if (!Awaited.all("github_file", {
+                    "card": driver.cardSettled && detailsModel.shaHex === graphModel.oidAt(fileTimer.row),
+                    "file": file !== null
+                }))
+                    return
+                file.askMenu()
+                fileTimer.step = 2
+                return
+            }
+            // The menu's read is a git subprocess away (`RepoPage.openCommitFileMenu`): ended before it lands, the run
+            // is photographed and recorded over whichever of the diff's rows the scheduler let in. With no menu standing
+            // there is no card to wait for: the line below says so, and the run is judged on it.
             if (!Awaited.all("github_file", {
-                "card": driver.cardSettled && detailsModel.shaHex === graphModel.oidAt(fileTimer.row),
-                "file": file !== null
+                "diff": !commitFileMenu.showing || (page.diffPath === fileTimer.path && diffPane.diffSettled())
             }))
                 return
             fileTimer.stop()
-            file.askMenu()
             Harness.report("github_file_menu open=" + commitFileMenu.showing + " read=" + page.diffPath)
             acts.stand("github_file", commitFileMenu.menu, commitFileMenu.githubCard, fileTimer.others)
             driver.complete()
