@@ -565,17 +565,14 @@ impl Reader<'_> {
     }
 
     fn eat(&mut self, want: char) -> Result<(), String> {
-        self.space();
-        match self.peek() {
-            Some(c) if c == want => {
-                self.at += c.len_utf8();
-                Ok(())
-            }
-            other => Err(format!(
-                "qmlimportscanner's answer has {other:?} at byte {} where {want:?} goes",
-                self.at
-            )),
+        if self.closes(want) {
+            return Ok(());
         }
+        Err(format!(
+            "qmlimportscanner's answer has {:?} at byte {} where {want:?} goes",
+            self.peek(),
+            self.at
+        ))
     }
 
     /// Whether `close` comes next, which is then read.
