@@ -527,16 +527,10 @@ fn compare<'a>(
 pub(super) fn scanned(json: &str) -> Result<Vec<Import>, String> {
     let mut read = Reader { text: json, at: 0 };
     let mut found = Vec::new();
-    read.eat('[')?;
-    if !read.closes(']') {
-        loop {
-            found.push(read.import()?);
-            if read.closes(']') {
-                break;
-            }
-            read.eat(',')?;
-        }
-    }
+    read.within('[', ']', |read| {
+        found.push(read.import()?);
+        Ok(())
+    })?;
     read.space();
     if read.at < read.text.len() {
         return Err(format!(
@@ -585,27 +579,42 @@ impl Reader<'_> {
         closes
     }
 
+    /// `open`, then `item` read for each of a comma-separated run up to
+    /// `close`, which is read too.
+    fn within(
+        &mut self,
+        open: char,
+        close: char,
+        mut item: impl FnMut(&mut Self) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.eat(open)?;
+        if self.closes(close) {
+            return Ok(());
+        }
+        loop {
+            item(self)?;
+            if self.closes(close) {
+                return Ok(());
+            }
+            self.eat(',')?;
+        }
+    }
+
     fn import(&mut self) -> Result<Import, String> {
         let at = self.at;
         let (mut name, mut kind, mut path) = (None, None, None);
-        self.eat('{')?;
-        if !self.closes('}') {
-            loop {
-                let key = self.string()?;
-                self.eat(':')?;
-                let value = self.value()?;
-                match key.as_str() {
-                    "name" => name = value,
-                    "type" => kind = value,
-                    "path" => path = value,
-                    _ => {}
-                }
-                if self.closes('}') {
-                    break;
-                }
-                self.eat(',')?;
+        self.within('{', '}', |read| {
+            let key = read.string()?;
+            read.eat(':')?;
+            let value = read.value()?;
+            match key.as_str() {
+                "name" => name = value,
+                "type" => kind = value,
+                "path" => path = value,
+                _ => {}
             }
-        }
+            Ok(())
+        })?;
         match (name, kind) {
             (Some(name), Some(kind)) => Ok(Import { name, kind, path }),
             // A script a script imports (`.import "x.js"` in a `.js`) has
@@ -628,20 +637,13 @@ impl Reader<'_> {
             Some('"') => self.string().map(Some),
             Some(open @ ('[' | '{')) => {
                 let close = if open == '[' { ']' } else { '}' };
-                self.at += 1;
-                if !self.closes(close) {
-                    loop {
-                        if open == '{' {
-                            self.string()?;
-                            self.eat(':')?;
-                        }
-                        self.value()?;
-                        if self.closes(close) {
-                            break;
-                        }
-                        self.eat(',')?;
+                self.within(open, close, |read| {
+                    if open == '{' {
+                        read.string()?;
+                        read.eat(':')?;
                     }
-                }
+                    read.value().map(|_| ())
+                })?;
                 Ok(None)
             }
             Some(_) => {
