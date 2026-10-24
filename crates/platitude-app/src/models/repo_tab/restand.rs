@@ -56,12 +56,7 @@ impl RepoTab {
         self.last_write_error = String::new();
         self.last_write_stopped = false;
         self.write_watch = WriteWatch::default();
-        self.write_refused = false;
-        self.write_stale_diff = false;
-        self.write_moved_head = false;
-        self.write_reworded = false;
-        self.write_branch_op = false;
-        self.write_fetched = false;
+        self.clear_write_group();
         self.write_answers = Vec::new();
         self.commit_out = crate::ops::Press::default();
         self.commit_answer = -1;
@@ -84,10 +79,6 @@ impl RepoTab {
         self.worktree_move_from = String::new();
         self.worktree_move_to = String::new();
         self.worktree_move_standing = false;
-        self.write_report_kind = String::new();
-        self.write_report_remote = String::new();
-        self.write_report_name = String::new();
-        self.write_report_fact = String::new();
         self.move_ask_local = String::new();
         self.move_ask_start = String::new();
         self.move_ask_lost = 0;
@@ -103,5 +94,50 @@ impl RepoTab {
         // until the new session says where it is (`RepoTab::standing`).
         self.busy_count = 1;
         self.standing = true;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn standing_elsewhere_puts_the_whole_write_group_at_rest() {
+        let mut tab = RepoTab {
+            write_refused: true,
+            write_stale_diff: true,
+            write_moved_head: true,
+            write_reworded: true,
+            write_branch_op: true,
+            write_tag_op: true,
+            write_fetched: true,
+            write_report_kind: "update-rule".into(),
+            write_report_remote: "origin".into(),
+            write_report_name: "main".into(),
+            write_report_fact: "main".into(),
+            ..RepoTab::default()
+        };
+        tab.forget_the_worktree();
+        assert_eq!(
+            [
+                tab.write_refused,
+                tab.write_stale_diff,
+                tab.write_moved_head,
+                tab.write_reworded,
+                tab.write_branch_op,
+                tab.write_tag_op,
+                tab.write_fetched,
+            ],
+            [false; 7]
+        );
+        assert_eq!(
+            [
+                tab.write_report_kind.as_str(),
+                tab.write_report_remote.as_str(),
+                tab.write_report_name.as_str(),
+                tab.write_report_fact.as_str(),
+            ],
+            [""; 4]
+        );
     }
 }

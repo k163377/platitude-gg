@@ -536,7 +536,7 @@ impl RepoTab {
     }
 
     /// The group at rest — values that ask the page to do nothing.
-    fn clear_write_group(&mut self) {
+    pub(super) fn clear_write_group(&mut self) {
         self.write_refused = false;
         self.write_stale_diff = false;
         self.write_moved_head = false;
