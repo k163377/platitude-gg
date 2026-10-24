@@ -160,13 +160,15 @@ impl RepoTab {
         f: impl FnOnce(
             &Arc<platitude_core::session::RepoSession>,
         ) -> Option<platitude_core::OperationId>,
-    ) -> Option<platitude_core::OperationId> {
-        let asked = crate::hub::from_session(self.tab_id, f).flatten();
-        self.write_watch.asked(asked.map(|id| id.as_u64()));
+    ) -> Option<u64> {
+        let asked = crate::hub::from_session(self.tab_id, f)
+            .flatten()
+            .map(platitude_core::OperationId::as_u64);
+        self.write_watch.asked(asked);
         // From here, not from its start: a write queued behind another
         // starts only once that one has settled.
         if let Some(id) = asked
-            && self.unsettle(id.as_u64())
+            && self.unsettle(id)
         {
             self.settling_changed();
         }
@@ -335,8 +337,7 @@ impl RepoTab {
             reset_author: amend && reset_author,
         };
         let asked = self.ask_session(|s| s.commit(message.clone(), options));
-        self.commit_out
-            .asked(asked.map(platitude_core::OperationId::as_u64));
+        self.commit_out.asked(asked);
     }
 
     /// The add slot's mode word, turned into what core stands the new worktree
@@ -368,8 +369,7 @@ impl RepoTab {
             }
         };
         let asked = self.ask_session(|s| s.add_worktree(path.clone(), on.clone(), name.clone()));
-        self.worktree_out
-            .asked(asked.map(platitude_core::OperationId::as_u64));
+        self.worktree_out.asked(asked);
         self.worktree_answer_path = path;
     }
 
@@ -379,8 +379,7 @@ impl RepoTab {
     /// Says whether the queue took it: only then does an answer come.
     pub(super) fn worktree_move(&mut self, from: String, to: String, name: String) -> bool {
         let asked = self.ask_session(|s| s.move_worktree(from.clone(), to.clone(), name.clone()));
-        self.worktree_move_out
-            .asked(asked.map(platitude_core::OperationId::as_u64));
+        self.worktree_move_out.asked(asked);
         self.worktree_move_standing = platitude_core::session::same_path_key(&self.repo_path)
             == platitude_core::session::same_path_key(&from);
         self.worktree_move_from = from;

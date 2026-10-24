@@ -15,8 +15,7 @@ impl RepoTab {
     /// kept for its answer (`branch_delete_out`).
     pub(super) fn branch_delete(&mut self, name: String, force: bool) {
         let asked = self.ask_session(|s| s.delete_branch(name.clone(), force));
-        let accepted = asked.map(platitude_core::OperationId::as_u64);
-        if !force && self.arm_branch_delete(&name, accepted) {
+        if !force && self.arm_branch_delete(&name, asked) {
             // QML is told the last answer is gone, so a delete of a
             // re-made branch of the same name reads its own answer as
             // a change.
@@ -65,7 +64,7 @@ impl RepoTab {
         let asked = self.ask_session(|s| {
             s.delete_remote_branch(remote.clone(), branch.clone(), expect.clone())
         });
-        self.ref_push_asked(&row, asked.map(platitude_core::OperationId::as_u64));
+        self.ref_push_asked(&row, asked);
         self.took_away(&[(Row::Remote, &row)], asked);
     }
 
@@ -97,7 +96,7 @@ impl RepoTab {
                 expect.clone(),
             )
         });
-        self.ref_push_asked(&row, asked.map(platitude_core::OperationId::as_u64));
+        self.ref_push_asked(&row, asked);
         self.took_away(&[(Row::Branch, &branch), (Row::Remote, &row)], asked);
     }
 
@@ -124,10 +123,7 @@ impl RepoTab {
     ) {
         let asked =
             self.ask_session(|s| s.delete_remote_tag(remote.clone(), tag.clone(), expect.clone()));
-        self.ref_push_asked(
-            &format!("{remote}/{tag}"),
-            asked.map(platitude_core::OperationId::as_u64),
-        );
+        self.ref_push_asked(&format!("{remote}/{tag}"), asked);
         let rows: &[(Row, &str)] = if row_goes { &[(Row::Tag, &tag)] } else { &[] };
         self.took_away(rows, asked);
     }
@@ -138,10 +134,7 @@ impl RepoTab {
     pub(super) fn tag_delete_everywhere(&mut self, tag: String, remote: String, expect: String) {
         let asked = self
             .ask_session(|s| s.delete_tag_everywhere(tag.clone(), remote.clone(), expect.clone()));
-        self.ref_push_asked(
-            &format!("{remote}/{tag}"),
-            asked.map(platitude_core::OperationId::as_u64),
-        );
+        self.ref_push_asked(&format!("{remote}/{tag}"), asked);
         self.took_away(&[(Row::Tag, &tag)], asked);
     }
 
@@ -200,8 +193,7 @@ impl RepoTab {
 
     /// Takes a press's rows off the screen under its write's id, and
     /// notifies so they leave at the press.
-    fn took_away(&mut self, rows: &[(Row, &str)], accepted: Option<platitude_core::OperationId>) {
-        let accepted = accepted.map(platitude_core::OperationId::as_u64);
+    fn took_away(&mut self, rows: &[(Row, &str)], accepted: Option<u64>) {
         if self.stand_in(|gone| gone.asked(rows, accepted)) {
             self.changed();
         }

@@ -19,8 +19,7 @@ impl RepoTab {
             staged_only: false,
         };
         let asked = self.ask_session(|s| s.stash_push(message.clone(), options, Vec::new()));
-        self.stash_out
-            .asked(asked.map(platitude_core::OperationId::as_u64));
+        self.stash_out.asked(asked);
     }
 
     /// The same over the gathered files only — it can empty the tree too,
@@ -36,8 +35,7 @@ impl RepoTab {
             staged_only: false,
         };
         let asked = self.ask_session(|s| s.stash_push(message.clone(), options, paths.clone()));
-        self.stash_out
-            .asked(asked.map(platitude_core::OperationId::as_u64));
+        self.stash_out.asked(asked);
     }
 
     pub(super) fn look_up_remote_branch(&mut self, remote: String, branch: String, local: String) {
@@ -68,8 +66,7 @@ impl RepoTab {
         let force = Self::push_force(&force, &lease_expect);
         let asked =
             self.ask_session(|s| s.push_named(branch.clone(), fallback.clone(), force.clone()));
-        self.push_out
-            .asked(asked.map(platitude_core::OperationId::as_u64), branch);
+        self.push_out.asked(asked, branch);
     }
 
     /// The commit asked about is written down first, so an answer for a

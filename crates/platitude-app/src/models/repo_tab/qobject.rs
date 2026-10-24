@@ -952,10 +952,7 @@ impl RepoTab {
         });
         // Keyed like every outgoing tag write (`ops_delete::remote_tag_delete`),
         // on the name that goes, so the page reports this press's answer.
-        self.ref_push_asked(
-            &format!("{remote}/{from}"),
-            asked.map(platitude_core::OperationId::as_u64),
-        );
+        self.ref_push_asked(&format!("{remote}/{from}"), asked);
     }
 
     /// The remote's copy of a tag. `rowGoes` is whether the sidebar's row
@@ -1019,7 +1016,7 @@ impl RepoTab {
     #[qslot]
     fn pop_stash(&mut self, selector: String) -> i32 {
         let asked = self.ask_session(|s| s.stash_pop(selector.clone()));
-        asked.map_or(0, |id| bridge_id(id.as_u64()))
+        asked.map_or(0, bridge_id)
     }
 
     /// `git stash apply` on the given selector (keeps the stash). No id
@@ -1163,8 +1160,7 @@ impl RepoTab {
         let fallback = self.default_remote.clone();
         let force = Self::push_force(&force, &lease_expect);
         let asked = self.ask_session(|s| s.push_current(fallback.clone(), force.clone()));
-        self.push_out
-            .asked(asked.map(platitude_core::OperationId::as_u64), branch);
+        self.push_out.asked(asked, branch);
     }
 
     /// The first push of `branch` — the one the question named, checked
@@ -1187,8 +1183,7 @@ impl RepoTab {
                 expect.clone(),
             )
         });
-        self.push_out
-            .asked(asked.map(platitude_core::OperationId::as_u64), branch);
+        self.push_out.asked(asked, branch);
     }
 
     /// `git remote add <name> <url>`. Contacts nothing — a URL that goes
@@ -1277,7 +1272,7 @@ impl RepoTab {
         let asked = self.ask_session(|s| {
             s.point_upstream_and_push(branch.clone(), remote.clone(), remote_branch.clone())
         });
-        self.ref_push_asked(&row, asked.map(platitude_core::OperationId::as_u64));
+        self.ref_push_asked(&row, asked);
     }
 
     /// Replaces a branch on a remote the way `replaceRemoteTag` replaces a
@@ -1288,7 +1283,7 @@ impl RepoTab {
         let asked = self.ask_session(|s| {
             s.replace_remote_branch(remote.clone(), from.clone(), to.clone(), expect.clone())
         });
-        self.ref_push_asked(&row, asked.map(platitude_core::OperationId::as_u64));
+        self.ref_push_asked(&row, asked);
     }
 
     /// `git push <remote> --delete <branch>` (destructive), leased to
