@@ -34,7 +34,7 @@ const NETWORK: &str = "a network plugin: none goes in (実装計画 §11.2)";
 
 /// The plugin directories macdeployqt fills that stay out, and why — each
 /// reason what the thing is, then why the bundle does without it.
-pub(super) const QT_PLUGINS_LEFT_OUT: [(&str, &str); 5] = [
+const QT_PLUGINS_LEFT_OUT: [(&str, &str); 5] = [
     (
         "iconengines",
         "QIcon's SVG engine: no QIcon is made from an SVG — the marks are QML images, which \
@@ -94,7 +94,7 @@ const DRAWN_DIALOGS: &str = "the dialogs Qt draws itself, for where the platform
 
 /// What qmlimportscanner reaches from `ui/` beside [`QML_MODULES`], and why
 /// each stays out, as [`QT_PLUGINS_LEFT_OUT`] says it.
-pub(super) const QML_LEFT_OUT: [(&str, &str); 19] = [
+const QML_LEFT_OUT: [(&str, &str); 19] = [
     ("QML", "the engine's own types: no qmldir is read for them"),
     (
         "Qt.labs.folderlistmodel",
@@ -131,7 +131,7 @@ pub(super) const QML_LEFT_OUT: [(&str, &str); 19] = [
 /// The modules under the directories of carried ones that nothing in `ui/`
 /// reaches — what a copy of the whole directory brings — and why each
 /// stays out, as [`QT_PLUGINS_LEFT_OUT`] says it.
-pub(super) const QML_UNREACHED: [(&str, &str); 9] = [
+const QML_UNREACHED: [(&str, &str); 9] = [
     (
         "QtQml.DesignSupport",
         "Qt Design Studio's support: nothing in ui/ reaches it",
@@ -256,7 +256,7 @@ pub(super) fn goes(name: &str) -> Goes {
 }
 
 /// The plugin a qmldir names: `[optional] plugin <name> [<path>]`.
-pub(super) fn plugin_of(qmldir: &str) -> Option<&str> {
+fn plugin_of(qmldir: &str) -> Option<&str> {
     qmldir.lines().find_map(|line| {
         let line = line.trim();
         let rest = line.strip_prefix("optional ").unwrap_or(line);
@@ -272,11 +272,11 @@ fn plugin_file(plugin: &str) -> String {
 /// One import qmlimportscanner names.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct Import {
-    pub(super) name: String,
+    name: String,
     /// `module`; a path import is a `directory` or a `javascript`.
-    pub(super) kind: String,
+    kind: String,
     /// Where it found the module: none for one no import path holds.
-    pub(super) path: Option<String>,
+    path: Option<String>,
 }
 
 /// What the app's QML imports as it is written (qmlimportscanner with no
@@ -347,15 +347,15 @@ fn left_out<'a>(list: &[(&str, &'a str)], name: &str) -> Option<&'a str> {
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(super) struct Carried {
     /// The entries of `Contents/Frameworks`.
-    pub(super) frameworks: Vec<String>,
+    frameworks: Vec<String>,
     /// The files under `Contents/PlugIns`, as `<directory>/<file>`, but
     /// for the modules' plugins in `quick`.
-    pub(super) plugins: Vec<String>,
+    plugins: Vec<String>,
     /// The files of `Contents/PlugIns/quick`.
-    pub(super) quick: Vec<String>,
+    quick: Vec<String>,
     /// Each directory under `Contents/Resources/qml` that holds a qmldir,
     /// as its module's name, with the plugin the qmldir names.
-    pub(super) modules: Vec<(String, Option<String>)>,
+    modules: Vec<(String, Option<String>)>,
 }
 
 /// Reads what `app` carries of Qt off its directories.
