@@ -118,35 +118,7 @@ Item {
                               + " can_move=" + commitMenuState.menuCanMoveBranch)
         } else if (act === "drop-commit" || act === "drop-commit-go" || act === "drop-stops"
                    || act === "drop-last-commit") {
-            // Opened first where a replay follows, for the fold's reason. The bare menu stays where the page opened:
-            // nothing after it moves the reader, and a read started here would race the picture.
-            const dropOid = driver.autoActOid(arg)
-            if (act !== "drop-commit")
-                acts.readCommit(dropOid)
-            page.openRowMenu(dropOid)
-            Harness.report("drop_row " + dropCommitItem.code
-                              + " " + dropCommitItem.text
-                              + " oid=" + commitMenuState.menuOid.substring(0, 8)
-                              + " hold=" + (dropCommitItem.holdPresses > 0)
-                              + " reached=" + worktree.headReachedElsewhere)
-            if (act !== "drop-commit") {
-                // "drop-stops" stops with the work still in the stash it took (`write_stopped stashes=`).
-                if (act === "drop-stops")
-                    opStoppedTimer.start()
-                if (dropCommitItem.holdPresses > 0) {
-                    dropCommitItem.completeHold()
-                } else {
-                    // The item's own click takes the menu down before the write (`CommitRowMenu`
-                    // `dropCommitItem.onHeld`); fired past it, whether the menu goes before the census walk is the
-                    // scheduler's. So it goes here, and completion waits until it is gone (`AutoActDriver.menuGoing`).
-                    commitMenu.dismiss()
-                    driver.menuGoing = commitMenu
-                    page.dropCommit(commitMenuState.menuOid)
-                }
-                // Nowhere to land: the refusal's bar is the shot.
-                if (act === "drop-last-commit")
-                    driver.barrierNotice.start()
-            }
+            dropTimer.begin(act, driver.autoActOid(arg))
         } else if (act === "wip-landing-stopped") {
             // The stop's worktree landing, read in a pass that carries every other worktree's row and none of
             // this window's. The run is started into that arrangement (`xtask::verify::child`, `harness::faults`)
@@ -239,6 +211,63 @@ Item {
         const row = graphModel.rowOf(oidHex)
         if (row >= 0)
             page.activateRow(oidHex, row)
+    }
+
+    // The drop row is a count of presses or a click by whether anything else holds the branch tip, read once as the
+    // menu opens (`CommitMenuState.standRow`). Before that answer is in, its `false` is no answer, and which of the two
+    // controls a run pressed would be the scheduler's — so the menu goes up once it is in (`WorktreeModel`'s
+    // `headReachKnown`) and nothing is out that would raise the menu greyed. The presses come past the dispatch, so the
+    // write barrier starts behind them: armed earlier, a write asked meanwhile would open it.
+    SampleTimer {
+        id: dropTimer
+        property string act: ""
+        property string oid: ""
+        function begin(act, oid) {
+            dropTimer.act = act
+            dropTimer.oid = oid
+            dropTimer.start()
+        }
+        onTriggered: {
+            if (!Awaited.all("drop_row", { "reach": worktree.headReachKnown, "live": driver.menusLive() }))
+                return
+            dropTimer.stop()
+            const act = dropTimer.act
+            // Opened first where a replay follows, for the fold's reason. The bare menu stays where the page opened:
+            // nothing after it moves the reader, and a read started here would race the picture.
+            if (act !== "drop-commit")
+                acts.readCommit(dropTimer.oid)
+            page.openRowMenu(dropTimer.oid)
+            Harness.report("drop_row " + dropCommitItem.code
+                              + " " + dropCommitItem.text
+                              + " oid=" + commitMenuState.menuOid.substring(0, 8)
+                              + " hold=" + (dropCommitItem.holdPresses > 0)
+                              + " reached=" + worktree.headReachedElsewhere)
+            if (act === "drop-commit") {
+                driver.complete()
+                return
+            }
+            // "drop-stops" stops with the work still in the stash it took (`write_stopped stashes=`).
+            if (act === "drop-stops")
+                opStoppedTimer.start()
+            if (dropCommitItem.holdPresses > 0) {
+                driver.holdToEnd(dropCommitItem)
+            } else {
+                // The item's own click takes the menu down before the write (`CommitRowMenu`
+                // `dropCommitItem.onHeld`); fired past it, whether the menu goes before the census walk is the
+                // scheduler's. So it goes here, and completion waits until it is gone (`AutoActDriver.menuGoing`).
+                commitMenu.dismiss()
+                driver.menuGoing = commitMenu
+                driver.pressWrite("drop", () => {
+                    page.dropCommit(commitMenuState.menuOid)
+                    return true
+                })
+            }
+            if (act === "drop-commit-go")
+                writeBarrier.start()
+            // Nowhere to land: the refusal's bar is the shot.
+            if (act === "drop-last-commit")
+                driver.barrierNotice.start()
+        }
     }
 
     // `menu-wait` / `menu-wait after`, over `--preset slowhook`'s sleeping pre-commit hook: the graph row's menu raised

@@ -93,6 +93,9 @@ QtObject {
                 "merge-commit",
                 // Framed with the commit still out (or once it has landed), the menu raised under it.
                 "menu-wait",
+                // The menu goes up once the answer that dresses its drop row is in (`AutoActHistoryVerbs.dropTimer`):
+                // the bare one ends on it, the pressing one behind the write barrier it starts after the press.
+                "drop-commit", "drop-commit-go",
                 "code-send", "code-grow", "code-shrink", "code-swap",
                 "line-back", "diff-follow", "line-run",
                 "stage-all", "unstage-all", "resolve-all",
