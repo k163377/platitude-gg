@@ -1182,12 +1182,7 @@ impl RepoTab {
     /// repository does not have.
     #[qslot]
     fn remote_url(&self, name: String) -> String {
-        self.remote_names
-            .iter()
-            .position(|r| *r == name)
-            .and_then(|at| self.remote_urls.get(at))
-            .cloned()
-            .unwrap_or_default()
+        self.remote_url_of(&name)
     }
 
     /// Marks a remote as origin — `remote.pushDefault` and

@@ -32,6 +32,15 @@ impl RepoTab {
         best.unwrap_or(remote_ref.as_str()).to_string()
     }
 
+    pub(super) fn remote_url_of(&self, name: &str) -> String {
+        self.remote_names
+            .iter()
+            .position(|r| r == name)
+            .and_then(|at| self.remote_urls.get(at))
+            .cloned()
+            .unwrap_or_default()
+    }
+
     pub(super) fn attach_feed(&mut self, tab_id: i32) {
         self.tab_id = tab_id;
         self.state = "loading".into();
