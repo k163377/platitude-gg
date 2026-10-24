@@ -487,13 +487,7 @@ pub(crate) fn read(dir: &str) -> Result<Line, String> {
         };
         let seat = roster_letter(&tree.path)
             .map(str::to_string)
-            .unwrap_or_else(|| {
-                tree.path
-                    .rsplit('/')
-                    .next()
-                    .unwrap_or(&tree.path)
-                    .to_string()
-            });
+            .unwrap_or_else(|| tree.path.rsplit('/').next().unwrap_or_default().to_string());
         let me = entry.identity(&session);
         // A seat nobody claims contradicts nothing; another conversation's
         // claim says the session that typed /land there is gone from it.
