@@ -459,10 +459,14 @@ pub(super) const TABLE: &[Verb] = &[
                 Arg::Starts("tag:"),
                 "worktree_add_menu card=true here=true add=false folder= blocked=false",
             ),
+            // The folder a remote's branch takes. Its 19 letters are about
+            // `labelColW` wide in the code face — whole in the desk's
+            // Cascadia Mono, cut in macOS's Menlo — so whether it is cut is the
+            // fonts' to say: the line stops before the tip, and the plain row
+            // judges a whole name.
             (
                 Arg::Has("remote-only"),
-                "worktree_add_menu card=true here=true add=true folder=feature-remote-only blocked=false tip=false \
-                 aside=false mark= cut=false",
+                "worktree_add_menu card=true here=true add=true folder=feature-remote-only blocked=false",
             ),
         ],
         plain: "worktree_add_menu card=true here=true add=true folder=feature-topic-a blocked=false tip=false \
