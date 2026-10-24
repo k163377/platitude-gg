@@ -159,7 +159,7 @@ impl RepoTab {
                     tip,
                     theirs,
                 } => {
-                    self.remote_branch_asked = Optional::some(super::RemoteBranch {
+                    self.remote_branch_asked = Optional::some(super::RemoteBranchAsked {
                         remote,
                         branch,
                         local,

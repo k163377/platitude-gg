@@ -14,13 +14,13 @@ use super::qml_register;
 /// The name a remote was asked about (`checkRemoteBranch`), and the branch
 /// here whose history the answer weighed it against.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteBranch {
+pub struct RemoteBranchAsked {
     pub remote: String,
     pub branch: String,
     pub local: String,
 }
 
-impl Record for RemoteBranch {
+impl Record for RemoteBranchAsked {
     fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
         Fields::new()
             .put("remote", &self.remote)
@@ -126,7 +126,7 @@ pub struct RepoTab {
     remote_names: Vec<String>,
     /// The name the last answer to `checkRemoteBranch` was about; none
     /// while a read is out. Readers check it — the box may have moved on.
-    remote_branch_asked: Optional<RemoteBranch>,
+    remote_branch_asked: Optional<RemoteBranchAsked>,
     /// Moves with every answer and every question, so a binding on it
     /// re-reads `remoteBranchAsked()`.
     remote_branch_revision: i32,

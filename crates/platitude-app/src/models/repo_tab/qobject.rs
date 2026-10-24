@@ -1205,7 +1205,7 @@ impl RepoTab {
     /// question goes out until its answer lands. Read on
     /// `remoteBranchRevision`.
     #[qslot]
-    fn remote_branch_asked(&self) -> Optional<RemoteBranch> {
+    fn remote_branch_asked(&self) -> Optional<RemoteBranchAsked> {
         self.remote_branch_asked.clone()
     }
 
