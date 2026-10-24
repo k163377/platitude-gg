@@ -1,7 +1,7 @@
 //! What a push that did not go was, told apart for the screen to say in
-//! its own words (デザイン規約 §答えの要らない報せ): the `pre-push` hook here,
-//! and the far side's own rules and settings — each set up for real on a
-//! bare repository over `file://`.
+//! its own words (デザイン規約 §答えの要らない報せ): a remote that moved on,
+//! the `pre-push` hook here, and the far side's own rules and settings —
+//! each set up for real on a bare repository over `file://`.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -11,11 +11,13 @@ use std::sync::Arc;
 use crate::support::TestRepo;
 use crate::support::exec::{Said, env, logged, observed_env};
 use crate::support::remote::{moved_over_there, origin_and_clone};
-const NET: std::time::Duration = remote::DEFAULT_NETWORK_TIMEOUT;
 use platitude_core::GitError;
 use platitude_core::process::{CommandEnd, Kept};
 use platitude_core::remote::{self, PushForce, PushSpec};
 use platitude_core::report::{RemoteWhy, ReportKind};
+
+/// A `file://` remote answers instantly; the budget just has to exist.
+const NET: std::time::Duration = remote::DEFAULT_NETWORK_TIMEOUT;
 
 /// `main` to `remote`'s `main`, forced or not.
 async fn push_main(work: &TestRepo, remote: &str, force: PushForce) -> Result<(), GitError> {
@@ -238,18 +240,10 @@ async fn naming_the_hook_runs_no_git_besides_the_push() {
 #[tokio::test]
 async fn a_non_fast_forward_push_is_refused_until_forced() {
     let (mut bare, mut work) = origin_and_clone();
-    let (exec, cancel) = env();
     moved_over_there(&bare, "main", "theirs.txt", "their work");
 
     work.git(&["commit", "--amend", "-m", "rewritten root"]);
-    let spec = PushSpec {
-        remote: "origin".into(),
-        local: "main".into(),
-        remote_branch: "main".into(),
-        set_upstream: false,
-        force: PushForce::None,
-    };
-    let err = remote::push(&exec, &work.path, &spec, NET, &cancel)
+    let err = push_main(&work, "origin", PushForce::None)
         .await
         .expect_err("non-fast-forward");
     assert!(
@@ -263,27 +257,20 @@ async fn a_non_fast_forward_push_is_refused_until_forced() {
 
     // A stale lease is outdated too: this window is looking at an older remote.
     let stale = work.git(&["rev-parse", "origin/main"]);
-    let leased = PushSpec {
-        force: PushForce::WithLease {
-            expect: Some(stale),
-        },
-        ..spec.clone()
+    let leased = PushForce::WithLease {
+        expect: Some(stale),
     };
-    let err = remote::push(&exec, &work.path, &leased, NET, &cancel)
+    let err = push_main(&work, "origin", leased)
         .await
         .expect_err("stale lease");
     assert_eq!(
-        err.report().map(|report| report.kind),
+        kind_of(&err),
         Some(ReportKind::Moved),
         "a lease the remote left says the branch moved, not that it is ahead: {err}"
     );
     assert!(err.is_outdated(), "and is caught up with all the same");
 
-    let forced = PushSpec {
-        force: PushForce::Force,
-        ..spec
-    };
-    remote::push(&exec, &work.path, &forced, NET, &cancel)
+    push_main(&work, "origin", PushForce::Force)
         .await
         .expect("forced push");
     assert_eq!(
@@ -348,25 +335,12 @@ async fn a_branch_the_far_side_keeps_comes_back_as_a_refusal_with_its_words() {
 #[tokio::test]
 async fn a_push_the_far_side_turns_down_is_not_one_a_fetch_would_answer() {
     let (bare, mut work) = origin_and_clone();
-    let (exec, cancel) = env();
     decline_every_push(&bare, "Changes must be made through a pull request.");
     work.commit_file("b.txt", "ours\n", "work of our own");
 
-    let err = remote::push(
-        &exec,
-        &work.path,
-        &PushSpec {
-            remote: "origin".into(),
-            local: "main".into(),
-            remote_branch: "main".into(),
-            set_upstream: false,
-            force: PushForce::None,
-        },
-        NET,
-        &cancel,
-    )
-    .await
-    .expect_err("the hook declines");
+    let err = push_main(&work, "origin", PushForce::None)
+        .await
+        .expect_err("the hook declines");
     let Some(report) = err.report() else {
         panic!("a fast-forward the far side declined is neither outdated nor ours: {err}");
     };
@@ -489,25 +463,12 @@ async fn a_hook_a_neighbour_holds_open_still_says_why_the_push_was_refused() {
 #[tokio::test]
 async fn a_push_that_is_only_out_of_date_reports_gits_own_advice() {
     let (bare, mut work) = origin_and_clone();
-    let (exec, cancel) = env();
     moved_over_there(&bare, "main", "theirs.txt", "pushed while you slept");
     work.commit_file("ours.txt", "ours\n", "work of our own");
 
-    let err = remote::push(
-        &exec,
-        &work.path,
-        &PushSpec {
-            remote: "origin".into(),
-            local: "main".into(),
-            remote_branch: "main".into(),
-            set_upstream: false,
-            force: PushForce::None,
-        },
-        NET,
-        &cancel,
-    )
-    .await
-    .expect_err("the remote holds what we have not got");
+    let err = push_main(&work, "origin", PushForce::None)
+        .await
+        .expect_err("the remote holds what we have not got");
     let Some(report) = err.report() else {
         panic!("being out of date is a report of its own: {err}");
     };

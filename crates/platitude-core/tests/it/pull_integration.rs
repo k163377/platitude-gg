@@ -8,9 +8,12 @@
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
-use crate::support::exec::env;
+use std::sync::Arc;
+
+use crate::support::exec::{Said, env, observed_env};
 use crate::support::remote::{a_branch_over_there, moved_over_there, origin_and_clone};
 use platitude_core::GitError;
+use platitude_core::process::{CommandEnd, Kept};
 use platitude_core::remote;
 
 /// A `file://` remote answers instantly; the budget just has to exist.
@@ -24,16 +27,15 @@ async fn a_pull_refused_over_work_in_the_way_keeps_gits_words_in_the_log() {
     work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
     moved_over_there(&bare, "main", "a.txt", "their line");
     work.write_file("a.txt", "mine\n");
-    let said = std::sync::Arc::new(crate::support::exec::Said::default());
-    let (exec, cancel) =
-        crate::support::exec::observed_env(said.clone(), platitude_core::process::Kept::Asked);
+    let said = Arc::new(Said::default());
+    let (exec, cancel) = observed_env(said.clone(), Kept::Asked);
 
     let err = remote::pull(&exec, &work.path, NET, &cancel)
         .await
         .expect_err("the work in the way is refused");
     assert!(matches!(err, GitError::Failed { code: 1, .. }), "{err}");
     let row = said
-        .message_of(platitude_core::process::CommandEnd::Exited(1))
+        .message_of(CommandEnd::Exited(1))
         .expect("the pull's row is a failure, not an answer");
     assert!(
         row.contains("a.txt") && row.contains("would be overwritten"),
