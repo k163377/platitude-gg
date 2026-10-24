@@ -88,10 +88,7 @@ impl Entry {
 /// conversation's entries under earlier session ids go: this message is
 /// theirs too.
 pub(crate) fn enter(permit: &Path, cwd: &str, host: Option<&str>, at: u64) {
-    let Some(permits) = permit.parent() else {
-        return;
-    };
-    let Ok(_held) = locked(permits) else {
+    let Some((permits, _held)) = locked_beside(permit) else {
         return;
     };
     store(
@@ -112,10 +109,7 @@ pub(crate) fn enter(permit: &Path, cwd: &str, host: Option<&str>, at: u64) {
 /// anything else: the permit closed, and the place with it — under every
 /// session id the conversation had.
 pub(crate) fn clear(permit: &Path, host: Option<&str>) {
-    let Some(permits) = permit.parent() else {
-        return;
-    };
-    let Ok(_held) = locked(permits) else {
+    let Some((permits, _held)) = locked_beside(permit) else {
         return;
     };
     let _gone = std::fs::remove_file(beside(permit));
@@ -161,6 +155,14 @@ fn locked(permits: &Path) -> Result<Locked, String> {
     Ok(Locked::new(file))
 }
 
+/// The directory `path` stands in, and that directory's lock, held; None
+/// where either cannot be had.
+fn locked_beside(path: &Path) -> Option<(&Path, Locked)> {
+    let permits = path.parent()?;
+    let held = locked(permits).ok()?;
+    Some((permits, held))
+}
+
 /// The session leaving the line for `why`: a landing that stopped,
 /// nothing to land, a seat released, a question for the user. Says
 /// whether the entry stood in the line until now.
@@ -168,18 +170,12 @@ pub(crate) fn leave(dir: &str, session: &str, why: &str) -> bool {
     let Some(path) = file(dir, session) else {
         return false;
     };
-    let Some(permits) = path.parent() else {
+    let Some((_, _held)) = locked_beside(&path) else {
         return false;
     };
-    let Ok(_held) = locked(permits) else {
+    let Some(mut entry) = load(&path).filter(|entry| entry.left.is_empty()) else {
         return false;
     };
-    let Some(mut entry) = load(&path) else {
-        return false;
-    };
-    if !entry.left.is_empty() {
-        return false;
-    }
     entry.left = one_line(why);
     entry.left_at = now();
     store(&path, &entry);
