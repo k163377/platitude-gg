@@ -11,7 +11,6 @@
 //! (dating the head, letting it go), holds the directory's lock: an entry
 //! is load-modify-store, and two processes at it lose one's change.
 
-use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -142,17 +141,7 @@ fn beside(permit: &Path) -> PathBuf {
 fn locked(permits: &Path) -> Result<Locked, String> {
     std::fs::create_dir_all(permits)
         .map_err(|e| format!("could not make {}: {e}", permits.display()))?;
-    let path = permits.join(LOCK);
-    let file = File::options()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(&path)
-        .map_err(|e| format!("could not open {}: {e}", path.display()))?;
-    file.lock()
-        .map_err(|e| format!("could not lock {}: {e}", path.display()))?;
-    Ok(Locked::new(file))
+    crate::locks::hold(&permits.join(LOCK))
 }
 
 /// The directory `path` stands in, and that directory's lock, held; None

@@ -3,6 +3,7 @@
 //! (.claude/rules-refs/core.md「lock は unlock で離す」).
 
 use std::fs::File;
+use std::path::Path;
 
 /// A file whose lock this process holds, released when this is dropped.
 ///
@@ -32,4 +33,24 @@ impl Drop for Locked {
         // A lock that will not come off is released by the close after.
         let _ = self.0.unlock();
     }
+}
+
+/// The lock file at `path`, opened to be locked: made where it is not,
+/// never truncated.
+pub(crate) fn open(path: &Path) -> Result<File, String> {
+    File::options()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path)
+        .map_err(|e| format!("could not open the lock at {}: {e}", path.display()))
+}
+
+/// The lock at `path`, waited for and held.
+pub(crate) fn hold(path: &Path) -> Result<Locked, String> {
+    let file = open(path)?;
+    file.lock()
+        .map_err(|e| format!("could not lock {}: {e}", path.display()))?;
+    Ok(Locked::new(file))
 }

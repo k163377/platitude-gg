@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use super::queue::{self, Rank, Ticket};
 use super::unit::{Admitted, Ask, COMPILE, HELD, demand};
-use crate::locks::Locked;
+use crate::locks::{self, Locked};
 use crate::wait::{Budget, LOOK_AGAIN, TRY_AGAIN, Wait};
 
 /// The ledger, beside `.git`.
@@ -279,7 +279,7 @@ impl Pool {
         let mut seq = self.next_seq()?;
         loop {
             let lock_path = self.dir.join(format!("t-{seq}.{LOCK}"));
-            let lock = open_lock(&lock_path)?;
+            let lock = locks::open(&lock_path)?;
             match lock.try_lock() {
                 Ok(()) => {
                     let held = Locked::new(lock);
@@ -570,7 +570,7 @@ pub(crate) fn probe(ticket: &Path) -> Option<(u32, bool, bool)> {
 /// pool (`Admitted::started`).
 pub(super) fn decide_in(dir: &Path) -> Result<Locked, String> {
     let path = dir.join(ADMIT);
-    let lock = open_lock(&path)?;
+    let lock = locks::open(&path)?;
     // Held for microseconds, so the tries come close together; the
     // ceiling is only a backstop (the OS releases a killed holder's lock).
     let mut tries = Wait::new("the ledger's lock", Budget::whole(QUIET_CEILING), TRY_AGAIN);
@@ -589,16 +589,6 @@ pub(super) fn decide_in(dir: &Path) -> Result<Locked, String> {
             .look_again("the ledger")
             .map_err(|expired| format!("{expired} — the ledger at {} is wedged", dir.display()))?;
     }
-}
-
-fn open_lock(path: &Path) -> Result<File, String> {
-    File::options()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(path)
-        .map_err(|e| format!("could not open the lock at {}: {e}", path.display()))
 }
 
 pub(super) fn now() -> u64 {

@@ -38,7 +38,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use crate::command::{self, Permission, Where};
-use crate::locks::Locked;
+use crate::locks::{self, Locked};
 use crate::note::{field, now_secs};
 use crate::subprocess::common_git_dir;
 use crate::wait::{Budget, LOOK_AGAIN, TRY_AGAIN, Wait};
@@ -331,7 +331,7 @@ fn common_dir(tree: &Path) -> Option<PathBuf> {
 
 fn hold_in(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Hold, String> {
     let note = common.join(HOLD);
-    let lock = open_lock(&lock_of(&note))?;
+    let lock = locks::open(&lock_of(&note))?;
     // Tried for a sweep's span ([`held`]): a lock held past it is a
     // measurement's.
     let mut tries = Wait::new(what, Budget::whole(SWEEP), TRY_AGAIN);
@@ -471,7 +471,7 @@ fn lock_beside_polled(note: &Path, polled: &dyn Fn()) -> Result<Locked, String> 
         TRY_AGAIN,
     );
     loop {
-        let lock = open_lock(&path)?;
+        let lock = locks::open(&path)?;
         match lock.try_lock() {
             Ok(()) => {
                 let lock = Locked::new(lock);
@@ -540,7 +540,7 @@ fn held(note: &Path, what: &str) -> Result<Option<Note>, String> {
     if !note.exists() {
         return Ok(None);
     }
-    let lock = open_lock(&lock_of(note))?;
+    let lock = locks::open(&lock_of(note))?;
     match lock.try_lock() {
         Ok(()) => {
             // Unlocked, not just closed, at the end of this arm, so
@@ -623,16 +623,6 @@ fn clear(path: &Path) {
     }
 }
 
-fn open_lock(path: &Path) -> Result<File, String> {
-    File::options()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(path)
-        .map_err(|e| format!("could not open the lock at {}: {e}", path.display()))
-}
-
 fn lock_of(note: &Path) -> PathBuf {
     note.with_extension(LOCK)
 }
@@ -709,7 +699,7 @@ mod tests {
 
     use super::{
         BUILT, BUSY, HOLD, Note, STAMP_FOR, busy_in, hold_in, live_notes, lock_beside_polled,
-        lock_of, open_lock, stamps_ended_since,
+        lock_of, locks, stamps_ended_since,
     };
     use crate::yard::Yard;
 
@@ -800,7 +790,7 @@ mod tests {
         let dir = common("one-hold");
         let hold = hold_in(&dir, "perf", &|| {}).expect("the hold");
         // A waiter that opened the lock while the hold still stood.
-        let waiter = open_lock(&lock_of(&dir.join(HOLD))).expect("the lock beside the hold");
+        let waiter = locks::open(&lock_of(&dir.join(HOLD))).expect("the lock beside the hold");
         drop(hold);
         waiter
             .try_lock()
@@ -821,7 +811,7 @@ mod tests {
 
         let dir = common("carried");
         let hold = hold_in(&dir, "perf", &|| {}).expect("the hold");
-        let waiter = open_lock(&lock_of(&dir.join(HOLD))).expect("the lock beside the hold");
+        let waiter = locks::open(&lock_of(&dir.join(HOLD))).expect("the lock beside the hold");
         // Handed the description as its stdin, the child holds a copy of
         // it for as long as it lives — past the drop below.
         let mut carrier = Command::new("sleep")
@@ -880,7 +870,7 @@ mod tests {
         std::fs::create_dir_all(dir.join(BUSY)).expect("the busy directory");
         let note = dir.join(BUSY).join("1-0");
         std::fs::write(&note, "half a note").expect("a note mid-write");
-        let held = open_lock(&lock_of(&note)).expect("the lock beside it");
+        let held = locks::open(&lock_of(&note)).expect("the lock beside it");
         held.try_lock().expect("held, as its announcer holds it");
         let under_way = live_notes(&dir.join(BUSY));
         assert_eq!(under_way.len(), 1, "the locked announcement was dropped");
@@ -902,7 +892,7 @@ mod tests {
         let dir = common("announcing");
         std::fs::create_dir_all(dir.join(BUSY)).expect("the busy directory");
         let lock = dir.join(BUSY).join("1-0.lock");
-        let held = open_lock(&lock).expect("the lock an announcer takes before its note");
+        let held = locks::open(&lock).expect("the lock an announcer takes before its note");
         held.try_lock().expect("held, as its announcer holds it");
         let under_way = live_notes(&dir.join(BUSY));
         assert_eq!(under_way.len(), 1, "the announcement was not counted");
@@ -929,7 +919,7 @@ mod tests {
         let dir = common("swept-name");
         std::fs::create_dir_all(dir.join(BUSY)).expect("the busy directory");
         let note = dir.join(BUSY).join("1-0");
-        let sweeping = open_lock(&lock_of(&note)).expect("a dead run's lock file");
+        let sweeping = locks::open(&lock_of(&note)).expect("a dead run's lock file");
         sweeping
             .try_lock()
             .expect("held, as the reader sweeping it holds it");

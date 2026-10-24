@@ -98,7 +98,6 @@
 //! lock; changed activity discards the old verdict and keeps protection
 //! until the next reading. An incompatible claim is never overwritten.
 
-use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -484,17 +483,7 @@ fn remove(path: &Path) -> Result<(), String> {
 }
 
 fn lock(dir: &Path) -> Result<Locked, String> {
-    let path = dir.join(LOCK);
-    let file = File::options()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(&path)
-        .map_err(|e| format!("could not open {}: {e}", path.display()))?;
-    file.lock()
-        .map_err(|e| format!("could not lock {}: {e}", path.display()))?;
-    Ok(Locked::new(file))
+    crate::locks::hold(&dir.join(LOCK))
 }
 
 /// Whether this [`REVISION`]'s holder has beaten within [`HOLDER_STALE`].

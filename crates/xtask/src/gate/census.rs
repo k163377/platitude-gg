@@ -397,17 +397,7 @@ pub(crate) fn record(
 fn one_writer(root: &Path) -> Result<crate::locks::Locked, String> {
     let dir = root.join("target");
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    let path = dir.join("verb-census.lock");
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(&path)
-        .map_err(|e| format!("{}: {e}", path.display()))?;
-    file.lock()
-        .map_err(|e| format!("could not hold {}: {e}", path.display()))?;
-    Ok(crate::locks::Locked::new(file))
+    crate::locks::hold(&dir.join("verb-census.lock"))
 }
 
 /// The names of every QML component file of the app, product and

@@ -8,10 +8,10 @@
 //! is free whatever note stands beside it, so a gate killed mid-run
 //! leaves nothing to clean up.
 
-use std::fs::{File, TryLockError};
+use std::fs::TryLockError;
 use std::path::{Path, PathBuf};
 
-use crate::locks::Locked;
+use crate::locks::{self, Locked};
 use crate::still::{Note, SWEEP};
 use crate::wait::{Budget, TRY_AGAIN, Wait};
 
@@ -51,7 +51,7 @@ pub(crate) fn sole(note: &Path, what: &str) -> Result<Sole, String> {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("could not make {}: {e}", parent.display()))?;
     }
-    let lock = open_lock(&note.with_extension(LOCK))?;
+    let lock = locks::open(&note.with_extension(LOCK))?;
     // A gate writes its note the instant it has the lock and takes it
     // down under the lock at the end, so a held lock with no readable note
     // is a gate at one of those edges: looked at again for a sweep's span
@@ -98,19 +98,9 @@ pub(crate) fn sole(note: &Path, what: &str) -> Result<Sole, String> {
     })
 }
 
-fn open_lock(path: &Path) -> Result<File, String> {
-    File::options()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(path)
-        .map_err(|e| format!("could not open the lock at {}: {e}", path.display()))
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{open_lock, sole};
+    use super::{locks, sole};
     use crate::yard::Yard;
 
     /// A `.git`-shaped directory of this test's own, gone when the test is.
@@ -188,7 +178,7 @@ mod tests {
         let dir = common("unnamed");
         let note = dir.join("target").join("gate-running");
         std::fs::create_dir_all(dir.join("target")).expect("target");
-        let held = open_lock(&note.with_extension(super::LOCK))
+        let held = locks::open(&note.with_extension(super::LOCK))
             .expect("a lock beside a note nobody writes");
         held.try_lock()
             .expect("held from here, as a carried lock is");

@@ -13,7 +13,7 @@
 //! stops none of the others — unless what went red is the build they all
 //! read.
 
-use std::fs::{File, TryLockError};
+use std::fs::TryLockError;
 use std::path::{Path, PathBuf};
 
 use crate::budget::{Ask, Pool, Rank};
@@ -196,13 +196,7 @@ fn sole_over(own: &Path) -> Result<Locked, String> {
     if let Some(parent) = at.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
     }
-    let lock = File::options()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(&at)
-        .map_err(|e| format!("{}: {e}", at.display()))?;
+    let lock = crate::locks::open(&at)?;
     match lock.try_lock() {
         Ok(()) => Ok(Locked::new(lock)),
         Err(TryLockError::WouldBlock) => Err(format!(

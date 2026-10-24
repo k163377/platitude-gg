@@ -365,13 +365,7 @@ fn hold_the_store(config_dir: &Path, verb: &str) -> Result<Option<crate::locks::
         return Ok(None);
     }
     let path = config_dir.join("lock");
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(&path)
-        .map_err(|e| format!("could not open {}: {e}", path.display()))?;
+    let file = crate::locks::open(&path)?;
     file.try_lock()
         .map_err(|e| format!("could not hold {}: {e}", path.display()))?;
     println!("holding: {}", path.display());
