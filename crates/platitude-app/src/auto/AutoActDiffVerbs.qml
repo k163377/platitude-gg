@@ -26,19 +26,15 @@ Item {
     readonly property var diffRowMenu: driver.diffRowMenu
     readonly property var renderedBarrier: driver.barrierRendered
     readonly property var writeBarrier: driver.barrierWrite
+    /// The verbs that open a file's preview: each waits for the decode and reports what the pane shows.
+    readonly property var previews: ["preview", "preview-unstaged", "preview-staged", "preview-close"]
 
     /// Runs `act` if it is this family's and says whether it was; `AutoActDriver` asks each family in turn.
     function run(act, arg) {
-        if (act === "stage-hunk" || act === "stage-line"
-            || act === "discard-hunk" || act === "discard-hunk-go"
-            || act === "diff-file" || act === "conflict-sides" || act === "line-tools"
-            || act === "hunk-tools" || act === "keep-place" || act === "diff-tick"
-            || act === "code-send" || act === "line-back"
-            || act === "code-grow" || act === "code-shrink" || act === "code-swap"
-            || act === "diff-select" || act === "diff-copy"
-            || act === "diff-menu" || act === "diff-copy-removed" || act === "diff-sweep"
-            || act === "diff-band-sweep" || act === "diff-bar" || act === "diff-blank"
-            || act === "diff-follow" || act === "line-run" || act === "diff-escape") {
+        if (["stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go", "diff-file", "conflict-sides", "line-tools",
+             "hunk-tools", "keep-place", "diff-tick", "code-send", "line-back", "code-grow", "code-shrink", "code-swap",
+             "diff-select", "diff-copy", "diff-menu", "diff-copy-removed", "diff-sweep", "diff-band-sweep", "diff-bar",
+             "diff-blank", "diff-follow", "line-run", "diff-escape"].indexOf(act) >= 0) {
             // `<path>` or `<bucket>:<path>` (an untracked file has no unstaged diff; a conflict is read from
             // `conflicts`). Only the bucket names count as a prefix, so a path with a colon still opens.
             const cut = arg.indexOf(":")
@@ -60,8 +56,7 @@ Item {
             page.toggleDiff(named ? head : "unstaged", filePath,
                             unstagedModel.origOf(filePath))
             stageRowTimer.begin()
-        } else if (act === "preview" || act === "preview-unstaged" || act === "preview-staged"
-                   || act === "preview-close") {
+        } else if (acts.previews.indexOf(act) >= 0) {
             // Completion is the pane settling (`stageRowTimer`). No path: said and stopped on the rendered barrier — no
             // read would answer a wait, and the missing must_say line fails the run.
             if (arg === "") {
@@ -138,7 +133,7 @@ Item {
                  "diff-escape"].indexOf(Harness.autoAct) >= 0)
                 return diffPane.diffSettled()
             // The previews also wait for the asynchronous decode, or the shot is an empty frame under a caption.
-            if (["preview", "preview-unstaged", "preview-staged", "preview-close"].indexOf(Harness.autoAct) >= 0)
+            if (acts.previews.indexOf(Harness.autoAct) >= 0)
                 return diffPane.diffSettled() && diffPane.picturesSettled
             return diffPane.firstChangedLine(0) >= 0
         }
@@ -200,8 +195,7 @@ Item {
             }
             // `kind=` and `pictures=` (sides decoded) are what the picture cannot tell: an unread pane and a `file:`
             // URL naming nothing both photograph as an empty frame.
-            if (act === "preview" || act === "preview-unstaged" || act === "preview-staged"
-                || act === "preview-close") {
+            if (acts.previews.indexOf(act) >= 0) {
                 const was = diffPane.diffModel.previewKind
                 Harness.report("preview_pane kind=" + was
                                   + " binary=" + diffPane.diffModel.isBinary
@@ -248,27 +242,28 @@ Item {
                 driver.barrierHeading.start()
                 return
             }
-            if (act === "diff-select" || act === "diff-copy"
-                || act === "diff-menu" || act === "diff-copy-removed") {
+            if (act === "diff-select" || act === "diff-copy" || act === "diff-menu" || act === "diff-copy-removed") {
                 acts.pickDiffText(act)
                 renderedBarrier.begin()
                 return
             }
-            // These three read the laid-out view, a frame behind the rows — their timers wait for it.
-            if (act === "diff-sweep") {
-                diffSweepTimer.start()
-                return
+            // The verbs whose sampler takes over from here. `diff-sweep`, `-bar` and `-blank` read the laid-out view,
+            // a frame behind the rows — their timers wait for it.
+            const samplers = {
+                "diff-sweep": () => diffSweepTimer.start(),
+                "diff-bar": () => diffBarTimer.start(),
+                "diff-blank": () => diffBlankTimer.start(),
+                "keep-place": () => keepPlaceTimer.begin(line),
+                "code-send": () => codeSendTimer.begin(),
+                "code-grow": () => codeGrowTimer.begin(),
+                "code-shrink": () => codeShrinkTimer.begin(line),
+                "code-swap": () => codeSwapTimer.begin(),
+                "line-run": () => lineRunTimer.begin(),
+                "diff-follow": () => followTimer.begin(),
+                "line-back": () => lineBackTimer.begin()
             }
-            if (act === "diff-bar") {
-                diffBarTimer.start()
-                return
-            }
-            if (act === "diff-blank") {
-                diffBlankTimer.start()
-                return
-            }
-            if (act === "keep-place") {
-                keepPlaceTimer.begin(line)
+            if (samplers[act]) {
+                samplers[act]()
                 return
             }
             if (act === "stage-hunk" || act === "stage-line") {
@@ -281,34 +276,6 @@ Item {
                     return true
                 })
                 stagedTimer.start()
-                return
-            }
-            if (act === "code-send") {
-                codeSendTimer.begin()
-                return
-            }
-            if (act === "code-grow") {
-                codeGrowTimer.begin()
-                return
-            }
-            if (act === "code-shrink") {
-                codeShrinkTimer.begin(line)
-                return
-            }
-            if (act === "code-swap") {
-                codeSwapTimer.begin()
-                return
-            }
-            if (act === "line-run") {
-                lineRunTimer.begin()
-                return
-            }
-            if (act === "diff-follow") {
-                followTimer.begin()
-                return
-            }
-            if (act === "line-back") {
-                lineBackTimer.begin()
                 return
             }
             // A hunk is the smallest discard. The write is armed on the hold's end (`holdToEnd`), which the button
@@ -328,8 +295,7 @@ Item {
         onTriggered: {
             // A closed pane is done. What it lands on need not have rows — a picture, a binary or an embedded
             // repository has none (`DiffPane.diffSettled`) — so waiting for rows would hold those to the watchdog.
-            if (!driver.wroteAndSettled() || page.diffSettling
-                    || (page.diffShown && !(diffPane.diffSettled() && diffPane.picturesSettled)))
+            if (!acts.wroteAndSettled() || (page.diffShown && !(diffPane.diffSettled() && diffPane.picturesSettled)))
                 return
             stagedTimer.stop()
             // The write barrier reports the rest (the contract, the status owed, the row taken out of its bucket).
@@ -344,7 +310,8 @@ Item {
         id: diffBarTimer
         property string lastGeom: ""
         onTriggered: {
-            // Same settle as `diffSweepTimer`, and also for the bar to come out.
+            // Settle: the rows' height read until two looks agree (the view lays them out a frame after they arrive),
+            // and the bar out.
             if (diffPane.view.count <= 0 || !diffPane.textHand.barOut)
                 return
             const geom = Math.round(diffPane.view.contentHeight) + "," + diffPane.view.count
@@ -368,7 +335,7 @@ Item {
         id: diffBlankTimer
         property string lastGeom: ""
         onTriggered: {
-            // Same settle as `diffSweepTimer`.
+            // Settle: the rows' height read until two looks agree, as `diffBarTimer` does.
             if (diffPane.view.count <= 0)
                 return
             const geom = Math.round(diffPane.view.contentHeight) + "," + diffPane.view.count
@@ -406,30 +373,23 @@ Item {
         let clamped = true
         let backwards = true
         for (let i = 0; i < diffPane.view.count; i++) {
-            const item = diffPane.view.itemAtIndex(i)
-            // Only rows the plain copy takes, so a drag can be held against the row's own copy.
-            if (!item || (item.kind !== "ctx" && item.kind !== "add") || item.codeInk <= 0)
-                continue
-            // The line's end in the hand's coordinates (the code scrolls under the pane).
-            const ends = item.codeInk - diffPane.codeAt
-            const y = item.y - diffPane.view.contentY + item.height / 2
-            if (ends < 1 || ends + 4 >= hand.width || y < 0 || y >= hand.height)
+            const at = acts.reachOf(i)
+            if (!at)
                 continue
             rows++
-            shortest = shortest === 0 ? item.codeInk : Math.min(shortest, item.codeInk)
-            const blank = Qt.point(Math.min(hand.width - 1, ends + 200), y)
+            shortest = shortest === 0 ? at.ink : Math.min(shortest, at.ink)
             const whole = acts.copyOfRow(i)
 
             diffPane.diffModel.clearSelect()
-            hand.takeAt(Qt.point(ends + 4, y), Qt.LeftButton)
-            hand.followAt(blank)
+            hand.takeAt(Qt.point(at.ends + 4, at.y), Qt.LeftButton)
+            hand.followAt(at.blank)
             hand.releaseText()
             quiet = quiet && !diffPane.diffModel.selHasNew && diffPane.diffModel.selRemoved === 0
 
             if (fromHead) {
-                clamped = clamped && acts.dragTakes(Qt.point(0, y), blank, whole)
+                clamped = clamped && acts.dragTakes(Qt.point(0, at.y), at.blank, whole)
                 // And from the blank back onto the row — the blank is a start too (規約 §diff の中身をコピーする).
-                backwards = backwards && acts.dragTakes(blank, Qt.point(0, y), whole)
+                backwards = backwards && acts.dragTakes(at.blank, Qt.point(0, at.y), whole)
             }
         }
         return { rows: rows, shortest: shortest, quiet: rows > 0 && quiet,
@@ -457,16 +417,11 @@ Item {
     /// copied one by one — the multi-row join (removed lines left out) a single-row drag cannot test. Answers
     /// `rows=<n>` when fewer than two rows are reachable.
     function spanTakes() {
-        const hand = diffPane.textHand
         const reach = []
         for (let i = 0; i < diffPane.view.count; i++) {
-            const item = diffPane.view.itemAtIndex(i)
-            if (!item || (item.kind !== "ctx" && item.kind !== "add") || item.codeInk <= 0)
-                continue
-            const ends = item.codeInk - diffPane.codeAt
-            const y = item.y - diffPane.view.contentY + item.height / 2
-            if (ends >= 1 && ends + 4 < hand.width && y >= 0 && y < hand.height)
-                reach.push({ row: i, ends: ends, y: y })
+            const at = acts.reachOf(i)
+            if (at)
+                reach.push(at)
         }
         if (reach.length < 2)
             return "rows=" + reach.length
@@ -479,8 +434,7 @@ Item {
                 lines.push(acts.copyOfRow(i))
         }
         const want = lines.join("\n")
-        const to = Qt.point(Math.min(hand.width - 1, last.ends + 200), last.y)
-        const took = acts.dragTakes(Qt.point(0, first.y), to, want)
+        const took = acts.dragTakes(Qt.point(0, first.y), last.blank, want)
         return "" + (took && lines.length > 1)
     }
     /// The shot: a drag past the end of two rows, left standing — the band has to stop at the ink.
@@ -489,25 +443,46 @@ Item {
         let stood = 0
         diffPane.diffModel.clearSelect()
         for (let i = 0; i < diffPane.view.count && stood < 2; i++) {
-            const item = diffPane.view.itemAtIndex(i)
-            if (!item || (item.kind !== "ctx" && item.kind !== "add") || item.codeInk <= 0)
-                continue
-            const ends = item.codeInk - diffPane.codeAt
-            const y = item.y - diffPane.view.contentY + item.height / 2
-            if (ends < 1 || ends + 4 >= hand.width || y < 0 || y >= hand.height)
+            const at = acts.reachOf(i)
+            if (!at)
                 continue
             if (stood === 0)
-                hand.takeAt(Qt.point(0, y), Qt.LeftButton)
-            hand.followAt(Qt.point(Math.min(hand.width - 1, ends + 200), y))
+                hand.takeAt(Qt.point(0, at.y), Qt.LeftButton)
+            hand.followAt(at.blank)
             stood++
         }
         hand.releaseText()
+    }
+    /// Row `i` as the drags reach it, or null: a row the plain copy takes (so a drag can be held against the row's own
+    /// copy) whose line ends inside the hand. `ends` is that end in the hand's coordinates (the code scrolls under the
+    /// pane), `y` the row's middle, `blank` a point past the end.
+    function reachOf(i) {
+        const hand = diffPane.textHand
+        const item = diffPane.view.itemAtIndex(i)
+        if (!item || (item.kind !== "ctx" && item.kind !== "add") || item.codeInk <= 0)
+            return null
+        const ends = item.codeInk - diffPane.codeAt
+        const y = item.y - diffPane.view.contentY + item.height / 2
+        if (ends < 1 || ends + 4 >= hand.width || y < 0 || y >= hand.height)
+            return null
+        return { row: i, ink: item.codeInk, ends: ends, y: y, blank: Qt.point(Math.min(hand.width - 1, ends + 200), y) }
     }
     /// Whether the list has laid its rows out, not merely received them: until then `contentHeight` is zero, so `maxY`
     /// and `codeMax` read as nothing.
     function viewLaidOut() {
         return diffPane.view.count > 0 && diffPane.view.width > 0
                 && diffPane.view.height > 0 && diffPane.view.contentHeight > 0
+    }
+    /// The write landed and the pane stopped rereading (`RepoPage.diffSettling`) — the answer triggers a reread whose
+    /// rows replace these. Never also wait to see `busyCount` rise: a write can start and finish in one tick.
+    function wroteAndSettled() {
+        return driver.wroteAndSettled() && !page.diffSettling
+    }
+    /// The end of a sampler that says its own claims (`report()`): stopped, said, then the frame waited for.
+    function finish(timer) {
+        timer.stop()
+        timer.report()
+        renderedBarrier.begin()
     }
     /// How far down the reader is taken before the rebuild (`keep-place`) or the colour swap (`colour-place`); both are
     /// judged on getting exactly this back.
@@ -533,11 +508,6 @@ Item {
             lineBackTimer.back = false
             lineBackTimer.start()
         }
-        /// The write landed and the pane stopped rereading (`RepoPage.diffSettling`) — the answer triggers a reread
-        /// whose rows replace these. Never also wait to see `busyCount` rise: a write can start and finish in one tick.
-        function wroteAndSettled() {
-            return driver.wroteAndSettled() && !page.diffSettling
-        }
         onTriggered: {
             const rows = diffPane.view.count
             if (lineBackTimer.step === 0) {
@@ -553,7 +523,7 @@ Item {
                 return
             }
             if (lineBackTimer.step === 1) {
-                if (!lineBackTimer.wroteAndSettled() || rows >= lineBackTimer.rows0)
+                if (!acts.wroteAndSettled() || rows >= lineBackTimer.rows0)
                     return
                 lineBackTimer.rows1 = rows
                 lineBackTimer.shrank = true
@@ -566,7 +536,7 @@ Item {
                 return
             }
             if (lineBackTimer.step === 2) {
-                if (!lineBackTimer.wroteAndSettled() || rows !== lineBackTimer.rows0)
+                if (!acts.wroteAndSettled() || rows !== lineBackTimer.rows0)
                     return
                 lineBackTimer.back = true
                 driver.pressWrite("stage-path", () => {
@@ -576,12 +546,12 @@ Item {
                 lineBackTimer.step = 3
                 return
             }
-            if (!lineBackTimer.wroteAndSettled() || page.diffKind !== "staged" || rows === 0)
+            if (!acts.wroteAndSettled() || page.diffKind !== "staged" || rows === 0)
                 return
             lineBackTimer.stop()
             Harness.report("line_back back=" + lineBackTimer.back
                               + " shrank=" + lineBackTimer.shrank
-                              + " followed=" + (page.diffKind + ":" + page.diffPath)
+                              + " followed=" + page.diffKey
                               + " rows0=" + lineBackTimer.rows0
                               + " rows1=" + lineBackTimer.rows1)
             renderedBarrier.begin()
@@ -611,22 +581,18 @@ Item {
             if (page.diffSettling)
                 return
             if (lineRunTimer.done === lineRunTimer.want) {
-                lineRunTimer.stop()
-                lineRunTimer.report()
-                renderedBarrier.begin()
+                acts.finish(lineRunTimer)
                 return
             }
             // The list builds its items a frame after the rows arrive, so an early empty answer is not "none" and is
             // waited on.
             const line = diffPane.firstChangedLine(0)
             if (line < 0) {
-                // waits(ceiling): the shortfall is still reported and still fails; this only names it before the watchdog
+                // waits(ceiling): the shortfall still reports and fails; this only names it before the watchdog
                 lineRunTimer.waited += lineRunTimer.interval
                 if (lineRunTimer.waited < 5000)
                     return
-                lineRunTimer.stop()
-                lineRunTimer.report()
-                renderedBarrier.begin()
+                acts.finish(lineRunTimer)
                 return
             }
             lineRunTimer.waited = 0
@@ -674,10 +640,9 @@ Item {
             if (followTimer.step === 0) {
                 if (diffPane.view.count === 0)
                     return
-                followTimer.was = page.diffKind + ":" + page.diffPath
+                followTimer.was = page.diffKey
                 // Read before the write takes the file off this side.
-                followTimer.alone =
-                    unstagedModel.besidePath(page.diffKind, page.diffPath) === ""
+                followTimer.alone = unstagedModel.besidePath(page.diffKind, page.diffPath) === ""
                 // The file list's own `+` / `−` path.
                 driver.pressWrite("follow:" + page.diffKind, () => {
                     if (page.diffKind === "staged")
@@ -690,10 +655,8 @@ Item {
                 return
             }
             // The landing is the output: off its old key, with rows (or closed), and done rereading.
-            const now = page.diffShown ? page.diffKind + ":" + page.diffPath : ""
-            if (!driver.wroteAndSettled()
-                    || now === followTimer.was || (page.diffShown && diffPane.view.count === 0)
-                    || page.diffSettling)
+            const now = page.diffKey
+            if (!acts.wroteAndSettled() || now === followTimer.was || (page.diffShown && diffPane.view.count === 0))
                 return
             followTimer.stop()
             followTimer.landed = now
@@ -728,9 +691,7 @@ Item {
                 if (!acts.viewLaidOut())
                     return
                 if (diffPane.codeMax <= 0) {
-                    codeSendTimer.stop()
-                    codeSendTimer.report()
-                    renderedBarrier.begin()
+                    acts.finish(codeSendTimer)
                     return
                 }
                 // The anchor's ring is part of the picture, so the hand is left running for the shot.
@@ -744,9 +705,7 @@ Item {
             // Both of the hand's axes must be seen moving: rows down, code past the bar's half.
             if (diffPane.view.contentY <= 0 || diffPane.codeAt <= diffPane.codeMax / 2)
                 return
-            codeSendTimer.stop()
-            codeSendTimer.report()
-            renderedBarrier.begin()
+            acts.finish(codeSendTimer)
         }
     }
     // The reach as one string (measured, drawn, widest row), compared look to look until it stops moving: delegates are
@@ -832,11 +791,6 @@ Item {
                               + " want=" + Math.round(Theme.spaceSm)
                               + " down=" + Math.round(diffPane.view.maxY))
         }
-        function finish() {
-            codeGrowTimer.stop()
-            codeGrowTimer.report()
-            renderedBarrier.begin()
-        }
         onTriggered: {
             const foot = diffPane.view.count - 1
             if (codeGrowTimer.step === 0) {
@@ -845,7 +799,7 @@ Item {
                 // A diff that fits its frame has no row to arrive from below: said and stopped
                 // (rules-refs/app-ui.md「欠けた前提は言って止まる」).
                 if (diffPane.view.maxY <= 0) {
-                    codeGrowTimer.finish()
+                    acts.finish(codeGrowTimer)
                     return
                 }
                 codeGrowTimer.measured = diffPane.codeMeasured
@@ -891,7 +845,7 @@ Item {
             }
             codeGrowTimer.ink = ink
             codeGrowTimer.room = diffPane.view.width
-            codeGrowTimer.finish()
+            acts.finish(codeGrowTimer)
         }
     }
     // code-shrink: the same file reread with its widest line staged out (`--preset widelate`'s `top.txt`, whose first
@@ -933,18 +887,13 @@ Item {
                               + " rows0=" + codeShrinkTimer.rows0
                               + " rows=" + diffPane.view.count)
         }
-        function finish() {
-            codeShrinkTimer.stop()
-            codeShrinkTimer.report()
-            renderedBarrier.begin()
-        }
         onTriggered: {
             if (!codeShrinkTimer.wrote) {
                 if (!acts.viewLaidOut())
                     return
                 // Nowhere sideways to go is no place to keep.
                 if (diffPane.codeMax <= 0) {
-                    codeShrinkTimer.finish()
+                    acts.finish(codeShrinkTimer)
                     return
                 }
                 // An eighth along: short of where the shorter reading ends, so `kept=` means kept, not clamped.
@@ -962,15 +911,14 @@ Item {
                 return
             }
             // The write, the reread, then the reread rows' widths standing still.
-            if (!driver.wroteAndSettled()
-                    || page.diffSettling || diffPane.view.count === 0)
+            if (!acts.wroteAndSettled() || diffPane.view.count === 0)
                 return
             const now = acts.reachNow()
             if (now !== codeShrinkTimer.lastReach) {
                 codeShrinkTimer.lastReach = now
                 return
             }
-            codeShrinkTimer.finish()
+            acts.finish(codeShrinkTimer)
         }
     }
     // code-swap: switching file drops both place and width. The second file is the row beside the first in the list
@@ -1006,28 +954,23 @@ Item {
                               + " was=" + codeSwapTimer.was
                               + " landed=" + codeSwapTimer.landed)
         }
-        function finish() {
-            codeSwapTimer.stop()
-            codeSwapTimer.report()
-            renderedBarrier.begin()
-        }
         onTriggered: {
             if (codeSwapTimer.step === 0) {
                 if (!acts.viewLaidOut())
                     return
                 if (diffPane.codeMax <= 0) {
-                    codeSwapTimer.finish()
+                    acts.finish(codeSwapTimer)
                     return
                 }
                 diffPane.sendCode(diffPane.codeMax / 2)
                 codeSwapTimer.at0 = diffPane.codeAt
                 codeSwapTimer.max0 = diffPane.codeMax
                 codeSwapTimer.drawn0 = diffPane.codeDrawn
-                codeSwapTimer.was = page.diffKind + ":" + page.diffPath
+                codeSwapTimer.was = page.diffKey
                 // `<bucket>:<path>` of the row beside this one under the same heading; none ends the run here.
                 const beside = unstagedModel.besidePath(page.diffKind, page.diffPath)
                 if (beside === "") {
-                    codeSwapTimer.finish()
+                    acts.finish(codeSwapTimer)
                     return
                 }
                 const cut = beside.indexOf(":")
@@ -1038,15 +981,14 @@ Item {
                 return
             }
             // On the other file, done reading and laid out, before its width counts.
-            if (page.diffKind + ":" + page.diffPath !== codeSwapTimer.landed
-                    || page.diffSettling || !acts.viewLaidOut())
+            if (page.diffKey !== codeSwapTimer.landed || page.diffSettling || !acts.viewLaidOut())
                 return
             const now = acts.reachNow()
             if (now !== codeSwapTimer.lastReach) {
                 codeSwapTimer.lastReach = now
                 return
             }
-            codeSwapTimer.finish()
+            acts.finish(codeSwapTimer)
         }
     }
     // diff-sweep: the text taken from the ground under a short file's last row (規約 §diff の中身をコピーする), shaped
@@ -1125,8 +1067,7 @@ Item {
             }
             // Then the rebuilt list put back on the place. A write that emptied this side never lands, and the run
             // waits out the watchdog.
-            if (!driver.wroteAndSettled()
-                    || diffPane.placeLandedY < 0)
+            if (!driver.wroteAndSettled() || diffPane.placeLandedY < 0)
                 return
             keepPlaceTimer.stop()
             acts.reportPlace(diffPane.placeLandedY, diffPane.view.maxY)
