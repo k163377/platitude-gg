@@ -228,6 +228,7 @@ fn holders_for(dir: &Path) -> Vec<u32> {
         .filter_map(|line| line.trim().parse().ok())
         .collect()
 }
+
 fn end_tree(pid: u32) {
     let _ = std::process::Command::new("taskkill")
         .args(["/PID", &pid.to_string(), "/T", "/F"])
@@ -491,6 +492,38 @@ fn summary(ms: u64) -> String {
 fn stop_hooks_ran(path: &Path) {
     append(path, &[&summary(crate::awake::now_ms())]);
 }
+
+/// What the history tells, in order: each line's verdict and reasons. A
+/// hold kept only because the claims changed under a reading
+/// (`holding -`) says nothing of its own: it is left out, and so is the
+/// line after it when that one only says again what stood before. Any
+/// other repeat stays — a holder that wrote a line a reading would show
+/// here.
+fn told(dir: &Path) -> Vec<String> {
+    let text = std::fs::read_to_string(dir.join(crate::awake::HISTORY)).expect("the history");
+    let mut told: Vec<String> = Vec::new();
+    let mut after_a_kept_hold = false;
+    for line in text.lines() {
+        let said = line
+            .splitn(4, ' ')
+            .nth(3)
+            .expect("a time, a revision and a pid, then what was asked");
+        if said == "holding -" {
+            after_a_kept_hold = true;
+            continue;
+        }
+        let again = told.last().map(String::as_str) == Some(said);
+        if !(after_a_kept_hold && again) {
+            told.push(said.to_string());
+        }
+        after_a_kept_hold = false;
+    }
+    told
+}
+
+/// Passed as a filter rather than with `--exact`, like the chain's other
+/// links.
+const CARGO: &str = "stands_in_for_cargo_between_claude_and_a_hook";
 
 /// The holder's script runs, takes the lock the hooks take, and — with no
 /// claim to read — clears its name and exits.
@@ -819,6 +852,7 @@ fn the_holder_s_command_fits_a_command_line() {
         line.len()
     );
 }
+
 /// The holder's script is pinned to its revision, as a holder runs it —
 /// the fragments spliced in and the constants it is started with among
 /// them: a holder whose name beats serves every seat's compatible claims,
@@ -857,10 +891,6 @@ fn the_holder_cannot_take_the_lock_a_hook_holds() {
     drop(held);
     assert_eq!(ask(), "took");
 }
-
-/// Passed as a filter rather than with `--exact`, like the chain's other
-/// links.
-const CARGO: &str = "stands_in_for_cargo_between_claude_and_a_hook";
 
 /// Claude Code reads a hook's output until the pipe closes, and every
 /// process holding a copy keeps it open: a holder that took one would keep
@@ -923,34 +953,6 @@ fn a_working_claim_holds_until_its_claude_process_is_gone() {
         !holder_path(&dir).exists(),
         "the holder left its name behind"
     );
-}
-
-/// What the history tells, in order: each line's verdict and reasons. A
-/// hold kept only because the claims changed under a reading
-/// (`holding -`) says nothing of its own: it is left out, and so is the
-/// line after it when that one only says again what stood before. Any
-/// other repeat stays — a holder that wrote a line a reading would show
-/// here.
-fn told(dir: &Path) -> Vec<String> {
-    let text = std::fs::read_to_string(dir.join(crate::awake::HISTORY)).expect("the history");
-    let mut told: Vec<String> = Vec::new();
-    let mut after_a_kept_hold = false;
-    for line in text.lines() {
-        let said = line
-            .splitn(4, ' ')
-            .nth(3)
-            .expect("a time, a revision and a pid, then what was asked");
-        if said == "holding -" {
-            after_a_kept_hold = true;
-            continue;
-        }
-        let again = told.last().map(String::as_str) == Some(said);
-        if !(after_a_kept_hold && again) {
-            told.push(said.to_string());
-        }
-        after_a_kept_hold = false;
-    }
-    told
 }
 
 /// The last line a holder wrote is its own: the status reads past the
@@ -1044,14 +1046,6 @@ fn claims_made_at_once_start_one_holder() {
     assert_eq!(holders_for(&dir), started);
 }
 
-mod codex;
-mod codex_log;
-mod coordination;
-mod counting;
-mod desktop;
-mod physical;
-mod quiet;
-
 #[test]
 fn an_installed_holder_handles_unicode_and_quotes_and_removes_its_script() {
     let dir = scratch("holder-東京 '");
@@ -1110,3 +1104,11 @@ fn a_name_left_by_an_ended_process_ends_no_later_one() {
         "a process started after the name was written was ended"
     );
 }
+
+mod codex;
+mod codex_log;
+mod coordination;
+mod counting;
+mod desktop;
+mod physical;
+mod quiet;
