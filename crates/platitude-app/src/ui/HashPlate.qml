@@ -248,7 +248,7 @@ ColumnLayout {
     function tapAt(which) {
         const hand = plate.handFor(which)
         const at = plate.controlPoint(which, hand)
-        hand.takeAt(at.x, at.y)
+        hand.takeAt(at)
         hand.releaseNow()
     }
     function dragAcross(which) {
@@ -256,8 +256,8 @@ ColumnLayout {
         const field = plate.fieldFor(which)
         const near = field.mapToItem(hand, 0, field.height / 2)
         const far = field.mapToItem(hand, field.width, field.height / 2)
-        hand.takeAt(near.x, near.y)
-        hand.followAt(far.x, far.y)
+        hand.takeAt(near)
+        hand.followAt(far)
         hand.releaseNow()
     }
     /// Automation: the word the copy control offers (hover cannot be injected; the tip itself is `tst_hashplate`'s).

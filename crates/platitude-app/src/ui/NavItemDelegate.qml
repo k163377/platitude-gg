@@ -561,10 +561,10 @@ Item {
             if (navRow.nameField === null)
                 return
             // Anchored where the button went down; a press beside a short name clamps to its end (`CardText.inBox`).
-            navRow.nameField.anchorFrom(navRow, itemMouse.pressFrom.x, itemMouse.pressFrom.y)
+            navRow.nameField.anchorFrom(navRow, itemMouse.pressFrom)
             itemMouse.handedOn = true
         }
-        navRow.nameField.extendFrom(navRow, x, y)
+        navRow.nameField.extendFrom(navRow, Qt.point(x, y))
     }
     function lineReleased() {
         itemMouse.pressing = false

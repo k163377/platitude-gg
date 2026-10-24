@@ -208,8 +208,8 @@ Item {
             const box = scene.box
             root.fill(box, false)
             tryVerify(() => box.hand.visible, undefined, "the words ran past the box and its hand never stood")
-            compare(box.hand.claimedAt(150, 70), box.hand.middlePastes)
-            compare(box.hand.press(150, 70), !box.hand.middlePastes)
+            compare(box.hand.claimedAt(Qt.point(150, 70)), box.hand.middlePastes)
+            compare(box.hand.press(Qt.point(150, 70)), !box.hand.middlePastes)
         }
 
         // The surface's hand lets a press on the box's words go to the box's own hand.

@@ -51,8 +51,8 @@ Item {
         function select(field, from, to) {
             const a = field.charRect(from)
             const b = field.charRect(to)
-            field.anchorFrom(field, a.x, a.y + a.height / 2)
-            field.extendFrom(field, b.x, b.y + b.height / 2)
+            field.anchorFrom(field, Qt.point(a.x, a.y + a.height / 2))
+            field.extendFrom(field, Qt.point(b.x, b.y + b.height / 2))
         }
 
         function test_a_whole_line_goes_out_as_its_words() {

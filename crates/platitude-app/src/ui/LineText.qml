@@ -123,19 +123,19 @@ Item {
     /// A point in `item`'s coordinates, in the field's own. The height is clamped: a one-line field asked above or
     /// below its box answers with the line's ends. The x is the field's, not this item's — a field cutting its head
     /// hangs off the near edge (negative `field.x`).
-    function onLine(item, x, y) {
-        const p = line.mapFromItem(item, x, y)
+    function onLine(item, position) {
+        const p = line.mapFromItem(item, position)
         return Qt.point(p.x - field.x, Math.max(0, Math.min(line.height - 1, p.y - field.y)))
     }
-    function anchorFrom(item, x, y) {
-        const p = line.onLine(item, x, y)
+    function anchorFrom(item, position) {
+        const p = line.onLine(item, position)
         // Taking the caret clears the selection of whatever field held it (no `persistentSelection`).
         field.forceActiveFocus()
         line.grabAnchor = field.positionAt(p.x, p.y)
         field.select(line.grabAnchor, line.grabAnchor)
     }
-    function extendFrom(item, x, y) {
-        const p = line.onLine(item, x, y)
+    function extendFrom(item, position) {
+        const p = line.onLine(item, position)
         field.select(line.grabAnchor, field.positionAt(p.x, p.y))
     }
 

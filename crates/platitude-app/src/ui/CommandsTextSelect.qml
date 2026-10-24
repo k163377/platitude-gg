@@ -46,32 +46,29 @@ Item {
 
     property bool dragging: false
     /// Where the hand was last seen, in this item's coordinates (the edge ticker below re-reads it).
-    property real handX: 0
-    property real handY: 0
+    property point handPosition: Qt.point(0, 0)
 
     // ---- what the hand does ------------------------------------------------------------------------------------
     /// A press at a point (own coordinates): true where the text took it, false where it goes down to the list —
     /// only a log with no rows. The `MouseArea` below and a run both enter here, so an unwired hand reports nothing
     /// (verify-ui §壊れない動詞の実装と反復).
-    function takeAt(x, y) {
-        const row = pick.rowAt(y)
+    function takeAt(position) {
+        const row = pick.rowAt(position.y)
         if (row < 0)
             return false
         // The press takes focus so Ctrl+C reaches the text just picked; the panel only takes it when it opens.
         pick.view.forceActiveFocus()
-        pick.handX = x
-        pick.handY = y
-        pick.pressText(row, pick.byteAt(row, x, y))
+        pick.handPosition = position
+        pick.pressText(row, pick.byteAt(row, position))
         return true
     }
-    function followAt(x, y) {
-        pick.handX = x
-        pick.handY = y
+    function followAt(position) {
+        pick.handPosition = position
         if (!pick.dragging)
             return
-        const row = pick.rowAt(y)
+        const row = pick.rowAt(position.y)
         if (row >= 0)
-            pick.dragText(row, pick.byteAt(row, x, y))
+            pick.dragText(row, pick.byteAt(row, position))
     }
     function pressText(row, at) {
         pick.commandsModel.beginSelect(row, at)
@@ -106,11 +103,12 @@ Item {
     }
 
     /// Which byte of a row's line a point lands on; a gap holds one tab, whose only two places are its ends.
-    function byteAt(row, x, y) {
+    function byteAt(row, position) {
         const item = pick.view.itemAtIndex(row)
         if (!item)
             return 0
-        if (y - (item.y - pick.view.contentY) >= item.lineHeight)
+        const x = position.x
+        if (position.y - (item.y - pick.view.contentY) >= item.lineHeight)
             return pick.commandsModel.hitAt(row, pick.atBelow, 0)
         if (x < item.clockEnd)
             return pick.hit(row, pick.atClock, x - item.clockX)
@@ -144,11 +142,11 @@ Item {
             return false
         const x = Math.max(1, Math.min(pick.width - 1, pick.width * fx))
         const y = pick.groundTop + 1 + (pick.height - pick.groundTop - 2) * fy
-        if (!pick.takeAt(x, y))
+        if (!pick.takeAt(Qt.point(x, y)))
             return false
         // Straight up at the starting x — a sideways jump would let a run pass while the real gesture fails.
         const top = pick.view.itemAtIndex(0)
-        pick.followAt(x, top ? top.y - pick.view.contentY + top.height / 2 : 1)
+        pick.followAt(Qt.point(x, top ? top.y - pick.view.contentY + top.height / 2 : 1))
         pick.releaseText()
         return true
     }
@@ -160,16 +158,16 @@ Item {
         acceptedButtons: Qt.LeftButton
         // The rows below keep their own hover (see the note at the top).
         cursorShape: Qt.IBeamCursor
-        onPressed: mouse => { mouse.accepted = pick.takeAt(mouse.x, mouse.y) }
-        onPositionChanged: mouse => pick.followAt(mouse.x, mouse.y)
+        onPressed: mouse => { mouse.accepted = pick.takeAt(Qt.point(mouse.x, mouse.y)) }
+        onPositionChanged: mouse => pick.followAt(Qt.point(mouse.x, mouse.y))
         onReleased: pick.releaseText()
         onCanceled: pick.releaseText()
     }
 
     // ---- the edge ----------------------------------------------------------------------------------------------
     /// How far past the frame the hand is; zero inside, which stops the ticker.
-    readonly property real pastY: pick.handY < 0 ? pick.handY
-                                  : pick.handY > pick.height ? pick.handY - pick.height : 0
+    readonly property real pastY: pick.handPosition.y < 0 ? pick.handPosition.y
+                                  : pick.handPosition.y > pick.height ? pick.handPosition.y - pick.height : 0
     // A drag past the frame scrolls the log at the middle-click hand's speed, and re-reads the row every step: the
     // rows move under a still pointer without any mouse event.
     Timer {
@@ -179,9 +177,9 @@ Item {
         repeat: true
         onTriggered: {
             pick.scrollWanted(pick.pastY * Metrics.middleScrollGain)
-            const row = pick.rowAt(pick.handY)
+            const row = pick.rowAt(pick.handPosition.y)
             if (row >= 0)
-                pick.dragText(row, pick.byteAt(row, pick.handX, pick.handY))
+                pick.dragText(row, pick.byteAt(row, pick.handPosition))
         }
     }
 }

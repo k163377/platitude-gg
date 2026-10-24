@@ -120,10 +120,9 @@ Item {
             return middle
         for (const fx of [0.5, 0.97]) {
             for (const fy of [0.5, 0.25, 0.75, 0.1, 0.9]) {
-                const x = hand.width * fx
-                const y = hand.height * fy
-                if (!hand.claimedAt(x, y))
-                    return Qt.point(x, y)
+                const at = Qt.point(hand.width * fx, hand.height * fy)
+                if (!hand.claimedAt(at))
+                    return at
             }
         }
         return middle
@@ -348,10 +347,10 @@ Item {
                 handTimer.standing = seat
                 handTimer.fromAt = seat.at()
                 const at = acts.pressPoint(seat)
-                handTimer.claimed = seat.hand.claimedAt(at.x, at.y)
-                handTimer.took = seat.hand.press(at.x, at.y)
+                handTimer.claimed = seat.hand.claimedAt(at)
+                handTimer.took = seat.hand.press(at)
                 if (handTimer.took)
-                    seat.hand.drift(at.x, at.y + (seat.down ? acts.reach : -acts.reach))
+                    seat.hand.drift(Qt.point(at.x, at.y + (seat.down ? acts.reach : -acts.reach)))
                 Harness.report("middle_hand surface=" + handTimer.surface + " pressed took=" + handTimer.took
                                + " claimed=" + handTimer.claimed
                                + " at=" + Math.round(at.x) + "," + Math.round(at.y))

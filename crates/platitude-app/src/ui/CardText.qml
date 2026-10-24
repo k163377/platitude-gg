@@ -325,21 +325,21 @@ Item {
     property int grabAnchor: 0
     /// A point in another item's coordinates, clamped into this box on both axes: outside it `positionAt` answers about
     /// the line alone, so a sweep from the padding picks the same character at both ends (`LineText.onLine`).
-    function inBox(item, x, y) {
-        const p = cardText.mapFromItem(item, x, y)
+    function inBox(item, position) {
+        const p = cardText.mapFromItem(item, position)
         return Qt.point(Math.max(0, Math.min(cardText.width - 1, p.x)),
                         Math.max(0, Math.min(cardText.height - 1, p.y)))
     }
-    function anchorFrom(item, x, y) {
-        const p = cardText.inBox(item, x, y)
+    function anchorFrom(item, position) {
+        const p = cardText.inBox(item, position)
         // Taking focus is what clears whichever field held the selection (one selection in the window); a press on
         // the words does the same on its own (`activeFocusOnPress`).
         field.forceActiveFocus()
         cardText.grabAnchor = field.positionAt(p.x, p.y)
         field.select(cardText.grabAnchor, cardText.grabAnchor)
     }
-    function extendFrom(item, x, y) {
-        const p = cardText.inBox(item, x, y)
+    function extendFrom(item, position) {
+        const p = cardText.inBox(item, position)
         field.select(cardText.grabAnchor, field.positionAt(p.x, p.y))
     }
 

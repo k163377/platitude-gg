@@ -714,17 +714,17 @@ Item {
                 handTimer.fromAt = handTimer.at()
                 // The first point down the middle nothing claims: a box on the chapters keeps the middle press where
                 // the platform pastes with it (`MiddleAutoScroll.claimedAt`).
-                let x = hand.width / 2
-                let y = hand.height / 2
+                let at = Qt.point(hand.width / 2, hand.height / 2)
                 for (const fy of [0.5, 0.25, 0.75, 0.1, 0.9]) {
-                    if (!hand.claimedAt(x, hand.height * fy)) {
-                        y = hand.height * fy
+                    const p = Qt.point(at.x, hand.height * fy)
+                    if (!hand.claimedAt(p)) {
+                        at = p
                         break
                     }
                 }
-                handTimer.took = hand.press(x, y)
+                handTimer.took = hand.press(at)
                 if (handTimer.took)
-                    hand.drift(x, y + Metrics.middleScrollDeadZone + 64)
+                    hand.drift(Qt.point(at.x, at.y + Metrics.middleScrollDeadZone + 64))
                 handTimer.pressed = true
                 Harness.report("settings_hand surface=" + Harness.autoActArg + " pressed took=" + handTimer.took)
                 return

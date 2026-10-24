@@ -297,10 +297,10 @@ Rectangle {
                 headPin.askFacts(headPin.mapToItem(null, x, y))
             if (headPin.nameField === null)
                 return
-            headPin.nameField.anchorFrom(headPin, headRowMouse.pressFrom.x, headRowMouse.pressFrom.y)
+            headPin.nameField.anchorFrom(headPin, headRowMouse.pressFrom)
             headRowMouse.handedOn = true
         }
-        headPin.nameField.extendFrom(headPin, x, y)
+        headPin.nameField.extendFrom(headPin, Qt.point(x, y))
     }
     /// A drag that took the name away is not a click — the reader was copying (`NavRowFacts.handClicked`).
     function lineClicked() {

@@ -57,7 +57,7 @@ AppCard {
         const row = parentCard.rowAt(i)
         if (!row)
             return false
-        row.hand.takeAt(row.width / 2, row.height / 2)
+        row.hand.takeAt(Qt.point(row.width / 2, row.height / 2))
         row.hand.releaseNow()
         return true
     }

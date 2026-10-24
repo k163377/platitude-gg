@@ -53,9 +53,9 @@ Item {
             if (!on)
                 return
             room.field = on
-            on.anchorFrom(room.row, p.x, p.y)
+            on.anchorFrom(room.row, p)
         }
-        room.field.extendFrom(room.row, p.x, p.y)
+        room.field.extendFrom(room.row, p)
     }
     function releaseNow() {
         room.taking = false

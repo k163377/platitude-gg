@@ -288,8 +288,8 @@ Rectangle {
     readonly property alias codeBarShown: codeScroll.barShown
     readonly property alias codeHandOn: codeScroll.handScrolling
     function sendCode(dx) { codeScroll.shift(dx) }
-    function startCodeHand(x, y) { codeScroll.startHand(x, y) }
-    function driftCodeHand(x, y) { codeScroll.driftHand(x, y) }
+    function startCodeHand(position) { codeScroll.startHand(position) }
+    function driftCodeHand(position) { codeScroll.driftHand(position) }
 
     // ---- the text the reader picked out -------------------------------
     /// What `Copy` and Ctrl+C put on the clipboard (デザイン規約 §diff の中身をコピーする). An empty selection sends

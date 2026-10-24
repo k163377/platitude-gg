@@ -89,8 +89,8 @@ Item {
         /// A drag over the words, made the way the hand makes it — `forceActiveFocus()` on this part would focus the
         /// `Item` and leave the `TextEdit` inside holding nothing.
         function grab() {
-            words.anchorFrom(root, 0, 5)
-            words.extendFrom(root, 300, 5)
+            words.anchorFrom(root, Qt.point(0, 5))
+            words.extendFrom(root, Qt.point(300, 5))
             verify(words.hasCaret)
             verify(words.selected !== "")
         }

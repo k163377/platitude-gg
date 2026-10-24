@@ -49,8 +49,7 @@ Item {
     /// Which column the drag is of — the one the press landed in (`sideAt`).
     property int side: 0
     /// Where the hand was last seen, in this item's coordinates, for the edge below.
-    property real handX: 0
-    property real handY: 0
+    property point handPosition: Qt.point(0, 0)
 
     // ---- columns ---------------------------------------------------------------------------------------------------
     /// The hairline between the two columns, in this item's coordinates (the first gutter is left of this item).
@@ -68,37 +67,35 @@ Item {
     /// A press at a point of this item: true where the text took it, false where it goes down to what is under this —
     /// a gutter's mark, the hunk's two words, or the list. **The `MouseArea` below and a run enter here**
     /// (verify-ui §壊れない動詞の実装と反復).
-    function takeAt(x, y, button) {
-        const row = pick.rowAt(y)
+    function takeAt(position, button) {
+        const row = pick.rowAt(position.y)
         if (row < 0 || !pick.takesPress(row))
             return false
-        const side = pick.sideAt(x)
+        const side = pick.sideAt(position.x)
         // The second column's gutter is the row's, as the first's is.
-        if (x < pick.codeStart(side))
+        if (position.x < pick.codeStart(side))
             return false
-        pick.handX = x
-        pick.handY = y
+        pick.handPosition = position
         if (button === Qt.LeftButton)
-            pick.pressText(side, row, pick.byteAt(side, row, x - pick.codeStart(side)))
+            pick.pressText(side, row, pick.byteAt(side, row, position.x - pick.codeStart(side)))
         return true
     }
     /// A drag that has left the rows keeps the one it can still see (`rowAt`), and one that has left its column
     /// keeps that too.
-    function followAt(x, y) {
-        pick.handX = x
-        pick.handY = y
+    function followAt(position) {
+        pick.handPosition = position
         if (!pick.dragging)
             return
-        const row = pick.rowAt(y)
+        const row = pick.rowAt(position.y)
         if (row >= 0)
-            pick.dragText(row, pick.byteAt(pick.side, row, x - pick.codeStart(pick.side)))
+            pick.dragText(row, pick.byteAt(pick.side, row, position.x - pick.codeStart(pick.side)))
     }
     /// A right-click that has been let go of, at a point of this item.
-    function answerAt(x, y) {
-        const row = pick.rowAt(y)
-        const side = pick.sideAt(x)
+    function answerAt(position) {
+        const row = pick.rowAt(position.y)
+        const side = pick.sideAt(position.x)
         if (row >= 0)
-            pick.askMenu(side, row, pick.byteAt(side, row, x - pick.codeStart(side)))
+            pick.askMenu(side, row, pick.byteAt(side, row, position.x - pick.codeStart(side)))
     }
     /// The selection starts here and holds nothing until the hand moves.
     function pressText(side, row, at) {
@@ -197,11 +194,11 @@ Item {
         const to = pick.split ? pick.divider : pick.width
         const x = Math.max(1, Math.min(to - 1, to * fx))
         const y = pick.groundTop + 1 + (pick.height - pick.groundTop - 2) * fy
-        if (!pick.takeAt(x, y, Qt.LeftButton))
+        if (!pick.takeAt(Qt.point(x, y), Qt.LeftButton))
             return false
         // Up at the x it started from — reading a row out where the reader never pressed passes a broken gesture.
         const top = pick.view.itemAtIndex(0)
-        pick.followAt(x, top ? top.y - pick.view.contentY + top.height / 2 : 1)
+        pick.followAt(Qt.point(x, top ? top.y - pick.view.contentY + top.height / 2 : 1))
         pick.releaseText()
         return true
     }
@@ -234,7 +231,8 @@ Item {
             const item = pick.view.itemAtIndex(i)
             if (!item || item.kind === "hunk")
                 continue
-            const took = pick.takeAt(pick.width - 1, item.y - pick.view.contentY + item.height / 2, Qt.LeftButton)
+            const took = pick.takeAt(Qt.point(pick.width - 1, item.y - pick.view.contentY + item.height / 2),
+                                     Qt.LeftButton)
             pick.releaseText()
             return took
         }
@@ -245,7 +243,7 @@ Item {
         const item = pick.view.itemAtIndex(row)
         if (!item)
             return true
-        const took = pick.takeAt(1, item.y - pick.view.contentY + item.height / 2, Qt.LeftButton)
+        const took = pick.takeAt(Qt.point(1, item.y - pick.view.contentY + item.height / 2), Qt.LeftButton)
         pick.releaseText()
         return took
     }
@@ -256,11 +254,11 @@ Item {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         cursorShape: Qt.IBeamCursor
-        onPressed: mouse => { mouse.accepted = pick.takeAt(mouse.x, mouse.y, mouse.button) }
-        onPositionChanged: mouse => pick.followAt(mouse.x, mouse.y)
+        onPressed: mouse => { mouse.accepted = pick.takeAt(Qt.point(mouse.x, mouse.y), mouse.button) }
+        onPositionChanged: mouse => pick.followAt(Qt.point(mouse.x, mouse.y))
         onReleased: pick.releaseText()
         onCanceled: pick.releaseText()
-        onClicked: mouse => { if (mouse.button === Qt.RightButton) pick.answerAt(mouse.x, mouse.y) }
+        onClicked: mouse => { if (mouse.button === Qt.RightButton) pick.answerAt(Qt.point(mouse.x, mouse.y)) }
     }
     // The second column's gutter keeps the arrow: a press there is the row's (`takeAt`), and a beam over the `+` reads
     // as selectable text. No button and no hover, so presses and hover go through. Built only side by side.
@@ -277,10 +275,10 @@ Item {
 
     // ---- the edge ----------------------------------------------------------------------------------------------
     /// How far past the frame the hand has reached, on each axis; zero inside, which stops the ticker below.
-    readonly property real pastY: pick.handY < 0 ? pick.handY
-                                  : pick.handY > pick.height ? pick.handY - pick.height : 0
-    readonly property real pastX: pick.handX < 0 ? pick.handX
-                                  : pick.handX > pick.width ? pick.handX - pick.width : 0
+    readonly property real pastY: pick.handPosition.y < 0 ? pick.handPosition.y
+                                  : pick.handPosition.y > pick.height ? pick.handPosition.y - pick.height : 0
+    readonly property real pastX: pick.handPosition.x < 0 ? pick.handPosition.x
+                                  : pick.handPosition.x > pick.width ? pick.handPosition.x - pick.width : 0
     // A drag past the frame carries the diff after it at the middle-click hand's gain, re-reading the row on every
     // step: the rows move under a pointer standing still.
     Timer {
@@ -290,9 +288,10 @@ Item {
         repeat: true
         onTriggered: {
             pick.scrollWanted(pick.pastY * Metrics.middleScrollGain, pick.pastX * Metrics.middleScrollGain)
-            const row = pick.rowAt(pick.handY)
+            const at = pick.handPosition
+            const row = pick.rowAt(at.y)
             if (row >= 0)
-                pick.dragText(row, pick.byteAt(pick.side, row, pick.handX - pick.codeStart(pick.side)))
+                pick.dragText(row, pick.byteAt(pick.side, row, at.x - pick.codeStart(pick.side)))
         }
     }
 }

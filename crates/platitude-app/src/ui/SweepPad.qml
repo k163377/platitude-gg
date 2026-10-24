@@ -34,14 +34,14 @@ Item {
         pad.field = pad.nearestTo(x, y)
         pad.taking = !!pad.field
         if (pad.taking)
-            pad.field.anchorFrom(pad, x, y)
+            pad.field.anchorFrom(pad, Qt.point(x, y))
         return pad.taking
     }
     function moveAt(x, y) {
         if (!pad.taking)
             return
         // One field per gesture (規約 §右のペインの字は掴める): changing half-way would drop the selection just made.
-        pad.field.extendFrom(pad, x, y)
+        pad.field.extendFrom(pad, Qt.point(x, y))
     }
     function releaseNow() {
         pad.taking = false

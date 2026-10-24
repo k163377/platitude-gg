@@ -417,19 +417,19 @@ Item {
                 continue
             rows++
             shortest = shortest === 0 ? item.codeInk : Math.min(shortest, item.codeInk)
-            const past = Math.min(hand.width - 1, ends + 200)
+            const blank = Qt.point(Math.min(hand.width - 1, ends + 200), y)
             const whole = acts.copyOfRow(i)
 
             diffPane.diffModel.clearSelect()
-            hand.takeAt(ends + 4, y, Qt.LeftButton)
-            hand.followAt(past, y)
+            hand.takeAt(Qt.point(ends + 4, y), Qt.LeftButton)
+            hand.followAt(blank)
             hand.releaseText()
             quiet = quiet && !diffPane.diffModel.selHasNew && diffPane.diffModel.selRemoved === 0
 
             if (fromHead) {
-                clamped = clamped && acts.dragTakes(0, y, past, y, whole)
+                clamped = clamped && acts.dragTakes(Qt.point(0, y), blank, whole)
                 // And from the blank back onto the row — the blank is a start too (規約 §diff の中身をコピーする).
-                backwards = backwards && acts.dragTakes(past, y, 0, y, whole)
+                backwards = backwards && acts.dragTakes(blank, Qt.point(0, y), whole)
             }
         }
         return { rows: rows, shortest: shortest, quiet: rows > 0 && quiet,
@@ -445,11 +445,11 @@ Item {
         return diffPane.copySelection() ? driver.clipboard.lastCopied : ""
     }
     /// One drag between two points of the hand; whether its copy is `want` (never for an empty `want`).
-    function dragTakes(fromX, fromY, toX, toY, want) {
+    function dragTakes(from, to, want) {
         const hand = diffPane.textHand
         diffPane.diffModel.clearSelect()
-        hand.takeAt(fromX, fromY, Qt.LeftButton)
-        hand.followAt(toX, toY)
+        hand.takeAt(from, Qt.LeftButton)
+        hand.followAt(to)
         hand.releaseText()
         return diffPane.copySelection() && driver.clipboard.lastCopied === want && want !== ""
     }
@@ -479,7 +479,8 @@ Item {
                 lines.push(acts.copyOfRow(i))
         }
         const want = lines.join("\n")
-        const took = acts.dragTakes(0, first.y, Math.min(hand.width - 1, last.ends + 200), last.y, want)
+        const to = Qt.point(Math.min(hand.width - 1, last.ends + 200), last.y)
+        const took = acts.dragTakes(Qt.point(0, first.y), to, want)
         return "" + (took && lines.length > 1)
     }
     /// The shot: a drag past the end of two rows, left standing — the band has to stop at the ink.
@@ -496,8 +497,8 @@ Item {
             if (ends < 1 || ends + 4 >= hand.width || y < 0 || y >= hand.height)
                 continue
             if (stood === 0)
-                hand.takeAt(0, y, Qt.LeftButton)
-            hand.followAt(Math.min(hand.width - 1, ends + 200), y)
+                hand.takeAt(Qt.point(0, y), Qt.LeftButton)
+            hand.followAt(Qt.point(Math.min(hand.width - 1, ends + 200), y))
             stood++
         }
         hand.releaseText()
@@ -734,10 +735,9 @@ Item {
                 }
                 // The anchor's ring is part of the picture, so the hand is left running for the shot.
                 diffPane.sendCode(diffPane.codeMax / 2)
-                diffPane.startCodeHand(diffPane.view.width / 2,
-                                       diffPane.view.height / 2)
-                diffPane.driftCodeHand(diffPane.view.width / 2 + 120,
-                                       diffPane.view.height / 2 + 120)
+                const mid = Qt.point(diffPane.view.width / 2, diffPane.view.height / 2)
+                diffPane.startCodeHand(mid)
+                diffPane.driftCodeHand(Qt.point(mid.x + 120, mid.y + 120))
                 codeSendTimer.sent = true
                 return
             }

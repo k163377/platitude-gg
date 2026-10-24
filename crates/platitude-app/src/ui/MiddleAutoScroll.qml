@@ -27,10 +27,9 @@ Item {
     readonly property bool middlePastes: Qt.platform.os === "linux"
 
     property bool scrolling: false
-    property real anchorX: 0
-    property real anchorY: 0
-    property real currentX: 0
-    property real currentY: 0
+    /// Where the gesture started and where the pointer is now, in this frame — copies, not the events' points.
+    property point anchorPosition: Qt.point(0, 0)
+    property point currentPosition: Qt.point(0, 0)
     /// Whether this gesture pans too — decided where the press landed and kept for the whole gesture
     /// (デザイン規約 §グラフを横へ送る).
     property bool panning: false
@@ -46,38 +45,38 @@ Item {
 
     /// A middle press at a point in this frame: starts the gesture, or steps aside for what claimed it (`claimedAt`).
     /// Answers whether the hand took it. The press and a run both come in here.
-    function press(x, y) {
-        if (autoScroll.claimedAt(x, y))
+    function press(position) {
+        if (autoScroll.claimedAt(position))
             return false
-        autoScroll.start(x, y)
+        autoScroll.start(position)
         return true
     }
     /// Whether a middle press at this point belongs to something under the hand: text being written where the platform
     /// pastes (`middlePastes`), or a surface inside this one with a hand of its own. Walks the items the press would
     /// land on, top down.
-    function claimedAt(x, y) {
+    function claimedAt(position) {
         let item = autoScroll.parent
-        let at = autoScroll.mapToItem(item, x, y)
+        let at = autoScroll.mapToItem(item, position)
         while (item !== null) {
             if (item !== autoScroll.parent && item.middlePastes !== undefined)
                 return true
             if (autoScroll.middlePastes && item.cursorPosition !== undefined && item.readOnly === false)
                 return true
-            const next = autoScroll.topChildAt(item, at.x, at.y)
+            const next = autoScroll.topChildAt(item, at)
             if (next !== null)
-                at = item.mapToItem(next, at.x, at.y)
+                at = item.mapToItem(next, at)
             item = next
         }
         return false
     }
     /// The child a press at this point of `item` lands on: visible, holding the point, highest `z`, last declared
     /// among equals. Not `childAt`, which ignores `z` (`DiffPane.doorOnTop`). This hand is passed over — it is asking.
-    function topChildAt(item, x, y) {
+    function topChildAt(item, position) {
         const kids = item.children
         let top = null
         for (let i = 0; i < kids.length; i++) {
             const kid = kids[i]
-            if (kid === autoScroll || !kid.visible || !kid.contains(item.mapToItem(kid, x, y)))
+            if (kid === autoScroll || !kid.visible || !kid.contains(item.mapToItem(kid, position)))
                 continue
             if (top === null || kid.z >= top.z)
                 top = kid
@@ -85,23 +84,20 @@ Item {
         return top
     }
     /// Starts autoscroll from a point in this frame; the press and the automation hook both come through here.
-    function start(x, y) {
-        autoScroll.anchorX = x
-        autoScroll.anchorY = y
-        autoScroll.currentX = x
-        autoScroll.currentY = y
-        autoScroll.panning = x >= autoScroll.panFrom && x < autoScroll.panTo
+    function start(position) {
+        autoScroll.anchorPosition = position
+        autoScroll.currentPosition = position
+        autoScroll.panning = position.x >= autoScroll.panFrom && position.x < autoScroll.panTo
         autoScroll.travelled = false
         autoScroll.ticks = 0
         autoScroll.scrolling = true
     }
     /// Where the pointer has drifted to (the ticker reads its distance from the anchor as speed), and whether it has
     /// left the dead zone (`travelled`). The pointer and a run both come in here.
-    function drift(x, y) {
-        autoScroll.currentX = x
-        autoScroll.currentY = y
-        if (Math.abs(x - autoScroll.anchorX) > Metrics.middleScrollDeadZone
-                || Math.abs(y - autoScroll.anchorY) > Metrics.middleScrollDeadZone)
+    function drift(position) {
+        autoScroll.currentPosition = position
+        if (Math.abs(position.x - autoScroll.anchorPosition.x) > Metrics.middleScrollDeadZone
+                || Math.abs(position.y - autoScroll.anchorPosition.y) > Metrics.middleScrollDeadZone)
             autoScroll.travelled = true
     }
     /// The gesture is over: a click, the wheel, Escape (`MiddleHand`), another surface's gesture, or this surface
@@ -148,8 +144,8 @@ Item {
         anchors.fill: parent
         acceptedButtons: Qt.MiddleButton
         // Left unaccepted, the press goes on to what lies under the hand (`press`).
-        onPressed: mouse => mouse.accepted = autoScroll.press(mouse.x, mouse.y)
-        onPositionChanged: mouse => autoScroll.drift(mouse.x, mouse.y)
+        onPressed: mouse => mouse.accepted = autoScroll.press(Qt.point(mouse.x, mouse.y))
+        onPositionChanged: mouse => autoScroll.drift(Qt.point(mouse.x, mouse.y))
         onReleased: autoScroll.letGo()
     }
     MouseArea {
@@ -159,7 +155,7 @@ Item {
         acceptedButtons: Qt.AllButtons
         // The cursor says which ways this gesture goes, so lanes staying put under a sideways drift do not look broken.
         cursorShape: autoScroll.panning ? Qt.SizeAllCursor : Qt.SizeVerCursor
-        onPositionChanged: mouse => autoScroll.drift(mouse.x, mouse.y)
+        onPositionChanged: mouse => autoScroll.drift(Qt.point(mouse.x, mouse.y))
         onPressed: mouse => {
             autoScroll.stop()
             mouse.accepted = true
@@ -177,16 +173,16 @@ Item {
             repeat: true
             onTriggered: {
                 autoScroll.ticks++
-                const dy = Metrics.handSent(autoScroll.currentY - autoScroll.anchorY, drift.interval)
-                const dx = autoScroll.panning && autoScroll.canPan
-                         ? Metrics.handSent(autoScroll.currentX - autoScroll.anchorX, drift.interval)
-                         : 0
+                const from = autoScroll.anchorPosition
+                const at = autoScroll.currentPosition
+                const dy = Metrics.handSent(at.y - from.y, drift.interval)
+                const dx = autoScroll.panning && autoScroll.canPan ? Metrics.handSent(at.x - from.x, drift.interval) : 0
                 autoScroll.drifted(dy, dx)
             }
         }
         Rectangle {
-            x: autoScroll.anchorX - Theme.iconMd / 2
-            y: autoScroll.anchorY - Theme.iconMd / 2
+            x: autoScroll.anchorPosition.x - Theme.iconMd / 2
+            y: autoScroll.anchorPosition.y - Theme.iconMd / 2
             width: Theme.iconMd
             height: Theme.iconMd
             radius: Theme.iconMd / 2

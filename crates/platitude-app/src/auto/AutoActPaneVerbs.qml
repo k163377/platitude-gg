@@ -312,8 +312,8 @@ Item {
                 const y = graphPane.height / 2
                 const x = Harness.autoActArg === "message"
                         ? graphPane.labelW + graphPane.graphColW + Theme.spaceXl : graphPane.labelW + Theme.spaceSm
-                graphPane.startAutoScroll(x, y)
-                graphPane.driftPointer(x + graphPane.width, y)
+                graphPane.startAutoScroll(Qt.point(x, y))
+                graphPane.driftPointer(Qt.point(x + graphPane.width, y))
                 middleScrollTimer.start()
                 return
             }
@@ -445,10 +445,10 @@ Item {
                 // The subject column: a press on the lanes would mix the sideways drift into the answer.
                 const x = graphPane.labelW + graphPane.graphColW + Theme.spaceXl
                 middleExitTimer.fromY = graphPane.view.contentY
-                graphPane.startAutoScroll(x, y)
+                graphPane.startAutoScroll(Qt.point(x, y))
                 // Past the pad for `held`, well inside it for `click`.
-                graphPane.driftPointer(x, y + (Harness.autoActArg === "click"
-                                               ? Metrics.middleScrollDeadZone - 5 : 200))
+                graphPane.driftPointer(Qt.point(x, y + (Harness.autoActArg === "click"
+                                                        ? Metrics.middleScrollDeadZone - 5 : 200)))
                 middleExitTimer.step = 1
                 return
             }

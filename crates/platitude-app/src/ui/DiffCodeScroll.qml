@@ -48,8 +48,8 @@ Item {
 
     /// Automation: the hand, driven without a pointer (a middle button cannot be injected), and what it and the bar
     /// are doing.
-    function startHand(x, y) { hand.start(x, y) }
-    function driftHand(x, y) { hand.drift(x, y) }
+    function startHand(position) { hand.start(position) }
+    function driftHand(position) { hand.drift(position) }
     readonly property alias handScrolling: hand.scrolling
     readonly property alias barShown: bar.visible
 

@@ -505,13 +505,13 @@ Rectangle {
     readonly property alias autoPanning: autoScroll.panning
     /// Starts autoscroll from a point in this pane's frame, and moves the pointer of one already under way — for the
     /// presses and the automation hook alike.
-    function startAutoScroll(x, y) {
+    function startAutoScroll(position) {
         // A wheel notch still in flight would pull against the drift for its last beat (`WheelGlide.halt`).
         graphList.haltGlide()
-        autoScroll.start(x, y)
+        autoScroll.start(position)
     }
-    function driftPointer(x, y) {
-        autoScroll.drift(x, y)
+    function driftPointer(position) {
+        autoScroll.drift(position)
     }
     /// The middle button came up. **Which exit that is was decided while it was down** (`MiddleAutoScroll.letGo`).
     function letGoAutoScroll() {
