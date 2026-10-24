@@ -256,8 +256,8 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
             println!("{}", line.mine(&me));
             Ok(())
         }
-        ["wait", "next"] => wait(&here, &me, 1),
-        ["wait", "head"] => wait(&here, &me, 0),
+        ["wait", "next"] => wait(&here, &me, 1, &super::WAIT_NEXT),
+        ["wait", "head"] => wait(&here, &me, 0, &super::WAIT_HEAD),
         ["leave", why @ ..] if !why.is_empty() => {
             if me.session.is_empty() {
                 return Err("no session identity — the line is per session".into());
@@ -282,8 +282,13 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
 /// or nearer the head, then says where it stands and what that stage
 /// does. Ends with an error the moment the session is not in the line; a
 /// line that cannot be read is looked at again, for [`UNREADABLE`] at
-/// most.
-fn wait(here: &str, me: &Identity, until: usize) -> Result<(), String> {
+/// most, and then `rerun` — the command waiting — is named to run again.
+fn wait(
+    here: &str,
+    me: &Identity,
+    until: usize,
+    rerun: &crate::command::Command,
+) -> Result<(), String> {
     if me.session.is_empty() {
         return Err(
             "no session identity — the line is per session (CLAUDE_CODE_SESSION_ID)".into(),
@@ -310,11 +315,7 @@ fn wait(here: &str, me: &Identity, until: usize) -> Result<(), String> {
                         "the line could not be read for {}s — {why}. Run `{}` again once git \
                          answers",
                         UNREADABLE.as_secs(),
-                        if until == 0 {
-                            super::WAIT_HEAD.line()
-                        } else {
-                            super::WAIT_NEXT.line()
-                        }
+                        rerun.line()
                     ));
                 }
             }
