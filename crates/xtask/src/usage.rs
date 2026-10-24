@@ -197,12 +197,11 @@ commands:
       what lets a table or a heading indented inside a list stay part of
       it; fenced code and YAML front matter are skipped whole. Structure
       only: how wide a line runs and how a sentence is built are the
-      writer's. An always-step of `gate` —
-      sixteen files in twenty milliseconds is under the cost of asking a
-      stamp whether it still answers. The Write hook says the same thing
-      about the one file an edit just landed in, which is where a tear is
-      cheapest to undo: the turn that made it is the only one that still
-      knows what the line meant to say.
+      writer's. An always-step of `gate` — reading every file costs less
+      than asking a stamp whether it still answers. The Write hook says
+      the same thing about the one file an edit just landed in, which is
+      where a tear is cheapest to undo: the turn that made it is the only
+      one that still knows what the line meant to say.
 
       It also holds what those documents quote: the value cells of
       デザイン規約 against Theme.qml and Metrics.qml, and the command
@@ -237,12 +236,12 @@ commands:
   deny
       cargo-deny over deny.toml: the bans that keep networking crates and
       git implementations out of the closure (CLAUDE.md 絶対制約), the
-      registries, and the license allow list. Three checks —
-      advisories fetches the RustSec database from github.com, and stage
-      2 stays offline; CI's whole test runs all four. Needs cargo-deny installed
-      (`cargo install --locked cargo-deny`), and says so when it is
-      missing. `gate` runs this when deny.toml or a manifest
-      moved, which is every way the closure can change.
+      registries, and the license allow list. Runs bans, sources and
+      licenses: advisories fetches the RustSec database from github.com
+      and stage 2 stays offline, so only CI's whole test runs all four.
+      Needs cargo-deny installed (`cargo install --locked cargo-deny`),
+      and says so when it is missing. `gate` runs this when deny.toml or
+      a manifest moved, which is every way the closure can change.
 
 ";
 
@@ -449,6 +448,7 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       [env]): the commit's own configuration sets that. cargo still reads
       the configuration of every directory above the rig, the primary
       checkout's included, and build.txt names each one it read.
+      See internal-docs/性能.md §計測 for contracts and OS baselines.
       options:
         --at <rev>        the commit to measure, built on the rig (above)
         --qt <version>    build and run with this Qt, not the pinned one
@@ -477,16 +477,16 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
         --no-scroll       leave the scroll benchmark out
         --no-select       selection empty, diff closed
         --selection <s>   none, first (default), or head
-        --select-oid <id>  select this full OID from the loaded graph
+        --select-oid <id> select this full OID from the loaded graph
         --file <path>     open this changed file (default: first)
         --cases <tsv>     fixed name/OID/path/raw-or-coloured cases (tab-separated)
         --cycles <n>      repeat the case list; needs two distinct OIDs
-        --completion <s> raw (default) or final coloured frame
-        --diff-scroll    separately measure each visible overflowing diff
-        --cache <s>      warm (default), first (--runs 1), or cold
-        --cold-prepare <exe>  explicit cache preparation; receives repo and binary
-        --compare <rev>  ABBA against --at; --runs counts blocks (two samples each)
-                          See internal-docs/性能.md §計測 for contracts and OS baselines.
+        --completion <s>  raw (default) or final coloured frame
+        --diff-scroll     separately measure each visible overflowing diff
+        --cache <s>       warm (default), first (--runs 1), or cold
+        --cold-prepare <exe>
+                          explicit cache preparation; receives repo and binary
+        --compare <rev>   ABBA against --at; --runs counts blocks (two samples each)
         --no-diff         select and show details without opening a diff
         --output <path>   new directory for metadata and raw per-run logs
         --trace-frames    diagnostic app-clock frame series in app.log;
@@ -928,8 +928,7 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       transcript, Desktop-log and child-process rules above are Claude's;
       Codex uses its own lifecycle hooks as described below.
 
-      Codex manual fallback: awake codex work|idle
-      Manual fallback for Codex activity hooks (.codex/hooks.json).
+      Codex manual fallback (.codex/hooks.json): awake codex work|idle
       CODEX_THREAD_ID names the chat; its claimed seat is read from Git
       even when the session cwd is the primary checkout. `work` refreshes
       working activity for one hour; refresh before it expires, including
