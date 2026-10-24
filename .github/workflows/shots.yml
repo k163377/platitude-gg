@@ -69,7 +69,7 @@ jobs:
         run: rustup toolchain install --no-self-update
       - name: Qt
         uses: ./.github/actions/qt
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           env-vars: QMAKE
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -133,12 +133,8 @@ jobs:
             ${{ runner.temp }}/shots/*/*.png
             ${{ runner.temp }}/shots/*/*.txt
           retention-days: 30
-      # As in ci.yml, and for one more reason: the cache's cleanup before it
-      # saves goes down every folder under target/ holding no build, deps or
-      # .fingerprint, and takes one named `tests` for a profile — it opens
-      # that folder's `target` and `trybuild` unawaited, two ENOENT errors on
-      # the run's page for each demo repository the replay left with a
-      # `tests/` (`demo::scale::long`), and empties the rest of it.
+      # As in ci.yml: before the cache saves, so the entry holds no target/tmp
+      # — here the demo repositories the replay left.
       - name: Drop the throwaway trees before the cache saves
         if: ${{ always() }}
         run: rm -rf target/tmp
