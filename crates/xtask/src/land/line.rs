@@ -246,16 +246,10 @@ pub(crate) fn must_be_head(dir: &str, me: &Identity) -> Result<(), String> {
 
 /// `cargo xtask land line | wait next | wait head | leave <why>`.
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
-    let here = crate::tree::workspace_root()
-        .to_string_lossy()
-        .replace('\\', "/");
+    let here = crate::seats::slashed(&crate::tree::workspace_root());
     let me = Identity::current(None);
-    match args
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>()
-        .as_slice()
-    {
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    match args.as_slice() {
         ["line"] => {
             let line = read(&here)?;
             println!("{}", line.say());
