@@ -24,13 +24,7 @@ const NET: std::time::Duration = remote::DEFAULT_NETWORK_TIMEOUT;
 async fn a_non_fast_forward_push_is_refused_until_forced() {
     let (mut bare, mut work) = origin_and_clone();
     let (exec, cancel) = env();
-
-    let mut other = TestRepo::init();
-    other.git(&["remote", "add", "origin", &bare.file_url()]);
-    other.git(&["fetch", "origin"]);
-    other.git(&["checkout", "-b", "main", "origin/main"]);
-    other.commit_file("theirs.txt", "theirs\n", "their work");
-    other.git(&["push", "origin", "main"]);
+    moved_over_there(&bare, "main", "theirs.txt", "their work");
 
     work.git(&["commit", "--amend", "-m", "rewritten root"]);
     let spec = PushSpec {
@@ -88,27 +82,14 @@ async fn a_non_fast_forward_push_is_refused_until_forced() {
 #[tokio::test]
 async fn replacing_a_remote_branch_moves_the_name_and_the_tracking() {
     let (mut bare, mut work) = origin_and_clone();
-    let (exec, cancel) = env();
-
-    work.git(&["switch", "-c", "billing"]);
-    work.commit_file("b.txt", "b\n", "billing work");
-    work.git(&["push", "-u", "origin", "billing"]);
-    let tip = work.git(&["rev-parse", "billing"]);
+    let tip = a_branch_over_there(&mut work, "billing");
+    work.git(&["switch", "billing"]);
     // Replacing publishes nothing: this commit is only here.
     work.commit_file("b.txt", "b2\n", "not published");
 
-    remote::replace_remote_branch(
-        &exec,
-        &work.path,
-        "origin",
-        "billing",
-        "billing-v2",
-        &tip,
-        NET,
-        &cancel,
-    )
-    .await
-    .expect("replace remote branch");
+    replace_billing(&work, &tip)
+        .await
+        .expect("replace remote branch");
 
     assert!(
         !bare.git_ok(&["rev-parse", "--verify", "refs/heads/billing"]),
@@ -133,30 +114,16 @@ async fn replacing_a_remote_branch_moves_the_name_and_the_tracking() {
 #[tokio::test]
 async fn a_replace_whose_push_fails_deletes_nothing() {
     let (mut bare, mut work) = origin_and_clone();
-    let (exec, cancel) = env();
-
-    work.git(&["switch", "-c", "billing"]);
-    work.commit_file("b.txt", "b\n", "billing work");
-    work.git(&["push", "-u", "origin", "billing"]);
-    let tip = work.git(&["rev-parse", "origin/billing"]);
+    let tip = a_branch_over_there(&mut work, "billing");
     // Unrelated work already under the new name: the push cannot fast-forward.
-    work.git(&["switch", "-c", "someone-else", "main"]);
+    work.git(&["switch", "-c", "someone-else"]);
     work.commit_file("c.txt", "c\n", "not ours");
     work.git(&["push", "origin", "someone-else:billing-v2"]);
     work.git(&["switch", "billing"]);
 
-    let error = remote::replace_remote_branch(
-        &exec,
-        &work.path,
-        "origin",
-        "billing",
-        "billing-v2",
-        &tip,
-        NET,
-        &cancel,
-    )
-    .await
-    .expect_err("the push is refused");
+    let error = replace_billing(&work, &tip)
+        .await
+        .expect_err("the push is refused");
     assert!(
         error.is_outdated() || matches!(error, GitError::Failed { .. }),
         "{error:?}"
@@ -183,16 +150,39 @@ fn a_branch_over_there(work: &mut TestRepo, name: &str) -> String {
     work.git(&["rev-parse", &format!("origin/{name}")])
 }
 
-/// Someone else's push to `branch` after our last fetch. Returns the tip
-/// it left over there, which this clone has never seen.
-fn moved_over_there(bare: &TestRepo, branch: &str) -> String {
+/// Someone else's push to `branch` after our last fetch: `file`, committed
+/// as `message` in a clone of their own. Returns the tip it left over
+/// there, which this clone has never seen.
+fn moved_over_there(bare: &TestRepo, branch: &str, file: &str, message: &str) -> String {
     let mut other = TestRepo::init();
     other.git(&["remote", "add", "origin", &bare.file_url()]);
     other.git(&["fetch", "origin"]);
-    other.git(&["switch", "-c", branch, &format!("origin/{branch}")]);
-    other.commit_file("theirs.txt", "theirs\n", "pushed since our fetch");
+    other.git(&[
+        "switch",
+        "--force-create",
+        branch,
+        &format!("origin/{branch}"),
+    ]);
+    let tip = other.commit_file_id(file, "theirs\n", message);
     other.git(&["push", "origin", branch]);
-    other.git(&["rev-parse", "HEAD"])
+    tip
+}
+
+/// [`remote::replace_remote_branch`] of `billing` with `billing-v2` on
+/// `origin`, leased to the commit the screen showed.
+async fn replace_billing(work: &TestRepo, shown: &str) -> Result<(), GitError> {
+    let (exec, cancel) = env();
+    remote::replace_remote_branch(
+        &exec,
+        &work.path,
+        "origin",
+        "billing",
+        "billing-v2",
+        shown,
+        NET,
+        &cancel,
+    )
+    .await
 }
 
 /// The lease is on the commit the screen showed: a push since the last
@@ -203,7 +193,7 @@ async fn a_remote_branch_that_moved_since_the_last_fetch_is_not_deleted() {
     let (mut bare, mut work) = origin_and_clone();
     let (exec, cancel) = env();
     let shown = a_branch_over_there(&mut work, "topic");
-    let theirs = moved_over_there(&bare, "topic");
+    let theirs = moved_over_there(&bare, "topic", "theirs.txt", "pushed since our fetch");
 
     let err =
         remote::delete_remote_branch(&exec, &work.path, "origin", "topic", &shown, NET, &cancel)
@@ -270,22 +260,12 @@ async fn a_remote_branch_dropped_since_the_last_fetch_is_the_leases_refusal() {
 #[tokio::test]
 async fn a_replace_whose_delete_is_refused_leaves_both_names_and_the_tracking() {
     let (mut bare, mut work) = origin_and_clone();
-    let (exec, cancel) = env();
     let shown = a_branch_over_there(&mut work, "billing");
-    let theirs = moved_over_there(&bare, "billing");
+    let theirs = moved_over_there(&bare, "billing", "theirs.txt", "pushed since our fetch");
 
-    let err = remote::replace_remote_branch(
-        &exec,
-        &work.path,
-        "origin",
-        "billing",
-        "billing-v2",
-        &shown,
-        NET,
-        &cancel,
-    )
-    .await
-    .expect_err("the old name moved since the screen showed it");
+    let err = replace_billing(&work, &shown)
+        .await
+        .expect_err("the old name moved since the screen showed it");
     assert!(err.is_outdated(), "{err}");
     assert_eq!(
         bare.git(&["rev-parse", "billing"]),
@@ -313,7 +293,7 @@ async fn a_replace_whose_delete_is_refused_leaves_both_names_and_the_tracking() 
 async fn delete_both_refused_by_the_lease_keeps_the_commit_under_the_remote_tracking_ref() {
     let (mut bare, mut work) = origin_and_clone();
     let shown = a_branch_over_there(&mut work, "topic");
-    let theirs = moved_over_there(&bare, "topic");
+    let theirs = moved_over_there(&bare, "topic", "theirs.txt", "pushed since our fetch");
     let (sink, session) = opened(&work).await;
 
     let id = session
@@ -446,11 +426,8 @@ async fn a_taken_name_holding_commits_of_its_own_is_refused() {
     let (mut bare, mut work) = origin_and_clone();
     let (exec, cancel) = env();
 
-    work.git(&["switch", "-c", "theirs"]);
-    work.commit_file("b.txt", "theirs\n", "theirs");
-    work.git(&["push", "origin", "theirs"]);
-    let theirs = bare.git(&["rev-parse", "theirs"]);
-    work.git(&["switch", "-c", "ours", "HEAD~1"]);
+    let theirs = a_branch_over_there(&mut work, "theirs");
+    work.git(&["switch", "-c", "ours"]);
     work.commit_file("c.txt", "ours\n", "ours");
 
     let tip = remote::branch_tip(&exec, &work.path, "origin", "theirs", NET, &cancel)
@@ -696,13 +673,7 @@ async fn a_hook_a_neighbour_holds_open_still_says_why_the_push_was_refused() {
 async fn a_push_that_is_only_out_of_date_reports_gits_own_advice() {
     let (bare, mut work) = origin_and_clone();
     let (exec, cancel) = env();
-
-    let mut other = TestRepo::init();
-    other.git(&["remote", "add", "origin", &bare.file_url()]);
-    other.git(&["fetch", "origin"]);
-    other.git(&["checkout", "-b", "main", "origin/main"]);
-    other.commit_file("theirs.txt", "theirs\n", "pushed while you slept");
-    other.git(&["push", "origin", "main"]);
+    moved_over_there(&bare, "main", "theirs.txt", "pushed while you slept");
     work.commit_file("ours.txt", "ours\n", "work of our own");
 
     let err = remote::push(
@@ -735,25 +706,13 @@ async fn a_push_that_is_only_out_of_date_reports_gits_own_advice() {
     );
 }
 
-/// A second working clone of the same bare `origin`, with a commit of
-/// its own already pushed: the far side that has moved on.
-fn origin_that_moved_on(bare: &TestRepo, file: &str, message: &str) -> TestRepo {
-    let mut other = TestRepo::init();
-    other.git(&["remote", "add", "origin", &bare.file_url()]);
-    other.git(&["fetch", "origin"]);
-    other.git(&["switch", "--force-create", "main", "origin/main"]);
-    other.commit_file(file, "far side\n", message);
-    other.git(&["push", "origin", "main"]);
-    other
-}
-
 /// The fast-forward git refuses over work in the way exits 1 with nothing
 /// standing, and its row keeps git's list of the files (as a merge's does).
 #[tokio::test]
 async fn a_pull_refused_over_work_in_the_way_keeps_gits_words_in_the_log() {
     let (bare, mut work) = origin_and_clone();
     work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
-    let _far = origin_that_moved_on(&bare, "a.txt", "their line");
+    moved_over_there(&bare, "main", "a.txt", "their line");
     work.write_file("a.txt", "mine\n");
     let said = std::sync::Arc::new(crate::support::exec::Said::default());
     let (exec, cancel) =
@@ -779,7 +738,7 @@ async fn a_branch_aside_is_fast_forwarded_to_what_its_upstream_holds() {
     let (bare, mut work) = origin_and_clone();
     let (exec, cancel) = env();
     a_branch_over_there(&mut work, "topic");
-    let theirs = moved_over_there(&bare, "topic");
+    let theirs = moved_over_there(&bare, "topic", "theirs.txt", "pushed since our fetch");
     let head = work.git(&["rev-parse", "HEAD"]);
 
     remote::fast_forward(&exec, &work.path, "topic", NET, &cancel)
@@ -811,7 +770,7 @@ async fn a_branch_aside_with_commits_of_its_own_keeps_them() {
     let (bare, mut work) = origin_and_clone();
     let (exec, cancel) = env();
     a_branch_over_there(&mut work, "topic");
-    moved_over_there(&bare, "topic");
+    moved_over_there(&bare, "topic", "theirs.txt", "pushed since our fetch");
     work.git(&["switch", "topic"]);
     work.commit_file("mine.txt", "mine\n", "work of our own");
     work.git(&["switch", "main"]);
@@ -981,7 +940,7 @@ mod periodic {
         let (bare, mut work) = origin_and_clone();
         let (exec, cancel) = env();
         work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
-        let _far = origin_that_moved_on(&bare, "a.txt", "their line");
+        moved_over_there(&bare, "main", "a.txt", "their line");
         work.write_file("a.txt", "uncommitted\n");
 
         remote::pull(&exec, &work.path, NET, &cancel)
@@ -1103,7 +1062,7 @@ mod periodic {
             if let Some(reconcile) = reconcile {
                 work.git(&["config", "pull.rebase", reconcile]);
             }
-            let _far = origin_that_moved_on(&bare, "a.txt", "their line");
+            moved_over_there(&bare, "main", "a.txt", "their line");
             work.commit_file("b.txt", "our line\n", "ours");
 
             let err = remote::pull(&exec, &work.path, NET, &cancel)
@@ -1134,7 +1093,7 @@ mod periodic {
         let (exec, cancel) = env();
         work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
         work.git(&["config", "pull.rebase", "true"]);
-        let _far = origin_that_moved_on(&bare, "b.txt", "over there");
+        moved_over_there(&bare, "main", "b.txt", "over there");
         work.write_file("a.txt", "mine\n");
 
         remote::pull(&exec, &work.path, NET, &cancel)
@@ -1175,7 +1134,7 @@ mod periodic {
         let (bare, mut work) = origin_and_clone();
         let (exec, cancel) = env();
         work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
-        let _far = origin_that_moved_on(&bare, "b.txt", "over there");
+        moved_over_there(&bare, "main", "b.txt", "over there");
 
         remote::pull(&exec, &work.path, NET, &cancel)
             .await
