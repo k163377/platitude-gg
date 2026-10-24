@@ -766,10 +766,8 @@ FocusScope {
             // The plan takes the graph, and the menu it folds is frozen under it: the discard log goes, with its entry.
             if (page.recoverOpen)
                 page.toggleRecover()
-            page.foldForPlan(true)
-        } else {
-            page.foldForPlan(false)
         }
+        page.foldForPlan(page.planShown)
     }
     onPlanActiveChanged: {
         if (page.planActive) {
@@ -1121,8 +1119,8 @@ FocusScope {
         }
     }
 
-    /// A worktree on no branch takes the folder `name` beside its own (`git worktree move`); `path` is where it is. Both
-    /// boxes turned down every name that cannot go there. Its answer is waited for by name (`absorbWorktreeMove`).
+    /// A worktree on no branch takes the folder `name` beside its own (`git worktree move`); `path` is where it is.
+    /// Both boxes turned down every name that cannot go there. Its answer is waited for by name (`absorbWorktreeMove`).
     function renameWorktreeFolder(path, name) {
         const facts = worktreesModel.worktreeFacts(path)
         const place = worktreesModel.renamedWorktreeFor(path, name)
@@ -1682,7 +1680,8 @@ FocusScope {
         ? worktreesModel.newWorktreeFor(graphPane.namingText.trim()) : undefined
     /// Where a worktree's folder would go renamed to what is typed in the graph's box
     /// (`NavSectionModel.renamedWorktreeFor`); undefined for every other box.
-    readonly property var graphFolderPlace: graphPane.namingMode === "rename" && graphPane.namingKind === "worktreeFolder"
+    readonly property var graphFolderPlace:
+        graphPane.namingMode === "rename" && graphPane.namingKind === "worktreeFolder"
         ? worktreesModel.renamedWorktreeFor(graphPane.namingId, graphPane.namingText.trim()) : undefined
     /// A local branch being renamed that a rebase or bisect stopped in some worktree holds — this one's too: git
     /// renames none such (`NavSectionModel.heldByOperation`, as `SidebarRowGestures.editHeld`).
@@ -3399,7 +3398,7 @@ FocusScope {
     }
     /// A list has drawn what it was handed, and a delete may be waiting on that list's own row — so **all five say
     /// it**, and **which list is not passed on** (`ops_delete::note_listing_drawn`, rules-refs/app-ui.md
-    /// 「消した行を戻す合図は 3 つ」). Withheld while a run holds the in-between open for a picture (`holdGoneRows`).
+    /// 「消した行を戻す合図は 4 つ」). Withheld while a run holds the in-between open for a picture (`holdGoneRows`).
     function listingDrawn() {
         if (!page.holdGoneRows)
             repoTab.listingDrawn()
