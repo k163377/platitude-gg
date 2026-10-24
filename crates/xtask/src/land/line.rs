@@ -15,6 +15,7 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::hook::permit::COMMAND;
 use crate::locks::Locked;
 use crate::seats::{Held, Identity, Standing as Claim, WorktreeBlock, roster_letter, standing};
 use crate::subprocess::git_query;
@@ -179,11 +180,10 @@ pub(crate) fn standing_for(dir: &str, session: &str) -> Option<String> {
     let entry = load(&file(dir, session)?)?;
     if !entry.left.is_empty() {
         return Some(format!(
-            "line: this seat left the line of landings ({}, {}) — the user's next {} puts it back \
-             at the end.",
+            "line: this seat left the line of landings ({}, {}) — the user's next {COMMAND} puts \
+             it back at the end.",
             entry.left,
             ago(entry.left_at),
-            crate::hook::permit::COMMAND
         ));
     }
     let me = Identity {
@@ -212,11 +212,10 @@ pub(crate) fn must_be_head(dir: &str, me: &Identity) -> Result<(), String> {
     };
     if !entry.left.is_empty() {
         return Err(format!(
-            "this seat left the line of landings ({}, {}): the user's next {} puts it back at the \
-             end, and only then does it land",
+            "this seat left the line of landings ({}, {}): the user's next {COMMAND} puts it back \
+             at the end, and only then does it land",
             entry.left,
             ago(entry.left_at),
-            crate::hook::permit::COMMAND
         ));
     }
     let line = read(dir)?;
@@ -229,10 +228,9 @@ pub(crate) fn must_be_head(dir: &str, me: &Identity) -> Result<(), String> {
             line.say()
         )),
         None => Err(format!(
-            "this session's {} was typed in {}, which is in no worktree with a branch of its \
-             own, or that tree's claim is another conversation's now — the line of landings \
+            "this session's {COMMAND} was typed in {}, which is in no worktree with a branch of \
+             its own, or that tree's claim is another conversation's now — the line of landings \
              does not hold it",
-            crate::hook::permit::COMMAND,
             entry.cwd
         )),
     }
@@ -264,9 +262,8 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
             }
             if leave(&here, &me.session, &why.join(" ")) {
                 println!(
-                    "this seat left the line of landings; the user's next {} puts it back at the \
-                     end",
-                    crate::hook::permit::COMMAND
+                    "this seat left the line of landings; the user's next {COMMAND} puts it back \
+                     at the end"
                 );
                 Ok(())
             } else {
@@ -331,30 +328,27 @@ fn wait(here: &str, me: &Identity, until: usize) -> Result<(), String> {
 fn left_or_gone(here: &str, me: &Identity) -> String {
     match file(here, &me.session).and_then(|path| load(&path)) {
         Some(entry) if !entry.left.is_empty() => format!(
-            "this seat left the line of landings ({}, {}) — the user's next {} puts it back at \
-             the end",
+            "this seat left the line of landings ({}, {}) — the user's next {COMMAND} puts it \
+             back at the end",
             entry.left,
             ago(entry.left_at),
-            crate::hook::permit::COMMAND
         ),
         Some(_)
             if crate::hook::permit::asked(here, &me.session).is_some_and(|asked| asked.waits()) =>
         {
             format!(
                 "this session is not in the line: its landing waits for the user's approval of \
-                 the pictures its seat put up after their {} — their next {} lands the branch",
-                crate::hook::permit::COMMAND,
-                crate::hook::permit::COMMAND
+                 the pictures its seat put up after their {COMMAND} — their next {COMMAND} lands \
+                 the branch"
             )
         }
         Some(_) => format!(
             "this session is not in the line: its permit closed (the user's later message), its \
-             {} was typed outside a worktree, or the seat's claim is another conversation's",
-            crate::hook::permit::COMMAND
+             {COMMAND} was typed outside a worktree, or the seat's claim is another \
+             conversation's"
         ),
         None => format!(
-            "this session has no place in the line: no {} of the user's stands open for it",
-            crate::hook::permit::COMMAND
+            "this session has no place in the line: no {COMMAND} of the user's stands open for it"
         ),
     }
 }
