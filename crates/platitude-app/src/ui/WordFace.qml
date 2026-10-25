@@ -10,12 +10,15 @@ import platitude.ui
 QtObject {
     id: face
 
-    readonly property FontMetrics large: FontMetrics {
+    /// The face's `H`, large.
+    readonly property TextMetrics capitalInk: TextMetrics {
         font.family: Theme.uiFamily
         font.pixelSize: 1000
+        text: "H"
     }
-    /// The capitals' height.
-    readonly property real capital: face.large.capitalHeight / 1000
+    /// The capitals' height: an `H`'s ink. Not the face's own table (`capitalHeight`): Yu Gothic UI's sets the capitals
+    /// a tenth taller than the `H` it draws (0.772 of an em against 0.700); Noto Sans JP's and its `H` agree.
+    readonly property real capital: face.capitalInk.tightBoundingRect.height / 1000
     /// The face's `+`, measured by a `TextMetrics`: its answers are properties, which the bindings below follow when
     /// the face changes — a `FontMetrics` method answers once (rules/app-ui.md「メソッドはバインディングが依存を取らない」).
     readonly property TextMetrics plusInk: TextMetrics {
@@ -70,6 +73,14 @@ QtObject {
 
     function share(rect) {
         return { y: rect.y / 1000, width: rect.width / 1000, height: rect.height / 1000 }
+    }
+    /// The capitals' height at `size` as the face draws them, to whole pixels and rounded up: hinting stands their
+    /// edges on whole pixels, mostly a pixel above `capital` at a name's size, and how far depends on the weight and
+    /// on where the baseline falls — no measure taken off the face foretells it. A mark drawn to the height unrounded
+    /// stands no taller than the letters beside it; rounded up, it stands past them at every size a name is set in
+    /// (`tst_setmark.qml`).
+    function capitalsAt(size) {
+        return Math.ceil(face.capital * size - 1e-6)
     }
     /// How far above the baseline the capitals' middle stands, at `size` — where a picture beside words (a face)
     /// sets its own middle.

@@ -16,12 +16,13 @@ InkCanvas {
     /// moved so that box stands in the middle of its own (デザイン規約 §アイコンの席) — across only for a mark set beside
     /// words, which stands against the words down (`shiftY`). A box centred on a line puts the ink on that line's
     /// middle, at every size and every line weight, with nothing for the caller to add.
-    /// `tst_iconink.qml` holds each list to the pixels drawn.
+    /// `tst_iconink.qml` holds each list to the pixels drawn — the tag's and the house's in both shapes (`grown`).
     readonly property var reaches: {
         switch (icon.kind) {
-        case "branch": return [[3.2, 3.5, 1], [12.8, 5, 1], [5, 1.7, 1], [5, 14.3, 1]]
+        case "branch": return [[3.2, 3.5, 1], [13.55, 5, 1], [5, 1.7, 1], [5, 14.3, 1]]
         case "remote": return [[1.7, 10, 1], [14.6, 9.5, 1], [8.05, 3.1, 1], [8, 12.9, 1]]
-        case "tag": return [[8, 3.41, 1.41], [8, 13.59, 1.41], [2.91, 8.5, 1.41], [13.09, 8.5, 1.41]]
+        case "tag": return icon.grown ? [[8, 2.8, 1.41], [8, 14.2, 1.41], [2.3, 8.5, 1.41], [13.7, 8.5, 1.41]]
+                                      : [[8, 3.41, 1.41], [8, 13.59, 1.41], [2.91, 8.5, 1.41], [13.09, 8.5, 1.41]]
         case "stash": return [[3, 4, 1], [13, 4, 1], [4, 13, 1], [12, 13, 1]]
         // As tall as `branch`, ring and stem (`lettered`).
         case "tree": return [[3.5, 6, 1], [12.5, 6, 1], [8, 1.5, 1], [8, 14.1, 1]]
@@ -52,7 +53,8 @@ InkCanvas {
         case "check": return [[3.5, 8.5, 1], [6.8, 11.8, 1.41], [12.5, 4.5, 1]]
         case "lock": return [[3.5, 8.2, 1], [12.5, 13.5, 1], [8, 4.4, 1]]
         // Filled throughout.
-        case "home": return [[2.5, 6.5, 0], [8, 2.3, 0], [13.5, 13.7, 0], [2.5, 13.7, 0]]
+        case "home": return icon.grown ? [[1.84, 6.32, 0], [8, 1.62, 0], [14.16, 14.38, 0], [1.84, 14.38, 0]]
+                                       : [[2.5, 6.5, 0], [8, 2.3, 0], [13.5, 13.7, 0], [2.5, 13.7, 0]]
         // GitHub's mark (`githubMark`, 16 × 15.5 of its own grid) at `githubScale`, its box on the grid's middle.
         case "github": return [[2, 2.19, 0], [14, 13.81, 0]]
         case "folder": return [[2.5, 4.5, 1], [13.5, 12.5, 1], [2.5, 12.5, 1]]
@@ -124,6 +126,8 @@ InkCanvas {
     /// under the baseline — never on a sign's middle or stopped at the baseline, which would drop the ring under the
     /// names' tall letters or stand the feet on the line (デザイン規約 §アイコンの席).
     readonly property bool lettered: icon.kind === "tree" || icon.kind === "branch"
+    /// Whether the tag and the house are drawn 1.12x: a mark set beside words only, not one drawn in a box.
+    readonly property bool grown: icon.set !== ""
     /// Whether a set mark takes the seat (`MarkSeat`, デザイン規約 §アイコンの席「字の中の席」): a letter of the words,
     /// and a sign drawn as a picture — not in place of a character (`characterStandIn`).
     readonly property bool seated: icon.set === "name" || (icon.set === "sign" && !icon.characterStandIn)
@@ -143,18 +147,19 @@ InkCanvas {
         const takenBy = Qt.colorEqual(nameColor, Theme.textMuted) || Qt.colorEqual(nameColor, Theme.textOnAccent)
         return takenBy ? nameColor : icon.kindTint
     }
-    /// What a set mark is drawn against: `height`, the capitals' (a step over them for a heading), and `middle`, where
-    /// the marks' middles stand from the baseline — the capitals' middle for a mark among the words, the face's own
-    /// `+`'s for a sign (`sign`). `null` for a mark not set — and what the bindings reading it ask, not `set`: when
-    /// `set` turns, a binding can hear of it before this one has, and would read a `target` still `null`.
+    /// What a set mark is drawn against: `height`, the capitals' as the face draws them (`WordFace.capitalsAt`; a step
+    /// over them for a heading), and `middle`, where the marks' middles stand from the baseline — the capitals' middle
+    /// for a mark among the words, the face's own `+`'s for a sign (`sign`). `null` for a mark not set — and what the
+    /// bindings reading it ask, not `set`: when `set` turns, a binding can hear of it before this one has, and would
+    /// read a `target` still `null`.
     readonly property var target: {
         if (icon.set === "")
             return null
         const step = icon.set === "head" ? Metrics.markHead : 1
         const sign = icon.set === "sign" && !icon.lettered
-        return { height: WordFace.capital * icon.size * step,
-                 middle: sign ? (WordFace.plus.y + WordFace.plus.height / 2) * icon.size
-                              : -WordFace.capital * icon.size / 2,
+        const capitals = WordFace.capitalsAt(icon.size)
+        return { height: capitals * step,
+                 middle: sign ? (WordFace.plus.y + WordFace.plus.height / 2) * icon.size : -capitals / 2,
                  sign: sign }
     }
     /// The line: the stroke given, or for a set mark the words' stem. Not `line`, as `wordCell` is not `cell`: an
@@ -189,6 +194,12 @@ InkCanvas {
         // Every other mark on its middle line, whatever its height: a squat mark stood on the baseline reads as
         // dropped, a tall one centred runs past the capitals both ways. A sign never goes under the baseline — that
         // band is the descenders', and a sign hanging in it reads as dropped.
+        if (icon.lettered) {
+            // As far past the capitals drawn on their whole pixels one way as the other, its top not rounded: what
+            // runs past them is under a pixel at a name's size, and rounded, all of it lands on one side — the mark
+            // reads as dropped, or lifted.
+            return (Math.round(icon.wordBase) + icon.target.middle - icon.inkDown / 2) / icon.unit - icon.inkBox[1]
+        }
         const middle = Math.round(icon.wordBase + icon.target.middle - icon.inkDown / 2)
         const top = icon.target.sign ? Math.min(middle, Math.round(icon.wordBase) - icon.inkDown) : middle
         return top / icon.unit - icon.inkBox[1]
@@ -213,6 +224,12 @@ InkCanvas {
                                      : Math.round(icon.set === "sign" ? icon.inkAcross + 2 * icon.wordAir
                                                                       : icon.inkAcross)
 
+    /// `unit` for this set mark beside words of `size` it is not drawn at: what a seat measures the mark it holds by
+    /// (`MarkSeat.need`).
+    function unitAt(size) {
+        const step = icon.set === "head" ? Metrics.markHead : 1
+        return Math.max(0, WordFace.capitalsAt(size) - Metrics.markStem * size) * step / 11.5
+    }
     /// The ink's box at `u` pixels to the grid square, the line keeping its pixels.
     function inkAt(u) {
         const half = u > 0 ? icon.pen / 2 / u : 0
@@ -254,16 +271,17 @@ InkCanvas {
         ctx.lineJoin = "miter"
         if (icon.kind === "branch") {
             // A line stops on the ring's circle, so its cap reaches the hole's edge at every size. Drawn to the
-            // centre, it stands in the hole as a spike.
+            // centre, it stands in the hole as a spike. The third ring stands under the first, as the app's own icon
+            // has its branch (assets/platitude.svg): level with it, the mark stops reading as that icon's.
             ctx.beginPath()
             ctx.moveTo(5 * s, 5.3 * s)
             ctx.lineTo(5 * s, 10.7 * s)
             ctx.stroke()
             ctx.beginPath()
-            ctx.moveTo(11 * s, 6.8 * s)
-            ctx.bezierCurveTo(11 * s, 8.6 * s, 8.6 * s, 9.2 * s, 5.6 * s, 9.2 * s)
+            ctx.moveTo(11.75 * s, 6.8 * s)
+            ctx.bezierCurveTo(11.75 * s, 8.6 * s, 9.02 * s, 9.2 * s, 5.6 * s, 9.2 * s)
             ctx.stroke()
-            for (const c of [[5, 3.5], [5, 12.5], [11, 5]]) {
+            for (const c of [[5, 3.5], [5, 12.5], [11.75, 5]]) {
                 ctx.beginPath()
                 ctx.arc(c[0] * s, c[1] * s, 1.8 * s, 0, 2 * Math.PI)
                 ctx.stroke()
@@ -284,9 +302,10 @@ InkCanvas {
             ctx.save()
             ctx.translate(8 * s, 8.5 * s)
             ctx.rotate(Math.PI / 4)
-            ctx.strokeRect(-3.6 * s, -3.6 * s, 7.2 * s, 7.2 * s)
+            const g = icon.grown
+            ctx.strokeRect((g ? -4.03 : -3.6) * s, (g ? -4.03 : -3.6) * s, (g ? 8.06 : 7.2) * s, (g ? 8.06 : 7.2) * s)
             ctx.beginPath()
-            ctx.arc(-1.4 * s, -1.4 * s, 1 * s, 0, 2 * Math.PI)
+            ctx.arc((g ? -1.57 : -1.4) * s, (g ? -1.57 : -1.4) * s, (g ? 1.12 : 1) * s, 0, 2 * Math.PI)
             ctx.fill()
             ctx.restore()
         } else if (icon.kind === "stash") {
@@ -469,19 +488,21 @@ InkCanvas {
         } else if (icon.kind === "home") {
             // Filled, and proportioned off octicons / Feather (デザイン規約 §左メニューの所作「家の印だけは塗りで描く」).
             // The apex keeps the miter join: rounded, the slopes close into a dome.
+            const h = icon.grown
+                      ? [1.84, 6.32, 1.62, 14.16, 14.38, 6.77, 9.23, 9.46] : [2.5, 6.5, 2.3, 13.5, 13.7, 6.9, 9.1, 9.3]
             ctx.beginPath()
-            ctx.moveTo(2.5 * s, 6.5 * s)
-            ctx.lineTo(8 * s, 2.3 * s)
-            ctx.lineTo(13.5 * s, 6.5 * s)
-            ctx.lineTo(13.5 * s, 13.7 * s)
-            ctx.lineTo(2.5 * s, 13.7 * s)
+            ctx.moveTo(h[0] * s, h[1] * s)
+            ctx.lineTo(8 * s, h[2] * s)
+            ctx.lineTo(h[3] * s, h[1] * s)
+            ctx.lineTo(h[3] * s, h[4] * s)
+            ctx.lineTo(h[0] * s, h[4] * s)
             ctx.closePath()
             // The doorway, wound against the outline so the non-zero fill leaves it open (this part is never told
             // the background's colour).
-            ctx.moveTo(6.9 * s, 13.7 * s)
-            ctx.lineTo(9.1 * s, 13.7 * s)
-            ctx.lineTo(9.1 * s, 9.3 * s)
-            ctx.lineTo(6.9 * s, 9.3 * s)
+            ctx.moveTo(h[5] * s, h[4] * s)
+            ctx.lineTo(h[6] * s, h[4] * s)
+            ctx.lineTo(h[6] * s, h[7] * s)
+            ctx.lineTo(h[5] * s, h[7] * s)
             ctx.closePath()
             ctx.fill()
         } else if (icon.kind === "folder") {

@@ -126,6 +126,26 @@ Item {
             }
         }
 
+        function test_a_mark_beside_words_reports_the_shape_it_draws_data() {
+            return [{ tag: "tag", kind: "tag" }, { tag: "house", kind: "home" }]
+        }
+        /// Beside words the tag and the house are drawn 1.12x (`NavIcon.grown`), from a reach list of their own: what
+        /// they report there is what they draw. Large letters, so a pixel's antialiasing is small against the mark.
+        function test_a_mark_beside_words_reports_the_shape_it_draws(data) {
+            const size = Theme.iconMd * 3
+            const mark = createTemporaryObject(markOf, root, {
+                kind: data.kind, set: "lead", size: size, wordBase: size,
+                width: 2 * size, height: 2 * size, x: root.gap, y: root.gap
+            })
+            verify(mark.grown, data.tag + " beside words is the grown shape")
+            tryVerify(() => mark.inked)
+            const ink = inkOf(grabImage(root), mark)
+            fuzzyCompare(mark.inkRight - mark.inkWidth, ink[0], 1, data.tag + ": reports its left edge")
+            fuzzyCompare(mark.inkRight, ink[2], 1, data.tag + ": reports its right edge")
+            fuzzyCompare(mark.inkTop, ink[1], 1, data.tag + ": reports its top edge")
+            fuzzyCompare(mark.inkTop + mark.inkHeight, ink[3], 1, data.tag + ": reports its bottom edge")
+        }
+
         function test_at_the_window_s_sizes_too_data() {
             return [Theme.iconMd, Theme.iconLg, Theme.iconXl].map(size => ({ tag: "at " + size, size: size }))
         }

@@ -34,9 +34,12 @@ QtObject {
     /// em) would otherwise stand the cloud against the ground's edge and its name.
     readonly property real air: Math.max(WordFace.signSide, Metrics.markStem)
 
-    /// What a seat holds at `size`: the widest mark's ink, and the seat's `air` either side of it.
+    /// What a seat holds at `size`: the widest mark's ink as it is drawn there — to the capitals as the face draws them
+    /// (`WordFace.capitalsAt`), so no share of the size — and the seat's `air` either side of it.
     function need(size) {
-        return (markSeat.widest.inkAcross / 1000 + 2 * markSeat.air) * size
+        const wide = markSeat.widest
+        const span = (wide.inkAcross - wide.pen) / wide.unit
+        return span * wide.unitAt(size) + Metrics.markStem * size + 2 * markSeat.air * size
     }
     /// How many spaces `space` wide the seat at `size` is: the fewest that hold `need`.
     function count(space, size) {

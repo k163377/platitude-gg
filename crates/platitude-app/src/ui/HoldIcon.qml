@@ -37,7 +37,7 @@ InkCanvas {
     /// The disc's width: 12.5 of the grid's 16, the rest the box's own air either side.
     readonly property real inkWidth: holdIcon.width * 12.5 / 16
 
-    width: holdIcon.size > 0 ? Math.round(WordFace.capital * holdIcon.size * 16 / 12.5) : Theme.iconSm
+    width: holdIcon.size > 0 ? Math.round(WordFace.capitalsAt(holdIcon.size) * 16 / 12.5) : Theme.iconSm
     height: holdIcon.width
     onProgressChanged: requestPaint()
     onPressesChanged: requestPaint()

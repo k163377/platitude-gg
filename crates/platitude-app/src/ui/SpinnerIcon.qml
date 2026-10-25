@@ -15,7 +15,9 @@ NavIcon {
     /// The box away from words.
     property real box: Theme.iconMd
 
-    width: ring.wordSize > 0 ? Math.round((WordFace.capital - Metrics.markStem) * ring.wordSize * 16 / 10) : ring.box
+    width: ring.wordSize > 0
+           ? Math.round((WordFace.capitalsAt(ring.wordSize) - Metrics.markStem * ring.wordSize) * 16 / 10)
+           : ring.box
     height: ring.width
     stroke: ring.wordSize > 0 ? Metrics.markStem * ring.wordSize : Metrics.iconStroke
     kind: "spinner"

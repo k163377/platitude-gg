@@ -21,6 +21,8 @@ Item {
         Item {
             id: pair
             property string letter: "H"
+            property real size: root.px
+            property int weight: Font.Normal
             property alias mark: mark
             property alias words: words
             x: 8
@@ -32,16 +34,17 @@ Item {
                 text: pair.letter
                 color: "black"
                 font.family: Theme.uiFamily
-                font.pixelSize: root.px
+                font.pixelSize: pair.size
+                font.weight: pair.weight
             }
             // The mirror box: the words' line, their baseline as its own.
             NavIcon {
                 id: mark
                 x: words.width + Theme.spaceXs
-                width: root.px * 2
+                width: pair.size * 2
                 height: words.height
                 wordBase: words.baselineOffset
-                size: root.px
+                size: pair.size
                 tint: "black"
             }
         }
@@ -111,9 +114,11 @@ Item {
             }
             return { left: first + 1 - cover[first], right: last + cover[last] }
         }
-        /// The letter's ink and the mark's, down the pair's own pixels.
-        function inks(set, kind, letter, turn) {
-            const pair = createTemporaryObject(pairOf, root, { letter: letter })
+        /// The letter's ink and the mark's, down the pair's own pixels: at `root.px` unless a `size` and `weight` are
+        /// given.
+        function inks(set, kind, letter, turn, size, weight) {
+            const pair = createTemporaryObject(pairOf, root, { letter: letter, size: size || root.px,
+                                                               weight: weight === undefined ? Font.Normal : weight })
             pair.mark.set = set
             pair.mark.kind = kind
             pair.mark.turn = turn || 0
@@ -164,6 +169,28 @@ Item {
             verify(ink.mark.bottom > ink.words.bottom + 1, data.kind + "'s stem runs under the baseline")
         }
 
+        /// At every size a name is set in, in either weight, a lettered mark stands past the capitals drawn beside it,
+        /// both ways: the face stands them on whole pixels, mostly a pixel above its own measure at these sizes, and a
+        /// mark drawn to the measure stood no taller than the letters (`WordFace.capitalsAt`); and what runs past them,
+        /// under a pixel, all landed on one side while the mark's top was rounded (`NavIcon.shiftY`).
+        function test_a_lettered_mark_stands_past_the_capitals_at_a_names_size_data() {
+            const rows = []
+            for (const size of [Theme.fontSm, Theme.fontChip, Theme.fontMd, Theme.fontLg, Theme.fontXl]) {
+                for (const weight of [Font.Normal, Theme.fontWeightStrong])
+                    rows.push({ tag: size + (weight === Font.Normal ? "" : " strong"), size: size, weight: weight })
+            }
+            return rows
+        }
+        function test_a_lettered_mark_stands_past_the_capitals_at_a_names_size(data) {
+            const ink = inks("name", "branch", "H", 0, data.size, data.weight)
+            const past = (ink.mark.bottom - ink.mark.top) - (ink.words.bottom - ink.words.top)
+            verify(past > 0.5, data.tag + ": the branch stands " + past.toFixed(2) + "px past the `H`")
+            const over = ink.words.top - ink.mark.top
+            const under = ink.mark.bottom - ink.words.bottom
+            verify(over > 0.15 && under > 0.15,
+                   data.tag + ": past the `H` both ways, " + over.toFixed(2) + " over and " + under.toFixed(2) + " under")
+        }
+
         function test_a_heading_s_mark_is_a_step_larger_on_the_same_middle() {
             const row = inks("lead", "stash", "H")
             const heading = inks("head", "stash", "H")
@@ -196,7 +223,8 @@ Item {
             const air = MarkSeat.air * root.px
             verify(ink.left >= air - 1 && after >= air - 1,
                    data.tag + ": the seat's air either side of " + air + ": " + ink.left + ", " + after)
-            fuzzyCompare(ink.left, after, 1, data.tag + " in the middle")
+            // A pixel: the seat stands the ink on a whole one (`NavIcon.shiftX`), and the drawn edges read a hair more.
+            fuzzyCompare(ink.left, after, 1.1, data.tag + " in the middle")
         }
 
         /// The widest mark stays inside its seat at every size words are set in, a seat laid in a line's spaces as well
