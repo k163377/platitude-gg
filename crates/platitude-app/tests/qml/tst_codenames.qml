@@ -3,17 +3,17 @@ import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
-// Names set as code (デザイン規約 §ref の種別「文の中の名前」): the room a mark opens is the mark's cell to within a
-// narrow space (`Words.roomFill`); a chip's ground stands as far off the mark's ink as off the name's last glyph as
-// drawn (`WordFace.groundStart` / `groundEnd`), whatever the kind and the letter — in a chip, a menu's column, a
-// sentence and a `NameRun`; a menu's names start on one x and its marks stand on one upright axis whatever their kind
-// and however they are put in the row — a name behind its mark at the row's end, a name opening a sentence — and a
-// name held at its ceiling in a row with room to spare stays there. A `NameRun` is code behind its kind's colour; the
-// conflict legend says the branch stood on in its own.
+// Names set as code (デザイン規約 §ref の種別「文の中の名前」): a chip's ground starts at its mark's seat, which holds
+// the mark's air — so chips start on one x whatever their mark — and ends half a gap past the name's last glyph as
+// drawn (`WordFace.groundEnd`), where a command's runs half a gap off both ends of its word — in a chip, a menu's
+// column, a sentence and a `NameRun`; a menu's names start on one x and its marks stand on one upright axis whatever
+// their kind and however they are put in the row — a name behind its mark at the row's end, a name opening a sentence —
+// and a name held at its ceiling in a row with room to spare stays there. A `NameRun` is code behind its kind's colour;
+// the conflict legend says the branch stood on in its own.
 Control {
     id: root
     width: 1800
-    height: 400
+    height: 440
     font.family: Theme.uiFamily
     font.pixelSize: Theme.fontMd
     // Dark, as the window's grounds are: the name's ink is read off the picture against it.
@@ -51,6 +51,13 @@ Control {
                 mark: modelData[1]
             }
         }
+    }
+    // A command's chip: where a chip's ground starts against its head.
+    CodeChip {
+        id: commandChip
+        x: 700
+        y: 270
+        word: "push"
     }
     // The worktree runs of a tab, a band and a row.
     NameRun {
@@ -105,11 +112,11 @@ Control {
         text: "Replace " + root.farName + " with x?"
         marks: [[8, "remote", undefined, root.farName.length]]
     }
-    // A list row's line: words and names as code, cut at the end.
+    // A list row's line: words and names as code, cut at the end — under the column of chips, clear of it.
     CodeLine {
         id: codeLine
         x: 20
-        y: 330
+        y: 400
         width: 160
         height: Theme.rowHeight
         text: "Deleted feature/login here and on origin"
@@ -229,6 +236,10 @@ Control {
     function groundOf(item) {
         return root.find(item, child => child.radius !== undefined && child.size !== undefined && child.visible)
     }
+    /// Where `item`'s ground starts against `item`'s own head.
+    function groundStart(item) {
+        return root.groundOf(item).mapToItem(item, 0, 0).x
+    }
     /// Where a name's ink ends as drawn, in `item`'s x, read off `picture` — outside every metric the code reads: back
     /// from `from` (an x on the ground past the ink) along the `band` of rows the name stands in, to the last column
     /// whose brightest pixel stands over the ground, that column counted by how much of it the ink covers. The ground's
@@ -285,64 +296,57 @@ Control {
         name: "CodeNames"
         when: windowShown
 
-        function test_a_room_is_the_mark_cell_to_within_a_narrow_space() {
-            const space = 3.4
-            const thin = 2.1
-            for (let cell = 6; cell <= 22; cell += 0.5) {
-                const room = Words.roomFill(cell, space, thin)
-                let width = 0
-                for (const c of room) {
-                    verify(c === "\u00a0" || c === "\u202f", "only no-break spaces: " + escape(c))
-                    width += c === "\u00a0" ? space : thin
-                }
-                verify(Math.abs(width - cell) <= thin / 2 + 0.01, cell + ": " + width)
-            }
-            compare(Words.roomFill(0, space, thin), "")
+        /// The ground holds the ink: the seat's own air before the mark's (`MarkSeat.air` at least, more before a mark
+        /// narrower than the widest) and half a gap after the name's last glyph as drawn.
+        function holdsInk(air, size, what) {
+            const seat = MarkSeat.air * size
+            verify(air.before >= seat - 1, what + ": the seat's air before the mark, " + seat + " at least: " + air.before)
+            fuzzyCompare(air.after, Theme.spaceXs / 2, 0.4, what + ": half a gap after the name")
         }
 
-        function sameAir(air, what) {
-            verify(air.before > 0 && air.after > 0,
-                   what + ": the ground holds the ink: " + air.before + ", " + air.after)
-            fuzzyCompare(air.before, air.after, 0.4, what + ": air before the mark, after the name")
-        }
-
-        /// The ground's ends against the ink they hold — the same air at both. Off the mark's cell instead of its
-        /// ink, the ground stands the cell's air more before it than after; off the name's advance, a `t` or a `j`
-        /// ends with more after it than an `n`; off the glyph's box at the drawn size, which FreeType rounds out to
-        /// whole pixels, most letters end with most of a pixel more.
-        function test_a_chip_holds_the_same_air_at_both_ends() {
+        /// The ground's start against the seat and its end against the ink. Half a gap before the seat, the ground adds
+        /// air on top of the seat's own; off the mark's ink, a narrow mark's chip starts further in than a wide one's —
+        /// chips opening two lines stand apart; off the name's advance, a `t` or a `j` ends with more after it than an
+        /// `n`; off the glyph's box at the drawn size, which FreeType rounds out to whole pixels, most letters end with
+        /// most of a pixel more.
+        function test_a_chips_ground_starts_off_its_seat_and_ends_off_its_ink() {
             tryVerify(() => chip.width > 0 && kinds.count > 0 && kinds.itemAt(kinds.count - 1).width > 0)
             const picture = grabImage(root)
-            sameAir(root.airOf(chip, picture), chip.word)
+            holdsInk(root.airOf(chip, picture), chip.size, chip.word)
+            fuzzyCompare(root.groundStart(commandChip), -Theme.spaceXs / 2, 0.01, "a command's: half a gap before it")
             for (let i = 0; i < kinds.count; i++) {
                 const each = kinds.itemAt(i)
-                sameAir(root.airOf(each, picture), each.mark + " " + each.word)
+                holdsInk(root.airOf(each, picture), each.size, each.mark + " " + each.word)
+                fuzzyCompare(root.groundStart(each), 0, 0.01, each.mark + ": at the seat's head")
             }
         }
 
         /// A name cut at its end ends its ground off the `…` it draws last, not off the letter it cut away.
-        function test_a_chip_cut_at_its_end_holds_the_same_air_at_both_ends() {
+        function test_a_chip_cut_at_its_end_ends_its_ground_off_the_cut() {
             tryVerify(() => cutEndChip.cut, undefined, "cut")
-            sameAir(root.airOf(cutEndChip, grabImage(root)), "cut at the end")
+            holdsInk(root.airOf(cutEndChip, grabImage(root)), cutEndChip.size, "cut at the end")
         }
 
-        /// A column's narrow mark stands at the head of the cell, so its chip holds the same air as a lone one's; the
-        /// spare width of the cell is between the mark and the name.
-        function test_a_chip_in_a_menus_column_holds_the_same_air_at_both_ends() {
+        /// A column's chips start on one x, whatever the mark in the middle of the seat and however the name is put
+        /// in the row, and each holds its ink.
+        function test_a_menus_column_of_chips_starts_on_one_x() {
             tryVerify(() => branchRow.width > 0 && sentenceRow.refLead1 > 0 && drawnSentence.text !== "")
             const picture = grabImage(root)
+            const start = root.groundStart(branchRow)
             for (const row of [branchRow, remoteRow]) {
                 const named = root.find(row, item => item.word === row.codeName && item.markRoom !== undefined)
-                sameAir(root.airOf(named, picture), row.nameMark)
+                holdsInk(root.airOf(named, picture), row.font.pixelSize, row.nameMark)
+                fuzzyCompare(root.groundStart(row), start, 0.5, row.nameMark + ": on one x")
             }
-            sameAir(root.sentenceAir(sentenceRow, picture), "a name opening a sentence")
+            holdsInk(root.sentenceAir(sentenceRow, picture), sentenceRow.font.pixelSize, "a name opening a sentence")
+            fuzzyCompare(root.groundStart(sentenceRow), start, 0.5, "a name opening a sentence: on one x")
         }
 
         function test_a_worktree_run_is_code_behind_its_kinds_colour() {
             tryVerify(() => treeRun.width > 0 && homeRun.width > 0)
             const picture = grabImage(root)
             for (const run of [treeRun, homeRun]) {
-                sameAir(root.runAir(run, picture), run.kind)
+                holdsInk(root.runAir(run, picture), run.pixelSize, run.kind)
                 const mark = root.find(run, item => item.inkLeft !== undefined)
                 verify(Qt.colorEqual(mark.tint, Theme.success), run.kind + ": the mark in its kind's colour")
                 const cut = root.find(run, item => item.headText !== undefined)

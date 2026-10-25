@@ -55,9 +55,9 @@ Item {
     /// its length — in the line's order. Where the length is given, the name is set as code (`namedMarkup`): the code
     /// face, in `Words.nameInk`, its mark on the same ground (`codeGrounds`) in its kind's colour
     /// (`NavIcon.inkBeside`).
-    /// The field opens a room of no-break spaces at each seat, the mark's cell wide (`roomedText`), and draws the mark
-    /// in it — so no line ends between a mark and its name. A copy leaves the rooms out (デザイン規約 §アイコンの席
-    /// 「コピー」).
+    /// The field opens a room at each — the seat's no-break spaces (`seatRoom`, `roomedText`) — and draws the mark
+    /// in its middle, so no line ends between a mark and its name. A copy leaves the rooms out (デザイン規約
+    /// §アイコンの席「コピー」).
     property var marks: []
     /// Names past the name ceiling (`Theme.nameMaxChars`) cut in the middle — a remote's at its end (デザイン規約 §寸法
     /// 「upstream 名だけは末尾で切る」) — and the whole line given back by a hand on a cut name — a heading's
@@ -91,18 +91,12 @@ Item {
         })
         return { text: line + cardText.text.substring(from), marks: moved, cuts: cuts }
     }
-    /// Each mark's cell, as its drawing reports it: the room is priced off the mark it holds.
-    property var markCells: []
-    function noteMarkCell(i, cell) {
-        const cells = cardText.markCells.slice()
-        cells[i] = cell
-        cardText.markCells = cells
-    }
-    /// Each mark's room, the mark's cell wide (`Words.roomFill`) — none until its drawing has said how wide it is.
-    readonly property var markRoomTexts: cardText.held.marks.map((mark, i) => {
-        const cell = i < cardText.markCells.length && cardText.markCells[i] ? cardText.markCells[i] : 0
-        return mark[1] === "" ? "" : Words.roomFill(cell, markSpace.advanceWidth, markThin.advanceWidth)
-    })
+    /// The seat in this line: as many of the field's own spaces — its font and weight — as hold the widest mark.
+    readonly property string seatRoom: MarkSeat.room(markSpace.advanceWidth, cardText.pixelSize)
+    /// Each mark's room: the seat, whatever the kind; none for a name with no mark.
+    readonly property var markRoomTexts: cardText.held.marks.map(mark => mark[1] === "" ? "" : cardText.seatRoom)
+    /// The seat as the field lays it out.
+    readonly property real seatWidth: cardText.seatRoom.length * markSpace.advanceWidth
     /// How many characters each room takes in the field.
     readonly property var markRooms: cardText.markRoomTexts.map(room => room.length)
     /// The drawn line (`held`) with those rooms opened: what the field draws where no `markup` is given.
@@ -169,10 +163,10 @@ Item {
              + Words.inked(cardText.place) + "</font></a>" + Words.inked(line.substring(at + cardText.place.length, to))
     }
     /// Where each name's code ground runs (`CodeGround`), a piece per line the name takes: `{x, y, width}` in this
-    /// part's coordinates, `y` the line's middle. From the mark's ink — or the name's start where it has none — to the
-    /// name's end, half a gap off the ink at both ends (`WordFace.groundStart` / `groundEnd`); a piece a wrap ends or
-    /// starts stands half a gap off the glyphs there. One binding over its inputs, since `positionToRectangle` and the
-    /// marks' items are calls (rules/app-ui.md「メソッドはバインディングが依存を取らない」).
+    /// part's coordinates, `y` the line's middle. From the head of the mark's room, which holds the mark's air — or
+    /// half a gap before the name where it has none — to half a gap past the name's end (`WordFace.groundStart` /
+    /// `groundEnd`); a piece a wrap ends or starts stands half a gap off the glyphs there. One binding over its inputs,
+    /// since `positionToRectangle` and the marks' items are calls (rules/app-ui.md「メソッドはバインディングが依存を取らない」).
     readonly property var codeGrounds: {
         const rooms = cardText.markRooms
         const drawn = lineMarks.count
@@ -190,7 +184,8 @@ Item {
             if (!(mark[3] > 0) || end > length)
                 return
             const icon = rooms[i] > 0 && i < drawn ? lineMarks.itemAt(i) : null
-            let left = icon ? WordFace.groundStart(icon.x + icon.inkLeft) : field.positionToRectangle(start).x - half
+            let left = rooms[i] > 0 ? field.positionToRectangle(cardText.markRoomAt(i)).x
+                                    : WordFace.groundStart(field.positionToRectangle(start).x)
             for (let at = start; at < end; at++) {
                 const here = field.positionToRectangle(at)
                 const next = field.positionToRectangle(at + 1)
@@ -212,7 +207,7 @@ Item {
     readonly property string drawnText: cardText.markup !== "" ? cardText.markup
                                       : cardText.namedMarkup !== "" ? cardText.namedMarkup : cardText.roomedText
     readonly property bool drawnRich: cardText.markup !== "" || cardText.namedMarkup !== ""
-    /// Where the first mark's name came out (empty while it has no room), and that mark's cell — what a run reads
+    /// Where the first mark's name came out (empty while it has no room), and that mark's room — what a run reads
     /// (`NoticeBar.markSeat`).
     readonly property rect firstMarkSeat: {
         const rooms = cardText.markRooms
@@ -221,8 +216,8 @@ Item {
             return Qt.rect(0, 0, 0, 0)
         return cardText.charRect(cardText.markRoomAt(0) + rooms[0])
     }
-    readonly property real firstMarkCell: cardText.markCells.length > 0 && cardText.markCells[0]
-                                          ? cardText.markCells[0] : 0
+    readonly property real firstMarkCell: cardText.markRooms.length > 0 && cardText.markRooms[0] > 0
+                                          ? cardText.seatWidth : 0
     /// Where mark `i`'s room starts in the field, every room before it counted.
     function markRoomAt(i) {
         let at = cardText.held.marks[i][0]
@@ -444,13 +439,7 @@ Item {
         font: codeFace.font
         text: "n".repeat(Theme.nameMaxChars)
     }
-    /// A narrow no-break space, the room's finer step (`Words.roomFill`).
-    TextMetrics {
-        id: markThin
-        font: field.font
-        text: "\u202f"
-    }
-    /// A space in the field's own font and weight, so a family with a wider space opens a wider room.
+    /// A space in the field's own font and weight (`seatWidth`).
     TextMetrics {
         id: markSpace
         font: field.font
@@ -477,23 +466,19 @@ Item {
             /// A name drawn apart with no mark of its own (`marks`' kind left empty).
             readonly property bool unmarked: lineMark.index < cardText.marks.length
                                              && cardText.marks[lineMark.index][1] === ""
-            /// The room this mark takes: its cell, its air both sides.
-            readonly property real room: lineMark.wordCell
             visible: !lineMark.unmarked && (lineMark.seat.width > 0 || lineMark.seat.height > 0)
             kind: lineMark.index < cardText.marks.length && !lineMark.unmarked ? cardText.marks[lineMark.index][1]
                                                                                : "tree"
-            // A sign on its name (デザイン規約 §アイコンの席 の修飾), a hair off it (`NavIcon.wordAir`).
+            // A sign on its name (デザイン規約 §アイコンの席 の修飾), in the middle of the room the line opened for it.
             set: "sign"
             size: cardText.pixelSize
             tint: lineMark.inkBeside(lineMark.index < cardText.marks.length ? cardText.nameInkAt(lineMark.index)
                                                                             : cardText.color)
             wordBase: Math.ceil(lineMark.size)
-            width: lineMark.wordCell
+            width: cardText.seatWidth
             height: lineMark.wordBase + Theme.spaceXs
             x: Math.round(lineMark.seat.x - lineMark.width)
             y: Math.round(cardText.baselineAt(lineMark.seat)) - lineMark.wordBase
-            onRoomChanged: cardText.noteMarkCell(lineMark.index, lineMark.room)
-            Component.onCompleted: cardText.noteMarkCell(lineMark.index, lineMark.room)
         }
     }
     // Built only on a line that holds a room: a helper is a second field, and most lines copy as they are.

@@ -35,8 +35,13 @@ Item {
     property real wordBase: 0
     /// How far that word's ground reaches before its letters: a code word's chip hangs half a step (`CodeChip`).
     property real wordHang: 0
+    /// The row's step between the seat and that word, which a hold mark's seat gives back: the seat's own air is what
+    /// parts the mark from the word (デザイン規約 §アイコンの席「② ③ の席」).
+    property real wordStep: 0
     /// Whether the seat heads a word.
     readonly property bool leads: seat.wordSize > 0
+    /// The seat of the word's letters (`MarkSeat`), where the hold mark alone heading the word stands.
+    readonly property real holdCell: seat.leads ? MarkSeat.cell(seat.wordSize) : 0
     /// Where the word's capitals' middle stands, in the seat's y: what a round mark (the hold mark, the ring) centres
     /// on.
     readonly property real capitalsMiddle: seat.wordBase - WordFace.capitalMiddle(seat.wordSize)
@@ -79,9 +84,10 @@ Item {
                         ? Theme.iconSm - 2 * seat.markAir
                         : Math.max(Theme.iconMd, Theme.iconSm + seat.spread))
                      // Heading a word, the hold mark alone is a letter of the phrase (デザイン規約 §アイコンの席 の
-                     // 名指し): the seat is its ink, and the row's step parts it from the word — from a code word's
-                     // ground, which hangs half a step before its letters, too.
-                     : seat.leads ? Math.round(loneHold.inkWidth) + seat.wordHang
+                     // 名指し), in the seat of its letters: the seat's air parts it from the word, so the row's step
+                     // goes back — and a code word's ground, which hangs half a step before its letters, starts past
+                     // the seat.
+                     : seat.leads ? seat.holdCell + seat.wordHang - seat.wordStep
                      : Theme.iconSm
     implicitHeight: seat.depthAt(seat.step)
     // Heading a word, its box runs a gap past the seat either way: the word's capitals stand where they stand, and the
@@ -107,7 +113,7 @@ Item {
     SpinnerIcon {
         box: seat.step
         wordSize: seat.leads ? seat.wordSize : 0
-        x: Math.round((seat.width - width) / 2)
+        x: Math.round(((seat.leads && seat.kind === "" ? seat.holdCell : seat.width) - width) / 2)
         y: seat.leads ? Math.round(seat.capitalsMiddle - height / 2) : Math.round((seat.height - height) / 2)
         tint: seat.tint
         spinning: seat.busy
@@ -124,10 +130,10 @@ Item {
         y: (pair.visible ? pair.y : 0) - Theme.spaceXs
     }
     // A held button with no icon wears only the hold mark, at the row's start (デザイン規約 §回数押し) — heading a word,
-    // as tall as its capitals and on their middle, its disc on the seat's start and its box's air past it.
+    // as tall as its capitals and on their middle, in the middle of its seat (`holdCell`).
     HoldIcon {
         id: loneHold
-        x: seat.leads ? -Math.round((loneHold.width - loneHold.inkWidth) / 2) : 0
+        x: seat.leads ? Math.round((seat.holdCell - loneHold.width) / 2) : 0
         y: seat.leads ? Math.round(seat.capitalsMiddle - loneHold.height / 2)
                       : Math.round((seat.height - loneHold.height) / 2)
         size: seat.wordSize

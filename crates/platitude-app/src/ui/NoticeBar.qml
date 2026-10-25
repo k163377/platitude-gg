@@ -65,7 +65,7 @@ Rectangle {
     /// Automation: whether the heading's first mark found its word, and where that word stands against the heading.
     readonly property alias markSeat: headingWord.firstMarkSeat
     readonly property bool markShown: headingWord.firstMarkSeat.width > 0 || headingWord.firstMarkSeat.height > 0
-    /// …and the mark's cell — what the room in front of the name is, to within half a narrow space (`Words.roomFill`).
+    /// …and the mark's room in front of the name: the seat as the heading lays it out (`CardText.seatWidth`).
     readonly property alias markCell: headingWord.firstMarkCell
     /// Automation: the one control, so a run can read where it stands — the middle of the bar, however many lines
     /// the words take.

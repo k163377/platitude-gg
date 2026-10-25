@@ -95,14 +95,18 @@ InkCanvas {
     /// Set beside words (デザイン規約 §アイコンの席): the mark is drawn as a letter of the words' face rather than to its
     /// box — its size, its line and where it stands all come off the words. Empty for a mark that stands alone, drawn
     /// to the middle of its box as above.
-    ///   - "name": a letter of the words, a state after a name included — the capitals' scale, on their middle; its
-    ///     cell the ink, with the row's step to the words kept by the caller, or the seat of the column it stands in
+    ///   - "name": a letter of the words, a state after a name included — the capitals' scale, on their middle, in the
+    ///     seat (`seated`), whose air is all that parts it from the words
     ///   - "lead": in a head's seat — a list's column of marks down its rows, or a thing's own mark seat — as
     ///     "name", in the seat it is given; a mark at a head with no seat is a "name" or a "sign"
     ///   - "head": the head of a heading — a step over the capitals (`Metrics.markHead`), on their middle
     ///   - "sign": a sign on the words — the capitals' scale, on the face's own `+`'s middle and never under the
-    ///     baseline, in the face's own room round its ink and a stem more
+    ///     baseline, in the seat (`seated`); one drawn in place of a character (`characterStandIn`) in the face's own
+    ///     room round its ink and a stem more, as that character
     property string set: ""
+    /// A sign drawn in place of a character the faces draw too unevenly to type — an arrow (↑ ↓ ← →), the tally's
+    /// conflict `!`: set as that character, with no seat (デザイン規約 §アイコンの席 の字の代替).
+    property bool characterStandIn: false
     /// The words' pixel size: what each measure of a set mark is a share of.
     property real size: Theme.fontMd
     /// Where the words' baseline runs, in this item's y.
@@ -120,8 +124,11 @@ InkCanvas {
     /// under the baseline — never on a sign's middle or stopped at the baseline, which would drop the ring under the
     /// names' tall letters or stand the feet on the line (デザイン規約 §アイコンの席).
     readonly property bool lettered: icon.kind === "tree" || icon.kind === "branch"
-    /// The air a set mark keeps off the word it stands against: the face's own room round a `+` and a stem more — a
-    /// sign's side of its cell (`wordCell`), so a mark in front of a name stands off it by a hair whatever its class.
+    /// Whether a set mark takes the seat (`MarkSeat`, デザイン規約 §アイコンの席「字の中の席」): a letter of the words,
+    /// and a sign drawn as a picture — not in place of a character (`characterStandIn`).
+    readonly property bool seated: icon.set === "name" || (icon.set === "sign" && !icon.characterStandIn)
+    /// The air a character's stand-in keeps off the words either side of its ink: the face's own room round a `+` and a
+    /// stem more, so it stands off them by a hair (`wordCell`).
     readonly property real wordAir: icon.set === "" ? 0 : WordFace.signSide * icon.size + icon.pen
     /// The tint the left menu gives a name mark's kind (`NavRail.sections`): what the mark says, in the colour it says
     /// it in everywhere else.
@@ -164,9 +171,9 @@ InkCanvas {
     /// The ink's box in the 16-grid, line included, before any move: `[left, top, right, bottom]`. A grid square is
     /// `unit` pixels and the line keeps its pixels, so the half line is worth more of the grid on a small mark.
     readonly property var inkBox: icon.inkAt(icon.unit)
-    /// How far the drawing moves, in grid squares: to stand its ink in the middle of the box, or for a set mark to its
-    /// place against the words — the middle across; down, on the capitals' middle, or for a sign the face's own `+`'s
-    /// middle, stopped at the baseline.
+    /// How far the drawing moves, in grid squares: to stand its ink in the middle of the box — for a set mark, its
+    /// seat, so every seat holds its mark's air evenly either side (デザイン規約 §アイコンの席「字の中の席」); down, on
+    /// the capitals' middle, or for a sign the face's own `+`'s middle, stopped at the baseline.
     readonly property real shiftX: {
         if (!icon.centred)
             return 0
@@ -194,15 +201,17 @@ InkCanvas {
     readonly property real inkWidth: icon.rotation % 180 === 0 ? icon.inkAcross : icon.inkDown
     readonly property real inkHeight: icon.rotation % 180 === 0 ? icon.inkDown : icon.inkAcross
     /// The ink's right edge and top edge in the item's pixels, before any `rotation`: `width - inkRight` is the air the
-    /// box holds on that side, which is the same on the other (デザイン規約 §アイコンの席).
+    /// box holds on that side (デザイン規約 §アイコンの席).
     readonly property real inkRight: (icon.inkBox[2] + icon.shiftX) * icon.unit
-    /// The ink's left edge, the same way: where a ground under the mark measures its air from (`WordFace.groundStart`).
+    /// The ink's left edge, the same way.
     readonly property real inkLeft: (icon.inkBox[0] + icon.shiftX) * icon.unit
     readonly property real inkTop: (icon.inkBox[1] + icon.shiftY) * (icon.set === "" ? icon.height / 16 : icon.unit)
-    /// The width a set mark takes in its run of words: for a sign, the face's own room round a `+` either side of the
-    /// ink and a stem more, so it stands off its word by a hair rather than touching it; for any other, the ink alone.
-    readonly property real wordCell:
-        Math.round(icon.set === "sign" ? icon.inkAcross + 2 * icon.wordAir : icon.inkAcross)
+    /// The width a set mark takes in its run of words: the seat for one that takes it (`seated`), the same whatever
+    /// the kind; for a character's stand-in, the face's own room round a `+` either side of the ink and a stem more, so
+    /// it stands off its word by a hair rather than touching it; for any other, the ink alone.
+    readonly property real wordCell: icon.seated ? MarkSeat.cell(icon.size)
+                                     : Math.round(icon.set === "sign" ? icon.inkAcross + 2 * icon.wordAir
+                                                                      : icon.inkAcross)
 
     /// The ink's box at `u` pixels to the grid square, the line keeping its pixels.
     function inkAt(u) {

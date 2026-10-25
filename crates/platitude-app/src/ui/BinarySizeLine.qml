@@ -24,8 +24,8 @@ RowLayout {
         elide: Text.ElideRight
         color: Theme.textMuted
     }
-    // Signs between the words (デザイン規約 §アイコンの席 の修飾): each box the words' line, so they stand where the
-    // face's own `+` would.
+    // Signs between the words, drawn in their characters' place (デザイン規約 §アイコンの席 の字の代替): each box the
+    // words' line, so they stand where the face's own `+` would.
     DotMark {
         visible: binaryLine.sized
         tint: Theme.textMuted
@@ -48,6 +48,7 @@ RowLayout {
         height: sizeWord.implicitHeight
         kind: "arrow"
         set: "sign"
+        characterStandIn: true
         size: sizeWord.font.pixelSize
         wordBase: sizeWord.baselineOffset
         tint: Theme.textMuted

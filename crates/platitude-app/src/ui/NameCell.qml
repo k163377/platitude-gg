@@ -155,9 +155,10 @@ RowLayout {
                 color: Theme.textSecondary
             }
         }
-        // A sign between the names (デザイン規約 §アイコンの席 の修飾): smaller and quieter than the names, so it does
-        // not read as the change-kind arrow at the row's head. It joins two words, so a word's step stands either side
-        // of its room. Its box is the names' line, so it is set against their baseline on the face's own `+`'s middle.
+        // The `→` between the names, drawn in its place (デザイン規約 §アイコンの席 の字の代替): smaller and quieter than
+        // the names, so it does not read as the change-kind arrow at the row's head. It joins two words, so a word's
+        // step stands either side of its room. Its box is the names' line, so it is set against their baseline on the
+        // face's own `+`'s middle.
         Loader {
             id: renameSeat
             active: origSeat.active
@@ -167,6 +168,7 @@ RowLayout {
             sourceComponent: NavIcon {
                 kind: "arrow"
                 set: "sign"
+                characterStandIn: true
                 size: newName.pixelSize
                 wordBase: newName.baselineOffset
                 width: renameSeat.width

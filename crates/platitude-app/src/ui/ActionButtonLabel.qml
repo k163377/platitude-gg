@@ -206,20 +206,21 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.spaceXs
         // The hold mark is a letter of the phrase (デザイン規約 §アイコンの席 の名指し): as tall as the plain words'
-        // capitals and on their middle (`lineRef`, centred in the row as each word is). Its seat is its disc, and the
-        // row's step parts it from the next word — from the ground of a command's chip, which hangs half a step before
-        // its letters, too.
+        // capitals and on their middle (`lineRef`, centred in the row as each word is), in the middle of the seat of
+        // their letters (`MarkSeat`). The seat's air parts it from the next word, so the row's step goes back — and a
+        // command's chip, whose ground hangs half a step before its letters, starts past the seat.
         Item {
             id: phraseHoldSeat
+            readonly property real cell: MarkSeat.cell(btnLabel.fontSize)
             visible: btnLabel.phraseHoldPresses > 0
-            width: Math.round(phraseHold.inkWidth)
+            width: phraseHoldSeat.cell - phraseRow.spacing
                    + (headChip.word !== "" && !btnLabel.alert ? Theme.spaceXs / 2 : 0)
             height: phraseHold.height
             anchors.verticalCenter: parent.verticalCenter
             anchors.verticalCenterOffset: WordFace.capitalDrop(lineRef)
             HoldIcon {
                 id: phraseHold
-                x: -Math.round((phraseHold.width - phraseHold.inkWidth) / 2)
+                x: Math.round((phraseHoldSeat.cell - phraseHold.width) / 2)
                 size: btnLabel.fontSize
                 progress: btnLabel.phraseHoldProgress
                 presses: btnLabel.phraseHoldPresses

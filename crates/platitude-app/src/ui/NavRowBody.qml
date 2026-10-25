@@ -41,6 +41,9 @@ RowLayout {
                                      && body.row.fullName === body.row.worktreesModel.homeBranch
     /// Whether this section has a mark seat — not STASHES / TAGS (デザイン規約 §余白「印の立たないセクションは席を取らない」).
     readonly property bool seated: body.row.kindHint !== "stash" && body.row.kindHint !== "tag"
+    /// The row-end columns' seat for a state after the name — the badge, the push mark: the seat of the name's letters
+    /// (`MarkSeat`, デザイン規約 §アイコンの席 の名指し), one width down the rows.
+    readonly property real stateSeat: MarkSeat.cell(nameCell.nameInk.pixelSize)
 
     spacing: Theme.spaceXs
     // The seat and the name (`NameCell`, shared with the file lists). The seat stays open when empty, so names at one
@@ -145,9 +148,8 @@ RowLayout {
                         && (body.row.has_remote || body.row.has_pr))
                     || ((body.row.kindHint === "remote" || body.row.kindHint === "worktree") && body.row.has_pr))
         visible: remoteSeat.active
-        // The row-end column's seat (デザイン規約 §アイコンの席 の名指し): an `iconSm` box, the badge drawn to the
-        // name's letters in its middle.
-        Layout.preferredWidth: Theme.iconSm
+        // The row-end column's seat (`stateSeat`), the badge drawn to the name's letters in its middle.
+        Layout.preferredWidth: body.stateSeat
         Layout.preferredHeight: Theme.iconSm
         sourceComponent: GoneBadge {
             pullRequest: body.row.has_pr
@@ -162,7 +164,7 @@ RowLayout {
         id: pushSeat
         active: body.row.pushesHere
         visible: pushSeat.active
-        Layout.preferredWidth: Theme.iconSm
+        Layout.preferredWidth: body.stateSeat
         Layout.preferredHeight: Theme.iconSm
         // A state after the name, as the badge is (デザイン規約 §アイコンの席「名前の後の状態」).
         sourceComponent: NavIcon {
@@ -171,7 +173,7 @@ RowLayout {
             size: nameCell.nameInk.pixelSize
             wordBase: nameCell.y + nameCell.nameBase - pushSeat.y
             tint: Theme.accent
-            width: Theme.iconSm
+            width: body.stateSeat
             height: Theme.iconSm
         }
     }

@@ -50,27 +50,16 @@ QtObject {
         font.family: Theme.uiFamily
         font.pixelSize: Theme.fontSm
     }
-    /// The widest marks a chip draws round its name, at the chip's letters, priced as `RefChip` seats them: the house
-    /// before the name (the padlock and the tree share its seat and are narrower — `RefChip.markCell`), the cloud
-    /// after it (the pull request's is narrower — `RefChip.badgeCell`). Never drawn.
-    readonly property NavIcon chipMarkInk: NavIcon {
-        visible: false
-        kind: "home"
-        set: "sign"
-        size: Theme.fontChip
-    }
-    readonly property NavIcon chipBadgeInk: NavIcon {
-        visible: false
-        kind: "remote"
-        set: "name"
-        size: Theme.fontChip
-    }
+    /// The seat a mark round a chip's name takes, at the chip's letters (`MarkSeat`): the padlock's, the tree's or the
+    /// house's before the name (`RefChip.markCell`), the cloud's or the pull request's after it (`RefChip.badgeCell`)
+    /// — one width whatever the mark.
+    readonly property real chipMarkSeat: MarkSeat.cell(Theme.fontChip)
     /// Everything a chip spends on what is not the name: fan, count with its half gap (`RefChip`'s row spacing), the
-    /// badge's cell and its half gap, the mark's cell, plus the frame's padding either side. Every mark counts though
-    /// it comes and goes — the column must fit the worst-dressed chip (rules-refs/app-ui.md「チップ列の狭める床」).
+    /// two marks' seats, plus the frame's padding either side. Every mark counts though it comes and goes — the column
+    /// must fit the worst-dressed chip (rules-refs/app-ui.md「チップ列の狭める床」).
     readonly property real chipFurnitureW: chipFan.fanMaxW
         + chipCountInk.implicitWidth + Theme.spaceXs / 2
-        + chipBadgeInk.wordCell + Theme.spaceXs + Theme.spaceXs / 2 + chipMarkInk.wordCell
+        + 2 * chipMarkSeat
         + 2 * Theme.spaceXs
     // The chip column's floor — name, furniture, and the `spaceSm` `GraphRowChips` keeps in front of the chip; move
     // any of those and this moves too — and its ceiling, where the next two columns can still say something

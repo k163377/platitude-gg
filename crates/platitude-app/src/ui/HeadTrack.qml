@@ -30,14 +30,15 @@ RowLayout {
         required property color hue
         spacing: 0
         baselineOffset: countWord.y + countWord.baselineOffset
-        // A sign before the count, as `+` stands before a number (デザイン規約 §アイコンの席 の修飾): its box is the
-        // count's line, its cell the face's own room round it.
+        // The `↑` / `↓` before the count, drawn in their place (デザイン規約 §アイコンの席 の字の代替): its box is the
+        // count's line, its cell the face's own room round it, as the character's would be.
         NavIcon {
             id: legMark
             Layout.preferredWidth: legMark.wordCell
             Layout.preferredHeight: countWord.implicitHeight
             kind: "arrow"
             set: "sign"
+            characterStandIn: true
             size: countWord.font.pixelSize
             wordBase: countWord.baselineOffset
             turn: leg.turn

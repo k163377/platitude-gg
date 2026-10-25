@@ -4,7 +4,8 @@ import platitude.ui
 // A name behind its kind's mark as one code chip, cut in the middle to the width it is given (デザイン規約 §ref の種別
 // 「文の中の名前」): the run a band, a tab or a row draws where it names a worktree (`TabTreeMark`, `CarriedPane`,
 // `DiffPaneHeader`, the uncommitted row) — so a fix to the run reaches them all. The mark in its kind's colour, the
-// name in the code face, both on one ground half a gap off their ink (`WordFace.groundStart` / `groundEnd`).
+// name in the code face, both on one ground from the head of the mark's seat, which holds the mark's air, to half a gap
+// past the name's ink (`WordFace.groundEnd`).
 Item {
     id: run
 
@@ -36,13 +37,13 @@ Item {
     }
     CodeGround {
         visible: run.name !== ""
-        x: WordFace.groundStart(runMark.x + runMark.inkLeft)
+        x: runMark.x
         width: WordFace.groundEnd(codeFace, run.name, nameCut.x + nameCut.inkWidth) - x
         anchors.verticalCenter: nameCut.verticalCenter
         size: run.pixelSize
     }
     // A sign on the name (デザイン規約 §アイコンの席 の修飾): its box is the name's line, so the two stand on one
-    // baseline, and its cell the face's own room round it.
+    // baseline, and its width the seat (`MarkSeat`), its ink in the seat's middle.
     NavIcon {
         id: runMark
         x: 0

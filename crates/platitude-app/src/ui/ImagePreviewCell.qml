@@ -43,7 +43,8 @@ ColumnLayout {
             font.pixelSize: Theme.fontSm
             color: Theme.textSecondary
         }
-        // A sign between the words, on the face's own `+`'s middle (デザイン規約 §アイコンの席 の修飾).
+        // The `·` between the words, drawn in its place on the face's own `+`'s middle (デザイン規約 §アイコンの席 の
+        // 字の代替).
         DotMark {
             tint: Theme.textSecondary
             Layout.preferredHeight: captionWord.implicitHeight

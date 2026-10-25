@@ -831,27 +831,6 @@ QtObject {
             return own
         return Qt.colorEqual(prose, Theme.textSecondary) ? Theme.textSecondary : Theme.textPrimary
     }
-    /// A room `cell` pixels wide out of no-break spaces `space` wide and narrow no-break spaces `thin` wide: the mix
-    /// whose width comes nearest the cell, so the gap before a mark is the sentence's own space and no more
-    /// (デザイン規約 §ref の種別「名前の印」). Whole spaces alone would leave up to a space's worth in front of it, a
-    /// different amount for each kind. Both hold the line: neither is a place to break it.
-    function roomFill(cell, space, thin) {
-        if (cell <= 0 || space <= 0)
-            return ""
-        const most = Math.ceil(cell / space)
-        let best = "\u00a0".repeat(most)
-        let off = most * space - cell
-        for (let n = 0; thin > 0 && n <= most; n++) {
-            for (let m = 0; n * space + m * thin <= cell + thin; m++) {
-                const miss = Math.abs(n * space + m * thin - cell)
-                if (n + m > 0 && miss < off - 0.01) {
-                    best = "\u00a0".repeat(n) + "\u202f".repeat(m)
-                    off = miss
-                }
-            }
-        }
-        return best
-    }
     /// `name` as code in markup (デザイン規約 §ref の種別「文の中の名前」): the mono face, in `ink`. Its ground is drawn
     /// under the words by whoever lays them out (`CardText`, `AppMenuItem`), measured off the ink.
     function codeMarkup(name, ink) {
@@ -955,13 +934,12 @@ QtObject {
     }
     /// Words as markup reads them. Rich text folds runs of spaces and newlines the way HTML does, so all but the last
     /// space of a run is pinned and a newline becomes `<br>`. Pin only those: `NoticeLine` wraps, and a sentence
-    /// pinned at every space breaks through a word (`tst_refwords`). A mark's room (`roomFill`) goes through as
-    /// written: its no-break spaces as such, and its narrow ones kept from the fold, which takes them as plain space.
+    /// pinned at every space breaks through a word (`tst_refwords`). A mark's room (`MarkSeat.room`) goes through as
+    /// written, its no-break spaces as such.
     function inked(words) {
         return words.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
                     .replace(/ (?= )/g, "&nbsp;")
                     .replace(/\u00a0/g, "&nbsp;")
-                    .replace(/\u202f/g, "<span style=\"white-space:pre\">&#8239;</span>")
                     .replace(/\n/g, "<br>")
     }
 }

@@ -56,15 +56,16 @@ MenuItem {
     /// The mark that name wears in front of it — its kind's `NavIcon` (デザイン規約 §ref の種別「名前の印」), a sign on
     /// the name. Empty for none.
     property string refMark: ""
-    /// The room the markup opens for that mark, the mark's cell wide (`Words.roomFill`): the sentence's own space
-    /// before the name stays the gap (as `CardText.marks`).
+    /// The room the markup opens for that mark, the seat (`seatRoom`): the sentence's own space before the name stays
+    /// the gap (as `CardText.marks`).
     readonly property string refRoom1: menuItem.refMark === "" || menuItem.refSentence.indexOf("%1") < 0 ? ""
-                                       : Words.roomFill(menuItem.refCell1, refSpace.advanceWidth, refThin.advanceWidth)
-    /// That room's width: the mark's own cell, or a column's — the widest name mark's — where the name opens the row,
-    /// so a card's names start on one x (`columnCell`, as `codeNameSeat`). The mark stands in its middle, so a card's
-    /// marks share one upright axis.
-    readonly property real refCell1: menuItem.refSentence.indexOf("%1") === 0 ? menuItem.columnCell
-                                     : refInk.item !== null ? refInk.item.cell1 : 0
+                                       : menuItem.seatRoom
+    /// The seat in the row's words: as many of the row's own spaces as hold the widest mark (`MarkSeat`). The size is
+    /// the row's own, not read back off the ruler's font: on Linux that read loops the binding on every row.
+    readonly property string seatRoom: MarkSeat.room(refSpace.advanceWidth, menuItem.font.pixelSize)
+    /// A room's width as the row lays it out — one width whatever the mark, so a card's names start on one x, a name
+    /// ending a row too (`codeNameSeat`). The mark stands in its middle, so a card's marks share one upright axis.
+    readonly property real refCell: menuItem.seatRoom.length * refSpace.advanceWidth
     readonly property int refMarkRoom: menuItem.refRoom1.length
     /// A second name in the same sentence, at its `%2` seat ("%1 from %2": a tag and the remote it goes from), with
     /// its colour and mark as the first's. Empty for a sentence with one name.
@@ -72,13 +73,8 @@ MenuItem {
     property color refTint2: Theme.textPrimary
     property string refMark2: ""
     readonly property string refRoom2: menuItem.refMark2 === "" || menuItem.refSentence.indexOf("%2") < 0 ? ""
-                                       : Words.roomFill(menuItem.refCell2, refSpace.advanceWidth, refThin.advanceWidth)
-    readonly property real refCell2: menuItem.refSentence.indexOf("%2") === 0 ? menuItem.columnCell
-                                     : refInk.item !== null ? refInk.item.cell2 : 0
+                                       : menuItem.seatRoom
     readonly property int refMarkRoom2: menuItem.refRoom2.length
-    /// The widest name mark's cell (`columnSeat`), where a name opening the row stands its mark; 0 on a row that seats
-    /// no name.
-    readonly property real columnCell: columnSeat.item !== null ? columnSeat.item.wordCell : 0
     text: menuItem.refSentence === "" ? ""
         : menuItem.refSentence.indexOf("%2") < 0 ? menuItem.refSentence.arg(menuItem.refName)
         : menuItem.refSentence.arg(menuItem.refName).arg(menuItem.refName2)
@@ -635,12 +631,6 @@ MenuItem {
                 font: itemLabel.font
                 text: "\u00a0"
             }
-            /// A narrow no-break space, the room's finer step (`Words.roomFill`).
-            TextMetrics {
-                id: refThin
-                font: itemLabel.font
-                text: "\u202f"
-            }
             // The name ceiling: in the row's face for words that are one name (`textNames`), in the code face for the
             // names set as code — each laid out only on a row that reads it.
             TextMetrics {
@@ -716,17 +706,14 @@ MenuItem {
                 z: -1
                 active: menuItem.refSentence !== ""
                 sourceComponent: Item {
-                    /// Each mark's own cell (`refCell1` / `refCell2`).
-                    readonly property real cell1: refMarkIcon.wordCell
-                    readonly property real cell2: refMarkIcon2.wordCell
-                    // Each name's code ground: from its mark's ink — or its start, behind no mark — to its end, half a
-                    // gap off the ink at both ends (`WordFace.groundStart` / `groundEnd`). Gone where the words are cut
-                    // before the name.
+                    // Each name's code ground: from the head of its mark's room, which holds the mark's air — or half a
+                    // gap before the name, behind no mark — to half a gap past its end (`WordFace.groundStart` /
+                    // `groundEnd`). Gone where the words are cut before the name.
                     CodeGround {
                         visible: menuItem.refSentence.indexOf("%1") >= 0 && menuItem.refShown !== ""
                                  && menuItem.refLead1 < itemLabel.width - itemLabel.rightPadding
-                        x: menuItem.refMarkRoom > 0 ? WordFace.groundStart(refMarkIcon.x + refMarkIcon.inkLeft)
-                                                    : menuItem.refLead1 - Theme.spaceXs / 2
+                        x: menuItem.refMarkRoom > 0 ? menuItem.refLead1 - menuItem.refCell
+                                                    : WordFace.groundStart(menuItem.refLead1)
                         width: (menuItem.refMarkRoom > 0
                                 ? WordFace.groundEnd(codeFace, menuItem.refShown,
                                                      menuItem.refLead1 + refShown1Code.advanceWidth)
@@ -737,8 +724,8 @@ MenuItem {
                     CodeGround {
                         visible: menuItem.refSentence.indexOf("%2") >= 0 && menuItem.refShown2 !== ""
                                  && menuItem.refLead2 < itemLabel.width - itemLabel.rightPadding
-                        x: menuItem.refMarkRoom2 > 0 ? WordFace.groundStart(refMarkIcon2.x + refMarkIcon2.inkLeft)
-                                                     : menuItem.refLead2 - Theme.spaceXs / 2
+                        x: menuItem.refMarkRoom2 > 0 ? menuItem.refLead2 - menuItem.refCell
+                                                     : WordFace.groundStart(menuItem.refLead2)
                         width: (menuItem.refMarkRoom2 > 0
                                 ? WordFace.groundEnd(codeFace, menuItem.refShown2,
                                                      menuItem.refLead2 + refShown2Code.advanceWidth)
@@ -747,17 +734,15 @@ MenuItem {
                         size: itemLabel.font.pixelSize
                     }
                     // `refMark`, in the middle of the room the markup opened in front of the name: a sign on the name,
-                    // its box the words' line (デザイン規約 §アイコンの席 の修飾). Gone where the words are cut before
-                    // the name.
+                    // its box the words' line (デザイン規約 §アイコンの席 の修飾), so a card's marks share one upright
+                    // axis (§メニュー). Gone where the words are cut before the name.
                     NavIcon {
                         id: refMarkIcon
                         visible: menuItem.refMarkRoom > 0
                                  && menuItem.refLead1 < itemLabel.width - itemLabel.rightPadding
-                        // The ink's middle on the room's (as `CodeChip`'s mark).
-                        x: Math.round(menuItem.refLead1 - menuItem.refCell1 / 2 - refMarkIcon.inkLeft
-                                      - refMarkIcon.inkWidth / 2)
+                        x: Math.round(menuItem.refLead1 - menuItem.refCell)
                         y: 0
-                        width: refMarkIcon.wordCell
+                        width: menuItem.refCell
                         height: itemLabel.height
                         set: "sign"
                         size: itemLabel.font.pixelSize
@@ -769,10 +754,9 @@ MenuItem {
                         id: refMarkIcon2
                         visible: menuItem.refMarkRoom2 > 0
                                  && menuItem.refLead2 < itemLabel.width - itemLabel.rightPadding
-                        x: Math.round(menuItem.refLead2 - menuItem.refCell2 / 2 - refMarkIcon2.inkLeft
-                                      - refMarkIcon2.inkWidth / 2)
+                        x: Math.round(menuItem.refLead2 - menuItem.refCell)
                         y: 0
-                        width: refMarkIcon2.wordCell
+                        width: menuItem.refCell
                         height: itemLabel.height
                         set: "sign"
                         size: itemLabel.font.pixelSize
@@ -782,22 +766,9 @@ MenuItem {
                     }
                 }
             }
-            // The widest name mark, unseen: the cell a name opening the row stands its mark in, so the names of a card
-            // start on one x whatever their kind (`columnCell` — デザイン規約 §メニュー). Built on a row that seats a
-            // name.
-            Loader {
-                id: columnSeat
-                active: menuItem.refSentence !== "" || menuItem.codesName
-                sourceComponent: NavIcon {
-                    visible: false
-                    kind: "remote"
-                    set: "sign"
-                    size: itemLabel.font.pixelSize
-                }
-            }
         }
-        // `nameMark` + `codeName`: the name as code, its mark on the same ground in the middle of the column's cell,
-        // so a card's names start on one x and its marks stand on one axis whatever their kind (デザイン規約 §メニュー);
+        // `nameMark` + `codeName`: the name as code, its mark on the same ground in the middle of the room a sentence
+        // opens (`refCell`), so a card's names start on one x and its marks stand on one axis (デザイン規約 §メニュー);
         // with no mark, the name alone. A word's step after the row's words; with none, where the words would start
         // (`markWordGap`). Built on a row that ends in one.
         Loader {
@@ -815,7 +786,7 @@ MenuItem {
                 cutToWidth: true
                 word: menuItem.codeName
                 mark: menuItem.nameMark
-                markCell: menuItem.columnCell
+                markCell: menuItem.refCell
                 cutAt: menuItem.nameMark === "remote" ? "end" : "middle"
                 size: menuItem.font.pixelSize
                 tint: menuItem.codeNameColor
@@ -873,7 +844,6 @@ MenuItem {
             visible: menuItem.badged
             Layout.leftMargin: Theme.spaceXs
             Layout.alignment: Qt.AlignVCenter
-            Layout.preferredWidth: Theme.iconSm
             Layout.preferredHeight: Theme.iconSm
             pullRequest: menuItem.badgePr
             gone: menuItem.badgeGone

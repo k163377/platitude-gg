@@ -58,8 +58,8 @@ Rectangle {
                     + 2 * Theme.spaceXs, maxWidth)
     readonly property int nameLines: chip.wrapped ? Math.max(1, nameLabel.lineCount) : 1
     /// Everything in the chip but the name, each with its gap, counted only while drawn: room not taken would cut the
-    /// name short of the frame.
-    readonly property real furnitureW: (chip.hasBadge ? chip.badgeCell + Theme.spaceXs / 2 : 0)
+    /// name short of the frame. A mark's seat holds its own gap (`markBoxWidth`, `badgeBoxWidth`).
+    readonly property real furnitureW: (chip.hasBadge ? chip.badgeCell : 0)
                                        + (chip.hasCount ? chip.countW + Theme.spaceXs / 2 : 0)
                                        + (chip.hasMark ? chip.markCell : 0)
     /// What the contents come to; `width` clamps this to `maxWidth` and the frame clips the rest, so [`furnitureW`]
@@ -76,14 +76,16 @@ Rectangle {
     /// The count's seat, measured off the label that draws it: a seat priced for one digit lets the frame clip a
     /// `+41` to `+4`, a wrong number.
     readonly property real countW: countLabel.implicitWidth
-    /// The padlock's or the tree's cell: a sign on the name (デザイン規約 §アイコンの席 の修飾).
+    /// The padlock's, the tree's or the house's seat (`MarkSeat`): a sign on the name (デザイン規約 §アイコンの席 の修飾).
     readonly property real markCell: nameMark.wordCell
-    /// Its seat in the row: the cell less the row's half gap, which the cell's own air stands in for — a sign keeps
-    /// only its cell's air before the name it stands on.
-    readonly property real markSeat: chip.markCell - Theme.spaceXs / 2
-    /// The cloud's or the pull request's cell: a state after the name (デザイン規約 §アイコンの席 の名指し), its ink
-    /// and half a step either side, so with the row's half step it stands a step off the name and off the count.
-    readonly property real badgeCell: badgeMark.wordCell + Theme.spaceXs
+    /// Its box in the row: the seat less the row's half gap after it, which the seat's own air stands in for — a sign
+    /// keeps only its seat's air before the name it stands on.
+    readonly property real markBoxWidth: chip.markCell - Theme.spaceXs / 2
+    /// The cloud's or the pull request's seat (`MarkSeat`): a state after the name (デザイン規約 §アイコンの席 の名指し).
+    readonly property real badgeCell: badgeMark.wordCell
+    /// Its box in the row: the seat less the row's half gap before it, which the seat's own air stands in for — the
+    /// state stands its seat's air off the name, and the row's half gap more off the count.
+    readonly property real badgeBoxWidth: chip.badgeCell - Theme.spaceXs / 2
     /// Where the badge and the count stand, read off the laid-out items: swapping them changes no width, so only
     /// these can say the drawn order (`tst_refstack.qml`).
     readonly property real badgeX: badgeSeat.x
@@ -238,12 +240,13 @@ Rectangle {
         // stood as far from its name as the name from the frame.
         spacing: Theme.spaceXs / 2
         // The padlock or the tree ([`hasMark`]). Unlike the sidebar row's, the seat comes and goes: held open, it
-        // would push every name on the graph one mark right. Its box runs into the half gap after it ([`markSeat`]).
-        // Its box is the name's, so the two stand on one baseline (the first line's, on a wrapped chip).
+        // would push every name on the graph one mark right. Its seat runs into the half gap after it
+        // ([`markBoxWidth`]). Its box is the name's, so the two stand on one baseline (the first line's, on a wrapped
+        // chip).
         Item {
             id: markBox
             visible: chip.hasMark
-            width: chip.markSeat
+            width: chip.markBoxWidth
             height: nameLabel.height
             y: nameLabel.y
             NavIcon {
@@ -272,16 +275,17 @@ Rectangle {
             width: Math.min(implicitWidth, chip.nameRoom)
         }
         // Remote / PR badge: its width is reserved in `furnitureW`, so it survives any elision. A state after the name,
-        // on the name's first line: centred on a wrapped chip, it would leave its name.
+        // on the name's first line: centred on a wrapped chip, it would leave its name. Its seat runs into the half gap
+        // before it ([`badgeBoxWidth`]).
         Item {
             id: badgeSeat
             visible: chip.hasBadge
-            width: chip.badgeCell
+            width: chip.badgeBoxWidth
             height: nameLabel.height
             y: nameLabel.y
             NavIcon {
                 id: badgeMark
-                x: Theme.spaceXs / 2
+                x: -Theme.spaceXs / 2
                 kind: chip.recPr ? "pr" : "remote"
                 set: "name"
                 size: nameLabel.font.pixelSize

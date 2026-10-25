@@ -46,12 +46,12 @@ QtObject {
         font.weight: Theme.fontWeightStrong
     }
 
-    /// Where a code ground starts in front of a name's mark (デザイン規約 §git 用語のコード表記): half a gap before the
-    /// mark's ink — the air it keeps after the name's last glyph too (`groundEnd`), whatever the glyph, so no ground
-    /// reaches into the next word further than a command's does. Not rounded: a ground drawn to a whole pixel moves
-    /// each end by up to half a pixel, a different amount name by name.
-    function groundStart(inkLeft) {
-        return inkLeft - Theme.spaceXs / 2
+    /// Where a code ground starts in front of a word or a name with no mark (デザイン規約 §git 用語のコード表記): half a
+    /// gap before its first glyph's `head` — the air it keeps after the last glyph too (`groundEnd`). A name behind its
+    /// mark starts its ground at the head of the mark's seat instead: the seat holds the mark's air. Not rounded: a
+    /// ground drawn to a whole pixel moves each end by up to half a pixel, a different amount name by name.
+    function groundStart(head) {
+        return head - Theme.spaceXs / 2
     }
     /// …and where it ends: half a gap past the ink of the name's last glyph. `advanceEnd` is where the name's
     /// advance ends, laid out in `code`, the code face at the drawn size; the glyph's ink is the outline's, read off

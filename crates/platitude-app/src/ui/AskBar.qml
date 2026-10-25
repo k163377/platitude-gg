@@ -355,15 +355,18 @@ Rectangle {
                 spacing: Theme.spaceXs
                 // Ahead of the word: how the pill is answered before what answering does (デザイン規約 §回数押し). A
                 // letter of the pill's words (デザイン規約 §アイコンの席 の名指し): as tall as their capitals and on their
-                // middle, its seat its disc, and the row's step to the word — to a chip's ground, which hangs half a
-                // step before its letters, too.
+                // middle, in the middle of the seat of their letters (`MarkSeat`). The seat's air parts it from the
+                // word, so the row's step goes back — and a chip, whose ground hangs half a step before its letters,
+                // starts past the seat.
                 Item {
+                    id: acceptHoldSeat
+                    readonly property real cell: MarkSeat.cell(acceptHold.size)
                     visible: bar.armedPresses > 0
-                    width: Math.round(acceptHold.inkWidth) + (bar.code !== "" ? Theme.spaceXs / 2 : 0)
+                    width: acceptHoldSeat.cell - acceptRow.spacing + (bar.code !== "" ? Theme.spaceXs / 2 : 0)
                     height: wordSeat.implicitHeight
                     HoldIcon {
                         id: acceptHold
-                        x: -Math.round((acceptHold.width - acceptHold.inkWidth) / 2)
+                        x: Math.round((acceptHoldSeat.cell - acceptHold.width) / 2)
                         y: Math.round(wordSeat.y + wordSeat.base - WordFace.capitalMiddle(acceptHold.size)
                                       - acceptHold.height / 2)
                         size: Theme.fontMd

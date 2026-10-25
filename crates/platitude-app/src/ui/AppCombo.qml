@@ -351,7 +351,8 @@ ComboBox {
                 size: rowWord.font.pixelSize
                 wordBase: rowWord.y + rowWord.baselineOffset - mark.y
                 tint: Theme.accent
-                width: Theme.iconSm
+                // The seat of the row's letters (`MarkSeat`, デザイン規約 §アイコンの席 の名指し).
+                width: MarkSeat.cell(rowWord.font.pixelSize)
                 height: Theme.iconSm
                 anchors.right: parent.right
                 // Clear of the list's floating thumb: right-set ink on that side would stand under it whenever the

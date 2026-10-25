@@ -33,15 +33,6 @@ Item {
     }
     /// Somewhere else for the focus to go, since the bar hands the pill the focus as it opens.
     Item { id: elsewhere }
-    /// A narrow no-break space in the heading's face: a mark's room is its cell to within half of one
-    /// (`Words.roomFill`).
-    TextMetrics {
-        id: thin
-        font.family: Theme.uiFamily
-        font.pixelSize: Theme.fontMd
-        font.weight: Theme.fontWeightStrong
-        text: String.fromCharCode(0x202f)
-    }
 
     TestCase {
         name: "ReportDress"
@@ -83,8 +74,8 @@ Item {
             dress("worktree-kept", "", "topic", "")
             tryVerify(() => bar.settled && bar.markShown && bar.markCell > 0)
             // The name opens the sentence, where rich text drops a lone leading space: the room must still be there,
-            // the mark's cell wide, or the mark is drawn over the name's first letter.
-            fuzzyCompare(bar.markSeat.x, bar.markCell, thin.advanceWidth / 2, "the name was pushed by the whole mark")
+            // the seat wide, or the mark is drawn over the name's first letter.
+            fuzzyCompare(bar.markSeat.x, bar.markCell, 0.5, "the name was pushed by the whole seat")
 
             dress("update-rule", "origin", "main", "")
             tryVerify(() => bar.settled)

@@ -400,6 +400,7 @@ HoverToolButton {
                 wordSize: actionBtn.folded || btnLabel.phrased || btnLabel.head === "" ? 0 : btnLabel.fontSize
                 wordBase: btnLabel.y + btnLabel.headBase - seat.y
                 wordHang: btnLabel.code ? Theme.spaceXs / 2 : 0
+                wordStep: btnRow.spacing
                 Layout.alignment: Qt.AlignVCenter
             }
             ActionButtonLabel {

@@ -5,6 +5,7 @@ singleton Words 1.0 Words.qml
 singleton Ink 1.0 Ink.qml
 singleton Motion 1.0 Motion.qml
 singleton WordFace 1.0 WordFace.qml
+singleton MarkSeat 1.0 MarkSeat.qml
 singleton Hand 1.0 Hand.qml
 singleton MiddleHand 1.0 MiddleHand.qml
 singleton KeyMenu 1.0 KeyMenu.qml

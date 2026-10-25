@@ -166,11 +166,11 @@ Item {
     Loader {
         id: noEolMark
         active: cell.noNewline
-        // Its cell straight after the code, its box the code's line: the sign's own room is the gap.
+        // Its seat straight after the code, its box the code's line: the seat's own air is the gap.
         x: codeLine.x + codeLine.implicitWidth
         y: codeLine.y
         // A sign after the line's code (デザイン規約 §アイコンの席 の修飾): the capitals' scale, on the face's own `+`'s
-        // middle, in its cell.
+        // middle, in the middle of its seat.
         sourceComponent: NavIcon {
             id: noEolSign
             kind: "no-entry"

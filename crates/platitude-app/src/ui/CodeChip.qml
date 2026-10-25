@@ -29,9 +29,9 @@ Item {
     /// in its kind's colour — the word's where that is grey or on a fill (`NavIcon.inkBeside`).
     property string mark: ""
     property color markTint: wordMark.inkBeside(chip.tint)
-    /// The room the mark takes before the word: its own cell, or where chips stand in a column, the widest name mark's,
-    /// so the names start on one x (`AppMenuItem`'s code names — デザイン規約 §メニュー). The mark stands in the
-    /// room's middle, so a column's marks share one upright axis; the ground is measured off the mark's own ink.
+    /// The room the mark takes before the word: the seat (`MarkSeat`), or where chips stand under sentences, the seat
+    /// as a sentence lays it out, so the names start on one x (`AppMenuItem.refCell` — デザイン規約 §メニュー). The mark
+    /// stands in its middle, and the ground starts at its head: the seat holds the mark's air.
     property real markCell: wordMark.wordCell
     /// The mark's cell, nothing without one.
     readonly property real markRoom: chip.mark !== "" ? chip.markCell : 0
@@ -68,11 +68,11 @@ Item {
     baselineOffset: wordLabel.y + wordLabel.baselineOffset
 
     CodeGround {
-        // A word alone: half a gap off either end of the drawn text, eating into the line's own air so the word
-        // starts where it would without the chip. A name behind its mark: half a gap off the ink at both ends — the
-        // mark's and the last glyph's the name is drawn with, the `…` of a cut at the end (`WordFace.groundStart` /
-        // `groundEnd`).
-        x: chip.mark !== "" ? WordFace.groundStart(wordMark.x + wordMark.inkLeft) : -Theme.spaceXs / 2
+        // A word alone: half a gap off either end of the drawn text, eating into the line's own air so the word starts
+        // where it would without the chip. A name behind its mark: from the seat's head, which holds the mark's air,
+        // to half a gap past the ink of the last glyph the name is drawn with — the `…` of a cut at the end
+        // (`WordFace.groundStart` / `groundEnd`).
+        x: chip.mark !== "" ? 0 : WordFace.groundStart(0)
         width: (chip.mark !== "" ? WordFace.groundEnd(wordFace, chip.shownWord, chip.drawnWidth)
                                  : chip.drawnWidth + Theme.spaceXs / 2) - x
         anchors.verticalCenter: wordLabel.verticalCenter
@@ -91,14 +91,13 @@ Item {
         elideWidth: wordLabel.width
         text: chip.cut ? chip.word : ""
     }
-    // The mark, its box the word's line, so the two stand on one baseline.
+    // The mark, its box the word's line, so the two stand on one baseline, and the room before the word.
     NavIcon {
         id: wordMark
         visible: chip.mark !== ""
-        // The ink's middle on the room's: the ink sits in its own box to a rounded pixel.
-        x: Math.round(chip.markRoom / 2 - wordMark.inkLeft - wordMark.inkWidth / 2)
+        x: 0
         y: wordLabel.y
-        width: wordMark.wordCell
+        width: chip.markCell
         height: wordLabel.height
         kind: chip.mark !== "" ? chip.mark : "branch"
         set: "sign"

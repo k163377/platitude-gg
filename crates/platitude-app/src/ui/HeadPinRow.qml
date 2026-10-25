@@ -154,7 +154,6 @@ Rectangle {
             gone: headPin.goneUpstream
             size: pinName.pixelSize
             wordBase: pinName.y + pinName.baselineOffset - pinBadge.y
-            Layout.preferredWidth: Theme.iconSm
             Layout.preferredHeight: Theme.iconSm
             Layout.alignment: Qt.AlignVCenter
         }

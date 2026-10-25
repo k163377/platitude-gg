@@ -2,13 +2,13 @@ import QtQuick
 import platitude.ui
 
 /// The separator between two short facts on one line, drawn: `·` is East Asian Ambiguous, so the CJK families this app
-/// names hold it in a full-width cell whose leftover the row cannot control. Drawn, its seat is its ink and the row's
-/// spacing the gaps either side (デザイン規約 §アイコンの席 の修飾).
+/// names hold it in a full-width cell whose leftover the row cannot control. Drawn in the character's place, its seat is
+/// its ink and the row's spacing the gaps either side (デザイン規約 §アイコンの席 の字の代替).
 Item {
     id: mark
     property color tint: Theme.textMuted
     /// Where the dot's middle stands, in this item's y: a sign beside words stands on the face's own `+`'s middle
-    /// (デザイン規約 §アイコンの席 の修飾, `WordFace.signMiddle`); the box's middle by default.
+    /// (デザイン規約 §アイコンの席 の字の代替, `WordFace.signMiddle`); the box's middle by default.
     property real middle: mark.height / 2
     implicitWidth: dot.width
     implicitHeight: Theme.iconXs

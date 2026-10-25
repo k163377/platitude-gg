@@ -16,15 +16,17 @@ Item {
     /// name, drawn to its letters and on their capitals' middle (デザイン規約 §アイコンの席 の名指し).
     property real size: Theme.fontMd
     property real wordBase: 0
+    /// The row-end column's seat: the seat of the name's letters (デザイン規約 §アイコンの席 の名指し), one width down
+    /// the rows, the mark in its middle.
+    readonly property real seat: MarkSeat.cell(badge.size)
 
-    // The row-end column's seat (デザイン規約 §アイコンの席 の名指し); the mark is drawn to the name's letters.
-    implicitWidth: Theme.iconSm
+    implicitWidth: badge.seat
     implicitHeight: Theme.iconSm
 
     NavIcon {
-        // Its own size, never the seat's: a canvas born sizeless is never asked to paint once a layout sizes it, and
+        // Its own size, never the layout's: a canvas born sizeless is never asked to paint once a layout sizes it, and
         // a shot waiting on it runs to the ceiling.
-        width: Theme.iconSm
+        width: badge.seat
         height: Theme.iconSm
         set: "name"
         size: badge.size
@@ -44,7 +46,7 @@ Item {
         height: Theme.iconXs
         // Seated by its ink, not its box: the ink is a sliver in the middle of its box, so aligning boxes puts the
         // stroke on the badge. The box overhangs into the gutter the row already keeps (デザイン規約 §余白).
-        x: Theme.iconSm - (goneMark.inkRight - goneMark.inkWidth)
+        x: badge.seat - (goneMark.inkRight - goneMark.inkWidth)
         // Up to the row's own air over the badge — any higher draws on the row above, and nothing clips it.
         y: -(badge.rowHeight - Theme.iconSm) / 2
     }

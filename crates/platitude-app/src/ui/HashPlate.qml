@@ -59,7 +59,7 @@ ColumnLayout {
         text: ", "
     }
     readonly property real commaWidth: Math.ceil(plate.commaInk.advanceWidth)
-    /// The line's head before the first hash: the arrow, a sign on the hashes (デザイン規約 §アイコンの席 の修飾) —
+    /// The line's head before the first hash: the `←`, drawn in its place (デザイン規約 §アイコンの席 の字の代替) —
     /// its cell, and no step of the row's beside it.
     readonly property real leadWidth: parentBack.wordCell
     /// One parent's digits: whole, or `digits` of them and the mark, which `LineText` lays over the next one. Every
@@ -408,8 +408,8 @@ ColumnLayout {
         // Drawn rather than `←` (デザイン規約 §寸法「印は描いて出す」), and set inline: its cell is its seat
         // (`leadWidth`). A mark, not a target: each hash is its own way to its parent, and the arrow stays outside the
         // card the count opens (デザイン規約 §右のペインの親).
-        // A sign ahead of the hashes (デザイン規約 §アイコンの席 の修飾): the capitals' scale, on the face's own `+`'s
-        // middle; its box is the line's (`lineRef`).
+        // The `←` ahead of the hashes, drawn in its place (デザイン規約 §アイコンの席 の字の代替): the capitals' scale,
+        // on the face's own `+`'s middle; its box is the line's (`lineRef`).
         Item {
             id: arrowSeat
             Layout.preferredWidth: plate.leadWidth
@@ -420,6 +420,7 @@ ColumnLayout {
                 anchors.horizontalCenter: parent.horizontalCenter
                 kind: "arrow"
                 set: "sign"
+                characterStandIn: true
                 size: lineRef.pixelSize
                 wordBase: lineRef.baselineOffset
                 // The family draws it leaving; turned to point back.

@@ -94,6 +94,7 @@ fn main() {
     qrc::embed!("ui/Ink.qml");
     qrc::embed!("ui/Motion.qml");
     qrc::embed!("ui/WordFace.qml");
+    qrc::embed!("ui/MarkSeat.qml");
     qrc::embed!("ui/Hand.qml");
     qrc::embed!("ui/MiddleHand.qml");
     qrc::embed!("ui/KeyMenu.qml");
