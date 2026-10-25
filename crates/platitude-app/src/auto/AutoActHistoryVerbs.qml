@@ -218,6 +218,17 @@ Item {
             page.activateRow(oidHex, row)
     }
 
+    /// What a picture of a replay under way waits on: the worktree's row standing for it — the status saying so
+    /// (`status`), and the graph's rows carrying it (`row`). The reads go on under a replay
+    /// (`RepoSession::begin_poll`) and the first one stands the row up for the operation at whatever moment the pace
+    /// gives it, so a picture of the rewrite, and the census walked after it, wait for that read rather than race it.
+    /// Asked for each beat until the status has the row (`RepoTab.pollNow`).
+    function replayRow() {
+        if (!worktree.wipRowStands)
+            repoTab.pollNow()
+        return { "status": worktree.wipRowStands, "row": graphModel.wipRow }
+    }
+
     // The drop row is a count of presses or a click by whether anything else holds the branch tip, read once as the
     // menu opens (`CommitMenuState.standRow`). Before that answer is in, its `false` is no answer, and which of the two
     // controls a run pressed would be the scheduler's — so the menu goes up once it is in (`WorktreeModel`'s
@@ -287,13 +298,14 @@ Item {
     // `selector=` the one a press now acts on. `menu-wait stash-ref` is the same over the left menu's STASHES row
     // (`RefRowMenu.standAgain`).
     // `menu-wait replay`, over `--preset replay`: the plain form's line with a rebase out instead of the commit, the
-    // menu raised once the rewrite shows mid-way.
+    // menu raised once the rewrite shows mid-way, and photographed once its worktree row stands too (`replayRow`).
     SampleTimer {
         id: menuWaitTimer
         /// `""`, `after`, `stash`, `stash-ref` or `replay`, as above.
         property string mode: ""
-        /// `idle` (the count with nothing running), `out` (the write pressed, the menu not raised yet), `up` (raised
-        /// under the write; `after` and the stash forms wait there for the menu to stand again).
+        /// `idle` (the count with nothing running), `out` (the write pressed, the menu not raised yet), `row`
+        /// (`replay`: raised, the rewrite's worktree row not in yet), `up` (raised under the write; `after` and the
+        /// stash forms wait there for the menu to stand again).
         property string stage: ""
         property string oid: ""
         property int idleRows: -1
@@ -371,7 +383,9 @@ Item {
             return true
         }
         onTriggered: {
-            Awaited.at("menu_wait", menuWaitTimer.stage)
+            // `row` says its own terms (`replayRow`): said in turn with this line, each would read as a change.
+            if (menuWaitTimer.stage !== "row")
+                Awaited.at("menu_wait", menuWaitTimer.stage)
             if (menuWaitTimer.stage === "idle") {
                 if (repoTab.state !== "open" || repoTab.busyCount !== 0 || !PageSettled.settled(page))
                     return
@@ -419,8 +433,22 @@ Item {
                     return
                 if (!menuWaitTimer.raise())
                     return
-                menuWaitTimer.stage = "up"
-                if (menuWaitTimer.mode === "after")
+                menuWaitTimer.stage = menuWaitTimer.mode === "replay" ? "row" : "up"
+                if (menuWaitTimer.mode === "after" || menuWaitTimer.mode === "replay")
+                    return
+                menuWaitTimer.stop()
+                menuWaitTimer.report("during")
+                driver.complete()
+            } else if (menuWaitTimer.stage === "row") {
+                // Raised before the row, not after: the rebuild that brings the row puts the commits replayed so far
+                // above the one the menu was counted on, and enough of them scroll it out of the view.
+                if (driver.wroteAndSettled()) {
+                    menuWaitTimer.stop()
+                    Harness.report("menu_wait_missed the write landed before its worktree row stood")
+                    driver.complete()
+                    return
+                }
+                if (!Awaited.all("menu_wait_row", acts.replayRow()))
                     return
                 menuWaitTimer.stop()
                 menuWaitTimer.report("during")
@@ -437,16 +465,27 @@ Item {
         }
     }
 
-    // `replay-running`: the screen while git is out — the step badge, the doors held down, the ring beside the hand.
-    // This only watches: the page ticks the count itself (`Metrics.opProgressMs`), so a build whose tick never
-    // reaches the badge waits out the watchdog. Then the face is held (`RepoPage.autoReplayHeld`, the latch
-    // `doors-held` takes): the write answers before the reads it invalidated, so a picture taken at the edge could
-    // show a screen the replay had already left.
+    // `replay-running`: the screen while git is out — the step badge, the doors held down, the ring beside the hand,
+    // and the worktree's row the replay stands up (`replayRow`, the one read this asks for). The count ticks on the
+    // page's own clock (`Metrics.opProgressMs`), so a build whose tick never reaches the badge waits out the watchdog.
+    // Then the face is held (`RepoPage.autoReplayHeld`, the latch `doors-held` takes): the write answers before the
+    // reads it invalidated, so a picture taken at the edge could show a screen the replay had already left.
     SampleTimer {
         id: replayRunningTimer
+        /// The replay has been seen counting: one gone before its row stood says so rather than wait out the watchdog.
+        property bool counting: false
         onTriggered: {
             // Queued is not out: git writes nothing to count until it is actually replaying.
-            if (!repoTab.replaying || worktree.opSteps === 0 || worktree.opStep === 0)
+            if (!repoTab.replaying || worktree.opSteps === 0 || worktree.opStep === 0) {
+                if (replayRunningTimer.counting && !repoTab.replaying) {
+                    replayRunningTimer.stop()
+                    Harness.report("replay_running_missed the replay ended before its worktree row stood")
+                    driver.complete()
+                }
+                return
+            }
+            replayRunningTimer.counting = true
+            if (!Awaited.all("replay_running_row", acts.replayRow()))
                 return
             replayRunningTimer.stop()
             page.autoReplayHeld = true
