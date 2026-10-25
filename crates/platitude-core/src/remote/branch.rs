@@ -45,6 +45,25 @@ impl RemoteBranch {
     pub fn tracking_ref(&self) -> String {
         format!("refs/remotes/{self}")
     }
+
+    /// `<remote> <branch>`, the pair as the discard record keeps it
+    /// (破棄記録仕様.md §2 `Upstream:`). A space parts the two where a slash
+    /// cannot: no branch name holds one (git-check-ref-format), so the
+    /// last space is the cut even where the remote — a path or a URL —
+    /// holds spaces of its own.
+    pub fn record_form(&self) -> String {
+        format!("{} {}", self.remote, self.branch)
+    }
+
+    /// The pair back out of [`Self::record_form`]; none where no space
+    /// parts it.
+    pub fn from_record_form(form: &str) -> Option<Self> {
+        let (remote, branch) = form.rsplit_once(' ')?;
+        Some(Self {
+            remote: remote.to_string(),
+            branch: branch.to_string(),
+        })
+    }
 }
 
 /// `<remote>/<branch>`, the short name its remote-tracking branch is
@@ -342,6 +361,22 @@ mod tests {
         assert_eq!(pair.head_ref(), "refs/heads/feature/x");
         assert_eq!(pair.tracking_ref(), "refs/remotes/team/fork/feature/x");
         assert_eq!(pair.to_string(), "team/fork/feature/x");
+    }
+
+    /// The record's form comes back as the same pair wherever the remote
+    /// holds spaces; a form no space parts is no pair.
+    #[test]
+    fn the_record_form_comes_back_as_the_pair() {
+        for pair in [
+            far("origin", "feature/x"),
+            far("../far away/repo", "feature/x"),
+            far(".", "main"),
+        ] {
+            let form = pair.record_form();
+            assert_eq!(RemoteBranch::from_record_form(&form), Some(pair), "{form}");
+        }
+        assert_eq!(RemoteBranch::from_record_form("origin/main"), None);
+        assert_eq!(RemoteBranch::from_record_form(""), None);
     }
 
     /// `team/fork` + `feature/x` and `team` + `fork/feature/x` both read

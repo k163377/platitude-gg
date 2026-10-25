@@ -185,8 +185,7 @@ pub async fn record_branch_delete(
         ("Branch", before.name.clone()),
     ];
     if let Some(upstream) = &before.upstream {
-        let pair = format!("{} {}", upstream.remote, upstream.branch);
-        trailers.push(("Upstream", pair));
+        trailers.push(("Upstream", upstream.record_form()));
     }
     if let Some(remote) = remote {
         trailers.push(("Remote", remote.target.remote.clone()));

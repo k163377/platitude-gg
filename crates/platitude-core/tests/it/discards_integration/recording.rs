@@ -409,6 +409,39 @@ async fn a_deleted_branch_comes_back_with_its_upstream_and_the_remotes_tip() {
     assert_eq!(left.parts[0].tip, oid(&s1));
 }
 
+/// An upstream's remote may hold a space — `branch.<name>.remote` takes a
+/// path or a URL — and a branch name never does, so the record gives the
+/// pair back as it was, slashes on both sides included.
+#[tokio::test]
+async fn an_upstream_whose_remote_holds_a_space_comes_back_as_it_was() {
+    let mut repo = TestRepo::init();
+    let c1 = repo.commit_file_id("a.txt", "1\n", "c1");
+    repo.git(&["branch", "spike"]);
+    repo.git(&["config", "branch.spike.remote", "../far away/repo"]);
+    repo.git(&["config", "branch.spike.merge", "refs/heads/feature/x"]);
+    let (executor, cancel) = env();
+    let dir = git_dir(&repo);
+    let before = discards::branch_before(&executor, &repo.path, "spike", &cancel)
+        .await
+        .expect("read the branch")
+        .expect("the branch is there");
+    repo.git(&["branch", "--delete", "--force", "spike"]);
+
+    discards::record_branch_delete(&executor, &repo.path, &dir, &before, None, &cancel)
+        .await
+        .expect("note the delete");
+
+    let found = read(&repo).await;
+    assert_eq!(
+        restores(one(&found, DiscardKind::Deleted)),
+        vec![&Restore::Branch {
+            name: "spike".to_string(),
+            tip: oid(&c1),
+            upstream: Some(far("../far away/repo", "feature/x")),
+        }]
+    );
+}
+
 /// A remote branch deleted, or pushed over, comes back as a branch here
 /// under the remote's name of it, with no upstream (§4).
 #[tokio::test]

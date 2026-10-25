@@ -198,13 +198,7 @@ impl Reading<'_> {
         let line = self.line;
         entry.kind = DiscardKind::Deleted;
         entry.name = line.get("Branch").to_string();
-        let upstream = line
-            .get("Upstream")
-            .split_once(' ')
-            .map(|(remote, branch)| crate::remote::RemoteBranch {
-                remote: remote.to_string(),
-                branch: branch.to_string(),
-            });
+        let upstream = crate::remote::RemoteBranch::from_record_form(line.get("Upstream"));
         let own = Recorded {
             line,
             part: 0,
