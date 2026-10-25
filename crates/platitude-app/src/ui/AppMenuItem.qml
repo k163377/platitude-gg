@@ -153,9 +153,10 @@ MenuItem {
     readonly property real codeColSeat: menuItem.code !== "" ? codeLabel.implicitWidth : 0
 
     /// Whether the row's words bid their whole width. Off for a row whose words carry data (`Unset upstream` and the
-    /// upstream it names): they bid at most `labelColW` and give way past that into the hover (デザイン規約 §メニュー).
-    /// Not zero: a sparse menu at `menuMinW` with a wide frozen chip column would leave the name no width. A name
-    /// behind its mark (`codeName`) bids the same of its own accord.
+    /// upstream it names): the names bid at most `labelColW`, on top of the words round them — capped whole, the
+    /// sentence would leave a card of such rows alone too narrow for any name —, and give way past that into the hover
+    /// (デザイン規約 §メニュー). Not zero: a sparse menu at `menuMinW` with a wide frozen chip column would leave the
+    /// name no width. A name behind its mark (`codeName`) bids the same of its own accord.
     property bool growsForText: true
     /// The row is one name (a repository, a worktree) — its words, or its code name (`codeName`): it bids at most the
     /// name ceiling (`Theme.nameMaxChars`) in the face it is drawn in and gives way in the middle, as a name in a
@@ -311,7 +312,12 @@ MenuItem {
     // A row this menu is not showing takes no room: the list lays rows out by height, so an invisible row that keeps
     // one leaves a hole.
     implicitHeight: menuItem.present ? Theme.rowHeight : 0
-    implicitWidth: (!menuItem.growsForText ? Math.min(menuItem.wordsWant, Metrics.labelColW)
+    implicitWidth: (!menuItem.growsForText
+                    ? Math.min(menuItem.wordsWant,
+                               // The sentence, not `refSeats`: those carry the names as cut, off this width.
+                               (menuItem.refSentence.indexOf("%1") >= 0 || menuItem.refSentence.indexOf("%2") >= 0
+                                ? Math.ceil(refFixedRuler.advanceWidth) : 0)
+                               + Metrics.labelColW)
                     : menuItem.textNames
                     ? Math.min(menuItem.wordsWant, Math.ceil(nameCapRuler.advanceWidth) + itemLabel.rightPadding)
                     : menuItem.wordsWant)
