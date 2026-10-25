@@ -407,10 +407,9 @@ pub(super) const TABLE: &[Verb] = &[
     // The two rows that make a worktree, on the WORKTREE card
     // (デザイン規約 §worktree を作る — `card=` is that card opened).
     // `here=` is `Create worktree here…`, on every row with a commit;
-    // `add=` is `worktree add`, on a branch no worktree has out — not on
-    // the tree's own branch (`main`) nor one another worktree holds
-    // (`worktrees`' `feature/topic-a`, whose `switch` row opens that
-    // worktree instead).
+    // `add=` is `worktree add`, on every local branch — greyed on the tree's
+    // own branch (`main`) and on one another worktree holds (`worktrees`'
+    // `feature/topic-a`, whose `switch` row opens that worktree instead).
     // `folder=` is where it would go, and `worktree-places` puts something in
     // the way of two branches: the row is greyed and its forced hover says
     // which — a greyed row and a pale one are a picture apart, the
@@ -449,18 +448,30 @@ pub(super) const TABLE: &[Verb] = &[
             ),
             // Held by a worktree stopped part-way through a rebase, which the
             // list shows detached (`WorktreeEntry::held`): git refuses it
-            // to any other worktree, so the row is not offered.
+            // to any other worktree, so the row stands greyed on its holder.
             (
                 Arg::Is("branch:fix/rebasing"),
-                "worktree_add_menu card=true here=true add=false folder= blocked=false",
+                "worktree_add_menu card=true here=true add=true folder=fix-rebasing blocked=true tip=true \
+                 aside=true mark=rebasing cut=false says=Checked out in another worktree — rebasing",
             ),
             (
                 Arg::WithPreset("worktrees"),
-                "worktree_add_menu card=true here=true add=false folder= blocked=false",
+                "worktree_add_menu card=true here=true add=true folder=feature-topic-a blocked=true tip=true \
+                 aside=true mark=topic cut=false says=Checked out in another worktree — topic",
             ),
+            // The same row through the graph's door (`CommitMenuState`).
             (
-                Arg::Is("branch:main"),
-                "worktree_add_menu card=true here=true add=false folder= blocked=false",
+                Arg::OneOf(&["branch:main", "branch:main@graph"]),
+                "worktree_add_menu card=true here=true add=true folder=main blocked=true tip=true \
+                 aside=true mark= cut=false says=Switch away first — this is the branch you are on",
+            ),
+            // The branch a rebase stopped here replays (`--preset
+            // rebase-conflict`): the tree is detached and no listing names a
+            // holder, but git still counts it out here.
+            (
+                Arg::WithPreset("rebase-conflict"),
+                "worktree_add_menu card=true here=true add=true folder=feature-clash blocked=true tip=true \
+                 aside=true mark= cut=false says=Being rebased in this worktree",
             ),
             // A tag has no branch to take out: only the new one.
             (

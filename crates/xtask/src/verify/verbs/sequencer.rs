@@ -78,14 +78,25 @@ pub(super) const TABLE: &[Verb] = &[
     // a note a frame late moves the card's edge from under the hand
     // (規約 §行が読む答えはどこから来るか). One run per answer — nothing
     // above `v0.2` is pushed, and `feature/topic-a` forks below
-    // `origin/main` so its range reaches back over it.
+    // `origin/main` so its range reaches back over it. Under a stopped
+    // merge (`--preset others-merging`) the four rows that would start
+    // something of their own keep their seats greyed, and the rebase row
+    // warns of nothing — though its range reaches main's pushed commit,
+    // which the note would name were the row live.
     Verb {
         name: "integrate-menu",
-        when: &[(
-            Arg::Is("v0.2:tag"),
-            "integrate_menu ref=v0.2 offered=true pushed=false",
-        )],
-        plain: "integrate_menu ref=feature/topic-a offered=true pushed=true",
+        when: &[
+            (
+                Arg::WithPreset("others-merging"),
+                "integrate_menu ref=release offered=true pushed=false greyed=4 \
+                 says=Finish the stopped operation first",
+            ),
+            (
+                Arg::Is("v0.2:tag"),
+                "integrate_menu ref=v0.2 offered=true pushed=false greyed=0 says=",
+            ),
+        ],
+        plain: "integrate_menu ref=feature/topic-a offered=true pushed=true greyed=0 says=",
     },
     // The same stop reached through a carry: the stash the rewrite took
     // out of its way still stands, and `stashes=1` is the claim — a screen

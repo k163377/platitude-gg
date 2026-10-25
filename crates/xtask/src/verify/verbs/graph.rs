@@ -75,9 +75,15 @@ pub(super) const TABLE: &[Verb] = &[
     // stands (`WindowChrome.frameYielded`) — otherwise the platform takes
     // a press on the band's grab runs or the edges, and the menu stands
     // through the click meant to close it.
+    // Under a stopped merge (`--preset others-merging`) the row the menu
+    // stands on — `feature/clash`'s — keeps its eight history rows greyed
+    // with the operation's reason, read off core's word (`standing=`).
     Verb {
         name: "commit-menu",
-        when: &[],
+        when: &[(
+            Arg::WithPreset("others-merging"),
+            "can_move=true standing=true greyed=8",
+        )],
         plain: "overlay saved=true popups=1 yield=true",
     },
     Verb {

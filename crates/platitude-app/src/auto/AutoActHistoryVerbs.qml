@@ -119,8 +119,17 @@ Item {
                 commitMenu.openSub(commitBranchCard)
             else if (act === "tag-card")
                 commitMenu.openSub(commitTagCard)
+            // `greyed=` the first level's rows out for a reason of their own — a stopped operation's, all of them.
+            let greyed = 0
+            for (let i = 0; i < commitMenu.count; i++) {
+                const row = commitMenu.itemAt(i)
+                if (row && row.codeColSeat !== undefined && row.offered && !row.subMenu && row.blockedReason !== "")
+                    greyed++
+            }
             Harness.report("commit_menu rows=" + commitMenu.offeredRows
-                              + " can_move=" + commitMenuState.menuCanMoveBranch)
+                              + " can_move=" + commitMenuState.menuCanMoveBranch
+                              + " standing=" + commitMenuState.menuOpStanding
+                              + " greyed=" + greyed)
         } else if (act === "drop-commit" || act === "drop-commit-go" || act === "drop-stops"
                    || act === "drop-last-commit") {
             dropTimer.begin(act, driver.autoActOid(arg))
@@ -193,15 +202,20 @@ Item {
     /// The ref menu left standing on what a merge or a rebase would bring in — a branch by bare name, a tag with
     /// `:tag` after it. `pushed=` is the `rebase` row's note, which must be on the row as the card is measured; a
     /// photograph cannot tell it from one a frame late (規約 §メニュー). Both values are runs of their own: either
-    /// alone passes an implementation that always answers the same.
+    /// alone passes an implementation that always answers the same. `greyed=` counts the rows that would start
+    /// something of their own — `Create branch here…`, merge, rebase, `Create tag here…` — standing greyed: all four
+    /// under a stopped operation, none otherwise; `says=` is the rebase row's reason.
     function openIntegrateMenu(arg) {
         const onTag = arg.endsWith(":tag")
         const name = onTag ? arg.substring(0, arg.length - 4) : arg
         const oid = onTag ? tagsModel.oidOfName(name) : branchesModel.oidOfName(name)
         page.openRefMenu(onTag ? "tag" : "branch", name, name, oid)
+        const starts = [refRowMenu.branchHereItem, refRowMenu.mergeItem, refRebaseItem, refRowMenu.tagHereItem]
         Harness.report("integrate_menu ref=" + name
                           + " offered=" + refRebaseItem.offered
-                          + " pushed=" + (refRebaseItem.note !== ""))
+                          + " pushed=" + (refRebaseItem.note !== "")
+                          + " greyed=" + starts.filter(item => item.offered && item.blocked).length
+                          + " says=" + refRebaseItem.blockedReason)
     }
 
     /// Which commit the reset verbs take the branch back to. With nothing given, the row under HEAD's: a reset to

@@ -562,11 +562,12 @@ Item {
                 }
                 if (!carriedMenuTimer.applying) {
                     carriedMenuTimer.stop()
-                    // Read off the rows as drawn: `apply=false` is the row taken off, `held=true` greyed.
+                    // Read off the rows as drawn: `apply=false` is the row taken off, `held=true` greyed, `says=` why.
                     Harness.report("carried_menu open=" + driver.carriedOpenItem.visible
                                       + " apply=" + driver.carriedApplyItem.visible
                                       + " held=" + driver.carriedApplyItem.blocked
-                                      + " name=" + driver.carriedOpenItem.codeName)
+                                      + " name=" + driver.carriedOpenItem.codeName
+                                      + " says=" + driver.carriedApplyItem.blockedWhy)
                     driver.complete()
                     return
                 }

@@ -9,6 +9,7 @@ pub(super) fn build(preset: &str, repo: &mut DemoRepo) -> Option<Result<(), Stri
         "behind" => behind(repo),
         "diverged" => diverged(repo),
         "others-behind" => others_behind(repo),
+        "others-merging" => others_merging(repo),
         "unpublished" => unpublished(repo),
         "gone" => gone(repo),
         "forkmark" => forkmark(repo),
@@ -406,6 +407,25 @@ pub(super) fn others_behind(repo: &mut DemoRepo) -> Result<(), String> {
     }
     repo.git(&["switch", "main"])?;
     repo.git(&["fetch", "origin"])?;
+    Ok(())
+}
+
+/// [`others_behind`] with a merge stopped on conflicts in the tree: still on
+/// `main`, which tracks `origin/main`, with `release` still behind its own.
+/// Every `pull` row is there and greyed while the merge stands — `git
+/// pull` on `main` and the fast-forward of `release` alike (デザイン規約
+/// §取り込んで合流させる) — and so are merge / rebase and the rows that
+/// make a name (§進行中の操作から出る).
+pub(super) fn others_merging(repo: &mut DemoRepo) -> Result<(), String> {
+    others_behind(repo)?;
+    repo.git(&["switch", "--create", "feature/clash"])?;
+    repo.commit("src/app.txt", "app v2, theirs\n", "feat: change the app")?;
+    repo.git(&["switch", "main"])?;
+    repo.commit("src/app.txt", "app v2, ours\n", "fix: change the app too")?;
+    // Sent, so a rebase onto `release` would rewrite a commit origin has:
+    // the note the rebase row wears where it is live, and not while greyed.
+    repo.git(&["push", "origin", "main"])?;
+    repo.git_expecting_stop(&["merge", "--no-edit", "feature/clash"])?;
     Ok(())
 }
 

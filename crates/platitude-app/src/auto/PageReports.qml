@@ -65,9 +65,12 @@ Item {
 
     Connections {
         target: reports.fileRowMenu
+        // `stash=` whether the row has a seat and `stashWhy=` why it is greyed — a conflict or no commit yet.
         function onOffered(bucket) {
             Harness.report("file_menu bucket=" + bucket
-                              + " rows=" + reports.fileRowMenu.menu.offeredRows)
+                              + " rows=" + reports.fileRowMenu.menu.offeredRows
+                              + " stash=" + reports.fileRowMenu.stashItem.offered
+                              + " stashWhy=" + reports.fileRowMenu.stashItem.blockedReason)
         }
     }
 

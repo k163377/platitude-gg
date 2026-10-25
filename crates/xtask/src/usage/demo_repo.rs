@@ -88,6 +88,11 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         outrun    the same, NOT fetched, with a commit of our own on top:
                   a plain push git will not send until the remote has been
                   read again (push-outdated)
+        others-merging  others-behind with a merge into main stopped on
+                  conflicts: the pull, merge, rebase and create-here rows
+                  there and greyed while it stands (pull-blocked,
+                  pull-blocked release, integrate-menu release, commit-menu,
+                  reset-menu)
         unpublished  a branch never sent anywhere, two remotes, one taken name
         gone      a branch whose upstream the far side deleted: git answers
                   [gone] for it, and the row has a remote branch to name
@@ -285,6 +290,9 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   worktree standing where this window stands: the one shape
                   the pane reading another worktree scrolls in (middle-hand
                   carried)
+        carried-conflicted  carried, with a merge stopped on conflicts in
+                  the worktree standing where this window stands: its work
+                  is there to read and greyed to apply (carried-menu here)
         worktree-detached  one linked worktree, detached, with a commit made
                   in it: the one shape where a worktree stands
                   somewhere no branch, tag or remote reaches (nav-jump)

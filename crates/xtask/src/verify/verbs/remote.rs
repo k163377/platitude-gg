@@ -98,6 +98,13 @@ pub(super) const TABLE: &[Verb] = &[
                 "offered=true state= code=push held=false blocked=true tip=true text=to… \
                  says=Cannot push — its upstream is not supported",
             ),
+            // A branch its remote has all of (`--preset github`'s
+            // `feature/login`): out where it goes, in the toolbar's words.
+            (
+                Arg::WithPreset("github"),
+                "offered=true state=clean code=push held=false blocked=true tip=true \
+                 text=to origin/feature/login says=Nothing to push — origin/feature/login is up to date",
+            ),
             (Arg::Ends("main"), "offered=false state= "),
         ],
         plain: "push_branch_menu where=",
@@ -606,10 +613,16 @@ pub(super) const TABLE: &[Verb] = &[
     // one another worktree has out (`--preset tracked-elsewhere`'s
     // `feature/topic-a`). The row is out and its tooltip says where to go.
     // The sidebar's row and the graph chip's get the answer from the same
-    // place, but a run through one says nothing about the other.
+    // place, but a run through one says nothing about the other. Under a
+    // stopped merge (`--preset others-merging`) every row is out with the
+    // one sentence, `git pull`'s and the fast-forward's alike.
     Verb {
         name: "pull-blocked",
         when: &[
+            (
+                Arg::WithPreset("others-merging"),
+                "offered=true blocked=true tip=true says=Finish the stopped operation first",
+            ),
             (
                 Arg::Is("chip"),
                 "pull_blocked where=chip offered=true blocked=true tip=true \

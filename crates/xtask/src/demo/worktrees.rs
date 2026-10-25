@@ -124,6 +124,31 @@ pub(super) fn carried_clashing(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// `carried`, with a merge stopped on conflicts in `../here`: its row still
+/// draws, and its work cannot be applied here — which side of the conflict
+/// to bring is not decided (`carried-menu here`, デザイン規約 §別の worktree
+/// を読む). The stop is proved by `MERGE_HEAD` in that worktree's own git
+/// directory, as `DemoRepo::git_expecting_stop` proves one here.
+pub(super) fn carried_conflicted(repo: &mut DemoRepo) -> Result<(), String> {
+    carried(repo)?;
+    let here = repo.root.join("here");
+    for (switch, way) in [
+        (["switch", "--create", "side/clash"].as_slice(), "one way"),
+        (["switch", "side/here"].as_slice(), "the other way"),
+    ] {
+        repo.git_at(&here, switch)?;
+        std::fs::write(here.join("docs/guide.md"), format!("guide, {way}\n"))
+            .map_err(|e| format!("writing the here worktree's guide: {e}"))?;
+        repo.git_at(&here, &["add", "--", "docs/guide.md"])?;
+        repo.git_at(&here, &["commit", "-m", &format!("docs: the guide {way}")])?;
+    }
+    output_of(&mut repo.command(&here, &["merge", "--no-edit", "side/clash"]))?;
+    if !repo.work.join(".git/worktrees/here/MERGE_HEAD").exists() {
+        return Err("the merge in ../here was expected to stop on its conflict".to_string());
+    }
+    Ok(())
+}
+
 /// One worktree in each state git can report: linked, detached, detached
 /// and locked, locked with and without a reason, and one whose folder is
 /// gone (`prunable`). This window opens the main checkout, so that row

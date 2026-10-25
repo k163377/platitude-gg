@@ -548,14 +548,32 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The menu on another worktree's uncommitted row: its door, named by
     // the worktree's folder, and the apply — read off the rows as drawn, so
-    // `apply=true held=false` is the row there and live, not greyed.
+    // `apply=true held=false` is the row there and live, not greyed. A
+    // merge stopped over there (`--preset carried-conflicted`) greys it,
+    // and `says=` names the side to settle.
     Verb {
         name: "carried-menu",
-        when: &[(
-            Arg::Is("here"),
-            "carried_menu open=true apply=true held=false name=here",
-        )],
+        when: &[
+            (
+                Arg::WithPreset("carried-conflicted"),
+                "carried_menu open=true apply=true held=true name=here \
+                 says=Settle its conflicts first — here",
+            ),
+            (
+                Arg::Is("here"),
+                "carried_menu open=true apply=true held=false name=here says=",
+            ),
+        ],
         plain: "carried_menu open=true apply=true held=false name=",
+    },
+    // A conflicted file's menu: git stashes nothing over an unmerged path,
+    // so the `stash` row stands greyed in the toolbar's words — not taken
+    // away (デザイン規約 §メニュー「「今できない」行は無効で残す」).
+    Verb {
+        name: "file-menu-conflict",
+        when: &[],
+        plain: "file_menu bucket=conflicts rows=5 stash=true \
+                stashWhy=Settle the conflicts first — git will not stash an unmerged file",
     },
     // That worktree's work applied here, landing as `stash apply` lands:
     // `here=` is this tree's row after it and `there=` the row it came from,
