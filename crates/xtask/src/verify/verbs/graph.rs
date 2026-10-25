@@ -278,7 +278,7 @@ pub(super) const TABLE: &[Verb] = &[
     // HEAD's row card taken down by a menu raised on its row (a blocker:
     // a dismissal) under a hand that never left: nothing comes back while
     // it stays; a tremor is the hand's own move, lifting the latch, and the
-    // card comes back after the rest.
+    // card comes back after the rest — not in the tremor's own turn.
     Verb {
         name: "card-latch",
         when: &[
@@ -294,12 +294,8 @@ pub(super) const TABLE: &[Verb] = &[
                 Arg::Is("dismissed"),
                 "card_latch stage=dismissed card=false menu=false latched=true",
             ),
-            (
-                Arg::Is("tremor"),
-                "card_latch stage=tremor card=false menu=false latched=false",
-            ),
         ],
-        plain: "card_latch stage=back card=true menu=false latched=false",
+        plain: "card_latch stage=back card=true menu=false latched=false tremor_card=false",
     },
     // HEAD's row card with the hand inside it, and the row rewritten in
     // place under it by the commit the run makes: the card's commit is a

@@ -27,8 +27,8 @@ Item {
         if (act === "card-latch") {
             // HEAD's row card, taken down by a menu raised on its row (a blocker: a dismissal), and the hand that
             // never left: nothing comes back while it stays, a tremor is its own move and the card comes back after
-            // the rest. The argument is the stage to stop at — `card` / `menu` / `dismissed` / `tremor` / `back`
-            // (`back` when none).
+            // the rest. The argument is the stage to stop at — `card` / `menu` / `dismissed` / `back` (`back` when
+            // none).
             cardLatchTimer.stage = arg === "" ? "back" : arg
             cardLatchTimer.step = 0
             cardLatchTimer.start()
@@ -48,17 +48,22 @@ Item {
     // PGG_AUTO_ACT=card-latch. The hand on HEAD's row as the pane hears it (`HandWatch.stir`), its card out, then the
     // row's menu raised: the blocker takes the card down and latches it (`HoverSeat.onBlockedByChanged`). The menu
     // dismissed, the hand still where it was: nothing comes back; a tremor is the hand's own move, and the card comes
-    // back after the rest (デザイン規約 §左メニューの所作「手が動いたかの見切り」).
+    // back after the rest (デザイン規約 §左メニューの所作「手が動いたかの見切り」). `tremor_card=` is read in the tremor's own
+    // turn: the card put out then (`visible`, up from the open call on, where `opened` waits out the enter
+    // transition). No stage stops at the tremor: the rest it starts runs on under the picture and the census, so what
+    // they show would be the machine's speed.
     SampleTimer {
         id: cardLatchTimer
         property string stage: "back"
         property int step: 0
         property point at: Qt.point(-1, -1)
         property string oidHex: ""
+        property bool tremorCard: false
         function done(stage) {
             cardLatchTimer.stop()
             Harness.report("card_latch stage=" + stage + " card=" + rowCard.opened + " menu=" + commitMenu.opened
-                              + " latched=" + (rowHost.cardLatched !== ""))
+                              + " latched=" + (rowHost.cardLatched !== "")
+                              + " tremor_card=" + cardLatchTimer.tremorCard)
             driver.complete()
         }
         onTriggered: {
@@ -103,10 +108,7 @@ Item {
                     return
                 }
                 graphPane.hand.stir(Qt.point(cardLatchTimer.at.x + 2, cardLatchTimer.at.y))
-                if (cardLatchTimer.stage === "tremor") {
-                    cardLatchTimer.done("tremor")
-                    return
-                }
+                cardLatchTimer.tremorCard = rowCard.visible
                 cardLatchTimer.step = 4
                 return
             }

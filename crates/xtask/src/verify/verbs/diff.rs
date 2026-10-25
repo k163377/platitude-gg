@@ -142,40 +142,31 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The rows moved under a still hand with the card out: the card goes,
     // and the light goes to the row that arrived under the hand at once;
-    // a tremor brings that row's own card after the rest. Each stage reads
-    // the state as it stands.
+    // a tremor brings that row's own card after the rest, not in its own
+    // turn. Each stage reads the state as it stands, but for what the
+    // tremor's turn read (`tremor=`, `tremor_card=`).
     Verb {
         name: "eol-walk",
-        when: &[
-            (
-                Arg::Is("gone"),
-                "eol_walk stage=gone gone=true slid_lit=false under_lit=true tremor=false back=false",
-            ),
-            (
-                Arg::Is("tremor"),
-                "eol_walk stage=tremor gone=true slid_lit=false under_lit=true tremor=true back=false",
-            ),
-        ],
-        plain: "eol_walk stage=back gone=false slid_lit=false under_lit=true tremor=true back=true \
-                path=src/fresh.kt",
+        when: &[(
+            Arg::Is("gone"),
+            "eol_walk stage=gone gone=true slid_lit=false under_lit=true tremor=false \
+             tremor_card=false back=false",
+        )],
+        plain: "eol_walk stage=back gone=false slid_lit=false under_lit=true tremor=true \
+                tremor_card=false back=true path=src/fresh.kt",
     },
     // The same list sent a pixel under the still hand: the row the hand
     // stayed on keeps its light, and the tremor brings its card back after
     // the rest (the ask stood through the hold).
     Verb {
         name: "eol-stay",
-        when: &[
-            (
-                Arg::Is("gone"),
-                "eol_stay stage=gone gone=true slid_lit=true under_lit=true tremor=false back=false",
-            ),
-            (
-                Arg::Is("tremor"),
-                "eol_stay stage=tremor gone=true slid_lit=true under_lit=true tremor=true back=false",
-            ),
-        ],
-        plain: "eol_stay stage=back gone=false slid_lit=true under_lit=true tremor=true back=true \
-                path=src/flipped.kt",
+        when: &[(
+            Arg::Is("gone"),
+            "eol_stay stage=gone gone=true slid_lit=true under_lit=true tremor=false \
+             tremor_card=false back=false",
+        )],
+        plain: "eol_stay stage=back gone=false slid_lit=true under_lit=true tremor=true \
+                tremor_card=false back=true path=src/flipped.kt",
     },
     Verb {
         name: "changes-shut",

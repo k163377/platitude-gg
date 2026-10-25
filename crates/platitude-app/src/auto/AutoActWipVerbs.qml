@@ -266,7 +266,7 @@ Item {
         } else if (act === "eol-walk" || act === "eol-stay") {
             // The rows moved under a still hand with the card out. `eol-walk` sends the list a whole row, so another
             // row arrives under the hand; `eol-stay` sends it a pixel, so the hand stays on its row. The argument is
-            // the stage to stop at — `gone` / `tremor` / `back` (`back` when none).
+            // the stage to stop at — `gone` / `back` (`back` when none).
             page.showWip()
             eolWalkTimer.stay = act === "eol-stay"
             eolWalkTimer.stage = arg === "" ? "back" : arg
@@ -895,8 +895,11 @@ Item {
     // tremor and the rest (デザイン規約 §左メニューの所作「手が動いたかの見切り」). A
     // pixel (`eol-stay`): the row the hand stayed on keeps its light, and the tremor brings its card back after the
     // rest (`HoverSeat.displace`). The report reads the state at the stage it stops at — `gone=` the card down,
-    // `slid_lit=` the first row's light, `under_lit=` the light of the row under the hand, `tremor=` that row's light
-    // right after the tremor, `back=` the card up.
+    // `slid_lit=` the first row's light, `under_lit=` the light of the row under the hand, `back=` the card up — but
+    // for the two read in the tremor's own turn: `tremor=` that row's light, `tremor_card=` the card put out
+    // (`visible`, up from the open call on, where `opened` waits out the enter transition). No stage stops at the
+    // tremor: the rest it starts runs on under the picture and the census, so what they show would be the machine's
+    // speed.
     SampleTimer {
         id: eolWalkTimer
         property bool stay: false
@@ -906,6 +909,7 @@ Item {
         /// The row under the hand after the scroll: the one that arrived, or the one the hand stayed on.
         property var under: null
         property bool tremorLit: false
+        property bool tremorCard: false
         function unstagedList() {
             const pane = wipPane.bucketPanes.find(pane => pane.section === "unstaged")
             return pane === undefined ? null : pane.list
@@ -924,7 +928,8 @@ Item {
             Harness.report((eolWalkTimer.stay ? "eol_stay" : "eol_walk") + " stage=" + stage
                               + " gone=" + !wipPane.eolCardOpen + " slid_lit=" + (row !== null && row.washLit)
                               + " under_lit=" + (under !== null && under.washLit) + " tremor=" + eolWalkTimer.tremorLit
-                              + " back=" + wipPane.eolCardOpen + " path=" + wipPane.pointedEolPath)
+                              + " tremor_card=" + eolWalkTimer.tremorCard + " back=" + wipPane.eolCardOpen
+                              + " path=" + wipPane.pointedEolPath)
             driver.complete()
         }
         onTriggered: {
@@ -949,10 +954,7 @@ Item {
                 }
                 wipPane.hand.stir(Qt.point(eolWalkTimer.at.x + 2, eolWalkTimer.at.y))
                 eolWalkTimer.tremorLit = eolWalkTimer.under !== null && eolWalkTimer.under.washLit
-                if (eolWalkTimer.stage === "tremor") {
-                    eolWalkTimer.done("tremor")
-                    return
-                }
+                eolWalkTimer.tremorCard = wipPane.eolHoverCard.visible
                 eolWalkTimer.step = 2
                 return
             }
