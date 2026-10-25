@@ -527,14 +527,13 @@ impl RepoSession {
         )
     }
 
-    /// Replaces a branch on a remote with one under a new name, which git
+    /// Replaces `old` with a branch named `to` on the same remote, which git
     /// does as a push and a delete (see [`remote::replace_remote_branch`]),
     /// the delete leased to `expect`, and caught up with as a push is. The
     /// UI asks first: the old name is destroyed.
     pub fn replace_remote_branch(
         self: &Arc<Self>,
-        remote_name: String,
-        from: String,
+        old: remote::RemoteBranch,
         to: String,
         expect: String,
     ) -> Option<OperationId> {
@@ -544,23 +543,18 @@ impl RepoSession {
             OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                let old = remote::RemoteBranch {
-                    remote: remote_name.clone(),
-                    branch: from.clone(),
-                };
                 let before = remote_tip(&exec, &repo.workdir, &old, Some(&expect), &cancel).await?;
                 let result = remote::replace_remote_branch(
                     &exec,
                     &repo.workdir,
-                    &remote_name,
-                    &from,
+                    &old,
                     &to,
                     &expect,
                     timeout,
                     &cancel,
                 )
                 .await;
-                s.catch_up_after(&result, remote_name);
+                s.catch_up_after(&result, old.remote);
                 result?;
                 if let Some(before) = before {
                     let keep = record_token();

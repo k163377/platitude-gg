@@ -91,7 +91,7 @@ impl RepoTab {
         if branch.is_empty() || target.remote.is_empty() || target.branch.is_empty() {
             return;
         }
-        let row = super::ops_delete::remote_row(&target);
+        let row = target.to_string();
         let asked = self.ask_session(|s| s.point_upstream_and_push(branch, target));
         self.ref_push_asked(&row, asked);
     }
@@ -112,15 +112,9 @@ impl RepoTab {
     }
 
     /// The same for a branch, keyed on the remote row that goes.
-    pub(super) fn remote_branch_replace(
-        &mut self,
-        remote: String,
-        from: String,
-        to: String,
-        expect: String,
-    ) {
-        let row = format!("{remote}/{from}");
-        let asked = self.ask_session(|s| s.replace_remote_branch(remote, from, to, expect));
+    pub(super) fn remote_branch_replace(&mut self, old: RemoteBranch, to: String, expect: String) {
+        let row = old.to_string();
+        let asked = self.ask_session(|s| s.replace_remote_branch(old, to, expect));
         self.ref_push_asked(&row, asked);
     }
 

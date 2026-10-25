@@ -434,7 +434,7 @@ pub(super) async fn remote_tip(
 ) -> Result<Option<RemoteTip>, GitError> {
     let rev = match expect.filter(|expect| !expect.is_empty()) {
         Some(expect) => expect.to_string(),
-        None => format!("refs/remotes/{}/{}", target.remote, target.branch),
+        None => target.tracking_ref(),
     };
     Ok(discards::commit_of(exec, workdir, &rev, cancel)
         .await?

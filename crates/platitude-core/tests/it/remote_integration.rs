@@ -92,8 +92,7 @@ async fn replace_billing(work: &TestRepo, shown: &str) -> Result<(), GitError> {
     remote::replace_remote_branch(
         &exec,
         &work.path,
-        "origin",
-        "billing",
+        &far("origin", "billing"),
         "billing-v2",
         shown,
         NET,

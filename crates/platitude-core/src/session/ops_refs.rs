@@ -102,13 +102,7 @@ impl RepoSession {
                 && snapshot.local_named(name).map(|b| b.oid) == head.upstream_oid
         });
         let remote_upstream = remote.is_some_and(|target| {
-            target.branch == head.short.as_str()
-                || head
-                    .upstream
-                    .as_str()
-                    .strip_prefix(target.remote.as_str())
-                    .and_then(|rest| rest.strip_prefix('/'))
-                    == Some(target.branch.as_str())
+            target.branch == head.short.as_str() || head.upstream.as_str() == target.to_string()
         });
         local_upstream || remote_upstream
     }

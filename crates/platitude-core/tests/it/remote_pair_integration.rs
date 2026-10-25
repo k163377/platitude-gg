@@ -174,3 +174,51 @@ async fn an_upstream_is_written_either_way_from_the_two_names() {
         ]
     );
 }
+
+/// A replace sends the new name from the old pair's remote-tracking ref,
+/// deletes the old name leased to the commit shown, and repoints what
+/// tracked it — every name spelled from the pair, the tag of the old
+/// name left where it was.
+#[tokio::test]
+async fn a_replace_reaches_git_from_the_old_pair_and_the_new_name() {
+    let (mut bare, mut work) = slashed_remote();
+    let tag = bare.git(&["rev-parse", "refs/tags/feature/x"]);
+    work.git(&["push", "-u", "team/fork", "topic:refs/heads/feature/x"]);
+    let shown = work.git(&["rev-parse", "refs/remotes/team/fork/feature/x"]);
+    let (exec, log, cancel) = logged();
+
+    remote::replace_remote_branch(
+        &exec,
+        &work.path,
+        &far("team/fork", "feature/x"),
+        "feature/y",
+        &shown,
+        NET,
+        &cancel,
+    )
+    .await
+    .expect("replaced");
+
+    let heads = bare.git(&["for-each-ref", "--format=%(refname)", "refs/heads"]);
+    assert_eq!(heads, "refs/heads/feature/y\nrefs/heads/main");
+    assert_eq!(bare.git(&["rev-parse", "refs/heads/feature/y"]), shown);
+    assert_eq!(bare.git(&["rev-parse", "refs/tags/feature/x"]), tag);
+    assert_eq!(work.git(&["config", "branch.topic.remote"]), "team/fork");
+    assert_eq!(
+        work.git(&["config", "branch.topic.merge"]),
+        "refs/heads/feature/y"
+    );
+    let send = "git push --porcelain --no-follow-tags";
+    assert_eq!(
+        rows(&log, &["git push", "git branch"]),
+        [
+            format!("{send} -- team/fork refs/remotes/team/fork/feature/x:refs/heads/feature/y"),
+            format!(
+                "{send} --force-with-lease=refs/heads/feature/x:{shown} \
+                 --delete -- team/fork refs/heads/feature/x"
+            ),
+            "git branch --set-upstream-to=refs/remotes/team/fork/feature/y --end-of-options topic"
+                .to_string(),
+        ]
+    );
+}

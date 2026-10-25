@@ -221,7 +221,7 @@ pub async fn record_remote_delete(
         ("Remote", remote.target.remote.clone()),
         ("Branch", remote.target.branch.clone()),
     ];
-    let summary = format!("delete {}/{}", remote.target.remote, remote.target.branch);
+    let summary = format!("delete {}", remote.target);
     note(
         executor,
         workdir,
@@ -247,10 +247,7 @@ pub async fn record_force_push(
         ("Remote", remote.target.remote.clone()),
         ("Branch", remote.target.branch.clone()),
     ];
-    let summary = format!(
-        "force-push {}/{}",
-        remote.target.remote, remote.target.branch
-    );
+    let summary = format!("force-push {}", remote.target);
     note(
         executor,
         workdir,

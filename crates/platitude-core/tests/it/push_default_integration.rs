@@ -190,7 +190,7 @@ async fn a_global_mark_is_read_and_sent_alike() {
     );
     assert_eq!(
         label,
-        format!("{}/{}", plan.target.remote, plan.target.branch),
+        plan.target.to_string(),
         "the label and the send disagree at global scope"
     );
 

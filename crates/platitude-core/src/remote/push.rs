@@ -662,7 +662,7 @@ mod tests {
                 "refs/heads/main"
             };
             let sent = plan("main", tracks, merge, push_remote, push_default, "origin")
-                .map(|spec| format!("{}/{}", spec.target.remote, spec.target.branch))
+                .map(|spec| spec.target.to_string())
                 .unwrap_or_default();
             // As the status shortens it: a branch here called `main` is
             // `main`, and only the configuration says it is here.

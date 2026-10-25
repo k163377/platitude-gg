@@ -1256,7 +1256,11 @@ impl RepoTab {
     /// tag, the old name's delete leased to `expect`.
     #[qslot]
     fn replace_remote_branch(&mut self, remote: String, from: String, to: String, expect: String) {
-        self.remote_branch_replace(remote, from, to, expect);
+        let old = RemoteBranch {
+            remote,
+            branch: from,
+        };
+        self.remote_branch_replace(old, to, expect);
     }
 
     /// `git push <remote> --delete <branch>` (destructive), leased to

@@ -265,7 +265,7 @@ pub async fn set_upstream(
     target: &crate::remote::RemoteBranch,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    let upstream = format!("refs/remotes/{}/{}", target.remote, target.branch);
+    let upstream = target.tracking_ref();
     if ref_is_here(executor, workdir, &upstream, cancel).await? {
         let cmd = GitCommand::new().cwd(workdir).args([
             "branch",

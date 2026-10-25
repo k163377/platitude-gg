@@ -362,9 +362,8 @@ impl RepoSession {
                     pending.take_ref(format!("refs/heads/{branch}"), tip.map(|item| item.oid));
                 }
                 LeavingRef::Remote(target) => {
-                    let short = format!("{}/{}", target.remote, target.branch);
-                    let tip = snapshot.and_then(|s| s.remote_named(&short));
-                    pending.take_ref(format!("refs/remotes/{short}"), tip.map(|item| item.oid));
+                    let tip = snapshot.and_then(|s| s.remote_named(&target.to_string()));
+                    pending.take_ref(target.tracking_ref(), tip.map(|item| item.oid));
                 }
                 LeavingRef::Tag(tag) => {
                     let tip = snapshot

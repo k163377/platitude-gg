@@ -247,7 +247,7 @@ async fn a_remote_upstream_is_named_as_the_send_names_it() {
             "origin",
             REMOTES
         ),
-        format!("{}/{}", plan.target.remote, plan.target.branch),
+        plan.target.to_string(),
         "the label and the send"
     );
     assert!(

@@ -2,6 +2,7 @@
 //! replacing one.
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::path::Path;
 use std::time::Duration;
 
@@ -35,6 +36,23 @@ impl RemoteBranch {
     /// tag of the same name the bare one is ambiguous.
     pub fn head_ref(&self) -> String {
         format!("refs/heads/{}", self.branch)
+    }
+
+    /// The remote-tracking ref here, `refs/remotes/<remote>/<branch>`: the
+    /// name the default fetch refspec gives it, not one resolved through
+    /// the remote's own `fetch` refspecs. `.` has none — no ref goes by
+    /// `refs/remotes/./<branch>`.
+    pub fn tracking_ref(&self) -> String {
+        format!("refs/remotes/{self}")
+    }
+}
+
+/// `<remote>/<branch>`, the short name its remote-tracking branch is
+/// listed under (`origin/feature/x`) — written from the pair, never cut
+/// back into one.
+impl fmt::Display for RemoteBranch {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}/{}", self.remote, self.branch)
     }
 }
 
@@ -209,7 +227,7 @@ pub async fn untrack_deleted(
     Ok(tracking)
 }
 
-/// Replaces a branch on a remote with one under a new name — not a
+/// Replaces `old` with a branch named `to` on the same remote — not a
 /// rename: the far side sees a create and a delete, and whatever hung off
 /// the old name (an open PR, a protection rule) stays behind.
 ///
@@ -219,33 +237,27 @@ pub async fn untrack_deleted(
 /// refused lease leaves both names over there and the tracking alone.
 /// Local branches tracking the old name are then repointed: a stale
 /// upstream would send the next push back to the deleted name.
-#[expect(clippy::too_many_arguments)]
 pub async fn replace_remote_branch(
     executor: &GitExecutor,
     workdir: &Path,
-    remote: &str,
-    from: &str,
+    old: &RemoteBranch,
     to: &str,
     expect: &str,
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    let old = RemoteBranch {
-        remote: remote.to_string(),
-        branch: from.to_string(),
-    };
     let spec = PushSpec {
         target: RemoteBranch {
-            remote: remote.to_string(),
+            remote: old.remote.clone(),
             branch: to.to_string(),
         },
-        local: format!("refs/remotes/{remote}/{from}"),
+        local: old.tracking_ref(),
         set_upstream: false,
         force: PushForce::None,
     };
     push(executor, workdir, &spec, timeout, cancel).await?;
-    delete_remote_branch(executor, workdir, &old, expect, timeout, cancel).await?;
-    for branch in tracking_branches(executor, workdir, &old, cancel).await? {
+    delete_remote_branch(executor, workdir, old, expect, timeout, cancel).await?;
+    for branch in tracking_branches(executor, workdir, old, cancel).await? {
         crate::branch::set_upstream(executor, workdir, &branch, &spec.target, cancel).await?;
     }
     Ok(())
@@ -323,12 +335,13 @@ mod tests {
         }
     }
 
+    /// Each name is spelled from the two halves as given, slashes and all.
     #[test]
-    fn the_head_ref_names_the_branch_under_refs_heads() {
-        assert_eq!(
-            far("team/fork", "feature/x").head_ref(),
-            "refs/heads/feature/x"
-        );
+    fn the_pair_spells_its_names_from_both_halves() {
+        let pair = far("team/fork", "feature/x");
+        assert_eq!(pair.head_ref(), "refs/heads/feature/x");
+        assert_eq!(pair.tracking_ref(), "refs/remotes/team/fork/feature/x");
+        assert_eq!(pair.to_string(), "team/fork/feature/x");
     }
 
     /// `team/fork` + `feature/x` and `team` + `fork/feature/x` both read
