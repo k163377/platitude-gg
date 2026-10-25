@@ -45,6 +45,10 @@ BandStateGroup 1.0 BandStateGroup.qml
 BandStateMetrics 1.0 BandStateMetrics.qml
 BandStateShare 1.0 BandStateShare.qml
 BandWidest 1.0 BandWidest.qml
+BranchBothDeleteRow 1.0 BranchBothDeleteRow.qml
+BranchDeleteRow 1.0 BranchDeleteRow.qml
+BranchPushRow 1.0 BranchPushRow.qml
+BranchRemoteDeleteRow 1.0 BranchRemoteDeleteRow.qml
 CoAuthorCard 1.0 CoAuthorCard.qml
 CoAuthorLine 1.0 CoAuthorLine.qml
 ChosenCommitRow 1.0 ChosenCommitRow.qml

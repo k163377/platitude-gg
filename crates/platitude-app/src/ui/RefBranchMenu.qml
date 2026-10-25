@@ -1,13 +1,13 @@
 import QtQuick
 import platitude.ui
 
-// The BRANCH card: the branch sent to its remote, its upstream set and taken off, and the delete table — local,
-// remote, both (デザイン規約 §メニュー の入れ子). Starting a branch stands on the level above with the other moves.
+// The BRANCH card: the branch sent to its remote (`BranchPushRow`), its upstream set and taken off, and the delete
+// table — local, remote, both (`BranchDeleteRow` / `BranchRemoteDeleteRow` / `BranchBothDeleteRow`) (デザイン規約
+// §メニュー の入れ子). Starting a branch stands on the level above with the other moves.
 //
 // **One card, two entrances** (`RefRowMenu` / `CommitMenuState`), so both offer the same thing. **It reads no model
 // and runs no write**: the entrance reads the facts (`branchFacts`), `standOn` freezes them as the menu opens, and
-// the card signals what was pressed (rules/app-ui.md の「配線」). What is decided here is the table — which row keeps
-// a seat, which greys and with which sentence, which gesture and colour each takes. Standing on plain values is what
+// the card and the rows on it signal what was pressed (rules/app-ui.md の「配線」). Standing on plain values is what
 // lets `tests/qml/tst_branchcard.qml` drive the real card, the only place the sentences are checked (see `holderLeaf`).
 AppMenu {
     id: branchCard
@@ -78,7 +78,8 @@ AppMenu {
     /// What the push row stands on (`NavSectionModel.branchPush`'s `state`), for the automation's report.
     readonly property alias pushState: state.pushState
 
-    /// Everything this card reads, set once by `standOn` and left alone while it stands.
+    /// Everything this card and its rows read (`BranchPushRow` / `BranchDeleteRow` / `BranchRemoteDeleteRow` /
+    /// `BranchBothDeleteRow`), set once by `standOn` and left alone while it stands.
     readonly property QtObject state: QtObject {
         id: state
         property string kind: ""
@@ -228,43 +229,9 @@ AppMenu {
     title: qsTr("BRANCH")
     applies: state.kind === "branch" || state.kind === "remote"
 
-    // The toolbar's push for a branch the worktree is not on, in the toolbar's forms (デザイン規約 §リモートへ送る): a
-    // plain click where git would take it; the leased overwrite, held, where the far side has commits this branch
-    // lacks; and a first push that asks where it goes. The flag long, as every menu row's (§git 用語のコード表記).
-    // Out, in the first push's words, where the push would stay here: there is no remote to send it to.
-    AppMenuItem {
+    BranchPushRow {
         id: refPushItem
-        readonly property bool publishing: state.pushState === "publish"
-        /// The first push's words: where it goes is asked — or, out, there is nowhere to name.
-        readonly property bool firstPushWords: refPushItem.publishing || state.pushStaysHere
-        readonly property bool overwrites: state.pushState === "behind" || state.pushState === "diverged"
-        // Off the running press's length, so the chip cannot change under a hand already on the row
-        // (`AppMenuItem.armedPresses`, デザイン規約 §回数押し).
-        code: refPushItem.armedPresses <= 0 ? "push" : "push --force"
-        // Where it goes, behind its kind's mark; the first push asks it, which the `…` says
-        // (デザイン規約 §はじめてリモートへ送る).
-        //: Follows the `push` chip: "push to origin/feature".
-        refSentence: refPushItem.firstPushWords ? "" : qsTr("to %1")
-        refName: state.pushTarget
-        refTint: Theme.textPrimary
-        refMark: "remote"
-        //: Follows the `push` chip: "push to…", where the branch goes being asked first.
-        text: refPushItem.firstPushWords ? qsTr("to…") : refPushItem.refSentence.arg(refPushItem.refName)
-        offered: state.pushState !== "" || state.pushStaysHere
-        blockedReason: state.pushStaysHere ? branchCard.pushBlockedStaysHere : ""
-        holdPresses: refPushItem.overwrites ? Metrics.holdPressesWarned : 0
-        // Reaching past this machine is the warning tone (デザイン規約 §状態).
-        holdTone: Theme.warning
-        onTriggered: {
-            if (refPushItem.publishing)
-                branchCard.publishRequested(state.refId, state.pushUpstream)
-            else
-                branchCard.pushRequested(state.refId, "", "")
-        }
-        onHeld: {
-            refPushItem.closeMenu()
-            branchCard.pushRequested(state.refId, "lease", state.pushLease)
-        }
+        card: branchCard
     }
     // Set upstream (デザイン規約 §ブランチが測られる相手を決める). Words and a `…`, no code: the flag's value is not
     // settled until the question is answered (§git 用語のコード表記). Only a local branch: a remote-tracking ref has
@@ -298,124 +265,17 @@ AppMenu {
         }
     }
     AppMenuSeparator {}
-    AppMenuItem {
+    BranchDeleteRow {
         id: refDeleteItem
-        // The delete names its target: during the hold, what is about to go has to be readable on the row itself
-        // (デザイン規約 §メニュー「例外は削除行だけ」).
-        readonly property bool remoteRow: state.kind === "remote"
-        readonly property bool branchRow: state.kind === "branch"
-        // git refused `--delete` while this menu stood, or the check at open came back unmerged (off the rows, else
-        // git's echo). Only `"no"` dresses the row: `"unknown"` is a read that fell over, offered plain.
-        readonly property bool refusedRow:
-            branchRow
-            && (branchCard.forceDeleteBranch === state.refId
-                || (state.deleteAnswered ? !state.deleteMerged
-                    : (branchCard.checkedBranch === state.refId
-                       && branchCard.checkedMerged === "no")))
-        readonly property bool heldRow: remoteRow || refusedRow
-        /// `refusedRow` as latched at the first press: on a branch row the warning's count (`AppMenuItem.armedPresses`)
-        /// means refused, the plain delete's means not. Read live, git's answer to the last attempt would re-word the
-        /// row between presses (デザイン規約 §回数押し).
-        readonly property bool shownRefused:
-            refDeleteItem.branchRow && refDeleteItem.armedPresses >= Metrics.holdPressesWarned
-        code: shownRefused ? "branch -D"
-            : branchRow ? "branch --delete"
-            : "push --delete"
-        // Data: untranslated, and it does not widen the menu past `labelColW` (`codeName`) — behind its kind's mark
-        // (デザイン規約 §ref の種別「名前の印」).
-        nameMark: remoteRow ? "remote" : "branch"
-        codeName: state.refId
-        note: shownRefused ? qsTr("not merged") : ""
-        // On a branch the delete forms are a fixed table whose rows grey out rather than go
-        // (デザイン規約 §メニュー「例外はブランチの削除の表」). The other kinds keep the assembled rule.
-        offered: branchRow || (heldRow && state.canDelete)
-        blockedReason: !branchRow || state.canDelete ? ""
-                     : state.onCurrentBranch ? branchCard.deleteBlockedOnCurrent
-                     : branchCard.blockedByWorktree
-        // Asked of the sentence this row shows, not of the state: a row blocked for another reason names no worktree.
-        reasonMarkWord: refDeleteItem.blockedReason === branchCard.blockedByWorktree ? state.holderLeaf : ""
-        reasonMarkKind: state.holderHome ? "home" : "tree"
-        // The plain delete is a delete too: two presses, in the plain ink (デザイン規約 §回数押し). Refused, or reaching
-        // past this machine, it is the warning's three.
-        holdPresses: heldRow ? Metrics.holdPressesWarned : Metrics.holdPressesPlain
-        // `warning` both ways when held: a remote's name stands back up here, and a local branch's tip and upstream
-        // come back from the discard record (デザイン規約 §回数押し の色の表). Off the latched count, as the words are.
-        holdTone: refDeleteItem.armedPresses >= Metrics.holdPressesWarned ? Theme.warning : Theme.textPrimary
-        // At the last press, so `shownRefused` is the count these presses were given: an unmerged answer landing on the
-        // floor turns no plain delete into `-D`.
-        onHeld: {
-            // A branch's plain delete keeps the menu up: git's answer lands on this row, which a refusal turns into
-            // `branch -D` (`AppMenuItem.armedPresses` reopens with the warning's count).
-            if (refDeleteItem.branchRow && !refDeleteItem.shownRefused) {
-                branchCard.deleteRequested(state.kind, state.refId, state.refName, state.refOid)
-                return
-            }
-            refDeleteItem.closeMenu()
-            if (remoteRow) {
-                // Leased to the commit this row showed (`remote::delete_remote_branch`).
-                branchCard.deleteRemoteRequested(state.refId, state.refOid)
-            } else {
-                branchCard.forceDeleteRequested(state.refId)
-            }
-        }
+        card: branchCard
     }
-    // The remote reading alone — on the current branch the only delete on offer (デザイン規約 §左メニューの所作).
-    AppMenuItem {
+    BranchRemoteDeleteRow {
         id: refRemoteDeleteItem
-        code: "push --delete"
-        nameMark: "remote"
-        codeName: state.remoteCounterpart
-        // Seated only while a remote reading exists; grey is "not now" — the reading stands on another commit
-        // (デザイン規約 §左メニューの所作 の削除の表).
-        offered: state.kind === "branch" && state.remoteCounterpart !== ""
-        blockedReason: state.canDeleteRemote ? "" : Words.differsFrom(state.remoteCounterpart)
-        reasonMarks: Words.listMarks(refRemoteDeleteItem.blockedReason, state.remoteCounterpart, "remote")
-        holdPresses: Metrics.holdPressesWarned
-        holdTone: Theme.warning
-        onHeld: {
-            refRemoteDeleteItem.closeMenu()
-            branchCard.deleteRemoteRequested(state.remoteCounterpart, state.remoteCounterpartOid)
-        }
+        card: branchCard
     }
-    // Two commands, so words and no code (§git 用語のコード表記). The local half runs first; its refusal stops the
-    // pair with nothing touched, and a refused lease on the remote half stops it with the local one done
-    // (`session::delete_branch_everywhere`).
-    AppMenuItem {
+    BranchBothDeleteRow {
         id: refBothDeleteItem
-        /// Whether the local half goes as `-D`, latched for the presses under way (デザイン規約 §回数押し): read live, git's
-        /// answer landing between presses would turn presses begun on the plain delete into a force delete. The count
-        /// cannot carry it (this row takes three either way), so the `Binding` freezes it while
-        /// `AppMenuItem.gesturing`.
-        property bool forces: refDeleteItem.refusedRow
-        readonly property Binding forcesHeld: Binding {
-            target: refBothDeleteItem
-            property: "forces"
-            value: refDeleteItem.refusedRow
-            when: !refBothDeleteItem.gesturing
-            restoreMode: Binding.RestoreNone
-        }
-        text: qsTr("Delete both")
-        note: refBothDeleteItem.forces ? qsTr("not merged") : ""
-        offered: state.kind === "branch" && state.remoteCounterpart !== ""
-        // The local half's reasons first: it runs first.
-        blockedReason: state.canDelete && state.canDeleteRemote ? ""
-                     : state.onCurrentBranch ? branchCard.deleteBlockedOnCurrent
-                     : state.heldByWorktree !== "" ? branchCard.blockedByWorktree
-                     : Words.differsFrom(state.remoteCounterpart)
-        // As on the local row.
-        reasonMarkWord: refBothDeleteItem.blockedReason === branchCard.blockedByWorktree ? state.holderLeaf : ""
-        reasonMarkKind: state.holderHome ? "home" : "tree"
-        reasonMarks: refBothDeleteItem.blockedReason === Words.differsFrom(state.remoteCounterpart)
-                     ? Words.listMarks(refBothDeleteItem.blockedReason, state.remoteCounterpart, "remote") : []
-        holdPresses: Metrics.holdPressesWarned
-        // `warning` whether the local half runs as `-d` or `-D`: the commits only it reached come back from the discard
-        // record with the name (デザイン規約 §回数押し の色の表).
-        holdTone: Theme.warning
-        onHeld: {
-            refBothDeleteItem.closeMenu()
-            // One write with one answer, so one thing to put back. `forces` is still the latched one.
-            branchCard.deleteEverywhereRequested(state.refId, state.remoteCounterpart,
-                                                 refBothDeleteItem.forces, state.remoteCounterpartOid)
-        }
+        card: branchCard
+        localRow: refDeleteItem
     }
 }

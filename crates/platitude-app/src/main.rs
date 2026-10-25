@@ -128,6 +128,10 @@ fn main() {
     qrc::embed!("ui/BandStateMetrics.qml");
     qrc::embed!("ui/BandStateShare.qml");
     qrc::embed!("ui/BandWidest.qml");
+    qrc::embed!("ui/BranchBothDeleteRow.qml");
+    qrc::embed!("ui/BranchDeleteRow.qml");
+    qrc::embed!("ui/BranchPushRow.qml");
+    qrc::embed!("ui/BranchRemoteDeleteRow.qml");
     qrc::embed!("ui/CardText.qml");
     qrc::embed!("ui/CarriedPane.qml");
     qrc::embed!("ui/CoAuthorCard.qml");
