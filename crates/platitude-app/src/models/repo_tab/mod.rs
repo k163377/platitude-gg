@@ -155,19 +155,20 @@ pub struct RepoTab {
     branch_delete_merged: String,
     /// The plain `branch --delete` out for git's answer — the one press
     /// whose menu stays up, so a refusal lands on the row that asked
-    /// (`RefBranchMenu`'s plain delete, `onHeld`); `-D` and `Delete both` stand for
-    /// nothing. The press writes the name down with its write's id
-    /// (`ops::BranchDeleteOut`): a drain can carry several answers, and
-    /// only the id tells which is this card's.
+    /// (`BranchDeleteRow`'s plain delete, `onHeld`); `-D` and `Delete both`
+    /// stand for nothing. The press writes the name down with its write's
+    /// id (`ops::BranchDeleteOut`): a drain can carry several answers, and
+    /// only the id tells which is this menu's.
     branch_delete_out: crate::ops::BranchDeleteOut,
     /// How git answered it: the branch whose plain delete it took, and the
-    /// one it turned down. The card reads its own name here and goes or
-    /// turns its row into `-D` (`RefBranchMenu`). Kept until the next
-    /// plain delete is asked, unlike the write group: the card reads it
-    /// as an edge and may not have been drawn yet.
+    /// one it turned down. The BRANCH card reads its own name here, and
+    /// the delete row closes the menu or turns into `-D` on it
+    /// (`RefBranchMenu` / `BranchDeleteRow`). Kept until the next plain
+    /// delete is asked, unlike the write group: the card reads it as an
+    /// edge and may not have been drawn yet.
     branch_delete_landed: String,
     branch_delete_refused: String,
-    /// Where that card's own answer stands in `write_answers`, or -1
+    /// Where the plain delete's own answer stands in `write_answers`, or -1
     /// where this notify carried none — how the page tells the answer in
     /// hand from the one standing above (`RepoPage.absorbBranchDelete`).
     branch_delete_answer: i32,

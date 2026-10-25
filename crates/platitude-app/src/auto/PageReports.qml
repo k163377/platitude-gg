@@ -20,8 +20,8 @@ Item {
     readonly property var repoTab: driver.repoTab
     readonly property var fileRowMenu: driver.fileRowMenu
     readonly property var diffRowMenu: driver.diffRowMenu
-    /// The branch whose plain delete git just refused (`RefBranchMenu` turns its row on it). Cleared as the next plain
-    /// delete is asked, so each refusal is its own edge.
+    /// The branch whose plain delete git just refused (`RefBranchMenu` turns the delete rows on it). Cleared as the
+    /// next plain delete is asked, so each refusal is its own edge.
     readonly property string refusedDelete: reports.repoTab.branchDeleteRefused
 
     onRefusedDeleteChanged: {

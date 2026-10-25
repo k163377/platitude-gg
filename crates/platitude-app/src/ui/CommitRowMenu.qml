@@ -5,8 +5,8 @@ import platitude.ui
 
 // The right-click on a graph row: one menu for a commit, another for a stash, a third for another worktree's
 // uncommitted row (デザイン規約 §グラフ行の右クリック) — this worktree's own uncommitted row has none. The first level
-// acts on the row's commit; the cards at the foot act on the name the chip draws, or the name pressed in the chip's
-// stacked list.
+// holds the rows used often — on the row's commit, and on the name the chip draws (or the name pressed in the chip's
+// stacked list): its pull, push and delete table —; the cards under them hold what is used rarely.
 //
 // Nothing here is looked up and nothing is run: answers arrive as plain values, held still from the moment the menu
 // opens until a command it waited for has ended (`CommitMenuState`, デザイン規約 §メニュー), and presses leave as
@@ -70,8 +70,8 @@ Item {
     /// Whether what `--hard` takes holds a file the discard record cannot copy (`WorktreeModel.hardResetNotCopied`),
     /// which holds the row in `danger` (デザイン規約 §回数押し の色の表).
     required property bool hardResetNotCopied
-    /// git's answers about the branch card's delete (refusal, landing, early check), live while the card stands —
-    /// passed straight through to `RefBranchMenu`.
+    /// git's answers about the branch's plain delete (refusal, landing, early check), live while the menu stands —
+    /// passed straight through to `RefBranchMenu`, whose answers the delete rows read.
     property string refusedDelete: ""
     property string landedDelete: ""
     property string checkedBranch: ""
@@ -97,8 +97,9 @@ Item {
     signal applyStashRequested(string selector)
     signal popStashRequested(string selector)
     signal dropStashRequested(string selector)
-    /// The branch card's five, passed straight up: the delete git may still refuse, the upstream set (`UpstreamFlow`)
-    /// and taken off, the push, and the first push's question (`PublishFlow`).
+    /// The BRANCH card's five, passed straight up — raised by its own rows and by the push row and delete table on the
+    /// first level: the delete git may still refuse, the upstream set (`UpstreamFlow`) and taken off, the push, and the
+    /// first push's question (`PublishFlow`).
     signal deleteRequested(string kind, string id, string name, string oidHex)
     signal upstreamRequested(string branch, string counterpart, bool unsettable)
     signal unsetUpstreamRequested(string branch)
@@ -142,8 +143,8 @@ Item {
     readonly property bool carriedShowing: carriedMenu.visible
     /// …or the fourth, on a choice of two commits, which stands on nothing a command can take away.
     readonly property bool choiceShowing: choiceMenu.visible
-    /// Every level of this menu: the four menus, the reset card and the cards at the foot. The GitHub cards' rows never
-    /// stand again (they start nothing), so their shape is theirs from the opening.
+    /// Every level of this menu: the four menus, the reset card and the cards under the rows used often. The GitHub
+    /// cards' rows never stand again (they start nothing), so their shape is theirs from the opening.
     readonly property var levels: [stashMenu, carriedMenu, choiceMenu, commitMenu, resetMenu, branchCommitMenu,
                                    worktreeCommitMenu, tagCommitMenu]
 
@@ -155,12 +156,16 @@ Item {
     readonly property alias branchHereItem: branchHereCommitItem
     readonly property alias switchItem: switchCommitItem
     readonly property alias pullItem: pullCommitItem
+    readonly property alias pushBranchItem: pushCommitRow
+    readonly property alias deleteItem: deleteCommitRow
+    readonly property alias deleteRemoteItem: remoteDeleteCommitRow
+    readonly property alias deleteBothItem: bothDeleteCommitRow
     readonly property alias tagHereItem: tagCommitMenu.tagHereItem
     readonly property alias dropItem: dropCommitItem
     readonly property alias stashDropItem: stashDeleteItem
     readonly property alias resetSubmenu: resetMenu
     readonly property alias hardResetRow: hardResetItem
-    /// The three cards the rows above hang behind (`AppMenu.openSub`).
+    /// The three cards the rows used rarely hang behind (`AppMenu.openSub`).
     readonly property alias branchCard: branchCommitMenu
     readonly property alias worktreeCard: worktreeCommitMenu
     readonly property alias tagCard: tagCommitMenu
@@ -185,7 +190,7 @@ Item {
             rowMenu.levels[i].releaseShape()
     }
 
-    // Each menu closes itself (a row's `dismiss()`, or `RefBranchMenu` when a delete's answer lands), so nothing here
+    // Each menu closes itself (a row's `dismiss()`, or the delete row when its answer lands), so nothing here
     // closes them — but for a row the command it waited for took away (`CommitMenuState.standAgain`).
     function offerStash() {
         stashMenu.offer()
@@ -295,8 +300,8 @@ Item {
         runningWhy: rowMenu.runningWhy
         onWaitEnded: rowMenu.waitEnded()
         onClosed: rowMenu.dismissed()
-        // The first level holds the rows that move the reader, in order of widening reach; what is done to a ref goes
-        // in the cards at the foot (デザイン規約 §メニュー).
+        // The first level holds the rows used often, in order of widening reach, the named branch's delete table last;
+        // what is used rarely goes in the cards under them, GITHUB at the foot (デザイン規約 §メニュー).
         //
         // Words, not a command: it opens a box, and what runs depends on what is typed. It shares a group with
         // `switch`, being its create form (デザイン規約 §ブランチ・コミットへの移動).
@@ -433,8 +438,8 @@ Item {
             }
         }
         AppMenuSeparator {}
-        // The sidebar's `pull` row, in the same seat: a group of its own above the cards, since a pull acts on a
-        // branch, not this commit (デザイン規約 §取り込んで合流させる).
+        // The sidebar's `pull` row, in the same seat: a group of its own with the push, since both act on a branch, not
+        // this commit (デザイン規約 §取り込んで合流させる).
         AppMenuItem {
             id: pullCommitItem
             code: "pull"
@@ -450,6 +455,26 @@ Item {
             reasonMarks: rowMenu.pullOut === "own"
                          ? Words.listMarks(pullCommitItem.blockedReason, rowMenu.pullUpstream, "remote") : []
             onTriggered: rowMenu.pullRequested(rowMenu.pullRuns === "aside" ? rowMenu.targetName : "")
+        }
+        // The sidebar's `push` row, in the same seat: the chip's branch sent, on the BRANCH card's answers.
+        BranchPushRow {
+            id: pushCommitRow
+            card: branchCommitMenu
+        }
+        AppMenuSeparator {}
+        // What takes the chip's name away, in the sidebar's seat — the last group above the cards: its delete table,
+        // on the BRANCH card's answers. A row that draws no branch has none of the three.
+        BranchDeleteRow {
+            id: deleteCommitRow
+            card: branchCommitMenu
+        }
+        BranchRemoteDeleteRow {
+            id: remoteDeleteCommitRow
+            card: branchCommitMenu
+        }
+        BranchBothDeleteRow {
+            id: bothDeleteCommitRow
+            card: branchCommitMenu
         }
         AppMenuSeparator {}
         // The same card the sidebar's row opens (デザイン規約 §メニュー); a row that draws no branch hands it "" and the

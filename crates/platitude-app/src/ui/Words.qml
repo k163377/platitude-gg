@@ -112,7 +112,7 @@ QtObject {
         }
     }
     /// The word a worktree-making tip stands the tree mark in front of: the folder, where `why` is the sentence
-    /// `worktreePlaceTaken` wrote about `place` — asked of the sentence shown, as `RefBranchMenu`'s delete rows ask.
+    /// `worktreePlaceTaken` wrote about `place` — asked of the sentence shown, as the delete table's rows ask.
     function worktreeNameMark(why, place) {
         return place !== undefined && why !== "" && why === Words.worktreePlaceTaken(place.taken, place.name)
                ? place.name : ""
@@ -237,7 +237,7 @@ QtObject {
         return qsTr("Being rebased in another worktree — %1").arg(leaf)
     }
 
-    /// Why a row acting on a branch another worktree has checked out is greyed — the branch card's delete rows and the
+    /// Why a row acting on a branch another worktree has checked out is greyed — the branch's delete table and the
     /// `pull` row. The state and where, not why (デザイン規約 §hover のツールチップ); the name the worktree goes by — its
     /// folder, or the branch the repository's own has out — not the whole path git prints: nobody reads a tooltip
     /// that wide.
@@ -271,10 +271,10 @@ QtObject {
 
     /// Why a copy of a name wears the warning, or why a row cannot reach the other copy: it stands on another commit
     /// than `reference` has it on. One sentence wherever two copies of one name disagree — a tag's holders on the left
-    /// panel and in a chip's card (`NavFacts.apartNote`), and the delete rows that reach a remote on the branch card
-    /// and the tag card, named there by what the copy the menu is about is read against (デザイン規約 §左メニューの所作
-    /// の削除の表). Says the state only: a line pointing at the row that deletes the reading would outgrow the menu it
-    /// explains.
+    /// panel and in a chip's card (`NavFacts.apartNote`), and the delete rows that reach a remote in the branch's
+    /// delete table and the tag card, named there by what the copy the menu is about is read against
+    /// (デザイン規約 §左メニューの所作 の削除の表). Says the state only: a line pointing at the row that deletes the
+    /// reading would outgrow the menu it explains.
     function differsFrom(reference) {
         return qsTr("Differs from %1").arg(reference)
     }

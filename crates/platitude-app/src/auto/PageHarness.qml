@@ -140,7 +140,7 @@ Item {
             resetMenu: harness.commitRowMenu.resetSubmenu
             commitBranchCard: harness.commitRowMenu.branchCard
             commitTagCard: harness.commitRowMenu.tagCard
-            commitDeleteItem: harness.commitRowMenu.branchCard.deleteItem
+            commitDeleteItem: harness.commitRowMenu.deleteItem
             switchCommitItem: harness.commitRowMenu.switchItem
             pullCommitItem: harness.commitRowMenu.pullItem
             hardResetItem: harness.commitRowMenu.hardResetRow

@@ -1,11 +1,11 @@
-//! The plain branch delete, and the card that stayed up for git's
+//! The plain branch delete, and the menu that stayed up for git's
 //! answer.
 
 use super::Press;
 
 /// The one press whose menu stays up: `git branch --delete` may be
 /// turned down, and the refusal has to land on the row that asked for
-/// it (`RefBranchMenu`'s plain delete, `onHeld`).
+/// it (`BranchDeleteRow`'s plain delete, `onHeld`).
 ///
 /// The press writes down the name with the id: only the id tells this
 /// answer from the fetch's in the same drain ([`Press`]).
@@ -19,8 +19,8 @@ use super::Press;
 /// menus at the press.
 #[derive(Debug, Default)]
 pub struct BranchDeleteOut {
-    /// The write the card waits on, and where its answer stood in this
-    /// notify.
+    /// The write the menu stays up for, and where its answer stood in
+    /// this notify.
     press: Press,
     /// The branch asked about, until the answer moves it to one of the two
     /// below.
@@ -51,7 +51,7 @@ impl BranchDeleteOut {
     }
 
     /// git answered a write, standing at `at` in this notify's answers.
-    /// Says whether it was this card's.
+    /// Says whether it was the plain delete's.
     ///
     /// A `reported` refusal (the far side keeping the branch) sets neither
     /// name: it goes to the page's notice bar and the row stays as it is
@@ -71,7 +71,7 @@ impl BranchDeleteOut {
         true
     }
 
-    /// The branch git took, for the card to go on.
+    /// The branch git took, for the menu to go on.
     #[must_use]
     pub fn landed(&self) -> &str {
         &self.landed
@@ -83,8 +83,8 @@ impl BranchDeleteOut {
         &self.refused
     }
 
-    /// Where this card's own answer stands in this notify, or `None`
-    /// where this notify carried none.
+    /// Where the plain delete's own answer stands in this notify, or
+    /// `None` where this notify carried none.
     #[must_use]
     pub fn answer(&self) -> Option<usize> {
         self.press.answer()

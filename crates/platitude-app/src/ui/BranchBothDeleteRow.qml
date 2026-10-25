@@ -3,25 +3,23 @@ import platitude.ui
 
 // The delete table's third row: the branch and its remote reading together. Two commands, so words and no code
 // (§git 用語のコード表記). The local half runs first; its refusal stops the pair with nothing touched, and a refused
-// lease on the remote half stops it with the local one done (`session::delete_branch_everywhere`). A row of the
-// BRANCH card, standing on its frozen answers (`RefBranchMenu.state`).
+// lease on the remote half stops it with the local one done (`session::delete_branch_everywhere`). On the first
+// level's last group, standing on the BRANCH card's frozen answers (`RefBranchMenu.state`).
 AppMenuItem {
     id: bothDeleteRow
 
     required property RefBranchMenu card
-    /// The table's first row, whose refusal this one follows: the local half is the same delete.
-    required property BranchDeleteRow localRow
     readonly property QtObject facts: bothDeleteRow.card.state
 
-    /// Whether the local half goes as `-D`, latched for the presses under way (デザイン規約 §回数押し): read live, git's
-    /// answer landing between presses would turn presses begun on the plain delete into a force delete. The count
-    /// cannot carry it (this row takes three either way), so the `Binding` freezes it while
-    /// `AppMenuItem.gesturing`.
-    property bool forces: bothDeleteRow.localRow.refusedRow
+    /// Whether the local half goes as `-D` — the card's `refused`, which the table's first row follows too: the local
+    /// half is the same delete. Latched for the presses under way (デザイン規約 §回数押し): read live, git's answer
+    /// landing between presses would turn presses begun on the plain delete into a force delete. The count cannot carry
+    /// it (this row takes three either way), so the `Binding` freezes it while `AppMenuItem.gesturing`.
+    property bool forces: bothDeleteRow.card.refused
     readonly property Binding forcesHeld: Binding {
         target: bothDeleteRow
         property: "forces"
-        value: bothDeleteRow.localRow.refusedRow
+        value: bothDeleteRow.card.refused
         when: !bothDeleteRow.gesturing
         restoreMode: Binding.RestoreNone
     }

@@ -92,6 +92,18 @@ Item {
         return { "rows": rows, "greyed": greyed }
     }
 
+    /// What the first level shows, in order: each row's command, its words where it has none, a card's title.
+    function shownOrder() {
+        const shown = []
+        for (let i = 0; i < menu.menu.count; i++) {
+            const item = menu.menu.itemAt(i)
+            if (!item || item.codeColSeat === undefined || !item.present)
+                continue
+            shown.push(item.subMenu ? item.subMenu.title : item.code !== "" ? item.code : item.text)
+        }
+        return shown
+    }
+
     /// What the cards stand on for a row drawing a branch nothing holds (`CommitMenuState.cardFacts`).
     function branchFacts() {
         return {
@@ -366,8 +378,8 @@ Item {
             menu.carriedRowMenu.dismiss()
         }
 
-        /// Only a command running as the menu opened is waited for: one started under a menu already up — the branch
-        /// card's plain delete stands for git's answer with the card up — greys nothing.
+        /// Only a command running as the menu opened is waited for: one started under a menu already up — the plain
+        /// branch delete stands for git's answer with the menu up — greys nothing.
         function test_a_menu_already_up_greys_nothing_for_a_command_started_under_it() {
             root.aimAt({})
             menu.runningWhy = ""
@@ -377,6 +389,25 @@ Item {
             compare(root.rowsOf(menu.menu).greyed, 0)
             compare(root.rowsOf(menu.branchCard).greyed, 0)
             menu.runningWhy = ""
+            menu.menu.dismiss()
+        }
+
+        /// The rows used often widen in reach down the first level and close with the named branch's delete table —
+        /// `push` beside `pull`, the table under them —, above the cards that hold what is used rarely
+        /// (デザイン規約 §メニュー).
+        function test_the_delete_table_closes_the_rows_used_often_above_the_cards() {
+            root.aimAt({ pullRuns: "aside" })
+            const facts = root.branchFacts()
+            facts.branch.push = { "state": "ready", "target": "origin/feature/topic-a", "lease": "fed789",
+                                  "upstream": "origin/feature/topic-a" }
+            menu.offerCommit(facts)
+            const shown = root.shownOrder()
+            const at = word => shown.indexOf(word)
+            verify(at("merge") >= 0 && at("merge") < at("pull"), "below the rows that move the tree's branch: " + shown)
+            compare(at("push"), at("pull") + 1, "push beside pull")
+            compare(shown.slice(at("push") + 1, at("push") + 4), ["branch --delete", "push --delete", "Delete both"],
+                    "then the delete table")
+            compare(shown[at("Delete both") + 1], "BRANCH", "and the cards under it")
             menu.menu.dismiss()
         }
 
@@ -433,8 +464,8 @@ Item {
 
             compare(menu.branchCard.refId, data.named, "the branch card is aimed at a branch and nothing else")
             compare(menu.branchCard.applies, data.named !== "")
-            compare(menu.branchCard.deleteItem.offered, data.named !== "",
-                    "its rows follow the words it was handed")
+            compare(menu.deleteItem.offered, data.named !== "",
+                    "and the delete table it lends the first level follows the words it was handed")
 
             compare(menu.tagCard.refId, data.tagNamed, "and the tag card at a tag and nothing else")
             verify(menu.tagCard.applies, "the tag card stays either way — a tag can still be made here")
@@ -536,7 +567,7 @@ Item {
             const notag = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] }
             root.aimAt({ targetKind: "remote", targetName: "origin/main" })
             menu.offerCommit({ "branch": reading, "tag": notag, "making": root.makingNothing })
-            menu.branchCard.deleteItem.held()
+            menu.deleteItem.held()
             compare(root.asked, "delete-remote origin/main " + menu.oid)
         }
     }

@@ -391,20 +391,21 @@ fn a_drain_with_no_write_answer_publishes_none() {
     assert!(tab.write_answers.is_empty());
 }
 
-/// A plain `branch --delete` out, its card standing for the answer
+/// A plain `branch --delete` out, its menu standing for the answer
 /// (`ops_delete::branch_delete`).
-fn card_standing() -> RepoTab {
+fn menu_standing() -> RepoTab {
     let mut tab = RepoTab::default();
     tab.arm_branch_delete("feature", Some(OURS));
     tab
 }
 
-// The card reads the answer by its own name (`RefBranchMenu`): taken, it
-// goes; turned down, its row turns into `-D`. The fetch behind the press
-// answers in the same drain and looks exactly like an answer to this one.
+// The card reads the answer by its own name (`RefBranchMenu`): taken, the
+// menu goes; turned down, the delete row turns into `-D`. The fetch behind
+// the press answers in the same drain and looks exactly like an answer to
+// this one.
 #[test]
 fn a_plain_delete_git_took_names_the_branch_over_the_fetch_behind_it() {
-    let mut tab = card_standing();
+    let mut tab = menu_standing();
     tab.absorb(vec![
         answered(OURS, K::Branch, ""),
         answered(SOMEBODY_ELSE, K::Fetch, ""),
@@ -420,7 +421,7 @@ fn a_plain_delete_git_took_names_the_branch_over_the_fetch_behind_it() {
 
 #[test]
 fn a_plain_delete_git_refused_names_the_branch_for_the_row_to_turn_on() {
-    let mut tab = card_standing();
+    let mut tab = menu_standing();
     tab.absorb(vec![answered(
         OURS,
         K::Branch,
@@ -432,9 +433,9 @@ fn a_plain_delete_git_refused_names_the_branch_for_the_row_to_turn_on() {
     assert!(!tab.write_refused);
 }
 
-// `-D`, a create, a rename and `Delete both` leave no card standing.
+// `-D`, a create, a rename and `Delete both` leave no menu standing.
 #[test]
-fn a_branch_answer_nobody_stayed_up_for_names_no_card() {
+fn a_branch_answer_nobody_stayed_up_for_names_nothing() {
     let mut tab = RepoTab::default();
     tab.absorb(vec![answered(OURS, K::Branch, "error: not fully merged")]);
     assert_eq!(tab.branch_delete_refused, "");
@@ -448,7 +449,7 @@ fn a_branch_answer_nobody_stayed_up_for_names_no_card() {
 // yet); where it answered is the notify's own.
 #[test]
 fn the_delete_answer_stands_but_says_which_notify_carried_it() {
-    let mut tab = card_standing();
+    let mut tab = menu_standing();
     tab.absorb(vec![answered(OURS, K::Branch, "")]);
     assert!(tab.branch_delete_answer >= 0);
     tab.absorb(vec![answered(SOMEBODY_ELSE, K::Fetch, "")]);
@@ -461,11 +462,11 @@ fn the_delete_answer_stands_but_says_which_notify_carried_it() {
     assert_eq!(tab.branch_delete_landed, "");
 }
 
-// A reported refusal is the notice bar's to say; the card's answer still
-// points the page at the words.
+// A reported refusal is the notice bar's to say; the plain delete's own
+// answer still points the page at the words.
 #[test]
 fn a_refusal_with_a_report_turns_no_row() {
-    let mut tab = card_standing();
+    let mut tab = menu_standing();
     tab.absorb(vec![reported(
         OURS,
         K::Branch,
@@ -480,7 +481,7 @@ fn a_refusal_with_a_report_turns_no_row() {
     assert_eq!(tab.branch_delete_landed, "");
     let answer = tab
         .write_answer_at(tab.branch_delete_answer)
-        .expect("the card's own answer");
+        .expect("the plain delete's own answer");
     assert_eq!(answer.report_kind, "delete-refused");
 }
 

@@ -2,8 +2,8 @@ import QtQuick
 import platitude.ui
 
 // The delete table's second row: the remote reading alone — on the current branch the only delete on offer
-// (デザイン規約 §左メニューの所作 の削除の表). A row of the BRANCH card, standing on its frozen answers
-// (`RefBranchMenu.state`).
+// (デザイン規約 §左メニューの所作 の削除の表). On the first level's last group, standing on the BRANCH card's frozen
+// answers (`RefBranchMenu.state`).
 AppMenuItem {
     id: remoteDeleteRow
 

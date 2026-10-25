@@ -137,7 +137,7 @@ QtObject {
                 // there — so the barrier is behind the wait.
                 "tag-menu", "push-tag", "delete-remote-tag", "delete-tag-both", "tag-refused",
                 "tag-chip-menu", "tag-line-menu",
-                // The card goes up once nothing is out, and the press goes from there; what ends them is the question
+                // The menu goes up once nothing is out, and the press goes from there; what ends them is the question
                 // the row raised, or the branch's row read level after git's answer (`AutoActBranchPushVerbs`).
                 "push-branch-menu", "push-branch-ask", "push-branch-go",
                 // The same for the row that takes an upstream off: it ends on the card read, or on the branch's row

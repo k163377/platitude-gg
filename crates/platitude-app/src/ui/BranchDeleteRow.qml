@@ -2,8 +2,8 @@ import QtQuick
 import platitude.ui
 
 // The delete table's first row — the branch itself, or a remote branch's reading (デザイン規約 §左メニューの所作 の
-// 削除の表). A row of the BRANCH card, standing on its frozen answers (`RefBranchMenu.state`), which also turn
-// this row into the held `-D` when git refuses while the card stands (`forceDeleteBranch`).
+// 削除の表). On the first level's last group, standing on the BRANCH card's frozen answers (`RefBranchMenu.state`),
+// which also turn this row into the held `-D` when git refuses while the menu stands (`RefBranchMenu.refused`).
 AppMenuItem {
     id: deleteRow
 
@@ -14,16 +14,8 @@ AppMenuItem {
     // (デザイン規約 §メニュー「例外は削除行だけ」).
     readonly property bool remoteRow: deleteRow.facts.kind === "remote"
     readonly property bool branchRow: deleteRow.facts.kind === "branch"
-    // git refused `--delete` while this menu stood, or the check at open came back unmerged (off the rows, else
-    // git's echo). Only `"no"` dresses the row: `"unknown"` is a read that fell over, offered plain.
-    readonly property bool refusedRow:
-        deleteRow.branchRow
-        && (deleteRow.card.forceDeleteBranch === deleteRow.facts.refId
-            || (deleteRow.facts.deleteAnswered ? !deleteRow.facts.deleteMerged
-                : (deleteRow.card.checkedBranch === deleteRow.facts.refId
-                   && deleteRow.card.checkedMerged === "no")))
-    readonly property bool heldRow: deleteRow.remoteRow || deleteRow.refusedRow
-    /// `refusedRow` as latched at the first press: on a branch row the warning's count (`AppMenuItem.armedPresses`)
+    readonly property bool heldRow: deleteRow.remoteRow || deleteRow.card.refused
+    /// `card.refused` as latched at the first press: on a branch row the warning's count (`AppMenuItem.armedPresses`)
     /// means refused, the plain delete's means not. Read live, git's answer to the last attempt would re-word the
     /// row between presses (デザイン規約 §回数押し).
     readonly property bool shownRefused:
@@ -68,6 +60,16 @@ AppMenuItem {
             deleteRow.card.deleteRemoteRequested(deleteRow.facts.refId, deleteRow.facts.refOid)
         } else {
             deleteRow.card.forceDeleteRequested(deleteRow.facts.refId)
+        }
+    }
+
+    /// The plain delete landed while the menu stood: through the row, so a git that answers inside the floor still
+    /// leaves the full fill its time. A property's value, not a bare child, as `forcesHeld` is on the pair's row.
+    readonly property Connections landing: Connections {
+        target: deleteRow.card
+        function onLandedDeleteChanged() {
+            if (deleteRow.card.answersHere(deleteRow.card.landedDelete))
+                deleteRow.closeMenu()
         }
     }
 }

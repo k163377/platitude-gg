@@ -87,7 +87,7 @@ impl RepoTab {
         Member = branch_delete_merged,
         Notify = changed
     );
-    // git's answer to the plain delete a card stayed up for, by name
+    // git's answer to the plain delete a menu stayed up for, by name
     // (`RefBranchMenu`), and where it stands in this notify, -1 for none
     // (`ops::BranchDeleteOut`).
     qproperty!(

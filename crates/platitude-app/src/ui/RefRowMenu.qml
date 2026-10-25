@@ -75,8 +75,8 @@ Item {
     property string pullOut: ""
     /// The remote branch this row's branch tracks, which the `own` reason names.
     property string pullUpstream: ""
-    /// The stash's drop — the only delete on this level; branch and tag deletes are their cards' (`RefBranchMenu` /
-    /// `RefTagMenu`).
+    /// The stash's drop, in the last group with the branch's delete table; a tag's deletes are its card's
+    /// (`RefTagMenu`).
     property bool canDelete: false
 
     // ---- bringing two lines of history together --------------------
@@ -107,15 +107,17 @@ Item {
     readonly property alias deleteTagItem: tagMenu.deleteTagItem
     readonly property alias deleteRemoteTagItem: tagMenu.deleteRemoteTagItem
     readonly property alias deleteTagBothItem: tagMenu.deleteTagBothItem
-    readonly property alias deleteItem: branchMenu.deleteItem
+    readonly property alias deleteItem: refDeleteRow
+    readonly property alias deleteRemoteItem: refRemoteDeleteRow
+    readonly property alias deleteBothItem: refBothDeleteRow
     readonly property alias upstreamItem: branchMenu.upstreamItem
-    readonly property alias pushBranchItem: branchMenu.pushItem
+    readonly property alias pushBranchItem: refPushRow
     readonly property alias removeWorktreeItem: worktreeMenu.removeWorktreeItem
     readonly property alias stashDropItem: refStashDropItem
     readonly property alias switchItem: refSwitchItem
     readonly property alias pullItem: refPullItem
     readonly property alias rebaseItem: refRebaseItem
-    /// The cards those rows hang behind; a run photographing one opens it first (`AppMenu.openSub`).
+    /// The cards the rows used rarely hang behind; a run photographing one opens it first (`AppMenu.openSub`).
     readonly property alias branchCard: branchMenu
     readonly property alias worktreeCard: worktreeMenu
     readonly property alias tagCard: tagMenu
@@ -139,7 +141,7 @@ Item {
     /// Which remote branch a local one is measured against — the branch card's row, answered in the page's one bar
     /// (`UpstreamFlow`). `unsettable`: it has one an emptied name takes off (`RefBranchMenu.upstreamRequested`).
     signal upstreamRequested(string branch, string counterpart, bool unsettable)
-    /// Where a branch's first push goes — the branch card's push row, asked in the page's one bar (`PublishFlow`).
+    /// Where a branch's first push goes — the push row beside `pull`, asked in the page's one bar (`PublishFlow`).
     signal publishRequested(string branch, string upstream)
     /// A link on its way to the clipboard (`GitHubMenu`); the page owns the clipboard.
     signal copyRequested(string text)
@@ -347,7 +349,7 @@ Item {
             refRowMenu.repoTab.state === "open",
             refRowMenu.tree.branch, refRowMenu.tree.detached,
             refRowMenu.tree.opText, refRowMenu.tree.conflictCount,
-            // No drift: the remote rows are the branch card's (`RefBranchMenu`).
+            // No drift: the remote rows are the delete table's, on the BRANCH card's answers (`RefBranchMenu`).
             held, "", false, false, refRowMenu.repoTab.defaultRemote, "")
         refRowMenu.canSwitch = offers.includes("switch")
         refRowMenu.switchAsks = offers.includes("asks")
@@ -378,8 +380,8 @@ Item {
         heldReason: refRowMenu.heldReason
         runningWhy: refRowMenu.runningWhy
         onWaitEnded: refRowMenu.standAgain()
-        // Nothing to clear at the close: a refused delete's `-D` is left standing, the card clears it as it opens
-        // (`RefBranchMenu.standOn`), and nothing reads it while the card is down.
+        // Nothing to clear at the close: a refused delete's `-D` is left standing, the card clears it as the menu
+        // opens (`RefBranchMenu.standOn`), and nothing reads it while the menu is down.
 
         // `Create branch here…` and `switch` are one group: it runs `switch --create` (デザイン規約 §メニュー の入れ子).
         AppMenuItem {
@@ -432,8 +434,9 @@ Item {
             onTriggered: refRowMenu.repoTab.rebase(refRowMenu.integrateRef, "", true)
         }
         AppMenuSeparator {}
-        // A group of its own above the cards, naming the branch that moves in its own colour — the worktree's, which
-        // the row may not name (its upstream's), or this row's own (デザイン規約 §取り込んで合流させる).
+        // The group that moves the named branch along its upstream, with the push: naming the branch that moves in its
+        // own colour — the worktree's, which the row may not name (its upstream's), or this row's own
+        // (デザイン規約 §取り込んで合流させる).
         AppMenuItem {
             id: refPullItem
             code: "pull"
@@ -451,7 +454,27 @@ Item {
             // `git pull` resolves the other end itself; the fast-forward is told the branch.
             onTriggered: refRowMenu.repoTab.pull(refRowMenu.pullRuns === "aside" ? refRowMenu.refId : "")
         }
-        // A stash's drop stays on this level: it has no card to nest in.
+        // The other way along the same upstream, on the BRANCH card's answers (デザイン規約 §リモートへ送る).
+        BranchPushRow {
+            id: refPushRow
+            card: branchMenu
+        }
+        AppMenuSeparator {}
+        // What takes the row's name away, the widest reach of the rows used often, so the last group above the cards
+        // (デザイン規約 §メニュー): the branch's delete table on the BRANCH card's answers — the same rows the graph
+        // row's menu carries —, or the stash's drop.
+        BranchDeleteRow {
+            id: refDeleteRow
+            card: branchMenu
+        }
+        BranchRemoteDeleteRow {
+            id: refRemoteDeleteRow
+            card: branchMenu
+        }
+        BranchBothDeleteRow {
+            id: refBothDeleteRow
+            card: branchMenu
+        }
         AppMenuItem {
             id: refStashDropItem
             code: "drop"
@@ -469,7 +492,7 @@ Item {
             heldReason: refRowMenu.heldReason
             runningWhy: refRowMenu.runningWhy
             onWaitEnded: refRowMenu.standAgain()
-            // git's two answers, live: the card turns its own row on them while it stands.
+            // git's two answers, live: the card turns the delete rows on them while the menu stands.
             refusedDelete: refRowMenu.repoTab.branchDeleteRefused
             landedDelete: refRowMenu.repoTab.branchDeleteLanded
             checkedBranch: refRowMenu.repoTab.branchDeleteAsked

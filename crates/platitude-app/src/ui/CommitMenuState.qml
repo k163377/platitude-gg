@@ -119,7 +119,7 @@ QtObject {
             menuState.repoTab.state === "open",
             menuState.tree.branch, menuState.tree.detached,
             menuState.tree.opText, menuState.tree.conflictCount,
-            // No drift: the rows that reach a remote are the card's (`RefBranchMenu`).
+            // No drift: the rows that reach a remote are the delete table's, on the BRANCH card's answers.
             held, "", false, false, menuState.repoTab.defaultRemote, "")
         menuState.menuCanSwitch = offers.includes("switch")
         menuState.menuSwitchAsks = offers.includes("asks")

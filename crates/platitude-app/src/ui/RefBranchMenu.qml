@@ -1,9 +1,10 @@
 import QtQuick
 import platitude.ui
 
-// The BRANCH card: the branch sent to its remote (`BranchPushRow`), its upstream set and taken off, and the delete
-// table — local, remote, both (`BranchDeleteRow` / `BranchRemoteDeleteRow` / `BranchBothDeleteRow`) (デザイン規約
-// §メニュー の入れ子). Starting a branch stands on the level above with the other moves.
+// The BRANCH card: the branch's upstream set and taken off (デザイン規約 §メニュー の入れ子). The rows a branch is used
+// through often — sent to its remote (`BranchPushRow`, beside `pull`) and the delete table, local / remote / both
+// (`BranchDeleteRow` / `BranchRemoteDeleteRow` / `BranchBothDeleteRow`, the last group) — stand on the level above,
+// reading this card's frozen answers (`state`).
 //
 // **One card, two entrances** (`RefRowMenu` / `CommitMenuState`), so both offer the same thing. **It reads no model
 // and runs no write**: the entrance reads the facts (`branchFacts`), `standOn` freezes them as the menu opens, and
@@ -12,8 +13,8 @@ import platitude.ui
 AppMenu {
     id: branchCard
 
-    /// git's answers to the plain delete this card stayed up for, handed down by the carrying menu. Live, not frozen:
-    /// they land while the card stands (`forceDeleteBranch`).
+    /// git's answers to the plain delete the menu stayed up for (`BranchDeleteRow`), handed down by the carrying menu.
+    /// Live, not frozen: they land while the menu stands (`forceDeleteBranch`).
     property string refusedDelete: ""
     property string landedDelete: ""
     /// The branch the early check was asked about and what git answered for it (`yes` / `no` / `unknown`, empty for
@@ -21,13 +22,14 @@ AppMenu {
     property string checkedBranch: ""
     property string checkedMerged: ""
 
-    /// The branch this card is about, frozen by `standOn`. `kind` is `branch` or `remote`; empty on a row that names
-    /// no branch, which is what takes the card off the menu.
+    /// The branch this card is about, frozen by `standOn`. `kind` is `branch` or `remote` — the delete table on the
+    /// level above stands on either —, empty on a row that names no branch. Only a local branch has the card's own
+    /// rows (`applies`).
     readonly property alias kind: state.kind
     readonly property alias refId: state.refId
     readonly property alias refName: state.refName
-    /// Whether the plain delete's answer was in hand off the graph's rows as the card opened, and what it was. For the
-    /// automation (`delete-branch-early`); the row reads `refusedRow`.
+    /// Whether the plain delete's answer was in hand off the graph's rows as the menu opened, and what it was. For the
+    /// automation (`delete-branch-early`); the delete rows read `refused`.
     readonly property alias deleteAnswered: state.deleteAnswered
     readonly property alias deleteMerged: state.deleteMerged
     /// Whether the delete row has an answer coming at all (off the rows, or asked of git). False when the delete is
@@ -38,14 +40,23 @@ AppMenu {
     /// witness that the worktree was looked up.
     readonly property alias holderLeaf: state.holderLeaf
 
-    /// The branch git has just refused to delete while this card stands, so the delete row turns into the held `-D`
+    /// The branch git has just refused to delete while the menu stands, so the delete row turns into the held `-D`
     /// where the hand already is (デザイン規約 §左メニューの所作). Written off `refusedDelete`, cleared at the next open.
-    /// The card answers for itself — refused, the row turns; landed, it `dismiss()`es with every level above — so
-    /// neither entrance has to know which one raised it (rules-refs/app-ui.md「メニューを閉じるのは自分」).
+    /// The menu answers for itself — refused, the rows turn (`refused`); landed, the delete row closes every level
+    /// (`BranchDeleteRow.landing`) — so neither entrance has to know which one raised it
+    /// (rules-refs/app-ui.md「メニューを閉じるのは自分」).
     property string forceDeleteBranch: ""
+    /// Whether the branch's plain delete is one git refuses: refused while the menu stood, or the check at open came
+    /// back unmerged (off the rows, else git's echo). Only `"no"` counts: `"unknown"` is a read that fell over, offered
+    /// plain. The delete table's local row and its pair read it (`BranchDeleteRow` / `BranchBothDeleteRow`).
+    readonly property bool refused:
+        state.kind === "branch"
+        && (branchCard.forceDeleteBranch === state.refId
+            || (state.deleteAnswered ? !state.deleteMerged
+                : (branchCard.checkedBranch === state.refId && branchCard.checkedMerged === "no")))
 
-    /// The plain delete, for the page (a refusal opens a question there). The row leaves the list ahead of git's
-    /// answer out of the same slot as the write, so the card writes no page state
+    /// The plain delete, for the page; git's answer comes back by name (`refusedDelete` / `landedDelete`). The row
+    /// leaves the list ahead of that answer out of the same slot as the write, so the card writes no page state
     /// (`ops_delete`, デザイン規約 §消す操作は先に画面から消す).
     signal deleteRequested(string kind, string id, string name, string oidHex)
     /// Set upstream: the page opens the question in the window's one question bar (`UpstreamFlow`), starting from
@@ -69,17 +80,13 @@ AppMenu {
     signal deleteEverywhereRequested(string branch, string remoteRef, bool forced, string expect)
 
     /// The automation's handles into these rows, passed on by the carrying menu.
-    readonly property alias deleteItem: refDeleteItem
-    readonly property alias deleteRemoteItem: refRemoteDeleteItem
-    readonly property alias deleteBothItem: refBothDeleteItem
     readonly property alias upstreamItem: refUpstreamItem
     readonly property alias unsetUpstreamItem: refUnsetUpstreamItem
-    readonly property alias pushItem: refPushItem
     /// What the push row stands on (`NavSectionModel.branchPush`'s `state`), for the automation's report.
     readonly property alias pushState: state.pushState
 
-    /// Everything this card and its rows read (`BranchPushRow` / `BranchDeleteRow` / `BranchRemoteDeleteRow` /
-    /// `BranchBothDeleteRow`), set once by `standOn` and left alone while it stands.
+    /// Everything this card and the rows it lends the level above read (`BranchPushRow` / `BranchDeleteRow` /
+    /// `BranchRemoteDeleteRow` / `BranchBothDeleteRow`), set once by `standOn` and left alone while it stands.
     readonly property QtObject state: QtObject {
         id: state
         property string kind: ""
@@ -207,32 +214,24 @@ AppMenu {
         return name !== "" && state.kind === "branch" && name === state.refId
     }
 
+    // A landing closes the menu through the delete row itself (`BranchDeleteRow.landing`).
     onRefusedDeleteChanged: {
         if (branchCard.answersHere(branchCard.refusedDelete))
             branchCard.forceDeleteBranch = branchCard.refusedDelete
     }
-    onLandedDeleteChanged: {
-        // Through the row: a git that answers inside the floor still leaves the full fill its time.
-        if (branchCard.answersHere(branchCard.landedDelete))
-            refDeleteItem.closeMenu()
-    }
 
-    /// Why the delete table's rows are out — worn as the rows' `blockedReason` (デザイン規約 §無効).
+    /// Why the delete table's rows are out — worn as the rows' `blockedReason` (デザイン規約 §無効). Here because both
+    /// the local row and its pair say them.
     readonly property string deleteBlockedOnCurrent:
         qsTr("Switch away first — this is the branch you are on")
     readonly property string blockedByWorktree: Words.checkedOutElsewhere(state.holderLeaf)
-    /// …and the push row's, where the push would stay in this repository — the toolbar's words for the same standing.
-    readonly property string pushBlockedStaysHere: qsTr("Cannot push — its upstream is not supported")
 
     titleKind: "branch"
     titleTint: Theme.accent
     title: qsTr("BRANCH")
-    applies: state.kind === "branch" || state.kind === "remote"
+    // A remote-tracking branch has no upstream of its own: its rows, the delete, are the level above's.
+    applies: state.kind === "branch"
 
-    BranchPushRow {
-        id: refPushItem
-        card: branchCard
-    }
     // Set upstream (デザイン規約 §ブランチが測られる相手を決める). Words and a `…`, no code: the flag's value is not
     // settled until the question is answered (§git 用語のコード表記). Only a local branch: a remote-tracking ref has
     // no upstream of its own.
@@ -244,7 +243,7 @@ AppMenu {
     }
     // The upstream taken off (デザイン規約 §ブランチが測られる相手を決める): words, the pair of `Set upstream…` — git's
     // spelling is the card's longest chip and would push every row's words over, and a flag alone is no command. It
-    // names what goes, as the delete rows below do (§メニュー「例外は削除行だけ」). The plain delete's two presses in
+    // names what goes, as the delete rows do (§メニュー「例外は削除行だけ」). The plain delete's two presses in
     // the plain ink: what goes is one setting, and `Set upstream…` puts it back (§回数押しの色).
     AppMenuItem {
         id: refUnsetUpstreamItem
@@ -263,19 +262,5 @@ AppMenu {
             refUnsetUpstreamItem.closeMenu()
             branchCard.unsetUpstreamRequested(state.refId)
         }
-    }
-    AppMenuSeparator {}
-    BranchDeleteRow {
-        id: refDeleteItem
-        card: branchCard
-    }
-    BranchRemoteDeleteRow {
-        id: refRemoteDeleteItem
-        card: branchCard
-    }
-    BranchBothDeleteRow {
-        id: refBothDeleteItem
-        card: branchCard
-        localRow: refDeleteItem
     }
 }

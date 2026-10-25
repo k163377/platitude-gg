@@ -939,8 +939,8 @@ FocusScope {
     function forcePush() {
         publishFlow.forcePush()
     }
-    /// The branch card's push row on a branch never sent, from either menu it is carried by: the question names that
-    /// branch and is marked on its own row (デザイン規約 §はじめてリモートへ送る「対象は呼んだ所が決め」).
+    /// The push row on a branch never sent, from either menu it is carried by: the question names that branch and is
+    /// marked on its own row (デザイン規約 §はじめてリモートへ送る「対象は呼んだ所が決め」).
     function startPublishAskFor(branch, upstream) {
         publishFlow.startPublishAsk(branch, upstream, branchesModel.oidOfName(branch))
     }
@@ -1267,13 +1267,13 @@ FocusScope {
     /// log yet (`absorbWriteResult`), spent by that row's own arrival. Counted, because the refusal and the write
     /// result arrive on separate paths, in no fixed order.
     property int answeredFailures: 0
-    /// The answer to the plain delete a card stayed up for — its own answer (`RepoTab.branchDeleteAnswer`, -1 for
+    /// The answer to the plain delete a menu stayed up for — its own answer (`RepoTab.branchDeleteAnswer`, -1 for
     /// none), which no count of answers could tell from the delete before it.
     function absorbBranchDelete() {
         const answer = repoTab.branchDeleteAnswer
         if (answer < 0)
             return
-        // Landed: the card goes by itself (`RefBranchMenu`). Refused by git itself: the card turns its row into the
+        // Landed: the menu goes by itself (`BranchDeleteRow`). Refused by git itself: the card turns the row into the
         // held `-D` and **the row is the answer** — nothing is raised over it (git measures against the upstream, so
         // a refusal need not mean commits would be lost).
         if (!repoTab.writeAnswerFailed(answer))
@@ -1332,19 +1332,19 @@ FocusScope {
     property bool holdGoneRows: false
 
     /// Automation only: whether the last delete asked of this page went out to git or was dropped — "did the input
-    /// land" for both entrances (app-ui.md §UI 自動化), as `RefBranchMenu.deleteAsked` is for the card. A dropped
+    /// land" for both entrances (app-ui.md §UI 自動化), as `RefBranchMenu.deleteAsked` is for the menu. A dropped
     /// request leaves nothing for a write barrier to wait on.
     property bool deleteRowAsked: false
     function deleteRow(kind, id, name, oidHex) {
         page.deleteRowAsked = false
         if (kind !== "branch")
             return
-        // The card stays open for git's answer, so it can be clicked twice; the second click is the same request.
+        // The menu stays open for git's answer, so it can be clicked twice; the second click is the same request.
         if (repoTab.busyCount > 0)
             return
-        // `-d`: git's refusal becomes the question (デザイン規約 §左メニューの所作). The tab keeps which branch the answer
-        // is about and the card reads it there (`RefBranchMenu`); the same slot takes the row off screen
-        // (`ops_delete`).
+        // `-d`: git's refusal turns the row into the held `-D` (デザイン規約 §左メニューの所作). The tab keeps which
+        // branch the answer is about and the BRANCH card reads it there for the delete rows (`RefBranchMenu.refused`);
+        // the same slot takes the row off screen (`ops_delete`).
         repoTab.deleteBranch(id, false)
         page.deleteRowAsked = true
     }
@@ -1565,7 +1565,7 @@ FocusScope {
             hardResetTakes: commitMenuState.menuHardResetTakes
             hardResetNotCopied: commitMenuState.menuHardResetNotCopied
             tipHeldElsewhere: commitMenuState.menuTipHeldElsewhere
-            // git's answers to the branch card's delete, live while the card stands (`RefBranchMenu`).
+            // git's answers to the branch's plain delete, live while the menu stands (`RefBranchMenu`).
             refusedDelete: repoTab.branchDeleteRefused
             landedDelete: repoTab.branchDeleteLanded
             checkedBranch: repoTab.branchDeleteAsked
@@ -1595,7 +1595,7 @@ FocusScope {
                 page.appliedName = worktreesModel.worktreeCalled(path)
                 repoTab.applyCarried(path)
             }
-            // The branch card's own rows, answered where the ref menu's are.
+            // The BRANCH card's signals, raised by its rows and the first level's, answered where the ref menu's are.
             onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
             onUpstreamRequested: (branch, counterpart, unsettable) =>
                 page.startUpstreamAsk(branch, counterpart, unsettable)

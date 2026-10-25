@@ -56,13 +56,13 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "push=true code=push held=false lease= ",
     },
-    // The BRANCH card's push row on a branch the worktree is not on, in the
-    // toolbar's forms off that branch's own counts (`--preset
+    // The menu's push row, beside `pull`, on a branch the worktree is not
+    // on, in the toolbar's forms off that branch's own counts (`--preset
     // others-behind`: `feature/mine` ahead, `feature/split` both ways,
     // `release` behind, `scratch` never sent, `stacked` measured against
     // `main` here, whose row is out and says why under the pointer) — and
     // none on the one it is on, whose door is the toolbar's button. The
-    // chip's entrance carries the same card, so the same words; none of it
+    // chip's entrance carries the same row, so the same words; none of it
     // is in the picture but the words.
     Verb {
         name: "push-branch-menu",

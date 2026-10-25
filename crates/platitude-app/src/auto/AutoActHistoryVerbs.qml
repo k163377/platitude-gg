@@ -102,12 +102,17 @@ Item {
         } else if (act === "commit-menu" || act === "reset-menu"
                    || act === "branch-card" || act === "tag-card") {
             // With no row named, the row under HEAD's: most of this menu is about a commit the branch is not on, and
-            // the rows above HEAD belong to whatever else the graph is showing.
+            // the rows above HEAD belong to whatever else the graph is showing. The BRANCH card's own case is HEAD's
+            // row aimed at the branch the tree is on: the card holds a local branch's upstream rows, and a
+            // remote-tracking chip — what the row under HEAD often draws — has no card (`RefBranchMenu.applies`).
             let menuOid = arg
-            if (menuOid === "")
-                menuOid = graphModel.oidAt(
-                    graphModel.rowOf(worktree.headOid) + 1)
-            page.openRowMenu(menuOid)
+            if (menuOid === "" && act === "branch-card") {
+                page.openRowMenu(worktree.headOid, { "kind": "branch", "name": worktree.branch })
+            } else {
+                if (menuOid === "")
+                    menuOid = graphModel.oidAt(graphModel.rowOf(worktree.headOid) + 1)
+                page.openRowMenu(menuOid)
+            }
             if (act === "reset-menu")
                 resetMenu.offer()
             else if (act === "branch-card")
@@ -317,7 +322,9 @@ Item {
             return menuWaitTimer.level.visible
         }
         /// The rows that start git — every row on show but the cards' titles, which stay live while the rows inside
-        /// say why — and how many of them grey.
+        /// say why — and how many of them grey. A row greyed for a reason of its own (`blockedReason`: the delete
+        /// table's row on the branch the tree is on) greys whether or not anything runs, so it is not one the wait
+        /// holds.
         function held() {
             const level = menuWaitTimer.level
             let rows = 0
@@ -325,6 +332,8 @@ Item {
             for (let i = 0; i < level.count; i++) {
                 const row = level.itemAt(i)
                 if (!row || !row.present || row.codeColSeat === undefined || row.subMenu)
+                    continue
+                if (row.blockedReason !== "" && !row.withdrawn)
                     continue
                 rows++
                 if (row.blocked)

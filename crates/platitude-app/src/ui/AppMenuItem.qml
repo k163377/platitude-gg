@@ -247,7 +247,7 @@ MenuItem {
     /// (rules-refs の「回数押しか否かは最初の押下で確定する」の行).
     readonly property alias armedPresses: holdDrive.armedPresses
     /// A gesture is under way, the fill's slide back included (`HoldDriver.gesturing`) — the latch for a row dressed
-    /// from an answer other than the count (`RefBranchMenu`'s `Delete both`).
+    /// from an answer other than the count (`BranchBothDeleteRow`, the delete table's `Delete both`).
     readonly property alias gesturing: holdDrive.gesturing
     /// What a confirmed row wears — word, chip, mark and fill. `warning`: what the row throws away is brought back from
     /// the discard record. **A row that cannot be brought back names `danger` itself**, and a plain delete

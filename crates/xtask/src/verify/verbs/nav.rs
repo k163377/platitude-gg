@@ -226,13 +226,13 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "delete_early asked=true",
     },
-    // The same card over a branch whose tip no drawn row holds, so
+    // The same menu over a branch whose tip no drawn row holds, so
     // `from=git` is claimed: `--preset deep-parked` forks `parked` below the
     // window's cut, which sends the question to `merge-base`
     // (`GraphModel::branch_delete_merged` empty →
     // `RepoSession::check_branch_delete`). `merged=no` is the half nothing
     // else reaches — git's answer is compared as a string in one place
-    // (`RefBranchMenu.refusedRow`), on this road alone, and a wrong word
+    // (`RefBranchMenu.refused`), on this road alone, and a wrong word
     // there silently offers the plain delete. `plain` because the verb has
     // one repository and one branch; anything else should fail.
     Verb {
@@ -241,7 +241,7 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "delete_early asked=true from=git merged=no code=branch -D presses=3 \
                 note=not merged",
     },
-    // The three deletes of the left row's card, each judged first on the
+    // The three deletes of the left row's menu, each judged first on the
     // press having left the page: the page drops a delete asked while a
     // write runs (`RepoPage.deleteRow`), and the run would then wait on a
     // write nobody made, silent until the watchdog. It is the one claim the

@@ -37,7 +37,6 @@ Item {
     readonly property var commitMenu: driver.commitMenu
     readonly property var tagHereCommitItem: driver.tagHereCommitItem
     readonly property var commitTagCard: driver.commitTagCard
-    readonly property var commitBranchCard: driver.commitBranchCard
     readonly property var commitDeleteItem: driver.commitDeleteItem
     readonly property var switchCommitItem: driver.switchCommitItem
     readonly property var pullCommitItem: driver.pullCommitItem
@@ -108,7 +107,6 @@ Item {
             // may hold `/`, so the cut is the configured one (`GitFacts.remoteOfRef`).
             remotesModel.toggleFolder(GitFacts.remoteOfRef(arg, repoTab.remoteNames))
             page.openRefMenu("remote", arg, arg, remotesModel.oidOfName(arg))
-            refMenu.openSub(refBranchCard)
             Harness.report("ref_menu kind=remote delete=" + refDeleteItem.code
                               + " " + refDeleteItem.text)
             if (act === "delete-remote-go" || act === "remote-refused")
@@ -117,18 +115,18 @@ Item {
             if (act === "remote-refused")
                 driver.barrierNotice.start()
         } else if (act === "delete-upstream-go" || act === "delete-both-go") {
-            // A local branch's card and a row that reaches its reading: that alone, or the pair. What reaches the
-            // remote is leased to the reading's commit as the card read it (`RefRowMenu.branchFacts`), so a card
-            // holding the wrong one is a refused write. The branch has to be tracked, merged and in step
-            // (`--preset stack`'s `side`).
+            // A local branch's menu and a row of its delete table that reaches its reading: that alone, or the pair.
+            // What reaches the remote is leased to the reading's commit as the BRANCH card froze it
+            // (`RefRowMenu.branchFacts`), so a card holding the wrong one is a refused write. The branch has to be
+            // tracked, merged and in step (`--preset stack`'s `side`).
             page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
-            refMenu.openSub(refBranchCard)
-            driver.holdToEnd(act === "delete-both-go" ? refBranchCard.deleteBothItem : refBranchCard.deleteRemoteItem)
+            driver.holdToEnd(act === "delete-both-go" ? driver.refRowMenu.deleteBothItem
+                                                      : driver.refRowMenu.deleteRemoteItem)
         } else if (act === "delete-force") {
             repoTab.deleteBranch(arg, true)
         } else if (act === "delete-branch-chip") {
-            // The same delete from the graph row's card (`RefBranchMenu`), pressed from the sampler on the sidebar's
-            // terms: both entrances end at `RepoPage.deleteRow`.
+            // The same delete from the graph row's menu (`BranchDeleteRow`), pressed from the sampler on the
+            // sidebar's terms: both entrances end at `RepoPage.deleteRow`.
             driver.beginWrite(act)
             chipDeleteTimer.start()
         } else if (act === "pull-menu") {
@@ -188,8 +186,7 @@ Item {
             const named = wantsRemote ? arg.slice(0, -7) : arg
             const blockedOn = named === "" ? worktree.branch : named
             page.openRefMenu("branch", blockedOn, blockedOn, branchesModel.oidOfName(blockedOn))
-            refMenu.openSub(refBranchCard)
-            acts.blockedTipRow = wantsRemote ? refBranchCard.deleteRemoteItem : refDeleteItem
+            acts.blockedTipRow = wantsRemote ? driver.refRowMenu.deleteRemoteItem : refDeleteItem
             acts.blockedTipRow.tipForced = true
             blockedTipTimer.start()
         } else if (act === "menu-highlight") {
@@ -199,7 +196,7 @@ Item {
             refMenu.currentIndex = 1
             Harness.report("menu_highlight index=" + refMenu.currentIndex)
         } else if (act === "delete-branch-early" || act === "delete-branch-early-far") {
-            // The early answer dresses the delete row before any click; the card goes up from the sampler
+            // The early answer dresses the delete row before any click; the menu goes up from the sampler
             // (`earlyDeleteTimer`). `-far` differs only in the repository: its branch's tip is outside the drawn rows
             // (`--preset deep-parked`), so git answers every time, where the plain one takes whichever road the refs'
             // timing hands it.
@@ -258,7 +255,7 @@ Item {
                           + " blocked=" + (row.blockedReason !== ""))
         return page.deleteRowAsked
     }
-    // The delete asked of the left pane's card. The card goes up and the row is pressed here, not in `run`: a card
+    // The delete asked of the left pane's menu. The menu goes up and the row is pressed here, not in `run`: a menu
     // opened while a write runs greys its delete row (`AppMenu.runningWhy`) and the page drops the request
     // (`RepoPage.deleteRow`).
     SampleTimer {
@@ -275,7 +272,6 @@ Item {
             const oid = branchesModel.oidOfName(arg)
             page.openRefMenu("branch", arg, arg, oid)
             page.deleteRow("branch", arg, arg, oid)
-            refMenu.openSub(refBranchCard)
             if (!acts.deleteRowLanded(refDeleteItem)) {
                 driver.complete()
                 return
@@ -289,9 +285,9 @@ Item {
     }
     // git's refusal has to come back before the row it turns into `-D` (the warning's three presses) can be pressed
     // through — or photographed. The plain delete is pressed too, so a count is no sign of the refusal; this one is.
-    // The card went up under that delete and greys its rows until the reading behind it is in (`AppMenu.waiting`),
-    // a drain after the write's own settle (`RepoTab::settling`): a row out of reach takes no press
-    // (`AppMenuItem.completeHold`), and the sampler presses again on its next beat, naming the stage it waits at.
+    // The menu went up before that delete, so the write greys none of its rows (`AppMenu.waiting`); a row out of
+    // reach still takes no press (`AppMenuItem.completeHold`), and the sampler presses again on its next beat, naming
+    // the stage it waits at.
     SampleTimer {
         id: forceDeleteTimer
         /// The refusal is in hand. Latched: a press that did not go has armed the watch again (`beginWrite`), so the
@@ -444,7 +440,7 @@ Item {
         /// Which row this run presses, empty for the ones that only stand the card up.
         property string press: ""
         /// `:tip` last: the card stood up, the `push --delete` row's reason is forced out, as `delete-blocked-tip` does
-        /// on a branch's card — the one place that row says why it is out.
+        /// on a branch's delete table — the one place that row says why it is out.
         property bool tip: false
         function begin(arg, pressing) {
             const parts = arg.split(":")
@@ -589,19 +585,19 @@ Item {
     // Waits on the early answer: nothing here writes.
     SampleTimer {
         id: earlyDeleteTimer
-        /// Whether the card is up yet; until then every tick is the input's branch only.
-        property bool cardUp: false
+        /// Whether the menu is up yet; until then every tick is the input's branch only.
+        property bool menuUp: false
         onTriggered: {
             const arg = Harness.autoActArg
-            if (!earlyDeleteTimer.cardUp) {
+            if (!earlyDeleteTimer.menuUp) {
                 // The precondition is read here and nowhere else (app-ui.md §UI 自動化): the delete row is live only
-                // on a card raised while nothing runs (`AppMenu.runningWhy`), and the card works its answers out once
-                // as it opens — put up a tick early, it asks nobody and the run waits out the watchdog.
+                // on a menu raised while nothing runs (`AppMenu.runningWhy`), and the BRANCH card it reads works its
+                // answers out once as the menu opens — put up a tick early, it asks nobody and the run waits out the
+                // watchdog.
                 if (!driver.menusLive())
                     return
-                earlyDeleteTimer.cardUp = true
+                earlyDeleteTimer.menuUp = true
                 page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
-                refMenu.openSub(refBranchCard)
                 if (refBranchCard.deleteAsked)
                     return
                 // Not landed (the name has no commit, or its delete is out), so nothing will come to latch on. Reported
@@ -632,8 +628,8 @@ Item {
             driver.complete()
         }
     }
-    // The delete asked from the graph row. The subject is the card going: the row stays up for a refusal
-    // (`RefBranchMenu`'s plain delete, `onHeld`), so a delete git takes has to take the card down — and a closed card
+    // The delete asked from the graph row. The subject is the menu going: the row stays up for a refusal
+    // (`BranchDeleteRow`'s plain delete, `onHeld`), so a delete git takes has to take the menu down — and a closed menu
     // frames like one nobody opened. `code=` tells a landing from a refusal, which leaves the row wearing `branch -D`.
     SampleTimer {
         id: chipDeleteTimer
@@ -641,14 +637,14 @@ Item {
         property bool pressed: false
         onTriggered: {
             if (!chipDeleteTimer.pressed) {
-                // The precondition is read here and nowhere else (app-ui.md §UI 自動化): a card raised while a write
+                // The precondition is read here and nowhere else (app-ui.md §UI 自動化): a menu raised while a write
                 // runs greys its rows, and the page drops the request.
                 if (!driver.menusLive())
                     return
                 const arg = Harness.autoActArg
                 page.openRowMenu(branchesModel.oidOfName(arg), { "kind": "branch", "name": arg })
-                commitMenu.openSub(commitBranchCard)
-                // The row's own presses: the plain delete's two, which keep the card up (`RefBranchMenu`'s `onHeld`).
+                // The row's own presses: the plain delete's two, which keep the menu up (`BranchDeleteRow`'s
+                // `onHeld`).
                 commitDeleteItem.completeHold()
                 if (!acts.deleteRowLanded(commitDeleteItem)) {
                     chipDeleteTimer.stop()
@@ -665,8 +661,7 @@ Item {
             Harness.report("chip_delete branch=" + Harness.autoActArg
                               + " row=" + branchesModel.rowOfName(Harness.autoActArg)
                               + " code=" + commitDeleteItem.code
-                              + " menu=" + commitMenu.opened
-                              + " card=" + commitBranchCard.opened)
+                              + " menu=" + commitMenu.opened)
             driver.complete()
         }
     }

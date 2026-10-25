@@ -6,7 +6,8 @@ import platitude.ui
 // lacks; and a first push that asks where it goes. The flag long, as every menu row's (§git 用語のコード表記).
 // Out, in the first push's words, where the push would stay here: there is no remote to send it to.
 //
-// A row of the BRANCH card, standing on its frozen answers (`RefBranchMenu.state`).
+// On the first level beside `pull`, standing on the BRANCH card's frozen answers (`RefBranchMenu.state`): both
+// entrances carry the row and the card it reads, so the two cannot disagree.
 AppMenuItem {
     id: pushRow
 
@@ -17,6 +18,9 @@ AppMenuItem {
     /// The first push's words: where it goes is asked — or, out, there is nowhere to name.
     readonly property bool firstPushWords: pushRow.publishing || pushRow.facts.pushStaysHere
     readonly property bool overwrites: pushRow.facts.pushState === "behind" || pushRow.facts.pushState === "diverged"
+    /// Why the row is out where the push would stay in this repository — the toolbar's words for the same standing
+    /// (`BandPushButton`).
+    readonly property string blockedStaysHere: qsTr("Cannot push — its upstream is not supported")
 
     // Off the running press's length, so the chip cannot change under a hand already on the row
     // (`AppMenuItem.armedPresses`, デザイン規約 §回数押し).
@@ -31,7 +35,7 @@ AppMenuItem {
     //: Follows the `push` chip: "push to…", where the branch goes being asked first.
     text: pushRow.firstPushWords ? qsTr("to…") : pushRow.refSentence.arg(pushRow.refName)
     offered: pushRow.facts.pushState !== "" || pushRow.facts.pushStaysHere
-    blockedReason: pushRow.facts.pushStaysHere ? pushRow.card.pushBlockedStaysHere : ""
+    blockedReason: pushRow.facts.pushStaysHere ? pushRow.blockedStaysHere : ""
     holdPresses: pushRow.overwrites ? Metrics.holdPressesWarned : 0
     // Reaching past this machine is the warning tone (デザイン規約 §状態).
     holdTone: Theme.warning

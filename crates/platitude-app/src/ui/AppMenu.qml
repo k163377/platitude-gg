@@ -71,7 +71,7 @@ Menu {
     /// a row says while it waits for it. Live, but **what greys the rows is whether one was out as this menu opened**
     /// (`waiting`): a menu opened under one keeps the rows it has with nothing out, so its shape does not depend on
     /// when it was opened (デザイン規約 §メニュー). One opened before it greys nothing — a row of its own may have
-    /// started it and still stand for git's answer (`RefBranchMenu`'s plain delete).
+    /// started it and still stand for git's answer (`BranchDeleteRow`'s plain delete).
     property string runningWhy: ""
     /// Opened while `runningWhy` stood, and it has not ended since.
     property bool waiting: false

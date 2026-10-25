@@ -4,10 +4,10 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The push of a branch the worktree is not on, from the BRANCH card of its row (デザイン規約 §リモートへ送る): the
-/// row's shape as the card opens, its press, and the first push's question it raises. `[chip:]<branch>` — bare is the
-/// sidebar's entrance, `chip:` the graph row's menu aimed at the branch's chip: the two carry one card, and only a run
-/// through each says both are wired to it.
+/// The push of a branch the worktree is not on, from its row's menu beside `pull` (デザイン規約 §リモートへ送る): the
+/// row's shape as the menu opens, its press, and the first push's question it raises. `[chip:]<branch>` — bare is the
+/// sidebar's entrance, `chip:` the graph row's menu aimed at the branch's chip: each carries the row (`BranchPushRow`)
+/// on its own BRANCH card's answers, and only a run through each says both are wired.
 // `Item` because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
@@ -28,11 +28,11 @@ Item {
     /// The run's branch and entrance, off its argument.
     property string branch: ""
     property bool onChip: false
-    /// What the run does once the card stands: `menu` reads it, `ask` presses a first push's row and stops at the
+    /// What the run does once the menu stands: `menu` reads the row, `ask` presses a first push's row and stops at the
     /// question, `go` presses it through to git's answer — a question answered too.
     property string after: ""
-    /// The card the run stood up.
-    property var card: null
+    /// The BRANCH card whose answers the push row stands on: the entrance's own.
+    readonly property var card: acts.onChip ? driver.commitBranchCard : driver.refBranchCard
 
     /// Runs `act` if it is one of this family's, and says whether it was.
     function run(act, arg) {
@@ -41,40 +41,40 @@ Item {
         acts.onChip = arg.startsWith("chip:")
         acts.branch = acts.onChip ? arg.slice("chip:".length) : arg
         acts.after = act === "push-branch-menu" ? "menu" : act === "push-branch-ask" ? "ask" : "go"
-        cardTimer.start()
+        menuTimer.start()
         return true
     }
 
-    /// The BRANCH card on the run's branch, through the door a right-click takes there; answers the card.
-    function standCard() {
+    /// The menu on the run's branch, through the door a right-click takes there.
+    function openMenu() {
         const oid = branchesModel.oidOfName(acts.branch)
-        if (acts.onChip) {
+        if (acts.onChip)
             page.openRowMenu(oid, { "kind": "branch", "name": acts.branch })
-            commitMenu.openSub(driver.commitBranchCard)
-            return driver.commitBranchCard
-        }
-        page.openRefMenu("branch", acts.branch, acts.branch, oid)
-        refMenu.openSub(driver.refBranchCard)
-        return driver.refBranchCard
+        else
+            page.openRefMenu("branch", acts.branch, acts.branch, oid)
+    }
+    /// The push row the run reads and presses, beside `pull` on the menu's first level.
+    function pushRow() {
+        return acts.onChip ? driver.commitRowMenu.pushBranchItem : driver.refRowMenu.pushBranchItem
     }
     /// A hand's click takes the menu down; a row's `triggered()` called from here does not, so it is told, and
     /// completion waits out its exit (`menuGoing` — the census walks what is visible).
-    function closeCard() {
+    function closeMenu() {
         driver.menuGoing = acts.onChip ? commitMenu : refMenu
         driver.menuGoing.close()
     }
 
-    // The card goes up once nothing is out (a card raised under a write greys its rows), and the row is read off it
+    // The menu goes up once nothing is out (a menu raised under a write greys its rows), and the row is read off it
     // from the next beat: its whole shape — seat, chip, presses, sentence, reason — is fixed as it opens
     // (デザイン規約 §メニュー).
     SampleTimer {
-        id: cardTimer
+        id: menuTimer
         onTriggered: {
             // The precondition is read here and nowhere else (app-ui.md §UI 自動化).
             if (!driver.menusLive())
                 return
-            cardTimer.stop()
-            acts.card = acts.standCard()
+            menuTimer.stop()
+            acts.openMenu()
             rowTimer.start()
         }
     }
@@ -83,7 +83,7 @@ Item {
     SampleTimer {
         id: rowTimer
         onTriggered: {
-            const row = acts.card.pushItem
+            const row = acts.pushRow()
             if (!driver.rowTipStood(row, row.blocked))
                 return
             rowTimer.stop()
@@ -104,19 +104,19 @@ Item {
             if (acts.card.pushState === "publish") {
                 // The question is raised by the row's own handler, and answered from it (`askTimer`).
                 row.triggered()
-                acts.closeCard()
+                acts.closeMenu()
                 askTimer.start()
                 return
             }
             if (row.holdPresses > 0) {
-                // The held row closes the card itself (`RefBranchMenu`'s `onHeld`).
+                // The held row closes the menu itself (`BranchPushRow`'s `onHeld`).
                 driver.holdToEnd(row)
             } else {
                 driver.pressWrite("push-branch", () => {
                     row.triggered()
                     return true
                 })
-                acts.closeCard()
+                acts.closeMenu()
             }
             landedTimer.start()
         }

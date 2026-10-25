@@ -4,29 +4,45 @@ import platitude.ui
 
 // What a press count answers, and when (デザイン規約 §回数押し): the answer is decided and sent at the last press, while
 // the presses' latches still hold; only going off the screen waits out the floor. Each case is something that can land
-// inside those `holdFloorMs` — git's unmerged answer, the card aimed at another branch, git's answer to the delete
+// inside those `holdFloorMs` — git's unmerged answer, the menu aimed at another branch, git's answer to the delete
 // itself — and must not change what was pressed for.
 Item {
     id: root
     width: 600
     height: 600
 
-    /// What the card asked for, every request in order: the card runs nothing itself.
+    /// What the delete table asked for, every request in order: it runs nothing itself.
     property var asked: []
 
-    RefBranchMenu {
-        id: card
-        onDeleteRequested: (kind, id, name, oidHex) => root.asked.push("delete " + id)
-        onForceDeleteRequested: branch => root.asked.push("force " + branch)
-        onDeleteRemoteRequested: (remoteRef, expect) => root.asked.push("delete-remote " + remoteRef)
-        onDeleteEverywhereRequested: (branch, remoteRef, forced, expect) =>
-            root.asked.push("delete-both " + branch + " forced=" + forced)
+    /// A branch's menu as both entrances lay its delete table out: rows on this level, on the BRANCH card's answers.
+    AppMenu {
+        id: level
+        BranchDeleteRow {
+            id: deleteRow
+            card: branchCard
+        }
+        BranchRemoteDeleteRow {
+            id: remoteDeleteRow
+            card: branchCard
+        }
+        BranchBothDeleteRow {
+            id: bothDeleteRow
+            card: branchCard
+        }
+        RefBranchMenu {
+            id: branchCard
+            onDeleteRequested: (kind, id, name, oidHex) => root.asked.push("delete " + id)
+            onForceDeleteRequested: branch => root.asked.push("force " + branch)
+            onDeleteRemoteRequested: (remoteRef, expect) => root.asked.push("delete-remote " + remoteRef)
+            onDeleteEverywhereRequested: (branch, remoteRef, forced, expect) =>
+                root.asked.push("delete-both " + branch + " forced=" + forced)
+        }
     }
 
     /// A branch with a reading on the remote, whose merged state only git can answer (`merged: ""`): the answer arrives
     /// later, as `checkedBranch` / `checkedMerged`.
     function standOn(name) {
-        card.standOn("branch", name, name, "abc123", {
+        branchCard.standOn("branch", name, name, "abc123", {
             "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "origin/" + name, "upstream": "origin/" + name,
             "upstreamWhere": "remote",
             "remoteCounterpartOid": "def456", "remoteDrifted": false, "open": true, "merged": "",
@@ -161,10 +177,10 @@ Item {
         function init() {
             root.asked = []
             tc.confirms = 0
-            card.checkedBranch = ""
-            card.checkedMerged = ""
-            card.forceDeleteBranch = ""
-            card.landedDelete = ""
+            branchCard.checkedBranch = ""
+            branchCard.checkedMerged = ""
+            branchCard.forceDeleteBranch = ""
+            branchCard.landedDelete = ""
             plan.steps = ["drop A", "pick B"]
             plan.taken = null
             plan.locked = false
@@ -181,20 +197,20 @@ Item {
         }
 
         function cleanup() {
-            card.dismiss()
+            level.dismiss()
             bar.open = false
             elsewhere.forceActiveFocus()
-            tryVerify(() => !card.visible && bar.shut)
-            tryVerify(() => !card.deleteItem.gesturing && !card.deleteRemoteItem.gesturing
-                      && !card.deleteBothItem.gesturing && bar.holdProgress === 0 && plan.taken === null
+            tryVerify(() => !level.visible && bar.shut)
+            tryVerify(() => !deleteRow.gesturing && !remoteDeleteRow.gesturing
+                      && !bothDeleteRow.gesturing && bar.holdProgress === 0 && plan.taken === null
                       && !draft.taken && removals.waiting.length === 0
                       && runBar.runTicket === 0 && planPane.discardTicket === 0)
         }
 
         function openOn(name) {
             root.standOn(name)
-            card.offer()
-            tryVerify(() => card.opened)
+            level.offer()
+            tryVerify(() => level.opened)
             root.asked = []
         }
 
@@ -219,57 +235,57 @@ Item {
 
         function test_a_plain_delete_stays_plain_when_the_unmerged_answer_lands_on_its_floor() {
             tc.openOn("topic")
-            compare(card.deleteItem.holdPresses, Metrics.holdPressesPlain)
-            tc.pressRow(card.deleteItem, Metrics.holdPressesPlain)
+            compare(deleteRow.holdPresses, Metrics.holdPressesPlain)
+            tc.pressRow(deleteRow, Metrics.holdPressesPlain)
             compare(root.asked, ["delete topic"], "sent at the last press")
-            card.checkedBranch = "topic"
-            card.checkedMerged = "no"
+            branchCard.checkedBranch = "topic"
+            branchCard.checkedMerged = "no"
             tc.outlastTheFloor()
             compare(root.asked, ["delete topic"],
                     "and nothing after it: consent to the plain delete is not taken for one to -D")
-            verify(card.opened, "the card stays up for git's answer")
-            compare(card.deleteItem.code, "branch -D", "which the row wears from the next press on")
+            verify(level.opened, "the menu stays up for git's answer")
+            compare(deleteRow.code, "branch -D", "which the row wears from the next press on")
         }
 
         function test_delete_both_keeps_the_local_half_its_first_press_saw() {
             tc.openOn("topic")
-            tc.pressRow(card.deleteBothItem, 1)
-            card.checkedBranch = "topic"
-            card.checkedMerged = "no"
-            compare(card.deleteBothItem.forces, false, "latched at the first press")
+            tc.pressRow(bothDeleteRow, 1)
+            branchCard.checkedBranch = "topic"
+            branchCard.checkedMerged = "no"
+            compare(bothDeleteRow.forces, false, "latched at the first press")
             tc.pressKeys(Metrics.holdPressesWarned - 1)
             compare(root.asked, ["delete-both topic forced=false"])
         }
 
-        function test_a_row_that_closes_its_card_waits_out_the_floor() {
+        function test_a_row_that_closes_its_menu_waits_out_the_floor() {
             tc.openOn("topic")
-            tc.pressRow(card.deleteRemoteItem, Metrics.holdPressesWarned)
+            tc.pressRow(remoteDeleteRow, Metrics.holdPressesWarned)
             compare(root.asked, ["delete-remote origin/topic"], "sent at the last press")
-            verify(card.opened, "the card stays up under the full fill")
-            verify(card.deleteRemoteItem.gesturing, "its row still completing")
-            tryVerify(() => !card.opened, undefined, "and goes once the floor has passed")
+            verify(level.opened, "the menu stays up under the full fill")
+            verify(remoteDeleteRow.gesturing, "its row still completing")
+            tryVerify(() => !level.opened, undefined, "and goes once the floor has passed")
         }
 
-        /// The card closed and aimed at another branch inside the floor: the first branch's answer has already gone,
-        /// and its row's floor neither asks for anything more nor closes the card now standing.
-        function test_a_confirmation_never_reaches_the_card_aimed_elsewhere_on_its_floor() {
+        /// The menu closed and opened on another branch inside the floor: the first branch's answer has already gone,
+        /// and its row's floor neither asks for anything more nor closes the menu now standing.
+        function test_a_confirmation_never_reaches_the_menu_aimed_elsewhere_on_its_floor() {
             tc.openOn("topic")
-            tc.pressRow(card.deleteRemoteItem, Metrics.holdPressesWarned)
+            tc.pressRow(remoteDeleteRow, Metrics.holdPressesWarned)
             compare(root.asked, ["delete-remote origin/topic"])
-            card.dismiss()
-            tryVerify(() => !card.visible)
+            level.dismiss()
+            tryVerify(() => !level.visible)
             tc.openOn("other")
             tc.outlastTheFloor()
-            compare(root.asked, [], "the card aimed at the other branch is asked nothing")
-            verify(card.opened, "and is not closed by the first row's floor")
+            compare(root.asked, [], "the menu aimed at the other branch is asked nothing")
+            verify(level.opened, "and is not closed by the first row's floor")
         }
 
-        function test_git_answering_inside_the_floor_leaves_the_card_its_floor() {
+        function test_git_answering_inside_the_floor_leaves_the_menu_its_floor() {
             tc.openOn("topic")
-            tc.pressRow(card.deleteItem, Metrics.holdPressesPlain)
-            card.landedDelete = "topic"
-            verify(card.opened, "the full fill is still seen")
-            tryVerify(() => !card.opened, undefined, "and the card goes with the floor")
+            tc.pressRow(deleteRow, Metrics.holdPressesPlain)
+            branchCard.landedDelete = "topic"
+            verify(level.opened, "the full fill is still seen")
+            tryVerify(() => !level.opened, undefined, "and the menu goes with the floor")
         }
 
         function focusInside(item) {

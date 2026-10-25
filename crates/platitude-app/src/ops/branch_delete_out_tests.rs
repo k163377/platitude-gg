@@ -1,5 +1,5 @@
-//! Which answer the standing card's delete is, and what the card is
-//! left holding at each of its moments.
+//! Which answer is the plain delete's that a menu stands for, and what
+//! is left for the card to read at each of its moments.
 
 use super::*;
 
@@ -14,7 +14,7 @@ fn pressed() -> BranchDeleteOut {
 }
 
 #[test]
-fn a_delete_git_took_names_the_branch_for_the_card_to_go_on() {
+fn a_delete_git_took_names_the_branch_for_the_menu_to_go_on() {
     let mut out = pressed();
     assert!(out.answered(OURS, 0, false, false));
     assert_eq!(out.landed(), "feature");
@@ -40,15 +40,16 @@ fn a_refusal_with_something_to_report_turns_no_row() {
 }
 
 // The fetch behind the press answers in the same drain under its own id;
-// matched by turn, the card would go on a branch git never touched.
+// matched by turn, the menu would go on a branch git never touched.
 #[test]
-fn somebody_elses_answer_leaves_the_card_where_it_is() {
+fn somebody_elses_answer_leaves_the_menu_where_it_is() {
     let mut out = pressed();
     assert!(!out.answered(SOMEBODY_ELSE, 0, false, false));
     assert_eq!(out.landed(), "");
     assert_eq!(out.refused(), "");
     assert_eq!(out.answer(), None);
-    // …and the card's own answer still finds it, wherever it stands.
+    // …and the plain delete's own answer still finds it, wherever it
+    // stands.
     assert!(out.answered(OURS, 1, false, false));
     assert_eq!(out.landed(), "feature");
     assert_eq!(out.answer(), Some(1));
@@ -56,7 +57,7 @@ fn somebody_elses_answer_leaves_the_card_where_it_is() {
 
 // `-D` and `Delete both` arm nothing.
 #[test]
-fn a_branch_answer_nobody_stayed_up_for_names_no_card() {
+fn a_branch_answer_nobody_stayed_up_for_names_nothing() {
     let mut out = BranchDeleteOut::default();
     assert!(!out.answered(OURS, 0, false, false));
     assert_eq!(out.landed(), "");

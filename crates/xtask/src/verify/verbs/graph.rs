@@ -87,8 +87,9 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The menu's two nested cards (デザイン規約 §メニュー の入れ子),
     // judged as above. `branch-card` also proves a graph row offers what
-    // its chip offers — an empty card takes its row with it, leaving one
-    // popup.
+    // its chip offers — the upstream rows of the branch the tree is on,
+    // which its row is aimed at; an empty card takes its row with it,
+    // leaving one popup.
     Verb {
         name: "branch-card",
         when: &[],
@@ -123,14 +124,15 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "menu_wait stage=during same=true held=all open=true",
     },
-    // The delete that card offers, run to git's answer. The row stays up
-    // for a refusal (the plain delete's `onHeld` in `RefBranchMenu`), so what is judged is the
-    // card going once none came; `code=` tells a landing (still
-    // `branch --delete`) from a refusal (turned `branch -D`).
+    // The delete that menu offers on its first level, run to git's answer.
+    // The row stays up for a refusal (the plain delete's `onHeld` in
+    // `BranchDeleteRow`), so what is judged is the menu going once none
+    // came; `code=` tells a landing (still `branch --delete`) from a
+    // refusal (turned `branch -D`).
     Verb {
         name: "delete-branch-chip",
         when: &[],
-        plain: "chip_delete branch=base row=-1 code=branch --delete menu=false card=false",
+        plain: "chip_delete branch=base row=-1 code=branch --delete menu=false",
     },
     // The card a chip unfolds into must cover the chip. It sits at the
     // chip's near edge with rows measured to their names, so a chip with
