@@ -110,6 +110,7 @@ GitVersionCorner 1.0 GitVersionCorner.qml
 GoneBadge 1.0 GoneBadge.qml
 GraphColumnDividers 1.0 GraphColumnDividers.qml
 GraphColumnMetrics 1.0 GraphColumnMetrics.qml
+GraphDividerLines 1.0 GraphDividerLines.qml
 GraphEmptyState 1.0 GraphEmptyState.qml
 GraphFind 1.0 GraphFind.qml
 GraphHeadPin 1.0 GraphHeadPin.qml

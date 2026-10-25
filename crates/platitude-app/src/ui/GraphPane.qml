@@ -7,7 +7,8 @@ import platitude.ui
 // Center pane: the commit graph.
 //
 // Every part that could leave has (`GraphList`, `GraphFind`, `AskBar`, `GraphRowWalk`, `GraphColumnMetrics`,
-// `GraphColumnDividers`, `GraphLanePan`, `GraphLaneBar`, `GraphHeadPin`, `MiddleAutoScroll`, `GraphEmptyState`).
+// `GraphColumnDividers`, `GraphDividerLines`, `GraphLanePan`, `GraphLaneBar`, `GraphHeadPin`, `MiddleAutoScroll`,
+// `GraphEmptyState`).
 // What is left is the seats and the page⇄part forwarding, and a further cut adds a level of forwarding and makes
 // the whole longer. The seats stay in one file: the list is laid from the question bar and steps down by the find
 // card, and the pane-wide `HoverHandler` sits on the pane itself
@@ -388,21 +389,11 @@ Rectangle {
     color: Theme.bgSurface
 
     // Divider hover-lines live under the list so the message ticks and lane strokes stay in front.
-    Rectangle {
-        id: labelDividerLine
-        x: columnDividers.labelX + Theme.borderWidth
-        width: Theme.splitterWidth - 2 * Theme.borderWidth
+    GraphDividerLines {
+        id: dividerLines
+        width: parent.width
         height: parent.height
-        color: Theme.borderStrong
-        visible: columnDividers.labelLineWanted
-    }
-    Rectangle {
-        id: graphDividerLine
-        x: columnDividers.graphDividerX + Theme.borderWidth
-        width: Theme.splitterWidth - 2 * Theme.borderWidth
-        height: parent.height
-        color: Theme.borderStrong
-        visible: columnDividers.graphLineWanted
+        dividers: columnDividers
     }
     // The list starts under the question — the graph moves down; a closed bar has no height. **The report bar is not
     // here**: a write can be answered while a file is being read, so it stands over the whole middle of the page
@@ -611,13 +602,13 @@ Rectangle {
     /// What is drawn: the automation hook reports the line and the badge themselves, so a column that cannot be
     /// resized but still promises a drag cannot pass.
     readonly property alias graphDividerShown: columnDividers.graphDividerShown
-    readonly property alias graphDividerLineShown: graphDividerLine.visible
+    readonly property alias graphDividerLineShown: dividerLines.graphShown
     /// Whether the badge the page draws for this pane is up — the pane's half of that answer.
     readonly property alias graphDividerRefuses: columnDividers.refused
     /// The line of whichever divider has the hand. A refused drag has to leave it drawn — the boundary still moves the
     /// other way — and only the pane knows which of the two lines is being asked about.
-    readonly property bool refusedLineShown: columnDividers.labelDragging ? labelDividerLine.visible
-        : graphDividerLine.visible
+    readonly property bool refusedLineShown: columnDividers.labelDragging ? dividerLines.labelShown
+        : dividerLines.graphShown
     /// Whether the pointer is anywhere in this pane; real hover and the automation hook write it alike. The hand is
     /// read on the pane itself (`HandWatch`), passively, so the rows', chips' and dividers' own hover does not take it
     /// away — on an item stacked over the list it would take the hover from every row under it

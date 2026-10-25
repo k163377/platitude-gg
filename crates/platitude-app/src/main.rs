@@ -195,6 +195,7 @@ fn main() {
     qrc::embed!("ui/GoneBadge.qml");
     qrc::embed!("ui/GraphColumnDividers.qml");
     qrc::embed!("ui/GraphColumnMetrics.qml");
+    qrc::embed!("ui/GraphDividerLines.qml");
     qrc::embed!("ui/GraphEmptyState.qml");
     qrc::embed!("ui/GraphFind.qml");
     qrc::embed!("ui/GraphHeadPin.qml");
