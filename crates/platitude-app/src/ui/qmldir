@@ -10,6 +10,7 @@ singleton MiddleHand 1.0 MiddleHand.qml
 singleton KeyMenu 1.0 KeyMenu.qml
 singleton OutsidePress 1.0 OutsidePress.qml
 singleton NavFacts 1.0 NavFacts.qml
+singleton Tips 1.0 Tips.qml
 ActionButton 1.0 ActionButton.qml
 ActionButtonLabel 1.0 ActionButtonLabel.qml
 ActionButtonSeat 1.0 ActionButtonSeat.qml
@@ -118,6 +119,7 @@ GraphRowDelegate 1.0 GraphRowDelegate.qml
 GraphRowWalk 1.0 GraphRowWalk.qml
 GraphTailFooter 1.0 GraphTailFooter.qml
 HarnessSeat 1.0 HarnessSeat.qml
+HandWatch 1.0 HandWatch.qml
 HashPlate 1.0 HashPlate.qml
 HeadPinRow 1.0 HeadPinRow.qml
 HeadTrack 1.0 HeadTrack.qml
@@ -126,6 +128,7 @@ HoldDriver 1.0 HoldDriver.qml
 HoldFill 1.0 HoldFill.qml
 HoldIcon 1.0 HoldIcon.qml
 HoverCardHost 1.0 HoverCardHost.qml
+HoverSeat 1.0 HoverSeat.qml
 HoverToolButton 1.0 HoverToolButton.qml
 IdentIcon 1.0 IdentIcon.qml
 InkCanvas 1.0 InkCanvas.qml
@@ -229,6 +232,8 @@ TabShare 1.0 TabShare.qml
 TabStrip 1.0 TabStrip.qml
 TabTitleFade 1.0 TabTitleFade.qml
 TabTreeMark 1.0 TabTreeMark.qml
+TipAsk 1.0 TipAsk.qml
+TipSeat 1.0 TipSeat.qml
 TopBar 1.0 TopBar.qml
 TreeViewToggle 1.0 TreeViewToggle.qml
 ViewMarkButton 1.0 ViewMarkButton.qml

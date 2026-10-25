@@ -204,6 +204,7 @@ fn main() {
     qrc::embed!("ui/GraphRowWalk.qml");
     qrc::embed!("ui/GraphTailFooter.qml");
     qrc::embed!("ui/HarnessSeat.qml");
+    qrc::embed!("ui/HandWatch.qml");
     qrc::embed!("ui/HashPlate.qml");
     qrc::embed!("ui/HeadPinRow.qml");
     qrc::embed!("ui/HeadTrack.qml");
@@ -212,6 +213,7 @@ fn main() {
     qrc::embed!("ui/HoldFill.qml");
     qrc::embed!("ui/HoldIcon.qml");
     qrc::embed!("ui/HoverCardHost.qml");
+    qrc::embed!("ui/HoverSeat.qml");
     qrc::embed!("ui/HoverToolButton.qml");
     qrc::embed!("ui/IdentIcon.qml");
     qrc::embed!("ui/InkCanvas.qml");
@@ -229,6 +231,7 @@ fn main() {
     qrc::embed!("ui/NameRun.qml");
     qrc::embed!("ui/NavFactLine.qml");
     qrc::embed!("ui/NavFacts.qml");
+    qrc::embed!("ui/Tips.qml");
     qrc::embed!("ui/NavHeader.qml");
     qrc::embed!("ui/NavIcon.qml");
     qrc::embed!("ui/NavItemDelegate.qml");
@@ -318,6 +321,8 @@ fn main() {
     qrc::embed!("ui/TabStrip.qml");
     qrc::embed!("ui/TabTitleFade.qml");
     qrc::embed!("ui/TabTreeMark.qml");
+    qrc::embed!("ui/TipAsk.qml");
+    qrc::embed!("ui/TipSeat.qml");
     qrc::embed!("ui/TopBar.qml");
     qrc::embed!("ui/TreeViewToggle.qml");
     qrc::embed!("ui/ViewMarkButton.qml");

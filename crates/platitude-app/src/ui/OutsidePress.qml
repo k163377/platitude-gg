@@ -17,6 +17,9 @@ QtObject {
     /// The popups standing now. Replaced, never changed in place, so a binding on it hears every change.
     property var standing: []
     readonly property bool any: outsidePress.standing.length > 0
+    /// One of them has the hand no more (`AppMenu.pointerInside`) — walked out, or the popup gone from under it. A
+    /// surface that lost the hand under one and has not heard it since weighs where it went (`HandWatch.weighCover`).
+    signal handLeft()
 
     /// Whether a popup in this state counts: on screen, under a policy a press outside closes. Takes the two values
     /// rather than the popup, so the caller's binding follows both.
@@ -35,5 +38,34 @@ QtObject {
     function closeAll() {
         for (const popup of outsidePress.standing.slice())
             popup.close()
+    }
+    /// Whether one stands in `item`'s window — what a hover there is behind (デザイン規約 §メニュー「メニューが立って
+    /// いる間、その裏の hover は引っ込む」), for what hangs off the window rather than a page (the tooltip, the band's
+    /// card; a page's own cards read its menus' door, `RepoPage.menuDoor`). Reads `standing`, so a binding follows.
+    function standsOver(item) {
+        const window = outsidePress.windowOf(item)
+        return outsidePress.standing.some(popup => outsidePress.windowOf(popup.parent) === window)
+    }
+    /// Whether the hand is inside one of them in `item`'s window: a surface that loses the hand then has lost it under
+    /// a popup, not left (`HandWatch.hidden`). One that does not say (`pointerInside` undefined: a combo's list) counts
+    /// while it stands, as Qt hands nothing under it its hover. Reads `standing` and what each says, so a binding
+    /// follows both.
+    function handIn(item) {
+        const window = outsidePress.windowOf(item)
+        return outsidePress.standing.some(popup => outsidePress.windowOf(popup.parent) === window
+                                                   && popup.pointerInside !== false)
+    }
+    /// Whether `item` is inside one of them — a menu's own row, which is not behind the menu.
+    function holds(item) {
+        for (const popup of outsidePress.standing) {
+            for (let at = item; at !== null && at !== undefined; at = at.parent) {
+                if (at === popup.contentItem)
+                    return true
+            }
+        }
+        return false
+    }
+    function windowOf(item) {
+        return item !== null && item !== undefined && item.Window !== undefined ? item.Window.window : null
     }
 }
