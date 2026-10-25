@@ -17,7 +17,7 @@ use crate::encode::{
 };
 use crate::hub::{DiffMsg, Feed};
 
-use super::text_position::{LayoutPosition, SourcePosition};
+use super::text_position::{LayoutPosition, SelectionEnds, SourcePosition};
 use super::{impl_extend_notified, impl_notify_runs, push_run, qml_register};
 
 mod find;
@@ -280,17 +280,13 @@ pub struct DiffModel {
     /// Whether a picture stands in for the diff on screen — the other half
     /// of what `flatten_patches` is told.
     shown_has_preview: bool,
-    /// The selection's two ends: `anchor` the press, `focus` the pointer, in
-    /// the order made (`taken()` sorts). Meaningless unless `sel_active` —
-    /// two ends at the head of row 0 are also a valid empty selection.
-    sel_anchor: SourcePosition,
-    sel_focus: SourcePosition,
+    /// The selection's two ends, none while nothing is selected.
+    sel_ends: Option<SelectionEnds>,
     /// Which column the selection is of (`selection`).
     sel_side: i32,
     /// What the selection holds, so the menu can leave out a row that
     /// would copy nothing (デザイン規約 §メニュー「選べない行は消す」);
     /// settled with the selection, read once as the menu opens.
-    sel_active: bool,
     sel_has_new: bool,
     sel_removed: i32,
     /// When the file on screen was asked for, for the read / apply marks

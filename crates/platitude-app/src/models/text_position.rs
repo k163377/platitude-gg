@@ -3,18 +3,19 @@
 //! and the byte of the text a copy takes that it stands for
 //! ([`SourcePosition`]). Which conversion turns one into the other is the
 //! model's own (`encode::markup::source_byte` for the diff,
-//! `encode::markup::plain_byte` per column for the log).
+//! `encode::markup::plain_byte` per column for the log). A selection is
+//! two of the latter ([`SelectionEnds`]).
 //!
 //! Unsigned. The slots hand signed values, and `new` reads them once:
 //! one that is negative makes no position. A position says nothing of
 //! whether its row or offset exists — the model that reads one answers
 //! for that.
 
-use std::ops::Range;
+use std::ops::{Range, RangeInclusive};
 
 /// A byte of the text a row copies. Ordered as the text is read: by row,
 /// then by byte within it (the derive follows the fields' order).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct SourcePosition {
     /// The model's row on screen, not a line number of the file.
     pub row: usize,
@@ -48,17 +49,39 @@ impl SourcePosition {
             ..self
         })
     }
+}
 
-    /// What row `row`, a line `len` bytes long, holds of the text running
-    /// from this position to `last` (not before it in reading order): its
-    /// bytes, each end cut to the line — empty where the row only meets an
-    /// end. None for a row outside the run.
-    pub(super) fn bytes_until(self, last: Self, row: usize, len: usize) -> Option<Range<usize>> {
-        if row < self.row || row > last.row {
+/// The two ends of a selection as the hand made them: `anchor` where the
+/// press went down, `focus` where the drag has carried the other end. Kept
+/// in that order — a drag made upwards has its focus first in reading
+/// order — and sorted only where reading order is asked for. Two ends on
+/// one position are a selection holding nothing, not no selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct SelectionEnds {
+    pub anchor: SourcePosition,
+    pub focus: SourcePosition,
+}
+
+impl SelectionEnds {
+    /// The ends in reading order, first to last, and the positions between
+    /// them. Not the bytes a copy takes, whose last end is not taken
+    /// (`bytes_on`).
+    pub(super) fn ordered(self) -> RangeInclusive<SourcePosition> {
+        self.anchor.min(self.focus)..=self.anchor.max(self.focus)
+    }
+
+    /// What row `row`, a line `len` bytes long, holds of the text between
+    /// the ends: its bytes, each end cut to the line — empty where the row
+    /// only meets an end. None for a row outside them. Sorted before the
+    /// cut, which takes the same bytes: the cut never reorders two bytes of
+    /// one row, and across rows the row decides.
+    pub(super) fn bytes_on(self, row: usize, len: usize) -> Option<Range<usize>> {
+        let (first, last) = self.ordered().into_inner();
+        if row < first.row || row > last.row {
             return None;
         }
-        let start = if row == self.row {
-            self.cut_to(len).byte
+        let start = if row == first.row {
+            first.cut_to(len).byte
         } else {
             0
         };
@@ -68,6 +91,15 @@ impl SourcePosition {
             len
         };
         Some(start..end)
+    }
+
+    /// The same text's ends once `gone` rows before them have been taken
+    /// away — none where either end's row was among them.
+    pub(super) fn shifted_up(self, gone: usize) -> Option<Self> {
+        Some(Self {
+            anchor: self.anchor.shifted_up(gone)?,
+            focus: self.focus.shifted_up(gone)?,
+        })
     }
 }
 
@@ -142,17 +174,56 @@ mod tests {
         assert_eq!(at(1, 3).shifted_up(2), None, "its own row went");
     }
 
+    fn ends(anchor: SourcePosition, focus: SourcePosition) -> SelectionEnds {
+        SelectionEnds { anchor, focus }
+    }
+
     #[test]
-    fn a_row_holds_the_bytes_between_the_ends_it_carries() {
-        let (first, last) = (at(1, 3), at(3, 2));
-        assert_eq!(first.bytes_until(last, 1, 10), Some(3..10), "the first row");
-        assert_eq!(first.bytes_until(last, 2, 10), Some(0..10), "a row between");
-        assert_eq!(first.bytes_until(last, 3, 10), Some(0..2), "the last row");
-        assert_eq!(at(2, 3).bytes_until(at(2, 7), 2, 10), Some(3..7), "one row");
-        assert_eq!(first.bytes_until(last, 0, 10), None, "before the run");
-        assert_eq!(first.bytes_until(last, 4, 10), None, "after it");
-        // An end past its line is cut to it; the first row then holds none.
-        assert_eq!(first.bytes_until(last, 1, 2), Some(2..2));
-        assert_eq!(at(2, 3).bytes_until(at(2, 99), 2, 5), Some(3..5));
+    fn the_ends_read_in_order_whichever_way_the_drag_went() {
+        let (down, up) = (ends(at(1, 3), at(3, 2)), ends(at(3, 2), at(1, 3)));
+        assert_eq!(down.ordered(), at(1, 3)..=at(3, 2));
+        assert_eq!(up.ordered(), down.ordered(), "a drag made upwards");
+        assert_eq!(ends(at(2, 4), at(2, 4)).ordered(), at(2, 4)..=at(2, 4));
+    }
+
+    #[test]
+    fn a_row_holds_the_bytes_between_the_ends() {
+        let run = ends(at(1, 3), at(3, 2));
+        assert_eq!(run.bytes_on(1, 10), Some(3..10), "the first row");
+        assert_eq!(run.bytes_on(2, 10), Some(0..10), "a row between");
+        assert_eq!(run.bytes_on(3, 10), Some(0..2), "the last row");
+        assert_eq!(
+            ends(at(2, 3), at(2, 7)).bytes_on(2, 10),
+            Some(3..7),
+            "one row"
+        );
+        assert_eq!(run.bytes_on(0, 10), None, "before the run");
+        assert_eq!(run.bytes_on(4, 10), None, "after it");
+        assert_eq!(
+            ends(at(3, 2), at(1, 3)).bytes_on(1, 10),
+            Some(3..10),
+            "a drag made upwards"
+        );
+        assert_eq!(
+            ends(at(2, 4), at(2, 4)).bytes_on(2, 10),
+            Some(4..4),
+            "a press with no drag"
+        );
+    }
+
+    #[test]
+    fn an_end_past_its_line_is_cut_to_it() {
+        // The first row then holds none.
+        assert_eq!(ends(at(1, 3), at(3, 2)).bytes_on(1, 2), Some(2..2));
+        assert_eq!(ends(at(2, 3), at(2, 99)).bytes_on(2, 5), Some(3..5));
+        assert_eq!(ends(at(2, 99), at(2, 3)).bytes_on(2, 5), Some(3..5));
+    }
+
+    #[test]
+    fn rows_taken_from_above_move_both_ends_or_neither() {
+        let run = ends(at(4, 1), at(2, 5));
+        assert_eq!(run.shifted_up(2), Some(ends(at(2, 1), at(0, 5))));
+        assert_eq!(run.shifted_up(3), None, "the focus's row went");
+        assert_eq!(ends(at(2, 5), at(4, 1)).shifted_up(3), None, "the anchor's");
     }
 }

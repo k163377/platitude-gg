@@ -149,7 +149,7 @@ fn the_rows_going_take_the_selection_with_them() {
     model.start_select(0, source(1, 0));
     model.drag_select(0, source(4, 1));
     model.forget_selection();
-    assert!(!model.sel_active);
+    assert_eq!(model.sel_ends, None);
     assert!(!model.sel_has_new);
     assert_eq!(model.sel_removed, 0);
     assert!(model.copied_new().is_empty());
@@ -292,7 +292,7 @@ fn a_drag_between_two_places_copies_what_lies_between_them() {
 fn a_drag_with_nothing_selected_starts_where_it_is() {
     let mut model = tab_kanji_astral();
     assert!(model.drag_select(0, source(1, 4)));
-    assert!(model.sel_active);
+    assert!(model.sel_ends.is_some());
     assert!(model.copied_new().is_empty(), "it holds nothing yet");
     model.drag_select(0, source(1, 7));
     assert_eq!(model.copied_new(), "本");

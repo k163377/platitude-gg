@@ -91,39 +91,28 @@ impl DiffModel {
         i32::try_from(byte).unwrap_or(0)
     }
 
-    /// The two ends in reading order, or nothing where no selection
-    /// stands — the one place that sorts them.
-    fn taken(&self) -> Option<(SourcePosition, SourcePosition)> {
-        if !self.sel_active {
-            return None;
-        }
-        let (anchor, focus) = (self.sel_anchor, self.sel_focus);
-        Some((anchor.min(focus), anchor.max(focus)))
-    }
-
     /// The rows the selection covers, clamped to the rows that exist.
     fn span(&self) -> Option<RangeInclusive<usize>> {
-        let (first, last) = self.taken()?;
+        let (first, last) = self.sel_ends?.ordered().into_inner();
         let end = self.lines.len().checked_sub(1)?;
         (first.row <= end).then(|| first.row..=last.row.min(end))
     }
 
     pub(super) fn holds(&self, side: i32, position: SourcePosition) -> bool {
-        let Some((first, last)) = self.taken() else {
-            return false;
-        };
-        side == self.sel_side && (first..=last).contains(&position)
+        side == self.sel_side
+            && self
+                .sel_ends
+                .is_some_and(|ends| ends.ordered().contains(&position))
     }
 
-    /// The end a drag carried (`sel_focus` — a right-click's whole row ends
-    /// at the line's end), in the places its row spells: where a text box's
+    /// The end a drag carried (`focus` — a right-click's whole row ends at
+    /// the line's end), in the places its row spells: where a text box's
     /// caret would stand, which the menu key opens under
     /// (デザイン規約 §メニュー のキーボード).
     pub(super) fn moving_end(&self) -> Ended {
-        if !self.sel_active {
+        let Some(SelectionEnds { focus, .. }) = self.sel_ends else {
             return Ended::none();
-        }
-        let focus = self.sel_focus;
+        };
         let place = self
             .source_line(self.sel_side, focus.row)
             .map_or(0, |text| spelled_place(text, focus.byte));
@@ -135,62 +124,59 @@ impl DiffModel {
     }
 
     pub(super) fn start_select(&mut self, side: i32, position: SourcePosition) -> bool {
-        self.move_ends(side, position, position, true)
+        let ends = SelectionEnds {
+            anchor: position,
+            focus: position,
+        };
+        self.move_ends(side, Some(ends))
     }
 
     /// The far end follows the pointer; the pressed end and its column
     /// stay — `side` is read only where no selection stands to extend.
     pub(super) fn drag_select(&mut self, side: i32, position: SourcePosition) -> bool {
-        if !self.sel_active {
+        let Some(ends) = self.sel_ends else {
             return self.start_select(side, position);
-        }
-        self.move_ends(self.sel_side, self.sel_anchor, position, true)
+        };
+        let ends = SelectionEnds {
+            focus: position,
+            ..ends
+        };
+        self.move_ends(self.sel_side, Some(ends))
     }
 
     pub(super) fn select_whole_row(&mut self, side: i32, row: usize) -> bool {
         let end = self.source_line(side, row).map_or(0, str::len);
-        let head = SourcePosition { row, byte: 0 };
-        let tail = SourcePosition { row, byte: end };
-        self.move_ends(side, head, tail, true)
+        let ends = SelectionEnds {
+            anchor: SourcePosition { row, byte: 0 },
+            focus: SourcePosition { row, byte: end },
+        };
+        self.move_ends(side, Some(ends))
     }
 
     /// Nothing is selected any more (a plain click, or a press on nothing).
     pub(super) fn drop_selection(&mut self) -> bool {
-        let none = SourcePosition::default();
-        self.move_ends(0, none, none, false)
+        self.move_ends(0, None)
     }
 
     /// The same while the rows themselves go: no wash is written back.
     pub(super) fn forget_selection(&mut self) {
-        self.sel_anchor = SourcePosition::default();
-        self.sel_focus = SourcePosition::default();
+        self.sel_ends = None;
         self.sel_side = 0;
-        self.sel_active = false;
         self.sel_has_new = false;
         self.sel_removed = 0;
     }
 
-    /// Moves the two ends — `anchor` the pressed one, `focus` the moving
-    /// one, kept in that order (`taken` sorts them) — and brings the rows
-    /// and the counts along. Returns whether anything moved — the slots
-    /// fire `changed` only then, so a drag that stays on one character
-    /// costs no signal.
-    fn move_ends(
-        &mut self,
-        side: i32,
-        anchor: SourcePosition,
-        focus: SourcePosition,
-        active: bool,
-    ) -> bool {
+    /// Moves the two ends, or lets the selection go (`None`), and brings
+    /// the rows and the counts along. Returns whether anything moved — the
+    /// slots fire `changed` only then, so a drag that stays on one
+    /// character costs no signal.
+    fn move_ends(&mut self, side: i32, ends: Option<SelectionEnds>) -> bool {
         let before = self.span();
-        let was_active = self.sel_active;
-        let was = (self.sel_side, self.sel_anchor, self.sel_focus);
-        self.sel_anchor = anchor;
-        self.sel_focus = focus;
+        let was = (self.sel_side, self.sel_ends);
+        self.sel_ends = ends;
         self.sel_side = side;
-        self.sel_active = active;
         let after = self.span();
-        if before == after && was_active == active && was == (side, anchor, focus) {
+        if before == after && was == (side, ends) {
             return false;
         }
         self.lay_wash(before, after, was.0 != side);
@@ -274,19 +260,19 @@ impl DiffModel {
         if side != self.sel_side || !self.takes(side, row) {
             return Wash::None;
         }
-        let Some((first, last)) = self.taken() else {
+        let Some(ends) = self.sel_ends else {
             return Wash::None;
         };
         let Some(text) = self.source_line(side, row) else {
             return Wash::None;
         };
-        let Some(bytes) = first.bytes_until(last, row, text.len()) else {
+        let Some(bytes) = ends.bytes_on(row, text.len()) else {
             return Wash::None;
         };
         if bytes.is_empty() {
             // An end row the selection only touches the edge of gives the
             // copy an empty line, and has nothing to wash.
-            return if first.row == last.row {
+            return if ends.anchor.row == ends.focus.row {
                 Wash::None
             } else {
                 Wash::Part(bytes)
@@ -399,9 +385,10 @@ impl DiffModel {
     /// at the head of its last row, or starts at the end of a first row
     /// with text: the copy takes the line break there, and none of the line.
     fn edge_only(&self, row: usize) -> bool {
-        let Some((first, last)) = self.taken() else {
+        let Some(ends) = self.sel_ends else {
             return false;
         };
+        let (first, last) = ends.ordered().into_inner();
         let len = self.source_line(self.sel_side, row).map_or(0, str::len);
         (row == last.row && last.byte == 0) || (row == first.row && len > 0 && first.byte >= len)
     }

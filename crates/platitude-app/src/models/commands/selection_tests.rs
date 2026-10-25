@@ -229,7 +229,7 @@ fn a_wash_inside_a_column_counts_from_that_column() {
 fn a_drag_with_nothing_selected_selects_nothing() {
     let mut model = kanji_astral();
     assert!(!model.drag_select(source(0, 5)));
-    assert!(!model.sel_active);
+    assert_eq!(model.sel_ends, None);
     assert_eq!(model.copied(), "");
 }
 
@@ -428,5 +428,6 @@ fn a_selection_whose_head_went_over_the_edge_is_let_go() {
     model.start_select(source(0, 9));
     model.drag_select(source(1, 12));
     model.shift_selection(1);
+    assert_eq!(model.sel_ends, None, "let go, not left holding nothing");
     assert_eq!(model.copied(), "");
 }

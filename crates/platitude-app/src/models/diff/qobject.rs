@@ -51,7 +51,10 @@ impl DiffModel {
     qproperty!("endingLines", Member = ending_lines, Notify = changed);
     qproperty!("endingScope", Member = ending_scope, Notify = changed);
     qproperty!("endingExt", Member = ending_ext, Notify = changed);
-    qproperty!("selActive", Member = sel_active, Notify = changed);
+    qproperty!("selActive", Read = sel_active, Notify = changed);
+    fn sel_active(&self) -> bool {
+        self.sel_ends.is_some()
+    }
     qproperty!("selHasNew", Member = sel_has_new, Notify = changed);
     qproperty!("selRemoved", Member = sel_removed, Notify = changed);
     // The find bar's answers (デザイン規約 §diff の中を探す): properties, so the count follows a re-lay nobody typed for.

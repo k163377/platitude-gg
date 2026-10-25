@@ -149,47 +149,35 @@ impl CommandsModel {
 
     // ---- where the selection runs ------------------------------------
 
-    /// The two ends in reading order, or nothing while none stands — the
-    /// one place that sorts the pair, which is kept press first.
-    ///
-    /// The ends are kept as pressed: on a row whose command is still
-    /// running, the outcome column names a byte past the line (the tab
-    /// before it is not there yet). Each row's bytes are cut to its line
-    /// where they are read (`SourcePosition::bytes_until`); sorting before
-    /// that cut takes the same bytes — the cut never reorders two bytes of
-    /// one row, and across rows the row decides.
-    fn taken(&self) -> Option<(SourcePosition, SourcePosition)> {
-        if !self.sel_active {
-            return None;
-        }
-        let (anchor, focus) = (self.sel_anchor, self.sel_focus);
-        Some((anchor.min(focus), anchor.max(focus)))
-    }
-
     /// The rows the selection touches, so that only they are re-spelled.
     fn span(&self) -> Option<RangeInclusive<usize>> {
-        self.taken().map(|(first, last)| first.row..=last.row)
+        let (first, last) = self.sel_ends?.ordered().into_inner();
+        Some(first.row..=last.row)
     }
 
     pub(super) fn start_select(&mut self, position: SourcePosition) -> bool {
         let was = self.span();
-        self.sel_active = true;
-        self.sel_anchor = position;
-        self.sel_focus = position;
+        self.sel_ends = Some(SelectionEnds {
+            anchor: position,
+            focus: position,
+        });
         self.respell(was)
     }
 
     pub(super) fn drag_select(&mut self, position: SourcePosition) -> bool {
-        if !self.sel_active || self.sel_focus == position {
+        let Some(ends) = self.sel_ends.filter(|ends| ends.focus != position) else {
             return false;
-        }
+        };
         let was = self.span();
-        self.sel_focus = position;
+        self.sel_ends = Some(SelectionEnds {
+            focus: position,
+            ..ends
+        });
         self.respell(was)
     }
 
     pub(super) fn drop_selection(&mut self) -> bool {
-        if !self.sel_active {
+        if self.sel_ends.is_none() {
             return false;
         }
         let was = self.span();
@@ -198,27 +186,13 @@ impl CommandsModel {
     }
 
     pub(super) fn forget_selection(&mut self) {
-        self.sel_active = false;
-        self.sel_anchor = SourcePosition::default();
-        self.sel_focus = SourcePosition::default();
+        self.sel_ends = None;
     }
 
     /// Moves the ends (row numbers) up past the `gone` oldest rows that fell
     /// off; a selection with an end over the edge is dropped.
     pub(super) fn shift_selection(&mut self, gone: usize) {
-        if !self.sel_active {
-            return;
-        }
-        match (
-            self.sel_anchor.shifted_up(gone),
-            self.sel_focus.shifted_up(gone),
-        ) {
-            (Some(anchor), Some(focus)) => {
-                self.sel_anchor = anchor;
-                self.sel_focus = focus;
-            }
-            _ => self.forget_selection(),
-        }
+        self.sel_ends = self.sel_ends.and_then(|ends| ends.shifted_up(gone));
     }
 
     // ---- what each row draws of it -----------------------------------
@@ -259,19 +233,20 @@ impl CommandsModel {
 
     /// One row's share, as the delegate reads it (`CommandWash`).
     fn spell(&self, row: usize) -> Optional<CommandWash> {
-        let Some((first, last)) = self.taken() else {
+        let Some(ends) = self.sel_ends else {
             return Optional::none();
         };
         // A re-spell walks rows the selection has left: they are answered
         // before their line is built (`line_at` allocates).
+        let (first, last) = ends.ordered().into_inner();
         if row < first.row || row > last.row {
             return Optional::none();
         }
         let Some(line) = self.line_at(row) else {
             return Optional::none();
         };
-        let Some(bytes) = first
-            .bytes_until(last, row, line.len())
+        let Some(bytes) = ends
+            .bytes_on(row, line.len())
             .filter(|bytes| !bytes.is_empty())
         else {
             return Optional::none();
@@ -302,16 +277,17 @@ impl CommandsModel {
     /// brings git's words under it, each indented by a tab so it pastes
     /// under the command column.
     pub(super) fn copied(&self) -> String {
-        let Some((first, last)) = self.taken() else {
+        let Some(ends) = self.sel_ends else {
             return String::new();
         };
+        let (first, last) = ends.ordered().into_inner();
         let mut out = String::new();
         for row in first.row..=last.row {
             let (Some(line), Some(item)) = (self.line_at(row), self.rows.get(row)) else {
                 continue;
             };
             let text = line.text();
-            let Some(bytes) = first.bytes_until(last, row, text.len()) else {
+            let Some(bytes) = ends.bytes_on(row, text.len()) else {
                 continue;
             };
             if bytes.is_empty() {
