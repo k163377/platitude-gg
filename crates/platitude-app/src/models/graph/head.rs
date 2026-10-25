@@ -45,6 +45,7 @@ impl GraphModel {
         // Outside the window the stand-in reads the empty answers.
         let none = GraphRowItem::default();
         let row = found.and_then(|i| self.rows.get(i)).unwrap_or(&none);
+        take(&mut self.head_row_oid, &row.oid_hex, &mut moved);
         take(&mut self.head_labels, &row.labels, &mut moved);
         take(&mut self.head_subject, &row.subject, &mut moved);
         take(&mut self.head_avatar_url, &row.avatar_url, &mut moved);
@@ -56,5 +57,54 @@ impl GraphModel {
             moved = true;
         }
         moved
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The stand-in names the commit it stands for: another commit taking
+    /// HEAD's row in place (an amend, a reset) moves the answer though the
+    /// row is the same, so what hung off the old commit's chip can go
+    /// (`GraphHeadPin`).
+    #[test]
+    fn the_stand_in_names_the_commit_on_heads_row() {
+        let first = "a1".repeat(20);
+        let second = "b2".repeat(20);
+        let oid = Oid::from_hex_str(&first).expect("an id");
+        let mut model = GraphModel {
+            rows: vec![GraphRowItem {
+                oid_hex: first.clone(),
+                ..GraphRowItem::default()
+            }],
+            index: vec![(oid, 0)],
+            head_oid: Some(oid),
+            ..GraphModel::default()
+        };
+        assert!(model.settle_head(), "the first read moves it");
+        assert_eq!(model.head_row, 0);
+        assert_eq!(model.head_row_oid, first);
+        assert!(!model.settle_head(), "read again, nothing moved");
+
+        let amended = Oid::from_hex_str(&second).expect("an id");
+        model.rows[0].oid_hex = second.clone();
+        model.index = vec![(amended, 0)];
+        model.head_oid = Some(amended);
+        assert!(
+            model.settle_head(),
+            "another commit on the same row moves it"
+        );
+        assert_eq!(model.head_row, 0, "the row is the same");
+        assert_eq!(model.head_row_oid, second);
+
+        model.head_oid = None;
+        model.pinned_oid = None;
+        assert!(model.settle_head());
+        assert_eq!(model.head_row, -1);
+        assert_eq!(
+            model.head_row_oid, "",
+            "outside the window it stands for nothing"
+        );
     }
 }

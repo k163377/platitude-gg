@@ -38,7 +38,6 @@ Flickable {
     required property bool savePointedAt
     required property bool mateCardInside
     required property bool authorCardInside
-    required property bool parentCardInside
     required property bool parentCardOpen
 
     signal avatarClicked()
@@ -160,7 +159,6 @@ Flickable {
                 stashed: block.stashed
                 mateCardInside: block.mateCardInside
                 authorCardInside: block.authorCardInside
-                parentCardInside: block.parentCardInside
                 parentsUnrolled: block.parentCardOpen
                 onAvatarClicked: block.avatarClicked()
                 onCopyRequested: text => block.copyRequested(text)

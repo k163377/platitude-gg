@@ -6,11 +6,12 @@ import platitude.ui
 // The ring beside the pointer while a write that replays history is out (`OperationKind::replays_history`), over
 // every pane.
 //
-// The sheet has no handler of its own (rules-refs/app-ui.md「窓全体のポインタ位置は `PointerWatch`」).
+// The sheet has no handler of its own (rules-refs/app-ui.md「窓全体のポインタ位置は `HandWatch`」).
 Item {
     id: waitSeat
 
-    /// Where the pointer is (`PointerWatch`), and the page whose replay the mark is about (null with no tab open).
+    /// Where the pointer is (`HandWatch`, in scene coordinates), and the page whose replay the mark is about (null
+    /// with no tab open).
     required property var hand
     required property var page
 
@@ -20,7 +21,7 @@ Item {
     readonly property bool handKnown: waitSeat.handStandIn.x >= 0 || waitSeat.hand.known
     readonly property point handAt: waitSeat.handStandIn.x >= 0
                                     ? waitSeat.handStandIn
-                                    : Qt.point(waitSeat.hand.handX, waitSeat.hand.handY)
+                                    : waitSeat.mapFromItem(null, waitSeat.hand.at.x, waitSeat.hand.at.y)
     /// The ring's own `spinning`: `visible` read from another file is stale (as with `RefusalBadge`).
     readonly property bool ringShown: waitRing.spinning
 

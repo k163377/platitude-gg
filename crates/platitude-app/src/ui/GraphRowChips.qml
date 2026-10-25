@@ -139,8 +139,9 @@ Item {
             readonly property real wantW: chipColumn.namingMode !== "rename"
                 ? Math.max(chipColumn.boxRoom, nameField.placeholderW)
                 : Math.max(nameField.openedW, nameField.text === "" ? nameField.placeholderW : nameField.typedW)
-            /// A worktree's folder in the refusal's line, which the shared tip stands the tree mark in front of
-            /// (`SharedToolTip.tipMarkWord`, デザイン規約 §ref の種別「名前の印」).
+            /// A worktree's folder in the refusal's line, which the tip stands the tree mark in front of, and the
+            /// names it seats itself — read off this field by the seat (`TipAsk.marksNow`, デザイン規約 §ref の種別
+            /// 「名前の印」).
             readonly property string tipMarkWord: chipColumn.namingRefusedMark
             readonly property var tipMarks: chipColumn.namingRefusedMarks
             /// The kind of ref being typed: the mode, or on a rename the kind it renames.
@@ -161,13 +162,18 @@ Item {
             placeholderText: nameField.namesKind === "tag" ? qsTr("Tag name")
                            : nameField.namesKind === "worktreeFolder" ? qsTr("Worktree name") : qsTr("Branch name")
             refused: chipColumn.namingRefused
-            ToolTip.visible: nameField.tipTyped
-            ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: chipColumn.namingRefusedWhy
-            /// That tip answers what is typed, not a hand: it stands until the typing changes it
-            /// (`SharedToolTip.typedAsker`).
+            /// That tip answers what is typed, not a hand: it stands until the typing changes it (`TipAsk.typed`).
+            /// A worktree's folder in the refusal's line has the tree mark stood in front of it (デザイン規約 §ref の種別
+            /// 「名前の印」).
             readonly property bool tipTyped: nameField.refused && nameField.activeFocus
                                              && chipColumn.namingRefusedWhy !== ""
+            readonly property TipAsk nameTip: TipAsk {
+                target: nameField
+                asked: nameField.tipTyped
+                typed: true
+                words: chipColumn.namingRefusedWhy
+                markWord: chipColumn.namingRefusedMark
+            }
             // Refused text stays in the box; Enter does nothing, and the frame and tooltip say why.
             onAccepted: {
                 if (!chipColumn.namingRefused)
@@ -197,15 +203,17 @@ Item {
         active: chipColumn.withheldWhy !== ""
         anchors.fill: rowStack
         sourceComponent: Item {
-            /// Answers the press that asked, not a hand (`SharedToolTip.tipTyped`).
-            readonly property bool tipTyped: true
-            readonly property string tipMarkWord: chipColumn.withheldMark
-            // Asked only once there are words: the attached show takes the text it has at the ask.
-            ToolTip.visible: visible && chipColumn.withheldWhy !== ""
-            ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: chipColumn.withheldWhy
+            id: withheldBox
+            // Answers the press that asked, not a hand (`TipAsk.typed`); the folder in it behind the tree mark.
+            readonly property TipAsk withheldTip: TipAsk {
+                target: withheldBox
+                asked: withheldBox.visible && chipColumn.withheldWhy !== ""
+                typed: true
+                words: chipColumn.withheldWhy
+                markWord: chipColumn.withheldMark
+            }
         }
     }
-    // Nothing here is hovered on its own: the row's MouseArea, declared after this, takes every hover
-    // (デザイン規約 §hover のツールチップ); stacked names are read in the RefListPopup it opens.
+    // Nothing here is hovered on its own: the row reads the pane's hand and says which part it is on
+    // (`GraphRowDelegate.syncHand`); stacked names are read in the RefListPopup the chip's part opens.
 }

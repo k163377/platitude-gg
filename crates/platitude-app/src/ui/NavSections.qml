@@ -20,6 +20,8 @@ ColumnLayout {
     /// The pane's row gestures (`SidebarRowGestures`): which row was clicked last and which is being typed into
     /// outlive both the delegates and these lists.
     required property var gestures
+    /// The panel's hand (`HandWatch`), which every row here reads its light and its rest off.
+    required property HandWatch paneHand
     /// Automation (PGG_AUTO_ACT=nav-open): what the open row says under itself, asked of the rows — they are what a
     /// run has to find wired up. One key names the open row (`SidebarRowGestures.openKey`), so these ask each list in
     /// turn; **the stand-in first** — while it is on screen its own row is not (`HeadPinRow`).
@@ -94,7 +96,7 @@ ColumnLayout {
     /// Where the ground under the last section begins (PGG_AUTO_ACT=nav-close).
     readonly property real groundTop: ground.y
     /// The sticky stand-in, as lit and as worded (`HeadPinRow`).
-    readonly property bool headPinLit: headPin.visible && headPin.pointed
+    readonly property bool headPinLit: headPin.visible && headPin.lit
     readonly property string headPinWords: headPin.tipWords
     /// Automation (PGG_AUTO_ACT=nav-pin-edge): whether the stand-in is standing, which edge it took, and where that
     /// edge came out — a number a run can hold, where the pane's height is not.
@@ -154,12 +156,15 @@ ColumnLayout {
     NavList {
         id: branchList
         sectionModel: sections.branchesModel
+        // The rows under the stand-in are not under the hand on it.
+        shield: headPin
         // Rows open their facts; the worktrees' model says which worktree holds each branch.
         offersFacts: true
         worktreesModel: sections.worktreesModel
         expanded: branchHead.showsRows
         kindHint: "branch"
         gestures: sections.gestures
+        paneHand: sections.paneHand
         // With no row to ride above, the stand-in takes a row of its own: under the folder that closed over the
         // branch (`pinSeatRow`), else at the head of the list — and the list asks for that much more height, or the
         // row pushed down could not be read. **Not in an empty section**: its 1px of ground is an instruction
@@ -183,6 +188,7 @@ ColumnLayout {
             // upward (`HeadPinRow.y`).
             opensFacts: true
             gestures: sections.gestures
+            paneHand: sections.paneHand
             worktreesModel: sections.worktreesModel
             contentY: branchList.contentY
             viewHeight: branchList.height
@@ -216,6 +222,7 @@ ColumnLayout {
         expanded: remoteHead.showsRows
         kindHint: "remote"
         gestures: sections.gestures
+        paneHand: sections.paneHand
         // Rows open like BRANCHES ones and name a branch: the worktrees' model says which worktree holds it…
         offersFacts: true
         worktreesModel: sections.worktreesModel
@@ -245,6 +252,7 @@ ColumnLayout {
         expanded: worktreeHead.showsRows
         kindHint: "worktree"
         gestures: sections.gestures
+        paneHand: sections.paneHand
         // Rows open with the branch the worktree holds, read off BRANCHES. **No worktrees' model**: a row here *is*
         // a worktree.
         offersFacts: true
@@ -269,6 +277,7 @@ ColumnLayout {
         expanded: stashHead.showsRows
         kindHint: "stash"
         gestures: sections.gestures
+        paneHand: sections.paneHand
         Layout.verticalStretchFactor: sections.sectionPull
         // A stash is a commit: clicking shows its stashed changes in the details pane.
         onRefActivated: oidHex => sections.refActivated(oidHex)
@@ -293,6 +302,7 @@ ColumnLayout {
         expanded: tagHead.showsRows
         kindHint: "tag"
         gestures: sections.gestures
+        paneHand: sections.paneHand
         // Rows open on the remotes carrying the tag (デザイン規約 §左メニューの所作). `pushRemote` is the remote the
         // row's own menu acts on, so the lines read against the same one.
         offersFacts: true

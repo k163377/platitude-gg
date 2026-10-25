@@ -11,13 +11,13 @@ QtObject {
 
     /// The scroll bar the hand is holding, or null. While one is held Qt hears no hover anywhere, so the rows keep what
     /// they had as they slide from under the hand: what hover opened goes, and nothing opens until the bar is let go
-    /// (`SharedToolTip`, `HoverCardHost`; rules-refs/app-ui.md「バーを掴んでいる間、窓に hover は届かない」). Written by
+    /// (`TipSeat`, `HoverSeat`; rules-refs/app-ui.md「バーを掴んでいる間、窓に hover は届かない」). Written by
     /// the bars (`AutoScrollBar`).
     property Item heldBar: null
 
     /// Something happened that a gesture of two clicks in a row must not span (`ReclickGesture`) — three ways in: a
     /// press anywhere in this window, on the window itself (`Main.pressLandedAnywhere`) or on a card, menu, dialog or
-    /// tip over it (`AppCardFace`, `SharedToolTip`'s ground); the history landing on a commit
+    /// tip over it (`AppCardFace`, `TipSeat`'s ground); the history landing on a commit
     /// (`RepoPage.activateRow` — the arrows, the search, a menu, a row's click — and `jumpToRef`); the window left
     /// (`Main`). The click a gesture is answering is among them, so a listener asks once the input is through whether
     /// its own target took it. The window hears a press before what it lands on does, a card after and some twice:

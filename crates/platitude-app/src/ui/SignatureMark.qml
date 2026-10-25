@@ -20,8 +20,8 @@ Item {
     /// (デザイン規約 §アイコンの席 の右肩, 規約 §署名の表示); the badge on a face keeps the default.
     property real stroke: Metrics.iconStroke
 
-    /// The tooltip is up, read off the ToolTip's own visible — the output side, so a cut binding cannot read as green.
-    readonly property bool tipShown: signatureMark.ToolTip.visible
+    /// The tooltip is up, read off the seat's own answer — the output side, so a cut binding cannot read as green.
+    readonly property bool tipShown: markTip.shown
     /// Whether the pointer is on the badge itself, which the face under it reads to keep its own tooltip out of the way
     /// (規約 §hover のツールチップ「1 つのポインタが開けるものは 1 つ」).
     readonly property bool pointed: signatureHover.hovered || signatureMark.pointedAt
@@ -67,9 +67,12 @@ Item {
         tint: signatureMark.tone
         stroke: signatureMark.stroke
     }
-    ToolTip.visible: signatureMark.pointed
-    ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.text: signatureMark.tip
+    readonly property TipAsk markTip: TipAsk {
+        id: markTip
+        target: signatureMark
+        asked: signatureMark.pointed
+        words: signatureMark.tip
+    }
     // A handler, being passive: the face under this keeps the hover that raises its own badge (規約 §hover のツールチップ).
     HoverHandler { id: signatureHover }
 }

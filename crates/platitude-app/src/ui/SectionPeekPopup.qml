@@ -26,17 +26,13 @@ AppCard {
     /// The `+` on the band above these rows is held (`SidebarPane.doorsHeld`) — the same band, so the same answer.
     property bool addHeld: false
 
-    /// Which section is open, and where the cell that opened it begins.
+    /// Which section is open, and where the cell that opened it begins — the seat's target, followed (`follow`).
     property string kind: ""
     property real top: 0
-    /// The pointer is still on that cell.
-    property bool wanted: false
-    /// The section whose row last raised a menu: the one a menu raised here holds open (`SidebarPane`'s `pinned`). A
-    /// rest on another cell while that menu stands opens that section, which goes as a hover does.
-    property string menuKind: ""
-    /// Where this section last saw the hand, in its own coordinates — tells a hand that moved from a layout that
-    /// moved under it (`SidebarPane`, and the handler below).
-    property point handAt: Qt.point(-1, -1)
+    /// The panel's hand (`HandWatch`), which the rows in here read as the panel's rows do; this popup stands outside
+    /// the panel, so its own handler counts as the panel's surface (`HandWatch.alsoOver` ← `hover`).
+    property HandWatch paneHand: null
+    readonly property alias hover: peekHover
 
     signal refActivated(string oidHex)
     signal refMenuRequested(string kind, string name, string full, string oidHex, string aim)
@@ -53,36 +49,41 @@ AppCard {
         : peek.kind === "stash" ? qsTr("STASHES")
         : peek.kind === "tag" ? qsTr("TAGS") : ""
 
+    /// The pointer came onto a cell (`NavRail.enterAt`): that section opens at once (規約 §hover のツールチップ「展開は
+    /// 即時に開く」), in place of the one open. **Each section is a target of its own** (`keyOf`) — the popup is one,
+    /// what it shows is not: a section held by its own rows (a menu raised on one, a name box open on one — `pinned`)
+    /// is not handed over, and the cell the hand is on meanwhile is an ask kept for the hold lifting.
     function openAt(kind, top) {
-        peek.kind = kind
-        peek.top = top
-        peek.wanted = true
-        peek.open()
+        peekKeeper.point(peek.targetOf(kind, top), true)
     }
-    /// A click on the cell under the pointer toggles the section — the hover cannot bring it back, as the pointer
-    /// has not moved.
+    /// A click on the cell under the pointer toggles the section — closed, the hover cannot bring it back, as the
+    /// pointer has not moved (the seat's latch); a click can (`HoverSeat.press`), whatever the latch says.
     function toggleAt(kind, top) {
         // By `kind`, not `visible`: the popup is still visible on the way out, and a click then would close what it
         // meant to open.
         if (peek.kind === kind)
-            peek.shut()
+            peekKeeper.takeDown("click", true)
         else
-            peek.openAt(kind, top)
+            peekKeeper.press(peek.targetOf(kind, top))
     }
-    /// The pointer left a cell. Only the open section's cell can take it away — a cell left for another has already
-    /// been replaced, whichever order the two arrive in.
+    /// The pointer left a cell: the section's own leave — the open one's lets it go (a cell left for another has
+    /// already been replaced, whichever order the two arrive in), and a kept ask's takes that ask with it.
     function leaveAt(kind) {
-        if (peek.kind === kind)
-            peek.wanted = false
-        peek.settle()
+        peekKeeper.unpoint(peek.keyOf(kind))
     }
-    /// Ask for the beat by hand, where the answer has changed somewhere
-    /// `lit` cannot see it — a cell saying the pointer left it.
-    function settle() {
-        peekKeeper.settle()
+    function keyOf(kind) {
+        return "peek:" + kind
     }
+    function targetOf(kind, top) {
+        return { "key": peek.keyOf(kind), "kind": kind, "top": top }
+    }
+    /// Down now, as the owner asks: a menu raised elsewhere, the rail unfolding.
     function shut() {
-        peek.close()
+        peekKeeper.takeDown("owner", false)
+    }
+    function follow(target) {
+        peek.kind = target.kind
+        peek.top = target.top
     }
     // Cleanup for every way out (the beat, a click on the cell, Escape). In `aboutToHide`: `kind` must be clear
     // before the next click, while the popup is still visible (`toggleAt`).
@@ -93,8 +94,6 @@ AppCard {
         if (peek.kind !== "" && peek.gestures)
             peek.gestures.forgetClicks()
         peek.kind = ""
-        peek.wanted = false
-        peek.menuKind = ""
         // The list has gone, whatever the last hover said.
         peek.contentPointed = false
     }
@@ -138,12 +137,34 @@ AppCard {
     readonly property alias list: peekList
     /// Automation only: the beat after a leave is still running — what a run waits out to read whether the section
     /// was kept (PGG_AUTO_ACT=menu-peek).
-    readonly property bool settling: peekKeeper.keep.running
-    HoverCardHost {
+    readonly property bool settling: peekKeeper.leaving
+    readonly property HoverSeat peekKeeper: HoverSeat {
         id: peekKeeper
         card: peek
-        pointedAt: peek.wanted
-        grace: peek.pinned
+        hand: peek.paneHand
+        // The section opens the moment the hand is on its cell; a cell asks only as the hand comes onto it, so a
+        // section the reader closed comes back with the hand leaving the cell and coming back, or a click.
+        expands: true
+        onOpenAsked: target => {
+            peek.follow(target)
+            peek.open()
+        }
+        // The open section's cell asked again — where it now begins, the rail having moved, is followed.
+        onTargetChanged: {
+            if (peekKeeper.shown && peekKeeper.target !== null)
+                peek.follow(peekKeeper.target)
+        }
+    }
+    // A menu raised from one of its rows, a box open on one of them: held with the pointer elsewhere.
+    onPinnedChanged: peekKeeper.hold("pinned", peek.pinned)
+    Component.onCompleted: peekKeeper.hold("pinned", peek.pinned)
+    /// The section open has rows to show; emptied under the open popup (its last branch deleted), the popup goes as
+    /// the owner's close — a cell holding a zero opens nothing (`NavRail`), and keeps nothing.
+    readonly property bool sectionStands: peek.kind === ""
+                                          || (peek.sectionModel !== null && peek.sectionModel.total > 0)
+    onSectionStandsChanged: {
+        if (!peek.sectionStands)
+            peekKeeper.forget(target => target.kind === peek.kind, "gone")
     }
 
     // Flush against the rail, level with the cell that opened it, and only growing downwards — a section taller than
@@ -178,20 +199,16 @@ AppCard {
             // card's `contentPointed`, as the smoke hooks do, so headless and a real pointer agree.
             onHoveredChanged: {
                 peek.contentPointed = peekHover.hovered
-                // Heard for the rows in here, which re-read their hover only on a move of the hand
-                // (`NavItemDelegate.syncHover`): a popup stands outside the panel, whose watch never sees in here.
-                peek.handAt = Qt.point(-1, -1)
-                if (peek.gestures !== null)
-                    peek.gestures.handStirred(peekHover.hovered ? peekHover.point.scenePosition : Qt.point(-1, -1))
+                // Heard for the rows in here, which read the panel's hand (`NavItemDelegate.syncHand`): a popup
+                // stands outside the panel, whose own handler never sees in here.
+                if (peek.paneHand !== null)
+                    peek.paneHand.stir(peek.paneHand.here())
             }
-            // By position, not notification, as `SidebarPane` weighs it: a row growing in here reports a fresh point.
+            // By position (`HandWatch.stir` counts a place, not a telling): a row growing in here reports a fresh
+            // point.
             onPointChanged: {
-                if (peekHover.point.position.x === peek.handAt.x
-                        && peekHover.point.position.y === peek.handAt.y)
-                    return
-                peek.handAt = peekHover.point.position
-                if (peek.gestures !== null)
-                    peek.gestures.handStirred(peekHover.point.scenePosition)
+                if (peek.paneHand !== null)
+                    peek.paneHand.stir(peekHover.point.scenePosition)
             }
         }
         // The section's own band (the tags eye, the remote `+`) without the fold arrow: there is nothing to fold away
@@ -215,6 +232,7 @@ AppCard {
             expanded: true
             kindHint: peek.kind
             gestures: peek.gestures
+            paneHand: peek.paneHand
             // Rows open under themselves as in the sections — all but STASHES, which keeps the tooltip. Worktrees
             // are read off their own section whichever list the row is in.
             offersFacts: peek.kind === "branch" || peek.kind === "remote" || peek.kind === "worktree"
@@ -229,15 +247,9 @@ AppCard {
             markedRemote: peek.repoTab.pushDefault
             originRemote: peek.repoTab.markedOrigin
             onRefActivated: oidHex => peek.refActivated(oidHex)
-            // Marked before the page raises the menu, so the hold is there as it comes up.
-            onRefMenuRequested: (kind, name, full, oidHex, aim) => {
-                peek.menuKind = peek.kind
-                peek.refMenuRequested(kind, name, full, oidHex, aim)
-            }
-            onRemoteMenuRequested: name => {
-                peek.menuKind = peek.kind
-                peek.remoteMenuRequested(name)
-            }
+            // The page notes where the menu was raised before it comes up, so the hold (`pinned`) is there as it does.
+            onRefMenuRequested: (kind, name, full, oidHex, aim) => peek.refMenuRequested(kind, name, full, oidHex, aim)
+            onRemoteMenuRequested: name => peek.remoteMenuRequested(name)
         }
     }
 }

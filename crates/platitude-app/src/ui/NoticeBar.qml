@@ -114,7 +114,7 @@ Rectangle {
             // **Wrapped, never cut** (デザイン規約 §答えの要らない報せ): the heading names a branch and a remote — a name
             // alone is cut at the name ceiling, given back whole under the hand (`holdsNames`). A `CardText`, since
             // only a text field answers where a character stands — what the mark in front of each name is set against
-            // (as `SharedToolTip`). Each mark is a sign on its name, as everywhere a name stands (デザイン規約
+            // (as `TipSeat`). Each mark is a sign on its name, as everywhere a name stands (デザイン規約
             // §アイコンの席 の修飾).
             CardText {
                 id: headingWord
@@ -139,7 +139,7 @@ Rectangle {
                 wrapMode: Text.Wrap
             }
             // A line naming a place to go, or a name behind its mark: a `CardText`, the one field whose words can carry
-            // a link (as `SharedToolTip`) or say where a name stands, the place in the tip's dress — `textMuted`,
+            // a link (as `TipSeat`) or say where a name stands, the place in the tip's dress — `textMuted`,
             // `textSecondary` under the pointer, underlined.
             CardText {
                 id: detailLink

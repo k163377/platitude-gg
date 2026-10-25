@@ -83,10 +83,12 @@ Rectangle {
         anchors.fill: parent
         hoverEnabled: true
         onClicked: toggle.curPage.toggleRecover()
-        // Only where the mark stands alone — a captioned seat already says it (規約 §hover のツールチップ).
-        ToolTip.visible: containsMouse && !toggle.captioned
-        ToolTip.delay: Metrics.tipDelayMs
-        ToolTip.text: toggle.open ? qsTr("Hide what was thrown away")
-                                  : qsTr("Show what was thrown away, to bring it back")
+        readonly property TipAsk toggleTip: TipAsk {
+            target: recoverMouse
+            // Only where the mark stands alone — a captioned seat already says it (規約 §hover のツールチップ).
+            asked: recoverMouse.containsMouse && !toggle.captioned
+            words: toggle.open ? qsTr("Hide what was thrown away")
+                               : qsTr("Show what was thrown away, to bring it back")
+        }
     }
 }

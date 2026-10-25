@@ -1,8 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-// For the attached ToolTip alone (rules-refs/app-ui.md carries what an unimported one answers).
-import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
@@ -60,16 +58,9 @@ Item {
     // **`noteRow` is not cleared when the lines are handed over again**: a row re-gathers them while the hand is still
     // on it (`NavItemDelegate.gatherFacts`), and nothing reports that hand again, so the supplement would never come
     // out. Only the line going out, or the row going, ends it.
-    /// **Beside these lines, never over them** (`SharedToolTip.tipBeside`): every seat inside the panel covers some
-    /// row's name.
-    readonly property bool tipBeside: true
-    /// Whether the tip standing is **this one's**. **Read off the instance, not off the attached `visible`**: the
-    /// shared box is handed between targets without this attachee hearing of it (`SharedToolTip.handOver`), and the
-    /// attached read went on calling the tip this row's after another row had it. The row holds itself open on this
-    /// (`NavItemDelegate.factsTipOut`).
-    readonly property var tipInstance: facts.ToolTip.toolTip
-    readonly property bool tipShown: !!facts.tipInstance && facts.tipInstance.visible
-                                     && facts.tipInstance.parent === facts
+    /// Whether the tip standing is **this one's** — the seat's own answer (`TipAsk.shown`), false the moment another
+    /// row has the box. The row holds itself open on this (`NavItemDelegate.factsTipOut`).
+    readonly property bool tipShown: pathTip.shown
     /// The hand is on these lines — read by the row as its own hover (`NavItemDelegate.factsPointed`).
     readonly property bool pointed: factsHover.hovered
     /// Whether the press that is ending took words with it — what tells a drag from a click. A drag must not reach
@@ -260,22 +251,27 @@ Item {
         facts.noted !== "" ? facts.noted
         : (facts.nameRested || facts.nameTipPointed) && facts.nameNote !== "" ? facts.nameNote
         : (factsHover.hovered || facts.rowPointed) && facts.path !== "" ? facts.path : ""
-    /// The words the box is wearing — **the last thing asked for, not what is asked now**: bound to the ask, the
-    /// attached write-through empties the box the instant the hand leaves for it (rules-refs/app-ui.md の
-    /// `NavRowFacts.said` の行). Written from the handler, which runs ahead of the `visible` binding on the same
-    /// property, so the box never opens on the previous rest's words.
+    /// The words the box is wearing — **the last thing asked for, not what is asked now**: the box follows its
+    /// target's words while it stands, and the beat a leave starts would show it empty (rules-refs/app-ui.md の
+    /// `NavRowFacts.said` の行). Written from the handler, which runs ahead of the ask's binding on the same property,
+    /// so the box never opens on the previous rest's words.
     property string said: ""
     onSaysChanged: if (facts.says !== "") facts.said = facts.says
     /// The remotes a tag's note names (`NavFacts.apartNote` — `Words.differsFrom`), each behind the cloud
-    /// (デザイン規約 §ref の種別「名前の印」, `SharedToolTip.tipMarks`).
+    /// (デザイン規約 §ref の種別「名前の印」; the seat reads them off these lines, `TipAsk.marksNow`).
     readonly property var tipMarks: {
         const lead = Words.differsFrom("")
         return facts.said.startsWith(lead)
                ? Words.listMarks(facts.said, facts.said.substring(lead.length), "remote") : []
     }
-    ToolTip.text: facts.said
-    ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.visible: facts.says !== ""
+    readonly property TipAsk pathTip: TipAsk {
+        id: pathTip
+        target: facts
+        asked: facts.says !== ""
+        words: facts.said
+        // **Beside these lines, never over them**: every seat inside the panel covers some row's name.
+        beside: true
+    }
 
     // Under everything drawn here; the hand below drives it.
     SweepPad {

@@ -180,13 +180,15 @@ Item {
             width: noEolSign.wordCell
             height: codeLine.height
             tint: Theme.danger
-            /// On its own line, never over the lines either side; rightward, past the line's end and off its code
-            /// (`SharedToolTip.tipRowSide`).
-            readonly property string tipRowSide: "right"
-            // Hover only: the press over the code belongs to `DiffTextSelect`.
-            ToolTip.visible: noEolHover.containsMouse
-            ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: qsTr("No newline at end of file")
+            readonly property TipAsk noEolTip: TipAsk {
+                target: noEolSign
+                // Hover only: the press over the code belongs to `DiffTextSelect`.
+                asked: noEolHover.containsMouse
+                words: qsTr("No newline at end of file")
+                // On its own line, never over the lines either side; rightward, past the line's end and off its
+                // code.
+                rowSide: "right"
+            }
             MouseArea {
                 id: noEolHover
                 anchors.fill: parent

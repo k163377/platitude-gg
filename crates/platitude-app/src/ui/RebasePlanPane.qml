@@ -71,7 +71,7 @@ Rectangle {
                 // the pane being its ceiling (§寸法「名前の天井」), and whole on the hover where cut.
                 CodeChip {
                     id: ontoChip
-                    /// The whole name behind its mark, for the tip (`SharedToolTip.tipMarks`).
+                    /// The whole name behind its mark, for the tip (`TipAsk.marksNow`).
                     readonly property var tipMarks: [[0, "branch", undefined, ontoChip.word.length]]
                     visible: !planPane.waiting && !planPane.planModel.root && planPane.planModel.ontoRef !== ""
                     Layout.fillWidth: true
@@ -80,9 +80,11 @@ Rectangle {
                     word: planPane.planModel.ontoRef
                     mark: "branch"
                     size: Theme.fontMd
-                    ToolTip.visible: ontoChip.cut && ontoHover.hovered
-                    ToolTip.delay: Metrics.tipDelayMs
-                    ToolTip.text: ontoChip.word
+                    readonly property TipAsk ontoTip: TipAsk {
+                        target: ontoChip
+                        asked: ontoChip.cut && ontoHover.hovered
+                        words: ontoChip.word
+                    }
                     HoverHandler { id: ontoHover }
                 }
                 Label {

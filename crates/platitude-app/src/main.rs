@@ -212,7 +212,6 @@ fn main() {
     qrc::embed!("ui/HoldDriver.qml");
     qrc::embed!("ui/HoldFill.qml");
     qrc::embed!("ui/HoldIcon.qml");
-    qrc::embed!("ui/HoverCardHost.qml");
     qrc::embed!("ui/HoverSeat.qml");
     qrc::embed!("ui/HoverToolButton.qml");
     qrc::embed!("ui/IdentIcon.qml");
@@ -248,13 +247,13 @@ fn main() {
     qrc::embed!("ui/OpExitRow.qml");
     qrc::embed!("ui/OpenFailedDialog.qml");
     qrc::embed!("ui/OpenFailedScreen.qml");
+    qrc::embed!("ui/OpenRowSeat.qml");
     qrc::embed!("ui/OpsBranchMenu.qml");
     qrc::embed!("ui/OpsPicker.qml");
     qrc::embed!("ui/PageLayout.qml");
     qrc::embed!("ui/PaneHeader.qml");
     qrc::embed!("ui/PaneScrollBar.qml");
     qrc::embed!("ui/ParentListCard.qml");
-    qrc::embed!("ui/PointerWatch.qml");
     qrc::embed!("ui/PublishFlow.qml");
     qrc::embed!("ui/PublishForm.qml");
     qrc::embed!("ui/QuitWaitDialog.qml");
@@ -297,7 +296,6 @@ fn main() {
     qrc::embed!("ui/SettingsGroup.qml");
     qrc::embed!("ui/SettingsRepoPane.qml");
     qrc::embed!("ui/SettingsSection.qml");
-    qrc::embed!("ui/SharedToolTip.qml");
     qrc::embed!("ui/ShoulderBadge.qml");
     qrc::embed!("ui/SidebarFilterRow.qml");
     qrc::embed!("ui/SidebarPane.qml");

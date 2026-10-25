@@ -8,8 +8,6 @@ Menu {
     id: appMenu
     // Also what keeps the card's rounded corner clear of a highlighted first or last row.
     padding: Theme.spaceXs
-    // The rows' tips time themselves, as the window's do: a popup inherits no policy (`Main.qml`).
-    ToolTip.policy: ToolTip.Manual
 
     /// A git term for this submenu's title row, drawn as a code chip; empty for a title of words.
     property string titleCode: ""
@@ -175,6 +173,30 @@ Menu {
     onInOutsidePressChanged: OutsidePress.stand(appMenu, appMenu.inOutsidePress)
     Component.onDestruction: OutsidePress.stand(appMenu, false)
 
+    /// The hand on this card — a row, a divider, the padding band: what a surface that lost the hand weighs it by,
+    /// under the card or gone (`OutsidePress.handIn`). The face hears the band and every gap; a row stands above it,
+    /// takes the hover first, and Qt goes no further than the first item that takes it, so the rows say their own.
+    /// **Handlers only** (`AppMenuItem.handOn`): they keep the hand until Qt takes it, after it has handed the hover to
+    /// what is under the hand — a row's own `hovered` drops as the card goes.
+    readonly property bool pointerInside: {
+        if (face.pointed)
+            return true
+        for (let i = 0; i < appMenu.count; i++) {
+            const row = appMenu.itemAt(i)
+            if (row && (row.handOn !== undefined ? row.handOn : row.hovered) === true)
+                return true
+        }
+        return false
+    }
+    // The card has the hand no more — the hand walked out, or the card went from under it: what lost the hand under it
+    // weighs where it went (`OutsidePress.handLeft`). Qt hands the hover to what the hand is on before it takes it from
+    // the card — a card gone included, on the next hover it delivers — so a surface the hand is still over has heard it
+    // by then, and one it has left has not.
+    onPointerInsideChanged: {
+        if (!appMenu.pointerInside)
+            OutsidePress.handLeft()
+    }
+
     // The chips' shared column, as wide as the widest chip on offer, a chip that ends its row included
     // (デザイン規約 §git 用語のコード表記「メニュー内のチップは 1 本の列を共有する」). Settled as the menu opens, so a
     // chip that changes while the card stands (`branch -D`) moves no row's words.
@@ -255,5 +277,8 @@ Menu {
         }
     }
 
-    background: AppCardFace {}
+    background: AppCardFace {
+        id: face
+        tracksPointer: true
+    }
 }

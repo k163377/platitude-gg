@@ -14,11 +14,13 @@ ColumnLayout {
     /// `author`, `authorTime`, `avatar`, `avatarUrl`, `mates`, `laneAbove`, `laneBelow`); empty while one commit is being
     /// read (デザイン規約 §複数のコミットを選ぶ).
     property var chosenCommits: []
-    /// The commit whose card is out, so its row keeps its band (the page's: `RowHoverHost.rowCardOid`).
-    property string rowCardOid: ""
+    /// The card the page has out, by target key (`RowHoverHost.cardKey`), so the row it is of keeps its band.
+    property string cardKey: ""
     /// A row of the commit list was rested on, or left. The page answers: one card of its own keeps the two lists from
     /// opening two.
     signal rowHoverRequested(var row, bool inside)
+    /// …and one was handed another commit (the choice changed under it): the card out on the one before goes.
+    signal rowRewritten(var row)
     /// A held press on a listed commit drops it from the choice, which is the page's.
     signal commitDropRequested(string oidHex)
     /// The height the two lists divide while a choice is up.
@@ -71,7 +73,8 @@ ColumnLayout {
     /// The badge was pressed: the settings card opens knowing whom it is about.
     signal avatarEditRequested(string name, string email)
     /// `*PointedAt` stand in for the pointer headless cannot put (avatar-hover / signature-tip / stash-tip /
-    /// path-tip); what each shows is read back off the ToolTip's own `visible`, so a cut binding cannot read green.
+    /// path-tip); what each shows is read back off the window's box standing for it (`TipAsk.shown`), so a cut
+    /// binding cannot read green.
     /// `pointedTipRow` -1 points at no row.
     property bool avatarPointedAt: false
     property bool signaturePointedAt: false
@@ -115,11 +118,36 @@ ColumnLayout {
     readonly property alias authorCards: cards
     readonly property alias messageBlock: block
 
+    /// The hand over this pane (`HandWatch`): the choice's rows read their light and their ask off it by geometry,
+    /// never off their own hover, and the author row's cards sit on seats that read it. The content moving under a
+    /// still hand holds it until the hand moves: the choice's rows scrolling, and another commit's details landing
+    /// where the hand rests.
+    HandWatch {
+        id: paneHand
+    }
+    readonly property alias hand: paneHand
+    /// The commit the content under the hand was last laid out for; another one landing is the content moving. Told
+    /// to the hand before the cards let go of the commit before: the hand in a card counts as over the pane only
+    /// while the card stands.
+    property string shownSha: ""
+    Connections {
+        target: detailsPane.details
+        function onChanged() {
+            if (detailsPane.details.shaHex === detailsPane.shownSha)
+                return
+            detailsPane.shownSha = detailsPane.details.shaHex
+            paneHand.rowsMoved()
+            cards.follow()
+        }
+    }
+
     DetailsAuthorCards {
         id: cards
         host: detailsPane
         block: block
         details: detailsPane.details
+        hand: paneHand
+        menuStanding: detailsPane.menuStanding
         onParentPicked: oidHex => detailsPane.parentClicked(oidHex)
     }
 
@@ -355,10 +383,16 @@ ColumnLayout {
         bottomMargin: Theme.spaceXs - (Theme.graphRowHeight - Theme.iconLg) / 2 + detailsPane.chosenFaceDrop
         model: detailsPane.chosenCommits
         verticalBar: PaneScrollBar {}
+        // The rows moved under the hand (`HandWatch.rowsMoved`); the choice changing moves each row, which says so
+        // itself (`ChosenCommitRow.placeMoved`). The rows' tips read the same hand (`TipAsk.hand`).
+        rowsHand: paneHand
+        onContentYChanged: paneHand.rowsMoved()
         delegate: ChosenCommitRow {
             faceDrop: detailsPane.chosenFaceDrop
-            cardOid: detailsPane.rowCardOid
+            cardKey: detailsPane.cardKey
+            paneHand: paneHand
             onHoverRequested: (row, inside) => detailsPane.rowHoverRequested(row, inside)
+            onRewritten: row => detailsPane.rowRewritten(row)
             onCopyRequested: text => detailsPane.copyRequested(text)
             onDropRequested: oidHex => detailsPane.commitDropRequested(oidHex)
         }
@@ -413,16 +447,15 @@ ColumnLayout {
         savePointedAt: detailsPane.savePointedAt
         mateCardInside: cards.matesPointerInside
         authorCardInside: cards.authorPointerInside
-        parentCardInside: cards.parentsPointerInside
         parentCardOpen: cards.parentCardOpen
         onAvatarClicked: detailsPane.avatarClicked()
         onCopyRequested: text => detailsPane.copyRequested(text)
         onParentClicked: oidHex => detailsPane.parentClicked(oidHex)
-        onOpenMateRequested: at => cards.openMateCard(at)
+        onOpenMateRequested: at => cards.pointMates(at)
         onSettleMateRequested: cards.settleMates()
-        onOpenParentsRequested: line => cards.openParentCard(line)
+        onOpenParentsRequested: line => cards.pointParents(line)
         onSettleParentsRequested: cards.settleParents()
-        onOpenAuthorRequested: at => cards.openAuthorCard(at)
+        onOpenAuthorRequested: at => cards.pointAuthor(at)
         onSettleAuthorRequested: cards.settleAuthor()
         onEscaped: detailsPane.revertMessage()
         onSaveRequested: detailsPane.submitMessage()
@@ -443,6 +476,14 @@ ColumnLayout {
         model: detailsPane.details
         // The pane's own bar — the style's is what `AppListView` hands the graph, the diff and the log.
         verticalBar: PaneScrollBar {}
+        // The rows moved under the hand (`HandWatch.rowsMoved`) — a scroll (the arrows' walk bringing a row on
+        // included), a folder opened or closed above it, the list stepping down the pane as the block over it changes
+        // — so a row's tip does not come out on a file brought under a still hand (`TipAsk.hand`). Another commit
+        // landing is told above (`shownSha`).
+        rowsHand: paneHand
+        onContentYChanged: paneHand.rowsMoved()
+        onCountChanged: paneHand.rowsMoved()
+        onYChanged: paneHand.rowsMoved()
         // The arrows move the file being read (規約 §diff のファイル一覧); Qt's own key navigation moves
         // `currentIndex` and tells nobody.
         keyNavigationEnabled: false
@@ -452,7 +493,6 @@ ColumnLayout {
         delegate: FileRowDelegate {
             listWidth: fileList.width
             pointedTipRow: detailsPane.pointedTipRow
-            menuStanding: detailsPane.menuStanding
             readPath: detailsPane.readPath
             // The press that opened the diff landed in this list, so the keyboard is here; a folder row does not
             // take it, since nothing is read from one.

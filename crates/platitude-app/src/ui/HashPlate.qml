@@ -127,8 +127,8 @@ ColumnLayout {
     readonly property int parentsLeft: plate.parents.length - plate.parentFit.shown
     readonly property alias moreSaid: moreLabel.text
     readonly property bool moreStands: moreLabel.visible
-    /// The pointer rests on the count, which asks for the parents' card. The row owns the card
-    /// (`CommitAuthorRow.parentsLit`).
+    /// The pointer rests on the count, which asks for the parents' card — the pane's to open (`DetailsAuthorCards`),
+    /// asked through the row (`CommitAuthorRow.parentsPointed`).
     readonly property bool morePointed: moreHover.hovered
     /// Automation: where each word of the plate sits on the page, in `item`'s y (-1 for one not drawn).
     function baselines(item) {
@@ -262,18 +262,15 @@ ColumnLayout {
     }
     /// Automation: the word the copy control offers (hover cannot be injected; the tip itself is `tst_hashplate`'s).
     function tipWords() {
-        return hashCopy.ToolTip.text
+        return copyTip.words
     }
-    /// Automation: what the shared tip shows for this control, empty while none is up — differs from `tipWords` when
-    /// a standing tip missed a new text.
+    /// Automation: what the window's tip shows for this control, empty while none is up — differs from `tipWords`
+    /// when a standing tip missed a new text.
     function tipSaid() {
-        return plate.tipStanding ? hashCopy.ToolTip.toolTip.text : ""
+        return plate.tipStanding ? Tips.box.text : ""
     }
-    /// Whether the window's one shared tip is up for this control, not merely up.
-    readonly property bool tipStanding: {
-        const tip = hashCopy.ToolTip.toolTip
-        return !!tip && tip.visible && tip.parent === hashCopy
-    }
+    /// Whether the window's one tip is up for this control, not merely up.
+    readonly property bool tipStanding: copyTip.shown
     function forceTip(on) {
         hashCopy.tipForced = on
     }
@@ -317,9 +314,12 @@ ColumnLayout {
         property bool tipForced: false
         // The hand takes the pointer's press, so the face sinks from it until the press travels; `Space` sinks it too.
         down: hashCopy.pressed || (hashHand.containsPress && !hashHand.dragging)
-        ToolTip.visible: hashCopy.hovered || hashCopy.tipForced
-        ToolTip.delay: Metrics.tipDelayMs
-        ToolTip.text: hashCopy.copied ? qsTr("Copied!") : qsTr("Copy full hash")
+        readonly property TipAsk copyTip: TipAsk {
+            id: copyTip
+            target: hashCopy
+            asked: hashCopy.hovered || hashCopy.tipForced
+            words: hashCopy.copied ? qsTr("Copied!") : qsTr("Copy full hash")
+        }
         // The keyboard's way in; the pointer's press goes to the hand.
         onClicked: plate.copyFullNow()
         background: Rectangle {
@@ -452,9 +452,11 @@ ColumnLayout {
                     id: linkFace
                     width: plate.hashWidth(plate.parentDigits)
                     height: parent.height
-                    ToolTip.visible: parentHand.containsMouse
-                    ToolTip.delay: Metrics.tipDelayMs
-                    ToolTip.text: qsTr("Go to parent commit")
+                    readonly property TipAsk parentTip: TipAsk {
+                        target: linkFace
+                        asked: parentHand.containsMouse
+                        words: qsTr("Go to parent commit")
+                    }
                     // The whole short hash in the field, the cut drawn over it (`LineText`): a drag takes what shows,
                     // `Ctrl+A` all eight.
                     LineText {

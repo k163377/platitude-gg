@@ -42,7 +42,7 @@ Rectangle {
     property string detail: ""
     /// The names it says, each behind its mark — as `labelMarks`.
     property var detailMarks: []
-    /// The names the pill's tip says, each behind its mark (`SharedToolTip.tipMarks`).
+    /// The names the pill's tip says, each behind its mark (`TipAsk.marksNow`).
     property var tipMarks: []
     /// The pill's word. Empty where the act is a git command and `code` says it instead.
     property string accept: ""
@@ -62,7 +62,7 @@ Rectangle {
     /// real hover is — the pill's wash and its tip — so what a run lights is what a hand lights.
     property bool pointedAt: false
     /// The tip standing: `tipDelayMs` waited out and the words on screen (`publish-tip`).
-    readonly property bool tipStanding: acceptPill.ToolTip.visible
+    readonly property bool tipStanding: pillTip.shown
     /// The far side could not be read (the remote never answered, or what it named is not in this repository): the
     /// frame goes `warning` and a `!` follows the word, as on the toolbar's pair (デザイン規約 §リモートへ送る). The
     /// word and the gesture stay as they were — what could not be read changes neither what would run nor how it is
@@ -289,7 +289,7 @@ Rectangle {
             id: acceptPill
             /// A hand on the pill, or its stand-in (`AskBar.pointedAt`).
             readonly property bool lit: acceptMouse.containsMouse || bar.pointedAt
-            /// The names its tip says, behind their marks (`SharedToolTip.tipMarks`).
+            /// The names its tip says, behind their marks (`TipAsk.marksNow`).
             readonly property var tipMarks: bar.tipMarks
             Layout.alignment: Qt.AlignVCenter
             implicitWidth: acceptRow.implicitWidth + 2 * Theme.spaceMd
@@ -406,9 +406,12 @@ Rectangle {
                     }
                 }
             }
-            ToolTip.visible: bar.tip !== "" && acceptPill.lit
-            ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: bar.tip
+            readonly property TipAsk pillTip: TipAsk {
+                id: pillTip
+                target: acceptPill
+                asked: bar.tip !== "" && acceptPill.lit
+                words: bar.tip
+            }
             MouseArea {
                 id: acceptMouse
                 anchors.fill: parent

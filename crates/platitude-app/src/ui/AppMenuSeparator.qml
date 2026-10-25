@@ -44,6 +44,8 @@ MenuSeparator {
         return above && below
     }
     visible: divider.dividing
+    /// The hand on this divider, by a handler of its own — as a row's (`AppMenuItem.handOn`).
+    readonly property bool handOn: dividerHand.hovered
 
     padding: 0
     topPadding: Theme.spaceXs
@@ -55,5 +57,9 @@ MenuSeparator {
         id: line
         implicitHeight: Theme.borderWidth
         color: Theme.borderSubtle
+    }
+
+    HoverHandler {
+        id: dividerHand
     }
 }

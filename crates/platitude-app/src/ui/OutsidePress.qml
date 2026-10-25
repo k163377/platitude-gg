@@ -8,7 +8,7 @@ import QtQuick.Controls.Fusion
 // resize edges (`WindowChrome.frameYielded`), and another window the ones on it (`Main.onActiveChanged`) — so those
 // ask here. They write themselves in while they stand.
 //
-// Not the hover cards (`AppCard`, all opened by `HoverCardHost`): the hand leaving closes them, and written in they
+// Not the hover cards (`AppCard`, all kept by `HoverSeat`): the hand leaving closes them, and written in they
 // would hand the edges to the scene under a row that reaches them — the row stays hovered, the card stays up, and the
 // edge never resizes.
 QtObject {

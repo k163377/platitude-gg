@@ -40,12 +40,11 @@ Rectangle {
     signal carriedOpenRequested(string path)
     /// …and right-clicked (see `GraphList`).
     signal carriedMenuRequested(string path, string name)
-    /// The chip whose stacked list the page has out (null when none). Rows read it through the view
-    /// (`GraphRowDelegate.listOnThisChip`).
-    property var chipListAnchor: null
-    /// The commit whose card the page has out (empty when none). Rows read it the same way: the row the card came out
-    /// of stays lit under it, though the card took the pointer off it.
-    property string rowCardOid: ""
+    /// The chip's list and the commit's card the page has out, by target key (`RowHoverHost.listKey` / `cardKey`,
+    /// empty when none). Rows read them through the view (`GraphRowDelegate.listOnThisChip` / `cardOnThisRow`): the
+    /// row the card came out of stays lit under it, though the card took the pointer off it.
+    property string listKey: ""
+    property string cardKey: ""
     /// A stacked chip was hovered: unstack it under the chip. The row comes with it — every name in the card is on
     /// that one commit, so a click in the card is a click on that row.
     signal chipExpandRequested(string oidHex, int atRow, var records, var anchor)
@@ -65,27 +64,30 @@ Rectangle {
     function dropRowRename() {
         graphList.dropRename()
     }
-    /// A press on something standing over these rows sent the graph somewhere while the hand stayed still — a card's
-    /// line (`RowHoverHost.mateFollowed`), the stand-in or its card (`pinPressed`). **The rest of that gesture is not
-    /// these rows'** (`ReclickGesture.hush`), **and the row that slid under the still hand opens nothing until the
-    /// hand moves** (`GraphList.handHeld`, デザイン規約 §左メニューの所作「手が動いていない所へ来た行は開かない」).
-    function settleUnderHand() {
+    /// A press on something standing over these rows sent the graph somewhere — a card's line
+    /// (`RowHoverHost.mateFollowed`), the stand-in or its card (`pinPressed`): **the rest of that gesture is not these
+    /// rows'** (`ReclickGesture.hush`). That the rows moved under a still hand is the hand's own to notice
+    /// (`HandWatch.rowsMoved`, below), not this click's.
+    function hushRowClicks() {
         graphList.hushClicks()
-        graphArea.heldAt = paneHand.hovered ? paneHand.point.position : Qt.point(-1, -1)
-        graphList.handHeld = true
     }
     /// A press on the current branch's stand-in (`GraphHeadPin`) or on the card its chip unfolds into
     /// (`RefListPopup.standInPressed`): brings the off-screen row on, then picks it with the modifiers the rows read.
     /// The stand-in goes once its row is on screen, so **the row now under the hand is not what the hand was on**
-    /// (`settleUnderHand`) — a double-click there would move the worktree.
+    /// (`hushRowClicks`, and the hand held still) — a double-click there would move the worktree.
     function pinPressed(row, modifiers) {
-        graphArea.settleUnderHand()
+        graphArea.hushRowClicks()
+        // The stand-in going is the rows moving under the hand, whether or not the jump scrolls.
+        paneHand.rowsMoved()
         graphList.takeKeyboard()
         graphArea.jumpToRow(row)
         graphArea.rowActivated(graphArea.graphModel.oidAt(row), row, modifiers)
     }
     readonly property alias rowClicksHushed: graphList.clicksHushed
-    readonly property alias rowHandHeld: graphList.handHeld
+    /// The rows moved under a hand that has not moved since (`HandWatch.stillHeld`) — automation reads it.
+    readonly property bool rowHandHeld: paneHand.stillHeld
+    /// The hand over this pane, which the rows and the page's hover host read (`HandWatch`).
+    readonly property alias hand: paneHand
     function rowRenameArmed(chip) {
         return graphList.renameArmed(chip)
     }
@@ -100,12 +102,16 @@ Rectangle {
         return true
     }
     readonly property alias rowClickGuarded: graphList.clickGuarded
-    /// The pointer settled on a row (or left it): open the commit card under it. `row` is the delegate, for its
-    /// position and fields — the page lets it go at once.
+    /// The pointer came onto a row (or left it): the page's host rests and opens the commit card under it. `row` is
+    /// the delegate, for its position and fields — the host weighs the commit, and asks the delegate again.
     signal rowHoverRequested(var row, bool inside)
-    /// The pointer left the chip `anchor` — put its list back, unless it went into the list itself (only the owner can
-    /// tell).
-    signal chipCollapseRequested(var anchor)
+    /// The reread rewrote a row in place — or the current branch's stand-in now stands for another commit — or
+    /// changed the names on a chip (`GraphList`, `GraphHeadPin`). `row` is what asked: the delegate, or the stand-in.
+    signal rowRewritten(var row)
+    signal chipChanged(string oidHex, var anchor)
+    /// The pointer left the chip `anchor` of `oidHex`'s row — put its list back, unless it went into the list itself
+    /// (only the owner can tell).
+    signal chipCollapseRequested(string oidHex, var anchor)
     signal createBranchRequested(string oidHex, string name)
     /// The same box, answered with a tag.
     signal createTagRequested(string oidHex, string name)
@@ -343,6 +349,7 @@ Rectangle {
         id: rowWalk
         view: graphList
         graphModel: graphArea.graphModel
+        standIn: headPin
         asking: askBar.open
         onActivated: (oidHex, atRow) => graphArea.rowActivated(oidHex, atRow, Qt.NoModifier)
     }
@@ -356,6 +363,8 @@ Rectangle {
     function jumpToRow(row) { rowWalk.jumpToRow(row) }
     function anchorSoon() { rowWalk.anchorSoon() }
     function shiftRows(rows) { rowWalk.shiftRows(rows) }
+    function handShift() { return rowWalk.handShift() }
+    function noteHand() { rowWalk.noteHand() }
     function showRowSoon(row) { rowWalk.showRowSoon(row) }
 
     // The three columns' widths and the lanes' sideways offset, aliased below so everyone reads them off this pane.
@@ -446,8 +455,10 @@ Rectangle {
         findOn: findBar.findOn
         chosenOids: graphArea.chosenOids
         chosenCount: graphArea.chosenCount
-        chipListAnchor: graphArea.chipListAnchor
-        rowCardOid: graphArea.rowCardOid
+        listKey: graphArea.listKey
+        cardKey: graphArea.cardKey
+        hand: paneHand
+        shield: headPin
         // The arrows are answered here, where the history is walked (規約 §矢印で履歴を辿る). `isAutoRepeat` is the only
         // thing that tells a run apart from a press (`GraphRowWalk.noteStep`).
         Keys.onUpPressed: event => {
@@ -472,8 +483,10 @@ Rectangle {
         onRowRenameRequested: (oidHex, chip) => graphArea.rowRenameRequested(oidHex, chip)
         onChipExpandRequested: (oidHex, atRow, records, anchor) =>
             graphArea.chipExpandRequested(oidHex, atRow, records, anchor)
-        onChipCollapseRequested: anchor => graphArea.chipCollapseRequested(anchor)
+        onChipCollapseRequested: (oidHex, anchor) => graphArea.chipCollapseRequested(oidHex, anchor)
         onRowHoverRequested: (row, inside) => graphArea.rowHoverRequested(row, inside)
+        onRowRewritten: row => graphArea.rowRewritten(row)
+        onChipChanged: (oidHex, anchor) => graphArea.chipChanged(oidHex, anchor)
         onNamingSubmitted: (oidHex, name, mode) => {
             const kind = graphList.namingKind
             const id = graphArea.namingId
@@ -564,7 +577,12 @@ Rectangle {
         // Its chip unfolds through the rows' own door: the card is the one the page holds for every chip.
         onChipExpandRequested: (oidHex, atRow, records, anchor) =>
             graphArea.chipExpandRequested(oidHex, atRow, records, anchor)
-        onChipCollapseRequested: anchor => graphArea.chipCollapseRequested(anchor)
+        onChipCollapseRequested: (oidHex, anchor) => graphArea.chipCollapseRequested(oidHex, anchor)
+        // Standing for another commit, or its chip's names changing, as a row the reread rewrote would say.
+        onRewritten: graphArea.rowRewritten(headPin)
+        onChipChanged: (oidHex, anchor) => graphArea.chipChanged(oidHex, anchor)
+        hand: paneHand
+        listKey: graphArea.listKey
     }
     /// The stand-in itself — automation-only exposure, like `view`.
     readonly property alias headPin: headPin
@@ -600,36 +618,32 @@ Rectangle {
     /// other way — and only the pane knows which of the two lines is being asked about.
     readonly property bool refusedLineShown: columnDividers.labelDragging ? labelDividerLine.visible
         : graphDividerLine.visible
-    /// Whether the pointer is anywhere in this pane; real hover and the automation hook write it alike. A passive
-    /// `HoverHandler`, so the rows', chips' and dividers' own hover does not take it away. **It stays on the pane
-    /// itself**: on an item stacked over the list it takes the hover from every row under it (rules-refs/app-ui.md
-    /// 「ペイン全体の hover を測る handler はペイン自身に置く」).
+    /// Whether the pointer is anywhere in this pane; real hover and the automation hook write it alike. The hand is
+    /// read on the pane itself (`HandWatch`), passively, so the rows', chips' and dividers' own hover does not take it
+    /// away — on an item stacked over the list it would take the hover from every row under it
+    /// (rules-refs/app-ui.md「ペイン全体の hover を測る handler はペイン自身に置く」). The rows read their light and
+    /// their rest off it: what arrives under a still hand lights as the row under it, and opens nothing until the hand
+    /// moves.
     property bool pointerInside: false
-    HoverHandler {
+    HandWatch {
         id: paneHand
-        onHoveredChanged: {
-            graphArea.pointerInside = paneHand.hovered
-            if (!paneHand.hovered)
-                graphList.handHeld = false
-        }
-        // **The hold lasts until the hand itself moves** (`settleUnderHand`). With no place to take at the press (the
-        // hand was in a card, and the card going brings it back over the rows), the first point heard is the place;
-        // rows moving under it arrive at that same place, so they do not count as a move.
-        onPointChanged: {
-            if (!graphList.handHeld)
-                return
-            const at = paneHand.point.position
-            if (graphArea.heldAt.x < 0) {
-                graphArea.heldAt = at
-                return
-            }
-            if (at.x !== graphArea.heldAt.x || at.y !== graphArea.heldAt.y)
-                graphList.handHeld = false
-        }
+        onKnownChanged: graphArea.pointerInside = paneHand.known
     }
-    /// Where the hand was when a press sent the rows moving under it (`settleUnderHand`), in this pane's own
-    /// coordinates; (-1, -1) until it is heard.
-    property point heldAt: Qt.point(-1, -1)
+    // The rows moved under the hand: a scroll, and the list stepping down the pane for the find bar (its
+    // `anchors.topMargin`). A row put at another row's place is its own to notice (`GraphRowDelegate.placeMoved`), as
+    // is a reread that rewrites it in place (`onOid_hexChanged`). The view putting
+    // itself back over its rows after a reread moved nothing under the hand (`GraphList.keepingRows`); laying out a
+    // reread it does not take back moves them as the reread's (`GraphList.rereading`).
+    Connections {
+        target: graphList
+        function onContentYChanged() {
+            if (graphList.keepingRows)
+                paneHand.rowsKept()
+            else
+                paneHand.rowsMoved(graphList.rereading)
+        }
+        function onYChanged() { paneHand.rowsMoved() }
+    }
     /// Automation: the pointer resting in the pane, which is what puts the lane bar on screen at all
     /// (`PGG_AUTO_ACT=graph-bar`).
     function restPointer(inside) { graphArea.pointerInside = inside }

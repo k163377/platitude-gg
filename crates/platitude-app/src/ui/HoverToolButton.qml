@@ -28,23 +28,27 @@ ToolButton {
     readonly property bool lit:
         (hoverToolButtonSelf.hovered && !Hand.away) || hoverToolButtonSelf.pointedAt
     /// Automation: the tip is actually up (after `tipDelayMs`), not merely asked for.
-    readonly property bool tipShown: hoverToolButtonSelf.ToolTip.visible
+    readonly property bool tipShown: buttonTip.shown
 
     // Said out loud: the default hint is false offscreen
     // (rules-refs/app-ui.md「`hoverEnabled: true` は `HoverToolButton` が名乗る」).
     hoverEnabled: true
 
-    /// The one thing the face had no room to say (デザイン規約 §hover のツールチップ); empty shows none. A button whose
-    /// tip shows under another condition leaves this empty and binds `ToolTip.visible` itself.
+    /// The one thing the face had no room to say (デザイン規約 §hover のツールチップ); empty shows none.
     property string tip: ""
     /// A word inside `tip` that is a place to go, and the name the page answers for it (`RepoPage.tipLinkAsked`).
-    /// `tip` stays plain text (git-printed names can hold `<`); `SharedToolTip` draws this word as the anchor.
+    /// `tip` stays plain text (git-printed names can hold `<`); the window's tip draws this word as the anchor.
     property string tipPlace: ""
     property string tipHref: ""
 
-    ToolTip.visible: hoverToolButtonSelf.tip !== "" && hoverToolButtonSelf.lit
-    ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.text: hoverToolButtonSelf.tip
+    readonly property TipAsk buttonTip: TipAsk {
+        id: buttonTip
+        target: hoverToolButtonSelf
+        asked: hoverToolButtonSelf.tip !== "" && hoverToolButtonSelf.lit
+        words: hoverToolButtonSelf.tip
+        place: hoverToolButtonSelf.tipPlace
+        href: hoverToolButtonSelf.tipHref
+    }
 
     background: Rectangle {
         implicitWidth: Theme.iconLg

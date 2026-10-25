@@ -32,18 +32,18 @@ Item {
     /// How far a local branch stands from its upstream as of the last fetch; 0 on every other row (`HeadTrack`).
     required property int ahead
     required property int behind
-    /// The pointer arrived at, or left, a row carrying the mark.
+    /// The hand arrived at a row carrying the mark (`on`), or left it — the hand walking off, or the row's path
+    /// changing under it (a recycled delegate). The path is the one that asked (`eolAskFor`); which list the row
+    /// stands in is the list's to add (`WipBucketPane.section`) — the same path in the other list is another row,
+    /// and the row's own `bucket` is the change's (an untracked file's is `untracked`), not the list's.
     signal eolPointed(string path, bool on)
     /// Stands in for the pointer where headless cannot put one, so a cut-down row's tooltip can be photographed
     /// (PGG_AUTO_ACT=path-tip). -1 points at no row.
     property int pointedTipRow: -1
-    /// Whether the pointer is on this row, written by `syncHover` off a `HoverHandler`: a `MouseArea` would lose
-    /// `containsMouse` to the stage `+` the moment the hand reached it (rules-refs/app-ui.md 「行の hover は
-    /// `HoverHandler`」).
-    property bool pointed: false
-    /// A right-click menu of the page's is standing over this list.
-    property bool menuStanding: false
-    /// That menu was raised on the panel's open row (`SidebarRowGestures.menuFromFacts`) — held by the gestures, since
+    /// Whether the row is lit: the hand on it (`handOn`), or its own tip or menu standing — the hand walked into them
+    /// (デザイン規約 §左メニューの所作).
+    readonly property bool pointed: navRow.handOn || navRow.factsTipOut || navRow.factsMenuOut
+    /// That menu was raised on the panel's open row (`SidebarRowGestures.menuOnOpenRow`) — held by the gestures, since
     /// the delegate showing that row may be another by the time it goes.
     property bool menuOnOpenRow: false
     property string kindHint: "branch"
@@ -258,101 +258,115 @@ Item {
         id: withheldSeat
         active: navRow.renameWithheld
         sourceComponent: Item {
+            id: withheldBox
             parent: rowLayout.nameInk
             anchors.fill: parent
-            /// Answers the press that asked, not a hand (`SharedToolTip.tipTyped`).
-            readonly property bool tipTyped: true
-            /// The folder the line names, behind the tree mark (デザイン規約 §ref の種別「名前の印」).
-            readonly property string tipMarkWord: navRow.withheldMark
-            // Asked only once there are words: the attached show takes the text it has at the ask, and keeps it through
-            // the delay.
-            ToolTip.visible: visible && navRow.withheldWhy !== ""
-            ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: navRow.withheldWhy
+            // Answers the press that asked, not a hand (`TipAsk.typed`); the folder the line names behind the tree
+            // mark (デザイン規約 §ref の種別「名前の印」).
+            readonly property TipAsk withheldTip: TipAsk {
+                target: withheldBox
+                asked: withheldBox.visible && navRow.withheldWhy !== ""
+                typed: true
+                words: navRow.withheldWhy
+                markWord: navRow.withheldMark
+            }
         }
     }
     /// The gesture the rows of this section share, or null for a list whose rows cannot be typed into (the working
     /// tree's files). Held by the sidebar, since it has to outlive this delegate (`SidebarRowGestures`).
     property ReclickGesture reclick: null
-    /// How often the hand itself has moved, as the panel counts it (`SidebarRowGestures.handMoves`). **Every row
-    /// reads its own hover again on each of these and never in between** (why: `rowHover`).
-    property int handMoves: 0
-    /// Whether a panel counts for this row; the rows it does not count for answer the hover event itself.
-    property bool handCounted: false
-    /// Read a turn later, when every handler that event reached has run: a row asked mid-delivery answers with the
-    /// hover it had before (and the count coalesces, so a hand crossing the list asks once).
-    onHandMovesChanged: Qt.callLater(navRow.syncHover)
-    /// The one spelling of "the hand is on this row", for both roads to it (the count, and the event).
-    function syncHover() {
-        // A row the view has pooled is hidden with whatever hover it had (`QQuickItemView` hides it, Qt sends it no
-        // leave): not on screen is not under the hand.
-        navRow.handOn = navRow.visible && (rowHover.hovered || navRow.factsPointed)
-        navRow.underHand = navRow.handOn
-        navRow.slidAway = false
-        navRow.pointed = navRow.handOn || navRow.factsTipOut || navRow.factsMenuOut
-    }
-    /// Whether this row is still under the hand — what the hand found on its last move, and, each time the reader
-    /// moves the list (`readerMoves`), whether the row's own rectangle still holds the place the hand was last heard
-    /// at (`handAt`, window coordinates). **Weighed by geometry, not Qt's hover**: Qt hands hover out before the view
-    /// lays its rows again, and a row it has just built at a stale place over this one takes the hover from it.
-    /// **It never lights or opens a row on its own** — `stillPointed` needs `pointed`, which is the hand's.
-    property bool underHand: false
-    /// The reader's scroll took this row from under the hand; the hand's next move clears it.
-    property bool slidAway: false
-    property point handAt: Qt.point(-1, -1)
-    property int readerMoves: 0
-    onReaderMovesChanged: Qt.callLater(navRow.syncUnder)
-    function syncUnder() {
-        const on = navRow.visible && navRow.handAt.x >= 0
-            && rowGround.contains(rowGround.mapFromItem(null, navRow.handAt.x, navRow.handAt.y))
-        // `slidAway` first: `underHand` falling takes the tip down, and the row answering that fall before it knows it
-        // slid would keep its lines up a beat for a hand walking into the tip (`pointFacts`).
-        navRow.slidAway = !on
-        navRow.underHand = on
-    }
-    /// Whether what this row puts out — its tip, its open lines — stays out: the row the hand walked onto, still under
-    /// it. **A row that slides out from under a still hand drops them at once** (a wheel: デザイン規約 §hover のツールチップ
-    /// 「的が手の下で動けば hover は外れ、出したものはその瞬間に消える」), and keeps its light until the hand moves
-    /// (§左メニューの所作「手の下から滑り出た行は、手が動くまで点いたまま」). A standing tip or menu of the row's own holds
-    /// it as it holds `pointed` — the hand walked into it — but not once the row has slid away: no hand went there.
-    readonly property bool stillPointed: navRow.pointed && !navRow.slidAway
-        && (navRow.underHand || navRow.factsTipOut || navRow.factsMenuOut)
-    /// A tip or menu of the row's own came or went: the hand is read again — **not on a row that slid away**, whose
-    /// light waits for the hand itself, and Qt's hover would put it out from under a hand that never moved.
-    function syncHeld() {
-        if (!navRow.slidAway)
-            navRow.syncHover()
-    }
-    /// A delegate the view pools is off screen, and one it uses again is another row (`ListView.reuseItems`): what the
-    /// hand found on it does not carry over — its light would land on a row nobody walked to, its rest open it. Only
-    /// where the hand is counted; the worktree's rows take Qt's hover itself.
-    function forgetHand() {
-        if (!navRow.handCounted)
-            return
-        navRow.handOn = false
-        navRow.underHand = false
-        navRow.slidAway = false
-        navRow.pointed = false
-    }
-    ListView.onPooled: navRow.forgetHand()
-    ListView.onReused: navRow.forgetHand()
-    /// The hand itself on this row's line or its open lines. **Unlike `pointed`, a standing tip does not count**: the
-    /// light stays while the tip does, but what asks for the tip must not, or the tip would hold itself up for good.
+    /// The panel's hand (`HandWatch`), which this row reads its light and its rest off: Qt hands hover to whatever
+    /// arrives under a still pointer, and a row the list moved under one was not walked to. Both lists hand theirs in
+    /// (the left panel's, the worktree's file lists'); the worktree's lists, dealt again on every status read, hand it
+    /// back to the row the hand was on (`WipBucketPane.weighDeal`). Null — a row standing on its own — reads Qt's
+    /// hover (`rowHover`).
+    property HandWatch paneHand: null
+    /// Every move of the hand is one read per row, and so is the reader moving the rows under it (`HandWatch.shifts`):
+    /// the light goes to the row under the hand, as Qt's own lists hand their hover on with a scroll
+    /// (`QAbstractItemView::verticalScrollbarValueChanged`), and what that row asks for waits on the seat until the
+    /// hand moves (デザイン規約 §左メニューの所作「手が動いていない所へ来た行は開かない」「手が動いたかの見切り」).
+    /// **Never the layout moving on its own**: these rows grow in place, and the row the hand walked to keeps its
+    /// light and its rest, as Qt's lists keep their hover on the item when rows open above it (§「点くのも同じ規則」).
+    readonly property int handMoves: navRow.paneHand !== null ? navRow.paneHand.moves : 0
+    onHandMovesChanged: navRow.syncHand(false)
+    readonly property int handShifts: navRow.paneHand !== null ? navRow.paneHand.shifts : 0
+    onHandShiftsChanged: navRow.syncHand(true)
+    /// The hand itself on this row's line or its open lines, which are inside it. **Unlike `pointed`, a standing tip
+    /// does not count**: the light stays while the tip does, but what asks for the tip must not, or the tip would
+    /// hold itself up for good. Weighed by geometry against the hand's place, not by Qt's hover: Qt hands hover out
+    /// before the view lays its rows again, and a row it has just built at a stale place over this one takes the
+    /// hover from it.
     property bool handOn: false
+    /// This row slid out from under a still hand (the reader's scroll): what it had out goes at once, with no beat
+    /// (§hover のツールチップ「的が手の下で動けば」). A standing tip or menu of its own holds a row otherwise — the hand
+    /// walked into it — but not one that slid away: no hand went there.
+    property bool slid: false
+    function syncHand(shifted) {
+        if (navRow.paneHand === null) {
+            // A row the view has pooled is hidden with whatever hover it had (`QQuickItemView` hides it, Qt sends it
+            // no leave): not on screen is not under the hand.
+            navRow.handOn = navRow.visible && (rowHover.hovered || navRow.factsPointed)
+            return
+        }
+        const hand = navRow.paneHand
+        let on = hand.known && navRow.visible && !navRow.pooled
+        if (on) {
+            const p = navRow.mapFromItem(null, hand.at.x, hand.at.y)
+            on = p.x >= 0 && p.y >= 0 && p.x < navRow.width && p.y < navRow.rowHeight
+        }
+        // Inside the list's own box: a row kept built past its edge (`cacheBuffer`) lies under the band and the next
+        // section, drawn not at all. And not under the stand-in on its edge (`NavList.shieldAt`) — the worktree's file
+        // lists are plain `AppListView`s, with none.
+        const view = navRow.ListView.view
+        if (on && view) {
+            const v = view.mapFromItem(null, hand.at.x, hand.at.y)
+            on = v.x >= 0 && v.y >= 0 && v.x < view.width && v.y < view.height
+                 && !(view.shieldAt !== undefined && view.shieldAt(hand.at))
+        }
+        if (shifted) {
+            navRow.slid = navRow.handOn && !on
+            navRow.handOn = on
+            return
+        }
+        // A move of the hand, however small: the light goes to the row under it, the slid row's goes, and the row
+        // under it asks — the seat's rest judges whether it opens (デザイン規約 §左メニューの所作「手が動いたかの見切り」).
+        navRow.slid = false
+        navRow.handOn = on
+    }
+    /// The hand itself on the row it walked onto, still under it — what asks for the row's lines, its tip and its
+    /// card. **The light is wider** (`pointed`): a standing tip or menu of the row's own keeps the light, but is the
+    /// seat's hold, never an ask (`SidebarRowGestures.openSeat`).
+    readonly property bool stillPointed: !navRow.slid && navRow.handOn
+    /// A delegate the view pools is off screen, and one it uses again is another row (`ListView.reuseItems`): what
+    /// the hand found on it does not carry over — its light would land on a row nobody walked to, its rest open it.
+    function forgetHand() {
+        navRow.handOn = false
+        navRow.slid = false
+    }
+    /// Pooled, the delegate stays `visible` where its row last stood (the view only stops drawing it): it reads no
+    /// hand until it is used again.
+    property bool pooled: false
+    ListView.onPooled: {
+        navRow.pooled = true
+        navRow.forgetHand()
+    }
+    ListView.onReused: {
+        navRow.pooled = false
+        navRow.forgetHand()
+    }
     /// The hand is on this row's open lines (`NavRowFacts.pointed`). **Read as the row's own hover**: the lines are a
     /// hover-taking sibling stacked over `rowGround` and take the pointer off its handler (rules-refs/app-ui.md
     /// 「開いた行は段の hover を自分のものとして読む」).
     readonly property bool factsPointed: factsSeat.item ? factsSeat.item.pointed : false
+    onFactsPointedChanged: if (navRow.paneHand === null) navRow.syncHand()
     /// Whether the tip these lines put out is standing (`NavRowFacts.tipShown`). **A row whose tip is up is still the
     /// row being read**: the tip is a popup that takes the pointer, and closing the row then would take the tip's
     /// target away (デザイン規約 §hover のツールチップ).
     readonly property bool factsTipOut: factsSeat.item ? factsSeat.item.tipShown : false
-    onFactsTipOutChanged: Qt.callLater(navRow.syncHeld)
     /// Whether the menu standing was raised on this row while open (`rowPressed`). **The row is still the one being
     /// read**, as with its tip: the menu takes the pointer off the row, and the row reading that as the hand gone would
     /// shrink from under the menu about it (デザイン規約 §左メニューの所作). Once the menu goes, the hand decides again.
     readonly property bool factsMenuOut: navRow.factsOpen && navRow.menuOnOpenRow
-    onFactsMenuOutChanged: Qt.callLater(navRow.syncHeld)
     /// Whether this row holds the wait the name box opens after, and whether a click now would still count as a
     /// double-click's second half — read by headless runs. Both are the sidebar's gesture's answer
     /// (`SidebarRowGestures`).
@@ -368,10 +382,10 @@ Item {
     readonly property real editBoxSeat: rowLayout.boxSeat.width
     readonly property bool editBoxShown: editSeat.item ? editSeat.item.visible : false
     readonly property string editBoxAt: editSeat.item ? editSeat.item.cameOut : ""
-    /// Whether the shared tooltip stands **on this row's box** (a refused name's reason, `NavNameBox`). Read off the
-    /// box's attached `ToolTip`, which weighs the target; the instance's own `visible` answers for anybody's tip
-    /// (`tests/qml/tst_tipowner.qml`).
-    readonly property bool editTipShown: editSeat.item ? editSeat.item.ToolTip.visible : false
+    /// Whether the window's tooltip stands **on this row's box** (a refused name's reason, `NavNameBox`). Read off the
+    /// box's own ask, which the seat weighs against the target; the box's own `visible` would answer for anybody's
+    /// tip.
+    readonly property bool editTipShown: editSeat.item ? editSeat.item.tipShown : false
     /// What the box says it takes, rubbed out (PGG_AUTO_ACT=worktree-rename-box): a picture of a box holding a name
     /// does not show it.
     readonly property string editPlaceholder: editSeat.item ? editSeat.item.placeholderText : ""
@@ -415,11 +429,11 @@ Item {
             navRow.refClicked(navRow.oid_hex)
         }
     }
-    // Which row the hand is on — a handler, for the reason `pointed` gives.
-    // **Where a panel counts the hand, nothing is written from here**: hover follows the item, not the hand, so rows
-    // growing or a list scrolling under a still pointer would light rows the reader never walked to
-    // (`tests/qml/tst_hoverunderstillhand.qml`). `syncHover` reads this on each hand move instead. The worktree's
-    // rows never move under a resting hand, and take the event.
+    // Which row the hand is on, for a row no panel's hand covers (one standing on its own) — a handler, since a
+    // `MouseArea` would lose `containsMouse` to the stage `+` the moment the hand reached it (rules-refs/app-ui.md
+    // 「行の hover は `HoverHandler`」). **Where a panel's hand is read, nothing is written from here**: hover follows
+    // the item, not the hand, so rows growing or a list scrolling under a still pointer would light rows the reader
+    // never walked to (`tests/qml/tst_hoverunderstillhand.qml`).
     // **On `rowGround`, not the whole item**: a `HoverHandler` takes its item's full face, and the seat at this row's
     // foot (`pinSeat`) is not this row (rules-refs/app-ui.md の「親アイテムの全面」の行).
     Item {
@@ -431,59 +445,34 @@ Item {
         HoverHandler {
             id: rowHover
             enabled: !navRow.editing
-            onHoveredChanged: if (!navRow.handCounted) navRow.syncHover()
+            onHoveredChanged: if (navRow.paneHand === null) navRow.syncHand()
         }
     }
-    // The marked row tells the model it is the one being read, so the card's sentence is built for it alone (the row
-    // has no field left to hold it — `NavItem::eol_mark`).
-    // **Opens on the usual rest** (規約 §hover のツールチップ「補足は待ってから開く」) and lets go at once — the card
-    // keeps its own beat (`WipPane.pointEol`). **A hand back from this row's own card is answered at once**
-    // (規約「出ているものの的へ戻る手は即通す」): a second rest would blink the card shut and open again.
-    function pointEol() {
-        if (!navRow.eol_mark)
-            return
-        if (!navRow.stillPointed) {
-            eolRest.stop()
-            navRow.eolPointed(navRow.fullName, false)
-            return
-        }
-        if (navRow.eolCardOut)
-            navRow.eolPointed(navRow.fullName, true)
-        else
-            eolRest.restart()
+    /// The path the line-ending card is asked for: this row's, while the hand is on it and it wears the mark; "" for
+    /// none. Every way the ask ends sends the leave for the path that asked — the hand walking off, the path changing
+    /// under the hand (a recycled delegate) — so the pane's seat is never left waiting on a row that let go
+    /// (`WipPane.pointEol`: the rest before the card, its beat, a hand back from the card answered at once). A mark
+    /// that goes comes with a status read, which deals the rows again: the pane weighs the card's target then
+    /// (`WipPane.weighEol`).
+    readonly property string eolAskFor: navRow.eol_mark && navRow.stillPointed ? navRow.fullName : ""
+    property string eolAskedPath: ""
+    onEolAskForChanged: {
+        if (navRow.eolAskedPath !== "")
+            navRow.eolPointed(navRow.eolAskedPath, false)
+        navRow.eolAskedPath = navRow.eolAskFor
+        if (navRow.eolAskedPath !== "")
+            navRow.eolPointed(navRow.eolAskedPath, true)
     }
-    // The row's facts sit out the same rest and go the moment the pointer leaves: they are **inside** the row, whose
-    // hover covers them (`factsPointed`), so there is no beat to keep.
-    function pointFacts() {
-        if (!navRow.expands)
-            return
-        if (navRow.stillPointed) {
-            factsWait.restart()
-            factsKeep.stop()
-            return
-        }
-        factsWait.stop()
-        // **Except a row whose lines put a tip out, which waits the tip's beat**: walking into the tip leaves these
-        // lines, the tip falls and is put back a turn later (`SharedToolTip.reopen`), and closing on that fall would
-        // take its target away (デザイン規約 §hover のツールチップ「hover が出した字は選べて、コピーできる」). **Not a row
-        // that slid away**: no hand is walking into its tip.
-        if (navRow.factsPath !== "" && !navRow.slidAway)
-            factsKeep.restart()
-        else
-            navRow.factsAsked(false, Qt.point(0, 0))
-    }
+    // The row's facts are asked for as the hand arrives and let go as it leaves: the panel's seat counts the rest and
+    // the beat, and holds them while the row's own tip or menu stands (`SidebarRowGestures.openSeat`). They are
+    // **inside** the row, so the hand walking down into them has not left it (`syncHand`).
     onStillPointedChanged: {
-        navRow.pointEol()
-        navRow.pointFacts()
-    }
-    // **Asks the row again when it runs out**: the recycled delegate holding it need not be the row the hand rested on.
-    Timer {
-        id: eolRest
-        interval: Metrics.tipDelayMs
-        onTriggered: {
-            if (navRow.eol_mark && navRow.stillPointed)
-                navRow.eolPointed(navRow.fullName, true)
-        }
+        if (navRow.stillPointed)
+            navRow.askFacts(navRow.paneHand !== null ? navRow.paneHand.at : rowHover.point.scenePosition)
+        else if (navRow.expands)
+            // A row that slid out from under the hand lets go at once, with no beat (規約 §hover のツールチップ「的が
+            // 手の下で動けば hover は外れ、出したものはその瞬間に消える」).
+            navRow.factsAsked(false, Qt.point(0, 0), navRow.slid)
     }
     MouseArea {
         id: itemMouse
@@ -554,9 +543,8 @@ Item {
             return
         if (!itemMouse.handedOn) {
             // The rest is what this press is skipping — the reader has already chosen this row.
-            factsWait.stop()
             if (!navRow.factsOpen)
-                navRow.askFacts(navRow.mapToItem(null, x, y))
+                navRow.askFacts(navRow.mapToItem(null, x, y), true)
             // Refused (a box is open, a menu is standing): there is no field to sweep, and the press stays a press.
             if (navRow.nameField === null)
                 return
@@ -591,15 +579,9 @@ Item {
                         || navRow.kindHint === "stash"
                         || navRow.kindHint === "worktree")) {
                 // Raised on the open row — its own line or its lines — the menu is about that row and keeps it open
-                // (デザイン規約 §左メニューの所作). Said before the ask, which the menu's opening reads.
-                if (navRow.factsOpen)
-                    navRow.factsMenuAsked()
+                // (デザイン規約 §左メニューの所作): the page keys the menu by the row, as the panel keys the row
+                // (`SidebarRowGestures.menuOnOpenRow`).
                 navRow.refMenuRequested(navRow.name, navRow.fullName, navRow.oid_hex, aim === undefined ? "" : aim)
-                // **The ask is answered before it returns**: the menu stands, or nothing was on offer and it stayed
-                // shut (`AppMenu.offer`). A note no menu followed would keep this row open under the next menu raised
-                // elsewhere, so it is taken back.
-                if (navRow.factsOpen && !navRow.menuStanding)
-                    navRow.factsMenuRefused()
             } else if (!navRow.folder && navRow.kindHint === "file")
                 navRow.fileMenuRequested(navRow.bucket, navRow.fullName)
             else if (navRow.isRemoteRow)
@@ -645,13 +627,10 @@ Item {
     /// delegates are recycled (`SidebarRowGestures.openKey`).
     property bool opensFacts: false
     property string openKey: ""
-    /// This row's facts are asked for, or let go of, at the place the pointer was standing; the pane holds which row
-    /// is open.
-    signal factsAsked(bool open, point at)
-    /// The menu about to be raised was asked for on this row while it is open, so it is not one that takes it down
-    /// (`rowPressed`) — and, when it did not open after all, that note is taken back.
-    signal factsMenuAsked()
-    signal factsMenuRefused()
+    /// This row's facts are asked for, or let go of, at the place the pointer was standing. `now` skips the wait
+    /// either way: a press going for the words opens with no rest, a row that slid out from under the hand closes
+    /// with no beat. The pane holds which row is open.
+    signal factsAsked(bool open, point at, bool now)
     /// A line of those facts going somewhere of its own was pressed: the graph goes to the commit it names
     /// (`NavFacts.place`), and this row — the one the press was in — is the one last clicked
     /// (`SidebarRowGestures.followLine`).
@@ -724,18 +703,24 @@ Item {
     /// Whether the card standing is this row's: the pane keeps the one answer and the row weighs it against its own
     /// name (`NavSectionModel::point_eol`).
     readonly property bool eolCardOut: navRow.eol_mark && navRow.pointedEolPath === navRow.fullName
-    /// Whether the headless stand-in points at this row (the report still reads the ToolTip itself — the output side).
+    /// Whether the headless stand-in points at this row (the report reads the window's box itself — the output side).
     /// **`>= 0` first**: a pooled delegate reports `index` -1, which is also "no row", and every pooled row would claim
     /// the window's one tooltip (rules-refs/app-ui.md 「プールへ戻された delegate は `index` -1 を名乗る」).
     readonly property bool tipPointedAt: navRow.pointedTipRow >= 0 && navRow.pointedTipRow === navRow.index
-    // Held down while a menu stands: the pointer is in the menu, and a tip now lands on the rows it is reading
-    // (デザイン規約 §メニュー). Out of the list, never over the rows either side: the left panel has no room on its left,
-    // so its box goes right, and the right panel's to its left (`SharedToolTip.tipRowSide`).
-    readonly property string tipRowSide: "left"
-    ToolTip.visible: (navRow.stillPointed || navRow.tipPointedAt) && !navRow.editing && !navRow.menuStanding
-                     && navRow.hoverText !== ""
-    ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.text: navRow.hoverText
+    /// The row's own tip is up (the output side, for the tests).
+    readonly property bool tipShown: rowTip.shown
+    readonly property TipAsk rowTip: TipAsk {
+        id: rowTip
+        target: navRow
+        // Behind a standing menu the window's seat holds the box down (`TipSeat`'s machine, `HoverSeat.blockedBy`,
+        // デザイン規約 §メニュー), not this ask: an ask that fell for the menu reads as the hand leaving the row, and the
+        // box would come back under the still hand the moment the menu went.
+        asked: (navRow.stillPointed || navRow.tipPointedAt) && !navRow.editing && navRow.hoverText !== ""
+        words: navRow.hoverText
+        // Out of the list, never over the rows either side: the left panel has no room on its left, so its box goes
+        // right, and the right panel's to its left.
+        rowSide: "left"
+    }
 
     /// What the row opens under itself, read as it opens rather than bound: the answers come off slots, which a
     /// binding freezes (app-ui.md).
@@ -792,36 +777,20 @@ Item {
         navRow.factsLines = NavFacts.lines(navRow.kindHint, said)
         return navRow.factsName !== ""
     }
-    /// Ask for this row to be the open one, with the pointer where it was standing when it asked.
-    function askFacts(at) {
-        if (navRow.expands && !navRow.editing && !navRow.menuStanding && navRow.gatherFacts())
-            navRow.factsAsked(true, at)
+    /// Ask for this row to be the open one, with the pointer where it was standing when it asked — `now` for a press
+    /// going for the words, which skips the rest. Whether it may — a name box, a menu, a held bar, a hand that has
+    /// not walked — is the seat's to weigh.
+    function askFacts(at, now) {
+        if (navRow.expands && navRow.gatherFacts())
+            navRow.factsAsked(true, at, now === true)
     }
-    // The rest before the facts come out (規約 §hover のツールチップ「補足は待ってから開く」).
-    Timer {
-        id: factsWait
-        interval: Metrics.tipDelayMs
-        onTriggered: if (navRow.stillPointed) navRow.askFacts(rowHover.point.scenePosition)
-    }
-    // The beat a row with a tip out waits before letting go, the tip's own (`Metrics.hoverKeepMs`). **It asks again
-    // rather than deciding once**: while the tip stands, the reader is still on this row.
-    Timer {
-        id: factsKeep
-        interval: Metrics.hoverKeepMs
-        onTriggered: {
-            if (navRow.stillPointed || navRow.factsTipOut)
-                factsKeep.restart()
-            else
-                navRow.factsAsked(false, Qt.point(0, 0))
-        }
-    }
-    // The stand-in opens the facts with no rest (a run has no hand to rest), asked from the row's own middle so two
-    // rows are never asked for from one place.
+    // The stand-in asks for the facts from the row's own middle, so two rows are never asked for from one place; the
+    // seat counts the rest for it as for a hand.
     onTipPointedAtChanged: {
         if (navRow.tipPointedAt)
             navRow.askFacts(navRow.mapToItem(null, navRow.width / 2, Theme.rowHeight / 2))
         else if (navRow.expands)
-            navRow.factsAsked(false, Qt.point(0, 0))
+            navRow.factsAsked(false, Qt.point(0, 0), false)
     }
     // A row that comes back open — recycled onto the open name while it was scrolled off — reads its answers again.
     onFactsOpenChanged: if (navRow.factsOpen) navRow.gatherFacts()
@@ -850,8 +819,8 @@ Item {
             path: navRow.factsPath
             // **The rest on the row's own line asks for it too** — walking down to the lines would pay a second rest
             // for it. Both roads write the same ask, so the box stays up as the hand crosses into the lines. Not once
-            // the row slides out from under the hand (`underHand`).
-            rowPointed: (navRow.handOn && navRow.underHand) || navRow.tipPointedAt
+            // the row slides out from under the hand (`slid`).
+            rowPointed: (navRow.handOn && !navRow.slid) || navRow.tipPointedAt
             // Why the row's own name wears the warning, said on a rest on that name alone: the lines under it keep
             // notes of their own. `rowHover` hears only the row's own line — the lines take the pointer off it.
             nameNote: navRow.factsNameNote

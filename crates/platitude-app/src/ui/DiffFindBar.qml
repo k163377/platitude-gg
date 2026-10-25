@@ -34,7 +34,7 @@ Rectangle {
             box.shownError = bar.error
     }
     /// Automation: the refusal's tip is actually up, on this box.
-    readonly property bool tipShown: box.tipTyped && box.ToolTip.toolTip.visible
+    readonly property bool tipShown: refusalTip.shown
     /// Automation: whether the caret is in the box.
     readonly property bool boxFocused: field.activeFocus
     /// Automation: how many lines the box holds.
@@ -137,14 +137,18 @@ Rectangle {
                         : field.activeFocus || menuSeat.holding ? Theme.borderFocus : Theme.borderDefault
             // The reason the line was refused (規約 §可否・警告の出し場所). That tip answers what is typed, not a hand:
             // it stands on the box's left edge until the typing changes it, wherever the hand goes
-            // (`SharedToolTip.typedAsker`, 規約 §hover のツールチップ「入力の拒否への補足は一律」).
+            // (`TipAsk.typed`, 規約 §hover のツールチップ「入力の拒否への補足は一律」).
             readonly property bool tipTyped: bar.refused && bar.open
             /// The reason as last said, kept through the tip's own fall: the error clears as the strip closes, and a
             /// box going down with no words in it is a flash.
             property string shownError: ""
-            ToolTip.visible: box.tipTyped
-            ToolTip.delay: Metrics.tipDelayMs
-            ToolTip.text: box.shownError
+            readonly property TipAsk refusalTip: TipAsk {
+                id: refusalTip
+                target: box
+                asked: box.tipTyped
+                typed: true
+                words: box.shownError
+            }
             // The lines run sideways, never wrapped — a typed line is one line of the text. Past the box's width the
             // view follows the caret, as a one-line field's does (規約 §diff を横へ送る「行は端まで在る」); up and down
             // the box grows instead, so nothing is ever out of sight that way.

@@ -67,7 +67,7 @@ ActionButton {
         return what
     }
     /// Where that sentence names the branch it goes to, behind the remote's cloud (デザイン規約 §ref の種別「名前の印」,
-    /// `SharedToolTip.tipMarks`).
+    /// `TipAsk.marksNow`).
     readonly property var tipMarks: pushButton.curPage === null || pushButton.curPage.planShown ? []
         : Words.standSeats(pushButton.sentenceTo(Words.stand), pushButton.curPage.pushTargetLabel)
               .map(at => [at, "remote", undefined, pushButton.curPage.pushTargetLabel.length])

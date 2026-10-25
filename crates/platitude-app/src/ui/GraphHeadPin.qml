@@ -29,33 +29,71 @@ Rectangle {
     /// The stand-in was pressed. `modifiers` ride along: Ctrl / Shift are decided where every row press is
     /// (デザイン規約 §複数のコミットを選ぶ).
     signal activated(int row, int modifiers)
-    /// The pointer came onto the chip: unfold it, as a row's chip unfolds (`GraphRowDelegate.openPointed`).
+    /// The pointer came onto the chip: unfold it, as a row's chip unfolds (`GraphRowDelegate.settlePointed`).
     signal chipExpandRequested(string oidHex, int atRow, var records, var anchor)
     /// And left it — put it back, unless it went into the card (only the owner can tell). `anchor` is the chip it left.
-    signal chipCollapseRequested(var anchor)
+    signal chipCollapseRequested(string oidHex, var anchor)
+    /// The stand-in stands for another commit now, or for none — HEAD moved, another commit took HEAD's row in place
+    /// (an amend) — or it went off the edge. The host weighs it (`RowHoverHost.rowGone`, as a row the graph rewrote):
+    /// another commit's chip is another chip, and its list goes; gone from the edge, the list waits for it while the
+    /// hand is inside.
+    signal rewritten()
+    /// The names on the chip changed under the same commit (a branch made or deleted there): the list out of it says
+    /// them again, or goes with the last of them (`RowHoverHost.chipChanged`, as a row's chips changing).
+    signal chipChanged(string oidHex, var anchor)
+    /// The pane's hand, which the stand-in reads its light and its chip's unfolding off, as the rows do
+    /// (`GraphRowDelegate.syncHand`).
+    required property HandWatch hand
+    /// The chip's list the page has out, by target key (`RowHoverHost.listKey`).
+    required property string listKey
 
-    /// The pointer resting on this, for the headless run (hover cannot be injected).
-    property bool pointed: false
-    /// Where along the stand-in the pointer is, or -1 — the row's `pointerRowX`; a headless run writes it too.
+    /// Where along the stand-in the hand is, or -1 — the row's `pointerRowX`; a headless run writes it too.
     property real pointerX: -1
+    readonly property int handMoves: pin.hand.moves
+    onHandMovesChanged: pin.syncHand()
+    // The rows' rule (`GraphRowDelegate.syncHand`): read again as the rows move under the hand too — the light is the
+    // stand-in's while the hand is on it, and the list it unfolds waits for the hand's move (`HoverSeat.stillHeld`).
+    readonly property int handShifts: pin.hand.shifts
+    onHandShiftsChanged: pin.syncHand()
+    function syncHand() {
+        const hand = pin.hand
+        if (!pin.visible || !hand.known) {
+            pin.pointerX = -1
+            return
+        }
+        const p = pinMouse.mapFromItem(null, hand.at.x, hand.at.y)
+        pin.pointerX = p.x >= 0 && p.y >= 0 && p.x < pinMouse.width && p.y < pinMouse.height ? p.x : -1
+    }
+    /// The commit the stand-in stands for — HEAD's row's, as the model last drew it (`models::graph::head`), empty
+    /// while it stands for none. What its chip's list is keyed by and weighed against.
+    readonly property string standsFor: pin.graphModel.headRowOid
+    // Gone from the edge, the stand-in is under no hand, and the host is told the same turn.
+    onVisibleChanged: {
+        if (pin.visible)
+            return
+        pin.pointerX = -1
+        pin.rewritten()
+    }
+    // Standing for another commit now: the same, and the next move of the hand reads it afresh.
+    onStandsForChanged: {
+        pin.pointerX = -1
+        pin.rewritten()
+    }
+    // By what the chip says (`chipSays`): a reread tells HEAD's names again whether or not they changed.
+    onChipSaysChanged: pin.chipChanged(pin.standsFor, pinStack)
     /// The chip's card stands on this stand-in's chip (as `GraphRowDelegate.listOnThisChip`).
-    readonly property bool listOnThisChip: pin.view.chipListAnchor === pinStack
+    readonly property bool listOnThisChip: pin.listKey === "chip:" + pin.standsFor + ":pin"
     /// The pointer is on the chip column — divided at the column's edge, not the chip's frame, as a row divides it
     /// (`GraphRowDelegate.partAt`).
     readonly property bool chipPointed: pin.pointerX >= 0 && pin.pointerX < pin.labelWidth && pin.records.length > 0
     onChipPointedChanged: pin.settleChip()
-    /// A second click is waiting out its window; hover holds still meanwhile, as on a row
-    /// (`GraphRowDelegate.renameWaiting`), and what the hand did meanwhile — a leave included — settles when it ends.
-    readonly property bool renameWaiting: pin.view.renameWaiting
-    onRenameWaitingChanged: if (!pin.renameWaiting) pin.settleChip()
-    /// Unfolds at once, as a row's chip does (規約 §hover のツールチップ「展開は即時に開く」).
+    /// Unfolds at once, as a row's chip does (規約 §hover のツールチップ「展開は即時に開く」); whether it may is the page's
+    /// seat's to say (`RowHoverHost`).
     function settleChip() {
-        if (pin.renameWaiting)
-            return
         if (pin.chipPointed)
-            pin.chipExpandRequested(pin.graphModel.oidAt(pin.headRow), pin.headRow, pin.records, pinStack)
+            pin.chipExpandRequested(pin.standsFor, pin.headRow, pin.records, pinStack)
         else
-            pin.chipCollapseRequested(pinStack)
+            pin.chipCollapseRequested(pin.standsFor, pinStack)
     }
     /// The hand came onto the stand-in at `x`, or left it — **every leave answered**, as on a row
     /// (`GraphRowDelegate.pointerCrossed`, which a run enters the same way).
@@ -72,8 +110,17 @@ Rectangle {
     /// HEAD is inside the loaded window and its chips have arrived (`models::graph::head`). Not while the discard log's
     /// entry is on the graph: the view keeps to the entry's span, HEAD is out of its reach, and a stand-in at the edge
     /// would cover the span's edge row — the entry's tip, often — where no scroll can take it out from under.
-    readonly property bool wanted: pin.headRow >= 0 && pin.graphModel.headLabels.length > 0
-                                   && !pin.graphModel.provisionalOn
+    readonly property bool wanted: pin.wantedAt(pin.headRow)
+    function wantedAt(row) {
+        return row >= 0 && pin.graphModel.headLabels.length > 0 && !pin.graphModel.provisionalOn
+    }
+    /// Whether the stand-in stands at the top edge with the view at `contentY` — read off the model as it is now: a
+    /// pass tells its rows and HEAD's row in one signal (`stats_changed`), and the bindings here may not have weighed
+    /// it again by the time the view puts itself back over its rows (`GraphRowWalk.keptRows`).
+    function aboveAt(contentY) {
+        const row = pin.graphModel.headRow
+        return pin.wantedAt(row) && pin.view.originY + row * Theme.graphRowHeight < contentY
+    }
     /// The list's selection is on HEAD's row. The grounds read this, not each other's `visible` — that is the
     /// effective one, false whenever the stand-in is hidden.
     readonly property bool selected: pin.view.currentIndex === pin.headRow
@@ -81,6 +128,8 @@ Rectangle {
     /// HEAD's own branch never is, but another on the same commit can be.
     readonly property var goneChips: pin.graphModel.goneChips
     readonly property var records: GitFacts.chipsShown(pin.graphModel.headLabels, pin.goneChips)
+    /// What the chip says, every field of every name — as a row's (`GraphRowDelegate.chipSays`).
+    readonly property string chipSays: JSON.stringify(pin.records)
     readonly property color laneColor: Theme.graphLane[pin.graphModel.headColor % Theme.graphLane.length]
     /// The search passed HEAD's row over, as `GraphRowDelegate.dimmed`. Read off the model: the row is off screen
     /// whenever this is up.
@@ -110,6 +159,9 @@ Rectangle {
     readonly property real nodeOutY: pin.rowMidY
         + (pin.rowAbove ? 1 : -1) * (Metrics.nodeIcon / 2 + Theme.borderWidth)
     readonly property real groundRoom: pin.topRoom + Theme.graphRowHeight + pin.hold
+    /// How far down the stand-in reaches at the top edge, its fade included — what a row there is covered by
+    /// (`GraphRowWalk.keptRows`).
+    readonly property real topBand: pin.view.topMargin + Theme.graphRowHeight + pin.hold + pin.fadeRoom
     /// Where the going-out ends: the hold's far edge, while the ground is still whole.
     readonly property real outTo: pin.rowAbove ? pin.groundRoom : pin.fadeRoom
 
@@ -167,7 +219,7 @@ Rectangle {
             color: Theme.bgHover
             // The chip's card holds it lit, as on a row — the card takes the pointer the moment it is drawn
             // (`GraphRowDelegate.lit`).
-            visible: (pinMouse.containsMouse || pin.pointed || pin.listOnThisChip) && !pin.selected
+            visible: (pin.pointerX >= 0 || pin.listOnThisChip) && !pin.selected
         }
     }
 
@@ -178,6 +230,9 @@ Rectangle {
     readonly property alias wordsOpacity: subject.opacity
     /// The chip, sheets and all — what its card stands on, for the headless run.
     readonly property alias chipItem: pinStack
+    /// The area a press lands in — what the rows under the stand-in are shielded by (`GraphList.shieldAt`), as a row's
+    /// own (`GraphRowDelegate.pressArea`).
+    readonly property alias pressArea: pinMouse
 
     // Laid out as a row's chip column is (`GraphRowChips`).
     RefChipStack {
@@ -321,14 +376,12 @@ Rectangle {
         // The only part that gives the bar room (`barRoom`).
         width: parent.width - pin.barRoom
         height: Theme.graphRowHeight + pin.topRoom
-        hoverEnabled: true
+        // Presses only: the hand is the pane's (`syncHand`).
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         // On press, as the rows answer (`GraphRowDelegate`).
         onPressed: mouse => {
             if (mouse.button === Qt.LeftButton)
                 pin.activated(pin.headRow, mouse.modifiers)
         }
-        onPositionChanged: mouse => pin.pointerX = mouse.x
-        onContainsMouseChanged: pin.pointerCrossed(pinMouse.containsMouse, pinMouse.mouseX)
     }
 }

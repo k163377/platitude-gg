@@ -23,6 +23,22 @@ AppListView {
     /// The sidebar's row gestures, which outlive the delegates and span sections — handed by every list here (the
     /// sections and the rail's peek). Null skips every call below.
     property var gestures: null
+    /// The panel's hand (`HandWatch`), which the rows read their light and their rest off — handed by every list here
+    /// (the sections and the rail's peek). Null, a list standing on its own, leaves the rows to Qt's hover.
+    property HandWatch paneHand: null
+    // The same hand for the tips the rows put out (`TipAsk.hand`).
+    rowsHand: navList.paneHand
+    /// What stands over these rows and is not a row: the current branch's stand-in on an edge of the list
+    /// (`HeadPinRow`). A row under it is not under the hand — the rows read the hand by geometry, and the stand-in's
+    /// own hand is the same panel's.
+    property Item shield: null
+    function shieldAt(scenePoint) {
+        const pin = navList.shield
+        if (pin === null || !pin.visible)
+            return false
+        const p = pin.mapFromItem(null, scenePoint.x, scenePoint.y)
+        return p.x >= 0 && p.y >= 0 && p.x < pin.width && p.y < pin.height
+    }
     /// Whether rows open their facts under themselves (`NavRowFacts`), and the section that knows which worktree
     /// has a branch out (`worktreeHolding`). Separate, since the WORKTREES list opens rows but has nothing to ask it.
     property bool offersFacts: false
@@ -183,17 +199,26 @@ AppListView {
     /// would undo where they sent it. Less than a pixel is the view rounding the place the opening wrote as it lays its
     /// rows (`QQuickFlickablePrivate::fixup`; a row's lines need not be whole pixels tall).
     property bool openHeld: false
-    /// How often the reader has moved this list, counted while it is moving (a notch's glide or the bar's step,
-    /// `moving`, or the middle button's drift) — for the rows, which ask each time whether they are still under the
-    /// hand (`NavItemDelegate.syncUnder`). **Not the list's own writes in between** (an opening shown or given back):
-    /// those are rows growing and shrinking, where the row the hand walked to keeps its rest
-    /// (デザイン規約 §左メニューの所作「点くのも同じ規則」).
-    property int readerMoves: 0
+    // The reader moving this list (a notch's glide or the bar's step, `moving`, or the middle button's drift) is the
+    // rows moving under the hand (`HandWatch.rowsMoved`): what the row under it had out goes, and nothing opens until
+    // the hand walks. **Not the list's own writes in between** (an opening shown or given back): those are rows
+    // growing and shrinking, where the row the hand walked to keeps its rest (デザイン規約 §左メニューの所作「点くのも
+    // 同じ規則」).
     onContentYChanged: {
         if (navList.openHeld && Math.abs(navList.contentY - navList.openShownY) >= 1)
             navList.openHeld = false
-        if (wheelGlide.sending || navList.moving || navList.hand.scrolling)
-            navList.readerMoves++
+        if (navList.paneHand !== null && (wheelGlide.sending || navList.moving || navList.hand.scrolling))
+            navList.paneHand.rowsMoved()
+    }
+    // The section's model rebuilt its rows (every arrival resets it): the open row is weighed again
+    // (`SidebarRowGestures.rowsRebuilt`).
+    Connections {
+        // A test's stand-in model has no reset to tell of.
+        target: navList.sectionModel && navList.sectionModel.modelReset !== undefined ? navList.sectionModel : null
+        function onModelReset() {
+            if (navList.gestures)
+                navList.gestures.rowsRebuilt()
+        }
     }
     function keepOpenRowInView() {
         if (navList.gestures === null)
@@ -330,7 +355,7 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.editBoxAt : ""
     }
-    /// Whether the shared tooltip stands on that row's box (PGG_AUTO_ACT=rename-tag-box).
+    /// Whether the window's tip stands on that row's box (PGG_AUTO_ACT=rename-tag-box).
     function rowTipShown(index) {
         const row = navList.itemAtIndex(index)
         return row ? row.editTipShown : false
@@ -340,8 +365,8 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.editPlaceholder : ""
     }
-    /// What the pointed row would say, and its name (PGG_AUTO_ACT=nav-tip). Read off `hoverText`: the attached
-    /// `ToolTip.visible` reads back the shared instance, false during the delay. An empty name: the row is unbuilt.
+    /// What the pointed row would say, and its name (PGG_AUTO_ACT=nav-tip). Read off `hoverText`: the row's
+    /// `tipShown` is the window's seat's answer, false during the rest. An empty name: the row is unbuilt.
     function rowTipWords(index) {
         const row = navList.itemAtIndex(index)
         return row ? row.hoverText : ""
@@ -485,16 +510,11 @@ AppListView {
         activeKey: navList.gestures ? navList.gestures.activeKey : ""
         // The gestures' own: the wait for a second click outlives this row (`ReclickGesture`).
         reclick: navList.gestures ? navList.gestures.reclick : null
-        // Hover is re-read when the hand moves, never when the layout does — these rows grow in place
-        // (`NavItemDelegate.syncHover`).
-        handCounted: navList.gestures !== null
-        handMoves: navList.gestures ? navList.gestures.handMoves : 0
-        // Only where the hand is counted (`handCounted`): rows taking Qt's hover themselves follow the scroll with it.
-        handAt: navList.gestures ? navList.gestures.handAt : Qt.point(-1, -1)
-        readerMoves: navList.gestures ? navList.readerMoves : 0
+        // The hand is read when it moves, never when the layout does — these rows grow in place
+        // (`NavItemDelegate.syncHand`).
+        paneHand: navList.paneHand
         editKey: navList.gestures ? navList.gestures.editKey : ""
-        menuStanding: navList.gestures ? navList.gestures.menuOpen : false
-        menuOnOpenRow: navList.gestures ? navList.gestures.menuOpen && navList.gestures.menuFromFacts : false
+        menuOnOpenRow: navList.gestures ? navList.gestures.menuOnOpenRow : false
         editMode: navList.gestures ? navList.gestures.editMode : ""
         editKind: navList.gestures ? navList.gestures.editKind : navList.kindHint
         editText: navList.gestures ? navList.gestures.editText : ""
@@ -516,21 +536,14 @@ AppListView {
                 navList.gestures.noteClick(row.rowKey)
             navList.takeKeyboard()
         }
-        onFactsAsked: (open, at) => {
+        onFactsAsked: (open, at, now) => {
             if (!navList.gestures)
                 return
             if (open)
-                navList.gestures.openFacts(row.rowKey, at)
+                navList.gestures.openFacts(row.rowKey, at, row, now, navList.sectionModel,
+                                           row.full !== "" ? row.full : row.name)
             else
-                navList.gestures.closeFacts(row.rowKey)
-        }
-        onFactsMenuAsked: {
-            if (navList.gestures)
-                navList.gestures.noteMenuFromFacts()
-        }
-        onFactsMenuRefused: {
-            if (navList.gestures)
-                navList.gestures.dropMenuFromFacts()
+                navList.gestures.closeFacts(row.rowKey, now)
         }
         onFactsFollowed: (key, oidHex) => {
             if (navList.gestures)

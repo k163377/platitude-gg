@@ -945,22 +945,28 @@ FocusScope {
         publishFlow.startPublishAsk(branch, upstream, branchesModel.oidOfName(branch))
     }
 
-    /// Where the standing right-click menu was raised — `sidebar` (the left panel's rows), `refList` (the rows of a
-    /// chip's stacked list), `graph`, `files`, `changes` (a commit's changed files), `diff` — or "" while none stands.
-    /// What hover opened stays under a menu raised on its own rows and goes behind any other (デザイン規約 §メニュー).
-    /// One binding over the seats and the
-    /// doors' marks, which are written before the menu shows: a reader that also read `menuStanding` could see the
-    /// menu up before its origin.
-    readonly property string menuRaisedOn:
-        page.menuShowing(refMenuSeat) ? (page.refMenuInSidebar ? "sidebar" : "graph")
-        : page.menuShowing(remoteMenuSeat) ? "sidebar"
-        : page.menuShowing(commitMenuSeat) ? (page.rowMenuOnList ? "refList" : "graph")
-        : page.menuShowing(fileMenuSeat) ? "files"
-        : page.menuShowing(commitFileMenuSeat) ? "changes"
-        : page.menuShowing(diffMenuSeat) ? "diff" : ""
     /// One of this page's right-click menus is standing: nothing behind a menu is being hovered, so no card or tip may
     /// come out over the rows the hand is reading. A menu nobody has raised yet is not standing.
-    readonly property bool menuStanding: page.menuRaisedOn !== ""
+    readonly property bool menuStanding: page.menuShowing(refMenuSeat) || page.menuShowing(remoteMenuSeat)
+                                         || page.menuShowing(commitMenuSeat) || page.menuShowing(fileMenuSeat)
+                                         || page.menuShowing(commitFileMenuSeat) || page.menuShowing(diffMenuSeat)
+    /// Where the standing menu was raised, and on what — one door (`menuDoor`), null while none stands. `area` is the
+    /// surface — `sidebar` (the left panel's rows), `peek` (the rows of the folded rail's open section), `refList`
+    /// (the rows of a chip's stacked list), `graph`, `files`, `changes` (a commit's changed files), `diff`; `key` the
+    /// thing the row stood for (`<kind>:<ref>` as the left panel keys its rows, a row's commit, a file's path). What
+    /// hover opened stays under a menu raised on its own rows and goes behind any other (デザイン規約 §メニュー). The
+    /// doors note the pair before the menu shows and it is read only while a seat shows, so no reader sees the menu
+    /// up before its origin. **A reader weighing both at once reads the door**: `menuArea` and `menuKey` are two
+    /// properties, updated one after the other.
+    readonly property var menuDoor: page.menuStanding ? { "area": page.menuDoorArea, "key": page.menuDoorKey } : null
+    readonly property string menuArea: page.menuDoor !== null ? page.menuDoor.area : ""
+    readonly property string menuKey: page.menuDoor !== null ? page.menuDoor.key : ""
+    property string menuDoorArea: ""
+    property string menuDoorKey: ""
+    function noteMenuDoor(area, key) {
+        page.menuDoorArea = area
+        page.menuDoorKey = key
+    }
     function menuShowing(seat) {
         return seat.item !== null && seat.item.showing
     }
@@ -1022,8 +1028,9 @@ FocusScope {
             onCopyRequested: text => clipboard.copy(text)
         }
     }
-    /// The one door into that menu. Says whether it opened.
-    function openRemoteMenu(name) {
+    /// The one door into that menu, from the left panel's rows (`area`: `sidebar` / `peek`). Says whether it opened.
+    function openRemoteMenu(name, area) {
+        page.noteMenuDoor(area === undefined ? "sidebar" : area, "remote:" + name)
         remoteMenuSeat.active = true
         return remoteMenuSeat.item.offerOn(name)
     }
@@ -1034,14 +1041,16 @@ FocusScope {
     /// acts on: a WORKTREES row opens the menu of the branch it has out, and the box still opens on that row.
     property string refMenuRowKind: ""
     property string refMenuRowId: ""
-    /// The one door into that menu: the sidebar's rows (`inSidebar`) and the automation, whose calls without it take
-    /// the graph's side. Says whether it opened. A worktree's row names that worktree (`full` is its path), which
-    /// carries its own card (`RefRowMenu.offerOn`). `aim` is a remote the reader named on its own (a TAGS row's
-    /// carrier line), which the menu then acts on.
-    function openRefMenu(kind, name, full, oidHex, inSidebar, aim) {
-        page.refMenuInSidebar = inSidebar === true
+    /// The one door into that menu: the left panel's rows (`area`: `sidebar` / `peek`) and the automation, whose calls
+    /// without it take the graph's side. Says whether it opened. A worktree's row names that worktree (`full` is its
+    /// path), which carries its own card (`RefRowMenu.offerOn`). `aim` is a remote the reader named on its own (a
+    /// TAGS row's carrier line), which the menu then acts on.
+    function openRefMenu(kind, name, full, oidHex, area, aim) {
+        const from = area === undefined || area === "" ? "graph" : area
+        page.refMenuInSidebar = from !== "graph"
         page.refMenuRowKind = kind
         page.refMenuRowId = full
+        page.noteMenuDoor(from, kind + ":" + (full !== "" ? full : name))
         refMenuSeat.active = true
         return kind === "worktree" ? refMenuSeat.item.offerOn(kind, name, full, oidHex, full)
                                    : refMenuSeat.item.offerOn(kind, name, full, oidHex, undefined,
@@ -1350,6 +1359,7 @@ FocusScope {
     function openFileMenu(bucket, path) {
         // A right-click is a click: it walks away from a standing question, which may be about another row.
         page.stopRowAsk()
+        page.noteMenuDoor("files", bucket + ":" + path)
         fileMenuSeat.active = true
         fileMenuSeat.item.offer(bucket, path)
     }
@@ -1384,6 +1394,7 @@ FocusScope {
         // Not read — a plan holds the centre (`openDiff`): the row is not lit, so no menu acts on it.
         if (page.diffKind !== "commit" || page.diffPath !== path)
             return false
+        page.noteMenuDoor("changes", path)
         commitFileMenuSeat.active = true
         return commitFileMenuSeat.item.offerOn(links)
     }
@@ -1410,6 +1421,7 @@ FocusScope {
     /// The menu acts on the selection, settled before asking (`DiffTextSelect.askMenu`), so no row travels here.
     function openCodeMenu() {
         page.stopRowAsk()
+        page.noteMenuDoor("diff", "")
         diffMenuSeat.active = true
         diffMenuSeat.item.standGithub(page.diffLineLinks())
         diffMenuSeat.item.offer()
@@ -1458,15 +1470,12 @@ FocusScope {
         return GitFacts.namedKind(shown[0].kind) === "" ? null : shown[0]
     }
 
-    /// Whether the standing row menu was raised on a row of the chip's stacked list, which it stands on rather than
-    /// over (`menuRaisedOn`).
-    property bool rowMenuOnList: false
-    /// The one door into that menu: graph rows, the rows of a chip's stacked list (`onList`), and automation. `chip`
-    /// is the name it is aimed at; null aims it at nothing, and left out it is asked of the model (`rowChipAt`). The
-    /// first level is the same commit either way — the name only picks which card comes up
-    /// (デザイン規約 §グラフ行の右クリック).
+    /// The one door into that menu: graph rows, the rows of a chip's stacked list (`onList` — the menu then stands on
+    /// the list rather than over it, `menuArea` = `refList`), and automation. `chip` is the name it is aimed at; null
+    /// aims it at nothing, and left out it is asked of the model (`rowChipAt`). The first level is the same commit
+    /// either way — the name only picks which card comes up (デザイン規約 §グラフ行の右クリック).
     function openRowMenu(oidHex, chip, onList) {
-        page.rowMenuOnList = onList === true
+        page.noteMenuDoor(onList === true ? "refList" : "graph", oidHex)
         const named = chip === undefined ? page.rowChipAt(oidHex) : chip
         commitMenuSeat.active = true
         const menu = commitMenuSeat.item
@@ -1484,7 +1493,7 @@ FocusScope {
     function openChoiceMenu(oidHex, atRow, chip) {
         // A right-click is a click: it walks away from a standing question, as the row's own press does.
         page.stopRowAsk()
-        page.rowMenuOnList = false
+        page.noteMenuDoor("graph", oidHex)
         commitMenuSeat.active = true
         const menu = commitMenuSeat.item
         menu.releaseShape()
@@ -1496,7 +1505,7 @@ FocusScope {
     }
     /// The menu on another worktree's uncommitted row, which is no commit: its own (デザイン規約 §別の worktree を読む).
     function openCarriedMenu(path, name) {
-        page.rowMenuOnList = false
+        page.noteMenuDoor("graph", path)
         commitMenuSeat.active = true
         commitMenuState.openCarriedMenu(path, name)
     }
@@ -1610,9 +1619,6 @@ FocusScope {
             onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
                 repoTab.deleteRemoteTag(remote, tag, onlyThere, expect)
             onDeleteTagEverywhereRequested: (tag, remote, expect) => repoTab.deleteTagEverywhere(tag, remote, expect)
-            // For a menu raised on a row of the stacked list: the list stayed up under it, and the pointer now decides
-            // again whether it stays.
-            onDismissed: rowHost.settleRefList()
         }
     }
 
@@ -1781,7 +1787,8 @@ FocusScope {
         remotesModel: remotesModel
         tagsModel: tagsModel
         tagAgainst: repoTab.defaultRemote
-        menuRaisedOn: page.menuRaisedOn
+        menuDoor: page.menuDoor
+        chosenHand: detailsPane.hand
         onRecordActivated: chip => page.activateChip(chip)
         // A plain click in the card is a click on its row: every name in it is on that one commit.
         onRecordChosen: (oidHex, atRow) => page.activateRow(oidHex, atRow)
@@ -1794,6 +1801,15 @@ FocusScope {
         onRecordMenuAsked: (oidHex, chip) => page.openRowMenu(oidHex, chip, true)
         // The line under a card's name: the same jump its left-panel row makes.
         onMateFollowed: oidHex => page.jumpToRef(oidHex)
+    }
+    // The list a menu was raised on went — the rows moved under it: the menu, a row of that list's, has nothing left
+    // to stand on and goes with it (as `CommitRowMenu.withdraw` takes a menu off a commit that is gone).
+    Connections {
+        target: rowHost
+        function onListKeyChanged() {
+            if (page.menuArea === "refList" && rowHost.listKey === "" && commitMenuSeat.item !== null)
+                commitMenuSeat.item.withdraw()
+        }
     }
 
     // ---- rewriting one commit --------------------------------------
@@ -2169,15 +2185,6 @@ FocusScope {
         page.diffShown = true
         page.diffNeighbour = ""
         page.noteDiffNeighbour()
-    }
-    /// A pointer came to rest on a commit, or left one. Two lists reach this — the graph's rows and the right pane's
-    /// under a choice (デザイン規約 §複数のコミットを選ぶ) — with one card between them (`RowHoverHost.openRowCard`).
-    function restOnCommit(row, inside) {
-        rowHost.rowCardWanted = inside
-        if (inside)
-            rowHost.openRowCard(row)
-        else
-            rowHost.settleRowCard()
     }
     /// The patch behind a commit-list row, in the list's three shapes (デザイン規約 §複数のコミットを選ぶ): one commit's
     /// change, the difference between exactly two, or each chosen commit's own block in turn — a diff of the two ends
@@ -3121,9 +3128,14 @@ FocusScope {
         page.anchorOid = row < 0 ? "" : graphModel.oidAt(row)
         page.anchorRow = row
     }
-    // How far the graph slid under the viewport. Zero when the anchor is gone: a rewrite deep in the history moves rows
-    // by different amounts and there is no single answer, so the view is left alone.
+    // How far the graph slid under the viewport: under the hand, by the row it is over — what the hand is on stays
+    // where it is (デザイン規約 §hover のツールチップ「外乱では閉じない」); elsewhere by the newest commit. Zero when the
+    // anchor is gone: a rewrite deep in the history moves rows by different amounts and there is no single answer, so
+    // the view is left alone.
     function anchorShift() {
+        const held = graphPane.handShift()
+        if (held !== undefined)
+            return held
         if (page.anchorRow < 0 || page.anchorOid === "")
             return 0
         const now = graphModel.rowOf(page.anchorOid)
@@ -3351,9 +3363,12 @@ FocusScope {
                 const resetHappened = graphModel.resetCount !== page.seenResetCount
                 page.seenResetCount = graphModel.resetCount
                 // A reset starts the viewport over anyway; only in-place replacements leave it pointing at rows that
-                // moved.
-                if (!resetHappened)
+                // moved — and what hangs off a commit standing on a row that shows another now (`RowHoverHost.reseat`).
+                if (!resetHappened) {
                     graphPane.shiftRows(page.anchorShift())
+                    rowHost.reseat()
+                }
+                graphPane.noteHand()
                 page.rememberAnchor()
                 // A stopped operation lands on the worktree's own row, which this pass is what puts there.
                 page.tryPendingWipSelect()
@@ -3552,12 +3567,12 @@ FocusScope {
                     recoverPage: page.blank ? null : page
                     // The menus the rows raise are the page's, so only the page can say where the standing one came
                     // from — the folded list's open section stays under its own rows' menu alone.
-                    menuRaisedOn: page.menuRaisedOn
+                    menuDoor: page.menuDoor
                     onFoldRequested: collapse => page.foldByHand(collapse)
                     onRefActivated: oidHex => page.jumpToRef(oidHex)
-                    onRefMenuRequested: (kind, name, full, oidHex, aim) =>
-                        page.openRefMenu(kind, name, full, oidHex, true, aim)
-                    onRemoteMenuRequested: name => page.openRemoteMenu(name)
+                    onRefMenuRequested: (kind, name, full, oidHex, aim, area) =>
+                        page.openRefMenu(kind, name, full, oidHex, area, aim)
+                    onRemoteMenuRequested: (name, area) => page.openRemoteMenu(name, area)
                     onWorktreeActivated: path => page.openRepositoryPathRequested(path)
                     onRefSwitchRequested: (kind, name) => page.switchToRef(kind, name)
                     onBranchAtRequested: (oidHex, name) => {
@@ -3625,8 +3640,8 @@ FocusScope {
                             graphModel: graphModel
                             worktree: worktree
                             blank: page.blank
-                            chipListAnchor: rowHost.refListAnchor
-                            rowCardOid: rowHost.rowCardOid
+                            listKey: rowHost.listKey
+                            cardKey: rowHost.cardKey
                             chosenOids: page.chosenOids
                             chosenCount: page.chosenCount
                             onRowActivated: (oidHex, atRow, modifiers) => page.pickRow(oidHex, atRow, modifiers)
@@ -3651,9 +3666,13 @@ FocusScope {
                             namingRefusedMark: page.graphNameRefusedMark
                             namingRefusedMarks: page.graphNameRefusedMarks
                             onChipExpandRequested: (oidHex, atRow, records, anchor) =>
-                                rowHost.openRefList(oidHex, atRow, records, anchor)
-                            onChipCollapseRequested: anchor => rowHost.closeRefListUnlessEntered(anchor)
-                            onRowHoverRequested: (row, inside) => page.restOnCommit(row, inside)
+                                rowHost.pointChip(oidHex, atRow, records, anchor)
+                            onChipCollapseRequested: (oidHex, anchor) => rowHost.unpointChip(oidHex, anchor)
+                            // One card between the graph's rows and the right pane's under a choice (デザイン規約
+                            // §複数のコミットを選ぶ), told apart by area.
+                            onRowHoverRequested: (row, inside) => rowHost.pointRow(row, inside, "graph")
+                            onRowRewritten: row => rowHost.rowGone(row)
+                            onChipChanged: (oidHex, anchor) => rowHost.chipChanged(oidHex, anchor)
                             onCreateBranchRequested: (oidHex, name) => repoTab.createBranch(name, oidHex, true)
                             // Nothing moves: a tag is left on the commit and the tree stays where it is.
                             onCreateTagRequested: (oidHex, name) => repoTab.createTag(name, oidHex)
@@ -3759,7 +3778,6 @@ FocusScope {
                         files: carriedModel
                         readBucket: page.diffFromWorktree ? page.diffKind : ""
                         readPath: page.diffFromWorktree ? page.diffPath : ""
-                        menuStanding: page.menuStanding
                         onTreeViewChosen: tree => page.setWipTreeView(tree)
                         onFileActivated: (bucket, path, origPath) => page.toggleDiff(bucket, path, origPath)
                         onFileWalked: (bucket, path, origPath) => page.openDiff(bucket, path, origPath)
@@ -3797,8 +3815,9 @@ FocusScope {
                         visible: !page.wipShown
                         details: detailsModel
                         chosenCommits: page.chosenRecords
-                        rowCardOid: rowHost.rowCardOid
-                        onRowHoverRequested: (row, inside) => page.restOnCommit(row, inside)
+                        cardKey: rowHost.cardKey
+                        onRowHoverRequested: (row, inside) => rowHost.pointRow(row, inside, "chosen")
+                        onRowRewritten: row => rowHost.rowGone(row)
                         onCommitDropRequested: oidHex => page.dropFromChoice(oidHex)
                         stashRef: page.selectedStashRef
                         menuStanding: page.menuStanding

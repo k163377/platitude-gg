@@ -107,13 +107,15 @@ Rectangle {
         anchors.fill: parent
         hoverEnabled: true
         onClicked: toggle.curPage.toggleCommands()
-        // Only where the mark stands alone — a captioned seat already says it (規約 §hover のツールチップ).
-        ToolTip.visible: containsMouse && !toggle.captioned
-        ToolTip.delay: Metrics.tipDelayMs
-        ToolTip.text: toggle.open
-                      ? qsTr("Hide the git commands this window ran")
-                      : toggle.wrong
-                        ? qsTr("The last command failed — read it here")
-                        : qsTr("Show the git commands this window ran")
+        readonly property TipAsk toggleTip: TipAsk {
+            target: commandsMouse
+            // Only where the mark stands alone — a captioned seat already says it (規約 §hover のツールチップ).
+            asked: commandsMouse.containsMouse && !toggle.captioned
+            words: toggle.open
+                   ? qsTr("Hide the git commands this window ran")
+                   : toggle.wrong
+                     ? qsTr("The last command failed — read it here")
+                     : qsTr("Show the git commands this window ran")
+        }
     }
 }

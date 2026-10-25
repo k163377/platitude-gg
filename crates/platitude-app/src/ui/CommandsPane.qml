@@ -174,14 +174,17 @@ Rectangle {
                 }
 
                 AppCheckBox {
+                    id: readsBox
                     text: qsTr("Background reads")
                     // The band is shorter than a form row (`AppCheckBox` opens at the control height).
                     implicitHeight: Theme.iconLg
                     checked: pane.commandsModel.backgroundReads
                     // Timer reads would bury the rest, so they are off until asked for, and only from here on.
-                    ToolTip.visible: hovered
-                    ToolTip.delay: Metrics.tipDelayMs
-                    ToolTip.text: qsTr("Also record the reads this window makes on its own, from now on")
+                    readonly property TipAsk readsTip: TipAsk {
+                        target: readsBox
+                        asked: readsBox.hovered
+                        words: qsTr("Also record the reads this window makes on its own, from now on")
+                    }
                     onToggled: pane.commandsModel.setBackgroundReads(checked)
                 }
                 HoverToolButton {
@@ -209,6 +212,11 @@ Rectangle {
             property bool follow: true
             onMovementEnded: list.follow = list.atYEnd
             onCountChanged: if (list.follow) list.positionViewAtEnd()
+            // The rows moved under the hand (`HandWatch.rowsMoved`) — the reader's scroll, new rows pulling the view
+            // along — so a command's tip does not come out on a row brought under a still hand (`TipAsk.hand`). A row
+            // that grew above the one under the hand says so itself (`CommandRowDelegate`).
+            rowsHand: logHand
+            onContentYChanged: logHand.rowsMoved()
 
             // `StandardKey`, so the platform's copy is what is matched (規約 §diff の中身をコピーする).
             Keys.onPressed: event => {
@@ -262,6 +270,11 @@ Rectangle {
         barRoom: list.barRoom
         ruler: lineRuler
         onScrollWanted: dy => list.contentY = list.clampY(list.contentY + dy)
+    }
+
+    /// The hand over the log (`HandWatch`) — a passive handler on the pane, which takes no row's hover.
+    HandWatch {
+        id: logHand
     }
 
     // ---- the middle button ----------------------------------------------------------------------------------------

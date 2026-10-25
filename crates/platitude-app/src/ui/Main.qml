@@ -25,10 +25,6 @@ ApplicationWindow {
     flags: root.captionMerged ? (Qt.Window | Qt.FramelessWindowHint) : Qt.Window
     title: Words.appName
     color: Theme.bgBase
-    // Every tip waits only the delay its site names (`Metrics.tipDelayMs`) and stays until its site lets it go: Qt's
-    // automatic policy would add the platform's wake-up delay and a timeout to each. A popup inherits nothing from the
-    // window, so the popup bases say it again (rules-refs/app-ui.md「ToolTip.policy」).
-    ToolTip.policy: ToolTip.Manual
 
     /// Whether this app draws the window's edge: a frameless window has no frame for the platform to draw one on, and
     /// a maximised one's edge is the screen's (デザイン規約 §ウィンドウの縁).
@@ -297,7 +293,7 @@ ApplicationWindow {
             gate: gate,
             windowEdge: windowEdge,
             windowShape: windowShape,
-            sharedToolTip: sharedToolTip,
+            windowTip: windowTip,
             openFailedDialog: openFailedDialog,
             identityGate: identityGate,
             identityDialog: identityGate.dialog,
@@ -322,8 +318,9 @@ ApplicationWindow {
             root.reportState()
     }
 
-    SharedToolTip {
-        id: sharedToolTip
+    // The window's one tooltip, which every target asks for through `TipAsk`.
+    TipSeat {
+        id: windowTip
         host: body
         hand: body.hand
         // One tip for the whole window, so a press inside it is the page's to answer (`RepoPage.tipLinkAsked`).
@@ -336,9 +333,10 @@ ApplicationWindow {
     /// the one part a run cannot press (verify-ui スキル). Answers whether there was a link, so a run cannot pass on a
     /// tip that offered nothing to press.
     function pressTipLink() {
-        if (sharedToolTip.tipPlace === "" || sharedToolTip.tipHref === "")
+        const ask = windowTip.current
+        if (ask === null || !windowTip.shownNow || ask.place === "" || ask.href === "")
             return false
-        sharedToolTip.linkAsked(sharedToolTip.tipHref)
+        windowTip.linkAsked(ask.href)
         return true
     }
 
@@ -351,7 +349,6 @@ ApplicationWindow {
     Component.onCompleted: {
         // First: what it seeds (the window's opening shape, the strip's first tabs) is read further down.
         const acts = harness.ask()
-        sharedToolTip.dressToolTip()
         chrome.decorateWindow()
         // A window that is only here to say another process has the files does none of the rest.
         if (!AppBackend.alreadyRunning) {

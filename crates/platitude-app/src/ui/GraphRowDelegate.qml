@@ -138,6 +138,9 @@ Item {
     readonly property var goneChips:
         rowItem.ListView.view && rowItem.ListView.view.model ? rowItem.ListView.view.model.goneChips : []
     readonly property var labelRecords: GitFacts.chipsShown(labels, rowItem.goneChips)
+    /// What the chip says, every field of every name. The records come as a fresh array whenever the roles or the gone
+    /// set are told again — a reread tells every row, changed or not — and a `string` notifies only when it differs.
+    readonly property string chipSays: JSON.stringify(rowItem.labelRecords)
     // The chips a double-click can lead to (`primaryChip`).
     readonly property var branchRecords: labelRecords.filter(chip => chip.kind === "branch" || chip.kind === "remote")
     // Whether this row is somewhere HEAD could stand: the worktree row is not a commit, and a stash sits on no
@@ -212,10 +215,16 @@ Item {
 
     // A row back from the reuse pool redraws even when no role differs: it holds the picture it was left with, and the
     // graph may have grown a lane meanwhile. The attached `ListView` exists only on the delegate's root, hence here.
+    // It is another row, too, which the hand never walked to: it reads the hand afresh (`syncHand`).
     ListView.onReused: {
+        rowItem.pooled = false
+        rowItem.pointerRowX = -1
         laneCell.loadFace()
         laneCell.repaintLanes()
     }
+    /// The view has put this delegate in its pool. A pooled delegate stays `visible` where its row last stood — the
+    /// view only stops drawing it — so it reads no hand, moves no rows, and what it asked for is not alive.
+    property bool pooled: false
 
     readonly property real labelsW: ListView.view ? ListView.view.labelWidth : Metrics.labelColW
     /// What a worktree's uncommitted row may spend on its words and name (only that row reads it). **Measured off the
@@ -399,8 +408,70 @@ Item {
     // chip's frame, which stops where the name stops, so the margin a reader takes for "the branch" would answer with
     // the commit's card (デザイン規約 §hover のツールチップ「開けるのは的、保つのはその的が属する区画」).
 
-    /// Where along the row the pointer is, or -1 for "not on this row". Written by the area below.
+    /// Where along the row the hand is, or -1 for "not on this row" — read off the pane's hand (`HandWatch`) each
+    /// time it moves and each time the rows move under it. A row the graph brought under a still hand is the row
+    /// under it, as Qt's hover says (`tst_hoverunderstillhand.qml`); what it asks for waits on its seat for the hand
+    /// (デザイン規約 §グラフ行のダブルクリック). A headless run writes it too (`pointerCrossed`).
     property real pointerRowX: -1
+    readonly property HandWatch hand: rowItem.ListView.view ? rowItem.ListView.view.hand : null
+    // Every move is one read per row: the hand's place is written before the count moves (`HandWatch.stir`). So is
+    // the rows moving under it (`HandWatch.shifts`): the wash goes to the row under the hand as Qt's own lists hand
+    // their hover on with a scroll (`QAbstractItemView::verticalScrollbarValueChanged`) — the wash is no judgement,
+    // and the seats hold the asks until the hand moves (`HoverSeat.stillHeld`).
+    readonly property int handMoves: rowItem.hand !== null ? rowItem.hand.moves : 0
+    onHandMovesChanged: rowItem.syncHand()
+    readonly property int handShifts: rowItem.hand !== null ? rowItem.hand.shifts : 0
+    onHandShiftsChanged: rowItem.syncHand()
+    // The row's place in the list changed with the list where it was — a pooled delegate put at another row's place,
+    // one built as the rows grow and laid out: the rows moved under the hand, as a scroll is, and the hand is told so
+    // (`HandWatch.rowsMoved`) by the row that had the hand or has it now. A hold already on is re-anchored, no more.
+    onYChanged: rowItem.placeMoved()
+    function placeMoved() {
+        const hand = rowItem.hand
+        if (hand === null || !rowItem.visible || rowItem.pooled)
+            return
+        // Moved to a place outside the list's own box — a row kept built past its edge, the current row among them,
+        // which a reread puts at its new place as the selection follows its commit: under no hand, and nothing hangs
+        // off it there. A row moving in is told by its new place. The view putting itself back over its rows after a
+        // reread is the pane's to tell (`GraphList.keepingRows`).
+        const view = rowItem.ListView.view
+        if (view && view.keepingRows)
+            return
+        if (view) {
+            const top = rowItem.mapToItem(view, 0, 0).y
+            if (top + rowItem.height <= 0 || top >= view.height)
+                return
+        }
+        // A row a reread's layout moved (`GraphList.rereading`) moved as the reread's.
+        const disturbed = view !== null && view !== undefined && view.rereading === true
+        // A hand the rows cannot hear — in a card over them, under a menu, elsewhere — is told all the same: what
+        // hangs off the rows goes with them, and a hand in a card is held from the first place heard.
+        if (!hand.known) {
+            hand.rowsMoved(disturbed)
+            return
+        }
+        const p = rowItem.mapFromItem(null, hand.at.x, hand.at.y)
+        const over = p.x >= 0 && p.y >= 0 && p.x < rowItem.width && p.y < rowItem.height
+        if (over !== (rowItem.pointerRowX >= 0))
+            hand.rowsMoved(disturbed)
+    }
+    function syncHand() {
+        const view = rowItem.ListView.view
+        const hand = rowItem.hand
+        if (!view || hand === null || !hand.known || !rowItem.visible || rowItem.pooled || view.shieldAt(hand.at)) {
+            rowItem.pointerRowX = -1
+            return
+        }
+        // Inside the list's own box: a row kept built past its edge (`cacheBuffer`) lies under the pane's margins
+        // and the footer, where it is drawn not at all.
+        const v = view.mapFromItem(null, hand.at.x, hand.at.y)
+        if (v.x < 0 || v.y < 0 || v.x >= view.width || v.y >= view.height) {
+            rowItem.pointerRowX = -1
+            return
+        }
+        const p = rowMouse.mapFromItem(null, hand.at.x, hand.at.y)
+        rowItem.pointerRowX = rowMouse.containmentMask.contains(p) ? p.x : -1
+    }
     /// Which half of the row a point along it falls in: `chip`, `row`, or `""` for neither.
     function partAt(px) {
         if (px < 0)
@@ -415,63 +486,36 @@ Item {
         return rowItem.isWip ? "" : "row"
     }
     readonly property string pointedPart: rowItem.partAt(rowItem.pointerRowX)
-    /// The open list is this row's chip's — read back from the page, which owns the card.
+    /// What this row's chip's list and this row's card answer to (`RowHoverHost.chipKey` / `pointRow`): the commit,
+    /// and which surface — a row's chip, the graph's card. **By the commit**: delegates travel, and a row that
+    /// scrolled into this one's place is not the row the card is of.
+    readonly property string chipKey: "chip:" + rowItem.oid_hex + ":row"
+    readonly property string cardKey: "card:graph:" + rowItem.oid_hex
+    /// The open list is this row's chip's, and the card out is of this row's own commit — read back from the page,
+    /// which owns both.
     readonly property bool listOnThisChip:
-        rowItem.ListView.view ? rowItem.ListView.view.chipListAnchor === chipColumn.chipItem : false
-    /// The card out is of this row's own commit — read back from the page the same way. **By the commit**:
-    /// delegates travel, and a row that scrolled into this one's place is not the row the card is of.
+        rowItem.ListView.view ? rowItem.ListView.view.listKey === rowItem.chipKey : false
     readonly property bool cardOnThisRow: rowItem.ListView.view && rowItem.oid_hex !== ""
-                                          ? rowItem.ListView.view.rowCardOid === rowItem.oid_hex : false
-    /// The row wears the hover band while the pointer is on it and while what it opened stands — both popups take the
-    /// pointer off the row (`RowHoverHost`). **Not for a row the graph brought under a still hand** (`handHeld`).
-    readonly property bool lit: (rowMouse.containsMouse && !rowItem.handHeld) || rowItem.cardOnThisRow
-                                || rowItem.listOnThisChip
+                                          ? rowItem.ListView.view.cardKey === rowItem.cardKey : false
+    /// The row wears the hover band while the hand is on it and while what it opened stands — both popups take the
+    /// pointer off the row (`RowHoverHost`). The hand is the pane's reading (`pointerRowX`): a row the graph brought
+    /// under a still hand wears it too, and opens nothing until the hand moves (`HandWatch.stillHeld`).
+    readonly property bool lit: rowItem.pointerRowX >= 0 || rowItem.cardOnThisRow || rowItem.listOnThisChip
 
     // **The chip's list opens at once; the row's card opens on a rest** (規約 §hover のツールチップ「展開は即時に開く」
-    // 「補足は待ってから開く」), and only one of the two is ever out (「1 つのポインタが開けるものは 1 つ」). Whatever the
-    // pointer has left goes now — the beat is for walking into what is open, not out of it.
+    // 「補足は待ってから開く」), and only one of the two is ever out (「1 つのポインタが開けるものは 1 つ」). Both are the
+    // page's host's to decide (`RowHoverHost`, one seat each): this row only says where the hand is. Whatever the
+    // pointer has left is told at once — the beat is the host's, for walking into what is open, not out of it.
     onPointedPartChanged: rowItem.settlePointed()
-    /// A second click is waiting out its window somewhere in this graph. **Hover is held still while it runs** (規約
-    /// §グラフ行のダブルクリック); what the pointer did meanwhile settles when the wait ends.
-    readonly property bool renameWaiting: rowItem.ListView.view ? rowItem.ListView.view.renameWaiting : false
-    onRenameWaitingChanged: if (!rowItem.renameWaiting) rowItem.settlePointed()
-    /// The graph moved under a hand that stayed where it was (`GraphPane.settleUnderHand`): **this row came to the
-    /// hand, the hand did not come to it**, so it opens nothing until the hand moves — and then settles what it is
-    /// under by then.
-    readonly property bool handHeld: rowItem.ListView.view ? rowItem.ListView.view.handHeld : false
-    onHandHeldChanged: if (!rowItem.handHeld) rowItem.settlePointed()
     function settlePointed() {
         const view = rowItem.ListView.view
-        if (!view || rowItem.renameWaiting)
+        if (!view)
             return
-        restDelay.stop()
-        // Named by the chip: only the one the list stands on lets it go (`RowHoverHost.closeRefListUnlessEntered`).
+        // Named by the chip and the commit: only the one the list stands on lets it go (`HoverSeat.unpoint`).
         if (rowItem.pointedPart !== "chip")
-            view.chipCollapseRequested(chipColumn.chipItem)
+            view.chipCollapseRequested(rowItem.oid_hex, chipColumn.chipItem)
         if (rowItem.pointedPart !== "row")
             view.rowHoverRequested(rowItem, false)
-        // What has to go goes all the same; what would open waits for the hand.
-        if (rowItem.handHeld)
-            return
-        if (rowItem.pointedPart === "chip") {
-            // Unfolding needs no rest (規約「展開は即時に開く」). A hand coming back out of the list takes this door
-            // too, and must: waiting here would let the list close at `hoverKeepMs` under it.
-            rowItem.openPointed()
-        } else if (rowItem.pointedPart === "row" && rowItem.cardOnThisRow) {
-            // The card already out on this commit re-opens at once too: `hoverKeepMs` is shorter than `tipDelayMs`,
-            // so waiting would take it down and bring it back wherever the pointer is by then
-            // (`RowHoverHost.openRowCard`).
-            rowItem.openPointed()
-        } else if (rowItem.pointedPart !== "") {
-            restDelay.restart()
-        }
-    }
-    function openPointed() {
-        const view = rowItem.ListView.view
-        // A rest already running when the second click landed opens nothing (`renameWaiting`), nor one on a row the
-        // graph brought under a still hand (`handHeld`).
-        if (!view || rowItem.renameWaiting || rowItem.handHeld)
-            return
         // Another worktree's row has no commit behind it: its card would come up empty, stamped `1970-01-01`
         // (規約 §hover のツールチップ「ツールチップが立つのは、足すものが在る的だけ」).
         if (rowItem.carried)
@@ -481,11 +525,6 @@ Item {
                                      chipColumn.chipItem.records, chipColumn.chipItem)
         else if (rowItem.pointedPart === "row")
             view.rowHoverRequested(rowItem, true)
-    }
-    Timer {
-        id: restDelay
-        interval: Metrics.tipDelayMs
-        onTriggered: rowItem.openPointed()
     }
 
     /// Whether this row is holding the wait the name box opens after, and whether a click landing now would still be
@@ -595,13 +634,15 @@ Item {
         // row. A mask is the whole of the hit test, so it says the area's own rectangle too.
         containmentMask: QtObject {
             function contains(point: point): bool {
-                if (point.x < 0 || point.y < 0 || point.x > rowMouse.width || point.y > rowMouse.height)
+                // The bottom edge is the next row's: a hand on the line between two rows is on one of them.
+                if (point.x < 0 || point.y < 0 || point.x > rowMouse.width || point.y >= rowMouse.height)
                     return false
                 const boxX = chipColumn.x + chipColumn.nameBoxX
                 return !rowItem.naming || point.x < boxX || point.x >= boxX + chipColumn.nameBoxWidth
             }
         }
-        hoverEnabled: true
+        // Presses only: the hand is read off the pane (`syncHand`); a hover-taking area here would take it from the
+        // chips' own parts and from the pane's handler.
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         // **The row keeps the drag it is handed** (`tst_pressorder`): otherwise the list grabs at the drag distance and
         // cancels the press, so a click with a tremor chooses nothing and slides the history.
@@ -621,24 +662,42 @@ Item {
                 return
             rowItem.doubleClick(mouse.modifiers)
         }
-        onPositionChanged: mouse => rowItem.pointerRowX = mouse.x
-        onContainsMouseChanged: rowItem.pointerCrossed(rowMouse.containsMouse, rowMouse.mouseX)
     }
-    /// The hand came onto the row at `x`, or left it. A run enters here (verify-ui implement.md「注入はハンドラ本体そのもの
-    /// へ入れる」).
+    /// The hand came onto the row at `x`, or left it — what a headless run writes, where a hand's move is read
+    /// (`syncHand`; verify-ui implement.md「注入はハンドラ本体そのものへ入れる」).
     ///
     /// **Every leave is answered**, the one the chip's own card causes included: the card is drawn over the chip and
-    /// takes the pointer, and to the row that leave is the same as a hand walking off to the pane's header, the left
-    /// panel or out of the window — none of which is a row that would report the hand. Answered, the list is let go and
-    /// stays only for the hand inside the card, which Qt hands it before this leave (`tst_listoverhand.qml`); a hand
-    /// coming back onto the chip column asks again and is held (`RowHoverHost.openRefList`).
+    /// takes the hand off the pane, and to the row that leave is the same as a hand walking off to the pane's header,
+    /// the left panel or out of the window — none of which is a row that would report the hand. Answered, the list is
+    /// let go and stays only for the hand inside the card, which Qt hands it before this leave
+    /// (`tst_graphhover.qml`); a hand coming back onto the chip column asks again and is held (`HoverSeat.point`).
     function pointerCrossed(inside, x) {
         rowItem.pointerRowX = inside ? x : -1
     }
-    /// Where the pointer is along the row, so the card opens under it rather than at the row's left edge.
-    readonly property real pointerX: rowMouse.mouseX
+    /// Where the hand is along the row, so the card opens under it rather than at the row's left edge.
+    readonly property real pointerX: rowItem.pointerRowX
 
-    // A pooled row is under no pointer: clearing it takes the rest and whatever was open down with it
-    // (`settlePointed`).
-    ListView.onPooled: rowItem.pointerRowX = -1
+    // A pooled row is under no pointer: clearing it takes whatever was open down with it (`settlePointed`). So is a
+    // row the graph's reread rewrote to another commit in place (`splice_notified`): the hand did not walk to that
+    // one, and what the old one had out goes (デザイン規約 §hover のツールチップ「的が手の下で動けば hover は外れ、出した
+    // ものはその瞬間に消える」). The next move of the hand reads it afresh.
+    ListView.onPooled: {
+        rowItem.pooled = true
+        rowItem.pointerRowX = -1
+    }
+    onOid_hexChanged: {
+        rowItem.pointerRowX = -1
+        const view = rowItem.ListView.view
+        if (view)
+            view.rowRewritten(rowItem)
+    }
+    // The chips changed (a ref deleted, renamed, moved): a list the hand opened from this row's chip says them again,
+    // or goes with the last of them (`RowHoverHost.chipChanged`). **Told whatever the page has out**: the host weighs
+    // it by the chip — the key the page reads back is the commit's, and a row rewritten first has already moved off
+    // it. **By what the chip says** (`chipSays`): names told again unchanged leave the list as it is.
+    onChipSaysChanged: {
+        const view = rowItem.ListView.view
+        if (view)
+            view.chipChanged(rowItem.oid_hex, chipColumn.chipItem)
+    }
 }

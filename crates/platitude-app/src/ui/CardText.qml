@@ -255,7 +255,7 @@ Item {
             return at >= start && at <= start + cardText.held.marks[i][3]
         })
     }
-    /// The whole line's names behind their marks, for the tip the cut puts up (`SharedToolTip.tipMarks`).
+    /// The whole line's names behind their marks, for the tip the cut puts up (`TipAsk.marksNow`).
     readonly property var tipMarks: cardText.held.cuts.length > 0 ? cardText.marks : []
     /// One line's height: the field is laid out in one font, so its height divides by its line count exactly.
     readonly property real lineHeight: field.lineCount > 0 ? field.contentHeight / field.lineCount : 0
@@ -360,10 +360,15 @@ Item {
     /// `LineText`'s.
     baselineOffset: field.y + field.baselineOffset
     clip: cardText.clipped
-    // The whole line, where a name was cut (`holdsNames`).
-    ToolTip.visible: cardText.cutPointed
-    ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.text: cardText.text
+    /// The whole line, where a name was cut (`holdsNames`): the ask for the window's tooltip, whose names behind their
+    /// marks the seat reads off this field (`tipMarks`).
+    readonly property alias tip: cutTip
+    readonly property TipAsk cutTip: TipAsk {
+        id: cutTip
+        target: cardText
+        asked: cardText.cutPointed
+        words: cardText.text
+    }
 
     FontMetrics {
         id: face

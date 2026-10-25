@@ -46,7 +46,7 @@ ColumnLayout {
     readonly property string subjectText: summaryArea.text
     readonly property string bodyText: descBox.text
     /// The read-only tooltip is up (the output side).
-    readonly property bool summaryTipShown: summaryArea.ToolTip.visible
+    readonly property bool summaryTipShown: summaryTip.shown
     /// What the description box paints (the output side).
     readonly property color descriptionColor: descBox.textColor
     readonly property bool descriptionFocused: descBox.focused
@@ -253,9 +253,12 @@ ColumnLayout {
                     editor.leaveBoxes()
                     event.accepted = true
                 }
-                ToolTip.visible: (hovered || editor.summaryPointedAt) && editor.blockedTip !== ""
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: editor.blockedTip
+                readonly property TipAsk summaryTip: TipAsk {
+                    id: summaryTip
+                    target: summaryArea
+                    asked: (summaryArea.hovered || editor.summaryPointedAt) && editor.blockedTip !== ""
+                    words: editor.blockedTip
+                }
                 WheelHandler {
                     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                     onWheel: event => editor.rollSummary(event.angleDelta.y)

@@ -76,7 +76,7 @@ ActionButton {
         return note === "" ? fetchButton.tipHead()
                            : fetchButton.tipHead() + "\n" + note.arg(Words.commandsTitle)
     }
-    // The linked place in the tip; empty while nothing has failed (`SharedToolTip` → `Main` → `RepoPage.tipLinkAsked`).
+    // The linked place in the tip; empty while nothing has failed (`TipSeat` → `Main` → `RepoPage.tipLinkAsked`).
     tipPlace: fetchButton.fails > 0 ? Words.commandsTitle : ""
     tipHref: Words.commandsHref
     // Resuming fetches by itself (`RepoTab::restart_auto_fetch`), so nothing here asks for a second one.

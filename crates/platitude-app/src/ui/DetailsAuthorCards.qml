@@ -17,6 +17,15 @@ QtObject {
     required property var block
     /// The commit whose two people the author card names.
     required property var details
+    /// The pane's hand (`HandWatch`), which the seats read: another commit landing under a still hand opens nothing
+    /// until the hand moves (`DetailsPane`), and a card dismissed under it stays down until the hand leaves its line
+    /// and comes back (`HoverSeat.expands`).
+    property HandWatch hand: null
+    /// A right-click menu of the page's stands (`RepoPage.menuStanding`): the cards are behind it — what is out goes
+    /// the moment it stands, and nothing opens while it does (デザイン規約 §メニュー「メニューが立っている間、その裏の
+    /// hover は引っ込む」); an ask made meanwhile is kept for it going.
+    property bool menuStanding: false
+    readonly property string blocker: cards.menuStanding ? "menu" : ""
 
     /// Whether each card is on screen — the output side, since the input side would read true with the binding cut.
     readonly property bool matesCardOpen: mateCard.opened
@@ -30,36 +39,57 @@ QtObject {
     /// A row of the parents' card was pressed: the pane goes there, as the parent line's own links do.
     signal parentPicked(string oidHex)
 
+    /// The pointer came onto the count that opens every parent, or left it. Each card's seat (`HoverSeat`) answers:
+    /// what unfolds opens at once; the hand inside the card holds it; a card the reader dismissed stays down until
+    /// the hand leaves the count and comes back (the card stands over the count, so Qt hands the count its hover
+    /// again the moment the card is gone). The target is the commit's (`targetOf`): another commit landing takes the
+    /// card down (`follow`), and the count asks again for the new one's.
+    function pointParents(line) {
+        parentKeep.point(cards.targetOf("parents", { "line": line }), true)
+    }
+    function settleParents() {
+        parentKeep.unpoint(parentKeep.keyOf(target => target.kind === "parents"))
+    }
+    /// A target of `kind` on the commit shown now, with `fields` (where it was asked from): alive while that commit
+    /// is the one shown, so a rest run out on the one before opens nothing.
+    function targetOf(kind, fields) {
+        const sha = cards.details.shaHex
+        return Object.assign({ "key": kind + ":" + sha, "kind": kind, "sha": sha,
+                               "alive": () => cards.details.shaHex === sha }, fields)
+    }
+    /// Another commit landed (`DetailsPane`, after telling the hand): a card out, or asked for, on the one before
+    /// goes — the owner's close, not a dismissal.
+    function follow() {
+        const sha = cards.details.shaHex
+        for (const seat of [mateKeep, parentKeep, authorKeep])
+            seat.forget(target => target.sha !== sha, "commit")
+    }
+    /// **One of the three is out at a time**, and the one opening is that one: the hand has gone from the line the
+    /// others hang off to another, so they go now, not after their beat (デザイン規約 §hover のツールチップ「1 つの
+    /// ポインタが開けるものは 1 つ」). Each keeps its own beat for the hand walking into itself.
+    function giveWay(opening) {
+        for (const seat of [mateKeep, parentKeep, authorKeep]) {
+            if (seat !== opening && (seat.shown || seat.waiting))
+                seat.takeDown("handover", false)
+        }
+    }
     /// Opens every parent on the seat a single parent's hash has — the line's right end (`line`, in the row's
     /// coordinates), which the line keeps while it stands as one parent's (`HashPlate.unrolled`; デザイン規約
-    /// §右のペインの親). Once: the lit state can fall and rise as the hand crosses from the count into the card, which
-    /// is the card it already opened.
+    /// §右のペインの親).
     function openParentCard(line) {
         const row = cards.block.valueRow
-        if (parentCard.opened || row.plate.parents.length < 2)
+        if (row.plate.parents.length < 2) {
+            parentKeep.refuse()
             return
+        }
         const at = row.mapToItem(cards.host, line.x + line.width, line.y)
         parentCard.parents = row.plate.parents
-        cards.parentsOf = cards.details.shaHex
         parentCard.x = Math.round(at.x - parentCard.hashWidth - parentCard.hashInset)
         parentCard.y = Math.round(at.y + line.height / 2 - parentCard.firstMiddle)
         // The pane's floor is the ceiling; its rows scroll past it.
         parentCard.listRoom = cards.host.height - parentCard.y - Theme.spaceXs
         parentCard.open()
     }
-    function settleParents() {
-        parentKeep.settle()
-    }
-    /// The commit the parents' card was opened on: its rows are that commit's, so another one closes it.
-    property string parentsOf: ""
-    readonly property Connections parentsFollow: Connections {
-        target: cards.details
-        function onChanged() {
-            if (parentCard.opened && cards.details.shaHex !== cards.parentsOf)
-                parentCard.close()
-        }
-    }
-
     /// Where each card was raised (host coordinates) and how far either may stand. Set on open: `mapToItem` is a
     /// call, so a binding would not see the splitter move.
     property real mateAnchorX: 0
@@ -69,8 +99,10 @@ QtObject {
 
     function openMateCard(at) {
         const records = cards.block.coAuthorRecords
-        if (records.length === 0)
+        if (records.length === 0) {
+            mateKeep.refuse()
             return
+        }
         const p = cards.block.valueRow.mapToItem(cards.host, at.x, at.y)
         mateCard.records = records
         cards.takeRoom()
@@ -81,8 +113,10 @@ QtObject {
         mateCard.open()
     }
     function openAuthorCard(at) {
-        if (cards.details.authorName === "")
+        if (cards.details.authorName === "") {
+            authorKeep.refuse()
             return
+        }
         const p = cards.block.valueRow.mapToItem(cards.host, at.x, at.y)
         cards.takeRoom()
         authorCard.maxWidth = cards.rightStop - cards.leftStop
@@ -104,12 +138,18 @@ QtObject {
     function seatX(anchorX, cardWidth) {
         return Math.max(cards.leftStop, Math.min(anchorX, cards.rightStop - cardWidth))
     }
-    /// The pointer left the row, or the card: each host closes its own a beat later.
+    /// The pointer came onto the credit line or the name, or left it (as `pointParents`).
+    function pointMates(at) {
+        mateKeep.point(cards.targetOf("mates", { "at": at }), true)
+    }
     function settleMates() {
-        mateKeep.settle()
+        mateKeep.unpoint(mateKeep.keyOf(target => target.kind === "mates"))
+    }
+    function pointAuthor(at) {
+        authorKeep.point(cards.targetOf("author", { "at": at }), true)
     }
     function settleAuthor() {
-        authorKeep.settle()
+        authorKeep.unpoint(authorKeep.keyOf(target => target.kind === "author"))
     }
 
     readonly property CoAuthorCard mateCard: CoAuthorCard {
@@ -117,10 +157,18 @@ QtObject {
         parent: cards.host
         x: cards.seatX(cards.mateAnchorX, mateCard.width)
     }
-    readonly property HoverCardHost mateKeep: HoverCardHost {
+    readonly property HoverSeat mateKeep: HoverSeat {
         id: mateKeep
+        hand: cards.hand
         card: mateCard
-        pointedAt: cards.block.matesPointed
+        // The three cards open the moment the hand is on their line: a hold lifts with the hand's move, a dismissal
+        // with the hand leaving the line and coming back.
+        expands: true
+        blockedBy: cards.blocker
+        onOpenAsked: target => {
+            cards.giveWay(mateKeep)
+            cards.openMateCard(target.at)
+        }
     }
 
     readonly property ParentListCard parentCard: ParentListCard {
@@ -128,10 +176,16 @@ QtObject {
         parent: cards.host
         onPicked: oidHex => cards.parentPicked(oidHex)
     }
-    readonly property HoverCardHost parentKeep: HoverCardHost {
+    readonly property HoverSeat parentKeep: HoverSeat {
         id: parentKeep
+        hand: cards.hand
         card: parentCard
-        pointedAt: cards.block.parentsPointed
+        expands: true
+        blockedBy: cards.blocker
+        onOpenAsked: target => {
+            cards.giveWay(parentKeep)
+            cards.openParentCard(target.line)
+        }
     }
 
     readonly property AuthorCard authorCard: AuthorCard {
@@ -151,9 +205,15 @@ QtObject {
         committerDiffers: cards.details.committerDiffers
         timeDiffers: cards.details.commitTimeDiffers
     }
-    readonly property HoverCardHost authorKeep: HoverCardHost {
+    readonly property HoverSeat authorKeep: HoverSeat {
         id: authorKeep
+        hand: cards.hand
         card: authorCard
-        pointedAt: cards.block.authorPointed
+        expands: true
+        blockedBy: cards.blocker
+        onOpenAsked: target => {
+            cards.giveWay(authorKeep)
+            cards.openAuthorCard(target.at)
+        }
     }
 }

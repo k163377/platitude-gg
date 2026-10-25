@@ -62,6 +62,7 @@ impl GraphModel {
     qproperty!("tailMatched", Member = tail_matched, Notify = stats_changed);
     // What the stand-in draws — properties for the reason `head.rs` gives.
     qproperty!("headRow", Member = head_row, Notify = stats_changed);
+    qproperty!("headRowOid", Member = head_row_oid, Notify = stats_changed);
     qproperty!("headLabels", Read = head_labels, Notify = stats_changed);
     fn head_labels(&self) -> &crate::encode::Chips {
         &self.head_labels

@@ -20,7 +20,7 @@ Item {
 
     /// The active tab's RepoPage — the only tab with one (`RepoPageStack`). Everybody else reads `Main.curPage`.
     readonly property var curPage: pages.curPage
-    /// Handed on by the window (to `WindowChrome`, `SharedToolTip`, `Main.holdWaitHand` and the harness).
+    /// Handed on by the window (to `WindowChrome`, `TipSeat`, `Main.holdWaitHand` and the harness).
     readonly property alias topBar: topBar
     readonly property alias pageRepeater: pages.seats
     readonly property alias hand: hand
@@ -42,8 +42,8 @@ Item {
         + (mainUi.floorPage !== null ? mainUi.floorPage.floorHeight : 0)
 
     // Where the pointer is. On the parent of all content: the one place a window-wide handler leaves the rows'
-    // hover alone (`PointerWatch`).
-    PointerWatch {
+    // hover alone (`HandWatch`).
+    HandWatch {
         id: hand
     }
 

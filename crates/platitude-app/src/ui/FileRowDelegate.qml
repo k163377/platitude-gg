@@ -50,8 +50,6 @@ Item {
     /// **`>= 0` first**: a pooled delegate reports `index` -1 (rules-refs/app-ui.md「プールへ戻された delegate は」).
     readonly property bool tipPointedAt: fileRow.pointedTipRow >= 0
                                          && fileRow.pointedTipRow === fileRow.model.index
-    /// A right-click menu of the page's is standing over this list.
-    property bool menuStanding: false
 
     signal activated(string bucket, string path, string origPath)
     signal folderToggled(string key)
@@ -118,10 +116,15 @@ Item {
                 fileRow.press()
         }
     }
-    // Hover always says the path (デザイン規約 §hover のツールチップ), except behind a standing menu (デザイン規約 §メニュー).
-    // Out of the list, never over the rows either side (`SharedToolTip.tipRowSide`).
-    readonly property string tipRowSide: "left"
-    ToolTip.visible: (fileMouse.containsMouse || fileRow.tipPointedAt) && !fileRow.menuStanding
-    ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.text: fileRow.pathText
+    readonly property TipAsk rowTip: TipAsk {
+        target: fileRow
+        // Hover always says the path (デザイン規約 §hover のツールチップ). Behind a standing menu the window's seat holds
+        // the box down (`TipSeat`'s machine, `HoverSeat.blockedBy`, §メニュー), not this ask: an ask that fell for the
+        // menu reads as the hand leaving the row, and the box would come back under the still hand the moment the menu
+        // went.
+        asked: fileMouse.containsMouse || fileRow.tipPointedAt
+        words: fileRow.pathText
+        // Out of the list, never over the rows either side.
+        rowSide: "left"
+    }
 }

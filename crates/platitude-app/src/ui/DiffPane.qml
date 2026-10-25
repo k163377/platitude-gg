@@ -149,6 +149,8 @@ Rectangle {
     // so a handler there runs on every search and, asking the model, calls itself without end (rules-refs/app-ui.md).
     readonly property int rowsGen: diffPane.diffModel.rowsGen
     onRowsGenChanged: {
+        // The rows laid out again are rows moved under the hand (`diffHand`).
+        diffHand.rowsMoved()
         if (findBar.open)
             diffPane.diffModel.findFrom(diffList.firstVisibleRow())
     }
@@ -224,6 +226,18 @@ Rectangle {
     }
     // A menu standing takes the marks away there and then: the pointer has not moved, so nothing else would ask again.
     onMenuStandingChanged: diffPane.settlePointedRow()
+    /// The hand over the rows (`HandWatch`), told as they move under it — a scroll, a find landing off screen, the code
+    /// sent sideways, the rows laid out again (another file, one column or two, a write landing) — so the tip of a
+    /// line's mark does not come out on a line brought under a still hand (`TipAsk.hand`, through
+    /// `diffList.rowsHand`). On the pane, beside `panePointer`: a passive handler, which takes no row's hover.
+    HandWatch {
+        id: diffHand
+    }
+    readonly property alias hand: diffHand
+    Connections {
+        target: codeScroll
+        function onOffsetChanged() { diffHand.rowsMoved() }
+    }
     // After the rows are replaced: on the frame they land the list has not laid them out — the scroll restore's wait
     // (`DiffScrollPlace`).
     Timer {
@@ -517,15 +531,21 @@ Rectangle {
             // (`DiffCodeScroll`).
             ownsHand: false
             model: diffPane.diffModel
+            rowsHand: diffHand
             // The rows the write asked for have landed. The filled half only — a reset shows up here as zero first.
             onCountChanged: {
+                diffHand.rowsMoved()
                 if (count > 0) {
                     diffPane.restoreScroll()
                     pointedRowTimer.restart()
                 }
             }
             // A row moving under a pointer standing still is the same question as the pointer moving over the rows.
-            onContentYChanged: diffPane.settlePointedRow()
+            onContentYChanged: {
+                diffHand.rowsMoved()
+                diffPane.settlePointedRow()
+            }
+            onYChanged: diffHand.rowsMoved()
             // An image with no text rows hands its space to the preview (SVG edits keep both).
             visible: diffPane.diffModel.previewKind !== "image" || count > 0
             /// How far down the view can go, and the one clamp every hand that sends it shares (デザイン規約 §diff を上下に送る).

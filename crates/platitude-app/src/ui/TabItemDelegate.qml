@@ -68,8 +68,8 @@ Rectangle {
     /// `TabCarry`, since the order changes under a drag.
     property bool held: false
     property real heldX: 0
-    /// The tab in hand takes its tip back, a box already out included (`SharedToolTip.tipWithheld`).
-    readonly property bool tipWithheld: tabItem.held
+    // The tab in hand takes its tip back, a box already out included (`TipAsk.drop`).
+    onHeldChanged: if (tabItem.held) pathTip.drop()
     /// Pressed with a button the tab answers. Which button means what is the strip's to say, since the same rule is
     /// what the middle-click hook comes through (`TabStrip.pressTab`).
     signal tabPressed(int button)
@@ -106,10 +106,13 @@ Rectangle {
     // (デザイン規約 §hover のツールチップ「タブも同じで、hover が必ずフルパスを言う」), read off `pointed` like the mark
     // so the headless run reaches it the same way (`TabProbe.pointAtTab`). Nothing opens under a carrying hand, and the
     // box already out goes as the tab is taken up (同§「掴んだ手の下は空のまま」): the ask falling here is no hand
-    // walking into the box, which the shared instance is told through `tipWithheld`.
-    ToolTip.visible: tabItem.pointed && !tabItem.held
-    ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.text: tabItem.worktree_path
+    // walking into the box, which the seat is told by the drop above.
+    readonly property TipAsk pathTip: TipAsk {
+        id: pathTip
+        target: tabItem
+        asked: tabItem.pointed && !tabItem.held
+        words: tabItem.worktree_path
+    }
     onCurrentChanged: tabItem.frontChanged(tabItem.current)
     // A tab born in front never announces `current` changing, and the stand-in would have nothing to draw from.
     Component.onCompleted: if (tabItem.current) tabItem.frontChanged(true)

@@ -67,7 +67,7 @@ Rectangle {
                  - tabStrip.width - (stateGroup.visible ? stateGroup.width : 0)) < 1
     readonly property bool stateCardOpen: stateGroup.stateCardOpen
     /// Whether the row has ever placed the group — one of the three things the stand-in pointer needs before a card
-    /// comes up (`BandStateGroup.standInAsking`), and the only one a verb cannot otherwise read: a run that saw no
+    /// comes up (`BandStateGroup.asking`), and the only one a verb cannot otherwise read: a run that saw no
     /// card is a different fault on either side of it.
     readonly property bool statePlaced: stateGroup.placed
     readonly property string stateCardRows: stateGroup.stateCardRows
@@ -214,7 +214,7 @@ Rectangle {
     readonly property string stashMode: stashButton.mode
     readonly property bool stashLive: stashButton.enabled
     /// Whether either action has a string to open under a pointer. **The string itself** — a disabled control takes
-    /// hover and opens its attached ToolTip like any other (rules-refs の `hoverEnabled` の行), so what tells the two
+    /// hover and asks for the window's tip like any other (rules-refs の `hoverEnabled` の行), so what tells the two
     /// sides apart is whether there is anything to open (`fetch-tip`).
     readonly property bool stashTipShown: stashButton.tip !== ""
     readonly property bool fetchTipShown: fetchButton.tip !== ""

@@ -31,11 +31,10 @@ Flickable {
     required property real blockRoom
     required property real listHeight
 
-    /// Up to the pane: the amend tick, the press, and the moment the button's warning card may need settling (the
-    /// pane places it).
+    /// Up to the pane: the amend tick and the press (the button's warning card is the pane's, asked off `commitWarned`
+    /// and `commitPointed`).
     signal amendToggled(bool on)
     signal commitClicked()
-    signal cardAsked()
 
     /// What the block would take with nothing in its way — the pane holds it against `blockRoom`.
     readonly property real wants: blockCol.implicitHeight
@@ -167,13 +166,16 @@ Flickable {
                 Item { Layout.fillWidth: true }
                 // A tag, not a confirmation: rewriting a pushed commit is undone by a switch or a reset.
                 Label {
+                    id: pushedNote
                     visible: block.amending && block.headPublished
                     text: qsTr("already pushed")
                     color: Theme.warning
                     font.pixelSize: Theme.fontSm
-                    ToolTip.visible: amendPushedHover.containsMouse
-                    ToolTip.delay: Metrics.tipDelayMs
-                    ToolTip.text: qsTr("Already on a remote — anyone who has it will be out of step")
+                    readonly property TipAsk pushedTip: TipAsk {
+                        target: pushedNote
+                        asked: amendPushedHover.containsMouse
+                        words: qsTr("Already on a remote — anyone who has it will be out of step")
+                    }
                     MouseArea {
                         id: amendPushedHover
                         anchors.fill: parent
@@ -191,11 +193,13 @@ Flickable {
                 text: qsTr("Make me the author")
                 font.pixelSize: Theme.fontSm
                 onVisibleChanged: if (!visible) checked = false
-                ToolTip.visible: hovered
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: qsTr("Replaces the author %1 <%2> with you, dated now")
-                              .arg(block.repoTab.headAuthorName)
-                              .arg(block.repoTab.headAuthorEmail)
+                readonly property TipAsk authorTip: TipAsk {
+                    target: authorBox
+                    asked: authorBox.hovered
+                    words: qsTr("Replaces the author %1 <%2> with you, dated now")
+                           .arg(block.repoTab.headAuthorName)
+                           .arg(block.repoTab.headAuthorEmail)
+                }
             }
             // The toolbar's framed button, so its frame, tone and `!` say its state in a vocabulary already read.
             ActionButton {
@@ -210,8 +214,7 @@ Flickable {
                 /// commit (`session::EolMark::staged`).
                 readonly property bool eolWarned:
                     block.worktree.eolStagedCount > 0 && commitButton.enabled
-                // The frame and the `!` follow as bindings; the card has to be asked (`settleCommitCard`).
-                onEolWarnedChanged: block.cardAsked()
+                // The frame and the `!` follow as bindings, and so does the card's ask (`WipPane.commitCardAsked`).
                 // No icon: the `!` is the one mark this button needs, and has to stand out.
                 centred: true
                 // Plain words in both states: a coloured word means a hold (`Remove`, a stopped fetch), and this
@@ -269,29 +272,30 @@ Flickable {
                 // One click even when warning: a confirmation on a daily operation gets pressed unread (デザイン規約
                 // §可否・警告の出し場所).
                 onActivated: block.commitClicked()
-                // Why it cannot be pressed. The line-ending warning is the card's (`settleCommitCard`), and only
+                // Why it cannot be pressed. The line-ending warning is the card's (`WipPane.commitCardAsked`), and only
                 // on a button that can be pressed.
-                ToolTip.visible: (commitHover.containsMouse || block.commitPointedAt) && !enabled
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: !block.repoTab.identityRead
-                              ? Words.otherCommandRunning
-                              : block.repoTab.identityUnread
-                              ? qsTr("The name and email for commits could not be read")
-                              : !block.repoTab.identityReady
-                              ? qsTr("No name or email set for commits")
-                              : block.worktree.conflictCount > 0
-                              ? qsTr("Files are still waiting on a decision")
-                              : msgEditor.subjectText.trim() === ""
-                              ? qsTr("A commit needs a summary")
-                              : block.amendEmpties
-                              ? Words.amendEmpties
-                              : qsTr("Stage something to commit")
+                readonly property TipAsk commitTip: TipAsk {
+                    target: commitButton
+                    asked: (commitHover.containsMouse || block.commitPointedAt) && !commitButton.enabled
+                    words: !block.repoTab.identityRead
+                           ? Words.otherCommandRunning
+                           : block.repoTab.identityUnread
+                           ? qsTr("The name and email for commits could not be read")
+                           : !block.repoTab.identityReady
+                           ? qsTr("No name or email set for commits")
+                           : block.worktree.conflictCount > 0
+                           ? qsTr("Files are still waiting on a decision")
+                           : msgEditor.subjectText.trim() === ""
+                           ? qsTr("A commit needs a summary")
+                           : block.amendEmpties
+                           ? Words.amendEmpties
+                           : qsTr("Stage something to commit")
+                }
                 MouseArea {
                     id: commitHover
                     anchors.fill: parent
                     hoverEnabled: true
                     acceptedButtons: Qt.NoButton
-                    onContainsMouseChanged: block.cardAsked()
                 }
             }
             // The way out of a stopped operation (`OpExitCard`), under the button that finishes things.

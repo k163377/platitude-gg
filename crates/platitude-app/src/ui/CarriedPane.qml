@@ -24,8 +24,6 @@ ColumnLayout {
     /// carry the side their bytes are on (`Bucket::routing_of`).
     property string readBucket: ""
     property string readPath: ""
-    /// A right-click menu of the page's is standing over this pane.
-    property bool menuStanding: false
 
     /// A file row was opened. `bucket` is the side the row's bytes are on, which the row works out itself
     /// (`Bucket::routing_of`).
@@ -39,7 +37,7 @@ ColumnLayout {
     readonly property alias filesWalk: fileWalk
     /// Automation: whether the name was cut, and whether its hover is out (`carried-read <長い名前>`).
     readonly property alias nameCut: nameRun.cutting
-    readonly property bool nameTipShown: nameSeat.ToolTip.visible
+    readonly property bool nameTipShown: nameTip.shown
     /// Stands in for the pointer on the name, which headless cannot inject (verify-ui).
     property bool namePointedAt: false
     /// The same stand-in for a file row's hover (`FileRowDelegate.pointedTipRow`); -1 points at no row. This list
@@ -51,6 +49,19 @@ ColumnLayout {
         - Math.max(0, Math.min(fileList.height, fileList.originY + fileList.contentHeight - fileList.contentY))
 
     spacing: 0
+
+    /// The hand over this pane (`HandWatch`), told as the rows move under it — a scroll (the arrows' walk bringing a
+    /// row on included), a folder opened or closed, the list re-read as that worktree's status moves — so a row's tip
+    /// does not come out on a file brought under a still hand (`TipAsk.hand`, through `fileList.rowsHand`). A handler,
+    /// so the layout takes no row for it.
+    HandWatch {
+        id: paneHand
+    }
+    readonly property alias hand: paneHand
+    Connections {
+        target: carriedPane.files
+        function onModelReset() { paneHand.rowsMoved() }
+    }
 
     FileRowWalk {
         id: fileWalk
@@ -103,13 +114,16 @@ ColumnLayout {
                     color: Words.nameInk(Theme.textSecondary)
                 }
                 HoverHandler { id: nameHover }
-                /// The whole name the hover gives back wears the band's own mark (`SharedToolTip.tipMarkWord`,
-                /// デザイン規約 §ref の種別「名前の印」).
+                /// The whole name the hover gives back wears the band's own mark (`TipAsk.markWordNow` reads it off
+                /// this seat, デザイン規約 §ref の種別「名前の印」).
                 readonly property string tipMarkWord: carriedPane.worktreeName
                 readonly property string tipMarkKind: carriedPane.worktreeHome ? "home" : "tree"
-                ToolTip.visible: (nameHover.hovered || carriedPane.namePointedAt) && nameRun.cutting
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: carriedPane.worktreeName
+                readonly property TipAsk nameTip: TipAsk {
+                    id: nameTip
+                    target: nameSeat
+                    asked: (nameHover.hovered || carriedPane.namePointedAt) && nameRun.cutting
+                    words: carriedPane.worktreeName
+                }
             }
         }
     }
@@ -129,6 +143,10 @@ ColumnLayout {
         Layout.fillHeight: true
         model: carriedPane.files
         verticalBar: PaneScrollBar {}
+        rowsHand: paneHand
+        onContentYChanged: paneHand.rowsMoved()
+        onCountChanged: paneHand.rowsMoved()
+        onYChanged: paneHand.rowsMoved()
         // The arrows are answered by the walk above: Qt's own key navigation moves `currentIndex` and tells nobody.
         keyNavigationEnabled: false
         Keys.onUpPressed: event => event.accepted = fileWalk.stepFile(-1, event.isAutoRepeat)
@@ -136,7 +154,6 @@ ColumnLayout {
         // The commit pane's row: it opens a diff and has no seat for a mark that stages.
         delegate: FileRowDelegate {
             listWidth: fileList.width
-            menuStanding: carriedPane.menuStanding
             pointedTipRow: carriedPane.pointedTipRow
             readPath: carriedPane.readPath
             // The names a `NavSectionModel` answers to (`models::nav::Role`) — a role it does not answer comes back

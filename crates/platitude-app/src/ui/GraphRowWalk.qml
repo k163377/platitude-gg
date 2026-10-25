@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import platitude
 import platitude.ui
 
 // The graph's selection and where the view stands to show it: the arrow keys (規約 §矢印で履歴を辿る), the page's
@@ -10,6 +11,9 @@ Item {
 
     required property var view
     required property var graphModel
+    /// The current branch's stand-in (`GraphHeadPin`): the band it covers at the top edge, and whether it stands there
+    /// at a given place of the view. Null for none.
+    property var standIn: null
     /// A question is standing over a row.
     required property bool asking
     /// A step came to rest on a row: read it. The row travels with the id, since every worktree's uncommitted row
@@ -127,8 +131,8 @@ Item {
     /// Automation: a settle stands between the last step and its reading. The hold verb waits for it to expire, as an
     /// OS's first-repeat delay would, before sending the repeats.
     readonly property alias settling: stepTimer.running
-    /// A centering or a shift is still owed to the view (the timers below); `PageSettled` waits on it.
-    readonly property bool placing: anchorTimer.running || shiftTimer.running
+    /// A centering or a row brought into view is still owed to the view (the timers below); `PageSettled` waits on it.
+    readonly property bool placing: anchorTimer.running || showTimer.running
     Timer {
         id: stepTimer
         interval: Metrics.keyStepSettleMs
@@ -148,38 +152,113 @@ Item {
     function anchorSoon() {
         anchorTimer.restart()
     }
-    /// Keeps the viewport over the rows it was reading after `rows` commits arrived above them (a rebuild rewrites rows
-    /// in place, so the view would silently show other commits). At the top it stays pinned to the newest. Applied a
-    /// beat later: clamping against the not-yet-relaid content height would swallow the correction.
+    /// Keeps the viewport over the rows it was reading after `rows` commits arrived above them — a rebuild rewrites
+    /// rows in place, so the view would show other commits — in the same turn as the rebuild, so no frame shows them.
+    /// At the top it stays pinned to the newest, but for a hand over the rows: a reread is no reader's doing, and what
+    /// the hand is on stays where it is (デザイン規約 §hover のツールチップ「外乱では閉じない」). What the view cannot
+    /// take back — a history too short to scroll that far — moves under the hand as the reread's
+    /// (`HandWatch.rowsMoved`). The rebuild's layout is forced here, kept or not: clamped against the content height
+    /// before it, the correction would be swallowed, and the rows it moves — a row built at the end lands too — are
+    /// weighed in this turn, taken back with the view (`keepingRows`) or moved as the reread's (`rereading`), not at
+    /// the next frame as a reader's move.
     function shiftRows(rows) {
-        if (rows === 0)
+        const hand = walk.view.hand
+        const keep = rows !== 0 && (walk.view.contentY > walk.view.originY - walk.view.topMargin || hand.present)
+        if (keep)
+            walk.view.haltGlide()
+        walk.view.keepingRows = keep
+        walk.view.rereading = !keep
+        walk.view.forceLayout()
+        walk.view.rereading = false
+        if (!keep) {
+            walk.view.keepingRows = false
             return
-        if (walk.view.contentY <= walk.view.originY - walk.view.topMargin)
-            return
-        shiftTimer.pending += rows
-        shiftTimer.restart()
+        }
+        const from = walk.view.contentY
+        const full = rows * Theme.graphRowHeight
+        walk.view.contentY = walk.view.clampY(from + walk.keptRows(rows, from) * Theme.graphRowHeight)
+        walk.view.keepingRows = false
+        if (Math.abs(walk.view.contentY - from - full) >= 1)
+            hand.rowsMoved(true)
     }
-    /// Brings `row` into view once its pass has settled, unless already on screen (as `goToMatch` does). Rides the
-    /// shift timer: whether the row is on screen is only true after the shift, so one timer fixes the order.
+    /// How many of the `rows` written in above the view takes back: all of them, but where the current branch's
+    /// stand-in stands at the top edge then over the row the hand is over — the hand's row comes down just as far as
+    /// clears its band (`GraphHeadPin.topBand`), the view giving back the rows the band would cover and going back up
+    /// for the rest: a few commits on the branch move the rows down as they came
+    /// (デザイン規約 §hover のツールチップ「外乱では閉じない」).
+    /// A hand's row the band covered before the reread stays where it is (`handUnderBand`).
+    function keptRows(rows, from) {
+        const pin = walk.standIn
+        if (pin === null || walk.handOid === "" || !walk.view.hand.present || walk.handUnderBand)
+            return rows
+        const row = walk.graphModel.rowOf(walk.handOid)
+        if (row < 0)
+            return rows
+        let kept = rows
+        for (;;) {
+            const to = from + kept * Theme.graphRowHeight
+            if (!pin.aboveAt(to) || walk.view.originY + row * Theme.graphRowHeight - to >= pin.topBand)
+                return kept
+            kept--
+        }
+    }
+    /// The commit the hand is over and its row — where it was last heard over the rows, kept while the hand is in a
+    /// card hung off them, found again after every pass (`noteHand`) — by which a reread is weighed (`handShift`).
+    property string handOid: ""
+    property int handRow: -1
+    /// …and whether the current branch's stand-in covered that row then (`keptRows`).
+    property bool handUnderBand: false
+    /// Notes the row under the hand; for a hand the rows do not hear now (in a card, under a menu), where the commit
+    /// it was last over stands now.
+    function noteHand() {
+        const hand = walk.view.hand
+        if (hand.known) {
+            const p = walk.view.contentItem.mapFromItem(null, hand.at.x, hand.at.y)
+            walk.handRow = walk.view.indexAt(p.x, p.y)
+            walk.handOid = walk.handRow >= 0 ? walk.graphModel.oidAt(walk.handRow) : ""
+        } else {
+            walk.handRow = walk.handOid === "" ? -1 : walk.graphModel.rowOf(walk.handOid)
+            if (walk.handRow < 0)
+                walk.handOid = ""
+        }
+        const pin = walk.standIn
+        walk.handUnderBand = pin !== null && walk.handRow >= 0 && pin.aboveAt(walk.view.contentY)
+            && walk.view.originY + walk.handRow * Theme.graphRowHeight - walk.view.contentY < pin.topBand
+    }
+    /// How far a reread moved the row the hand is over (デザイン規約 §hover のツールチップ「外乱では閉じない」), or
+    /// `undefined` for no answer: no hand over the rows, the commit it was over gone. A worktree's row stays at the top
+    /// whatever is written in under it — and every worktree's row wears the same all-zero id.
+    function handShift() {
+        if (!walk.view.hand.present || walk.handOid === "")
+            return undefined
+        if (GitFacts.wipOid(walk.handOid))
+            return 0
+        const now = walk.graphModel.rowOf(walk.handOid)
+        return now < 0 ? undefined : now - walk.handRow
+    }
+    // Every place the hand is heard at, and every move of the rows under it.
+    property Connections handWatch: Connections {
+        target: walk.view.hand
+        function onMoved() { walk.noteHand() }
+        function onShiftsChanged() { walk.noteHand() }
+    }
+    /// Brings `row` into view once its pass has settled, unless already on screen (as `goToMatch` does) — a beat later,
+    /// weighed against where the view stands once the rows are laid out.
     function showRowSoon(row) {
-        shiftTimer.showRow = row
-        shiftTimer.restart()
+        showTimer.showRow = row
+        showTimer.restart()
     }
     Timer {
-        id: shiftTimer
-        property int pending: 0
+        id: showTimer
         property int showRow: -1
         interval: Metrics.anchorDelayMs
         onTriggered: {
+            const row = showTimer.showRow
+            showTimer.showRow = -1
+            if (row < 0 || walk.view.rowOnScreen(row))
+                return
             walk.view.haltGlide()
-            const rows = shiftTimer.pending
-            shiftTimer.pending = 0
-            if (rows !== 0)
-                walk.view.contentY = walk.view.clampY(walk.view.contentY + rows * Theme.graphRowHeight)
-            const row = shiftTimer.showRow
-            shiftTimer.showRow = -1
-            if (row >= 0 && !walk.view.rowOnScreen(row))
-                walk.view.positionViewAtIndex(row, ListView.Center)
+            walk.view.positionViewAtIndex(row, ListView.Center)
         }
     }
     Timer {

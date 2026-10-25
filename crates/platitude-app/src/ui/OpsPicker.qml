@@ -171,7 +171,7 @@ HoverToolButton {
     // Every run whole, one a line, wherever the row cut one of them (規約 §hover のツールチップ): the name, the
     // worktree's folder, the upstream.
     tip: picker.nameCut || picker.noteCut || trailRun.cutting ? picker.tipLines.join("\n") : ""
-    /// …each behind its mark (`SharedToolTip.tipMarks`).
+    /// …each behind its mark (`TipAsk.marksNow`).
     readonly property var tipLines: [picker.shown, picker.trail, picker.note].filter(line => line !== "")
     readonly property var tipMarks: {
         const marks = []

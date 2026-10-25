@@ -24,6 +24,10 @@ ListView {
     /// Off where the pane seats its own middle-button hand above what it lays over the rows (`GraphPane` /
     /// `DiffCodeScroll` / `CommandsPane`); one in here would sit under all of it.
     property bool ownsHand: true
+    /// The hand over the pane these rows move under (`HandWatch`), which the pane tells as they move — what the tips of
+    /// the rows read to tell a hand that moved from rows that moved under it (`TipAsk.hand`, found through this). Null
+    /// for a list whose pane keeps none.
+    property HandWatch rowsHand: null
     /// Automation only: started and drifted without a pointer (a middle button cannot be injected).
     readonly property alias hand: hand
 

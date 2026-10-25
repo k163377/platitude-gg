@@ -239,8 +239,6 @@ ComboBox {
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
         onInOutsidePressChanged: OutsidePress.stand(list, list.inOutsidePress)
         Component.onDestruction: OutsidePress.stand(list, false)
-        // As every popup base: a popup inherits no tip policy from the window (`Main.qml`).
-        ToolTip.policy: ToolTip.Manual
         // Also reached by the control's own press. Picking only, the arrows start from the value; on an editable list
         // moving `currentIndex` drags the text (see `wanted`).
         onAboutToShow: {

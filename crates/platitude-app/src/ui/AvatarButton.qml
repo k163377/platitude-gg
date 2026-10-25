@@ -91,10 +91,12 @@ Item {
         onClicked: avatarBox.clicked()
     }
     HoverHandler { id: avatarHover }
-    // One pointer opens one thing (規約 §hover のツールチップ): the face's tip stands down over the mark.
-    ToolTip.visible: avatarBox.showBadge && !sigMark.pointed
-    ToolTip.delay: Metrics.tipDelayMs
-    // The articles differ on purpose (デザイン規約 §アバターを与える).
-    ToolTip.text: avatarBox.faceUrl !== "" ? qsTr("Change the avatar for %1").arg(avatarBox.email)
-                  : qsTr("Choose avatar for %1").arg(avatarBox.email)
+    readonly property TipAsk badgeTip: TipAsk {
+        target: avatarBox
+        // One pointer opens one thing (規約 §hover のツールチップ): the face's tip stands down over the mark.
+        asked: avatarBox.showBadge && !sigMark.pointed
+        // The articles differ on purpose (デザイン規約 §アバターを与える).
+        words: avatarBox.faceUrl !== "" ? qsTr("Change the avatar for %1").arg(avatarBox.email)
+               : qsTr("Choose avatar for %1").arg(avatarBox.email)
+    }
 }

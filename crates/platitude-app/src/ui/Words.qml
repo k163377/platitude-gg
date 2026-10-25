@@ -150,7 +150,7 @@ QtObject {
     /// Why the spaced second click on a worktree opened no box (`GitFacts.worktreeRename`): what cannot be done —
     /// nothing was sent, so not "not renamed", which is the word for a press git turned down — then what the worktree
     /// `name` is — locked, or missing (git's word for a worktree whose folder is gone). The name
-    /// wears the tree mark (`SharedToolTip.tipMarkWord`); a lock's own reason is not quoted — it is whatever the person
+    /// wears the tree mark (`TipAsk.markWord`); a lock's own reason is not quoted — it is whatever the person
     /// who locked it typed, and says nothing of the rename.
     function worktreeRenameWithheld(answer, name) {
         switch (answer) {
@@ -863,7 +863,7 @@ QtObject {
              + "<a href=\"" + href + "\"><font color=\"" + tint + "\">" + Words.inked(place) + "</font></a>"
              + Words.inked(sentence.substring(seat + place.length))
     }
-    /// Where a tip's sentence puts `word`, the name a drawn mark goes in front of (`SharedToolTip.tipMarkWord`): a
+    /// Where a tip's sentence puts `word`, the name a drawn mark goes in front of (`TipAsk.markWordNow`): a
     /// whole word at its end — a tip names it after its conclusion, `<conclusion> — <name>`, and a cut row's line ends
     /// in it — or opening what follows the conclusion, `<conclusion> — <name> is locked`. -1 anywhere else — a
     /// translation that moved it, or the same letters inside another word (`old` in `folder`) — so the sentence is

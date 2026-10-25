@@ -18,6 +18,8 @@ AppListView {
     required property var columns
 
     model: graphList.graphModel
+    // The pane's hand for the tips the rows put out, as for their light (`TipAsk.hand`).
+    rowsHand: graphList.hand
     // The middle button is the pane's, whose hand also pans the lanes sideways (`GraphPane`).
     ownsHand: false
     // The arrows are the pane's (`GraphRowWalk.stepRow`, 規約 §矢印で履歴を辿る): Qt's own key navigation moves
@@ -103,8 +105,19 @@ AppListView {
         reclick.hush()
     }
     readonly property alias clicksHushed: reclick.hushed
-    /// The rows moved under a still hand; nothing opens under it until it moves (`GraphPane.settleUnderHand`).
-    property bool handHeld: false
+    /// The hand over the pane (`HandWatch`), which the rows read their light and their rest off — never their own
+    /// hover (デザイン規約 §グラフ行のダブルクリック「グラフが動いて手の下へ来た行は点くが、手が動くまで何も開かない」).
+    required property HandWatch hand
+    /// What stands over these rows at the hand's place and is not a row: the current branch's stand-in. A row under
+    /// it is not under the hand.
+    property Item shield: null
+    function shieldAt(scenePoint) {
+        const pin = graphList.shield
+        if (pin === null || !pin.visible)
+            return false
+        const p = pin.pressArea.mapFromItem(null, scenePoint.x, scenePoint.y)
+        return p.x >= 0 && p.y >= 0 && p.x < pin.pressArea.width && p.y < pin.pressArea.height
+    }
     /// The box was taken down: the gesture is spent, so the click that took it down is no second click
     /// (`GraphPane.stopNaming`).
     function forgetClicks() {
@@ -113,12 +126,19 @@ AppListView {
     /// For the runs: which target the last left click landed on, and the gesture's state.
     readonly property alias clickedKey: reclick.activeKey
     readonly property alias clickGuarded: reclick.guarded
-    /// A second click is waiting out the double-click window; meanwhile the rows open and close nothing
-    /// (`GraphRowDelegate.settlePointed`).
+    /// A second click is waiting out the double-click window; meanwhile hover opens and closes nothing over the rows
+    /// (the seats' `frozen`, `RowHoverHost`).
     readonly property alias renameWaiting: reclick.armed
     function renameArmed(chip) {
         return chip !== null && reclick.armedFor(chip.key)
     }
+    /// The view is putting itself back over the rows it was reading, after a reread wrote commits in above them
+    /// (`GraphRowWalk.shiftRows`): no reader moved anything, and nothing moved under the hand — the rows read it again,
+    /// and what hangs off them stays (`HandWatch.rowsKept`).
+    property bool keepingRows: false
+    /// The rows a reread wrote are being laid out where the view does not take them back (`GraphRowWalk.shiftRows`):
+    /// a row that moves now moved as the reread's, and what the hand is inside stays (`HandWatch.rowsMoved`).
+    property bool rereading: false
     // Which row the standing question is about, and in which tone; the words are on the bar.
     property string askOid: ""
     property bool askDanger: false
@@ -147,11 +167,17 @@ AppListView {
     /// A second click, late enough to rule out a double-click: rename the chip's first ref, whatever its kind.
     signal rowRenameRequested(string oidHex, var chip)
     signal chipExpandRequested(string oidHex, int atRow, var records, var anchor)
-    /// `anchor` is the chip the pointer left (`GraphRowDelegate.settlePointed`).
-    signal chipCollapseRequested(var anchor)
+    /// `anchor` is the chip the pointer left, on `oidHex`'s row (`GraphRowDelegate.settlePointed`).
+    signal chipCollapseRequested(string oidHex, var anchor)
     signal rowHoverRequested(var row, bool inside)
-    property var chipListAnchor: null
-    property string rowCardOid: ""
+    /// The graph's reread rewrote `row` to another commit in place, or changed the chips of `anchor`'s row: the host
+    /// weighs what hung off them (`RowHoverHost.rowGone` / `chipChanged` — it stays with a commit still in the graph
+    /// and with names still on the chip, and goes with them).
+    signal rowRewritten(var row)
+    signal chipChanged(string oidHex, var anchor)
+    /// What the page has out, by target key (`RowHoverHost.listKey` / `cardKey`); empty for none.
+    property string listKey: ""
+    property string cardKey: ""
     signal namingSubmitted(string oidHex, string name, string mode)
     signal namingCancelled()
     /// The wheel asked for the lanes sideways; the pane owns how far they may go.

@@ -24,9 +24,9 @@ ColumnLayout {
     /// The save is pointed at without a pointer (automation, as `WipPane.pointAtCommit`): its refusal comes out as
     /// for a hand.
     property bool pointedAt: false
-    /// Automation: whether the save can be pressed, and the tip it raises.
+    /// Automation: whether the save can be pressed, and the ask for the tip it raises (`TipAsk.shown` / `words`).
     readonly property alias saveEnabled: saveButton.enabled
-    readonly property var saveTip: saveButton.ToolTip.toolTip
+    readonly property var saveTip: saveRefusal
     /// A caret is in one of the boxes.
     property bool editing: false
     /// The boxes are feeding a rebase plan's `reword` row: the press stores the words in the
@@ -76,9 +76,13 @@ ColumnLayout {
         // nothing (`DetailsPane.submitMessage`).
         enabled: !actions.busy && actions.canSave && actions.refusedWhy === ""
         onActivated: actions.saveRequested()
-        ToolTip.visible: (saveHover.containsMouse || actions.pointedAt) && !enabled && actions.refusedWhy !== ""
-        ToolTip.delay: Metrics.tipDelayMs
-        ToolTip.text: actions.refusedWhy
+        readonly property TipAsk saveRefusal: TipAsk {
+            id: saveRefusal
+            target: saveButton
+            asked: (saveHover.containsMouse || actions.pointedAt) && !saveButton.enabled
+                   && actions.refusedWhy !== ""
+            words: actions.refusedWhy
+        }
         MouseArea {
             id: saveHover
             anchors.fill: parent

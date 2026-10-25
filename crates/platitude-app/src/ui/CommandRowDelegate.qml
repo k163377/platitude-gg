@@ -47,6 +47,14 @@ Rectangle {
 
     height: Theme.rowHeight + (row.showsOutput ? outputText.implicitHeight + 2 * Theme.spaceXs : 0)
     color: row.failed || rowHover.containsMouse ? Theme.bgElevated : "transparent"
+    // The row under the hand moved — a row above it grew with a failure's words, a row came in above it: the hand is
+    // told, so this row's tip does not stay on a line that slid away nor come out on the one that slid in
+    // (`TipAsk.hand`). Read before Qt hands the hover on, so the row that had the hand is the one that says it.
+    onYChanged: {
+        const view = row.ListView.view
+        if (rowHover.containsMouse && view && view.rowsHand)
+            view.rowsHand.rowsMoved()
+    }
 
     // A failure's edge, findable while scrolling past at speed.
     Rectangle {
@@ -64,10 +72,12 @@ Rectangle {
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.NoButton
-        ToolTip.visible: containsMouse && row.status !== "running"
-        ToolTip.delay: Metrics.tipDelayMs
-        // The reproducible form is long; it is here so the log stays one line per command.
-        ToolTip.text: row.full
+        readonly property TipAsk rowTip: TipAsk {
+            target: rowHover
+            asked: rowHover.containsMouse && row.status !== "running"
+            // The reproducible form is long; it is here so the log stays one line per command.
+            words: row.full
+        }
     }
 
     // ---- the reader's own selection -----------------------------------------------------------------------------

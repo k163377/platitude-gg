@@ -1,5 +1,4 @@
 import QtQuick
-// For the attached ToolTip alone (rules-refs/app-ui.md carries what an unimported one answers).
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
@@ -43,19 +42,26 @@ Rectangle {
         if (same)
             return
         pane.shownEntries = kept
-        // The rows are dealt again under the hand, so a card names whatever row it stood on: it goes.
-        pane.cardWanted = false
-        entryCard.close()
+        // The rows are dealt again under the hand: that is the rows moving under it (`HandWatch.rowsMoved`). The card
+        // goes, as it names whatever row it stood on, and the row that came under a still hand lights and opens only
+        // once the hand has moved — its ask is kept (`displace`, below).
+        paneHand.rowsMoved()
     }
+    /// The hand over the list (`HandWatch`), as the left panel keeps one: the rows read their light and their ask
+    /// off it by geometry — a row the list's scrolling or its re-dealing brought under a still hand lights as the row
+    /// under it, and its card waits for the hand to move.
+    HandWatch {
+        id: paneHand
+    }
+    /// Automation only: the list and the hand, for a run that moves either (`tst_recoverpane`).
+    readonly property alias entryList: list
+    readonly property alias hand: paneHand
     onEntriesChanged: pane.refilter()
     onNowChanged: pane.refilter()
     Component.onCompleted: pane.refilter()
     /// Automation: the card is out, and for which entry (-1 for none).
     readonly property bool cardOpen: entryCard.opened
     property int cardAt: -1
-    /// The row the card hangs from: rows are recycled (`AppListView.reuseItems`), so a row's number can change under a
-    /// hand that never left it.
-    property Item cardRow: null
 
     /// The words an entry shows, which the filter reads: what it did in the row's words and the card's, where, what it
     /// took, and when — as the row writes its time and as its card does.
@@ -67,29 +73,34 @@ Rectangle {
         return words
     }
 
-    /// A rest ran out on `row`: its card opens under the pointer, as a graph row's does (`RowHoverHost.openRowCard`).
-    function openCard(row, pointerX) {
-        if (entryCard.opened && pane.cardAt === row.at) {
-            pane.cardWanted = true
+    /// The hand is on `row`, or left it (`EntryRow`): the card opens on a rest and goes a beat after the hand has left
+    /// the row and the card both — the seat's doing (`entryKeep`). Rows are recycled (`AppListView.reuseItems`), so
+    /// the target is the entry, and the row is asked again at the rest whether it still shows it.
+    function pointEntry(row, inside, pointerX) {
+        const key = "entry:" + row.at
+        if (!inside) {
+            entryKeep.unpoint(key)
             return
         }
+        entryKeep.point({ "key": key, "row": row, "x": pointerX,
+                          "alive": () => row.visible && !row.pooled && "entry:" + row.at === key })
+    }
+    /// The rest ran out on `row`: its card opens under the pointer, as a graph row's does (`RowHoverHost.openRowCard`).
+    function openCard(row, pointerX) {
         entryCard.entry = row.entry
         entryCard.when = pane.words.whenWords(row.entry.at, pane.now)
         const at = row.mapToItem(pane, pointerX, row.height)
         entryCard.x = at.x
         entryCard.y = at.y
         pane.cardAt = row.at
-        pane.cardRow = row
-        pane.cardWanted = true
         entryCard.open()
     }
-    /// The hand is on a row, or left it: what holds the card up (`HoverCardHost`).
-    property bool cardWanted: false
-    /// Automation: rests a hand on the shown entry `index` — hover cannot be injected (verify-ui スキル).
+    /// Automation: a hand that has rested on the shown entry `index` — hover cannot be injected (verify-ui スキル), and
+    /// the rest is taken as done, so the card opens at once.
     function restOnShown(index) {
         const row = list.itemAtIndex(index)
         if (row !== null)
-            pane.openCard(row, row.width / 2)
+            entryKeep.point({ "key": "entry:" + row.at, "row": row, "x": row.width / 2 }, true)
         return row !== null
     }
 
@@ -210,11 +221,17 @@ Rectangle {
         anchors.top: filterRow.bottom
         anchors.bottom: parent.bottom
         model: pane.shownEntries
+        // The rows moved under the hand: the reader's wheel and bar (`HandWatch.rowsMoved`) — the hand the rows' tips
+        // read too (`TipAsk.hand`).
+        rowsHand: paneHand
+        onContentYChanged: paneHand.rowsMoved()
         delegate: EntryRow {
             pickedIndex: pane.picked
             page: pane.curPage
             host: pane
             now: pane.now
+            // By the pane's name: inside the component, `paneHand` is the row's own property.
+            paneHand: pane.hand
         }
     }
     // The first read, before any entry: a ring in a row's height, then the rows (`AppCombo`).
@@ -264,9 +281,18 @@ Rectangle {
         textWidth: pane.width
         onClosed: pane.cardAt = -1
     }
-    HoverCardHost {
+    readonly property HoverSeat entryKeep: HoverSeat {
+        id: entryKeep
+        hand: paneHand
         card: entryCard
-        pointedAt: pane.cardWanted
+        // Behind a menu of the page's the card goes the moment it stands, and nothing opens while it does
+        // (デザイン規約 §メニュー「メニューが立っている間、その裏の hover は引っ込む」).
+        blockedBy: pane.curPage !== null && pane.curPage.menuStanding ? "menu" : ""
+        onOpenAsked: target => pane.openCard(target.row, target.x)
+    }
+    Connections {
+        target: paneHand
+        function onRowsShifted() { entryKeep.displace("slid") }
     }
 
     // One operation, in a left menu row's columns: its mark in the seat, what it did where the names begin, when at the
@@ -287,30 +313,67 @@ Rectangle {
 
         width: ListView.view ? ListView.view.width : 0
         height: Theme.rowHeight
-        color: row.isPicked ? Theme.bgSelected : rowHover.hovered ? Theme.bgHover : "transparent"
+        color: row.isPicked ? Theme.bgSelected : row.handOn ? Theme.bgHover : "transparent"
 
-        // The card opens on a rest, as a graph row's does (規約 §hover のツールチップ「補足は待ってから開く」), and goes
-        // a beat after the hand has left the row and the card both (`HoverCardHost`).
-        HoverHandler {
-            id: rowHover
-            onHoveredChanged: {
-                if (rowHover.hovered) {
-                    rest.restart()
+        /// The pane's hand (`HandWatch`), which the row reads its light and its ask off by geometry each time the
+        /// hand or the rows move: a row brought under a still hand is the row under it, and what it asks for waits on
+        /// the seat for the hand (as the graph's rows, `GraphRowDelegate.syncHand`).
+        property HandWatch paneHand: null
+        property real pointerRowX: -1
+        readonly property int handMoves: row.paneHand !== null ? row.paneHand.moves : 0
+        onHandMovesChanged: row.syncHand()
+        readonly property int handShifts: row.paneHand !== null ? row.paneHand.shifts : 0
+        onHandShiftsChanged: row.syncHand()
+        // The row's place in the list changed with the list where it was (the rows dealt again): told as a move
+        // (`GraphRowDelegate.placeMoved`).
+        onYChanged: row.placeMoved()
+        function syncHand() {
+            const hand = row.paneHand
+            if (hand === null || !hand.known || !row.visible || row.pooled) {
+                row.pointerRowX = -1
+                return
+            }
+            const view = row.ListView.view
+            if (view) {
+                const v = view.mapFromItem(null, hand.at.x, hand.at.y)
+                if (v.x < 0 || v.y < 0 || v.x >= view.width || v.y >= view.height) {
+                    row.pointerRowX = -1
                     return
                 }
-                rest.stop()
-                if (row.host !== null && row.host.cardRow === row)
-                    row.host.cardWanted = false
             }
+            const p = row.mapFromItem(null, hand.at.x, hand.at.y)
+            row.pointerRowX = p.x >= 0 && p.y >= 0 && p.x < row.width && p.y < row.height ? p.x : -1
         }
-        Timer {
-            id: rest
-            interval: Metrics.tipDelayMs
-            onTriggered: {
-                if (row.host !== null && rowHover.hovered)
-                    row.host.openCard(row, rowHover.point.position.x)
+        function placeMoved() {
+            const hand = row.paneHand
+            if (hand === null || !row.visible || row.pooled)
+                return
+            if (!hand.known) {
+                hand.rowsMoved()
+                return
             }
+            const p = row.mapFromItem(null, hand.at.x, hand.at.y)
+            const over = p.x >= 0 && p.y >= 0 && p.x < row.width && p.y < row.height
+            if (over !== (row.pointerRowX >= 0))
+                hand.rowsMoved()
         }
+        // The card opens on a rest, as a graph row's does (規約 §hover のツールチップ「補足は待ってから開く」), and goes
+        // a beat after the hand has left the row and the card both: the pane's seat counts both (`pointEntry`).
+        readonly property bool handOn: row.pointerRowX >= 0
+        onHandOnChanged: {
+            if (row.host !== null)
+                row.host.pointEntry(row, row.handOn, Math.max(0, row.pointerRowX))
+        }
+        // A row pooled is off screen; one handed another entry is another row: what the hand found on it does not
+        // carry over, and nothing lights or opens until the hand moves. Pooled, it stays `visible` where it last stood
+        // (`GraphRowDelegate.pooled`).
+        property bool pooled: false
+        ListView.onPooled: {
+            row.pooled = true
+            row.pointerRowX = -1
+        }
+        ListView.onReused: row.pooled = false
+        onAtChanged: row.pointerRowX = -1
         TapHandler {
             onTapped: row.page.pickRecover(row.at)
         }

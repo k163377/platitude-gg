@@ -36,8 +36,8 @@ Rectangle {
 
     signal refActivated(string oidHex)
     /// Right-click on a row. `kind` is the section it came from, `name` what the row shows and `full` what git knows
-    /// it by.
-    signal refMenuRequested(string kind, string name, string full, string oidHex, string aim)
+    /// it by; `area` is the surface the row is on — the list (`sidebar`) or the folded rail's open section (`peek`).
+    signal refMenuRequested(string kind, string name, string full, string oidHex, string aim, string area)
     signal worktreeActivated(string path)
     /// Double-click on a branch row: `kind` is the word the page's dispatcher reads (`branch` / `remote`, the
     /// same word a chip goes out under).
@@ -54,45 +54,35 @@ Rectangle {
     signal foldRequested(bool collapse)
     /// The REMOTES `+`, past the doors' hold (`askAddRemote`).
     signal addRemoteRequested()
-    /// Right-click on the row a remote itself stands on: what to do with that remote.
-    signal remoteMenuRequested(string name)
+    /// Right-click on the row a remote itself stands on: what to do with that remote. `area` as above.
+    signal remoteMenuRequested(string name, string area)
 
     // ---- the row gestures ------------------------------------------
     // The pane keeps the names its callers (the page's row menu, the smoke hooks) reach for.
     SidebarRowGestures {
         id: rowGestures
         host: sidebar
+        hand: paneHand
         // Only the doors' hold: the plan's freeze already takes the list out of the input path.
         held: sidebar.doorsHeld
-        menuOpen: sidebar.menuRaisedOn !== ""
+        menuDoor: sidebar.menuDoor
         repoTab: sidebar.repoTab
         remotesModel: sidebar.remotesModel
         branchesModel: sidebar.branchesModel
         worktreesModel: sidebar.worktreesModel
         tagsModel: sidebar.tagsModel
     }
-    /// Where this panel last saw the hand, in its own coordinates.
-    property point handAt: Qt.point(-1, -1)
-    // The hand, heard once on the panel — an ancestor of every row, since a sibling over them takes their hover. The
-    // rows re-read their hover on its moves only, so a list moving under a still pointer cannot light a row nobody
-    // aimed at (`NavItemDelegate.syncHover`; rules-refs/app-ui.md, the 左メニューの行の重ね色 line). Walking out of
-    // the panel counts as a move, or the row it left would keep the light.
-    HoverHandler {
-        id: handWatch
-        // A move is a new place, not a new telling: the point is handed again when the layout moves under a still
-        // pointer, and counting that closes an opening row in a blink (`tests/qml/tst_hoverunderstillhand.qml`).
-        onPointChanged: {
-            if (handWatch.point.position.x === sidebar.handAt.x
-                    && handWatch.point.position.y === sidebar.handAt.y)
-                return
-            sidebar.handAt = handWatch.point.position
-            rowGestures.handStirred(handWatch.point.scenePosition)
-        }
-        onHoveredChanged: {
-            sidebar.handAt = Qt.point(-1, -1)
-            rowGestures.handStirred(handWatch.hovered ? handWatch.point.scenePosition : Qt.point(-1, -1))
-        }
+    // The hand over the panel (`HandWatch`), heard once on the panel — an ancestor of every row, since a sibling over
+    // them takes their hover. The rows read their light and their rest off it, never off their own hover: a row
+    // growing in place does not hand the light to the row it pushed under the pointer, and a row the reader's scroll
+    // brought there opens nothing until the hand moves (`NavItemDelegate.syncHand`;
+    // rules-refs/app-ui.md, the 左メニューの行の重ね色 line). The folded rail's open section stands outside the panel
+    // and counts as it (`alsoOver`).
+    HandWatch {
+        id: paneHand
+        alsoOver: peek.hover
     }
+    readonly property alias hand: paneHand
     property alias activeKey: rowGestures.activeKey
     property alias editKey: rowGestures.editKey
     /// Automation only: whether the box refuses what is typed, and its line — a frame colour and a tooltip.
@@ -102,15 +92,16 @@ Rectangle {
     readonly property string editKind: rowGestures.editKind
     readonly property string editText: rowGestures.editText
     readonly property string withheldWhy: rowGestures.withheldWhy
-    /// Where the page's standing menu was raised (`RepoPage.menuRaisedOn`), "" while none stands; `sidebar` is these
-    /// rows. The page sets it, the menus being its.
-    property string menuRaisedOn: ""
+    /// The page's standing menu's door (`RepoPage.menuDoor`), null while none stands: raised on `sidebar` (the list's
+    /// rows) or `peek` (the folded rail's open section's), or elsewhere. The page sets it, the menus being its.
+    property var menuDoor: null
+    readonly property string menuArea: sidebar.menuDoor !== null ? sidebar.menuDoor.area : ""
     /// Any of the page's menus is standing: no row opens or wears a tip behind it (`SidebarRowGestures.menuOpen`).
-    property alias menuOpen: rowGestures.menuOpen
+    readonly property bool menuOpen: rowGestures.menuOpen
     // What the rail opened is behind a menu raised anywhere else, and goes at once (デザイン規約 §メニュー); under
     // one raised on its own rows it stays (`peek.pinned`).
-    onMenuRaisedOnChanged: {
-        if (sidebar.menuRaisedOn !== "" && sidebar.menuRaisedOn !== "sidebar")
+    onMenuAreaChanged: {
+        if (sidebar.menuArea !== "" && sidebar.menuArea !== "peek")
             sidebar.closePeek()
     }
     function stopEdit() {
@@ -313,11 +304,13 @@ Rectangle {
         expStashes: sidebar.expStashes
         expTags: sidebar.expTags
         headPinPointed: sidebar.headPinPointed
+        paneHand: paneHand
         onSectionToggled: kind => sidebar.toggleSection(kind)
         onFoldRequested: collapse => sidebar.foldRequested(collapse)
         onRefActivated: oidHex => sidebar.refActivated(oidHex)
-        onRefMenuRequested: (kind, name, full, oidHex, aim) => sidebar.refMenuRequested(kind, name, full, oidHex, aim)
-        onRemoteMenuRequested: name => sidebar.remoteMenuRequested(name)
+        onRefMenuRequested: (kind, name, full, oidHex, aim) =>
+            sidebar.refMenuRequested(kind, name, full, oidHex, aim, "sidebar")
+        onRemoteMenuRequested: name => sidebar.remoteMenuRequested(name, "sidebar")
         onAddRemoteRequested: sidebar.askAddRemote()
     }
 
@@ -387,15 +380,20 @@ Rectangle {
         worktree: sidebar.worktree
         rail: rail
         gestures: rowGestures
+        paneHand: paneHand
         paneW: sidebar.width
         paneH: sidebar.height
         listW: sidebar.openWidth
-        // A menu raised on its rows holds it — this section's, not one a rest brought in under that menu; so does a box
-        // open on one of them: a name half typed into a list the pointer walked away from is a name lost.
-        pinned: (sidebar.menuRaisedOn === "sidebar" && peek.menuKind === peek.kind) || sidebar.editKey !== ""
+        // A menu raised on its rows holds it — this section's (the page keys the menu's row by its section), not one
+        // a rest brought in under that menu; so does a box open on one of them: a name half typed into a list the
+        // pointer walked away from is a name lost.
+        pinned: (sidebar.menuDoor !== null && sidebar.menuDoor.area === "peek"
+                 && sidebar.menuDoor.key.startsWith(peek.kind + ":"))
+                || sidebar.editKey !== ""
         onRefActivated: oidHex => sidebar.refActivated(oidHex)
-        onRefMenuRequested: (kind, name, full, oidHex, aim) => sidebar.refMenuRequested(kind, name, full, oidHex, aim)
-        onRemoteMenuRequested: name => sidebar.remoteMenuRequested(name)
+        onRefMenuRequested: (kind, name, full, oidHex, aim) =>
+            sidebar.refMenuRequested(kind, name, full, oidHex, aim, "peek")
+        onRemoteMenuRequested: name => sidebar.remoteMenuRequested(name, "peek")
         onAddRemoteRequested: sidebar.askAddRemote()
     }
 }

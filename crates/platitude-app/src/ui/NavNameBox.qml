@@ -25,11 +25,11 @@ SlimField {
     property string mode: ""
     property string carried: ""
     property string refusedWhy: ""
-    /// A worktree's folder in `refusedWhy`, empty for none: the shared tip stands the tree mark in front of it
-    /// (`SharedToolTip.tipMarkWord`, デザイン規約 §ref の種別「名前の印」).
+    /// A worktree's folder in `refusedWhy`, empty for none: the tip stands the tree mark in front of it
+    /// (`TipAsk.markWord`, デザイン規約 §ref の種別「名前の印」).
     property string refusedMark: ""
     readonly property string tipMarkWord: box.refusedMark
-    /// The branch, tag or remote in `refusedWhy`, behind their marks (`SharedToolTip.tipMarks`).
+    /// The branch, tag or remote in `refusedWhy`, behind their marks (`TipAsk.marksNow` reads them off the box).
     property var refusedMarks: []
     readonly property var tipMarks: box.refusedMarks
     /// The kind of name being typed — the mode, or the row's kind on a rename — which the frame and the placeholder
@@ -94,15 +94,21 @@ SlimField {
             box.submitted(box.text)
     }
     Keys.onEscapePressed: box.cancelled()
-    // Why Enter did nothing (規約 §hover のツールチップ). Asks `visible`, not focus: the reparent's keyboard hand-off
-    // lands inside this binding and Qt drops it as a loop
-    // (rules-refs/app-ui.md「添付 `ToolTip.visible` の式が読むのは `visible`」).
-    ToolTip.visible: box.tipTyped
-    ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.text: box.refusedWhy
-    /// That tip answers what is typed, not a hand: it stands until the typing changes it (`SharedToolTip.typedAsker`) —
-    /// a hand walking elsewhere, another target's hover and a held scroll bar leave it standing (in the folded rail's
-    /// peek the box stays open while the peek's own bar is used to look through the names).
+    // Why Enter did nothing (規約 §hover のツールチップ).
+    /// The refusal is up on this box — the seat's own answer (`TipAsk.shown`), for the row and the runs.
+    readonly property bool tipShown: refusalTip.shown
+    readonly property TipAsk refusalTip: TipAsk {
+        id: refusalTip
+        target: box
+        asked: box.tipTyped
+        typed: true
+        words: box.refusedWhy
+        markWord: box.refusedMark
+    }
+    /// That tip answers what is typed, not a hand: it stands until the typing changes it (`TipAsk.typed`) — a hand
+    /// walking elsewhere, another target's hover and a held scroll bar leave it standing (in the folded rail's peek the
+    /// box stays open while the peek's own bar is used to look through the names). Asks `visible`, not focus: the
+    /// reparent's keyboard hand-off lands inside this binding and Qt drops it as a loop.
     readonly property bool tipTyped: box.refused && box.visible && box.refusedWhy !== ""
 
     /// Where the box came out (PGG_AUTO_ACT=nav-branch-box / nav-rename-box): a clipped or scrolled-away box is

@@ -67,10 +67,35 @@ Rectangle {
      : headPin.rowTop - headPin.contentY
     // The list's own ground, opaque: the rows scroll under it.
     color: Theme.bgSurface
+    /// The panel's hand (`HandWatch`), read as the rows read it (`NavItemDelegate.syncHand`): on the stand-in, its
+    /// lines included.
+    property HandWatch paneHand: null
+    readonly property int handMoves: headPin.paneHand !== null ? headPin.paneHand.moves : 0
+    onHandMovesChanged: headPin.syncHand(false)
+    // Read again as the rows move too (`HandWatch.shifts`), as a row is: seated under a folder the stand-in scrolls
+    // with them, and on an edge it comes and goes as its row leaves the view and comes back.
+    readonly property int handShifts: headPin.paneHand !== null ? headPin.paneHand.shifts : 0
+    onHandShiftsChanged: headPin.syncHand(true)
+    property bool handOn: false
+    /// The stand-in slid out from under a still hand: what it had open goes at once (as `NavItemDelegate.slid`).
+    property bool slid: false
+    function syncHand(shifted) {
+        const hand = headPin.paneHand
+        let on = hand !== null && hand.known && headPin.visible
+        if (on) {
+            const p = headPin.mapFromItem(null, hand.at.x, hand.at.y)
+            on = p.x >= 0 && p.y >= 0 && p.x < headPin.width && p.y < headPin.height
+        }
+        headPin.slid = shifted === true && headPin.handOn && !on
+        headPin.handOn = on
+    }
+    onVisibleChanged: if (!headPin.visible) headPin.handOn = false
+    /// The stand-in is lit: the hand on it, or the run's stand-in for one.
+    readonly property bool lit: headPin.handOn || headPin.pointed
     Rectangle {
         anchors.fill: parent
         color: Theme.bgHover
-        visible: headRowMouse.containsMouse || headPin.pointed
+        visible: headPin.lit
     }
     RowLayout {
         id: pinLine
@@ -136,11 +161,13 @@ Rectangle {
     }
     /// The full name, as its row's tip (デザイン規約 §hover のツールチップ); none where the facts open and say it.
     readonly property string tipWords: headPin.opensFacts ? "" : headPin.branchesModel.headName
-    /// Out of the list as its rows' (`NavItemDelegate.tipRowSide`).
-    readonly property string tipRowSide: "left"
-    ToolTip.visible: (headRowMouse.containsMouse || headPin.pointed) && headPin.tipWords !== ""
-    ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.text: headPin.tipWords
+    readonly property TipAsk pinTip: TipAsk {
+        target: headPin
+        asked: headPin.lit && headPin.tipWords !== ""
+        words: headPin.tipWords
+        // Out of the list as its rows' (`NavItemDelegate`).
+        rowSide: "left"
+    }
 
     /// Whether it opens facts under itself as a row does, the gestures holding which row is open, and the WORKTREES
     /// section (`NavRowFacts` / `SidebarRowGestures`).
@@ -205,13 +232,15 @@ Rectangle {
         headPin.factsName = said.name
         return headPin.factsName !== ""
     }
-    function askFacts(at) {
+    /// `now` for a press going for the words, which skips the rest (`lineDragged`).
+    function askFacts(at, now) {
         if (headPin.opensFacts && headPin.gestures !== null && headPin.gatherFacts())
-            headPin.gestures.openFacts(headPin.factsKey, at)
+            headPin.gestures.openFacts(headPin.factsKey, at, headPin, now === true, headPin.branchesModel,
+                                       headPin.branchesModel.headName)
     }
     function dropFacts() {
         if (headPin.gestures !== null)
-            headPin.gestures.closeFacts(headPin.factsKey)
+            headPin.gestures.closeFacts(headPin.factsKey, headPin.slid)
     }
     /// For the runs (PGG_AUTO_ACT=nav-open `head:…`): what is open, and the lines. Empty / null while closed, so the
     /// sections can ask it first.
@@ -231,21 +260,16 @@ Rectangle {
     function openShown() {
         return headPin.y >= 0 && headPin.y + headPin.height <= headPin.viewHeight
     }
-    // The pointer stand-in opens at once: a run has no hand to rest.
-    onPointedChanged: {
-        if (headPin.pointed)
-            headPin.askFacts(headPin.mapToItem(null, headPin.width / 2, Theme.rowHeight / 2))
+    // The hand arriving asks for the facts and leaving lets them go; the panel's seat counts the rest and the beat
+    // (`SidebarRowGestures.openSeat`). The run's stand-in asks from the stand-in's own middle.
+    onLitChanged: {
+        if (headPin.lit)
+            headPin.askFacts(headPin.handOn ? headPin.paneHand.at
+                                            : headPin.mapToItem(null, headPin.width / 2, Theme.rowHeight / 2))
         else
             headPin.dropFacts()
     }
     onFactsOpenChanged: if (headPin.factsOpen) headPin.gatherFacts()
-    // The rest before the facts open (規約 §hover のツールチップ「補足は待ってから開く」).
-    Timer {
-        id: pinFactsWait
-        interval: Metrics.tipDelayMs
-        onTriggered: if (headRowMouse.containsMouse) headPin.askFacts(headRowMouse.mapToItem(null, headRowMouse.mouseX,
-                                                                                            headRowMouse.mouseY))
-    }
     // The facts, inside the stand-in under its line (`NavRowFacts`); on the bottom edge the whole grows upward.
     Loader {
         id: pinFacts
@@ -292,9 +316,8 @@ Rectangle {
                 && Math.abs(y - headRowMouse.pressFrom.y) < Qt.styleHints.startDragDistance)
             return
         if (!headRowMouse.handedOn) {
-            pinFactsWait.stop()
             if (!headPin.factsOpen)
-                headPin.askFacts(headPin.mapToItem(null, x, y))
+                headPin.askFacts(headPin.mapToItem(null, x, y), true)
             if (headPin.nameField === null)
                 return
             headPin.nameField.anchorFrom(headPin, headRowMouse.pressFrom)
@@ -311,7 +334,7 @@ Rectangle {
     MouseArea {
         id: headRowMouse
         anchors.fill: parent
-        hoverEnabled: true
+        // Presses only: the hand is the panel's (`syncHand`).
         enabled: headPin.branchesModel.headOid !== ""
         /// Where the button went down, and whether this press has already been handed on to the lines below.
         property point pressFrom: Qt.point(0, 0)
@@ -321,14 +344,5 @@ Rectangle {
         onPressed: mouse => headPin.linePressed(mouse.x, mouse.y)
         onPositionChanged: mouse => headPin.lineDragged(mouse.x, mouse.y)
         onClicked: headPin.lineClicked()
-        // Rest before opening, drop on leaving — the facts are inside the stand-in, so reading them never leaves it.
-        onContainsMouseChanged: {
-            if (headRowMouse.containsMouse) {
-                pinFactsWait.restart()
-            } else {
-                pinFactsWait.stop()
-                headPin.dropFacts()
-            }
-        }
     }
 }

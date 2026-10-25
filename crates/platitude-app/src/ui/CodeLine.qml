@@ -73,16 +73,21 @@ Item {
         }
         return out
     }
-    /// The whole line's names behind their marks, for the tip a cut line puts up (`SharedToolTip.tipMarks`).
+    /// The whole line's names behind their marks, for the tip a cut line puts up (`TipAsk.marksNow`).
     readonly property var tipMarks: line.marks
 
     implicitHeight: baseRef.implicitHeight
     // Every piece stands on the words' baseline.
     baselineOffset: baseRef.baselineOffset
-    // The whole line, where a name was cut (`middle`).
-    ToolTip.visible: line.cutAt === "middle" && line.cutting && lineHover.hovered
-    ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.text: line.text
+    /// The whole line, where a name was cut (`middle`): the ask for the window's tooltip, whose names behind their
+    /// marks the seat reads off this line (`tipMarks`).
+    readonly property alias tip: lineTip
+    readonly property TipAsk lineTip: TipAsk {
+        id: lineTip
+        target: line
+        asked: line.cutAt === "middle" && line.cutting && lineHover.hovered
+        words: line.text
+    }
 
     HoverHandler {
         id: lineHover

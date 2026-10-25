@@ -24,6 +24,10 @@ MenuItem {
         menuItem.shapeHeld && menuItem.shownAtHold
         && (!menuItem.offered || menuItem.menu !== null && menuItem.menu.applies === false)
     visible: menuItem.present
+    /// The hand on this row, by a handler of its own (`AppMenu.pointerInside`): the row's `hovered` drops the moment
+    /// the card goes (`QQuickControl::itemChange`), before Qt hands the hover to what is under the hand; a handler
+    /// keeps it until Qt takes it.
+    readonly property bool handOn: rowHand.hovered
 
     /// A short warning tag after the row's words ("already pushed"); the row still runs on click.
     property string note: ""
@@ -186,17 +190,17 @@ MenuItem {
     /// The mark that folder wears: the house for the repository's own worktree, else the tree.
     property string reasonMarkKind: "tree"
     /// The names in the row's own reason seated by the caller, where there are several or a ref's, as the tip's field
-    /// takes them (`Words.listMarks`, `SharedToolTip.tipMarks`). Wins over `reasonMarkWord`.
+    /// takes them (`Words.listMarks`, `TipAsk.marksNow`). Wins over `reasonMarkWord`.
     property var reasonMarks: []
-    /// The word the shared tooltip stands the worktree's mark against (`SharedToolTip.tipMarkWord`, デザイン規約
-    /// §ref の種別「ツールチップだけは字の中」): the folder in a turned-down row's reason. A row's own names, the folder
-    /// among them, are `tipMarks`.
+    /// The word the tooltip stands the worktree's mark against (`TipAsk.markWordNow`, デザイン規約 §ref の種別
+    /// 「ツールチップだけは字の中」): the folder in a turned-down row's reason. A row's own names, the folder among them,
+    /// are `tipMarks`.
     readonly property string tipMarkWord: menuItem.blocked ? menuItem.reasonMarkWord : ""
-    /// …and which mark (`SharedToolTip.tipMarkKind`).
+    /// …and which mark (`TipAsk.markKindNow`).
     readonly property string tipMarkKind: menuItem.blocked ? menuItem.reasonMarkKind : ""
-    /// The names the hover's whole line says (`ToolTip.text`), each behind its mark, seated part by part as that line
+    /// The names the hover's whole line says (`tip.words`), each behind its mark, seated part by part as that line
     /// joins them — the sentence's (`refSentence`), the code name, the worktree after the words, the far column's
-    /// branch (`SharedToolTip.tipMarks`).
+    /// branch (`TipAsk.marksNow` reads them off the row).
     readonly property var tipMarks: {
         if (menuItem.blocked)
             return menuItem.blockedWhy === menuItem.blockedReason ? menuItem.reasonMarks : []
@@ -455,20 +459,27 @@ MenuItem {
         return words.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/ /g, "&nbsp;")
     }
 
-    /// Out of the menu, never over its other rows — on the right first, where a sub-menu opens, so a parent menu on the
-    /// left stays readable (`SharedToolTip.tipRowSide`).
-    readonly property string tipRowSide: "right"
-    // A blocked row's line comes before the elision's: one tooltip, one delay.
-    ToolTip.visible: (menuItem.hovered || menuItem.tipForced)
-                     && (menuItem.blocked || itemLabel.truncated || menuItem.refCut || menuItem.trailCut
-                         || menuItem.sideCut || menuItem.nameCut)
-    ToolTip.delay: Metrics.tipDelayMs
-    // The whole line, code name included — a cut name is what the hover is there to give back, behind a chip too
-    // (`worktree remove`).
-    ToolTip.text: menuItem.blocked ? menuItem.blockedWhy
-                : [menuItem.code, menuItem.text, menuItem.codesName ? menuItem.codeName : "", menuItem.trail,
-                   menuItem.sideName]
-                  .filter(words => words !== "").join(" ")
+    /// The row's ask for the window's tooltip (`TipAsk`), for the harness and the tests to read. The names behind
+    /// their marks and the one word a mark stands against are the row's own (`tipMarks`, `tipMarkWord`), read off the
+    /// row by the seat.
+    readonly property alias tip: rowTip
+    readonly property TipAsk rowTip: TipAsk {
+        id: rowTip
+        target: menuItem
+        // A blocked row's line comes before the elision's: one tooltip, one delay.
+        asked: (menuItem.hovered || menuItem.tipForced)
+               && (menuItem.blocked || itemLabel.truncated || menuItem.refCut || menuItem.trailCut
+                   || menuItem.sideCut || menuItem.nameCut)
+        // The whole line, code name included — a cut name is what the hover is there to give back, behind a chip too
+        // (`worktree remove`).
+        words: menuItem.blocked ? menuItem.blockedWhy
+             : [menuItem.code, menuItem.text, menuItem.codesName ? menuItem.codeName : "", menuItem.trail,
+                menuItem.sideName]
+               .filter(words => words !== "").join(" ")
+        // Out of the menu, never over its other rows — on the right first, where a sub-menu opens, so a parent menu
+        // on the left stays readable.
+        rowSide: "right"
+    }
 
     // The press mark, in the seat `holdIndent` leaves on every row (デザイン規約 §回数押し): the head of the row's words,
     // as tall as their capitals and on their middle (デザイン規約 §アイコンの席 の文頭記号).
@@ -986,4 +997,8 @@ MenuItem {
     Keys.onReleased: event => holdDrive.releaseKey(event)
     // A key let go after the focus has moved is answered somewhere else (`HoldDriver.focusLost`).
     onActiveFocusChanged: if (!menuItem.activeFocus) holdDrive.focusLost()
+
+    HoverHandler {
+        id: rowHand
+    }
 }

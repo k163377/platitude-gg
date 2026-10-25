@@ -93,9 +93,11 @@ Rectangle {
     // (デザイン規約 §タブの所作「縦の境は地が言う」); what the strip does past that edge is `pinDissolve`.
     color: tabPin.frontTab ? tabPin.frontTab.groundColor : Theme.bgSelected
     // The worktree's full path, as the tab says it (デザイン規約 §hover のツールチップ).
-    ToolTip.visible: tabPin.pointed
-    ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.text: tabPin.frontTab ? tabPin.frontTab.worktree_path : ""
+    readonly property TipAsk pathTip: TipAsk {
+        target: tabPin
+        asked: tabPin.pointed
+        words: tabPin.frontTab ? tabPin.frontTab.worktree_path : ""
+    }
     HoverHandler {
         id: pinHover
         onHoveredChanged: tabPin.pointed = pinHover.hovered

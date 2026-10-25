@@ -44,10 +44,11 @@ Item {
     readonly property real fanDepthMax: 2 * stack.fanRoom - 2 * Theme.borderWidth
 
     /// One key per sheet behind the front card, in the row's own order: every colour on the row once, and the front
-    /// card's own a second time when the row carries more than one of it.
-    readonly property var sheets: {
-        if (stack.unstacked)
-            return []
+    /// card's own a second time when the row carries more than one of it. None drawn while the card stands over the
+    /// stack; `sheetsStacked` is the fan as it stands when nothing covers it, which is what the card has to cover
+    /// (`stackedWidth`, `RowHoverHost.openRefList`).
+    readonly property var sheets: stack.unstacked ? [] : stack.sheetsStacked
+    readonly property var sheetsStacked: {
         const order = []
         const seen = ({})
         for (let i = 0; i < stack.records.length; ++i) {
@@ -75,11 +76,23 @@ Item {
     }
     readonly property real fanW: stack.sheets.length * stack.step
     readonly property real fanDepth: stack.sheets.length * stack.drop
+    /// The stack's width with every sheet drawn, whether or not they are now: the card that covers it is measured
+    /// against this, so it is the same card whichever is read first.
+    readonly property real stackedWidth: frontChip.width + stack.sheetsStacked.length * stack.step
     /// The widest fan, which the column's floor keeps back (`GraphColumnMetrics.chipFurnitureW`).
     readonly property real fanMaxW: stack.maxSheets * stack.step
     /// How far the stack rises off the row's middle, so the row centres card and fan together, the odd pixel above
     /// (デザイン規約 §重ね表示).
     readonly property real lift: Math.floor(stack.fanDepth / 2)
+    /// …and with every sheet drawn, as `stackedWidth`: where the stack stood as the reader saw it.
+    readonly property real stackedLift: Math.floor(stack.sheetsStacked.length * stack.drop / 2)
+
+    /// Lays the front card out now, for a caller reading `stackedWidth` in the turn its names changed — the card that
+    /// covers the stack, said over again in place (`RowHoverHost.refreshRefList`). Unforced, the front card answers
+    /// with the width it had for the names before (`RefChip.layOutNow`).
+    function layOutNow() {
+        frontChip.layOutNow()
+    }
 
     implicitWidth: frontChip.width + stack.fanW
     implicitHeight: frontChip.height

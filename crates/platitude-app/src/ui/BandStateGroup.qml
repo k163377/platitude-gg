@@ -123,10 +123,6 @@ Item {
                                                 stateGroup.tabRunAvail, stateGroup.tabCount,
                                                 stateGroup.windowAtFloor)
 
-    /// Whether anything is asking for the card: the pointer on the mark, the pointer inside the card, or the hook
-    /// standing in for either.
-    readonly property alias stateLit: stateKeep.lit
-
     /// Whether the band has ever placed this group; the card waits for it. A cell the row has not laid out yet is
     /// still at (0, 0), where the offscreen pointer sits (rules-refs/app-ui.md「初めて立つセルはまだ原点に居る」).
     /// Kept once said: the row leaves a cell where it put it. Never make this group the row's first cell — the card
@@ -138,15 +134,6 @@ Item {
 
     /// Automation: `BandStateCard.wordsOffLevel`, for the band to hand on.
     function stateCardWordsOff() { return stateCard.wordsOffLevel() }
-    /// Opens the card; `stateKeep` is what closes it a beat after the last thing asking for it lets go.
-    function settleStateCard() {
-        if (!stateGroup.stateLit || !stateGroup.placed) {
-            stateKeep.settle()
-            return
-        }
-        if (!stateCard.opened && stateGroup.stateShown)
-            stateCard.open()
-    }
 
     /// The same max-min share the tab names are settled with (`TabStrip.settleTitleCap`), settled by hand for the same
     /// reason.
@@ -167,13 +154,28 @@ Item {
         stateGroup.cap = share.cap(want, stateGroup.room)
     }
 
-    /// The stand-in pointer is down on a group that can answer it: standing, and placed. `stateLit` alone is one edge
-    /// too few for a pointer that cannot move — written before `placed`, it would never ask again. A real hand is not
-    /// watched here: it gets no card until it next moves (`placed`).
-    readonly property bool standInAsking: stateGroup.pointedAt && stateGroup.placed && stateGroup.stateShown
+    /// The pointer, or the stand-in, is on a group that can answer it: standing, and placed — a pointer that cannot
+    /// move, written before `placed`, would never ask again. The card unfolds what the mark stands for, so it opens
+    /// at once (規約 §hover のツールチップ「展開は即時に開く」); the seat closes it a beat after the last thing asking for
+    /// it lets go, and does not put it back under the same still hand once dismissed. **A parked hand asks nothing**
+    /// (`Hand.away`, as every `HandWatch` reads it): a headless run gets Qt's enter at the offscreen cursor while the
+    /// band has not placed this group yet, and the hover that leaves behind would raise the card for a beat in a run
+    /// that put no hand here — a card in the census by the luck of the frame.
+    readonly property bool asking: ((groupHover.hovered && !Hand.away) || stateGroup.pointedAt)
+                                   && stateGroup.placed && stateGroup.stateShown
+    onAskingChanged: {
+        if (stateGroup.asking)
+            stateKeep.point({ "key": "state" }, true)
+        else
+            stateKeep.unpoint("state")
+    }
+    // The state the card speaks for went (the operation finished, the conflicts resolved): the card goes as the
+    // owner's close, the hand inside it or not.
+    onStateShownChanged: {
+        if (!stateGroup.stateShown)
+            stateKeep.takeDown("gone", false)
+    }
 
-    onStateLitChanged: stateGroup.settleStateCard()
-    onStandInAskingChanged: stateGroup.settleStateCard()
     onRoomChanged: stateGroup.settleCap()
     onTabRunAvailChanged: stateGroup.settleCap()
 
@@ -183,10 +185,17 @@ Item {
     // alone, or the words' width stands empty beside it (デザイン規約 §ウィンドウの縁「タブと群は同時に譲る」).
     implicitWidth: stateGroup.folded ? stateGroup.foldedWidth : stateGroup.naturalWidth
 
-    HoverCardHost {
+    readonly property HoverSeat stateKeep: HoverSeat {
         id: stateKeep
         card: stateCard
-        pointedAt: groupHover.hovered || stateGroup.pointedAt
+        // The card opens the moment the hand is on the marks. No pane's hand: the band does not move under the hand,
+        // so nothing comes under a still one — a card the reader dismissed comes back with the hand leaving the group
+        // and coming back, or, folded, a press on the `…` (`stateMouse`, `HoverSeat.expands`).
+        expands: true
+        // Behind any menu in the window — a page's right-click, the ☰ beside it — the card goes the moment it stands
+        // and nothing opens while it does (デザイン規約 §メニュー「メニューが立っている間、その裏の hover は引っ込む」).
+        blockedBy: OutsidePress.standsOver(stateGroup) ? "menu" : ""
+        onOpenAsked: stateCard.open()
     }
 
     BandStateMetrics {
@@ -394,8 +403,9 @@ Item {
             id: stateMouse
             anchors.fill: parent
             hoverEnabled: true
-            // A press opens what the hover opens: a press that did nothing would read as a dead control.
-            onClicked: stateGroup.settleStateCard()
+            // A press opens what the hover opens — a dismissed card too: a press that did nothing would read as a
+            // dead control.
+            onClicked: stateKeep.press({ "key": "state" })
         }
     }
 

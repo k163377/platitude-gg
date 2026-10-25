@@ -33,8 +33,6 @@ Popup {
     // from the window and still stay up on Escape (rules-refs/app-ui.md「hover のカードは窓の `Shortcut` を塞がない」).
     closePolicy: (card.activeFocus ? Popup.CloseOnEscape : Popup.NoAutoClose)
                  | (card.closesOnPressOutside ? Popup.CloseOnPressOutside : Popup.NoAutoClose)
-    // The tips inside time themselves, as the window's do: a popup inherits no policy (`Main.qml`).
-    ToolTip.policy: ToolTip.Manual
     background: AppCardFace {
         id: cardFace
         tracksPointer: card.tracksPointer

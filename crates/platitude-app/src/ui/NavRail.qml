@@ -181,9 +181,11 @@ Rectangle {
                        ? Theme.bgHover : "transparent"
                 // A wordless `+` names itself by tooltip (規約 §hover のツールチップ), in the band's own words
                 // (デザイン規約 §リモートを書き留める).
-                ToolTip.visible: cell.addLive && cellHover.hovered
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: Words.addRemote
+                readonly property TipAsk addTip: TipAsk {
+                    target: cell
+                    asked: cell.addLive && cellHover.hovered
+                    words: Words.addRemote
+                }
 
                 NavIcon {
                     id: sectionIcon

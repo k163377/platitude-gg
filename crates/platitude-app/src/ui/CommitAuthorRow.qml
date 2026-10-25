@@ -51,9 +51,6 @@ Item {
     // Every parent over the parent line, opened from its count (デザイン規約 §右のペインの親).
     /// Whether the pointer is on the count — the same pair of writers as `matesPointed`.
     property bool parentsPointed: false
-    /// ...or on the card it opened.
-    property bool parentCardInside: false
-    readonly property bool parentsLit: authorRow.parentsPointed || authorRow.parentCardInside
     /// The card is out, and the line stands as one parent's would under it (`HashPlate.unrolled`).
     property bool parentsUnrolled: false
 
@@ -77,8 +74,8 @@ Item {
     signal avatarClicked()
     signal copyRequested(string text)
     signal parentClicked(string oidHex)
-    /// Open the card at this anchor (row coordinates), or start the settle beat that closes it. Raised when the lit
-    /// state turns, real hover and stand-in alike.
+    /// The pointer came onto the stretch that opens the card, at this anchor (row coordinates), or left it. Raised
+    /// when the pointer turns, real hover and stand-in alike; the owner's seat decides what the card does.
     signal openMateRequested(point at)
     signal settleMateRequested()
     signal openAuthorRequested(point at)
@@ -318,20 +315,23 @@ Item {
         return ""
     }
 
-    onMatesLitChanged: {
-        if (authorRow.matesLit)
+    // Asked on the pointer alone: the hand inside the card it opened is the card's own hold (`HoverSeat`), and a
+    // card the reader dismissed is not put back under the same still hand — the pointer has to leave the stretch and
+    // come back (`DetailsAuthorCards`).
+    onMatesPointedChanged: {
+        if (authorRow.matesPointed)
             authorRow.openMateRequested(coBlock.mapToItem(authorRow, 0, coBlock.height))
         else
             authorRow.settleMateRequested()
     }
-    onParentsLitChanged: {
-        if (authorRow.parentsLit)
+    onParentsPointedChanged: {
+        if (authorRow.parentsPointed)
             authorRow.openParentsRequested(hashPlate.parentSeatRect(authorRow))
         else
             authorRow.settleParentsRequested()
     }
-    onAuthorLitChanged: {
-        if (authorRow.authorLit)
+    onAuthorPointedChanged: {
+        if (authorRow.authorPointed)
             authorRow.openAuthorRequested(authorLabel.mapToItem(authorRow, 0, authorLabel.height))
         else
             authorRow.settleAuthorRequested()

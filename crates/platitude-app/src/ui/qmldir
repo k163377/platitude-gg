@@ -127,7 +127,6 @@ HelpText 1.0 HelpText.qml
 HoldDriver 1.0 HoldDriver.qml
 HoldFill 1.0 HoldFill.qml
 HoldIcon 1.0 HoldIcon.qml
-HoverCardHost 1.0 HoverCardHost.qml
 HoverSeat 1.0 HoverSeat.qml
 HoverToolButton 1.0 HoverToolButton.qml
 IdentIcon 1.0 IdentIcon.qml
@@ -161,13 +160,13 @@ OpExitCard 1.0 OpExitCard.qml
 OpExitRow 1.0 OpExitRow.qml
 OpenFailedDialog 1.0 OpenFailedDialog.qml
 OpenFailedScreen 1.0 OpenFailedScreen.qml
+OpenRowSeat 1.0 OpenRowSeat.qml
 OpsBranchMenu 1.0 OpsBranchMenu.qml
 OpsPicker 1.0 OpsPicker.qml
 PageLayout 1.0 PageLayout.qml
 PaneHeader 1.0 PaneHeader.qml
 PaneScrollBar 1.0 PaneScrollBar.qml
 ParentListCard 1.0 ParentListCard.qml
-PointerWatch 1.0 PointerWatch.qml
 PublishFlow 1.0 PublishFlow.qml
 PublishForm 1.0 PublishForm.qml
 QuitWaitDialog 1.0 QuitWaitDialog.qml
@@ -208,7 +207,6 @@ SettingsHeader 1.0 SettingsHeader.qml
 SettingsGroup 1.0 SettingsGroup.qml
 SettingsRepoPane 1.0 SettingsRepoPane.qml
 SettingsSection 1.0 SettingsSection.qml
-SharedToolTip 1.0 SharedToolTip.qml
 ShoulderBadge 1.0 ShoulderBadge.qml
 SidebarFilterRow 1.0 SidebarFilterRow.qml
 SidebarPane 1.0 SidebarPane.qml

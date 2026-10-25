@@ -128,7 +128,7 @@ AppCard {
         font.pixelSize: Theme.fontSm
     }
 
-    // The pointer leaving is what closes it (`BandStateGroup.settleStateCard`).
+    // The pointer leaving is what closes it, a beat later (`BandStateGroup`'s seat).
     closesOnPressOutside: false
     // Both halves of `AppCard.pointerInside`, for the same reason.
     tracksPointer: true

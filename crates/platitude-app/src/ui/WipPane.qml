@@ -13,7 +13,7 @@ import platitude.ui
 // `FileRowWalk`, `TreeViewToggle`, `EolHoverCard`); what is left is what they share: the choice keyed
 // `<bucket>:<path>` across the bucket lists, and the row lookups (`rowAt` / `rowFor`, walking each list's
 // `itemAtIndex`) that `RepoPage` (`readOne`) and the automation (`rowAt` / `rowFor` / `chooseOnly` / `pointEol`) call
-// directly. Moving it out only adds wiring to hand the lists and keys back. The EOL card and its keep (`eolAsked` /
+// directly. Moving it out only adds wiring to hand the lists and keys back. The EOL card and its seat (`pointEol` /
 // `eolKeep`) stay with it: the card is placed from `rowFor(path)` and the pane's own coordinates.
 ColumnLayout {
     id: wipPane
@@ -346,70 +346,153 @@ ColumnLayout {
     function showStageTools(bucket, path) {
         wipPane.stageHotKey = bucket + ":" + path
     }
-    /// A row's mark under the hand, or the commit button, is asking for the line-ending card. The hand inside the card
-    /// is the third asker, and `eolKeep` reads that one off the card itself.
-    property bool eolAsked: false
-    /// Names the file the line-ending card speaks for; "" lets it go. Automation calls it directly.
-    function pointEol(path) {
-        if (path === "") {
-            // Not closed here: the hand may be walking into the card, which holds for a beat (`eolKeep`); the pointed
-            // row goes with the card (`onClosed`).
-            wipPane.eolAsked = false
-            eolKeep.settle()
+    /// A row's mark under the hand asks for the line-ending card, which speaks for the file `path` names in `bucket`
+    /// — the same path in two buckets is two rows, each with a change of its own to say, so the target is the row's
+    /// (`eol:file:<bucket>:<path>`), and the warning data is that bucket's model's. The ask is the seat's from there
+    /// (`eolKeep`: the rest, the hand inside the card holding it, the beat, a dismissal not put back under the same
+    /// still hand). The target is alive while that bucket still marks the path (`NavSectionModel.eolMarked`), which
+    /// the pane weighs again on every status read (`weighEol`), not only as the card opens.
+    function pointEolIn(bucket, path) {
+        eolKeep.point({ "key": wipPane.eolKey(bucket, path), "kind": "file", "bucket": bucket, "path": path,
+                        "alive": () => wipPane.modelOf(bucket).eolMarked(path) })
+    }
+    function unpointEolIn(bucket, path) {
+        eolKeep.unpoint(wipPane.eolKey(bucket, path))
+    }
+    function eolKey(bucket, path) {
+        return "eol:file:" + bucket + ":" + path
+    }
+    /// Automation (hover cannot be injected): the row of `path` in the first bucket marking it, asked for as a hand
+    /// on its mark asks, and asked again until the card is up — the marks arrive with the status read, and a re-ask
+    /// for the one already resting keeps the rest. `<bucket>:<path>` names the bucket.
+    function pointEol(arg) {
+        const parts = ("" + arg).split(":")
+        const named = parts.length > 1 && wipPane.modelOf(parts[0]) !== null
+        const bucket = named ? parts[0] : wipPane.bucketMarking(arg)
+        if (bucket === "")
+            return
+        wipPane.pointEolIn(bucket, named ? parts.slice(1).join(":") : arg)
+    }
+    function modelOf(bucket) {
+        return bucket === "conflicts" ? wipPane.conflictsModel
+             : bucket === "unstaged" ? wipPane.unstagedModel
+             : bucket === "staged" ? wipPane.stagedModel : null
+    }
+    function bucketMarking(path) {
+        for (const bucket of ["unstaged", "staged", "conflicts"]) {
+            if (wipPane.modelOf(bucket).eolMarked(path))
+                return bucket
+        }
+        return ""
+    }
+    /// The targets out, resting or kept, weighed against the marks as they stand now — **two questions**: whether the
+    /// warning is still there (a warning gone with the status read, the row moved to the other bucket, the staged
+    /// count fallen to nothing — the card goes, with the hand inside it as much as elsewhere), and, where it is, what
+    /// it says now. **The same path is not the same warning**: a file rewritten in place keeps its mark and changes
+    /// its kind or its count, so the card out names the row to its model again and takes the sentence that comes back
+    /// (`NavSectionModel.pointEol`, which rebuilds it from the marks the read brought) — swapped in place, as the
+    /// button's count is.
+    function weighEol() {
+        // **The row dealt elsewhere, or out of this list** (a file above it came or went, the file staged): the card
+        // hangs where another row stands now, and goes as the rows moving under the hand take it — weighed before the
+        // warning is, so a hand inside the card is held too: the card's going leaves it over a row it did not walk
+        // to, which opens nothing until it moves (`HandWatch.covered`).
+        const out = eolKeep.target
+        if (eolKeep.shown && out !== null && out.kind === "file") {
+            const row = wipPane.rowIn(out.bucket, out.path)
+            if (row === null || Math.abs(row.mapToItem(wipPane, 0, row.height).y - eolCard.anchorY) >= 1)
+                paneHand.rowsMoved()
+        }
+        eolKeep.forget(target => target.alive !== undefined && !target.alive(), "gone")
+        const target = eolKeep.target
+        if (!eolKeep.shown || target === null || target.kind !== "file")
+            return
+        wipPane.modelOf(target.bucket).pointEol(target.path)
+        eolCard.notice = wipPane.pointedEolText
+    }
+    /// The card is out, or resting, for a row of `bucket`.
+    function eolCardIn(bucket) {
+        const target = eolKeep.target
+        return (eolKeep.shown || eolKeep.waiting) && target !== null && target.kind === "file"
+            && target.bucket === bucket
+    }
+    /// The rest ran out on the row named: the card opens under it, placed from the row — a row is a pane wide at
+    /// most, so never far from the hand, and a pointer and the automation land the card alike. The marked row tells
+    /// its bucket's model it is the one being read, so the card's sentence is built for it alone (`NavItem::eol_mark`).
+    function openEolCard(bucket, path) {
+        const row = wipPane.rowIn(bucket, path)
+        if (row === null) {
+            eolKeep.refuse()
             return
         }
-        wipPane.unstagedModel.pointEol(path)
-        // Under the row, placed from the row: a row is a pane wide at most, so never far from the hand, and a pointer
-        // and the automation land the card alike.
-        const row = wipPane.rowFor(path)
-        if (row === null)
-            return
+        wipPane.pointedEolBucket = bucket
+        wipPane.modelOf(bucket).pointEol(path)
         const at = row.mapToItem(wipPane, 0, row.height)
         eolCard.path = path
         eolCard.notice = wipPane.pointedEolText
         eolCard.x = at.x + Theme.spaceMd
         eolCard.anchorY = at.y
         eolCard.above = false
-        wipPane.eolAsked = true
         eolCard.open()
+    }
+    /// The row of `path` in `bucket`, null while the view has not built it.
+    function rowIn(bucket, path) {
+        const standing = wipPane.bucketPanes
+        for (let i = 0; i < standing.length; i++) {
+            if (standing[i].section !== bucket)
+                continue
+            for (let at = 0; at < standing[i].rows; at++) {
+                const row = standing[i].list.itemAtIndex(at)
+                if (row && row.fullName === path)
+                    return row
+            }
+        }
+        return null
     }
     /// Puts the commit button's card out without a pointer, the way the rows' is put out.
     property bool pointAtCommit: false
-    onPointAtCommitChanged: wipPane.settleCommitCard()
-    /// **The warning re-asks too.** The card is placed by a function, and called on the pointer's edges alone it
-    /// answers for the pane as the pointer found it — usually mid-write after `Stage all`, not warning yet. So the
-    /// warning (`onCardAsked`) and its count call it as well.
-    Connections {
-        target: wipPane.worktree
-        function onEolStagedCountChanged() { wipPane.settleCommitCard() }
-    }
-    /// The button is warning and the pointer (or a headless run) is on it.
+    /// The button is warning and the pointer (or a headless run) is on it: the card is asked for, and comes after
+    /// the usual rest (規約 §hover のツールチップ「補足は待ってから開く」). **The warning asks too**: read on the pointer's
+    /// edges alone, the button answers for the pane as the pointer found it — usually mid-write after `Stage all`,
+    /// not warning yet.
     readonly property bool commitCardAsked:
         commitBlock.commitWarned && (commitBlock.commitPointed || wipPane.pointAtCommit)
-    function settleCommitCard() {
-        if (!wipPane.commitCardAsked) {
-            commitRest.stop()
-            // Settles rather than closes, as the rows' card does: the hand may be walking into it (`pointEol`).
-            if (eolCard.path === "") {
-                wipPane.eolAsked = false
-                eolKeep.settle()
-            }
-            return
-        }
-        // It waits the pointer out (規約 §hover のツールチップ「補足は待ってから開く」). **Already out means only the
-        // count moved**: swap the words in place — sitting the rest out again would take the card down under a reading
-        // hand (規約「戻る手は即通す」). **A running rest is not restarted** when the count moves: the wait is of the
-        // hand, and the hand has not moved.
-        if (eolCard.opened && eolCard.path === "")
-            wipPane.openCommitCard()
-        else if (!commitRest.running)
-            commitRest.restart()
+    // Its own kind of target, apart from the files' (a file may be named `commit`).
+    onCommitCardAskedChanged: {
+        if (wipPane.commitCardAsked)
+            eolKeep.point({ "key": "eol:button", "kind": "button", "alive": () => commitBlock.commitWarned })
+        else
+            eolKeep.unpoint("eol:button")
     }
-    // **It asks again when it runs out**: the pointer may have left or the warning stopped while it ran.
-    Timer {
-        id: commitRest
-        interval: Metrics.tipDelayMs
-        onTriggered: if (wipPane.commitCardAsked) wipPane.openCommitCard()
+    /// **The count moving while the card stands swaps its words in place** — sitting the rest out again would take
+    /// the card down under a reading hand (規約「戻る手は即通す」) — and a count fallen to nothing takes it down, as any
+    /// warning gone does.
+    Connections {
+        target: wipPane.worktree
+        function onEolStagedCountChanged() {
+            wipPane.weighEol()
+            if (eolKeep.shownFor("eol:button"))
+                wipPane.openCommitCard()
+        }
+    }
+    // A status read that brings anything rebuilds the buckets' rows — a mark that moved alone included (a file saved
+    // over in place: `models::nav::drain` resets on it) — and says `changed` after; the marks come with it
+    // (`NavSectionModel.eolMarked`). Weighed a turn later, once: the weighing names the row to the model again, which
+    // is a call into the model that is still telling its news.
+    Connections {
+        target: wipPane.unstagedModel
+        function onModelReset() { Qt.callLater(wipPane.weighEol) }
+        function onChanged() { Qt.callLater(wipPane.weighEol) }
+    }
+    Connections {
+        target: wipPane.stagedModel
+        function onModelReset() { Qt.callLater(wipPane.weighEol) }
+        function onChanged() { Qt.callLater(wipPane.weighEol) }
+    }
+    Connections {
+        target: wipPane.conflictsModel
+        function onModelReset() { Qt.callLater(wipPane.weighEol) }
+        function onChanged() { Qt.callLater(wipPane.weighEol) }
     }
     function openCommitCard() {
         // The button speaks for the whole index, so the words hold for all four cases at once: **"problems"**, since
@@ -423,7 +506,6 @@ ColumnLayout {
         eolCard.x = at.x
         eolCard.anchorY = at.y
         eolCard.above = true
-        wipPane.eolAsked = true
         eolCard.open()
     }
     // The one card both hovers open (one pointer, one card). Owned here: a row is recycled the moment it scrolls off.
@@ -439,27 +521,47 @@ ColumnLayout {
         // stands, and the card's sentence is read off the pointed row.
         onClosed: {
             eolCard.path = ""
-            wipPane.unstagedModel.pointEol("")
+            wipPane.modelOf(wipPane.pointedEolBucket).pointEol("")
         }
     }
-    // The beat between the card and its mark: the card goes only when the hand is out of both.
-    HoverCardHost {
+    // The one seat both askers go through, on the pane's hand: the card goes only when the hand is out of the mark
+    // and the card both, and the rows moving under the hand take it down (`rowsShifted`) and hold the hand. Behind a
+    // menu of the page's — the rows' file menu, raised by a press or the menu key — it goes the moment the menu
+    // stands and nothing opens while it does; an ask made meanwhile is kept for the menu going (デザイン規約 §メニュー).
+    readonly property HoverSeat eolKeep: HoverSeat {
         id: eolKeep
+        hand: paneHand
         card: eolCard
-        pointedAt: wipPane.eolAsked
+        blockedBy: wipPane.menuStanding ? "menu" : ""
+        onOpenAsked: target => {
+            if (target.kind === "button")
+                wipPane.openCommitCard()
+            else
+                wipPane.openEolCard(target.bucket, target.path)
+        }
+    }
+    Connections {
+        target: paneHand
+        function onRowsShifted() { eolKeep.displace("slid") }
     }
     /// The card itself is up. Read by the headless runs — reporting what asked for it would go green with the wiring
     /// cut.
     readonly property bool eolCardOpen: eolCard.opened
-    /// What the named row is saying, for the headless report and the rows of all three lists — read off the unstaged
-    /// model, where `pointEol` writes.
-    readonly property string pointedEolPath: wipPane.unstagedModel.pointedEolPath
-    readonly property string pointedEolKind: wipPane.unstagedModel.pointedEolKind
-    readonly property string pointedEolFrom: wipPane.unstagedModel.pointedEolFrom
-    readonly property string pointedEolTo: wipPane.unstagedModel.pointedEolTo
-    readonly property int pointedEolLines: wipPane.unstagedModel.pointedEolLines
-    readonly property string pointedEolScope: wipPane.unstagedModel.pointedEolScope
-    readonly property string pointedEolExt: wipPane.unstagedModel.pointedEolExt
+    /// Automation only: the card and the hand, for a run that puts the hand in the card or moves it (`eol-gone`,
+    /// `eol-walk`).
+    readonly property alias eolHoverCard: eolCard
+    readonly property alias hand: paneHand
+    /// The bucket whose model the card's row is named in (`openEolCard`), and what that row is saying — for the
+    /// headless report; each bucket's rows read their own model's pointed path (`WipBucketPane`).
+    property string pointedEolBucket: "unstaged"
+    readonly property var pointedModel: wipPane.modelOf(wipPane.pointedEolBucket)
+    readonly property string pointedEolPath: wipPane.pointedModel.pointedEolPath
+    readonly property string pointedEolKind: wipPane.pointedModel.pointedEolKind
+    readonly property string pointedEolFrom: wipPane.pointedModel.pointedEolFrom
+    readonly property string pointedEolTo: wipPane.pointedModel.pointedEolTo
+    readonly property int pointedEolLines: wipPane.pointedModel.pointedEolLines
+    readonly property string pointedEolScope: wipPane.pointedModel.pointedEolScope
+    readonly property string pointedEolExt: wipPane.pointedModel.pointedEolExt
     readonly property string pointedEolText:
         wipPane.pointedEolKind !== ""
         ? Words.lineEndings(wipPane.pointedEolKind, wipPane.pointedEolFrom, wipPane.pointedEolTo,
@@ -679,6 +781,14 @@ ColumnLayout {
         Layout.fillHeight: true
         visible: wipPane.bucketsStanding
 
+        // The hand over the file rows (`HandWatch`), as the left panel keeps one: the rows read their light and
+        // their asks off it by geometry — a row the status read brought under a still hand lights as the row under
+        // it, and its card waits for the hand to move — and the row it dealt again where it stood keeps the hand
+        // (`WipBucketPane.weighDeal`).
+        HandWatch {
+            id: paneHand
+        }
+
         WipBucketPane {
             id: conflictsBucket
             section: "conflicts"
@@ -689,6 +799,7 @@ ColumnLayout {
             repoTab: wipPane.repoTab
             worktree: wipPane.worktree
             model: wipPane.conflictsModel
+            paneHand: paneHand
             tipRow: wipPane.pointedTipRow
             width: buckets.width
             y: 0
@@ -701,6 +812,7 @@ ColumnLayout {
             repoTab: wipPane.repoTab
             worktree: wipPane.worktree
             model: wipPane.unstagedModel
+            paneHand: paneHand
             tipRow: wipPane.pointedTipRow - wipPane.conflictRows
             width: buckets.width
             // A hairline of ground between buckets: both headings wear `bgElevated`, and stacked flush an emptied
@@ -715,6 +827,7 @@ ColumnLayout {
             repoTab: wipPane.repoTab
             worktree: wipPane.worktree
             model: wipPane.stagedModel
+            paneHand: paneHand
             tipRow: wipPane.pointedTipRow - wipPane.conflictRows - unstagedBucket.rows
             width: buckets.width
             y: unstagedBucket.y + unstagedBucket.height + Theme.borderWidth
@@ -761,6 +874,5 @@ ColumnLayout {
         listHeight: buckets.height
         onAmendToggled: on => wipPane.amendToggled(on)
         onCommitClicked: wipPane.commitClicked()
-        onCardAsked: wipPane.settleCommitCard()
     }
 }

@@ -130,6 +130,9 @@ pub struct GraphModel {
     /// The loaded row the worktree stands on, and what its stand-in
     /// draws; -1 and empty outside the window (`head::settle_head`).
     head_row: i32,
+    /// That row's commit — what the stand-in stands for, so what hangs off
+    /// its chip goes when another commit takes the row (`GraphHeadPin`).
+    head_row_oid: String,
     head_labels: Chips,
     head_subject: String,
     head_color: i32,
