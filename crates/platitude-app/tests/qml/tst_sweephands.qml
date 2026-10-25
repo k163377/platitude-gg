@@ -96,6 +96,19 @@ Item {
             const p = item.mapToItem(root, position)
             return Qt.point(Math.round(p.x), Math.round(p.y))
         }
+        /// A drag from the middle of the gap beside a row's value onto the value's far end and back across it, at the
+        /// root's `y` throughout — the height the press went down at.
+        function sweepFromGap(which, y) {
+            const field = row.fieldFor(which)
+            const slack = row.slackFor(which)
+            const from = Qt.point(inRoot(slack, Qt.point(slack.width / 2, 0)).x, y)
+            const near = Qt.point(inRoot(field, Qt.point(field.width - 1, 0)).x, y)
+            const far = Qt.point(inRoot(field, Qt.point(1, 0)).x, y)
+            mousePress(root, from.x, from.y)
+            mouseMove(root, near.x, near.y)
+            mouseMove(root, far.x, far.y)
+            mouseRelease(root, far.x, far.y)
+        }
 
         // From the air between the two lines, nearer the first.
         function test_a_drag_from_a_card_s_air_takes_the_characters_it_crossed() {
@@ -114,19 +127,27 @@ Item {
         // name's far end and back across it at the height the press went down at.
         function test_a_drag_from_the_row_s_gap_takes_the_value_it_crossed() {
             tryVerify(() => row.valueReady("author"), undefined, "the name stands at its own width")
-            const name = row.fieldFor("author")
-            const slack = row.slackFor("author")
             const band = row.bandFor("author")
-            const y = inRoot(row, Qt.point(0, (band[0] + band[1]) / 2)).y
-            const from = Qt.point(inRoot(slack, Qt.point(slack.width / 2, 0)).x, y)
-            const near = Qt.point(inRoot(name, Qt.point(name.width - 1, 0)).x, y)
-            const far = Qt.point(inRoot(name, Qt.point(1, 0)).x, y)
-            mousePress(root, from.x, from.y)
-            mouseMove(root, near.x, near.y)
-            mouseMove(root, far.x, far.y)
-            mouseRelease(root, far.x, far.y)
+            sweepFromGap("author", inRoot(row, Qt.point(0, (band[0] + band[1]) / 2)).y)
             compare(row.sweptField(), commit.authorName, "the room anchored on the name, not the hash beside it")
             compare(row.selectedValue("author"), commit.authorName)
+        }
+
+        // From the gap beside the name and beside the date, level with the top, the middle and the foot of the value's
+        // own box: the line a press goes to is read off where the words were laid out, which no band the row reports
+        // can stand in for.
+        function test_a_press_level_with_a_value_s_words_takes_that_value() {
+            const values = ["author", "date"]
+            const down = [0.1, 0.5, 0.9]
+            for (let i = 0; i < values.length; i++) {
+                const which = values[i]
+                tryVerify(() => row.valueReady(which), undefined, which + " stands at its own width")
+                const field = row.fieldFor(which)
+                for (let j = 0; j < down.length; j++) {
+                    sweepFromGap(which, inRoot(field, Qt.point(0, field.height * down[j])).y)
+                    compare(row.selectedValue(which), row.shownValue(which), which + " at " + down[j] + " down its box")
+                }
+            }
         }
     }
 }

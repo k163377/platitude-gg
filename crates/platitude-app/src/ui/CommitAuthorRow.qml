@@ -211,9 +211,10 @@ Item {
     //
     // A gesture belongs to one of the two lines, decided by where the press landed (nearness to the glyphs picks the
     // line above where lines are taller). The border is the middle of the gap, measured on the words: the slack has
-    // no height of its own, so a border read off it lands wherever a spacer happens to be centred.
+    // no height of its own, so a border read off it lands wherever a spacer happens to be centred. Positions come
+    // through `laidY`: a binding takes no dependency on what `mapToItem` read, and would keep the first pass's border.
     readonly property real lineBorder:
-        (authorLabel.mapToItem(authorRow, 0, authorLabel.height).y + detailsDate.mapToItem(authorRow, 0, 0).y) / 2
+        (authorRow.laidY(authorLabel) + authorLabel.height + authorRow.laidY(detailsDate)) / 2
     /// Which of the two lines a point of this row is on.
     function lineAt(position) {
         return position.y < authorRow.lineBorder ? 0 : 1
@@ -241,8 +242,9 @@ Item {
     }
 
     // ---- and what a run needs, on top of that (verify-ui) -------------
-    /// The field that draws one value, the slack a hand reaches it through, and its line's band — the whole band,
-    /// since the air above and below a value must answer a press too.
+    /// The field that draws one value, the slack a hand reaches it through, and its line's band — from the row's edge
+    /// to the far side of the line's words, since the air beyond a value must answer a press too. Read off the words,
+    /// not `lineBorder`: a band cut at the border agrees with the border wherever it stands.
     function fieldFor(which) {
         if (which === "author")
             return authorLabel
@@ -257,8 +259,8 @@ Item {
     }
     function bandFor(which) {
         return which === "author" || which === "hash"
-            ? [0, authorRow.lineBorder]
-            : [authorRow.lineBorder, authorRow.height]
+            ? [0, authorRow.laidY(authorLabel) + authorLabel.height]
+            : [authorRow.laidY(detailsDate), authorRow.height]
     }
     /// Whether that value is drawn and laid out to its own width, and the geometry a run watches settle before it
     /// sweeps. A looser test passes a field a fraction of a pixel wide, which answers the same character at both ends
