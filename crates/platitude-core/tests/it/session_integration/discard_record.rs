@@ -4,7 +4,7 @@
 //! [`SessionEvent::DiscardsChanged`].
 
 use crate::support::exec::env;
-use crate::support::remote::{far, origin_and_clone};
+use crate::support::remote::{far, far_tag, origin_and_clone};
 use crate::support::session::{opened, write_answer};
 use crate::support::stage::fp;
 use crate::support::{TestRepo, info};
@@ -758,7 +758,7 @@ async fn what_went_from_a_remote_is_on_the_record_and_comes_back_here() {
         .expect("the push is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
     let id = session
-        .delete_remote_tag("origin".into(), "v1".into(), object.clone())
+        .delete_remote_tag(far_tag("origin", "v1"), object.clone())
         .expect("the tag's delete is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
 
@@ -820,11 +820,11 @@ async fn a_remote_annotated_tag_is_recorded_as_the_remote_held_it() {
     let (sink, session) = opened(&work).await;
 
     let id = session
-        .delete_remote_tag("origin".into(), "v1".into(), shown.clone())
+        .delete_remote_tag(far_tag("origin", "v1"), shown.clone())
         .expect("the delete is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
     let id = session
-        .delete_tag_everywhere("v2".into(), "origin".into(), shown.clone())
+        .delete_tag_everywhere(far_tag("origin", "v2"), shown.clone())
         .expect("the delete is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
 
@@ -870,7 +870,7 @@ async fn a_tag_pushed_over_is_recorded_as_the_remote_held_it() {
     let (sink, session) = opened(&work).await;
 
     let id = session
-        .push_tag("origin".into(), "v1".into(), shown)
+        .push_tag(far_tag("origin", "v1"), shown)
         .expect("the push is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
 

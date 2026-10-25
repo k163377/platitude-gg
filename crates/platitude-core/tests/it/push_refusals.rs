@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use crate::support::TestRepo;
 use crate::support::exec::{Said, env, logged, observed_env};
-use crate::support::remote::{far, moved_over_there, origin_and_clone};
+use crate::support::remote::{far, far_tag, moved_over_there, origin_and_clone};
 use platitude_core::GitError;
 use platitude_core::process::{CommandEnd, Kept};
 use platitude_core::remote::{self, PushForce, PushSpec};
@@ -390,15 +390,29 @@ async fn a_tag_the_far_side_keeps_is_reported_the_way_a_branch_is() {
     let (bare, mut work) = origin_and_clone();
     let (exec, cancel) = env();
     work.git(&["tag", "v1.0"]);
-    remote::push_tag(&exec, &work.path, "origin", "v1.0", "", NET, &cancel)
-        .await
-        .expect("the tag goes over while nothing is standing over it");
+    remote::push_tag(
+        &exec,
+        &work.path,
+        &far_tag("origin", "v1.0"),
+        "",
+        NET,
+        &cancel,
+    )
+    .await
+    .expect("the tag goes over while nothing is standing over it");
     decline_every_push(&bare, "Tag protection rules prevent this.");
     let shown = work.git(&["rev-parse", "v1.0"]);
 
-    let err = remote::delete_remote_tag(&exec, &work.path, "origin", "v1.0", &shown, NET, &cancel)
-        .await
-        .expect_err("the far side keeps the tag");
+    let err = remote::delete_remote_tag(
+        &exec,
+        &work.path,
+        &far_tag("origin", "v1.0"),
+        &shown,
+        NET,
+        &cancel,
+    )
+    .await
+    .expect_err("the far side keeps the tag");
     let Some(report) = err.report() else {
         panic!("a tag the far side keeps is a report, not a failure of ours: {err}");
     };
@@ -408,9 +422,16 @@ async fn a_tag_the_far_side_keeps_is_reported_the_way_a_branch_is() {
 
     work.commit_file("c.txt", "more\n", "something to tag");
     work.git(&["tag", "v1.1"]);
-    let err = remote::push_tag(&exec, &work.path, "origin", "v1.1", "", NET, &cancel)
-        .await
-        .expect_err("the far side keeps its tags");
+    let err = remote::push_tag(
+        &exec,
+        &work.path,
+        &far_tag("origin", "v1.1"),
+        "",
+        NET,
+        &cancel,
+    )
+    .await
+    .expect_err("the far side keeps its tags");
     let Some(report) = err.report() else {
         panic!("a tag the far side would not take is a report as well: {err}");
     };
@@ -435,9 +456,16 @@ async fn a_hook_a_neighbour_holds_open_still_says_why_the_push_was_refused() {
     let (bare, mut work) = origin_and_clone();
     let (exec, cancel) = env();
     work.git(&["tag", "v1.0"]);
-    remote::push_tag(&exec, &work.path, "origin", "v1.0", "", NET, &cancel)
-        .await
-        .expect("the tag goes over while nothing is standing over it");
+    remote::push_tag(
+        &exec,
+        &work.path,
+        &far_tag("origin", "v1.0"),
+        "",
+        NET,
+        &cancel,
+    )
+    .await
+    .expect("the tag goes over while nothing is standing over it");
     decline_every_push(&bare, "Tag protection rules prevent this.");
     let shown = work.git(&["rev-parse", "v1.0"]);
 
@@ -469,9 +497,16 @@ async fn a_hook_a_neighbour_holds_open_still_says_why_the_push_was_refused() {
         }
     });
 
-    let err = remote::delete_remote_tag(&exec, &work.path, "origin", "v1.0", &shown, NET, &cancel)
-        .await
-        .expect_err("the far side keeps the tag");
+    let err = remote::delete_remote_tag(
+        &exec,
+        &work.path,
+        &far_tag("origin", "v1.0"),
+        &shown,
+        NET,
+        &cancel,
+    )
+    .await
+    .expect_err("the far side keeps the tag");
     assert!(
         err.report().is_some(),
         "a tag the far side keeps is a report, not a failure of ours: {err}"

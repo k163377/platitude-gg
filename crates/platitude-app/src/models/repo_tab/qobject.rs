@@ -933,7 +933,8 @@ impl RepoTab {
     /// on; empty sends it plain.
     #[qslot]
     fn push_tag(&mut self, remote: String, tag: String, lease_expect: String) {
-        self.ask_session(|s| s.push_tag(remote, tag, lease_expect));
+        let target = RemoteTag { remote, tag };
+        self.ask_session(|s| s.push_tag(target, lease_expect));
     }
 
     /// Replaces a tag on a remote with one under a new name. git has no
@@ -943,7 +944,8 @@ impl RepoTab {
     /// its delete is leased to.
     #[qslot]
     fn replace_remote_tag(&mut self, remote: String, from: String, to: String, expect: String) {
-        self.remote_tag_replace(remote, from, to, expect);
+        let old = RemoteTag { remote, tag: from };
+        self.remote_tag_replace(old, to, expect);
     }
 
     /// The remote's copy of a tag. `rowGoes` is whether the sidebar's row
@@ -952,13 +954,13 @@ impl RepoTab {
     /// showed the tag on, which the delete is leased to.
     #[qslot]
     fn delete_remote_tag(&mut self, remote: String, tag: String, row_goes: bool, expect: String) {
-        self.remote_tag_delete(remote, tag, row_goes, expect);
+        self.remote_tag_delete(RemoteTag { remote, tag }, row_goes, expect);
     }
 
     /// Both copies of a tag, as one queued write, leased as above.
     #[qslot]
     fn delete_tag_everywhere(&mut self, tag: String, remote: String, expect: String) {
-        self.tag_delete_everywhere(tag, remote, expect);
+        self.tag_delete_everywhere(RemoteTag { remote, tag }, expect);
     }
 
     /// Renames a tag. git has none, so core builds it out of a new name on

@@ -104,15 +104,10 @@ impl RepoTab {
     /// had the name; one held here too keeps its row and loses the badge
     /// (`RefTagMenu`). The row knows which, so it travels with the press,
     /// as does `expect`, the commit it showed the tag on — the lease.
-    pub(super) fn remote_tag_delete(
-        &mut self,
-        remote: String,
-        tag: String,
-        row_goes: bool,
-        expect: String,
-    ) {
-        let row = format!("{remote}/{tag}");
-        let asked = self.ask_session(|s| s.delete_remote_tag(remote, tag.clone(), expect));
+    pub(super) fn remote_tag_delete(&mut self, target: RemoteTag, row_goes: bool, expect: String) {
+        let row = target.to_string();
+        let tag = target.tag.clone();
+        let asked = self.ask_session(|s| s.delete_remote_tag(target, expect));
         self.ref_push_asked(&row, asked);
         let rows: &[(Row, &str)] = if row_goes { &[(Row::Tag, &tag)] } else { &[] };
         self.took_away(rows, asked);
@@ -121,9 +116,10 @@ impl RepoTab {
     /// The remote's copy and then `git tag --delete`, as one queued
     /// write: a lease the remote refuses stops it with nothing touched
     /// (`session::delete_tag_everywhere`).
-    pub(super) fn tag_delete_everywhere(&mut self, tag: String, remote: String, expect: String) {
-        let row = format!("{remote}/{tag}");
-        let asked = self.ask_session(|s| s.delete_tag_everywhere(tag.clone(), remote, expect));
+    pub(super) fn tag_delete_everywhere(&mut self, target: RemoteTag, expect: String) {
+        let row = target.to_string();
+        let tag = target.tag.clone();
+        let asked = self.ask_session(|s| s.delete_tag_everywhere(target, expect));
         self.ref_push_asked(&row, asked);
         self.took_away(&[(Row::Tag, &tag)], asked);
     }

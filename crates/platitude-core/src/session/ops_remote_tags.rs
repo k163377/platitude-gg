@@ -143,8 +143,7 @@ impl RepoSession {
     /// pass over every ref — the longest read this application makes.
     pub fn push_tag(
         self: &Arc<Self>,
-        remote_name: String,
-        tag: String,
+        target: remote::RemoteTag,
         expect: String,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
@@ -153,27 +152,24 @@ impl RepoSession {
             OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                let result = remote::push_tag(
-                    &exec,
-                    &repo.workdir,
-                    &remote_name,
-                    &tag,
-                    &expect,
-                    timeout,
-                    &cancel,
-                )
-                .await;
-                if tags_moved(&result) {
-                    s.read_remote_tags(&exec, &repo.workdir, Some(&remote_name), timeout, &cancel)
+                let result =
+                    remote::push_tag(&exec, &repo.workdir, &target, &expect, timeout, &cancel)
                         .await;
+                if tags_moved(&result) {
+                    s.read_remote_tags(
+                        &exec,
+                        &repo.workdir,
+                        Some(&target.remote),
+                        timeout,
+                        &cancel,
+                    )
+                    .await;
                 }
                 // A leased push overwrote what the remote held, as the lease
                 // read it: that goes on the discard record (破棄記録仕様.md §2).
                 if let Some(replaced) = result? {
                     let keep = record_token();
-                    s.recorded_if(
-                        tag_pushed_over(&exec, &repo, &remote_name, &tag, &replaced, &keep).await,
-                    );
+                    s.recorded_if(tag_pushed_over(&exec, &repo, &target, &replaced, &keep).await);
                 }
                 Ok(())
             },
@@ -186,8 +182,7 @@ impl RepoSession {
     /// afterwards, as [`Self::push_tag`] does.
     pub fn delete_remote_tag(
         self: &Arc<Self>,
-        remote_name: String,
-        tag: String,
+        target: remote::RemoteTag,
         expect: String,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
@@ -199,36 +194,38 @@ impl RepoSession {
                 let result = remote::delete_remote_tag(
                     &exec,
                     &repo.workdir,
-                    &remote_name,
-                    &tag,
+                    &target,
                     &expect,
                     timeout,
                     &cancel,
                 )
                 .await;
                 if tags_moved(&result) {
-                    s.read_remote_tags(&exec, &repo.workdir, Some(&remote_name), timeout, &cancel)
-                        .await;
+                    s.read_remote_tags(
+                        &exec,
+                        &repo.workdir,
+                        Some(&target.remote),
+                        timeout,
+                        &cancel,
+                    )
+                    .await;
                 }
                 let held = result?;
                 let keep = record_token();
-                s.recorded_if(
-                    tags_gone(&exec, &repo, &remote_name, &tag, None, held.as_ref(), &keep).await,
-                );
+                s.recorded_if(tags_gone(&exec, &repo, &target, None, held.as_ref(), &keep).await);
                 Ok(())
             },
         )
     }
 
-    /// Replaces a tag on a remote with one under a new name, which git
+    /// Replaces `old` with a tag named `to` on the same remote, which git
     /// does as a push and a delete (see [`remote::replace_remote_tag`]),
     /// the delete leased to `expect`. The UI asks first: the old name is
     /// destroyed. Reads that remote's tags afterwards, as
     /// [`Self::push_tag`] does.
     pub fn replace_remote_tag(
         self: &Arc<Self>,
-        remote_name: String,
-        from: String,
+        old: remote::RemoteTag,
         to: String,
         expect: String,
     ) -> Option<OperationId> {
@@ -241,8 +238,7 @@ impl RepoSession {
                 let result = remote::replace_remote_tag(
                     &exec,
                     &repo.workdir,
-                    &remote_name,
-                    &from,
+                    &old,
                     &to,
                     &expect,
                     timeout,
@@ -250,23 +246,12 @@ impl RepoSession {
                 )
                 .await;
                 if tags_moved(&result) {
-                    s.read_remote_tags(&exec, &repo.workdir, Some(&remote_name), timeout, &cancel)
+                    s.read_remote_tags(&exec, &repo.workdir, Some(&old.remote), timeout, &cancel)
                         .await;
                 }
                 let held = result?;
                 let keep = record_token();
-                s.recorded_if(
-                    tags_gone(
-                        &exec,
-                        &repo,
-                        &remote_name,
-                        &from,
-                        None,
-                        held.as_ref(),
-                        &keep,
-                    )
-                    .await,
-                );
+                s.recorded_if(tags_gone(&exec, &repo, &old, None, held.as_ref(), &keep).await);
                 Ok(())
             },
         )
@@ -284,12 +269,11 @@ impl RepoSession {
     /// (`session::leaving`).
     pub fn delete_tag_everywhere(
         self: &Arc<Self>,
-        tag: String,
-        remote_name: String,
+        target: remote::RemoteTag,
         expect: String,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
-        let name = tag.clone();
+        let name = target.tag.clone();
         let s = Arc::clone(self);
         // A kind of its own: it answers as a tag write but runs on the
         // remote lane, since the far end paces the first half and the read.
@@ -298,14 +282,18 @@ impl RepoSession {
             AfterWrite::Name { status: false },
             &[LeavingRef::Tag(&name)],
             move |exec, repo, cancel| async move {
-                let local = format!("refs/tags/{tag}");
-                let here =
-                    discards::tag_before(&exec, &repo.workdir, &tag, &local, &cancel).await?;
+                let here = discards::tag_before(
+                    &exec,
+                    &repo.workdir,
+                    &target.tag,
+                    &target.tag_ref(),
+                    &cancel,
+                )
+                .await?;
                 let remote_half = remote::delete_remote_tag(
                     &exec,
                     &repo.workdir,
-                    &remote_name,
-                    &tag,
+                    &target,
                     &expect,
                     timeout,
                     &cancel,
@@ -314,29 +302,27 @@ impl RepoSession {
                 // The remote's tags are read whatever the local half says:
                 // the name is gone over there even where it stays here.
                 let local_half = if remote_half.is_ok() {
-                    tag::delete(&exec, &repo.workdir, &tag, &cancel).await
+                    tag::delete(&exec, &repo.workdir, &target.tag, &cancel).await
                 } else {
                     Ok(())
                 };
                 if tags_moved(&remote_half) {
-                    s.read_remote_tags(&exec, &repo.workdir, Some(&remote_name), timeout, &cancel)
-                        .await;
+                    s.read_remote_tags(
+                        &exec,
+                        &repo.workdir,
+                        Some(&target.remote),
+                        timeout,
+                        &cancel,
+                    )
+                    .await;
                 }
                 // What went: the remote's name as the lease read it, and the
                 // one here with it.
                 if let Ok(held) = &remote_half {
                     let here = here.filter(|_| local_half.is_ok());
                     let keep = record_token();
-                    let written = tags_gone(
-                        &exec,
-                        &repo,
-                        &remote_name,
-                        &tag,
-                        here.as_ref(),
-                        held.as_ref(),
-                        &keep,
-                    )
-                    .await;
+                    let written =
+                        tags_gone(&exec, &repo, &target, here.as_ref(), held.as_ref(), &keep).await;
                     s.recorded_if(written);
                 }
                 remote_half.map(drop).and(local_half)
@@ -357,22 +343,21 @@ fn tags_moved<T>(result: &Result<T, GitError>) -> bool {
 async fn tag_pushed_over(
     exec: &GitExecutor,
     repo: &RepoInfo,
-    remote_name: &str,
-    tag: &str,
+    target: &remote::RemoteTag,
     replaced: &remote::HeldTag,
     cancel: &CancellationToken,
 ) -> Result<bool, GitError> {
-    let here = format!("refs/tags/{tag}");
-    let sent = discards::tag_before(exec, &repo.workdir, tag, &here, cancel).await?;
+    let sent =
+        discards::tag_before(exec, &repo.workdir, &target.tag, &target.tag_ref(), cancel).await?;
     if sent.is_some_and(|sent| sent.object == replaced.object) {
         return Ok(false);
     }
-    let before = held_before(exec, &repo.workdir, tag, replaced, cancel).await?;
+    let before = held_before(exec, &repo.workdir, &target.tag, replaced, cancel).await?;
     discards::record_tag_force_push(
         exec,
         &repo.workdir,
         &repo.git_dir,
-        remote_name,
+        &target.remote,
         &before,
         cancel,
     )
@@ -385,14 +370,13 @@ async fn tag_pushed_over(
 async fn tags_gone(
     exec: &GitExecutor,
     repo: &RepoInfo,
-    remote_name: &str,
-    tag: &str,
+    target: &remote::RemoteTag,
     here: Option<&TagBefore>,
     held: Option<&remote::HeldTag>,
     cancel: &CancellationToken,
 ) -> Result<bool, GitError> {
     let there = match held {
-        Some(held) => Some(held_before(exec, &repo.workdir, tag, held, cancel).await?),
+        Some(held) => Some(held_before(exec, &repo.workdir, &target.tag, held, cancel).await?),
         None => None,
     };
     if here.is_none() && there.is_none() {
@@ -403,7 +387,7 @@ async fn tags_gone(
         &repo.workdir,
         &repo.git_dir,
         here,
-        there.as_ref().map(|there| (remote_name, there)),
+        there.as_ref().map(|there| (target.remote.as_str(), there)),
         cancel,
     )
     .await?;

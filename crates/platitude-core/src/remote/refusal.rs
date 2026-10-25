@@ -31,11 +31,11 @@ impl<'a> Sent<'a> {
         }
     }
 
-    pub(super) fn tag(remote: &'a str, name: &'a str, deleting: bool) -> Self {
+    pub(super) fn tag(target: &'a super::RemoteTag, deleting: bool) -> Self {
         Self {
-            remote,
-            name,
-            refname: format!("refs/tags/{name}"),
+            remote: &target.remote,
+            name: &target.tag,
+            refname: target.tag_ref(),
             deleting,
         }
     }

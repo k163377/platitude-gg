@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use platitude_core::remote::RemoteBranch;
+use platitude_core::remote::{RemoteBranch, RemoteTag};
 use platitude_core::{OperationKind, ReportKind};
 use qtbridge::{QmlObject, qobject};
 

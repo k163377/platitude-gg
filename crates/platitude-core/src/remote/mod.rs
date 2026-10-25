@@ -45,8 +45,8 @@ pub use self::standing::{
     PushStanding, PushTrack, Upstream, push_standing, push_target, pushes_elsewhere,
 };
 pub use self::tags::{
-    AdvertisedTag, HeldTag, delete_remote_tag, list_tags, parse_ls_remote_tags, push_tag,
-    replace_remote_tag,
+    AdvertisedTag, HeldTag, RemoteTag, delete_remote_tag, list_tags, parse_ls_remote_tags,
+    push_tag, replace_remote_tag,
 };
 pub use self::unreached::{Unreached, unreached};
 

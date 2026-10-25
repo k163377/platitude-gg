@@ -1,14 +1,14 @@
-//! A branch on a remote travels as one pair (`remote::RemoteBranch`): the
-//! remote and the name over there, each handed to git as given — where
-//! both names hold a slash, the branch here goes by another name, and a
-//! tag over there shares the branch's.
+//! A branch or a tag on a remote travels as one pair (`remote::RemoteBranch`,
+//! `remote::RemoteTag`): the remote and the name over there, each handed to
+//! git as given — where both names hold a slash, the branch here goes by
+//! another name, and a ref of the other kind over there shares the name.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
 use crate::support::TestRepo;
 use crate::support::exec::{Log, logged};
-use crate::support::remote::{far, origin_and_clone};
+use crate::support::remote::{far, far_tag, origin_and_clone};
 use platitude_core::branch;
 use platitude_core::remote;
 
@@ -219,6 +219,58 @@ async fn a_replace_reaches_git_from_the_old_pair_and_the_new_name() {
             ),
             "git branch --set-upstream-to=refs/remotes/team/fork/feature/y --end-of-options topic"
                 .to_string(),
+        ]
+    );
+}
+
+/// A tag pair reaches git the same way: `refs/tags/<tag>` on both sides of
+/// the refspec and in the lease, the remote as given — and a branch of the
+/// tag's name over there is left where it was.
+#[tokio::test]
+async fn a_tag_pair_reaches_git_as_its_two_names() {
+    let (mut bare, mut work) = slashed_remote();
+    bare.git(&["branch", "release/1.0", "main"]);
+    let branch = bare.git(&["rev-parse", "refs/heads/release/1.0"]);
+    work.git(&["tag", "release/1.0"]);
+    work.git(&["tag", "release/1.1"]);
+    let ours = work.git(&["rev-parse", "refs/tags/release/1.0"]);
+    let target = far_tag("team/fork", "release/1.0");
+    let (exec, log, cancel) = logged();
+
+    remote::push_tag(&exec, &work.path, &target, "", NET, &cancel)
+        .await
+        .expect("sent");
+    assert_eq!(bare.git(&["rev-parse", "refs/tags/release/1.0"]), ours);
+
+    remote::replace_remote_tag(
+        &exec,
+        &work.path,
+        &target,
+        "release/1.1",
+        &ours,
+        NET,
+        &cancel,
+    )
+    .await
+    .expect("replaced");
+
+    let tags = bare.git(&["for-each-ref", "--format=%(refname)", "refs/tags"]);
+    assert_eq!(tags, "refs/tags/feature/x\nrefs/tags/release/1.1");
+    assert_eq!(
+        bare.git(&["rev-parse", "refs/heads/release/1.0"]),
+        branch,
+        "the branch of that name stays"
+    );
+    let send = "git push --porcelain --no-follow-tags";
+    assert_eq!(
+        rows(&log, &["git push"]),
+        [
+            format!("{send} -- team/fork refs/tags/release/1.0:refs/tags/release/1.0"),
+            format!("{send} -- team/fork refs/tags/release/1.1:refs/tags/release/1.1"),
+            format!(
+                "{send} --force-with-lease=refs/tags/release/1.0:{ours} \
+                 --delete -- team/fork refs/tags/release/1.0"
+            ),
         ]
     );
 }

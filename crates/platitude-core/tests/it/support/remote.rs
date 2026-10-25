@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use platitude_core::remote::RemoteBranch;
+use platitude_core::remote::{RemoteBranch, RemoteTag};
 
 use crate::support::TestRepo;
 
@@ -12,6 +12,14 @@ pub fn far(remote: &str, branch: &str) -> RemoteBranch {
     RemoteBranch {
         remote: remote.to_string(),
         branch: branch.to_string(),
+    }
+}
+
+/// A tag on a remote, by its two names.
+pub fn far_tag(remote: &str, tag: &str) -> RemoteTag {
+    RemoteTag {
+        remote: remote.to_string(),
+        tag: tag.to_string(),
     }
 }
 

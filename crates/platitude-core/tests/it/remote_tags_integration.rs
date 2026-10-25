@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::support::TestRepo;
+use crate::support::remote::far_tag;
 use crate::support::session::{CaptureSink, TestSession, opened, write_answer};
 use platitude_core::remote;
 use platitude_core::session::{
@@ -91,7 +92,7 @@ async fn a_tag_the_remote_holds_on_the_same_commit_is_answered_as_sent() {
         &format!("{root}:refs/tags/v-both"),
     ]);
 
-    remote::push_tag(&exec, &path, "origin", "v-both", "", NET, &cancel)
+    remote::push_tag(&exec, &path, &far_tag("origin", "v-both"), "", NET, &cancel)
         .await
         .expect("the same commit over there is no collision");
     assert_eq!(
@@ -123,7 +124,8 @@ async fn the_same_commit_is_weighed_where_the_push_goes() {
         &pushed_to.file_url(),
     ]);
 
-    let refused = remote::push_tag(&exec, &path, "origin", "v-both", "", NET, &cancel).await;
+    let refused =
+        remote::push_tag(&exec, &path, &far_tag("origin", "v-both"), "", NET, &cancel).await;
     assert_eq!(
         refused
             .as_ref()
@@ -155,9 +157,16 @@ async fn a_qualified_delete_takes_the_tag_and_leaves_the_branch_of_the_same_name
     let path = work.path.clone();
     work.git(&["push", "origin", &format!("{root}:refs/heads/v-both")]);
 
-    remote::delete_remote_tag(&exec, &path, "origin", "v-both", &root, NET, &cancel)
-        .await
-        .expect("the qualified refspec names one ref");
+    remote::delete_remote_tag(
+        &exec,
+        &path,
+        &far_tag("origin", "v-both"),
+        &root,
+        NET,
+        &cancel,
+    )
+    .await
+    .expect("the qualified refspec names one ref");
 
     assert_eq!(at_origin(&mut work, "v-both"), "", "the tag is gone");
     assert_eq!(
@@ -192,7 +201,13 @@ async fn replacing_a_tag_on_a_remote_pushes_the_new_name_and_deletes_the_old() {
     let object = work.git(&["rev-parse", "v-moved"]);
 
     remote::replace_remote_tag(
-        &exec, &path, "origin", "v-both", "v-moved", &root, NET, &cancel,
+        &exec,
+        &path,
+        &far_tag("origin", "v-both"),
+        "v-moved",
+        &root,
+        NET,
+        &cancel,
     )
     .await
     .expect("the push and the delete both go through");
@@ -224,7 +239,13 @@ async fn a_replace_the_remote_refuses_leaves_the_old_name_standing() {
 
     // `v-drift` stands on another commit over there, so its push is refused.
     let refused = remote::replace_remote_tag(
-        &exec, &path, "origin", "v-both", "v-drift", &root, NET, &cancel,
+        &exec,
+        &path,
+        &far_tag("origin", "v-both"),
+        "v-drift",
+        &root,
+        NET,
+        &cancel,
     )
     .await;
 
@@ -267,9 +288,16 @@ async fn a_tag_the_remote_moved_since_it_was_read_is_not_deleted() {
     let path = work.path.clone();
     move_v_both_over_there(&mut work, &head);
 
-    let refused = remote::delete_remote_tag(&exec, &path, "origin", "v-both", &root, NET, &cancel)
-        .await
-        .expect_err("the name is not where the screen showed it");
+    let refused = remote::delete_remote_tag(
+        &exec,
+        &path,
+        &far_tag("origin", "v-both"),
+        &root,
+        NET,
+        &cancel,
+    )
+    .await
+    .expect_err("the name is not where the screen showed it");
     let Some(report) = refused.report() else {
         panic!("a stale lease on a tag reads as a branch's does: {refused}");
     };
@@ -284,9 +312,16 @@ async fn a_tag_the_remote_moved_since_it_was_read_is_not_deleted() {
         "and it stays over there"
     );
 
-    remote::delete_remote_tag(&exec, &path, "origin", "v-both", &head, NET, &cancel)
-        .await
-        .expect("leased to what is there, the delete goes");
+    remote::delete_remote_tag(
+        &exec,
+        &path,
+        &far_tag("origin", "v-both"),
+        &head,
+        NET,
+        &cancel,
+    )
+    .await
+    .expect("leased to what is there, the delete goes");
     assert_eq!(at_origin(&mut work, "v-both"), "");
 }
 
@@ -304,7 +339,13 @@ async fn a_replace_whose_delete_is_refused_leaves_both_names() {
     let object = work.git(&["rev-parse", "v-moved"]);
 
     remote::replace_remote_tag(
-        &exec, &path, "origin", "v-both", "v-moved", &root, NET, &cancel,
+        &exec,
+        &path,
+        &far_tag("origin", "v-both"),
+        "v-moved",
+        &root,
+        NET,
+        &cancel,
     )
     .await
     .expect_err("the old name moved since the screen showed it");
@@ -327,7 +368,7 @@ async fn delete_both_of_a_tag_refused_by_the_lease_touches_nothing() {
     let (sink, session) = opened(&work).await;
 
     let id = session
-        .delete_tag_everywhere("v-both".into(), "origin".into(), root.clone())
+        .delete_tag_everywhere(far_tag("origin", "v-both"), root.clone())
         .expect("accepted");
     assert!(
         write_answer(&sink, id).await.is_some(),
@@ -352,7 +393,7 @@ async fn delete_both_of_a_tag_refused_by_the_lease_touches_nothing() {
 
     work.git(&["push", "origin", "v-local"]);
     let id = session
-        .delete_tag_everywhere("v-local".into(), "origin".into(), head.clone())
+        .delete_tag_everywhere(far_tag("origin", "v-local"), head.clone())
         .expect("accepted");
     assert_eq!(write_answer(&sink, id).await, None);
     assert!(!work.git_ok(&["rev-parse", "--verify", "refs/tags/v-local"]));
@@ -369,7 +410,7 @@ async fn a_tag_the_remote_holds_elsewhere_is_read_again_on_the_refusal() {
     let (sink, session) = opened(&work).await;
 
     let id = session
-        .push_tag("origin".into(), "v-drift".into(), String::new())
+        .push_tag(far_tag("origin", "v-drift"), String::new())
         .expect("accepted");
     assert!(write_answer(&sink, id).await.is_some(), "git refuses it");
     let snapshot = refs_after_write(&sink, id).await;
@@ -409,7 +450,7 @@ async fn delete_both_of_a_tag_reads_the_remote_again_where_the_local_half_fails(
     std::fs::write(&lock, b"").expect("hold the tag's ref lock");
 
     let id = session
-        .delete_tag_everywhere("v-both".into(), "origin".into(), root.clone())
+        .delete_tag_everywhere(far_tag("origin", "v-both"), root.clone())
         .expect("accepted");
     let answer = write_answer(&sink, id).await;
 
@@ -468,7 +509,15 @@ async fn a_lease_pinned_to_a_commit_the_remote_has_left_is_refused() {
         &format!("{third}:refs/tags/v-drift"),
     ]);
 
-    let refused = remote::push_tag(&exec, &path, "origin", "v-drift", &root, NET, &cancel).await;
+    let refused = remote::push_tag(
+        &exec,
+        &path,
+        &far_tag("origin", "v-drift"),
+        &root,
+        NET,
+        &cancel,
+    )
+    .await;
 
     assert_eq!(
         refused
@@ -830,10 +879,16 @@ mod periodic {
         let exec = crate::support::exec::isolated();
         let cancel = CancellationToken::new();
 
-        let err =
-            remote::delete_remote_tag(&exec, &work.path, "origin", "v-local", &head, NET, &cancel)
-                .await
-                .expect_err("nothing is there to hold the lease");
+        let err = remote::delete_remote_tag(
+            &exec,
+            &work.path,
+            &far_tag("origin", "v-local"),
+            &head,
+            NET,
+            &cancel,
+        )
+        .await
+        .expect_err("nothing is there to hold the lease");
         assert!(
             err.is_outdated(),
             "read as any stale lease on a tag (`remote::push_tag`): {err:?}"
@@ -946,16 +1001,31 @@ mod periodic {
         let cancel = CancellationToken::new();
         let path = work.path.clone();
 
-        remote::push_tag(&exec, &path, "origin", "v-local", "", NET, &cancel)
-            .await
-            .expect("a name the remote has not got needs nothing");
+        remote::push_tag(
+            &exec,
+            &path,
+            &far_tag("origin", "v-local"),
+            "",
+            NET,
+            &cancel,
+        )
+        .await
+        .expect("a name the remote has not got needs nothing");
         assert_eq!(
             at_origin(&mut work, "v-local"),
             head,
             "it is over there now"
         );
 
-        let refused = remote::push_tag(&exec, &path, "origin", "v-drift", "", NET, &cancel).await;
+        let refused = remote::push_tag(
+            &exec,
+            &path,
+            &far_tag("origin", "v-drift"),
+            "",
+            NET,
+            &cancel,
+        )
+        .await;
         assert_eq!(
             refused
                 .as_ref()
@@ -971,9 +1041,16 @@ mod periodic {
             "and nothing over there moved"
         );
 
-        remote::push_tag(&exec, &path, "origin", "v-drift", &root, NET, &cancel)
-            .await
-            .expect("the lease names the commit the remote is actually on");
+        remote::push_tag(
+            &exec,
+            &path,
+            &far_tag("origin", "v-drift"),
+            &root,
+            NET,
+            &cancel,
+        )
+        .await
+        .expect("the lease names the commit the remote is actually on");
         assert_eq!(
             at_origin(&mut work, "v-drift"),
             head,

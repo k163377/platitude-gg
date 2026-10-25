@@ -97,17 +97,11 @@ impl RepoTab {
     }
 
     /// A tag replaced on a remote under a new name.
-    pub(super) fn remote_tag_replace(
-        &mut self,
-        remote: String,
-        from: String,
-        to: String,
-        expect: String,
-    ) {
+    pub(super) fn remote_tag_replace(&mut self, old: RemoteTag, to: String, expect: String) {
         // Keyed like every outgoing tag write (`ops_delete::remote_tag_delete`),
         // on the name that goes, so the page reports this press's answer.
-        let row = format!("{remote}/{from}");
-        let asked = self.ask_session(|s| s.replace_remote_tag(remote, from, to, expect));
+        let row = old.to_string();
+        let asked = self.ask_session(|s| s.replace_remote_tag(old, to, expect));
         self.ref_push_asked(&row, asked);
     }
 

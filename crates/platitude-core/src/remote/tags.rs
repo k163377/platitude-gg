@@ -1,6 +1,7 @@
 //! What a remote carries under `refs/tags/`, asked of the remote
 //! itself because nothing local records it.
 
+use std::fmt;
 use std::path::Path;
 use std::time::Duration;
 
@@ -11,6 +12,34 @@ use crate::oid::Oid;
 use crate::process::{GitCommand, GitExecutor};
 
 use super::push::porcelain_push;
+
+/// A tag on a remote: the remote as git is handed it, and the tag's name —
+/// one name here and over there, a tag having no remote-tracking ref.
+///
+/// Built from the two names as they were given apart, never cut out of
+/// `origin/release/1.0`: both may hold a slash. Nothing here checks them;
+/// git judges the names, and the callers refuse what they refuse.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteTag {
+    pub remote: String,
+    pub tag: String,
+}
+
+impl RemoteTag {
+    /// The tag's full name, `refs/tags/<tag>`, here and over there alike —
+    /// a bare name a branch shares is ambiguous, and git refuses it.
+    pub fn tag_ref(&self) -> String {
+        format!("refs/tags/{}", self.tag)
+    }
+}
+
+/// `<remote>/<tag>`, the key the page's row for it goes by — written from
+/// the pair, never cut back into one.
+impl fmt::Display for RemoteTag {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}/{}", self.remote, self.tag)
+    }
+}
 
 /// What a remote carries under `refs/tags/`: each tag name and the commit
 /// it designates over there.
@@ -63,32 +92,30 @@ pub async fn list_tags(
 pub async fn push_tag(
     executor: &GitExecutor,
     workdir: &Path,
-    remote: &str,
-    tag: &str,
+    target: &RemoteTag,
     expect: &str,
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<Option<HeldTag>, GitError> {
-    let refspec = format!("refs/tags/{tag}:refs/tags/{tag}");
+    let sent = super::refusal::Sent::tag(target, false);
+    let refspec = format!("{0}:{0}", sent.refname);
     let mut cmd = porcelain_push(workdir, timeout);
     let mut replaced = None;
     if !expect.is_empty() {
-        let (pinned, there) =
-            lease_on(executor, workdir, remote, tag, expect, timeout, cancel).await?;
-        cmd = cmd.arg(format!("--force-with-lease=refs/tags/{tag}:{pinned}"));
+        let (pinned, there) = lease_on(executor, workdir, target, expect, timeout, cancel).await?;
+        cmd = cmd.arg(format!("--force-with-lease={}:{pinned}", sent.refname));
         replaced = there;
     }
-    cmd = cmd.args(["--", remote, &refspec]);
+    cmd = cmd.args(["--", &target.remote, &refspec]);
     let command = cmd.describe();
     let out = executor.run_unchecked(cmd, cancel).await?;
     if out.code == 0 {
         return Ok(replaced);
     }
-    let sent = super::refusal::Sent::tag(remote, tag, false);
     if super::refusal::is_taken(&out.stdout_utf8(), &sent.refname) {
         // `already exists` says only that the objects differ: what the
         // remote holds now says whether the commit does.
-        match held_against_here(executor, workdir, remote, tag, timeout, cancel).await? {
+        match held_against_here(executor, workdir, target, timeout, cancel).await? {
             Held::OnTheSameCommit => return Ok(None),
             Held::OnAnotherCommit => {}
             // Gone since git looked: nothing to say it stands elsewhere.
@@ -104,7 +131,8 @@ pub async fn push_tag(
     Err(super::refusal::tag_refusal(command, &out, &sent))
 }
 
-/// Where `remote` holds `tag`, against the commit the tag here peels to.
+/// Where the remote holds the tag, against the commit the tag here peels
+/// to.
 enum Held {
     OnTheSameCommit,
     OnAnotherCommit,
@@ -114,19 +142,18 @@ enum Held {
 async fn held_against_here(
     executor: &GitExecutor,
     workdir: &Path,
-    remote: &str,
-    tag: &str,
+    target: &RemoteTag,
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<Held, GitError> {
-    let Some(there) = holding(executor, workdir, remote, tag, timeout, cancel).await? else {
+    let Some(there) = holding(executor, workdir, target, timeout, cancel).await? else {
         return Ok(Held::Nowhere);
     };
     let cmd = GitCommand::new().cwd(workdir).args([
         "rev-parse",
         "--verify",
         "--end-of-options",
-        &format!("refs/tags/{tag}^{{commit}}"),
+        &format!("{}^{{commit}}", target.tag_ref()),
     ]);
     let here = executor.run(cmd, cancel).await?;
     Ok(match here.stdout_utf8().trim() == there.commit.to_hex() {
@@ -148,22 +175,21 @@ async fn held_against_here(
 pub async fn delete_remote_tag(
     executor: &GitExecutor,
     workdir: &Path,
-    remote: &str,
-    tag: &str,
+    target: &RemoteTag,
     expect: &str,
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<Option<HeldTag>, GitError> {
-    let (pinned, there) = lease_on(executor, workdir, remote, tag, expect, timeout, cancel).await?;
+    let (pinned, there) = lease_on(executor, workdir, target, expect, timeout, cancel).await?;
+    let sent = super::refusal::Sent::tag(target, true);
     let cmd = porcelain_push(workdir, timeout)
-        .arg(format!("--force-with-lease=refs/tags/{tag}:{pinned}"))
-        .args(["--delete", "--", remote, &format!("refs/tags/{tag}")]);
+        .arg(format!("--force-with-lease={}:{pinned}", sent.refname))
+        .args(["--delete", "--", &target.remote, &sent.refname]);
     let command = cmd.describe();
     let out = executor.run_unchecked(cmd, cancel).await?;
     if out.code == 0 {
         return Ok(there);
     }
-    let sent = super::refusal::Sent::tag(remote, tag, true);
     Err(super::refusal::tag_refusal(command, &out, &sent))
 }
 
@@ -178,13 +204,12 @@ pub async fn delete_remote_tag(
 async fn lease_on(
     executor: &GitExecutor,
     workdir: &Path,
-    remote: &str,
-    tag: &str,
+    target: &RemoteTag,
     expect: &str,
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<(String, Option<HeldTag>), GitError> {
-    let there = holding(executor, workdir, remote, tag, timeout, cancel).await?;
+    let there = holding(executor, workdir, target, timeout, cancel).await?;
     Ok((pin_for(there.as_ref(), expect), there))
 }
 
@@ -197,8 +222,8 @@ pub struct HeldTag {
     pub commit: Oid,
 }
 
-/// What `remote` holds `tag` on where the push goes; `None` where it lacks
-/// the name.
+/// What the remote holds the tag on where the push goes; `None` where it
+/// lacks the name.
 ///
 /// Asked of the push URL (`remote get-url --push`, the fetch URL where none
 /// is set): `ls-remote <name>` reads the fetch URL, and a `pushurl` naming
@@ -206,21 +231,21 @@ pub struct HeldTag {
 async fn holding(
     executor: &GitExecutor,
     workdir: &Path,
-    remote: &str,
-    tag: &str,
+    target: &RemoteTag,
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<Option<HeldTag>, GitError> {
-    let cmd = GitCommand::new()
-        .cwd(workdir)
-        .args(["remote", "get-url", "--push", "--", remote]);
+    let cmd =
+        GitCommand::new()
+            .cwd(workdir)
+            .args(["remote", "get-url", "--push", "--", &target.remote]);
     let url = executor
         .run(cmd, cancel)
         .await?
         .stdout_utf8()
         .trim()
         .to_string();
-    let refname = format!("refs/tags/{tag}");
+    let refname = target.tag_ref();
     let peeled = format!("{refname}^{{}}");
     // Both names: a bare pattern does not match the `^{}` line.
     let cmd = GitCommand::new()
@@ -261,7 +286,7 @@ fn pin_for(there: Option<&HeldTag>, expect: &str) -> String {
     }
 }
 
-/// Replaces a tag on a remote with one under a new name — no git command
+/// Replaces `old` with a tag named `to` on the same remote — no git command
 /// does this; the tag's counterpart to [`super::replace_remote_branch`].
 ///
 /// The new name goes up from the local copy (a tag has no tracking ref),
@@ -275,19 +300,21 @@ fn pin_for(there: Option<&HeldTag>, expect: &str) -> String {
 /// [`delete_remote_tag`]; refused, both names stay over there.
 /// Whatever hung off the old name over there (a release) stays behind on
 /// it; the UI warns before this runs.
-#[expect(clippy::too_many_arguments)]
 pub async fn replace_remote_tag(
     executor: &GitExecutor,
     workdir: &Path,
-    remote: &str,
-    from: &str,
+    old: &RemoteTag,
     to: &str,
     expect: &str,
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<Option<HeldTag>, GitError> {
-    push_tag(executor, workdir, remote, to, "", timeout, cancel).await?;
-    delete_remote_tag(executor, workdir, remote, from, expect, timeout, cancel).await
+    let new = RemoteTag {
+        remote: old.remote.clone(),
+        tag: to.to_string(),
+    };
+    push_tag(executor, workdir, &new, "", timeout, cancel).await?;
+    delete_remote_tag(executor, workdir, old, expect, timeout, cancel).await
 }
 
 /// One tag as a remote advertises it.
@@ -353,6 +380,18 @@ pub(super) fn split_ls_remote_line(line: &[u8]) -> Option<(Oid, &str)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Each name is spelled from the two halves as given, slashes and all.
+    #[test]
+    fn the_pair_spells_its_names_from_both_halves() {
+        let pair = RemoteTag {
+            remote: "team/fork".to_string(),
+            tag: "release/1.0".to_string(),
+        };
+        assert_eq!(pair.tag_ref(), "refs/tags/release/1.0");
+        assert_eq!(pair.to_string(), "team/fork/release/1.0");
+    }
+
     /// Real `ls-remote --tags` stdout (git 2.51): one annotated tag
     /// (`ann-1`, advertised twice) and three lightweight ones.
     const LS_REMOTE_TAGS: &[u8] = b"\
