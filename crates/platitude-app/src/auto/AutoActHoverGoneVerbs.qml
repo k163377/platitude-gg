@@ -7,7 +7,7 @@ import platitude.ui
 /// What a hover display does when what it stands for changes under it, read stage by stage through the paths the change
 /// comes in by — the app's own writes landing and the lists rebuilt from them: a chip's list over a row rewritten or a
 /// chip renamed (`list-reread`), the line-ending card over a warning that changed (`eol-change`), the worktree's rows
-/// dealt again under the hand (`wip-redeal`), and a row's tip over rows that moved under a still hand (`tip-slide`). A
+/// read again under the hand (`wip-reread`), and a row's tip over rows that moved under a still hand (`tip-slide`). A
 /// run stops at the moment its argument names (verify-ui スキル §board).
 // `Item` because `QtObject` has no default property to hold the timers below.
 Item {
@@ -50,16 +50,16 @@ Item {
             eolChangeTimer.bucket = head === "" ? "unstaged" : head
             eolChangeTimer.step = 0
             eolChangeTimer.start()
-        } else if (act === "wip-redeal") {
-            // `<same|above|staged|gone|fixed>` — the pane's hand on a marked row of the worktree's lists with its card
-            // out, and a file written from outside so the status read deals the rows again (`--preset eol`); at
-            // `wipRedealTimer`.
+        } else if (act === "wip-reread") {
+            // `<same|above|inside|staged|gone|fixed>` — the pane's hand on a marked row of the worktree's lists with
+            // its card out, and a file written from outside so the status reads the rows again (`--preset eol`); at
+            // `wipRereadTimer`.
             page.showWip()
-            wipRedealTimer.how = head === "" ? "same" : head
-            wipRedealTimer.step = 0
-            wipRedealTimer.resets = 0
-            wipRedealTimer.dealt = ""
-            wipRedealTimer.start()
+            wipRereadTimer.how = head === "" ? "same" : head
+            wipRereadTimer.step = 0
+            wipRereadTimer.reads = 0
+            wipRereadTimer.left = ""
+            wipRereadTimer.start()
         } else if (act === "tip-slide") {
             // `files[:<stage>]` — a changed file's tip in the commit's list (`--preset long`), the hand still on its
             // row, and a folder above it shut so the rows slide under the hand; stages at `tipSlideTimer`.
@@ -324,40 +324,47 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=wip-redeal. The pane's hand on a marked row of the worktree's lists, its line-ending card out, and a
-    // file written from outside — the poll reads the tree again and the list deals its rows again (a reset: every row a
-    // new delegate that has not heard the hand). How the rows come back decides (`WipBucketPane.weighDeal`):
-    //   `same`   — `src/mixed.kt` saved over in place: the same row dealt under the hand keeps it — lit, its card up
-    //              with the new count;
+    // PGG_AUTO_ACT=wip-reread. The pane's hand on a marked row of the worktree's lists, its line-ending card out, and a
+    // file written from outside — the poll reads the tree again and the lists are told the rows that went, came or
+    // changed (`NavSectionModel.reshape`): the row under the hand keeps its delegate, and the pane puts it back under
+    // the hand as far as its list scrolls (`WipPane.rowKeep`). Where the rows land decides:
+    //   `same`   — `src/mixed.kt` saved over in place: the row stays under the hand — lit, its card up with the new
+    //              count;
     //   `fixed`  — `src/mixed.kt` saved over with its endings put right and a change kept: the row stays under the
     //              hand, lit, and only its mark goes — the card goes with it (`WipPane.weighEol`);
-    //   `above`  — a new file written above it: another row is dealt under the still hand — lit as the row under it,
-    //              the card gone, the hand held until it moves; moved two pixels, that row is still the lit one;
+    //   `above`  — a new file written above it, in a list too short to scroll: another row comes under the still hand
+    //              as the read's — lit as the row under it, the card gone (the hand was on the row, not in the card),
+    //              the hand held until it moves; moved two pixels, that row is still the lit one;
+    //   `inside` — the same file written above with the hand inside the card: the card stays where it opened, and
+    //              the hand is held (デザイン規約 §hover のツールチップ「外乱では閉じない」);
     //   `staged` — the hand on the staged `src/twice.kt` and a new file in the unstaged list: the staged bucket steps
     //              down the pane under the hand — the card gone, the hand held;
     //   `gone`   — the hand inside `src/flipped.kt`'s card and the file staged by the app's own write: the card goes
     //              with its row, and the row that stepped up under the hand — heard again where it stood, which is no
     //              move — opens nothing.
     SampleTimer {
-        id: wipRedealTimer
+        id: wipRereadTimer
         property string how: "same"
         property int step: 0
-        property int resets: 0
+        /// The unstaged list's reads since the write (`NavSectionModel.rowsArrived`).
+        property int reads: 0
         property string before: ""
         property real bucketYBefore: 0
+        /// Where the card stood before the write (`inside`).
+        property point cardBefore: Qt.point(0, 0)
         property point at: Qt.point(-1, -1)
-        readonly property string bucket: wipRedealTimer.how === "staged" ? "staged" : "unstaged"
-        readonly property string path: wipRedealTimer.how === "staged" ? "src/twice.kt"
-            : wipRedealTimer.how === "gone" ? "src/flipped.kt" : "src/mixed.kt"
+        readonly property string bucket: wipRereadTimer.how === "staged" ? "staged" : "unstaged"
+        readonly property string path: wipRereadTimer.how === "staged" ? "src/twice.kt"
+            : wipRereadTimer.how === "gone" ? "src/flipped.kt" : "src/mixed.kt"
         property real waitedFrom: 0
         /// The file written: the same one saved over in place — with a second line of the other ending (`same`), or
         /// with its endings put right and a change kept, so the row stays and its mark goes (`fixed`) — or a new one
         /// sorted above every row.
-        readonly property string written: wipRedealTimer.how === "same" || wipRedealTimer.how === "fixed"
+        readonly property string written: wipRereadTimer.how === "same" || wipRereadTimer.how === "fixed"
             ? "src/mixed.kt" : "src/aaa.kt"
-        readonly property string text: wipRedealTimer.how === "same"
+        readonly property string text: wipRereadTimer.how === "same"
             ? "fun a() = 1\nfun b() = 2\r\nfun c() = 3\r\nfun d() = 4\nfun e() = 5\n"
-            : wipRedealTimer.how === "fixed" ? "fun a() = 1\nfun b() = 2\nfun c() = 33\nfun d() = 4\nfun e() = 5\n"
+            : wipRereadTimer.how === "fixed" ? "fun a() = 1\nfun b() = 2\nfun c() = 33\nfun d() = 4\nfun e() = 5\n"
             : "fun aaa() = 0\n"
         function paneOf(bucket) {
             const standing = wipPane.bucketPanes
@@ -369,113 +376,123 @@ Item {
         }
         /// The row under the pane's hand in the run's bucket, or null.
         function under() {
-            const pane = wipRedealTimer.paneOf(wipRedealTimer.bucket)
+            const pane = wipRereadTimer.paneOf(wipRereadTimer.bucket)
             return pane !== null ? pane.rowUnderHand() : null
         }
-        /// What the rows dealt again left, read a turn after the deal: the card, the hand's hold, the row under it.
-        property string dealt: ""
+        /// What the read left, read once the pane has weighed it: the card, the hand's hold, the row under it.
+        property string left: ""
         function read() {
-            const row = wipRedealTimer.under()
+            const row = wipRereadTimer.under()
+            const card = wipPane.eolHoverCard
             return "card=" + wipPane.eolCardOpen + " still=" + wipPane.hand.stillHeld
                 + " lit=" + (row !== null && row.washLit)
-                + " changed=" + (wipPane.eolCardOpen && wipPane.eolHoverCard.notice !== wipRedealTimer.before)
+                + " changed=" + (wipPane.eolCardOpen && card.notice !== wipRereadTimer.before)
+                + (wipRereadTimer.how === "inside"
+                   ? " placed=" + (card.x === wipRereadTimer.cardBefore.x && card.y === wipRereadTimer.cardBefore.y)
+                   : "")
         }
         function done() {
-            const row = wipRedealTimer.under()
-            wipRedealTimer.stop()
-            Harness.report("wip_redeal how=" + wipRedealTimer.how + " " + wipRedealTimer.dealt
-                           + (wipRedealTimer.how === "above" ? " moved_lit=" + (row !== null && row.washLit) : "")
-                           + " under=" + (row !== null ? row.fullName : "") + " resets=" + wipRedealTimer.resets)
+            const row = wipRereadTimer.under()
+            wipRereadTimer.stop()
+            Harness.report("wip_reread how=" + wipRereadTimer.how + " " + wipRereadTimer.left
+                           + (wipRereadTimer.how === "above" ? " moved_lit=" + (row !== null && row.washLit) : "")
+                           + " under=" + (row !== null ? row.fullName : "") + " reads=" + wipRereadTimer.reads)
             driver.complete()
         }
-        property Connections dealing: Connections {
+        property Connections reading: Connections {
             target: wipPane.unstagedModel
-            function onModelReset() { wipRedealTimer.resets++ }
+            function onRowsArrived() { wipRereadTimer.reads++ }
         }
         onTriggered: {
-            if (wipRedealTimer.step === 0) {
-                const row = wipPane.rowIn(wipRedealTimer.bucket, wipRedealTimer.path)
-                if (!Awaited.all("wip_redeal_row", { "row": row !== null }))
+            if (wipRereadTimer.step === 0) {
+                const row = wipPane.rowIn(wipRereadTimer.bucket, wipRereadTimer.path)
+                if (!Awaited.all("wip_reread_row", { "row": row !== null }))
                     return
-                wipRedealTimer.at = row.mapToItem(null, row.width / 2, row.height / 2)
+                wipRereadTimer.at = row.mapToItem(null, row.width / 2, row.height / 2)
                 // The pane's hand on the row, as it hears a hand (`HandWatch.stir`): the row's own ask brings the card.
-                wipPane.hand.stir(wipRedealTimer.at)
-                wipRedealTimer.step = 1
+                wipPane.hand.stir(wipRereadTimer.at)
+                wipRereadTimer.step = 1
                 return
             }
-            if (wipRedealTimer.step === 1) {
-                if (!Awaited.all("wip_redeal_card", { "card": wipPane.eolCardOpen }))
+            if (wipRereadTimer.step === 1) {
+                if (!Awaited.all("wip_reread_card", { "card": wipPane.eolCardOpen }))
                     return
-                wipRedealTimer.before = wipPane.eolHoverCard.notice
-                wipRedealTimer.bucketYBefore = wipRedealTimer.paneOf("staged").y
-                wipRedealTimer.resets = 0
-                if (wipRedealTimer.how === "gone") {
+                wipRereadTimer.before = wipPane.eolHoverCard.notice
+                wipRereadTimer.bucketYBefore = wipRereadTimer.paneOf("staged").y
+                wipRereadTimer.reads = 0
+                if (wipRereadTimer.how === "gone") {
                     // The hand inside the card, which the pane no longer hears; the file staged by the app's own
                     // write — its row leaves the list, and the rows under the card step up.
                     wipPane.eolHoverCard.contentPointed = true
                     wipPane.hand.stir(Qt.point(-1, -1))
                     driver.pressWrite("stage-file", () => {
-                        wipPane.moveStage("unstaged", wipRedealTimer.path)
+                        wipPane.moveStage("unstaged", wipRereadTimer.path)
                         return true
                     })
-                    wipRedealTimer.step = 2
+                    wipRereadTimer.step = 2
                     return
                 }
+                if (wipRereadTimer.how === "inside") {
+                    // The hand inside the card, which the pane no longer hears; the rows move under the card.
+                    wipRereadTimer.cardBefore = Qt.point(wipPane.eolHoverCard.x, wipPane.eolHoverCard.y)
+                    wipPane.eolHoverCard.contentPointed = true
+                    wipPane.hand.stir(Qt.point(-1, -1))
+                }
                 // Saved over in place with a second line of the other ending, or a new file sorted above every row.
-                const why = Harness.writeFile(repoTab.repoPath + "/" + wipRedealTimer.written, wipRedealTimer.text)
+                const why = Harness.writeFile(repoTab.repoPath + "/" + wipRereadTimer.written, wipRereadTimer.text)
                 if (why !== "")
-                    Harness.report("wip_redeal write " + why)
+                    Harness.report("wip_reread write " + why)
                 repoTab.pollNow()
-                wipRedealTimer.step = 2
+                wipRereadTimer.step = 2
                 return
             }
-            if (wipRedealTimer.step === 2) {
-                // The rows dealt again; read a turn later, once the list has weighed them (`weighDeal`).
-                if (!Awaited.all("wip_redeal_dealt", {
-                        "reset": wipRedealTimer.resets > 0,
-                        "moved": wipRedealTimer.how !== "staged"
-                                 || wipRedealTimer.paneOf("staged").y !== wipRedealTimer.bucketYBefore,
-                        "gone": wipRedealTimer.how !== "gone"
-                                || (driver.wroteAndSettled() && wipPane.rowIn("unstaged", wipRedealTimer.path) === null
+            if (wipRereadTimer.step === 2) {
+                // The read in; read on the next beat, once the pane has weighed it (`WipPane.rowKeep`).
+                if (!Awaited.all("wip_reread_read", {
+                        "read": wipRereadTimer.reads > 0 && !wipPane.rowKeep.busy,
+                        "moved": wipRereadTimer.how !== "staged"
+                                 || wipRereadTimer.paneOf("staged").y !== wipRereadTimer.bucketYBefore,
+                        "gone": wipRereadTimer.how !== "gone"
+                                || (driver.wroteAndSettled() && wipPane.rowIn("unstaged", wipRereadTimer.path) === null
                                     && !wipPane.eolCardOpen),
                         // The mark went with the row still there: the card goes as the pane weighs its target.
-                        "down": wipRedealTimer.how !== "fixed" || !wipPane.eolCardOpen
+                        "down": wipRereadTimer.how !== "fixed" || !wipPane.eolCardOpen
                     }))
                     return
-                if (wipRedealTimer.how === "gone") {
+                if (wipRereadTimer.how === "gone") {
                     // The card went with its row, and the hand that was inside it is heard again where it stood — in
                     // Qt's order: the hover handed to what is under the hand first, then taken from the card that went
                     // (`QQuickDeliveryAgentPrivate::deliverHoverEvent`).
-                    wipPane.hand.stir(wipRedealTimer.at)
+                    wipPane.hand.stir(wipRereadTimer.at)
                     wipPane.eolHoverCard.contentPointed = false
                     // waits(timed): the absence is read from here — a card that must not open gets its rest twice over
-                    wipRedealTimer.waitedFrom = Date.now()
-                    wipRedealTimer.step = 5
+                    wipRereadTimer.waitedFrom = Date.now()
+                    wipRereadTimer.step = 5
                     return
                 }
-                wipRedealTimer.step = 3
+                wipRereadTimer.step = 3
                 return
             }
-            if (wipRedealTimer.step === 5) {
+            if (wipRereadTimer.step === 5) {
                 // waits(timed): the product's rest, as a floor: a card that would open has opened by then
-                if (Date.now() - wipRedealTimer.waitedFrom < 2 * Metrics.tipDelayMs)
+                if (Date.now() - wipRereadTimer.waitedFrom < 2 * Metrics.tipDelayMs)
                     return
-                wipRedealTimer.dealt = wipRedealTimer.read()
-                wipRedealTimer.done()
+                wipRereadTimer.left = wipRereadTimer.read()
+                wipRereadTimer.done()
                 return
             }
-            if (wipRedealTimer.step === 3) {
-                wipRedealTimer.dealt = wipRedealTimer.read()
-                if (wipRedealTimer.how !== "above") {
-                    wipRedealTimer.done()
+            if (wipRereadTimer.step === 3) {
+                wipRereadTimer.left = wipRereadTimer.read()
+                if (wipRereadTimer.how !== "above") {
+                    wipRereadTimer.done()
                     return
                 }
-                // The hand moved two pixels: the row dealt under it is the row it is on now.
-                wipPane.hand.stir(Qt.point(wipRedealTimer.at.x + 2, wipRedealTimer.at.y))
-                wipRedealTimer.step = 4
+                // The hand moved two pixels: the row the read brought under it is the row it is on now.
+                wipPane.hand.stir(Qt.point(wipRereadTimer.at.x + 2, wipRereadTimer.at.y))
+                wipRereadTimer.step = 4
                 return
             }
-            wipRedealTimer.done()
+            wipRereadTimer.done()
         }
     }
 

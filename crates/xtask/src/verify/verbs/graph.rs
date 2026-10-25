@@ -718,4 +718,41 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "stage=after list=true names=1 moved=false",
     },
+    // A read under the left menu's open row, the hand in its lines: a tag
+    // written in between the top of the list and the row is taken back by
+    // the scroll — the row stays under the hand, open; a branch written in
+    // above a list too short to scroll moves the row down as the read's,
+    // and it stays open, the hand held; its own branch deleted takes the
+    // lines with it (デザイン規約 §hover のツールチップ「外乱では閉じない」).
+    Verb {
+        name: "nav-reread",
+        when: &[
+            (
+                Arg::Is("short"),
+                "nav_reread how=short open=true kept=false still=true",
+            ),
+            (Arg::Is("gone"), "nav_reread how=gone open=false"),
+        ],
+        plain: "nav_reread how=above open=true kept=true still=false",
+    },
+    // A discard the log reads in at its top under the card of an entry: the
+    // card the hand is inside stays where it opened, the hand held; the
+    // hand on the entry's row sees the card go with the row's place.
+    Verb {
+        name: "recover-reread",
+        when: &[(Arg::Is("row"), "recover_reread how=row card=false")],
+        plain: "recover_reread how=inside card=true placed=true still=true",
+    },
+    // The diff read again under the hand on a changed line: a line written
+    // in above it is taken back by the scroll — the same line stays under
+    // the hand; the line itself put back takes its row away, and the row
+    // that comes under the hand comes as the read's.
+    Verb {
+        name: "diff-reread",
+        when: &[(
+            Arg::Is("gone"),
+            "diff_reread how=gone kept=false same=false still=true",
+        )],
+        plain: "diff_reread how=above kept=true same=true still=false",
+    },
 ];

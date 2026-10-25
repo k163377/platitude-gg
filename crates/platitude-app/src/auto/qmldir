@@ -5,6 +5,7 @@ AutoActBranchPushVerbs 1.0 AutoActBranchPushVerbs.qml
 AutoActCardFlowVerbs 1.0 AutoActCardFlowVerbs.qml
 AutoActHoverHoldVerbs 1.0 AutoActHoverHoldVerbs.qml
 AutoActHoverGoneVerbs 1.0 AutoActHoverGoneVerbs.qml
+AutoActRereadVerbs 1.0 AutoActRereadVerbs.qml
 AutoActWorktreeVerbs 1.0 AutoActWorktreeVerbs.qml
 AutoActDetailsVerbs 1.0 AutoActDetailsVerbs.qml
 AutoActDiffFindVerbs 1.0 AutoActDiffFindVerbs.qml

@@ -77,7 +77,7 @@ Item {
         Harness.report("recover open=" + page.recoverOpen
                        + " entries=" + page.recoverEntries.length
                        // What the filter left, and whether an entry's card is out.
-                       + " listed=" + sidebarPane.autoRecover.shownEntries.length
+                       + " listed=" + sidebarPane.autoRecover.shownEntries.count
                        + " card=" + sidebarPane.autoRecover.cardOpen
                        + " pick=" + page.recoverPick
                        + " shown=" + graph.provisionalOn

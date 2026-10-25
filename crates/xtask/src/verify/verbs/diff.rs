@@ -624,30 +624,36 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "eol_change bucket=unstaged card=true changed=true stale=false",
     },
-    // The worktree's rows dealt again under the pane's hand by a status
+    // The worktree's rows read again under the pane's hand by a status
     // read: the same row keeps the hand (lit, its card up with the new
-    // count); another row dealt there, or the bucket stepping down the
-    // pane, is the rows moving under a still hand — the card goes, the hand
-    // is held, and the row under it lights at once, its card waiting for
-    // the hand. How far the bucket steps is the pane's share-out, so whether
+    // count); another row brought there, or the bucket stepping down the
+    // pane, past what the list can scroll back, is the rows moving under a
+    // still hand as the read's — the card the hand is on the row of goes,
+    // the hand is held, and the row under it lights at once, its card
+    // waiting for the hand; the card the hand is inside stays where it
+    // opened. How far the bucket steps is the pane's share-out, so whether
     // another row is under the hand after it is not this line's to say.
     Verb {
-        name: "wip-redeal",
+        name: "wip-reread",
         when: &[
             (
                 Arg::Is("above"),
-                "wip_redeal how=above card=false still=true lit=true changed=false moved_lit=true",
+                "wip_reread how=above card=false still=true lit=true changed=false moved_lit=true",
+            ),
+            (
+                Arg::Is("inside"),
+                "wip_reread how=inside card=true still=true lit=false changed=false placed=true",
             ),
             (
                 Arg::Is("staged"),
-                "wip_redeal how=staged card=false still=true",
+                "wip_reread how=staged card=false still=true",
             ),
-            (Arg::Is("gone"), "wip_redeal how=gone card=false still=true"),
+            (Arg::Is("gone"), "wip_reread how=gone card=false still=true"),
             (
                 Arg::Is("fixed"),
-                "wip_redeal how=fixed card=false still=false lit=true",
+                "wip_reread how=fixed card=false still=false lit=true",
             ),
         ],
-        plain: "wip_redeal how=same card=true still=false lit=true changed=true",
+        plain: "wip_reread how=same card=true still=false lit=true changed=true",
     },
 ];

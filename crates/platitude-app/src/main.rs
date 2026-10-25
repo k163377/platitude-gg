@@ -513,6 +513,7 @@ fn embed_harness_qml() {
     qrc::embed!("auto/AutoActCardFlowVerbs.qml");
     qrc::embed!("auto/AutoActHoverHoldVerbs.qml");
     qrc::embed!("auto/AutoActHoverGoneVerbs.qml");
+    qrc::embed!("auto/AutoActRereadVerbs.qml");
     qrc::embed!("auto/AutoActDetailsVerbs.qml");
     qrc::embed!("auto/AutoActDiffFindVerbs.qml");
     qrc::embed!("auto/AutoActDiffVerbs.qml");

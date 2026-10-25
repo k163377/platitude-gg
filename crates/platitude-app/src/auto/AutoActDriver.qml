@@ -686,6 +686,7 @@ Item {
     AutoActCardFlowVerbs { id: cardFlowVerbs; driver: driver }
     AutoActHoverHoldVerbs { id: hoverHoldVerbs; driver: driver }
     AutoActHoverGoneVerbs { id: hoverGoneVerbs; driver: driver }
+    AutoActRereadVerbs { id: rereadVerbs; driver: driver }
     AutoActGraphReclickVerbs { id: graphReclickVerbs; driver: driver }
     AutoActStepVerbs { id: stepVerbs; driver: driver }
     AutoActKeyMenuVerbs { id: keyMenuVerbs; driver: driver }
@@ -722,6 +723,7 @@ Item {
             || cardFlowVerbs.run(act, arg)
             || hoverHoldVerbs.run(act, arg)
             || hoverGoneVerbs.run(act, arg)
+            || rereadVerbs.run(act, arg)
             || graphReclickVerbs.run(act, arg)
             || stepVerbs.run(act, arg)
             || keyMenuVerbs.run(act, arg)

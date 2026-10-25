@@ -1034,14 +1034,21 @@ Item {
             renderedBarrier.begin()
         }
     }
-    // keep-place: read part way down a long diff, then write — the rebuild must come back to the same place. Waits for
-    // `viewLaidOut` (before it the scroll goes nowhere); a laid-out diff with less than `readY` of room is said and
-    // stopped (rules-refs/app-ui.md「欠けた前提は言って止まる」).
+    // keep-place: read part way down a long diff, then write — the file read again must leave the view on the same
+    // place: the line staged above it goes, and the rows on screen stay where they stand (`DiffModel.layOutKept`, Qt
+    // keeping the rows on screen as rows above them go). Waits for `viewLaidOut` (before it the scroll goes nowhere); a
+    // laid-out diff with less than `readY` of room is said and stopped (rules-refs/app-ui.md「欠けた前提は言って止まる」).
     SampleTimer {
         id: keepPlaceTimer
-        /// The first hunk's line whose staging rebuilds the diff under the reader.
+        /// The first hunk's line whose staging reads the diff again under the reader.
         property int line: -1
         property bool wrote: false
+        /// The file's reads since the write (`DiffModel.rowsArrived`).
+        property int reads: 0
+        property Connections reading: Connections {
+            target: diffPane.diffModel
+            function onRowsArrived() { keepPlaceTimer.reads++ }
+        }
         function begin(atLine) {
             keepPlaceTimer.line = atLine
             keepPlaceTimer.wrote = false
@@ -1058,6 +1065,7 @@ Item {
                     return
                 }
                 diffPane.scrollTo(acts.readY)
+                keepPlaceTimer.reads = 0
                 driver.pressWrite("stage-selection", () => {
                     page.stageSelection(0, keepPlaceTimer.line)
                     return true
@@ -1065,12 +1073,12 @@ Item {
                 keepPlaceTimer.wrote = true
                 return
             }
-            // Then the rebuilt list put back on the place. A write that emptied this side never lands, and the run
-            // waits out the watchdog.
-            if (!driver.wroteAndSettled() || diffPane.placeLandedY < 0)
+            // Then the file read again and weighed by the pane. A write that emptied this side never lands, and the
+            // run waits out the watchdog.
+            if (!driver.wroteAndSettled() || keepPlaceTimer.reads === 0 || diffPane.rowKeep.busy)
                 return
             keepPlaceTimer.stop()
-            acts.reportPlace(diffPane.placeLandedY, diffPane.view.maxY)
+            acts.reportPlace(diffPane.view.contentY, diffPane.view.maxY)
             renderedBarrier.begin()
         }
     }
