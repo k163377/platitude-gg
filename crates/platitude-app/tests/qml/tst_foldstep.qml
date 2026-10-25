@@ -1,6 +1,4 @@
 import QtQuick
-// For the attached ToolTip alone.
-import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
@@ -13,8 +11,6 @@ Item {
     id: root
     width: 400
     height: 300
-    // What `Main.qml` and the popup bases declare (rules-refs/app-ui.md「ToolTip.policy」).
-    ToolTip.policy: ToolTip.Manual
 
     // A commit's changed files (`DetailsPane.fileList`): a folder, a file inside it, a file beside it.
     ListModel {

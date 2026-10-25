@@ -36,12 +36,17 @@ const MODULE: &str = "platitude/ui";
 /// The app's Rust-backed module, which several `ui` components import
 /// whether or not they reach into it (`AppCombo`). Only the running app
 /// registers it, and a file whose import does not resolve is a type that
-/// does not resolve — so it is staged empty, and a test reaching into it
-/// fails on the name it wanted.
+/// does not resolve — so it is staged all but empty, and a test reaching
+/// into it fails on the name it wanted. The exception is [`STUBS`].
 const APP_MODULE: &str = "platitude";
 /// The stub's one type, named so a test reaching for it reads as the
 /// mistake it is.
 const APP_STUB_TYPE: &str = "NotTheApplication.qml";
+/// Stand-ins for the module's singletons that the row delegates read as
+/// they are built (`GitFacts`): one file per singleton, staged into the
+/// module so a real `GraphRowDelegate` can stand in a test. Argument-only
+/// facts, whose rules Rust tests; nothing of the models.
+const STUBS: &str = "crates/platitude-app/tests/qml/stubs";
 
 /// How long one `qmltestrunner`, one file or all of them, may write
 /// nothing. QtTest bounds `tryCompare`, but not `when: windowShown` on a
@@ -60,25 +65,35 @@ const QUIET: Duration = Duration::from_secs(120);
 const WHOLE: Duration = Duration::from_secs(15 * 60);
 
 pub fn run(args: &[String]) -> Result<(), String> {
-    if let Some(unknown) = args.first() {
-        return Err(format!("unknown option {unknown:?} (qmltest takes none)"));
+    if let Some(unknown) = args.iter().find(|arg| arg.starts_with('-')) {
+        return Err(format!(
+            "unknown option {unknown:?} (qmltest takes file names alone)"
+        ));
     }
     let root = crate::tree::workspace_root();
-    let tests = tests_in(&root)?;
-    if tests.is_empty() {
+    let every = tests_in(&root)?;
+    if every.is_empty() {
         return Err(format!("no tst_*.qml under {TESTS}"));
     }
+    let tests = chosen(&every, args)?;
     let work = work_rel();
     let import = stage(&root, &root.join(&work))?;
     // qmltestrunner sits in Qt's bin, which the harness shells' PATH may lack.
     let path = crate::qt::path_with_qt()?;
-    let outcome = all_at_once(&root, &work, &import, &tests, &path);
-    let verdict = match outcome {
-        Ok(()) => {
-            println!("qmltest: PASS ({} file(s), one process)", tests.len());
-            Ok(())
+    // Named files run apart, each answering for itself — the road for one file while it is being written. The
+    // gate names none.
+    let verdict = if args.is_empty() {
+        match all_at_once(&root, &work, &import, &tests, &path) {
+            Ok(()) => {
+                println!("qmltest: PASS ({} file(s), one process)", tests.len());
+                Ok(())
+            }
+            Err(together) => one_at_a_time(&root, &work, &import, &tests, &path, &together),
         }
-        Err(together) => one_at_a_time(&root, &work, &import, &tests, &path, &together),
+    } else {
+        tests
+            .iter()
+            .try_for_each(|test| run_one(&root, &work, &import, test, &path))
     };
     let _ = std::fs::remove_dir_all(root.join(&work));
     verdict
@@ -213,6 +228,28 @@ fn work_rel() -> String {
     format!("{WORK}/{}", std::process::id())
 }
 
+/// The files `args` name out of `every` — by stem (`tst_ink`), file name or
+/// path — or all of them for no args. A name that matches none is a
+/// mistake, not an empty run.
+fn chosen(every: &[String], args: &[String]) -> Result<Vec<String>, String> {
+    if args.is_empty() {
+        return Ok(every.to_vec());
+    }
+    let mut picked = Vec::new();
+    for arg in args {
+        let want = arg.replace('\\', "/");
+        let stem = want.trim_end_matches(".qml");
+        let found = every
+            .iter()
+            .find(|test| test == &&want || test.ends_with(&format!("/{stem}.qml")))
+            .ok_or_else(|| format!("no test called {arg:?} under {TESTS}"))?;
+        if !picked.contains(found) {
+            picked.push(found.clone());
+        }
+    }
+    Ok(picked)
+}
+
 /// The `tst_*.qml` files, in a fixed order so two runs read alike.
 fn tests_in(root: &Path) -> Result<Vec<String>, String> {
     let dir = root.join(TESTS);
@@ -259,12 +296,32 @@ fn stage(root: &Path, work: &Path) -> Result<PathBuf, String> {
     // `import platitude` to resolve to, and reads as not installed.
     std::fs::write(app.join(APP_STUB_TYPE), "import QtQuick\n\nQtObject {}\n")
         .map_err(|e| format!("{APP_MODULE}/{APP_STUB_TYPE}: {e}"))?;
-    std::fs::write(
-        app.join("qmldir"),
-        format!("module {APP_MODULE}\nNotTheApplication 1.0 {APP_STUB_TYPE}\n"),
-    )
-    .map_err(|e| format!("{APP_MODULE}/qmldir: {e}"))?;
+    let mut qmldir = format!("module {APP_MODULE}\nNotTheApplication 1.0 {APP_STUB_TYPE}\n");
+    for stub in stubs_in(root)? {
+        let name = stub
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        std::fs::copy(&stub, app.join(&name)).map_err(|e| format!("{name}: {e}"))?;
+        let stem = name.trim_end_matches(".qml");
+        qmldir.push_str(&format!("singleton {stem} 1.0 {name}\n"));
+    }
+    std::fs::write(app.join("qmldir"), qmldir).map_err(|e| format!("{APP_MODULE}/qmldir: {e}"))?;
     Ok(import)
+}
+
+/// The stand-in singletons under [`STUBS`], in a fixed order.
+fn stubs_in(root: &Path) -> Result<Vec<PathBuf>, String> {
+    let dir = root.join(STUBS);
+    let mut found = Vec::new();
+    for entry in std::fs::read_dir(&dir).map_err(|e| format!("{}: {e}", dir.display()))? {
+        let path = entry.map_err(|e| e.to_string())?.path();
+        if path.extension().is_some_and(|e| e == "qml") {
+            found.push(path);
+        }
+    }
+    found.sort();
+    Ok(found)
 }
 
 fn run_one(

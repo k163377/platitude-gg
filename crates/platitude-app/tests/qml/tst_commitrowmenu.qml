@@ -166,7 +166,7 @@ Item {
             compare(menu.switchItem.codeName, "topic")
             compare(menu.switchItem.nameMark, "tree")
             verify(menu.switchItem.codesName)
-            compare(menu.switchItem.ToolTip.text, "Open topic", "a cut folder comes back whole on the hover")
+            compare(menu.switchItem.tip.words, "Open topic", "a cut folder comes back whole on the hover")
             compare(menu.switchItem.tipMarks, [["Open ".length, "tree", undefined, "topic".length]],
                     "behind the mark it wears on the row")
             root.aimAt({ canSwitch: true })
@@ -474,7 +474,7 @@ Item {
             compare(add.codeName, "feature-topic-a")
             compare(add.blockedReason, "")
             // What the hover says once the folder is cut: the whole line, chip and folder, the folder behind its mark.
-            compare(add.ToolTip.text, "worktree add feature-topic-a")
+            compare(add.tip.words, "worktree add feature-topic-a")
             compare(add.tipMarks, [["worktree add ".length, "tree", undefined, "feature-topic-a".length]])
             add.triggered()
             compare(root.asked,

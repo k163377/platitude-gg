@@ -63,6 +63,15 @@ Control {
         height: Theme.toolbarHeight
     }
 
+    /// A menu standing in the window, clear of the group (`OutsidePress`): what the state card is behind.
+    AppMenu {
+        id: menu
+        x: 450
+        AppMenuItem {
+            text: "Act"
+        }
+    }
+
     /// The floor measured again outside the group: a group handing its share-out some other number would report
     /// that number as its own.
     BandStateMetrics {
@@ -91,6 +100,11 @@ Control {
             worktree.lfsNeeded = 0
             graph.failed = false
             graph.stale = false
+            // The hand off the group and no menu standing, for the case that hovers.
+            mouseMove(root, root.width - 1, root.height - 1)
+            if (menu.visible)
+                menu.dismiss()
+            tryVerify(() => !menu.visible && !group.stateCardOpen, undefined, "nothing stands")
         }
 
         function badgesStanding() {
@@ -135,6 +149,28 @@ Control {
                     return w
             }
             return -1
+        }
+
+        /// The folded mark answers a press with the card, a dismissed one too (`stateMouse` → `HoverSeat.press`): a
+        /// menu standing takes the card down under the hand on the mark, and once it has gone the card stays down for
+        /// that hand — the press brings it back.
+        function test_a_press_on_the_folded_mark_brings_back_the_card_a_menu_took_down() {
+            group.width = widestFolded()
+            verify(group.stateMarkShown, "folded: the mark stands")
+            // The band has placed the group (`placed`, which the row's first layout sets).
+            group.placed = true
+            const mark = Qt.point(group.width - group.foldedWidth / 2, group.height / 2)
+            mouseMove(group, mark.x, mark.y)
+            tryVerify(() => group.stateCardOpen, undefined, "the card unfolds at once for the hand on the mark")
+            menu.offerHere()
+            tryVerify(() => menu.visible && !group.stateCardOpen, undefined, "a menu standing takes the card down")
+            menu.dismiss()
+            tryVerify(() => !menu.visible)
+            // waits(paced): a card that must **not** come back as the menu goes; the beat, twice over.
+            wait(Metrics.hoverKeepMs * 2)
+            verify(!group.stateCardOpen, "the menu gone, the card stays down for the hand on the mark")
+            mouseClick(group, mark.x, mark.y)
+            tryVerify(() => group.stateCardOpen, undefined, "the press on the mark brings it back")
         }
 
         /// The reported floor first: had it drifted from the measurement, every case below would agree with itself.

@@ -448,36 +448,25 @@ Item {
             row.destroy()
         }
 
-        /// A menu raised on the open row is one about it, which keeps it open (`factsMenuAsked`) — from the row's own
-        /// line under a real right-click as from its lines; a closed row's menu is any other menu. Said once per menu
-        /// (the lines go through the same press), and before the ask.
-        function test_a_menu_raised_on_the_open_row_keeps_it_open() {
+        /// A menu raised on the open row — from its own line under a real right-click, or from its lines — asks with
+        /// the row's own name, so the page keys it as the panel keys the row, and the gestures read that key against
+        /// the open one (`SidebarRowGestures.menuOnOpenRow`). A closed row asks the same way: whether the menu holds
+        /// anything is the key's, not the row's.
+        function test_a_menu_raised_on_the_open_row_asks_with_its_own_name() {
             root.sectionUpstream = ""
             root.holdingWorktree = ""
             const row = root.openRow(root.rowOf({ "kindHint": "branch", "name": "solo", "full": "solo",
                                                   "oid_hex": "e5" }))
             verify(row.factsItem !== null)
-            let menus = 0
-            let kept = 0
-            // What had been said when the ask went up: the menu's opening is what reads the note
-            // (`SidebarRowGestures.onMenuOpenChanged`), so a note after the ask comes too late.
-            let keptAtAsk = -1
-            row.refMenuRequested.connect(() => {
-                menus++
-                keptAtAsk = kept
-            })
-            row.factsMenuAsked.connect(() => kept++)
+            let asked = []
+            row.refMenuRequested.connect((name, full, oidHex, aim) => asked.push(full !== "" ? full : name))
             mouseClick(row, row.width / 2, row.lineHeight / 2, Qt.RightButton)
-            compare(menus, 1, "the menu, off the row's own line")
-            compare(kept, 1, "raised on the open row")
-            compare(keptAtAsk, 1, "said before the ask")
+            compare(asked, ["solo"], "the menu, off the row's own line, named for the row")
             row.factsItem.lineMenu(-1)
-            compare(menus, 2, "the menu, off its lines")
-            compare(kept, 2, "raised on the open row, once")
+            compare(asked, ["solo", "solo"], "the menu, off its lines, named the same")
             row.openKey = ""
             mouseClick(row, row.width / 2, row.lineHeight / 2, Qt.RightButton)
-            compare(menus, 3, "a closed row's menu")
-            compare(kept, 2, "keeps nothing open")
+            compare(asked, ["solo", "solo", "solo"], "a closed row's menu, named the same")
             row.destroy()
         }
 

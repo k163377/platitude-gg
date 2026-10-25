@@ -192,7 +192,7 @@ Control {
             const marks = bareRow.tipMarks
             compare(marks.length, 2)
             compare(marks[0][1], "", "bare")
-            compare(bareRow.ToolTip.text.substr(marks[0][0], marks[0][3]), root.farName)
+            compare(bareRow.tip.words.substr(marks[0][0], marks[0][3]), root.farName)
         }
 
         /// A row that says no name builds nothing that draws one: its own heading and seat marks, and no name's mark,
@@ -208,7 +208,7 @@ Control {
 
         /// The hover's line seats every name it says behind its mark: the worktree's tree, the far column's branch.
         function test_the_hover_seats_every_name_behind_its_mark() {
-            const line = nameRow.ToolTip.text
+            const line = nameRow.tip.words
             const marks = nameRow.tipMarks
             compare(marks.length, 2)
             compare(marks[0][1], "tree")

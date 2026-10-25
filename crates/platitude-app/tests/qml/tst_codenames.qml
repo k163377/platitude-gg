@@ -415,7 +415,7 @@ Control {
             verify(far.markRoom > 0 && chipOf("main").markRoom > 0, "each behind its mark")
             verify(Qt.colorEqual(far.tint, Theme.textSecondary), "a step down with the line")
             verify(Qt.colorEqual(chipOf("main").tint, Theme.textLink), "the branch stood on, in its own")
-            compare(sharedLine.ToolTip.text, sharedLine.text)
+            compare(sharedLine.tip.words, sharedLine.text)
             compare(sharedLine.tipMarks, sharedLine.marks)
 
             const both = "Deleted on " + root.farName + ", changed on " + root.farName + "-too"

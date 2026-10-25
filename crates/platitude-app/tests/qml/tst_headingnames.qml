@@ -10,8 +10,6 @@ Item {
     id: root
     width: 1400
     height: 400
-    // What `Main.qml` and the popup bases declare (rules-refs/app-ui.md「ToolTip.policy」).
-    ToolTip.policy: ToolTip.Manual
 
     readonly property string longName:
         "bugfix/keep-the-long-branch-names-readable-in-every-menu-card-tooltip-question-bar-notice-and-the-button"
@@ -19,8 +17,8 @@ Item {
         return "Deleted " + name + " here"
     }
 
-    PointerWatch { id: hand }
-    SharedToolTip {
+    HandWatch { id: hand }
+    TipSeat {
         id: shared
         host: root
         hand: hand
@@ -83,8 +81,8 @@ Item {
             const on = nameCharAt(held, 3)
             mouseMove(root, on.x, on.y)
             tryVerify(() => held.cutPointed, undefined, "the hand is on the cut name")
-            tryVerify(() => shared.sharedTip.visible && shared.sharedTip.parent === held, undefined, "the tip is up")
-            compare(shared.sharedTip.text, root.sentence(root.longName), "the whole line")
+            tryVerify(() => held.tip.shown, undefined, "the tip is up")
+            compare(shared.box.text, root.sentence(root.longName), "the whole line")
 
             const off = held.mapToItem(root, held.charRect(2).x, held.charRect(2).y + held.charRect(2).height / 2)
             mouseMove(root, off.x, off.y)

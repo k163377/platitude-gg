@@ -1,6 +1,4 @@
 import QtQuick
-// For the attached ToolTip alone.
-import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
@@ -14,11 +12,14 @@ Item {
     id: root
     width: 300
     height: 200
-    // What `Main.qml` and the popup bases declare (rules-refs/app-ui.md「ToolTip.policy」).
-    ToolTip.policy: ToolTip.Manual
 
-    /// The panel's count, as the rows are handed it (`SidebarRowGestures.handMoves`).
-    property int handMoves: 0
+    // The window's tooltip, as `Main` keeps it, and the panel's hand, as the sidebar keeps it (`SidebarPane`): the
+    // rows read their light off the latter.
+    HandWatch { id: hand }
+    TipSeat {
+        host: root
+        hand: hand
+    }
 
     Column {
         id: rows
@@ -47,8 +48,7 @@ Item {
             behind: 0
             listWidth: rows.width
             height: Theme.rowHeight + (rows.firstOpen ? Theme.rowHeight * 3 : 0)
-            handMoves: root.handMoves
-            handCounted: true
+            paneHand: hand
             kindHint: "worktree"
         }
         NavItemDelegate {
@@ -72,26 +72,29 @@ Item {
             behind: 0
             listWidth: rows.width
             height: Theme.rowHeight
-            handMoves: root.handMoves
+            paneHand: hand
         }
     }
 
-    /// Another target for the shared box, as the next section the hand walks onto is (`SharedToolTip.handOver`).
+    /// Another target for the window's one box, as the next section the hand walks onto is (`TipSeat`'s handover).
     Item {
         id: elsewhere
         width: 40
         height: 20
         property bool asking: false
-        ToolTip.visible: elsewhere.asking
-        ToolTip.text: "somewhere else"
+        readonly property TipAsk elsewhereTip: TipAsk {
+            target: elsewhere
+            asked: elsewhere.asking
+            words: "somewhere else"
+        }
     }
 
     TestCase {
         name: "NavRowLight"
         when: windowShown
 
-        /// Rows read the hand a turn after the panel counts it (`NavItemDelegate.syncHover` on `Qt.callLater`). The
-        /// queue runs in order and a re-queued call moves to the back (qqmldelayedcallqueue.cpp
+        /// A turn, for a reading that the rows make on the delivery itself (`NavItemDelegate.syncHand`): a call queued
+        /// after the move runs after everything the move reached (qqmldelayedcallqueue.cpp
         /// `addUniquelyAndExecuteLater` erases the entry and appends it), so this call landing means the rows have
         /// read.
         function rowsRead() {
@@ -102,10 +105,8 @@ Item {
 
         function test_the_row_the_hand_walked_onto_keeps_the_light() {
             rows.firstOpen = false
-            root.handMoves = 0
 
             mouseMove(top, 100, Theme.rowHeight / 2)
-            root.handMoves++
             tryVerify(() => top.pointed, undefined, "the row the hand walked onto is lit")
             verify(!below.pointed, "and the one below it is not")
 
@@ -120,7 +121,6 @@ Item {
         /// out — walking down to the lines would be a second rest for it (デザイン規約 §左メニューの所作).
         function test_the_rest_on_the_rows_own_line_asks_for_the_supplement() {
             rows.firstOpen = false
-            root.handMoves = 0
             top.opensFacts = true
             top.rowKey = "worktree:topic"
             top.openKey = "worktree:topic"
@@ -128,11 +128,9 @@ Item {
 
             // Start off the row, so the answer below is this rest's and not the previous case's pointer.
             mouseMove(below, 100, Theme.rowHeight / 2)
-            root.handMoves++
             tryVerify(() => top.factsItem.says === "", undefined, "nothing is asked for off a row nobody is on")
 
             mouseMove(top, 100, Theme.rowHeight / 2)
-            root.handMoves++
             tryVerify(() => top.factsItem.says === top.factsPath, undefined,
                       "the hand on the row's own line asks for where the worktree stands")
             tryVerify(() => top.factsTipOut, undefined, "and the box comes out on the rest already taken")
@@ -143,7 +141,6 @@ Item {
         /// (デザイン規約 §hover のツールチップ「hover が出した字は選べて、コピーできる」).
         function test_a_row_holds_itself_open_under_its_own_supplement() {
             rows.firstOpen = false
-            root.handMoves = 0
 
             // The row opens and puts the path out; `pointedTipRow` stands in for the hand resting on its name.
             top.opensFacts = true
@@ -152,13 +149,13 @@ Item {
             verify(top.factsItem !== null, "the row has its lines open")
             top.pointedTipRow = top.index
             tryVerify(() => top.factsTipOut, undefined, "and the supplement is standing on it")
-            // The row takes the light a turn after the box comes out (`NavItemDelegate.onFactsTipOutChanged`).
+            // The row takes the light while its supplement's box stands (`NavItemDelegate.pointed` reads
+            // `factsTipOut`).
             tryVerify(() => top.pointed, undefined, "and the row wears the light its supplement holds")
 
             // The hand walks off the row into the tip and the panel counts the move; the claim is what the row reads
             // a turn later.
             mouseMove(below, 100, Theme.rowHeight / 2)
-            root.handMoves++
             rowsRead()
             verify(top.pointed, "the row stays the row the reader is on while its own supplement stands")
 
@@ -166,11 +163,10 @@ Item {
             tryVerify(() => !top.pointed, undefined, "the row gives up the light with the words it put out")
         }
 
-        /// The shared box is handed to another target without this row being told (`SharedToolTip.handOver`), so a
-        /// row reading its own attached property would stay open behind a hand long gone.
+        /// The one box is handed to another target without this row being told (`TipSeat`'s handover), so a row
+        /// reading anything but the seat's own answer would stay open behind a hand long gone.
         function test_a_row_lets_go_when_the_box_is_handed_to_another_target() {
             rows.firstOpen = false
-            root.handMoves = 0
             elsewhere.asking = false
 
             top.opensFacts = true
@@ -190,17 +186,13 @@ Item {
 
         function test_a_hand_that_moves_takes_the_light_with_it() {
             rows.firstOpen = false
-            root.handMoves = 0
 
             mouseMove(top, 100, Theme.rowHeight / 2)
-            root.handMoves++
             tryVerify(() => top.pointed, undefined, "the hand is on the first row")
 
             mouseMove(below, 100, Theme.rowHeight / 2)
-            root.handMoves++
             tryVerify(() => below.pointed, undefined, "the row it walked to takes the light")
-            // Waited for: the count here is raised by hand with the move, so the rows can read before Qt hands the
-            // hover on (the panel's own count is raised by the delivery itself).
+            // Waited for: the rows read the panel's hand as Qt delivers the move to it (`HandWatch`).
             tryVerify(() => !top.pointed, undefined,
                       "and the one it left gives it up — the light stands on one row")
         }

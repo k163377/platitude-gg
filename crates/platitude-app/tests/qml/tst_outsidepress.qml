@@ -35,7 +35,7 @@ Item {
         }
     }
 
-    /// A hover card (`HoverCardHost` opens every `AppCard`), under the policy a press outside closes.
+    /// A hover card (`HoverSeat` opens every `AppCard`), under the policy a press outside closes.
     AppCard {
         id: hoverCard
         width: 100

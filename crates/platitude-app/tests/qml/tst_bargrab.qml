@@ -13,12 +13,10 @@ Item {
     id: root
     width: 400
     height: 400
-    // What `Main.qml` and the popup bases declare (rules-refs/app-ui.md「ToolTip.policy」).
-    ToolTip.policy: ToolTip.Manual
 
-    PointerWatch { id: hand }
+    HandWatch { id: hand }
 
-    SharedToolTip {
+    TipSeat {
         id: shared
         host: root
         hand: hand
@@ -62,9 +60,14 @@ Item {
             }
         }
     }
-    HoverCardHost {
+    readonly property HoverSeat peekKeep: HoverSeat {
         id: peekKeep
         card: peekCard
+        onOpenAsked: peekCard.open()
+    }
+    /// A hand come onto what the card hangs off: the card opens at once, as the owners' cards do.
+    function askPeek() {
+        peekKeep.point({ "key": "peek" }, true)
     }
 
     /// A target asked while the bar is held — what a row reused under the hand does (it takes the hover afresh), with
@@ -76,8 +79,11 @@ Item {
         y: 250
         width: 160
         height: 40
-        ToolTip.text: "asked"
-        ToolTip.visible: root.askedWhileHeld
+        readonly property TipAsk askerTip: TipAsk {
+            target: asker
+            asked: root.askedWhileHeld
+            words: "asked"
+        }
     }
 
     /// A box that answers typing, not a hand (`NavNameBox`'s refusal): it says so the way the box does.
@@ -87,9 +93,12 @@ Item {
         y: 250
         width: 200
         height: 40
-        readonly property bool tipTyped: root.refusedNow
-        ToolTip.text: "refused"
-        ToolTip.visible: typedBox.tipTyped
+        readonly property TipAsk typedTip: TipAsk {
+            target: typedBox
+            asked: root.refusedNow
+            typed: true
+            words: "refused"
+        }
     }
     // A bar over rows that ask for nothing, so the hand reaching it does not take the shared box off the name box —
     // which any hover ask does, bar or no bar.
@@ -112,7 +121,6 @@ Item {
         when: windowShown
 
         function initTestCase() {
-            shared.dressToolTip()
             for (let i = 0; i < 60; ++i)
                 files.append({ "path": "src/file" + i + ".txt", "name": "file" + i + ".txt", "change": "M" })
         }
@@ -120,15 +128,14 @@ Item {
         function init() {
             // A corner nothing reaches, and the beat the box leaves on.
             mouseMove(root, root.width - 1, root.height - 1)
-            peekKeep.pointedAt = false
+            peekKeep.takeDown("init", false)
+            peekKeep.latchedKey = ""
             root.askedWhileHeld = false
             root.refusedNow = false
-            peekCard.close()
             list.contentY = 0
             cardList.contentY = 0
-            // `keeping` too: the box falls first and is put back a turn later for the beat, so down alone can be read
-            // in between — and the put-back box then stands where the next case's hand goes.
-            tryVerify(() => !shared.sharedTip.visible && !shared.keeping && !peekCard.visible, undefined,
+            // The beat too: a box the beat is still keeping up stands where the next case's hand goes.
+            tryVerify(() => !shared.box.visible && !shared.settling && !peekCard.visible, undefined,
                       "each case starts with nothing out")
             // The rows are laid out a frame after they are added; the bar stands once they overflow.
             tryVerify(() => barOf(list).visible, undefined, "the list has somewhere to go")
@@ -159,16 +166,16 @@ Item {
             return bar.contentItem.y + bar.contentItem.height / 2
         }
         /// The box is out and settled on the target it came out on. A list that has just built its rows can hand the
-        /// row under the hand to a new delegate, and the box then goes down and counts again (`SharedToolTip.handOver`)
-        /// — a press landing in that turn would be credited with the fall.
+        /// row under the hand to a new delegate, and the box then goes down and counts again (the seat's handover) —
+        /// a press landing in that turn would be credited with the fall.
         function tipStands() {
-            const tip = shared.sharedTip
-            return tip.visible && shared.standing === tip.parent
+            const tip = shared.box
+            return tip.visible && shared.shownNow && shared.current !== null && tip.parent === shared.current.target
         }
 
         // The case this was found by: the box of the row under the bar stands, the bar is taken, and the rows move.
         function test_a_the_box_goes_when_the_bar_is_taken() {
-            const tip = shared.sharedTip
+            const tip = shared.box
             const bar = barOf(list)
             const x = bar.width / 2
             const y = thumbY(bar)
@@ -200,7 +207,7 @@ Item {
 
         // The hand takes the bar before the row's rest is over: the count goes with the box.
         function test_b_a_rest_already_counting_opens_nothing_while_held() {
-            const tip = shared.sharedTip
+            const tip = shared.box
             const bar = barOf(list)
             const x = bar.width / 2
             const y = thumbY(bar)
@@ -215,7 +222,7 @@ Item {
         // Let go before that rest would have run out: it is not waiting on the far side of the release either. The
         // row under the still hand never stopped being hovered, so nothing asks again until the hand moves.
         function test_b_the_rest_does_not_outlive_a_short_hold() {
-            const tip = shared.sharedTip
+            const tip = shared.box
             const bar = barOf(list)
             const x = bar.width / 2
             const y = thumbY(bar)
@@ -232,8 +239,8 @@ Item {
 
         // The exception: the bar is the card's own, and the hand holding it is reading the card.
         function test_c_the_card_the_bar_is_in_stays() {
-            const tip = shared.sharedTip
-            peekCard.open()
+            const tip = shared.box
+            root.askPeek()
             tryVerify(() => peekCard.opened, undefined, "the card is out")
             const bar = barOf(cardList)
             tryVerify(() => bar.visible, undefined, "the card's rows have somewhere to go")
@@ -241,6 +248,9 @@ Item {
             const y = thumbY(bar)
             mouseMove(bar, x, y)
             tryVerify(() => peekCard.pointerInside, undefined, "the hand is in the card")
+            // The hand has left what the card hangs off for the card: inside it, the card is held — told once the hand
+            // is in, so no beat runs meanwhile.
+            peekKeep.unpoint("peek")
             tryVerify(tipStands, undefined, "and the row under it puts its box out")
 
             take(bar, x, y)
@@ -262,9 +272,8 @@ Item {
 
         // A bar outside the card: what the card hangs off is about to slide from under the hand.
         function test_d_a_bar_outside_the_card_takes_it_down() {
-            peekCard.open()
             // What the card hangs off still has the hand, as far as the card was told.
-            peekKeep.pointedAt = true
+            root.askPeek()
             tryVerify(() => peekCard.opened, undefined, "the card is out")
             const bar = barOf(list)
             const x = bar.width / 2
@@ -282,24 +291,24 @@ Item {
             const y = thumbY(bar)
             mouseMove(bar, x, y)
             take(bar, x, y)
-            peekCard.open()
+            root.askPeek()
             verify(!peekCard.visible, "a card asked for while a bar outside it is held does not come out")
             root.askedWhileHeld = true
-            verify(!shared.sharedTip.visible, "nor does a box")
+            verify(!shared.box.visible, "nor does a box")
             letGo(bar, x, y)
 
-            peekCard.open()
+            root.askPeek()
             tryVerify(() => peekCard.opened, undefined, "and a card opens as ever once the bar is let go")
             root.askedWhileHeld = false
             root.askedWhileHeld = true
-            tryVerify(() => shared.sharedTip.visible, undefined, "and so does a box")
+            tryVerify(() => shared.box.visible, undefined, "and so does a box")
             root.askedWhileHeld = false
         }
 
         // What hover did not open is not the bar's to close: a name box's refusal answers what was typed, and in the
         // folded rail's peek the box stays open while the peek's bar looks through the names.
         function test_f_a_box_that_answers_typing_stays() {
-            const tip = shared.sharedTip
+            const tip = shared.box
             root.refusedNow = true
             tryVerify(() => tip.visible && tip.parent === typedBox, undefined, "the refusal is up")
             const bar = barOf(quietList)
@@ -311,7 +320,9 @@ Item {
             verify(tip.visible && tip.parent === typedBox, "the bar leaves the refusal up")
             root.refusedNow = false
             root.refusedNow = true
-            verify(tip.visible && tip.parent === typedBox, "and one asked for while the bar is held comes out")
+            // After its rest, as any refusal (規約 §hover のツールチップ「入力の拒否への補足は一律」).
+            tryVerify(() => tip.visible && tip.parent === typedBox, undefined,
+                      "and one asked for while the bar is held comes out")
             letGo(bar, x, y)
         }
     }

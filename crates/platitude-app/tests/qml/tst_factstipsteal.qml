@@ -11,12 +11,17 @@ Item {
     id: root
     width: 400
     height: 200
-    // What `Main.qml` and the popup bases declare (rules-refs/app-ui.md「ToolTip.policy」).
-    ToolTip.policy: ToolTip.Manual
 
     property bool pointed: false
     /// How often `pointed` has changed — what a blink would run up.
     property int flips: 0
+
+    // The window's tooltip, as `Main` keeps it.
+    HandWatch { id: hand }
+    TipSeat {
+        host: root
+        hand: hand
+    }
 
     NavRowFacts {
         id: facts
@@ -28,15 +33,15 @@ Item {
         path: "C:/Users/somebody/IdeaProjects/project/.claude/worktrees/d"
     }
 
-    // The lines' own hover, read as the row reads it (`NavItemDelegate.syncHover`); a `HoverHandler` here would be a
-    // second reader of the same pointer.
+    // A sampler of the path tip standing (`NavRowFacts.tipShown`, its `TipAsk.shown`), counting its flips; a
+    // `HoverHandler` here would be a second reader of the same pointer.
     Timer {
         id: watch
         interval: 16
         repeat: true
         running: true
         onTriggered: {
-            const on = facts.ToolTip.visible
+            const on = facts.tipShown
             if (on !== root.pointed) {
                 root.pointed = on
                 root.flips++
@@ -50,7 +55,7 @@ Item {
 
         function test_the_supplement_stands_still_under_a_hand_that_stays() {
             mouseMove(facts, 100, 30)
-            tryVerify(() => facts.ToolTip.visible, undefined, "the rest over the lines opens the path")
+            tryVerify(() => facts.tipShown, undefined, "the rest over the lines opens the path")
             // The watch is a sampler: until it has met the tip standing, the tip's own arrival would count below as
             // the blink.
             tryVerify(() => root.pointed, undefined, "and the watch has met it standing")
@@ -61,22 +66,22 @@ Item {
             // waits(paced): the subject is a state that must **not** change, so the wait is the window it is watched
             // over; nothing here answers sooner.
             wait(Metrics.tipDelayMs * 3)
-            verify(facts.ToolTip.visible, "and it is still up with the hand where it was")
+            verify(facts.tipShown, "and it is still up with the hand where it was")
             compare(root.flips, stood, "having neither gone down nor come back in between")
         }
 
-        /// Leaving the lines is the first step of the walk to the box, and the attached property writes `text`
-        /// straight through to the shared instance while it owns it — words bound to the ask would be wiped on the
-        /// way out, and the box `SharedToolTip.reopen` puts back would be empty.
+        /// Leaving the lines is the first step of the walk to the box, and the box follows its target's words while
+        /// it stands — words bound to the ask would be wiped on the way out, and the box the beat keeps up would be
+        /// empty.
         function test_the_box_keeps_its_words_when_the_hand_sets_off_for_it() {
             mouseMove(facts, 100, 30)
-            tryVerify(() => facts.ToolTip.visible, undefined, "the rest over the lines opens the path")
-            const box = facts.ToolTip.toolTip
+            tryVerify(() => facts.tipShown, undefined, "the rest over the lines opens the path")
+            const box = Tips.box
             tryCompare(box, "text", facts.path, undefined, "and the box is wearing it")
 
             // The box is a popup over the panel, so the lines stop being asked.
             mouseMove(root, root.width - 1, root.height - 1)
-            tryVerify(() => !facts.ToolTip.visible, undefined, "the ask falls with the pointer")
+            tryVerify(() => facts.says === "", undefined, "the ask falls with the pointer")
             compare(box.text, facts.path, "the box still has the words the hand is walking towards")
         }
     }

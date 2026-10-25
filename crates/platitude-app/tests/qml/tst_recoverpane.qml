@@ -70,6 +70,9 @@ Item {
         }
 
         function init() {
+            // The hand parked off the pane: rows dealt under a hand that stayed would hold it (`HandWatch.rowsMoved`).
+            mouseMove(root, root.width - 1, root.height - 1)
+            tryVerify(() => !pane.hand.known)
             page.recoverEntries = []
             page.recoverPick = -1
             page.recoverAnswered = true
@@ -172,6 +175,74 @@ Item {
             verify(pane.restOnShown(0))
             tryVerify(() => pane.cardOpen, undefined, "the card opened")
             compare(pane.cardAt, 0)
+        }
+
+        /// Enough entries to overflow the list.
+        function manyEntries(n) {
+            const out = []
+            for (let i = 0; i < n; i++)
+                out.push(entry("Reset main-" + i))
+            return out
+        }
+        /// The row at `index` of the list, as the real pointer reaches it.
+        function rowAt(index) {
+            return pane.entryList.itemAtIndex(index)
+        }
+        function restOnRow(index) {
+            const row = rowAt(index)
+            verify(row !== null, "the row is built")
+            mouseMove(pane.entryList, pane.entryList.width / 2, index * Theme.rowHeight + Theme.rowHeight / 2
+                                                                 - pane.entryList.contentY)
+            tryVerify(() => row.handOn, undefined, "the hand is on the row")
+            tryVerify(() => pane.cardOpen && pane.cardAt === index, undefined, "its card is out after the rest")
+        }
+
+        /// The rows read the hand off the pane, as the graph's do: the row the hand walked onto lights and opens its
+        /// card after the rest.
+        function test_a_hand_that_walks_to_an_entry_lights_it_and_opens_its_card() {
+            page.recoverEntries = manyEntries(30)
+            tryVerify(() => rowAt(2) !== null)
+            restOnRow(2)
+        }
+
+        /// The list scrolling under a still hand: the card goes, the row that came under the hand lights, and its card
+        /// comes only once the hand has moved.
+        function test_the_rows_scrolling_under_a_still_hand_open_nothing() {
+            page.recoverEntries = manyEntries(30)
+            tryVerify(() => rowAt(2) !== null)
+            restOnRow(2)
+            pane.entryList.contentY = Theme.rowHeight * 3
+            tryVerify(() => !pane.cardOpen, undefined, "the card went with the move")
+            verify(pane.hand.stillHeld, "the hand is held")
+            // waits(paced): a card that must **not** come back under the still hand; the rest it would take.
+            wait(Metrics.tipDelayMs * 2)
+            verify(!pane.cardOpen, "nothing opened under a hand that did not move")
+            const under = rowAt(5)
+            verify(under !== null && under.handOn, "the row that came under the hand is lit")
+            // A tremor is the hand's own move: the row's card comes after the rest.
+            mouseMove(pane.entryList, pane.entryList.width / 2 + 2, 2 * Theme.rowHeight + Theme.rowHeight / 2)
+            tryVerify(() => pane.cardOpen && pane.cardAt === 5, undefined,
+                      "a move asks for the card of the row under it")
+            verify(under.handOn, "and the row stays lit")
+        }
+
+        /// The entries dealt again under a still hand (the filter, a reread): the same rule.
+        function test_the_rows_dealt_again_under_a_still_hand_open_nothing() {
+            page.recoverEntries = manyEntries(30)
+            tryVerify(() => rowAt(2) !== null)
+            restOnRow(2)
+            page.recoverEntries = manyEntries(31)
+            tryVerify(() => !pane.cardOpen, undefined, "the card went with the rows")
+            verify(pane.hand.stillHeld, "the hand is held")
+            // waits(paced): a card that must **not** come back under the still hand; the rest it would take.
+            wait(Metrics.tipDelayMs * 2)
+            verify(!pane.cardOpen, "nothing opened under a hand that did not move")
+            tryVerify(() => rowAt(2) !== null && rowAt(2).handOn, undefined, "the row dealt under it is lit")
+            // A tremor is the hand's own move: the card of the row dealt under it comes after the rest — its ask was
+            // kept through the deal, whichever the rows read the hand in.
+            mouseMove(pane.entryList, pane.entryList.width / 2 + 2, 2 * Theme.rowHeight + Theme.rowHeight / 2)
+            tryVerify(() => pane.cardOpen && pane.cardAt === 2, undefined,
+                      "a move asks for the card of the row under it")
         }
     }
 }

@@ -20,7 +20,7 @@ Item {
     property int pointedRow: -1
 
     /// How often the ancestor was told about the pointer, and how often the place it was told about had changed —
-    /// the two the panel has to tell apart (`SidebarRowGestures.handMoves`).
+    /// the two the panel has to tell apart (`HandWatch.moves`).
     property int stirs: 0
     property int moves: 0
     property point handAt: Qt.point(-1, -1)

@@ -9,6 +9,13 @@ Item {
     width: 200
     height: 60
 
+    // The window's tooltip, as `Main` keeps it.
+    HandWatch { id: hand }
+    TipSeat {
+        host: root
+        hand: hand
+    }
+
     DiffViewToggle {
         id: toggle
         height: Theme.iconXl

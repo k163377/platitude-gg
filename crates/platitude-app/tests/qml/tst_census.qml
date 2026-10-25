@@ -115,6 +115,16 @@ Item {
         AppMenuItem { text: "Row" }
     }
 
+    // An item holding a part by name, as the product holds its tips and hover seats: in no `data` of its.
+    Item {
+        id: holder
+        width: 10
+        height: 10
+        readonly property TipAsk heldTip: TipAsk {
+            target: holder
+        }
+    }
+
     TestCase {
         name: "Census"
         when: windowShown
@@ -141,6 +151,7 @@ Item {
             page.pageCarriedSettled = true
             census.waiting = false
             census.armed = false
+            census.harnessBranch = null
             window.curPage = null
         }
 
@@ -215,6 +226,15 @@ Item {
             verify(census.met.FileRowDelegate !== true)
             verify(census.seen.FileRowDelegate === true)
             verify(census.lost().indexOf("FileRowDelegate") >= 0)
+        }
+
+        function test_a_part_an_item_holds_by_name_is_counted() {
+            compare(read(holder), ["TipAsk"])
+        }
+
+        function test_a_part_an_item_of_the_harness_holds_by_name_is_not_counted() {
+            census.harnessBranch = root
+            compare(read(holder), [])
         }
 
         function test_a_closed_submenu_reached_first_as_owned_then_as_offered_is_counted() {

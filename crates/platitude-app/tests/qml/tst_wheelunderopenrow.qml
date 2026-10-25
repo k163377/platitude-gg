@@ -1,24 +1,20 @@
 import QtQuick
-// For the attached ToolTip alone.
-import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
 // The reader moving the list under a still hand (デザイン規約 §左メニューの所作, §hover のツールチップ「的が手の下で
 // 動けば hover は外れ、出したものはその瞬間に消える」): the row that slides out from under the hand drops what it put out
-// — its open lines, its tip — at once and keeps its light until the hand moves, and closing gives back only what the
-// opening scrolled, never where the reader sent the list.
+// — its open lines, its tip — at once and hands its light to the row now under the hand, and closing gives back only
+// what the opening scrolled, never where the reader sent the list.
 //
 // The real list (`NavList`) and rows, in a panel that counts the hand the way the sidebar does
-// (`SidebarPane.handWatch`), with the sidebar's gestures cut down to the open row's key.
+// (`SidebarPane.handWatch`), on the real open row (`OpenRowSeat`).
 Item {
     id: root
-    // Room right of the list, where a row's tip stands (`NavItemDelegate.tipRowSide`) — not over the hand.
+    // Room right of the list, where a row's tip stands (`TipAsk.rowSide`) — not over the hand.
     width: 560
     // Room below the list, where the hand goes to be on no row.
     height: Theme.rowHeight * 8
-    // What `Main.qml` and the popup bases declare (rules-refs/app-ui.md「ToolTip.policy」).
-    ToolTip.policy: ToolTip.Manual
 
     /// The section's model, cut down: rows by name, and one upstream line under every branch (`NavFacts.answers`) —
     /// also what a worktree's row asks about the branch it holds, as the branches' section would answer.
@@ -58,54 +54,55 @@ Item {
         id: worktrees
     }
 
-    /// `SidebarRowGestures`, cut down: the key a row hands up becomes the open one, and the hand is counted.
+    /// `SidebarRowGestures`, cut down to what the rows read off it, around the real open row (`OpenRowSeat`, as the
+    /// gestures hold it): the key a row hands up, the seat, and what holds and closes it.
     QtObject {
         id: gestures
-        property string openKey: ""
         property string activeKey: ""
         property string editKey: ""
-        property int handMoves: 0
-        property point handAt: Qt.point(-1, -1)
         property bool menuOpen: false
-        property bool menuFromFacts: false
         property string editMode: ""
         property string editText: ""
         property bool editRefused: false
         property string editRefusedWhy: ""
         property string editRefusedMark: ""
         property var reclick: null
-        function openFacts(key, at) {
-            gestures.openKey = key
+        readonly property OpenRowSeat openRow: OpenRowSeat {
+            id: openRowSeat
+            hand: hand
+            editKey: gestures.editKey
+            host: panel
         }
-        function closeFacts(key) {
-            if (gestures.openKey === key)
-                gestures.openKey = ""
+        readonly property alias openKey: openRowSeat.openKey
+        readonly property alias openSeat: openRowSeat.seat
+        readonly property alias menuOnOpenRow: openRowSeat.menuOnRow
+        function openFacts(key, at, row, now, model, name) {
+            openRowSeat.openFacts(key, at, row, now, model, name)
+        }
+        function closeFacts(key, now) {
+            openRowSeat.closeFacts(key, now)
         }
         function noteClick(key) {
         }
-        function handStirred(at) {
-            gestures.handAt = at
-            gestures.handMoves++
-        }
+    }
+
+    // The window's tooltip, as `Main` keeps it.
+    HandWatch { id: windowHand }
+    TipSeat {
+        host: root
+        hand: windowHand
     }
 
     Item {
         id: panel
         anchors.fill: parent
-        property point handAt: Qt.point(-1, -1)
-        HoverHandler {
-            id: handWatch
-            onPointChanged: {
-                if (handWatch.point.position.x === panel.handAt.x
-                        && handWatch.point.position.y === panel.handAt.y)
-                    return
-                panel.handAt = handWatch.point.position
-                gestures.handStirred(handWatch.point.scenePosition)
-            }
-            onHoveredChanged: {
-                panel.handAt = Qt.point(-1, -1)
-                gestures.handStirred(handWatch.hovered ? handWatch.point.scenePosition : Qt.point(-1, -1))
-            }
+        /// Where the open row's lines are, as the sidebar answers it (`NavSections.openFactsItem`).
+        function openFactsItem() {
+            return list.openFactsItem() ?? worktreeList.openFactsItem()
+        }
+        // The panel's hand, as the sidebar keeps it (`SidebarPane`): the rows read their light and their rest off it.
+        HandWatch {
+            id: hand
         }
 
         NavList {
@@ -114,8 +111,19 @@ Item {
             height: Theme.rowHeight * 5
             sectionModel: rows
             gestures: gestures
+            paneHand: hand
             offersFacts: true
             kindHint: "branch"
+        }
+        /// The current branch's stand-in on the list's top edge, as `NavSections` lays one over BRANCHES
+        /// (`HeadPinRow`, the list's `shield`): opaque, over the top row.
+        Rectangle {
+            id: cover
+            parent: list
+            width: list.width
+            height: Theme.rowHeight
+            visible: false
+            color: Theme.bgSurface
         }
         /// WORKTREES in the same place, shown for the one case on it — a list of its own, as in the sidebar: a view
         /// handed another model keeps rows it uses again on the old model's names.
@@ -126,6 +134,7 @@ Item {
             expanded: false
             sectionModel: worktrees
             branchesModel: worktrees
+            paneHand: hand
             gestures: gestures
             offersFacts: true
             kindHint: "worktree"
@@ -169,6 +178,8 @@ Item {
         }
         /// And ends with the list as it began: BRANCHES, the height of five rows.
         function cleanup() {
+            cover.visible = false
+            list.shield = null
             testCase.handOff()
             worktreeList.expanded = false
             list.expanded = true
@@ -185,6 +196,9 @@ Item {
             const view = testCase.view
             view.contentY = y
             view.forceLayout()
+            // A frame asked for: the list may already stand at `y`, and `waitForRendering` only waits for the next one
+            // (rules-refs/app-ui.md「`frameSwapped` を待つなら頼むのは `window.update()`」).
+            view.Window.window.update()
             verify(waitForRendering(view), "the list is drawn where it was put")
         }
 
@@ -198,6 +212,12 @@ Item {
             const row = view.itemAtIndex(index)
             tryVerify(() => row.factsItem !== null && row.factsItem.height > 0, undefined,
                       "its lines are built under it")
+            // The view lays its rows out again in its own pass, after the row grew: the row below stands under the
+            // lines only once it has, and a place reckoned from the lines before then is on another row.
+            tryVerify(() => {
+                const next = view.itemAtIndex(index + 1)
+                return next === null || next.y === row.y + row.height
+            }, undefined, "the rows below stand under its lines")
             return row
         }
         /// A notch of the wheel up — the rows move down past the hand — sent its whole way: three rows, or to the
@@ -219,20 +239,88 @@ Item {
             const opened = row.index
             compare(list.contentY, rest, "a row that opened in full view moved nothing")
 
-            const heard = gestures.handMoves
+            const heard = hand.moves
             testCase.wheelUp(handY)
             tryCompare(gestures, "openKey", "", undefined, "the row slid out from under the hand and its lines went")
             const sent = list.contentY
-            compare(gestures.handMoves, heard, "with the hand never having moved")
+            compare(hand.moves, heard, "with the hand never having moved")
             compare(row.index, opened, "the row is still the one that opened")
-            verify(row.washLit, "the row that slid away keeps its light until the hand moves")
+            // The light goes to the row under the hand, as Qt's own lists hand their hover on with a scroll (the wash
+            // is no judgement — デザイン規約 §左メニューの所作「手が動いたかの見切り」).
+            verify(!row.washLit, "the row that slid away lets its light go")
+            verify(list.rowWashLit(list.indexAt(testCase.handX, sent + handY)), "to the row under the hand")
 
-            // The hand moves a pixel: the light goes to the row under it, and nothing scrolls.
+            // The hand moves a pixel: nothing scrolls, and the light stays where the hand is.
             mouseMove(panel, testCase.handX + 1, handY)
             testCase.turnPassed()
             compare(list.contentY, sent, "the hand moving takes back nothing the wheel sent")
-            verify(!row.washLit, "the row that slid away gives the light up")
-            verify(list.rowWashLit(list.indexAt(testCase.handX, sent + handY)), "to the row under the hand")
+            verify(!row.washLit, "the row that slid away stays dark")
+            verify(list.rowWashLit(list.indexAt(testCase.handX, sent + handY)), "the row under the hand stays lit")
+        }
+
+        /// The reader's scroll stepping rows under the hand at once (the middle button's drift, `AppListView.hand`):
+        /// the row that came under it asked in the same move as the open row that went let go — the rows read the hand
+        /// again in the order their delegates heard it first — and that ask stands: the hand's own move opens it after
+        /// the rest. Up, then down, so the row that came is read before the row that went in one of the two steps,
+        /// whichever order the delegates hear in.
+        function test_the_row_a_step_brings_under_the_hand_opens_once_the_hand_moves() {
+            testCase.scrollTo(Theme.rowHeight * 8)
+            const handY = Theme.rowHeight + 3
+            testCase.restAt(handY)
+            for (const down of [false, true]) {
+                list.hand.scrolling = true
+                list.contentY = list.contentY + (down ? 3 : -3) * Theme.rowHeight
+                list.hand.scrolling = false
+                tryCompare(gestures, "openKey", "", undefined, "the row slid away and its lines went")
+                // waits(paced): a row that must **not** open under the still hand; the rest it would take, twice over.
+                wait(Metrics.tipDelayMs * 2)
+                compare(gestures.openKey, "", "nothing opens under a hand that did not move")
+                // Read once the lines that went have folded away: the rows below them close up under the hand.
+                const handX = testCase.handX + (down ? 0 : 1)
+                const index = list.indexAt(handX, list.contentY + handY)
+                verify(index !== testCase.folderRow, "a row that opens is under the hand")
+                mouseMove(panel, handX, handY)
+                tryCompare(gestures, "openKey", list.keyOf(list.sectionModel.get(index).full, ""), undefined,
+                           "the hand's move opens the row under it (" + (down ? "down" : "up") + ")")
+            }
+        }
+
+        /// A row folding its lines moves the rows under the hand, which the reader did not move: the row the hand
+        /// walked to keeps the light, as Qt's own lists keep it on their item (デザイン規約 §左メニューの所作「行が自分で
+        /// 伸び縮みした時だけは、手が歩いて来た行が光を持つ」), until the hand's own move hands it to the row under it.
+        function test_a_row_folding_its_lines_leaves_the_light_on_the_row_the_hand_walked_to() {
+            const top = testCase.restAt(Theme.rowHeight / 2)
+            const lines = top.factsItem.height
+            verify(lines > Theme.rowHeight / 2, "the open row's lines are deep enough to move a row: " + lines)
+            // Down past the lines onto the next row: the hand has left the open row, whose lines fold away.
+            const walkedY = Theme.rowHeight + lines + Theme.rowHeight / 2
+            mouseMove(panel, testCase.handX, walkedY)
+            const walked = list.itemAtIndex(1)
+            verify(walked.washLit, "the hand lit the row it walked to")
+            tryCompare(gestures, "openKey", "", undefined, "the open row closed as the hand left it")
+            tryVerify(() => walked.y < Theme.rowHeight + lines / 2, undefined, "and the rows closed up under the hand")
+            const under = list.itemAtIndex(list.indexAt(testCase.handX, list.contentY + walkedY))
+            verify(under !== null && under !== walked, "another row is under the hand now")
+            verify(walked.washLit, "the row the hand walked to keeps the light")
+            verify(!under.washLit, "the row the fold brought under the hand does not take it")
+            mouseMove(panel, testCase.handX + 1, walkedY)
+            tryVerify(() => under.washLit && !walked.washLit, undefined, "the hand's own move hands it on")
+        }
+
+        /// The stand-in on the list's edge stands over a row (`NavList.shield`): the hand on it is not on that row,
+        /// which neither lights nor opens; with the stand-in gone, the hand's move is on the row.
+        function test_a_row_under_the_stand_in_is_not_under_the_hand() {
+            list.shield = cover
+            cover.visible = true
+            mouseMove(panel, testCase.handX, Theme.rowHeight / 2)
+            // waits(paced): a row that must **not** open or light; the rest it would take, twice over.
+            wait(Metrics.tipDelayMs * 2)
+            compare(gestures.openKey, "", "the row under the stand-in does not open")
+            verify(!list.rowWashLit(0), "nor light")
+            cover.visible = false
+            mouseMove(panel, testCase.handX + 1, Theme.rowHeight / 2)
+            tryCompare(gestures, "openKey", list.keyOf(list.sectionModel.get(0).full, ""), undefined,
+                       "with the stand-in gone, the hand's move is on the row")
         }
 
         /// A row that says its path in a tip (a folder) drops the tip the same way.
@@ -241,16 +329,17 @@ Item {
             const handY = Theme.rowHeight + 3
             mouseMove(panel, testCase.handX, handY)
             const row = list.itemAtIndex(testCase.folderRow)
-            tryVerify(() => row.ToolTip.visible, undefined, "the folder says its path after the rest")
+            tryVerify(() => row.tipShown, undefined, "the folder says its path after the rest")
 
             testCase.wheelUp(handY)
-            tryVerify(() => !row.ToolTip.visible, undefined,
+            tryVerify(() => !row.tipShown, undefined,
                       "the tip goes the moment the row slides from under the hand")
-            verify(row.washLit, "and the row keeps its light until the hand moves")
+            verify(!row.washLit, "and the row lets its light go")
+            verify(list.rowWashLit(list.indexAt(testCase.handX, list.contentY + handY)), "to the row under the hand")
         }
 
         /// A row whose lines have put a tip out (a worktree's path) is held by that tip while the hand walks into
-        /// it — not when the reader's scroll takes the row away: its lines and the tip go at once, its light stays.
+        /// it — not when the reader's scroll takes the row away: its lines, the tip and its light go at once.
         function test_a_row_holding_its_path_tip_drops_it_with_its_lines() {
             list.expanded = false
             worktreeList.expanded = true
@@ -260,16 +349,18 @@ Item {
             const row = testCase.restAt(handY)
             tryVerify(() => row.factsTipOut, undefined, "the path comes out on a second rest")
 
-            // What was open the instant the path went: a row that kept its lines a beat for a hand walking into the
-            // tip (`factsKeep`) is still open then.
+            // What was open once the turn the path went in had run out: a row whose lines the seat held while its tip
+            // stood (`SidebarRowGestures.openTipOut`) would still be open then, a beat behind the tip.
             let openAsTipWent = "unseen"
             const note = () => {
-                if (!row.factsTipOut && openAsTipWent === "unseen")
-                    openAsTipWent = gestures.openKey
+                if (!row.factsTipOut && openAsTipWent === "unseen") {
+                    openAsTipWent = "pending"
+                    Qt.callLater(() => openAsTipWent = gestures.openKey)
+                }
             }
             row.factsTipOutChanged.connect(note)
             // A flick, not the wheel: QtTest's own tip stands over the row's line, where the hand is (the app's stands
-            // beside the list — `SharedToolTip.tipBeside`), and would take the notch.
+            // beside the list — `TipAsk.beside`), and would take the notch.
             const from = worktreeList.contentY
             worktreeList.flick(0, 600)
             tryCompare(worktreeList, "moving", false, undefined, "the flick has come to rest")
@@ -278,7 +369,7 @@ Item {
             compare(openAsTipWent, "", "the path went with the lines — none left up a beat")
             compare(gestures.openKey, "", "the row slid out from under the hand and its lines went")
             testCase.turnPassed()
-            verify(row.washLit, "and the row keeps its light until the hand moves")
+            verify(!row.washLit, "and the row lets its light go")
         }
 
         /// A delegate the view uses again is another row (`ListView.reuseItems`): the light the hand left on one does
