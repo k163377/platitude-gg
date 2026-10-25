@@ -23,12 +23,12 @@ Item {
         onWheel: wheel => under.wheels++
     }
 
-    RecoverEntries {
+    readonly property RecoverEntries words: RecoverEntries {
         id: words
     }
 
     /// The page's side of the list, in the shape `RecoverPane` and `RecoverToggle` read.
-    QtObject {
+    readonly property QtObject page: QtObject {
         id: page
         property var recoverEntries: []
         property int recoverPick: -1

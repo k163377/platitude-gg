@@ -19,7 +19,7 @@ Item {
     /// One stopped merge, its conflicts and an unset identity, at the widths they ask for.
     readonly property var three: [80, 71, 68]
 
-    BandStateShare {
+    readonly property BandStateShare share: BandStateShare {
         id: share
         gap: root.gap
         badgeMinW: root.badgeMin

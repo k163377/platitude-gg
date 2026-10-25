@@ -22,7 +22,7 @@ Control {
     /// A stopped merge with conflicts: two badges, in the page's shape the group reads (`curPage.pageWorktree` / …).
     /// The identity and old-git badges read `AppBackend`, staged empty for these runs (`xtask::qmltest`), so they
     /// stay down.
-    QtObject {
+    readonly property QtObject worktree: QtObject {
         id: worktree
         property string opText: "MERGING"
         property string opAlso: ""
@@ -31,16 +31,16 @@ Control {
         property bool hasConflicts: true
         property int lfsNeeded: 0
     }
-    QtObject {
+    readonly property QtObject graph: QtObject {
         id: graph
         property bool failed: false
         property bool stale: false
     }
-    QtObject {
+    readonly property QtObject tab: QtObject {
         id: tab
         property bool identityReady: true
     }
-    QtObject {
+    readonly property QtObject page: QtObject {
         id: page
         property var pageWorktree: worktree
         property var pageGraph: graph

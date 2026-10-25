@@ -10,12 +10,12 @@ Item {
     width: 200
     height: 600
 
-    QtObject {
+    readonly property QtObject tab: QtObject {
         id: tab
         property int busyCount: 0
         function resolveOperation(how) {}
     }
-    QtObject {
+    readonly property QtObject tree: QtObject {
         id: tree
         property string opText: "REBASING"
         property string opAlso: ""

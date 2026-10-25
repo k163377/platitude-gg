@@ -339,7 +339,7 @@ Item {
         }
     }
 
-    TabMetrics {
+    readonly property TabMetrics tabMetrics: TabMetrics {
         id: tabMetrics
     }
 
@@ -485,7 +485,7 @@ Item {
         onActivated: tabStrip.showFrontTab()
     }
     // Where the strip stands in its run, and the travel that sends it somewhere.
-    TabRun {
+    readonly property TabRun tabRun: TabRun {
         id: tabRun
         view: tabs
     }

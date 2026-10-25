@@ -217,7 +217,7 @@ Item {
     // Keys counted elsewhere are another gesture: the focus moved away drops them (`HoldDriver.focusLost`).
     onActiveFocusChanged: if (!opRow.activeFocus) holdDrive.focusLost()
 
-    HoldDriver {
+    readonly property HoldDriver holdDrive: HoldDriver {
         id: holdDrive
         holdPresses: opRow.holdPresses
         waiting: opRow.waiting

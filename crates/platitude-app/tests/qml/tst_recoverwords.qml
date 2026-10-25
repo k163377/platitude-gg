@@ -7,7 +7,7 @@ import platitude.ui
 Item {
     id: root
 
-    RecoverEntries {
+    readonly property RecoverEntries shown: RecoverEntries {
         id: shown
     }
 

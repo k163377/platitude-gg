@@ -115,7 +115,6 @@ ColumnLayout {
             detailsPane.avatarEditRequested(detailsPane.details.authorName, detailsPane.details.authorEmail)
     }
     /// Automation-only exposures, like `GraphPane.view` (rules-refs/app-ui.md; `AutoActTipVerbs`).
-    readonly property alias authorCards: cards
     readonly property alias messageBlock: block
 
     /// The hand over this pane (`HandWatch`): the choice's rows read their light and their ask off it by geometry,
@@ -137,12 +136,12 @@ ColumnLayout {
                 return
             detailsPane.shownSha = detailsPane.details.shaHex
             paneHand.rowsMoved()
-            cards.follow()
+            authorCards.follow()
         }
     }
 
-    DetailsAuthorCards {
-        id: cards
+    readonly property DetailsAuthorCards authorCards: DetailsAuthorCards {
+        id: authorCards
         host: detailsPane
         block: block
         details: detailsPane.details
@@ -445,18 +444,18 @@ ColumnLayout {
         signaturePointedAt: detailsPane.signaturePointedAt
         summaryPointedAt: detailsPane.summaryPointedAt
         savePointedAt: detailsPane.savePointedAt
-        mateCardInside: cards.matesPointerInside
-        authorCardInside: cards.authorPointerInside
-        parentCardOpen: cards.parentCardOpen
+        mateCardInside: authorCards.matesPointerInside
+        authorCardInside: authorCards.authorPointerInside
+        parentCardOpen: authorCards.parentCardOpen
         onAvatarClicked: detailsPane.avatarClicked()
         onCopyRequested: text => detailsPane.copyRequested(text)
         onParentClicked: oidHex => detailsPane.parentClicked(oidHex)
-        onOpenMateRequested: at => cards.pointMates(at)
-        onSettleMateRequested: cards.settleMates()
-        onOpenParentsRequested: line => cards.pointParents(line)
-        onSettleParentsRequested: cards.settleParents()
-        onOpenAuthorRequested: at => cards.pointAuthor(at)
-        onSettleAuthorRequested: cards.settleAuthor()
+        onOpenMateRequested: at => authorCards.pointMates(at)
+        onSettleMateRequested: authorCards.settleMates()
+        onOpenParentsRequested: line => authorCards.pointParents(line)
+        onSettleParentsRequested: authorCards.settleParents()
+        onOpenAuthorRequested: at => authorCards.pointAuthor(at)
+        onSettleAuthorRequested: authorCards.settleAuthor()
         onEscaped: detailsPane.revertMessage()
         onSaveRequested: detailsPane.submitMessage()
     }

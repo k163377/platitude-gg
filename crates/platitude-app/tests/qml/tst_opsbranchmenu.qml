@@ -12,7 +12,7 @@ Item {
     height: 600
 
     /// All the card asks of a page: the section's answer, one card of the nest at a time.
-    QtObject {
+    readonly property QtObject page: QtObject {
         id: page
         property var rows: []
         property var asked: []

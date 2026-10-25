@@ -46,7 +46,7 @@ Item {
         ListElement { tab_id: 2; title: "sealed-class"; worktree_path: "/src/sc"; worktree_name: "" }
     }
 
-    TabMetrics { id: tabMetrics }
+    readonly property TabMetrics tabMetrics: TabMetrics { id: tabMetrics }
 
     // Wired as `TabStrip` wires its own, less the band's sharing out.
     ListView {

@@ -261,7 +261,7 @@ HoverToolButton {
     onActiveFocusChanged: if (!actionBtn.activeFocus) holdDrive.focusLost()
     // The work goes out at the last press; the full fill waits on it past the floor, and the ring takes over from
     // there. An answer that takes the button away is given at the floor's end (`landed`).
-    HoldDriver {
+    readonly property HoldDriver holdDrive: HoldDriver {
         id: holdDrive
         holdPresses: actionBtn.holdPresses
         waiting: actionBtn.busy

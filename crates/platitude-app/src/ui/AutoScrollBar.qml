@@ -177,7 +177,7 @@ ScrollBar {
         bar.trackRunning = false
     }
 
-    WheelGlide {
+    readonly property WheelGlide ownGlide: WheelGlide {
         id: ownGlide
         view: bar.view
     }

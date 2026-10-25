@@ -294,7 +294,7 @@ Item {
             driver.barrierWrite.start()
         }
     }
-    QtObject {
+    readonly property QtObject commitAnswer: QtObject {
         id: commitAnswer
         property bool armed: false
     }
@@ -627,7 +627,7 @@ Item {
             driver.complete()
         }
     }
-    QtObject {
+    readonly property QtObject halfWatch: QtObject {
         id: halfWatch
         property bool duringOnly: false
         /// The pair below and what the page held, latched at the edge — a later read gives the settled page's numbers.

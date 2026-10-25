@@ -60,7 +60,7 @@ Item {
         return lines.map(line => ({ bold: true, line: root.escaped(line) }))
     }
 
-    QtObject {
+    readonly property QtObject diffModel: QtObject {
         id: diffModel
         property int widestNo: 1234
         property var widestLines: []
@@ -100,7 +100,7 @@ Item {
     }
 
     /// The reach as the pane keeps it: what was picked and measured, and what the rows turned out to be.
-    DiffReach {
+    readonly property DiffReach reach: DiffReach {
         id: reach
         rowsGen: 1
         measured: 0

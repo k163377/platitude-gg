@@ -83,7 +83,7 @@ AppListView {
     // shared with the chip's card (via `GraphPane.noteRowClick`): a pooled delegate would drop or misplace the wait,
     // and the card opens on the chip's seat, so a second click landing on it must still count as the second.
     // Keyed by the ref's kind and name (`encode::Chip::key`) — the same on both surfaces and stable across repaints.
-    ReclickGesture {
+    readonly property ReclickGesture reclick: ReclickGesture {
         id: reclick
         onRenameAsked: (key, names) => graphList.rowRenameRequested(names.oid, names.chip)
     }
@@ -250,7 +250,7 @@ AppListView {
     function haltGlide() {
         wheelGlide.halt()
     }
-    WheelGlide {
+    readonly property WheelGlide wheelGlide: WheelGlide {
         id: wheelGlide
         view: graphList
     }

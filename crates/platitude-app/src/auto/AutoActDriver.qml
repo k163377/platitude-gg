@@ -318,7 +318,7 @@ Item {
             writeBarrier.start()
             return
         }
-        renderedBarrier.begin()
+        barrierRendered.begin()
     }
 
     function complete() {
@@ -452,13 +452,12 @@ Item {
     readonly property int pastLineEnd: 9999
 
     // The render boundary is `AutoShotDriver`'s (rules/app-ui.md §UI 自動化), so completing is all this does.
-    QtObject {
-        id: renderedBarrier
+    readonly property QtObject barrierRendered: QtObject {
+        id: barrierRendered
         function begin() {
             driver.complete()
         }
     }
-    readonly property alias barrierRendered: renderedBarrier
     // Arms `statusOwedFrom` for a run with no index of its own (`owedStatusAt`) on the first answer after the arm
     // that was asked for (`RepoTab.writeAnswerAsked`): the opening and interval fetches answer on the same notify,
     // and arming on one waits for a report a status read before the press already carries.
@@ -582,7 +581,7 @@ Item {
     }
     function afterTreeSettled() {
         if (driver.graphGoneOid === "")
-            renderedBarrier.begin()
+            barrierRendered.begin()
         else
             graphBarrier.start()
     }
@@ -622,7 +621,7 @@ Item {
             if (Harness.autoAct === "stash-lands")
                 driver.awaitStashLanding()
             else
-                renderedBarrier.begin()
+                barrierRendered.begin()
         }
     }
     /// The two landings a press can have — where the write put the reader (`AutoActLandings`).
@@ -666,18 +665,17 @@ Item {
         return arg
     }
 
-    // Which verbs write and which defer their completion: two lists, read only from `prepareCompletion`.
-    AutoActCompletion { id: completion }
+    // Which verbs write, defer their completion or are owed a status: three lists, read only from `prepareCompletion`.
+    readonly property AutoActCompletion completion: AutoActCompletion { id: completion }
 
     /// The verbs, grouped by what they act on.
     AutoActWipVerbs { id: wipVerbs; driver: driver }
     AutoActFileRowVerbs { id: fileRowVerbs; driver: driver }
     /// One for the two nav families, so a peek one of them opened is the peek the other reads.
-    NavProbe {
-        id: navigation
+    readonly property NavProbe navProbe: NavProbe {
+        id: navProbe
         sidebar: driver.sidebarPane
     }
-    readonly property alias navProbe: navigation
 
     AutoActNavVerbs { id: navVerbs; driver: driver }
     AutoActNavBoxVerbs { id: navBoxVerbs; driver: driver }

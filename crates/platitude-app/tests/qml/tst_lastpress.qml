@@ -51,7 +51,7 @@ Item {
 
     /// The plan as the run bar sees it, answering the way `RebasePlanModel` does (`answer.rs`): the todo is taken at
     /// `acceptRun` and given as taken; `steps` stands for the rows a hand can still reach.
-    QtObject {
+    readonly property QtObject plan: QtObject {
         id: plan
         property bool dirty: true
         property int dropCount: 1
@@ -142,7 +142,7 @@ Item {
     /// A settings list's removals, over a list of two people as filed.
     readonly property var twoFiled: [{ email: "a@example.com", url: "file:///a.png" },
                                      { email: "b@example.com", url: "file:///b.png" }]
-    AvatarRemovals {
+    readonly property AvatarRemovals removals: AvatarRemovals {
         id: removals
         filed: root.twoFiled
         onRemove: email => tc.removed = tc.removed.concat([email])

@@ -12,7 +12,7 @@ Item {
 
     readonly property int presses: Metrics.holdPressesWarned
 
-    HoldDriver {
+    readonly property HoldDriver drive: HoldDriver {
         id: drive
         holdPresses: root.presses
     }

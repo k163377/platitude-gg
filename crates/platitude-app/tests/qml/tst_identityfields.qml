@@ -16,7 +16,7 @@ Item {
 
     /// git's answer as the application delivers it: one notification for both values (`AppBackend.identityName` /
     /// `identityEmail` share `identity_changed`).
-    QtObject {
+    readonly property QtObject answer: QtObject {
         id: answer
         /// `"<name>|<email>"`, so one write moves both.
         property string pair: "|"

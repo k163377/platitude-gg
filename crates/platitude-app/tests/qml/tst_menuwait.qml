@@ -47,14 +47,14 @@ Item {
     }
 
     /// What a remote's menu reads off its tab.
-    QtObject {
+    readonly property QtObject remoteTab: QtObject {
         id: remoteTab
         property string markedOrigin: "origin"
         property var remoteNames: ["origin", "fork"]
     }
 
     /// No remote here is GitHub's: the menu's GITHUB card stays out (`GitHubLinks.ofRemote`).
-    QtObject {
+    readonly property QtObject noLinks: QtObject {
         id: noLinks
         function ofRemote(name) {
             return []

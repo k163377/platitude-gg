@@ -41,7 +41,7 @@ AppMenu {
     readonly property alias reach: state.reach
 
     /// Everything this card reads, worked out once as the menu opens and left alone while it stands.
-    QtObject {
+    readonly property QtObject state: QtObject {
         id: state
         property string kind: ""
         property string refId: ""

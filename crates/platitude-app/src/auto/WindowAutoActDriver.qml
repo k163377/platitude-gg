@@ -158,7 +158,7 @@ Item {
         tabProbe: tabProbe
     }
     /// Reads the strip's items through the one name the strip hands over (`TabStrip.tabsView`).
-    TabProbe {
+    readonly property TabProbe tabProbe: TabProbe {
         id: tabProbe
         view: driver.topBar.tabsView
     }

@@ -56,7 +56,7 @@ Item {
 
     /// `SidebarRowGestures`, cut down to what the rows read off it, around the real open row (`OpenRowSeat`, as the
     /// gestures hold it): the key a row hands up, the seat, and what holds and closes it.
-    QtObject {
+    readonly property QtObject gestures: QtObject {
         id: gestures
         property string activeKey: ""
         property string editKey: ""

@@ -368,7 +368,7 @@ Rectangle {
     function showRowSoon(row) { rowWalk.showRowSoon(row) }
 
     // The three columns' widths and the lanes' sideways offset, aliased below so everyone reads them off this pane.
-    GraphColumnMetrics {
+    readonly property GraphColumnMetrics metrics: GraphColumnMetrics {
         id: metrics
         paneW: graphArea.width
         maxLanes: graphArea.graphModel.maxLanes

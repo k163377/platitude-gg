@@ -840,7 +840,7 @@ Item {
         }
     }
     // The point asked along the row and the card expected of it, for the report.
-    QtObject {
+    readonly property QtObject rowPartReport: QtObject {
         id: rowPartReport
         property int row: 0
         property string want: ""

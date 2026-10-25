@@ -126,7 +126,7 @@ Rectangle {
     function blankHold() {
         holdDrive.blank()
     }
-    HoldDriver {
+    readonly property HoldDriver holdDrive: HoldDriver {
         id: holdDrive
         holdPresses: bar.holdPresses
         // At the last press, while the question is still the one pressed for. The owner lowers the bar as it answers;

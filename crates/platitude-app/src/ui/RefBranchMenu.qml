@@ -79,7 +79,7 @@ AppMenu {
     readonly property alias pushState: state.pushState
 
     /// Everything this card reads, set once by `standOn` and left alone while it stands.
-    QtObject {
+    readonly property QtObject state: QtObject {
         id: state
         property string kind: ""
         property string refId: ""

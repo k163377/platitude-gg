@@ -38,7 +38,7 @@ Item {
 
     /// The row's own section — BRANCHES asks it for the reading, REMOTES for the branch that reads the row, TAGS for
     /// the remotes carrying the name.
-    QtObject {
+    readonly property QtObject sections: QtObject {
         id: sections
         function upstreamOf(name) { return root.sectionUpstream }
         function upstreamOidOf(name) { return root.sectionReadingAt }
@@ -52,7 +52,7 @@ Item {
     }
     /// A worktree's row asks it about the branch it holds; a remote-tracking row, where the branch reading it
     /// stands.
-    QtObject {
+    readonly property QtObject branches: QtObject {
         id: branches
         function upstreamOf(name) { return root.branchUpstream }
         function upstreamOidOf(name) { return root.branchReadingAt }
@@ -61,7 +61,7 @@ Item {
         function behindOf(name) { return root.branchBehind }
         function oidOfName(name) { return root.branchAt }
     }
-    QtObject {
+    readonly property QtObject worktrees: QtObject {
         id: worktrees
         function worktreeHolding(name) { return root.holdingWorktree }
         function headOfWorktree(path) { return "" }

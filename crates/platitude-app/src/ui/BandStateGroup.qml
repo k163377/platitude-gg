@@ -207,7 +207,7 @@ Item {
     }
     /// The share-out (`BandStateShare`). Its floor is bound to the metrics' property, which is settled by assignment
     /// and so notifies.
-    BandStateShare {
+    readonly property BandStateShare share: BandStateShare {
         id: share
         gap: Theme.spaceXs
         badgeMinW: badgeMetrics.minW

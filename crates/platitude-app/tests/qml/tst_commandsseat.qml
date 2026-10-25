@@ -9,7 +9,7 @@ Item {
     width: 400
     height: 60
 
-    QtObject {
+    readonly property QtObject page: QtObject {
         id: page
         property var pageCommands: null
         property bool commandsWrong: false

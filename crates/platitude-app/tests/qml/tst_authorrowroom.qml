@@ -11,7 +11,7 @@ Item {
     width: 800
     height: 100
 
-    QtObject {
+    readonly property QtObject commit: QtObject {
         id: commit
         property string authorName: "Alexandria Montgomery-Vanderbilt"
         property string authorEmail: "demo@example.com"

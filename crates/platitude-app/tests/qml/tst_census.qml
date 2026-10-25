@@ -74,7 +74,7 @@ Item {
         }
     }
 
-    QtObject {
+    readonly property QtObject window: QtObject {
         id: window
         property Item contentItem: root
         property var curPage: null
@@ -83,7 +83,7 @@ Item {
         function requestUpdate() { updateRequests++ }
     }
 
-    QtObject {
+    readonly property QtObject page: QtObject {
         id: page
         property var pageTab: ({state: "open"})
         property var pageWorktree: ({loaded: true, wipRowStands: false})
@@ -94,7 +94,7 @@ Item {
         property var pageGraphPane: ({placing: false})
         property var pageGraph: graphState
     }
-    QtObject {
+    readonly property QtObject graphState: QtObject {
         id: graphState
         property int finishCount: 3
         property bool loading: false

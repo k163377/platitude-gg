@@ -42,14 +42,14 @@ Item {
     }
 
     // Stand-ins that give the row one line to walk into; the table itself is read in `tst_navfacts.qml`.
-    QtObject {
+    readonly property QtObject sections: QtObject {
         id: sections
         function upstreamOf(name) { return "origin/feature/topic-a" }
         function upstreamOidOf(name) { return root.readingAt }
         function trackedBy(full) { return "" }
         function tagRemotes(name, against) { return [] }
     }
-    QtObject {
+    readonly property QtObject branches: QtObject {
         id: branches
         function upstreamOf(name) { return "" }
         function upstreamOidOf(name) { return "" }
@@ -58,7 +58,7 @@ Item {
         function behindOf(name) { return 0 }
         function oidOfName(name) { return "" }
     }
-    QtObject {
+    readonly property QtObject worktrees: QtObject {
         id: worktrees
         function worktreeHolding(name) { return "" }
         function headOfWorktree(path) { return "" }

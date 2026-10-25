@@ -54,7 +54,7 @@ Item {
     }
     // The column floor that has to keep back what the card spends. `paneW` / `maxLanes` only answer its required
     // properties.
-    GraphColumnMetrics {
+    readonly property GraphColumnMetrics columns: GraphColumnMetrics {
         id: columns
         paneW: 800
         maxLanes: 4

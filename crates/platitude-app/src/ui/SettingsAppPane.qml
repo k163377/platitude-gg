@@ -760,7 +760,7 @@ ColumnLayout {
         onAccepted: AppBackend.assignAvatar(pane.chosenEmail, pane.chosenName, selectedFile.toString())
     }
     // The rows' removals, kept here: a row is rebuilt with every assignment that lands.
-    AvatarRemovals {
+    readonly property AvatarRemovals leaving: AvatarRemovals {
         id: leaving
         filed: AppBackend.avatars
         onRemove: email => AppBackend.removeAvatar(email)

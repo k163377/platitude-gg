@@ -455,7 +455,7 @@ Rectangle {
     }
     /// How far this diff reaches sideways: the lines the model picked, measured before any row exists, and the rows
     /// themselves as they are laid out.
-    DiffReach {
+    readonly property DiffReach reachTally: DiffReach {
         id: reachTally
         rowsGen: diffPane.diffModel.rowsGen
         measured: metrics.codeW
@@ -571,7 +571,7 @@ Rectangle {
                 const bottom = diffList.indexAt(0, diffList.contentY + diffList.height - Theme.rowHeight)
                 return row >= diffList.firstVisibleRow() && (bottom < 0 || row <= bottom)
             }
-            WheelGlide {
+            readonly property WheelGlide wheelGlide: WheelGlide {
                 id: wheelGlide
                 view: diffList
             }

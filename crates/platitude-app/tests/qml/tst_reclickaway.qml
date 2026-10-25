@@ -28,7 +28,7 @@ Item {
         }
     }
 
-    ReclickGesture {
+    readonly property ReclickGesture gesture: ReclickGesture {
         id: gesture
     }
 

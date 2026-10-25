@@ -949,7 +949,7 @@ MenuItem {
     }
 
     // The row runs at the last press; only the menu's going waits out the floor (`closeMenu`).
-    HoldDriver {
+    readonly property HoldDriver holdDrive: HoldDriver {
         id: holdDrive
         holdPresses: menuItem.holdPresses
         onFinished: menuItem.held()

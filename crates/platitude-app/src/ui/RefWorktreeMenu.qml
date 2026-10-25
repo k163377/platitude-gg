@@ -34,7 +34,7 @@ AppMenu {
     signal worktreeAddRequested(string mode, string branch, string start, string path, string name)
     signal removeRequested(string path, string name, string holds)
 
-    QtObject {
+    readonly property QtObject state: QtObject {
         id: state
         property string path: ""
         property string name: ""

@@ -148,7 +148,7 @@ Rectangle {
         }
         box.wheelPastEnd(pixels)
     }
-    WheelGlide {
+    readonly property WheelGlide glide: WheelGlide {
         id: glide
         view: textView.contentItem
     }

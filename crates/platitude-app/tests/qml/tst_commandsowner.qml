@@ -12,7 +12,7 @@ Item {
     width: 200
     height: 100
 
-    CommandsOwner {
+    readonly property CommandsOwner owner: CommandsOwner {
         id: owner
     }
 

@@ -154,7 +154,7 @@ AppListView {
     function haltGlide() {
         wheelGlide.halt()
     }
-    WheelGlide {
+    readonly property WheelGlide wheelGlide: WheelGlide {
         id: wheelGlide
         view: navList
     }

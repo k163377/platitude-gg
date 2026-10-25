@@ -59,7 +59,7 @@ Rectangle {
 
     // ---- the row gestures ------------------------------------------
     // The pane keeps the names its callers (the page's row menu, the smoke hooks) reach for.
-    SidebarRowGestures {
+    readonly property SidebarRowGestures rowGestures: SidebarRowGestures {
         id: rowGestures
         host: sidebar
         hand: paneHand

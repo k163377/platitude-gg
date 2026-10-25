@@ -171,7 +171,7 @@ ColumnLayout {
         }
         editor.wheelPastEnd(pixels)
     }
-    WheelGlide {
+    readonly property WheelGlide summaryGlide: WheelGlide {
         id: summaryGlide
         view: summaryView.contentItem
     }

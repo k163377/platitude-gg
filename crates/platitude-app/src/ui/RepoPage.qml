@@ -1510,7 +1510,7 @@ FocusScope {
         commitMenuState.openCarriedMenu(path, name)
     }
 
-    CommitMenuState {
+    readonly property CommitMenuState commitMenuState: CommitMenuState {
         id: commitMenuState
         repoTab: repoTab
         worktree: worktree
@@ -1525,7 +1525,7 @@ FocusScope {
         menu: commitMenuSeat.item
     }
     /// What every GITHUB card stands on, asked as its menu opens (デザイン規約 §GitHub のページへのリンク).
-    GitHubLinks {
+    readonly property GitHubLinks githubLinks: GitHubLinks {
         id: githubLinks
         repoTab: repoTab
         graphModel: graphModel
@@ -2358,7 +2358,7 @@ FocusScope {
     onCommandsOpenChanged: if (!page.commandsOpen) page.commandsAttention = false
     // Who owns the standing panel — the one rule about the order failures arrive in, so a component of its own with
     // every order walked (`CommandsOwner` / `tst_commandsowner.qml`).
-    CommandsOwner {
+    readonly property CommandsOwner commandsOwner: CommandsOwner {
         id: commandsOwner
     }
     function toggleCommands() {
@@ -2390,16 +2390,15 @@ FocusScope {
     DiscardModel {
         id: discardModel
     }
-    RecoverEntries {
-        id: recoverShown
+    /// The discard log's words (`RecoverEntries`) — its times included, which the band over the graph writes too.
+    readonly property RecoverEntries recoverWords: RecoverEntries {
+        id: recoverWords
         rows: discardModel.rows
         calledOf: path => ({ name: worktreesModel.worktreeCalled(path), home: worktreesModel.worktreeHome(path) })
         homeBranch: worktreesModel.homeBranch
     }
-    /// What the discard log draws, worded (`RecoverEntries`), and the words themselves — its times included, which
-    /// the band over the graph writes too.
-    readonly property var recoverEntries: recoverShown.entries
-    readonly property alias recoverWords: recoverShown
+    /// What the discard log draws, worded.
+    readonly property var recoverEntries: recoverWords.entries
     /// The moment the log's times are read against; a minute's step is the finest a time there says.
     property real recoverNow: Math.floor(Date.now() / 1000)
     Timer {
@@ -2850,7 +2849,7 @@ FocusScope {
 
     // ---- what this page is laid out at ------------------------------
 
-    PageLayout {
+    readonly property PageLayout pageLayout: PageLayout {
         id: pageLayout
         page: page
         sidebarPane: sidebarPane
@@ -3616,7 +3615,7 @@ FocusScope {
                         visible: page.recoverPicked !== null && !page.planShown && !page.diffShown
                         entry: page.recoverPicked
                         when: page.recoverPicked === null
-                              ? "" : recoverShown.whenWords(page.recoverPicked.at, page.recoverNow)
+                              ? "" : recoverWords.whenWords(page.recoverPicked.at, page.recoverNow)
                         reach: page.recoverReach
                         canWalkFurther: graphModel.truncated && !graphModel.growing
                         step: graphModel.windowStep

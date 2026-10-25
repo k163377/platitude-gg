@@ -18,7 +18,7 @@ Item {
     readonly property real floorW: 68
     readonly property real easeFullW: 72
 
-    TabShare {
+    readonly property TabShare share: TabShare {
         id: share
         padL: root.padL
         markRoomFull: root.roomFull
@@ -30,12 +30,12 @@ Item {
     }
 
     /// The real one, with the real font behind it.
-    TabMetrics {
+    readonly property TabMetrics metrics: TabMetrics {
         id: metrics
     }
 
     /// The strip's own model, as much of it as a tab reads.
-    QtObject {
+    readonly property QtObject tabsModel: QtObject {
         id: tabsModel
         property int currentIndex: -1
     }
