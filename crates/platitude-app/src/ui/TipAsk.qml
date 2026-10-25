@@ -22,6 +22,8 @@ import platitude.ui
 /// id: buttonTip … }`), never as a bare child: Qt 6.12's incremental collector keeps an item's child items through the
 /// item but a plain QObject child only through its ancestors, and can lose one while the page is built — its storage
 /// goes, and every property reads empty from then on. A property holds it from its owner's own storage.
+/// TODO(QTBUG-122800): a workaround for Qt holding that storage weakly — recheck on every Qt update and drop the rule
+/// once the storage lives as long as its object (internal-docs/P3-確認事項.md, the incremental collector's item).
 QtObject {
     id: ask
 
