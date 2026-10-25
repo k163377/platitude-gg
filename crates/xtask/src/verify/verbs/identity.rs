@@ -47,8 +47,10 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "state=ready dialog=true nameSaved=true emailSaved=false unsaved=true",
     },
-    // Forced tooltips: a hook that never reached its target photographs
-    // the resting state. `tip=` is the attached ToolTip's own visible.
+    // Forced hovers: a hook that never reached its target photographs
+    // the resting state. `tip=` is what stands: the identity state's
+    // card (`BandStateGroup.stateCardOpen`), the signature mark's tip
+    // (`TipAsk.shown`).
     Verb {
         name: "identity-tip",
         when: &[],

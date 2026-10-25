@@ -16,6 +16,9 @@ Item {
 
     /// The window whose tree is walked. `var` because `Main` is the file the engine loads.
     required property var window
+    /// The harness's own branch, which holds the window's parts by name to act on them: what an item there holds is
+    /// not what the run showed (`harnessHolds`).
+    property Item harnessBranch: null
 
     /// Every name any walk met, as keys — the census itself.
     property var seen: ({})
@@ -69,6 +72,48 @@ Item {
         return view.itemAtIndex(view.indexAt(point.x, point.y)) === object
     }
 
+    /// What every item has, so the names a type adds stand out.
+    readonly property Item plain: Item {}
+    property var itemNames: null
+    /// By type, the names its items hold a QML-defined `QtObject` part under: one object (a list such as
+    /// `contentChildren` prints its rows' names), no item, no `parent` of its own as a handler or a popup has, and no
+    /// children as a window has (an item holding the window would walk every popup under the overlay as shown).
+    /// Found once a type, on its first item, among the names a plain item lacks: an item's property surface is wide,
+    /// and some of it (`palette`) is made by being read.
+    property var heldNames: ({})
+
+    function heldBy(object, key) {
+        const at = key.indexOf("(")
+        const type = at > 0 ? key.substring(0, at) : key
+        let names = census.heldNames[type]
+        if (names !== undefined)
+            return names
+        if (census.itemNames === null) {
+            census.itemNames = ({})
+            for (const name in census.plain)
+                census.itemNames[name] = true
+        }
+        names = []
+        for (const name in object) {
+            if (census.itemNames[name] === true)
+                continue
+            const value = object[name]
+            if (value && typeof value === "object" && !(value instanceof Item) && value.parent === undefined
+                    && value.length === undefined && value.data === undefined && value.contentData === undefined
+                    && String(value).indexOf("_QMLTYPE_") > 0)
+                names.push(name)
+        }
+        census.heldNames[type] = names
+        return names
+    }
+
+    function harnessHolds(item) {
+        for (let at = item; at; at = at.parent)
+            if (at === census.harnessBranch)
+                return true
+        return false
+    }
+
     /// Down through `data`, not `children` — a Popup is no item. `shown` is whether this branch is on screen: a shut
     /// popup is still walked (an open one can be declared inside it) with nothing noted until an open one. `offered`
     /// is a menu in an open menu's content, which shows as that menu's row whether open or not.
@@ -103,6 +148,14 @@ Item {
                 if (held && typeof held === "object" && String(held).indexOf("_QMLTYPE_") > 0)
                     visit(held, shown, false)
             }
+        // An item holds its non-visual parts by name too, never in `data` (rules-refs/app-ui.md「Item の中に置く
+        // `QtObject` 製の部品」).
+        if (owned !== undefined && key.indexOf("_QML") > 0) {
+            const names = census.heldBy(object, key)
+            if (names.length > 0 && !census.harnessHolds(object))
+                for (const name of names)
+                    visit(object[name], shown, false)
+        }
         const content = object.contentData
         if (content !== undefined && content !== null)
             for (let i = 0; i < content.length; i++)

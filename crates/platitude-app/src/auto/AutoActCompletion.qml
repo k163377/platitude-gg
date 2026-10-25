@@ -104,7 +104,9 @@ QtObject {
                 "delete-stood-down",
                 "keep-place", "colour-place", "delete-branch-go", "nav-fold",
                 "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",
-                "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close", "menu-peek",
+                "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-peek-again", "nav-close", "menu-peek",
+                "eol-gone", "eol-walk", "eol-stay", "card-rewrite", "card-latch",
+                "peek-hold", "menu-block", "author-swap", "list-reread", "eol-change", "wip-redeal", "tip-slide",
                 "nav-filter", "nav-tip", "nav-jump", "nav-open", "nav-open-foot", "nav-open-then", "nav-open-held",
                 "nav-drag-open", "nav-peek-open", "nav-open-tip", "nav-open-tag", "nav-follow", "nav-follow-lit",
                 "nav-reclick", "nav-reclick-away", "nav-reclick-elsewhere", "nav-rename-far",
@@ -165,7 +167,7 @@ QtObject {
                 // The same bar with nothing written: the preview turns the plan down before it opens.
                 "plan-off-branch",
                 // Dress only: nothing is written, and the bar is raised through the page's own door.
-                "report-tone", "rename-tag-box", "rename-branch-box",
+                "report-tone", "rename-tag-box", "rename-tag-box-early", "rename-branch-box",
                 // Photographs the box still standing after git's answer, with the bar that answer brings down.
                 "rename-taken",
                 "delete-blocked-tip", "switch-stopped", "switch-lands",

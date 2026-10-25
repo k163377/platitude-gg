@@ -127,11 +127,13 @@ Item {
             if (!sidebarPane.editRefused)
                 sidebarPane.submitEdit(arg)
             renameTakenTimer.start()
-        } else if (act === "rename-tag-box" || act === "rename-branch-box") {
+        } else if (act === "rename-tag-box" || act === "rename-branch-box" || act === "rename-tag-box-early") {
             // The box opened with the argument typed in, so a name the box itself refuses can be photographed
             // (デザイン規約 §答えの要らない報せ「押す前に断れるものは、名前の箱で断る」). `was=` names the row, so a
-            // run that opened the box on the wrong one says so.
-            tagNameBoxTimer.begin(arg, act === "rename-tag-box" ? "tag" : "branch")
+            // run that opened the box on the wrong one says so. `-early` photographs the refusal before its tip,
+            // which waits the usual rest (`TipAsk.typed` → `TipSeat`).
+            tagNameBoxTimer.early = act === "rename-tag-box-early"
+            tagNameBoxTimer.begin(arg, act === "rename-branch-box" ? "branch" : "tag")
         } else if (act === "replace-remote" || act === "replace-remote-box"
                    || act === "replace-remote-go" || act === "replace-remote-tip") {
             // Named outright (`origin/billing:billing-v2`) because the remote's rows are behind a fold. "-box" leaves
@@ -209,11 +211,13 @@ Item {
     // `editKey` is only the ask: the box is built by a `Loader` in a row not yet laid out, so `box=` reads the box as
     // drawn and holding the keyboard (`NavList.rowBoxShown` / `rowFocused`). `refused=` alone passes a box refusing in
     // silence, and Qt can drop the tooltip the box's binding raises (`NavNameBox`) as a binding loop without a word,
-    // so `tip=` is taken through the box (`NavList.rowTipShown`, whose tip it is — `tests/qml/tst_tipowner.qml`).
+    // so `tip=` is taken through the box (`NavList.rowTipShown` = the box's own `TipAsk.shown`).
     SampleTimer {
         id: tagNameBoxTimer
         property string typed: ""
         property string kind: "tag"
+        /// Report the refusal as soon as the box stands, without its tip (`rename-tag-box-early`).
+        property bool early: false
         /// The branch named before the `:`, `""` for HEAD's.
         property string row: ""
         function begin(arg, kind) {
@@ -240,7 +244,7 @@ Item {
                 return
             // Only a refused name raises a tip to wait for.
             const tipped = list.rowTipShown(row)
-            if (sidebarPane.editRefused && !tipped)
+            if (sidebarPane.editRefused && !tipped && !tagNameBoxTimer.early)
                 return
             tagNameBoxTimer.stop()
             Harness.report(tagNameBoxTimer.kind + "_name_box was=" + was
@@ -248,7 +252,7 @@ Item {
                               + " box=" + open
                               + " refused=" + sidebarPane.editRefused
                               + " tip=" + tipped
-                              + " text=" + page.ToolTip.toolTip.text)
+                              + " text=" + Tips.box.text)
             renderedBarrier.begin()
         }
     }
@@ -478,7 +482,7 @@ Item {
         property string kind: "worktree"
         property int row: 3
         onTriggered: {
-            const tip = page.ToolTip.toolTip
+            const tip = Tips.box
             // Re-applied every beat (`nav-open` の同じ歩き).
             navProbe.pointTipAt(openTipTimer.kind, openTipTimer.row)
             if (!navProbe.rowFactsOpen)
@@ -686,7 +690,7 @@ Item {
             navTipTimer.start()
         }
         onTriggered: {
-            const tip = page.ToolTip.toolTip
+            const tip = Tips.box
             if (!navTipTimer.lit) {
                 // Re-applied every beat: the delegate arrives on a later layout than the rows the model got, and a
                 // miss reads exactly like a row that answers a rest with nothing (`NavList.clickRow`).
@@ -919,7 +923,7 @@ Item {
             }
             // Then the second rest, on the first line or the name, re-applied until it takes: the lines are built a
             // pass after the row that opened them.
-            const tip = page.ToolTip.toolTip
+            const tip = Tips.box
             if (navOpenTagTimer.rest !== "") {
                 if (!navOpenTagTimer.rested) {
                     navOpenTagTimer.rested = navOpenTagTimer.rest === "name" ? navProbe.pointFactsName(true)
@@ -998,7 +1002,7 @@ Item {
                 // Through the menu — the box's only door on this side, and the one that picks this box over the
                 // graph's (`RepoPage.refMenuInSidebar`). Both names are the whole ref: only `full` reaches git.
                 page.openRefMenu(navNameBoxTimer.kind, navNameBoxTimer.ref,
-                                 navNameBoxTimer.ref, oid, true)
+                                 navNameBoxTimer.ref, oid, "sidebar")
                 if (navNameBoxTimer.mode === "tag")
                     page.startTagAt(oid)
                 else

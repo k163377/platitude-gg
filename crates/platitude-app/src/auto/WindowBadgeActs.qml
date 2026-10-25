@@ -17,7 +17,7 @@ Item {
     required property IdentityDialog identityDialog
 
     // PGG_AUTO_ACT=badges-hover-early: the stand-in pointer put down before the band has placed the group — an order a
-    // hand cannot take, and the one `BandStateGroup.standInAsking` is for (a pointer that cannot move raises the beat
+    // hand cannot take, and the one `BandStateGroup.asking` is for (a pointer that cannot move raises the beat
     // once, so the card is asked for again when the row answers); `badges-hover` passes with or without it. Written
     // in the completion handler, the first moment this verb exists (`WindowHarness.begun`); the rest is shared.
     Component.onCompleted: {
@@ -30,6 +30,15 @@ Item {
     // window width (or `floor`), and how many tabs the run built the strip out of (`verify::repos::band_tab_count`).
     // `badges-all` / `badges-all-hover`: every one of the six — the run's git is old and has no Git LFS
     // (`verify-ui` stages both by the verb's name), and the graph is made stale here the way `graph-stale` makes it.
+    // The group's card is raised only by a hand on the marks or `badges-hover`'s stand-in: a card up in a run that
+    // put no hand there is Qt's own hover, and the census moves with it — so every change is said, with what asked.
+    Connections {
+        target: topBar
+        function onStateCardOpenChanged() {
+            Harness.report("state_card open=" + topBar.stateCardOpen + " pointedAt=" + topBar.statePointedAt
+                              + " beats=" + acts.bandBeats)
+        }
+    }
     SampleTimer {
         id: badgesActTimer
         running: Harness.autoAct === "badges"
@@ -352,7 +361,7 @@ Item {
                 return
             // The pointer, through the one property the real hover writes, goes down on a tick of its own and the card
             // is read on the next. A pointer down before the badge is answered again when the badge arrives and when
-            // the row places the group (`BandStateGroup.standInAsking`).
+            // the row places the group (`BandStateGroup.asking`).
             if (Harness.autoAct === "old-git-card" && !stateRequested) {
                 topBar.statePointedAt = true
                 stateRequested = true

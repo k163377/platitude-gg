@@ -133,8 +133,8 @@ Item {
             refListOpenTimer.chooseRow = held.length > 1 ? Number(held[1]) : 0
             refListOpenTimer.start()
         } else if (act === "row-card" || act === "card-sweep") {
-            // Entered where the row's delay timer would. The sweep defaults to row 1: its presets have a dirty tree,
-            // whose top row opens a card with no commit in it.
+            // Entered where the row's own ask goes in (`rowHoverRequested`, as `settlePointed` sends it). The sweep
+            // defaults to row 1: its presets have a dirty tree, whose top row opens a card with no commit in it.
             const at = act === "card-sweep" && arg === "" ? 1 : Number(arg)
             const hovered = graphPane.view.itemAtIndex(at)
             if (hovered)
@@ -384,7 +384,7 @@ Item {
                 // reads one unbroken stretch of the line.
                 Harness.report("chosen_said open=" + rowCard.opened
                                   + " door=" + rowCard.asksForMore
-                                  + " lit=" + (row.cardOid === row.oid_hex)
+                                  + " lit=" + row.lit
                                   + " held=" + rowCard.messageCut
                                   + " cut=" + row.summaryCut)
                 driver.complete()
@@ -603,15 +603,16 @@ Item {
                 headListTimer.stop()
                 const listAfter = refList.opened
                 // The row now where the stand-in stood is told the still pointer is on its chip and must open nothing
-                // (`GraphPane.settleUnderHand`) — the chip's half, where a card opens at once, is the one that can go
-                // wrong.
+                // — the hand it came under did not walk to it (`HandWatch.rowsMoved`, which the press sent; the seat
+                // keeps the ask for the hand's first walk) — the chip's half, where a card opens at once, is the one
+                // that can go wrong.
                 // The first row in view: at the head of the list `contentY` sits in the top margin, above row 0.
                 const underAt = graphPane.view.indexAt(1, Math.max(0, graphPane.view.contentY) + 1)
                 const under = underAt >= 0 ? graphPane.view.itemAtIndex(underAt) : null
                 if (under)
                     under.pointerRowX = under.labelsW / 2
                 const part = under ? under.pointedPart : ""
-                const opened = refList.opened || rowHost.refListWanted
+                const opened = refList.opened || rowHost.listPointed
                 const held = part === "chip" && !opened
                 if (under)
                     under.pointerRowX = -1
@@ -646,11 +647,13 @@ Item {
                     return
                 }
                 headListTimer.pointed = true
-                // The middle of the front card, where a hand reaching for the name lands.
-                pin.pointerX = pin.chipItem.x + pin.chipItem.chipItem.width / 2
+                // The middle of the front card, where a hand reaching for the name lands — put on the pane's hand
+                // (`HandWatch.stir`), which the stand-in reads it off, so the press below has a hand to hold still.
+                const front = pin.chipItem.chipItem
+                graphPane.hand.stir(front.mapToItem(null, front.width / 2, front.height / 2))
                 return
             }
-            if (!refList.opened || rowHost.refListAnchor !== pin.chipItem)
+            if (!refList.opened || rowHost.listAnchor !== pin.chipItem)
                 return
             if (headListTimer.click) {
                 // In at the card's own row, the way a hand presses it (`RefListPopup.clickRow`).
@@ -699,10 +702,10 @@ Item {
             at.pointerRowX = -1
             at.pointerRowX = cardReturnTimer.firstX * 2
             Harness.report(
-                "row_card_return held=" + rowHost.rowCardWanted
+                "row_card_return held=" + rowHost.cardPointed
                 + " open=" + rowCard.opened
                 + " moved=" + (rowCard.x !== cardReturnTimer.seat)
-                + " oid=" + (rowHost.rowCardOid === at.oid_hex))
+                + " oid=" + (rowHost.cardOid === at.oid_hex))
             driver.complete()
         }
     }
@@ -957,7 +960,7 @@ Item {
             if (leaveTimer.step === 1) {
                 // A tick after the ask, so the card stands where it was placed.
                 if (!Awaited.all("ref_list_leave", {
-                        "list": refList.opened, "on": rowHost.refListAnchor === item.chipItem }))
+                        "list": refList.opened, "on": rowHost.listAnchor === item.chipItem }))
                     return
                 leaveTimer.covered = leaveTimer.coveredAt(item, leaveTimer.handX)
                 leaveTimer.firstBox = leaveTimer.boxOf()
@@ -968,7 +971,7 @@ Item {
                     item.pointerCrossed(true, leaveTimer.handX)
                 } else if (leaveTimer.to === "menu") {
                     // Into the card, and a right-click on its first row: that row's menu stands on the list
-                    // (`RepoPage.menuRaisedOn` = `refList`). Not built yet: no press has gone in.
+                    // (`RepoPage.menuArea` = `refList`). Not built yet: no press has gone in.
                     if (!refList.menuRow(0))
                         return
                     item.pointerCrossed(false, 0)
@@ -981,18 +984,18 @@ Item {
                     other.pointerCrossed(true, leaveTimer.bareX(other))
                     item.pointerCrossed(false, 0)
                 }
-                leaveTimer.heldAfter = rowHost.refListWanted
+                leaveTimer.heldAfter = rowHost.listPointed
                 leaveTimer.settlingAfter = rowHost.listSettling
                 leaveTimer.step = 2
                 return
             }
             if (leaveTimer.step === 3) {
                 // The hand back on the chip's column while the menu stands, and the menu let go of as Escape does:
-                // its close asks the list again (`RepoPage` → `settleRefList`).
+                // its close lets the menu's hold go and the hand decides again (`RowHoverHost.menuOnList`).
                 if (!Awaited.all("ref_list_leave", { "menu": commitMenu.opened }))
                     return
                 item.pointerCrossed(true, leaveTimer.handX)
-                leaveTimer.heldAfter = rowHost.refListWanted
+                leaveTimer.heldAfter = rowHost.listPointed
                 leaveTimer.settlingAfter = rowHost.listSettling
                 commitMenu.dismiss()
                 leaveTimer.step = 2
@@ -1006,7 +1009,7 @@ Item {
             Harness.report("ref_list_leave to=" + leaveTimer.to
                               + " covered=" + leaveTimer.covered
                               + " list=" + refList.opened
-                              + " on=" + (target !== null && rowHost.refListAnchor === target.chipItem)
+                              + " on=" + (target !== null && rowHost.listAnchor === target.chipItem)
                               + " same=" + (leaveTimer.boxOf() === leaveTimer.firstBox)
                               // How the leave was taken, for a reader of a red run.
                               + " held=" + leaveTimer.heldAfter
@@ -1019,11 +1022,23 @@ Item {
     // PGG_AUTO_ACT=menu-list. The list is HEAD's — the one commit sure to have a chip — and a graph row's menu the row
     // under it's, as `menu-hover` raises it. Each step waits for the one before to land; the list goes, or stays out,
     // in the same turn as the ask, so the answer is read once the menu is up — for `own`, once the beat the hand's
-    // leaving started has run out.
+    // leaving started has run out. `swap` raises the menu on the list and puts the hand on another row's chip: the
+    // list is the menu's and is not handed over (`kept=`).
     SampleTimer {
         id: menuListTimer
         property string how: ""
         property int step: 0
+        /// The nearest built row below HEAD's with a chip of its own, or null.
+        function otherChipped(head) {
+            for (let i = head + 1; i < graphPane.view.count; i++) {
+                const row = graphPane.view.itemAtIndex(i)
+                if (row === null)
+                    return null
+                if (row.chipItem && row.chipItem.records.length > 0)
+                    return row
+            }
+            return null
+        }
         onTriggered: {
             const head = graphModel.loading || graphModel.rowTotal === 0 ? -1 : graphModel.headRow
             const stacked = head < 0 ? null : graphPane.view.itemAtIndex(head)
@@ -1052,8 +1067,21 @@ Item {
                         // Not built yet: no press has gone in.
                         if (!refList.menuRow(0))
                             return
-                        // The hand off the chip, as its row reports it (`GraphRowDelegate.settlePointed`).
-                        graphPane.view.chipCollapseRequested(stacked.chipItem)
+                        if (menuListTimer.how === "swap") {
+                            const next = menuListTimer.otherChipped(head)
+                            if (next === null) {
+                                menuListTimer.stop()
+                                Harness.report("menu_list how=swap other=none")
+                                driver.complete()
+                                return
+                            }
+                            // The hand onto the other row's chip, as that row reports it.
+                            graphPane.view.chipExpandRequested(next.oid_hex, next.index, next.chipItem.records,
+                                                               next.chipItem)
+                        } else {
+                            // The hand off the chip, as its row reports it (`GraphRowDelegate.settlePointed`).
+                            graphPane.view.chipCollapseRequested(stacked.oid_hex, stacked.chipItem)
+                        }
                     }
                 }
                 menuListTimer.step = 2
@@ -1065,13 +1093,15 @@ Item {
                     return
                 menuListTimer.stop()
                 Harness.report("menu_list how=" + menuListTimer.how + " menu=" + commitMenu.opened
-                                  + " list=" + refList.opened + " raised=" + page.menuRaisedOn)
+                                  + " list=" + refList.opened + " raised=" + page.menuArea
+                                  + " kept=" + (refList.opened && stacked !== null
+                                                && rowHost.refListOid === stacked.oid_hex))
                 driver.complete()
             }
         }
     }
-    // The row under a standing menu, asked for its card where its delay timer would ask. Asked once the menu is up,
-    // read a turn later: a card that was going to open opens synchronously.
+    // The row under a standing menu, asked for its card where the row's own ask goes in (`rowHoverRequested`). Asked
+    // once the menu is up, read a turn later: a card that was going to open opens synchronously.
     SampleTimer {
         id: menuHoverTimer
         property string oidHex: ""

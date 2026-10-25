@@ -203,7 +203,7 @@ Item {
     SampleTimer {
         id: pathTipReport
         onTriggered: {
-            const tip = page.ToolTip.toolTip
+            const tip = Tips.box
             if (!tip.visible)
                 return
             pathTipReport.stop()
@@ -226,7 +226,7 @@ Item {
             if (unstagedModel.total === 0)
                 return
             wipPane.pointedTipRow = 0
-            const tip = page.ToolTip.toolTip
+            const tip = Tips.box
             if (!tip.visible)
                 return
             tipCopyTimer.stop()
@@ -246,7 +246,7 @@ Item {
             if (unstagedModel.total === 0)
                 return
             wipPane.pointedTipRow = 0
-            const tip = page.ToolTip.toolTip
+            const tip = Tips.box
             if (!tip.visible || tip.width <= 0)
                 return
             tipSweepTimer.stop()

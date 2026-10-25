@@ -185,7 +185,8 @@ QtObject {
         else if (what === "edit")
             probe.sidebar.beginRename(kind, probe.tipNameAt(kind, row), probe.tipNameAt(kind, row))
         else if (what === "menu")
-            probe.sidebar.menuOpen = true
+            // A menu raised elsewhere: on the list's rows, but on no row of its (`SidebarRowGestures.menuOnOpenRow`).
+            probe.sidebar.menuDoor = { "area": "sidebar", "key": "" }
         else if (what === "filter")
             probe.typeFilter("zzzz")
     }

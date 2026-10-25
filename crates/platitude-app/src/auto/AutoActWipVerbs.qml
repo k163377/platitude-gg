@@ -1,8 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-// For the attached `ToolTip.toolTip` alone (rules-refs/app-ui.md「attached 型は宣言元モジュールを import しないと」).
-import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
 
@@ -250,10 +248,30 @@ Item {
             wipPane.signingPointedAt = true
             commitFaceTimer.start()
         } else if (act === "eol-hover") {
-            // Writes what a real pointer writes (hover cannot be injected); the tip lands in overlay.png.
+            // Writes what a real pointer writes (hover cannot be injected); the tip lands in overlay.png. The argument
+            // is the path, or `<bucket>:<path>` for the same path shown in two buckets.
             page.showWip()
             wipPane.pointEol(arg)
             eolHoverTimer.start()
+        } else if (act === "eol-gone") {
+            // The card out with the hand inside it, and the warning gone with the status read: the row's file staged
+            // away from under it, or (`button`) the staged count fallen to nothing. `inside` stops with the card out
+            // and the hand in it, before the write (`button:inside` for the button's).
+            page.showWip()
+            const goneParts = ("" + arg).split(":")
+            eolGoneTimer.button = goneParts.indexOf("button") >= 0
+            eolGoneTimer.inside = goneParts.indexOf("inside") >= 0
+            eolGoneTimer.step = 0
+            eolGoneTimer.start()
+        } else if (act === "eol-walk" || act === "eol-stay") {
+            // The rows moved under a still hand with the card out. `eol-walk` sends the list a whole row, so another
+            // row arrives under the hand; `eol-stay` sends it a pixel, so the hand stays on its row. The argument is
+            // the stage to stop at — `gone` / `tremor` / `back` (`back` when none).
+            page.showWip()
+            eolWalkTimer.stay = act === "eol-stay"
+            eolWalkTimer.stage = arg === "" ? "back" : arg
+            eolWalkTimer.step = 0
+            eolWalkTimer.start()
         } else {
             return false
         }
@@ -772,7 +790,7 @@ Item {
             if (wipPane.subjectText === "")
                 return
             wipPane.pointAtCommit = true
-            const tip = wipPane.commitBlock.commitSeat.ToolTip.toolTip
+            const tip = Tips.box
             if (!tip.visible)
                 return
             amendTipTimer.stop()
@@ -803,10 +821,146 @@ Item {
             if (!wipPane.eolCardOpen)
                 return
             eolHoverTimer.stop()
-            Harness.report("eol_hover path=" + wipPane.pointedEolPath
+            Harness.report("eol_hover bucket=" + wipPane.pointedEolBucket + " path=" + wipPane.pointedEolPath
                               + " card=" + wipPane.eolCardOpen
                               + " text=" + wipPane.pointedEolText)
             driver.complete()
+        }
+    }
+    // PGG_AUTO_ACT=eol-gone. The card is asked for as the hover asks (the row's, or the button's once something is
+    // staged), the hand is put in it as the card reads a hand (`AppCard.contentPointed`), and the warning is taken
+    // away with one write: the card goes, held hand or not (`WipPane.weighEol`).
+    SampleTimer {
+        id: eolGoneTimer
+        property bool button: false
+        /// Stop with the card out and the hand in it, before the write that takes the warning away.
+        property bool inside: false
+        property int step: 0
+        /// Everything staged (`stage-all`) or unstaged (`unstage-all`), through the driver's door for a write.
+        function pressAll(what) {
+            return driver.pressWrite(what, () => {
+                if (what === "stage-all")
+                    repoTab.stageAll()
+                else
+                    repoTab.unstageAll()
+                return true
+            })
+        }
+        onTriggered: {
+            if (eolGoneTimer.step === 0) {
+                if (eolGoneTimer.button) {
+                    if (!Awaited.all("eol_gone_stage", { "pressed": eolGoneTimer.pressAll("stage-all") }))
+                        return
+                    // The button warns only while it can be pressed (`WipCommitBlock.eolWarned`): a message first.
+                    wipPane.setMessage("feat: something", "")
+                    wipPane.pointAtCommit = true
+                }
+                eolGoneTimer.step = 1
+                return
+            }
+            if (eolGoneTimer.step === 1) {
+                if (!eolGoneTimer.button)
+                    wipPane.pointEol("src/flipped.kt")
+                if (!Awaited.all("eol_gone_card", {
+                        "card": wipPane.eolCardOpen,
+                        // The staging before the button's card is waited out before the next write is armed.
+                        "wrote": !eolGoneTimer.button || driver.wroteAndSettled()
+                    }))
+                    return
+                wipPane.eolHoverCard.contentPointed = true
+                if (eolGoneTimer.inside) {
+                    eolGoneTimer.stop()
+                    Harness.report("eol_gone button=" + eolGoneTimer.button + " stage=inside card="
+                                      + wipPane.eolCardOpen + " warned=" + worktree.eolStagedCount)
+                    driver.complete()
+                    return
+                }
+                const away = eolGoneTimer.button ? "unstage-all" : "stage-all"
+                if (!Awaited.all("eol_gone_write", { "pressed": eolGoneTimer.pressAll(away) }))
+                    return
+                eolGoneTimer.step = 2
+                return
+            }
+            if (!Awaited.all("eol_gone", { "gone": !wipPane.eolCardOpen }))
+                return
+            eolGoneTimer.stop()
+            Harness.report("eol_gone button=" + eolGoneTimer.button + " card=" + wipPane.eolCardOpen
+                              + " gone=" + !wipPane.eolCardOpen + " warned=" + worktree.eolStagedCount)
+            driver.complete()
+        }
+    }
+    // PGG_AUTO_ACT=eol-walk / eol-stay. The hand on the row's words as the pane hears it (`HandWatch.stir`), the card
+    // out, then the unstaged list sent down under the still hand: the card goes and the hand is held. A whole row
+    // (`eol-walk`): the light goes to the row that arrived under the hand at once, and its own card comes after a
+    // tremor and the rest (デザイン規約 §左メニューの所作「手が動いたかの見切り」). A
+    // pixel (`eol-stay`): the row the hand stayed on keeps its light, and the tremor brings its card back after the
+    // rest (`HoverSeat.displace`). The report reads the state at the stage it stops at — `gone=` the card down,
+    // `slid_lit=` the first row's light, `under_lit=` the light of the row under the hand, `tremor=` that row's light
+    // right after the tremor, `back=` the card up.
+    SampleTimer {
+        id: eolWalkTimer
+        property bool stay: false
+        property string stage: "back"
+        property int step: 0
+        property point at: Qt.point(-1, -1)
+        /// The row under the hand after the scroll: the one that arrived, or the one the hand stayed on.
+        property var under: null
+        property bool tremorLit: false
+        function unstagedList() {
+            const pane = wipPane.bucketPanes.find(pane => pane.section === "unstaged")
+            return pane === undefined ? null : pane.list
+        }
+        function rowUnderHand() {
+            const list = eolWalkTimer.unstagedList()
+            if (list === null)
+                return null
+            const p = list.mapFromItem(null, eolWalkTimer.at.x, eolWalkTimer.at.y)
+            return list.itemAt(p.x, p.y + list.contentY)
+        }
+        function done(stage) {
+            eolWalkTimer.stop()
+            const row = wipPane.rowFor("src/flipped.kt")
+            const under = eolWalkTimer.under
+            Harness.report((eolWalkTimer.stay ? "eol_stay" : "eol_walk") + " stage=" + stage
+                              + " gone=" + !wipPane.eolCardOpen + " slid_lit=" + (row !== null && row.washLit)
+                              + " under_lit=" + (under !== null && under.washLit) + " tremor=" + eolWalkTimer.tremorLit
+                              + " back=" + wipPane.eolCardOpen + " path=" + wipPane.pointedEolPath)
+            driver.complete()
+        }
+        onTriggered: {
+            const row = wipPane.rowFor("src/flipped.kt")
+            if (eolWalkTimer.step === 0) {
+                wipPane.pointEol("src/flipped.kt")
+                if (!Awaited.all("eol_walk_card", { "card": wipPane.eolCardOpen, "row": row !== null }))
+                    return
+                eolWalkTimer.at = row.mapToItem(null, row.width / 2, row.height / 2)
+                wipPane.hand.stir(eolWalkTimer.at)
+                eolWalkTimer.unstagedList().contentY += eolWalkTimer.stay ? 1 : Theme.rowHeight
+                eolWalkTimer.step = 1
+                return
+            }
+            if (eolWalkTimer.step === 1) {
+                if (!Awaited.all("eol_walk_gone", { "gone": !wipPane.eolCardOpen }))
+                    return
+                eolWalkTimer.under = eolWalkTimer.rowUnderHand()
+                if (eolWalkTimer.stage === "gone") {
+                    eolWalkTimer.done("gone")
+                    return
+                }
+                wipPane.hand.stir(Qt.point(eolWalkTimer.at.x + 2, eolWalkTimer.at.y))
+                eolWalkTimer.tremorLit = eolWalkTimer.under !== null && eolWalkTimer.under.washLit
+                if (eolWalkTimer.stage === "tremor") {
+                    eolWalkTimer.done("tremor")
+                    return
+                }
+                eolWalkTimer.step = 2
+                return
+            }
+            // The row under the hand asks for its card — its own, or the one kept through the hold: it comes after
+            // the rest the tremor started.
+            if (!Awaited.all("eol_walk_back", { "card": wipPane.eolCardOpen }))
+                return
+            eolWalkTimer.done("back")
         }
     }
     // The band's Stash button, pressed until it takes: it is down while the opening fetch keeps the tab busy. The row

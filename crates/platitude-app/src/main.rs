@@ -505,6 +505,9 @@ fn embed_harness_qml() {
     qrc::embed!("auto/AutoActCompletion.qml");
     qrc::embed!("auto/AutoActWorktreeVerbs.qml");
     qrc::embed!("auto/AutoActBranchPushVerbs.qml");
+    qrc::embed!("auto/AutoActCardFlowVerbs.qml");
+    qrc::embed!("auto/AutoActHoverHoldVerbs.qml");
+    qrc::embed!("auto/AutoActHoverGoneVerbs.qml");
     qrc::embed!("auto/AutoActDetailsVerbs.qml");
     qrc::embed!("auto/AutoActDiffFindVerbs.qml");
     qrc::embed!("auto/AutoActDiffVerbs.qml");

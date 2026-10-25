@@ -41,6 +41,14 @@ pub(super) const TABLE: &[Verb] = &[
     // refusing everything frames the same. Every field is the output side
     // (rules-refs/app-ui.md「断りのツールチップ」): `box=` drawn and focused,
     // `tip=` read through the box, `text=` the sentence the reader gets.
+    // The same refusal photographed before its tip: a typed refusal's tip
+    // waits the usual rest (`TipAsk.typed` → `TipSeat`). Argument
+    // `V0.3-LOCAL`, as the plain row below.
+    Verb {
+        name: "rename-tag-box-early",
+        when: &[],
+        plain: "tag_name_box was=v0.3-local typed=V0.3-LOCAL box=true refused=true tip=false",
+    },
     // The other names a tag's box refuses before the press: git 2.55's own
     // rules (`HEAD`), and the tags already there — taken, a folder's
     // clash, letter case alone (デザイン規約 §左メニューの所作「名前の衝突」).
@@ -1003,7 +1011,7 @@ pub(super) const TABLE: &[Verb] = &[
     // `peek=` empty is the section gone, `peek=<kind>` standing, and only
     // `-into` (the hand inside what it opened) must stand
     // (verbs.md の `nav-peek-shut` の行). A section on its way out
-    // (`HoverCardHost` waits a beat) frames like one standing, so the eye
+    // (`HoverSeat` waits a beat) frames like one standing, so the eye
     // passes the state these verbs disprove. `top=` follows because
     // `peek=` alone is a prefix of `peek=branch`; `width=` is the rail's
     // and stays out of the claim.
@@ -1027,25 +1035,34 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "peek=branch top=",
     },
+    // Clicked shut and clicked again with the hand where it was: the
+    // second click opens (a press is a new ask, past the latch the first
+    // click left — `SectionPeekPopup.toggleAt`).
+    Verb {
+        name: "nav-peek-again",
+        when: &[],
+        plain: "peek=branch top=",
+    },
     // The folded rail's section and a standing menu: under a graph row's
     // menu it still opens at a rest and goes once the hand has left
     // (`behind`, read after the beat that closes a section left alone;
     // `opened=` is the rest's answer, or a section that never came out
     // would read as closed), and a graph row's menu raised over it takes it
     // down (`under`); the menu raised on its own row holds it with the hand
-    // gone (`own`), and holds only that section — TAGS, rested on under
-    // that menu, goes as a hover does (`own-swap`). `shown=` is the popup
-    // itself — `peek=` clears as it starts to close.
+    // gone (`own`), and holds that section — TAGS, rested on under that
+    // menu, is an ask kept for the menu going and never comes out
+    // (`own-swap`, `opened=` read at the rest on TAGS). `shown=` is the
+    // popup itself — `peek=` clears as it starts to close.
     Verb {
         name: "menu-peek",
         when: &[
             (
                 Arg::Is("own"),
-                "menu=true opened=true peek=branch shown=true raised=sidebar",
+                "menu=true opened=true peek=branch shown=true raised=peek",
             ),
             (
                 Arg::Is("own-swap"),
-                "menu=true opened=true peek= shown=false raised=sidebar",
+                "menu=true opened=false peek=branch shown=true raised=peek",
             ),
         ],
         plain: "menu=true opened=true peek= shown=false raised=graph",
@@ -1256,5 +1273,33 @@ pub(super) const TABLE: &[Verb] = &[
         name: "name-box-drop",
         when: &[(Arg::Has(":"), "name_drop box=true")],
         plain: "name_drop box=false",
+    },
+    // The folded rail's BRANCHES section held by its own row — a menu
+    // raised on it, a name box open on it — and the hand then on the TAGS
+    // cell: held, the section stays with the menu still standing for its
+    // row (`door=kept`) or the box still open, and TAGS waits; let go
+    // with the hand on TAGS, TAGS comes out at once. Nothing held, TAGS is
+    // swapped in the turn the hand reaches it (`none`).
+    Verb {
+        name: "peek-hold",
+        when: &[
+            (
+                Arg::Is("none"),
+                "peek_hold how=none stage=swap peek=tag shown=true menu=false door=none edit=false",
+            ),
+            (
+                Arg::Is("menu:released"),
+                "peek_hold how=menu stage=released peek=tag shown=true menu=false door=gone edit=false",
+            ),
+            (
+                Arg::Is("rename"),
+                "peek_hold how=rename stage=held peek=branch shown=true menu=false door=none edit=true",
+            ),
+            (
+                Arg::Is("rename:released"),
+                "peek_hold how=rename stage=released peek=tag shown=true menu=false door=none edit=false",
+            ),
+        ],
+        plain: "peek_hold how=menu stage=held peek=branch shown=true menu=true door=kept edit=false",
     },
 ];

@@ -1,8 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-// For the attached `ToolTip` alone (rules-refs/app-ui.md「attached 型は宣言元モジュールを import しないと」).
-import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
 
@@ -52,7 +50,7 @@ Item {
             // into the opened list, "-out" on out the far side, "-shut" clicks the cell; only "-into" leaves the
             // section standing. "nav-peek" on an empty section stays shut (NavRail.enterAt).
             //
-            // The section goes a beat after the pointer leaves (`HoverCardHost`, `Metrics.hoverKeepMs`), so the three
+            // The section goes a beat after the pointer leaves (`HoverSeat`, `Metrics.hoverKeepMs`), so the three
             // whose subject is its going wait for it — finished on the rail's answer, the run frames it standing.
             acts.peekGoneWanted = act === "nav-peek-away" || act === "nav-peek-out" || act === "nav-peek-shut"
             if (arg === "no-tags")
@@ -81,11 +79,19 @@ Item {
                                         worktree.branch)
             }
             navRailTimer.start()
+        } else if (act === "nav-peek-again") {
+            // The cell clicked shut and clicked again with the hand where it was: the second click opens — a press is
+            // a new ask, past the latch the first click left (`SectionPeekPopup.toggleAt`, `HoverSeat.press`).
+            page.foldByHand(true)
+            peekAgainTimer.kind = arg === "" ? "branch" : arg
+            peekAgainTimer.step = 0
+            peekAgainTimer.start()
         } else if (act === "menu-peek") {
             // The folded rail's section and a standing menu (デザイン規約 §左メニューを畳む). `behind` rests on the
             // BRANCHES cell with a graph row's menu up — it opens — and walks off it; `under` raises that menu over the
             // open section; `own` raises the menu on one of the section's rows and walks the hand out — the one menu it
-            // stays under; `own-swap` rests on the TAGS cell under that menu and walks off it — TAGS goes as a hover.
+            // stays under; `own-swap` rests on the TAGS cell under that menu and walks off it — the held section is not
+            // swapped: BRANCHES stays and TAGS never comes in.
             page.foldByHand(true)
             menuPeekTimer.how = arg === "" ? "behind" : arg
             menuPeekTimer.step = 0
@@ -304,7 +310,7 @@ Item {
                                   + " card=" + card.opened
                                   + " offered=" + item.offered
                                   + " blocked=" + item.blocked
-                                  + " tip=" + item.ToolTip.visible
+                                  + " tip=" + item.tip.shown
                                   + " code=" + item.code
                                   // Whether the menu stands on the branch the worktree has out, which brings the
                                   // BRANCH card.
@@ -315,7 +321,7 @@ Item {
                                   // short elides it on one OS only (`AppMenuItem.implicitWidth`).
                                   + " cut=" + item.nameCut
                                   // What the hover says. Last, because it is a sentence.
-                                  + " says=" + (item.ToolTip.visible ? item.ToolTip.text : ""))
+                                  + " says=" + (item.tip.shown ? item.tip.words : ""))
                 driver.complete()
                 return
             }
@@ -523,8 +529,7 @@ Item {
                     navProbe.peekAway("branch")
                     navProbe.peekOut()
                     if (menuPeekTimer.how === "own-swap") {
-                        // On to the TAGS cell and off it: the section the rest brings in is not the one the menu
-                        // was raised on.
+                        // On to the TAGS cell and off it: `opened=` says whether TAGS took the held section's place.
                         navProbe.peekAt("tag")
                         menuPeekTimer.opened = sidebarPane.peekKind === "tag"
                         navProbe.peekAway("tag")
@@ -545,7 +550,7 @@ Item {
                     + " opened=" + menuPeekTimer.opened
                     + " peek=" + sidebarPane.peekKind
                     + " shown=" + sidebarPane.peekSection.visible
-                    + " raised=" + page.menuRaisedOn)
+                    + " raised=" + page.menuArea)
                 driver.complete()
             }
         }
@@ -553,6 +558,37 @@ Item {
     /// Whether this act's subject is the peeked section going away. `run()` writes it on every road to the beat, so a
     /// later act never waits on an earlier one's answer.
     property bool peekGoneWanted: false
+    // PGG_AUTO_ACT=nav-peek-again: rest on the cell, click it shut, click it again. Each click waits for the one
+    // before to land — the section gone, then standing — and the rail's answer is read as `nav-peek`'s is.
+    SampleTimer {
+        id: peekAgainTimer
+        property string kind: ""
+        property int step: 0
+        onTriggered: {
+            const up = sidebarPane.peekSection.visible
+            if (peekAgainTimer.step === 0) {
+                // Rested on the cell each beat until the section stands: asked again, the seat runs on
+                // (`HoverSeat.point`).
+                if (!up)
+                    navProbe.peekAt(peekAgainTimer.kind)
+                if (!Awaited.all("peek_again_open", { "up": up }))
+                    return
+                navProbe.peekTap(peekAgainTimer.kind)
+                peekAgainTimer.step = 1
+            } else if (peekAgainTimer.step === 1) {
+                if (!Awaited.all("peek_again_shut", { "down": !up }))
+                    return
+                navProbe.peekTap(peekAgainTimer.kind)
+                peekAgainTimer.step = 2
+            } else {
+                if (!Awaited.all("peek_again_back", { "up": up }))
+                    return
+                peekAgainTimer.stop()
+                acts.peekGoneWanted = false
+                navRailTimer.start()
+            }
+        }
+    }
     // Three waits: the splitter handing the pane its width; the diff's read having landed (`DiffPane.diffSettled`),
     // since a pane still reading frames like one that has; and, for `peekGoneWanted`, the section having gone.
     SampleTimer {
@@ -610,7 +646,7 @@ Item {
         id: navHeldTimer
         onTriggered: {
             if (acts.heldTried) {
-                if (!refSwitchItem.ToolTip.visible)
+                if (!refSwitchItem.tip.shown)
                     return
                 navHeldTimer.stop()
                 acts.reportHeld()

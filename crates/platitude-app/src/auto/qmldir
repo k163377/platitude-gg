@@ -2,6 +2,9 @@ module platitude.auto
 AutoActDriver 1.0 AutoActDriver.qml
 AutoActCompletion 1.0 AutoActCompletion.qml
 AutoActBranchPushVerbs 1.0 AutoActBranchPushVerbs.qml
+AutoActCardFlowVerbs 1.0 AutoActCardFlowVerbs.qml
+AutoActHoverHoldVerbs 1.0 AutoActHoverHoldVerbs.qml
+AutoActHoverGoneVerbs 1.0 AutoActHoverGoneVerbs.qml
 AutoActWorktreeVerbs 1.0 AutoActWorktreeVerbs.qml
 AutoActDetailsVerbs 1.0 AutoActDetailsVerbs.qml
 AutoActDiffFindVerbs 1.0 AutoActDiffFindVerbs.qml

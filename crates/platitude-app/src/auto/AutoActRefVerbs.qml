@@ -1,8 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-// For the attached `ToolTip` alone (rules-refs/app-ui.md「attached 型は宣言元モジュールを import しないと」).
-import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
 
@@ -335,18 +333,18 @@ Item {
             renderedBarrier.begin()
         }
     }
-    // Waits on the attached ToolTip itself (it opens after `tipDelayMs`): read sooner, the line says false while the
-    // shot holds it.
+    // Waits on the window's tip itself (it opens after `tipDelayMs`): read sooner, the line says false while the shot
+    // holds it.
     SampleTimer {
         id: blockedTipTimer
         onTriggered: {
-            if (acts.blockedTipRow === null || !acts.blockedTipRow.ToolTip.visible)
+            if (acts.blockedTipRow === null || !acts.blockedTipRow.tip.shown)
                 return
             blockedTipTimer.stop()
             Harness.report(
             "delete_blocked code=" + acts.blockedTipRow.code
-            + " tip=" + acts.blockedTipRow.ToolTip.visible
-            + " aside=" + driver.tipAside(acts.blockedTipRow.ToolTip.toolTip)
+            + " tip=" + acts.blockedTipRow.tip.shown
+            + " aside=" + driver.tipAside(Tips.box)
             // The name the holding worktree goes by (`RefBranchMenu.holderLeaf`), empty on other rows — the sentence is
             // tst_branchcard's to judge.
             + " holder=" + refBranchCard.holderLeaf
@@ -363,13 +361,13 @@ Item {
         property var row: null
         onTriggered: {
             const card = pullBlockedTimer.onChip ? commitMenu : refMenu
-            if (!card.opened || !pullBlockedTimer.row.ToolTip.visible)
+            if (!card.opened || !pullBlockedTimer.row.tip.shown)
                 return
             pullBlockedTimer.stop()
             Harness.report("pull_blocked where=" + (pullBlockedTimer.onChip ? "chip" : "row")
                               + " offered=" + pullBlockedTimer.row.offered
                               + " blocked=" + pullBlockedTimer.row.blocked
-                              + " tip=" + pullBlockedTimer.row.ToolTip.visible
+                              + " tip=" + pullBlockedTimer.row.tip.shown
                               + " says=" + pullBlockedTimer.row.blockedReason)
             driver.complete()
         }

@@ -1,8 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-// For the attached `ToolTip` alone (rules-refs/app-ui.md: an unimported attached type reads `undefined`).
-import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui
@@ -605,7 +603,7 @@ Item {
                 tabProbe.pointAtTab(0)
                 return
             }
-            const tip = mainUi.ToolTip.toolTip
+            const tip = Tips.box
             // The tip is on a delay, so this waits it out.
             if (!tip.visible)
                 return
@@ -874,7 +872,7 @@ Item {
             // The marks, and the pointed tab's path, which comes up a rest after the hand (`TabItemDelegate`): ended
             // before it, the picture holds the box or not by the machine's pace. The box is the shared one, so it is
             // read as that tab's by its target.
-            const tip = mainUi.ToolTip.toolTip
+            const tip = Tips.box
             if (!Awaited.all("tab_marks", {
                     "marks": tabProbe.tabMarks() !== tabMarkActTimer.beforeMarks,
                     "tip": tip.visible && tip.parent === tabProbe.view.itemAtIndex(pointed)
@@ -906,7 +904,7 @@ Item {
                 tabProbe.pointAtTab(tabNameActTimer.pointed)
                 return
             }
-            const tip = mainUi.ToolTip.toolTip
+            const tip = Tips.box
             if (!tip.visible)
                 return
             stop()

@@ -813,12 +813,12 @@ Item {
                 return
             detailsPane.savePointedAt = true
             const tip = detailsPane.saveTip
-            if (!tip.visible)
+            if (!tip.shown)
                 return
             saveRefusedTimer.stop()
             Harness.report("save_refused enabled=" + detailsPane.saveEnabled
-                              + " tip=" + tip.visible
-                              + " why=" + tip.text)
+                              + " tip=" + tip.shown
+                              + " why=" + tip.words)
             driver.complete()
         }
     }

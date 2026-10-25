@@ -23,7 +23,7 @@ Item {
     /// The window's edge, drawn outside `mainUi` — the scene picture lays it over the body (`WindowShotMirrors`).
     required property var windowEdge
     required property var windowShape
-    required property var sharedToolTip
+    required property var windowTip
     required property var openFailedDialog
     required property var identityGate
     required property var identityDialog
@@ -62,7 +62,7 @@ Item {
     // A tip that opens beside the hand is told where a run's would be: a quarter across the target, so the picture
     // says which of the two the seat was read from.
     Binding {
-        target: harness.sharedToolTip
+        target: harness.windowTip
         property: "handAcross"
         value: Harness.autoAct !== "" ? 0.25 : -1
     }
@@ -134,6 +134,7 @@ Item {
     WindowCensus {
         id: census
         window: harness.window
+        harnessBranch: harness
         onWalked: shotDriver.censusDone()
     }
 

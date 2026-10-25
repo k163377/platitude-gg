@@ -115,17 +115,18 @@ Item {
         function addItem() {
             return worktreeTimer.onGraph ? acts.driver.commitWorktreeAddItem : acts.driver.refWorktreeAddItem
         }
-        /// The word the shared tip stands the tree mark in front of, read off the target it stands on as the tip
-        /// reads it (`SharedToolTip.tipMarkWord`, else the folder among `tipMarks`). Empty while it is down.
+        /// The word the window's tip stands the tree mark in front of, read off the ask it stands on as the tip reads
+        /// it (`TipAsk.markWordNow`, else the folder among the names it seats itself, `marksNow`). Empty while it is
+        /// down.
         function tipMark(tip) {
-            const at = tip.visible ? tip.parent : null
-            if (at === null || at.tipMarkWord === undefined)
+            const ask = tip.visible ? Tips.current : null
+            if (ask === null)
                 return ""
-            if (at.tipMarkWord !== "" || at.tipMarks === undefined)
-                return at.tipMarkWord
+            if (ask.markWordNow !== "")
+                return ask.markWordNow
             // A row that is not turned down names its folder in its whole line, among the line's names (`tipMarks`).
-            const folder = at.tipMarks.find(mark => mark[1] === "tree" || mark[1] === "home")
-            return folder === undefined ? "" : String(at.ToolTip.text).substr(folder[0], folder[3])
+            const folder = ask.marksNow.find(mark => mark[1] === "tree" || mark[1] === "home")
+            return folder === undefined ? "" : String(ask.words).substr(folder[0], folder[3])
         }
 
         function begin(arg, mode) {
@@ -212,7 +213,7 @@ Item {
                 if (!Awaited.all("worktree_add_menu", { "card_laid_out": laidOut }))
                     return
                 // A greyed row says why on its hover alone, and a cut folder comes back whole on it.
-                const tip = add.ToolTip.toolTip
+                const tip = Tips.box
                 const wants = add.offered && (add.blocked || add.nameCut)
                 if (!Awaited.all("worktree_add_menu", { "tip_beside": acts.driver.rowTipStood(add, wants) }))
                     return
@@ -221,7 +222,7 @@ Item {
                               + " add=" + add.offered
                               + " folder=" + add.codeName
                               + " blocked=" + add.blocked
-                              + " tip=" + add.ToolTip.visible
+                              + " tip=" + add.tip.shown
                               + " aside=" + acts.driver.tipAside(tip)
                               + " mark=" + worktreeTimer.tipMark(tip)
                               + " cut=" + add.nameCut
@@ -278,8 +279,8 @@ Item {
                 const refused = worktreeTimer.onGraph ? acts.graphPane.namingRefused : acts.sidebarPane.editRefused
                 const why = worktreeTimer.onGraph ? acts.page.graphNameRefusedWhy : acts.sidebarPane.editRefusedWhy
                 // A refused name says why in the box's tip, which comes up after the tip's delay: the picture waits for
-                // it, read off the window's one tip (the box's own attached `ToolTip`).
-                const tip = acts.page.ToolTip.toolTip
+                // it, read off the window's one tip (`Tips.box`).
+                const tip = Tips.box
                 const tipped = tip.visible && tip.text === why
                 if (refused && !tipped)
                     return
@@ -435,7 +436,7 @@ Item {
             const why = withheld ? (renameTimer.onGraph ? view.withheldWhy : acts.sidebarPane.withheldWhy)
                       : renameTimer.onGraph ? acts.page.graphNameRefusedWhy : acts.sidebarPane.editRefusedWhy
             // A reason comes up after the tip's delay, on the window's one tip.
-            const tip = acts.page.ToolTip.toolTip
+            const tip = Tips.box
             const tipped = tip.visible && tip.text === why
             if (!Awaited.all("worktree_rename_box", { "tip": tipped || !(refused || withheld) }))
                 return

@@ -251,11 +251,18 @@ pub(super) const TABLE: &[Verb] = &[
     // from coming out (`behind`) and takes one already out down (`under`);
     // the menu raised on its own row holds it once the hand has left the
     // chip (`own`, read after the list's beat — `list-menu` reads at once,
-    // while the chip still asks for it). `behind` is paired with
-    // `ref-list`, which proves the same ask opens it.
+    // while the chip still asks for it), and keeps it from the hand on
+    // another chip (`swap`: the list is the menu's, `kept=`). `behind` is
+    // paired with `ref-list`, which proves the same ask opens it.
     Verb {
         name: "menu-list",
-        when: &[(Arg::Is("own"), "menu=true list=true raised=refList")],
+        when: &[
+            (Arg::Is("own"), "menu=true list=true raised=refList"),
+            (
+                Arg::Is("swap"),
+                "menu=true list=true raised=refList kept=true",
+            ),
+        ],
         plain: "menu=true list=false raised=graph",
     },
     // The card of a row's message. `lit=`: the card takes the pointer off
@@ -265,6 +272,44 @@ pub(super) const TABLE: &[Verb] = &[
         name: "row-card",
         when: &[],
         plain: "row_card open=true lit=true",
+    },
+    // HEAD's row card taken down by a menu raised on its row (a blocker:
+    // a dismissal) under a hand that never left: nothing comes back while
+    // it stays; a tremor is the hand's own move, lifting the latch, and the
+    // card comes back after the rest.
+    Verb {
+        name: "card-latch",
+        when: &[
+            (
+                Arg::Is("card"),
+                "card_latch stage=card card=true menu=false latched=false",
+            ),
+            (
+                Arg::Is("menu"),
+                "card_latch stage=menu card=false menu=true latched=true",
+            ),
+            (
+                Arg::Is("dismissed"),
+                "card_latch stage=dismissed card=false menu=false latched=true",
+            ),
+            (
+                Arg::Is("tremor"),
+                "card_latch stage=tremor card=false menu=false latched=false",
+            ),
+        ],
+        plain: "card_latch stage=back card=true menu=false latched=false",
+    },
+    // HEAD's row card with the hand inside it, and the row rewritten in
+    // place under it by the commit the run makes: the card's commit is a
+    // row down, the reread no reader's doing, and the card stays
+    // (デザイン規約 §hover のツールチップ「外乱では閉じない」).
+    Verb {
+        name: "card-rewrite",
+        when: &[(
+            Arg::Is("inside"),
+            "card_rewrite stage=inside card=true moved=false",
+        )],
+        plain: "card_rewrite stage=rewritten card=true moved=true",
     },
     // The hand walks into that card and back to its row, and the card
     // stays (rules-refs/app-ui.md「カードが既に出ている行へ手が戻ったら」).
@@ -648,5 +693,25 @@ pub(super) const TABLE: &[Verb] = &[
             "middle_scroll_exit case=click travelled=false scrolling=true sent=false",
         )],
         plain: "middle_scroll_exit case=held travelled=true scrolling=false sent=true",
+    },
+    // A chip's list with the hand inside it (or still on the chip), and
+    // what it stands for changed by one of the tab's own writes landing —
+    // no reader's doing (デザイン規約 §hover のツールチップ「外乱では閉じない」).
+    // A row rewritten to the commit the run makes, or amended, leaves the
+    // list's commit without its names or out of the graph, and the
+    // stand-in standing for HEAD's new commit is another chip: the list
+    // goes. A branch made on HEAD — the hand inside the list or on the
+    // chip — or one made while a menu held the ask back, has it say the
+    // names as they are now (`names=1` more).
+    Verb {
+        name: "list-reread",
+        when: &[
+            (
+                Arg::OneOf(&["row:commit", "row:amend"]),
+                "list=false names=- moved=true",
+            ),
+            (Arg::Is("pin:amend"), "stage=after list=false names=-"),
+        ],
+        plain: "stage=after list=true names=1 moved=false",
     },
 ];

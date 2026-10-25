@@ -304,6 +304,19 @@ pub(super) fn eol(repo: &mut DemoRepo) -> Result<(), String> {
     // An ordinary change with nothing to say, so "a file is marked" and
     // "this commit carries a marked file" can be told apart.
     repo.commit("src/plain.kt", "fun plain() = 1\n", "feat: an ordinary one")?;
+    // Neighbours at the root, enough for a file there to be judged against
+    // (`commit`, below).
+    for name in ["one", "two", "three", "four"] {
+        repo.commit(&format!("{name}.txt"), "plain\n", &format!("feat: {name}"))?;
+    }
+    // (e) the same path in both buckets, each with a change of its own to
+    // say: staged to CRLF, then the working tree back to LF. **After the
+    // last commit**: `git commit` records the whole index, so a commit after
+    // this `add` would carry the staged change into HEAD.
+    repo.commit("src/twice.kt", "fun twice() = 2\n", "feat: twice")?;
+    repo.write("src/twice.kt", "fun twice() = 2\r\n")?;
+    repo.git(&["add", "--", "src/twice.kt"])?;
+    repo.write("src/twice.kt", "fun twice() = 2\n")?;
 
     // (a) every line's ending changes, and nothing else does.
     repo.write(
@@ -318,6 +331,10 @@ pub(super) fn eol(repo: &mut DemoRepo) -> Result<(), String> {
     // (d) the file that had none gains its first.
     repo.write("src/bare.kt", "fun bare() = 0\r\n")?;
     repo.write("src/plain.kt", "fun plain() = 1\nfun alsoPlain() = 2\n")?;
+    // A file at the root named like the commit button's own card target
+    // (`commit`): the card its row asks for is the file's, not the button's
+    // (`eol-hover commit`).
+    repo.write("commit", "first\r\nsecond\r\n")?;
     // (c) a file the repository has never seen, disagreeing with its
     // neighbours.
     repo.write(

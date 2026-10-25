@@ -103,6 +103,80 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "pane=wip open=false lit=false",
     },
+    // The line-ending card a file row asks for is the file's — for a file
+    // named `commit` too (`WipPane.pointEol`: its own kind of target, apart
+    // from the commit button's, whose card names no path).
+    Verb {
+        name: "eol-hover",
+        when: &[
+            (Arg::Is("commit"), "path=commit card=true"),
+            // The same path in both buckets is two rows: the card is the
+            // row's that asked, placed under it, worded for that side's
+            // own change (the preset stages CRLF, then writes LF back).
+            (
+                Arg::Is("staged:src/twice.kt"),
+                "bucket=staged path=src/twice.kt card=true text=Line endings change · LF → CRLF",
+            ),
+            (
+                Arg::Is("unstaged:src/twice.kt"),
+                "bucket=unstaged path=src/twice.kt card=true text=Line endings change · CRLF → LF",
+            ),
+        ],
+        plain: "card=true",
+    },
+    // The card out with the hand inside it, and the warning gone with the
+    // status read (the file staged away from under it; the staged count
+    // fallen to nothing): the card goes, held hand or not.
+    Verb {
+        name: "eol-gone",
+        when: &[
+            (Arg::Is("button"), "card=false gone=true"),
+            // Stopped before the write: the card out, the hand in it.
+            (Arg::Is("inside"), "button=false stage=inside card=true"),
+            (
+                Arg::Is("button:inside"),
+                "button=true stage=inside card=true",
+            ),
+        ],
+        plain: "card=false gone=true",
+    },
+    // The rows moved under a still hand with the card out: the card goes,
+    // and the light goes to the row that arrived under the hand at once;
+    // a tremor brings that row's own card after the rest. Each stage reads
+    // the state as it stands.
+    Verb {
+        name: "eol-walk",
+        when: &[
+            (
+                Arg::Is("gone"),
+                "eol_walk stage=gone gone=true slid_lit=false under_lit=true tremor=false back=false",
+            ),
+            (
+                Arg::Is("tremor"),
+                "eol_walk stage=tremor gone=true slid_lit=false under_lit=true tremor=true back=false",
+            ),
+        ],
+        plain: "eol_walk stage=back gone=false slid_lit=false under_lit=true tremor=true back=true \
+                path=src/fresh.kt",
+    },
+    // The same list sent a pixel under the still hand: the row the hand
+    // stayed on keeps its light, and the tremor brings its card back after
+    // the rest (the ask stood through the hold).
+    Verb {
+        name: "eol-stay",
+        when: &[
+            (
+                Arg::Is("gone"),
+                "eol_stay stage=gone gone=true slid_lit=true under_lit=true tremor=false back=false",
+            ),
+            (
+                Arg::Is("tremor"),
+                "eol_stay stage=tremor gone=true slid_lit=true under_lit=true tremor=true back=false",
+            ),
+        ],
+        plain: "eol_stay stage=back gone=false slid_lit=true under_lit=true tremor=true back=true \
+                path=src/flipped.kt",
+    },
     Verb {
         name: "changes-shut",
         when: &[],
@@ -547,5 +621,42 @@ pub(super) const TABLE: &[Verb] = &[
         name: "resolve-all",
         when: &[],
         plain: "wip_heads from=conflicts unstaged=true staged=true conflicts=false",
+    },
+    // The line-ending card held by the hand inside it, and a line of its
+    // file staged under it: the file stays marked in that bucket and its
+    // mark says another count — the card says the new sentence.
+    Verb {
+        name: "eol-change",
+        when: &[(
+            Arg::Is("staged"),
+            "eol_change bucket=staged card=true changed=true stale=false",
+        )],
+        plain: "eol_change bucket=unstaged card=true changed=true stale=false",
+    },
+    // The worktree's rows dealt again under the pane's hand by a status
+    // read: the same row keeps the hand (lit, its card up with the new
+    // count); another row dealt there, or the bucket stepping down the
+    // pane, is the rows moving under a still hand — the card goes, the hand
+    // is held, and the row under it lights at once, its card waiting for
+    // the hand. How far the bucket steps is the pane's share-out, so whether
+    // another row is under the hand after it is not this line's to say.
+    Verb {
+        name: "wip-redeal",
+        when: &[
+            (
+                Arg::Is("above"),
+                "wip_redeal how=above card=false still=true lit=true changed=false moved_lit=true",
+            ),
+            (
+                Arg::Is("staged"),
+                "wip_redeal how=staged card=false still=true",
+            ),
+            (Arg::Is("gone"), "wip_redeal how=gone card=false still=true"),
+            (
+                Arg::Is("fixed"),
+                "wip_redeal how=fixed card=false still=false lit=true",
+            ),
+        ],
+        plain: "wip_redeal how=same card=true still=false lit=true changed=true",
     },
 ];

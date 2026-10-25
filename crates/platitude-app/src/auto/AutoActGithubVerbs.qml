@@ -135,8 +135,8 @@ Item {
             if (!acts.menuLive("github_ref", refTimer.fetched) || !Awaited.all("github_ref", { "row": oid !== "" }))
                 return
             refTimer.stop()
-            // The left menu's own door, as its row's right-click takes it.
-            page.openRefMenu(refTimer.kind, refTimer.name, refTimer.name, oid, true)
+            // The left menu's own door, as its row's right-click takes it (`area`: the panel's rows).
+            page.openRefMenu(refTimer.kind, refTimer.name, refTimer.name, oid, "sidebar")
             acts.stand("github_ref", refRowMenu.menu, refRowMenu.githubCard, refTimer.others)
             driver.complete()
         }

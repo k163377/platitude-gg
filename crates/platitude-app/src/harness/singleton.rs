@@ -135,5 +135,17 @@ impl Harness {
     fn file_url(&self, path: String) -> String {
         crate::urlpath::file_url(std::path::Path::new(&path))
     }
+
+    /// Writes `text` over the file at `path` in the run's repository —
+    /// another program saving it, which the app hears only by reading
+    /// the tree again (`eol-change`). Says why it could not, "" when it
+    /// did. The bytes are the text's own: a `\r\n` in it lands as one.
+    #[qslot]
+    fn write_file(&self, path: String, text: String) -> String {
+        match std::fs::write(&path, text.as_bytes()) {
+            Ok(()) => String::new(),
+            Err(e) => format!("{path}: {e}"),
+        }
+    }
 }
 qml_register!(Harness, "Harness", singleton = true);

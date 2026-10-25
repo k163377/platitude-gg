@@ -1,8 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-// For the attached `ToolTip` alone (rules-refs/app-ui.md「attached 型は宣言元モジュールを import しないと」).
-import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
 
@@ -96,7 +94,7 @@ Item {
                               + " code=" + row.code
                               + " held=" + (row.holdPresses > 0)
                               + " blocked=" + row.blocked
-                              + " tip=" + row.ToolTip.visible
+                              + " tip=" + row.tip.shown
                               + " text=" + row.text
                               + (row.blocked ? " says=" + row.blockedReason : ""))
             if (acts.after === "menu" || !row.offered || row.blocked) {

@@ -604,4 +604,127 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
                 said=Changes from",
     },
+    // A display behind a menu raised over it through a real door: what was
+    // out goes in the turn the door returns (`down=true`), another target
+    // asked for under the menu stays in past its rest, and the menu gone —
+    // by Escape, a row taken, a press outside — the ask kept comes out.
+    // `eol` / `eol-key` / `author` run every stage; `author-files`,
+    // `recover` and `tip` the first two.
+    Verb {
+        name: "menu-block",
+        when: &[
+            (
+                Arg::Is("eol:card"),
+                "menu_block owner=eol stage=card shown=true menu=false down=false path=src/flipped.kt",
+            ),
+            (
+                Arg::Is("eol:other"),
+                "menu_block owner=eol stage=other shown=false menu=true down=true path=",
+            ),
+            (
+                Arg::OneOf(&["eol:back", "eol:back-item", "eol:back-outside"]),
+                "shown=true menu=false down=true path=src/mixed.kt",
+            ),
+            (
+                Arg::Is("eol-key:card"),
+                "menu_block owner=eol-key stage=card shown=true menu=false down=false path=src/flipped.kt",
+            ),
+            (
+                Arg::Is("eol-key:other"),
+                "menu_block owner=eol-key stage=other shown=false menu=true down=true path=",
+            ),
+            (
+                Arg::OneOf(&["eol-key:back", "eol-key:back-item", "eol-key:back-outside"]),
+                "shown=true menu=false down=true path=src/mixed.kt",
+            ),
+            (
+                Arg::Starts("eol-key"),
+                "menu_block owner=eol-key stage=menu shown=false menu=true down=true path=",
+            ),
+            (
+                Arg::Is("author:card"),
+                "menu_block owner=author stage=card shown=true menu=false down=false author=true mates=false",
+            ),
+            (
+                Arg::Is("author:other"),
+                "menu_block owner=author stage=other shown=false menu=true down=true author=false mates=false",
+            ),
+            (
+                Arg::OneOf(&["author:back", "author:back-item", "author:back-outside"]),
+                "shown=true menu=false down=true author=false mates=true",
+            ),
+            (
+                Arg::Is("author-files:card"),
+                "menu_block owner=author-files stage=card shown=true menu=false down=false",
+            ),
+            (
+                Arg::Starts("author-files"),
+                "menu_block owner=author-files stage=menu shown=false menu=true down=true author=false",
+            ),
+            (
+                Arg::Starts("author"),
+                "menu_block owner=author stage=menu shown=false menu=true down=true author=false mates=false",
+            ),
+            (
+                Arg::Is("recover:card"),
+                "menu_block owner=recover stage=card shown=true menu=false down=false",
+            ),
+            (
+                Arg::Starts("recover"),
+                "menu_block owner=recover stage=menu shown=false menu=true down=true",
+            ),
+            (
+                Arg::Is("tip:card"),
+                "menu_block owner=tip stage=card shown=true menu=false down=false",
+            ),
+            (
+                Arg::Starts("tip"),
+                "menu_block owner=tip stage=menu shown=false menu=true down=true",
+            ),
+        ],
+        plain: "menu_block owner=eol stage=menu shown=false menu=true down=true path=",
+    },
+    // One of the author row's cards out, and the hand off its line onto
+    // another in one turn: the card opening takes the one before down in
+    // that turn (`now:`), and one card is out after it (`later:`) — the
+    // one the hand went to.
+    Verb {
+        name: "author-swap",
+        when: &[
+            (
+                Arg::Is("mates:parents"),
+                "author_swap from=mates to=parents now: open=1 mates=false parents=true \
+                 later: open=1 parents=true",
+            ),
+            (
+                Arg::Is("parents:author"),
+                "author_swap from=parents to=author now: open=1 parents=false author=true \
+                 later: open=1 author=true",
+            ),
+        ],
+        plain: "author_swap from=author to=mates now: open=1 author=false mates=true \
+                later: open=1 mates=true",
+    },
+    // A changed file's tip with the pane's hand still on its row, and a
+    // folder above it shut: the tip goes in that turn, nothing comes out
+    // on the row that slid under the still hand past the rest, and a
+    // two-pixel move brings the tip back after the rest.
+    Verb {
+        name: "tip-slide",
+        when: &[
+            (
+                Arg::Is("files:shown"),
+                "tip_slide on=files stage=shown tip=true still=false",
+            ),
+            (
+                Arg::Is("files:slid"),
+                "tip_slide on=files stage=slid tip=false still=true",
+            ),
+            (
+                Arg::Is("files:still"),
+                "tip_slide on=files stage=still tip=false still=true",
+            ),
+        ],
+        plain: "tip_slide on=files stage=moved tip=true still=false",
+    },
 ];

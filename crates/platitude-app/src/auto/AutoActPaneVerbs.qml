@@ -263,8 +263,12 @@ Item {
                 }
                 graphHeadTimer.answered = true
                 if (act === "graph-head-lit") {
-                    // Hover cannot be injected, so the rest goes to the one property the pointer's own arrival writes.
-                    graphPane.headPin.pointed = true
+                    // Hover cannot be injected, so the hand is put where the pointer's own arrival would put it: on
+                    // the pane's hand (`HandWatch.stir`), over the stand-in's words, which the stand-in reads it off.
+                    const pin = graphPane.headPin
+                    const words = pin.mapToItem(null, pin.labelWidth + pin.graphColWidth + Theme.spaceLg,
+                                                pin.rowMidY)
+                    graphPane.hand.stir(words)
                 } else if (act === "graph-head-back") {
                     graphPane.view.positionViewAtBeginning()
                     return

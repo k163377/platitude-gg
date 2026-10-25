@@ -308,7 +308,7 @@ Item {
                 return
             topBar.statePointedAt = true
             stop()
-            // The rest of what the card waits on: the group standing, and placed (`BandStateGroup.standInAsking`).
+            // The rest of what the card waits on: the group standing, and placed (`BandStateGroup.asking`).
             Harness.report("identity_tip step=pointed"
                 + " badge=" + (topBar.stateWordsShown || topBar.stateMarkShown)
                 + " placed=" + topBar.statePlaced)

@@ -1,8 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-// For the attached `ToolTip.toolTip` alone (rules-refs/app-ui.md「attached 型は宣言元モジュールを import しないと」).
-import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
 
@@ -173,7 +171,7 @@ Item {
     SampleTimer {
         id: avatarTipReport
         onTriggered: {
-            const tip = page.ToolTip.toolTip
+            const tip = Tips.box
             if (!tip.visible)
                 return
             avatarTipReport.stop()
@@ -347,7 +345,7 @@ Item {
         onTriggered: {
             if (!Awaited.all("avatar", {
                     "picture": detailsModel.avatarUrl !== "" || AppBackend.avatarErrorKind !== "",
-                    "tip": page.ToolTip.toolTip.visible
+                    "tip": Tips.box.visible
                 }))
                 return
             avatarReportTimer.stop()

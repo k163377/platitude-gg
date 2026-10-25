@@ -116,7 +116,7 @@ Item {
         }
         return -1
     }
-    /// Whether the shared tooltip stands clear of its target sideways — beside the row rather than over the rows
+    /// Whether the window's tip stands clear of its target sideways — beside the row rather than over the rows
     /// above and below it (規約 §hover のツールチップ「行の的は、行の横に立つ」). Read off the instance's drawn seat, not the rule.
     function tipAside(tip) {
         const at = tip.parent
@@ -126,16 +126,16 @@ Item {
     }
     /// Forces a menu row's tooltip through the property the real hover writes (`AppMenuItem.tipForced`), and says
     /// whether it stands where a hand's would: up, beside the row. One that came out before the menu stood where the
-    /// hand would have raised it keeps the seat read off the row then (`SharedToolTip.targetAt`), so it is taken down
+    /// hand would have raised it keeps the seat read off the row then (`TipSeat.targetAt`), so it is taken down
     /// to come out again. True at once for a row that `wants` none.
     function rowTipStood(row, wants) {
-        const tip = row.ToolTip.toolTip
+        const tip = Tips.box
         if (row.tipForced && tip.visible && !driver.tipAside(tip)) {
             row.tipForced = false
             return false
         }
         row.tipForced = wants
-        return !wants || (row.ToolTip.visible && driver.tipAside(tip))
+        return !wants || (row.tip.shown && driver.tipAside(tip))
     }
     // A menu row's words take their widths from a `RowLayout` on polish, so a cut name (`AppMenuItem.nameCut`) read in
     // the beat its card opens answers for the row before that layout ran — whole, as if it fit. Under load the
@@ -685,6 +685,9 @@ Item {
     AutoActSwitchVerbs { id: switchVerbs; driver: driver }
     AutoActPublishVerbs { id: publishVerbs; driver: driver }
     AutoActGraphRowVerbs { id: graphRowVerbs; driver: driver }
+    AutoActCardFlowVerbs { id: cardFlowVerbs; driver: driver }
+    AutoActHoverHoldVerbs { id: hoverHoldVerbs; driver: driver }
+    AutoActHoverGoneVerbs { id: hoverGoneVerbs; driver: driver }
     AutoActGraphReclickVerbs { id: graphReclickVerbs; driver: driver }
     AutoActStepVerbs { id: stepVerbs; driver: driver }
     AutoActKeyMenuVerbs { id: keyMenuVerbs; driver: driver }
@@ -718,6 +721,9 @@ Item {
             || switchVerbs.run(act, arg)
             || publishVerbs.run(act, arg)
             || graphRowVerbs.run(act, arg)
+            || cardFlowVerbs.run(act, arg)
+            || hoverHoldVerbs.run(act, arg)
+            || hoverGoneVerbs.run(act, arg)
             || graphReclickVerbs.run(act, arg)
             || stepVerbs.run(act, arg)
             || keyMenuVerbs.run(act, arg)
