@@ -1,5 +1,6 @@
-//! The commit guard: the primary checkout is where this repository is
-//! read, and every commit of it rides a worktree branch.
+//! The commit guards: the primary checkout is where this repository is
+//! read, and every commit of it rides a worktree branch; a seat the film
+//! verb stands in commits nothing until it is taken out.
 
 use super::approval::MAIN_APPROVAL_FLAG;
 use super::git::unquote;
@@ -38,6 +39,37 @@ pub(super) fn primary_commit_denied(command: &str, cwd: &str) -> bool {
         MAIN_APPROVAL_FLAG
     );
     true
+}
+
+/// Denies a commit in a seat the film verb stands in (`film::injected`):
+/// its edits are put in to be taken out, and a commit of them ships a
+/// slot that runs any program.
+pub(super) fn film_commit_denied(command: &str, cwd: &str) -> bool {
+    let Some(tree) = filmed_seat(command, cwd) else {
+        return false;
+    };
+    println!(
+        "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
+         \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
+         \"The film verb stands in {tree} (`{}`), and its edits are put in to be taken out: a \
+         commit now would carry them. Take it out with `{}`, see `git status --short` show only \
+         your own changes, and commit then.\"}}}}",
+        crate::film::IN.line(),
+        crate::film::OUT.line()
+    );
+    true
+}
+
+/// The seat the first `git commit` in `command` would commit to, when the
+/// film verb stands in it. A repository of its own under the seat — a
+/// scene's, under target/ — is not the seat's.
+fn filmed_seat(command: &str, cwd: &str) -> Option<String> {
+    let dir = resolve(cwd, commit_dir(command, cwd)?);
+    let tree = worktree_root(&dir)?;
+    if !crate::film::injected(std::path::Path::new(&tree)) {
+        return None;
+    }
+    (common_git_dir(&dir)? == common_git_dir(&tree)?).then_some(tree)
 }
 
 /// The repository the first `git commit` in `command` would run in:
@@ -81,9 +113,45 @@ pub(super) fn commit_dir<'a>(command: &'a str, cwd: &'a str) -> Option<&'a str> 
 
 #[cfg(test)]
 mod tests {
-    use super::commit_dir;
+    use std::path::Path;
+    use std::process::Command;
+
+    use super::{commit_dir, filmed_seat};
 
     const CWD: &str = "C:/x/platitude-gg";
+
+    fn init(dir: &Path) {
+        std::fs::create_dir_all(dir).expect("a directory");
+        let done = Command::new("git")
+            .arg("init")
+            .arg("-q")
+            .arg(dir)
+            .status()
+            .expect("git runs");
+        assert!(done.success());
+    }
+
+    /// The seat's own commits stop while the film stands in it; a
+    /// scene's repository under it, a commit-free line and a seat without
+    /// the film do not.
+    #[test]
+    fn a_seat_the_film_stands_in_commits_nothing_of_its_own() {
+        let dir = crate::verify::claim_dir(&crate::temp::root().join("pgg-film"), "guard")
+            .expect("a directory of its own");
+        let seat = dir.join(".claude").join("worktrees").join("z");
+        init(&seat);
+        let scene = seat.join("target").join("film").join("s").join("repo");
+        init(&scene);
+        let (seat_cwd, scene_cwd) = (seat.display().to_string(), scene.display().to_string());
+        assert_eq!(filmed_seat("git commit -m x", &seat_cwd), None);
+        let payload = seat.join(crate::film::PAYLOAD);
+        std::fs::create_dir_all(payload.parent().expect("a parent")).expect("a directory");
+        std::fs::write(&payload, "").expect("the component");
+        assert!(filmed_seat("git commit -m x", &seat_cwd).is_some());
+        assert_eq!(filmed_seat("git commit -m x", &scene_cwd), None);
+        assert_eq!(filmed_seat("git status", &seat_cwd), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn finds_the_commit_however_the_line_reaches_it() {

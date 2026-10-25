@@ -2,16 +2,16 @@
 //! the branch under the session.
 
 use super::approval::{MAIN_APPROVAL_FLAG, REBASE_APPROVAL_FLAG};
-use super::commit::primary_commit_denied;
+use super::commit::{film_commit_denied, primary_commit_denied};
 use super::payload::{deny, string_field};
 use super::permit;
 use crate::subprocess::common_git_dir;
 use crate::subprocess::git_query;
 
 /// PreToolUse(Bash|PowerShell): the git held until the user asks for it in
-/// so many words (CLAUDE.md Git 運用), and any commit from the primary
-/// checkout. Answers whether it refused, so the guard after it stays quiet
-/// when it did.
+/// so many words (CLAUDE.md Git 運用), any commit from the primary
+/// checkout, and a commit in a seat the film verb stands in. Answers
+/// whether it refused, so the guard after it stays quiet when it did.
 pub(super) fn pre_git(input: &str) -> Result<bool, String> {
     let Some(command) = string_field(input, "command") else {
         return Ok(false);
@@ -27,7 +27,7 @@ pub(super) fn pre_git(input: &str) -> Result<bool, String> {
     if !command.contains(MAIN_APPROVAL_FLAG) && primary_commit_denied(&command, &cwd) {
         return Ok(true);
     }
-    Ok(false)
+    Ok(film_commit_denied(&command, &cwd))
 }
 
 /// The gate's skip flag and session mark decide whether refs/heads/main
