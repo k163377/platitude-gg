@@ -472,13 +472,16 @@ fn each_part_of_a_location_picks_its_own_line() {
     assert_eq!(covered(1, 1, 0), "let long_name = 1;".len(), "another line");
 }
 
+/// Which locations name no line is `DiffLineLocation::entry_in`'s to
+/// answer, part by part; here such a location is a line with no colours.
 #[test]
-fn a_location_past_any_part_answers_nothing() {
+fn a_location_with_no_line_has_no_colours() {
     let colors = colors(&patches(TWO_FILES), None);
-    let nothing = LineColors::default();
-    assert_eq!(colors.line(at(2, 0, 1)), &nothing, "no third patch");
-    assert_eq!(colors.line(at(1, 2, 1)), &nothing, "no third hunk");
-    assert_eq!(colors.line(at(1, 1, 2)), &nothing, "no third line");
+    assert_eq!(
+        colors.line(at(1, 1, 2)),
+        &LineColors::default(),
+        "no third line"
+    );
 }
 
 #[test]

@@ -360,11 +360,11 @@ diff --git a/b.rs b/b.rs
         assert!(marks.line(at(1, 1, 0)).is_empty(), "another line");
     }
 
+    /// Which locations name no line is `DiffLineLocation::entry_in`'s to
+    /// answer, part by part; here such a location is no emphasis.
     #[test]
-    fn a_location_past_any_part_answers_nothing() {
+    fn a_location_with_no_line_has_no_emphasis() {
         let marks = marks(&parse_patch(TWO_FILES.as_bytes()));
-        assert!(marks.line(at(2, 0, 1)).is_empty(), "no third patch");
-        assert!(marks.line(at(1, 2, 1)).is_empty(), "no third hunk");
         assert!(marks.line(at(1, 1, 2)).is_empty(), "no third line");
     }
 
