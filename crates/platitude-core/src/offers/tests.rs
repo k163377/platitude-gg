@@ -33,6 +33,7 @@ fn a_branch_someone_else_is_not_on_offers_everything() {
             switch_asks: false,
             branch_here: true,
             integrate_from: true,
+            standing: false,
             delete: true,
             delete_remote: true,
             // A branch goes out through the toolbar; the tag rows are a tag's.
@@ -298,27 +299,50 @@ fn a_drifted_reading_keeps_the_local_delete_and_loses_the_remote_one() {
 }
 
 #[test]
-fn a_standing_operation_asks_and_holds_back_new_history_but_not_deletes() {
-    let offers = ref_menu(
-        RefKind::Branch,
-        "feat",
-        "abc123",
-        true,
-        "main",
-        false,
-        "REBASING",
-        0,
-        "",
-        "",
-        false,
-        false,
-        "origin",
-        "here",
+fn a_standing_operation_asks_and_greys_new_history_but_not_deletes() {
+    let standing = |detached: bool| {
+        ref_menu(
+            RefKind::Branch,
+            "feat",
+            "abc123",
+            true,
+            if detached { "" } else { "main" },
+            detached,
+            if detached { "REBASE 1/3" } else { "MERGING" },
+            0,
+            "",
+            "",
+            false,
+            false,
+            "origin",
+            "here",
+        )
+    };
+    let merging = standing(false);
+    assert!(merging.switch_asks);
+    assert!(merging.standing);
+    assert!(merging.branch_here, "kept, greyed");
+    assert!(merging.integrate_from, "kept, greyed");
+    assert!(merging.delete, "a delete moves no working tree");
+    assert_eq!(
+        merging.words(),
+        [
+            "switch",
+            "asks",
+            "branch-here",
+            "integrate",
+            "standing",
+            "delete",
+            "set-upstream"
+        ]
     );
-    assert!(offers.switch_asks);
-    assert!(!offers.branch_here);
-    assert!(!offers.integrate_from);
-    assert!(offers.delete, "a delete moves no working tree");
+    let rebasing = standing(true);
+    assert!(rebasing.standing);
+    assert!(rebasing.branch_here, "kept, greyed");
+    assert!(
+        !rebasing.integrate_from,
+        "a stopped rebase leaves the tree detached: no branch for a row to name"
+    );
 }
 
 #[test]

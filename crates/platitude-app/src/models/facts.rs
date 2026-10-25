@@ -105,9 +105,11 @@ impl GitFacts {
     }
 
     /// The two rows that make a worktree (`offers::worktree_rows`), as
-    /// words: `here`, then `checkout-branch` / `checkout-track`. `kind` is
-    /// the row's word, empty on a commit row that draws no name;
-    /// `local_exists` whether a remote row's local branch is there.
+    /// words: `here`, then `checkout-branch` / `checkout-track`, then
+    /// `out-current` / `out-held` / `out-stopped`. `kind` is the row's
+    /// word, empty on a commit row that draws no name; `local_exists`
+    /// whether a remote row's local branch is there; `stopped_here`
+    /// whether a rebase or bisect stopped in this tree holds the branch.
     #[qslot]
     #[expect(clippy::too_many_arguments)]
     fn worktree_offers(
@@ -118,6 +120,7 @@ impl GitFacts {
         open: bool,
         current_branch: String,
         held_by_worktree: String,
+        stopped_here: bool,
         local_exists: bool,
     ) -> Vec<String> {
         platitude_core::offers::worktree_rows(
@@ -127,6 +130,7 @@ impl GitFacts {
             open,
             &current_branch,
             &held_by_worktree,
+            stopped_here,
             local_exists,
         )
         .words()

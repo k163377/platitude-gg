@@ -22,6 +22,9 @@ pub enum PullRuns {
 /// the reason is known before it (デザイン規約 §メニュー「今できない」).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PullOut {
+    /// An operation stands in this worktree: nothing is pulled until it is
+    /// finished or put down.
+    Standing,
     /// The tree's branch and its upstream have both moved: merging and
     /// rebasing are the reader's to choose between, and git's settings do
     /// not get to choose for them.
@@ -43,13 +46,15 @@ pub struct PullOffer {
 
 impl PullOffer {
     /// The offer as words, the shape `GitFacts.pullRow` answers with:
-    /// `here` / `aside`, then `out-diverged` / `out-own` / `out-held`.
+    /// `here` / `aside`, then `out-standing` / `out-diverged` / `out-own` /
+    /// `out-held`.
     pub fn words(&self) -> Vec<&'static str> {
         let mut words = vec![match self.runs {
             PullRuns::Here => "here",
             PullRuns::Aside => "aside",
         }];
         match self.out {
+            Some(PullOut::Standing) => words.push("out-standing"),
             Some(PullOut::Diverged) => words.push("out-diverged"),
             Some(PullOut::OwnCommits) => words.push("out-own"),
             Some(PullOut::Held) => words.push("out-held"),
@@ -73,8 +78,10 @@ impl PullOffer {
 ///   row does not name.
 /// - **The fast-forward on every other local branch with an upstream.**
 ///   Detached is no bar: nothing here is touched.
-/// - **Nowhere while an operation stands**, as the rows that integrate,
-///   and nowhere without an upstream — git has no far side to go to.
+/// - **Greyed on every one of those rows while an operation stands** —
+///   a stopped rebase or bisect leaves the tree detached, so its branches
+///   all stand aside then. Nowhere without an upstream — git has no far
+///   side to go to.
 #[expect(clippy::too_many_arguments)]
 pub fn pull_row(
     kind: RefKind,
@@ -89,9 +96,10 @@ pub fn pull_row(
     row_upstream: &str,
     row_ahead: i32,
 ) -> Option<PullOffer> {
-    if !open || !op_text.is_empty() || full.is_empty() {
+    if !open || full.is_empty() {
         return None;
     }
+    let standing = !op_text.is_empty();
     let tree_end = !detached
         && !current_branch.is_empty()
         && !current_upstream.is_empty()
@@ -101,18 +109,26 @@ pub fn pull_row(
             RefKind::Tag | RefKind::Stash | RefKind::Worktree => false,
         };
     if tree_end {
+        let out = if standing {
+            Some(PullOut::Standing)
+        } else {
+            current_diverged.then_some(PullOut::Diverged)
+        };
         return Some(PullOffer {
             runs: PullRuns::Here,
-            out: current_diverged.then_some(PullOut::Diverged),
+            out,
         });
     }
     if kind != RefKind::Branch || full == current_branch || row_upstream.is_empty() {
         return None;
     }
-    // The holder first: the reader cannot switch to the branch from here,
-    // which is what the other reason asks of them.
+    // The holder first: nothing done here lifts it. The operation is
+    // finished here, and own commits are taken in from the branch itself,
+    // which the reader cannot switch to from here.
     let out = if !held_by_worktree.is_empty() {
         Some(PullOut::Held)
+    } else if standing {
+        Some(PullOut::Standing)
     } else if row_ahead > 0 {
         Some(PullOut::OwnCommits)
     } else {
@@ -259,29 +275,85 @@ mod tests {
     }
 
     #[test]
-    fn a_standing_operation_or_a_tab_not_open_offers_no_pull() {
-        for (open, op_text) in [(true, "REBASE 1/3"), (false, "")] {
-            for (kind, full) in [
-                (RefKind::Branch, "main"),
-                (RefKind::Remote, "origin/main"),
-                (RefKind::Branch, "feat"),
-            ] {
-                let offer = pull_row(
-                    kind,
-                    full,
-                    open,
-                    "main",
-                    false,
-                    op_text,
-                    "origin/main",
-                    false,
-                    "",
-                    "origin/feat",
-                    0,
-                );
-                assert_eq!(offer, None, "{full} with open={open} op={op_text:?}");
-            }
+    fn a_tab_not_open_offers_no_pull() {
+        for (kind, full) in [
+            (RefKind::Branch, "main"),
+            (RefKind::Remote, "origin/main"),
+            (RefKind::Branch, "feat"),
+        ] {
+            let offer = pull_row(
+                kind,
+                full,
+                false,
+                "main",
+                false,
+                "",
+                "origin/main",
+                false,
+                "",
+                "origin/feat",
+                0,
+            );
+            assert_eq!(offer, None, "{full}");
         }
+    }
+
+    #[test]
+    fn a_standing_operation_greys_every_row_the_pull_stands_on() {
+        let standing = |kind: RefKind, full: &str, detached: bool, diverged: bool, ahead: i32| {
+            pull_row(
+                kind,
+                full,
+                true,
+                if detached { "" } else { "main" },
+                detached,
+                if detached { "REBASE 1/3" } else { "MERGING" },
+                if detached { "" } else { "origin/main" },
+                diverged,
+                "",
+                &if kind == RefKind::Branch {
+                    format!("origin/{full}")
+                } else {
+                    String::new()
+                },
+                ahead,
+            )
+        };
+        for (kind, full) in [(RefKind::Branch, "main"), (RefKind::Remote, "origin/main")] {
+            assert_eq!(
+                standing(kind, full, false, true, 0),
+                Some(PullOffer {
+                    runs: PullRuns::Here,
+                    out: Some(PullOut::Standing)
+                }),
+                "{full}: a merge keeps the tree on its branch, and the operation is named over the divergence"
+            );
+        }
+        assert_eq!(
+            standing(RefKind::Branch, "feat", false, false, 2),
+            Some(PullOffer {
+                runs: PullRuns::Aside,
+                out: Some(PullOut::Standing)
+            }),
+            "named over the branch's own commits"
+        );
+        assert_eq!(
+            standing(RefKind::Branch, "main", true, false, 0),
+            Some(PullOffer {
+                runs: PullRuns::Aside,
+                out: Some(PullOut::Standing)
+            }),
+            "a stopped rebase leaves the tree detached, so the branch it replays stands aside"
+        );
+        assert_eq!(
+            standing(RefKind::Remote, "origin/main", true, false, 0),
+            None,
+            "detached, no remote row is an end of the tree's comparison"
+        );
+        assert_eq!(
+            standing(RefKind::Branch, "main", false, false, 0).map(|offer| offer.words()),
+            Some(vec!["here", "out-standing"])
+        );
     }
 
     #[test]
@@ -366,6 +438,24 @@ mod tests {
             aside("C:/work/other", 2),
             Some(PullOut::Held),
             "the holder is named first: switching to it is not on offer from here"
+        );
+        assert_eq!(
+            pull_row(
+                RefKind::Branch,
+                "feat",
+                true,
+                "main",
+                false,
+                "MERGING",
+                "origin/main",
+                false,
+                "C:/work/other",
+                "origin/feat",
+                0,
+            )
+            .and_then(|offer| offer.out),
+            Some(PullOut::Held),
+            "and over a standing operation: finishing it here frees nothing there"
         );
         assert_eq!(
             pull_row(

@@ -108,6 +108,11 @@ pub struct RefMenuOffers {
     /// merge / rebase with this row as the far side: needs a current
     /// branch to move, and a row that is not it.
     pub integrate_from: bool,
+    /// An operation stands: [`Self::branch_here`] and
+    /// [`Self::integrate_from`] keep their seats, greyed until it is
+    /// finished or put down — one operation at a time, and `switch
+    /// --create` is a move (デザイン規約 §進行中の操作から出る).
+    pub standing: bool,
     /// The everyday delete. git refuses the branch the tree is on or one
     /// any other worktree has checked out (`cannot delete branch …
     /// used by worktree at …`), locked or not.
@@ -159,6 +164,9 @@ impl RefMenuOffers {
         }
         if self.integrate_from {
             words.push("integrate");
+        }
+        if self.standing {
+            words.push("standing");
         }
         if self.delete {
             words.push("delete");
@@ -240,13 +248,13 @@ pub fn ref_menu(
         // in it, which is when the caller hands no holder.
         switch_to: (branchy && full != current_branch) || (kind == RefKind::Worktree && held),
         switch_asks: !held && (op_standing || conflict_count > 0),
-        branch_here: kind != RefKind::Stash && !oid_hex.is_empty() && !op_standing,
+        branch_here: kind != RefKind::Stash && !oid_hex.is_empty(),
         integrate_from: open
             && !detached
             && !current_branch.is_empty()
-            && !op_standing
             && !full.is_empty()
             && full != current_branch,
+        standing: op_standing,
         // A worktree's own delete is the WORKTREE card's
         // ([`worktree_card`]).
         delete: kind != RefKind::Worktree
@@ -281,8 +289,7 @@ pub struct CommitMenuOffers {
     /// branch, and a commit other than HEAD's.
     pub integrate: bool,
     /// squash / reword / drop, HEAD's commit included (the one most often
-    /// meant). Not mid-operation: mid-merge a soft reset refuses and the
-    /// other two abandon the merge silently.
+    /// meant).
     pub edit_history: bool,
     /// reset — the branch taken back to this commit. Asks the same of the
     /// repository as [`Self::integrate`].
@@ -291,6 +298,12 @@ pub struct CommitMenuOffers {
     /// back out, デザイン規約 §ブランチ・コミットへの移動), and on HEAD's
     /// commit.
     pub branch_here: bool,
+    /// An operation stands: every row above keeps its seat, greyed until
+    /// it is finished or put down — they all start or rewrite history,
+    /// and mid-merge a soft reset refuses while squash and drop would
+    /// abandon the merge silently. As [`RefMenuOffers::standing`] greys
+    /// the ref menu's.
+    pub standing: bool,
     /// The stash menu's writes.
     pub stash_write: bool,
 }
@@ -315,6 +328,9 @@ impl CommitMenuOffers {
         if self.branch_here {
             words.push("branch-here");
         }
+        if self.standing {
+            words.push("standing");
+        }
         if self.stash_write {
             words.push("stash-write");
         }
@@ -336,14 +352,15 @@ pub fn commit_menu(
 ) -> CommitMenuOffers {
     let op_standing = !op_text.is_empty();
     let commit_row = !oid_hex.is_empty() && stash_ref.is_empty();
-    let on_branch = open && !detached && !current_branch.is_empty() && !op_standing && commit_row;
+    let on_branch = open && !detached && !current_branch.is_empty() && commit_row;
     let elsewhere = oid_hex != head_oid;
     CommitMenuOffers {
-        sequence: !op_standing && commit_row,
+        sequence: commit_row,
         integrate: on_branch && elsewhere,
         edit_history: on_branch,
         move_branch: on_branch && elsewhere,
-        branch_here: open && !op_standing && commit_row,
+        branch_here: open && commit_row,
+        standing: op_standing && commit_row,
         stash_write: !stash_ref.is_empty(),
     }
 }
@@ -461,9 +478,23 @@ pub struct WorktreeOffers {
     /// nothing in this worktree is touched, so it is the one way to start on
     /// another branch while one is stopped here.
     pub here: bool,
-    /// `worktree add` — the row's own branch out in a new worktree, where git
-    /// would take it.
+    /// `worktree add` — the row's own branch out in a new worktree.
     pub checkout: Option<WorktreeCheckout>,
+    /// Why that row is greyed, where it is.
+    pub checkout_out: Option<WorktreeAddOut>,
+}
+
+/// Why `worktree add` cannot take the row's branch out right now: git keeps a
+/// branch to one worktree (`is already used by worktree at`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorktreeAddOut {
+    /// The tree this tab stands in has it out.
+    Current,
+    /// Another worktree has it out.
+    Held,
+    /// A rebase or bisect stopped in this tree holds it: the tree is
+    /// detached, and git still counts the branch it names as out here.
+    Stopped,
 }
 
 /// How the row's branch goes out in the new worktree.
@@ -478,7 +509,8 @@ pub enum WorktreeCheckout {
 
 impl WorktreeOffers {
     /// The offers as words, the shape `GitFacts.worktreeOffers` answers with:
-    /// `here`, then `checkout-branch` / `checkout-track`.
+    /// `here`, then `checkout-branch` / `checkout-track`, then `out-current`
+    /// / `out-held` / `out-stopped`.
     pub fn words(&self) -> Vec<&'static str> {
         let mut words: Vec<&'static str> = Vec::new();
         if self.here {
@@ -489,6 +521,12 @@ impl WorktreeOffers {
             Some(WorktreeCheckout::Track) => words.push("checkout-track"),
             None => {}
         }
+        match self.checkout_out {
+            Some(WorktreeAddOut::Current) => words.push("out-current"),
+            Some(WorktreeAddOut::Held) => words.push("out-held"),
+            Some(WorktreeAddOut::Stopped) => words.push("out-stopped"),
+            None => {}
+        }
         words
     }
 }
@@ -496,13 +534,17 @@ impl WorktreeOffers {
 /// The rule. `kind` is the row's (`None` on a commit row that draws no
 /// name); `held_by_worktree` the worktree holding the row's branch, a remote
 /// row's through the local branch of its name, as in [`ref_menu`];
-/// `local_exists` whether a remote row's local branch is there already.
+/// `stopped_here` whether a rebase or bisect stopped in this tree holds the
+/// row's branch; `local_exists` whether a remote row's local branch is
+/// there already.
 ///
-/// The branch the tree is on and one another worktree has out are git's to
-/// refuse (`is already used by worktree at`), so they offer no
-/// `worktree add` — the `switch` row's `Open` leads to the holder. A
-/// remote branch whose local one exists leaves it to that branch's own
-/// row: making the worktree off the remote would mean moving the local one.
+/// The branch the tree is on, one a stopped operation here holds and one
+/// another worktree has out are git's to refuse (`is already used by
+/// worktree at`): their `worktree add` stands greyed ([`WorktreeAddOut`]),
+/// and the `switch` row's `Open` leads to the holder. A remote branch whose
+/// local one exists leaves it to that branch's own row: making the
+/// worktree off the remote would mean moving the local one.
+#[expect(clippy::too_many_arguments)]
 pub fn worktree_rows(
     kind: Option<RefKind>,
     full: &str,
@@ -510,17 +552,26 @@ pub fn worktree_rows(
     open: bool,
     current_branch: &str,
     held_by_worktree: &str,
+    stopped_here: bool,
     local_exists: bool,
 ) -> WorktreeOffers {
     let held = !held_by_worktree.is_empty();
     let checkout = match kind {
-        Some(RefKind::Branch) if !held && full != current_branch => Some(WorktreeCheckout::Branch),
+        Some(RefKind::Branch) => Some(WorktreeCheckout::Branch),
         Some(RefKind::Remote) if !held && !local_exists => Some(WorktreeCheckout::Track),
+        _ => None,
+    }
+    .filter(|_| open && !full.is_empty());
+    let checkout_out = match checkout {
+        Some(WorktreeCheckout::Branch) if full == current_branch => Some(WorktreeAddOut::Current),
+        Some(WorktreeCheckout::Branch) if held => Some(WorktreeAddOut::Held),
+        Some(WorktreeCheckout::Branch) if stopped_here => Some(WorktreeAddOut::Stopped),
         _ => None,
     };
     WorktreeOffers {
         here: open && !oid_hex.is_empty() && kind != Some(RefKind::Stash),
-        checkout: checkout.filter(|_| open && !full.is_empty()),
+        checkout,
+        checkout_out,
     }
 }
 

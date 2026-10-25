@@ -76,7 +76,7 @@ fn the_kind_word_is_the_chips() {
 /// The two rows that make a worktree, asked of an idle repository on `main`
 /// with no worktree holding anything.
 fn making(kind: Option<RefKind>, full: &str) -> WorktreeOffers {
-    worktree_rows(kind, full, "abc123", true, "main", "", false)
+    worktree_rows(kind, full, "abc123", true, "main", "", false, false)
 }
 
 #[test]
@@ -92,11 +92,14 @@ fn a_free_branch_goes_out_as_it_is_and_any_commit_takes_a_new_one() {
     );
 }
 
-/// git keeps a branch to one worktree: the tree's own and another's offer
-/// only a new branch.
+/// git keeps a branch to one worktree: on the tree's own and on another's,
+/// `worktree add` stands greyed and says which.
 #[test]
-fn a_branch_already_out_offers_only_a_new_one() {
-    assert_eq!(making(Some(RefKind::Branch), "main").words(), vec!["here"]);
+fn a_branch_already_out_greys_its_worktree_add() {
+    assert_eq!(
+        making(Some(RefKind::Branch), "main").words(),
+        vec!["here", "checkout-branch", "out-current"]
+    );
     let held = worktree_rows(
         Some(RefKind::Branch),
         "feature/topic-a",
@@ -105,14 +108,50 @@ fn a_branch_already_out_offers_only_a_new_one() {
         "main",
         "C:/work/topic",
         false,
+        false,
     );
-    assert_eq!(held.words(), vec!["here"]);
+    assert_eq!(held.words(), vec!["here", "checkout-branch", "out-held"]);
+    assert_eq!(
+        making(Some(RefKind::Branch), "feature/login").checkout_out,
+        None,
+        "a free branch goes out"
+    );
+}
+
+/// A rebase or bisect stopped here leaves the tree detached, and the
+/// branch it names is still out here — the one listing no worktree as its
+/// holder.
+#[test]
+fn a_branch_a_stopped_operation_here_holds_greys_its_worktree_add() {
+    let stopped = worktree_rows(
+        Some(RefKind::Branch),
+        "feature/clash",
+        "abc123",
+        true,
+        "",
+        "",
+        true,
+        false,
+    );
+    assert_eq!(
+        stopped.words(),
+        vec!["here", "checkout-branch", "out-stopped"]
+    );
 }
 
 /// On a detached HEAD every local branch is free.
 #[test]
 fn a_detached_tree_holds_no_branch() {
-    let offers = worktree_rows(Some(RefKind::Branch), "main", "abc123", true, "", "", false);
+    let offers = worktree_rows(
+        Some(RefKind::Branch),
+        "main",
+        "abc123",
+        true,
+        "",
+        "",
+        false,
+        false,
+    );
     assert_eq!(offers.checkout, Some(WorktreeCheckout::Branch));
 }
 
@@ -131,6 +170,7 @@ fn a_remote_branch_makes_its_local_one_only_where_there_is_none() {
         true,
         "main",
         "",
+        false,
         true,
     );
     assert_eq!(local_there.words(), vec!["here"]);
@@ -141,12 +181,12 @@ fn a_remote_branch_makes_its_local_one_only_where_there_is_none() {
 #[test]
 fn only_a_closed_tab_or_no_commit_keeps_a_worktree_from_being_made() {
     assert!(
-        worktree_rows(None, "", "abc123", false, "main", "", false)
+        worktree_rows(None, "", "abc123", false, "main", "", false, false)
             .words()
             .is_empty()
     );
     assert!(
-        worktree_rows(None, "", "", true, "main", "", false)
+        worktree_rows(None, "", "", true, "main", "", false, false)
             .words()
             .is_empty()
     );
@@ -158,6 +198,7 @@ fn only_a_closed_tab_or_no_commit_keeps_a_worktree_from_being_made() {
             true,
             "main",
             "",
+            false,
             false
         )
         .words()

@@ -20,6 +20,7 @@ fn an_ordinary_commit_away_from_head_offers_the_whole_menu() {
             edit_history: true,
             move_branch: true,
             branch_here: true,
+            standing: false,
             stash_write: false,
         }
     );
@@ -55,9 +56,36 @@ fn detached_keeps_only_the_rows_that_ask_nothing_of_a_branch() {
 }
 
 #[test]
-fn a_standing_operation_closes_the_commit_menu_down() {
+fn a_standing_operation_greys_the_whole_menu_in_its_seats() {
     let offers = commit_menu(true, "main", false, "MERGING", "abc123", "def456", "");
-    assert_eq!(offers, CommitMenuOffers::default());
+    assert_eq!(
+        offers,
+        CommitMenuOffers {
+            standing: true,
+            ..commit_offers("abc123", "def456")
+        },
+        "every row the idle menu has, kept"
+    );
+    assert_eq!(
+        offers.words(),
+        [
+            "sequence",
+            "integrate",
+            "edit-history",
+            "move-branch",
+            "branch-here",
+            "standing"
+        ]
+    );
+    let rebasing = commit_menu(true, "", true, "REBASE 1/3", "abc123", "def456", "");
+    assert_eq!(
+        rebasing,
+        CommitMenuOffers {
+            standing: true,
+            ..commit_menu(true, "", true, "", "abc123", "def456", "")
+        },
+        "a stopped rebase leaves the tree detached: the rows that need a branch have none to name"
+    );
 }
 
 #[test]
