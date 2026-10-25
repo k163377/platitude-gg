@@ -31,8 +31,9 @@ Item {
     property string path: ""
     /// Whether git could stash at all — **a question about the tree**: one unmerged path anywhere and git refuses the
     /// whole command, named paths or not, and an unborn repository has nowhere to put one (`BandStashButton`,
-    /// `platitude_core::stash::standing`).
-    property bool canStash: false
+    /// `platitude_core::stash::standing`). Both of those grey the row in the toolbar's words; `clean` takes it away,
+    /// a file row having nothing to set aside.
+    property string stashStanding: ""
     /// How many files the rows here would touch, counted the way the writes count them.
     property int count: 0
     property var plan: null
@@ -47,6 +48,7 @@ Item {
 
     /// Automation: handles into these rows (the same exposure `GraphPane.view` is).
     readonly property alias menu: fileMenu
+    readonly property alias stashItem: fileStashItem
     readonly property alias discardItem: fileDiscardItem
 
     anchors.fill: parent
@@ -62,7 +64,7 @@ Item {
     }
     /// Reads and freezes what the rows stand on, off the pane's choice as it is now.
     function standOn() {
-        fileRowMenu.canStash = fileRowMenu.tree.stashStanding === "ready"
+        fileRowMenu.stashStanding = fileRowMenu.tree.stashStanding
         fileRowMenu.plan = fileRowMenu.planDiscard()
         // Rows, not `chosenCount`: a folder in the choice is a chosen key no command here reaches.
         fileRowMenu.count = fileRowMenu.wipPane.chosenRows().length
@@ -202,9 +204,15 @@ Item {
         }
         AppMenuSeparator {}
         AppMenuItem {
+            id: fileStashItem
             code: "stash"
             note: fileRowMenu.count > 1 ? qsTr("%n files", "", fileRowMenu.count) : ""
-            offered: fileRowMenu.canStash
+            offered: fileRowMenu.stashStanding !== "" && fileRowMenu.stashStanding !== "clean"
+            blockedReason: fileRowMenu.stashStanding === "unborn"
+                           ? qsTr("No commits yet — git cannot stash before the first one")
+                           : fileRowMenu.stashStanding === "conflicts"
+                             ? qsTr("Settle the conflicts first — git will not stash an unmerged file")
+                             : ""
             onTriggered: {
                 const rows = fileRowMenu.wipPane.chosenRows()
                 const paths = []

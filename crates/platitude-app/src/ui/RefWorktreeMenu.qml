@@ -53,6 +53,13 @@ AppMenu {
         property string addPath: ""
         property string place: ""
         property string taken: ""
+        /// Why `worktree add` greys before any place is asked: the branch is out — `current` here, `held` in the
+        /// worktree that goes by `holderLeaf`, `stopped` under a rebase or bisect stopped here (`stoppedBy` says which;
+        /// `offers::WorktreeAddOut`) — or "".
+        property string addOut: ""
+        property string holderLeaf: ""
+        property bool holderHome: false
+        property string stoppedBy: ""
     }
 
     /// Stands the card on a row. `facts` is the worktree the row names (`NavSectionModel.worktreeFacts`) — undefined
@@ -61,7 +68,8 @@ AppMenu {
     /// (`offers::worktree_rows`, `CommitMenuState.askWorktreeRows` / `RefRowMenu.askWorktreeRows`): `oid` (the row's
     /// commit), `here` (`Create worktree here…` has a row), `checkout` (`branch` / `track` / empty for no
     /// `worktree add`), `branch` / `start` (what that row takes out, and the remote branch a tracking one is made off),
-    /// and where it goes — `path`, `place` (its folder) and `taken` (what is in the way there).
+    /// where it goes — `path`, `place` (its folder) and `taken` (what is in the way there) — and `out` / `holderLeaf` /
+    /// `holderHome` / `stoppedBy` (the branch already out, and where or by what).
     function standOn(facts, here, making) {
         const offers = facts ? GitFacts.worktreeCardOffers(facts.change, here) : []
         state.path = facts ? facts.full : ""
@@ -79,6 +87,10 @@ AppMenu {
         state.addPath = making.path
         state.place = making.place
         state.taken = making.taken
+        state.addOut = making.out
+        state.holderLeaf = making.holderLeaf
+        state.holderHome = making.holderHome
+        state.stoppedBy = making.stoppedBy
     }
 
     // `dismiss()` folds every level (rules-refs/app-ui.md「メニューを閉じるのは自分」).
@@ -98,7 +110,8 @@ AppMenu {
         onTriggered: worktreeMenu.worktreeHereRequested(state.oid)
     }
     // Names the folder it makes, as `worktree remove` names the one it takes (デザイン規約 §ref の種別「名前の印」);
-    // greyed with the reason where something is in the way there, warned of before the press.
+    // greyed with the reason where the branch is out already — git keeps it to one worktree — or something is in the
+    // way there, warned of before the press.
     AppMenuItem {
         id: refWorktreeAddItem
         code: "worktree add"
@@ -106,9 +119,15 @@ AppMenu {
         codeName: state.place
         growsForText: false
         offered: state.checkout !== ""
-        blockedReason: Words.worktreePlaceTaken(state.taken, state.place)
-        // The folder at the end of that line wears the tree mark, as it does on the row (デザイン規約 §ref の種別).
-        reasonMarkWord: refWorktreeAddItem.blockedReason !== "" ? state.place : ""
+        blockedReason: state.addOut === "current" ? qsTr("Switch away first — this is the branch you are on")
+                     : state.addOut === "held" ? Words.checkedOutElsewhere(state.holderLeaf)
+                     // The rename box's words for the same hold (`Words.heldByOperation`).
+                     : state.addOut === "stopped" ? Words.heldByOperation(state.stoppedBy, true, "")
+                     : Words.worktreePlaceTaken(state.taken, state.place)
+        // The folder at the end of that line wears its mark, as it does on the row (デザイン規約 §ref の種別).
+        reasonMarkWord: state.addOut === "held" ? state.holderLeaf
+                      : state.addOut === "" && refWorktreeAddItem.blockedReason !== "" ? state.place : ""
+        reasonMarkKind: state.addOut === "held" && state.holderHome ? "home" : "tree"
         onTriggered: worktreeMenu.worktreeAddRequested(state.checkout, state.branch, state.start, state.addPath,
                                                        state.place)
     }
@@ -125,7 +144,8 @@ AppMenu {
         codeName: state.name
         growsForText: false
         offered: state.canRemove
-        // Greyed, not gone: the reader asked why it cannot go, and this is where it says (デザイン規約 §メニュー の例外).
+        // Greyed, not gone: the reader asked why it cannot go, and this is where it says (デザイン規約 §メニュー
+        // 「「今できない」行は無効で残す」).
         blockedReason: state.out === "locked"
                        ? (state.lockReason === "" ? qsTr("This worktree is locked")
                                                   : qsTr("Locked — %1").arg(state.lockReason))

@@ -67,11 +67,16 @@ Item {
     property bool heldHome: false
     property bool canBranchHere: false
     property bool canIntegrateFrom: false
+    /// An operation stands: `Create branch here…`, merge / rebase and the TAG card's `Create tag here…` keep their
+    /// seats, greyed (`offers::RefMenuOffers::standing`).
+    property bool opStanding: false
+    /// What those rows say while it does — empty while they are live.
+    readonly property string startWhy: refRowMenu.opStanding ? Words.finishStoppedFirst : ""
     /// What the `pull` row runs (`offers::pull_row`): `here` — `git pull`, on either end of the current branch's
     /// upstream comparison —, `aside` — this row's own branch fast-forwarded, the worktree being on another —, or ""
     /// for no row.
     property string pullRuns: ""
-    /// Why that row is greyed — `diverged` / `own` / `held` (`Words.pullOut`) — or "" while it is live.
+    /// Why that row is greyed — `standing` / `diverged` / `own` / `held` (`Words.pullOut`) — or "" while it is live.
     property string pullOut: ""
     /// The remote branch this row's branch tracks, which the `own` reason names.
     property string pullUpstream: ""
@@ -116,6 +121,7 @@ Item {
     readonly property alias stashDropItem: refStashDropItem
     readonly property alias switchItem: refSwitchItem
     readonly property alias pullItem: refPullItem
+    readonly property alias mergeItem: refMergeItem
     readonly property alias rebaseItem: refRebaseItem
     /// The cards the rows used rarely hang behind; a run photographing one opens it first (`AppMenu.openSub`).
     readonly property alias branchCard: branchMenu
@@ -232,14 +238,18 @@ Item {
     }
 
     /// What the WORKTREE card's two making rows stand on (`RefWorktreeMenu.standOn`'s `making`), asked of the row
-    /// (`offers::worktree_rows`) — `held` the worktree holding its branch, as `offerOn` found it. A free branch, or a
-    /// remote one with no local branch, goes out as it is to the folder `newWorktreeFor` names; the folder is looked at
-    /// here, as the menu opens. The same answer `CommitMenuState.askWorktreeRows` gives the graph row's card.
+    /// (`offers::worktree_rows`) — `held` the worktree holding its branch, as `offerOn` found it. A local branch, or a
+    /// remote one with no local branch, goes out as it is to the folder `newWorktreeFor` names, greyed where the branch
+    /// is out already; the folder is looked at here, as the menu opens. The same answer
+    /// `CommitMenuState.askWorktreeRows` gives the graph row's card.
     function askWorktreeRows(kind, full, oidHex, held) {
         const local = kind === "remote" ? refRowMenu.repoTab.localNameFor(full) : full
+        // As `CommitMenuState.askWorktreeRows`: a stopped operation here holds its branch with no listed holder.
+        const stopped = kind === "branch" ? refRowMenu.worktreesModel.heldByOperation(local) : undefined
+        const stoppedHere = stopped !== undefined && stopped.here
         const offers = GitFacts.worktreeOffers(
             kind, full, oidHex, refRowMenu.repoTab.state === "open",
-            refRowMenu.tree.branch, kind === "branch" || kind === "remote" ? held : "",
+            refRowMenu.tree.branch, kind === "branch" || kind === "remote" ? held : "", stoppedHere,
             kind === "remote" && refRowMenu.branchesModel.oidOfName(local) !== "")
         const checkout = offers.includes("checkout-branch") ? "branch"
                        : offers.includes("checkout-track") ? "track" : ""
@@ -253,7 +263,12 @@ Item {
             "start": checkout === "track" ? full : "",
             "path": place === undefined ? "" : place.path,
             "place": place === undefined ? "" : place.name,
-            "taken": place === undefined ? "" : place.taken
+            "taken": place === undefined ? "" : place.taken,
+            "out": offers.includes("out-current") ? "current" : offers.includes("out-held") ? "held"
+                 : offers.includes("out-stopped") ? "stopped" : "",
+            "holderLeaf": held === "" ? "" : refRowMenu.worktreesModel.worktreeCalled(held),
+            "holderHome": held !== "" && refRowMenu.worktreesModel.worktreeHome(held),
+            "stoppedBy": stoppedHere ? stopped.by : ""
         }
     }
 
@@ -358,6 +373,7 @@ Item {
         refRowMenu.heldHome = held !== "" && refRowMenu.worktreesModel.worktreeHome(held)
         refRowMenu.canBranchHere = offers.includes("branch-here")
         refRowMenu.canIntegrateFrom = offers.includes("integrate")
+        refRowMenu.opStanding = offers.includes("standing")
         // The tree's own comparison for `git pull`, the row's branch's for its fast-forward (offers::pull_row).
         refRowMenu.pullUpstream = refRowMenu.branchesModel.upstreamOf(full)
         const pull = GitFacts.pullRow(
@@ -368,9 +384,9 @@ Item {
         refRowMenu.pullRuns = pull.length > 0 ? pull[0] : ""
         refRowMenu.pullOut = pull.length > 1 ? pull[1].replace("out-", "") : ""
         refRowMenu.canDelete = offers.includes("delete")
-        // Only where the row that wears it is offered.
+        // Only where the row that wears it is offered, and live: a greyed row warns of a press that cannot be made.
         refRowMenu.rebasePublished =
-            refRowMenu.integrateOffered
+            refRowMenu.integrateOffered && !refRowMenu.opStanding
             && refRowMenu.graphModel.rebaseRewritesPublished(oidHex, refRowMenu.tree.headOid)
     }
 
@@ -388,6 +404,7 @@ Item {
             id: refBranchHereItem
             text: Words.createBranchHere
             offered: refRowMenu.canBranchHere
+            blockedReason: refRowMenu.startWhy
             onTriggered: refRowMenu.branchHereRequested(refRowMenu.refOid)
         }
         AppMenuItem {
@@ -412,11 +429,13 @@ Item {
         }
         AppMenuSeparator {}
         AppMenuItem {
+            id: refMergeItem
             code: "merge"
             refSentence: Words.intoBranch
             refName: refRowMenu.worktree.branch
             refMark: "branch"
             offered: refRowMenu.integrateOffered
+            blockedReason: refRowMenu.startWhy
             onTriggered: refRowMenu.repoTab.merge(refRowMenu.integrateRef, false, false, "")
         }
         AppMenuItem {
@@ -429,6 +448,7 @@ Item {
             // A tag stays put under a rebase onto it: git peels it to its commit, and `--update-refs` carries
             // branches only (デザイン規約 §履歴を合流させる).
             offered: refRowMenu.integrateOffered
+            blockedReason: refRowMenu.startWhy
             // Published = reachable from a remote-tracking ref, as of the last fetch.
             note: refRowMenu.rebasePublished ? Words.rewritesPushed : ""
             onTriggered: refRowMenu.repoTab.rebase(refRowMenu.integrateRef, "", true)
@@ -530,6 +550,7 @@ Item {
             runningWhy: refRowMenu.runningWhy
             onWaitEnded: refRowMenu.standAgain()
             canBranchHere: refRowMenu.canBranchHere
+            makeWhy: refRowMenu.startWhy
             onTagHereRequested: oidHex => refRowMenu.tagHereRequested(oidHex)
             onPushTagRequested: (remote, tag, lease) => refRowMenu.repoTab.pushTag(remote, tag, lease)
             onDeleteTagRequested: tag => refRowMenu.repoTab.deleteTag(tag)

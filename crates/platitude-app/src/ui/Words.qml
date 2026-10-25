@@ -197,6 +197,11 @@ QtObject {
     //: Follows the `merge` or `pull` chip: "merge into main", "pull into release". %1 is a branch name.
     readonly property string intoBranch: qsTr("into %1")
 
+    /// Why a row that would start or rewrite history is greyed while an operation stands here: the message edit
+    /// (`RepoPage`), `pull`, merge / rebase, the rows that make a name and the graph row's rewrites
+    /// (デザイン規約 §進行中の操作から出る).
+    readonly property string finishStoppedFirst: qsTr("Finish the stopped operation first")
+
     /// Why the `pull` row is greyed while both sides have moved, from both entrances (`RefRowMenu` / `CommitRowMenu`;
     /// デザイン規約 §取り込んで合流させる).
     readonly property string pullDiverged: qsTr(
@@ -208,11 +213,12 @@ QtObject {
         //: %1 is the remote branch this branch tracks, e.g. origin/feature/login.
         return qsTr("Cannot fast-forward — it has commits not on %1").arg(upstream)
     }
-    /// Why the `pull` row is greyed, by the word `GitFacts.pullRow` answered after `out-`: the tree diverged, the row's
-    /// branch has commits its `upstream` lacks, or another worktree has it out — `leaf` is that worktree's folder.
-    /// Empty where the row is live.
+    /// Why the `pull` row is greyed, by the word `GitFacts.pullRow` answered after `out-`: an operation stands here,
+    /// the tree diverged, the row's branch has commits its `upstream` lacks, or another worktree has it out — `leaf`
+    /// is that worktree's folder. Empty where the row is live.
     function pullOut(out, leaf, upstream) {
         switch (out) {
+        case "standing": return Words.finishStoppedFirst
         case "diverged": return Words.pullDiverged
         case "own": return Words.pullOwnCommits(upstream)
         case "held": return Words.checkedOutElsewhere(leaf)

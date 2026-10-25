@@ -184,12 +184,13 @@ AppMenu {
         state.canUnsetUpstream = offers.includes("unset-upstream")
         state.onCurrentBranch = offers.includes("current")
         // A local branch the worktree is not on — the one it is on has the toolbar's own button (デザイン規約 §メニュー
-        // 「そこにしか入口が無いものだけ」) — and only where a push can go: nothing to send, or nothing to name, is no row.
-        // Where the push would stay in this repository, it stands out instead (デザイン規約 §リモートへ送る).
+        // 「そこにしか入口が無いものだけ」) — and only where a push names somewhere: nothing to name is no row. Nothing to
+        // send stands out (`clean`), and so does a push that would stay in this repository (デザイン規約 §メニュー
+        // 「「今できない」行は無効で残す」, §リモートへ送る).
         const push = facts.push
         if (kind === "branch" && facts.open && !state.onCurrentBranch && push !== undefined) {
             state.pushStaysHere = push.state === "stays-here"
-            if (["publish", "elsewhere", "ready", "behind", "diverged"].includes(push.state)) {
+            if (["publish", "elsewhere", "ready", "clean", "behind", "diverged"].includes(push.state)) {
                 state.pushState = push.state
                 state.pushTarget = push.target
                 state.pushLease = push.lease

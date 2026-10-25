@@ -29,8 +29,8 @@ AppMenuItem {
     nameMark: deleteRow.remoteRow ? "remote" : "branch"
     codeName: deleteRow.facts.refId
     note: deleteRow.shownRefused ? qsTr("not merged") : ""
-    // On a branch the delete forms are a fixed table whose rows grey out rather than go
-    // (デザイン規約 §メニュー「例外はブランチの削除の表」). The other kinds keep the assembled rule.
+    // On a branch the delete forms are a fixed table whose rows grey out rather than go (デザイン規約 §メニュー
+    // 「ブランチの削除の表」); a remote branch's row stands where core offers its delete.
     offered: deleteRow.branchRow || (deleteRow.heldRow && deleteRow.facts.canDelete)
     blockedReason: !deleteRow.branchRow || deleteRow.facts.canDelete ? ""
                  : deleteRow.facts.onCurrentBranch ? deleteRow.card.deleteBlockedOnCurrent

@@ -47,6 +47,8 @@ QtObject {
     property bool menuCanEditHistory: false
     property bool menuCanMoveBranch: false
     property bool menuCanBranchHere: false
+    /// An operation stands: every row that starts or rewrites history is there but greyed.
+    property bool menuOpStanding: false
     property bool menuStashCanWrite: false
     /// Whether the row's name is somewhere to move to, and whether the press asks first (`offers::ref_menu`).
     property bool menuCanSwitch: false
@@ -73,16 +75,21 @@ QtObject {
     property bool menuTipHeldElsewhere: false
 
     /// What the WORKTREE card's two making rows stand on (`RefWorktreeMenu.standOn`'s `making`), asked of the commit
-    /// and the name the menu is aimed at (`offers::worktree_rows`): any commit takes a new branch; a free branch, or a
+    /// and the name the menu is aimed at (`offers::worktree_rows`): any commit takes a new branch; a local branch, or a
     /// remote one with no local branch, goes out as it is — to the folder `newWorktreeFor` names, looked at here as the
-    /// menu opens, the row greyed where something is already there.
+    /// menu opens, the row greyed where the branch is out already or something is already there.
     function askWorktreeRows(kind, name, oidHex) {
         const local = kind === "remote" ? menuState.repoTab.localNameFor(name) : name
+        const held = kind === "branch" || kind === "remote" ? menuState.worktreesModel.worktreeHolding(local) : ""
+        // A stopped rebase or bisect here holds it with the tree detached: no listing names this tree its holder.
+        const stopped = kind === "branch" ? menuState.worktreesModel.heldByOperation(local) : undefined
+        const stoppedHere = stopped !== undefined && stopped.here
         const offers = GitFacts.worktreeOffers(
             kind, name, oidHex,
             menuState.repoTab.state === "open",
             menuState.tree.branch,
-            kind === "branch" || kind === "remote" ? menuState.worktreesModel.worktreeHolding(local) : "",
+            held,
+            stoppedHere,
             kind === "remote" && menuState.branchesModel.oidOfName(local) !== "")
         const checkout = offers.includes("checkout-branch") ? "branch"
                        : offers.includes("checkout-track") ? "track" : ""
@@ -97,7 +104,14 @@ QtObject {
             "start": checkout === "track" ? name : "",
             "path": place === undefined ? "" : place.path,
             "place": place === undefined ? "" : place.name,
-            "taken": place === undefined ? "" : place.taken
+            "taken": place === undefined ? "" : place.taken,
+            // Why that row greys: the branch is out here, in the worktree named, or under an operation stopped here
+            // (`offers::WorktreeAddOut`).
+            "out": offers.includes("out-current") ? "current" : offers.includes("out-held") ? "held"
+                 : offers.includes("out-stopped") ? "stopped" : "",
+            "holderLeaf": held === "" ? "" : menuState.worktreesModel.worktreeCalled(held),
+            "holderHome": held !== "" && menuState.worktreesModel.worktreeHome(held),
+            "stoppedBy": stoppedHere ? stopped.by : ""
         }
     }
 
@@ -258,14 +272,16 @@ QtObject {
         menuState.standCarried()
         menu.offerCarried()
     }
-    /// Whether that worktree's work can be applied here: not where a conflict stands on either side — there it leaves
-    /// no telling which side to bring, and git applies nothing over one here. Both are already on screen, the row's
-    /// tally and the band's badge (デザイン規約 §メニュー「選べない行は消す」). False where the row is gone.
+    /// Whether that worktree's work has an apply row — false where the row is gone — and what greys it: a conflict
+    /// standing on either side (デザイン規約 §メニュー「「今できない」行は無効で残す」). Here first: git applies nothing
+    /// over one, whichever side would be brought.
     function standCarried() {
         const menu = menuState.menu
         const tally = menuState.graphModel.carriedTally(menuState.graphModel.carriedRowOf(menu.carriedPath))
-        menu.carriedCanApply = menuState.repoTab.state === "open" && tally !== undefined
-            && tally.conflicted === 0 && menuState.tree.conflictCount === 0
+        menu.carriedApplyOffered = menuState.repoTab.state === "open" && tally !== undefined
+        menu.carriedApplyOut = !menu.carriedApplyOffered ? ""
+                             : menuState.tree.conflictCount > 0 ? "here"
+                             : tally.conflicted > 0 ? "there" : ""
     }
 
     function openRowMenu(oidHex) {
@@ -355,6 +371,7 @@ QtObject {
         menuState.menuCanEditHistory = offers.includes("edit-history")
         menuState.menuCanMoveBranch = offers.includes("move-branch")
         menuState.menuCanBranchHere = offers.includes("branch-here")
+        menuState.menuOpStanding = offers.includes("standing")
         menuState.askRefRows(menuState.menu.targetKind, menuState.menu.targetName, aimAt)
         return menuState.cardFacts(oidHex, aimAt)
     }

@@ -1561,6 +1561,7 @@ FocusScope {
             canEditHistory: commitMenuState.menuCanEditHistory
             canMoveBranch: commitMenuState.menuCanMoveBranch
             canBranchHere: commitMenuState.menuCanBranchHere
+            opStanding: commitMenuState.menuOpStanding
             stashCanWrite: commitMenuState.menuStashCanWrite
             hardResetTakes: commitMenuState.menuHardResetTakes
             hardResetNotCopied: commitMenuState.menuHardResetNotCopied
@@ -3835,7 +3836,7 @@ FocusScope {
                             : page.messageEdit === "stash"
                               ? qsTr("Rename it in the list on the left")
                               : page.messageEdit === "standing"
-                                ? qsTr("Finish the stopped operation first")
+                                ? Words.finishStoppedFirst
                                 : ""
                         busy: repoTab.busyCount > 0
                         published: page.selectedPublished

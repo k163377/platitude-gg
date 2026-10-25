@@ -47,6 +47,13 @@ Item {
     required property bool canEditHistory
     required property bool canMoveBranch
     required property bool canBranchHere
+    /// An operation stands: every row that starts or rewrites history keeps its seat, greyed — the reset card's rows
+    /// through the card (`offers::CommitMenuOffers::standing`).
+    required property bool opStanding
+    /// What those rows say while it does — empty while they are live.
+    readonly property string startWhy: rowMenu.opStanding ? Words.finishStoppedFirst : ""
+    /// `published` as the rewrite rows wear it: a greyed row warns of nothing, the press it warned of being out.
+    readonly property bool publishedLive: rowMenu.published && !rowMenu.opStanding
     required property bool stashCanWrite
     /// Whether anything besides this branch still reaches the tip — what decides whether the drop row is held
     /// (`CommitMenuState.menuTipHeldElsewhere`, the same answer `RebasePlanRunBar` is handed).
@@ -58,8 +65,8 @@ Item {
     required property string heldLeaf
     /// That worktree is the repository's own: its name wears the house (`RefRowMenu.heldHome`).
     property bool heldHome: false
-    /// What the `pull` row runs on that name — `here` / `aside`, "" for no row — and why it is greyed — `diverged` /
-    /// `own` / `held`, "" while live (`RefRowMenu.pullRuns` / `pullOut`).
+    /// What the `pull` row runs on that name — `here` / `aside`, "" for no row — and why it is greyed — `standing` /
+    /// `diverged` / `own` / `held`, "" while live (`RefRowMenu.pullRuns` / `pullOut`).
     required property string pullRuns
     required property string pullOut
     /// The remote branch that name tracks, which the `own` reason names (`RefRowMenu.pullUpstream`).
@@ -77,12 +84,16 @@ Item {
     property string checkedBranch: ""
     property string checkedMerged: ""
     /// Another worktree's uncommitted row the third menu stands on: where that worktree is (as its row names it), the
-    /// name the row gives it, and whether its work can be applied here (`CommitMenuState.standCarried`).
+    /// name the row gives it, and whether its apply has a row — greyed by `carriedApplyOut` where it cannot run now
+    /// (`CommitMenuState.standCarried`).
     property string carriedPath: ""
     property string carriedName: ""
     /// That worktree is the repository's own, whose name wears the house (`GraphModel.carriedHome`).
     property bool carriedHome: false
-    property bool carriedCanApply: false
+    property bool carriedApplyOffered: false
+    /// Where a conflict stands that greys the apply — `here` (git applies nothing over one) or `there` (no telling
+    /// which side to bring) —, "" while it is live (`CommitMenuState.standCarried`).
+    property string carriedApplyOut: ""
 
     /// Move the worktree to the row's name, by the road a double-click takes (`RepoPage.switchToRef`).
     signal switchRequested(string kind, string name)
@@ -289,7 +300,15 @@ Item {
         AppMenuItem {
             id: carriedApplyRow
             text: qsTr("Apply changes to this worktree")
-            offered: rowMenu.carriedCanApply
+            offered: rowMenu.carriedApplyOffered
+            // Not "here": in this app that is the row right-clicked (デザイン規約 §別の worktree を読む).
+            //: %1 is the other worktree's name — its folder, or the branch the repository's own worktree has out.
+            blockedReason: rowMenu.carriedApplyOut === "there" ? qsTr("Settle its conflicts first — %1")
+                                                                 .arg(rowMenu.carriedName)
+                         : rowMenu.carriedApplyOut === "here" ? qsTr("Settle this worktree's conflicts first") : ""
+            // The worktree in that reason wears its mark, as the door above does.
+            reasonMarkWord: rowMenu.carriedApplyOut === "there" ? rowMenu.carriedName : ""
+            reasonMarkKind: rowMenu.carriedHome ? "home" : "tree"
             onTriggered: rowMenu.carriedApplyRequested(rowMenu.carriedPath)
         }
     }
@@ -309,6 +328,7 @@ Item {
             id: branchHereCommitItem
             text: Words.createBranchHere
             offered: rowMenu.canBranchHere
+            blockedReason: rowMenu.startWhy
             onTriggered: rowMenu.branchHereRequested(rowMenu.oid)
         }
         // The name is the chip's, so the row does not repeat it; landing is by name, since the commit itself would
@@ -333,12 +353,14 @@ Item {
         AppMenuItem {
             code: "cherry-pick"
             offered: rowMenu.canSequence
+            blockedReason: rowMenu.startWhy
             onTriggered: rowMenu.cherryPickRequested(rowMenu.oid)
         }
         // Both cherry-pick and revert only add a commit, so both are a plain click.
         AppMenuItem {
             code: "revert"
             offered: rowMenu.canSequence
+            blockedReason: rowMenu.startWhy
             onTriggered: rowMenu.revertRequested(rowMenu.oid)
         }
         AppMenuSeparator {}
@@ -348,8 +370,9 @@ Item {
             code: "squash"
             //: Follows the `squash` chip: "squash into parent".
             text: qsTr("into parent")
-            note: rowMenu.published ? qsTr("already pushed") : ""
+            note: rowMenu.publishedLive ? qsTr("already pushed") : ""
             offered: rowMenu.canEditHistory
+            blockedReason: rowMenu.startWhy
             onTriggered: rowMenu.squashRequested(rowMenu.oid)
         }
         // Held while this branch alone holds its tip; a plain click once something else does, since the commits then
@@ -357,8 +380,9 @@ Item {
         AppMenuItem {
             id: dropCommitItem
             code: "drop"
-            note: rowMenu.published ? qsTr("already pushed") : ""
+            note: rowMenu.publishedLive ? qsTr("already pushed") : ""
             offered: rowMenu.canEditHistory
+            blockedReason: rowMenu.startWhy
             holdPresses: rowMenu.tipHeldElsewhere ? 0 : Metrics.holdPressesWarned
             onTriggered: rowMenu.dropRequested(rowMenu.oid)
             onHeld: {
@@ -372,8 +396,9 @@ Item {
             code: "rebase --interactive"
             //: Follows the `rebase --interactive` chip: "from here up".
             text: qsTr("from here up")
-            note: rowMenu.published ? Words.rewritesPushed : ""
+            note: rowMenu.publishedLive ? Words.rewritesPushed : ""
             offered: rowMenu.canEditHistory
+            blockedReason: rowMenu.startWhy
             onTriggered: rowMenu.planRequested(rowMenu.oid)
         }
         AppMenuSeparator {}
@@ -383,6 +408,7 @@ Item {
             refName: rowMenu.branch
             refMark: "branch"
             offered: rowMenu.canIntegrate
+            blockedReason: rowMenu.startWhy
             onTriggered: rowMenu.mergeRequested(rowMenu.integrateRef)
         }
         AppMenuItem {
@@ -391,13 +417,15 @@ Item {
             refSentence: qsTr("%1 onto it")
             refName: rowMenu.branch
             refMark: "branch"
-            note: rowMenu.published ? Words.rewritesPushed : ""
+            note: rowMenu.publishedLive ? Words.rewritesPushed : ""
             offered: rowMenu.canIntegrate
+            blockedReason: rowMenu.startWhy
             onTriggered: rowMenu.rebaseRequested(rowMenu.integrateRef)
         }
         AppMenu {
             id: resetMenu
-            heldReason: rowMenu.heldReason
+            // A stopped operation holds every row inside as the held doors do; the title stays live to show them.
+            heldReason: rowMenu.heldReason !== "" ? rowMenu.heldReason : rowMenu.startWhy
             runningWhy: rowMenu.runningWhy
             onWaitEnded: rowMenu.waitEnded()
             titleCode: "reset"
@@ -425,7 +453,7 @@ Item {
                 code: "--hard"
                 text: qsTr("Discard everything after it")
                 // Two words and no count: `%n … file(s)` would show `(s)` verbatim, since no translation loads.
-                note: rowMenu.hardResetTakes > 0 ? qsTr("uncommitted too") : ""
+                note: rowMenu.hardResetTakes > 0 && !rowMenu.opStanding ? qsTr("uncommitted too") : ""
                 holdPresses: Metrics.holdPressesWarned
                 // The commits come back from the branch's reflog and the uncommitted changes from the discard
                 // record's copy — unless a file in them is one the copy cannot take (デザイン規約 §回数押し の色の表).
@@ -523,6 +551,7 @@ Item {
             runningWhy: rowMenu.runningWhy
             onWaitEnded: rowMenu.waitEnded()
             canBranchHere: rowMenu.canBranchHere
+            makeWhy: rowMenu.startWhy
             onTagHereRequested: oidHex => rowMenu.tagHereRequested(oidHex)
             onPushTagRequested: (remote, tag, lease) => rowMenu.pushTagRequested(remote, tag, lease)
             onDeleteTagRequested: tag => rowMenu.deleteTagRequested(tag)

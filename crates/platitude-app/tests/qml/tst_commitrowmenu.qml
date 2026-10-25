@@ -18,7 +18,15 @@ Item {
     property string asked: ""
     /// The WORKTREE card's making rows where a case is not about them (`CommitMenuState.askWorktreeRows`).
     readonly property var makingNothing: ({ "oid": "", "here": false, "checkout": "", "branch": "", "start": "",
-                                             "path": "", "place": "", "taken": "" })
+                                             "path": "", "place": "", "taken": "", "out": "", "holderLeaf": "",
+                                             "holderHome": false, "stoppedBy": "" })
+    /// The making rows of a case that is about them: `makingNothing` with `fields` over it.
+    function making(fields) {
+        const all = Object.assign({}, root.makingNothing)
+        for (const key in fields)
+            all[key] = fields[key]
+        return all
+    }
 
     CommitRowMenu {
         id: menu
@@ -31,6 +39,7 @@ Item {
         canEditHistory: true
         canMoveBranch: true
         canBranchHere: true
+        opStanding: false
         stashCanWrite: false
         tipHeldElsewhere: false
         canSwitch: true
@@ -121,7 +130,7 @@ Item {
         const all = { "targetKind": "branch", "targetName": "feature/topic-a", "canSwitch": true,
                       "switchAsks": false, "heldLeaf": "", "pullRuns": "here", "pullOut": "",
                       "pullUpstream": "origin/feature/topic-a", "published": false, "canIntegrate": true,
-                      "canSequence": true, "hardResetTakes": 0, "hardResetNotCopied": false }
+                      "canSequence": true, "opStanding": false, "hardResetTakes": 0, "hardResetNotCopied": false }
         for (const key in fields)
             all[key] = fields[key]
         for (const key in all)
@@ -213,6 +222,9 @@ Item {
             root.aimAt({ pullOut: "diverged" })
             verify(root.row("pull").offered, "the row stays: it is the reader's question, not a missing one")
             compare(root.row("pull").blockedReason, Words.pullDiverged)
+            root.aimAt({ pullOut: "standing" })
+            verify(root.row("pull").offered, "a stopped operation greys the row, it does not take it away")
+            compare(root.row("pull").blockedReason, "Finish the stopped operation first")
 
             root.aimAt({ pullRuns: "aside" })
             compare(root.row("pull").text, "into feature/topic-a", "aside, the chip's own branch is the one that moves")
@@ -229,6 +241,29 @@ Item {
 
             root.aimAt({ pullRuns: "" })
             verify(!root.row("pull").offered, "a row with no far side to go to is no row")
+        }
+
+        /// Under a stopped operation every row that starts or rewrites history keeps its seat and says what comes
+        /// first (offers::commit_menu `standing`) — the reset card's through the card, whose title stays live to show
+        /// them — and a warning goes with the press it warned of. The move stays live: it asks first.
+        function test_a_standing_operation_greys_every_row_that_starts_or_rewrites_history() {
+            root.aimAt({ opStanding: true, published: true, hardResetTakes: 2 })
+            menu.offerCommit(root.branchFacts())
+            verify(menu.menu.openSub(menu.resetSubmenu))
+            for (const item of [menu.branchHereItem, root.row("cherry-pick"), root.row("revert"), root.row("squash"),
+                                root.row("drop"), root.row("rebase --interactive"), root.row("merge"),
+                                root.row("rebase"), menu.tagHereItem, menu.hardResetRow]) {
+                verify(item.offered, item.code + " " + item.text + " keeps its seat")
+                compare(item.blockedWhy, Words.finishStoppedFirst, item.code + " " + item.text)
+                compare(item.note, "", "a greyed row warns of nothing")
+            }
+            compare(menu.switchItem.blockedWhy, "")
+
+            root.aimAt({ opStanding: false, published: true, hardResetTakes: 2 })
+            compare(root.row("merge").blockedWhy, "")
+            compare(menu.hardResetRow.blockedWhy, "")
+            compare(root.row("rebase").note, Words.rewritesPushed)
+            compare(menu.hardResetRow.note, "uncommitted too")
         }
 
         /// The press carries the chip's name, not the id: a merge of `main` says so in the commit it writes.
@@ -349,7 +384,7 @@ Item {
         function test_the_carried_row_menu_waits_and_withdraws_as_the_others() {
             menu.carriedPath = "C:/w/topic"
             menu.carriedName = "topic"
-            menu.carriedCanApply = true
+            menu.carriedApplyOffered = true
             menu.runningWhy = Words.otherCommandRunning
             menu.offerCarried()
             verify(menu.carriedShowing)
@@ -362,19 +397,38 @@ Item {
             compare(menu.carriedOpenItem.codeName, "topic")
 
             menu.holdShape()
-            menu.carriedCanApply = false
+            menu.carriedApplyOffered = false
             verify(menu.carriedApplyItem.withdrawn, "an apply that stopped applying greys where it is")
             menu.withdraw()
             verify(!menu.carriedShowing, "the withdrawal takes this menu down")
             menu.releaseShape()
 
-            menu.carriedCanApply = true
+            menu.carriedApplyOffered = true
             menu.offerCarried()
             menu.carriedApplyItem.triggered()
             compare(root.asked, "carried-apply C:/w/topic")
             menu.offerCarried()
             menu.carriedOpenItem.triggered()
             compare(root.asked, "carried-open C:/w/topic")
+            menu.carriedRowMenu.dismiss()
+        }
+
+        /// A conflict on either side greys the apply where it is and says which side to settle — the other worktree by
+        /// the name its door wears (デザイン規約 §別の worktree を読む).
+        function test_a_conflict_on_either_side_greys_the_apply() {
+            menu.carriedPath = "C:/w/topic"
+            menu.carriedName = "topic"
+            menu.carriedApplyOffered = true
+            menu.carriedApplyOut = "there"
+            menu.offerCarried()
+            verify(menu.carriedApplyItem.offered)
+            compare(menu.carriedApplyItem.blockedReason, "Settle its conflicts first — topic")
+            compare(menu.carriedApplyItem.tipMarkWord, "topic")
+            menu.carriedApplyOut = "here"
+            compare(menu.carriedApplyItem.blockedReason, "Settle this worktree's conflicts first")
+            compare(menu.carriedApplyItem.tipMarkWord, "")
+            menu.carriedApplyOut = ""
+            compare(menu.carriedApplyItem.blockedReason, "")
             menu.carriedRowMenu.dismiss()
         }
 
@@ -485,9 +539,9 @@ Item {
                             "upstream": "", "upstreamWhere": "",
                             "remoteDrifted": false, "open": false, "merged": "", "offers": [] }
             const notag = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] }
-            const making = { "oid": menu.oid, "here": true, "checkout": "branch", "branch": "feature/topic-a",
-                             "start": "", "path": "C:/work/repo.worktrees/feature-topic-a",
-                             "place": "feature-topic-a", "taken": "" }
+            const making = root.making({ "oid": menu.oid, "here": true, "checkout": "branch",
+                                         "branch": "feature/topic-a", "path": "C:/work/repo.worktrees/feature-topic-a",
+                                         "place": "feature-topic-a" })
             root.aimAt({})
             menu.offerCommit({ "branch": empty, "tag": notag, "making": making })
             const card = menu.worktreeCard
@@ -512,28 +566,47 @@ Item {
                     "worktree-add branch feature/topic-a  C:/work/repo.worktrees/feature-topic-a feature-topic-a")
 
             root.aimAt({ targetKind: "remote", targetName: "origin/feature/remote-only" })
-            menu.offerCommit({ "branch": empty, "tag": notag, "making": {
+            menu.offerCommit({ "branch": empty, "tag": notag, "making": root.making({
                 "oid": menu.oid, "here": true, "checkout": "track", "branch": "feature/remote-only",
                 "start": "origin/feature/remote-only", "path": "C:/work/repo.worktrees/feature-remote-only",
-                "place": "feature-remote-only", "taken": "" } })
+                "place": "feature-remote-only" }) })
             card.worktreeAddItem.triggered()
             compare(root.asked, "worktree-add track feature/remote-only origin/feature/remote-only "
                     + "C:/work/repo.worktrees/feature-remote-only feature-remote-only")
 
-            menu.offerCommit({ "branch": empty, "tag": notag, "making": {
-                "oid": menu.oid, "here": true, "checkout": "branch", "branch": "feature/blocked", "start": "",
-                "path": "C:/work/repo.worktrees/feature-blocked", "place": "feature-blocked", "taken": "folder" } })
+            menu.offerCommit({ "branch": empty, "tag": notag, "making": root.making({
+                "oid": menu.oid, "here": true, "checkout": "branch", "branch": "feature/blocked",
+                "path": "C:/work/repo.worktrees/feature-blocked", "place": "feature-blocked", "taken": "folder" }) })
             compare(card.worktreeAddItem.blockedReason, "The folder is not empty — feature-blocked")
             compare(card.worktreeAddItem.tipMarkWord, "feature-blocked", "the tip's tree mark stands before the folder")
 
-            menu.offerCommit({ "branch": empty, "tag": notag, "making": {
-                "oid": menu.oid, "here": true, "checkout": "branch", "branch": "fix/listed", "start": "",
-                "path": "C:/work/repo.worktrees/fix-listed", "place": "fix-listed", "taken": "listed" } })
+            menu.offerCommit({ "branch": empty, "tag": notag, "making": root.making({
+                "oid": menu.oid, "here": true, "checkout": "branch", "branch": "fix/listed",
+                "path": "C:/work/repo.worktrees/fix-listed", "place": "fix-listed", "taken": "listed" }) })
             compare(card.worktreeAddItem.blockedReason, "Taken by another worktree — fix-listed")
             compare(card.worktreeAddItem.tipMarkWord, "fix-listed")
 
+            // The branch already out — here, or in the worktree named — greys the row on that, whatever the place.
+            menu.offerCommit({ "branch": empty, "tag": notag, "making": root.making({
+                "oid": menu.oid, "here": true, "checkout": "branch", "branch": "main",
+                "path": "C:/work/repo.worktrees/main", "place": "main", "out": "current" }) })
+            verify(card.worktreeAddItem.offered, "the branch the tab stands on keeps the row")
+            compare(card.worktreeAddItem.blockedReason, "Switch away first — this is the branch you are on")
+            menu.offerCommit({ "branch": empty, "tag": notag, "making": root.making({
+                "oid": menu.oid, "here": true, "checkout": "branch", "branch": "feature/topic-a",
+                "path": "C:/work/repo.worktrees/feature-topic-a", "place": "feature-topic-a", "out": "held",
+                "holderLeaf": "topic" }) })
+            compare(card.worktreeAddItem.blockedReason, Words.checkedOutElsewhere("topic"))
+            compare(card.worktreeAddItem.tipMarkWord, "topic", "the holder's folder wears its mark in the tip")
+            menu.offerCommit({ "branch": empty, "tag": notag, "making": root.making({
+                "oid": menu.oid, "here": true, "checkout": "branch", "branch": "feature/clash",
+                "path": "C:/work/repo.worktrees/feature-clash", "place": "feature-clash", "out": "stopped",
+                "stoppedBy": "rebase" }) })
+            compare(card.worktreeAddItem.blockedReason, "Being rebased in this worktree",
+                    "a stop here holds the branch with the tree detached")
+
             menu.offerCommit({ "branch": empty, "tag": notag, "making": root.makingNothing })
-            verify(!card.worktreeAddItem.offered, "a branch out somewhere has no row, not a grey one")
+            verify(!card.worktreeAddItem.offered, "a row whose name has no branch to take out has no row")
             verify(!card.applies, "and a row with nothing to make or take away has no card")
             menu.menu.dismiss()
         }

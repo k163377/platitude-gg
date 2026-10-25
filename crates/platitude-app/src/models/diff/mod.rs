@@ -285,7 +285,7 @@ pub struct DiffModel {
     /// Which column the selection is of (`selection`).
     sel_side: i32,
     /// What the selection holds, so the menu can leave out a row that
-    /// would copy nothing (デザイン規約 §メニュー「選べない行は消す」);
+    /// would copy nothing (デザイン規約 §メニュー「対象が存在しない」行は消す);
     /// settled with the selection, read once as the menu opens.
     sel_has_new: bool,
     sel_removed: i32,

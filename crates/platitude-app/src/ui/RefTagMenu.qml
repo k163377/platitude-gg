@@ -14,6 +14,8 @@ AppMenu {
     /// Whether a name can be made on this commit. Handed in: the graph row asks the commit's rule, the sidebar row
     /// the ref's.
     property bool canBranchHere: false
+    /// Why that name cannot be made right now (an operation standing), handed in with it; empty while it can.
+    property string makeWhy: ""
 
     /// The tag this card is about, frozen by `standOn`. `kind` is `tag` on a row that names one; anything else leaves
     /// the card holding `Create tag here…` alone, and `stash` takes the card off the menu.
@@ -118,6 +120,7 @@ AppMenu {
         id: refTagHereItem
         text: qsTr("Create tag here…")
         offered: tagMenu.canBranchHere
+        blockedReason: tagMenu.makeWhy
         onTriggered: tagMenu.tagHereRequested(state.refOid)
     }
     // Two forms, fixed as the menu opens: a name the remote has on another commit is the held, leased `push --force`

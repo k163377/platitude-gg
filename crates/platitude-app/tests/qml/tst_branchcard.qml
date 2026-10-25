@@ -268,7 +268,8 @@ Item {
             compare(root.asked, "upstream feature/topic-a  false", "nothing for it to take off")
         }
 
-        /// A remote-tracking row keeps the assembled rule; its own delete is the held one reaching past this machine.
+        /// A remote-tracking row seats only the rows it can name; its own delete is the held one reaching past this
+        /// machine.
         function test_a_remote_row_keeps_only_the_rows_it_can_name() {
             root.standOn({ kind: "remote", name: "origin/main", full: "origin/main",
                            remoteCounterpart: "", offers: ["switch", "branch-here", "integrate", "delete"] })
@@ -307,10 +308,9 @@ Item {
             compare(pushRow.holdTone, Theme.warning, "an overwrite reaches past this machine")
         }
 
-        /// Nothing to send, nothing to name, or a door of its own: no seat (デザイン規約 §メニュー).
+        /// Nothing to name, or a door of its own: no seat (デザイン規約 §メニュー).
         function test_the_push_row_has_no_seat_where_it_could_do_nothing_here_data() {
             return [
-                { tag: "the remote has it all", fields: { push: root.pushing("clean") } },
                 { tag: "no answer read", fields: {} },
                 { tag: "the branch the tree is on: the toolbar's button",
                   fields: { offers: root.current, push: root.pushing("ready") } },
@@ -342,6 +342,18 @@ Item {
             // The next card on a branch that can be sent drops it.
             root.standOn({ push: root.pushing("ready") })
             verify(!pushRow.blocked)
+        }
+
+        /// The far side has it all: the row keeps its seat, named where it goes, and says there is nothing to send —
+        /// the toolbar's words for the same standing (デザイン規約 §メニュー「「今できない」行は無効で残す」).
+        function test_the_push_row_stands_out_where_there_is_nothing_to_send() {
+            root.standOn({ push: root.pushing("clean") })
+            verify(pushRow.offered)
+            verify(pushRow.blocked)
+            compare(pushRow.code, "push")
+            compare(pushRow.text, "to origin/feature/topic-a")
+            compare(pushRow.holdPresses, 0)
+            compare(pushRow.blockedReason, "Nothing to push — origin/feature/topic-a is up to date")
         }
 
         function test_the_push_row_asks_for_the_push_its_form_says() {
