@@ -115,13 +115,14 @@ Item {
     /// item: a band reaching past it by a handler's margin took the hover off the row's own line, and the row closed
     /// under the hand (`tst_openrowholdshand`).
     readonly property real bandReach: Theme.spaceXs
-    /// Which line going somewhere has its band under a point, or -1.
-    function goingAt(x, y) {
+    /// Which line going somewhere has its band under a point of this item, or -1.
+    function goingAt(position) {
         for (let i = 0; i < facts.lines.length; i++) {
             if (!facts.lines[i].to)
                 continue
             const band = facts.bandOf(i)
-            if (x >= band.x && x < band.x + band.width && y >= band.y && y < band.y + band.height)
+            if (position.x >= band.x && position.x < band.x + band.width
+                    && position.y >= band.y && position.y < band.y + band.height)
                 return i
         }
         return -1
@@ -136,15 +137,14 @@ Item {
             return facts.pointedRow
         if (!factsHover.hovered || lineSeats.count === 0)
             return -1
-        const p = factsHover.point.position
-        return facts.goingAt(p.x, p.y)
+        return facts.goingAt(factsHover.point.position)
     }
     /// Where the press that is ending went down, in this item's own coordinates — what decides where its click goes.
     property point pressFrom: Qt.point(-1, -1)
     /// Where a press at that point goes: the place the line whose band it is in names (`NavFacts.place`), or null
     /// where it is in no such band.
-    function goesAt(p) {
-        const row = facts.goingAt(p.x, p.y)
+    function goesAt(position) {
+        const row = facts.goingAt(position)
         return row < 0 ? null : facts.lines[row].to
     }
     /// The first line that goes somewhere, or -1 — the one a run presses (PGG_AUTO_ACT=nav-follow).
@@ -183,16 +183,16 @@ Item {
     /// hears it.
     /// Where any press went down is kept — a right press names the line its menu acts on (`lineMenu`) — and only a
     /// left one anchors a sweep.
-    function handPressed(button, x, y) {
-        facts.pressFrom = Qt.point(x, y)
+    function handPressed(button, position) {
+        facts.pressFrom = position
         if (button !== Qt.LeftButton)
             return
         if (facts.row !== null)
             facts.row.takePress()
-        pad.pressAt(x, y)
+        pad.pressAt(position)
     }
-    function handMoved(x, y) {
-        pad.moveAt(x, y)
+    function handMoved(position) {
+        pad.moveAt(position)
     }
     function handReleased() {
         pad.releaseNow()
@@ -222,13 +222,13 @@ Item {
         facts.row.rowPressed(Qt.RightButton, modifiers === undefined ? Qt.NoModifier : modifiers, aim)
     }
     /// Which line a point is on, in this item's coordinates — each line's seat and half the gap either side — or -1.
-    function lineAt(p) {
+    function lineAt(position) {
         for (let i = 0; i < lineSeats.count; i++) {
             const line = lineSeats.itemAt(i)
             if (line === null)
                 continue
             const top = lines.y + line.y - Theme.spaceXs / 2
-            if (p.y >= top && p.y < top + line.height + Theme.spaceXs)
+            if (position.y >= top && position.y < top + line.height + Theme.spaceXs)
                 return i
         }
         return -1
@@ -343,8 +343,8 @@ Item {
         // A line that goes somewhere is pressed, not swept.
         cursorShape: facts.aimRow >= 0 ? Qt.PointingHandCursor : Qt.IBeamCursor
         // Each handler is one line into the item's own (verify-ui implement.md「注入はハンドラ本体そのものへ入れる」).
-        onPressed: mouse => facts.handPressed(mouse.button, mouse.x, mouse.y)
-        onPositionChanged: mouse => facts.handMoved(mouse.x, mouse.y)
+        onPressed: mouse => facts.handPressed(mouse.button, Qt.point(mouse.x, mouse.y))
+        onPositionChanged: mouse => facts.handMoved(Qt.point(mouse.x, mouse.y))
         onReleased: facts.handReleased()
         onCanceled: facts.handReleased()
         onClicked: mouse => facts.handClicked(mouse.button, mouse.modifiers)

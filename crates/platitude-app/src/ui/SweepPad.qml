@@ -26,22 +26,22 @@ Item {
     readonly property string endedOn: pad.field ? pad.field.text : ""
     readonly property bool caretLanded: !!pad.field && pad.field.hasCaret
 
-    /// The three the hand below calls, in this item's coordinates — and the three a run enters, so a pad never wired up
-    /// reports nothing (verify-ui §壊れない動詞の実装と反復). The anchor is taken at the press, unlike `SweepRoom`'s:
-    /// the nearest field is already known there.
-    function pressAt(x, y) {
+    /// The three the hand below calls, at points in this item's coordinates — and the three a run enters, so a pad
+    /// never wired up reports nothing (verify-ui §壊れない動詞の実装と反復). The anchor is taken at the press, unlike
+    /// `SweepRoom`'s: the nearest field is already known there.
+    function pressAt(position) {
         pad.dropValues()
-        pad.field = pad.nearestTo(x, y)
+        pad.field = pad.nearestTo(position)
         pad.taking = !!pad.field
         if (pad.taking)
-            pad.field.anchorFrom(pad, Qt.point(x, y))
+            pad.field.anchorFrom(pad, position)
         return pad.taking
     }
-    function moveAt(x, y) {
+    function moveAt(position) {
         if (!pad.taking)
             return
         // One field per gesture (規約 §右のペインの字は掴める): changing half-way would drop the selection just made.
-        pad.field.extendFrom(pad, Qt.point(x, y))
+        pad.field.extendFrom(pad, position)
     }
     function releaseNow() {
         pad.taking = false
@@ -76,14 +76,14 @@ Item {
 
     /// The field nearest a point of this pad: vertical distance first, sideways to break a tie between fields sharing a
     /// line. Distance is to the field's box, so a point inside one wins outright.
-    function nearestTo(x, y) {
+    function nearestTo(position) {
         const fields = pad.fields()
         let best = null
         let bestDown = 0
         let bestAcross = 0
         for (let i = 0; i < fields.length; i++) {
             const f = fields[i]
-            const p = f.mapFromItem(pad, x, y)
+            const p = f.mapFromItem(pad, position)
             const down = Math.max(0, Math.max(-p.y, p.y - f.height))
             const across = Math.max(0, Math.max(-p.x, p.x - f.width))
             if (!best || down < bestDown || (down === bestDown && across < bestAcross)) {
@@ -96,11 +96,11 @@ Item {
     }
 
     /// The field a point of this pad is on, or null on the card's air — the only places a real press reaches this hand.
-    function fieldAt(x, y) {
+    function fieldAt(position) {
         const fields = pad.fields()
         for (let i = 0; i < fields.length; i++) {
             const f = fields[i]
-            const p = f.mapFromItem(pad, x, y)
+            const p = f.mapFromItem(pad, position)
             if (p.x >= 0 && p.x <= f.width && p.y >= 0 && p.y <= f.height)
                 return f
         }
@@ -114,10 +114,9 @@ Item {
         const out = []
         for (let i = 0; i < steps; i++) {
             for (let j = 0; j < steps; j++) {
-                const x = pad.width * (i + 0.5) / steps
-                const y = pad.height * (j + 0.5) / steps
-                if (!pad.fieldAt(x, y))
-                    out.push(Qt.point(x, y))
+                const p = Qt.point(pad.width * (i + 0.5) / steps, pad.height * (j + 0.5) / steps)
+                if (!pad.fieldAt(p))
+                    out.push(p)
             }
         }
         return out
@@ -126,17 +125,17 @@ Item {
     /// Automation: the gesture as a hand makes it from a point of this pad's air, through the `MouseArea`'s three
     /// functions. The drag stays at the height it started from: a value read out at a height the reader never used
     /// passes while the gesture does not work.
-    function sweepAt(x, y) {
-        if (!pad.pressAt(x, y))
+    function sweepAt(position) {
+        if (!pad.pressAt(position))
             return false
         const f = pad.field
         // Toward the words: a field is as wide as the card, so a press level with a short line is usually past its
         // last glyph, and a drag to the box's far side would cross nothing.
-        const near = f.mapToItem(pad, 0, 0)
-        const away = f.mapToItem(pad, f.width, 0)
-        pad.moveAt(near.x, y)
+        const near = f.mapToItem(pad, Qt.point(0, 0))
+        const away = f.mapToItem(pad, Qt.point(f.width, 0))
+        pad.moveAt(Qt.point(near.x, position.y))
         if (pad.sweptText() === "")
-            pad.moveAt(away.x, y)
+            pad.moveAt(Qt.point(away.x, position.y))
         pad.releaseNow()
         return true
     }
@@ -149,7 +148,7 @@ Item {
         let reach = 0
         let miss = ""
         for (let i = 0; i < air.length; i++) {
-            if (pad.sweepAt(air[i].x, air[i].y) && pad.sweptText() !== "")
+            if (pad.sweepAt(air[i]) && pad.sweptText() !== "")
                 reach++
             else if (miss === "")
                 miss = Math.round(air[i].x) + "," + Math.round(air[i].y) + "," + pad.sweptTrace()
@@ -184,8 +183,8 @@ Item {
         hoverEnabled: false
         preventStealing: true
         cursorShape: Qt.IBeamCursor
-        onPressed: mouse => { mouse.accepted = pad.pressAt(mouse.x, mouse.y) }
-        onPositionChanged: mouse => { if (hand.pressed) pad.moveAt(mouse.x, mouse.y) }
+        onPressed: mouse => { mouse.accepted = pad.pressAt(Qt.point(mouse.x, mouse.y)) }
+        onPositionChanged: mouse => { if (hand.pressed) pad.moveAt(Qt.point(mouse.x, mouse.y)) }
         onReleased: pad.releaseNow()
         onCanceled: pad.releaseNow()
     }

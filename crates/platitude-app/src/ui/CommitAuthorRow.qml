@@ -214,21 +214,22 @@ Item {
     // no height of its own, so a border read off it lands wherever a spacer happens to be centred.
     readonly property real lineBorder:
         (authorLabel.mapToItem(authorRow, 0, authorLabel.height).y + detailsDate.mapToItem(authorRow, 0, 0).y) / 2
-    function lineAt(y) {
-        return y < authorRow.lineBorder ? 0 : 1
+    /// Which of the two lines a point of this row is on.
+    function lineAt(position) {
+        return position.y < authorRow.lineBorder ? 0 : 1
     }
     function lineValues(line) {
         return line === 0
             ? [authorLabel, hashPlate.fieldFor("hash")]
             : [detailsDate].concat(coBlock.valueFields, hashPlate.parentFields())
     }
-    /// Whether a press at that point belongs to a control of this row (the avatar badge, the plate's two), which keep
-    /// their whole hit areas.
-    function claimedAt(item, x, y) {
-        const a = avatarBadge.mapFromItem(item, x, y)
+    /// Whether a press at a point in `item`'s coordinates belongs to a control of this row (the avatar badge, the
+    /// plate's two), which keep their whole hit areas.
+    function claimedAt(item, position) {
+        const a = avatarBadge.mapFromItem(item, position)
         if (a.x >= 0 && a.y >= 0 && a.x < avatarBadge.width && a.y < avatarBadge.height)
             return true
-        return hashPlate.claims(item, x, y)
+        return hashPlate.claims(item, position)
     }
     /// Clear every selection on this row: one selection in the window (規約 §右のペインの字は掴める).
     function dropValues() {
@@ -280,7 +281,7 @@ Item {
         if (which === "hash" || which === "parent")
             return hashPlate.controlPoint(which, item)
         const f = authorRow.fieldFor(which)
-        return f ? f.mapToItem(item, f.width / 2, f.height / 2) : Qt.point(0, 0)
+        return f ? f.mapToItem(item, Qt.point(f.width / 2, f.height / 2)) : Qt.point(0, 0)
     }
     function valueGrabs(which) { const f = authorRow.fieldFor(which); return !!f && f.grabs }
     /// The plate's gestures, entered where its hand enters them (`HashPlate`): the tap copies the whole hash, the drag

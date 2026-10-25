@@ -154,7 +154,7 @@ Control {
             laidOut()
             const arrow = plate.arrowBox(root)
             const p = Qt.point(arrow.x + arrow.width / 2, arrow.y + arrow.height / 2)
-            verify(!plate.claims(root, p.x, p.y), "no control claims the arrow")
+            verify(!plate.claims(root, p), "no control claims the arrow")
             mouseClick(root, p.x, p.y)
             compare(root.visited, "", "and a press there went nowhere")
         }

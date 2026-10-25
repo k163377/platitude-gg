@@ -32,24 +32,24 @@ Item {
     readonly property bool caretLanded: !!room.field && room.field.hasCaret
     property string trace: ""
 
-    /// The three the hand below calls, in this item's coordinates — and the three a run enters, so a hand never wired
-    /// up reports nothing (verify-ui §壊れない動詞の実装と反復). Points are mapped into the row: a drag leaves its gap
-    /// as soon as it reaches a value.
-    function pressAt(x, y) {
-        const p = room.mapToItem(room.row, x, y)
+    /// The three the hand below calls, at points in this item's coordinates — and the three a run enters, so a hand
+    /// never wired up reports nothing (verify-ui §壊れない動詞の実装と反復). Points are mapped into the row: a drag
+    /// leaves its gap as soon as it reaches a value.
+    function pressAt(position) {
+        const p = room.mapToItem(room.row, position)
         room.field = null
-        room.lineFields = room.row.lineValues(room.row.lineAt(p.y))
-        room.taking = !room.row.claimedAt(room.row, p.x, p.y)
+        room.lineFields = room.row.lineValues(room.row.lineAt(p))
+        room.taking = !room.row.claimedAt(room.row, p)
         if (room.taking)
             room.row.dropValues()
         return room.taking
     }
-    function moveAt(x, y) {
+    function moveAt(position) {
         if (!room.taking)
             return
-        const p = room.mapToItem(room.row, x, y)
+        const p = room.mapToItem(room.row, position)
         if (!room.field) {
-            const on = room.fieldUnder(p.x, p.y)
+            const on = room.fieldUnder(p)
             if (!on)
                 return
             room.field = on
@@ -61,24 +61,24 @@ Item {
         room.taking = false
     }
 
-    /// The value of the press's line the pointer has arrived over, in the row's coordinates — decided across only.
-    /// Null while the pointer is still in a gap, and the anchor waits.
-    function fieldUnder(x, y) {
+    /// The value of the press's line the pointer has arrived over, at a point in the row's coordinates — decided
+    /// across only. Null while the pointer is still in a gap, and the anchor waits.
+    function fieldUnder(position) {
         const fields = room.lineFields
         for (let i = 0; i < fields.length; i++) {
             const f = fields[i]
             if (!f || !f.visible || f.width <= 0 || f.text === "")
                 continue
-            const p = f.mapFromItem(room.row, x, y)
+            const p = f.mapFromItem(room.row, position)
             if (p.x >= 0 && p.x <= f.width)
                 return f
         }
         return null
     }
 
-    /// Automation: the gesture from a point (`fx`, `fy`) of the gap beside that value, entered through the three
-    /// functions above. Runs start from every corner of the gap: the middle is the one place that hides a reach that
-    /// works from one point only.
+    /// Automation: the gesture from a point (`fx`, `fy` — fractions of the gap's width and of the line's band) of the
+    /// gap beside that value, entered through the three functions above. Runs start from every corner of the gap: the
+    /// middle is the one place that hides a reach that works from one point only.
     function sweepAt(which, fx, fy) {
         const f = room.row.fieldFor(which)
         const slack = room.row.slackFor(which)
@@ -86,31 +86,30 @@ Item {
             return false
         // Across the slack, and down the whole band of that value's line: the air over and under a value is its line's.
         const band = room.row.bandFor(which)
-        const x = slack.mapToItem(room, Math.max(1, Math.min(slack.width - 1, slack.width * fx)), 0).x
-        const y = band[0] + 1 + (band[1] - band[0] - 2) * fy
-        if (!room.pressAt(x, y))
+        const across = slack.mapToItem(room, Qt.point(Math.max(1, Math.min(slack.width - 1, slack.width * fx)), 0))
+        const start = Qt.point(across.x, band[0] + 1 + (band[1] - band[0] - 2) * fy)
+        if (!room.pressAt(start))
             return false
         // Onto the value and out its far side, from whichever side the value sits on, at the height the gesture
         // started at — a value read out at a height the reader never used passes while the gesture does not work.
-        const mid = f.mapToItem(room, f.width / 2, f.height / 2)
-        const leftFirst = x < mid.x
-        const near = f.mapToItem(room, leftFirst ? 0 : f.width, f.height / 2)
-        const far = f.mapToItem(room, leftFirst ? f.width : 0, f.height / 2)
-        room.moveAt(near.x, y)
-        room.moveAt(far.x, y)
+        const mid = f.mapToItem(room, Qt.point(f.width / 2, f.height / 2))
+        const leftFirst = start.x < mid.x
+        const near = f.mapToItem(room, Qt.point(leftFirst ? 0 : f.width, f.height / 2))
+        const far = f.mapToItem(room, Qt.point(leftFirst ? f.width : 0, f.height / 2))
+        room.moveAt(Qt.point(near.x, start.y))
+        room.moveAt(Qt.point(far.x, start.y))
         room.releaseNow()
         room.trace = Math.round(f.width) + "x" + Math.round(f.height)
                      + ",slack" + Math.round(slack.width) + "x" + Math.round(slack.height)
                      + ",near" + Math.round(near.x) + ",far" + Math.round(far.x)
-                     + ",y" + Math.round(y) + ",a" + f.grabAnchor + ",c" + f.caretPos
+                     + ",y" + Math.round(start.y) + ",a" + f.grabAnchor + ",c" + f.caretPos
         return true
     }
 
     /// Automation: the other half — a press on a control is left alone. The plate keeps its hit area only for as long
     /// as this answers false there.
     function pressOnControl(which) {
-        const at = room.row.controlPoint(which, room)
-        const took = room.pressAt(at.x, at.y)
+        const took = room.pressAt(room.row.controlPoint(which, room))
         room.releaseNow()
         return took
     }
@@ -123,8 +122,8 @@ Item {
         hoverEnabled: false
         preventStealing: true
         cursorShape: Qt.IBeamCursor
-        onPressed: mouse => room.pressAt(mouse.x, mouse.y)
-        onPositionChanged: mouse => { if (hand.pressed) room.moveAt(mouse.x, mouse.y) }
+        onPressed: mouse => room.pressAt(Qt.point(mouse.x, mouse.y))
+        onPositionChanged: mouse => { if (hand.pressed) room.moveAt(Qt.point(mouse.x, mouse.y)) }
         onReleased: room.releaseNow()
         onCanceled: room.releaseNow()
     }

@@ -173,9 +173,9 @@ QtObject {
             // the foot, under the last line's band: a line that goes somewhere takes clicks end to end
             // (`NavRowFacts.bandOf`), so the row's own click is only what no band covers.
             const line = what === "tap" ? lines.height - 1 : lines.height / 4
-            lines.handPressed(Qt.LeftButton, 0, line)
+            lines.handPressed(Qt.LeftButton, Qt.point(0, line))
             if (what === "sweep")
-                lines.handMoved(lines.width, line)
+                lines.handMoved(Qt.point(lines.width, line))
             lines.handReleased()
             lines.handClicked(Qt.LeftButton, Qt.NoModifier)
             return
@@ -242,7 +242,7 @@ QtObject {
         const at = lines.lineWordsMiddle(row)
         if (at.x < 0)
             return false
-        lines.handPressed(Qt.RightButton, at.x, at.y)
+        lines.handPressed(Qt.RightButton, at)
         lines.handClicked(Qt.RightButton, Qt.NoModifier)
         return true
     }
@@ -271,7 +271,7 @@ QtObject {
         const at = lines.lineWordsMiddle(line)
         if (at.x < 0)
             return false
-        lines.handPressed(Qt.LeftButton, at.x, at.y)
+        lines.handPressed(Qt.LeftButton, at)
         lines.handReleased()
         lines.handClicked(Qt.LeftButton, Qt.NoModifier)
         return true

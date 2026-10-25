@@ -14,17 +14,18 @@ Item {
 
     /// The character nearest a point of this band, clamped to the text — the whole of what the band is for. The map
     /// carries the view's scroll, so a press on a scrolled box lands on the line under the pointer.
-    function caretAt(x, y) {
-        const at = band.field.mapFromItem(band, x, y)
+    function caretAt(position) {
+        const at = band.field.mapFromItem(band, position)
         return band.field.positionAt(at.x, at.y)
     }
-    /// The two the hand below calls. The anchor is taken at the press, as `SweepPad`'s is.
-    function pressAt(x, y) {
+    /// The two the hand below calls, at points in this item's coordinates. The anchor is taken at the press, as
+    /// `SweepPad`'s is.
+    function pressAt(position) {
         band.field.forceActiveFocus()
-        band.field.cursorPosition = band.caretAt(x, y)
+        band.field.cursorPosition = band.caretAt(position)
     }
-    function moveAt(x, y) {
-        band.field.moveCursorSelection(band.caretAt(x, y), TextEdit.SelectCharacters)
+    function moveAt(position) {
+        band.field.moveCursorSelection(band.caretAt(position), TextEdit.SelectCharacters)
     }
 
     MouseArea {
@@ -34,7 +35,7 @@ Item {
         // The commit block and the details pane are `Flickable`s, and a drag they steal takes the selection with it.
         preventStealing: true
         cursorShape: Qt.IBeamCursor
-        onPressed: mouse => band.pressAt(mouse.x, mouse.y)
-        onPositionChanged: mouse => { if (hand.pressed) band.moveAt(mouse.x, mouse.y) }
+        onPressed: mouse => band.pressAt(Qt.point(mouse.x, mouse.y))
+        onPositionChanged: mouse => { if (hand.pressed) band.moveAt(Qt.point(mouse.x, mouse.y)) }
     }
 }

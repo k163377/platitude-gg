@@ -435,14 +435,14 @@ Item {
             let aimed = null
             row.refMenuRequested.connect((name, full, oidHex, aim) => aimed = aim)
             const onMirror = facts.lineWordsMiddle(1)
-            facts.handPressed(Qt.RightButton, onMirror.x, onMirror.y)
+            facts.handPressed(Qt.RightButton, onMirror)
             facts.handClicked(Qt.RightButton, Qt.NoModifier)
             compare(aimed, "mirror", "the line under the right press")
 
             const onFork = facts.lineWordsMiddle(0)
-            facts.handPressed(Qt.LeftButton, onFork.x, onFork.y)
+            facts.handPressed(Qt.LeftButton, onFork)
             facts.handReleased()
-            facts.handPressed(Qt.RightButton, onMirror.x, onMirror.y)
+            facts.handPressed(Qt.RightButton, onMirror)
             facts.handClicked(Qt.RightButton, Qt.NoModifier)
             compare(aimed, "mirror", "a left press on another line before it changes nothing")
             row.destroy()

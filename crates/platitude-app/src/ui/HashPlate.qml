@@ -182,18 +182,19 @@ ColumnLayout {
         return [shaText].concat(plate.parentFields())
     }
     /// Whether a point in `item`'s coordinates lands on a control of this plate, whose press is the control's whole.
-    function claims(item, x, y) {
-        if (plate.inside(hashCopy, item, x, y))
+    function claims(item, position) {
+        if (plate.inside(hashCopy, item, position))
             return true
         for (let i = 0; i < plate.parentsShown; i++) {
             const link = plate.linkAt(i)
-            if (link && link.visible && plate.inside(link.face, item, x, y))
+            if (link && link.visible && plate.inside(link.face, item, position))
                 return true
         }
         return false
     }
-    function inside(box, item, x, y) {
-        const p = box.mapFromItem(item, x, y)
+    /// Whether a point in `item`'s coordinates lands in `box`, its far edges left out.
+    function inside(box, item, position) {
+        const p = box.mapFromItem(item, position)
         return p.x >= 0 && p.y >= 0 && p.x < box.width && p.y < box.height
     }
     /// Where this plate begins, in `item`'s x.
@@ -211,7 +212,7 @@ ColumnLayout {
     function controlPoint(which, item) {
         const link = plate.linkAt(0)
         const box = which === "parent" ? (link ? link.face : null) : hashCopy
-        return box ? box.mapToItem(item, box.width / 2, box.height / 2) : Qt.point(0, 0)
+        return box ? box.mapToItem(item, Qt.point(box.width / 2, box.height / 2)) : Qt.point(0, 0)
     }
 
     /// The controls' actions; handlers and runs both enter here (verify-ui §壊れない動詞の実装).
@@ -254,8 +255,8 @@ ColumnLayout {
     function dragAcross(which) {
         const hand = plate.handFor(which)
         const field = plate.fieldFor(which)
-        const near = field.mapToItem(hand, 0, field.height / 2)
-        const far = field.mapToItem(hand, field.width, field.height / 2)
+        const near = field.mapToItem(hand, Qt.point(0, field.height / 2))
+        const far = field.mapToItem(hand, Qt.point(field.width, field.height / 2))
         hand.takeAt(near)
         hand.followAt(far)
         hand.releaseNow()
