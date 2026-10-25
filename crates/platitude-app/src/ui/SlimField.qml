@@ -65,6 +65,7 @@ TextField {
         set: "sign"
         size: slim.font.pixelSize
         wordBase: slim.baselineOffset - slim.topPadding
+        nameAir: WordFace.nameAir(slim, slim.text)
         // Its kind's colour, as a name's mark is anywhere (`NavIcon.inkBeside`); grey with the box.
         tint: leadIcon.inkBeside(slim.enabled ? Theme.textPrimary : Theme.textMuted)
     }

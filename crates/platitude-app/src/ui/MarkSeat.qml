@@ -6,11 +6,12 @@ import platitude.ui
 // The seat a mark set in a run of words takes (デザイン規約 §アイコンの席「字の中の席」): a whole number of the line
 // face's no-break spaces — the fewest that hold the widest mark it seats, the cloud, with the face's own room round a
 // `+` either side, or a stem where that room is thinner (`air`). Every mark takes the same seat whatever its kind, its
-// ink in the seat's middle, and a name's code
-// ground starts at the seat's head: the seat holds the mark's air. A line of words opens it as those spaces and nothing
-// finer: a space the face has no glyph for sends Qt through every family on the machine (U+202F in
-// Yu Gothic UI). The count is the face's and the size's, read at run time: a face that sets its advances to whole
-// pixels (FreeType's, offscreen) can take one more space at a size than one that keeps fractions.
+// ink in the seat's middle — in front of a name, the middle between the seat's head and the name's ink
+// (`NavIcon.nameAir`) — and a name's code ground starts at the seat's head: the seat holds the mark's air. A line of
+// words opens it as those spaces and nothing finer: a space the face has no glyph for sends Qt through every family on
+// the machine (U+202F in Yu Gothic UI). The count is the face's and the size's, read at run time: a face that sets its
+// advances to whole pixels (FreeType's, offscreen) rounds a space narrower or wider, so it can take one more space or
+// one fewer at a size than one that keeps fractions.
 QtObject {
     id: markSeat
 

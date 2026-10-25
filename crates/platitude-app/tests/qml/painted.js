@@ -15,6 +15,18 @@ function labelSaying(item, words) {
     return null
 }
 
+/// The first item under `item`, depth first, that `holds` is true of, or null.
+function itemUnder(item, holds) {
+    for (const child of item.children) {
+        if (holds(child))
+            return child
+        const found = itemUnder(child, holds)
+        if (found !== null)
+            return found
+    }
+    return null
+}
+
 /// The colour `words` are painted in inside `item`; undefined where nothing paints them.
 function inkOf(item, words) {
     const label = labelSaying(item, words)

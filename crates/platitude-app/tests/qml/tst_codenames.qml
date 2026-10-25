@@ -112,6 +112,26 @@ Control {
         text: "Replace " + root.farName + " with x?"
         marks: [[8, "remote", undefined, root.farName.length]]
     }
+    // Names behind a narrow mark, which stands well inside its seat: a menu row's sentence and a heading's line.
+    AppMenuItem {
+        id: treeSentenceRow
+        x: 1000
+        y: 100
+        width: 500
+        refSentence: "%1 here"
+        refName: "wt-j"
+        refTint: Theme.textPrimary
+        refMark: "tree"
+    }
+    CardText {
+        id: treeHeading
+        x: 1000
+        y: 140
+        width: 500
+        holdsNames: true
+        text: "Open wt-j here?"
+        marks: [[5, "tree", undefined, 4]]
+    }
     // A list row's line: words and names as code, cut at the end — under the column of chips, clear of it.
     CodeLine {
         id: codeLine
@@ -300,7 +320,8 @@ Control {
         /// narrower than the widest) and half a gap after the name's last glyph as drawn.
         function holdsInk(air, size, what) {
             const seat = MarkSeat.air * size
-            verify(air.before >= seat - 1, what + ": the seat's air before the mark, " + seat + " at least: " + air.before)
+            verify(air.before >= seat - 1,
+                   what + ": the seat's air before the mark, " + seat + " at least: " + air.before)
             fuzzyCompare(air.after, Theme.spaceXs / 2, 0.4, what + ": half a gap after the name")
         }
 
@@ -342,11 +363,28 @@ Control {
             fuzzyCompare(root.groundStart(sentenceRow), start, 0.5, "a name opening a sentence: on one x")
         }
 
+        /// A name behind its mark grounds from the head of the mark's seat, which holds the mark's air — in a menu
+        /// row's sentence and in a line of words as in a chip — never off the mark's ink, which a narrow mark stands
+        /// further in from. To half a pixel: the mark stands on a whole one.
+        function test_a_sentence_and_a_line_ground_a_name_from_its_marks_seat() {
+            tryVerify(() => treeSentenceRow.refLead1 > 0 && treeHeading.codeGrounds.length > 0)
+            const markOf = item => root.find(item, child => child.inkLeft !== undefined && child.visible
+                                                         && child.kind === "tree")
+            // Read off the ink, the ground would start half a gap before it: a pixel or more past the seat's head.
+            const sentenceMark = markOf(treeSentenceRow)
+            verify(sentenceMark.inkLeft >= Theme.spaceXs / 2 + 1, "a narrow mark, well inside its seat")
+            fuzzyCompare(root.groundOf(treeSentenceRow).x, sentenceMark.x, 0.5, "a menu row's sentence")
+            const lineMark = markOf(treeHeading)
+            verify(lineMark.inkLeft >= Theme.spaceXs / 2 + 1, "a narrow mark, well inside its seat")
+            fuzzyCompare(treeHeading.codeGrounds[0].x, lineMark.x, 0.5, "a line of words")
+        }
+
         function test_a_worktree_run_is_code_behind_its_kinds_colour() {
             tryVerify(() => treeRun.width > 0 && homeRun.width > 0)
             const picture = grabImage(root)
             for (const run of [treeRun, homeRun]) {
                 holdsInk(root.runAir(run, picture), run.pixelSize, run.kind)
+                fuzzyCompare(root.groundStart(run), 0, 0.01, run.kind + ": the ground from the seat's head")
                 const mark = root.find(run, item => item.inkLeft !== undefined)
                 verify(Qt.colorEqual(mark.tint, Theme.success), run.kind + ": the mark in its kind's colour")
                 const cut = root.find(run, item => item.headText !== undefined)

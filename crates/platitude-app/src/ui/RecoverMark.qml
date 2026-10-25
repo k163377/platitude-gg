@@ -28,20 +28,24 @@ Item {
     implicitWidth: mark.paired ? Theme.iconXs + mark.pairSpread : Theme.iconSm
     implicitHeight: mark.paired ? Theme.iconSm + Theme.spaceXs : Theme.iconSm
 
+    // A step taller than the box, on the box's middle: the branch and the tree run past the capitals both ways and
+    // come out as tall as the box, and a canvas only the box's height cuts what lands past it.
     NavIcon {
         visible: !mark.paired
         width: Theme.iconSm
-        height: Theme.iconSm
+        height: Theme.iconSm + Theme.spaceXs
         anchors.verticalCenter: parent.verticalCenter
         set: "lead"
         size: mark.size
-        wordBase: Theme.iconSm / 2 + WordFace.capitalMiddle(mark.size)
+        wordBase: (Theme.iconSm + Theme.spaceXs) / 2 + WordFace.capitalMiddle(mark.size)
         kind: mark.kind
         tint: mark.tint
         ShoulderBadge {
             visible: mark.badged
             kind: "remote"
             tint: Theme.textSecondary
+            // On the box's shoulder, not the taller canvas's.
+            anchors.topMargin: -Theme.spaceXs / 2
         }
     }
     // The halves a step under the mark they stand for, at opposite corners of the pair's box across the slash.

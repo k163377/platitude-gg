@@ -255,6 +255,7 @@ Rectangle {
                 set: "sign"
                 size: nameLabel.font.pixelSize
                 wordBase: nameLabel.baselineOffset
+                nameAir: WordFace.nameAir(nameLabel, chip.recName)
                 // Its kind's colour, as a name's mark is anywhere (`NavIcon.kindTint`; the padlock's grey).
                 tint: nameMark.kindTint
                 width: nameMark.wordCell

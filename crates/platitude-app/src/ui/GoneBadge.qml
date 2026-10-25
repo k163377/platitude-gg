@@ -24,6 +24,7 @@ Item {
     implicitHeight: Theme.iconSm
 
     NavIcon {
+        id: badgeMark
         // Its own size, never the layout's: a canvas born sizeless is never asked to paint once a layout sizes it, and
         // a shot waiting on it runs to the ceiling.
         width: badge.seat
@@ -44,9 +45,9 @@ Item {
         tint: Theme.warning
         width: Theme.iconXs
         height: Theme.iconXs
-        // Seated by its ink, not its box: the ink is a sliver in the middle of its box, so aligning boxes puts the
-        // stroke on the badge. The box overhangs into the gutter the row already keeps (デザイン規約 §余白).
-        x: badge.seat - (goneMark.inkRight - goneMark.inkWidth)
+        // Its ink against the mark's ink, not boxes: the `!` is a sliver in the middle of its box, and the seat holds
+        // air either side of the mark. The box overhangs into the gutter the row already keeps (デザイン規約 §余白).
+        x: badgeMark.x + badgeMark.inkRight - goneMark.inkLeft
         // Up to the row's own air over the badge — any higher draws on the row above, and nothing clips it.
         y: -(badge.rowHeight - Theme.iconSm) / 2
     }

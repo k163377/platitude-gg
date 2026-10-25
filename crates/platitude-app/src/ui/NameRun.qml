@@ -53,6 +53,7 @@ Item {
         set: "sign"
         size: run.pixelSize
         wordBase: nameCut.baselineOffset
+        nameAir: WordFace.nameAir(codeFace, run.name)
         tint: runMark.inkBeside(run.color)
     }
     CutName {

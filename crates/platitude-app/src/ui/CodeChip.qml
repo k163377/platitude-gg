@@ -103,6 +103,7 @@ Item {
         set: "sign"
         size: chip.size
         wordBase: wordLabel.baselineOffset
+        nameAir: WordFace.nameAir(wordFace, chip.shownWord)
         tint: chip.markTint
     }
     Label {

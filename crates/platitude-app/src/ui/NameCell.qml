@@ -58,8 +58,8 @@ RowLayout {
     /// How wide the slot every row opens with is (デザイン規約 §余白「その席は `iconXs` で、印は席の中央に置く」).
     /// The fold arrow, the change codes and the state marks are
     /// all drawn to the name's letters (`set: "lead"`) at one scale and centred across the seat; the widest, the
-    /// filled house (11 squares), stays inside it at `fontMd`. The seat is the column the marks centre on, not a
-    /// frame: a mark's ink may run a little past it.
+    /// filled house (12.32 squares), comes out a little wider than it at `fontMd` in a face with tall capitals (Noto
+    /// Sans JP). The seat is the column the marks centre on, not a frame: a mark's ink may run a little past it.
     ///
     /// One width for every list, so a name stands as far from its mark in the file lists as in the sidebar; measured
     /// per row, the padlock and the fold arrow would step the names in and out.

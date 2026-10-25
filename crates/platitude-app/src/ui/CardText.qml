@@ -193,7 +193,7 @@ Item {
                 if (at + 1 < end && sameLine)
                     continue
                 // The name's end on this line: where the next character stands, or past this one's own advance where
-                // the field wraps after it — and at the name's end, half a gap off its ink, as before the mark.
+                // the field wraps after it — and at a marked name's end, half a gap off its ink.
                 const right = sameLine ? next.x : here.x + codeFace.advanceWidth(line.charAt(mark[0] + at - start))
                 const end_ = at + 1 === end && icon
                              ? WordFace.groundEnd(codeFace, line.substr(mark[0], mark[3]), right) : right + half
@@ -475,6 +475,12 @@ Item {
             tint: lineMark.inkBeside(lineMark.index < cardText.marks.length ? cardText.nameInkAt(lineMark.index)
                                                                             : cardText.color)
             wordBase: Math.ceil(lineMark.size)
+            nameAir: {
+                const marks = cardText.held.marks
+                const mark = lineMark.index < marks.length ? marks[lineMark.index] : null
+                return mark !== null && mark[3] > 0
+                       ? WordFace.nameAir(codeFace, cardText.held.text.substr(mark[0], mark[3])) : 0
+            }
             width: cardText.seatWidth
             height: lineMark.wordBase + Theme.spaceXs
             x: Math.round(lineMark.seat.x - lineMark.width)

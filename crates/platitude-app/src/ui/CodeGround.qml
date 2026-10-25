@@ -3,8 +3,8 @@ import platitude.ui
 
 // The ground git's spelling stands on — a command's, a name's (デザイン規約 §git 用語のコード表記): faint, rounded, as tall
 // as the word's step and not its line box, which the code face makes different on every OS. Where it starts and ends
-// is the caller's: half a gap off a word's ends, or before a name's mark's seat and past the name's ink
-// (`WordFace.groundStart` / `groundEnd`).
+// is the caller's: half a gap off a word's ends, or from the head of a name's mark's seat to half a gap past the name's
+// ink (`WordFace.groundStart` / `groundEnd`).
 Rectangle {
     id: ground
 

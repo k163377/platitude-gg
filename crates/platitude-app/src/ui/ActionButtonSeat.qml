@@ -36,7 +36,7 @@ Item {
     /// How far that word's ground reaches before its letters: a code word's chip hangs half a step (`CodeChip`).
     property real wordHang: 0
     /// The row's step between the seat and that word, which a hold mark's seat gives back: the seat's own air is what
-    /// parts the mark from the word (デザイン規約 §アイコンの席「② ③ の席」).
+    /// parts the mark from the word (デザイン規約 §アイコンの席「字の中の席」).
     property real wordStep: 0
     /// Whether the seat heads a word.
     readonly property bool leads: seat.wordSize > 0

@@ -99,9 +99,9 @@ MenuItem {
     /// The room a heading's mark takes, zero on any other row: read by `AppMenu.headingSeat` to line a card's headings
     /// up.
     readonly property real headingRoom: menuItem.titled ? menuItem.headSeat : 0
-    /// How wide a heading's mark seat is: as wide as the widest heading mark's ink (11 squares of its grid and its
-    /// line), so the words start one step past any of them.
-    readonly property real headSeat: Math.ceil(rowMark.unit * 11 + rowMark.pen)
+    /// How wide a heading's mark seat is: as wide as the tag's ink, its mitred corners included — the widest of the
+    /// cards' heading marks but GitHub's cloud, which runs past it — so the words start one step past the others.
+    readonly property real headSeat: Math.ceil(rowMark.inkAcrossOf("tag"))
     /// The step every heading on such a card starts its words at, marked or not; zero on any other card.
     readonly property real headingSeat:
         menuItem.subMenu !== null && menuItem.menu !== null && menuItem.menu.headingSeat !== undefined
@@ -137,7 +137,7 @@ MenuItem {
     readonly property bool sideCut: sideSeat.item !== null && sideSeat.item.cut
     /// The step in front of `codeName`: a word's after the row's words; none where the name opens the row, so it starts
     /// where the words would, as a name opening a sentence does. The mark is a sign on its name, so nothing stands
-    /// between it and the name but its cell's own air (デザイン規約 §アイコンの席 の修飾).
+    /// between it and the name but its seat's air (デザイン規約 §アイコンの席 の修飾).
     readonly property real markWordGap: menuItem.text !== "" ? Theme.spaceXs : 0
     /// Where the row's words stand, in the row's y: every mark ahead of them takes their line for its box
     /// (デザイン規約 §アイコンの席 の文頭記号). Read off the label, since the layout and an anchor round a half pixel
@@ -338,7 +338,7 @@ MenuItem {
                    // card is measured before it opens.
                    + (menuItem.sideName !== "" ? menuItem.sideWidth + Theme.spaceLg : 0)
                    + (menuItem.ahead > 0 || menuItem.behind > 0 ? rowTrack.implicitWidth + Theme.spaceSm : 0)
-                   + (menuItem.badged ? Theme.iconSm + Theme.spaceXs : 0)
+                   + (menuItem.badged ? Math.ceil(rowBadge.implicitWidth) + Theme.spaceXs : 0)
                    + (trailSeat.item !== null ? trailSeat.item.cappedWidth : 0)
                    + menuItem.leftPadding + menuItem.rightPadding
     font.pixelSize: Theme.fontMd
@@ -747,6 +747,7 @@ MenuItem {
                         set: "sign"
                         size: itemLabel.font.pixelSize
                         wordBase: itemLabel.baselineOffset
+                        nameAir: WordFace.nameAir(codeFace, menuItem.refShown)
                         kind: menuItem.refMark !== "" ? menuItem.refMark : "branch"
                         tint: refMarkIcon.inkBeside(menuItem.refColor)
                     }
@@ -761,6 +762,7 @@ MenuItem {
                         set: "sign"
                         size: itemLabel.font.pixelSize
                         wordBase: itemLabel.baselineOffset
+                        nameAir: WordFace.nameAir(codeFace, menuItem.refShown2)
                         kind: menuItem.refMark2 !== "" ? menuItem.refMark2 : "remote"
                         tint: refMarkIcon2.inkBeside(menuItem.refColor2)
                     }

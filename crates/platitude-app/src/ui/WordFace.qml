@@ -36,15 +36,26 @@ QtObject {
     }
     /// The air the face's `+` holds either side of its ink: a sign's room in a run of words.
     readonly property real signSide: (face.plusInk.advanceWidth / 1000 - face.plus.width) / 2
-    /// The code face large, in the two weights a name is set in, for where a glyph's ink ends (`groundEnd`): a glyph's
-    /// box comes back rounded out to whole pixels where the face is FreeType's (offscreen, and Linux —
-    /// `QFontEngineFT::boundingBox`), up to a pixel past the ink at a name's size; here the rounding is a thousandth.
+    /// The code face large, in the two weights a name is set in, for where a glyph's ink ends and starts (`groundEnd`,
+    /// `nameAir`): a glyph's box comes back rounded out to whole pixels where the face is FreeType's (offscreen, and
+    /// Linux — `QFontEngineFT::boundingBox`), up to a pixel past the ink at a name's size; here the rounding is a
+    /// thousandth.
     readonly property FontMetrics codeLarge: FontMetrics {
         font.family: Theme.monoFamily
         font.pixelSize: 1000
     }
     readonly property FontMetrics codeLargeStrong: FontMetrics {
         font.family: Theme.monoFamily
+        font.pixelSize: 1000
+        font.weight: Theme.fontWeightStrong
+    }
+    /// The window's face large in the same two weights, for where a name set in it starts its ink (`nameAir`).
+    readonly property FontMetrics wordLarge: FontMetrics {
+        font.family: Theme.uiFamily
+        font.pixelSize: 1000
+    }
+    readonly property FontMetrics wordLargeStrong: FontMetrics {
+        font.family: Theme.uiFamily
         font.pixelSize: 1000
         font.weight: Theme.fontWeightStrong
     }
@@ -69,6 +80,21 @@ QtObject {
         const ink = large.tightBoundingRect(last)
         const inkEnd = (ink.x + ink.width) * code.font.pixelSize / 1000
         return advanceEnd - (code.advanceWidth(last) - inkEnd) + Theme.spaceXs / 2
+    }
+    /// The air `name`'s first glyph holds ahead of its ink, set in the font of `words` (what draws the name, or metrics
+    /// in its font): the outline read off the face large, as `groundEnd` reads the last glyph's — the code face's for
+    /// a name in the code face, the window's for any other, the faces the app sets names in. A mark seated in front of
+    /// the name stands in the middle between its seat's head and that ink (`NavIcon.nameAir`). Its font is read here so
+    /// a binding calling this follows it.
+    function nameAir(words, name) {
+        const font_ = words.font
+        const first = name.charAt(0)
+        if (first === "")
+            return 0
+        const strong = words.font.weight === Theme.fontWeightStrong
+        const large = words.font.family === Theme.monoFamily ? (strong ? face.codeLargeStrong : face.codeLarge)
+                                                             : (strong ? face.wordLargeStrong : face.wordLarge)
+        return large.tightBoundingRect(first).x * words.font.pixelSize / 1000
     }
 
     function share(rect) {

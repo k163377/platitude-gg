@@ -17,70 +17,7 @@ InkCanvas {
     /// words, which stands against the words down (`shiftY`). A box centred on a line puts the ink on that line's
     /// middle, at every size and every line weight, with nothing for the caller to add.
     /// `tst_iconink.qml` holds each list to the pixels drawn — the tag's and the house's in both shapes (`grown`).
-    readonly property var reaches: {
-        switch (icon.kind) {
-        case "branch": return [[3.2, 3.5, 1], [13.55, 5, 1], [5, 1.7, 1], [5, 14.3, 1]]
-        case "remote": return [[1.7, 10, 1], [14.6, 9.5, 1], [8.05, 3.1, 1], [8, 12.9, 1]]
-        case "tag": return icon.grown ? [[8, 2.8, 1.41], [8, 14.2, 1.41], [2.3, 8.5, 1.41], [13.7, 8.5, 1.41]]
-                                      : [[8, 3.41, 1.41], [8, 13.59, 1.41], [2.91, 8.5, 1.41], [13.09, 8.5, 1.41]]
-        case "stash": return [[3, 4, 1], [13, 4, 1], [4, 13, 1], [12, 13, 1]]
-        // As tall as `branch`, ring and stem (`lettered`).
-        case "tree": return [[3.5, 6, 1], [12.5, 6, 1], [8, 1.5, 1], [8, 14.1, 1]]
-        // The body's four corners turned 45°, and the filled point.
-        case "pen": return [[11.25, 2.77, 1.41], [13.23, 4.75, 1.41], [5.24, 8.78, 1.41], [7.22, 10.76, 1.41],
-                            [4.11, 11.89, 0]]
-        case "plus": return [[3.5, 8, 1], [12.5, 8, 1], [8, 3.5, 1], [8, 12.5, 1]]
-        case "minus": return [[3.5, 8, 1], [12.5, 8, 1]]
-        case "window-minimize": return [[3, 8, 1], [13, 8, 1]]
-        case "arrow": return [[3.5, 8, 1], [11.5, 8, 1], [8.8, 5.2, 1], [8.8, 10.8, 1]]
-        case "fetch": return [[8, 2.5, 1], [3.5, 13, 1], [12.5, 13, 1], [4.8, 6.8, 1], [11.2, 6.8, 1]]
-        // The barbs meet the point in a mitred right angle.
-        case "push": return [[8, 2.5, 1.41], [3.5, 13, 1], [12.5, 13, 1], [4.8, 5.7, 1], [11.2, 5.7, 1]]
-        case "spinner": return [[3, 8, 1], [13, 8, 1], [8, 3, 1], [8, 13, 1]]
-        // The ring from the barb round to just under the left, and the filled barb.
-        case "history": return [[8, 2.5, 1], [13.5, 8, 1], [8, 13.5, 1], [2.53, 8.57, 1], [3.63, 4.66, 1],
-                                [2.02, 3.4, 0], [2.02, 6.48, 0], [5.12, 6.48, 0]]
-        case "copyicon": return [[3.5, 9, 1], [12.5, 7, 1], [9, 3.5, 1], [7, 12.5, 1]]
-        // The stroke above, the filled dot below.
-        case "bang": return [[8, 3.5, 1], [8, 10, 1], [7, 12.8, 0], [9, 12.8, 0], [8, 13.8, 0]]
-        case "hier": return [[3, 3, 1], [13, 6.5, 1], [13, 13.5, 1], [10, 13.5, 1]]
-        // The filled dots stand out past the lines' ends.
-        case "list": return [[2.5, 4.5, 0], [3.4, 3.6, 0], [3.4, 12.4, 0], [13, 4.5, 1], [13, 11.5, 1], [5.5, 4.5, 1],
-                             [5.5, 11.5, 1]]
-        case "pr": return [[2.8, 3.8, 1], [2.8, 12.2, 1], [13.2, 12.2, 1], [4.5, 2.1, 1], [4.5, 13.9, 1],
-                           [11.5, 13.9, 1], [8.8, 2.5, 1]]
-        // The tick's corner is a mitred join, its point a half line and more below the corner.
-        case "check": return [[3.5, 8.5, 1], [6.8, 11.8, 1.41], [12.5, 4.5, 1]]
-        case "lock": return [[3.5, 8.2, 1], [12.5, 13.5, 1], [8, 4.4, 1]]
-        // Filled throughout.
-        case "home": return icon.grown ? [[1.84, 6.32, 0], [8, 1.62, 0], [14.16, 14.38, 0], [1.84, 14.38, 0]]
-                                       : [[2.5, 6.5, 0], [8, 2.3, 0], [13.5, 13.7, 0], [2.5, 13.7, 0]]
-        // GitHub's mark (`githubMark`, 16 × 15.5 of its own grid) at `githubScale`, its box on the grid's middle.
-        case "github": return [[2, 2.19, 0], [14, 13.81, 0]]
-        case "folder": return [[2.5, 4.5, 1], [13.5, 12.5, 1], [2.5, 12.5, 1]]
-        case "chevron": return [[6, 4, 1], [10, 8, 1], [6, 12, 1]]
-        case "chevrons": return [[4, 4, 1], [13, 8, 1], [4, 12, 1]]
-        case "terminal": return [[3, 4, 1], [7, 8, 1], [3, 12, 1], [13, 12, 1]]
-        // A resize corner hangs off the box's lower right and is not centred (`centred`).
-        case "grip": return [[6, 12, 1], [12, 6, 1], [10, 12, 1], [12, 10, 1]]
-        case "menu": return [[3, 4.5, 1], [13, 11.5, 1]]
-        case "close": return [[4.5, 4.5, 1], [11.5, 11.5, 1]]
-        // The teeth's outer corners on the axes.
-        case "gear": return [[2.03, 8, 1], [13.97, 8, 1], [8, 2.03, 1], [8, 13.97, 1]]
-        case "window-maximize":
-        case "window-restore": return [[3.5, 3.5, 1], [12.5, 12.5, 1]]
-        case "app-window": return [[2.5, 3.5, 1], [13.5, 12.5, 1]]
-        case "unified":
-        case "split": return [[3, 4, 1], [13, 12, 1]]
-        // The lens's two curves meet at a mitred point at each end.
-        case "eye": return [[2.5, 8, 1.36], [13.5, 8, 1.36], [8, 5, 1], [8, 11, 1]]
-        case "eye-off": return [[2.5, 8, 1.36], [13.5, 8, 1.36], [3, 13, 1], [13, 3, 1]]
-        case "no":
-        case "no-entry": return [[2.5, 8, 1], [13.5, 8, 1], [8, 2.5, 1], [8, 13.5, 1]]
-        case "search": return [[2.8, 7, 1], [7, 2.8, 1], [13.2, 13.2, 1]]
-        default: return []
-        }
-    }
+    readonly property var reaches: icon.reachesOf(icon.kind)
     /// Whether the drawing is moved to stand its ink in the middle of the box. Only the resize corner is not.
     readonly property bool centred: icon.kind !== "grip"
     /// GitHub's mark as Octicons draws it (`mark-github-16`, MIT, © GitHub Inc. — used under GitHub's logo terms:
@@ -113,6 +50,10 @@ InkCanvas {
     property real size: Theme.fontMd
     /// Where the words' baseline runs, in this item's y.
     property real wordBase: icon.height
+    /// For a mark seated in front of a name: the air the name's first glyph holds ahead of its ink
+    /// (`WordFace.nameAir`). The mark stands in the middle between the box's head and the name's ink, not its advance —
+    /// measured to the advance, the letter's air lands on the name's side alone and the mark reads as standing off it.
+    property real nameAir: 0
     /// Quarter turns, clockwise, of a set mark's drawing — not `rotation`, which would turn its place against the
     /// words with it.
     property int turn: 0
@@ -177,14 +118,15 @@ InkCanvas {
     /// `unit` pixels and the line keeps its pixels, so the half line is worth more of the grid on a small mark.
     readonly property var inkBox: icon.inkAt(icon.unit)
     /// How far the drawing moves, in grid squares: to stand its ink in the middle of the box — for a set mark, its
-    /// seat, so every seat holds its mark's air evenly either side (デザイン規約 §アイコンの席「字の中の席」); down, on
-    /// the capitals' middle, or for a sign the face's own `+`'s middle, stopped at the baseline.
+    /// seat, so every seat holds its mark's air evenly either side (デザイン規約 §アイコンの席「字の中の席」), up to its
+    /// name's ink where one follows (`nameAir`); down, on the capitals' middle, or for a sign the face's own `+`'s
+    /// middle, stopped at the baseline.
     readonly property real shiftX: {
         if (!icon.centred)
             return 0
         if (icon.set === "")
             return 8 - (icon.inkBox[0] + icon.inkBox[2]) / 2
-        return Math.round((icon.width - icon.inkAcross) / 2) / icon.unit - icon.inkBox[0]
+        return Math.round((icon.width + icon.nameAir - icon.inkAcross) / 2) / icon.unit - icon.inkBox[0]
     }
     readonly property real shiftY: {
         if (!icon.centred)
@@ -224,6 +166,71 @@ InkCanvas {
                                      : Math.round(icon.set === "sign" ? icon.inkAcross + 2 * icon.wordAir
                                                                       : icon.inkAcross)
 
+    /// Each kind's `reaches`, drawn the way this mark is (`grown`).
+    function reachesOf(kind) {
+        switch (kind) {
+        case "branch": return [[3.2, 3.5, 1], [13.55, 5, 1], [5, 1.7, 1], [5, 14.3, 1]]
+        case "remote": return [[1.7, 10, 1], [14.6, 9.5, 1], [8.05, 3.1, 1], [8, 12.9, 1]]
+        case "tag": return icon.grown ? [[8, 2.8, 1.41], [8, 14.2, 1.41], [2.3, 8.5, 1.41], [13.7, 8.5, 1.41]]
+                                      : [[8, 3.41, 1.41], [8, 13.59, 1.41], [2.91, 8.5, 1.41], [13.09, 8.5, 1.41]]
+        case "stash": return [[3, 4, 1], [13, 4, 1], [4, 13, 1], [12, 13, 1]]
+        // As tall as `branch`, ring and stem (`lettered`).
+        case "tree": return [[3.5, 6, 1], [12.5, 6, 1], [8, 1.5, 1], [8, 14.1, 1]]
+        // The body's four corners turned 45°, and the filled point.
+        case "pen": return [[11.25, 2.77, 1.41], [13.23, 4.75, 1.41], [5.24, 8.78, 1.41], [7.22, 10.76, 1.41],
+                            [4.11, 11.89, 0]]
+        case "plus": return [[3.5, 8, 1], [12.5, 8, 1], [8, 3.5, 1], [8, 12.5, 1]]
+        case "minus": return [[3.5, 8, 1], [12.5, 8, 1]]
+        case "window-minimize": return [[3, 8, 1], [13, 8, 1]]
+        case "arrow": return [[3.5, 8, 1], [11.5, 8, 1], [8.8, 5.2, 1], [8.8, 10.8, 1]]
+        case "fetch": return [[8, 2.5, 1], [3.5, 13, 1], [12.5, 13, 1], [4.8, 6.8, 1], [11.2, 6.8, 1]]
+        // The barbs meet the point in a mitred right angle.
+        case "push": return [[8, 2.5, 1.41], [3.5, 13, 1], [12.5, 13, 1], [4.8, 5.7, 1], [11.2, 5.7, 1]]
+        case "spinner": return [[3, 8, 1], [13, 8, 1], [8, 3, 1], [8, 13, 1]]
+        // The ring from the barb round to just under the left, and the filled barb.
+        case "history": return [[8, 2.5, 1], [13.5, 8, 1], [8, 13.5, 1], [2.53, 8.57, 1], [3.63, 4.66, 1],
+                                [2.02, 3.4, 0], [2.02, 6.48, 0], [5.12, 6.48, 0]]
+        case "copyicon": return [[3.5, 9, 1], [12.5, 7, 1], [9, 3.5, 1], [7, 12.5, 1]]
+        // The stroke above, the filled dot below.
+        case "bang": return [[8, 3.5, 1], [8, 10, 1], [7, 12.8, 0], [9, 12.8, 0], [8, 13.8, 0]]
+        case "hier": return [[3, 3, 1], [13, 6.5, 1], [13, 13.5, 1], [10, 13.5, 1]]
+        // The filled dots stand out past the lines' ends.
+        case "list": return [[2.5, 4.5, 0], [3.4, 3.6, 0], [3.4, 12.4, 0], [13, 4.5, 1], [13, 11.5, 1], [5.5, 4.5, 1],
+                             [5.5, 11.5, 1]]
+        case "pr": return [[2.8, 3.8, 1], [2.8, 12.2, 1], [13.2, 12.2, 1], [4.5, 2.1, 1], [4.5, 13.9, 1],
+                           [11.5, 13.9, 1], [8.8, 2.5, 1]]
+        // The tick's corner is a mitred join, its point a half line and more below the corner.
+        case "check": return [[3.5, 8.5, 1], [6.8, 11.8, 1.41], [12.5, 4.5, 1]]
+        case "lock": return [[3.5, 8.2, 1], [12.5, 13.5, 1], [8, 4.4, 1]]
+        // Filled throughout.
+        case "home": return icon.grown ? [[1.84, 6.32, 0], [8, 1.62, 0], [14.16, 14.38, 0], [1.84, 14.38, 0]]
+                                       : [[2.5, 6.5, 0], [8, 2.3, 0], [13.5, 13.7, 0], [2.5, 13.7, 0]]
+        // GitHub's mark (`githubMark`, 16 × 15.5 of its own grid) at `githubScale`, its box on the grid's middle.
+        case "github": return [[2, 2.19, 0], [14, 13.81, 0]]
+        case "folder": return [[2.5, 4.5, 1], [13.5, 12.5, 1], [2.5, 12.5, 1]]
+        case "chevron": return [[6, 4, 1], [10, 8, 1], [6, 12, 1]]
+        case "chevrons": return [[4, 4, 1], [13, 8, 1], [4, 12, 1]]
+        case "terminal": return [[3, 4, 1], [7, 8, 1], [3, 12, 1], [13, 12, 1]]
+        // A resize corner hangs off the box's lower right and is not centred (`centred`).
+        case "grip": return [[6, 12, 1], [12, 6, 1], [10, 12, 1], [12, 10, 1]]
+        case "menu": return [[3, 4.5, 1], [13, 11.5, 1]]
+        case "close": return [[4.5, 4.5, 1], [11.5, 11.5, 1]]
+        // The teeth's outer corners on the axes.
+        case "gear": return [[2.03, 8, 1], [13.97, 8, 1], [8, 2.03, 1], [8, 13.97, 1]]
+        case "window-maximize":
+        case "window-restore": return [[3.5, 3.5, 1], [12.5, 12.5, 1]]
+        case "app-window": return [[2.5, 3.5, 1], [13.5, 12.5, 1]]
+        case "unified":
+        case "split": return [[3, 4, 1], [13, 12, 1]]
+        // The lens's two curves meet at a mitred point at each end.
+        case "eye": return [[2.5, 8, 1.36], [13.5, 8, 1.36], [8, 5, 1], [8, 11, 1]]
+        case "eye-off": return [[2.5, 8, 1.36], [13.5, 8, 1.36], [3, 13, 1], [13, 3, 1]]
+        case "no":
+        case "no-entry": return [[2.5, 8, 1], [13.5, 8, 1], [8, 2.5, 1], [8, 13.5, 1]]
+        case "search": return [[2.8, 7, 1], [7, 2.8, 1], [13.2, 13.2, 1]]
+        default: return []
+        }
+    }
     /// `unit` for this set mark beside words of `size` it is not drawn at: what a seat measures the mark it holds by
     /// (`MarkSeat.need`).
     function unitAt(size) {
@@ -240,6 +247,18 @@ InkCanvas {
                    Math.max(box[2], p[0] + out), Math.max(box[3], p[1] + out)]
         }
         return icon.reaches.length > 0 ? box : [0, 0, 16, 16]
+    }
+    /// The ink's span across, in pixels, of another kind drawn the way this mark is drawn — its `unit` and line,
+    /// unturned: what a seat holding the widest of several kinds reads off one of them (`AppMenuItem.headSeat`).
+    function inkAcrossOf(kind) {
+        const half = icon.unit > 0 ? icon.pen / 2 / icon.unit : 0
+        let left = 16
+        let right = 0
+        for (const p of icon.reachesOf(kind)) {
+            left = Math.min(left, p[0] - p[2] * half)
+            right = Math.max(right, p[0] + p[2] * half)
+        }
+        return Math.max(0, right - left) * icon.unit
     }
 
     width: Theme.iconMd

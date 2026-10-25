@@ -132,6 +132,7 @@ ComboBox {
             set: "sign"
             size: input.font.pixelSize
             wordBase: input.baselineOffset
+            nameAir: WordFace.nameAir(input, input.text)
             // Its kind's colour, as a name's mark is anywhere (`NavIcon.inkBeside`); grey with the box.
             tint: leadIcon.inkBeside(combo.enabled ? Theme.textPrimary : Theme.textMuted)
         }

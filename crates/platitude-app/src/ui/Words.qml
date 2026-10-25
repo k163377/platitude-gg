@@ -832,7 +832,9 @@ QtObject {
         return Qt.colorEqual(prose, Theme.textSecondary) ? Theme.textSecondary : Theme.textPrimary
     }
     /// `name` as code in markup (デザイン規約 §ref の種別「文の中の名前」): the mono face, in `ink`. Its ground is drawn
-    /// under the words by whoever lays them out (`CardText`, `AppMenuItem`), measured off the ink.
+    /// under the words by whoever lays them out (`CardText`, `AppMenuItem`): from the head of its mark's seat to half a
+    /// gap past its last glyph's ink (`WordFace.groundEnd`), or for a name with no mark, from half a gap before it to
+    /// half a gap past its advance (`WordFace.groundStart`).
     function codeMarkup(name, ink) {
         return "<span style=\"font-family:'" + Theme.monoFamily + "'; color:" + ink + "\">" + Words.inked(name)
              + "</span>"
