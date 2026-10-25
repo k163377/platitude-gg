@@ -46,16 +46,18 @@ impl DiffModel {
     /// draws.
     pub(super) fn source_line(&self, side: i32, row: usize) -> Option<&str> {
         let item = self.lines.get(row)?;
-        let patch = usize::try_from(item.patch).ok()?;
-        let hunk = usize::try_from(item.hunk).ok()?;
         let line = if side == RIGHT {
             item.pair_line
         } else {
             item.line
         };
-        let line = usize::try_from(line).ok()?;
-        let patch = self.shown.as_ref()?.get(patch)?;
-        Some(&patch.hunks.get(hunk)?.lines.get(line)?.text)
+        // The row carries its place as QML's signed roles, -1 for none.
+        let location = DiffLineLocation {
+            patch: usize::try_from(item.patch).ok()?,
+            hunk: usize::try_from(item.hunk).ok()?,
+            line: usize::try_from(line).ok()?,
+        };
+        Some(&location.line_in(self.shown.as_ref()?)?.text)
     }
 
     /// The kind of the line one side of a row holds — `""` for nothing

@@ -151,11 +151,7 @@ impl DiffColors {
             spans: Vec::new(),
             fence: false,
         };
-        self.patches
-            .get(location.patch)
-            .and_then(|p| p.get(location.hunk))
-            .and_then(|h| h.get(location.line))
-            .unwrap_or(&NOTHING)
+        location.entry_in(&self.patches).unwrap_or(&NOTHING)
     }
 
     /// Whether nothing anywhere in this diff was read. A pane never needs

@@ -27,11 +27,7 @@ impl IntraMarks {
     /// The emphasised ranges of one row — none, where none are.
     pub fn line(&self, location: DiffLineLocation) -> &[Range<usize>] {
         static NOTHING: Ranges = Vec::new();
-        self.patches
-            .get(location.patch)
-            .and_then(|p| p.get(location.hunk))
-            .and_then(|h| h.get(location.line))
-            .unwrap_or(&NOTHING)
+        location.entry_in(&self.patches).unwrap_or(&NOTHING)
     }
 }
 

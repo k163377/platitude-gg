@@ -83,11 +83,34 @@ pub struct DiffLine {
 /// [`FilePatch`], of the [`DiffHunk`] in that patch, and of the line in that
 /// hunk. Not a row on screen, and not a line number of either file. Nothing
 /// says the line is there; whoever reads by it answers for one that is not.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Ordered as the diff runs: by patch, then hunk, then line (the derive
+/// follows the fields' order).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DiffLineLocation {
     pub patch: usize,
     pub hunk: usize,
     pub line: usize,
+}
+
+impl DiffLineLocation {
+    /// The line this names in `patches` — none where any of the three is
+    /// past the end.
+    pub fn line_in(self, patches: &[FilePatch]) -> Option<&DiffLine> {
+        patches
+            .get(self.patch)?
+            .hunks
+            .get(self.hunk)?
+            .lines
+            .get(self.line)
+    }
+
+    /// The entry this names in a table laid out as a parse's lines are —
+    /// one list per patch, one per hunk in it, one entry per line
+    /// (`IntraMarks`, `DiffColors`) — none where any of the three is past
+    /// the end.
+    pub fn entry_in<T>(self, table: &[Vec<Vec<T>>]) -> Option<&T> {
+        table.get(self.patch)?.get(self.hunk)?.get(self.line)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

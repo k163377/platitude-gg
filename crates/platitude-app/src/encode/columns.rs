@@ -1,5 +1,7 @@
 //! How far a diff reaches sideways: the lines the pane measures to find out.
 
+use std::cmp::Reverse;
+
 use platitude_core::highlight::DiffColors;
 use platitude_core::parse::diff::{DiffLine, DiffLineKind, DiffLineLocation, FilePatch};
 use qtbridge::qtbridge_type_lib::QVariantMap;
@@ -60,7 +62,7 @@ const MOST_CANDIDATES: usize = 8;
 /// source line would measure `<b>` as markup and tabs at Qt's own stop.
 /// Hunk headings are left out: they never travel.
 pub fn widest_lines(patches: &[FilePatch], colors: &DiffColors) -> Candidates {
-    let mut lines: Vec<(usize, usize, usize, usize)> = Vec::new();
+    let mut lines: Vec<(usize, DiffLineLocation, &DiffLine)> = Vec::new();
     for (patch_index, patch) in patches.iter().enumerate() {
         for (hunk_index, hunk) in patch.hunks.iter().enumerate() {
             for (line_index, line) in hunk.lines.iter().enumerate() {
@@ -69,26 +71,23 @@ pub fn widest_lines(patches: &[FilePatch], colors: &DiffColors) -> Candidates {
                 if line.kind == DiffLineKind::NoNewline {
                     continue;
                 }
-                lines.push((columns_of(&line.text), patch_index, hunk_index, line_index));
+                let location = DiffLineLocation {
+                    patch: patch_index,
+                    hunk: hunk_index,
+                    line: line_index,
+                };
+                lines.push((columns_of(&line.text), location, line));
             }
         }
     }
-    lines.sort_unstable_by(|a, b| b.cmp(a));
+    lines.sort_unstable_by_key(|&(columns, location, _)| Reverse((columns, location)));
     lines.truncate(MOST_CANDIDATES);
     Candidates::new(
         lines
             .into_iter()
-            .map(|(_, patch_index, hunk_index, line_index)| {
-                let line = &patches[patch_index].hunks[hunk_index].lines[line_index];
-                let read = colors.line(DiffLineLocation {
-                    patch: patch_index,
-                    hunk: hunk_index,
-                    line: line_index,
-                });
-                Candidate {
-                    bold: is_bold(line),
-                    line: super::markup::styled(&line.text, &read.spans),
-                }
+            .map(|(_, location, line)| Candidate {
+                bold: is_bold(line),
+                line: super::markup::styled(&line.text, &colors.line(location).spans),
             })
             .collect(),
     )

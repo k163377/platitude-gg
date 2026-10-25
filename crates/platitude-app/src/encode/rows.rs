@@ -44,8 +44,9 @@ pub struct DiffRow {
     pub hunk: i32,
     pub line: i32,
     /// Which of the read's patches the two above count within (-1 where
-    /// they name nothing); together, the address
-    /// `patches[patch].hunks[hunk].lines[line]` (`DiffModel::source_line`).
+    /// they name nothing); together, the address a
+    /// `platitude_core::parse::diff::DiffLineLocation` names
+    /// (`DiffModel::source_line`).
     pub patch: i32,
     /// One marker column per side of a combined diff (`" +"`, `"++"`,
     /// `"- "`), empty on every ordinary row. Which side a line came from

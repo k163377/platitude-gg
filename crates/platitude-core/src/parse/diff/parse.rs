@@ -235,9 +235,60 @@ pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::DiffLineKind;
     use super::super::testkit::PATCH;
+    use super::super::{DiffLineKind, DiffLineLocation};
     use super::*;
+
+    #[test]
+    fn a_location_reads_back_the_line_it_names() {
+        let files = parse_patch(PATCH.as_bytes());
+        let text = |patch, hunk, line| {
+            DiffLineLocation { patch, hunk, line }
+                .line_in(&files)
+                .map(|found| found.text.as_str())
+        };
+        assert_eq!(text(0, 0, 1), Some("line two"));
+        assert_eq!(text(0, 0, 2), Some("line two changed"), "another line");
+        assert_eq!(text(0, 1, 2), Some("tail two changed"), "another hunk");
+        assert_eq!(text(1, 0, 0), Some("hello"), "another patch");
+        assert_eq!(text(3, 0, 0), None, "no fourth patch");
+        assert_eq!(text(2, 0, 0), None, "a binary patch has no hunk");
+        assert_eq!(text(0, 2, 0), None, "no third hunk");
+        assert_eq!(text(0, 1, 3), None, "no fourth line");
+    }
+
+    /// A table laid out as the lines are: each entry names its own place.
+    #[test]
+    fn a_location_reads_back_its_entry_of_a_table() {
+        let table = vec![
+            vec![vec!["0.0.0", "0.0.1"], vec!["0.1.0"]],
+            vec![vec!["1.0.0", "1.0.1", "1.0.2"]],
+        ];
+        let entry = |patch, hunk, line| {
+            DiffLineLocation { patch, hunk, line }
+                .entry_in(&table)
+                .copied()
+        };
+        assert_eq!(entry(0, 0, 1), Some("0.0.1"));
+        assert_eq!(entry(1, 0, 1), Some("1.0.1"), "another patch");
+        assert_eq!(entry(0, 1, 0), Some("0.1.0"), "another hunk");
+        assert_eq!(entry(1, 0, 2), Some("1.0.2"), "another line");
+        assert_eq!(entry(2, 0, 0), None, "no third patch");
+        assert_eq!(entry(1, 1, 0), None, "no second hunk");
+        assert_eq!(entry(0, 1, 1), None, "no second line");
+    }
+
+    #[test]
+    fn locations_run_in_the_diff_s_order() {
+        let at = |patch, hunk, line| DiffLineLocation { patch, hunk, line };
+        assert!(
+            at(0, 9, 9) < at(1, 0, 0),
+            "a patch before its hunks and lines"
+        );
+        assert!(at(1, 0, 9) < at(1, 1, 0), "a hunk before its lines");
+        assert!(at(1, 1, 0) < at(1, 1, 1));
+    }
+
     #[test]
     fn parses_a_multi_file_patch() {
         let files = parse_patch(PATCH.as_bytes());
