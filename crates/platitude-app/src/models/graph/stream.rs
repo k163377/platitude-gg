@@ -281,7 +281,7 @@ impl GraphModel {
 
         // In-place writes first (no Qt runs between here and the
         // notifications below — everything happens inside one slot).
-        let mut ranges: Vec<(usize, usize)> = Vec::new();
+        let mut ranges = Vec::new();
         for (i, item) in head.into_iter().enumerate() {
             if self.rows[i] != item {
                 self.rows[i] = item;

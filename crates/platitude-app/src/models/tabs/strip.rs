@@ -187,7 +187,7 @@ impl TabsModel {
         if let Some(item) = self.items.get_mut(at) {
             item.stand_in(worktree);
         }
-        self.notify_runs([(at, at)]);
+        self.notify_runs(std::iter::once(at..=at));
         self.current_index = at as i32;
         self.report();
         self.current_index_changed();

@@ -538,7 +538,7 @@ impl GraphModel {
     #[qslot]
     fn refresh_avatars(&mut self) {
         let avatars = crate::hub::AvatarUrls::current();
-        let mut ranges: Vec<(usize, usize)> = Vec::new();
+        let mut ranges = Vec::new();
         for i in 0..self.rows.len() {
             let url = avatars.url_of(&self.rows[i].author_email);
             if self.rows[i].avatar_url != url {

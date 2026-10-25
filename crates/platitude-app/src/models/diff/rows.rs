@@ -57,7 +57,7 @@ impl DiffModel {
         if rows == 0 {
             return;
         }
-        self.notify_runs([(0, rows - 1)]);
+        self.notify_runs(std::iter::once(0..=rows - 1));
     }
 
     pub(super) fn lay_out_rows(&mut self, colors: &platitude_core::highlight::DiffColors) {

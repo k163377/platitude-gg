@@ -169,7 +169,7 @@ impl RebasePlanModel {
         let mut touched = self.demote_orphan_folds();
         touched.push(index);
         touched.sort_unstable();
-        self.notify_runs(touched.into_iter().map(|i| (i, i)));
+        self.notify_runs(touched.into_iter().map(|i| i..=i));
         self.settle();
         self.changed();
     }
@@ -193,7 +193,7 @@ impl RebasePlanModel {
         step.msg_subject = subject;
         step.msg_body = body;
         step.shown = Self::shown_of(step);
-        self.notify_runs([(index, index)]);
+        self.notify_runs(std::iter::once(index..=index));
         self.settle();
         self.changed();
     }

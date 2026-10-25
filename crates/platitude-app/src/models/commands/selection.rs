@@ -15,6 +15,8 @@
 //! - git's own words come only with a line taken whole: the block under a
 //!   failure cannot be pointed into (デザイン規約 §diff の中身をコピーする).
 
+use std::ops::RangeInclusive;
+
 use super::*;
 
 /// `HH:mm:ss` — the clock column's only shape, so the first tab is at
@@ -165,8 +167,8 @@ impl CommandsModel {
     }
 
     /// The rows the selection touches, so that only they are re-spelled.
-    fn span(&self) -> Option<(usize, usize)> {
-        self.taken().map(|(first, last)| (first.row, last.row))
+    fn span(&self) -> Option<RangeInclusive<usize>> {
+        self.taken().map(|(first, last)| first.row..=last.row)
     }
 
     pub(super) fn start_select(&mut self, position: SourcePosition) -> bool {
@@ -223,12 +225,12 @@ impl CommandsModel {
 
     /// Re-spells the rows the selection covers now or covered before, and
     /// answers whether any changed.
-    fn respell(&mut self, was: Option<(usize, usize)>) -> bool {
+    fn respell(&mut self, was: Option<RangeInclusive<usize>>) -> bool {
         let now = self.span();
         let (first, last) = match (was, now) {
             (None, None) => return false,
-            (Some(span), None) | (None, Some(span)) => span,
-            (Some(a), Some(b)) => (a.0.min(b.0), a.1.max(b.1)),
+            (Some(span), None) | (None, Some(span)) => span.into_inner(),
+            (Some(a), Some(b)) => (*a.start().min(b.start()), *a.end().max(b.end())),
         };
         let mut runs = Vec::new();
         for row in first..=last.min(self.rows.len().saturating_sub(1)) {

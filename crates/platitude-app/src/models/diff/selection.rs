@@ -18,7 +18,7 @@
 //! its tabs spelled out as `&nbsp;` (`encode::markup`), so a copy off the
 //! screen would paste spaces.
 
-use std::ops::Range;
+use std::ops::{Range, RangeInclusive};
 
 use super::*;
 
@@ -34,9 +34,6 @@ enum Wash {
     /// row the selection only touches the edge of.
     Part(Range<usize>),
 }
-
-/// The rows a selection covers, first and last inclusive.
-type Span = (usize, usize);
 
 /// The new side of a split row (the find bar's marks read it too, `find`).
 pub(super) const RIGHT: i32 = 1;
@@ -105,10 +102,10 @@ impl DiffModel {
     }
 
     /// The rows the selection covers, clamped to the rows that exist.
-    fn span(&self) -> Option<Span> {
+    fn span(&self) -> Option<RangeInclusive<usize>> {
         let (first, last) = self.taken()?;
         let end = self.lines.len().checked_sub(1)?;
-        (first.row <= end).then(|| (first.row, last.row.min(end)))
+        (first.row <= end).then(|| first.row..=last.row.min(end))
     }
 
     pub(super) fn holds(&self, side: i32, position: SourcePosition) -> bool {
@@ -205,19 +202,32 @@ impl DiffModel {
     /// those rows. With both spans standing only the moving edges are
     /// revisited — a row inside both is whole in each — unless the column
     /// changed (`whole`), when every row of either span moves side.
-    fn lay_wash(&mut self, before: Option<Span>, after: Option<Span>, whole: bool) {
+    fn lay_wash(
+        &mut self,
+        before: Option<RangeInclusive<usize>>,
+        after: Option<RangeInclusive<usize>>,
+        whole: bool,
+    ) {
         let mut ranges = match (before, after) {
             (None, None) => return,
             (None, Some(span)) | (Some(span), None) => vec![span],
             (Some(a), Some(b)) if whole => vec![a, b],
-            (Some(a), Some(b)) => vec![(a.0.min(b.0), a.0.max(b.0)), (a.1.min(b.1), a.1.max(b.1))],
+            (Some(a), Some(b)) => {
+                let (a_first, a_last) = a.into_inner();
+                let (b_first, b_last) = b.into_inner();
+                vec![
+                    a_first.min(b_first)..=a_first.max(b_first),
+                    a_last.min(b_last)..=a_last.max(b_last),
+                ]
+            }
         };
-        ranges.sort_unstable();
+        // Walked by first row: what one range wrote is skipped in the next.
+        ranges.sort_unstable_by_key(|range| *range.start());
         let mut runs = Vec::new();
         // The ranges overlap where the edges met or crossed; each row is
         // written once.
         let mut done: Option<usize> = None;
-        for (first, last) in ranges {
+        for (first, last) in ranges.into_iter().map(RangeInclusive::into_inner) {
             let first = done.map_or(first, |last_done| first.max(last_done + 1));
             for row in first..=last {
                 if row >= self.lines.len() {
@@ -301,8 +311,8 @@ impl DiffModel {
         let mut takes = 0usize;
         let mut inked = false;
         let mut removed = 0usize;
-        if let Some((first, last)) = self.span() {
-            for row in first..=last {
+        if let Some(rows) = self.span() {
+            for row in rows {
                 match self.wash_of(self.sel_side, row) {
                     Wash::None => {}
                     Wash::Whole => {
@@ -330,8 +340,8 @@ impl DiffModel {
     pub(super) fn copied_new(&self) -> String {
         let mut out = String::new();
         let mut first_line = true;
-        if let Some((first, last)) = self.span() {
-            for row in first..=last {
+        if let Some(rows) = self.span() {
+            for row in rows {
                 let Some(text) = self.source_line(self.sel_side, row) else {
                     continue;
                 };
@@ -357,11 +367,11 @@ impl DiffModel {
     /// lines it reaches over, which are the old file's. An end row the
     /// selection only touches the edge of holds no line of it.
     pub(super) fn line_span(&self) -> Option<LineSpan> {
-        let (first, last) = self.span()?;
+        let rows = self.span()?;
         let old_column = self.split && self.sel_side != RIGHT;
         let mut taken = (i32::MAX, 0);
         let mut removed = (i32::MAX, 0);
-        for row in first..=last {
+        for row in rows {
             let Some(item) = self.lines.get(row) else {
                 continue;
             };
@@ -406,8 +416,8 @@ impl DiffModel {
         if !self.removed_offered() {
             return out;
         }
-        if let Some((first, last)) = self.span() {
-            for row in first..=last {
+        if let Some(rows) = self.span() {
+            for row in rows {
                 if self.kind_of(0, row) != "del" {
                     continue;
                 }

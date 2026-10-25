@@ -393,7 +393,7 @@ impl CommandsModel {
                     // The line grew its outcome, so re-spell the wash; the
                     // `set` above carried the old one.
                     if self.respell_row(index) {
-                        self.notify_runs([(index, index)]);
+                        self.notify_runs(std::iter::once(index..=index));
                     }
                     // "Still running" is about the whole list: a fetch
                     // can outlive the write that started it.

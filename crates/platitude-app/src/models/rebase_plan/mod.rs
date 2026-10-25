@@ -284,7 +284,7 @@ impl RebasePlanModel {
     pub(super) fn hold_fold_rule(&mut self) -> bool {
         let demoted = self.demote_orphan_folds();
         let moved = !demoted.is_empty();
-        self.notify_runs(demoted.into_iter().map(|i| (i, i)));
+        self.notify_runs(demoted.into_iter().map(|i| i..=i));
         moved
     }
 

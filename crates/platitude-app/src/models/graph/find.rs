@@ -25,7 +25,7 @@ impl GraphModel {
     /// [`Self::splice_notified`], which takes a whole new `Vec` — a clone of
     /// every row per keystroke.
     pub(super) fn remark_notified(&mut self) {
-        let mut ranges: Vec<(usize, usize)> = Vec::new();
+        let mut ranges = Vec::new();
         let mut count = 0;
         for i in 0..self.rows.len() {
             let now = match &self.query {
