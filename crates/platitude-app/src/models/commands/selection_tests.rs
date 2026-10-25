@@ -337,11 +337,21 @@ fn a_successful_command_never_brings_its_stderr() {
 
 #[test]
 fn a_hand_that_ran_off_the_end_stops_at_it() {
-    // A drag out past the panel's right edge names a byte past the line.
-    let mut model = log(vec![row("add --all", "ok", "", "23 ms", "")]);
+    // A command still running has no outcome yet: the outcome column's place
+    // is past its line, the tab before it not there.
+    let mut model = log(vec![row("fetch origin", "running", "", "", "")]);
+    let end = model.line_at(0).unwrap().len();
+    let off = model.hit(AT_OUT, layout(0, 0));
+    assert!(usize::try_from(off).unwrap() > end, "a place past the line");
     model.start_select(source(0, 0));
-    model.drag_select(source(0, 9999));
-    assert_eq!(model.copied(), "12:03:17\tgit add --all\t23 ms");
+    model.drag_select(source(0, off));
+    assert_eq!(model.copied(), "12:03:17\tgit fetch origin");
+    model.respell_row(0);
+    assert_eq!(
+        said(&model.rows[0].sel).map(|wash| wash.3),
+        Some(true),
+        "its wash takes the line whole"
+    );
 }
 
 #[test]

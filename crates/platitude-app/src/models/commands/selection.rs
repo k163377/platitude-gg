@@ -150,15 +150,17 @@ impl CommandsModel {
     /// The two ends in reading order, or nothing while none stands — the
     /// one place that sorts the pair, which is kept press first.
     ///
-    /// Both ends are cut to their line: a drag off a row's end names a byte
-    /// past it.
+    /// The ends are kept as pressed: on a row whose command is still
+    /// running, the outcome column names a byte past the line (the tab
+    /// before it is not there yet). Each row's bytes are cut to its line
+    /// where they are read (`SourcePosition::bytes_until`); sorting before
+    /// that cut takes the same bytes — the cut never reorders two bytes of
+    /// one row, and across rows the row decides.
     fn taken(&self) -> Option<(SourcePosition, SourcePosition)> {
         if !self.sel_active {
             return None;
         }
-        let cut =
-            |end: SourcePosition| end.cut_to(self.line_at(end.row).map_or(0, |line| line.len()));
-        let (anchor, focus) = (cut(self.sel_anchor), cut(self.sel_focus));
+        let (anchor, focus) = (self.sel_anchor, self.sel_focus);
         Some((anchor.min(focus), anchor.max(focus)))
     }
 

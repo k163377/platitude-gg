@@ -33,7 +33,7 @@ impl SourcePosition {
 
     /// This position cut to a line `len` bytes long: a byte past its end is
     /// the end.
-    pub(super) fn cut_to(self, len: usize) -> Self {
+    fn cut_to(self, len: usize) -> Self {
         Self {
             byte: self.byte.min(len),
             ..self
