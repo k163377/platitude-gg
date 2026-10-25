@@ -211,13 +211,18 @@ fn a_letter_is_handed_out_once_per_session_and_stays_that_sessions() {
     let sb = Sandbox::new("seat-handout");
     let (ok, first) = seat(&sb, &[], "one");
     assert!(ok && first.contains("newly created"), "{first}");
+    assert!(!first.contains("never came off"), "{first}");
     let taken = letter_of(&first);
     assert_eq!(lock_on(&sb, &taken), "claude-seat one pid 4242");
     assert_eq!(sb.head(&letter_path(&sb, &taken)), sb.main_sha());
 
+    // Asked again — after a resume, say — the letter is said to be kept,
+    // so the session does not tell the user it took the seat back.
     let (ok, again) = seat(&sb, &[], "one");
     assert!(
-        ok && again.contains(&format!("seat {taken} was already this session's")),
+        ok && again.contains(&format!("seat {taken} was already this session's"))
+            && again.contains("its claim never came off")
+            && again.contains(&format!("「席 {taken} で続ける」")),
         "{again}"
     );
     let (ok, other) = seat(&sb, &[], "two");
@@ -523,6 +528,18 @@ fn a_letter_whose_tree_went_missing_is_still_its_sessions() {
     assert_eq!(lock_on(&sb, "b"), claim, "the claim stood: {text}");
     assert!(!tree.exists(), "and nothing was made in its place: {text}");
 
+    // Its own session is told the tree is gone, not sent into it: the
+    // entry door reads no claim from a missing tree.
+    let (ok, text) = seat(&sb, &[], "sleeping");
+    assert!(
+        ok && text.contains("seat b was already this session's")
+            && text.contains("its tree is gone")
+            && text.contains("seat takeover b")
+            && !text.contains("EnterWorktree"),
+        "{text}"
+    );
+    assert_eq!(lock_on(&sb, "b"), claim, "{text}");
+
     // Once the user says the word, the tree comes back, naming whose it was.
     let (ok, text) = seat(&sb, &["takeover", "b"], "mine");
     assert!(ok, "{text}");
@@ -593,6 +610,72 @@ fn only_a_conversation_beginning_in_a_seat_claims_it_as_it_starts() {
     }
     start("startup");
     assert_eq!(lock_on(&sb, "b"), "claude-seat mine");
+}
+
+/// A resume names the directory the session began in — the primary
+/// checkout — while the conversation goes on in its seat. The start says
+/// the seat is kept, found by the session id or by the app session the
+/// conversation goes on under, and touches no claim; of two, it names the
+/// one the transcript last stood in, and a seat whose tree went away is
+/// not one to enter. A conversation holding none is greeted as a session
+/// in the checkout.
+#[test]
+fn a_conversation_resumed_from_the_checkout_is_told_its_seat_is_kept() {
+    let sb = Sandbox::new("seat-start-held");
+    let tree = letter_carrying_work(&sb, "b");
+    let claim = "claude-seat old host local_app";
+    lock(&sb, &tree, claim);
+    let start = |session: &str, host: &str| {
+        sb.hook_with(
+            "session-start",
+            &format!(
+                "{{\"session_id\":\"{session}\",\"cwd\":\"{}\",\"hook_event_name\":\"SessionStart\",\
+                 \"source\":\"resume\"}}",
+                slashed(&sb.repo)
+            ),
+            &[("CLAUDE_CODE_HOST_SESSION_ID", host)],
+        )
+    };
+    for (session, host) in [("old", "local_elsewhere"), ("new", "local_app")] {
+        let greeting = start(session, host);
+        assert!(
+            greeting.contains("This conversation holds seat b")
+                && greeting.contains("it carries 1 commit(s) main does not have")
+                && greeting.contains("EnterWorktree path=")
+                && greeting.contains("「席 b で続ける」"),
+            "{session}: {greeting}"
+        );
+        assert!(
+            !greeting.contains("runs in the primary checkout"),
+            "{session}: {greeting}"
+        );
+    }
+    assert_eq!(lock_on(&sb, "b"), claim, "a greeting moves no claim");
+    let greeting = start("stranger", "local_stranger");
+    assert!(
+        greeting.contains("runs in the primary checkout") && !greeting.contains("holds seat"),
+        "{greeting}"
+    );
+
+    let other = letter_carrying_work(&sb, "d");
+    lock(&sb, &other, claim);
+    transcript(&sb, "old", &other, "2026-10-13T10:00:00.000Z");
+    let greeting = start("old", "local_elsewhere");
+    assert!(
+        greeting.contains("This conversation holds seat d"),
+        "the seat it works in, not the first it holds: {greeting}"
+    );
+
+    std::fs::remove_dir_all(&other).expect("the directory going out from under the letter");
+    let greeting = start("old", "local_elsewhere");
+    assert!(
+        greeting.contains("This conversation holds seat d")
+            && greeting.contains("its tree is gone")
+            && greeting.contains("seat takeover d")
+            && !greeting.contains("EnterWorktree path="),
+        "{greeting}"
+    );
+    assert_eq!(lock_on(&sb, "d"), claim, "{greeting}");
 }
 
 /// Only the seat this session holds is entered or written in, however
@@ -739,9 +822,17 @@ fn a_seat_this_session_entered_is_not_one_to_enter_again() {
     let (ok, first) = seat(&sb, &[], "s1");
     assert!(ok, "{first}");
     assert!(first.contains("enter it with EnterWorktree"), "{first}");
-    let tree = sb.repo.join(".claude/worktrees").join(letter_of(&first));
+    let taken = letter_of(&first);
+    let tree = sb.repo.join(".claude/worktrees").join(&taken);
 
-    entered(&sb, "s1", &tree);
+    // Entering hands over no claim, so the note leaves "taken" to what
+    // `seat` said and names a seat already held as the one work goes on in.
+    let note = entered(&sb, "s1", &tree);
+    assert!(
+        note.contains(&format!("「席 {taken} で続ける」"))
+            && !note.contains(&format!("Seat {taken} is this session's now")),
+        "{note}"
+    );
 
     let (ok, again) = seat(&sb, &[], "s1");
     assert!(ok, "{again}");

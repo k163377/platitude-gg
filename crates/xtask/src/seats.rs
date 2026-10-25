@@ -55,19 +55,32 @@ pub(crate) struct Assigned {
 impl Assigned {
     /// What the session is told: this path is the one EnterWorktree
     /// argument that will be let through, the claim behind it being this
-    /// session's.
+    /// session's. A seat it held already is said to be kept: a session
+    /// that comes back to its seat after a resume reads a second ask as a
+    /// letter it lost, and tells the user it took the seat again.
     pub(crate) fn report(&self, me: &Identity) -> String {
         let standing = if self.held {
             "was already this session's"
         } else {
             "is this session's now"
         };
-        let entry = if self.already_in(me) {
+        let entry = if !has_a_directory(&self.path) {
+            treeless(self.seat, &self.path)
+        } else if self.already_in(me) {
             "this session is already working in it — nothing to enter".to_string()
         } else {
             format!("enter it with EnterWorktree path={}", self.path)
         };
-        format!("seat {} {standing}{}\n{entry}", self.seat, self.note)
+        let kept = match self.held {
+            true => format!(
+                "\nits claim never came off, so nothing was taken again: name it to the user \
+                 as the seat the work goes on in (「席 {} で続ける」), never as released or \
+                 taken back",
+                self.seat
+            ),
+            false => String::new(),
+        };
+        format!("seat {} {standing}{}\n{entry}{kept}", self.seat, self.note)
     }
 
     /// Whether the session already works in this seat (EnterWorktree would
@@ -254,8 +267,19 @@ fn takeover(root: &str, me: &Identity, letter: &str) -> Result<(), String> {
 /// Whether a listed tree is on disk. git still lists (as prunable) a tree
 /// whose directory is gone, and such a letter is treeless for every
 /// purpose here.
-fn has_a_directory(path: &str) -> bool {
+pub(crate) fn has_a_directory(path: &str) -> bool {
     std::path::Path::new(path).is_dir()
+}
+
+/// What a session holding a treeless letter is told in place of a path
+/// to enter: the entry door reads the claim from the tree and finds none
+/// there, so being sent in sends the session round to the roster again.
+pub(crate) fn treeless(seat: &str, path: &str) -> String {
+    format!(
+        "its tree is gone ({path}) — the work stays on worktree-{seat}, and only `{}` grows \
+         the tree back, on the user's word: tell the user",
+        commands::TAKEOVER.line().replace("<letter>", seat)
+    )
 }
 
 /// Clears git's record of a tree whose directory is gone, so a tree can
@@ -349,8 +373,9 @@ fn put_back(primary: &str, path: &str, displaced: Option<&str>) -> String {
     }
 }
 
-/// What a seat carries, said where it changes hands as it stands.
-fn carrying(path: &str) -> String {
+/// What a seat carries, said wherever a seat is handed over or named to
+/// its session as it stands.
+pub(crate) fn carrying(path: &str) -> String {
     match (commits_in(path, "main..HEAD"), dirty_lines(path)) {
         (Some(ahead), Some(dirty)) => format!(
             "it carries {ahead} commit(s) main does not have and {dirty} uncommitted file(s)"
@@ -501,6 +526,31 @@ fn transcript_seat(primary: &str, me: &Identity) -> Option<&'static str> {
     let cwd = transcripts::stand_of(&me.session)?.cwd.replace('\\', "/");
     let (repository, letter) = seat_in_repository(&cwd)?;
     same_tree(&repository, primary).then_some(letter)
+}
+
+/// The seat this session's conversation holds, read and left as it is —
+/// for the greeting, whose `cwd` is where the session began: a resume
+/// names the starting directory while the session goes on in its seat.
+/// Of several, the one its transcript last stood in, else the first: the
+/// greeting cannot ask the directory where the session works.
+pub(crate) fn conversation_seat(cwd: &str, me: &Identity) -> Option<(&'static str, String)> {
+    let (primary, trees) = primary_checkout(cwd).ok()?;
+    let mine: Vec<SeatEntry> = seat_entries_of(trees)
+        .into_iter()
+        .filter(|entry| is_ours(&entry.tree, me))
+        .collect();
+    let entry = match mine.as_slice() {
+        [] => return None,
+        [one] => one,
+        several => {
+            let stood = transcript_seat(&primary, me);
+            several
+                .iter()
+                .find(|entry| Some(entry.seat) == stood)
+                .unwrap_or(&several[0])
+        }
+    };
+    Some((entry.seat, entry.tree.path.clone()))
 }
 
 /// Whether the claim the listing shows on a letter is this session's.

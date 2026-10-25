@@ -194,9 +194,27 @@ pub(super) fn post_worktree(input: &str) -> Result<(), String> {
     println!(
         "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PostToolUse\",\
          \"additionalContext\":\"{}\"}}}}",
-        announce(seat)
+        entered_note(seat)
     );
     Ok(())
+}
+
+/// What a session owes the user once it is in a seat. The door lets in
+/// a seat already this session's (or claims back the unclaimed tree it
+/// stands in, `reclaims_on_entry`), so whether it was taken is what
+/// `cargo xtask seat` said: a session back in its seat after a resume
+/// would otherwise tell the user it took the seat again, as if it had
+/// been released.
+fn entered_note(seat: &str) -> String {
+    format!(
+        "This session works in seat {seat} now. Name it to the user in your very next reply, \
+         in Japanese and by its letter — the letter is how the user tells which tree a change, \
+         a build or a screenshot came from (CLAUDE.md ビルド・テスト). Say it was taken \
+         (「席 {seat} を取った」) only when `cargo xtask seat` just answered that it is this \
+         session's now; a seat this conversation already held is the seat the work goes on \
+         in (「席 {seat} で続ける」), and calling it taken again tells the user its claim had \
+         come off."
+    )
 }
 
 /// SessionEnd: the entry mark goes with the session; the seat stays
@@ -210,7 +228,7 @@ pub(super) fn session_end(input: &str) {
     }
 }
 
-/// What a session owes the user the moment a seat becomes its own.
+/// What a session owes the user the moment an edit claims a seat again.
 fn announce(seat: &str) -> String {
     format!(
         "Seat {seat} is this session's now. Name it to the user in your very next \

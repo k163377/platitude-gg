@@ -29,32 +29,37 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
         );
     }
     let seats = seat_report(&cwd).unwrap_or_default();
+    let me = Identity::current(string_field(input, "session_id").as_deref());
     match worktree_root(&cwd) {
-        None => println!(
-            "This session runs in the primary checkout, and the primary \
-             checkout is only ever read. Every write belongs in a worktree \
-             seat — implementation, documents, settings and the shared \
-             session rules alike: parallel sessions fight over target/ and \
-             the release exe, and they keep reaching for the same files, so \
-             a direct commit to main collides with theirs (CLAUDE.md \
-             ビルド・テスト / Git 運用). Nothing has to be decided about \
-             that now: the first edit that would land here is held, and \
-             `cargo xtask seat` is what answers it — the roster claims a \
-             free letter for this session and prints the path to enter. \
-             The claim is the only thing that decides who gets a seat; the \
-             letter comes from it. \
-             Make the edit in the seat you are given, and report the branch \
-             as ready to merge. {seats}"
-        ),
+        // A resume names the directory the session began in, and the
+        // session goes on in the seat it works in.
+        None => match seats::conversation_seat(&cwd, &me) {
+            Some((letter, path)) => println!("{}", holds_a_seat(letter, &path, &seats)),
+            None => println!(
+                "This session runs in the primary checkout, and the primary \
+                 checkout is only ever read. Every write belongs in a worktree \
+                 seat — implementation, documents, settings and the shared \
+                 session rules alike: parallel sessions fight over target/ and \
+                 the release exe, and they keep reaching for the same files, so \
+                 a direct commit to main collides with theirs (CLAUDE.md \
+                 ビルド・テスト / Git 運用). Nothing has to be decided about \
+                 that now: the first edit that would land here is held, and \
+                 `cargo xtask seat` is what answers it — the roster claims a \
+                 free letter for this session and prints the path to enter. \
+                 The claim is the only thing that decides who gets a seat; the \
+                 letter comes from it. \
+                 Make the edit in the seat you are given, and report the branch \
+                 as ready to merge. {seats}"
+            ),
+        },
         Some(root) => {
             let name = root.rsplit('/').next().unwrap_or_default();
             if SEATS.contains(&name) {
-                let session = string_field(input, "session_id").unwrap_or_default();
                 // A conversation carried on — compacted, resumed — takes no
                 // claim: its landing handed the seat back, and its next edit
                 // claims it again if the work goes on (`seats::how_claims_move`).
                 if begins(input)
-                    && let Some(note) = claim_at_start(&cwd, &session)
+                    && let Some(note) = claim_at_start(&cwd, &me)
                 {
                     println!("{note}");
                 }
@@ -62,11 +67,7 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
                     println!("{stand}");
                 }
             } else {
-                let session = string_field(input, "session_id");
-                match seats::start::write_down(
-                    &root,
-                    &Identity::current(session.as_deref()).session,
-                ) {
+                match seats::start::write_down(&root, &me.session) {
                     Some(Ok(branch)) => println!(
                         "This session starts in worktree '{name}', which the app made \
                          for it on {branch}, outside the seat roster a-f: take a seat with \
@@ -97,6 +98,30 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// The greeting of a conversation that holds a seat while this start
+/// names the primary checkout. Told as kept: a session read as standing
+/// outside its seat goes to take it again and tells the user so, though
+/// no claim moved. A seat whose tree went away is said so instead of
+/// being entered: the entry door finds no claim in a missing tree.
+fn holds_a_seat(letter: &str, path: &str, seats: &str) -> String {
+    let way_in = match seats::has_a_directory(path) {
+        true => format!(
+            "{}. The directory this start names is where the session began, which after a \
+             resume is not where it works: if this session's working directory is outside the \
+             seat, `EnterWorktree path={path}` goes back in, and when EnterWorktree answers that \
+             the seat is the working directory already, the session is in it",
+            seats::carrying(path)
+        ),
+        false => seats::treeless(letter, path),
+    };
+    format!(
+        "This conversation holds seat {letter}, and {way_in}. {} Nothing is taken again — name \
+         it to the user as the seat the work goes on in (「席 {letter} で続ける」), never as \
+         released or taken back. {seats}",
+        how_claims_move()
+    )
+}
+
 /// Whether this start begins a conversation (`startup`, `/clear`) rather
 /// than carries one on (`resume`, `compact`).
 fn begins(input: &str) -> bool {
@@ -108,14 +133,13 @@ fn begins(input: &str) -> bool {
 
 /// A session started inside an unclaimed seat claims it (the `claude
 /// --worktree <letter>` road). A seat somebody else holds stays theirs.
-fn claim_at_start(cwd: &str, session: &str) -> Option<String> {
+fn claim_at_start(cwd: &str, me: &Identity) -> Option<String> {
     // git resolves the lock's argument by exact top-level path; from a
     // subdirectory the claim would fail silently.
     let root = crate::seats::worktree_root(cwd).unwrap_or_else(|| cwd.to_string());
-    let me = Identity::current(Some(session));
     // A claim that could not be written is left to the survey: the
     // session sits here either way.
-    match take_seat(&root, &root, &me, Held::BySession) {
+    match take_seat(&root, &root, me, Held::BySession) {
         Standing::Ours | Standing::Free => None,
         Standing::Foreign(reason) | Standing::Stale(reason) => Some(format!(
             "This seat is {}. This session is {}. {} Two sessions in one seat commit on \
