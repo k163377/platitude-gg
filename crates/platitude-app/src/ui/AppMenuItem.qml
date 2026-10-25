@@ -290,10 +290,10 @@ MenuItem {
 
     /// Where a heading's mark box stands: its ink then starts where the other rows start their words (the row's
     /// padding), so the card's left edge reads as one column (デザイン規約 §メニュー) — or, where the menu has a hold /
-    /// `!` seat, the box is centred on that seat as the `!` is. A mark wider than the seat (the cloud) starts its ink
-    /// at the row's side instead: centred, it would stand out past the row's wash.
+    /// `!` seat, the box is centred on that seat as the `!` is: the seat is the box's width (`AppMenu.holdIndent`), so
+    /// the widest heading mark, the cloud, stands inside the row's wash (`tst_menuedge.qml`).
     readonly property real markX: menuItem.holdIndent > 0
-                                  ? Math.max((menuItem.holdIndent - Theme.iconMd) / 2, -rowMark.inkLeft)
+                                  ? (menuItem.holdIndent - Theme.iconMd) / 2
                                   : menuItem.padding - Math.round((Theme.iconMd - rowMark.inkAcross) / 2)
 
     // On a card that keeps the heading seat, every row's words start past it, marked or not (`NameCell`'s spacing).
@@ -489,7 +489,7 @@ MenuItem {
         id: rowHold
         // Centred on the seat, where the `!` and a heading's mark stand.
         x: Math.round((menuItem.holdIndent - rowHold.width) / 2)
-        y: Math.round(menuItem.wordsTop + itemLabel.baselineOffset - WordFace.capitalMiddle(rowHold.size)
+        y: Math.round(menuItem.wordsTop + itemLabel.baselineOffset - WordFace.drawnCapitalMiddle(rowHold.size)
                       - rowHold.height / 2)
         size: itemLabel.font.pixelSize
         progress: menuItem.holdProgress
@@ -509,7 +509,9 @@ MenuItem {
         size: itemLabel.font.pixelSize
         wordBase: itemLabel.baselineOffset
         tint: Theme.warning
-        width: Theme.iconSm
+        // The seat's width, so the `!` stands in its middle as the hold mark does — never sizeless while the menu has
+        // no seat yet: a canvas born without a size is never asked to paint once one arrives (`GoneBadge`).
+        width: Math.max(Theme.iconSm, menuItem.holdIndent)
         height: itemLabel.height
         // Only on a row that can be pressed; a blocked row says `blockedWhy` instead.
         visible: menuItem.asks && menuItem.armedPresses <= 0 && !menuItem.blocked

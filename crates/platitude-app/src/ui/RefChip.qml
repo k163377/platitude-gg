@@ -53,7 +53,8 @@ Rectangle {
             + chip.mateRoom
     // Whole pixels: every term inside is fractional, and a width just past a whole pixel loses the right border
     // altogether (the chip clips its own frame). Rounded up, the extra pixel going into the end padding (§余白).
-    width: Math.min(Math.ceil(Math.max(chipContent.implicitWidth + (chip.trackOnName ? chip.trackRoom : 0),
+    width: Math.min(Math.ceil(Math.max(chipContent.implicitWidth - chip.frameAir
+                                       + (chip.trackOnName ? chip.trackRoom : 0),
                                        chip.mateWidth + (chip.trackOnName ? 0 : chip.trackRoom)))
                     + 2 * Theme.spaceXs, maxWidth)
     readonly property int nameLines: chip.wrapped ? Math.max(1, nameLabel.lineCount) : 1
@@ -81,6 +82,9 @@ Rectangle {
     /// Its box in the row: the seat less the row's half gap after it, which the seat's own air stands in for — a sign
     /// keeps only its seat's air before the name it stands on.
     readonly property real markBoxWidth: chip.markCell - Theme.spaceXs / 2
+    /// The seat's air on the frame's side (`MarkSeat.airAt`), taken off the padding: the padding already parts the mark
+    /// from the frame (デザイン規約 §余白「枠の中の先頭に立つ印」).
+    readonly property real frameAir: chip.hasMark ? MarkSeat.airAt(nameLabel.font.pixelSize) : 0
     /// The cloud's or the pull request's seat (`MarkSeat`): a state after the name (デザイン規約 §アイコンの席 の名指し).
     readonly property real badgeCell: badgeMark.wordCell
     /// Its box in the row: the seat less the row's half gap before it, which the seat's own air stands in for — the
@@ -93,7 +97,7 @@ Rectangle {
     /// Where the count and the ahead/behind measure came out: they share a seat (`tests/qml/tst_refstack.qml`).
     readonly property real countY: countLabel.y
     readonly property real trackY: mateTrack.y
-    readonly property real nameRoom: chip.maxWidth - 2 * Theme.spaceXs - chip.furnitureW
+    readonly property real nameRoom: chip.maxWidth - 2 * Theme.spaceXs + chip.frameAir - chip.furnitureW
     radius: Theme.radiusSm
     clip: true
 
@@ -235,7 +239,7 @@ Rectangle {
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         anchors.left: parent.left
-        anchors.leftMargin: Theme.spaceXs
+        anchors.leftMargin: Theme.spaceXs - chip.frameAir
         // A whole gap from the frame, half a gap inside: the contents are one phrase, and at a whole gap each mark
         // stood as far from its name as the name from the frame.
         spacing: Theme.spaceXs / 2

@@ -4,8 +4,8 @@ import QtTest
 import platitude.ui
 
 // A menu row's side: the hold fill reaches past it out to the card's frame (`HoldFill.bleed`), drawn there because the
-// card's list clips only while it scrolls (`AppMenu`); a heading's mark wider than the hold seat it is centred on stays
-// inside it, under the row's wash (`AppMenuItem.markX`).
+// card's list clips only while it scrolls (`AppMenu`); a heading's mark centred on the hold seat — the cloud, the
+// widest — stays inside the row, under the row's wash (`AppMenuItem.markX`).
 Item {
     id: root
     width: 400
@@ -58,7 +58,7 @@ Item {
             return found
         }
 
-        function test_a_headings_mark_wider_than_the_hold_seat_stays_in_its_row() {
+        function test_a_headings_mark_stays_in_its_row() {
             verify(menu.offer())
             tryVerify(() => menu.opened)
             const heading = menu.itemAt(1)
@@ -66,7 +66,6 @@ Item {
             verify(menu.holdIndent > 0, "the held row opens the seat")
             const mark = markOf(heading)
             verify(mark !== null)
-            verify(mark.inkAcross > menu.holdIndent, "the cloud is wider than the seat: " + mark.inkAcross)
             tryVerify(() => mark.inked)
             const edge = heading.mapToItem(root, 0, 0).x
             const inkStart = mark.mapToItem(root, mark.inkLeft, 0).x

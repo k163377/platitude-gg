@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import "painted.js" as Painted
 
 // The sheets behind a chip's front card, and what the card spends on its count. Only the built stack can answer
 // this: the colour comes through the card's own `kindKeyOf`, and `furnitureW` sums what the laid-out labels and marks
@@ -290,8 +291,16 @@ Item {
             // The positioner and the eliding name answer their widths a pass after the records land; an earlier read
             // catches the name unelided.
             verify(waitForRendering(stack), "the stack was laid out and drawn")
-            fuzzyCompare(chip.contentW, chip.maxWidth - 2 * Theme.spaceXs, 0.01)
             compare(chip.width, chip.maxWidth)
+            // Where the contents end, read off the laid-out row: the padding short of the frame, wherever they start —
+            // the padlock's seat gives its air on the frame's side back (`frameAir`), and the name has that room.
+            let row = null
+            for (const child of chip.children) {
+                if (child.spacing !== undefined && child.implicitWidth === chip.contentW)
+                    row = child
+            }
+            verify(row !== null, "the chip's row of contents")
+            fuzzyCompare(row.x + row.implicitWidth, chip.width - Theme.spaceXs, 0.01)
         }
 
         // The badge is this ref's own state and the count is the others behind it, so the badge stands with the name
@@ -313,6 +322,21 @@ Item {
                    "the floor prices the count under what the deepest real row draws")
             verify(columns.chipFurnitureW > columns.chipFan.fanMaxW + columns.chipCountInk.implicitWidth,
                    "the floor left the count out")
+        }
+
+        // Past the fan and the count, the floor prices what the worst-dressed card spends beside its name as laid out:
+        // the two marks' seats and the frame's padding, less the seat's air the mark before the name gives back on the
+        // frame's side (`RefChip.frameAir`). Priced narrower, the narrowest column cuts the name past the characters it
+        // keeps; wider, a drag stops short of the narrowest the chips allow.
+        function test_the_column_floor_prices_the_dressed_card_s_furniture() {
+            stack.records = [root.dressed].concat(tags(41))
+            const chip = stack.chipItem
+            verify(chip.hasMark && chip.hasBadge && chip.frameAir > 0, "the card is not the worst-dressed one")
+            verify(waitForRendering(stack), "the stack was laid out and drawn")
+            const name = Painted.labelSaying(chip, chip.recName)
+            verify(name !== null, "the card's name")
+            fuzzyCompare(columns.chipFurnitureW - columns.chipFan.fanMaxW - columns.chipCountInk.implicitWidth,
+                         chip.width - name.width - chip.countW, 0.01)
         }
 
         // The column opens at `Metrics.labelColW` (`GraphColumnMetrics.labelW` clamps only a dragged width), so a floor

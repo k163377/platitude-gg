@@ -17,11 +17,14 @@ TextField {
     /// The kind of name the box takes, as a mark at its left edge that is no part of what is typed
     /// (`AppCombo.leadMark`, デザイン規約 §ref の種別「名前の印」). Empty for none.
     property string leadMark: ""
+    /// The mark's seat's air on the frame's side, given back: the inset already parts the mark from the frame
+    /// (`MarkSeat.airAt`, デザイン規約 §余白「枠の中の先頭に立つ印」).
+    readonly property real frameAir: slim.leadMark !== "" ? MarkSeat.airAt(slim.font.pixelSize) : 0
     implicitHeight: Theme.iconLg
     font.pixelSize: Theme.fontMd
     // Every box in the app holds its words `spaceXs` off its frame on both sides — the pane's own inset, which the
     // message frames also stand their text on (デザイン規約 §余白) — and the kind's mark after it (`leadMark`).
-    leftPadding: Theme.spaceXs + (slim.leadMark !== "" ? leadIcon.wordCell : 0)
+    leftPadding: Theme.spaceXs + (slim.leadMark !== "" ? leadIcon.wordCell - slim.frameAir : 0)
     rightPadding: Theme.spaceXs
     topPadding: 0
     bottomPadding: 0
@@ -57,7 +60,7 @@ TextField {
     NavIcon {
         id: leadIcon
         visible: slim.leadMark !== ""
-        x: Theme.spaceXs
+        x: Theme.spaceXs - slim.frameAir
         y: slim.topPadding
         width: leadIcon.wordCell
         height: slim.height - slim.topPadding - slim.bottomPadding

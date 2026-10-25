@@ -49,7 +49,7 @@ AppDialog {
                 Layout.preferredHeight: quitRing.height
                 Layout.alignment: Qt.AlignTop
                 Layout.topMargin: Math.round(quitWords.baselineOffset
-                                             - WordFace.capitalMiddle(quitWords.pixelSize) - quitRing.height / 2)
+                                             - WordFace.drawnCapitalMiddle(quitWords.pixelSize) - quitRing.height / 2)
                 spinning: quitWaitDialog.opened
             }
             CardText {

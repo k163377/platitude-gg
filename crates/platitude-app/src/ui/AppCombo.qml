@@ -37,6 +37,8 @@ ComboBox {
     /// over, selected or pressed (デザイン規約 §ref の種別「名前の印」): the cloud of a remote, the branch of a branch's
     /// name. Empty for none.
     property string leadMark: ""
+    /// The mark's seat's air on the frame's side, given back as the plain box gives it (`SlimField.frameAir`).
+    readonly property real frameAir: combo.leadMark !== "" ? MarkSeat.airAt(combo.font.pixelSize) : 0
 
     /// The value; `editText` follows it. A model arriving snaps `currentIndex` to the first row and drags the text
     /// along, so the text is held here and put back once the swap settles. Only a person moves it — a picked row, or
@@ -80,8 +82,8 @@ ComboBox {
         color: combo.enabled ? Theme.textPrimary : Theme.textMuted
         font: combo.font
         // The plain boxes' inset (`SlimField`), which this field stands beside in the question bar — and the kind's
-        // mark after it, a sign on the value (`leadMark`).
-        leftPadding: Theme.spaceXs + (combo.leadMark !== "" ? leadIcon.wordCell : 0)
+        // mark after it, a sign on the value (`leadMark`), its seat's air on the frame's side given back (`frameAir`).
+        leftPadding: Theme.spaceXs + (combo.leadMark !== "" ? leadIcon.wordCell - combo.frameAir : 0)
         // Stops the word short of the arrow; no list, the plain inset (rules-refs/app-ui.md「打つ欄の右で字を止めるのは山」).
         rightPadding: combo.hasList ? Theme.spaceSm + Theme.spaceXs : Theme.spaceXs
         verticalAlignment: Text.AlignVCenter
@@ -124,7 +126,7 @@ ComboBox {
         NavIcon {
             id: leadIcon
             visible: combo.leadMark !== ""
-            x: Theme.spaceXs
+            x: Theme.spaceXs - combo.frameAir
             y: 0
             width: leadIcon.wordCell
             height: input.height

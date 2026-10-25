@@ -102,7 +102,7 @@ Item {
         id: holdMark
         x: Math.round((opRow.holdIndent - holdMark.width) / 2)
         y: Math.round(opWords.y + rowLabel.y + rowLabel.baselineOffset
-                      - WordFace.capitalMiddle(holdMark.size) - holdMark.height / 2)
+                      - WordFace.drawnCapitalMiddle(holdMark.size) - holdMark.height / 2)
         size: rowLabel.font.pixelSize
         progress: opRow.holdProgress
         presses: opRow.armedPresses

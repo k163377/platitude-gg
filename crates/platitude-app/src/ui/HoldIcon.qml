@@ -31,7 +31,8 @@ InkCanvas {
 
     /// The pixel size of the words it heads; zero for none. Set, the disc is as tall as their capitals
     /// (デザイン規約 §アイコンの席「顔と回数押しの印」— the head of a row, or a letter of a button's phrase) — the box
-    /// round it a 16-grid whose disc spans 12.5 — and a caller stands its middle on theirs (`WordFace.capitalDrop`).
+    /// round it a 16-grid whose disc spans 12.5 — and a caller stands its middle on theirs, the capitals as drawn
+    /// (`WordFace.drawnCapitalMiddle`).
     property real size: 0
 
     /// The disc's width: 12.5 of the grid's 16, the rest the box's own air either side.

@@ -126,6 +126,16 @@ QtObject {
     function capitalDropOf(base, size, height) {
         return Math.round(base - face.capitalMiddle(size) - height / 2)
     }
+    /// How far above the baseline the middle of the capitals as the face draws them (`capitalsAt`) stands, at `size`:
+    /// where a hold mark and a ring heading the words centre, as the marks among the words do (デザイン規約
+    /// §アイコンの席「顔と回数押しの印」).
+    function drawnCapitalMiddle(size) {
+        return face.capitalsAt(size) / 2
+    }
+    /// How far a box centred where `words`' box is centred moves its middle down to `drawnCapitalMiddle`.
+    function drawnCapitalDrop(words) {
+        return Math.round(words.baselineOffset - face.drawnCapitalMiddle(words.font.pixelSize) - words.height / 2)
+    }
     /// The same to the face's `+`'s middle: where a sign that turns about its own middle (the ring) stands.
     function signDrop(words) {
         return Math.round(words.baselineOffset - face.signMiddle(words.font.pixelSize) - words.height / 2)

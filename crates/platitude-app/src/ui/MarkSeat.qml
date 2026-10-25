@@ -34,6 +34,11 @@ QtObject {
     /// `+`, but never thinner than a stem — a face that sets its `+` tight (Noto Sans CJK JP's, a twenty-seventh of an
     /// em) would otherwise stand the cloud against the ground's edge and its name.
     readonly property real air: Math.max(WordFace.signSide, Metrics.markStem)
+    /// The seat's `air` at `size`, to whole pixels: what a mark leading the words inside a frame gives back to the
+    /// padding on the frame's side, which already parts it from the frame (デザイン規約 §余白「枠の中の先頭に立つ印」).
+    function airAt(size) {
+        return Math.round(markSeat.air * size)
+    }
 
     /// What a seat holds at `size`: the widest mark's ink as it is drawn there — to the capitals as the face draws them
     /// (`WordFace.capitalsAt`), so no share of the size — and the seat's `air` either side of it.
@@ -56,5 +61,19 @@ QtObject {
     function cell(size) {
         const space = markSeat.space.advanceWidth * size / 1000
         return Math.round(markSeat.count(space, size) * space)
+    }
+    /// The seat at `size` of a mark leading the words inside a frame: the frame's side gives its air back (`airAt`).
+    function leadCell(size) {
+        return markSeat.cell(size) - markSeat.airAt(size)
+    }
+    /// The width that seat takes in a row stepping `step` to the next word: the step goes back, the seat's air parting
+    /// the mark from the word — and a code word's ground, which hangs `hang` before its letters, starts past the seat.
+    function leadWidth(size, step, hang) {
+        return markSeat.leadCell(size) - step + hang
+    }
+    /// Where a box `box` wide stands in `leadCell(size)`: the seat's middle, an odd pixel to its head — rounded to the
+    /// words, a small mark meets them (デザイン規約 §アイコンの席 の ②).
+    function leadX(size, box) {
+        return Math.floor((markSeat.cell(size) - box) / 2) - markSeat.airAt(size)
     }
 }

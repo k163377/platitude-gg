@@ -55,12 +55,13 @@ QtObject {
     /// — one width whatever the mark.
     readonly property real chipMarkSeat: MarkSeat.cell(Theme.fontChip)
     /// Everything a chip spends on what is not the name: fan, count with its half gap (`RefChip`'s row spacing), the
-    /// two marks' seats, plus the frame's padding either side. Every mark counts though it comes and goes — the column
-    /// must fit the worst-dressed chip (rules-refs/app-ui.md「チップ列の狭める床」).
+    /// two marks' seats, plus the frame's padding either side, less the seat's air the mark before the name gives back
+    /// on the frame's side (`RefChip.frameAir`). Every mark counts though it comes and goes — the column must fit the
+    /// worst-dressed chip (rules-refs/app-ui.md「チップ列の狭める床」).
     readonly property real chipFurnitureW: chipFan.fanMaxW
         + chipCountInk.implicitWidth + Theme.spaceXs / 2
         + 2 * chipMarkSeat
-        + 2 * Theme.spaceXs
+        + 2 * Theme.spaceXs - MarkSeat.airAt(Theme.fontChip)
     // The chip column's floor — name, furniture, and the `spaceSm` `GraphRowChips` keeps in front of the chip; move
     // any of those and this moves too — and its ceiling, where the next two columns can still say something
     // (規約 §グラフ列は最も広い所のレーンまで).

@@ -189,6 +189,18 @@ Item {
             wordBase: Theme.iconSm
         }
     }
+    // A held button's seat heading its word, as `ActionButton` sets it: the word's size and baseline, the row's step.
+    Component {
+        id: holdSeatOf
+        ActionButtonSeat {
+            x: 8
+            y: 8
+            holdPresses: 2
+            wordSize: root.px
+            wordBase: root.px
+            wordStep: Theme.spaceXs
+        }
+    }
     FontMetrics {
         id: codeLarge
         font.family: Theme.monoFamily
@@ -447,6 +459,21 @@ Item {
             const bang = marks.find(mark => mark.kind === "bang")
             verify(cloud.width - cloud.inkRight > 1, "the seat holds air past the cloud")
             fuzzyCompare(bang.x + bang.inkLeft, cloud.x + cloud.inkRight, 0.01, "the `!`'s ink against the cloud's")
+        }
+
+        /// A hold mark leading the words inside a frame stands in the middle of the seat of their letters with the
+        /// frame's side given back, the padding already parting it from the frame (デザイン規約 §余白「枠の中の先頭に
+        /// 立つ印」), its odd pixel to the seat's head; the row's step goes back, the seat's air parting it from the word.
+        function test_a_hold_mark_heading_its_words_stands_in_the_seat_less_the_frames_air() {
+            const seat = createTemporaryObject(holdSeatOf, root)
+            const hold = seat.children.find(child => child.presses !== undefined && child.visible)
+            const cell = MarkSeat.cell(root.px)
+            const air = MarkSeat.airAt(root.px)
+            verify(air > 0, "the seat's air at the words' size: " + air)
+            compare(seat.implicitWidth, cell - air - Theme.spaceXs, "the seat less the frame's air and the row's step")
+            const middle = hold.x + hold.width / 2
+            verify(middle <= cell / 2 - air && middle >= cell / 2 - air - 0.5,
+                   "in the middle of the seat less the frame's air, an odd pixel to its head: " + middle)
         }
 
         /// The widest mark stays inside its seat at every size words are set in, a seat laid in a line's spaces as well
