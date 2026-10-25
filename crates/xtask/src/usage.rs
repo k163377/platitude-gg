@@ -864,6 +864,26 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       — an approach abandoned under a name nobody retakes (--label), or
       a seat whose session is long gone.
 
+  film <in|out|shoot|bake|changes>
+      Behaviour as an animation, for the board (film skill). A scene
+      file says what the frames show and what the hand does; `shoot`
+      plays it into the headless window with real input events —
+      hover is Qt's own — and grabs the views, the hand and a caption
+      band every tick into target/film/<scene>/<side>/. Each side of a
+      comparison is shot from its own tree (main, or the commit before
+      a fix, against the branch) from one repository the scene builds
+      once and copies, since a preset can differ between two trees.
+      The verb that plays it is not the harness's own: `in` puts it
+      into this tree and `out` takes it out by the same substitutions
+      backwards, and a commit is refused while it stands. `shoot`
+      takes --side (now unless told), --no-build and --fresh-base.
+      `bake` (--sides to choose) puts the sides on one clock — the
+      setup cut, each side counted from its first frame after it, each
+      as long as the longest — as one APNG each, made of the frames
+      themselves, never compressed again, and names the last frame
+      under each caption to read. `changes` (--side) says when a
+      side's picture changed and where.
+
   awake [log on|off]
       Which Claude and Codex sessions keep this machine from idle-sleeping (Windows
       only): each session's hooks, and each subagent's apart, write a

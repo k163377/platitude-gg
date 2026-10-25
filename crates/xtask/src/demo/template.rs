@@ -279,6 +279,40 @@ fn copy_in(template: &Path, leaf: &str, root: &Path) -> Result<(), String> {
     })
 }
 
+/// Copies a root built in place (`demo-repo --at`) into `root` beside it,
+/// rebound as a template's copy is: the two differ in their last segment
+/// alone, which is all the rebinding rewrites. Refuses a root whose name a
+/// tracked file carries, as a template refuses one.
+pub(crate) fn copy_root(from: &Path, root: &Path) -> Result<(), String> {
+    if from.parent() != root.parent() {
+        return Err(format!(
+            "{} is copied beside itself only, and {} is not beside it",
+            from.display(),
+            root.display()
+        ));
+    }
+    let leaf = from
+        .file_name()
+        .ok_or("a root to copy needs a name")?
+        .to_string_lossy()
+        .to_string();
+    walk(from, &mut |path, kind| {
+        if kind != Entry::File {
+            return Ok(());
+        }
+        let bytes = std::fs::read(path).map_err(|e| format!("reading {}: {e}", path.display()))?;
+        if holds(&bytes, leaf.as_bytes()) && !under_git_metadata(from, path) {
+            return Err(format!(
+                "{} names the directory it was built in, and git tracks it",
+                path.display()
+            ));
+        }
+        Ok(())
+    })?;
+    clear(root)?;
+    copy_in(from, &leaf, root)
+}
+
 /// What an entry under a template is allowed to be.
 #[derive(PartialEq, Eq, Clone, Copy)]
 enum Entry {

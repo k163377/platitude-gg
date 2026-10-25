@@ -28,6 +28,12 @@ impl Image {
             self.rgba[at + 3],
         ]
     }
+
+    /// Row `y`, four bytes a pixel, `y` already inside the picture.
+    pub(crate) fn row(&self, y: u32) -> &[u8] {
+        let stride = self.width as usize * 4;
+        &self.rgba[y as usize * stride..(y as usize + 1) * stride]
+    }
 }
 
 pub(crate) fn decode(file: &[u8]) -> Result<Image, String> {

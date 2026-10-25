@@ -1,0 +1,444 @@
+pragma ComponentBehavior: Bound
+
+import QtQuick
+import QtQuick.Controls.Fusion
+import QtQuick.Window
+import QtTest
+import platitude
+import platitude.ui
+
+// PGG_AUTO_ACT=film, put into the tree by `cargo xtask film in` and never committed. Plays a scene with synthetic
+// input — QtTest's TestEvent, real mouse and key events through the window, so hover is Qt's own — and grabs the
+// scene's views of the window (the content with the overlay over it), the hand and the caption band under them, every
+// tick into Harness.shotDir as fNNNN.png, with frames.tsv beside them.
+// The arg (film/scene.rs writes it): "<views>;<scale>;<tick ms>;<tag>;<tag colour>;<step>;<step>…", the views as
+// x,y,w,h in window coordinates joined by "/", the tag and the captions percent-encoded, the colour a Theme token's
+// name. Steps:
+//   c:n|text caption · w:ms wait · m:x,y move · g:x0,y0,x1,y1,ms glide · l:x,y left click · r:x,y right click
+//   d:x,y left press · u:x,y left release (moves and glides between them carry the button)
+//   wh:n wheel notches · wr:d wheel delta · k:name key · kc:mod,name key with a modifier · t:text type
+//   fw:path|text write a file in the repository (\n \r escaped) · cp:from|to copy a file over another in it
+//   git:a b c run git in the repository · rt:fn|arg a write of the tab's (`@head` HEAD's commit)
+//   pg:fn|arg a page function
+Item {
+    id: acts
+
+    required property var window
+    required property Item mainUi
+
+    readonly property bool on: Harness.autoAct === "film"
+    property var steps: []
+    property int at: -1
+    property int caption: 0
+    property string captionText: ""
+    property real start: 0
+    property real waitUntil: 0
+    property real nextFrame: 0
+    property int tick: 80
+    property var views: []
+    property int scale: 1
+    property string tag: ""
+    property string tagColour: "textPrimary"
+    property real band: 0
+    property point hand: Qt.point(-1, -1)
+    /// The left button is down (`d:` … `u:`): moves and glides carry it, so a drag goes to its grabber.
+    property bool held: false
+    property var glide: null
+    property int frames: 0
+    /// A grab is on its way: the sources' completions count toward it only while one is.
+    property bool shooting: false
+    property real shotAt: 0
+    property string lines: ""
+    property bool ending: false
+    property bool ended: false
+    /// The hands painted so far: a canvas grabbed before its first paint is empty.
+    property int painted: 0
+    readonly property string repo: Harness.autoOpen.split(";")[0]
+
+    component Hand: Canvas {
+        required property color fill
+
+        width: 14
+        height: 22
+        onPaint: {
+            const ctx = getContext("2d")
+            const pts = [[0, 0], [0, 17], [4, 13], [7, 20], [10, 19], [7, 12], [12, 12]]
+            ctx.reset()
+            ctx.beginPath()
+            ctx.moveTo(pts[0][0] + 0.5, pts[0][1] + 0.5)
+            for (let i = 1; i < pts.length; i++)
+                ctx.lineTo(pts[i][0] + 0.5, pts[i][1] + 0.5)
+            ctx.closePath()
+            ctx.fillStyle = fill
+            ctx.fill()
+            ctx.lineWidth = 1
+            ctx.strokeStyle = Theme.bgBase
+            ctx.stroke()
+        }
+        onPainted: acts.painted++
+    }
+
+    function now() {
+        return Date.now() - acts.start
+    }
+    function moveTo(x, y) {
+        acts.hand = Qt.point(x, y)
+        KeyMenu.filmHand = Qt.point(x, y)
+        ev.mouseMove(acts.window.contentItem, x, y, -1, acts.held ? Qt.LeftButton : Qt.NoButton, Qt.NoModifier)
+    }
+    function keyOf(name) {
+        const keys = { "esc": Qt.Key_Escape, "menu": Qt.Key_Menu, "enter": Qt.Key_Return, "up": Qt.Key_Up,
+                       "down": Qt.Key_Down, "left": Qt.Key_Left, "right": Qt.Key_Right, "tab": Qt.Key_Tab,
+                       "f": Qt.Key_F, "f2": Qt.Key_F2, "f10": Qt.Key_F10, "space": Qt.Key_Space,
+                       "delete": Qt.Key_Delete, "backspace": Qt.Key_Backspace, "home": Qt.Key_Home,
+                       "end": Qt.Key_End, "pageup": Qt.Key_PageUp, "pagedown": Qt.Key_PageDown }
+        return keys[name]
+    }
+    function modOf(name) {
+        return name === "ctrl" ? Qt.ControlModifier : name === "shift" ? Qt.ShiftModifier
+             : name === "alt" ? Qt.AltModifier : Qt.NoModifier
+    }
+    function unescaped(s) {
+        return s.replace(/\\n/g, "\n").replace(/\\r/g, "\r")
+    }
+    /// What the page hands its harness (`HarnessSeat.seats`): its tab and models, which its ids keep from outside.
+    function seatsOf(page) {
+        if (page === null)
+            return null
+        for (let i = 0; i < page.children.length; i++) {
+            const c = page.children[i]
+            if (c.seats !== undefined && c.seats !== null && c.seats.repoTab !== undefined)
+                return c.seats
+        }
+        return null
+    }
+    function begin() {
+        const parts = Harness.autoActArg.split(";")
+        acts.views = parts[0].split("/").map(v => v.split(",").map(Number))
+        acts.scale = Number(parts[1])
+        acts.tick = Number(parts[2])
+        acts.tag = decodeURIComponent(parts[3])
+        acts.tagColour = parts[4]
+        acts.steps = parts.slice(5)
+        Harness.report("film begin steps=" + acts.steps.length + " views=" + parts[0] + " scale=" + acts.scale)
+    }
+    /// The band's height is the tallest caption's, wrapped to the frame's width: every frame has one size.
+    function measure() {
+        let tallest = tagText.height
+        for (const step of acts.steps) {
+            if (!step.startsWith("c:"))
+                continue
+            measuring.text = decodeURIComponent(step.substring(step.indexOf("|") + 1))
+            tallest = Math.max(tallest, measuring.contentHeight)
+        }
+        measuring.text = ""
+        acts.band = Math.ceil(tallest) + 2 * Theme.spaceSm
+    }
+    function play() {
+        acts.start = Date.now()
+        acts.at = 0
+        acts.nextFrame = 0
+        Harness.report("film play band=" + acts.band)
+    }
+    function stepOnce() {
+        const step = acts.steps[acts.at]
+        acts.at++
+        const cut = step.indexOf(":")
+        const verb = cut < 0 ? step : step.substring(0, cut)
+        const arg = cut < 0 ? "" : step.substring(cut + 1)
+        const n = arg.split(",").map(Number)
+        if (verb === "c") {
+            const bar = arg.indexOf("|")
+            acts.caption = Number(arg.substring(0, bar))
+            acts.captionText = decodeURIComponent(arg.substring(bar + 1))
+        } else if (verb === "w") {
+            acts.waitUntil = acts.now() + Number(arg)
+        } else if (verb === "m") {
+            acts.moveTo(n[0], n[1])
+            acts.shootSoon()
+        } else if (verb === "g") {
+            acts.glide = { "x0": n[0], "y0": n[1], "x1": n[2], "y1": n[3], "from": acts.now(), "ms": n[4] }
+        } else if (verb === "l" || verb === "r") {
+            acts.moveTo(n[0], n[1])
+            ev.mouseClick(acts.window.contentItem, n[0], n[1], verb === "l" ? Qt.LeftButton : Qt.RightButton,
+                          Qt.NoModifier, -1)
+            acts.shootSoon()
+        } else if (verb === "d") {
+            acts.moveTo(n[0], n[1])
+            ev.mousePress(acts.window.contentItem, n[0], n[1], Qt.LeftButton, Qt.NoModifier, -1)
+            acts.held = true
+            acts.shootSoon()
+        } else if (verb === "u") {
+            acts.moveTo(n[0], n[1])
+            ev.mouseRelease(acts.window.contentItem, n[0], n[1], Qt.LeftButton, Qt.NoModifier, -1)
+            acts.held = false
+            acts.shootSoon()
+        } else if (verb === "wh" || verb === "wr") {
+            const delta = verb === "wh" ? 120 * Number(arg) : Number(arg)
+            ev.mouseWheel(acts.window.contentItem, acts.hand.x, acts.hand.y, Qt.NoButton, Qt.NoModifier, 0, delta, -1)
+            acts.shootSoon()
+        } else if (verb === "k") {
+            ev.keyClick(acts.keyOf(arg), Qt.NoModifier, -1)
+            acts.shootSoon()
+        } else if (verb === "kc") {
+            const two = arg.split(",")
+            ev.keyClick(acts.keyOf(two[1]), acts.modOf(two[0]), -1)
+            acts.shootSoon()
+        } else if (verb === "t") {
+            for (let i = 0; i < arg.length; i++)
+                ev.keyClickChar(arg[i], Qt.NoModifier, -1)
+            acts.shootSoon()
+        } else if (verb === "fw") {
+            const bar = arg.indexOf("|")
+            const path = arg.substring(0, bar)
+            const why = Harness.writeFile(acts.repo + "/" + path, acts.unescaped(arg.substring(bar + 1)))
+            Harness.report("film write " + path + " " + why)
+            acts.shootSoon()
+        } else if (verb === "cp") {
+            // A file copied over another as an editor saves it, both relative to the repository.
+            const two = arg.split("|")
+            const why = Harness.filmCopy(acts.repo + "/" + two[0], acts.repo + "/" + two[1])
+            Harness.report("film cp " + arg + " " + why)
+            acts.shootSoon()
+        } else if (verb === "git") {
+            const said = Harness.filmRun("git", ["-C", acts.repo].concat(arg.split(" ")).join("\n"))
+            Harness.report("film git " + arg + " -> " + said.replace(/\n/g, " "))
+            acts.shootSoon()
+        } else if (verb === "rt") {
+            // A write of this window's, as a press asks it of the tab.
+            const seats = acts.seatsOf(acts.window.curPage)
+            const parts = arg.split("|")
+            const args = parts.slice(1).map(a => a === "@head" ? seats.graphModel.headRowOid
+                                                : a === "@false" ? false : a === "@true" ? true : a)
+            Harness.report("film tab " + arg + " " + (seats !== null))
+            if (seats !== null)
+                seats.repoTab[parts[0]](...args)
+            acts.shootSoon()
+        } else if (verb === "pg") {
+            // A page function, as the page would call it on a read of its own (`readDiscards`).
+            const page = acts.window.curPage
+            const parts = arg.split("|")
+            const fn = parts[0]
+            Harness.report("film page " + arg + " " + (page !== null && typeof page[fn] === "function"))
+            if (page !== null && typeof page[fn] === "function")
+                page[fn](...parts.slice(1))
+            acts.shootSoon()
+        } else {
+            Harness.report("film unknown step " + step)
+        }
+    }
+    /// A frame now rather than at the next tick: what an action does first is what the reader looks for.
+    function shootSoon() {
+        acts.nextFrame = Math.min(acts.nextFrame, acts.now())
+    }
+    function shoot() {
+        acts.shooting = true
+        acts.shotAt = acts.now()
+        lens.owed = 2 * tiles.count
+        for (let i = 0; i < tiles.count; i++)
+            tiles.itemAt(i).take()
+    }
+    /// A source's update landed. Each source also lands once on its own when it first renders, before any grab
+    /// asked for one: that one is not this grab's.
+    function landed() {
+        if (!acts.shooting)
+            return
+        lens.owed--
+        if (lens.owed > 0)
+            return
+        const name = "f" + String(acts.frames).padStart(4, "0") + ".png"
+        acts.frames++
+        acts.lines += name + "\t" + Math.round(acts.shotAt) + "\t" + Math.round(acts.hand.x) + "\t"
+            + Math.round(acts.hand.y) + "\t" + acts.caption + "\t" + (acts.held ? 1 : 0) + "\n"
+        const ok = lens.grabToImage(function (res) {
+            res.saveToFile(Harness.shotDir + "/" + name)
+            acts.shooting = false
+        })
+        if (!ok) {
+            Harness.report("film grab refused")
+            acts.shooting = false
+        }
+    }
+
+    TestEvent { id: ev }
+
+    Timer {
+        id: filmTimer
+
+        property bool begun: false
+        property bool measured: false
+
+        interval: 5
+        repeat: true
+        running: acts.on && !acts.ended
+        onTriggered: {
+            if (acts.at < 0) {
+                if (!filmTimer.begun) {
+                    filmTimer.begun = true
+                    acts.begin()
+                    return
+                }
+                // The scene starts on a page that has stopped arriving, with the hands painted and the band
+                // measured to the frame's width a tick before the first grab.
+                if (acts.window.curPage === null || !PageSettled.settled(acts.window.curPage)
+                        || acts.painted < 2 * tiles.count)
+                    return
+                if (!filmTimer.measured) {
+                    acts.measure()
+                    filmTimer.measured = true
+                    return
+                }
+                acts.play()
+                return
+            }
+            const t = acts.now()
+            if (!acts.shooting && t >= acts.nextFrame) {
+                acts.shoot()
+                acts.nextFrame = (Math.floor(t / acts.tick) + 1) * acts.tick
+            }
+            if (acts.glide !== null) {
+                const g = acts.glide
+                const k = Math.min(1, (t - g.from) / g.ms)
+                acts.moveTo(Math.round(g.x0 + (g.x1 - g.x0) * k), Math.round(g.y0 + (g.y1 - g.y0) * k))
+                if (k >= 1) {
+                    acts.glide = null
+                    acts.shootSoon()
+                }
+                return
+            }
+            if (t < acts.waitUntil)
+                return
+            if (acts.at < acts.steps.length) {
+                acts.stepOnce()
+                return
+            }
+            if (!acts.ending) {
+                acts.ending = true
+                acts.shootSoon()
+                return
+            }
+            if (acts.shooting)
+                return
+            acts.ended = true
+            Harness.writeFile(Harness.shotDir + "/frames.tsv", acts.lines)
+            Harness.report("film done frames=" + acts.frames + " ms=" + Math.round(t))
+            acts.window.finishAutoAct()
+        }
+    }
+
+    // What a frame is taken of: each view of the content with the overlay over it, magnified by `scale` without
+    // smoothing, the hand over them, and the band that names the side and the caption. Behind everything; the grab
+    // renders it on its own.
+    Item {
+        id: lens
+
+        property int owed: 0
+
+        z: -20000
+        width: Math.max(16, row.width)
+        height: row.height + acts.band
+
+        Row {
+            id: row
+
+            spacing: Theme.spaceSm
+
+            Repeater {
+                id: tiles
+
+                model: acts.views
+                delegate: Item {
+                    id: tile
+
+                    required property var modelData
+                    readonly property var view: modelData
+                    readonly property bool handIn: acts.hand.x >= view[0] && acts.hand.x < view[0] + view[2]
+                                                   && acts.hand.y >= view[1] && acts.hand.y < view[1] + view[3]
+
+                    function take() {
+                        const ui = acts.mainUi.mapFromItem(null, tile.view[0], tile.view[1])
+                        uiLens.sourceRect = Qt.rect(ui.x, ui.y, tile.view[2], tile.view[3])
+                        const ov = acts.window.Overlay.overlay.mapFromItem(null, tile.view[0], tile.view[1])
+                        ovLens.sourceRect = Qt.rect(ov.x, ov.y, tile.view[2], tile.view[3])
+                        uiLens.scheduleUpdate()
+                        ovLens.scheduleUpdate()
+                    }
+
+                    width: view[2] * acts.scale
+                    height: view[3] * acts.scale
+                    clip: true
+
+                    ShaderEffectSource {
+                        id: uiLens
+
+                        anchors.fill: parent
+                        live: false
+                        smooth: false
+                        sourceItem: acts.on ? acts.mainUi : null
+                        onScheduledUpdateCompleted: acts.landed()
+                    }
+                    ShaderEffectSource {
+                        id: ovLens
+
+                        anchors.fill: parent
+                        live: false
+                        smooth: false
+                        sourceItem: acts.on ? acts.window.Overlay.overlay : null
+                        onScheduledUpdateCompleted: acts.landed()
+                    }
+                    // Both hands stay visible, the one not in use off the tile, so neither is grabbed unpainted.
+                    Hand {
+                        fill: Theme.textOnAccent
+                        x: tile.handIn && !acts.held ? (acts.hand.x - tile.view[0]) * acts.scale : -100
+                        y: (acts.hand.y - tile.view[1]) * acts.scale
+                    }
+                    Hand {
+                        fill: Theme.warning
+                        x: tile.handIn && acts.held ? (acts.hand.x - tile.view[0]) * acts.scale : -100
+                        y: (acts.hand.y - tile.view[1]) * acts.scale
+                    }
+                }
+            }
+        }
+        Rectangle {
+            y: row.height
+            width: lens.width
+            height: acts.band
+            color: Theme.bgElevated
+
+            Text {
+                id: tagText
+
+                x: Theme.spaceMd
+                y: Theme.spaceSm
+                text: acts.tag
+                color: Theme[acts.tagColour]
+                font.family: Theme.uiFamily
+                font.pixelSize: Theme.fontXl
+                font.bold: true
+            }
+            Text {
+                x: measuring.x
+                y: Theme.spaceSm
+                width: measuring.width
+                wrapMode: Text.Wrap
+                text: acts.captionText
+                color: Theme.textPrimary
+                font.family: Theme.uiFamily
+                font.pixelSize: Theme.fontXl
+                font.bold: true
+            }
+        }
+        Text {
+            id: measuring
+
+            x: tagText.x + tagText.width + Theme.spaceLg
+            width: lens.width - x - Theme.spaceMd
+            visible: false
+            wrapMode: Text.Wrap
+            font.family: Theme.uiFamily
+            font.pixelSize: Theme.fontXl
+            font.bold: true
+        }
+    }
+}

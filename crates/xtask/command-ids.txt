@@ -17,6 +17,11 @@ demo.repo
 deny.policy
 docs.check
 docs.sync
+film.bake
+film.changes
+film.in
+film.out
+film.shoot
 footprint.watch
 gate.daily
 gate.deps

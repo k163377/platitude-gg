@@ -77,6 +77,30 @@ fn a_copy_pushes_to_its_own_origin() {
     git(&work, &["fetch", "origin"]);
 }
 
+/// A root built in place and copied beside itself (`copy_root`, a film's
+/// base) pushes to the copy's own origin, as a template's copy does.
+#[test]
+fn a_root_copied_beside_itself_pushes_to_its_own_origin() {
+    let dir = crate::demo::claim_root("copy-root").expect("a directory of this test's");
+    let base = dir.join("built-in-place");
+    crate::demo::create("tags", Some(base.clone())).expect("the preset, built in place");
+    let copy = dir.join("copied-beside");
+    super::copy_root(&base, &copy).expect("copies");
+    let work = copy.join("repo");
+    let url = git(&work, &["remote", "get-url", "origin"]);
+    assert!(
+        url.contains("copied-beside"),
+        "origin is not the copy's: {url}"
+    );
+    let stragglers = naming(&copy, "built-in-place");
+    assert!(
+        stragglers.is_empty(),
+        "these still name the base: {stragglers:?}"
+    );
+    git(&work, &["fetch", "origin"]);
+    assert!(super::copy_root(&base, &dir.join("deeper").join("copy")).is_err());
+}
+
 /// A linked worktree's `.git` and the `gitdir` pointing back both name an
 /// absolute path, in git's own long spelling; a copy that kept either
 /// would have git answering about the template.

@@ -12,6 +12,7 @@ mod demo;
 mod deny;
 mod digest;
 mod docs;
+mod film;
 mod footprint;
 mod gate;
 mod gui;
@@ -80,6 +81,7 @@ fn main() -> ExitCode {
         Some("seat") => seats::take(&args[1..]),
         Some("seats") => seats::run(&args[1..]),
         Some("shots") => shots::run(&args[1..]),
+        Some("film") => film::run(&args[1..]),
         Some("footprint") => footprint::run(&args[1..]),
         Some("still") => still::run(&args[1..]),
         Some("budget") => budget::run(&args[1..]),
