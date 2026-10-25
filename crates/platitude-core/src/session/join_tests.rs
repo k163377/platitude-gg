@@ -8,7 +8,7 @@
 
 use super::joins::{RefJoins, WorktreeHolders, build_label_map, build_snapshot};
 use super::*;
-use crate::remote::RemoteTag;
+use crate::remote::AdvertisedTag;
 
 /// One worktree: no branch is held anywhere else.
 fn held_by_nobody() -> WorktreeHolders {
@@ -57,7 +57,7 @@ fn head_at(commit: Oid) -> HeadState {
     }
 }
 
-fn index_of(remote: &str, tags: Vec<RemoteTag>) -> std::sync::Arc<RemoteTagIndex> {
+fn index_of(remote: &str, tags: Vec<AdvertisedTag>) -> std::sync::Arc<RemoteTagIndex> {
     std::sync::Arc::new(RemoteTagIndex::build(
         tags.into_iter()
             .map(|t| (t.name, t.commit, t.annotated, crate::Name::from(remote))),
@@ -448,7 +448,7 @@ fn an_agreed_tag_gets_one_label() {
     let refs = vec![tag("v1", oid(1), false)];
     let remote_tags = index_of(
         "origin",
-        vec![RemoteTag {
+        vec![AdvertisedTag {
             name: crate::Name::const_new("v1"),
             commit: oid(1),
             annotated: false,
@@ -473,7 +473,7 @@ fn a_drifted_tag_stands_on_both_rows() {
     let refs = vec![tag("v1", oid(1), false)];
     let remote_tags = index_of(
         "origin",
-        vec![RemoteTag {
+        vec![AdvertisedTag {
             name: crate::Name::const_new("v1"),
             commit: oid(2),
             annotated: false,
@@ -541,7 +541,7 @@ fn a_tag_only_a_remote_has_is_listed_and_marked() {
     let refs = vec![tag("v1", oid(1), false)];
     let remote_tags = index_of(
         "origin",
-        vec![RemoteTag {
+        vec![AdvertisedTag {
             name: crate::Name::const_new("v9"),
             commit: oid(9),
             annotated: true,
@@ -895,7 +895,7 @@ fn refs_join_at_scale() {
         "origin",
         refs.iter()
             .filter(|r| r.kind == RefKind::Tag)
-            .map(|r| RemoteTag {
+            .map(|r| AdvertisedTag {
                 name: r.short.clone(),
                 commit: r.commit_oid(),
                 annotated: r.peeled.is_some(),

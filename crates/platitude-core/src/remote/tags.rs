@@ -27,7 +27,7 @@ pub async fn list_tags(
     remote: &str,
     timeout: Duration,
     cancel: &CancellationToken,
-) -> Result<Vec<RemoteTag>, GitError> {
+) -> Result<Vec<AdvertisedTag>, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["ls-remote", "--tags", "--", remote])
@@ -173,7 +173,7 @@ pub async fn delete_remote_tag(
 /// A lease compares the ref's own value, which for an annotated tag is the
 /// tag object — leased to the commit it peels to, the delete is refused as
 /// stale, and git takes no `^{}` there. The screen holds only the commit
-/// ([`RemoteTag::commit`]), so the object is asked for here; a remote that
+/// ([`AdvertisedTag::commit`]), so the object is asked for here; a remote that
 /// has left `expect` gets `expect` itself, which git then refuses.
 async fn lease_on(
     executor: &GitExecutor,
@@ -292,7 +292,7 @@ pub async fn replace_remote_tag(
 
 /// One tag as a remote advertises it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteTag {
+pub struct AdvertisedTag {
     pub name: crate::Name,
     /// The commit it designates, annotated tags peeled — comparable with
     /// [`crate::refs::RefEntry::commit_oid`].
@@ -305,8 +305,8 @@ pub struct RemoteTag {
 ///
 /// Lines outside `refs/tags/` or with an unreadable oid are skipped, so one
 /// odd advertisement does not cost every other tag its badge.
-pub fn parse_ls_remote_tags(bytes: &[u8]) -> Vec<RemoteTag> {
-    let mut out: Vec<RemoteTag> = Vec::new();
+pub fn parse_ls_remote_tags(bytes: &[u8]) -> Vec<AdvertisedTag> {
+    let mut out: Vec<AdvertisedTag> = Vec::new();
     // Pairing by scanning `out` would be quadratic over tens of thousands of
     // tags.
     let mut by_name: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
@@ -331,7 +331,7 @@ pub fn parse_ls_remote_tags(bytes: &[u8]) -> Vec<RemoteTag> {
             Some(_) => {}
             None => {
                 by_name.insert(name, out.len());
-                out.push(RemoteTag {
+                out.push(AdvertisedTag {
                     name: name.into(),
                     commit: oid,
                     annotated: peeled,

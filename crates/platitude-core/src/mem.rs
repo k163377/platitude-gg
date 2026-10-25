@@ -306,7 +306,7 @@ impl Footprint for crate::session::EolMark {
     }
 }
 
-impl Footprint for crate::remote::RemoteTag {
+impl Footprint for crate::remote::AdvertisedTag {
     fn heap_bytes(&self) -> usize {
         self.name.heap_bytes()
     }
