@@ -173,6 +173,9 @@ Item {
     /// The row's press area — automation-only exposure, like `GraphPane.view`: a run asks it where along the row a
     /// press lands while a name box stands (PGG_AUTO_ACT=graph-rename-fit).
     readonly property alias pressArea: rowMouse
+    /// Automation: the boundaries' lines this row draws over its highlight ground, `null` while it draws none
+    /// (PGG_AUTO_ACT=graph-divider).
+    readonly property var groundLines: lineSeat.item
     // This row's chip column is a name box right now.
     readonly property bool naming: rowItem.ListView.view ? rowItem.ListView.view.namingOid === rowItem.oid_hex : false
     // The standing question is about this row. Its words are on the bar above the graph; the row answers "which one"
@@ -210,6 +213,20 @@ Item {
             anchors.bottom: parent.bottom
             width: Metrics.laneStroke
             color: rowItem.ListView.view && rowItem.ListView.view.askDanger ? Theme.danger : Theme.warning
+        }
+    }
+    // The column boundaries' lines again, over the grounds above and under the ink below (`GraphDividerLines`): the
+    // pane's run under the list, where the selection's ground cuts them and the washes tint them. Built only while a
+    // boundary has the hand and this row wears a ground.
+    Loader {
+        id: lineSeat
+        y: -rowItem.topBleed
+        width: rowItem.width
+        height: rowItem.height + rowItem.topBleed
+        active: (rowItem.selected || rowItem.lit || rowItem.marked)
+                && !!rowItem.ListView.view && rowItem.ListView.view.dividers.lineWanted
+        sourceComponent: GraphDividerLines {
+            dividers: rowItem.ListView.view.dividers
         }
     }
 

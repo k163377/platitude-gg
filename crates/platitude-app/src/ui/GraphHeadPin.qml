@@ -221,6 +221,16 @@ Rectangle {
             // (`GraphRowDelegate.lit`).
             visible: (pin.pointerX >= 0 || pin.listOnThisChip) && !pin.selected
         }
+        // The column boundaries' lines over the row's two grounds only, as over a row's (`GraphDividerLines`); the rest
+        // of the band cuts them, as it cuts the rows under it (デザイン規約 §グラフ列は最も広い所のレーンまで).
+        GraphDividerLines {
+            id: pinLines
+            y: pinPicked.y
+            width: parent.width
+            height: pinPicked.height
+            visible: pinPicked.visible || pinHover.visible
+            dividers: pin.view.dividers
+        }
     }
 
     /// The two grounds as drawn, for the headless run — not their conditions, which would pass unwired grounds.
@@ -233,6 +243,8 @@ Rectangle {
     /// The area a press lands in — what the rows under the stand-in are shielded by (`GraphList.shieldAt`), as a row's
     /// own (`GraphRowDelegate.pressArea`).
     readonly property alias pressArea: pinMouse
+    /// The boundaries' lines over the row's grounds, for the headless run (PGG_AUTO_ACT=graph-divider).
+    readonly property alias lines: pinLines
 
     // Laid out as a row's chip column is (`GraphRowChips`).
     RefChipStack {

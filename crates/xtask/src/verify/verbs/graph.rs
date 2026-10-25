@@ -638,6 +638,26 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "divider_refuse refuses=true line=true",
     },
+    // The pointer resting on the graph divider: every highlight ground on
+    // screen (the selection's, and the pointer's wash on the row under the
+    // hand) draws the line again over itself. `grounds=2` is the run
+    // standing the hand off the selected row, `ruled=2` both drawing the
+    // line — a line drawn nowhere reads 0. `pin` is the same over HEAD's
+    // stand-in wearing the selection, `pin-lit` wearing the pointer's wash.
+    Verb {
+        name: "graph-divider",
+        when: &[
+            (
+                Arg::Is("pin"),
+                "graph_divider_pin shown=true ruled=true line=true picked=true",
+            ),
+            (
+                Arg::Is("pin-lit"),
+                "graph_divider_pin shown=true ruled=true line=true picked=false lit=true",
+            ),
+        ],
+        plain: "grounds=2 ruled=2",
+    },
     // The end of what was loaded differs from the end of history by one
     // footer line. `shown=` is the footer's own visible, next to the
     // model's answer — only neighbours are caught in one substring.

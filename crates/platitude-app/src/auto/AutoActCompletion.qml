@@ -243,7 +243,7 @@ QtObject {
                 "middle-hand",
                 "graph-tail", "graph-tail-more",
                 "graph-head", "graph-head-below", "graph-head-back",
-                "graph-head-go", "graph-head-lit", "wip-lanes",
+                "graph-head-go", "graph-head-lit", "wip-lanes", "graph-divider",
                 // Three arrivals behind the press, each from a different tree: the worktree's row, its file list, and
                 // one of its files. `carried-stand` waits out the first two and the rows built from them.
                 "carried-read", "carried-stand",

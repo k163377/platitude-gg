@@ -5,7 +5,7 @@ import platitude.ui
 
 // The hands on the two boundaries between the graph's three columns (labels | graph | message): what a drag asks its
 // column for, and whether the ask runs past what the column allows. Widths are `GraphColumnMetrics`'s; the hover lines
-// are the pane's (rules-refs/structure.md「手を持つ部品と、その手が上げる線は同じファイルに入らない」).
+// are `GraphDividerLines`' (rules-refs/structure.md「手を持つ部品と、その手が上げる線は同じファイルに入らない」).
 Item {
     id: dividers
 
@@ -40,13 +40,15 @@ Item {
     readonly property bool refused: dividers.dividerRefused || dividers.labelRefused
         || (dividers.columns.graphColWFixed && dividers.dividerPointed)
     readonly property point refusedAt: dividers.labelRefused ? dividers.labelPoint : dividers.dividerPoint
-    /// Where each boundary stands, and whether its hover line is wanted — the pane draws the lines.
+    /// Where each boundary stands, and whether its hover line is wanted — `GraphDividerLines` draws the lines.
     readonly property alias labelX: labelDivider.x
     readonly property alias graphDividerX: graphDivider.x
     readonly property bool labelLineWanted: dividers.labelPointed || labelDivider.pressed
     /// No line on a column with one width — the cursor speaks instead (規約 §グラフ列は最も広い所のレーンまで).
     readonly property bool graphLineWanted: !dividers.columns.graphColWFixed
         && (dividers.dividerPointed || graphDivider.pressed)
+    /// Either line — what a row wearing a highlight ground builds its own copy of the lines on (`GraphRowDelegate`).
+    readonly property bool lineWanted: dividers.labelLineWanted || dividers.graphLineWanted
     /// The divider as drawn, so the hook cannot pass a fixed column that still offers a drag.
     readonly property alias graphDividerShown: graphDivider.visible
 
@@ -69,11 +71,12 @@ Item {
     function outOfRange(asked, floor, ceiling) {
         return asked > ceiling + Theme.splitterWidth || asked < floor - Theme.splitterWidth
     }
-    /// Automation: the pointer resting on the graph divider's middle (`PGG_AUTO_ACT=graph-divider`).
-    function restDividerPointer(inside) {
+    /// Automation: the pointer resting on the graph divider at `y`, in this item's coordinates
+    /// (`PGG_AUTO_ACT=graph-divider`).
+    function restDividerPointer(inside, y) {
         dividers.dividerPointed = inside
         if (inside)
-            dividers.dividerPoint = graphDivider.mapToItem(null, graphDivider.width / 2, dividers.height / 2)
+            dividers.dividerPoint = graphDivider.mapToItem(null, graphDivider.width / 2, y)
     }
     /// Automation: a drag carried past one of the four bounds (`PGG_AUTO_ACT=divider-refuse`, whose argument names
     /// which), walking the road the handler walks.
@@ -109,7 +112,7 @@ Item {
     ColumnDivider {
         id: graphDivider
         frame: dividers
-        // Centred on the message tick, so the hover line lies over it.
+        // Centred on the message tick, so the hover line lies along it, under it.
         x: dividers.columns.labelW + dividers.columns.graphColW + Theme.spaceSm
            + Theme.borderWidth - Theme.splitterWidth / 2
         visible: !dividers.blank

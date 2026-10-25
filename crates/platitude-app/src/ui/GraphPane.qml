@@ -388,7 +388,8 @@ Rectangle {
 
     color: Theme.bgSurface
 
-    // Divider hover-lines live under the list so the message ticks and lane strokes stay in front.
+    // Divider hover-lines live under the list so the message ticks and lane strokes stay in front; a row's and the
+    // stand-in's highlight grounds draw them again over themselves (`GraphDividerLines`).
     GraphDividerLines {
         id: dividerLines
         width: parent.width
@@ -443,6 +444,7 @@ Rectangle {
         graphModel: graphArea.graphModel
         worktree: graphArea.worktree
         columns: metrics
+        dividers: columnDividers
         findOn: findBar.findOn
         chosenOids: graphArea.chosenOids
         chosenCount: graphArea.chosenCount
@@ -591,10 +593,12 @@ Rectangle {
     /// the badge, since a drag carries the hand out past this pane.
     readonly property alias refused: columnDividers.refused
     readonly property alias refusedAt: columnDividers.refusedAt
-    /// Automation: the pointer resting on the graph divider, and a drag carried out past one of the four bounds these
-    /// two dividers have.
-    function restDividerPointer(inside) {
-        columnDividers.restDividerPointer(inside)
+    /// Automation: the pointer resting on the graph divider at `y` (this pane's coordinates), and a drag carried out
+    /// past one of the four bounds these two dividers have. A resting pointer is this pane's hand as well, which lights
+    /// the row under it.
+    function restDividerPointer(inside, y) {
+        columnDividers.restDividerPointer(inside, y)
+        paneHand.stir(inside ? columnDividers.dividerPoint : null)
     }
     function dragDividerPast(which) {
         columnDividers.dragDividerPast(which)

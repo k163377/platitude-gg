@@ -145,6 +145,9 @@ Item {
             onYChanged: paneHand.rowsMoved()
 
             readonly property HandWatch hand: paneHand
+            readonly property var dividers: QtObject {
+                readonly property bool lineWanted: false
+            }
             property Item shield: null
             property bool keepingRows: false
             property bool rereading: false

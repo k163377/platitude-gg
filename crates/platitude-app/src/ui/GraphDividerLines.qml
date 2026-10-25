@@ -3,7 +3,11 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude.ui
 
-// The lines the two column boundaries raise, as tall as this is.
+// The lines the two column boundaries raise, as tall as this is. Drawn under the list for the pane, so the ticks and
+// lanes stay in front of them, and again over each highlight ground a row or the stand-in wears and under its ink:
+// the selection's ground and the stand-in's band would cut the pane's lines, and the pointer's and the question's
+// washes would tint them. Each of those surfaces starts at the pane's left edge, so the boundaries' x is theirs as it
+// stands.
 Item {
     id: lines
 

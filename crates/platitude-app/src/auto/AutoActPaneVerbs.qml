@@ -93,15 +93,7 @@ Item {
             Harness.report("graph_min w=" + graphPane.graphColW
                               + " min=" + graphPane.graphColWMin)
         } else if (act === "graph-divider") {
-            // Read against two repositories: a line withheld on a linear history is only an answer next to a run where
-            // it is drawn.
-            graphPane.restDividerPointer(true)
-            Harness.report("graph_divider shown=" + graphPane.graphDividerShown
-                              + " line=" + graphPane.graphDividerLineShown
-                              + " refuses=" + graphPane.graphDividerRefuses
-                              + " lanes=" + graphModel.maxLanes
-                              + " max=" + Math.round(graphPane.graphColWMax)
-                              + " min=" + Math.round(graphPane.graphColWMin))
+            graphDividerTimer.start()
         } else {
             return false
         }
@@ -293,6 +285,84 @@ Item {
             }
             graphHeadTimer.stop()
             graphHeadTimer.report()
+        }
+    }
+    // The pointer resting on the graph divider, and the pane's hand with it. The hand rests on the row under the
+    // selection, so a picked ground and a lit one both stand under the line; with `pin` it rests on HEAD's
+    // stand-in instead, which a view sent to its end puts up at the top edge (`--preset deep`). `pin-lit` selects the
+    // newest commit first, so the stand-in lights under the hand rather than wearing the selection — HEAD has to be
+    // another commit (`--preset deep-detached`).
+    SampleTimer {
+        id: graphDividerTimer
+        /// Whether `pin-lit` has moved the selection off HEAD's row; once, or the view would never stay at its end.
+        property bool stoodAside: false
+        /// The rows on screen wearing a highlight ground, and how many of them draw the graph divider's line again over
+        /// it (`GraphRowDelegate.groundLines`) — the line as drawn, not its conditions.
+        function ruledRows() {
+            const view = graphPane.view
+            let grounds = 0
+            let ruled = 0
+            for (let row = view.firstVisibleRow(); row < graphModel.rowTotal; row++) {
+                const item = view.itemAtIndex(row)
+                if (item === null || item.y >= view.contentY + view.height)
+                    break
+                if (!item.selected && !item.lit && !item.marked)
+                    continue
+                grounds++
+                if (item.groundLines !== null && item.groundLines.graphShown)
+                    ruled++
+            }
+            return " grounds=" + grounds + " ruled=" + ruled
+        }
+        onTriggered: {
+            if (graphModel.loading || graphModel.rowTotal < 2) {
+                Awaited.at("graph_divider", "rows")
+                return
+            }
+            const pin = graphPane.headPin
+            const arg = Harness.autoActArg
+            if (arg === "pin" || arg === "pin-lit") {
+                if (arg === "pin-lit" && !graphDividerTimer.stoodAside) {
+                    // HEAD's row is known before the stand-in can stand, so the newest commit is told apart from it.
+                    if (graphModel.headRow < 0) {
+                        Awaited.at("graph_divider", "head")
+                        return
+                    }
+                    graphDividerTimer.stoodAside = true
+                    const top = graphModel.newestCommitRow()
+                    if (top >= 0 && top !== graphModel.headRow)
+                        page.activateRow(graphModel.oidAt(top), top)
+                }
+                if (!pin.visible || !pin.rowAbove) {
+                    Awaited.at("graph_divider", "pin")
+                    graphPane.view.positionViewAtEnd()
+                    return
+                }
+                graphDividerTimer.stop()
+                graphPane.restDividerPointer(true, pin.y + pin.rowMidY)
+                Harness.report("graph_divider_pin shown=" + pin.visible
+                                  + " ruled=" + pin.lines.graphShown
+                                  + " line=" + graphPane.graphDividerLineShown
+                                  + " picked=" + pin.picked
+                                  + " lit=" + pin.lit)
+                driver.complete()
+                return
+            }
+            const below = graphPane.view.itemAtIndex(graphPane.view.currentIndex + 1)
+            if (below === null) {
+                Awaited.at("graph_divider", "row")
+                return
+            }
+            graphDividerTimer.stop()
+            graphPane.restDividerPointer(true, below.mapToItem(graphPane, 0, below.height / 2).y)
+            Harness.report("graph_divider shown=" + graphPane.graphDividerShown
+                              + " line=" + graphPane.graphDividerLineShown
+                              + " refuses=" + graphPane.graphDividerRefuses
+                              + " lanes=" + graphModel.maxLanes
+                              + " max=" + Math.round(graphPane.graphColWMax)
+                              + " min=" + Math.round(graphPane.graphColWMin)
+                              + graphDividerTimer.ruledRows())
+            driver.complete()
         }
     }
     // The lane column has to have taken its narrower width before there is anywhere to pan to, or a bar worth wanting.

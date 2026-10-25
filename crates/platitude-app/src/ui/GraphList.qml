@@ -16,6 +16,9 @@ AppListView {
     required property var worktree
     /// The three columns' arithmetic (`GraphColumnMetrics`).
     required property var columns
+    /// The boundaries between them (`GraphColumnDividers`), whose lines a row and the stand-in draw again over their
+    /// highlight grounds (`GraphDividerLines`).
+    required property GraphColumnDividers dividers
 
     model: graphList.graphModel
     // The pane's hand for the tips the rows put out, as for their light (`TipAsk.hand`).
