@@ -283,6 +283,65 @@ fn a_tag_row_says_which_sides_its_name_stands_on() {
     assert_eq!(model.tag_sides("v-nobody".into()), "");
     assert_eq!(model.tag_sides(String::new()), "");
 }
+/// A path changed on both sides has a row in each bucket, and each warns
+/// about its own change: the staged list reads the index's mark, the
+/// unstaged list the working tree's — never the other side's.
+#[test]
+fn a_file_changed_on_both_sides_is_marked_on_each_side_for_its_own_change() {
+    use platitude_core::eol::{Eol, Notice};
+    use platitude_core::session::EolMark;
+    let mark = |staged: bool, from: Eol, to: Eol| EolMark {
+        path: "src/b.txt".to_string(),
+        notice: Notice::Flipped { from, to },
+        staged,
+    };
+    let both = Arc::new(vec![
+        mark(true, Eol::Lf, Eol::Crlf),
+        mark(false, Eol::Crlf, Eol::Lf),
+    ]);
+    for (run, staged) in [("staged", true), ("unstaged", false)] {
+        let mut model = worktree(run, Source::files(pending()));
+        model.tree_view = false;
+        model.eol_marks = Arc::clone(&both);
+        model.arrange();
+        let at = (0..model.shown_rows())
+            .find(|&at| says(&model, at, Role::Full) == "src/b.txt")
+            .expect("the MM row in this run");
+        assert!(
+            flags(&model, at, Role::EolMark),
+            "{run}: its own side's mark"
+        );
+        assert!(
+            model.eol_marked("src/b.txt".to_string()),
+            "{run}: alive on its own side"
+        );
+        model.point_eol("src/b.txt".to_string());
+        assert_eq!(
+            (
+                model.pointed_eol_from.as_str(),
+                model.pointed_eol_to.as_str()
+            ),
+            if staged {
+                ("LF", "CRLF")
+            } else {
+                ("CRLF", "LF")
+            },
+            "{run}: worded for its own change"
+        );
+
+        // Only the other side's mark: this row has nothing to say.
+        model.eol_marks = Arc::new(vec![mark(!staged, Eol::Lf, Eol::Crlf)]);
+        assert!(
+            !flags(&model, at, Role::EolMark),
+            "{run}: the other side's mark is not this row's"
+        );
+        assert!(
+            !model.eol_marked("src/b.txt".to_string()),
+            "{run}: nor keeps a card alive"
+        );
+    }
+}
+
 #[test]
 fn a_file_row_reads_out_of_the_status() {
     let mut model = section("files", Source::files(pending()));

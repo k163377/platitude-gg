@@ -506,6 +506,61 @@ async fn a_global_mark_moved_in_a_terminal_reaches_the_snapshot() {
     session.close_and_wait().await;
 }
 
+/// A path changed on both sides has a row in each bucket, and each warns
+/// about its own change: the index's for what a commit now would record,
+/// the working tree's for what the next `git add` would — one mark per
+/// side, not one per path.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_file_changed_on_both_sides_is_marked_once_per_side() {
+    use platitude_core::eol::{Eol, Notice};
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "one\ntwo\n", "root");
+    // Every line's ending flips in the index, and flips back in the tree.
+    std::fs::write(repo.path.join("f.txt"), "one\r\ntwo\r\n").expect("rewrite with CRLF");
+    repo.git(&["add", "--", "f.txt"]);
+    std::fs::write(repo.path.join("f.txt"), "one\ntwo\n").expect("rewrite with LF");
+    let (sink, session) = opened(&repo).await;
+    sink.opening_settled(&session).await;
+    let marks = sink
+        .wait_for("both sides warned about", |events| {
+            events.iter().rev().find_map(|e| match e {
+                SessionEvent::StatusLoaded { eol_marks, .. } if eol_marks.len() == 2 => {
+                    Some(eol_marks.iter().cloned().collect::<Vec<_>>())
+                }
+                _ => None,
+            })
+        })
+        .await;
+    let side = |staged: bool| {
+        marks
+            .iter()
+            .find(|mark| mark.staged == staged && mark.path == "f.txt")
+            .unwrap_or_else(|| {
+                panic!(
+                    "the mark on the {} side: {marks:?}",
+                    if staged { "index" } else { "tree" }
+                )
+            })
+    };
+    assert_eq!(
+        side(true).notice,
+        Notice::Flipped {
+            from: Eol::Lf,
+            to: Eol::Crlf
+        },
+        "the index's: what a commit now would record"
+    );
+    assert_eq!(
+        side(false).notice,
+        Notice::Flipped {
+            from: Eol::Crlf,
+            to: Eol::Lf
+        },
+        "the tree's: what the next add would"
+    );
+    session.close_and_wait().await;
+}
+
 /// The line-ending setting written into this repository's own file
 /// reaches the notices by the poll. The settings screen writes it outside
 /// the session (`models::line_endings`), like `git config core.autocrlf` in
@@ -549,6 +604,78 @@ async fn the_line_ending_setting_written_beside_the_session_reaches_the_notices(
 
     sink.wait_for("the notice withdrawn", |evs| {
         (marked(evs) == Some(0)).then_some(())
+    })
+    .await;
+    session.close_and_wait().await;
+}
+
+/// A file already modified and saved over again from outside — another
+/// editor, a terminal — prints the same status line, and the poll reads
+/// its line-ending marks again all the same: the working tree's change is
+/// part of what the poll weighs (`joins::status_key`), so the mark says
+/// what the file holds now, not what it held.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_file_saved_over_in_place_is_marked_for_what_it_holds_now() {
+    use platitude_core::eol::{Eol, Notice};
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "a\nb\nc\nd\ne\n", "root");
+    // One line lands with the other ending.
+    std::fs::write(repo.path.join("f.txt"), "a\nb\nc\r\nd\ne\n").expect("one CRLF line");
+    let (sink, session) = opened(&repo).await;
+    sink.opening_settled(&session).await;
+    // The tree's mark on f.txt as the last status read said it.
+    let said = |events: &[SessionEvent]| {
+        events.iter().rev().find_map(|e| match e {
+            SessionEvent::StatusLoaded { eol_marks, .. } => Some(
+                eol_marks
+                    .iter()
+                    .find(|mark| mark.path == "f.txt" && !mark.staged)
+                    .map(|mark| mark.notice.clone()),
+            ),
+            _ => None,
+        })
+    };
+    let lines = |lines: u32| {
+        Some(Some(Notice::Mixed {
+            lines,
+            added: Eol::Crlf,
+            file: Eol::Lf,
+        }))
+    };
+    sink.wait_for("one line warned about", |evs| {
+        (said(evs) == lines(1)).then_some(())
+    })
+    .await;
+    let poll = || async {
+        let polled = crate::support::wait::bounded(
+            "the tracked poll",
+            session.refresh_poll_tracked().outcome(),
+        )
+        .await;
+        assert!(
+            matches!(
+                polled,
+                platitude_core::session::RefreshOutcome::Changed
+                    | platitude_core::session::RefreshOutcome::Unchanged
+            ),
+            "the poll ran: {polled:?}"
+        );
+    };
+    // A poll over the tree as it was first: the opening's reads leave the
+    // marks to be read again once (`forget_eol_derived`), and this is that
+    // once — the next is weighed on what moved alone.
+    poll().await;
+    assert_eq!(
+        said(&sink.events.lock().unwrap()),
+        lines(1),
+        "nothing moved, nothing new to say"
+    );
+
+    // A second line with the other ending: git's status line is the same.
+    std::fs::write(repo.path.join("f.txt"), "a\nb\r\nc\r\nd\ne\n").expect("two CRLF lines");
+    poll().await;
+    sink.wait_for("two lines warned about", |evs| {
+        (said(evs) == lines(2)).then_some(())
     })
     .await;
     session.close_and_wait().await;

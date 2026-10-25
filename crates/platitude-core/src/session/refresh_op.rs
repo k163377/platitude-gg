@@ -273,10 +273,13 @@ impl RepoSession {
                     incoming.is_some_and(|sides| self.standing.set_merge_incoming(sides));
                 let flipped = dirt_flipped || merge_moved;
                 // The pending diffs scale with the change, so they are read
-                // only when status moved (the index cannot change without
-                // status changing, whoever changes it) or were marked stale.
+                // only when status moved or were marked stale. The status key
+                // covers what the lines cannot say: a working-tree change
+                // saved over in place keeps its line, so the key also hashes
+                // each such file's length and modification time
+                // (`status_key`); the index cannot change without its line.
                 let stale = self.eol_marks_stale.swap(false, Ordering::SeqCst);
-                let key = status_key(&status);
+                let key = status_key(&workdir, &status);
                 let moved = relock(&self.status_key).replace(key) != Some(key);
                 self.amend_status(&status);
                 let (eol_marks, lfs) = tokio::join!(

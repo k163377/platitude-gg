@@ -1,6 +1,17 @@
 use super::*;
 
 impl NavSectionModel {
+    /// The line-ending marks on this list's side of the index: a path
+    /// changed on both sides has a row in each bucket, each warning about
+    /// its own change (`RepoSession::read_eol_marks`). The staged list
+    /// reads the index's, the other two the working tree's.
+    pub(super) fn eol_marks_here(&self) -> impl Iterator<Item = &platitude_core::session::EolMark> {
+        let staged = self.run == "staged";
+        self.eol_marks
+            .iter()
+            .filter(move |mark| mark.staged == staged)
+    }
+
     /// What one row answers for one role — the only place a row's fields
     /// are worked out. `data` and the slots both read it, so the delegate
     /// and automation cannot be told different things.
@@ -159,7 +170,7 @@ impl NavSectionModel {
                 _ => "",
             }),
             Role::EolMark => Value::Flag(matches!(of, Entry::File { item, .. }
-                if self.eol_marks.iter().any(|mark| mark.path == item.path()))),
+                if self.eol_marks_here().any(|mark| mark.path == item.path()))),
             // A local branch carries its own pair; a remote-tracking ref
             // carries the one made against it (`BranchItem::tracked_by`),
             // drawn by the line naming that branch (`NavRowFacts`).

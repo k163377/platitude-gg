@@ -234,24 +234,26 @@ impl RepoSession {
             eol::untracked_shapes(&self.executor, workdir, cancel),
         );
 
-        // One reading per path (one row), but the side is kept: only the
-        // index goes into a commit.
-        let mut readings: BTreeMap<String, (eol::Reading, bool)> = BTreeMap::new();
+        // One reading per row: a path changed on both sides has a row in
+        // each bucket, each with a change of its own to say — the index
+        // side's, which a commit now would record, and the working tree's,
+        // which the next `git add` would. Only the index goes into a commit.
+        let mut readings: BTreeMap<(String, bool), eol::Reading> = BTreeMap::new();
         if let Ok(out) = unstaged {
             for seen in eol::read(&out.stdout) {
-                readings.insert(seen.path, (seen.reading, false));
+                readings.insert((seen.path, false), seen.reading);
             }
         }
         if let Ok(out) = staged {
             for seen in eol::read(&out.stdout) {
-                readings.insert(seen.path, (seen.reading, true));
+                readings.insert((seen.path, true), seen.reading);
             }
         }
         // Only paths status reports: one the patch header C-quotes has no
         // row, and goes unmarked.
         let pending: std::collections::HashSet<&str> =
             status.items.iter().map(|i| i.path()).collect();
-        readings.retain(|path, _| pending.contains(path.as_str()));
+        readings.retain(|(path, _), _| pending.contains(path.as_str()));
 
         for (path, shape) in untracked.unwrap_or_default() {
             if !pending.contains(path.as_str()) {
@@ -261,7 +263,7 @@ impl RepoSession {
             // `git add`.
             match shape {
                 eol::Shape::Uniform(eol) => {
-                    readings.insert(path, (eol::Reading::NewFile { eol }, false));
+                    readings.insert((path, false), eol::Reading::NewFile { eol });
                 }
                 // The one shape the column cannot finish: the sentence
                 // counts lines, and only the patch has them.
@@ -270,19 +272,25 @@ impl RepoSession {
                     if let Ok(raw) =
                         details::file_diff_raw(&self.executor, workdir, &target, cancel).await
                     {
-                        readings.insert(path, (eol::read_one(&raw), false));
+                        readings.insert((path, false), eol::read_one(&raw));
                     }
                 }
                 eol::Shape::Nothing => {}
             }
         }
-        readings.retain(|_, (reading, _)| *reading != eol::Reading::Quiet);
+        readings.retain(|_, reading| *reading != eol::Reading::Quiet);
         if readings.is_empty() {
             return Vec::new();
         }
 
-        // Which are text at all, in one spawn.
-        let paths: Vec<String> = readings.keys().cloned().collect();
+        // Which are text at all, in one spawn — once per path, whichever
+        // sides read it.
+        let paths: Vec<String> = readings
+            .keys()
+            .map(|(path, _)| path.clone())
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
         let converting = self.normalising(workdir, cancel).await.unwrap_or(false);
         let rulings = eol::rulings_given(&self.executor, workdir, &paths, converting, cancel)
             .await
@@ -292,10 +300,12 @@ impl RepoSession {
                 }
                 Vec::new()
             });
+        let ruled: std::collections::HashMap<&str, eol::Ruling> =
+            paths.iter().map(String::as_str).zip(rulings).collect();
 
         let mut marks = Vec::new();
-        for (path, ruling) in paths.into_iter().zip(rulings) {
-            let Some((reading, staged)) = readings.get(&path).copied() else {
+        for ((path, staged), reading) in readings {
+            let Some(ruling) = ruled.get(path.as_str()).copied() else {
                 continue;
             };
             if ruling == eol::Ruling::NotText {

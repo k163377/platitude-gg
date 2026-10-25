@@ -270,12 +270,33 @@ pub(super) fn build_label_map(
 
 /// Fingerprint of which paths status reported, in which state — not
 /// ahead/behind, which a fetch moves and which say nothing about line
-/// endings.
-pub(super) fn status_key(status: &WorktreeStatus) -> u64 {
+/// endings — and of every change in the working tree as it stands on
+/// disk: its length and modification time, a stat each. Status prints no
+/// line for what a working-tree change now holds, so a file already
+/// modified (or untracked) and saved over again — another editor, a
+/// terminal — prints the same line, and the line-ending marks read off
+/// its patch would go on describing the bytes it had
+/// (`RepoSession::settle_eol_marks`). A change on the index side alone
+/// cannot move without its status line moving, so it is not looked at.
+pub(super) fn status_key(workdir: &std::path::Path, status: &WorktreeStatus) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     for item in &status.items {
         item.hash(&mut hasher);
+        let in_tree = match item {
+            crate::status::StatusItem::Tracked { unstaged, .. } => *unstaged != '.',
+            crate::status::StatusItem::Unmerged { .. }
+            | crate::status::StatusItem::Untracked { .. } => true,
+        };
+        if !in_tree {
+            continue;
+        }
+        // A file gone from the tree hashes as nothing: its status line
+        // already says so.
+        std::fs::metadata(workdir.join(item.path()))
+            .ok()
+            .map(|meta| (meta.len(), meta.modified().ok()))
+            .hash(&mut hasher);
     }
     hasher.finish()
 }

@@ -57,10 +57,9 @@ impl NavSectionModel {
     /// built; an empty path clears it. Automation writes it too, since
     /// hover cannot be injected headless.
     #[qslot]
-    fn point_eol(&mut self, path: String) {
+    pub(super) fn point_eol(&mut self, path: String) {
         let notice = self
-            .eol_marks
-            .iter()
+            .eol_marks_here()
             .find(|m| m.path == path)
             .map(|m| &m.notice);
         let words = crate::encode::ending_words(notice);
@@ -82,6 +81,14 @@ impl NavSectionModel {
         self.pointed_eol_scope = words.scope;
         self.pointed_eol_ext = words.ext;
         self.changed();
+    }
+
+    /// Whether this bucket still marks `path`'s line endings — what a
+    /// card out, or asked for, on that row is weighed against once the
+    /// status has been read again (`WipPane.weighEol`).
+    #[qslot]
+    pub(super) fn eol_marked(&self, path: String) -> bool {
+        self.eol_marks_here().any(|m| m.path == path)
     }
 
     #[qsignal]
