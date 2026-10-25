@@ -34,4 +34,12 @@ QtObject {
     function namedKind(kind) {
         return kind === "worktree" ? "worktree" : refKind(kind)
     }
+    /// `encode::shown_matches`: whether a filter's line is in any of the words an entry shows, case folded; a line of
+    /// nothing but whitespace leaves every entry in.
+    function shownMatches(shown, line) {
+        if (line.trim() === "")
+            return true
+        const needle = line.toLowerCase()
+        return shown.some(words => String(words).toLowerCase().indexOf(needle) >= 0)
+    }
 }

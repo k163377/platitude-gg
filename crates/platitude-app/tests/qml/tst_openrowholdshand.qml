@@ -140,8 +140,11 @@ Item {
         function cleanup() {
             menu.close()
             root.menuKey = ""
+            openRow.seat.hold("reread", false)
             openRow.seat.takeDown("cleanup", false)
             openRow.seat.latchedKey = ""
+            // Off the rows: the next case's first move onto them is a move, wherever this one left the hand.
+            mouseMove(root, root.width - 2, root.height - 2)
             testCase.row.destroy()
             testCase.row = null
         }
@@ -230,6 +233,35 @@ Item {
 
             menu.close()
             tryCompare(row, "factsOpen", false, undefined, "once the menu goes, the hand off the row closes it")
+        }
+
+        /// A read that moved the open row from under the still hand further than the list could take back
+        /// (`HandWatch.rowsMoved(true)`, as `RowKeep` tells it) leaves it open where the read put it — its lines were
+        /// what the hand was reading (デザイン規約 §hover のツールチップ「外乱では閉じない」) — until the hand moves;
+        /// then the hand decides again.
+        function test_a_read_that_moves_the_open_row_from_under_the_hand_leaves_it_open_until_the_hand_moves() {
+            const row = testCase.row
+            const x = panel.width / 2
+            mouseMove(panel, x, Theme.rowHeight / 2)
+            tryCompare(row, "factsOpen", true, undefined, "the row opens under the hand")
+            // The read wrote rows in above it: it stands lower, past the still hand.
+            row.y = row.height + Theme.rowHeight
+            hand.rowsMoved(true)
+            testCase.turnPassed()
+            compare(row.factsOpen, true, "the row stays open where the read put it")
+            verify(hand.stillHeld, "and the hand is held")
+            // The hand's own move, off the row.
+            mouseMove(panel, x + 2, Theme.rowHeight / 2)
+            tryCompare(row, "factsOpen", false, undefined, "the row closes as the hand moves elsewhere")
+        }
+        /// …where the reader's own scroll takes it down at once: the row slid from under a hand that did not go there.
+        function test_a_scroll_that_moves_the_open_row_from_under_the_hand_closes_it() {
+            const row = testCase.row
+            mouseMove(panel, panel.width / 2, Theme.rowHeight / 2)
+            tryCompare(row, "factsOpen", true, undefined, "the row opens under the hand")
+            row.y = row.height + Theme.rowHeight
+            hand.rowsMoved()
+            tryCompare(row, "factsOpen", false, undefined, "the row that slid away closes at once")
         }
 
         /// A menu asked for on the open row that does not open (nothing on offer) holds nothing: the next menu, raised

@@ -5,8 +5,8 @@ import platitude.ui
 // What a file row asks the line-ending card for, and how every ask ends (`NavItemDelegate.eolAskFor`): the hand
 // walking off, the row's path changing under the hand, the row being pooled — each sends the leave for the path that
 // asked, so the pane's seat is never left waiting on a row that let go (`WipPane.pointEolIn` / `unpointEolIn`). A mark
-// that goes is a status read dealing the rows again, which the pane weighs (`wip-redeal fixed`). The real row, under a
-// real pointer, on a panel that keeps the hand as the WIP pane does.
+// that goes comes with a status read, which the pane weighs (`wip-reread fixed`). The real row, under a real pointer,
+// on a panel that keeps the hand as the WIP pane does.
 Item {
     id: root
     width: 320
