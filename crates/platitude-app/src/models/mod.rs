@@ -44,7 +44,10 @@ pub use repo_tab::RepoTab;
 pub use tabs::TabsModel;
 pub use worktree::WorktreeModel;
 
-pub(crate) use notify::{impl_extend_notified, impl_move_notified, impl_notify_runs, push_run};
+pub(crate) use notify::{
+    edit_between, impl_edit_notified, impl_extend_notified, impl_move_notified, impl_notify_runs,
+    push_run,
+};
 
 /// Registers a type under the `platitude` QML module.
 macro_rules! qml_register {

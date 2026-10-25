@@ -94,6 +94,18 @@ impl NavSectionModel {
     #[qsignal]
     pub(super) fn changed(&mut self);
 
+    /// A read is about to move this list's rows (`drain`): what moves on
+    /// screen from here to `rows_arrived` is the read's, no reader's doing
+    /// (デザイン規約 §hover のツールチップ「外乱では閉じない」). Not said
+    /// for what the reader moves — a filter, a fold, the tree toggle.
+    #[qsignal]
+    pub(super) fn rows_arriving(&mut self);
+
+    /// …and the rows it brought are in, the properties told: the pane
+    /// weighs where the row under the hand went (`RowKeep.arrived`).
+    #[qsignal]
+    pub(super) fn rows_arrived(&mut self);
+
     // A refs snapshot arrived, whether or not it moved anything. Not
     // `changed`, which stays quiet on identical rows: a write that leaves
     // the refs as they were (a cherry-pick of a commit the branch already

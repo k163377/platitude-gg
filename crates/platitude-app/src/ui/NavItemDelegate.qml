@@ -277,9 +277,9 @@ Item {
     property ReclickGesture reclick: null
     /// The panel's hand (`HandWatch`), which this row reads its light and its rest off: Qt hands hover to whatever
     /// arrives under a still pointer, and a row the list moved under one was not walked to. Both lists hand theirs in
-    /// (the left panel's, the worktree's file lists'); the worktree's lists, dealt again on every status read, hand it
-    /// back to the row the hand was on (`WipBucketPane.weighDeal`). Null — a row standing on its own — reads Qt's
-    /// hover (`rowHover`).
+    /// (the left panel's, the worktree's file lists'). A read tells the lists only the rows it moved, so the row under
+    /// the hand keeps its delegate, and the pane puts it back under the hand (`RowKeep`). Null — a row standing on its
+    /// own — reads Qt's hover (`rowHover`).
     property HandWatch paneHand: null
     /// Every move of the hand is one read per row, and so is the reader moving the rows under it (`HandWatch.shifts`):
     /// the light goes to the row under the hand, as Qt's own lists hand their hover on with a scroll
@@ -299,7 +299,9 @@ Item {
     property bool handOn: false
     /// This row slid out from under a still hand (the reader's scroll): what it had out goes at once, with no beat
     /// (§hover のツールチップ「的が手の下で動けば」). A standing tip or menu of its own holds a row otherwise — the hand
-    /// walked into it — but not one that slid away: no hand went there.
+    /// walked into it — but not one that slid away: no hand went there. **Not a row a read moved**
+    /// (`HandWatch.disturbed`): it leaves the hand as a hand leaves it, and the seats weigh what stays
+    /// (§「外乱では閉じない」, `OpenRowSeat`).
     property bool slid: false
     function syncHand(shifted) {
         if (navRow.paneHand === null) {
@@ -324,7 +326,7 @@ Item {
                  && !(view.shieldAt !== undefined && view.shieldAt(hand.at))
         }
         if (shifted) {
-            navRow.slid = navRow.handOn && !on
+            navRow.slid = navRow.handOn && !on && !hand.disturbed
             navRow.handOn = on
             return
         }
@@ -344,11 +346,14 @@ Item {
         navRow.slid = false
     }
     /// Pooled, the delegate stays `visible` where its row last stood (the view only stops drawing it): it reads no
-    /// hand until it is used again.
+    /// hand until it is used again. Its tips go with it — the row they named left the list or the screen, and the
+    /// delegate is to stand for another — but for the box the hand is reading, which stays where it stands until the
+    /// hand leaves it or a read's keeper finds the row went (`Tips.dropIn`).
     property bool pooled: false
     ListView.onPooled: {
         navRow.pooled = true
         navRow.forgetHand()
+        Tips.dropIn(navRow)
     }
     ListView.onReused: {
         navRow.pooled = false
@@ -452,8 +457,7 @@ Item {
     /// none. Every way the ask ends sends the leave for the path that asked — the hand walking off, the path changing
     /// under the hand (a recycled delegate) — so the pane's seat is never left waiting on a row that let go
     /// (`WipPane.pointEol`: the rest before the card, its beat, a hand back from the card answered at once). A mark
-    /// that goes comes with a status read, which deals the rows again: the pane weighs the card's target then
-    /// (`WipPane.weighEol`).
+    /// that goes comes with a status read: the pane weighs the card's target then (`WipPane.weighEol`).
     readonly property string eolAskFor: navRow.eol_mark && navRow.stillPointed ? navRow.fullName : ""
     property string eolAskedPath: ""
     onEolAskForChanged: {

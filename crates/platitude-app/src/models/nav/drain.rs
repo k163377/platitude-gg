@@ -112,10 +112,7 @@ impl NavSectionModel {
             arrived |= self.take(Source::Stashes(list.entries));
         }
         if arrived {
-            // `total` is settled by the arrange below — the one place
-            // that knows how many rows are shown as gone.
-            self.reshape();
-            self.changed();
+            self.show_arrival();
         }
         if settled {
             self.refs_settled();
@@ -132,6 +129,17 @@ impl NavSectionModel {
         if crate::harness::memprobe::enabled() {
             self.note_footprint();
         }
+    }
+
+    /// Lays out the rows a read brought, its moves said apart from the
+    /// reader's (`rows_arriving` … `rows_arrived`). `total` is settled by
+    /// the arrange — the one place that knows how many rows are shown as
+    /// gone.
+    fn show_arrival(&mut self) {
+        self.rows_arriving();
+        self.reshape();
+        self.changed();
+        self.rows_arrived();
     }
 
     /// What the current branch's own row wears — the marks and the counts,

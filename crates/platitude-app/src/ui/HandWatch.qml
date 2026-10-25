@@ -26,7 +26,9 @@ HoverHandler {
     /// The hand is over these rows — heard, lost under something standing over them, or in a card hung off them.
     readonly property bool present: watch.known || watch.hidden || watch.covered > 0
     /// The rows moving now came of no reader's doing — a reread, the history growing — rather than of a scroll, a
-    /// search or the keyboard (デザイン規約 §hover のツールチップ「外乱では閉じない」). Read while `rowsShifted` is told.
+    /// search or the keyboard (デザイン規約 §hover のツールチップ「外乱では閉じない」). Read while `rowsShifted` is told
+    /// and while the rows read the hand again (`shifts`): a row a read took from under the hand has not slid away from
+    /// a reader (`NavItemDelegate.syncHand`).
     property bool disturbed: false
     /// Whether something stands over the hand now: a card hung off these rows (`covered`), a popup in this window
     /// (`OutsidePress.handIn`) — with the hand inside. Asked, not bound: a popup telling it lost the hand
@@ -58,6 +60,12 @@ HoverHandler {
     property int shifts: 0
     /// The rows under the hand moved — what hung off them is told (`RowHoverHost`).
     signal rowsShifted()
+    /// A read is moving these rows, weighed by its keeper as it lands (`RowKeep.busy`): a row it pushes past its view's
+    /// cache is still there, and the box the hand is reading off it stays (`Tips.dropIn`).
+    property bool reading: false
+    /// …and that row is built again where it stood (`RowKeep.bringBack`): the box held off its pooled delegate comes
+    /// back onto it (`TipAsk`, `Tips.takeBack`).
+    signal rowBack(Item row)
 
     /// The rows under the hand moved — a scroll, rows inserted above, the list stepping down the pane. What hangs off
     /// them is told either way; the hold, and the rows reading the hand again, are for a hand over them — heard, or in
@@ -76,9 +84,9 @@ HoverHandler {
         }
         watch.disturbed = disturbed === true
         watch.rowsShifted()
-        watch.disturbed = false
         if (over)
             watch.shifts++
+        watch.disturbed = false
     }
     /// The view put itself back over the rows it was showing after a reread (`GraphList.keepingRows`): nothing moved
     /// under the hand and nothing hung off the rows goes, but other delegates stand under it now, and they read the

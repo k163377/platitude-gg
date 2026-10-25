@@ -44,25 +44,33 @@ QtObject {
     }
     /// The hand came onto `row`'s own line or its lines — `key` is the row's (`NavList.keyOf`), `at` where the hand
     /// stood, `now` a press going for the words, which skips the rest. The seat asks again at the rest, and when the
-    /// list is rebuilt (`rowsRebuilt`), whether the target is still there: the row, while that delegate shows the
-    /// key (delegates are recycled); or, the list having rebuilt its rows, the section's model still holding the
-    /// name (`model` / `name`, where the row hands them over — the stand-in has none).
+    /// section's rows change (`rowsRebuilt`), whether the target is still there: the row, while that delegate shows
+    /// the key (delegates are recycled — a pooled one still says the key it last showed); or the section's model still
+    /// holding the name on show (`model` / `name`, where the row hands them over — the stand-in has none).
     function openFacts(key, at, row, now, model, name) {
         openRow.seat.point({
             "key": key, "at": at, "row": row,
-            "alive": () => (row !== undefined && row !== null && row.visible
+            "alive": () => (row !== undefined && row !== null && row.visible && row.pooled !== true
                             && (row.factsKey !== undefined ? row.factsKey : row.rowKey) === key)
                           || (model !== undefined && model !== null && model.rowOfName(name) >= 0)
         }, now === true)
     }
-    /// The list rebuilt its rows (the section's model reset): the open row's delegate is gone, and the row is open
-    /// only if the model still holds it — the one built in its place shows the lines; a name gone takes them down.
-    /// A row still resting is left to its rest, which asks the same question when it runs out (the stand-in asks
-    /// before it is on screen, and a rebuild of another section would take that ask away).
+    /// The section's rows changed (`NavSectionModel.changed` — a read, or the reader's filter, fold or delete): the row
+    /// is open only while the model still shows it — a name gone takes the lines down, held or not. A row still
+    /// resting is left to its rest, which asks the same question when it runs out (the stand-in asks before it is on
+    /// screen, and a change of another section would take that ask away).
     function rowsRebuilt() {
         const seat = openRow.seat
-        if (seat.shown && seat.target !== null && seat.target.alive !== undefined && !seat.target.alive())
+        if (seat.shown && seat.target !== null && seat.target.alive !== undefined && !seat.target.alive()) {
             seat.takeDown("gone", false)
+            return
+        }
+        // Still there, it says what the read brought — the counts, the reading, a branch another worktree took — in
+        // place (§「外乱では閉じない」: what is still there changes its words). Any section's read: a row's lines speak of
+        // the others' rows too (`NavFacts.answers`).
+        const row = seat.shown && seat.target !== null ? seat.target.row : null
+        if (row !== null && row !== undefined && row.factsOpen === true && row.gatherFacts !== undefined)
+            row.gatherFacts()
     }
     /// …and left it. Only the open row's leave lets it go (`HoverSeat.unpoint`); `now` is a row that slid out from
     /// under a still hand — the reader's scroll — which goes at once, with no beat (デザイン規約 §hover のツールチップ
@@ -87,4 +95,20 @@ QtObject {
     readonly property bool menuOnRow:
         openRow.menuDoor !== null && openRow.openKey !== "" && openRow.menuDoor.key === openRow.openKey
     onMenuOnRowChanged: openRow.seat.hold("menu", openRow.menuOnRow)
+
+    /// A read moved the rows under the still hand further than the list could take back (`HandWatch.rowsMoved(true)`):
+    /// the open row stays open where the read put it, the hand on it or not — its lines are what the hand was reading
+    /// (デザイン規約 §hover のツールチップ「外乱では閉じない」) — until the hand moves; then the hand decides again, and the
+    /// row under it, asked for meanwhile, opens on its rest. A row the read took out goes all the same (`rowsRebuilt`).
+    property Connections rereadWatch: Connections {
+        target: openRow.hand
+        function onRowsShifted() {
+            if (openRow.hand.disturbed && openRow.hand.stillHeld && openRow.seat.shown)
+                openRow.seat.hold("reread", true)
+        }
+        function onStillHeldChanged() {
+            if (!openRow.hand.stillHeld)
+                openRow.seat.hold("reread", false)
+        }
+    }
 }

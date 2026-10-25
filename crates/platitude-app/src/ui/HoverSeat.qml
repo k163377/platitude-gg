@@ -229,7 +229,7 @@ QtObject {
         seat.drop(seat.target, why)
         seat.pending = kept
     }
-    /// The place the target hangs off moved — the rows scrolled or were dealt again under the hand: what is out goes
+    /// The place the target hangs off moved — the rows scrolled or moved under the hand: what is out goes
     /// at once, its place being stale (デザイン規約 §hover のツールチップ「的が手の下で動けば hover は外れ、出したものは
     /// その瞬間に消える」), and an ask still standing is kept — asked again with its rest once the hold is off
     /// (`HandWatch.stillHeld`), or at once where there is none (a hand the rows cannot hear). The target itself is
@@ -250,6 +250,12 @@ QtObject {
             seat.drop(seat.target, why)
             seat.resume()
         }
+    }
+    /// What is out stands for `target` from here, out as it is — no rest, no beat: the owner's word on what the card
+    /// answers (`TipSeat.detach` / `takeBack`).
+    function retarget(target) {
+        if (seat.shown)
+            seat.target = target
     }
     /// An ask kept for `target`, to be made again: a seat that opens at once opens it at once, one that rests rests.
     function keep(target) {

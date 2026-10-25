@@ -24,44 +24,115 @@ Rectangle {
     readonly property real now: pane.curPage !== null ? pane.curPage.recoverNow : 0
     /// What is typed into the filter. Automation writes it into the field itself, as a typist would.
     property alias filterText: filterField.text
-    /// The entries the filter leaves, each with where it stands in the whole list — the number a pick goes by. Dealt
-    /// again only when what it holds changed (`refilter`): a fresh array resets the list's rows and its scroll, and the
-    /// times the filter reads move every half minute.
-    property var shownEntries: []
-    function refilter() {
+    /// The entries the filter leaves, as `{key, at}` — the entry across reads (`DiscardModel.keyAt`), and where it
+    /// stands in the whole list, the number a pick goes by. **Kept by key** (`keepRows`): a read moves only the rows
+    /// that came or went, so a row that stays keeps its delegate — the hand on it, the card hung off it — and the
+    /// list puts it back under the hand (`rowKeep`). A fresh array would send the list back to the top with every row
+    /// built again (`QQuickItemView::setModel`).
+    readonly property ListModel shownEntries: ListModel {}
+    /// Weighs the entries against the filter, and moves the rows that changed. `read`: a read of the log, or the time
+    /// moving under a filter that reads it — no reader's doing (デザイン規約 §hover のツールチップ「外乱では閉じない」);
+    /// else the reader typed, and the rows moving under the hand are theirs (`HandWatch.rowsMoved`: the card goes,
+    /// and the row that came under a still hand opens only once the hand has moved).
+    function refilter(read) {
         const line = filterField.text
         // Nothing typed leaves every entry in without asking the rule entry by entry.
         const asked = line.trim() !== ""
         const kept = []
         for (let i = 0; i < pane.entries.length; i++) {
             if (!asked || GitFacts.shownMatches(pane.wordsOf(pane.entries[i]), line))
-                kept.push({ "entry": pane.entries[i], "at": i })
+                kept.push({ "key": pane.entries[i].key, "at": i })
         }
-        const same = kept.length === pane.shownEntries.length
-            && kept.every((shown, i) => shown.entry === pane.shownEntries[i].entry && shown.at === pane.shownEntries[i].at)
+        const rows = pane.shownEntries
+        const same = kept.length === rows.count
+            && kept.every((shown, i) => shown.key === rows.get(i).key && shown.at === rows.get(i).at)
         if (same)
             return
-        pane.shownEntries = kept
-        // The rows are dealt again under the hand: that is the rows moving under it (`HandWatch.rowsMoved`). The card
-        // goes, as it names whatever row it stood on, and the row that came under a still hand lights and opens only
-        // once the hand has moved — its ask is kept (`displace`, below).
-        paneHand.rowsMoved()
+        if (read === true)
+            rowKeep.arriving()
+        pane.keepRows(kept)
+        // An entry the read took away takes its card with it, the hand inside or not: what it said is gone. Asked of
+        // the rows as now kept — the list lays out the row's going at its next polish.
+        entryKeep.forget(target => !kept.some(shown => "entry:" + shown.key === target.key), "gone")
+        if (read === true)
+            rowKeep.arrived()
+        else
+            paneHand.rowsMoved()
+    }
+    /// The entry a row stands for: the one at its number, found again by its key where a read has moved the entries
+    /// and not yet the row's number (the rows are told after the entries), and nothing for one that went.
+    function entryOf(key, at) {
+        const here = pane.entries[at]
+        if (here !== undefined && here.key === key)
+            return here
+        const found = pane.entries.find(entry => entry.key === key)
+        return found !== undefined ? found : pane.noEntry
+    }
+    /// What a row draws while it stands for no entry.
+    readonly property var noEntry: ({ "key": "", "mark": "", "tint": "transparent", "badged": false, "paired": false,
+                                      "title": "", "titleMarks": [], "listTitle": "", "listMarks": [], "at": 0,
+                                      "worktree": "", "worktreeMark": "tree", "parts": [], "byPart": false })
+    /// Turns the rows into `kept` by key: the rows no longer kept go, a kept one out of place moves up to its place,
+    /// a new one comes in at its place, and one that stayed takes its new number.
+    function keepRows(kept) {
+        const rows = pane.shownEntries
+        const wanted = ({})
+        for (let i = 0; i < kept.length; i++)
+            wanted[kept[i].key] = true
+        for (let i = rows.count - 1; i >= 0; i--) {
+            if (wanted[rows.get(i).key] !== true)
+                rows.remove(i)
+        }
+        for (let i = 0; i < kept.length; i++) {
+            const want = kept[i]
+            if (i < rows.count && rows.get(i).key === want.key) {
+                if (rows.get(i).at !== want.at)
+                    rows.setProperty(i, "at", want.at)
+                continue
+            }
+            let from = -1
+            for (let j = i + 1; j < rows.count; j++) {
+                if (rows.get(j).key === want.key) {
+                    from = j
+                    break
+                }
+            }
+            if (from >= 0) {
+                rows.move(from, i, 1)
+                rows.setProperty(i, "at", want.at)
+            } else {
+                rows.insert(i, want)
+            }
+        }
+        if (rows.count > kept.length)
+            rows.remove(kept.length, rows.count - kept.length)
     }
     /// The hand over the list (`HandWatch`), as the left panel keeps one: the rows read their light and their ask
-    /// off it by geometry — a row the list's scrolling or its re-dealing brought under a still hand lights as the row
-    /// under it, and its card waits for the hand to move.
+    /// off it by geometry — a row the list's scrolling or a read brought under a still hand lights as the row under
+    /// it, and its card waits for the hand to move.
     HandWatch {
         id: paneHand
     }
-    /// Automation only: the list and the hand, for a run that moves either (`tst_recoverpane`).
+    /// The row under the hand, kept where it was through a read of the log (`RowKeep`): an entry written in above it
+    /// — as far as the list can scroll.
+    readonly property RowKeep rowKeep: RowKeep {
+        id: rowKeep
+        hand: paneHand
+        views: [list]
+    }
+    /// Automation only: the list, the hand and the card, for a run that moves the first two or puts the hand in the
+    /// third (`tst_recoverpane`, `recover-reread`).
     readonly property alias entryList: list
     readonly property alias hand: paneHand
-    onEntriesChanged: pane.refilter()
-    onNowChanged: pane.refilter()
-    Component.onCompleted: pane.refilter()
-    /// Automation: the card is out, and for which entry (-1 for none).
+    readonly property alias entryHoverCard: entryCard
+    onEntriesChanged: pane.refilter(true)
+    onNowChanged: pane.refilter(true)
+    Component.onCompleted: pane.refilter(false)
+    /// Automation: the card is out, and for which entry (-1 for none) — where that entry stands now, a read having
+    /// moved it.
     readonly property bool cardOpen: entryCard.opened
-    property int cardAt: -1
+    readonly property int cardAt: entryCard.opened && entryCard.key !== ""
+                                  ? pane.entries.findIndex(entry => entry.key === entryCard.key) : -1
 
     /// The words an entry shows, which the filter reads: what it did in the row's words and the card's, where, what it
     /// took, and when — as the row writes its time and as its card does.
@@ -75,24 +146,30 @@ Rectangle {
 
     /// The hand is on `row`, or left it (`EntryRow`): the card opens on a rest and goes a beat after the hand has left
     /// the row and the card both — the seat's doing (`entryKeep`). Rows are recycled (`AppListView.reuseItems`), so
-    /// the target is the entry, and the row is asked again at the rest whether it still shows it.
+    /// the target is the entry — by its key, which a read leaves alone where it moves the entry's number — and the row
+    /// is asked again at the rest whether it still shows it.
     function pointEntry(row, inside, pointerX) {
-        const key = "entry:" + row.at
+        const key = "entry:" + row.key
         if (!inside) {
             entryKeep.unpoint(key)
             return
         }
         entryKeep.point({ "key": key, "row": row, "x": pointerX,
-                          "alive": () => row.visible && !row.pooled && "entry:" + row.at === key })
+                          "alive": () => row.visible && !row.pooled && "entry:" + row.key === key })
     }
     /// The rest ran out on `row`: its card opens under the pointer, as a graph row's does (`RowHoverHost.openRowCard`).
+    /// **Its words follow the entry while it stands** — by its key, not by the row, whose delegate a read may pool and
+    /// use for another entry: a read words the entry as it does, and the time moves on (§hover のツールチップ「外乱では
+    /// 閉じない」: what is still there changes its words). Placed once — a read that moves the row leaves the card where
+    /// it opened.
     function openCard(row, pointerX) {
-        entryCard.entry = row.entry
-        entryCard.when = pane.words.whenWords(row.entry.at, pane.now)
+        const key = row.key
+        entryCard.key = key
+        entryCard.entry = Qt.binding(() => pane.entryOf(key, -1))
+        entryCard.when = Qt.binding(() => pane.words.whenWords(entryCard.entry.at, pane.now))
         const at = row.mapToItem(pane, pointerX, row.height)
         entryCard.x = at.x
         entryCard.y = at.y
-        pane.cardAt = row.at
         entryCard.open()
     }
     /// Automation: a hand that has rested on the shown entry `index` — hover cannot be injected (verify-ui スキル), and
@@ -100,7 +177,7 @@ Rectangle {
     function restOnShown(index) {
         const row = list.itemAtIndex(index)
         if (row !== null)
-            entryKeep.point({ "key": "entry:" + row.at, "row": row, "x": row.width / 2 }, true)
+            entryKeep.point({ "key": "entry:" + row.key, "row": row, "x": row.width / 2 }, true)
         return row !== null
     }
 
@@ -222,9 +299,9 @@ Rectangle {
         anchors.bottom: parent.bottom
         model: pane.shownEntries
         // The rows moved under the hand: the reader's wheel and bar (`HandWatch.rowsMoved`) — the hand the rows' tips
-        // read too (`TipAsk.hand`).
+        // read too (`TipAsk.hand`). The list put back after a read tells the hand itself (`rowKeep`).
         rowsHand: paneHand
-        onContentYChanged: paneHand.rowsMoved()
+        onContentYChanged: if (!rowKeep.busy) paneHand.rowsMoved()
         delegate: EntryRow {
             pickedIndex: pane.picked
             page: pane.curPage
@@ -245,7 +322,7 @@ Rectangle {
     // An answer with nothing in it, or a filter that leaves nothing: not a row, so centred where the ring stood, as the
     // command log's empty list says its line (`CommandsPane`).
     Label {
-        visible: pane.curPage !== null && pane.curPage.recoverAnswered && pane.shownEntries.length === 0
+        visible: pane.curPage !== null && pane.curPage.recoverAnswered && pane.shownEntries.count === 0
         x: (pane.width - width) / 2
         y: filterRow.y + filterRow.height + (Theme.rowHeight - height) / 2
         // The words list and search boxes everywhere answer an empty search with (VS Code, Windows, Chrome).
@@ -278,8 +355,10 @@ Rectangle {
 
     RecoverHoverCard {
         id: entryCard
+        /// The key of the entry it words (`DiscardModel.keyAt`); "" while it is down.
+        property string key: ""
         textWidth: pane.width
-        onClosed: pane.cardAt = -1
+        onClosed: entryCard.key = ""
     }
     readonly property HoverSeat entryKeep: HoverSeat {
         id: entryKeep
@@ -290,25 +369,33 @@ Rectangle {
         blockedBy: pane.curPage !== null && pane.curPage.menuStanding ? "menu" : ""
         onOpenAsked: target => pane.openCard(target.row, target.x)
     }
+    // The rows moved under the hand: the card goes with its row's place — but for a read that moved them with the hand
+    // inside the card, which stays where it stands (デザイン規約 §hover のツールチップ「外乱では閉じない」).
     Connections {
         target: paneHand
-        function onRowsShifted() { entryKeep.displace("slid") }
+        function onRowsShifted() {
+            if (!(paneHand.disturbed && entryKeep.cardPointed))
+                entryKeep.displace("slid")
+        }
     }
 
     // One operation, in a left menu row's columns: its mark in the seat, what it did where the names begin, when at the
     // right edge. An inline component has its own ids, so the list's state comes in as properties.
     component EntryRow: Rectangle {
         id: row
-        /// `{entry, at}` — the entry as the list words it, and where it stands in the whole list.
-        required property var modelData
+        /// The entry across reads, and where it stands in the whole list (`shownEntries`).
+        required property string key
+        required property int at
+        /// Its place in the rows the filter leaves, which a read's keeper brings it back by (`RowKeep.land`).
+        required property int index
         property int pickedIndex: -1
         property var page: null
-        /// The list, whose words for a time and whose card the row uses.
+        /// The list, whose entries, words for a time and card the row uses.
         property var host: null
         property real now: 0
 
-        readonly property var entry: row.modelData.entry
-        readonly property int at: row.modelData.at
+        /// The entry as the list words it.
+        readonly property var entry: row.host !== null ? row.host.entryOf(row.key, row.at) : ({})
         readonly property bool isPicked: row.pickedIndex === row.at
 
         width: ListView.view ? ListView.view.width : 0
@@ -324,8 +411,8 @@ Rectangle {
         onHandMovesChanged: row.syncHand()
         readonly property int handShifts: row.paneHand !== null ? row.paneHand.shifts : 0
         onHandShiftsChanged: row.syncHand()
-        // The row's place in the list changed with the list where it was (the rows dealt again): told as a move
-        // (`GraphRowDelegate.placeMoved`).
+        // The row's place in the list changed with the list where it was (a filter typed): told as a move
+        // (`GraphRowDelegate.placeMoved`). A read's is the list's to weigh as it lands (`rowKeep`).
         onYChanged: row.placeMoved()
         function syncHand() {
             const hand = row.paneHand
@@ -346,7 +433,7 @@ Rectangle {
         }
         function placeMoved() {
             const hand = row.paneHand
-            if (hand === null || !row.visible || row.pooled)
+            if (hand === null || !row.visible || row.pooled || (row.host !== null && row.host.rowKeep.busy))
                 return
             if (!hand.known) {
                 hand.rowsMoved()
@@ -371,9 +458,12 @@ Rectangle {
         ListView.onPooled: {
             row.pooled = true
             row.pointerRowX = -1
+            // The entry it stood for left the list or the screen; its words' tip goes with it, but for the box the hand
+            // is reading (`Tips.dropIn`).
+            Tips.dropIn(row)
         }
         ListView.onReused: row.pooled = false
-        onAtChanged: row.pointerRowX = -1
+        onKeyChanged: row.pointerRowX = -1
         TapHandler {
             onTapped: row.page.pickRecover(row.at)
         }

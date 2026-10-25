@@ -1,4 +1,7 @@
+use std::ops::RangeInclusive;
+
 use super::*;
+use crate::models::notify::Edit;
 
 impl NavSectionModel {
     /// Shapes the arrived rows into the ones on screen — indented, folded,
@@ -179,15 +182,88 @@ impl NavSectionModel {
         }
     }
 
-    /// Re-arranges under one model reset, spelled as a begin/end pair —
-    /// `QAbstractItemModel` has no `reset` wrapper.
+    /// Re-arranges, and tells the view only the rows that went, came or
+    /// changed (`tell_rows`) — not a model reset, under which Qt destroys
+    /// every delegate and sends the view back to the top
+    /// (`QQuickItemView::modelUpdated` → `regenerate`): the row under the
+    /// hand, the tip it put out and the place the reader scrolled to would
+    /// all go with a read that moved one row elsewhere
+    /// (デザイン規約 §hover のツールチップ「外乱では閉じない」).
     pub(super) fn reshape(&mut self) {
-        self.begin_reset_model();
+        let before = std::mem::take(&mut self.shown_keys);
         self.arrange();
-        self.end_reset_model();
+        let after: Vec<u64> = (0..self.shown_rows()).map(|at| self.row_key(at)).collect();
+        self.tell_rows(&before, &after);
+        self.shown_keys = after;
+    }
+
+    /// What a row is across reads, whatever it shows: the ref, the file in
+    /// its bucket, the worktree's path, the folder — and a stash's commit,
+    /// since its selector moves down with every stash pushed over it.
+    fn row_key(&self, at: usize) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut key = std::collections::hash_map::DefaultHasher::new();
+        match self.row_at(at) {
+            Some(Row::Made(item)) => (0u8, &item.full, &item.bucket).hash(&mut key),
+            Some(Row::Shown { of, .. }) => match of {
+                Entry::Local(branch) => (1u8, &branch.short).hash(&mut key),
+                Entry::Remote(branch) => (2u8, &branch.short).hash(&mut key),
+                Entry::Tag(tag) => (3u8, &tag.short).hash(&mut key),
+                Entry::Stash(stash) => (4u8, stash.oid.to_hex()).hash(&mut key),
+                Entry::Worktree { entry, .. } => (5u8, &entry.path).hash(&mut key),
+                Entry::File { item, bucket } => (6u8, bucket as u8, item.path()).hash(&mut key),
+            },
+            None => {}
+        }
+        key.finish()
+    }
+
+    /// Tells the view how the rows `before` became the rows now arranged:
+    /// the runs that went (from the foot up, so the places above stay
+    /// true), the runs that came (from the head down), and a `dataChanged`
+    /// over the rows that stayed — whose fields may have moved (counts, a
+    /// mark). Between the steps `rowCount` and `data` answer the rows as Qt
+    /// holds them (`transit`).
+    fn tell_rows(&mut self, before: &[u64], after: &[u64]) {
+        // A model with no QObject attached (the tests) has no view to tell.
+        if qtbridge::QObjectHolder::try_get_rust_proxy_ptr(self).is_none() {
+            return;
+        }
+        let edit = edit_between(before, after);
+        let root = QModelIndex::default();
+        self.transit = Some(held_before(before.len(), &edit));
+        // No list told here nears i32::MAX rows.
+        let place = |at: usize| i32::try_from(at).unwrap_or(i32::MAX);
+        for run in edit.gone.iter().rev() {
+            self.begin_remove_rows(&root, place(*run.start()), place(*run.end()));
+            if let Some(held) = self.transit.as_mut() {
+                held_without(held, run);
+            }
+            self.end_remove_rows();
+        }
+        for run in &edit.come {
+            self.begin_insert_rows(&root, place(*run.start()), place(*run.end()));
+            if let Some(held) = self.transit.as_mut() {
+                held_with(held, run);
+            }
+            self.end_insert_rows();
+        }
+        self.transit = None;
+        let mut stayed = Vec::new();
+        for &(_, now) in &edit.kept {
+            push_run(&mut stayed, now);
+        }
+        for run in stayed {
+            let top = self.create_index(place(*run.start()), 0, 0);
+            let foot = self.create_index(place(*run.end()), 0, 0);
+            self.data_changed(&top, &foot);
+        }
     }
 
     pub(super) fn shown_rows(&self) -> usize {
+        if let Some(held) = &self.transit {
+            return held.len();
+        }
         match &self.arranged {
             Some(arranged) => arranged.len(),
             None => self.all.len(),
@@ -195,6 +271,10 @@ impl NavSectionModel {
     }
 
     pub(super) fn row_at(&self, at: usize) -> Option<Row<'_>> {
+        let at = match &self.transit {
+            Some(held) => (*held.get(at)?)? as usize,
+            None => at,
+        };
         match &self.arranged {
             Some(arranged) => self.read_arranged(arranged.get(at)?),
             None => Some(Row::Shown {
@@ -415,4 +495,30 @@ impl NavSectionModel {
             self.arranged.as_ref().map_or(0, Vec::len),
         );
     }
+}
+
+/// The rows as Qt holds them as `edit` starts to be told (`transit`): the
+/// rows before, each one that stays pointing at its place in the new
+/// arrangement, `None` for one on its way out.
+pub(super) fn held_before(before: usize, edit: &Edit) -> Vec<Option<u32>> {
+    let mut held = vec![None; before];
+    for &(was, now) in &edit.kept {
+        // A list of `u32::MAX` rows is far outside the memory budget.
+        held[was] = u32::try_from(now).ok();
+    }
+    held
+}
+
+/// …once the run `gone` (places before) went.
+pub(super) fn held_without(held: &mut Vec<Option<u32>>, gone: &RangeInclusive<usize>) {
+    held.drain(gone.clone());
+}
+
+/// …once the run `come` (places after) came: rows of the new arrangement,
+/// each at its own place — the runs above it have gone and come already.
+pub(super) fn held_with(held: &mut Vec<Option<u32>>, come: &RangeInclusive<usize>) {
+    held.splice(
+        *come.start()..*come.start(),
+        come.clone().map(|at| u32::try_from(at).ok()),
+    );
 }

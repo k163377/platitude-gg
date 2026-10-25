@@ -165,7 +165,7 @@ impl DiscardModel {
         }
         self.found
             .iter()
-            .position(|entry| entry_key(entry) == key)
+            .position(|entry| crate::encode::discard_key(entry) == key)
             .and_then(|at| i32::try_from(at).ok())
             .unwrap_or(-1)
     }
@@ -227,13 +227,6 @@ impl DiscardModel {
         }
         crate::hub::from_session(self.tab_id, |session| session.restore_discard(parts)).flatten()
     }
-}
-
-/// An entry as the same entry across reads: what was done, when, and on
-/// which tips — the index moves as entries come and go.
-fn entry_key(entry: &Discard) -> String {
-    let tips: Vec<String> = entry.parts.iter().map(|part| part.tip.to_hex()).collect();
-    format!("{:?} {} {}", entry.kind, entry.at, tips.join(","))
 }
 
 qml_register!(DiscardModel, "DiscardModel", singleton = false);

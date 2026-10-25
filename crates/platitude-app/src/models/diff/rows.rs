@@ -34,8 +34,8 @@ impl DiffModel {
     }
 
     /// Re-lays the rows as one column or two from the same patches and
-    /// colours — no read; the reader's place is kept as a re-read keeps it
-    /// (`rows_replacing`).
+    /// colours — no read. The rows come back as a whole new list, so the
+    /// reader's place is held across it (`rows_replacing`, `DiffScrollPlace`).
     pub(super) fn relay_rows(&mut self, split: bool) {
         self.split = split;
         if self.shown.is_none() {
@@ -61,13 +61,29 @@ impl DiffModel {
     }
 
     pub(super) fn lay_out_rows(&mut self, colors: &platitude_core::highlight::DiffColors) {
+        self.lay_out(colors, None);
+    }
+
+    /// Lays out a re-read of the file on screen over its rows, telling the
+    /// view only the rows that went, came or changed (`edit_notified`): a
+    /// row that stays keeps its delegate — the tip the hand is in, the place
+    /// the reader scrolled to (デザイン規約 §hover のツールチップ「外乱では閉じ
+    /// ない」). `before`: the rows on screen, keyed off the patches they were
+    /// laid out from (`row_keys`).
+    pub(super) fn lay_out_kept(&mut self, before: &[u64]) {
+        self.lay_out(&Default::default(), Some(before));
+    }
+
+    fn lay_out(&mut self, colors: &platitude_core::highlight::DiffColors, before: Option<&[u64]>) {
         let Some(patches) = self.shown.clone() else {
             return;
         };
         // A selection left standing would point by position into the new
         // rows.
         self.forget_selection();
-        self.reset();
+        if before.is_none() {
+            self.reset();
+        }
         let rows = line_items(
             &patches,
             !self.shown_has_preview,
@@ -86,7 +102,16 @@ impl DiffModel {
         self.widest_lines = widest_lines(&patches, colors);
         self.rows_gen = self.rows_gen.wrapping_add(1);
         self.commit_bands = patches.iter().filter(|p| !p.from_commit.is_empty()).count() as i32;
-        self.extend_notified(rows);
+        match before {
+            Some(before) => {
+                let edit = edit_between(
+                    before,
+                    &row_keys(&patches, !self.shown_has_preview, self.split),
+                );
+                self.edit_notified(&edit, rows);
+            }
+            None => self.extend_notified(rows),
+        }
         // A query standing over the old rows stands over these.
         self.refind();
         if crate::harness::memprobe::enabled() {
@@ -219,6 +244,37 @@ pub(super) fn line_items(
     }
 }
 
+/// One key per row [`line_items`] lays out of these patches — what a re-read
+/// of the same file keeps a row by (`DiffModel::lay_out_kept`): its kind and
+/// its line as git printed it, and for a hunk's header its heading alone, the
+/// numbers moving with every line above. The colours and the marks laid
+/// over a line come and go on their own.
+pub(super) fn row_keys(patches: &[FilePatch], binary_note: bool, split: bool) -> Vec<u64> {
+    fn said(row: &DiffRow) -> (&'static str, &str) {
+        let text = if row.kind == "hunk" {
+            row.text.splitn(3, "@@").nth(2).unwrap_or("")
+        } else {
+            row.text.as_str()
+        };
+        (row.kind, text)
+    }
+    fn key_of(parts: impl std::hash::Hash) -> u64 {
+        use std::hash::Hasher;
+        let mut key = std::collections::hash_map::DefaultHasher::new();
+        parts.hash(&mut key);
+        key.finish()
+    }
+    let rows = flatten_patches(patches, binary_note, &Default::default(), None);
+    if split {
+        pair_rows(rows)
+            .iter()
+            .map(|row| key_of((said(&row.left), row.right.as_ref().map(said))))
+            .collect()
+    } else {
+        rows.iter().map(|row| key_of(said(row))).collect()
+    }
+}
+
 /// One line as one row; `pair_line` -1 says the right side is empty.
 fn line_item(r: DiffRow) -> DiffLineItem {
     DiffLineItem {
@@ -287,4 +343,129 @@ pub(crate) fn wanted(msgs: Vec<DiffMsg>, key: &str) -> Vec<DiffMsg> {
     msgs.into_iter()
         .filter(|msg| diff_key(msg.target()) == key)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::notify::runs_of;
+    use platitude_core::parse::diff::parse_patch;
+
+    /// How a re-read moved the rows, by the keys the model keeps them by.
+    fn edit(before: &str, after: &str, split: bool) -> crate::models::notify::Edit {
+        let keys = |patch: &str| row_keys(&parse_patch(patch.as_bytes()), true, split);
+        edit_between(&keys(before), &keys(after))
+    }
+
+    const BEFORE: &str = "\
+--- a/notes.txt
++++ b/notes.txt
+@@ -1,3 +1,3 @@ fn main
+ one
+-two
++deux
+ three
+";
+    /// A line written in at the top of the hunk: the hunk's numbers move, the
+    /// rest stays (`DiffModel::lay_out_kept`).
+    const LINE_ABOVE: &str = "\
+--- a/notes.txt
++++ b/notes.txt
+@@ -1,3 +1,4 @@ fn main
++zero
+ one
+-two
++deux
+ three
+";
+
+    #[test]
+    fn a_line_written_in_above_comes_and_the_rows_below_and_the_heading_stay() {
+        let moved = edit(BEFORE, LINE_ABOVE, false);
+        assert_eq!(moved.come, runs_of([1]), "the new line, under the header");
+        assert!(moved.gone.is_empty());
+        assert_eq!(moved.kept, vec![(0, 0), (1, 2), (2, 3), (3, 4), (4, 5)]);
+    }
+
+    #[test]
+    fn side_by_side_the_rows_are_kept_by_both_their_sides() {
+        let moved = edit(BEFORE, LINE_ABOVE, true);
+        // header, one, two|deux, three — then header, |zero, one, two|deux, three.
+        assert_eq!(moved.come, runs_of([1]));
+        assert_eq!(moved.kept, vec![(0, 0), (1, 2), (2, 3), (3, 4)]);
+    }
+
+    /// The change staged out of the hunk: `two` / `deux` left as `deux`.
+    const STAGED: &str = "\
+--- a/notes.txt
++++ b/notes.txt
+@@ -1,3 +1,3 @@ fn main
+ one
+ deux
+ three
+";
+
+    #[test]
+    fn a_line_staged_out_of_the_hunk_goes_alone() {
+        let moved = edit(BEFORE, STAGED, false);
+        // `two` / `deux` went and `deux` came back as context: a line of
+        // another kind is another row.
+        assert_eq!(moved.gone, runs_of([2, 3]));
+        assert_eq!(moved.come, runs_of([2]));
+        assert_eq!(moved.kept, vec![(0, 0), (1, 1), (4, 3)]);
+    }
+
+    /// The rows a read of the same file leaves are the rows a fresh layout
+    /// of it lays out — either way round, one column or two: the runs that
+    /// went and came spliced at their places, the rows that stayed
+    /// rewritten (`impl_edit_notified!`; no QObject here, so the rows
+    /// alone).
+    #[test]
+    fn a_read_laid_out_over_the_rows_leaves_the_rows_a_fresh_layout_lays_out() {
+        let said = |rows: &[DiffLineItem]| {
+            rows.iter()
+                .map(|row| {
+                    let sides = (row.kind.clone(), row.text.clone(), row.pair_kind.clone());
+                    (
+                        sides,
+                        row.pair_text.clone(),
+                        row.old_no,
+                        row.new_no,
+                        row.hunk,
+                        row.line,
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        let pairs = [
+            (BEFORE, LINE_ABOVE),
+            (LINE_ABOVE, BEFORE),
+            (BEFORE, STAGED),
+            (STAGED, LINE_ABOVE),
+        ];
+        for split in [false, true] {
+            for (before, after) in pairs {
+                let was = parse_patch(before.as_bytes());
+                let mut model = DiffModel {
+                    lines: line_items(&was, true, &Default::default(), None, split),
+                    split,
+                    ..DiffModel::default()
+                };
+                model.shown = Some(std::sync::Arc::new(parse_patch(after.as_bytes())));
+                model.lay_out_kept(&row_keys(&was, true, split));
+                let fresh = line_items(
+                    &parse_patch(after.as_bytes()),
+                    true,
+                    &Default::default(),
+                    None,
+                    split,
+                );
+                assert_eq!(
+                    said(&model.lines),
+                    said(&fresh),
+                    "{before:?} read again as {after:?}, two columns: {split}"
+                );
+            }
+        }
+    }
 }

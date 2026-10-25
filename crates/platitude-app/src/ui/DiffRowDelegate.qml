@@ -198,10 +198,22 @@ Rectangle {
              : kind === "" ? Theme.bgElevated
              : "transparent"
     }
-    /// A heading is line -1, so a hunk named without a line means the heading.
-    readonly property bool underPointer: diffRow.hoverHunk === diffRow.hunk && diffRow.hoverLine === diffRow.line
-    readonly property bool pairUnderPointer: diffRow.pair_line >= 0 && diffRow.hoverHunk === diffRow.hunk
+    /// A heading is line -1, so a hunk named without a line means the heading. Not while pooled: the row that read
+    /// took out keeps the place it named (`pooled`).
+    readonly property bool underPointer: !diffRow.pooled && diffRow.hoverHunk === diffRow.hunk
+                                         && diffRow.hoverLine === diffRow.line
+    readonly property bool pairUnderPointer: !diffRow.pooled && diffRow.pair_line >= 0
+                                             && diffRow.hoverHunk === diffRow.hunk
                                              && diffRow.hoverLine === diffRow.pair_line
+    /// Pooled, the delegate stays `visible` where its row last stood (`NavItemDelegate.pooled`) — a line a read of the
+    /// file took out, or one it pushed past the view's cache — and still names its hunk and line: nothing on it answers
+    /// the pointer, and its tips go but for the box the hand is reading (`Tips.dropIn`).
+    property bool pooled: false
+    ListView.onPooled: {
+        diffRow.pooled = true
+        Tips.dropIn(diffRow)
+    }
+    ListView.onReused: diffRow.pooled = false
     /// The pointer is on this hunk's heading, so the whole hunk lights — only the heading does it
     /// (デザイン規約 §diff の中のステージ).
     readonly property bool inAimedHunk: diffRow.partial && diffRow.hoverLine < 0 && diffRow.hoverHunk === diffRow.hunk

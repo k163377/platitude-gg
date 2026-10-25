@@ -75,7 +75,9 @@ impl DiscardModel {
     /// parts' tips — "" for none: [`Self::index_of_key`] finds it again.
     #[qslot]
     fn key_at(&self, index: i32) -> String {
-        self.entry(index).map(entry_key).unwrap_or_default()
+        self.entry(index)
+            .map(crate::encode::discard_key)
+            .unwrap_or_default()
     }
 
     /// Where the entry [`Self::key_at`] named stands now, -1 where this read

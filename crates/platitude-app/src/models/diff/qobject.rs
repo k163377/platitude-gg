@@ -66,14 +66,27 @@ impl DiffModel {
     #[qsignal]
     pub(super) fn changed(&mut self);
 
-    /// The rows on screen are about to be swapped (a re-read of the same
-    /// file, or a re-lay) — emitted before any moves, so `DiffScrollPlace`
+    /// The rows on screen are about to be swapped for one column's or two
+    /// (`relay_rows`) — emitted before any moves, so `DiffScrollPlace`
     /// takes the place off a view still standing.
     ///
-    /// Handlers must not call back into this model: `drain` / `relay_rows`
-    /// hold the borrow while it goes out.
+    /// Handlers must not call back into this model: `relay_rows` holds the
+    /// borrow while it goes out.
     #[qsignal]
     pub(super) fn rows_replacing(&mut self);
+
+    /// A re-read of the file on screen is about to move its rows
+    /// (`lay_out_kept`, a write of this window's or an edit from outside):
+    /// what moves on screen from here to `rows_arrived` is the read's, no
+    /// reader's doing (デザイン規約 §hover のツールチップ「外乱では閉じない」).
+    /// Handlers must not call back into this model, as above.
+    #[qsignal]
+    pub(super) fn rows_arriving(&mut self);
+
+    /// …and the rows it brought are in, the properties told: the pane weighs
+    /// where the row under the hand went (`RowKeep.arrived`).
+    #[qsignal]
+    pub(super) fn rows_arrived(&mut self);
 
     #[qslot]
     fn attach(&mut self, tab_id: i32) {
@@ -434,10 +447,12 @@ impl DiffModel {
         // Only a batch carrying rows takes it — the colours are a second
         // message about a read already answered.
         let asked = carries_rows.then(|| self.requested_at.take()).flatten();
-        // Only where there is a place to lose: rows for an empty pane are
-        // a pane opening.
-        if !self.lines.is_empty() && carries_rows {
-            self.rows_replacing();
+        // Rows over rows on screen are the same file read again
+        // (`begin_request_in` empties the pane for another): they move only
+        // the rows that changed. Rows for an empty pane are a pane opening.
+        let rereading = !self.lines.is_empty() && carries_rows;
+        if rereading {
+            self.rows_arriving();
         }
         for msg in mine {
             match msg {
@@ -472,12 +487,21 @@ impl DiffModel {
                     self.fingerprint = format!("{fingerprint:016x}");
                     self.apply_endings(endings.as_ref());
                     self.apply_preview(preview.as_deref());
+                    // The rows on screen, keyed off what they were laid out
+                    // from, before that is replaced.
+                    let before = (!self.lines.is_empty())
+                        .then_some(self.shown.as_ref())
+                        .flatten()
+                        .map(|shown| row_keys(shown, !self.shown_has_preview, self.split));
                     self.shown_has_preview = preview.is_some();
                     self.shown = Some(patches);
                     self.shown_marks = marks;
                     self.shown_colors = Default::default();
                     self.coloured = false;
-                    self.lay_out_rows(&Default::default());
+                    match before {
+                        Some(keys) => self.lay_out_kept(&keys),
+                        None => self.lay_out_rows(&Default::default()),
+                    }
                 }
                 DiffMsg::Coloured {
                     colors, settled, ..
@@ -493,6 +517,9 @@ impl DiffModel {
             }
         }
         self.changed();
+        if rereading {
+            self.rows_arrived();
+        }
         if let Some(t0) = asked {
             tracing::info!(
                 elapsed_ms = t0.elapsed().as_millis() as u64,

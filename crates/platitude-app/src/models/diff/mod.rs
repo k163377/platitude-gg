@@ -18,7 +18,10 @@ use crate::encode::{
 use crate::hub::{DiffMsg, Feed};
 
 use super::text_position::{LayoutPosition, SelectionEnds, SourcePosition};
-use super::{impl_extend_notified, impl_notify_runs, push_run, qml_register};
+use super::{
+    edit_between, impl_edit_notified, impl_extend_notified, impl_notify_runs, push_run,
+    qml_register,
+};
 
 mod find;
 #[cfg(test)]
@@ -29,9 +32,9 @@ mod selection;
 #[cfg(test)]
 mod selection_tests;
 
-use rows::bucket_target;
 /// Re-exported for `models::diff_tests` (`rows` is private).
 pub(super) use rows::wanted;
+use rows::{bucket_target, row_keys};
 
 /// One row of the pane. As one column, a row is one line of the diff and
 /// the `pair_*` roles are empty; side by side (`split`), the old side's
@@ -311,4 +314,5 @@ impl QListModel for DiffModel {
 }
 
 impl_extend_notified!(DiffModel, lines, DiffLineItem);
+impl_edit_notified!(DiffModel, lines, DiffLineItem);
 impl_notify_runs!(DiffModel);

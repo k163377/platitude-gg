@@ -14,7 +14,7 @@ use crate::encode::{Fields, Landed, Landing, Listed, One, Optional, Record, fiel
 use crate::hub::{CarriedStatusMsg, Feed, Hub, RefsMsg, StatusMsg, attached};
 
 use super::pathtree::DirNode;
-use super::qml_register;
+use super::{edit_between, push_run, qml_register};
 
 /// One remote carrying a tag's name, and whether it stands somewhere
 /// other than where the remote this window acts on has it
@@ -268,6 +268,16 @@ pub struct NavSectionModel {
     /// they are the source's rows in its own order (a section with no
     /// tree and no filter, e.g. tags, skips an index per row).
     arranged: Option<Vec<Arranged>>,
+    /// One key per row on screen, in screen order (`view::row_key`): what
+    /// the next reshape weighs its rows against, so that a read moving a
+    /// few rows tells Qt of those alone and every other row keeps its
+    /// delegate (`view::tell_rows`).
+    shown_keys: Vec<u64>,
+    /// The rows as Qt holds them while a reshape is being told — each one
+    /// a row of the new arrangement, or `None` for one on its way out — so
+    /// that `rowCount` and `data` answer every step of the telling. `None`
+    /// outside it.
+    transit: Option<Vec<Option<u32>>>,
     /// Whether a tree placed these rows — the one thing that gives a
     /// **ref** row a full name (every other kind of row arrives with
     /// one). A filtered list stands in no tree, so its refs have none.

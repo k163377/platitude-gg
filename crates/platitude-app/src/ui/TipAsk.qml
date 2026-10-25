@@ -99,6 +99,11 @@ QtObject {
             if (ask.seat !== null)
                 ask.seat.slid(ask)
         }
+        // A row a read pushed past its view's cache stands again: the box held off its pooled delegate is this ask's
+        // again where it is the row's (`Tips.takeBack`).
+        function onRowBack(row) {
+            Tips.takeBack(ask, row)
+        }
     }
     Component.onCompleted: {
         ask.keyNow = Tips.key()

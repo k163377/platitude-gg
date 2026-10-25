@@ -41,19 +41,65 @@ QtObject {
         }
         return null
     }
+    /// The box `dropIn` held off a pooled row — the seat's ask holding it — and its seat; null for none (`takeBack`,
+    /// `settleParked`).
+    property var parked: null
+    property var parkedSeat: null
     /// A key for one ask, unique for the window's life.
     property int keys: 0
     function key() {
         tips.keys++
         return "tip:" + tips.keys
     }
+    /// The tip standing or resting on a target inside `item` goes now: `item` stands for something else from here (a
+    /// row that left the list or the screen, which the list pools — `ListView.onPooled`). **But the box the hand is
+    /// reading, its row pushed off by a read** (`HandWatch.reading`), stays where it stands, held off the delegate
+    /// (`TipSeat.detach`) until the hand leaves it: the row is still there, and the read's keeper stands it again
+    /// (`takeBack`) or finds it went (`settleParked`).
+    function dropIn(item) {
+        const seat = tips.seatFor(item)
+        if (seat === null || seat.current === null || !tips.within(seat.current.target, item))
+            return
+        const hand = seat.current.hand
+        if (seat.pointed && hand !== null && hand.reading) {
+            seat.detach()
+            tips.parked = seat.current
+            tips.parkedSeat = seat
+        } else {
+            seat.drop(seat.current)
+        }
+    }
+    /// `ask`, one of a row a read's keeper stood again (`HandWatch.rowBack`), takes back the box held off the row's
+    /// pooled delegate (`TipSeat.takeBack`).
+    function takeBack(ask, row) {
+        const seat = tips.parkedSeat
+        if (seat !== null && tips.parked !== null && seat.current === tips.parked)
+            seat.takeBack(ask, row)
+    }
+    /// A read's keeper's word on the box `dropIn` parked (`RowKeep`): the row it came off went with the read
+    /// (`gone`), and it goes too, the hand in it or not (§「外乱では閉じない」: what is gone closes); else it stays where
+    /// it stands until the hand leaves it.
+    function settleParked(gone) {
+        const ask = tips.parked
+        const seat = tips.parkedSeat
+        tips.parked = null
+        tips.parkedSeat = null
+        if (gone && seat !== null && ask !== null && seat.current === ask)
+            seat.drop(ask)
+    }
     /// Whether the tip standing was raised by a target inside `item` (the card that keeps itself up for it).
     function shownIn(item) {
         const seat = tips.seat
-        if (seat === null || !seat.shownNow || seat.current === null || item === null || item === undefined)
+        if (seat === null || !seat.shownNow || seat.current === null)
             return false
-        for (let at = seat.current.target; at !== null && at !== undefined; at = at.parent) {
-            if (at === item)
+        return tips.within(seat.current.target, item)
+    }
+    /// Whether `item` is `outer` or inside it; false for no `outer`.
+    function within(item, outer) {
+        if (outer === null || outer === undefined)
+            return false
+        for (let at = item; at !== null && at !== undefined; at = at.parent) {
+            if (at === outer)
                 return true
         }
         return false

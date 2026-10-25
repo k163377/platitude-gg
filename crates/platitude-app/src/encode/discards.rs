@@ -9,6 +9,10 @@ use super::wire::{Fields, Listed, Record, field};
 /// One operation that took something away.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiscardRow {
+    /// The entry's identity across reads ([`discard_key`]): what the log's
+    /// rows are kept by as a read moves them (`RecoverPane.refilter`), and
+    /// what the entry picked is found again by.
+    pub key: String,
     /// What it was, by [`kind_word`].
     pub kind: String,
     /// What it happened to: the branch, the tag, the worktree's folder,
@@ -68,6 +72,7 @@ pub fn discard_rows(found: &[Discard]) -> DiscardRows {
         found
             .iter()
             .map(|discard| DiscardRow {
+                key: discard_key(discard),
                 kind: kind_word(discard.kind).to_string(),
                 name: discard.name.clone(),
                 remote: discard.remote.clone(),
@@ -80,6 +85,14 @@ pub fn discard_rows(found: &[Discard]) -> DiscardRows {
             })
             .collect(),
     )
+}
+
+/// An entry's identity across reads — its kind, its moment and its parts'
+/// tips: a read again lists the same operation the same, and one that came
+/// or went since stands apart.
+pub fn discard_key(discard: &Discard) -> String {
+    let tips: Vec<String> = discard.parts.iter().map(|part| part.tip.to_hex()).collect();
+    format!("{:?} {} {}", discard.kind, discard.at, tips.join(","))
 }
 
 fn part_row(part: &Part) -> DiscardPart {
@@ -175,6 +188,7 @@ pub fn shown_matches(shown: &[String], line: &str) -> bool {
 impl Record for DiscardRow {
     fn to_map(&self) -> QVariantMap {
         Fields::new()
+            .put("key", &self.key)
             .put("kind", &self.kind)
             .put("name", &self.name)
             .put("remote", &self.remote)
@@ -189,6 +203,7 @@ impl Record for DiscardRow {
 
     fn from_map(map: &QVariantMap) -> Result<Self, ()> {
         Ok(Self {
+            key: field(map, "key")?,
             kind: field(map, "kind")?,
             name: field(map, "name")?,
             remote: field(map, "remote")?,

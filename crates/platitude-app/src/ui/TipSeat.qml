@@ -88,9 +88,59 @@ Item {
     /// its rest: one under a hand the rows moved under has already let go (`TipAsk.live`), so what keeps asking is a
     /// target the hand is not on — a stand-in a run wrote, a hand the surface cannot hear. Another target's box, or an
     /// ask kept for one behind a menu, is not this target's to touch.
+    ///
+    /// **A read that moved the rows leaves the box the hand is in where it stands** (`HandWatch.disturbed`; デザイン規約
+    /// §hover のツールチップ「外乱では閉じない」): its target moved, so the box comes off it and stays put in the window
+    /// (`park`) — following the row, it would slide from under the hand reading it.
     function slid(a) {
-        if (machine.target === a)
-            machine.displace("slid")
+        if (machine.target !== a)
+            return
+        if (a.hand !== null && a.hand.disturbed && seat.pointed && machine.shown) {
+            seat.park()
+            return
+        }
+        machine.displace("slid")
+    }
+    /// The box stands where the hand found it, off its target, until it goes; the next coming out seats it afresh
+    /// (`freeze`). Not where it stands now: a box rides its target's place, and has moved with the rows by the time
+    /// they say so.
+    function park() {
+        box.parent = seat.host
+        box.x = seat.readAt.x
+        box.y = seat.readAt.y
+    }
+    /// Where the box stood in `host` as the hand came into it.
+    property point readAt: Qt.point(0, 0)
+    /// The box parked off a row a read pushed past its view's cache (`Tips.dropIn`) says what it said, held by the
+    /// seat's own ask (`heldAsk`): the view goes on to use the row's delegate for another row, or lets it go, and the
+    /// box stays with the hand all the same. The ask moves with the rows' hand, so their moves still reach the box
+    /// (`slid`).
+    function detach() {
+        const ask = machine.target
+        seat.park()
+        if (ask === null || ask === heldAsk)
+            return
+        heldAsk.words = ask.words
+        heldAsk.marks = ask.marksNow
+        heldAsk.markWord = ask.markWordNow
+        heldAsk.markKind = ask.markKindNow
+        heldAsk.place = ask.place
+        heldAsk.href = ask.href
+        heldAsk.rowSide = ask.rowSide
+        heldAsk.beside = ask.beside
+        heldAsk.hand = ask.hand
+        machine.retarget(heldAsk)
+    }
+    /// …and the row standing again (`HandWatch.rowBack`): its ask saying the same words takes the box back on, as the
+    /// target it came off — the box follows its words again, and the hand walking back onto the row is on its target.
+    function takeBack(ask, row) {
+        if (machine.target === heldAsk && ask !== heldAsk && ask.words === heldAsk.words
+                && Tips.within(ask.target, row))
+            machine.retarget(ask)
+    }
+    readonly property TipAsk heldAsk: TipAsk {
+        id: heldAsk
+        target: seat
     }
 
     readonly property HoverSeat machine: HoverSeat {
@@ -117,6 +167,8 @@ Item {
     }
     // The hand reached the box: a hold; letting go starts the beat.
     onPointedChanged: {
+        if (seat.pointed && box.background !== null)
+            seat.readAt = box.background.mapToItem(seat.host, 0, 0)
         machine.hold("inside", seat.pointed)
         seat.cover()
     }

@@ -83,6 +83,42 @@ Rectangle {
         alsoOver: peek.hover
     }
     readonly property alias hand: paneHand
+    /// The row under the panel's hand, kept where it was through a read (`RowKeep`): a branch written in above it, the
+    /// section above growing — as far as its list can scroll. The sections are laid out first: a section's height is
+    /// its rows', and the column places them at the next polish.
+    readonly property RowKeep rowKeep: RowKeep {
+        id: rowKeep
+        hand: paneHand
+        views: [sections.listOf("branch"), sections.listOf("remote"), sections.listOf("worktree"),
+                sections.listOf("stash"), sections.listOf("tag"), peek.list]
+        layout: sections
+    }
+    // Every section's reads, whichever moved the rows (`NavSectionModel.rowsArriving` … `rowsArrived`).
+    Connections {
+        target: sidebar.branchesModel
+        function onRowsArriving() { rowKeep.arriving() }
+        function onRowsArrived() { rowKeep.arrived() }
+    }
+    Connections {
+        target: sidebar.remotesModel
+        function onRowsArriving() { rowKeep.arriving() }
+        function onRowsArrived() { rowKeep.arrived() }
+    }
+    Connections {
+        target: sidebar.worktreesModel
+        function onRowsArriving() { rowKeep.arriving() }
+        function onRowsArrived() { rowKeep.arrived() }
+    }
+    Connections {
+        target: sidebar.stashesModel
+        function onRowsArriving() { rowKeep.arriving() }
+        function onRowsArrived() { rowKeep.arrived() }
+    }
+    Connections {
+        target: sidebar.tagsModel
+        function onRowsArriving() { rowKeep.arriving() }
+        function onRowsArrived() { rowKeep.arrived() }
+    }
     property alias activeKey: rowGestures.activeKey
     property alias editKey: rowGestures.editKey
     /// Automation only: whether the box refuses what is typed, and its line — a frame colour and a tooltip.

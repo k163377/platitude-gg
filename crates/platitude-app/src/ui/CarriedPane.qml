@@ -58,9 +58,17 @@ ColumnLayout {
         id: paneHand
     }
     readonly property alias hand: paneHand
+    /// The row under the hand, kept where it was through that worktree's status read (`RowKeep`), as far as the list
+    /// can scroll; what it cannot take back moves under the hand as the read's.
+    readonly property RowKeep rowKeep: RowKeep {
+        id: rowKeep
+        hand: paneHand
+        views: [fileList]
+    }
     Connections {
         target: carriedPane.files
-        function onModelReset() { paneHand.rowsMoved() }
+        function onRowsArriving() { rowKeep.arriving() }
+        function onRowsArrived() { rowKeep.arrived() }
     }
 
     FileRowWalk {
@@ -144,9 +152,10 @@ ColumnLayout {
         model: carriedPane.files
         verticalBar: PaneScrollBar {}
         rowsHand: paneHand
-        onContentYChanged: paneHand.rowsMoved()
-        onCountChanged: paneHand.rowsMoved()
-        onYChanged: paneHand.rowsMoved()
+        // A move the read made is told by the keeper, as the read lands (`rowKeep`).
+        onContentYChanged: if (!rowKeep.busy) paneHand.rowsMoved()
+        onCountChanged: if (!rowKeep.busy) paneHand.rowsMoved()
+        onYChanged: if (!rowKeep.busy) paneHand.rowsMoved()
         // The arrows are answered by the walk above: Qt's own key navigation moves `currentIndex` and tells nobody.
         keyNavigationEnabled: false
         Keys.onUpPressed: event => event.accepted = fileWalk.stepFile(-1, event.isAutoRepeat)

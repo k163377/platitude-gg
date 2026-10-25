@@ -149,8 +149,10 @@ Rectangle {
     // so a handler there runs on every search and, asking the model, calls itself without end (rules-refs/app-ui.md).
     readonly property int rowsGen: diffPane.diffModel.rowsGen
     onRowsGenChanged: {
-        // The rows laid out again are rows moved under the hand (`diffHand`).
-        diffHand.rowsMoved()
+        // The rows laid out again are rows moved under the hand (`diffHand`) — but for the file read again, whose rows
+        // that stayed the pane puts back under the hand (`rowKeep`).
+        if (!rowKeep.busy)
+            diffHand.rowsMoved()
         if (findBar.open)
             diffPane.diffModel.findFrom(diffList.firstVisibleRow())
     }
@@ -234,6 +236,20 @@ Rectangle {
         id: diffHand
     }
     readonly property alias hand: diffHand
+    /// The row under the hand, kept where it was through a read of the same file (`RowKeep`) — a write of this
+    /// window's, an edit from outside: the model moves only the rows that changed (`DiffModel.rowsArriving` …
+    /// `rowsArrived`), and the lines written in or taken out above the hand's are taken back by the scroll, as far as
+    /// it goes.
+    readonly property RowKeep rowKeep: RowKeep {
+        id: rowKeep
+        hand: diffHand
+        views: [diffList]
+    }
+    Connections {
+        target: diffPane.diffModel
+        function onRowsArriving() { rowKeep.arriving() }
+        function onRowsArrived() { rowKeep.arrived() }
+    }
     Connections {
         target: codeScroll
         function onOffsetChanged() { diffHand.rowsMoved() }
@@ -395,8 +411,6 @@ Rectangle {
         id: scrollPlace
         view: diffList
     }
-    /// Automation: where the rebuild put the view back, and -1 until it has put it anywhere.
-    readonly property real placeLandedY: scrollPlace.landedY
     function holdScroll() { scrollPlace.hold() }
     function restoreScroll() { scrollPlace.restore() }
     function dropScroll() { scrollPlace.drop() }
@@ -532,9 +546,11 @@ Rectangle {
             ownsHand: false
             model: diffPane.diffModel
             rowsHand: diffHand
-            // The rows the write asked for have landed. The filled half only — a reset shows up here as zero first.
+            // The rows the write asked for have landed. The filled half only — a reset shows up here as zero first. A
+            // read of the same file is the pane's to tell the hand of (`rowKeep`).
             onCountChanged: {
-                diffHand.rowsMoved()
+                if (!rowKeep.busy)
+                    diffHand.rowsMoved()
                 if (count > 0) {
                     diffPane.restoreScroll()
                     pointedRowTimer.restart()
@@ -542,10 +558,11 @@ Rectangle {
             }
             // A row moving under a pointer standing still is the same question as the pointer moving over the rows.
             onContentYChanged: {
-                diffHand.rowsMoved()
+                if (!rowKeep.busy)
+                    diffHand.rowsMoved()
                 diffPane.settlePointedRow()
             }
-            onYChanged: diffHand.rowsMoved()
+            onYChanged: if (!rowKeep.busy) diffHand.rowsMoved()
             // An image with no text rows hands its space to the preview (SVG edits keep both).
             visible: diffPane.diffModel.previewKind !== "image" || count > 0
             /// How far down the view can go, and the one clamp every hand that sends it shares (デザイン規約 §diff を上下に送る).

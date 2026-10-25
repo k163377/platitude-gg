@@ -210,14 +210,15 @@ AppListView {
         if (navList.paneHand !== null && (wheelGlide.sending || navList.moving || navList.hand.scrolling))
             navList.paneHand.rowsMoved()
     }
-    // The section's model rebuilt its rows (every arrival resets it): the open row is weighed again
-    // (`SidebarRowGestures.rowsRebuilt`).
+    // The section's rows changed (`NavSectionModel.changed` — a read, or the reader's filter, fold or delete, which takes
+    // the name off the list at the press): the open row is weighed again (`SidebarRowGestures.rowsRebuilt`) — a turn
+    // later, as the model is still telling its news, which the weighing asks it (`rowOfName`).
     Connections {
-        // A test's stand-in model has no reset to tell of.
-        target: navList.sectionModel && navList.sectionModel.modelReset !== undefined ? navList.sectionModel : null
-        function onModelReset() {
+        // A test's stand-in model brings no read.
+        target: navList.sectionModel && navList.sectionModel.rowsArrived !== undefined ? navList.sectionModel : null
+        function onChanged() {
             if (navList.gestures)
-                navList.gestures.rowsRebuilt()
+                Qt.callLater(navList.gestures.rowsRebuilt)
         }
     }
     function keepOpenRowInView() {

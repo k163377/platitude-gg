@@ -3,6 +3,7 @@
 
 use super::testkit::*;
 use super::*;
+use crate::models::notify::{Edit, runs_of};
 
 /// The match reads the whole name, and the row is still named to git by
 /// it (`build_remote_groups`).
@@ -409,4 +410,112 @@ fn a_filtered_list_leaves_out_the_row_shown_as_gone_as_well() {
     );
     assert_eq!(says(&model, 1, Role::Full), "origin/feature/two");
     assert_eq!(model.total, 1);
+}
+
+/// How a read moved the rows on screen, weighed by their keys
+/// (`view::row_key`) as the reshape weighs them.
+fn kept_across(model: &mut NavSectionModel, arrived: Source) -> Edit {
+    let before = model.shown_keys.clone();
+    model.take(arrived);
+    model.reshape();
+    crate::models::edit_between(&before, &model.shown_keys)
+}
+
+/// A read that writes a branch in between two others tells the one row
+/// that came: the rows either side stay, with their delegates
+/// (デザイン規約 §hover のツールチップ「外乱では閉じない」).
+#[test]
+fn a_branch_written_in_comes_and_the_rows_either_side_stay() {
+    let mut model = section(
+        "branches",
+        Source::Locals(locals(vec![local("alpha", false), local("gamma", true)])),
+    );
+    model.reshape();
+    let edit = kept_across(
+        &mut model,
+        Source::Locals(locals(vec![
+            local("alpha", false),
+            local("beta", false),
+            local("gamma", true),
+        ])),
+    );
+    assert_eq!(edit.come, runs_of([1]));
+    assert!(edit.gone.is_empty());
+    assert_eq!(edit.kept, vec![(0, 0), (1, 2)]);
+}
+
+/// A stash pushed over the others moves every selector down a place: the
+/// rows are the same stashes all the same, kept by their commits.
+#[test]
+fn a_stash_pushed_over_the_others_leaves_them_standing() {
+    let entry = |name: &str, digit: &str| platitude_core::stash::StashEntry {
+        name: name.to_string(),
+        oid: oid(digit),
+        time: 0,
+        message: format!("WIP {digit}"),
+        stands: None,
+    };
+    let mut model = section(
+        "stashes",
+        Source::Stashes(vec![entry("stash@{0}", "a"), entry("stash@{1}", "b")]),
+    );
+    model.reshape();
+    let edit = kept_across(
+        &mut model,
+        Source::Stashes(vec![
+            entry("stash@{0}", "c"),
+            entry("stash@{1}", "a"),
+            entry("stash@{2}", "b"),
+        ]),
+    );
+    assert_eq!(edit.come, runs_of([0]));
+    assert!(edit.gone.is_empty());
+    assert_eq!(edit.kept, vec![(0, 1), (1, 2)]);
+}
+
+/// A tag deleted from outside goes alone; the tags either side stay.
+#[test]
+fn a_tag_taken_away_goes_alone() {
+    let tags = |names: &[&str]| {
+        Source::Tags(snapshot(
+            Vec::new(),
+            names.iter().map(|name| tag(name, false, true)).collect(),
+        ))
+    };
+    let mut model = section("tags", tags(&["v1.0", "v1.1", "v1.2"]));
+    model.reshape();
+    let edit = kept_across(&mut model, tags(&["v1.0", "v1.2"]));
+    assert_eq!(edit.gone, runs_of([1]));
+    assert!(edit.come.is_empty());
+    assert_eq!(edit.kept, vec![(0, 0), (2, 1)]);
+}
+
+/// Told run by run — the runs that went from the foot up, then the runs
+/// that came from the head down — the rows Qt holds end as the new
+/// arrangement, each at its own place: what `transit` answers `rowCount`
+/// and `data` with between the steps (`view::tell_rows`).
+#[test]
+fn told_run_by_run_the_rows_qt_holds_end_as_the_new_arrangement() {
+    let cases: [(&[u64], &[u64]); 5] = [
+        (&[1, 2, 3], &[0, 1, 2, 3]),
+        (&[1, 2, 3, 4, 5, 6], &[1, 7, 8, 4, 9]),
+        (&[10, 20, 30], &[30, 10, 20]),
+        (&[], &[1, 2]),
+        (&[1, 2], &[]),
+    ];
+    for (before, after) in cases {
+        let edit = edit_between(before, after);
+        let mut held = view::held_before(before.len(), &edit);
+        for run in edit.gone.iter().rev() {
+            view::held_without(&mut held, run);
+        }
+        // Every run gone, the rows left are the ones that stay, in order.
+        assert!(held.iter().all(Option::is_some), "{before:?} → {after:?}");
+        for run in &edit.come {
+            view::held_with(&mut held, run);
+        }
+        let arranged: Vec<Option<u32>> =
+            (0..after.len()).map(|at| u32::try_from(at).ok()).collect();
+        assert_eq!(held, arranged, "{before:?} → {after:?}");
+    }
 }

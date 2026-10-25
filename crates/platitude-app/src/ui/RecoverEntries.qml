@@ -2,11 +2,11 @@ import QtQuick
 import platitude.ui
 
 // What the discard log's rows say (破棄記録仕様.md §3): one operation that took something away, as the model reads it —
-// `{kind, name, remote, worktree, worktreePath, at, lost, parts, byPart}`, each part `{restore, name, with, look, tip,
-// remote, lost, files, notCopied, worktreePath}` (`DiscardModel.rows`). The rows draw `{mark, tint, badged, paired,
-// title, titleMarks, listTitle, listMarks, at, worktree, worktreeMark, parts, byPart}`, each part `{mark, tint, badged,
-// text, restore, restoreMarks}` (`RecoverPane`, `RecoverBand`, `RecoverHoverCard`, the marks through `RecoverMark`) —
-// the words are said here, where they can be translated.
+// `{key, kind, name, remote, worktree, worktreePath, at, lost, parts, byPart}`, each part `{restore, name, with, look,
+// tip, remote, lost, files, notCopied, worktreePath}` (`DiscardModel.rows`). The rows draw `{key, mark, tint, badged,
+// paired, title, titleMarks, listTitle, listMarks, at, worktree, worktreeMark, parts, byPart}`, each part `{mark, tint,
+// badged, text, restore, restoreMarks}` (`RecoverPane`, `RecoverBand`, `RecoverHoverCard`, the marks through
+// `RecoverMark`) — the words are said here, where they can be translated.
 //
 // The verbs are the ones other tools bring things back with: GitHub's `Restore branch`, the Windows Recycle Bin's
 // `Restore all items` (`RecoverBand`).
@@ -303,6 +303,8 @@ QtObject {
         const theirs = where === "theirs" && mark === "tag"
         const worktree = shown.worktreeAt(row.worktreePath, row.worktree)
         return {
+            // The entry across reads (`DiscardModel.keyAt`): what the list keeps its rows by.
+            key: row.key,
             kind: row.kind,
             mark: mark,
             tint: shown.tintOf(mark, theirs),

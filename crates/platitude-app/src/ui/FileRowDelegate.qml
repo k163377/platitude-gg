@@ -10,6 +10,9 @@ import platitude.ui
 Item {
     id: fileRow
     required property var model
+    /// Its place in the list's model, which follows its row as the model tells its inserts and removes — what a read's
+    /// keeper brings the row back by (`RowKeep.land`).
+    readonly property int index: fileRow.model.index
     property real listWidth: 200
 
     readonly property string changeText: model.change ?? ""
@@ -72,6 +75,15 @@ Item {
 
     width: listWidth
     height: Theme.rowHeight
+
+    /// Pooled, the delegate stays `visible` where its row last stood (`NavItemDelegate.pooled`): the row it showed
+    /// left the list or the screen, and its tip goes with it — but for the box the hand is reading (`Tips.dropIn`).
+    property bool pooled: false
+    ListView.onPooled: {
+        fileRow.pooled = true
+        Tips.dropIn(fileRow)
+    }
+    ListView.onReused: fileRow.pooled = false
 
     // The row whose diff is on screen (デザイン規約 §diff のファイル一覧), under the hover wash, which is an overlay colour.
     Rectangle {

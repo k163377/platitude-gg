@@ -3433,9 +3433,9 @@ FocusScope {
     }
     Connections {
         target: diffModel
-        // The rows are about to be swapped for a re-read of the same file (a write of ours, or an outside edit the
-        // tick caught). Held here, not by the askers: the tick asks on files that turn out unchanged, and a place held
-        // for a swap that never comes puts the next one back where the reader has since left (`DiffScrollPlace`).
+        // The rows are about to be laid out again as one column or two (`DiffModel.relay_rows`), a whole new list: the
+        // place is held as the swap begins (`DiffScrollPlace`). A read of the same file moves only the rows that
+        // changed and keeps the place by itself (`DiffPane.rowKeep`).
         function onRowsReplacing() {
             diffPane.holdScroll()
         }

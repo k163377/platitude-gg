@@ -391,18 +391,8 @@ ColumnLayout {
     /// it says now. **The same path is not the same warning**: a file rewritten in place keeps its mark and changes
     /// its kind or its count, so the card out names the row to its model again and takes the sentence that comes back
     /// (`NavSectionModel.pointEol`, which rebuilds it from the marks the read brought) — swapped in place, as the
-    /// button's count is.
+    /// button's count is. Where the row went is the pane's to weigh as the read lands (`rowKeep`).
     function weighEol() {
-        // **The row dealt elsewhere, or out of this list** (a file above it came or went, the file staged): the card
-        // hangs where another row stands now, and goes as the rows moving under the hand take it — weighed before the
-        // warning is, so a hand inside the card is held too: the card's going leaves it over a row it did not walk
-        // to, which opens nothing until it moves (`HandWatch.covered`).
-        const out = eolKeep.target
-        if (eolKeep.shown && out !== null && out.kind === "file") {
-            const row = wipPane.rowIn(out.bucket, out.path)
-            if (row === null || Math.abs(row.mapToItem(wipPane, 0, row.height).y - eolCard.anchorY) >= 1)
-                paneHand.rowsMoved()
-        }
         eolKeep.forget(target => target.alive !== undefined && !target.alive(), "gone")
         const target = eolKeep.target
         if (!eolKeep.shown || target === null || target.kind !== "file")
@@ -475,24 +465,35 @@ ColumnLayout {
                 wipPane.openCommitCard()
         }
     }
-    // A status read that brings anything rebuilds the buckets' rows — a mark that moved alone included (a file saved
-    // over in place: `models::nav::drain` resets on it) — and says `changed` after; the marks come with it
-    // (`NavSectionModel.eolMarked`). Weighed a turn later, once: the weighing names the row to the model again, which
-    // is a call into the model that is still telling its news.
+    // A status read that brings anything tells the buckets' rows that went, came or changed — a mark that moved alone
+    // included (a file saved over in place: `models::nav::drain` counts it as news) — and says `changed` after; the
+    // marks come with it (`NavSectionModel.eolMarked`). Weighed a turn later, once: the weighing names the row to the
+    // model again, which is a call into the model that is still telling its news. Where the row under the hand went is
+    // weighed as the read lands (`rowKeep`).
     Connections {
         target: wipPane.unstagedModel
-        function onModelReset() { Qt.callLater(wipPane.weighEol) }
         function onChanged() { Qt.callLater(wipPane.weighEol) }
+        function onRowsArriving() { rowKeep.arriving() }
+        function onRowsArrived() { rowKeep.arrived() }
     }
     Connections {
         target: wipPane.stagedModel
-        function onModelReset() { Qt.callLater(wipPane.weighEol) }
         function onChanged() { Qt.callLater(wipPane.weighEol) }
+        function onRowsArriving() { rowKeep.arriving() }
+        function onRowsArrived() { rowKeep.arrived() }
     }
     Connections {
         target: wipPane.conflictsModel
-        function onModelReset() { Qt.callLater(wipPane.weighEol) }
         function onChanged() { Qt.callLater(wipPane.weighEol) }
+        function onRowsArriving() { rowKeep.arriving() }
+        function onRowsArrived() { rowKeep.arrived() }
+    }
+    /// The row under the pane's hand, kept where it was through a status read (`RowKeep`): a file written in above
+    /// it, the bucket above growing — as far as its bucket's list can scroll.
+    readonly property RowKeep rowKeep: RowKeep {
+        id: rowKeep
+        hand: paneHand
+        views: wipPane.bucketPanes.map(pane => pane.list)
     }
     function openCommitCard() {
         // The button speaks for the whole index, so the words hold for all four cases at once: **"problems"**, since
@@ -525,9 +526,11 @@ ColumnLayout {
         }
     }
     // The one seat both askers go through, on the pane's hand: the card goes only when the hand is out of the mark
-    // and the card both, and the rows moving under the hand take it down (`rowsShifted`) and hold the hand. Behind a
-    // menu of the page's — the rows' file menu, raised by a press or the menu key — it goes the moment the menu
-    // stands and nothing opens while it does; an ask made meanwhile is kept for the menu going (デザイン規約 §メニュー).
+    // and the card both, and the rows moving under the hand take it down (`rowsShifted`) and hold the hand — but for a
+    // status read that moved them with the hand inside the card, which stays where it stands (デザイン規約 §hover の
+    // ツールチップ「外乱では閉じない」). Behind a menu of the page's — the rows' file menu, raised by a press or the menu
+    // key — it goes the moment the menu stands and nothing opens while it does; an ask made meanwhile is kept for the
+    // menu going (デザイン規約 §メニュー).
     readonly property HoverSeat eolKeep: HoverSeat {
         id: eolKeep
         hand: paneHand
@@ -542,7 +545,10 @@ ColumnLayout {
     }
     Connections {
         target: paneHand
-        function onRowsShifted() { eolKeep.displace("slid") }
+        function onRowsShifted() {
+            if (!(paneHand.disturbed && eolKeep.cardPointed))
+                eolKeep.displace("slid")
+        }
     }
     /// The card itself is up. Read by the headless runs — reporting what asked for it would go green with the wiring
     /// cut.
@@ -783,8 +789,8 @@ ColumnLayout {
 
         // The hand over the file rows (`HandWatch`), as the left panel keeps one: the rows read their light and
         // their asks off it by geometry — a row the status read brought under a still hand lights as the row under
-        // it, and its card waits for the hand to move — and the row it dealt again where it stood keeps the hand
-        // (`WipBucketPane.weighDeal`).
+        // it, and its card waits for the hand to move — and the row under it is put back where it was through a read
+        // (`rowKeep`).
         HandWatch {
             id: paneHand
         }
