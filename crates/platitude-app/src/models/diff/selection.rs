@@ -94,32 +94,26 @@ impl DiffModel {
 
     /// The two ends in reading order, or nothing where no selection
     /// stands — the one place that sorts them.
-    fn taken(&self) -> Option<(usize, usize, usize, usize)> {
+    fn taken(&self) -> Option<(SourcePosition, SourcePosition)> {
         if !self.sel_active {
             return None;
         }
-        let from = (self.sel_anchor.row, self.sel_anchor.byte);
-        let to = (self.sel_focus.row, self.sel_focus.byte);
-        let (first, last) = if from <= to { (from, to) } else { (to, from) };
-        Some((first.0, first.1, last.0, last.1))
+        let (anchor, focus) = (self.sel_anchor, self.sel_focus);
+        Some((anchor.min(focus), anchor.max(focus)))
     }
 
     /// The rows the selection covers, clamped to the rows that exist.
     fn span(&self) -> Option<Span> {
-        let (first, _, last, _) = self.taken()?;
+        let (first, last) = self.taken()?;
         let end = self.lines.len().checked_sub(1)?;
-        (first <= end).then(|| (first, last.min(end)))
+        (first.row <= end).then(|| (first.row, last.row.min(end)))
     }
 
     pub(super) fn holds(&self, side: i32, position: SourcePosition) -> bool {
-        let Some((first_row, first_at, last_row, last_at)) = self.taken() else {
+        let Some((first, last)) = self.taken() else {
             return false;
         };
-        if side != self.sel_side {
-            return false;
-        }
-        let here = (position.row, position.byte);
-        (first_row, first_at) <= here && here <= (last_row, last_at)
+        side == self.sel_side && (first..=last).contains(&position)
     }
 
     /// The end a drag carried (`sel_focus` — a right-click's whole row ends
@@ -268,38 +262,28 @@ impl DiffModel {
         if side != self.sel_side || !self.takes(side, row) {
             return Wash::None;
         }
-        let Some((first_row, first_at, last_row, last_at)) = self.taken() else {
+        let Some((first, last)) = self.taken() else {
             return Wash::None;
         };
-        if row < first_row || row > last_row {
-            return Wash::None;
-        }
         let Some(text) = self.source_line(side, row) else {
             return Wash::None;
         };
-        let first = if row == first_row {
-            first_at.min(text.len())
-        } else {
-            0
+        let Some(bytes) = first.bytes_until(last, row, text.len()) else {
+            return Wash::None;
         };
-        let last = if row == last_row {
-            last_at.min(text.len())
-        } else {
-            text.len()
-        };
-        if last <= first {
+        if bytes.is_empty() {
             // An end row the selection only touches the edge of gives the
             // copy an empty line, and has nothing to wash.
-            return if row == first_row && row == last_row {
+            return if first.row == last.row {
                 Wash::None
             } else {
-                Wash::Part(first..first)
+                Wash::Part(bytes)
             };
         }
-        if first == 0 && last == text.len() {
+        if bytes == (0..text.len()) {
             Wash::Whole
         } else {
-            Wash::Part(first..last)
+            Wash::Part(bytes)
         }
     }
 
@@ -403,11 +387,11 @@ impl DiffModel {
     /// at the head of its last row, or starts at the end of a first row
     /// with text: the copy takes the line break there, and none of the line.
     fn edge_only(&self, row: usize) -> bool {
-        let Some((first_row, first_at, last_row, last_at)) = self.taken() else {
+        let Some((first, last)) = self.taken() else {
             return false;
         };
         let len = self.source_line(self.sel_side, row).map_or(0, str::len);
-        (row == last_row && last_at == 0) || (row == first_row && len > 0 && first_at >= len)
+        (row == last.row && last.byte == 0) || (row == first.row && len > 0 && first.byte >= len)
     }
 
     /// The removed lines the selection reaches over, whole — they carry no

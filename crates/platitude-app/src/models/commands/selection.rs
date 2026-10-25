@@ -151,26 +151,20 @@ impl CommandsModel {
     /// one place that sorts the pair, which is kept press first.
     ///
     /// Both ends are cut to their line: a drag off a row's end names a byte
-    /// past it, and uncut the whole selection reads as empty.
-    fn taken(&self) -> Option<(usize, usize, usize, usize)> {
+    /// past it.
+    fn taken(&self) -> Option<(SourcePosition, SourcePosition)> {
         if !self.sel_active {
             return None;
         }
-        let cut = |end: SourcePosition| {
-            let byte = self
-                .line_at(end.row)
-                .map_or(0, |line| end.byte.min(line.len()));
-            (end.row, byte)
-        };
-        let from = cut(self.sel_anchor);
-        let to = cut(self.sel_focus);
-        let (first, last) = if from <= to { (from, to) } else { (to, from) };
-        Some((first.0, first.1, last.0, last.1))
+        let cut =
+            |end: SourcePosition| end.cut_to(self.line_at(end.row).map_or(0, |line| line.len()));
+        let (anchor, focus) = (cut(self.sel_anchor), cut(self.sel_focus));
+        Some((anchor.min(focus), anchor.max(focus)))
     }
 
     /// The rows the selection touches, so that only they are re-spelled.
     fn span(&self) -> Option<(usize, usize)> {
-        self.taken().map(|(first, _, last, _)| (first, last))
+        self.taken().map(|(first, last)| (first.row, last.row))
     }
 
     pub(super) fn start_select(&mut self, position: SourcePosition) -> bool {
@@ -211,12 +205,16 @@ impl CommandsModel {
         if !self.sel_active {
             return;
         }
-        if self.sel_anchor.row < gone || self.sel_focus.row < gone {
-            self.forget_selection();
-            return;
+        match (
+            self.sel_anchor.shifted_up(gone),
+            self.sel_focus.shifted_up(gone),
+        ) {
+            (Some(anchor), Some(focus)) => {
+                self.sel_anchor = anchor;
+                self.sel_focus = focus;
+            }
+            _ => self.forget_selection(),
         }
-        self.sel_anchor.row -= gone;
-        self.sel_focus.row -= gone;
     }
 
     // ---- what each row draws of it -----------------------------------
@@ -257,24 +255,27 @@ impl CommandsModel {
 
     /// One row's share, as the delegate reads it (`CommandWash`).
     fn spell(&self, row: usize) -> Optional<CommandWash> {
-        let Some((first, first_at, last, last_at)) = self.taken() else {
+        let Some((first, last)) = self.taken() else {
             return Optional::none();
         };
-        if row < first || row > last {
+        // A re-spell walks rows the selection has left: they are answered
+        // before their line is built (`line_at` allocates).
+        if row < first.row || row > last.row {
             return Optional::none();
         }
         let Some(line) = self.line_at(row) else {
             return Optional::none();
         };
-        let from = if row == first { first_at } else { 0 };
-        let to = if row == last { last_at } else { line.len() };
-        if from >= to {
+        let Some(bytes) = first
+            .bytes_until(last, row, line.len())
+            .filter(|bytes| !bytes.is_empty())
+        else {
             return Optional::none();
-        }
+        };
         let mut columns: Vec<Runs> = Vec::with_capacity(3);
         for (base, text) in line.columns() {
-            let start = from.max(base);
-            let end = to.min(base + text.len());
+            let start = bytes.start.max(base);
+            let end = bytes.end.min(base + text.len());
             columns.push(if start < end {
                 let in_column = start - base..end - base;
                 plain_ranges(text, &[in_column])
@@ -287,7 +288,7 @@ impl CommandsModel {
             clock: columns.next().unwrap_or_default(),
             command: columns.next().unwrap_or_default(),
             outcome: columns.next().unwrap_or_default(),
-            whole: from == 0 && to == line.len(),
+            whole: bytes == (0..line.len()),
         })
     }
 
@@ -297,25 +298,26 @@ impl CommandsModel {
     /// brings git's words under it, each indented by a tab so it pastes
     /// under the command column.
     pub(super) fn copied(&self) -> String {
-        let Some((first, first_at, last, last_at)) = self.taken() else {
+        let Some((first, last)) = self.taken() else {
             return String::new();
         };
         let mut out = String::new();
-        for row in first..=last {
+        for row in first.row..=last.row {
             let (Some(line), Some(item)) = (self.line_at(row), self.rows.get(row)) else {
                 continue;
             };
             let text = line.text();
-            let from = if row == first { first_at } else { 0 };
-            let to = if row == last { last_at } else { text.len() };
-            if from >= to {
+            let Some(bytes) = first.bytes_until(last, row, text.len()) else {
+                continue;
+            };
+            if bytes.is_empty() {
                 continue;
             }
             if !out.is_empty() {
                 out.push('\n');
             }
-            out.push_str(text.get(from..to).unwrap_or_default());
-            if from != 0 || to != text.len() || item.status != "failed" {
+            out.push_str(text.get(bytes.clone()).unwrap_or_default());
+            if bytes != (0..text.len()) || item.status != "failed" {
                 continue;
             }
             for said in item.output.lines() {

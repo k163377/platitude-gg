@@ -300,6 +300,12 @@ fn a_line_taken_whole_brings_gits_own_words_with_it() {
         model.copied(),
         "12:03:17\tgit switch nope\texit 128 12 ms\n\tfatal: invalid reference: nope\n\thint: try again"
     );
+    model.respell_row(0);
+    assert_eq!(
+        said(&model.rows[0].sel).map(|wash| wash.3),
+        Some(true),
+        "and its wash says so"
+    );
 }
 
 #[test]

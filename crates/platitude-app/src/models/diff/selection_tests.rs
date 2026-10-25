@@ -124,6 +124,7 @@ fn a_press_with_no_drag_behind_it_copies_nothing() {
     model.start_select(0, source(1, 4));
     assert!(!model.sel_has_new);
     assert!(model.copied_new().is_empty());
+    assert_eq!(model.line_span(), None, "and links no line");
 }
 
 #[test]
