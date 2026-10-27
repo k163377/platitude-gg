@@ -16,17 +16,17 @@ const IN_FLIGHT: u64 = 40;
 const FENCE: u64 = 41;
 const AFTERWARDS: u64 = 42;
 
-/// What the counts look like to [`StashOut::taken`].
+/// What the counts look like to [`TreeOut::taken`].
 const EMPTIED: bool = true;
 const STILL_DIRTY: bool = false;
 
-fn pressed() -> StashOut {
-    let mut out = StashOut::default();
+fn pressed() -> TreeOut {
+    let mut out = TreeOut::default();
     out.asked(Some(OURS));
     out
 }
 
-fn landed() -> StashOut {
+fn landed() -> TreeOut {
     let mut out = pressed();
     assert!(out.answered(OURS, 0, false, FENCE));
     out
@@ -126,7 +126,7 @@ fn a_press_the_queue_took_nothing_for_claims_no_tree() {
 
 #[test]
 fn a_tree_nobody_here_emptied_is_not_claimed() {
-    let mut out = StashOut::default();
+    let mut out = TreeOut::default();
     assert!(!out.answered(OURS, 0, false, FENCE));
     assert!(!out.taken(AFTERWARDS, EMPTIED));
 }

@@ -15,7 +15,7 @@
 //! (`Main.qml`) while the rows stay gone. They end with the session
 //! ([`StandIn::session_gone`]), not the operation, since what a session
 //! numbered goes with it. What one page's own boxes wait on is that page's
-//! ([`Press`], [`StashOut`], kept on the tab model the boxes belong to): a
+//! ([`Press`], [`TreeOut`], kept on the tab model the boxes belong to): a
 //! page that went away has nothing left to empty or walk anybody off.
 
 mod branch_delete_out;
@@ -33,13 +33,13 @@ mod push_out_tests;
 mod stand_in;
 #[cfg(test)]
 mod stand_in_tests;
-mod stash_out;
+mod tree_out;
 #[cfg(test)]
-mod stash_out_tests;
+mod tree_out_tests;
 
 pub use branch_delete_out::BranchDeleteOut;
 pub use diff_reread::DiffReread;
 pub use press::Press;
 pub use push_out::PushOut;
 pub use stand_in::{Row, Rows, StandIn};
-pub use stash_out::StashOut;
+pub use tree_out::TreeOut;

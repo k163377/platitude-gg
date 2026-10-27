@@ -102,7 +102,7 @@ impl Default for RepoTab {
             write_answers: Vec::new(),
             commit_out: crate::ops::Press::default(),
             commit_answer: -1,
-            stash_out: crate::ops::StashOut::default(),
+            stash_out: crate::ops::TreeOut::default(),
             stash_answer: -1,
             push_out: crate::ops::PushOut::default(),
             push_answer: -1,
@@ -210,7 +210,7 @@ impl RepoTab {
         self.tree_emptied = emptied;
     }
 
-    /// Behind `takeStashLanding` (`ops::StashOut`).
+    /// Behind `takeStashLanding` (`ops::TreeOut`).
     pub(super) fn stash_landing_taken(&mut self) -> bool {
         self.stash_out.taken(self.tree_seen, self.tree_emptied)
     }

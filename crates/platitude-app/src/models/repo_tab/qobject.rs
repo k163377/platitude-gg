@@ -1097,7 +1097,7 @@ impl RepoTab {
 
     /// The page is acting on the worktree it has: answers whether
     /// this window's own stash is what emptied it, and settles that press
-    /// (`ops::StashOut`). Asked from both halves of the pair (a status
+    /// (`ops::TreeOut`). Asked from both halves of the pair (a status
     /// landing, a write answering) — the first gets nothing — and asking
     /// spends it, so there is nothing for a binding to follow.
     #[qslot]

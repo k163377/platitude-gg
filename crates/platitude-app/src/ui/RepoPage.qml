@@ -3184,7 +3184,7 @@ FocusScope {
         // off it. The landing below stays armed for the reader coming back to their own row.
         if (!page.wipWritable)
             return
-        // Whether this window's own stash emptied it (`ops::StashOut`), **asked from both sides of the pair**: the
+        // Whether this window's own stash emptied it (`ops::TreeOut`), **asked from both sides of the pair**: the
         // status and the answer arrive in no fixed order, and the first asks and gets nothing.
         const ourStash = repoTab.takeStashLanding()
         if (!page.treeClean)

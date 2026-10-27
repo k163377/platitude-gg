@@ -28,7 +28,7 @@ use super::Press;
 /// Only the presses that can empty a tree write here: armed by a pop,
 /// apply, drop or rename, it would claim a tree somebody else emptied.
 #[derive(Debug, Default)]
-pub struct StashOut {
+pub struct TreeOut {
     /// The write that took the tree away, and where its answer stood in
     /// this notify — the page's cue to re-read the open file or to say
     /// what git refused.
@@ -40,7 +40,7 @@ pub struct StashOut {
     after: u64,
 }
 
-impl StashOut {
+impl TreeOut {
     /// The stash went to the queue under `accepted`. Whatever an earlier
     /// press left standing goes: the tree emptying next is the work of the
     /// stash asked for last.

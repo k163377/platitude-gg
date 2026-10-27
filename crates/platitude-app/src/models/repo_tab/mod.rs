@@ -369,12 +369,12 @@ pub struct RepoTab {
     tree_emptied: bool,
     /// The stash this window pressed to take the worktree away,
     /// waiting for the reading that finds the tree empty
-    /// (`ops::StashOut`).
+    /// (`ops::TreeOut`).
     ///
     /// Whether that tree is the one on screen is asked once, when the page
     /// acts on a tree, and asking spends it (`takeStashLanding`) — a
     /// binding would read an answer already gone.
-    stash_out: crate::ops::StashOut,
+    stash_out: crate::ops::TreeOut,
     /// Where that press's own answer stands in `write_answers`, or -1
     /// where this notify carried none.
     stash_answer: i32,

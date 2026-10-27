@@ -9,7 +9,7 @@ impl RepoTab {
     /// `message` is the summary standing in the commit box, or empty for
     /// git's own `WIP on …`; the press asks nothing.
     ///
-    /// The press writes down its id (`ops::StashOut`): the reading that
+    /// The press writes down its id (`ops::TreeOut`): the reading that
     /// finds the tree empty comes long after the answer, when only the
     /// press can say whose doing it was.
     pub(super) fn stash_push(&mut self, message: String) {

@@ -63,7 +63,7 @@ impl RepoTab {
         self.diff_reread = crate::ops::DiffReread::default();
         self.tree_seen = 0;
         self.tree_emptied = false;
-        self.stash_out = crate::ops::StashOut::default();
+        self.stash_out = crate::ops::TreeOut::default();
         self.stash_answer = -1;
         self.push_out = crate::ops::PushOut::default();
         self.push_answer = -1;
