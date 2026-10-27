@@ -817,12 +817,14 @@ Item {
         }
         onTriggered: {
             const page = window.curPage
-            if (!Awaited.all("tab_carry_ready", { "ready": tabCarryTimer.whole(page),
-                                                  "page": PageSettled.windowSettled(window) }))
+            // Named for the stage: the strip's moves unsettle the page between the stages, and one name read every
+            // beat would be reached again behind the stages' checkpoints.
+            if (!Awaited.all("tab_carry_ready/" + tabCarryTimer.step, { "ready": tabCarryTimer.whole(page),
+                                                                       "page": PageSettled.windowSettled(window) }))
                 return
             if (tabCarryTimer.step === 0) {
                 // Two tabs — read at the first landing alone, as the verb then moves the strip.
-                if (pageRepeater.count < 2)
+                if (!Awaited.all("tab_carry_tabs", { "tabs": pageRepeater.count >= 2 }))
                     return
                 // A layout nobody starts in, so "it followed" cannot be read off a page that was already like this.
                 page.foldByHand(true)
@@ -834,7 +836,7 @@ Item {
                 return
             }
             if (tabCarryTimer.step === 1) {
-                if (tabsModel.currentTabId === tabCarryTimer.firstTab)
+                if (!Awaited.all("tab_carry_moved", { "moved": tabsModel.currentTabId !== tabCarryTimer.firstTab }))
                     return
                 tabCarryTimer.folded = page.sidebarCollapsed
                 tabCarryTimer.log = page.commandsOpen
@@ -844,7 +846,7 @@ Item {
                 tabsModel.setCurrentIndex(tabsModel.currentIndex === 0 ? 1 : 0)
                 return
             }
-            if (tabsModel.currentTabId !== tabCarryTimer.firstTab)
+            if (!Awaited.all("tab_carry_back", { "back": tabsModel.currentTabId === tabCarryTimer.firstTab }))
                 return
             stop()
             // `sessions=` is the release: two tabs in the strip, one repository in memory.

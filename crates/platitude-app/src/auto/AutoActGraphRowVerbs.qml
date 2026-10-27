@@ -1082,6 +1082,7 @@ Item {
                         return
                     graphPane.view.chipExpandRequested(stacked.oid_hex, stacked.index, stacked.chipItem.records,
                                                        stacked.chipItem)
+                    menuListTimer.step = 2
                 } else {
                     if (!Awaited.all("menu_list_open", { "list": refList.opened }))
                         return
@@ -1107,8 +1108,8 @@ Item {
                             graphPane.view.chipCollapseRequested(stacked.oid_hex, stacked.chipItem)
                         }
                     }
+                    menuListTimer.step = 2
                 }
-                menuListTimer.step = 2
             } else {
                 if (!Awaited.all("menu_list_after", {
                         "menu": commitMenu.opened,

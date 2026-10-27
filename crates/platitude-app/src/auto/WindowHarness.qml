@@ -183,8 +183,22 @@ Item {
     function settle() {
         if (Awaited.frames <= harness.settlingFrom)
             return
+        // The frame swapped. The page may owe an ambient read again (the pacer's, the re-centring), which the
+        // picture waits out as the completion did; anything else owed is the picture's to say
+        // (`WindowCensus.reportAt`).
+        if (harness.holdsPicture(census.pageMissing())) {
+            harness.settlingFrom = Awaited.frames
+            harness.window.update()
+            return
+        }
         harness.settlingFrom = -1
         shotDriver.finish()
+    }
+    /// Whether a picture waits for the page: an ambient read is owed, and nothing else the verb did not name
+    /// (`Awaited.expects`).
+    function holdsPicture(owed) {
+        return owed.some(term => harness.ambientTerms.indexOf(term) >= 0)
+            && owed.every(term => harness.ambientTerms.indexOf(term) >= 0 || Awaited.expects(term))
     }
 
     WindowCensus {
@@ -224,6 +238,7 @@ Item {
         window: harness.window
         overlayMirror: shotMirrors.overlayMirror
         sceneMirror: shotMirrors.sceneMirror
+        pictureHeld: () => harness.holdsPicture(census.pageMissing())
         mainUi: harness.mainUi
         gate: harness.gate
         chrome: harness.chrome

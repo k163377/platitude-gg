@@ -262,14 +262,14 @@ Item {
         onTriggered: {
             const section = sidebarPane.peekSection
             if (acts.farStep === 0) {
-                if (sidebarPane.peekKind === "") {
+                if (!Awaited.all("nav_far_peek", { "peek": sidebarPane.peekKind !== "" })) {
                     navProbe.peekAt("tag")
                     return
                 }
                 section.scrollToEnd()
                 acts.farStep = 1
             } else if (acts.farStep === 1) {
-                if (section.rowInView(0))
+                if (!Awaited.all("nav_far_scrolled", { "away": !section.rowInView(0) }))
                     return
                 sidebarPane.beginRename("tag", tagsModel.nameAt(0),
                                         tagsModel.nameAt(0))
@@ -528,7 +528,6 @@ Item {
         property bool lit: false
         /// 0 the filter, 1 the rest that opens the row, 2 the lines standing still, 3 the answer.
         property int step: 0
-        property string stood: ""
         property int line: -1
         property var to: null
         property string name: ""
@@ -539,7 +538,6 @@ Item {
             followTimer.filter = parts.length > 2 ? parts[2] : ""
             followTimer.lit = lit
             followTimer.step = followTimer.filter === "" ? 1 : 0
-            followTimer.stood = ""
             followTimer.line = -1
             followTimer.to = null
             followTimer.start()
@@ -558,6 +556,10 @@ Item {
         onTriggered: {
             // A filter, once: the way a leaf under a folded folder is brought into the list.
             if (followTimer.step === 0) {
+                // The page's rows in before the filter rebuilds them (a section's list stands only once peeked, so
+                // the list itself is nothing to wait for here).
+                if (!Awaited.all("nav_follow_filter", { "page": PageSettled.settled(page) }))
+                    return
                 navProbe.typeFilter(followTimer.filter)
                 followTimer.step = 1
                 return
@@ -565,7 +567,7 @@ Item {
             // The rest, every beat until the row is open (`nav-open` の同じ歩き).
             if (followTimer.step === 1) {
                 navProbe.pointTipAt(followTimer.kind, followTimer.row)
-                if (!navProbe.rowFactsOpen)
+                if (!Awaited.all("nav_follow_open", { "open": navProbe.rowFactsOpen }))
                     return
                 followTimer.name = navProbe.tipNameAt(followTimer.kind, followTimer.row)
                 followTimer.step = 2
@@ -574,11 +576,8 @@ Item {
             // Nothing is aimed until the lines stop moving: laid out a pass after they are built, a press worked out
             // from a line still at its origin lands on the row's mark.
             if (followTimer.step === 2) {
-                const geom = sidebarPane.rowFactsGeom()
-                if (geom !== followTimer.stood) {
-                    followTimer.stood = geom
+                if (!Awaited.still("nav_follow_geom", sidebarPane.rowFactsGeom()))
                     return
-                }
                 followTimer.line = navProbe.factsFirstGoing()
                 followTimer.to = navProbe.factsGoesTo(followTimer.line)
                 if (followTimer.to === null) {
@@ -982,7 +981,9 @@ Item {
             if (navNameBoxTimer.step === 0) {
                 // The width first: the box is laid out in what the row has left, so one opened earlier settles into a
                 // width nobody asked about.
-                if (row < 0 || Math.round(sidebarPane.width) !== Math.round(navNameBoxTimer.want))
+                if (!Awaited.all("nav_name_box_row", {
+                        "row": row >= 0,
+                        "width": Math.round(sidebarPane.width) === Math.round(navNameBoxTimer.want) }))
                     return
                 if (navNameBoxTimer.mode === "rename") {
                     // What a second click puts in the box (`NavList`): a remote branch without its remote.
@@ -1058,20 +1059,21 @@ Item {
         property string route: ""
         onTriggered: {
             const item = graphPane.view.itemAtIndex(0)
-            if (!Awaited.all("box_out_ready", { "ready": item }))
-                return
             if (acts.boxOutStep === 0) {
                 // Opened by the gesture itself, two clicks: a box put up any other way leaves the gesture with no
                 // memory of the row, and every way out passes for free.
+                if (!Awaited.all("box_out_row", { "row": !!item }))
+                    return
                 item.leftClick(Qt.NoModifier)
                 acts.boxOutStep = 1
             } else if (acts.boxOutStep === 1) {
-                if (graphPane.view.clickGuarded)
+                // Inside the double-click window a second click would be half a double-click.
+                if (!Awaited.all("box_out_second", { "row": !!item, "window": !graphPane.view.clickGuarded }))
                     return
                 item.leftClick(Qt.NoModifier)
                 acts.boxOutStep = 2
             } else if (acts.boxOutStep === 2) {
-                if (graphPane.namingOid === "")
+                if (!Awaited.all("box_out_box", { "row": !!item, "box": graphPane.namingOid !== "" }))
                     return
                 const route = boxOutTimer.route
                 if (route === "same-row" || route === "other-row") {

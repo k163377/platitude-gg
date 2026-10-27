@@ -50,6 +50,20 @@ Item {
     /// When the last frame swapped (-1 for none), for the watchdog's line: with the frames counted (`Awaited.frames`)
     /// it separates a term stuck over a scene still drawing from one over a scene that stopped.
     property real lastFrameAt: -1
+    /// Whether a picture waits for the page (`WindowHarness.holdsPicture`), asked before the overlay's and the
+    /// scene's grabs: an ambient read owed again between two pictures is waited out as before the first. Null
+    /// holds nothing.
+    property var pictureHeld: null
+    property bool overlayHeldBack: false
+    property bool sceneHeldBack: false
+    function held() {
+        return driver.pictureHeld !== null && driver.pictureHeld() === true
+    }
+    /// Said for each picture the run asked for (`takeShot`), saved or not: the parent holds the set asked for
+    /// against the set saved (`verify::contract`), and a save that failed is no picture, whatever came after it.
+    function pictureSaved(artifact, saved) {
+        Harness.report("picture run=" + Awaited.runId + " artifact=" + artifact + " saved=" + saved)
+    }
 
     function claimPageAct() {
         if (driver.pageActClaimed)
@@ -90,6 +104,14 @@ Item {
         function onFrameSwapped() {
             driver.lastFrameAt = PerfProbe.clockMs()
             driver.scheduleShot()
+            if (driver.overlayHeldBack) {
+                driver.overlayHeldBack = false
+                driver.grabOverlay()
+            }
+            if (driver.sceneHeldBack) {
+                driver.sceneHeldBack = false
+                driver.grabScene()
+            }
         }
     }
 
@@ -141,6 +163,11 @@ Item {
     function grabOverlay() {
         if (!driver.overlayAsked || driver.overlayGrabbed)
             return
+        if (driver.held()) {
+            driver.overlayHeldBack = true
+            driver.window.update()
+            return
+        }
         driver.overlayGrabbed = true
         const mirror = overlayMirror.item
         const popups = mirror.sourceItem ? mirror.sourceItem.children.length : 0
@@ -148,11 +175,13 @@ Item {
         const overlayOk = mirror.grabToImage(function (res) {
             const saved = res.saveToFile(Harness.shotDir + "/overlay.png")
             console.warn("overlay saved=" + saved + " popups=" + popups + " yield=" + yielded)
+            driver.pictureSaved("overlay", saved)
             driver.pictured("overlay")
             driver.partDone()
         })
         if (!overlayOk) {
             console.warn("overlay grabToImage returned false")
+            driver.pictureSaved("overlay", false)
             driver.partDone()
         }
     }
@@ -166,6 +195,10 @@ Item {
         driver.sceneWanted = holding > 0 && driver.sceneMirror !== null && driver.sceneMirror.item !== null
         driver.overlayWanted = overlayMirror.item !== null
         driver.shotParts = 1 + (driver.overlayWanted ? 1 : 0) + (driver.sceneWanted ? 1 : 0)
+        // The pictures this run owes, fixed here: each is said saved or not (`pictureSaved`), and the parent passes
+        // the run only on all of them.
+        const wanted = ["app"].concat(driver.overlayWanted ? ["overlay"] : [], driver.sceneWanted ? ["scene"] : [])
+        Harness.report("pictures run=" + Awaited.runId + " wanted=" + wanted.join(","))
         driver.grabApp()
     }
     /// The popups' texture, refreshed once app.png is saved, as the composite is: a popup's marks are owed like the
@@ -185,16 +218,27 @@ Item {
             driver.grabScene()
         }
     }
+    property bool sceneGrabbed: false
     function grabScene() {
+        if (driver.sceneGrabbed)
+            return
+        if (driver.held()) {
+            driver.sceneHeldBack = true
+            driver.window.update()
+            return
+        }
+        driver.sceneGrabbed = true
         const scene = driver.sceneMirror.item
         const ok = scene.grabToImage(function (res) {
             const saved = res.saveToFile(Harness.shotDir + "/scene.png")
             console.warn("scene saved=" + saved)
+            driver.pictureSaved("scene", saved)
             driver.pictured("scene")
             driver.partDone()
         })
         if (!ok) {
             console.warn("scene grabToImage returned false")
+            driver.pictureSaved("scene", false)
             driver.partDone()
         }
     }
@@ -217,6 +261,7 @@ Item {
             driver.appSaved = true
             const saved = res.saveToFile(path)
             console.warn("screenshot saved=" + saved + " ink=" + driver.inkWaited + " path=" + path)
+            driver.pictureSaved("app", saved)
             driver.pictured("app")
             driver.refreshOverlay()
             if (driver.sceneWanted && !driver.sceneAsked) {
@@ -229,6 +274,7 @@ Item {
             console.warn("grabToImage returned false")
             driver.appGrabbing = false
             driver.appSaved = true
+            driver.pictureSaved("app", false)
             driver.pictured("app")
             driver.refreshOverlay()
             driver.partDone()

@@ -283,6 +283,21 @@ Item {
             verify(boxOff(at.x) <= 1, "on the hand again, with the row's move taken in: " + boxOff(at.x) + " off")
         }
 
+        // A refusal of what is typed waits its rest before the box, as every ask does (「入力の拒否への補足は一律」):
+        // typed, the seat is deciding and nothing is out; the rest run out, the box stands with the refusal's words.
+        // Read off the seat's machine — the rest is the product's own (`Metrics.tipDelayMs`), and a box out at once
+        // would be read here before the rest could run.
+        function test_e2_a_refusal_of_typing_waits_its_rest_before_the_box() {
+            const box = root.box
+            typedBox.refused = true
+            compare(seat.machineState, "waiting", "typed: the refusal's ask is resting")
+            verify(!box.visible, "nothing is out while the rest counts")
+            verify(seat.machine.rest.running, "and it is the seat's own rest that counts")
+            tryCompare(seat, "machineState", "shown")
+            verify(box.visible && box.parent === typedBox, "the rest run out, the refusal's box stands")
+            compare(box.text, askTyped.words)
+        }
+
         // A refusal of what is typed stands until the typing changes it (「入力の拒否への補足は一律」): a hand resting on
         // rows that ask for their own boxes, and a hand walking into the box and out again, leave it up with its own
         // words; the typing that ends it takes it down for good.

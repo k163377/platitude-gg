@@ -175,12 +175,11 @@ Item {
         }
         onTriggered: {
             const item = graphPane.view.itemAtIndex(reclickGraphTimer.row)
-            // Not laid out yet: latching a click here would wait for an answer to a question nobody put. Named for
-            // the step: the scroll pools the row and the box's return rebuilds it, which is the last step's row
-            // coming, not the first step's reached again.
-            if (!Awaited.all("reclick_graph_row/" + acts.reclickGraphStep, { "row": !!item }))
-                return
+            // Each step asks for the row itself: not laid out yet, a click would wait for an answer to a question
+            // nobody put, and the scroll pools the row until the box's return rebuilds it.
             if (acts.reclickGraphStep === 0) {
+                if (!Awaited.all("reclick_graph_row", { "row": !!item }))
+                    return
                 // Written where a real pointer writes it, so the row makes every decision after that itself
                 // (`GraphRowDelegate.settlePointed`).
                 if (reclickGraphTimer.points)
@@ -190,7 +189,8 @@ Item {
             } else if (acts.reclickGraphStep === 1) {
                 // Inside the double-click window a second click would be half a double-click; and the details the
                 // first click asked for land first, or `-mark` completes over that read.
-                if (!Awaited.all("reclick_graph_second", { "window": !item.clickGuarded,
+                if (!Awaited.all("reclick_graph_second", { "row": !!item,
+                                                           "window": !!item && !item.clickGuarded,
                                                            "details": page.pageDetailsSettled }))
                     return
                 // waits(measured): the origin of the `wait=` below, which the report prints and nothing here reads
@@ -216,10 +216,12 @@ Item {
                 }
                 acts.reclickGraphStep = 2
             } else if (acts.reclickGraphStep === 2) {
-                if (acts.reclickGraphArmed && graphPane.namingOid === "")
-                    return
-                // And the box's row sent back into view, a beat after it opens (`RepoPage.startRename`).
-                if (reclickGraphTimer.scrolls && !graphPane.rowOnScreen(reclickGraphTimer.row))
+                // The box open where one was armed, and its row sent back into view, a beat after it opens
+                // (`RepoPage.startRename`).
+                if (!Awaited.all("reclick_graph_box", {
+                    "row": !!item,
+                    "box": !acts.reclickGraphArmed || graphPane.namingOid !== "",
+                    "shown": !reclickGraphTimer.scrolls || graphPane.rowOnScreen(reclickGraphTimer.row) }))
                     return
                 reclickGraphTimer.stop()
                 if (reclickGraphTimer.fits) {
@@ -274,23 +276,23 @@ Item {
         property int row: 0
         onTriggered: {
             const item = graphPane.view.itemAtIndex(laneClickTimer.row)
-            if (!Awaited.all("lane_click_ready", { "ready": item }))
-                return
+            // A point in the strip's own frame, over this row — the strip works out which row that is.
+            const strikes = () => graphPane.lanePan.clickAt(1, item.mapToItem(graphPane, 0, item.height / 2).y)
             if (acts.laneClickStep === 0) {
+                if (!Awaited.all("lane_click_row", { "row": !!item }))
+                    return
                 // The strip is only up while the lanes overflow, so the column is squeezed to its floor first.
                 page.setGraphColumns(graphPane.labelW, 0)
                 acts.laneClickStep = 1
             } else if (acts.laneClickStep === 1) {
-                if (!graphPane.lanePan.visible)
-                    return
-                // A point in the strip's own frame, over this row — the strip works out which row that is.
-                if (!graphPane.lanePan.clickAt(1, item.mapToItem(graphPane, 0, item.height / 2).y))
+                const strip = !!item && graphPane.lanePan.visible
+                if (!Awaited.all("lane_click_first", { "strip": strip, "struck": strip && strikes() }))
                     return
                 acts.laneClickStep = 2
             } else if (acts.laneClickStep === 2) {
-                if (graphPane.view.clickGuarded)
-                    return
-                if (!graphPane.lanePan.clickAt(1, item.mapToItem(graphPane, 0, item.height / 2).y))
+                // Inside the double-click window a second click would be half a double-click.
+                const open = !!item && !graphPane.view.clickGuarded
+                if (!Awaited.all("lane_click_second", { "window": open, "struck": open && strikes() }))
                     return
                 acts.laneClickArmed = item.renameArmed
                 acts.laneClickStep = 3
@@ -390,7 +392,7 @@ Item {
         onTriggered: {
             if (acts.reclickListStep === 0) {
                 const item = graphPane.view.itemAtIndex(reclickListTimer.row)
-                if (!item)
+                if (!Awaited.all("reclick_list_row", { "row": item !== null }))
                     return
                 if (reclickListTimer.across)
                     item.leftClick(Qt.NoModifier)
@@ -400,7 +402,7 @@ Item {
                 acts.reclickListStep = 1
             } else if (acts.reclickListStep === 1) {
                 // The card lays its rows out as it is shown; until it is up there is no row to click.
-                if (!refList.opened)
+                if (!Awaited.all("reclick_list_open", { "list": refList.opened }))
                     return
                 if (reclickListTimer.picks) {
                     if (!driver.inputWent(refList.doubleClickRow(reclickListTimer.card)))
@@ -413,9 +415,9 @@ Item {
                     return
                 }
                 // Inside the window the row's click opened, a click here is the other half of a double-click.
-                if (reclickListTimer.across && refList.rowGuarded(reclickListTimer.card))
-                    return
-                if (!refList.clickRow(reclickListTimer.card))
+                const open = !reclickListTimer.across || !refList.rowGuarded(reclickListTimer.card)
+                if (!Awaited.all("reclick_list_first", { "window": open,
+                                                         "clicked": open && refList.clickRow(reclickListTimer.card) }))
                     return
                 if (reclickListTimer.across) {
                     // The row's click was the first: one click on the card is already the second.
@@ -425,9 +427,9 @@ Item {
                 }
                 acts.reclickListStep = 2
             } else if (acts.reclickListStep === 2) {
-                if (refList.rowGuarded(reclickListTimer.card))
-                    return
-                if (!refList.clickRow(reclickListTimer.card))
+                const open = !refList.rowGuarded(reclickListTimer.card)
+                if (!Awaited.all("reclick_list_second", { "window": open,
+                                                          "clicked": open && refList.clickRow(reclickListTimer.card) }))
                     return
                 acts.reclickListArmed = refList.rowArmed(reclickListTimer.card)
                 acts.reclickListStep = 3
@@ -481,17 +483,15 @@ Item {
         }
         onTriggered: {
             if (listHeldTimer.step === 0) {
-                Awaited.at("ref_list_held", "card")
                 const item = graphPane.view.itemAtIndex(listHeldTimer.row)
-                if (!item)
+                if (!Awaited.all("ref_list_held_row", { "row": item !== null }))
                     return
                 // Hover cannot be injected, so this enters where the row's own rest timer would (`ref-list`).
                 graphPane.view.chipExpandRequested(item.oid_hex, listHeldTimer.row, item.chipItem.records,
                                                    item.chipItem)
                 listHeldTimer.step = 1
             } else if (listHeldTimer.step === 1) {
-                Awaited.at("ref_list_held", "press")
-                if (!refList.opened)
+                if (!Awaited.all("ref_list_held_open", { "list": refList.opened }))
                     return
                 // The card is up, so its records are this run's answer: a row that is no held branch never will be.
                 const rec = refList.records[listHeldTimer.card]
@@ -502,9 +502,9 @@ Item {
                 }
                 // The chip's mark rides the ref joins; the listing the page asks may land a tick apart.
                 listHeldTimer.wanted = sidebarPane.worktreesModel.worktreeHolding(rec.name)
-                if (listHeldTimer.wanted === "")
-                    return
-                if (!refList.doubleClickRow(listHeldTimer.card))
+                const named = listHeldTimer.wanted !== ""
+                if (!Awaited.all("ref_list_held_press", {
+                    "wanted": named, "pressed": named && refList.doubleClickRow(listHeldTimer.card) }))
                     return
                 listHeldTimer.step = 2
             } else {

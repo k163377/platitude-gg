@@ -514,11 +514,13 @@ Item {
                     // Read at the rest, before the walk off: a section that never opened also reads as gone.
                     menuPeekTimer.opened = sidebarPane.peekSection.visible
                     navProbe.peekAway("branch")
+                    menuPeekTimer.step = 2
                 } else if (menuPeekTimer.how === "under") {
                     if (!Awaited.all("menu_peek_open", { "peek": navProbe.peekStanding }))
                         return
                     menuPeekTimer.opened = true
                     page.openRowMenu(worktree.headOid)
+                    menuPeekTimer.step = 2
                 } else {
                     // The current branch's row: the list's first row may be a folder, which raises no menu.
                     const row = navProbe.peek.sectionModel
@@ -538,8 +540,8 @@ Item {
                     } else {
                         menuPeekTimer.opened = true
                     }
+                    menuPeekTimer.step = 2
                 }
-                menuPeekTimer.step = 2
             } else {
                 if (!Awaited.all("menu_peek_after", {
                         "menu": page.menuStanding,
@@ -716,7 +718,7 @@ Item {
         onTriggered: {
             const there = graphModel.rowOf(acts.tagEyeOid) >= 0
             if (acts.tagEyeStep === 0) {
-                if (!there)
+                if (!Awaited.all("tag_eye_there", { "there": there }))
                     return
                 acts.tagEyeStep = 1
                 acts.tagEyeFinish = graphModel.finishCount
@@ -726,7 +728,7 @@ Item {
             if (graphModel.finishCount === acts.tagEyeFinish)
                 return
             if (acts.tagEyeStep === 1) {
-                if (there)
+                if (!Awaited.all("tag_eye_gone", { "gone": !there }))
                     return
                 if (acts.tagEyeBack) {
                     acts.tagEyeStep = 2
@@ -833,20 +835,28 @@ Item {
         onTriggered: {
             const section = sidebarPane.peekSection
             if (acts.reclickStep === 0) {
-                if (!reclickTimer.peeked() || !section.clickRow(reclickTimer.row))
+                const peeked = reclickTimer.peeked()
+                if (!Awaited.all("nav_reclick_first", { "peeked": peeked,
+                                                        "clicked": peeked && section.clickRow(reclickTimer.row) }))
                     return
                 acts.reclickStep = acts.reclickAway ? 1 : 3
             } else if (acts.reclickStep === 1) {
+                // The hand off the section it is on.
+                if (!Awaited.all("nav_reclick_away", { "peek": sidebarPane.peekKind !== "" }))
+                    return
                 navProbe.peekAway(reclickTimer.kind)
                 acts.reclickStep = 2
             } else if (acts.reclickStep === 2) {
                 // The pointer leaving is answered a beat later (SectionPeekPopup.settle).
-                if (sidebarPane.peekKind !== "")
+                if (!Awaited.all("nav_reclick_gone", { "gone": sidebarPane.peekKind === "" }))
                     return
                 acts.reclickStep = 3
             } else if (acts.reclickStep === 3) {
-                if (!reclickTimer.peeked() || section.rowGuarded(reclickTimer.row)
-                        || !section.clickRow(reclickTimer.row))
+                // Inside the double-click window a second click would be half a double-click.
+                const peeked = reclickTimer.peeked()
+                const open = peeked && !section.rowGuarded(reclickTimer.row)
+                if (!Awaited.all("nav_reclick_second", { "peeked": peeked, "window": open,
+                                                         "clicked": open && section.clickRow(reclickTimer.row) }))
                     return
                 // Read here: the wait is short and turns into the box.
                 acts.reclickArmed = section.rowArmed(reclickTimer.row)
@@ -907,21 +917,23 @@ Item {
             if (!Awaited.all("elsewhere_ready", { "ready": list }))
                 return
             const step = acts.elsewhereStep
-            if (step === 0 || step === 3 || step === 5) {
+            if (acts.elsewhereStep === 0 || acts.elsewhereStep === 3 || acts.elsewhereStep === 5) {
                 // Spaced from the click before: inside its window this would be half a double-click.
-                if (list.rowGuarded(elsewhereTimer.row) || !elsewhereTimer.press(list))
+                const open = !list.rowGuarded(elsewhereTimer.row)
+                if (!Awaited.all("elsewhere_press/" + step, { "window": open,
+                                                              "pressed": open && elsewhereTimer.press(list) }))
                     return
                 acts.elsewhereStep = step + 1
-            } else if (step === 1 || step === 4 || step === 6) {
-                if (!list.releaseRow(elsewhereTimer.row))
+            } else if (acts.elsewhereStep === 1 || acts.elsewhereStep === 4 || acts.elsewhereStep === 6) {
+                if (!Awaited.all("elsewhere_release/" + step, { "released": list.releaseRow(elsewhereTimer.row) }))
                     return
                 if (step === 4)
                     acts.elsewherePane = list.rowArmed(elsewhereTimer.row)
                 if (step === 6)
                     acts.elsewhereArmed = list.rowArmed(elsewhereTimer.row)
                 acts.elsewhereStep = step === 1 ? 2 : step + 1
-            } else if (step === 2) {
-                if (list.rowGuarded(elsewhereTimer.row))
+            } else if (acts.elsewhereStep === 2) {
+                if (!Awaited.all("elsewhere_window", { "window": !list.rowGuarded(elsewhereTimer.row) }))
                     return
                 page.Window.window.caretHand.pressedAt(detailsPane.mapToItem(null, detailsPane.width / 2,
                                                                              detailsPane.height / 2))

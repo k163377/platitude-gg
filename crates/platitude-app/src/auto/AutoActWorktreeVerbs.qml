@@ -185,8 +185,9 @@ Item {
             if (!acts.driver.menusLive())
                 return
             if (worktreeTimer.step === 0) {
-                if (worktreeTimer.raise())
-                    worktreeTimer.step = 1
+                if (!Awaited.all("worktree_menu_raised", { "raised": worktreeTimer.raise() }))
+                    return
+                worktreeTimer.step = 1
                 return
             }
             if (worktreeTimer.step === 1) {
@@ -377,7 +378,7 @@ Item {
             Awaited.at("worktree_rename", renameTimer.step)
             if (renameTimer.step === 0) {
                 const at = acts.rowOf("worktree", renameTimer.folder)
-                if (at < 0)
+                if (!Awaited.all("worktree_rename_row", { "row": at >= 0 }))
                     return
                 renameTimer.full = acts.worktreesModel.fullAt(at)
                 renameTimer.oid = acts.worktreesModel.headOfWorktree(renameTimer.full)
@@ -387,14 +388,15 @@ Item {
                     renameTimer.step = 2
                     return
                 }
-                if (!renameTimer.click())
+                if (!Awaited.all("worktree_rename_first", { "clicked": renameTimer.click() }))
                     return
                 renameTimer.step = 1
                 return
             }
             if (renameTimer.step === 1) {
                 // Inside the double-click window a second click would be half a double-click.
-                if (renameTimer.guarded() || !renameTimer.click())
+                const open = !renameTimer.guarded()
+                if (!Awaited.all("worktree_rename_second", { "window": open, "clicked": open && renameTimer.click() }))
                     return
                 renameTimer.step = 2
                 return

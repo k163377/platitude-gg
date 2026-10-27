@@ -204,8 +204,10 @@ Item {
     /// The walk at a picture (`AutoShotDriver.pictured`), in the picture's own turn. The claim every run makes of
     /// every picture: `pictured … name=window holds=` — the parts standing are the parts it completed on, named by
     /// what came (`gained=`) and what went (`lost=`); a read landing between the completion and the picture moves
-    /// the set, and the picture is then of a state the run never claimed. At the app's picture, the census itself
-    /// follows: `census=<names>`, read one word at a time by the parent (`verify::observed::Observed::in_lines`).
+    /// the set, and the picture is then of a state the run never claimed — and the page as it stood then (`page=`),
+    /// judged as the completion's is: a picture of a page still arriving is a breach unless the verb named the read
+    /// (`Awaited.arriving`), whatever the parts say. At the app's picture, the census itself follows:
+    /// `census=<names>`, read one word at a time by the parent (`verify::observed::Observed::in_lines`).
     function reportAt(artifact) {
         if (Harness.autoAct === "")
             return
@@ -214,15 +216,15 @@ Item {
         const gained = Object.keys(census.met).filter(name => before[name] !== true).sort()
         const lost = Object.keys(before).filter(name => census.met[name] !== true).sort()
         const holds = census.atCompletion !== null && gained.length === 0 && lost.length === 0
+        const owed = census.pageMissing()
+        const page = owed.length === 0 ? "settled" : "arriving:" + owed.join(",")
         Harness.report("pictured run=" + Awaited.runId + " artifact=" + artifact + " name=window holds=" + holds
                        + " gained=" + (gained.length === 0 ? "none" : gained.join("/"))
-                       + " lost=" + (lost.length === 0 ? "none" : lost.join("/")))
+                       + " lost=" + (lost.length === 0 ? "none" : lost.join("/"))
+                       + " page=" + page)
         if (artifact !== "app")
             return
-        const owed = census.pageMissing()
-        Harness.report("census run=" + Awaited.runId
-                       + " page=" + (owed.length === 0 ? "settled" : "arriving:" + owed.join(","))
-                       + " " + census.terms())
+        Harness.report("census run=" + Awaited.runId + " page=" + page + " " + census.terms())
         Harness.report("census=" + Object.keys(census.met).sort().join(","))
     }
 

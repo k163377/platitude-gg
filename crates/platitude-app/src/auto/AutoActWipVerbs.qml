@@ -868,9 +868,11 @@ Item {
         }
         onTriggered: {
             if (eolGoneTimer.step === 0) {
+                // The button's form stages everything first; the row's form starts on the rows as they are.
+                if (!Awaited.all("eol_gone_stage", {
+                        "pressed": !eolGoneTimer.button || eolGoneTimer.pressAll("stage-all") }))
+                    return
                 if (eolGoneTimer.button) {
-                    if (!Awaited.all("eol_gone_stage", { "pressed": eolGoneTimer.pressAll("stage-all") }))
-                        return
                     // The button warns only while it can be pressed (`WipCommitBlock.eolWarned`): a message first.
                     wipPane.setMessage("feat: something", "")
                     wipPane.pointAtCommit = true

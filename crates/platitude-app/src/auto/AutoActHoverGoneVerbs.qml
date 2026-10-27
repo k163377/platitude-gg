@@ -283,12 +283,11 @@ Item {
                     eolChangeTimer.stroke("eol_change_first")
                     return
                 }
-                if (staged && !Awaited.all("eol_change_staged", {
-                        "wrote": driver.wroteAndSettled(),
-                        "marked": marked.eolMarked(eolChangeTimer.path)
-                    }))
-                    return
-                if (!eolChangeTimer.cardHeld())
+                // The card held with the hand inside it — after the stage's write and the mark, where the file was
+                // staged.
+                const written = !staged || (driver.wroteAndSettled() && marked.eolMarked(eolChangeTimer.path))
+                if (!Awaited.all("eol_change_held", { "written": written,
+                                                      "held": written && eolChangeTimer.cardHeld() }))
                     return
                 if (!staged) {
                     // Saved over from outside: a second line lands with the other ending.
@@ -487,8 +486,8 @@ Item {
             if (wipRereadTimer.step === 3) {
                 // The row the read left under the hand asks for its tip or card after the rest: the forms that end
                 // here end on that decision; `above` reads first, then moves the hand (below).
-                if (wipRereadTimer.how !== "above"
-                        && !Awaited.all("wip_reread_landed", { "page": PageSettled.settled(page) }))
+                if (!Awaited.all("wip_reread_landed", {
+                        "page": wipRereadTimer.how === "above" || PageSettled.settled(page) }))
                     return
                 wipRereadTimer.left = wipRereadTimer.read()
                 if (wipRereadTimer.how !== "above") {

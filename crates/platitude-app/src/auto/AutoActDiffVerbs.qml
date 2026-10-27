@@ -507,7 +507,7 @@ Item {
             const rows = diffPane.view.count
             if (lineBackTimer.step === 0) {
                 const line = diffPane.firstChangedLine(0)
-                if (line < 0)
+                if (!Awaited.all("line_back_line", { "line": line >= 0 }))
                     return
                 lineBackTimer.rows0 = rows
                 driver.pressWrite("stage-line", () => {
@@ -518,7 +518,8 @@ Item {
                 return
             }
             if (lineBackTimer.step === 1) {
-                if (!acts.wroteAndSettled() || rows >= lineBackTimer.rows0)
+                if (!Awaited.all("line_back_shrunk", { "written": acts.wroteAndSettled(),
+                                                       "shrunk": rows < lineBackTimer.rows0 }))
                     return
                 lineBackTimer.rows1 = rows
                 lineBackTimer.shrank = true
@@ -531,7 +532,8 @@ Item {
                 return
             }
             if (lineBackTimer.step === 2) {
-                if (!acts.wroteAndSettled() || rows !== lineBackTimer.rows0)
+                if (!Awaited.all("line_back_back", { "written": acts.wroteAndSettled(),
+                                                     "back": rows === lineBackTimer.rows0 }))
                     return
                 lineBackTimer.back = true
                 driver.pressWrite("stage-path", () => {
@@ -634,7 +636,7 @@ Item {
         }
         onTriggered: {
             if (followTimer.step === 0) {
-                if (diffPane.view.count === 0)
+                if (!Awaited.all("diff_follow_rows", { "rows": diffPane.view.count > 0 }))
                     return
                 followTimer.was = page.diffKey
                 // Read before the write takes the file off this side.
@@ -794,7 +796,7 @@ Item {
         onTriggered: {
             const foot = diffPane.view.count - 1
             if (codeGrowTimer.step === 0) {
-                if (!acts.viewLaidOut())
+                if (!Awaited.all("code_grow_laid", { "laid": acts.viewLaidOut() }))
                     return
                 // A diff that fits its frame has no row to arrive from below: said and stopped
                 // (rules-refs/app-ui.md「欠けた前提は言って止まる」).
@@ -809,7 +811,7 @@ Item {
                 return
             }
             if (codeGrowTimer.step === 1) {
-                if (!codeGrowTimer.arrived(foot))
+                if (!Awaited.all("code_grow_foot", { "arrived": codeGrowTimer.arrived(foot) }))
                     return
                 codeGrowTimer.drawn = diffPane.codeDrawn
                 codeGrowTimer.row = diffPane.codeWidestRow
@@ -818,7 +820,7 @@ Item {
                 return
             }
             if (codeGrowTimer.step === 2) {
-                if (!codeGrowTimer.arrived(0))
+                if (!Awaited.all("code_grow_top", { "arrived": codeGrowTimer.arrived(0) }))
                     return
                 codeGrowTimer.back = diffPane.codeDrawn
                 codeGrowTimer.step = 3
@@ -826,7 +828,7 @@ Item {
                 return
             }
             if (codeGrowTimer.step === 3) {
-                if (!codeGrowTimer.arrived(foot))
+                if (!Awaited.all("code_grow_foot_again", { "arrived": codeGrowTimer.arrived(foot) }))
                     return
                 codeGrowTimer.again = diffPane.codeDrawn
                 codeGrowTimer.rowAgain = diffPane.codeWidestRow
@@ -947,7 +949,7 @@ Item {
         }
         onTriggered: {
             if (codeSwapTimer.step === 0) {
-                if (!acts.viewLaidOut())
+                if (!Awaited.all("code_swap_laid", { "laid": acts.viewLaidOut() }))
                     return
                 if (diffPane.codeMax <= 0) {
                     acts.finish(codeSwapTimer)

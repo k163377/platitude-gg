@@ -291,7 +291,7 @@ Item {
         property int step: 0
         onTriggered: {
             if (refreshLeaveTimer.step === 0) {
-                if (!settingsDialog.opened) {
+                if (!Awaited.all("refresh_leave_open", { "open": settingsDialog.opened })) {
                     settingsDialog.openAt("app")
                     return
                 }
@@ -300,6 +300,12 @@ Item {
                 return
             }
             if (refreshLeaveTimer.step === 1) {
+                // The pairs typed are in the store before the way out is taken, or the leave would write over them.
+                if (!Awaited.all("refresh_leave_typed", {
+                        "refresh": AppBackend.refreshFloorSecs === 7 && AppBackend.refreshCeilingSecs === 20,
+                        "worktrees": AppBackend.worktreesReading === "auto" && AppBackend.worktreesFloorSecs === 9
+                                     && AppBackend.worktreesCeilingSecs === 60 }))
+                    return
                 const parts = Harness.autoActArg.split(":")
                 acts.appPane.autoLeaveBounds(parts[0] || "", parts[1] || "", parts[2] || "", parts[3] || "")
                 settingsDialog.escapeOut()

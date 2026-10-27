@@ -287,6 +287,9 @@ Item {
                 return
             }
             if (diffTimer.step === 1) {
+                // The row the hand is on laid out and standing, before the write moves the rows under it.
+                if (!Awaited.still("diff_reread_stood", diffTimer.row.mapToItem(null, 0, 0).y))
+                    return
                 diffTimer.rowAt = diffTimer.row.mapToItem(null, 0, 0).y
                 diffTimer.reads = 0
                 const why = Harness.writeFile(acts.repoTab.repoPath + "/notes.txt", diffTimer.notes(diffTimer.how))

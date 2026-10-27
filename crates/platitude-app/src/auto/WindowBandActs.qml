@@ -256,16 +256,16 @@ Item {
         /// Whether a folder of the branch card was there to be opened (`ops-branch-folder`).
         property bool folderAsked: false
         onTriggered: {
-            // Both listings, not a beat: they land on separate reads. Every repository lists its own worktree, so
-            // zero worktrees is a listing not yet landed.
-            if (!Awaited.all("ops_door_ready", {
-                "shown": window.visible && topBar.width > 0,
-                "refs": window.curPage !== null && window.curPage.pageRefsLoaded,
-                "worktrees": window.curPage !== null && window.curPage.pageWorktrees.total > 0,
-                "page": PageSettled.settledUnder(window) }))
-                return
             const branchDoor = Harness.autoAct === "ops-branch" || Harness.autoAct === "ops-branch-folder"
             if (opsDoorTimer.opened === 0) {
+                // Both listings, not a beat: they land on separate reads. Every repository lists its own worktree,
+                // so zero worktrees is a listing not yet landed.
+                if (!Awaited.all("ops_door_ready", {
+                    "shown": window.visible && topBar.width > 0,
+                    "refs": window.curPage !== null && window.curPage.pageRefsLoaded,
+                    "worktrees": window.curPage !== null && window.curPage.pageWorktrees.total > 0,
+                    "page": PageSettled.settledUnder(window) }))
+                    return
                 // The left menu filtered first (as `NavProbe.typeFilter` does): a worktree filtered out of sight there
                 // is still one the card offers.
                 if (Harness.autoAct === "ops-stand-worktrees" && Harness.autoActArg !== "")
@@ -285,7 +285,9 @@ Item {
                 if (Harness.autoAct === "ops-stand-worktrees")
                     topBar.openStandWorktrees()
             }
-            if (opsDoorTimer.opened === 1 && Harness.autoAct === "ops-branch-folder" && topBar.branchMenuOpen) {
+            if (opsDoorTimer.opened === 1 && Harness.autoAct === "ops-branch-folder") {
+                if (!Awaited.all("ops_door_branch_menu", { "menu": topBar.branchMenuOpen }))
+                    return
                 opsDoorTimer.opened = 2
                 opsDoorTimer.folderAsked = topBar.openBranchFolder(Harness.autoActArg)
                 Harness.report("ops_door step=folder asked=" + opsDoorTimer.folderAsked)
@@ -323,17 +325,17 @@ Item {
         /// Presses gone in. The second lands only on a card observed standing, as a hand's would.
         property int pressed: 0
         onTriggered: {
-            if (!Awaited.all("app_menu_act_ready", { "ready": !(!window.visible || topBar.width <= 0),
-                                                     "page": PageSettled.windowSettled(window) }))
-                return
             const twice = Harness.autoAct === "app-menu-reclick"
             if (appMenuActTimer.pressed === 0) {
+                if (!Awaited.all("app_menu_act_ready", { "shown": window.visible && topBar.width > 0,
+                                                         "page": PageSettled.windowSettled(window) }))
+                    return
                 appMenuActTimer.pressed = 1
                 topBar.clickAppMenu()
                 return
             }
             if (appMenuActTimer.pressed === 1) {
-                if (!topBar.appMenuOpen)
+                if (!Awaited.all("app_menu_open", { "menu": topBar.appMenuOpen }))
                     return
                 if (twice) {
                     appMenuActTimer.pressed = 2
@@ -341,7 +343,8 @@ Item {
                     return
                 }
             }
-            if (twice && topBar.appMenuOpen)
+            if (!Awaited.all("app_menu_landed", { "shut": !twice || !topBar.appMenuOpen,
+                                                  "page": PageSettled.windowSettled(window) }))
                 return
             stop()
             Harness.report(

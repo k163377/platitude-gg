@@ -274,23 +274,22 @@ Item {
                     && !Awaited.all("menu_block_page/" + menuBlockTimer.step, { "page": PageSettled.settled(page) }))
                 return
             if (menuBlockTimer.step === 0) {
-                if (owner === "eol" || owner === "eol-key") {
+                const eol = owner === "eol" || owner === "eol-key"
+                if (eol)
                     page.showWip()
-                    if (!Awaited.all("menu_block_rows", {
-                            "first": wipPane.rowIn("unstaged", menuBlockTimer.first) !== null,
-                            "second": wipPane.rowIn("unstaged", menuBlockTimer.second) !== null
-                        }))
-                        return
-                } else if (owner === "recover") {
-                    if (!page.recoverOpen)
-                        page.toggleRecover()
-                    if (!Awaited.all("menu_block_log", { "read": page.recoverAnswered }))
-                        return
-                } else if (owner === "author" || owner === "tip") {
+                else if (owner === "recover" && !page.recoverOpen)
+                    page.toggleRecover()
+                else if (owner === "author" || owner === "tip")
                     page.activateRow(graphModel.oidAt(owner === "tip" ? 1 : 4))
-                } else if (owner === "author-files") {
+                else if (owner === "author-files")
                     page.activateRow(graphModel.oidAt(1))
-                }
+                // What the owner's display hangs off: the two file rows, or the log's answer; a row activated is in.
+                if (!Awaited.all("menu_block_rows", {
+                        "first": !eol || wipPane.rowIn("unstaged", menuBlockTimer.first) !== null,
+                        "second": !eol || wipPane.rowIn("unstaged", menuBlockTimer.second) !== null,
+                        "read": owner !== "recover" || page.recoverAnswered
+                    }))
+                    return
                 menuBlockTimer.step = 1
                 return
             }

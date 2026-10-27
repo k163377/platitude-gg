@@ -543,7 +543,7 @@ Item {
         }
         onTriggered: {
             if (middleExitTimer.step === 0) {
-                if (graphPane.view.count === 0)
+                if (!Awaited.all("middle_exit_rows", { "rows": graphPane.view.count > 0 }))
                     return
                 const y = graphPane.height / 2
                 // The subject column: a press on the lanes would mix the sideways drift into the answer.
@@ -557,7 +557,7 @@ Item {
                 return
             }
             if (middleExitTimer.step === 1) {
-                if (graphPane.autoTicks < 2)
+                if (!Awaited.all("middle_exit_ticked", { "ticked": graphPane.autoTicks >= 2 }))
                     return
                 middleExitTimer.movedAway =
                     Math.abs(graphPane.view.contentY - middleExitTimer.fromY) > 0.5

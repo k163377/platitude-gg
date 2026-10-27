@@ -34,17 +34,19 @@ Item {
         /// When the press went in, and the first tick the panel named a branch after it (`headMs=`).
         property real pressedAt: 0
         property real headAt: 0
-        /// The frame after the press, grabbed to `pressed.png`: 0 while owed, 1 saved, -1 not.
-        property int pressShot: 0
+        /// Whether the panel's own picture (`pressed.png`, the frame after the press) was saved: `saved` /
+        /// `failed`, "" while not asked.
+        property string pressShot: ""
         onTriggered: {
             const page = acts.window.curPage
-            if (!Awaited.all("ops_pick_ready", { "ready": !(!acts.window.visible || page === null),
-                                             "page": PageSettled.windowSettled(window) }))
-                return
             const door = Harness.autoAct === "ops-branch-pick" ? "branch"
                        : Harness.autoAct === "ops-worktree-pick" ? "worktree" : "repo"
             if (pickTimer.step === 0) {
-                if (!acts.ready(page))
+                // Read here alone: the move the later stages wait for unsettles the page, and a guard read every beat
+                // across them would be reached again behind their checkpoints.
+                if (!Awaited.all("ops_pick_ready", { "shown": acts.window.visible,
+                                                 "ready": page !== null && acts.ready(page),
+                                                 "page": PageSettled.windowSettled(window) }))
                     return
                 // The repository door needs a second tab; with one, the run says so now rather than at the ceiling.
                 if (door === "repo" && acts.pageRepeater.count < 2) {
@@ -61,7 +63,7 @@ Item {
                 return
             }
             if (pickTimer.step === 1) {
-                if (!acts.topBar.standMenuOpen)
+                if (!Awaited.all("ops_pick_stand_menu", { "menu": acts.topBar.standMenuOpen }))
                     return
                 const opened = door === "worktree" ? acts.topBar.openStandWorktrees() : acts.topBar.openStandRepos()
                 pickTimer.step = 2
@@ -72,7 +74,8 @@ Item {
                 // Card and tab read in the turn that presses, not the tick that opened the card: a read landing
                 // between the two can start something the move is then refused over.
                 const wanted = door === "branch" ? "branch" : door === "worktree" ? "worktrees" : "repos"
-                if (acts.topBar.standDoor !== wanted || !acts.ready(page))
+                if (!Awaited.all("ops_pick_tier", { "door": acts.topBar.standDoor === wanted,
+                                                    "ready": acts.ready(page) }))
                     return
                 pickTimer.from = door === "branch" ? acts.topBar.branchName : page.pageTab.repoPath
                 pickTimer.fromNames = acts.names()
@@ -99,10 +102,10 @@ Item {
                 // asked for is said as such rather than waited on.
                 if (door === "repo" && pressed) {
                     const asked = Harness.shotDir !== "" && acts.topBar.grabToImage(shot => {
-                        pickTimer.pressShot = shot.saveToFile(Harness.shotDir + "/pressed.png") ? 1 : -1
+                        pickTimer.pressShot = shot.saveToFile(Harness.shotDir + "/pressed.png") ? "saved" : "failed"
                     })
                     if (!asked)
-                        pickTimer.pressShot = -1
+                        pickTimer.pressShot = "failed"
                 }
                 pickTimer.step = 3
                 Harness.report("ops_pick step=pressed door=" + door + " found=" + pressed)
@@ -117,7 +120,7 @@ Item {
             // A move turned away (a worded refusal, or a worktree that would not open) is an answer too, not a ceiling.
             const refused = page.pageTab.state === "error"
                             || (page.pageTab.lastError !== "" && page.pageTab.lastError !== pickTimer.errorBefore)
-            if (!refused && (!acts.landed(door, page) || (door === "repo" && pickTimer.pressShot === 0)))
+            if (!refused && (!acts.landed(door, page) || (door === "repo" && pickTimer.pressShot === "")))
                 return
             acts.finish(door, true)
         }
@@ -160,7 +163,7 @@ Item {
                        // so this door's press leaves the branch unknown until the status answers.
                        + (door === "repo"
                           ? " headMs=" + (pickTimer.headAt > 0 ? Math.round(pickTimer.headAt - pickTimer.pressedAt) : -1)
-                            + " pressShot=" + (pickTimer.pressShot === 1)
+                            + " pressShot=" + (pickTimer.pressShot === "saved")
                           : "")
                        + " error=" + (page.pageTab.lastError !== pickTimer.errorBefore)
                        + " from=" + pickTimer.from

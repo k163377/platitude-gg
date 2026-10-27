@@ -131,6 +131,10 @@ QtObject {
     /// names): a verb that photographs a page arriving says so here before it completes, and the parent holds the
     /// completion to it. Empty for every verb that completes on a settled page — the rule.
     property var arriving: []
+    /// Whether the verb said it would photograph `term` still arriving (`arriving`; `*` for every read).
+    function expects(term) {
+        return awaited.arriving.indexOf("*") >= 0 || awaited.arriving.indexOf(term) >= 0
+    }
 
     /// The verb's completion, by name, before the pictures: a run whose pictures come with no completion, or whose
     /// completion comes with no checkpoint reached, is one that ended on its own count. `missing` is what the page

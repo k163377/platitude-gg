@@ -173,9 +173,8 @@ Item {
         }
         onTriggered: {
             if (fileTimer.step === 0) {
-                Awaited.at("github_file", "row")
                 const item = graphPane.view.itemAtIndex(fileTimer.row)
-                if (!item) {
+                if (!Awaited.all("github_file_row", { "row": item !== null })) {
                     graphPane.view.positionViewAtIndex(fileTimer.row, ListView.Contain)
                     return
                 }
@@ -267,9 +266,8 @@ Item {
         }
         onTriggered: {
             if (diffTimer.step === 0) {
-                Awaited.at("diff_github", "row")
                 const item = graphPane.view.itemAtIndex(diffTimer.row)
-                if (!item) {
+                if (!Awaited.all("diff_github_row", { "row": item !== null })) {
                     graphPane.view.positionViewAtIndex(diffTimer.row, ListView.Contain)
                     return
                 }
