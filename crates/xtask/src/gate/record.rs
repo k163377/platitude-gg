@@ -181,8 +181,9 @@ pub(crate) struct Spent {
     pub graph_cache: String,
     /// The one `git ls-tree` the cache keys are made of.
     pub ids: Duration,
-    /// The census, and the wearers the components are read through.
-    pub census: Duration,
+    /// The registered lines, the tier table and the composition of the
+    /// QML they are read against.
+    pub lines: Duration,
     /// The rest of the plan: the diff, the reach, the steps, the stamps.
     pub plan_rest: Duration,
     /// The tree's status and the stamp store, before anything runs.
@@ -191,8 +192,6 @@ pub(crate) struct Spent {
     pub runner: Duration,
     /// Both sides, from the first step to the last.
     pub sides: Duration,
-    /// Reading the census back to see whether a verb moved it.
-    pub census_after: Duration,
     /// The whole run.
     pub total: Duration,
     /// How many units of the host side waited for room held elsewhere,
@@ -220,7 +219,7 @@ pub(crate) struct Run<'a> {
     /// always, cached, to run.
     pub steps: (usize, usize, usize),
     /// Verb steps selected, those of them not already stamped, and the
-    /// census lines left to the whole gate.
+    /// registered lines left to the whole gate.
     pub verbs: (usize, usize, usize),
     pub outcome: &'a str,
 }
@@ -235,7 +234,7 @@ fn moment(spent: Duration) -> String {
 }
 
 /// The block both the terminal and the record hold.
-pub(crate) fn render(run: &Run<'_>, spent: &Spent, shift: &super::census::Shift) -> String {
+pub(crate) fn render(run: &Run<'_>, spent: &Spent) -> String {
     let (always, cached, to_run) = run.steps;
     let (verbs_selected, verbs_run, verbs_left) = run.verbs;
     let mut out = format!(
@@ -256,18 +255,17 @@ pub(crate) fn render(run: &Run<'_>, spent: &Spent, shift: &super::census::Shift)
         always + cached + to_run,
     ));
     out.push_str(&format!(
-        "  spent  gate lock {} / graph {}{} / tree ids {} / census {} / plan {} / prepare {} / \
-         runner {} / sides {} / census back {}\n",
+        "  spent  gate lock {} / graph {}{} / tree ids {} / lines {} / plan {} / prepare {} / \
+         runner {} / sides {}\n",
         moment(spent.sole),
         moment(spent.graph),
         if spent.graph_reused { " (kept)" } else { "" },
         moment(spent.ids),
-        moment(spent.census),
+        moment(spent.lines),
         moment(spent.plan_rest),
         moment(spent.prepare),
         moment(spent.runner),
         moment(spent.sides),
-        moment(spent.census_after),
     ));
     if !spent.graph_cache.is_empty() {
         out.push_str(&format!("  graph cache {}\n", spent.graph_cache));
@@ -293,14 +291,12 @@ pub(crate) fn render(run: &Run<'_>, spent: &Spent, shift: &super::census::Shift)
             spent.ledger.lines().count().saturating_sub(1),
         ));
     }
-    // What the run's verbs did to the census, by name (`super::census::Shift`).
-    out.push_str(&shift.block());
     out
 }
 
 /// Writes the block under `target/gate-runs/` and takes away all but the
 /// newest [`KEEP`]. A record nobody could write is not worth a red gate.
-pub(crate) fn keep(dir: &Path, run: &Run<'_>, spent: &Spent, shift: &super::census::Shift) {
+pub(crate) fn keep(dir: &Path, run: &Run<'_>, spent: &Spent) {
     let records = dir.join("target").join(DIR);
     if std::fs::create_dir_all(&records).is_err() {
         return;
@@ -310,7 +306,7 @@ pub(crate) fn keep(dir: &Path, run: &Run<'_>, spent: &Spent, shift: &super::cens
         .map_or(0, |since| since.as_secs());
     let name = format!("{at}-{}", std::process::id());
     let path = records.join(format!("{name}.txt"));
-    let _ = std::fs::write(&path, render(run, spent, shift));
+    let _ = std::fs::write(&path, render(run, spent));
     if !spent.ledger.is_empty() {
         let _ = std::fs::write(records.join(format!("{name}.units.tsv")), &spent.ledger);
     }
@@ -540,13 +536,13 @@ mod tests {
             verbs: (353, 353, 0),
             outcome: "PASS",
         };
-        let text = render(&run, &spent, &crate::gate::census::Shift::default());
+        let text = render(&run, &spent);
         for word in [
             "gate lock",
             "graph",
             "graph cache miss: invalid cache payload; saved",
             "tree ids",
-            "census",
+            "lines",
             "plan",
             "prepare",
             "runner",

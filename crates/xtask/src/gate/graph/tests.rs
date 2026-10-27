@@ -62,14 +62,14 @@ fn a_byte_string_is_bytes_and_not_a_path() {
 }
 
 #[test]
-fn a_literal_naming_an_ancestor_directory_or_the_census_is_no_edge() {
+fn a_literal_naming_an_ancestor_directory_or_the_lines_is_no_edge() {
     let root = crate::tree::workspace_root();
     let named = |file: &str, literal: &str| literal_paths(&root, file, &[literal.to_string()]);
     let plan = "crates/xtask/src/gate/plan.rs";
     assert!(named(plan, "crates/").is_empty());
     assert!(named(plan, "../").is_empty());
     assert!(named("crates/xtask/src/hook/seat.rs", "crates/xtask").is_empty());
-    assert!(named(plan, crate::gate::census::FILE).is_empty());
+    assert!(named(plan, crate::gate::lines::FILE).is_empty());
     assert!(named(plan, crate::gate::tiers::FILE).is_empty());
     // What the rule keeps: a directory the file is not in, and a file
     // of its own. Spelled in pieces, or this very file would read them.
@@ -364,13 +364,13 @@ fn a_product_file_read_off_the_disk_stops_at_an_integration_binary() {
 /// The same stop on the tree as it stands; the hook script the sandbox
 /// tests copy off the real tree still reaches them.
 #[test]
-fn the_apps_window_owes_the_census_tests_and_not_the_gates_sandbox() {
+fn the_apps_window_owes_the_composition_tests_and_not_the_gates_sandbox() {
     let root = crate::tree::workspace_root();
     let g = build(&root).expect("the graph of this tree");
     let window = format!("crates/{}/src/ui/{}.qml", "platitude-app", "Main");
     let reach = g.reach(&[window]);
     assert_eq!(
-        reach.get("crates/xtask/src/gate/census.rs"),
+        reach.get("crates/xtask/src/gate/shown.rs"),
         Some(&Carried::AsProductFile),
         "{reach:?}"
     );

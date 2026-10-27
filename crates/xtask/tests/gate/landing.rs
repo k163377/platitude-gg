@@ -335,67 +335,25 @@ fn land_refuses_a_dirty_seat_and_a_rebase_that_stops_is_walked_back() {
     assert_eq!(sb.main_sha(), main_before);
 }
 
-/// After committing it, the landing gates again on its own.
+/// No run writes the table of lines, so a seat dirty with it is dirty
+/// with somebody's edit, and refused like any other.
 #[test]
-fn land_commits_the_census_its_gate_rewrote() {
-    let sb = Sandbox::new("land-census");
-    sb.write_pane(&sb.seat, 4);
-    let before = sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
-    let mut command = Command::new(EXE);
-    command
-        .args(["land", "worktree-a", "--dir"])
-        .arg(&sb.repo)
-        .current_dir(&sb.repo)
-        .env("PGG_GATE_FAKE_REWRITE", "verify stash --preset basic");
-    sb.env(&mut command);
-    let output = output_past_a_busy_image(&mut command, || {}).expect("spawn xtask");
-    let text = format!(
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(output.status.success(), "{text}");
-    assert!(text.contains("committed on worktree-a"), "{text}");
-    assert!(text.contains("landed worktree-a"), "{text}");
-    assert_eq!(
-        sb.git_ok(&sb.seat, &["log", "-1", "--format=%s"]),
-        "chore(xtask): the verb census as the land's gate rewrote it"
-    );
-    assert_eq!(sb.git_ok(&sb.seat, &["rev-parse", "HEAD~1"]), before);
-    assert_eq!(
-        sb.main_sha(),
-        sb.head(&sb.seat),
-        "main is the seat's tip, census and all"
-    );
-    let census = std::fs::read_to_string(sb.repo.join("crates/xtask/verb-census.txt"))
-        .expect("the census on main");
-    assert!(
-        census.contains("stash --preset basic\tDriver Main StashPane Theme"),
-        "{census}"
-    );
-}
-
-/// A seat dirty with only that generated file is not refused.
-#[test]
-fn land_commits_a_census_the_seat_was_holding_dirty() {
-    let sb = Sandbox::new("land-census-dirty");
+fn land_refuses_a_seat_dirty_with_the_table_of_lines() {
+    let sb = Sandbox::new("land-lines-dirty");
     sb.write_refs(&sb.seat, 22);
     let before = sb.commit_all(&sb.seat, "feat(core): twenty-two", &[]);
-    let census = std::fs::read_to_string(sb.seat.join("crates/xtask/verb-census.txt"))
-        .expect("the census in the seat");
+    let main_before = sb.main_sha();
+    let lines = std::fs::read_to_string(sb.seat.join("crates/xtask/verb-lines.txt"))
+        .expect("the table in the seat");
     sb.write(
         &sb.seat,
-        "crates/xtask/verb-census.txt",
-        &format!("{census}stash --preset extra\tDriver Main\n"),
+        "crates/xtask/verb-lines.txt",
+        &format!("{lines}stash --preset extra\t-\n"),
     );
     let (ok, text) = sb.land("worktree-a");
-    assert!(ok && text.contains("before this landing"), "{text}");
-    assert_eq!(
-        sb.git_ok(&sb.seat, &["log", "-1", "--format=%s"]),
-        "chore(xtask): the verb census as the land's gate rewrote it"
-    );
-    assert_eq!(sb.git_ok(&sb.seat, &["rev-parse", "HEAD~1"]), before);
-    assert_eq!(sb.main_sha(), sb.head(&sb.seat));
+    assert!(!ok && text.contains("uncommitted changes"), "{text}");
+    assert_eq!(sb.head(&sb.seat), before, "nothing was committed for it");
+    assert_eq!(sb.main_sha(), main_before);
 }
 
 /// Whoever's claim was on the seat comes off (CLAUDE.md §ビルド・テスト):
@@ -533,15 +491,6 @@ fn a_landing_waits_for_approval_of_pictures_put_up_after_the_ask() {
     let seat = sb.roster_tree("b", "worktree-b");
     sb.write_refs(&seat, 21);
     let tip = sb.commit_all(&seat, "feat(core): twenty-one", &[]);
-    // The census a verb run rewrites in the seat, which a landing that
-    // goes ahead commits on the way.
-    let census = std::fs::read_to_string(seat.join("crates/xtask/verb-census.txt"))
-        .expect("the census in the seat");
-    sb.write(
-        &seat,
-        "crates/xtask/verb-census.txt",
-        &format!("{census}stash --preset extra\tDriver Main\n"),
-    );
     let before = sb.main_sha();
     let asked = now() - 60;
     ask(&sb, "mine", asked);
@@ -560,12 +509,7 @@ fn a_landing_waits_for_approval_of_pictures_put_up_after_the_ask() {
     );
     assert!(text.contains("「/land」"), "{text}");
     assert_eq!(sb.main_sha(), before, "nothing moved: {text}");
-    assert_eq!(sb.head(&seat), tip, "not even the census: {text}");
-    assert!(
-        sb.git_ok(&seat, &["status", "--porcelain"])
-            .contains("crates/xtask/verb-census.txt"),
-        "{text}"
-    );
+    assert_eq!(sb.head(&seat), tip, "{text}");
 
     // A landing run by a person, with no session behind it, is theirs to
     // look at.
@@ -581,7 +525,6 @@ fn a_landing_waits_for_approval_of_pictures_put_up_after_the_ask() {
     let output = output_past_a_busy_image(&mut command, || {}).expect("spawn xtask");
     let text = String::from_utf8_lossy(&output.stdout).into_owned();
     assert!(output.status.success(), "{output:?}");
-    assert!(text.contains("committed on worktree-b"), "{text}");
     assert!(text.contains("landed worktree-b"), "{text}");
     assert!(text.contains("took seat b's 2 run(s) off"), "{text}");
 }

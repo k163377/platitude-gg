@@ -31,15 +31,18 @@ struct Gits<'a> {
     version: &'a str,
     /// Whether the copy on PATH answers `git lfs` as missing.
     no_lfs: bool,
+    /// The subcommand the copy on PATH answers late (`--slow-git`); empty
+    /// when none.
+    slow: &'a str,
     /// The PATH the app is handed.
     child_path: std::ffi::OsString,
     /// Where a second git stands.
     other: Option<std::path::PathBuf>,
 }
 
-/// The gits a run is staged with. `--old-git` / `--no-lfs` stand one copy
-/// on PATH; `--other-git` stands one beside it, reading the same
-/// variables — so a run takes one or the other.
+/// The gits a run is staged with. `--old-git` / `--no-lfs` / `--slow-git`
+/// stand one copy on PATH; `--other-git` stands one beside it, reading
+/// the same variables — so a run takes one or the other.
 fn gits_for<'a>(
     opts: &'a super::options::Options,
     shot_dir: &std::path::Path,
@@ -51,27 +54,35 @@ fn gits_for<'a>(
         asked => asked,
     };
     let no_lfs = opts.no_lfs || NO_LFS_VERBS.contains(&opts.verb.as_str());
-    let on_path = !old_git.is_empty() || no_lfs;
+    let slow = opts.slow_git.as_str();
+    let on_path = !old_git.is_empty() || no_lfs || !slow.is_empty();
     if on_path && !opts.other_git.is_empty() {
         return Err(
-            "--old-git / --no-lfs and --other-git stage one copy of git each; a run takes one"
+            "--old-git / --no-lfs / --slow-git and --other-git stage one copy of git each; a run \
+             takes one"
                 .into(),
         );
     }
     if on_path {
         let staged = stage_shim(shot_dir, path)?;
         println!(
-            "git for this run: {}{} (real git behind it)",
+            "git for this run: {}{}{} (real git behind it)",
             if old_git.is_empty() {
                 "this machine's"
             } else {
                 old_git
             },
-            if no_lfs { ", without Git LFS" } else { "" }
+            if no_lfs { ", without Git LFS" } else { "" },
+            if slow.is_empty() {
+                String::new()
+            } else {
+                format!(", answering {slow} late")
+            }
         );
         return Ok(Gits {
             version: old_git,
             no_lfs,
+            slow,
             child_path: staged,
             other: None,
         });
@@ -89,6 +100,7 @@ fn gits_for<'a>(
         return Ok(Gits {
             version: "",
             no_lfs: false,
+            slow: "",
             child_path: path.clone(),
             other: None,
         });
@@ -101,6 +113,7 @@ fn gits_for<'a>(
     Ok(Gits {
         version: other,
         no_lfs: false,
+        slow: "",
         child_path: path.clone(),
         other: Some(staged),
     })
@@ -124,6 +137,77 @@ fn room_for(opts: &super::options::Options) -> Result<crate::budget::Admitted, S
         crate::budget::Rank::Normal,
         &format!("verify-ui {}", opts.verb),
     )
+}
+
+/// The verb's argument: the one typed, or what a verb typed without one
+/// is given — a body of its own, or a folder made for it.
+fn argument_for(
+    opts: &super::options::Options,
+    shot_dir: &std::path::Path,
+    path: &std::ffi::OsStr,
+) -> Result<String, String> {
+    Ok(match opts.arg.is_empty() {
+        true => match body_for(&opts.verb) {
+            Some(body) => body,
+            None => folder_for(&opts.verb, shot_dir, path)?,
+        },
+        // The seed is the whole of this one (`seed::config`): nothing is
+        // put in the box.
+        false if opts.verb == "settings-git-path" && opts.arg == "stored-missing" => String::new(),
+        false => opts.arg.clone(),
+    })
+}
+
+/// The `running:` line: the verb, its argument and what it opens.
+fn announce(opts: &super::options::Options, arg: &str, repos: &[std::path::PathBuf]) {
+    let opened = repos
+        .iter()
+        .map(|r| r.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    println!(
+        "running: {} (arg: {}) against {}",
+        opts.verb,
+        if arg.is_empty() { "-" } else { arg },
+        if opts.restore {
+            "the tabs it remembers"
+        } else {
+            &opened
+        }
+    );
+}
+
+/// Git reads "who is sitting here" from a config file and from the
+/// directory it runs in, so every run gets both of its own: a gitconfig
+/// (`shim::global_seed`, which the identity verbs write to) and a working
+/// directory of its own where git finds no repository: the primary
+/// checkout around it is kept out (`temp::stop_git_above`), and in the
+/// container a checkout's `.git` names a Windows path git calls fatal.
+fn gitconfig_for(verb: &str, shot_dir: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    let config = gitconfig_home(
+        std::env::var_os(crate::linux::IN_CONTAINER).is_some(),
+        shot_dir,
+    )?
+    .join("gitconfig");
+    std::fs::write(&config, super::shim::global_seed(verb)).map_err(|e| e.to_string())?;
+    println!("git config for this run: {}", config.display());
+    Ok(config)
+}
+
+/// What the registered table promises for this line, or nothing for a line
+/// it does not hold. A table that cannot be read is said, so a run judged
+/// without its row's promise is no quiet pass.
+fn promised(root: &std::path::Path, line: &str) -> Option<BTreeSet<String>> {
+    match crate::gate::Lines::load(root) {
+        Ok(lines) => lines.declared(line),
+        Err(why) => {
+            println!(
+                "verify: the registered table could not be read ({why}) — the row's promise \
+                 is not held against this run"
+            );
+            None
+        }
+    }
 }
 
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -191,48 +275,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
     println!("config dir: {}", config_dir.display());
     seed::config(&config_dir, &opts.verb, &opts.arg, &opts.preset)?;
 
-    let arg = match opts.arg.is_empty() {
-        true => match body_for(&opts.verb) {
-            Some(body) => body,
-            None => folder_for(&opts.verb, &shot_dir, &path)?,
-        },
-        // The seed is the whole of this one (`seed::config`): nothing is
-        // put in the box.
-        false if opts.verb == "settings-git-path" && opts.arg == "stored-missing" => String::new(),
-        false => opts.arg.clone(),
-    };
-
-    let opened = repos
-        .iter()
-        .map(|r| r.display().to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
-    println!(
-        "running: {} (arg: {}) against {}",
-        opts.verb,
-        if arg.is_empty() { "-" } else { &arg },
-        if opts.restore {
-            "the tabs it remembers"
-        } else {
-            &opened
-        }
-    );
+    let arg = argument_for(&opts, &shot_dir, &path)?;
+    announce(&opts, &arg, &repos);
     let gits = gits_for(&opts, &shot_dir, &path)?;
 
-    // Git reads "who is sitting here" from a config file and from the
-    // directory it runs in, so every run gets both of its own: a gitconfig
-    // (`shim::global_seed`, which the identity verbs write to) and a
-    // working directory of its own where git finds no repository: the
-    // primary checkout around it is kept out (`temp::stop_git_above`), and
-    // in the container a checkout's `.git` names a Windows path git calls
-    // fatal.
-    let config = gitconfig_home(
-        std::env::var_os(crate::linux::IN_CONTAINER).is_some(),
-        &shot_dir,
-    )?
-    .join("gitconfig");
-    std::fs::write(&config, super::shim::global_seed(&opts.verb)).map_err(|e| e.to_string())?;
-    println!("git config for this run: {}", config.display());
+    let config = gitconfig_for(&opts.verb, &shot_dir)?;
 
     // Who was already running, taken at the last moment before the app
     // exists (`ownership::give_back_claimed`).
@@ -248,37 +295,47 @@ pub fn run(args: &[String]) -> Result<(), String> {
         arg: &arg,
         shim_version: gits.version,
         shim_no_lfs: gits.no_lfs,
+        shim_slow: gits.slow,
         other_git: gits.other.as_deref(),
         repos: &repos,
         opts: &opts,
     })?;
-    let verdict = outcome::judge(&opts, &ran, &config, &config_dir);
-    let census = if verdict.passed() {
-        settle_a_pass(&root, &opts, &ran, beside.as_deref())
-    } else {
-        None
-    };
+    // The run's id is its picture directory's name, which the harness
+    // says on every structured line (`Awaited.runId`); what its row
+    // promises is held against the picture's census (`outcome::judge`).
+    let run_id = shot_dir
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let typable = opts.typable_line();
+    let declared = typable.as_deref().and_then(|line| promised(&root, line));
+    let verdict = outcome::judge(
+        &opts,
+        &ran,
+        &config,
+        &config_dir,
+        &run_id,
+        declared.as_ref(),
+    );
+    // What the run met beyond its row, beside its pictures — said, never
+    // judged (`super::observed`); what it lacked is the judgment's.
+    for line in super::observed::note(
+        &root,
+        &shot_dir,
+        typable.as_deref(),
+        if verdict.passed() { "PASS" } else { "FAIL" },
+        &ran.err_lines,
+    ) {
+        println!("{line}");
+    }
+    if verdict.passed() {
+        let gone = super::ownership::give_back_claimed(beside.as_deref());
+        if gone > 0 {
+            println!("demo repositories given back: {gone}");
+        }
+    }
     say_what_it_spent(whole, fixture, build, ran.elapsed);
-    outcome::announce(&opts, &shot_dir, &ran, &verdict, census.as_deref())
-}
-
-/// What a passed run still owes: its census line, then the scaffolding
-/// it stood up. Answers why the line was not written, which fails the
-/// run — else a gate would choose off a stale census.
-fn settle_a_pass(
-    root: &std::path::Path,
-    opts: &super::options::Options,
-    ran: &child::Ran,
-    beside: Option<&[u32]>,
-) -> Option<String> {
-    if let Err(why) = tell_the_census(root, opts.census_line(), &ran.err_lines) {
-        return Some(why);
-    }
-    let gone = super::ownership::give_back_claimed(beside);
-    if gone > 0 {
-        println!("demo repositories given back: {gone}");
-    }
-    None
+    outcome::announce(&opts, &shot_dir, &ran, &verdict)
 }
 
 /// The three parts of a run worth telling apart, and the rest — one
@@ -288,8 +345,8 @@ fn settle_a_pass(
 /// whichever uncached verb came first (`gate::sides::verbs`), and a
 /// preset's first run builds its template (`demo::template`): by wall
 /// clock those verbs would rank as the expensive ones. `app` is what the
-/// verb itself costs. `rest` (seeds, shim, judging, census, pictures) is
-/// not split — nobody measured its parts.
+/// verb itself costs. `rest` (seeds, shim, judging, the walk's note,
+/// pictures) is not split — nobody measured its parts.
 fn say_what_it_spent(
     whole: std::time::Instant,
     fixture: std::time::Duration,
@@ -309,54 +366,6 @@ fn say_what_it_spent(
         rest.as_millis(),
         whole.as_millis(),
     );
-}
-
-/// A passing run tells the census what it showed, so the gate picks this
-/// line when one of those components changes (`gate::census`). Only a
-/// run somebody can type again is recorded (`line`, from
-/// `Options::census_line`); only one whose page had stopped arriving
-/// writes its line, the rest add to it.
-///
-/// An error is a line owed and not written: the run never said what it
-/// showed, or the file could not be read, held or written. A run that
-/// owes no line (not typable again, or a twin) answers `Ok` whatever it
-/// said.
-fn tell_the_census(
-    root: &std::path::Path,
-    line: Option<String>,
-    said: &[String],
-) -> Result<(), String> {
-    let Some(line) = line else {
-        return Ok(());
-    };
-    // No gate owes a twin; recording it would bring it back for `verbs`
-    // to refuse (`gate::tiers`).
-    if let Some(of) = crate::gate::Tiers::load(root)?.twin_of(&line) {
-        println!("census: {line} — not recorded, the tier table says it is the same run as {of}");
-        return Ok(());
-    }
-    // Every run that ends on its picture walks the window first
-    // (`AutoShotDriver.waitsForCensus`), so a pass with no names is a
-    // harness that stopped saying them.
-    let names =
-        crate::gate::names_in(said).ok_or_else(|| format!("{line}: never said `census=`"))?;
-    let page_settled = crate::gate::page_settled_in(said);
-    let (count, shift) = crate::gate::record(root, &line, &names, page_settled)
-        .map_err(|why| format!("{line}: {why}"))?;
-    // The names the write moved: when a component came or went the
-    // file's diff is every line, so the run says which.
-    if page_settled {
-        println!(
-            "census: {line} — {count} component(s) recorded{}",
-            shift.said_for(&line)
-        );
-    } else {
-        println!(
-            "census: {line} — {count} component(s), added to: the page was still arriving{}",
-            shift.said_for(&line)
-        );
-    }
-    Ok(())
 }
 
 /// Where a run's gitconfig stands: beside its pictures, except inside a
@@ -398,68 +407,38 @@ mod tests {
         let _ = std::fs::remove_dir_all(&own);
     }
 
-    /// A tree of one test's own, holding one component and no census yet.
-    fn tree() -> std::path::PathBuf {
-        let root = super::claim_dir(&crate::temp::root().join("pgg-census"), "told")
+    /// A run writes nothing of the tree: what it met goes beside its
+    /// pictures, and a tree with no table says so instead of failing the
+    /// run (`super::observed`).
+    #[test]
+    fn what_a_run_met_goes_beside_its_pictures_and_never_into_the_tree() {
+        let root = super::claim_dir(&crate::temp::root().join("pgg-census"), "noted")
             .expect("a root of this test's own");
-        let ui = root.join("crates/platitude-app/src/ui");
-        std::fs::create_dir_all(&ui).expect("ui dir");
-        std::fs::create_dir_all(root.join("crates/xtask")).expect("xtask dir");
-        std::fs::write(ui.join("WipPane.qml"), "Item {}\n").expect("component");
-        // A table with no rows: a tree without one is refused (`gate::tiers`).
-        std::fs::write(root.join("crates/xtask/verb-tiers.txt"), "# no rows\n")
-            .expect("the tier table");
-        root
-    }
-
-    /// What a run that walked the window says at its end.
-    fn walked() -> Vec<String> {
-        [
-            "INFO bench: census page=settled",
-            "INFO bench: census=WipPane",
-        ]
-        .map(String::from)
-        .to_vec()
-    }
-
-    #[test]
-    fn a_line_owed_and_not_written_is_an_error_and_a_run_that_owes_none_is_not() {
-        let root = tree();
-        let census = root.join(crate::gate::CENSUS_FILE);
-        let silent = ["INFO bench: auto_act complete=wip".to_string()];
-        let Err(why) = super::tell_the_census(&root, Some("wip".into()), &silent) else {
-            panic!("a run that never said what it showed owed its line nothing");
-        };
-        assert!(why.contains("census="), "{why}");
-        assert!(!census.exists(), "nothing was written");
-        // `--no-census`, the container, a `--repo`: no line anybody can
-        // type again.
-        super::tell_the_census(&root, None, &silent).expect("a run that owes no line");
-
-        let staging = root.join("target").join("verb-census.txt.part");
-        std::fs::create_dir_all(&staging).expect("a directory where the staging file goes");
-        let Err(why) = super::tell_the_census(&root, Some("wip".into()), &walked()) else {
-            panic!("a line with nowhere to stage it was written");
-        };
-        assert!(why.contains("verb-census.txt.part"), "{why}");
-        assert!(!census.exists(), "nothing was written");
-
-        std::fs::remove_dir(&staging).expect("the directory gone");
-        super::tell_the_census(&root, Some("wip".into()), &walked()).expect("the line written");
-        let text = std::fs::read_to_string(&census).expect("the census");
-        assert!(text.contains("\nwip\tWipPane\n"), "{text}");
-    }
-
-    #[test]
-    fn a_twin_owes_no_line() {
-        let root = tree();
-        std::fs::write(
-            root.join("crates/xtask/verb-tiers.txt"),
-            "twin\twip again\twip\tthe same run as wip\n",
-        )
-        .expect("the tier table");
-        super::tell_the_census(&root, Some("wip again".into()), &[]).expect("said nothing");
-        super::tell_the_census(&root, Some("wip again".into()), &walked()).expect("said it");
-        assert!(!root.join(crate::gate::CENSUS_FILE).exists());
+        let shots = root.join("shots");
+        std::fs::create_dir_all(&shots).expect("shot dir");
+        let said = super::super::observed::note(
+            &root,
+            &shots,
+            Some("wip"),
+            "PASS",
+            &[
+                "INFO bench: census run=r1 page=settled state=open".to_string(),
+                "INFO bench: census=WipPane".to_string(),
+            ],
+        );
+        assert!(
+            said.iter().any(|line| line.contains("not compared")),
+            "{said:?}"
+        );
+        let text = std::fs::read_to_string(shots.join(super::super::observed::FILE))
+            .expect("the note beside the pictures");
+        assert!(
+            text.contains("line=wip\n") && text.contains("census=WipPane\n"),
+            "{text}"
+        );
+        assert!(
+            !root.join("crates").exists(),
+            "nothing of the tree was written: {text}"
+        );
     }
 }

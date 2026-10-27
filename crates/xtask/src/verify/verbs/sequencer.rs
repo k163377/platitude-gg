@@ -252,11 +252,13 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "replay_running op=REBASING counted=true ring=true held=true",
     },
     // The run's landing; `gone=` is the dropped row, read off the graph's
-    // own model.
+    // own model, and `wip=` the worktree row the operation stood up and
+    // the status behind the write took away (the `plan` tree is clean).
     Verb {
         name: "rebase-plan-run",
         when: &[],
-        plain: "rebase_plan_ran op=rebase moved=true gone=true stopped=false plan=false error=false",
+        plain: "rebase_plan_ran op=rebase moved=true gone=true stopped=false plan=false error=false \
+                wip=false",
     },
     // The stop that was asked for: git's edit marker up, the skip's cost
     // back, the exit card's rows standing — over a clean tree it frames
@@ -354,10 +356,19 @@ pub(super) const TABLE: &[Verb] = &[
     // stops replaying `feature/clash`. `quit` leaves HEAD on no branch.
     Verb {
         name: "op-exit-lands",
+        // `quit` keeps HEAD, the index and the tree as git left them (the
+        // one answer that stops stepping and keeps the tree, デザイン規約
+        // §操作の終わり), so what it lands on is the fixture's: over
+        // `rebase-staged` the staged change stays, the worktree row with
+        // it and the reader on it. HEAD is on no branch (`home=` is the
+        // folder). No clean-tree form: `rebase --quit` from a stop on an
+        // empty commit (`rebase-empty`) leaves `CHERRY_PICK_HEAD` behind
+        // (git 2.55), so git itself still reports a cherry-pick standing
+        // and nothing lands.
         when: &[
             (
-                Arg::Is("quit"),
-                "op_exit_landed wip=false op= follows=true onscreen=true",
+                Arg::IsOn("quit", "rebase-staged"),
+                "op_exit_landed wip=true op= follows=false onscreen=true home=repo",
             ),
             (
                 Arg::WithPreset("rebase-staged"),

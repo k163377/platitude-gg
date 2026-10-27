@@ -638,7 +638,7 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[
             (
                 Arg::Is("above"),
-                "wip_reread how=above card=false still=true lit=true changed=false moved_lit=true",
+                "wip_reread how=above card=false still=true lit=true changed=false moved_lit=true after_card=true",
             ),
             (
                 Arg::Is("inside"),

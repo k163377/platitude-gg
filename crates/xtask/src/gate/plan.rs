@@ -8,9 +8,10 @@ mod steps;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use super::census::{self, Census};
 use super::graph::{self, Carried, Reach, stem_of};
+use super::lines::{Lines, Shown};
 use super::record::Spent;
+use super::shown::{Composition, Module};
 use super::stamp::Store;
 use super::tiers::Tiers;
 use crate::subprocess::{git_query, run_captured};
@@ -47,6 +48,11 @@ pub(crate) struct Step {
     /// What the step reads, as workspace paths (a directory covers
     /// everything under it): the cache key is their object ids.
     pub inputs: BTreeSet<String>,
+    /// What the step is held to beyond its inputs, in the key too: a
+    /// verify-ui line's promised parts and judgment (`steps::binary_steps`),
+    /// so a row or a claim moved runs the line again and a green of
+    /// another contract answers for nothing. Empty for the other steps.
+    pub contract: String,
 }
 
 /// One step the branch owes.
@@ -63,8 +69,8 @@ pub(crate) struct Scope {
     /// Every file in the tree counted as reached, and why: `--whole`, a
     /// moved version, or the build input that changed.
     pub everything: Option<String>,
-    /// The whole tier's steps (`periodic`, every census line): `--whole`, or
-    /// a moved version ([`pins`]) before a merge.
+    /// The whole tier's steps (`periodic`, every registered line): `--whole`,
+    /// or a moved version ([`pins`]) before a merge.
     pub whole_tier: bool,
 }
 
@@ -88,8 +94,9 @@ pub(crate) struct Plan {
     pub changed: Vec<String>,
     pub reach: BTreeSet<String>,
     pub required: Vec<Required>,
-    /// QML components the change reaches that no verb's census names —
-    /// nothing headless shows them, so the gate cannot pass them.
+    /// Product components the change reaches that no registered line
+    /// shows (`lines::Shown`) — nothing headless brings them up, so the
+    /// gate cannot pass them.
     pub uncovered: Vec<String>,
     /// Changed files no step reads, listed so that a kind of file nothing
     /// tests shows in the report.
@@ -97,11 +104,13 @@ pub(crate) struct Plan {
     /// What the graph says is wrong with the tree itself
     /// (`graph::complaints`); no run over such a tree can be stamped.
     pub complaints: Vec<String>,
-    /// Candidate count from the final census, for comparison only.
-    /// A component absent at the end may have been exercised earlier.
-    pub verbs_in_shadow: usize,
-    /// Census lines the reach selected that this gate leaves to the whole
-    /// one (`tiers`) — before a merge only; the whole gate leaves none.
+    /// How many of the selected lines show a component the change itself
+    /// touched (`lines::Shown`), for comparison only: what a selection by
+    /// what each line shows would run, against the selection by reach
+    /// (反映前テストの機械化.md §動詞の絞り込みは比較表示に留める).
+    pub verbs_by_shown: usize,
+    /// Registered lines the reach selected that this gate leaves to the
+    /// whole one (`tiers`) — before a merge only; the whole gate leaves none.
     pub verbs_left: usize,
 }
 
@@ -110,7 +119,7 @@ pub(crate) struct Ask<'a> {
     pub host_only: bool,
     pub whole: bool,
     pub fresh: bool,
-    /// verify-ui lines to run besides the census's, as typed.
+    /// Registered verify-ui lines to run besides the reach's, as typed.
     pub extra_verbs: &'a [String],
 }
 
@@ -274,22 +283,26 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
     } = reaches(&g, dir, &host, &container, &executable_changes)?;
     // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
-    let census = Census::load(dir)?;
+    let lines = Lines::load(dir)?;
     let tiers = Tiers::load(dir)?;
-    let worn = census::worn_by(dir);
-    spent.census = at.elapsed();
+    let added = rows_the_tables_owe(&here, &base, &changed, &lines, &tiers);
+    let composition = Composition::read(dir)?;
+    let shown = lines.shown(&composition);
+    spent.lines = at.elapsed();
+    registered_or_refused(&lines, ask.extra_verbs)?;
     let read = |scope: &Scope| Reading {
         dir,
-        census: &census,
+        lines: &lines,
+        added: &added,
+        shown: &shown,
         tiers: &tiers,
-        worn: &worn,
         everything: scope.everything.is_some(),
         whole_tier: scope.whole_tier,
     };
     let (
         mut steps,
         Counted {
-            shadow: verbs_in_shadow,
+            by_shown: verbs_by_shown,
             left: verbs_left,
         },
     ) = select(&g, &read(&host), &reach, &executable_changes, ask);
@@ -306,19 +319,23 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
     }
     let store = Store::open(dir)?;
     let required = owed(&here, &head, &store, steps, ask, spent)?;
-    let uncovered = uncovered(dir, &census, &touched, &worn);
+    let uncovered = uncovered(&composition, &lines.promised(), &touched);
+    // The two tables are the plan's own inputs (`steps::binary_steps`),
+    // answered by what the plan owes, not by a step's key.
+    let tables = [super::lines::FILE, super::tiers::FILE];
     let unclaimed = changed
         .iter()
         .filter(|file| {
-            !required
-                .iter()
-                .any(|r| !r.step.always && r.step.inputs.iter().any(|i| under(file, i)))
+            !tables.contains(&file.as_str())
+                && !required
+                    .iter()
+                    .any(|r| !r.step.always && r.step.inputs.iter().any(|i| under(file, i)))
         })
         .cloned()
         .collect();
     spent.plan_rest = started
         .elapsed()
-        .saturating_sub(spent.graph + spent.census + spent.ids);
+        .saturating_sub(spent.graph + spent.lines + spent.ids);
     Ok(Plan {
         dir: dir.to_path_buf(),
         head,
@@ -335,14 +352,78 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
         uncovered,
         unclaimed,
         complaints: graph::complaints(&g),
-        verbs_in_shadow,
+        verbs_by_shown,
         verbs_left,
     })
 }
 
+/// The lines the two tables' own move owes, whatever else moved
+/// (`steps::binary_steps`): a row added to the registry, which no stamp
+/// answers for, and a line whose tier moved, which this gate may owe now
+/// where it did not — on the container too, where `fonts` says so. Read
+/// against the tables as the base holds them; a base without a table
+/// makes every row new.
+fn rows_the_tables_owe(
+    here: &str,
+    base: &str,
+    changed: &[String],
+    lines: &Lines,
+    tiers: &Tiers,
+) -> Vec<String> {
+    let moved = |file: &str| changed.iter().any(|f| f == file);
+    let before = |file: &str| git_query(here, &["show", &format!("{base}:{file}")]);
+    let mut owed = Vec::new();
+    if moved(super::lines::FILE) {
+        // A row added, or one whose promise moved: a new contract either
+        // way, which the green of the old one answers for nothing.
+        let registered = before(super::lines::FILE).and_then(|text| Lines::parse(&text).ok());
+        owed.extend(
+            lines
+                .lines()
+                .filter(|line| {
+                    !registered
+                        .as_ref()
+                        .is_some_and(|b| b.declared(line) == lines.declared(line))
+                })
+                .cloned(),
+        );
+    }
+    if moved(super::tiers::FILE) {
+        let tiered = before(super::tiers::FILE).map(|text| Tiers::parse(&text));
+        let retiered: Vec<String> = lines
+            .lines()
+            .filter(|line| {
+                tiered
+                    .as_ref()
+                    .is_none_or(|b| b.tier(line) != tiers.tier(line))
+            })
+            .filter(|line| !owed.contains(line))
+            .cloned()
+            .collect();
+        owed.extend(retiered);
+    }
+    owed
+}
+
+/// A line asked for by name has to be a registered one: the gate runs
+/// nothing the table does not hold.
+fn registered_or_refused(lines: &Lines, extra: &[String]) -> Result<(), String> {
+    for line in extra {
+        if !lines.contains(line) {
+            return Err(format!(
+                "--verb {line:?} is not a registered line: register it in {} (with what its run \
+                 brings up) and the gate runs it from then on, or run it with `cargo xtask \
+                 verify-ui` by itself",
+                super::lines::FILE
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// The reach of everything: every node, and every QML file — a component
-/// with no edge is no node, and the verbs only its census line names
-/// would be missed. All handed whole: the change is the build itself.
+/// with no edge is no node, and would be missed. All handed whole: the
+/// change is the build itself.
 fn every_file(g: &graph::Graph, dir: &Path) -> Result<Reach, String> {
     let mut every: Reach = g
         .deps
@@ -382,7 +463,15 @@ fn owed(
             let (key, cached) = if step.always {
                 (String::new(), false)
             } else {
-                let key = cache_key(&ids, &step);
+                // A step that builds or reads the app sees no comment (`shipped`, the verbs, `bare`), so its key
+                // is of the code alone; a tool that reads the sources (fmt, clippy, waits with its markers, docs,
+                // structure, the tests with their doc-tests) sees every byte.
+                let ids = if step.release || step.id == "shipped" {
+                    &ids.code
+                } else {
+                    &ids.whole
+                };
+                let key = cache_key(ids, &step);
                 let cached = !ask.fresh && store.step_green(&key);
                 (key, cached)
             };
@@ -391,10 +480,18 @@ fn owed(
         .collect())
 }
 
+/// The object ids of every path in the tree, twice over: as git holds
+/// them (`whole`), and with a Rust or QML file's id its code's
+/// (`code`, `inputs::with_code_ids`).
+struct TreeIds {
+    whole: BTreeMap<String, String>,
+    code: BTreeMap<String, String>,
+}
+
 /// The object id of every path in the tree at `rev` from one `git ls-tree`;
 /// a directory's is a fingerprint of its entries besides Markdown
 /// (`inputs::from_listing`).
-fn tree_ids(here: &str, rev: &str) -> Result<BTreeMap<String, String>, String> {
+fn tree_ids(here: &str, rev: &str) -> Result<TreeIds, String> {
     let mut command = std::process::Command::new("git");
     command
         .arg("-C")
@@ -407,7 +504,15 @@ fn tree_ids(here: &str, rev: &str) -> Result<BTreeMap<String, String>, String> {
             String::from_utf8_lossy(&output.stderr).trim()
         ));
     }
-    Ok(parse_ls_tree(&output.stdout))
+    // A Rust or QML file's code id, so a comment moved stamps no run of the
+    // built app out (`inputs::with_code_ids`); the tools that read the
+    // sources key on the whole file.
+    let whole = parse_ls_tree(&output.stdout);
+    let listing = super::inputs::with_code_ids(here, &output.stdout)?;
+    Ok(TreeIds {
+        whole,
+        code: parse_ls_tree(&listing),
+    })
 }
 
 /// `ls-tree -z`: `<mode> <type> <id>\t<path>` per entry, NUL after each
@@ -602,10 +707,15 @@ fn under(file: &str, input: &str) -> bool {
 /// What a selection reads off the tree besides the reach.
 struct Reading<'a> {
     dir: &'a Path,
-    census: &'a Census,
-    /// Which of the census's lines each gate owes, and where (`tiers`).
+    /// The registered lines (`lines`).
+    lines: &'a Lines,
+    /// The lines the tables' own move owes — a row added, a tier moved —
+    /// whatever else moved (`rows_the_tables_owe`).
+    added: &'a [String],
+    /// What each of them shows, read off the sources.
+    shown: &'a Shown,
+    /// Which of the lines each gate owes, and where (`tiers`).
     tiers: &'a Tiers,
-    worn: &'a BTreeMap<String, BTreeSet<String>>,
     everything: bool,
     /// Owes the whole tier ([`Scope::whole_tier`]).
     whole_tier: bool,
@@ -613,38 +723,39 @@ struct Reading<'a> {
 
 /// What the verb selection counted beside the steps it made.
 struct Counted {
-    /// The narrower candidate count (`steps::verbs_in_snapshot`).
-    shadow: usize,
+    /// The selected lines that show a reached component
+    /// (`steps::lines_showing_the_reach`).
+    by_shown: usize,
     /// Selected lines left to the whole gate.
     left: usize,
 }
 
-/// QML components in the reach that stand in the item tree and no verb's
-/// census names — the wearers counting for the worn (`census::worn_by`).
-fn uncovered(
-    dir: &Path,
-    census: &Census,
-    reach: &Reach,
-    worn: &BTreeMap<String, BTreeSet<String>>,
-) -> Vec<String> {
+/// Product components in the reach that stand in the item tree and no
+/// registered line shows — not as themselves, and not through a wearer
+/// (a component worn as another's root is composed by the wearer,
+/// `shown::Composition`).
+/// The product components the change reaches that no registered line
+/// promises to show (`Lines::promised`): a green of every line is
+/// evidence of none of them. What a line's run brings up by composition
+/// alone is no promise — the picture is held to the row, not to the
+/// sources' closure (反映前テストの機械化 §選択の正本).
+fn uncovered(composition: &Composition, promised: &BTreeSet<String>, reach: &Reach) -> Vec<String> {
     let (_, qml_tests) = qml_dirs();
     reach
         .keys()
         .filter(|f| f.ends_with(".qml"))
-        // A QtTest file is shown by its own runner (`qmltest_steps`).
+        // A QtTest file is shown by its own runner (`qmltest_steps`); the
+        // harness's own parts are the verbs, not what they show
+        // (`verify::verbs` reads them whole).
         .filter(|f| !under(f, &qml_tests))
-        .filter(|f| census::instantiable(dir, f))
-        .filter(|f| !shown_as(&stem_of(f), worn).iter().any(|s| census.covers(s)))
+        .filter(|f| composition.module(&stem_of(f)) == Some(Module::Product))
+        .filter(|f| composition.instantiable(&stem_of(f)))
+        // A root another file wears is met under the wearer's name, so the
+        // wearer's promise is its (`verify::observed`).
+        .filter(|f| !composition.is_worn(&stem_of(f)))
+        .filter(|f| !promised.contains(&stem_of(f)) && stem_of(f) != super::shown::MAIN)
         .cloned()
         .collect()
-}
-
-/// The names a run could have met this component under: its own, and
-/// every wearer's — an item declared as the wearer is one of these too.
-fn shown_as(stem: &str, worn: &BTreeMap<String, BTreeSet<String>>) -> BTreeSet<String> {
-    let mut names = BTreeSet::new();
-    census::through_wearers(stem, worn, &mut names);
-    names
 }
 
 /// The cache key: the step's identity and command, and the object id of
@@ -655,6 +766,8 @@ fn cache_key(ids: &BTreeMap<String, String>, step: &Step) -> String {
     let mut text = step.id.clone();
     text.push('\0');
     text.push_str(&step.command.join("\0"));
+    text.push('\n');
+    text.push_str(&step.contract);
     text.push('\n');
     for input in &step.inputs {
         let path = input.trim_end_matches('/');
@@ -708,7 +821,7 @@ pub(crate) fn describe(plan: &Plan, keys: bool) -> String {
         }
     }
     if !plan.uncovered.is_empty() {
-        out.push_str("no verb's census names these — nothing headless shows them:\n");
+        out.push_str("no registered line shows these — nothing headless brings them up:\n");
         for file in &plan.uncovered {
             out.push_str(&format!("  {file}\n"));
         }
@@ -729,7 +842,7 @@ pub(crate) fn describe(plan: &Plan, keys: bool) -> String {
         .iter()
         .filter(|r| r.step.id.starts_with("verify-linux "))
         .count();
-    if plan.verbs_in_shadow > 0 || chosen > 0 || on_linux > 0 {
+    if chosen > 0 || on_linux > 0 {
         // The container's lines are the host's own unless its side owes
         // more than the host's does; what waits for the whole gate is the
         // host's count.
@@ -739,11 +852,11 @@ pub(crate) fn describe(plan: &Plan, keys: bool) -> String {
             (format!("{on_linux} on the container"), " on the host")
         };
         out.push_str(&format!(
-            "verbs: {chosen} selected, {container}; {} left{left} to the whole gate ({}); shadow \
-             candidate: {} (final census only, not used to skip runs)\n",
+            "verbs: {chosen} selected, {container}; {} left{left} to the whole gate ({}); by what \
+             they show: {} (a comparison, not used to skip runs)\n",
             plan.verbs_left,
             super::tiers::FILE,
-            plan.verbs_in_shadow
+            plan.verbs_by_shown
         ));
     }
     out.push_str(&format!("steps ({}):\n", plan.required.len()));

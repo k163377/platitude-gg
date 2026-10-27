@@ -75,6 +75,12 @@ pub(super) struct Options {
     /// passes everything else to the real one (`git_shim`). Empty: the git
     /// this machine has.
     pub(super) old_git: String,
+    /// Run the app against a git that answers one subcommand late
+    /// (`<subcommand>:<ms>[:quiet]`, `git_shim`): the order a slow read
+    /// gives by chance, made the run's own, for a verb whose completion
+    /// is held against it. Empty: git as it is. No registered line spells
+    /// it — a diagnostic run.
+    pub(super) slow_git: String,
     /// Run the app against a git that answers `git lfs` as a git without
     /// Git LFS does, and passes everything else to the real one
     /// (`git_shim`). Off: whatever this machine has.
@@ -90,32 +96,23 @@ pub(super) struct Options {
     /// Keep this run off the board: for runs nobody asked to look at — a
     /// flakiness sweep, or the runs a suite drives (`verify::suite_words`).
     pub(super) no_board: bool,
-    /// Keep this run out of the verb census: for a verb repeated to
-    /// measure how steady it is, or run to look at a picture, where moving
-    /// a checked-in file is noise.
-    pub(super) no_census: bool,
 }
 
 impl Options {
-    /// The line the census records a passing run under: what somebody
+    /// The line a run is registered under (`gate::lines`): what somebody
     /// would type to run it again, less the options that only move its
     /// output. None for a run nobody can type again elsewhere (`--repo`,
-    /// `--restore`).
-    ///
-    /// The census is the host's alone: the container runs on the host's
-    /// checkout over a mount, and the two sides of the gate would take
-    /// the line in turns.
-    pub(super) fn census_line(&self) -> Option<String> {
-        if self.no_census
-            || !self.repo.is_empty()
+    /// `--restore`) or made to stop.
+    pub(crate) fn typable_line(&self) -> Option<String> {
+        if !self.repo.is_empty()
             || self.restore
             || self.config_dir.is_some()
-            // A run made to wedge never reaches the walk the census is
-            // written off.
+            // A run made to wedge never reaches its picture.
             || !self.fault_hang.is_empty()
             || self.fault_no_deadline
             || self.fault_hold_act
-            || std::env::var_os(crate::linux::IN_CONTAINER).is_some()
+            // A run made to see one order of the reads.
+            || !self.slow_git.is_empty()
             // Read back one word per argument (`suite_words`): an argument
             // with a space comes back as several and the replay is refused.
             || self.arg.contains(char::is_whitespace)
@@ -127,7 +124,7 @@ impl Options {
             words.push(self.arg.clone());
         }
         // A preset that builds what leaving it off would is left out: the
-        // census is keyed by the line (`repos::preset_is_the_default`).
+        // table is keyed by the line (`repos::preset_is_the_default`).
         if !super::repos::preset_is_the_default(&self.verb, &self.arg, &self.preset) {
             for preset in &self.preset {
                 words.push("--preset".to_string());
@@ -214,13 +211,22 @@ impl Default for Options {
             restore: false,
             allow_write_failure: false,
             old_git: String::new(),
+            slow_git: String::new(),
             no_lfs: false,
             other_git: String::new(),
             label: String::new(),
             no_board: false,
-            no_census: false,
         }
     }
+}
+
+/// The spelling a typable line is registered under (`gate::lines`): the
+/// line parsed as `verify-ui` would and read back. `Ok(None)` for a line
+/// nobody can type again (one with a space in its argument); an error for
+/// one `verify-ui` would refuse.
+pub(crate) fn canonical_line(line: &str) -> Result<Option<String>, String> {
+    let words: Vec<String> = line.split_whitespace().map(String::from).collect();
+    Ok(parse(&words)?.typable_line())
 }
 
 pub(super) fn parse(args: &[String]) -> Result<Options, String> {
@@ -249,7 +255,6 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             "--system-title-bar" => opts.system_title_bar = true,
             "--label" => opts.label = typed_label(it.next())?,
             "--no-board" => opts.no_board = true,
-            "--no-census" => opts.no_census = true,
             "--quit-ms" => {
                 return Err(
                     "unknown verify-ui option: --quit-ms (shots follow the act's completion; use --watchdog-ms only as a diagnostic ceiling)"
@@ -298,6 +303,13 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
                 opts.old_git = it.next().ok_or("--old-git needs a version")?.clone();
             }
             "--no-lfs" => opts.no_lfs = true,
+            "--slow-git" => {
+                let asked = it
+                    .next()
+                    .ok_or("--slow-git needs <subcommand>:<ms>[:quiet] (status:1500:quiet)")?;
+                super::shim::Slow::parse(asked)?;
+                opts.slow_git = asked.clone();
+            }
             "--other-git" => {
                 opts.other_git = it.next().ok_or("--other-git needs a version")?.clone();
             }
@@ -360,11 +372,10 @@ mod tests {
         assert_eq!(opts.verb, "co-authors");
         assert_eq!(opts.arg, "4");
         assert_eq!(opts.preset, ["co-authors"]);
-        // The census cannot tell the two apart. Compared, not spelled: in
-        // the container both are None.
+        // The table cannot tell the two apart.
         let typed = parse(&words[..words.len() - 1]).expect("the same line, boarded");
         assert!(!typed.no_board);
-        assert_eq!(opts.census_line(), typed.census_line());
+        assert_eq!(opts.typable_line(), typed.typable_line());
     }
 
     /// `--label` is the second door onto the board after `shots add`, and
@@ -394,7 +405,7 @@ mod tests {
     /// Two keys would be the verb run twice by every gate that owes it
     /// (`repos::preset_is_the_default`).
     #[test]
-    fn the_default_preset_named_and_left_off_is_one_census_line() {
+    fn the_default_preset_named_and_left_off_is_one_line() {
         let named = parse(&[
             "delete-gone".to_string(),
             "v0.3-local".to_string(),
@@ -404,23 +415,25 @@ mod tests {
         .expect("a verb, its argument and the default preset");
         let unsaid = parse(&["delete-gone".to_string(), "v0.3-local".to_string()])
             .expect("the same run with the flag left off");
-        // The run itself is untouched: only the census line is the same.
+        // The run itself is untouched: only the line is the same.
         assert_eq!(named.preset, ["basic"]);
         assert!(unsaid.preset.is_empty());
-        assert_eq!(named.census_line(), unsaid.census_line());
-        // The container files no census (`census_line`).
-        if std::env::var_os(crate::linux::IN_CONTAINER).is_none() {
-            assert_eq!(
-                named.census_line().as_deref(),
-                Some("delete-gone v0.3-local")
-            );
-        }
+        assert_eq!(named.typable_line(), unsaid.typable_line());
+        assert_eq!(
+            named.typable_line().as_deref(),
+            Some("delete-gone v0.3-local")
+        );
+        // The spelling the table takes is the one read back (`canonical_line`).
+        assert_eq!(
+            super::canonical_line("delete-gone v0.3-local --preset basic").expect("a line"),
+            Some("delete-gone v0.3-local".to_string())
+        );
     }
 
     /// The replay splits the line on whitespace, so `find` would come back
     /// with three words and be refused.
     #[test]
-    fn an_argument_with_a_space_is_no_line_for_the_census() {
+    fn an_argument_with_a_space_is_no_line_for_the_table() {
         let spaced = parse(&[
             "find".to_string(),
             "filler commit 150".to_string(),
@@ -429,7 +442,7 @@ mod tests {
         ])
         .expect("a query with spaces, typed as one argument");
         assert_eq!(spaced.arg, "filler commit 150");
-        assert_eq!(spaced.census_line(), None);
+        assert_eq!(spaced.typable_line(), None);
         let Err(refusal) = parse(&suite_words("find filler commit 150 --preset deep")) else {
             panic!("the line read back is not the run that was recorded");
         };
@@ -455,16 +468,14 @@ mod tests {
             "basic".to_string(),
         ])
         .expect("a verb that builds its own strip");
-        if std::env::var_os(crate::linux::IN_CONTAINER).is_none() {
-            assert_eq!(
-                two.census_line().as_deref(),
-                Some("tab-carry --preset basic --preset stashes")
-            );
-            assert_eq!(
-                strip.census_line().as_deref(),
-                Some("tab-widths short --preset basic")
-            );
-        }
+        assert_eq!(
+            two.typable_line().as_deref(),
+            Some("tab-carry --preset basic --preset stashes")
+        );
+        assert_eq!(
+            strip.typable_line().as_deref(),
+            Some("tab-widths short --preset basic")
+        );
     }
 
     /// A run against the wrong repository still photographs a window that
@@ -519,30 +530,27 @@ mod tests {
         assert_eq!(asked.arg, "3");
     }
 
-    /// The runner's own fault changes nothing the app shows, so the
-    /// census line is the verb's.
+    /// The runner's own fault changes nothing the app shows, so the line
+    /// is the verb's.
     #[test]
-    fn a_stalled_look_is_asked_for_and_leaves_the_census_alone() {
+    fn a_stalled_look_is_asked_for_and_leaves_the_line_alone() {
         let plain = parse(&["band".to_string()]).expect("verb only");
         assert!(!plain.fault_stall_look);
         let asked =
             parse(&["band".to_string(), "--fault-stall-look".to_string()]).expect("verb and fault");
         assert!(asked.fault_stall_look);
-        assert_eq!(asked.census_line(), plain.census_line());
+        assert_eq!(asked.typable_line(), plain.typable_line());
     }
 
     #[test]
-    fn a_held_act_is_asked_for_and_writes_no_census_line() {
+    fn a_held_act_is_asked_for_and_is_no_line_of_the_table() {
         let plain = parse(&["band".to_string()]).expect("verb only");
         assert!(!plain.fault_hold_act);
         let asked =
             parse(&["band".to_string(), "--fault-hold-act".to_string()]).expect("verb and fault");
         assert!(asked.fault_hold_act);
-        assert!(asked.census_line().is_none());
-        // In the container no run has a line (`census_line`).
-        if std::env::var_os(crate::linux::IN_CONTAINER).is_none() {
-            assert!(plain.census_line().is_some());
-        }
+        assert!(asked.typable_line().is_none());
+        assert!(plain.typable_line().is_some());
     }
 
     #[test]

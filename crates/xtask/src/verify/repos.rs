@@ -113,10 +113,26 @@ pub(super) fn band_state_repos(count: usize, presets: &[String]) -> Result<Vec<P
 }
 
 /// The preset a run stands on where it names none. Also read by the
-/// census line (`options::census_line`, [`preset_is_the_default`]):
+/// registered line (`options::typable_line`, [`preset_is_the_default`]):
 /// naming it and leaving it off are one fixture, and two spellings would
 /// be two lines every gate runs twice.
 pub(super) const DEFAULT_PRESET: &str = "basic";
+
+/// The presets the run's fixture is built from: the ones typed, or the
+/// default where the route has one and none was named — what a judgment
+/// row keyed on a preset (`verbs::Arg::WithPreset`) is held against, so
+/// `corner 1` is judged as the run on `basic` it is.
+pub(super) fn presets_as_built(opts: &super::options::Options) -> Vec<String> {
+    if opts.preset.is_empty()
+        && matches!(
+            route_of(&opts.verb, &opts.arg),
+            Ok(Route::Presets | Route::NamedPresets)
+        )
+    {
+        return vec![DEFAULT_PRESET.to_string()];
+    }
+    opts.preset.clone()
+}
 
 /// One fresh demo repository per preset, in the order they were asked
 /// for — which is the order the tabs come up in. Each is called `repo`,
@@ -332,7 +348,7 @@ pub(super) fn folder_for(
             Ok(repo.display().to_string())
         }
         // A picture made here keeps the avatar verbs' line free of one
-        // machine's path, so the census can record it. Its name holds what
+        // machine's path, so the line can be registered. Its name holds what
         // a URL spells differently from a path — a space, a non-ASCII
         // letter, `#`, a `%` before hex digits and, where a name may hold
         // one, a backslash — and the card's verbs wait on the picture
@@ -400,9 +416,9 @@ pub(super) fn for_run(opts: &super::options::Options) -> Result<Vec<PathBuf>, St
 }
 
 /// Which fixture a run of this verb stands on. Read by both the builder
-/// above and the census line ([`preset_is_the_default`]); a second copy
-/// of "does this verb read `--preset`" would drift, recording one run
-/// under two lines.
+/// above and the registered line's spelling ([`preset_is_the_default`]); a
+/// second copy of "does this verb read `--preset`" would drift, spelling
+/// one run as two lines.
 enum Route {
     /// A strip off the ladder of names: `None` takes the count from the
     /// run's argument, `Some` is the verb's own. `--preset` is not read —

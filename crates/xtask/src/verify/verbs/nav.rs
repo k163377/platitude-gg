@@ -22,10 +22,12 @@ pub(super) const TABLE: &[Verb] = &[
     // turned it down and sends the reader to the log for git's words
     // (デザイン規約 §答えの要らない報せ). `tone=warning`: the gesture is still
     // going.
+    // The files store's lock on the ref (`--preset reflock`), named by git.
     Verb {
         name: "rename-taken",
-        // A reftable store's lock (`--preset reftable-lock`): git's branch
-        // rename says only `branch rename failed`, so no lock is named.
+        // A reftable store's lock (`--preset reftable-lock`, git 2.48+ —
+        // the host's line alone, verb-tiers.txt): git's branch rename says
+        // only `branch rename failed`, so no lock is named.
         when: &[(
             Arg::WithPreset("reftable-lock"),
             "rename_taken open=true refused=false tone=warning place=GIT COMMANDS \
@@ -41,14 +43,6 @@ pub(super) const TABLE: &[Verb] = &[
     // refusing everything frames the same. Every field is the output side
     // (rules-refs/app-ui.md「断りのツールチップ」): `box=` drawn and focused,
     // `tip=` read through the box, `text=` the sentence the reader gets.
-    // The same refusal photographed before its tip: a typed refusal's tip
-    // waits the usual rest (`TipAsk.typed` → `TipSeat`). Argument
-    // `V0.3-LOCAL`, as the plain row below.
-    Verb {
-        name: "rename-tag-box-early",
-        when: &[],
-        plain: "tag_name_box was=v0.3-local typed=V0.3-LOCAL box=true refused=true tip=false",
-    },
     // The other names a tag's box refuses before the press: git 2.55's own
     // rules (`HEAD`), and the tags already there — taken, a folder's
     // clash, letter case alone (デザイン規約 §左メニューの所作「名前の衝突」).
@@ -1177,8 +1171,10 @@ pub(super) const TABLE: &[Verb] = &[
     // The two name boxes a sidebar row opens, at the width the argument
     // dragged the pane to: the cut is the picture's; `focused=` / `shown=`
     // are not (a box nobody can type into frames like a waiting one).
-    // `:away` scrolls the list past the box's row, and the box — drawn
-    // outside its list — has to leave with it (`shown=false`).
+    // `:away`: the row scrolled out of the view — far enough that the
+    // box, drawn outside its list, hides by its own rule (`shown=false`),
+    // and near enough that the delegate survives — on a list long enough
+    // to scroll that row out (`--preset manytags`, the TAGS section).
     Verb {
         name: "nav-branch-box",
         when: &[(Arg::Ends(":away"), "open=true focused=true shown=false")],
@@ -1209,7 +1205,7 @@ pub(super) const TABLE: &[Verb] = &[
     // must dim with the rows the search passed over — lit, it reads as a
     // match. `150` makes that jump on `deep` (HEAD row 0, first match row
     // 591); other runs still reach the line after the jump. No spaces in
-    // the query: the census replays a line word by word.
+    // the query: a registered line is replayed word by word.
     Verb {
         name: "find",
         when: &[(Arg::Is("150"), "pin=dim")],

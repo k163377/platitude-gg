@@ -172,12 +172,6 @@ fn a_changed_tree_invalidates_the_graph_and_cache_io_failures_are_reported() {
     assert!(!text.contains(" (kept)"), "{text}");
 }
 
-/// Whitespace runs collapsed, so a test asserts a row's content and not
-/// its column width.
-fn squeezed(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
 #[test]
 fn a_truncated_graph_is_rebuilt_and_hidden_untracked_files_prevent_reuse() {
     let sb = Sandbox::new("graph-reuse");
@@ -336,10 +330,10 @@ fn a_red_verb_stops_no_other_verb_and_the_rerun_owes_it_alone() {
     let sb = Sandbox::new("red-verb");
     sb.write(
         &sb.seat,
-        "crates/xtask/verb-census.txt",
-        "# census\nstash --preset basic\tDriver Main StashPane\n\
-         stash-menu --preset basic\tDriver Main StashPane\n\
-         stash-open --preset basic\tDriver Main StashPane\n",
+        "crates/xtask/verb-lines.txt",
+        "*\tStashPane\nstash --preset basic\t-\n\
+         stash-menu --preset basic\t-\n\
+         stash-open --preset basic\t-\n",
     );
     sb.write_pane(&sb.seat, 2);
     sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
@@ -371,10 +365,10 @@ fn a_verb_stamped_while_it_queued_does_not_earn_the_block_its_no_build() {
     let sb = Sandbox::new("stamped-while-queued");
     sb.write(
         &sb.seat,
-        "crates/xtask/verb-census.txt",
-        "# census\nstash --preset basic\tDriver Main StashPane\n\
-         stash-menu --preset basic\tDriver Main StashPane\n\
-         stash-open --preset basic\tDriver Main StashPane\n",
+        "crates/xtask/verb-lines.txt",
+        "*\tStashPane\nstash --preset basic\t-\n\
+         stash-menu --preset basic\t-\n\
+         stash-open --preset basic\t-\n",
     );
     sb.write_pane(&sb.seat, 3);
     sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
@@ -574,53 +568,57 @@ fn a_lock_frees_the_tree_when_unlocked_and_not_when_merely_closed() {
     closing.wait().expect("the child that carried it");
 }
 
-/// A verb that rewrote its census line leaves a tree that is not the
-/// commit, so there is nothing to stamp.
+/// No step writes the tree: a green gate stamps the commit as it stood,
+/// and the table of lines is no step's input, so a row moved runs nothing
+/// a stamp answers for.
 #[test]
-fn a_gate_whose_verbs_rewrote_the_census_stamps_nothing_until_it_is_committed() {
-    let sb = Sandbox::new("rewrote");
+fn a_gate_writes_nothing_of_the_tree_and_a_moved_row_owes_no_step_again() {
+    let sb = Sandbox::new("writes-nothing");
     sb.write_pane(&sb.seat, 3);
     sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
-    let (ok, text) = sb.gate(
-        &sb.seat,
-        &[],
-        &[("PGG_GATE_FAKE_REWRITE", "verify stash --preset basic")],
-    );
-    assert!(!ok, "{text}");
-    assert!(
-        text.contains("the tree moved with them") && text.contains("review the diff"),
-        "{text}"
-    );
-    // Named by verb: when a component comes or goes the census diff is the
-    // whole file, and the moved line is lost in it.
-    assert!(
-        squeezed(&text).contains("+Theme stash --preset basic"),
-        "the record names the verb whose line moved: {text}"
-    );
+    let text = sb.gate_ok(&sb.seat, &[]);
+    assert!(!text.contains("census"), "{text}");
     assert_eq!(
         sb.git_ok(&sb.seat, &["status", "--porcelain"]),
-        "M crates/xtask/verb-census.txt",
-        "the rewrite stands in the tree"
+        "",
+        "the tree stands as it was committed"
     );
-    let merge = sb.git(&sb.repo, &["merge", "--ff-only", "worktree-a"], &[]);
-    assert!(merge.is_err(), "nothing was stamped: {merge:?}");
     let _ = sb.ran();
-    sb.commit_all(&sb.seat, "chore(xtask): the verb census", &[]);
+    sb.git_ok(&sb.repo, &["merge", "--ff-only", "worktree-a"]);
+    // A row moved by hand: the next gate reads the new table and owes
+    // nothing again — the row's step reads the tree, not the table, and
+    // the table is the plan's own input, not a file no step knows.
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-lines.txt",
+        "# lines\n*\t-\nstash --preset basic\tStashPane\n",
+    );
+    sb.commit_all(&sb.seat, "chore(xtask): a row", &[]);
     let text = sb.gate_ok(&sb.seat, &[]);
     assert!(
-        text.contains("cached verify stash --preset basic"),
+        !text.contains("verify stash") && !text.contains("no step reads these"),
         "{text}"
-    );
-    assert!(
-        text.contains("census  no line moved"),
-        "the run over the commit of it moved nothing: {text}"
     );
     assert_eq!(
         sb.ran(),
         set(&ALWAYS),
-        "the commit of the census owed nothing new: the census is no step's input"
+        "the table is no step's input, so a row moved owes nothing new"
     );
-    sb.git_ok(&sb.repo, &["merge", "--ff-only", "worktree-a"]);
+    // A row added is a line no stamp answers for: it runs, and alone.
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-lines.txt",
+        "# lines\n*\t-\nstash --preset basic\tStashPane\nstash-open --preset basic\t-\n",
+    );
+    sb.commit_all(&sb.seat, "chore(xtask): another row", &[]);
+    let text = sb.gate_ok(&sb.seat, &[]);
+    assert!(text.contains("verbs: 1 selected"), "{text}");
+    let ran = sb.ran();
+    assert!(
+        ran.contains("verify stash-open --preset basic")
+            && !ran.contains("verify stash --preset basic"),
+        "{ran:?}"
+    );
 }
 
 /// A host-only stamp over a both-sides one would send the landing back through
@@ -859,8 +857,8 @@ fn a_cargo_config_change_asks_every_build_again() {
 #[test]
 fn a_run_that_ran_nothing_still_files_a_row_for_every_step() {
     let sb = Sandbox::new("ledger-cached");
-    // A change the census's verb answers for, so the verbs are in the plan
-    // (`selection::a_core_change_owes_what_reads_it_and_nothing_beside_it`).
+    // A change the registered line answers for, so the verbs are in the
+    // plan (`selection::a_core_change_owes_what_reads_it_and_nothing_beside_it`).
     sb.write(
         &sb.seat,
         "crates/platitude-core/src/stash.rs",
@@ -872,7 +870,7 @@ fn a_run_that_ran_nothing_still_files_a_row_for_every_step() {
     let ran = sb.ran();
     assert!(
         ran.iter().any(|id| id.starts_with("verify ")),
-        "the first run owes the census's verb: {ran:?}"
+        "the first run owes the registered line: {ran:?}"
     );
 
     sb.gate_ok(&sb.seat, &[]);

@@ -9,12 +9,13 @@ name: Shots (macOS)
 
 on:
   # Any lines, on any ref that is on GitHub. Run as it comes, it shoots
-  # every census line, as the whole test does: a tier narrows it, and lines
-  # are shot besides the tier's, or alone under `none`.
+  # every registered line (crates/xtask/verb-lines.txt), as the whole test
+  # does: a tier narrows it, and lines are shot besides the tier's, or
+  # alone under `none`.
   workflow_dispatch:
     inputs:
       tier:
-        description: "census lines to shoot: whole (every line), fonts (what the fonts decide), premerge, none (the lines below alone)"
+        description: "registered lines to shoot: whole (every line), fonts (what the fonts decide), premerge, none (the lines below alone)"
         type: choice
         options: [whole, fonts, premerge, none]
         default: whole

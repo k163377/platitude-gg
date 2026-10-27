@@ -1099,9 +1099,9 @@ fn in_container(
         .arg(format!("{}:{DEMO_MOUNT}", volume(root, "demo")))
         .arg("--workdir")
         .arg(WORK)
-        // The checkout is mounted, so what a run generates here would land
-        // in the host's files: the mark keeps another machine's census out
-        // (`verify::options::census_line`).
+        // The checkout is mounted, so a run says which side it ran on
+        // (`verify::observed`) and keeps its temporary files to the
+        // container's own `/tmp` (`verify::run`).
         .arg("--env")
         .arg(format!("{IN_CONTAINER}=1"));
     given_commit(&mut cmd, root);

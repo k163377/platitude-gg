@@ -27,12 +27,12 @@ commands:
       manifest moved, qmltest when the product's QML module, the QtTest
       files that read it, or the runner that stages it moved, shipped when
       the app's QML or entry point
-      moved, the verify-ui verbs whose census names a reached component
-      (crates/xtask/verb-census.txt, written by the
-      runs themselves), bare when the app moved. A file read as it stands
+      moved, every registered verify-ui line (crates/xtask/verb-lines.txt)
+      when the app's QML or the harness that drives it is reached, bare
+      when the app moved. A file read as it stands
       — named in a string, a bin a test shoots — moves no code: it owes
-      its readers' tests and the verbs whose census names what they show,
-      not clippy or the harness's every verb; taken out, it owes what
+      its readers' tests and the registered lines,
+      not clippy; taken out, it owes what
       still names it. A module one system alone compiles owes the other
       side nothing. The always-steps
       (structure, waits, versions, docs, relied-messages check, verbs, fmt) run every
@@ -54,16 +54,16 @@ commands:
       stamped, and the reference-transaction hook lets a session's git
       move main onto stamped commits only — a git the user runs carries
       no CLAUDECODE mark, and the hook does not answer for it. A
-      component no verb's census names stops the gate by name: run a
-      verb that shows it once, and the gate picks that verb from then
-      on. The verbs rewrite their own census
-      lines as they run, so a gate that finds the file rewritten stops
-      before stamping — commit the generated file and run it again.
+      component no registered line shows stops the gate by name: name
+      it on the row of the line whose run brings it up
+      (crates/xtask/verb-lines.txt), and the gate passes it from then
+      on. No step writes the tree: what passed is the commit, and the
+      stamp names it as it stands.
       options:
         --host-only   the daily tier: no container; stamps the host half
         --whole       stage 3: no diff is read, every file counts as
-                      changed; every census line on both sides (a twin
-                      is in no census) and the `periodic` tests; implies
+                      changed; every registered line on both sides (a twin
+                      is registered nowhere) and the `periodic` tests; implies
                       --fresh and --keep-going
         --fresh       ignore the stamps and run everything owed
         --keep-going  run the rest after a red (--whole does): a red verb
@@ -71,7 +71,8 @@ commands:
                       group stops that group, and what passed is stamped.
                       A red always-step stops the run all the same
         --dry-run     print the reach and the steps, run nothing
-        --verb <l>    a verify-ui line to run besides the census's
+        --verb <l>    a registered verify-ui line to run besides the
+                      reach's, on both sides
         --jobs <n>    this gate's verbs at a time per side (default: a
                       third of the logical CPUs, 1 to 8). The lanes are
                       the machine's: every gate on it shares that many
@@ -261,13 +262,13 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       until one has gone green and the rest reuse it. A red line stops
       none of the others, unless what went red is the build they all
       read: the lines left are then named in the summary, not run.
-      Nothing here writes the census or the board.
+      Nothing here writes the board.
       options:
-        --tier <t>    the census lines to run: fonts (the tier table's
+        --tier <t>    the registered lines to run: fonts (the tier table's
                       rows judged on what the fonts decide), premerge
                       (every line a gate owes before a merge), whole
                       (every line the whole gate owes); none takes no
-                      census line
+                      registered line
         --line <l>    a line to run besides, as it would follow verify-ui;
                       one value may hold several with ; between them
         --out <dir>   where the pictures and logs go: a directory that
@@ -346,19 +347,32 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
         --no-build    package the shipped build already built
 
   verbs
-      Which verbs the gate never runs. The gate runs the argument lines
-      the census holds, so a verb with no line there is one no change
-      re-photographs — however it would be judged if it ran. Counts both
-      sides off the tree: the names the harness compares PGG_AUTO_ACT
-      against (crates/platitude-app/src/auto), and the first word of each
-      census line. Prints the verbs with no line, and fails on a line
-      whose verb the harness does not name anywhere — that one the gate
-      still runs, and the run waits out its whole ceiling saying nothing.
-      The two halves read the harness differently on purpose: the count
-      is of dispatches, the failure is of every name it holds, since a
+      The registered lines (crates/xtask/verb-lines.txt) held against the
+      harness, the judgment tables and the sources, before any gate
+      chooses off them. Fails on: a verb the harness answers
+      (crates/platitude-app/src/auto, the names it compares PGG_AUTO_ACT
+      against) with no registered line — one no change re-photographs; a
+      registered line whose verb the harness no longer names anywhere —
+      the gate would run it and the app ignore the name; a line spelled
+      otherwise than verify-ui reads it back; a judgment row of
+      verify/verbs no registered line reaches; a row naming what is no
+      component, or what every line shows already; a tier-table row
+      naming no registered line; a harness file nothing names. The two
+      halves read the harness differently on purpose: the answered verbs
+      are dispatches, the gone check reads every name it holds, since a
       verb can be reached through a list too.
-      Recording a missing verb is one `verify-ui <line>` without
-      --no-census.
+      Registering a line is one row: the line as typed, a tab, and what
+      its run brings up beyond the window's core (or -). A run says what
+      it met beside its row (`shown:` in verify-ui's output).
+      options:
+        --core        print the window's core: what Main and the `*` row
+                      compose, which every line shows
+        --shown <l>   print a registered line's subjects and what they
+                      bring up beyond the core
+        --why <c>     print whether a component is in the core, who
+                      composes it outright and whose popup opens onto it
+        --ledger      print every registered line as a row: line, tier,
+                      must-say, claims, promises (tab-separated)
 
   wedge-check
       Stops three runs on purpose and reads back what the parent could
@@ -650,14 +664,10 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       latest message opened by typing /land, the land skill; the
       fast-forward is what spends that permit — one message, one landing
       that moved main; a landing that stops short spends nothing). In the
-      branch's own worktree: commits a census a gate or a verb run
-      there left dirty (that one generated file, nothing else), rebases
+      branch's own worktree: rebases
       the branch onto main when it is behind (a rebase that stops is
-      walked back), runs `gate` there — cached steps are not paid twice,
-      and a census the verbs rewrote is committed as
-      `chore(xtask): the verb census as the land's gate rewrote it` and
-      gated once more (a second rewrite stops the landing for a person
-      to read) — and only then fast-forwards main, in the primary
+      walked back), runs `gate` there — cached steps are not paid twice
+      — and only then fast-forwards main, in the primary
       checkout when it sits on main or on the bare ref (reattaching a
       detached primary) when main is checked out nowhere; the
       reference-transaction hook checks the stamp on the way. History

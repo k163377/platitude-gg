@@ -329,7 +329,7 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // …and a folder of it, opened the way resting on its row opens it.
     // Which folder stands is judged, for the same reason, one row per
-    // folder the census runs; an argument with no row of its own is judged
+    // folder a registered line runs; an argument with no row of its own is judged
     // on the tier alone.
     Verb {
         name: "ops-branch-folder",

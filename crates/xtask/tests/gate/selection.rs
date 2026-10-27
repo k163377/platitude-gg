@@ -108,7 +108,7 @@ fn a_leaf_core_change_stays_narrow() {
 }
 
 #[test]
-fn a_qml_change_owes_the_verbs_whose_census_names_it_and_no_rust_test() {
+fn a_qml_change_owes_every_registered_line_and_no_rust_test() {
     let sb = Sandbox::new("qml");
     sb.write_pane(&sb.seat, 1);
     sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
@@ -127,27 +127,42 @@ fn a_qml_change_owes_the_verbs_whose_census_names_it_and_no_rust_test() {
     );
 }
 
-/// The final census does not contain a dialog a verb opened and closed.
-/// Narrowing by that snapshot is only a candidate; a verb reached
-/// through the dialog's owner still runs.
+/// A popup stands only when a line opens it, so a change to it is shown
+/// by the line that names it alone; the selection still runs every
+/// registered line, and says what a selection by what the lines show
+/// would have run (反映前テストの機械化.md §動詞の絞り込みは比較表示に留める).
 #[test]
-fn a_qml_leaf_keeps_reached_verbs_and_reports_the_shadow_selection() {
+fn a_qml_leaf_owes_every_line_and_reports_the_selection_by_what_they_show() {
     let sb = Sandbox::new("qml-shown");
     sb.write(
         &sb.seat,
-        "crates/xtask/verb-census.txt",
-        "# census\nstash --preset basic\tDriver Main StashPane\n\
-         window --preset basic\tDriver Main\n",
+        "crates/platitude-app/src/ui/SettingsDialog.qml",
+        "Popup {\n    property int x: 1\n}\n",
     );
-    sb.write_pane(&sb.seat, 3);
-    sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
-    let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/Main.qml",
+        "Item {\n    spacing: Theme.gap\n    StashPane {}\n    SettingsDialog {}\n}\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-lines.txt",
+        "*\tStashPane\nstash --preset basic\t-\nsettings --preset basic\tSettingsDialog\n",
+    );
+    let base = sb.commit_all(&sb.seat, "feat(app-ui): a dialog", &[]);
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/SettingsDialog.qml",
+        "Popup {\n    property int x: 2\n}\n",
+    );
+    sb.commit_all(&sb.seat, "feat(app-ui): the dialog moved", &[]);
+    let text = sb.gate_ok(&sb.seat, &["--main", &base, "--dry-run"]);
     assert!(
         text.contains("verbs: 2 selected, 1 of them on the container too; 0 left")
-            && text.contains("shadow candidate: 1"),
+            && text.contains("by what they show: 1"),
         "{text}"
     );
-    sb.gate_ok(&sb.seat, &[]);
+    sb.gate_ok(&sb.seat, &["--main", &base]);
     let ran = without_always(&sb.ran());
     assert_eq!(
         ran,
@@ -157,14 +172,14 @@ fn a_qml_leaf_keeps_reached_verbs_and_reports_the_shadow_selection() {
             "shipped",
             "verify stash --preset basic",
             "verify-linux stash --preset basic",
-            "verify window --preset basic",
+            "verify settings --preset basic",
             "bare"
         ])
     );
 }
 
 #[test]
-fn a_dialog_closed_before_the_census_still_owes_its_escape_verb() {
+fn a_dialog_closed_before_the_picture_still_owes_its_escape_verb() {
     let sb = Sandbox::new("closed-dialog");
     sb.write(
         &sb.seat,
@@ -178,8 +193,8 @@ fn a_dialog_closed_before_the_census_still_owes_its_escape_verb() {
     );
     sb.write(
         &sb.seat,
-        "crates/xtask/verb-census.txt",
-        "settings\tMain SettingsDialog\nsettings-escape\tMain\n",
+        "crates/xtask/verb-lines.txt",
+        "*\tStashPane\nsettings\tSettingsDialog\nsettings-escape\tSettingsDialog\n",
     );
     let base = sb.commit_all(&sb.seat, "test: dialog fixture", &[]);
     sb.write(
@@ -195,7 +210,7 @@ fn a_dialog_closed_before_the_census_still_owes_its_escape_verb() {
 }
 
 #[test]
-fn a_harness_change_without_qml_edges_owes_every_recorded_verb() {
+fn a_harness_change_without_qml_edges_owes_every_registered_line() {
     let sb = Sandbox::new("harness-no-qml");
     sb.write(
         &sb.seat,
@@ -209,8 +224,8 @@ fn a_harness_change_without_qml_edges_owes_every_recorded_verb() {
     );
     sb.write(
         &sb.seat,
-        "crates/xtask/verb-census.txt",
-        "stash --preset basic\tDriver Main StashPane\nwindow\tDriver Main\n",
+        "crates/xtask/verb-lines.txt",
+        "*\tStashPane\nstash --preset basic\t-\nwindow\t-\n",
     );
     let base = sb.commit_all(&sb.seat, "test: harness fixture", &[]);
     sb.write(
@@ -238,16 +253,15 @@ fn a_harness_change_without_qml_edges_owes_every_recorded_verb() {
 /// A singleton stands in no item tree, so no run reports it; the app's
 /// Rust is the binary every verb runs.
 #[test]
-fn a_singleton_and_the_apps_rust_owe_every_verb_the_census_holds() {
+fn a_singleton_and_the_apps_rust_owe_every_registered_line() {
     let sb = Sandbox::new("qml-unnameable");
-    let census = "# census\nstash --preset basic\tDriver Main StashPane\n\
-                  window --preset basic\tDriver Main\n";
+    let lines = "*\tStashPane\nstash --preset basic\t-\nwindow --preset basic\t-\n";
     let both = [
         "verify stash --preset basic",
         "verify window --preset basic",
         "verify-linux stash --preset basic",
     ];
-    sb.write(&sb.seat, "crates/xtask/verb-census.txt", census);
+    sb.write(&sb.seat, "crates/xtask/verb-lines.txt", lines);
     sb.write(
         &sb.seat,
         "crates/platitude-app/src/ui/Theme.qml",
@@ -342,7 +356,8 @@ fn a_qtest_file_owes_the_qml_runner_and_nothing_the_app_is_built_for() {
 #[test]
 fn a_component_worn_as_another_s_root_is_covered_by_the_one_wearing_it() {
     let sb = Sandbox::new("worn");
-    // `StashPane` is what the seeded census names, and this is one.
+    // `StashPane` is what every line shows (`Main` composes it), and this
+    // is one.
     sb.write(
         &sb.seat,
         "crates/platitude-app/src/ui/Bar.qml",
@@ -355,56 +370,79 @@ fn a_component_worn_as_another_s_root_is_covered_by_the_one_wearing_it() {
     );
     sb.commit_all(&sb.seat, "feat(app-ui): a bar under the pane", &[]);
     let text = sb.gate_ok(&sb.seat, &[]);
-    // Nothing in an item tree ever answers to `Bar` — the run that showed
-    // the pane is the run that showed it.
-    assert!(!text.contains("no verb shows"), "{text}");
+    // Nothing in an item tree ever answers to `Bar` — the line that shows
+    // the pane is the line that shows it.
+    assert!(!text.contains("no registered line shows"), "{text}");
     let ran = sb.ran();
     assert!(ran.contains("verify stash --preset basic"), "{ran:?}");
 }
 
+/// A component no row promises is one no green is evidence of, so the
+/// gate stops by its name: a popup until a line names it, a composed part
+/// until the `*` row does — what `Main` composes is no promise by itself.
 #[test]
-fn a_component_no_verb_shows_stops_the_gate_by_name() {
+fn a_component_no_registered_line_shows_stops_the_gate_by_name() {
     let sb = Sandbox::new("uncovered");
     sb.write(
         &sb.seat,
         "crates/platitude-app/src/ui/Extra.qml",
+        "Popup {}\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/Plain.qml",
         "Item {}\n",
     );
     sb.write(
         &sb.seat,
         "crates/platitude-app/src/ui/Main.qml",
-        "Item {\n    StashPane {}\n    Extra {}\n}\n",
+        "Item {\n    StashPane {}\n    Plain {}\n    Extra {}\n}\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-lines.txt",
+        "*\tStashPane Plain\nstash --preset basic\t-\n",
     );
     sb.commit_all(&sb.seat, "feat(app-ui): extra", &[]);
     let (ok, text) = sb.gate(&sb.seat, &[], &[]);
     assert!(!ok, "{text}");
-    // Main.qml is in the plan's list of changed files too: only the
-    // refusal's own list says which components no verb shows.
+    // Main.qml and Plain.qml are in the plan's list of changed files too:
+    // only the refusal's own list says which components no line shows.
     let refused = text
-        .split_once("no verb shows these components, so the gate cannot pass them:\n")
-        .and_then(|(_, rest)| rest.split_once("\nRun a verb"))
+        .split_once(
+            "no registered line brings these components up, so the gate cannot pass them:\n",
+        )
+        .and_then(|(_, rest)| rest.split_once("\nName each one"))
         .map(|(named, _)| named)
         .unwrap_or_else(|| panic!("no refusal by name: {text}"));
     assert!(
-        refused.contains("ui/Extra.qml") && !refused.contains("ui/Main.qml"),
+        refused.contains("ui/Extra.qml")
+            && !refused.contains("ui/Main.qml")
+            && !refused.contains("ui/Plain.qml"),
         "{refused}"
     );
-    // The census is asked before anything runs, so `--verb` here records
-    // too late and is no way out.
-    let (ok, text) = sb.gate(&sb.seat, &["--verb", "extra"], &[]);
-    assert!(!ok && text.contains("ui/Extra.qml"), "{text}");
-    let way_out = text
-        .lines()
-        .find(|line| line.starts_with("Run a verb"))
-        .unwrap_or_else(|| panic!("no way out said: {text}"));
     assert!(
-        way_out.contains("cargo xtask verify-ui <verb>")
-            && way_out.contains("commit it")
-            && !way_out.contains("--verb"),
-        "{way_out}"
+        text.contains("crates/xtask/verb-lines.txt") && text.contains("cargo xtask verify-ui"),
+        "the way out names the table and the run: {text}"
+    );
+    // The table is asked before anything runs, so `--verb` of a line the
+    // table does not hold is refused, not a way out.
+    let (ok, text) = sb.gate(&sb.seat, &["--verb", "extra"], &[]);
+    assert!(
+        !ok && text.contains("--verb \"extra\" is not a registered line"),
+        "{text}"
     );
     assert!(sb.ran().is_empty());
-    // A singleton is never owed a census.
+    // Named on a row, the popup is shown by that line.
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-lines.txt",
+        "*\tStashPane Plain\nstash --preset basic\t-\nextra\tExtra\n",
+    );
+    sb.commit_all(&sb.seat, "test: the line that opens it", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    assert!(sb.ran().contains("verify extra"));
+    // A singleton is never owed a line.
     sb.write(
         &sb.seat,
         "crates/platitude-app/src/ui/Theme.qml",
@@ -413,36 +451,41 @@ fn a_component_no_verb_shows_stops_the_gate_by_name() {
     sb.write(
         &sb.seat,
         "crates/platitude-app/src/ui/Main.qml",
-        "Item {\n    StashPane {}\n}\n",
+        "Item {\n    StashPane {}\n    Plain {}\n}\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-lines.txt",
+        "*\tStashPane Plain\nstash --preset basic\t-\n",
     );
     std::fs::remove_file(sb.seat.join("crates/platitude-app/src/ui/Extra.qml")).expect("rm");
     sb.commit_all(&sb.seat, "feat(app-ui): theme", &[]);
     sb.gate_ok(&sb.seat, &[]);
 }
 
-/// A row no run wrote: no step runs, and the file is left as it was.
+/// A row that is no line's: no step runs, and the file is left as it was.
 #[test]
-fn a_census_that_cannot_be_read_whole_stops_the_gate_by_its_row() {
-    let sb = Sandbox::new("census-rows");
-    let census = "# census\nstash --preset basic\tDriver Main StashPane\n\
-                  stash --preset basic\tMain\n";
-    sb.write(&sb.seat, "crates/xtask/verb-census.txt", census);
+fn a_table_that_cannot_be_read_whole_stops_the_gate_by_its_row() {
+    let sb = Sandbox::new("lines-rows");
+    let lines = "# lines\nstash --preset basic\t-\n\
+                 stash --preset basic\tStashPane\n";
+    sb.write(&sb.seat, "crates/xtask/verb-lines.txt", lines);
     sb.write(
         &sb.seat,
         "crates/platitude-app/src/ui/StashPane.qml",
         "Item {\n    property var model: StashModel\n    property int x: 1\n}\n",
     );
-    sb.commit_all(&sb.seat, "feat(app-ui): a census taken twice", &[]);
+    sb.commit_all(&sb.seat, "feat(app-ui): a line registered twice", &[]);
     let (ok, text) = sb.gate(&sb.seat, &[], &[]);
     assert!(!ok, "{text}");
     assert!(
-        text.contains("crates/xtask/verb-census.txt:3: \"stash --preset basic\" again"),
+        text.contains("crates/xtask/verb-lines.txt:3: \"stash --preset basic\" again"),
         "{text}"
     );
     assert!(sb.ran().is_empty());
     assert_eq!(
-        std::fs::read_to_string(sb.seat.join("crates/xtask/verb-census.txt")).expect("census"),
-        census
+        std::fs::read_to_string(sb.seat.join("crates/xtask/verb-lines.txt")).expect("the table"),
+        lines
     );
 }
 
@@ -595,11 +638,11 @@ fn the_tier_table_says_which_lines_each_gate_owes_and_where() {
     let sb = Sandbox::new("tiers");
     sb.write(
         &sb.seat,
-        "crates/xtask/verb-census.txt",
-        "# census\nstash --preset basic\tDriver Main StashPane\n\
-         stash-menu --preset basic\tDriver Main StashPane\n\
-         stash-twin --preset basic\tDriver Main StashPane\n\
-         stash-open --preset basic\tDriver Main StashPane\n",
+        "crates/xtask/verb-lines.txt",
+        "*\tStashPane\nstash --preset basic\t-\n\
+         stash-menu --preset basic\t-\n\
+         stash-twin --preset basic\t-\n\
+         stash-open --preset basic\t-\n",
     );
     sb.write(
         &sb.seat,
@@ -658,9 +701,9 @@ fn a_whole_line_that_alone_shows_a_reached_component_is_owed_before_the_merge() 
     );
     sb.write(
         &sb.seat,
-        "crates/xtask/verb-census.txt",
-        "# census\nstash --preset basic\tDriver Main StashPane\n\
-         perf none --preset perf\tDriver Main PerfDriver\n",
+        "crates/xtask/verb-lines.txt",
+        "*\tStashPane\nstash --preset basic\t-\n\
+         perf none --preset perf\tPerfDriver\n",
     );
     sb.write(
         &sb.seat,
@@ -719,8 +762,8 @@ fn a_qtest_change_reaches_the_harness_as_data_and_owes_no_verb() {
     );
     sb.write(
         &sb.seat,
-        "crates/xtask/verb-census.txt",
-        "stash --preset basic\tDriver Main StashPane\nwindow\tDriver Main\n",
+        "crates/xtask/verb-lines.txt",
+        "*\tStashPane\nstash --preset basic\t-\nwindow\t-\n",
     );
     let base = sb.commit_all(&sb.seat, "test: harness fixture", &[]);
 

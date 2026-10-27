@@ -2,7 +2,6 @@
 //! queue, the turn, and everything past it up to the fast-forward and
 //! the clearing after (the module's doc says why this is the one way).
 
-use crate::gate::Gated;
 use crate::seats::{
     Held, Identity, Standing, WorktreeBlock, is_a_seat_claim, same_tree, standing, whose,
     worktree_blocks,
@@ -146,12 +145,11 @@ fn preflight(
     };
     let seat_dir = std::path::Path::new(&trees[seat_at].path);
     phases.target(seat_dir, &branch);
-    // Ahead of the census commit below: a landing that waits moves nothing.
+    // A landing that waits moves nothing.
     approval::awaited(here, &listing, &branch)?;
-    // The line of landings: only its head lands (`line`) — ahead of the
-    // census commit too, which is the head's to make.
+    // The line of landings: only its head lands (`line`).
     line::must_be_head(here, me)?;
-    settle_the_tree(&trees[seat_at].path, &branch)?;
+    settle_the_tree(&trees[seat_at].path)?;
     // The landings' queue (`budget::Pool::turn`), held to the end. Taken
     // before the seat's tree, its gate and the machine's budget, so a
     // landing standing in line stands in nobody's way.
@@ -199,7 +197,7 @@ fn through(
         rebase(&seat.path)?;
     }
     phases.mark("rebase");
-    gate_in_the_seat(seat_dir, branch)?;
+    gate_in_the_seat(seat_dir)?;
     phases.mark("gate");
     // Again, for a run that went up while the gate ran (a verify-ui left in
     // the background): once main moves, the board is cleared of it unseen.
@@ -263,19 +261,10 @@ fn permit_still_open(here: &str, me: &Identity) -> Result<(), String> {
     ))
 }
 
-/// What would land is what stands committed, so the seat must be clean —
-/// except for a census a gate or verb run there rewrote, which the
-/// landing commits as it does its own gate's rewrite (`gate_in_the_seat`).
-fn settle_the_tree(seat: &str, branch: &str) -> Result<(), String> {
+/// What would land is what stands committed, so the seat must be clean:
+/// no run writes the tree, so anything standing is somebody's.
+fn settle_the_tree(seat: &str) -> Result<(), String> {
     let dirty = git_query(seat, &["status", "--porcelain"]).unwrap_or_default();
-    if census_alone(&dirty) {
-        commit_census(seat)?;
-        println!(
-            "{} was rewritten in {seat} before this landing: committed on {branch}",
-            crate::gate::CENSUS_FILE
-        );
-        return Ok(());
-    }
     if dirty.is_empty() {
         return Ok(());
     }
@@ -425,64 +414,10 @@ fn build_slot_tree(exe: &std::path::Path) -> Option<String> {
     Some(target.parent()?.to_string_lossy().replace('\\', "/"))
 }
 
-/// The gate in the seat. A census its verbs rewrote leaves the tree that
-/// passed unstamped, so it is committed and the gate asked again (every
-/// step cached: the census is no step's input). A second rewrite is a
-/// census moving under the machine's timing, and is reported.
-fn gate_in_the_seat(seat: &std::path::Path, branch: &str) -> Result<(), String> {
-    if crate::gate::for_landing(seat, "main")? == Gated::Stamped {
-        return Ok(());
-    }
-    commit_census(&crate::seats::slashed(seat))?;
-    println!(
-        "the land's gate rewrote {}: committed on {branch}, and the gate runs again",
-        crate::gate::CENSUS_FILE
-    );
-    if crate::gate::for_landing(seat, "main")? == Gated::Stamped {
-        return Ok(());
-    }
-    Err(format!(
-        "the verbs rewrote {} again, on the run that was to stamp the commit holding the first \
-         rewrite — the census is moving under the machine's timing. \
-         Read the two rewrites' diffs before landing.",
-        crate::gate::CENSUS_FILE
-    ))
-}
-
-/// The message of every commit of the census the gate rewrote.
-const CENSUS_COMMIT: &str = "chore(xtask): the verb census as the land's gate rewrote it";
-
-/// Whether a seat's `status --porcelain` says the census, modified in the
-/// working tree, is the whole of what stands uncommitted.
-fn census_alone(dirty: &str) -> bool {
-    dirty.trim() == format!("M {}", crate::gate::CENSUS_FILE)
-}
-
-/// Commits the census the gate's verbs rewrote, alone: a landing commits
-/// only what the machine wrote, so anything else standing is refused.
-fn commit_census(seat: &str) -> Result<(), String> {
-    let census = crate::gate::CENSUS_FILE;
-    let dirty = git_query(seat, &["status", "--porcelain"]).unwrap_or_default();
-    if !census_alone(&dirty) {
-        return Err(format!(
-            "the gate left more than {census} changed in {seat}, and a landing commits the \
-             census alone:\n{dirty}"
-        ));
-    }
-    let mut command = std::process::Command::new("git");
-    command
-        .arg("-C")
-        .arg(seat)
-        .args(["commit", "-q", "-m", CENSUS_COMMIT, "--", census]);
-    let output = crate::subprocess::run_captured(&mut command)?;
-    if output.status.success() {
-        return Ok(());
-    }
-    Err(format!(
-        "the census could not be committed in {seat}:\n{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    ))
+/// The gate in the seat: green is the commit stamped, since no step
+/// writes the tree.
+fn gate_in_the_seat(seat: &std::path::Path) -> Result<(), String> {
+    crate::gate::for_landing(seat, "main")
 }
 
 /// A rebase that stops is walked back and reported: resolving conflicts

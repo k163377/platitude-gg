@@ -107,7 +107,7 @@ fn shoot(
         .arg(&config)
         .arg("--shot-dir")
         .arg(&shots)
-        .args(["--no-census", "--no-board", "--watchdog-ms"])
+        .args(["--no-board", "--watchdog-ms"])
         .arg(ceiling_ms(scene).to_string());
     if !build {
         command.arg("--no-build");

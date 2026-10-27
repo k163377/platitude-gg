@@ -393,8 +393,8 @@ impl Sandbox {
         );
     }
 
-    /// The pane the seeded census names, rewritten `n` wide: a QML change
-    /// that owes the census's verb.
+    /// The pane every line shows (`Main` composes it), rewritten `n` wide:
+    /// a QML change that owes the registered line.
     pub fn write_pane(&self, dir: &Path, n: u32) {
         self.write(
             dir,
@@ -584,19 +584,25 @@ const SEED: &[(&str, &str)] = &[
     ("crates/platitude-app/src/auto/Driver.qml", "Item {}\n"),
     (
         "crates/xtask/src/main.rs",
-        "mod qmltest;\nmod seats;\nfn main() {}\n",
+        "mod demo;\nmod qmltest;\nmod seats;\nmod verify;\nfn main() {}\n",
     ),
     (
         "crates/xtask/src/seats.rs",
         "#[cfg(test)]\nmod tests {\n    #[test]\n    fn x() {}\n}\n",
     ),
     ("crates/xtask/src/qmltest.rs", "pub fn run() {}\n"),
+    // The harness's Rust half: the fixtures a run stands on and the
+    // judgment it is held to, which every verify step reads.
+    ("crates/xtask/src/demo/mod.rs", "pub fn build() {}\n"),
+    ("crates/xtask/src/verify/mod.rs", "pub fn judge() {}\n"),
+    // The one registered line promises the pane every line stands up
+    // (the `*` row): a change to the pane is one some line is evidence of.
     (
-        "crates/xtask/verb-census.txt",
-        "# census\nstash --preset basic\tDriver Main StashPane\n",
+        "crates/xtask/verb-lines.txt",
+        "# lines\n*\tStashPane\nstash --preset basic\t-\n",
     ),
-    // The census's verb runs on the container too, so every test
-    // sees both sides' verb blocks.
+    // The line runs on the container too, so every test sees both
+    // sides' verb blocks.
     (
         "crates/xtask/verb-tiers.txt",
         "fonts\tstash --preset basic\t-\tthe sandbox's line on both sides\n",
@@ -628,6 +634,39 @@ fn checked_in_hook() -> String {
 
 pub fn set(items: &[&str]) -> BTreeSet<String> {
     items.iter().map(|s| (*s).to_string()).collect()
+}
+
+/// A sandbox with one line of each tier the whole gate adds, the tables
+/// stamped and on main: a row added to the registry is itself a line the
+/// gate owes, and not what the tests on this sandbox measure.
+pub fn tiered(name: &str) -> Sandbox {
+    let sb = Sandbox::new(name);
+    // A popup nothing composes, promised by the pre-merge line (a whole
+    // line alone promising it would be its only witness, owed before a
+    // merge): a part another row can come to promise.
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/Peek.qml",
+        "Popup {}\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-lines.txt",
+        "*\tStashPane\nstash --preset basic\tPeek\n\
+         stash-menu --preset basic\t-\n\
+         stash-open --preset basic\t-\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-tiers.txt",
+        "fonts\tstash --preset basic\t-\tboth sides\n\
+         whole\tstash-menu --preset basic\tstash --preset basic\tpicture: the menu standing\n",
+    );
+    sb.commit_all(&sb.seat, "chore: tiers", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    let _ = sb.ran();
+    sb.git_ok(&sb.repo, &["merge", "--ff-only", "worktree-a"]);
+    sb
 }
 
 pub fn without_always(ran: &BTreeSet<String>) -> BTreeSet<String> {

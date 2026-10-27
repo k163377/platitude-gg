@@ -1,5 +1,5 @@
 # Everything CI checks: the whole cargo set on all three OSes (ci.yml)
-# and every census line on macOS (shots.yml, the `whole` tier).
+# and every registered verify-ui line on macOS (shots.yml, the `whole` tier).
 name: Whole test (3 OS)
 run-name: >-
   Whole test · ${{ github.event_name == 'push' && github.ref_name

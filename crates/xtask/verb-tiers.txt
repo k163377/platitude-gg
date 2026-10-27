@@ -1,11 +1,12 @@
-# Which census lines each gate owes, and on which side — read by `cargo xtask gate`
-# and checked against the census by `cargo xtask verbs` (every gate's always-step).
-# The reasons are in crates/xtask/src/gate/tiers.rs and internal-docs/反映前テストの機械化.md.
+# Which registered lines (verb-lines.txt) each gate owes, and on which side — read by
+# `cargo xtask gate` and checked against the registered lines by `cargo xtask verbs` (every
+# gate's always-step). The reasons are in crates/xtask/src/gate/tiers.rs and
+# internal-docs/反映前テストの機械化.md.
 #
-# A census line this table does not name: the host before a merge, both sides in the whole
+# A registered line this table does not name: the host before a merge, both sides in the whole
 # gate (`gate --whole`). One row per line it does name, tab-separated:
 #
-#   <tier>  <census line>  <leans on>  <why>
+#   <tier>  <registered line>  <leans on>  <why>
 #
 #   fonts  also on the container before a merge — judged on a size, a cut or a fold the
 #          fonts decide; CI's macOS replays these on every push. <leans on> is -.
@@ -15,8 +16,8 @@
 #          (judged by its picture, which no gate reads), held (a cheaper test holds the
 #          claim), perf (the perf tool walks it), other. Only held and perf lean on -: the
 #          test named in <why>, or the perf tool's own runs, is the witness.
-#   twin   no gate: <leans on> is the census line that runs the same path and judges as much.
-#          The census does not record a twin, so its line stays out.
+#   twin   no gate: <leans on> is the registered line that runs the same path and judges as
+#          much. A twin is registered nowhere (`verbs` refuses a registered one).
 
 fonts	author-card-open 0 --preset authorship	-	cut= reads whether the author's name fits the card
 fonts	badges --preset conflict	-	narrowed= words= mark= read the band's measured floor
@@ -69,6 +70,7 @@ whole	avatar-settings	avatar-remove	picture: List picture at the chapter foot; i
 whole	badges 1400:6 --preset conflict	badges --preset conflict ; badges 1000:6 --preset conflict	held: Same judged line as the plain run; its extra (six tabs still leaving the words) is the share-out boundary QtTested; real fonts reach the group before a merge via plain and 1000:6.
 whole	badges-all --preset lfs-conflict	badges --preset conflict ; badges-all-hover --preset lfs-conflict	other: All six badges' words standing unnarrowed at 1440; the three-badge run walks the same share-out on real fonts and the card run stands the same six before a merge, and the share-out itself is QtTested (tst_bandshare, tst_bandgroup).
 whole	badges-all floor --preset lfs-conflict	badges floor:16 --preset conflict ; badges-all-hover --preset lfs-conflict	other: Same judged line as badges floor:16 on the same floor branch: a folded group's width and frame depth are read off the mark and the shared badge box (BandStateGroup.foldedWidth / foldedDepth, BandStateMetrics.depth), not off the badges standing, and its red is the conflict's in both; the six standing at once (stale armed, LFS, old git) is walked before a merge by badges-all-hover.
+whole	badges-all 1000:6 --preset lfs-conflict	badges 1000:6 --preset conflict ; badges-all-hover --preset lfs-conflict	other: The six-tab share-out is badges 1000:6's on real fonts before a merge, and the six badges standing at once are badges-all-hover's; this line only puts the two together.
 whole	band	band --system-title-bar	picture: No must_say row although the driver says 'numbers say it': the gate only sees the band lay out, which every other line also needs. Numbers and picture are for a human.
 whole	band-actions-fold --preset longnames	band-actions-alert --preset longnames --allow-write-failure	picture: Its judged claim is asserted before a merge by band-actions-alert at the same width on the same preset; what remains is the picture of a clean fold with no !.
 whole	carried-apply topic --preset carried	carried-apply here --preset carried	git: The same menu, press and landing as carried-apply here; what differs is git landing the apply on a conflict, which core's carried_apply::a_conflict_is_a_landing holds.
@@ -177,6 +179,8 @@ whole	perf details --preset perf	-	perf: Perf driver display contract.
 whole	perf diff-scroll --preset perf-sequence	-	perf: Perf driver display contract.
 whole	perf font-walk --preset perf	-	perf: Calibration-run contract of cargo xtask perf.
 whole	perf none --preset perf	-	perf: Perf driver display contract.
+whole	perf scroll-none --preset perf	-	perf: Perf driver display contract (the scroll with nothing selected).
+whole	perf diff --preset perf	-	perf: Perf driver display contract (the diff measured on its own).
 whole	perf scroll --preset perf	-	perf: Perf driver display contract (resolves to the table's plain row; no Is("scroll") row).
 whole	perf sequence --preset perf-sequence	-	perf: Perf driver display contract (two OIDs twice, next op after the final colouring).
 whole	preview art/photo.png --preset pictures	preview-staged art/icon.png --preset pictures ; diff-step untracked.txt --preset dirty	git: Same generic cells and count as icon.png; only the bucket/git state differs, which core and encode units hold.
@@ -385,3 +389,6 @@ whole	window-floor log --preset rebase-conflict	window-floor log	git: Distinct f
 twin	wip-tally --preset dirty	wip --preset dirty	Same run as wip --preset dirty; its extra wip_tally line (kinds summing to rows) is judged nowhere, so nothing the gate reads or the PNG shows differs.
 twin	worktree-kept 8 --preset basic --preset worktrees	worktree-kept --preset basic --preset worktrees	Same must_say and road; the long worktree name only changes the picture (wide= is reported, not judged) and the cut rule is QtTested.
 twin	graph-choose-said 1:3:5 --preset co-authors	graph-choose-said --preset co-authors	Byte-identical run: an empty argument is the rows 1:3:5 (AutoActGraphRowVerbs.qml, acts.rowsArg(arg, [1, 3, 5])), same preset, same chosen_said line and completion.
+host	push --preset prepush-config --allow-write-failure	-	git: a pre-push hook set in configuration needs git 2.54, above the container's minimum; the hook-file form (`--preset prepush`) runs on both sides
+host	rename-stash renamed --preset reftable-droplock --allow-write-failure	-	git: a reftable store needs git 2.48, above the container's minimum; the files store's lock (`--preset stash-droplock`) runs on both sides
+host	rename-taken held --preset reftable-lock --allow-write-failure	-	git: a reftable store needs git 2.48, above the container's minimum; the files store's lock (`--preset reflock`) runs on both sides

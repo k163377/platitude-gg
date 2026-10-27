@@ -1,12 +1,10 @@
 //! A plan run and stamped: what no stamp could answer for, refused
-//! before anything runs; the sides; the census read again; the stamp.
+//! before anything runs; the sides; the stamp.
 
-use super::Gated;
-use super::census::{self, Census, Shift};
 use super::halt::Halt;
 use super::plan::Plan;
 use super::record::Spent;
-use super::run::{census_rewritten, short};
+use super::run::short;
 use super::runner::{FAKE_LOG, runner};
 use super::sides::run_sides;
 use super::stamp::{CommitStamp, Store};
@@ -18,23 +16,22 @@ use super::stamp::{CommitStamp, Store};
 /// to the end of their block, `jobs` at a time (`sides::verbs`) — and the
 /// rest finishes, so its green steps are stamped and need not run again.
 /// A `landing`'s units get the machine ahead of other gates' (`budget`).
+///
+/// Nothing a step runs writes the tree: what passed is the commit, so the
+/// stamp names it as it stands.
 pub(super) fn execute(
     plan: &Plan,
     jobs: usize,
     landing: bool,
     keep_going: bool,
     spent: &mut Spent,
-    shift: &mut Shift,
-) -> Result<Gated, String> {
+) -> Result<(), String> {
     // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
     refuse_what_no_stamp_could_answer_for(plan)?;
     // A verb's repositories and pictures are left for a person to look
     // at, and nothing else ever takes them away.
     crate::verify::sweep_yesterdays_runs();
-    // What the census said before the verbs ran, so that a line one of
-    // them rewrote can be told from the file as it was committed.
-    let census_before = census::bytes(&plan.dir)?;
     let store = Store::open(&plan.dir)?;
     let logs = plan.dir.join("target").join("gate-logs");
     std::fs::create_dir_all(&logs).map_err(|e| format!("{}: {e}", logs.display()))?;
@@ -64,32 +61,11 @@ pub(super) fn execute(
     )?;
     spent.sides = at.elapsed();
     let head = short(&plan.head);
-    // A verb that passed rewrote its census line whether or not another
-    // step went red, so this is said on both roads out.
-    // waits(measured): the phase's cost, for the record
-    let at = std::time::Instant::now();
-    let census_now = census::bytes(&plan.dir)?;
-    // The bytes answer whether the tree moved (a changed header too,
-    // which the next gate would refuse to run over); the sets answer
-    // what moved.
-    let rewrote = census_now != census_before;
-    *shift = Shift::between(&Census::read(&census_before)?, &Census::read(&census_now)?);
-    spent.census_after = at.elapsed();
     if !failures.is_empty() {
         return Err(format!(
-            "gate failed: {} — nothing stamped for {head}.{}",
+            "gate failed: {} — nothing stamped for {head}.",
             failures.join(" / "),
-            if rewrote {
-                census_rewritten()
-            } else {
-                String::new()
-            }
         ));
-    }
-    // Green, and the tree that passed is no longer the commit: a stamp
-    // names one, so the file has to be in it before a stamp is written.
-    if rewrote {
-        return Ok(Gated::CensusMoved);
     }
     // A host-only run keeps a both-sides stamp already on the commit:
     // writing `container=false` over it would send the next landing back
@@ -100,7 +76,7 @@ pub(super) fn execute(
         })
     {
         println!("gate: PASS — {head} keeps its both-sides stamp (this run was host-only)");
-        return Ok(Gated::Stamped);
+        return Ok(());
     }
     let stamp = CommitStamp {
         main: plan.main.clone(),
@@ -133,12 +109,12 @@ pub(super) fn execute(
             "off main"
         }
     );
-    Ok(Gated::Stamped)
+    Ok(())
 }
 
 /// A tree with uncommitted changes, a graph that cannot read it whole,
-/// and a component no verb shows: nothing a run could answer for, said
-/// before anything runs.
+/// and a component no registered line shows: nothing a run could answer
+/// for, said before anything runs.
 fn refuse_what_no_stamp_could_answer_for(plan: &Plan) -> Result<(), String> {
     let here = plan.dir.display().to_string();
     let dirty = crate::subprocess::git_query(&here, &["status", "--porcelain"])
@@ -161,20 +137,21 @@ fn refuse_what_no_stamp_could_answer_for(plan: &Plan) -> Result<(), String> {
                 .join("\n")
         ));
     }
-    // Asked of the census as committed, before anything runs: a
-    // `--verb` of this gate would record its line too late to answer.
+    // Asked of the table as committed, before anything runs: a run that
+    // showed the component would not register it.
     if !plan.uncovered.is_empty() {
         return Err(format!(
-            "no verb shows these components, so the gate cannot pass them:\n{}\nRun a verb \
-             that brings each one up on its own (`cargo xtask verify-ui <verb> …`) — a passing \
-             run records what it showed in {} — then review that diff, commit it, and gate \
-             again: from then on the gate picks that verb by itself.",
+            "no registered line brings these components up, so the gate cannot pass them:\n{}\n\
+             Name each one on the row of the line whose run stands it up in {} (the popup or \
+             the part itself, or the holder that opens it), run that line once to see it met \
+             (`cargo xtask verify-ui <line>` says what the run met beside its row), commit, and \
+             gate again.",
             plan.uncovered
                 .iter()
                 .map(|f| format!("  {f}"))
                 .collect::<Vec<_>>()
                 .join("\n"),
-            census::FILE
+            super::lines::FILE
         ));
     }
     Ok(())

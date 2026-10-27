@@ -89,7 +89,7 @@ pub(crate) struct Graph {
 /// them: a binary reads a non-product file off the real tree (the hook
 /// script `tests/gate` copies into its sandbox) and runs the real bin.
 /// Without the stop, every app or core change would owe the gate's
-/// sandbox tests on both sides, since the census reads the app.
+/// sandbox tests on both sides, since the composition reads the app.
 ///
 /// The selection reads the difference too: a file handed data did not
 /// change, so a step that file's name selects (the verbs through
@@ -1371,11 +1371,11 @@ fn literal_paths(root: &Path, file: &str, bodies: &[String]) -> Vec<String> {
             if name.starts_with("target") || name.is_empty() {
                 continue;
             }
-            // The census and the tier table are plan inputs no test opens
-            // (sandboxes lay out their own). As edges they would enter the
-            // keys of every test their readers reach, so a landing's census
-            // commit would rerun them all to the same answer.
-            if name == super::census::FILE || name == super::tiers::FILE {
+            // The registered lines and the tier table are plan inputs no
+            // test opens (sandboxes lay out their own). As edges they would
+            // enter the keys of every test their readers reach, so a row
+            // moved would rerun them all to the same answer.
+            if name == super::lines::FILE || name == super::tiers::FILE {
                 continue;
             }
             if real.is_dir() {
@@ -1574,7 +1574,7 @@ fn qml(root: &Path, g: &mut Graph) -> Result<(), String> {
 }
 
 /// Every QML file of the app, product and harness alike, as workspace
-/// paths — the set the census can name, edges or none.
+/// paths — the set a registered line can name, edges or none.
 pub(crate) fn qml_files(root: &Path) -> Result<Vec<String>, String> {
     let mut files = Vec::new();
     collect(
@@ -1587,7 +1587,7 @@ pub(crate) fn qml_files(root: &Path) -> Result<Vec<String>, String> {
 }
 
 /// A file's name without directory or extension — what a QML type is
-/// called, and what the census records.
+/// called, and what a registered line names.
 pub(crate) fn stem_of(file: &str) -> String {
     Path::new(file)
         .file_stem()

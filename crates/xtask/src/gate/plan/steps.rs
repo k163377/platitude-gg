@@ -8,7 +8,6 @@ use super::{
     Ask, CARGO, Counted, DOCKERFILE, DOCS, IMAGE, QMLTEST, Reading, Side, Step, app, clippy_config,
     core, deny_policy, harness, qml_dirs, under,
 };
-use crate::gate::census;
 use crate::gate::graph::{Carried, Graph, Reach, stem_of};
 use crate::gate::tiers::Tier;
 
@@ -41,6 +40,7 @@ fn step<S: AsRef<str>>(
         beside: false,
         command,
         inputs: inputs.iter().map(|s| s.as_ref().to_string()).collect(),
+        contract: String::new(),
     }
 }
 
@@ -89,26 +89,21 @@ struct Sorted {
     unit_filters: BTreeMap<String, BTreeSet<String>>,
     unit_files: BTreeMap<String, Vec<String>>,
     integration: BTreeMap<(String, String), (BTreeSet<String>, Vec<String>)>,
-    /// The QML components in the reach, by name.
+    /// The QML components in the reach, by name — the product's and the
+    /// harness's.
     qml: BTreeSet<String>,
 }
 
 /// `everything` runs every package's tests unfiltered.
-fn sort(
-    g: &Graph,
-    reach: &Reach,
-    everything: bool,
-    worn: &BTreeMap<String, BTreeSet<String>>,
-) -> Sorted {
+fn sort(g: &Graph, reach: &Reach, everything: bool) -> Sorted {
     let (_, qml_tests) = qml_dirs();
     let mut sorted = Sorted::default();
     for (file, carried) in reach {
         if file.ends_with(".qml") {
-            // A QtTest file is no component: no census names it, so it
+            // A QtTest file is no component: no line shows it, so it
             // belongs to `qmltest_steps` alone.
             if !under(file, &qml_tests) {
-                // Under every name a run could have met it (`census::worn_by`).
-                census::through_wearers(&stem_of(file), worn, &mut sorted.qml);
+                sorted.qml.insert(stem_of(file));
             }
             continue;
         }
@@ -168,7 +163,7 @@ pub(super) fn select(
     changed: &[String],
     ask: &Ask<'_>,
 ) -> (Vec<Step>, Counted) {
-    let mut sorted = sort(g, reach, read.everything, read.worn);
+    let mut sorted = sort(g, reach, read.everything);
     let mut steps = always_steps();
     steps.extend(deny_steps(g, changed, read.everything));
     steps.extend(qmltest_steps(reach, read.everything));
@@ -222,9 +217,10 @@ fn always_steps() -> Vec<Step> {
                 crate::relied_messages::LEDGER,
             ],
         ),
-        // Fails on a census line no verb answers: the app would ignore the
-        // name and the run wait out its ceiling silently. Verbs with no
-        // line are only counted (`verify::coverage`).
+        // Fails on a registered line no verb answers (the app would ignore
+        // the name and the run wait out its ceiling silently), on a verb
+        // or a judgment row no line reaches, and on a row that names what
+        // is no component (`verify::coverage`).
         step("verbs", Side::Host, true, xtask(&["verbs"]), &["crates"]),
         step(
             "fmt",
@@ -500,34 +496,40 @@ fn holds_periodic(text: &str) -> bool {
     })
 }
 
-/// Components for the shadow candidate only: absence from the census is
-/// no proof a run did not use a component
-/// (反映前テストの機械化.md §動詞の絞り込みは比較表示に留める). `None`
-/// when the changed inputs are not all component names.
-fn verbs_in_snapshot(read: &Reading<'_>, changed: &[String]) -> Option<BTreeSet<String>> {
-    if read.everything {
-        return None;
+/// How many of `lines` show a component the reach holds — the selection
+/// a gate choosing by what each line shows would make, printed beside
+/// the selection by reach and never used to skip a run
+/// (反映前テストの機械化.md §動詞の絞り込みは比較表示に留める). Counted
+/// over the components the change itself touched, not their readers:
+/// composition reads up to `Main`, which every line shows. Every line
+/// counts where the change is the whole tree or has no QML in it to
+/// compare against.
+fn lines_showing_the_change(
+    read: &Reading<'_>,
+    changed: &BTreeSet<String>,
+    lines: &[String],
+) -> usize {
+    if read.everything || changed.is_empty() {
+        return lines.len();
     }
-    let (ui, _) = qml_dirs();
-    let mut shown = BTreeSet::new();
-    for file in changed {
-        let read_by_a_verb = verb_inputs().iter().any(|input| under(file, input));
-        if !read_by_a_verb {
-            continue;
-        }
-        if !(file.ends_with(".qml") && under(file, &ui) && census::instantiable(read.dir, file)) {
-            return None;
-        }
-        census::through_wearers(&stem_of(file), read.worn, &mut shown);
-    }
-    Some(shown)
+    lines
+        .iter()
+        .filter(|line| {
+            read.shown
+                .of(line)
+                .is_some_and(|shown| changed.iter().any(|stem| shown.contains(stem)))
+        })
+        .count()
 }
 
-/// What the verify-ui verbs read besides the census.
-fn verb_inputs() -> Vec<String> {
-    let mut inputs = cargo_inputs(&[&app(), &core()]);
-    inputs.extend(harness());
-    inputs
+/// The QML components among the changed files, by name.
+fn changed_qml(changed: &[String]) -> BTreeSet<String> {
+    let (_, qml_tests) = qml_dirs();
+    changed
+        .iter()
+        .filter(|file| file.ends_with(".qml") && !under(file, &qml_tests))
+        .map(|file| stem_of(file))
+        .collect()
 }
 
 /// The app as a built thing: `shipped`, the verify-ui verbs, `bare`. The
@@ -539,7 +541,6 @@ fn binary_steps(
     changed: &[String],
     ask: &Ask<'_>,
 ) -> (Vec<Step>, Counted) {
-    let census = read.census;
     let mut steps = Vec::new();
     // Spelled in pieces: a whole path in a string here would be read as
     // this file reading the app's entry point.
@@ -561,18 +562,28 @@ fn binary_steps(
     // Every verb runs through the harness, which has no static edge into
     // QML. The harness reads the product tree, so every product change
     // reaches it as data (`graph::Carried`) — that is no change to the
-    // harness, and what it changed the census names.
+    // harness.
     let harness_dirs = harness();
     let harness_moved = reach.iter().any(|(file, carried)| {
         *carried == Carried::Whole && harness_dirs.iter().any(|dir| under(file, dir))
     });
-    let lines = if read.everything || harness_moved {
-        census.lines.keys().cloned().collect()
+    // Every registered line, whenever the change reaches the app's QML or
+    // the harness that drives it: every run stands the whole window up,
+    // so a component reached is one every run can meet
+    // (反映前テストの機械化.md §選択の正本). Narrower selections are
+    // counted for comparison (`lines_showing_the_change`), never run.
+    //
+    // A row added to the registry is a line no stamp answers for, and a
+    // line whose tier moved one this gate may owe where it did not: owed
+    // whatever else moved (`plan::rows_the_tables_owe`). A row that stood
+    // owes nothing again — its step's inputs are the tree's, and its
+    // contract is in its key.
+    let lines: Vec<String> = if read.everything || harness_moved || qml_moved {
+        read.lines.lines().cloned().collect()
     } else {
-        census.verbs_touching(&sorted.qml)
+        read.added.to_vec()
     };
-    let shadow = verbs_in_snapshot(read, changed)
-        .map_or(lines.len(), |shown| census.verbs_touching(&shown).len());
+    let by_shown = lines_showing_the_change(read, &changed_qml(changed), &lines);
     let selected = lines.len();
     let mut lines = owed_lines(read, &sorted.qml, lines, read.whole_tier);
     let left = selected - lines.len();
@@ -581,12 +592,20 @@ fn binary_steps(
             lines.push(extra.clone());
         }
     }
+    // A run reads the product, the harness that drives it, the fixtures it
+    // stands on and the judgment it is held to; its row's promise and its
+    // judgment are its contract, in the key as text.
     let mut verb_inputs = binary_inputs.clone();
     verb_inputs.extend(harness());
-    // The host's runs rewrite their census lines, the container's do not
-    // (`verify::options::census_line`); a gate whose runs moved the census
-    // stops before it stamps (`gate::execute::execute`).
     for line in &lines {
+        let contract = format!(
+            "promises={}\n{}",
+            read.lines
+                .declared(line)
+                .map(|names| names.into_iter().collect::<Vec<_>>().join(" "))
+                .unwrap_or_default(),
+            crate::verify::judgment_of(line)
+        );
         let mut host = xtask(&["verify-ui"]);
         host.extend(crate::verify::suite_words(line));
         let mut host_step = step(
@@ -598,6 +617,7 @@ fn binary_steps(
         );
         host_step.builds_app = true;
         host_step.release = true;
+        host_step.contract = contract.clone();
         steps.push(host_step);
         // Asked for by name, the line runs where the asker can see it.
         if !(read.tiers.on_linux(line, read.whole_tier) || ask.extra_verbs.contains(line)) {
@@ -616,6 +636,7 @@ fn binary_steps(
         );
         linux_step.builds_app = true;
         linux_step.release = true;
+        linux_step.contract = contract;
         steps.push(linux_step);
     }
     // The image it runs in moving is the container's whole reach
@@ -636,13 +657,14 @@ fn binary_steps(
         bare.release = true;
         steps.push(bare);
     }
-    (steps, Counted { shadow, left })
+    (steps, Counted { by_shown, left })
 }
 
-/// The selected census lines this gate owes (`tiers`): the whole gate owes
-/// every line but a twin; a gate before a merge leaves the whole lines out,
+/// The selected lines this gate owes (`tiers`): the whole gate owes every
+/// line but a twin; a gate before a merge leaves the whole lines out,
 /// except one that is the only witness of a component the change reaches
-/// (反映前テストの機械化.md「唯一の証人の例外」).
+/// — the only line whose run shows it (`lines::Shown`;
+/// 反映前テストの機械化.md「唯一の証人の例外」).
 fn owed_lines(
     read: &Reading<'_>,
     reached: &BTreeSet<String>,
@@ -653,18 +675,20 @@ fn owed_lines(
         .into_iter()
         .filter(|line| read.tiers.tier(line) != Some(Tier::Twin))
         .partition(|line| read.tiers.owed(line, whole_tier));
-    let shown: BTreeSet<&String> = owed
+    // By what the rows promise, which a green run is evidence of — not by
+    // what the sources' closure says a run would bring up.
+    let promised: BTreeSet<String> = owed
         .iter()
-        .filter_map(|line| read.census.lines.get(line))
+        .filter_map(|line| read.lines.declared(line))
         .flatten()
         .collect();
     let only_witnesses: Vec<String> = left
         .into_iter()
         .filter(|line| {
-            read.census.lines.get(line).is_some_and(|names| {
+            read.lines.declared(line).is_some_and(|names| {
                 names
                     .iter()
-                    .any(|name| reached.contains(name) && !shown.contains(name))
+                    .any(|name| reached.contains(name) && !promised.contains(name))
             })
         })
         .collect();
@@ -675,8 +699,6 @@ fn owed_lines(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
     use super::{Carried, Graph, Reach, clippy_steps, holds_periodic, sort};
     use crate::gate::graph::Module;
 
@@ -704,7 +726,7 @@ mod tests {
         ]
         .into_iter()
         .collect();
-        let sorted = sort(&g, &reach, false, &BTreeMap::new());
+        let sorted = sort(&g, &reach, false);
         assert!(sorted.rust_in.contains_key("xtask"));
         assert_eq!(sorted.unit_files["xtask"], vec![tool]);
         let ids: Vec<String> = clippy_steps(&sorted).into_iter().map(|s| s.id).collect();
@@ -718,7 +740,7 @@ mod tests {
             .into_keys()
             .map(|file| (file, Carried::Whole))
             .collect();
-        let ids: Vec<String> = clippy_steps(&sort(&g, &both, false, &BTreeMap::new()))
+        let ids: Vec<String> = clippy_steps(&sort(&g, &both, false))
             .into_iter()
             .map(|s| s.id)
             .collect();

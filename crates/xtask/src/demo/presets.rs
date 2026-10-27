@@ -10,7 +10,7 @@ use super::basic::{
 use super::conflict::{
     cherry_pick_conflict, cherry_pick_quit, clashing, conflict, conflict_kinds, conflict_ours,
     conflict_staged, conflict_typed, drop_collides, drop_stops, rebase_clashes, rebase_conflict,
-    rebase_empty, rebase_staged, revert_clashes,
+    rebase_empty, rebase_staged, revert_clashes, switch_carry,
 };
 use super::deep::{deep, deep_detached, deep_parked, perf, perf_sequence, replay};
 use super::discards::{discards, discards_deep};
@@ -154,6 +154,7 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         "rebase-clashes" => rebase_clashes(&mut repo)?,
         "rebase-conflict" => rebase_conflict(&mut repo)?,
         "rebase-staged" => rebase_staged(&mut repo)?,
+        "switch-carry" => switch_carry(&mut repo)?,
         "rebase-empty" => rebase_empty(&mut repo)?,
         "cherry-pick-conflict" => cherry_pick_conflict(&mut repo)?,
         "cherry-pick-quit" => cherry_pick_quit(&mut repo)?,

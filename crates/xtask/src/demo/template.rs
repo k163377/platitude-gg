@@ -81,9 +81,12 @@ fn make(template: &Path, preset: &str, name: &str) -> Result<bool, String> {
     // fingerprint, and inside a container the gate's own sweep never runs
     // (`linux`).
     crate::verify::sweep_yesterdays_runs();
-    // The staging name carries the template's, so the rebind has one
-    // string to look for and the scan one string to prove gone.
-    let staging = crate::verify::claim_dir(&base, &format!("{leaf}-staging"))?;
+    // A short name of this run's own, not the template's: the deepest
+    // preset under the longest strip name is built here, and a staging
+    // name carrying the leaf puts `lfs-conflict`'s objects past Windows'
+    // path limit (`Filename too long` at the first `git add`). The rebind
+    // below has one string to look for either way.
+    let staging = crate::verify::claim_dir(&base, "staging")?;
     let staging_leaf = staging
         .file_name()
         .ok_or("a staged template needs a name")?

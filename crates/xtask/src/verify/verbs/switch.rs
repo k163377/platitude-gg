@@ -9,10 +9,15 @@ pub(super) const TABLE: &[Verb] = &[
     //
     // `log=false` is on every move line here: a move the screen knows git
     // would refuse is never sent, so no refusal may raise the command log.
+    // The carried half (`--preset switch-carry`): a tree dirty on main is
+    // stashed around the move and popped after it; the pop conflicts on
+    // `feature/topic-a`, so the entry stays beside the one already there
+    // (`stashes=2`) and the tree holds the conflict (`conflicts=1`,
+    // `session::build` on carrying).
     Verb {
         name: "switch-lands",
         when: &[(
-            Arg::Starts("feature/topic-a"),
+            Arg::IsOn("feature/topic-a:2", "switch-carry"),
             "switch_landed branch=feature/topic-a stashes=2 wanted=2 conflicts=1 log=false",
         )],
         plain: "switch_landed branch=feature/clash stashes=0 wanted=0 conflicts=0 log=false",

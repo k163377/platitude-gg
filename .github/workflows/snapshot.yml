@@ -19,8 +19,8 @@ defaults:
 
 jobs:
   # The run's verdict on the commit. The bundle does not wait for it: the
-  # census on macOS takes the most of an hour, and one red line there
-  # would keep a bundle from being looked at.
+  # registered lines on macOS take the most of an hour, and one red line
+  # there would keep a bundle from being looked at.
   whole:
     uses: ./.github/workflows/whole.yml
 

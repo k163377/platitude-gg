@@ -2,27 +2,7 @@
 //! the whole tier before a merge (反映前テストの機械化.md
 //! §版を動かす変更は段 3).
 
-use crate::support::{Ran, Sandbox, without_always};
-
-/// A census with one line of each tier the whole gate adds.
-fn tiered(name: &str) -> Sandbox {
-    let sb = Sandbox::new(name);
-    sb.write(
-        &sb.seat,
-        "crates/xtask/verb-census.txt",
-        "# census\nstash --preset basic\tDriver Main StashPane\n\
-         stash-menu --preset basic\tDriver Main StashPane\n\
-         stash-open --preset basic\tDriver Main StashPane\n",
-    );
-    sb.write(
-        &sb.seat,
-        "crates/xtask/verb-tiers.txt",
-        "fonts\tstash --preset basic\t-\tboth sides\n\
-         whole\tstash-menu --preset basic\tstash --preset basic\tpicture: the menu standing\n",
-    );
-    sb.commit_all(&sb.seat, "chore: tiers", &[]);
-    sb
-}
+use crate::support::{Ran, tiered, without_always};
 
 /// The lines only the whole gate owes, both sides.
 const WHOLE_ONLY: [&str; 2] = [

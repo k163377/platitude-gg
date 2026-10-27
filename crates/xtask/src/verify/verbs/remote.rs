@@ -262,8 +262,8 @@ pub(super) const TABLE: &[Verb] = &[
                  said=origin would not update main place=GIT COMMANDS \
                  says=origin has main checked out in a working tree of its own — see GIT COMMANDS",
             ),
-            // The same no from a hook the config names (git 2.54+, so out of
-            // the census — the minimum runs no such hook).
+            // A pre-push hook set in configuration (git 2.54+, the host's
+            // line alone: verb-tiers.txt), turning the push down.
             (
                 Arg::WithPreset("prepush-config"),
                 "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
@@ -633,6 +633,11 @@ pub(super) const TABLE: &[Verb] = &[
                 "pull_blocked where=row offered=true blocked=true tip=true \
                  says=Cannot fast-forward — it has commits not on origin/feature/mine",
             ),
+            // Both entrances, on the one fixture whose branch has an
+            // upstream and a worktree holding it (`--preset
+            // tracked-elsewhere`): without the upstream the product offers
+            // no pull at all, so the row's form over another preset waits
+            // out its ceiling.
             (
                 Arg::Is("chip:feature/topic-a"),
                 "pull_blocked where=chip offered=true blocked=true tip=true \

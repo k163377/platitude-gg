@@ -6,7 +6,7 @@ use std::path::PathBuf;
 /// What the run is judged on. A refused write counts against it — a
 /// picture of the state it never reached proves nothing — unless the verb
 /// walks a refusal (`--allow-write-failure`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Outcome {
     pub(super) exit_ok: bool,
     pub(super) saved: bool,
@@ -29,6 +29,12 @@ pub(super) struct Outcome {
     /// saying (`super::verbs::must_say`).
     pub(super) must_say: Option<&'static str>,
     pub(super) said: bool,
+    /// What the run's contract owed and did not deliver
+    /// (`super::contract::breaches`): a claim never read or fallen, a
+    /// picture the window moved under, a part the row promised and the
+    /// picture lacks, a completion on no checkpoint. Empty for a run that
+    /// kept it; a red whatever else the run said.
+    pub(super) contract: Vec<String>,
     /// Whether the identity a held save wrote is in the run's gitconfig
     /// once the app has ended — the witness outside the app that the exit
     /// waited for the save (`quit-save-held`,
@@ -42,7 +48,7 @@ pub(super) struct Outcome {
 }
 
 impl Outcome {
-    pub(super) fn passed(self) -> bool {
+    pub(super) fn passed(&self) -> bool {
         self.exit_ok
             && self.saved
             && !self.timed_out
@@ -51,30 +57,40 @@ impl Outcome {
             && !self.contract_broken
             && !self.store_refused
             && (self.must_say.is_none() || self.said)
+            && self.contract.is_empty()
             && self.held_save_landed.is_none_or(|landed| landed)
             && self.stored_path_kept.is_none_or(|kept| kept)
     }
 
     /// Whether the failing writes are what the verdict turns on — the one
     /// reason worth a line of its own, since the run looks well otherwise.
-    pub(super) fn write_sank_it(self) -> bool {
+    pub(super) fn write_sank_it(&self) -> bool {
         self.write_failures > 0 && !self.allow_write_failure
     }
 }
 
 /// What the run's own lines make of it — and, for the runs that have one,
 /// what the witness on disk says (`config` is the run's gitconfig,
-/// `config_dir` its settings directory).
+/// `config_dir` its settings directory). `run` is the run's id, which its
+/// structured lines carry; `declared` is what its registered row promises
+/// to show, `None` for a run nobody could type again.
 pub(super) fn judge(
     opts: &super::options::Options,
     ran: &super::child::Ran,
     config: &std::path::Path,
     config_dir: &std::path::Path,
+    run: &str,
+    declared: Option<&std::collections::BTreeSet<String>>,
 ) -> Outcome {
     let (status, err_lines, out_lines, timed_out) =
         (&ran.status, &ran.err_lines, &ran.out_lines, ran.timed_out);
 
-    let must_say = super::verbs::must_say(&opts.verb, &opts.arg, &opts.preset);
+    // Held against the fixture as built: a run that named no preset
+    // stands on the default, and a row keyed on it judges that run.
+    let presets = super::repos::presets_as_built(opts);
+    let must_say = super::verbs::must_say(&opts.verb, &opts.arg, &presets);
+    let every_line: Vec<String> = err_lines.iter().chain(out_lines.iter()).cloned().collect();
+    let said = super::contract::read(&every_line, run);
     Outcome {
         exit_ok: status.as_ref().is_some_and(|s| s.success()),
         saved: err_lines
@@ -109,6 +125,11 @@ pub(super) fn judge(
                 .chain(out_lines.iter())
                 .any(|l| l.contains(wanted))
         }),
+        contract: super::contract::breaches(
+            &said,
+            super::verbs::claims_for(&opts.verb, &opts.arg, &presets),
+            declared,
+        ),
         held_save_landed: super::shim::held_save_landed(&opts.verb, config),
         stored_path_kept: super::seed::stored_path_kept(&opts.verb, &opts.arg, config_dir),
     }
@@ -155,16 +176,13 @@ fn filed_shots(opts: &super::options::Options, shot_dir: &std::path::Path) -> Ve
 }
 
 /// Prints what the run said, files its pictures, and gives the verdict.
-/// `census_unwritten` is why a run that passed did not write the census
-/// line it owed (`run::tell_the_census`), which fails it.
 pub(super) fn announce(
     opts: &super::options::Options,
     shot_dir: &std::path::Path,
     ran: &super::child::Ran,
     outcome: &Outcome,
-    census_unwritten: Option<&str>,
 ) -> Result<(), String> {
-    let passed = outcome.passed() && census_unwritten.is_none();
+    let passed = outcome.passed();
     let (status, err_lines, out_lines, timed_out, elapsed) = (
         &ran.status,
         &ran.err_lines,
@@ -228,6 +246,16 @@ pub(super) fn announce(
              --allow-write-failure."
         );
     }
+    for breach in &outcome.contract {
+        println!("  contract: {breach}");
+    }
+    if !outcome.contract.is_empty() {
+        println!(
+            "  the run's contract was not kept (反映前テストの機械化 §検証時点): what it completed on, what \
+             its row promises and what its pictures show have to be one state, said under this \
+             run's id — a red whatever else the run said."
+        );
+    }
     if outcome.contract_broken {
         println!(
             "  the harness broke its own write barrier's contract — the `write_contract` line \
@@ -242,13 +270,6 @@ pub(super) fn announce(
              opened is the one that says so. Nothing else knows that directory, so \
              two runs were given one: on the container side, the host directory \
              mounted at /out."
-        );
-    }
-    if let Some(why) = census_unwritten {
-        println!(
-            "  the run was judged well and the census line it owes was not written: {why}. \
-             Its repositories and pictures are kept, and {} is as it was before the run.",
-            crate::gate::CENSUS_FILE
         );
     }
     if passed {
@@ -288,8 +309,8 @@ fn say_the_witnesses_on_disk(outcome: &Outcome) {
 /// What a run the app's own watchdog ended is read by.
 fn say_the_watchdog(shot_dir: &std::path::Path, ran: &super::child::Ran, outcome: &Outcome) {
     println!(
-        "  the app's own watchdog ended this run — the act, screenshot, and census did \
-         not all finish; a run stalled between grabs can still leave app.png behind."
+        "  the app's own watchdog ended this run — the act, screenshot, and the window's walk \
+         did not all finish; a run stalled between grabs can still leave app.png behind."
     );
     if loop_was_turning(outcome, ran) {
         println!(
@@ -322,9 +343,66 @@ mod tests {
         store_refused: false,
         must_say: None,
         said: true,
+        contract: Vec::new(),
         held_save_landed: None,
         stored_path_kept: None,
     };
+
+    /// The picture is of another state than the one the verb completed on
+    /// (`Awaited.pictured`), or the claim its row requires was never read
+    /// at the picture: a red whatever the must-say line said.
+    #[test]
+    fn a_claim_that_did_not_hold_or_was_never_read_at_the_picture_fails_the_run() {
+        let broken = Outcome {
+            contract: vec!["a breach".to_string()],
+            ..WELL
+        };
+        assert!(!broken.passed());
+        let opts = super::super::options::parse(&["card-latch".to_string()]).expect("a line");
+        let said = |pictured: &str| -> Vec<String> {
+            [
+                "INFO bench: checkpoint run=r1 name=card_latch_back seq=1",
+                "INFO bench: complete run=r1 verb=card-latch checkpoints=1",
+                "INFO bench: pictures run=r1 wanted=app",
+                "screenshot saved=true ink=0 path=x/app.png",
+                "INFO bench: picture run=r1 artifact=app saved=true",
+                pictured,
+                "INFO bench: pictured run=r1 artifact=app name=window holds=true gained=none lost=none page=settled",
+                "INFO bench: census run=r1 page=settled state=open",
+                "INFO bench: census=Main,RepoPage",
+            ]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect()
+        };
+        let dir = crate::temp::root().join("pgg-verify-claim");
+        let fell = super::super::child::Ran {
+            err_lines: said("INFO bench: pictured run=r1 artifact=app name=card_latch holds=false"),
+            ..ran(false, Some(0))
+        };
+        let outcome = super::judge(&opts, &fell, &dir, &dir, "r1", None);
+        assert!(
+            outcome.contract.iter().any(|b| b.contains("did not hold")) && !outcome.passed(),
+            "{outcome:?}"
+        );
+        let unread = super::super::child::Ran {
+            err_lines: said(
+                "INFO bench: card_latch stage=back card=true menu=false latched=false tremor_card=false",
+            ),
+            ..ran(false, Some(0))
+        };
+        let outcome = super::judge(&opts, &unread, &dir, &dir, "r1", None);
+        assert!(
+            outcome.contract.iter().any(|b| b.contains("never read")) && !outcome.passed(),
+            "{outcome:?}"
+        );
+        let held = super::super::child::Ran {
+            err_lines: said("INFO bench: pictured run=r1 artifact=app name=card_latch holds=true"),
+            ..ran(false, Some(0))
+        };
+        let outcome = super::judge(&opts, &held, &dir, &dir, "r1", None);
+        assert!(outcome.contract.is_empty(), "{outcome:?}");
+    }
 
     #[test]
     fn a_broken_contract_fails_the_run_whatever_else_it_did() {
@@ -502,26 +580,18 @@ mod tests {
         ));
     }
 
-    /// Else the census would still say what the verbs showed before, and a
-    /// gate would choose off that.
+    /// The verdict is the judgment's alone: what the run met beside its
+    /// registered row is said, never judged (`super::observed`).
     #[test]
-    fn a_run_judged_well_that_did_not_write_its_census_line_fails() {
+    fn a_run_judged_well_passes_on_the_judgment_alone() {
         let opts = super::super::options::parse(&["wip".to_string(), "--no-board".to_string()])
             .expect("a line");
         let shot_dir =
             super::super::ownership::claim_dir(&crate::temp::root().join("pgg-verify"), "shots")
                 .expect("a shot dir of this test's own");
-        let well = super::announce(&opts, &shot_dir, &ran(false, Some(0)), &WELL, None);
-        let unwritten = super::announce(
-            &opts,
-            &shot_dir,
-            &ran(false, Some(0)),
-            &WELL,
-            Some("wip: never said `census=`"),
-        );
+        let well = super::announce(&opts, &shot_dir, &ran(false, Some(0)), &WELL);
         let _ = std::fs::remove_dir_all(&shot_dir);
         assert!(well.is_ok(), "{well:?}");
-        assert!(unwritten.is_err());
     }
 
     #[test]

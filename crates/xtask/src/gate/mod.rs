@@ -2,7 +2,8 @@
 //! (internal-docs/反映前テストの機械化.md).
 //!
 //! The branch's diff, everything that reads it ([`graph`]) and the tests
-//! in that reach select the steps ([`plan`]; verbs by [`census`]). Each
+//! in that reach select the steps ([`plan`]; the verbs are the registered
+//! lines, [`lines`], owed whenever the app's QML is reached). Each
 //! step is cached by the object ids of what it reads ([`stamp`]); a commit
 //! whose every owed step is green is stamped, and the
 //! `reference-transaction` hook lets `refs/heads/main` move onto stamped
@@ -12,7 +13,6 @@
 //! the both-sides run reuses. The first red stops the run ([`halt`]) unless
 //! `--keep-going`, which `--whole` implies.
 
-mod census;
 mod deps;
 mod evidence;
 mod execute;
@@ -20,11 +20,13 @@ mod graph;
 mod halt;
 pub(crate) mod hooks;
 mod inputs;
+mod lines;
 mod plan;
 mod record;
 mod reuse;
 mod run;
 mod runner;
+mod shown;
 mod sides;
 mod stamp;
 mod standing;
@@ -67,7 +69,7 @@ pub(crate) static DAILY: command::Command = command::Command {
 pub(crate) static WHOLE: command::Command = command::Command {
     id: "gate.whole",
     call: "gate --whole",
-    purpose: "stage 3: no diff read, every census line and periodic test on both sides, \
+    purpose: "stage 3: no diff read, every registered line and periodic test on both sides, \
               stamps ignored",
     run_in: Where::Seat,
     needs: &[],
@@ -103,20 +105,10 @@ pub(crate) static DEPS: command::Command = command::Command {
 
 pub(crate) static COMMANDS: &[&command::Command] =
     &[&PREMERGE, &DAILY, &WHOLE, &VERDICT, &INSTALL, &DEPS];
-pub(crate) use census::Census;
-pub(crate) use census::{FILE as CENSUS_FILE, names_in, page_settled_in, record};
-pub(crate) use graph::qml_files;
+pub(crate) use graph::{qml_files, stem_of};
+pub(crate) use lines::{FILE as LINES_FILE, Lines};
+pub(crate) use shown::Composition;
 pub(crate) use tiers::Tiers;
-
-/// What a gate whose every step was green left behind.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Gated {
-    Stamped,
-    /// Nothing is stamped: the host's verbs rewrote the census, so the tree
-    /// that passed is not the commit. Commit the rewrite and gate again,
-    /// which finds every step cached.
-    CensusMoved,
-}
 
 /// What one side's steps stand on. `runner` is the copy its xtask steps
 /// start from (`None` under the tests' faked steps).

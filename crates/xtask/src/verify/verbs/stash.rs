@@ -49,16 +49,18 @@ pub(super) const TABLE: &[Verb] = &[
                  said=The stash was not renamed place=GIT COMMANDS \
                  says=Another git process seems to be running — see GIT COMMANDS",
             ),
+            // The drop git turned down after the new entry was made — a
+            // reftable store's lock (git 2.48+, the host's line alone:
+            // verb-tiers.txt), which names no lock.
             (
-                Arg::WithPreset("stash-droplock"),
+                Arg::WithPreset("reftable-droplock"),
                 "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
                  said=The rename did not finish place=GIT COMMANDS \
                  says=The new name was made, but the old one is still there — see GIT COMMANDS",
             ),
-            // The reftable store's drop git turned down without naming a
-            // lock (git 2.48+, `--no-census`).
+            // …and a files store's, named.
             (
-                Arg::WithPreset("reftable-droplock"),
+                Arg::WithPreset("stash-droplock"),
                 "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
                  said=The rename did not finish place=GIT COMMANDS \
                  says=The new name was made, but the old one is still there — see GIT COMMANDS",

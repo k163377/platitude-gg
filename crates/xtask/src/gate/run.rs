@@ -3,8 +3,6 @@
 
 use std::path::Path;
 
-use super::Gated;
-use super::census::{self, Shift};
 use super::deps;
 use super::execute::execute;
 use super::hooks::{self, install};
@@ -143,62 +141,34 @@ fn gate(args: &[String]) -> Result<(), String> {
         &mut spent,
     )?;
     print!("{}", plan::describe(&plan, opts.dry_run));
-    let mut shift = Shift::default();
     if opts.dry_run {
         // The plan's own cost, said but not kept: a record would name a
         // run that did not happen.
         spent.total = whole_run.elapsed();
         let head = short(&plan.head);
         let run = stood(&plan, what.trim_end(), &head, opts.jobs, false, "dry run");
-        print!("{}", record::render(&run, &spent, &shift));
+        print!("{}", record::render(&run, &spent));
         return Ok(());
     }
-    let outcome = execute(
-        &plan,
-        opts.jobs,
-        false,
-        opts.keep_going,
-        &mut spent,
-        &mut shift,
-    );
+    let outcome = execute(&plan, opts.jobs, false, opts.keep_going, &mut spent);
     spent.total = whole_run.elapsed();
-    report(
-        &plan,
-        what.trim_end(),
-        opts.jobs,
-        false,
-        &spent,
-        &outcome,
-        &shift,
+    report(&plan, what.trim_end(), opts.jobs, false, &spent, &outcome);
+    outcome?;
+    // Green, and nothing else is running in this tree: where the sweep
+    // belongs (反映前テストの機械化.md §世代の掃除).
+    crate::sweep::at_a_tail(
+        &plan.dir,
+        &crate::sweep::Tail {
+            whatever_the_key_says: opts.whole,
+            the_volume_too: !opts.host_only,
+        },
     );
-    match outcome? {
-        Gated::Stamped => {
-            // Green, and nothing else is running in this tree: where the
-            // sweep belongs (反映前テストの機械化.md §世代の掃除).
-            crate::sweep::at_a_tail(
-                &plan.dir,
-                &crate::sweep::Tail {
-                    whatever_the_key_says: opts.whole,
-                    the_volume_too: !opts.host_only,
-                },
-            );
-            Ok(())
-        }
-        // A failure as far as the stamp goes: it must name the commit
-        // that holds the census. Said aloud, since a dirty tree stops the
-        // next gate.
-        Gated::CensusMoved => Err(format!(
-            "the verbs passed and the tree moved with them — nothing stamped for {}.{}",
-            short(&plan.head),
-            census_rewritten()
-        )),
-    }
+    Ok(())
 }
 
-/// The gate for `land`: the seat's tree, both sides, the census's verbs.
-/// What it answers is the landing's to act on — a census the verbs moved
-/// is committed there and gated again.
-pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<Gated, String> {
+/// The gate for `land`: the seat's tree, both sides, the registered
+/// lines. Green is a stamped commit, since no step writes the tree.
+pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<(), String> {
     let mut spent = Spent::default();
     // waits(measured): the run's whole, for the record (`Spent::total`)
     let whole_run = std::time::Instant::now();
@@ -219,12 +189,11 @@ pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<Gated, String> 
     )?;
     print!("{}", plan::describe(&plan, false));
     let jobs = crate::budget::default_jobs();
-    let mut shift = Shift::default();
     // A landing's red leaves main where it was whatever else would pass,
     // so the first one is the answer.
-    let outcome = execute(&plan, jobs, true, false, &mut spent, &mut shift);
+    let outcome = execute(&plan, jobs, true, false, &mut spent);
     spent.total = whole_run.elapsed();
-    report(&plan, "land's gate", jobs, true, &spent, &outcome, &shift);
+    report(&plan, "land's gate", jobs, true, &spent, &outcome);
     outcome
 }
 
@@ -267,8 +236,7 @@ fn report(
     jobs: usize,
     landing: bool,
     spent: &Spent,
-    outcome: &Result<Gated, String>,
-    shift: &Shift,
+    outcome: &Result<(), String>,
 ) {
     let head = short(&plan.head);
     let run = stood(
@@ -277,27 +245,14 @@ fn report(
         &head,
         jobs,
         landing,
-        match outcome {
-            Ok(Gated::Stamped) => "PASS",
-            Ok(Gated::CensusMoved) => "census moved",
-            Err(_) => "FAIL",
-        },
+        if outcome.is_ok() { "PASS" } else { "FAIL" },
     );
-    print!("{}", record::render(&run, spent, shift));
-    record::keep(&plan.dir, &run, spent, shift);
+    print!("{}", record::render(&run, spent));
+    record::keep(&plan.dir, &run, spent);
 }
 
 pub(super) fn short(sha: &str) -> String {
     sha.chars().take(10).collect()
-}
-
-/// The line that says what a verb's rewrite means for whoever reads it.
-pub(super) fn census_rewritten() -> String {
-    format!(
-        " The verbs rewrote {}: it is generated, so review the diff and commit it as it \
-         stands, and the gate can stamp the commit that holds it.",
-        census::FILE
-    )
 }
 
 /// Where a tree's running gate leaves its note (`lanes::sole`): under

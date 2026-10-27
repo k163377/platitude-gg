@@ -210,9 +210,8 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
 fn drive(me: &std::path::Path, case: &Case, build: bool) -> Result<String, String> {
     let mut command = std::process::Command::new(me);
     command.arg("verify-ui").arg(VERB).args(case.args);
-    // Nobody asked to look at a run made to stop, and it shows nothing to
-    // record.
-    command.arg("--no-board").arg("--no-census");
+    // Nobody asked to look at a run made to stop.
+    command.arg("--no-board");
     if !build {
         command.arg("--no-build");
     }

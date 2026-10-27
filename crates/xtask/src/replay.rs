@@ -5,8 +5,7 @@
 //! pictures have to travel to be looked at.
 //!
 //! Each line is one `verify-ui`, judged as a typed run is. Nothing here
-//! writes the census or the board: the census is the desk's that recorded
-//! it, and the board is read where the pictures were asked for.
+//! writes the board: it is read where the pictures were asked for.
 //!
 //! The lines build the release until one has gone green and the rest reuse
 //! it, as a gate's block of verbs does (`gate::sides::verbs`). A red line
@@ -18,14 +17,14 @@ use std::path::{Path, PathBuf};
 
 use crate::budget::{Ask, Pool, Rank};
 use crate::command::{self, Permission, Where};
-use crate::gate::{Census, Tiers};
+use crate::gate::{Lines, Tiers};
 use crate::locks::Locked;
 use crate::watched::Stepped;
 
 pub(crate) static REPLAY: command::Command = command::Command {
     id: "replay.lines",
     call: "replay --tier <fonts|premerge|whole>",
-    purpose: "census lines run again on this machine, every run's pictures under one directory",
+    purpose: "registered lines run again on this machine, every run's pictures under one directory",
     run_in: Where::Seat,
     needs: &[],
     permission: Permission::Plain,
@@ -33,7 +32,7 @@ pub(crate) static REPLAY: command::Command = command::Command {
 
 pub(crate) static COMMANDS: &[&command::Command] = &[&REPLAY];
 
-/// Which census lines a run takes besides the ones it is handed.
+/// Which registered lines a run takes besides the ones it is handed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Tier {
     /// The tier table's `fonts` rows: judged on a size, a cut or a fold
@@ -96,8 +95,8 @@ fn parse(args: &[String]) -> Result<Options, String> {
 }
 
 /// The lines one `--line` value holds: `;` or a line end between them, so
-/// a single field of a form carries several. No census line spells a `;`
-/// (an argument with a space is no census line either — `verify::options`).
+/// a single field of a form carries several. No registered line spells a
+/// `;` (an argument with a space is no line either — `verify::options`).
 fn typed_lines(value: &str) -> Vec<String> {
     value
         .split([';', '\n', '\r'])
@@ -108,11 +107,10 @@ fn typed_lines(value: &str) -> Vec<String> {
 }
 
 /// The lines of one run, in the order they run: the tier's in the
-/// census's own order, then the typed ones. A line named twice runs once.
-fn chosen(tier: Option<Tier>, typed: &[String], census: &Census, tiers: &Tiers) -> Vec<String> {
-    let mut lines: Vec<String> = census
-        .lines
-        .keys()
+/// table's sorted order, then the typed ones. A line named twice runs once.
+fn chosen(tier: Option<Tier>, typed: &[String], registered: &Lines, tiers: &Tiers) -> Vec<String> {
+    let mut lines: Vec<String> = registered
+        .lines()
         .filter(|line| match tier {
             None => false,
             Some(Tier::Fonts) => tiers.on_linux(line, false),
@@ -229,11 +227,10 @@ fn slug(line: &str) -> String {
 
 /// One line's run as a step: this runner itself, so nothing waits on
 /// cargo between two lines. `--no-board` rides in with the line
-/// (`verify::suite_words`), and the census is left alone.
+/// (`verify::suite_words`).
 fn step_for(runner: &Path, line: &str, shots: &Path, build: bool) -> Vec<String> {
     let mut step = vec![runner.display().to_string(), "verify-ui".to_string()];
     step.extend(crate::verify::suite_words(line));
-    step.push("--no-census".to_string());
     step.push("--shot-dir".to_string());
     step.push(shots.display().to_string());
     if !build {
@@ -401,11 +398,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let opts = parse(args)?;
     let root = crate::tree::workspace_root();
     // The tables are read only for a tier: a typed line runs as typed.
-    let (census, tiers) = match opts.tier {
-        Some(_) => (Census::load(&root)?, Tiers::load(&root)?),
-        None => (Census::default(), Tiers::default()),
+    let (registered, tiers) = match opts.tier {
+        Some(_) => (Lines::load(&root)?, Tiers::load(&root)?),
+        None => (Lines::default(), Tiers::default()),
     };
-    let lines = chosen(opts.tier, &opts.lines, &census, &tiers);
+    let lines = chosen(opts.tier, &opts.lines, &registered, &tiers);
     if lines.is_empty() {
         return Err(
             "nothing to replay: --tier (fonts, premerge or whole) and --line '<verify-ui line>' named \
@@ -471,7 +468,7 @@ mod tests {
         Row, Tier, Walked, build_went_red, builds_next, chosen, out_dir, parse, slug, step_for,
         summary, typed_lines, walk,
     };
-    use crate::gate::{Census, Tiers};
+    use crate::gate::{Lines, Tiers};
     use std::path::Path;
 
     fn words(line: &[&str]) -> Vec<String> {
@@ -488,14 +485,14 @@ mod tests {
         }
     }
 
-    fn census(lines: &[&str]) -> Census {
-        let mut census = Census::default();
+    fn registered(lines: &[&str]) -> Lines {
+        let mut table = Lines::default();
         for line in lines {
-            census
-                .lines
-                .insert((*line).to_string(), ["Main".to_string()].into());
+            table
+                .entries
+                .insert((*line).to_string(), Default::default());
         }
-        census
+        table
     }
 
     const TABLE: &str = "fonts\tbadges --preset conflict\t-\tcap= reads the band's measured floor\n\
@@ -503,7 +500,7 @@ mod tests {
 
     #[test]
     fn a_tier_takes_the_lines_the_table_gives_it_and_typed_lines_follow() {
-        let held = census(&["badges --preset conflict", "file-menu b.txt", "stash"]);
+        let held = registered(&["badges --preset conflict", "file-menu b.txt", "stash"]);
         let tiers = Tiers::parse(TABLE);
         let of = |tier, typed: &[&str]| chosen(tier, &words(typed), &held, &tiers);
         assert_eq!(of(Some(Tier::Fonts), &[]), ["badges --preset conflict"]);
@@ -524,7 +521,7 @@ mod tests {
             ),
             ["badges --preset conflict", "nav-tip branch:0"]
         );
-        // No tier: the census is not asked at all.
+        // No tier: the table is not asked at all.
         assert_eq!(of(None, &["band", "band"]), ["band"]);
         assert!(of(None, &[]).is_empty());
     }
@@ -593,8 +590,7 @@ mod tests {
         assert_eq!(slug(&"é".repeat(200)).len(), super::SLUG_LEN);
     }
 
-    /// A line that builds, and one told not to; neither writes the census
-    /// or the board.
+    /// A line that builds, and one told not to; neither writes the board.
     #[test]
     fn a_line_runs_as_one_verify_ui_of_this_runner() {
         let runner = Path::new("target/debug/xtask");
@@ -610,7 +606,6 @@ mod tests {
                 "--preset",
                 "co-authors",
                 "--no-board",
-                "--no-census",
                 "--shot-dir",
                 "out/000-band",
             ])

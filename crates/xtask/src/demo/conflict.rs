@@ -208,6 +208,24 @@ pub(super) fn rebase_staged(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// A move that carries a dirty tree and cannot put it back: one stash
+/// already standing on `main`, and an edit on the line `feature/topic-a`
+/// rewrote. The product stashes the edit around the move and pops it
+/// after; the pop conflicts, so the entry stays beside the first
+/// (`stashes=2`) and the tree holds the conflict (`conflicts=1`) —
+/// `switch-lands feature/topic-a:2` (`session::build` on carrying).
+pub(super) fn switch_carry(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("shared.txt", "base\n", "feat: shared base")?;
+    repo.commit("notes.txt", "notes\n", "docs: start the notes")?;
+    repo.git(&["switch", "--create", "feature/topic-a"])?;
+    repo.commit("shared.txt", "feature side\n", "feat: change shared")?;
+    repo.git(&["switch", "main"])?;
+    repo.write("notes.txt", "notes\nparked\n")?;
+    repo.git(&["stash", "push", "-m", "parked notes"])?;
+    repo.write("shared.txt", "main side, uncommitted\n")?;
+    Ok(())
+}
+
 /// A rebase stopped on a commit that came out empty — git's own
 /// `Otherwise, please use 'git rebase --skip'`, with nothing conflicted or
 /// staged.

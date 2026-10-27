@@ -4,9 +4,11 @@
 //! with a kill guard, and a verdict off the run's own lines (`outcome`).
 
 mod child;
+mod contract;
 mod coverage;
 mod faults;
 mod look;
+mod observed;
 mod options;
 mod outcome;
 mod ownership;
@@ -21,10 +23,11 @@ mod wedge;
 pub use coverage::run as verbs;
 pub(crate) use faults::run as wedge_check;
 pub(crate) use look::look_into;
-pub(crate) use options::suite_words;
+pub(crate) use options::{canonical_line, suite_words};
 pub(crate) use ownership::{ResourceClaim, claim_dir, claim_resource, keep, sweep_yesterdays_runs};
 pub use run::run;
 pub use shim::git_shim;
+pub(crate) use verbs::judgment_of;
 
 use crate::command::{self, Permission, Where};
 
@@ -40,7 +43,7 @@ pub(crate) static UI: command::Command = command::Command {
 pub(crate) static VERBS: command::Command = command::Command {
     id: "verify.verbs",
     call: "verbs",
-    purpose: "which verbs exist, and what each one is for",
+    purpose: "the registered lines against the harness, the judgment rows and the sources",
     run_in: Where::Either,
     needs: &[],
     permission: Permission::Plain,

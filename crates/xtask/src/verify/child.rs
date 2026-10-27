@@ -14,7 +14,8 @@ use std::time::Duration;
 
 use super::options::Options;
 use super::shim::{
-    OTHER_GIT, SHIM_NO_LFS, SHIM_REAL, SHIM_VERSION, identity_answer, identity_seed, real_git,
+    OTHER_GIT, SHIM_NO_LFS, SHIM_REAL, SHIM_SLOW, SHIM_VERSION, identity_answer, identity_seed,
+    real_git,
 };
 use crate::wait::{Budget, LOOK_AGAIN, Wait};
 
@@ -38,6 +39,9 @@ pub(super) struct Start<'a> {
     pub(super) shim_version: &'a str,
     /// Whether the copy on PATH answers `git lfs` as missing (`--no-lfs`).
     pub(super) shim_no_lfs: bool,
+    /// The subcommand the copy on PATH answers late (`--slow-git`); empty
+    /// when none.
+    pub(super) shim_slow: &'a str,
     pub(super) other_git: Option<&'a std::path::Path>,
     pub(super) repos: &'a [PathBuf],
     pub(super) opts: &'a Options,
@@ -220,9 +224,13 @@ fn fault_knobs(cmd: &mut Command, opts: &Options) {
     if opts.fault_hold_act {
         cmd.env("PGG_FAULT_HOLD_ACT", "1");
     }
-    // Raised by verb name: a run that needed a hand-typed flag is one the
-    // census could not record (`super::verbs::window`).
-    if HELD_WIP_ROW_VERBS.contains(&opts.verb.as_str()) {
+    // Raised by verb name: a run that needed a hand-typed flag is one no
+    // registered line could spell (`super::verbs::window`). `card-latch`'s
+    // `:row-late` argument lets the row through itself after its tremor,
+    // so the rebuild lands under the rest (`AutoActCardFlowVerbs`).
+    if HELD_WIP_ROW_VERBS.contains(&opts.verb.as_str())
+        || (opts.verb == "card-latch" && opts.arg.ends_with(":row-late"))
+    {
         cmd.env("PGG_FAULT_HOLD_WIP_ROW", "1");
     }
     // The save hold: where a run asked for it, and unasked for
@@ -250,6 +258,7 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
         arg,
         shim_version,
         shim_no_lfs,
+        shim_slow,
         other_git,
         repos,
         opts,
@@ -292,7 +301,10 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
     if shim_no_lfs {
         cmd.env(SHIM_NO_LFS, "1");
     }
-    if !shim_version.is_empty() || shim_no_lfs {
+    if !shim_slow.is_empty() {
+        cmd.env(SHIM_SLOW, shim_slow);
+    }
+    if !shim_version.is_empty() || shim_no_lfs || !shim_slow.is_empty() {
         cmd.env(SHIM_REAL, real_git(path)?);
     }
     if let Some(other) = other_git {

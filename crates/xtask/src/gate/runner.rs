@@ -6,9 +6,9 @@
 
 use std::path::Path;
 
+use super::Ground;
 use super::plan::Required;
 use super::sides::rank;
-use super::{Ground, census};
 
 /// The tests' switch: with it set no step runs at all (`execute_step`).
 pub(super) const FAKE_LOG: &str = "PGG_GATE_FAKE_LOG";
@@ -111,9 +111,7 @@ pub(super) fn execute_step(
 
 /// A step of the tests' faked runs ([`FAKE_LOG`]): its id appended to
 /// that file, and then green — or red where `PGG_GATE_FAKE_FAIL` names
-/// it, held where [`FAKE_HOLD`] does. `PGG_GATE_FAKE_REWRITE` names a
-/// step that rewrites the census the way a passing verb does, once, so
-/// the run after its commit finds nothing to move.
+/// it, held where [`FAKE_HOLD`] does.
 fn faked(
     ground: &Ground<'_>,
     id: &str,
@@ -174,26 +172,6 @@ fn faked(
                 .map_err(|expired| expired.to_string())?;
         }
         return Ok(Finished::Halted);
-    }
-    if let Some(line) = id.strip_prefix("verify ")
-        && std::env::var("PGG_GATE_FAKE_REWRITE").is_ok_and(|step| step == id)
-    {
-        // The verb's own line with one more name on it.
-        let path = ground.dir.join(census::FILE);
-        let text = std::fs::read_to_string(&path).unwrap_or_default();
-        let rewritten: String = text
-            .lines()
-            .map(|held| {
-                if held.starts_with(&format!("{line}\t")) && !held.ends_with(" Theme") {
-                    format!("{held} Theme\n")
-                } else {
-                    format!("{held}\n")
-                }
-            })
-            .collect();
-        if rewritten != text {
-            std::fs::write(&path, rewritten).map_err(|e| format!("{}: {e}", path.display()))?;
-        }
     }
     Ok(Finished::Green)
 }
@@ -498,6 +476,7 @@ mod tests {
                     .chain(line.split_whitespace().map(String::from))
                     .collect(),
                 inputs: std::collections::BTreeSet::new(),
+                contract: String::new(),
             },
             key: "k".to_string(),
             cached,

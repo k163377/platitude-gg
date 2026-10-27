@@ -1,8 +1,8 @@
-//! Which census lines each gate owes, and on which side — the table
-//! `crates/xtask/verb-tiers.txt`, read by the gate and checked by
-//! `cargo xtask verbs` (反映前テストの機械化.md §段ごとに何を回すか).
+//! Which registered lines (`gate::lines`) each gate owes, and on which
+//! side — the table `crates/xtask/verb-tiers.txt`, read by the gate and
+//! checked by `cargo xtask verbs` (反映前テストの機械化.md §段ごとに何を回すか).
 //!
-//! A census line is a whole app run on each side, and the census grows
+//! A registered line is a whole app run on each side, and the table grows
 //! with the features, so a line runs before a merge only for what it alone
 //! catches there: an app decision, a wiring or a timing no cheaper test
 //! holds.
@@ -11,18 +11,18 @@
 //! can answer differently: it runs the same QML over the same core, and
 //! every change still owes its clippy, tests, QtTest and `bare` there.
 //!
-//! No test reads the file, so like the census it is no edge of the graph
-//! (`graph::literal_paths`): it decides which steps a gate owes, not what
-//! any step reads.
+//! No test reads the file, so like the table of lines it is no edge of
+//! the graph (`graph::literal_paths`): it decides which steps a gate owes,
+//! not what any step reads.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use super::census::Census;
+use super::lines::Lines;
 
 pub(crate) const FILE: &str = "crates/xtask/verb-tiers.txt";
 
-/// What the table says of one census line.
+/// What the table says of one registered line.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Tier {
     /// Owed by the container before a merge too: the line is judged on a
@@ -32,18 +32,21 @@ pub(crate) enum Tier {
     /// its path, and they have to stay pre-merge lines — unless its claim
     /// is held elsewhere ([`STANDS_ALONE`]).
     Whole,
-    /// Owed by no gate: the census line it leans on runs the same path and
-    /// judges as much. A passing run of it is not recorded, so it does not
-    /// come back.
+    /// Owed by no gate: the registered line it leans on runs the same path
+    /// and judges as much. Registered nowhere itself (`complaints`).
     Twin,
+    /// Owed by the host alone, before a merge and in the whole gate: the
+    /// form needs a git above the container's minimum (its reason starts
+    /// with `git:`), so the container can never answer for it.
+    Host,
 }
 
 /// What a whole row's reason starts with: the kind of thing that tells it
 /// from the pre-merge lines it leans on.
 const KINDS: [&str; 5] = ["git:", "picture:", "held:", "perf:", "other:"];
 
-/// The kinds whose witness is no census line: a cheaper test, or the perf
-/// tool's own runs.
+/// The kinds whose witness is no registered line: a cheaper test, or the
+/// perf tool's own runs.
 const STANDS_ALONE: [&str; 2] = ["held:", "perf:"];
 
 struct Entry {
@@ -72,7 +75,7 @@ impl Tiers {
         Ok(Tiers::parse(&text))
     }
 
-    /// `<tier> TAB <census line> TAB <leans, ` ; `-separated, or -> TAB
+    /// `<tier> TAB <registered line> TAB <leans, ` ; `-separated, or -> TAB
     /// <why>` per row; `#` starts a comment.
     pub(crate) fn parse(text: &str) -> Tiers {
         let mut tiers = Tiers::default();
@@ -85,6 +88,7 @@ impl Tiers {
                 Some("fonts") => Tier::Fonts,
                 Some("whole") => Tier::Whole,
                 Some("twin") => Tier::Twin,
+                Some("host") => Tier::Host,
                 _ => {
                     tiers
                         .unread
@@ -127,7 +131,8 @@ impl Tiers {
     }
 
     /// The line a twin is the same run as.
-    pub(crate) fn twin_of(&self, line: &str) -> Option<&str> {
+    #[cfg(test)]
+    fn twin_of(&self, line: &str) -> Option<&str> {
         self.entries
             .get(line)
             .filter(|entry| entry.tier == Tier::Twin)
@@ -139,18 +144,31 @@ impl Tiers {
     /// or in the whole gate.
     pub(crate) fn owed(&self, line: &str, whole_tier: bool) -> bool {
         match self.tier(line) {
-            None | Some(Tier::Fonts) => true,
+            None | Some(Tier::Fonts | Tier::Host) => true,
             Some(Tier::Whole) => whole_tier,
             Some(Tier::Twin) => false,
         }
     }
 
-    /// Whether the container owes `line`, given that the gate owes it.
+    /// Whether the container owes `line`, given that the gate owes it: never
+    /// a host row's, whose git the container does not have.
     pub(crate) fn on_linux(&self, line: &str, whole_tier: bool) -> bool {
-        whole_tier || self.tier(line) == Some(Tier::Fonts)
+        match self.tier(line) {
+            Some(Tier::Host) => false,
+            Some(Tier::Fonts) => true,
+            _ => whole_tier,
+        }
     }
 
-    /// The verbs a census holds no line of on purpose: every row the table
+    /// The twin rows' lines: runs of their own, registered nowhere.
+    pub(crate) fn twins(&self) -> impl Iterator<Item = String> + '_ {
+        self.entries
+            .iter()
+            .filter(|(_, entry)| entry.tier == Tier::Twin)
+            .map(|(line, _)| line.clone())
+    }
+
+    /// The verbs no line is registered for on purpose: every row the table
     /// has of the verb is a twin of another verb's line.
     pub(crate) fn twinned_away(&self) -> BTreeSet<String> {
         let verb = |line: &str| line.split_whitespace().next().unwrap_or("").to_string();
@@ -165,31 +183,44 @@ impl Tiers {
             .collect()
     }
 
-    /// How many rows of each tier: fonts, whole, twin.
-    pub(crate) fn counts(&self) -> (usize, usize, usize) {
+    /// How many rows of each tier: fonts, whole, twin, host.
+    pub(crate) fn counts(&self) -> (usize, usize, usize, usize) {
         let of = |tier| self.entries.values().filter(|e| e.tier == tier).count();
-        (of(Tier::Fonts), of(Tier::Whole), of(Tier::Twin))
+        (
+            of(Tier::Fonts),
+            of(Tier::Whole),
+            of(Tier::Twin),
+            of(Tier::Host),
+        )
     }
 
-    /// What is wrong with the table against `census`. The failure this is
-    /// for is a lean that moved: moving the pre-merge line a whole line
-    /// names to the whole gate too would silently leave its claim with no
-    /// witness before a merge.
-    pub(crate) fn complaints(&self, census: &Census) -> Vec<String> {
-        let recorded: BTreeSet<&str> = census.lines.keys().map(String::as_str).collect();
+    /// What is wrong with the table against the registered `lines`. The
+    /// failure this is for is a lean that moved: moving the pre-merge line
+    /// a whole line names to the whole gate too would silently leave its
+    /// claim with no witness before a merge.
+    pub(crate) fn complaints(&self, lines: &Lines) -> Vec<String> {
+        let recorded: BTreeSet<&str> = lines.lines().map(String::as_str).collect();
         let before_merge = |line: &str| {
-            recorded.contains(line) && matches!(self.tier(line), None | Some(Tier::Fonts))
+            recorded.contains(line)
+                && matches!(self.tier(line), None | Some(Tier::Fonts | Tier::Host))
         };
         let mut out = self.unread.clone();
         for (line, entry) in &self.entries {
             match entry.tier {
-                Tier::Fonts | Tier::Whole if !recorded.contains(line.as_str()) => out.push(format!(
-                    "{FILE} names {line:?}, which the census does not hold — a renamed or dropped \
-                     line: follow it or take the row out"
+                Tier::Fonts | Tier::Whole | Tier::Host if !recorded.contains(line.as_str()) => out
+                    .push(format!(
+                        "{FILE} names {line:?}, which {} does not hold — a renamed or dropped \
+                     line: follow it or take the row out",
+                        super::lines::FILE
+                    )),
+                Tier::Host if !entry.why.starts_with("git:") => out.push(format!(
+                    "{line:?} is a host row, whose reason starts with `git:` — the git the \
+                     container lacks"
                 )),
                 Tier::Twin if recorded.contains(line.as_str()) => out.push(format!(
-                    "{line:?} is in the census again, and {FILE} says it is the same run as {:?} \
-                     — drop the census line",
+                    "{line:?} is registered in {}, and {FILE} says it is the same run as {:?} \
+                     — drop one of the two rows",
+                    super::lines::FILE,
                     entry.leans.first().map_or("", String::as_str)
                 )),
                 _ => {}
@@ -215,7 +246,7 @@ impl Tiers {
                     for lean in entry.leans.iter().filter(|lean| !before_merge(lean)) {
                         out.push(format!(
                             "{line:?} waits for the whole gate leaning on {lean:?}, which is not a \
-                             pre-merge line of the census — keep one of them before the merge"
+                             registered pre-merge line — keep one of them before the merge"
                         ));
                     }
                 }
@@ -223,8 +254,8 @@ impl Tiers {
                     [of] if recorded.contains(of.as_str()) && self.tier(of) != Some(Tier::Twin) => {
                     }
                     _ => out.push(format!(
-                        "{line:?} is a twin of {:?}, which has to be one census line that is no \
-                         twin itself",
+                        "{line:?} is a twin of {:?}, which has to be one registered line that is \
+                         no twin itself",
                         entry.leans
                     )),
                 },
@@ -237,22 +268,23 @@ impl Tiers {
 
 #[cfg(test)]
 mod tests {
-    use super::{Census, Tier, Tiers};
+    use super::{Lines, Tier, Tiers};
 
-    fn census(lines: &[&str]) -> Census {
-        let mut census = Census::default();
+    fn registered(lines: &[&str]) -> Lines {
+        let mut table = Lines::default();
         for line in lines {
-            census
-                .lines
-                .insert((*line).to_string(), ["Main".to_string()].into());
+            table
+                .entries
+                .insert((*line).to_string(), Default::default());
         }
-        census
+        table
     }
 
     const TABLE: &str = "# a comment\n\
         fonts\tbadges --preset conflict\t-\tcap= reads the band's measured floor\n\
         whole\tfile-menu b.txt\tdiscard-many-go c.txt\tpicture: the menu standing\n\
-        twin\tdiscard-file b.txt\tfile-menu b.txt\tthe same run\n";
+        twin\tdiscard-file b.txt\tfile-menu b.txt\tthe same run\n\
+        host\tpush-lease\t-\tgit: --force-if-includes needs 2.30\n";
 
     /// A line the table does not name is the host's before a merge and
     /// both sides' in the whole gate; each tier moves one of those four.
@@ -271,24 +303,57 @@ mod tests {
         let twin = "discard-file b.txt";
         assert!(!tiers.owed(twin, false) && !tiers.owed(twin, true));
         assert_eq!(tiers.twin_of(twin), Some("file-menu b.txt"));
-        assert_eq!(tiers.counts(), (1, 1, 1));
+        let host = "push-lease";
+        assert_eq!(tiers.tier(host), Some(Tier::Host));
+        assert!(tiers.owed(host, false) && !tiers.on_linux(host, false));
+        assert!(tiers.owed(host, true) && !tiers.on_linux(host, true));
+        assert_eq!(tiers.counts(), (1, 1, 1, 1));
     }
 
+    /// A host row runs before a merge, so a whole row may lean on it; its
+    /// reason has to say which git the container lacks.
     #[test]
-    fn a_table_that_agrees_with_the_census_has_nothing_to_say() {
-        let tiers = Tiers::parse(TABLE);
-        let held = census(&[
+    fn a_host_row_is_a_witness_before_a_merge_and_names_the_git_it_needs() {
+        let lines = registered(&[
             "badges --preset conflict",
             "file-menu b.txt",
             "discard-many-go c.txt",
+            "push-lease",
+            "push-lease-far",
+        ]);
+        let leaning =
+            format!("{TABLE}whole\tpush-lease-far\tpush-lease\tgit: the far side answers\n");
+        assert_eq!(
+            Tiers::parse(&leaning).complaints(&lines),
+            Vec::<String>::new()
+        );
+        let wordless = format!("{TABLE}host\tpush-lease-far\t-\tthe far side\n");
+        let said = Tiers::parse(&wordless).complaints(&lines);
+        assert!(
+            said.len() == 1 && said[0].contains("starts with `git:`"),
+            "{said:?}"
+        );
+    }
+
+    #[test]
+    fn a_table_that_agrees_with_the_registered_lines_has_nothing_to_say() {
+        let tiers = Tiers::parse(TABLE);
+        let held = registered(&[
+            "badges --preset conflict",
+            "file-menu b.txt",
+            "discard-many-go c.txt",
+            "push-lease",
         ]);
         assert_eq!(tiers.complaints(&held), Vec::<String>::new());
     }
 
     #[test]
     fn a_moved_lean_a_returned_twin_and_a_gone_line_are_each_named() {
-        let said = |table: &str, lines: &[&str]| Tiers::parse(table).complaints(&census(lines));
-        let gone = said(TABLE, &["file-menu b.txt", "discard-many-go c.txt"]);
+        let said = |table: &str, lines: &[&str]| Tiers::parse(table).complaints(&registered(lines));
+        let gone = said(
+            TABLE,
+            &["file-menu b.txt", "discard-many-go c.txt", "push-lease"],
+        );
         assert!(gone.len() == 1 && gone[0].contains("badges"), "{gone:?}");
         let back = said(
             TABLE,
@@ -297,10 +362,11 @@ mod tests {
                 "file-menu b.txt",
                 "discard-many-go c.txt",
                 "discard-file b.txt",
+                "push-lease",
             ],
         );
         assert!(
-            back.len() == 1 && back[0].contains("in the census again"),
+            back.len() == 1 && back[0].contains("is registered"),
             "{back:?}"
         );
         let moved = said(
@@ -309,6 +375,7 @@ mod tests {
                 "badges --preset conflict",
                 "file-menu b.txt",
                 "discard-many-go c.txt",
+                "push-lease",
             ],
         );
         assert!(
@@ -340,11 +407,12 @@ mod tests {
     #[test]
     fn a_whole_row_names_its_pre_merge_line_unless_something_cheaper_holds_it() {
         let said = |row: &str| {
-            Tiers::parse(&format!("{TABLE}{row}\n")).complaints(&census(&[
+            Tiers::parse(&format!("{TABLE}{row}\n")).complaints(&registered(&[
                 "badges --preset conflict",
                 "file-menu b.txt",
                 "discard-many-go c.txt",
                 "push",
+                "push-lease",
             ]))
         };
         for kind in ["git", "picture", "other"] {
@@ -407,7 +475,7 @@ mod tests {
         std::fs::remove_dir(&path).expect("rmdir");
         std::fs::write(&path, TABLE).expect("table");
         let read = Tiers::load(&root).expect("the table");
-        assert_eq!(read.counts(), (1, 1, 1));
+        assert_eq!(read.counts(), (1, 1, 1, 1));
         let _ = std::fs::remove_dir_all(&root);
     }
 }
