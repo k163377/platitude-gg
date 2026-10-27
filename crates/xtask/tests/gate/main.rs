@@ -31,5 +31,6 @@ mod pins;
 mod seats;
 mod selection;
 mod shell;
+mod shots;
 mod stamps;
 mod tables;

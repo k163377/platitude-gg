@@ -389,6 +389,24 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       Each run must fail and leave the expected record. The held cases
       must have completed the act and saved its picture first; a watchdog
       abort reaching the same exit station is not accepted.
+      options:
+        --no-build    reuse the release the gate's block already built
+
+  shot-check
+      Lands a read in a picture on purpose and reads the saved pictures
+      back. A picture is one claim — the page settled as the grab
+      answered — and a read landing in it is retaken from its source,
+      not from the texture the read was drawn into; whether it is cannot
+      be told from the run's own lines. So six commit-menu runs are
+      driven with `--fault-owed-at-shot`: the window's picture and the
+      scene's (a mirror's texture), each with the read before the grab,
+      as the grab answers, and never, with a mark drawn into the content
+      while the injected read stands. Each run must pass, say the
+      attempts' lines (`picture … attempt= waiting= / held= / saved=`),
+      and leave the mark in no picture but the two that prove the mark
+      reaches one.
+      options:
+        --no-build    reuse the release the gate's block already built
 
   corpus [--force] [--path <dir>] [--against <repo>]
       Builds the repository `perf` measures against, and says where it

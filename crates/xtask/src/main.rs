@@ -74,6 +74,7 @@ fn main() -> ExitCode {
         Some("replay") => replay::run(&args[1..]),
         Some("verbs") => verify::verbs(&args[1..]),
         Some("wedge-check") => verify::wedge_check(&args[1..]),
+        Some("shot-check") => verify::shot_check(&args[1..]),
         Some("corpus") => corpus::run(&args[1..]),
         Some("perf") => perf::run(&args[1..]),
         Some("shipped") => shipped::run(&args[1..]),

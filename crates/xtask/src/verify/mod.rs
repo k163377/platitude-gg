@@ -17,6 +17,7 @@ mod repos;
 mod run;
 mod seed;
 mod shim;
+mod shot_check;
 mod verbs;
 mod wedge;
 
@@ -27,6 +28,7 @@ pub(crate) use options::{canonical_line, suite_words};
 pub(crate) use ownership::{ResourceClaim, claim_dir, claim_resource, keep, sweep_yesterdays_runs};
 pub use run::run;
 pub use shim::git_shim;
+pub(crate) use shot_check::run as shot_check;
 pub(crate) use verbs::judgment_of;
 
 use crate::command::{self, Permission, Where};
@@ -58,4 +60,13 @@ pub(crate) static WEDGE: command::Command = command::Command {
     permission: Permission::Plain,
 };
 
-pub(crate) static COMMANDS: &[&command::Command] = &[&UI, &VERBS, &WEDGE];
+pub(crate) static SHOT: command::Command = command::Command {
+    id: "verify.shot",
+    call: "shot-check",
+    purpose: "whether a picture a read landed in is taken again from its source",
+    run_in: Where::Seat,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&UI, &VERBS, &WEDGE, &SHOT];

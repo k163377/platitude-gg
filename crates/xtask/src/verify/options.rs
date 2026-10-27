@@ -58,6 +58,11 @@ pub(super) struct Options {
     /// provably out and the exit can be read joining it. Set unasked for
     /// the verb whose subject that is (`super::child`).
     pub(super) fault_hold_save: String,
+    /// Have one picture's readings of the page say a read is on its way
+    /// (`PGG_FAULT_OWED_AT_SHOT=<artifact>-<when>`), so the picture taken
+    /// again can be read from outside: driven by `shot-check`
+    /// (`super::shot_check`).
+    pub(super) fault_owed_at_shot: String,
     /// Stall the parent's own look at a run reaped at the ceiling
     /// (`super::look::look_at`) — the one fault that is the runner's own,
     /// driven by `wedge-check`.
@@ -111,8 +116,9 @@ impl Options {
             || !self.fault_hang.is_empty()
             || self.fault_no_deadline
             || self.fault_hold_act
-            // A run made to see one order of the reads.
+            // A run made to see one order of the reads, or a read land in its picture.
             || !self.slow_git.is_empty()
+            || !self.fault_owed_at_shot.is_empty()
             // Read back one word per argument (`suite_words`): an argument
             // with a space comes back as several and the replay is refused.
             || self.arg.contains(char::is_whitespace)
@@ -205,6 +211,7 @@ impl Default for Options {
             fault_no_deadline: false,
             fault_hold_act: false,
             fault_hold_save: String::new(),
+            fault_owed_at_shot: String::new(),
             fault_stall_look: false,
             shot_dir: None,
             config_dir: None,
@@ -290,6 +297,13 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
                     .ok_or("--fault-hold-save needs a station (e.g. writes-joining)")?
                     .clone();
             }
+            "--fault-owed-at-shot" => {
+                let asked = it.next().ok_or(
+                    "--fault-owed-at-shot needs <artifact>-<before|during|shown> (e.g. app-during)",
+                )?;
+                owed_at_shot(asked)?;
+                opts.fault_owed_at_shot = asked.clone();
+            }
             "--fault-stall-look" => opts.fault_stall_look = true,
             "--shot-dir" => {
                 opts.shot_dir = Some(typed_path(it.next().ok_or("--shot-dir needs a path")?));
@@ -354,9 +368,58 @@ fn name_the_verb(opts: &mut Options, positional: &[&str]) -> Result<(), String> 
     Ok(())
 }
 
+/// `<artifact>-<when>` as `PGG_FAULT_OWED_AT_SHOT` is read
+/// (`WindowHarness.owedForPicture`): one of the three pictures, and the
+/// reading the injected read lands in — anything else would run as
+/// `shown` without saying so.
+fn owed_at_shot(asked: &str) -> Result<(), String> {
+    match asked.split_once('-') {
+        Some((artifact, when))
+            if ["app", "overlay", "scene"].contains(&artifact)
+                && ["before", "during", "shown"].contains(&when) =>
+        {
+            Ok(())
+        }
+        _ => Err(format!(
+            "--fault-owed-at-shot takes <app|overlay|scene>-<before|during|shown>; got {asked:?}"
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{parse, suite_words};
+
+    /// The injected read names one of the three pictures at one of its three moments, or the run is refused.
+    #[test]
+    fn the_injected_read_is_one_of_the_pictures_at_one_of_its_moments() {
+        let line = |fault: &str| {
+            parse(&[
+                "commit-menu".to_string(),
+                "--fault-owed-at-shot".to_string(),
+                fault.to_string(),
+            ])
+        };
+        assert_eq!(
+            line("app-during")
+                .expect("a picture and a moment")
+                .fault_owed_at_shot,
+            "app-during"
+        );
+        assert!(line("scene-shown").is_ok());
+        for wrong in [
+            "app-durng",
+            "window-during",
+            "during",
+            "app-",
+            "app-during-twice",
+        ] {
+            assert!(
+                line(wrong).is_err_and(|why| why.contains("--fault-owed-at-shot takes")),
+                "{wrong}"
+            );
+        }
+    }
 
     /// The flag goes last, where the runner's `--no-build` can follow it,
     /// and `parse` takes it there.

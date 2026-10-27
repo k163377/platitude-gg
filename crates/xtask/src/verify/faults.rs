@@ -166,17 +166,15 @@ const CASES: &[Case] = &[
 /// Each case is meant to fail; what is judged is whether the lines that
 /// say why came back.
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
-    if let Some(unknown) = args.first() {
-        return Err(format!("wedge-check takes no arguments, and got {unknown}"));
-    }
+    let reuse = reuse_the_build(args, "wedge-check")?;
     let me = std::env::current_exe().map_err(|e| format!("could not find this binary: {e}"))?;
     let mut missed = Vec::new();
     for (nth, case) in CASES.iter().enumerate() {
         println!("wedge-check: {}", case.shape);
         // waits(measured): what the case cost, for the line under it — the verdict is the words
         let began = Instant::now();
-        // Only the first case builds the app.
-        let said = drive(&me, case, nth == 0)?;
+        // Only the first case builds the app, and none when the release stands.
+        let said = drive(&me, case, nth == 0 && !reuse)?;
         let absent = case.missing(&said);
         println!(
             "  {} in {:.1}s",
@@ -203,6 +201,20 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         "the record a wedged run leaves did not come back:\n  {}",
         missed.join("\n  ")
     ))
+}
+
+/// Whether `args` say the release stands already — `--no-build`, the one
+/// word the gate's block hands a step after the first built it
+/// (`gate::sides::verbs`): the first case then builds nothing either.
+fn reuse_the_build(args: &[String], check: &str) -> Result<bool, String> {
+    match args {
+        [] => Ok(false),
+        [word] if word == "--no-build" => Ok(true),
+        _ => Err(format!(
+            "{check} takes --no-build alone, and got {}",
+            args.join(" ")
+        )),
+    }
 }
 
 /// Runs one case and answers with both streams, together. Every case

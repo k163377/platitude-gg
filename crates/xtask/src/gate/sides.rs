@@ -287,7 +287,9 @@ fn against_the_build(
 }
 
 /// One side's verbs: the first uncached one runs alone and builds the
-/// release, the rest reuse that build `jobs` at a time. A red verb stops
+/// release, the rest reuse that build `jobs` at a time. The checks that
+/// drive verbs of their own (`wedge-check`, `shot-check`) stand in the
+/// block behind the lines and take `--no-build` as a line does. A red verb stops
 /// the run — under `--keep-going` none of the others: every green is
 /// stamped, so the run after the fix owes the reds alone.
 ///

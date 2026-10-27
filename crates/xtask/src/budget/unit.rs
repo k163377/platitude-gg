@@ -31,8 +31,8 @@ pub(crate) fn demand(jobs: usize) -> u32 {
 }
 
 /// A step's weight, read off its words: the runner's reading verbs,
-/// `cargo fmt` and a verb told `--no-build` start no compiler; everything
-/// else starts one.
+/// `cargo fmt` and a verb — or a check driving verbs — told `--no-build`
+/// start no compiler; everything else starts one.
 pub(crate) fn weight_of(command: &[String], no_build: bool) -> u32 {
     let mut words = command.iter().map(String::as_str);
     let first = words.next().unwrap_or_default();
@@ -58,7 +58,7 @@ pub(crate) fn weight_of(command: &[String], no_build: bool) -> u32 {
     };
     match verb {
         Some("structure" | "waits" | "versions" | "docs" | "verbs" | "deny" | "qmltest") => LIGHT,
-        Some("verify-ui") if no_build => LIGHT,
+        Some("verify-ui" | "wedge-check" | "shot-check") if no_build => LIGHT,
         _ => COMPILE,
     }
 }

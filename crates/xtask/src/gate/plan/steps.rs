@@ -167,7 +167,6 @@ pub(super) fn select(
     let mut steps = always_steps();
     steps.extend(deny_steps(g, changed, read.everything));
     steps.extend(qmltest_steps(reach, read.everything));
-    steps.extend(wedge_steps(reach, read.everything));
     // Its configuration is clippy's alone, read by every crate's run and
     // by nothing a test or a build reads.
     if changed.contains(&clippy_config()) {
@@ -183,6 +182,11 @@ pub(super) fn select(
     }
     let (binary, counted) = binary_steps(read, &sorted, reach, changed, ask);
     steps.extend(binary);
+    // Behind the lines in the release block: the first line builds the
+    // release alone, and the checks, each a handful of runs of their own,
+    // reuse it beside the rest (`sides::verbs`).
+    steps.extend(wedge_steps(reach, read.everything));
+    steps.extend(shot_steps(g, reach, &sorted, read.everything));
     (steps, counted)
 }
 
@@ -348,6 +352,77 @@ fn wedge_steps(reach: &Reach, everything: bool) -> Vec<Step> {
     wedge.builds_app = true;
     wedge.release = true;
     vec![wedge]
+}
+
+/// Whether the change reaches the app's QML, or the entry that embeds it:
+/// what every run stands up.
+fn qml_moved(sorted: &Sorted, reach: &Reach) -> bool {
+    // Spelled in pieces: a whole path in a string here would be read as
+    // this file reading the app's entry point.
+    let entry = format!("{}/src/main.rs", app());
+    !sorted.qml.is_empty() || reach.contains_key(&entry)
+}
+
+/// Whether the change reaches the harness's Rust half as code. Every verb
+/// runs through the harness, which has no static edge into QML. The
+/// harness reads the product tree, so every product change reaches it as
+/// data (`graph::Carried`) — that is no change to the harness.
+fn harness_moved(reach: &Reach) -> bool {
+    let dirs = harness();
+    reach.iter().any(|(file, carried)| {
+        *carried == Carried::Whole && dirs.iter().any(|dir| under(file, dir))
+    })
+}
+
+/// The shot check's own file, spelled in pieces as [`record_of_a_wedge`]'s are.
+fn shot_check() -> String {
+    format!("{}/{}", "crates/xtask/src/verify", "shot_check.rs")
+}
+
+/// What a picture a read lands in passes through (`verify::shot_check`),
+/// as the step's inputs, each boundary named. This runner's own code,
+/// from the check to what it reads (the pictures' decoding, the spawn):
+/// the check's static closure (`Graph::inputs`). Across the process
+/// boundary the check spawns, `verify-ui` in this same binary, the
+/// harness's Rust half every verb reads ([`harness`]), which no `use` of
+/// the check's reaches: the fault's option and its carriage into the
+/// app's environment, the run's judgment and contract. Across the
+/// boundary to the app it drives, the product unit every verb reads
+/// ([`cargo_inputs`] over the app and core): the knob read off the
+/// environment and published to QML — the Rust/QML boundary, which the
+/// graph reads as the QML's mention of the singleton's type —, the
+/// harness module that reads it and draws the mark, and the product it
+/// draws. The key is the code's (`release`), so an edit no build reads
+/// keeps the stamp.
+fn shot_inputs(g: &Graph) -> Vec<String> {
+    let mut inputs: BTreeSet<String> = g.inputs(&[shot_check()]).into_iter().collect();
+    inputs.extend(cargo_inputs(&[&app(), &core()]));
+    inputs.extend(harness());
+    inputs.into_iter().collect()
+}
+
+/// Six runs with a read landed in a picture on purpose, owed by what they
+/// pass through ([`shot_inputs`]): the check reached as code, the
+/// harness's Rust half moved, or the app's QML — the reach every verb is
+/// owed by. Host only: the pictures come off the disk the same way on
+/// both sides, and every verb's run on the container already proves that
+/// side carries a file out.
+fn shot_steps(g: &Graph, reach: &Reach, sorted: &Sorted, everything: bool) -> Vec<Step> {
+    let own = reach.get(&shot_check()) == Some(&Carried::Whole);
+    if !everything && !own && !harness_moved(reach) && !qml_moved(sorted, reach) {
+        return Vec::new();
+    }
+    let mut shot = step(
+        "shot-check",
+        Side::Host,
+        false,
+        xtask(&["shot-check"]),
+        &shot_inputs(g),
+    );
+    // It drives verify-ui: the same release build as the verbs.
+    shot.builds_app = true;
+    shot.release = true;
+    vec![shot]
 }
 
 /// clippy for every crate the reach enters as code, on both sides: the
@@ -542,10 +617,7 @@ fn binary_steps(
     ask: &Ask<'_>,
 ) -> (Vec<Step>, Counted) {
     let mut steps = Vec::new();
-    // Spelled in pieces: a whole path in a string here would be read as
-    // this file reading the app's entry point.
-    let entry = format!("{}/src/main.rs", app());
-    let qml_moved = !sorted.qml.is_empty() || reach.contains_key(&entry);
+    let qml_moved = qml_moved(sorted, reach);
     let binary_moved = qml_moved
         || sorted.rust_in.contains_key("platitude-app")
         || sorted.rust_in.contains_key("platitude-core");
@@ -559,14 +631,7 @@ fn binary_steps(
             &binary_inputs,
         ));
     }
-    // Every verb runs through the harness, which has no static edge into
-    // QML. The harness reads the product tree, so every product change
-    // reaches it as data (`graph::Carried`) — that is no change to the
-    // harness.
-    let harness_dirs = harness();
-    let harness_moved = reach.iter().any(|(file, carried)| {
-        *carried == Carried::Whole && harness_dirs.iter().any(|dir| under(file, dir))
-    });
+    let harness_moved = harness_moved(reach);
     // Every registered line, whenever the change reaches the app's QML or
     // the harness that drives it: every run stands the whole window up,
     // so a component reached is one every run can meet

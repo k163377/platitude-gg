@@ -79,6 +79,14 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           drives, and the one a short ceiling cannot make
                           on its own: a ceiling that outruns a completion
                           here loses to it on a busier machine
+        --fault-owed-at-shot <artifact>-<before|during|shown>
+                          have that picture's readings of the page say a
+                          read is on its way — at its attempt's first
+                          reading (before the grab), at its second (as the
+                          grab answers), or never — with a mark drawn into
+                          the content while the injected read stands.
+                          What `shot-check` drives: the picture must be
+                          taken again from its source, without the mark
         --fault-stall-look
                           stall the runner's own look at a run it reaps:
                           the thread listing is a process that never

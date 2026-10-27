@@ -198,13 +198,16 @@ fn run_bounded(
 
 /// Runs git in `dir`, answering its trimmed stdout with backslashes
 /// forward, and None when it fails at all — callers treat a repository
-/// that cannot answer as one they are not judging.
+/// that cannot answer as one they are not judging. A query beside a
+/// commit, or beside another run's query of the same seat, takes no
+/// optional lock on the index and waits for none (`GIT_OPTIONAL_LOCKS=0`).
 pub(crate) fn git_query(dir: &str, arguments: &[&str]) -> Option<String> {
     if dir.is_empty() {
         return None;
     }
     let mut command = std::process::Command::new("git");
     command.arg("-C").arg(dir).args(arguments);
+    command.env("GIT_OPTIONAL_LOCKS", "0");
     let output = run_captured(&mut command).ok()?;
     output.status.success().then(|| {
         String::from_utf8_lossy(&output.stdout)

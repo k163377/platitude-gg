@@ -224,6 +224,9 @@ fn fault_knobs(cmd: &mut Command, opts: &Options) {
     if opts.fault_hold_act {
         cmd.env("PGG_FAULT_HOLD_ACT", "1");
     }
+    if !opts.fault_owed_at_shot.is_empty() {
+        cmd.env("PGG_FAULT_OWED_AT_SHOT", &opts.fault_owed_at_shot);
+    }
     // Raised by verb name: a run that needed a hand-typed flag is one no
     // registered line could spell (`super::verbs::window`). `card-latch`'s
     // `:row-late` argument lets the row through itself after its tremor,
