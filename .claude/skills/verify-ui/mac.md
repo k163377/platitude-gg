@@ -4,13 +4,13 @@
 
 mac の実機は無い。**mac の絵と判定は GitHub Actions の `shots.yml` が出す** — runner(`macos-26` = arm64)の上で `cargo xtask replay` が verify-ui の行を 1 本ずつ撃ち、絵とログを artifact `shots-macos` に残す。**判定は手で撃った run と同じ**(`screenshot saved=true` + 報告行)で、行の書き方も **verbs.md の表がそのまま通る**。
 
-- **いつ撃たれるか**: main への push = `push.yml` が段分け表の `fonts` 行(判定がフォントで決まる行)/ `whole.yml`(週 1・版を動かした land のタグ・PR・手動・snapshot の中)= census の全行(public のリポジトリで 60 日活動が無いと GitHub が schedule を止める — Actions のページから戻す)/ **手で撃つのは `shots.yml` の dispatch** —— **何も指定しなければ census の全行**(Whole test の撮影と同じ。40 分前後)。名指した行だけ撃つ時は段を `none` にする:
+- **いつ撃たれるか**: main への push = `push.yml` が段分け表の `fonts` 行(判定がフォントで決まる行)/ `whole.yml`(週 1・版を動かした land のタグ・PR・手動・snapshot の中)= 登録表の全行(public のリポジトリで 60 日活動が無いと GitHub が schedule を止める — Actions のページから戻す)/ **手で撃つのは `shots.yml` の dispatch** —— **何も指定しなければ登録表の全行**(Whole test の撮影と同じ。40 分前後)。名指した行だけ撃つ時は段を `none` にする:
 
   ```bash
   gh workflow run shots.yml --ref main -f tier=none -f lines='band; nav-tip branch:0'
   ```
 
-  `lines` は `verify-ui` の後ろに書く行そのものを `;` で並べ、段の行に足される。`-f tier=fonts` / `premerge` / `whole`(既定)/ `none` が census のどの行を撃つかで、`-f locale=en` は英語のシステムで撃つ(既定は日本語)。段が `none` で行も無い dispatch は job ごと skip される。**`--ref` に書けるのは GitHub に在る枝だけ** — 席の枝は GitHub に無く、出すかどうかはユーザーが決める
+  `lines` は `verify-ui` の後ろに書く行そのものを `;` で並べ、段の行に足される。`-f tier=fonts` / `premerge` / `whole`(既定)/ `none` が登録表のどの行を撃つかで、`-f locale=en` は英語のシステムで撃つ(既定は日本語)。段が `none` で行も無い dispatch は job ごと skip される。**`--ref` に書けるのは GitHub に在る枝だけ** — 席の枝は GitHub に無く、出すかどうかはユーザーが決める
 - **結果を読む**: run のページの Summary に行ごとの `ok` / `FAIL` が並ぶ(赤が先頭。ビルドが赤くて撃てなかった行は末尾に名指される)。天井(270 分)で切れた run は Summary が出ない — 行ごとの `ok` / `FAIL` は Replay の step のログ、そこまでの絵は artifact に在る。絵は artifact を席の `target/` へ落として読む。**Push check と Whole test が撃った分は呼んだ側の run に載る**(`--workflow` は `push.yml` / `whole.yml`、Snapshot の中の Whole test は `snapshot.yml`。`shots.yml` の一覧は dispatch の分だけ):
 
   ```bash
@@ -25,5 +25,5 @@ mac の実機は無い。**mac の絵と判定は GitHub Actions の `shots.yml`
 - **land の後に出た mac の絵を、自分から board へ載せない** — push 時の run は main を撮るので land の後に出るが、絵は席の claim を戻さず、claim の無い席からは載らない(CLAUDE.md §Git 運用)。**mac の見た目の承諾が反映の前に要るなら**、席の枝を GitHub に出して `--ref` で撃つかをユーザーに訊く。land 後に mac の絵を見せるのは、ユーザーが求めた時だけ
 - **写るのは offscreen の絵まで** — フォントは CoreText(Hiragino Sans / Menlo。`QT_QPA_FONTDIR` は Windows の話)、描画は Windows と同じ software scene graph。**Cocoa の窓(タイトルバー・ネイティブメニュー・Dock)は写らない**(P5-確認事項 §3.6)
 - **言語は runner のシステム設定で決まる** — Qt は macOS では `LANG` ではなくシステムの言語を読む。英文中の `—` `…` と等幅の和文フォールバックを判定する時は、**日本語と英語の両方で撃って並べる**
-- **赤を見たら先に机で同じ行を撃つ** — `cargo xtask replay --line '<行>'` は机でも同じ道を通る(絵は `target/replay/`、census も board も動かない)。机で緑なら mac の答えが違う — 絵で「実際に切れている」か「判定の閾がフォントに依っている」かを分ける
+- **赤を見たら先に机で同じ行を撃つ** — `cargo xtask replay --line '<行>'` は机でも同じ道を通る(絵は `target/replay/`、board は動かない)。机で緑なら mac の答えが違う — 絵で「実際に切れている」か「判定の閾がフォントに依っている」かを分ける
 - **1 run = runner 1 台**(release ビルド + 行数ぶん)。public の間は無料で、同時に走れる macOS の job は 5 本まで

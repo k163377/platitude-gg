@@ -11,7 +11,7 @@ description: platitude-gg の UI 動作確認・スクリーンショット検�
 
 presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正。
 
-**触った動詞は gate が選ぶ** — 各 run は「どの QML 部品を出したか」を `census=` で報告し、PASS した run が `crates/xtask/verb-census.txt` に記録する(commit する生成物。手で触るのは消した / 改名した動詞の行と、段分け表で `twin` とした行を落とす時だけ)。**動詞の行を足したら段を決める**(rules-refs/app-ui.md)。**census に無い部品(新規・まだ誰も撮っていない)は gate が名指しで止まる** — その部品を出す動詞を 1 度 `verify-ui` で単独に撃てば記録され、census の diff を見て commit してから gate を撃ち直す(`gate --verb` は動詞を走らせる前に止まるので、この登録には使えない)。`--repo` / `--restore` / `--config-dir` の run とコンテナの中の run は記録されない。**census に行の無い動詞は gate が一度も回さない** — must_say の表に在っても、誰かが 1 度 `verify-ui` で撃つまでは手で撃つ以外に網が無い。**gate が撃つ動詞も自分の行を書き直す**ので、QML を変えた後の gate は「census を書き直した」と言って**スタンプせずに赤で止まる** — 生成物なので diff を見てそのまま commit し、もう一度撃つ。合否に関係ない反復(揺れの計測・絵を見るだけ)は `--no-census` で撃つと生成物が動かない。
+**gate が回す動詞は登録表 `crates/xtask/verb-lines.txt` の行**(行は人が登録し、約束は run から作る。1 行 = `<verify-ui の行> TAB <その run の絵が `*` 行の外で見せると約束する部品、無ければ ->`。約束は契約: 絵に無ければ FAIL。正本と読み方は 反映前テストの機械化.md §選択の正本)。**動詞を足したら行を登録し、段を決める**(rules-refs/app-ui.md)— 登録の無い動詞・判定行は `cargo xtask verbs`(gate の常時ステップ)が赤で止める。**登録表のどの行も示さない部品(新規の popup・Loader の中身)は gate が名指しで止まる** — それを立てる行に部品を書く(`gate --verb` は登録済みの行だけ)。**run は木に何も書かない**: 会った部品は絵の隣の `census.txt` に残り、登録行との差を `shown:` の 1 行で言う(会ったのに書いていない物 = 行を広げる候補)。反復(揺れの計測・絵を見るだけ)は何も動かさないので、そのまま撃つ。
 
 **目視は等倍以上で、判定する所を切り出して見る。** 何枚も並べて縮小した一覧は「どの絵が撮れたか」の確認**だけ**に使う — 縮小の補間は上に載った数 px を消す。文字・枠・重なりを判定する時は、その行を 3 倍以上・**NEAREST**(補間なし)で切り出す —— **`cargo xtask shots crop <png> --at <x>:<y>:<幅>:<高さ> [--scale <n>]`**(既定 3 倍。整数倍のみ)。切り出しは元の絵の隣に置かれる(`app.png` → `app-crop-24-96-220x44.png`)ので、そのまま Read で読む —— **切り出しの道具はこれだけ**。空白・崩れに見えた絵は、直す前に保存ファイルの画素(crop / SHA-256)で確かめる。
 
@@ -62,7 +62,9 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 
 **白紙の overlay.png は「その時点で何も開いていなかった」の意味**。報告行 `overlay saved=<bool> popups=<n> yield=<bool>` の **`popups=` がオーバーレイ自身が抱えていた数**(メニュー 1 / サブメニューを開けば 2 / モーダルは dimmer を伴って 2 以上)、`yield=` が窓の枠を場面へ返していたか(外の press で閉じるメニュー・リストが立っていたか)。`commit-menu` / `reset-menu` はこの行が must_say — **overlay が主題の動詞には同じ 1 行を足せる**(`verify/verbs.rs`)。「閉じたか」は `Popup.opened` の報告行で読む。
 
-**overlay が空でない run は 3 枚目 `scene.png` を出す** —— app.png と overlay.png を**描かれた座標のまま重ねた 1 枚**で、**窓の縁(Windows の窓モードの 1px)が写るのはこの 1 枚だけ**(app.png は本体だけ = Windows では窓より 2px 狭い)。「開いたものは、それを開けたものに対して**どこに**立っているか」(hover の席・カードの密着・メニューの掛かり方)はこれでしか読めない。報告行は `scene saved=<bool>`。**hover の席を見せる時はこの 1 枚を board に出す**。
+**絵は試行の単位で撮る** — page の成立 → 元の更新 → grab → 答えの確認を 1 試行とし、待機(ambient の読み・インク)で止まった試行は捨てて page から撮り直す。行は `picture run= artifact= attempt=<n> waiting= / held= / ink= / saved=`(正本は 反映前テストの機械化.md §検証時点)。
+
+**overlay が空でない run は 3 枚目 `scene.png` を出す** —— app.png と overlay.png を**描かれた座標のまま重ねた 1 枚**で、**窓の縁(Windows の窓モードの 1px)が写るのはこの 1 枚だけ**(app.png は本体だけ = Windows では窓より 2px 狭い)。「開いたものは、それを開けたものに対して**どこに**立っているか」(hover の席・カードの密着・メニューの掛かり方)はこれでしか読めない。報告行は `scene saved=<bool>`。**hover の席を見せる時はこの 1 枚を board に出す**。**撮る絵は run が頭で名乗り**(`pictures run= wanted=…`)、**1 枚ごとに `picture run= artifact= saved=<bool>`** — 頼んだ絵が全部 `saved=true` でなければ契約違反(保存の失敗は後の絵で取り消せない)。
 
 ## 場面ごとの各論(このディレクトリ。その場面に入る前に読む)
 

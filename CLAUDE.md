@@ -1,7 +1,7 @@
 # platitude-gg 開発規約
 
 **platitude-gg** — 軽量・マルチプラットフォーム(Windows / macOS arm64 / Ubuntu。**Intel Mac は対象外**)の git GUI。機能要件・スコープ外の正本は [実装計画.md](internal-docs/実装計画.md) — 機能実装の前に該当セクションを読む。
-本ファイルは全セッション共通の不変条件だけ。**規約本体は分割配置**: コード共通(Rust / QML)→ [code.md](.claude/rules/code.md)、core → [core.md](.claude/rules/core.md)、app → [app-ui.md](.claude/rules/app-ui.md)、分割・共通化 → [structure.md](.claude/rules/structure.md)(該当クレートに触れると自動ロード。**各論は `.claude/rules-refs/` の同名ファイル** — 触る項を Grep で引く)。動確・起動・`PGG_AUTO_ACT` 動詞表は **verify-ui スキル**、反映前テスト(gate / land / census)は [反映前テストの機械化.md](internal-docs/反映前テストの機械化.md)、依存の追加は [依存とライセンス.md](internal-docs/依存とライセンス.md)。
+本ファイルは全セッション共通の不変条件だけ。**規約本体は分割配置**: コード共通(Rust / QML)→ [code.md](.claude/rules/code.md)、core → [core.md](.claude/rules/core.md)、app → [app-ui.md](.claude/rules/app-ui.md)、分割・共通化 → [structure.md](.claude/rules/structure.md)(該当クレートに触れると自動ロード。**各論は `.claude/rules-refs/` の同名ファイル** — 触る項を Grep で引く)。動確・起動・`PGG_AUTO_ACT` 動詞表は **verify-ui スキル**、反映前テスト(gate / land / 動詞の登録表)は [反映前テストの機械化.md](internal-docs/反映前テストの機械化.md)、依存の追加は [依存とライセンス.md](internal-docs/依存とライセンス.md)。
 
 ## 絶対制約(変更には人間の明示承認が必要)
 

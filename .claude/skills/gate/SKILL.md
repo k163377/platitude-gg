@@ -5,7 +5,7 @@ description: platitude-gg の確認(段 1〜3 の gate・Linux コンテナ・�
 
 # 確認の段と gate を撃つ時機
 
-**Claudeクラウド(`CLAUDE_CODE_REMOTE=true`)ではここの何も撃たない** — 撃つはずだった確認は報告で「未実行の検証」として名指す([クラウドセッション.md](../../../internal-docs/クラウドセッション.md))。仕組み(依存木・スタンプ・census・land)の正本は [反映前テストの機械化.md](../../../internal-docs/反映前テストの機械化.md)、ここは使う側の手順。
+**Claudeクラウド(`CLAUDE_CODE_REMOTE=true`)ではここの何も撃たない** — 撃つはずだった確認は報告で「未実行の検証」として名指す([クラウドセッション.md](../../../internal-docs/クラウドセッション.md))。仕組み(依存木・スタンプ・登録表・land)の正本は [反映前テストの機械化.md](../../../internal-docs/反映前テストの機械化.md)、ここは使う側の手順。
 
 前提: 日常のビルド・テストは debug。起動・UI 検証・性能計測は各 xtask コマンドの手順に従う。以下 `cargo` / `cargo xtask` を省略。
 
@@ -13,7 +13,7 @@ description: platitude-gg の確認(段 1〜3 の gate・Linux コンテナ・�
 
 - **1 日常** = <!--call:gate.daily-->`gate --host-only`(コンテナ無し)
 - **2 反映前** = `gate`(差分の依存木と `verb-tiers.txt` の段で選んだテストを回し、緑を commit にスタンプ = `land` と git hook が要求)
-- **3 全体** = <!--call:gate.whole-->`gate --whole`(差分を見ず census の全行と `periodic` を両 OS で回す。それ以外で回すのはユーザーがテストを指示した時だけ)+ <!--call:linux.bare-->`linux bare --discover` + CI の Whole test + 性能実測([性能.md](../../../internal-docs/性能.md) §計測)。リリース前と依存・環境を触った時。**版(crate・toolchain・Qt・最低 git)を動かす差分は `gate` 自身が段 3 の計画へ上がる**、残りは手で
+- **3 全体** = <!--call:gate.whole-->`gate --whole`(差分を見ず登録表(`verb-lines.txt`)の全行と `periodic` を両 OS で回す。それ以外で回すのはユーザーがテストを指示した時だけ)+ <!--call:linux.bare-->`linux bare --discover` + CI の Whole test + 性能実測([性能.md](../../../internal-docs/性能.md) §計測)。リリース前と依存・環境を触った時。**版(crate・toolchain・Qt・最低 git)を動かす差分は `gate` 自身が段 3 の計画へ上がる**、残りは手で
 
 段の中身と「いつ何が走るか」の表は 反映前テストの機械化.md §段 1 / 段 2 / 段 3。
 

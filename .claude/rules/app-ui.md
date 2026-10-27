@@ -26,7 +26,7 @@ UI の**値**の正本は `Theme.qml` / `Metrics.qml`(値の隣に、なぜそ�
 
 ## UI 自動化(`PGG_AUTO_ACT` 動詞)の不変条件
 
-- **完了条件は動詞固有の因果だけ** — 入力の受理 → busy 開始 → 終了 → 対象モデルの更新 → 出力プロパティか描画可能状態。短い反復 Timer は sampler、`--watchdog-ms` は診断の天井で撮影時点を選ばない。性能測定の窓は測定入力で、完了は `perf_done` と親 watchdog の別勘定
+- **完了条件は動詞固有の因果だけ** — 入力の受理 → busy 開始 → 終了 → 対象モデルの更新 → 出力プロパティか描画可能状態。**完了のターンと各絵の時点に page は settled**(`PageSettled.missing` が空 — 読みと、見える一覧の delegate まで)で、完了と絵の間で部品の集合が動いても FAIL(`complete … page=` / `pictured … name=window … page=`。届く前に撮る動詞だけ `Awaited.arriving` に項を名指す。窓の動詞も同じ = 報告の前の待ちに `PageSettled.windowSettled(window)`、page を読む act は `settledUnder`)。短い反復 Timer は sampler、`--watchdog-ms` は診断の天井で撮影時点を選ばない。性能測定の窓は測定入力で、完了は `perf_done` と親 watchdog の別勘定
 - **1 run の完了 owner は 1 つ**(page が原子的に claim し、window-level 動詞は defer)。撮影は owner の `finishAutoAct()` 1 回の後だけ
 - **run は自分の環境と状態を建てる** — 起動前に全 `PGG_AUTO_*` を除いてから自分の値だけを設定し、repo / config / shot は run 固有(明示した `--repo` / `--config-dir` / `--shot-dir` は原子的に所有、同時利用は fail fast)。worktree からの起動は親が監督する `cargo xtask verify-ui` / `linux verify-ui`。build は一度、反復・並行は `--no-build`
 - **待ちの型は rules-refs**(前提条件は入力を出す枝で読む・書き込みの答えは読み直しより先に来る・readiness の前の 0 / false は答えでない・一瞬の edge は signal で latch・描画境界は `grabToImage` callback で、`frameSwapped` を待つのは `window.update()` で頼んだ後だけ = 素の `requestUpdate()` は静止した scene で swap しない)— 動詞を書く前に `PGG_AUTO_ACT` / `finishAutoAct` / 動詞名で Grep する。QML テストの待ちも `cargo xtask waits` が見る(残す理由は `// waits(<purpose>): <reason>`、core.md §非同期・並行テスト)
