@@ -39,7 +39,7 @@ Item {
         visible: run.name !== ""
         x: runMark.x
         width: WordFace.groundEnd(codeFace, run.name, nameCut.x + nameCut.inkWidth) - x
-        anchors.verticalCenter: nameCut.verticalCenter
+        wordBaseline: run.baselineOffset
         size: run.pixelSize
     }
     // A sign on the name (デザイン規約 §アイコンの席 の修飾): its box is the name's line, so the two stand on one

@@ -389,6 +389,7 @@ Rectangle {
                         visible: bar.code !== ""
                         word: bar.code
                         tint: acceptPill.wordInk
+                        buttonWord: true
                     }
                     Label {
                         id: acceptWord

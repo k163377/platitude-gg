@@ -66,6 +66,7 @@ Rectangle {
                 id: applyChip
                 word: "apply"
                 size: Theme.fontSm
+                buttonWord: true
                 tint: Theme.textPrimary
             }
         }
@@ -78,6 +79,7 @@ Rectangle {
                 id: popChip
                 word: "pop"
                 size: Theme.fontSm
+                buttonWord: true
                 tint: Theme.textPrimary
             }
         }

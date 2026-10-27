@@ -136,14 +136,15 @@ Item {
             Layout.topMargin: (opRow.firstBand - codeLabel.implicitHeight) / 2
             implicitWidth: Math.max(opRow.codeColW, codeLabel.implicitWidth)
             implicitHeight: codeLabel.implicitHeight
-            Rectangle {
-                anchors.fill: codeLabel
+            CodeGround {
+                anchors.left: codeLabel.left
+                anchors.right: codeLabel.right
                 // Half a gap of tint outside the glyphs, the way the menu chips sit: a whole one would reach back to
                 // the mark and the row would read as one run of ink.
                 anchors.leftMargin: -Theme.spaceXs / 2
                 anchors.rightMargin: -Theme.spaceXs / 2
-                radius: Theme.radiusSm
-                color: Theme.bgHover
+                wordBaseline: codeLabel.y + codeLabel.baselineOffset
+                size: codeLabel.font.pixelSize
             }
             Label {
                 id: codeLabel

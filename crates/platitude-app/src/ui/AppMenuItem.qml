@@ -568,9 +568,9 @@ MenuItem {
             CodeGround {
                 anchors.left: codeLabel.left
                 anchors.right: codeLabel.right
-                // Height off the glyph size, not the label: the mono line box differs per OS and stands taller than
-                // the UI-family sentence (デザイン規約 §git 用語のコード表記).
-                anchors.verticalCenter: codeLabel.verticalCenter
+                // Height off the glyph size and place off the baseline, not the label: the mono line box differs per
+                // OS and stands taller than the UI-family sentence (デザイン規約 §git 用語のコード表記).
+                wordBaseline: codeLabel.y + codeLabel.baselineOffset
                 size: codeLabel.font.pixelSize
                 // Half a gap, no more: a chip after the hold mark would otherwise reach back against it and the two
                 // would read as one run of ink.
@@ -720,7 +720,7 @@ MenuItem {
                                 ? WordFace.groundEnd(codeFace, menuItem.refShown,
                                                      menuItem.refLead1 + refShown1Code.advanceWidth)
                                 : menuItem.refLead1 + refShown1Code.advanceWidth + Theme.spaceXs / 2) - x
-                        anchors.verticalCenter: parent.verticalCenter
+                        wordBaseline: itemLabel.baselineOffset
                         size: itemLabel.font.pixelSize
                     }
                     CodeGround {
@@ -732,7 +732,7 @@ MenuItem {
                                 ? WordFace.groundEnd(codeFace, menuItem.refShown2,
                                                      menuItem.refLead2 + refShown2Code.advanceWidth)
                                 : menuItem.refLead2 + refShown2Code.advanceWidth + Theme.spaceXs / 2) - x
-                        anchors.verticalCenter: parent.verticalCenter
+                        wordBaseline: itemLabel.baselineOffset
                         size: itemLabel.font.pixelSize
                     }
                     // `refMark`, in the middle of the room the markup opened in front of the name: a sign on the name,

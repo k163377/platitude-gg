@@ -247,6 +247,7 @@ Item {
             word: btnLabel.phraseHead
             tint: btnLabel.tint
             size: btnLabel.fontSize
+            buttonWord: true
             anchors.verticalCenter: parent.verticalCenter
         }
         // Invisible when empty: a `Row` charges a gap for a visible child of no width.
@@ -287,6 +288,7 @@ Item {
             tint: btnLabel.phraseTailTint
             mark: btnLabel.phraseTailMark
             size: btnLabel.fontSize
+            buttonWord: true
             cap: btnLabel.tailCap
             anchors.verticalCenter: parent.verticalCenter
         }
@@ -395,8 +397,10 @@ Item {
         // Off the word's step, not the mono line box, which differs per OS (@14px: Cascadia Mono 16, Noto Sans Mono
         // CJK JP 21; rules-refs/app-ui.md「チップの地の高さは語の段から採る」).
         size: btnLabel.fontSize
-        // The word's middle, not the cell's: a word moved onto a baseline (`headText`) would leave its ground behind.
-        anchors.verticalCenter: headText.verticalCenter
+        // The word's baseline, not the cell's middle: a word moved onto a baseline (`headText`) would leave its ground
+        // behind.
+        wordBaseline: headText.y + headText.baselineOffset
+        buttonWord: true
     }
     // The failure mark, on the right shoulder of the word it is about: past the word's end, its ink half a gap over the
     // word's ground — pulled back wherever that would reach the frame (デザイン規約 §git 用語のコード表記「`!` の席」).

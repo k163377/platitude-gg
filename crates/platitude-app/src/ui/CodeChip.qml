@@ -41,6 +41,8 @@ Item {
     /// field takes the press wherever it is drawn, so the button under it could not be pressed
     /// (`tests/qml/tst_hashplate.qml`). On only where the chip is the value (規約 §設定の画面).
     property bool grabbable: false
+    /// The chip is a button's word (`CodeGround.buttonWord`).
+    property bool buttonWord: false
 
     /// Where a word that will not fit gives way: `middle` — the tail tells two branch names apart — or `end`: a
     /// remote's name, whose head is the remote (デザイン規約 §寸法「upstream 名だけは末尾で切る」), or a line cut at
@@ -75,8 +77,11 @@ Item {
         x: chip.mark !== "" ? 0 : WordFace.groundStart(0)
         width: (chip.mark !== "" ? WordFace.groundEnd(wordFace, chip.shownWord, chip.drawnWidth)
                                  : chip.drawnWidth + Theme.spaceXs / 2) - x
-        anchors.verticalCenter: wordLabel.verticalCenter
+        // The baseline of the word as drawn: the field's where it draws the word (`grabbable`).
+        wordBaseline: wordField.item !== null ? wordField.y + wordField.item.baselineOffset
+                                          : wordLabel.y + wordLabel.baselineOffset
         size: chip.size
+        buttonWord: chip.buttonWord
     }
     /// The word's face, for where its ink ends (`WordFace.groundEnd`).
     FontMetrics {

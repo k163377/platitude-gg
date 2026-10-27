@@ -49,6 +49,19 @@ QtObject {
         font.pixelSize: 1000
         font.weight: Theme.fontWeightStrong
     }
+    /// The code face's letters and digits and the `/` that cuts a name, large: how far a name's ink reaches over its
+    /// baseline and under it (`codeInkShare`). `f`, `j` and `/` the tallest and `y`, `g` and `j` the deepest, by face.
+    readonly property TextMetrics codeInk: TextMetrics {
+        font.family: Theme.monoFamily
+        font.pixelSize: 1000
+        text: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/"
+    }
+    /// How far above the baseline the middle of that ink stands, in shares of the pixel size. Read once here: the
+    /// metrics lay the line out again at every read, and every code ground asks.
+    readonly property real codeInkShare: {
+        const ink = face.codeInk.tightBoundingRect
+        return -(ink.y + ink.height / 2) / 1000
+    }
     /// The window's face large in the same two weights, for where a name set in it starts its ink (`nameAir`).
     readonly property FontMetrics wordLarge: FontMetrics {
         font.family: Theme.uiFamily
@@ -112,6 +125,11 @@ QtObject {
     /// sets its own middle.
     function capitalMiddle(size) {
         return face.capital * size / 2
+    }
+    /// How far above the baseline the middle of the code face's ink stands, at `size` — where a code ground sets its
+    /// own (`CodeGround`).
+    function codeInkMiddle(size) {
+        return face.codeInkShare * size
     }
     /// How far above the baseline the face's `+` has its middle, at `size` — where a sign drawn beside words, a dot
     /// included, sets its own (`DotMark.middle`).

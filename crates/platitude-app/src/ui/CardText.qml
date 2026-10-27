@@ -162,11 +162,12 @@ Item {
              + "<a href=\"" + cardText.placeHref + "\"><font color=\"" + cardText.placeTint + "\">"
              + Words.inked(cardText.place) + "</font></a>" + Words.inked(line.substring(at + cardText.place.length, to))
     }
-    /// Where each name's code ground runs (`CodeGround`), a piece per line the name takes: `{x, y, width}` in this
-    /// part's coordinates, `y` the line's middle. From the head of the mark's room, which holds the mark's air — or
-    /// half a gap before the name where it has none — to half a gap past the name's end (`WordFace.groundStart` /
-    /// `groundEnd`); a piece a wrap ends or starts stands half a gap off the glyphs there. One binding over its inputs,
-    /// since `positionToRectangle` and the marks' items are calls (rules/app-ui.md「メソッドはバインディングが依存を取らない」).
+    /// Where each name's code ground runs (`CodeGround`), a piece per line the name takes: `{x, baseline, width}` in
+    /// this part's coordinates, `baseline` the line's (`baselineAt`). From the head of the mark's room, which holds the
+    /// mark's air — or half a gap before the name where it has none — to half a gap past the name's end
+    /// (`WordFace.groundStart` / `groundEnd`); a piece a wrap ends or starts stands half a gap off the glyphs there.
+    /// One binding over its inputs, since `positionToRectangle` and the marks' items are calls
+    /// (rules/app-ui.md「メソッドはバインディングが依存を取らない」).
     readonly property var codeGrounds: {
         const rooms = cardText.markRooms
         const drawn = lineMarks.count
@@ -197,7 +198,7 @@ Item {
                 const right = sameLine ? next.x : here.x + codeFace.advanceWidth(line.charAt(mark[0] + at - start))
                 const end_ = at + 1 === end && icon
                              ? WordFace.groundEnd(codeFace, line.substr(mark[0], mark[3]), right) : right + half
-                pieces.push({ x: left, y: here.y + here.height / 2, width: end_ - left })
+                pieces.push({ x: left, baseline: cardText.baselineAt(here), width: end_ - left })
                 left = next.x - half
             }
         })
@@ -391,9 +392,10 @@ Item {
         CodeGround {
             required property var modelData
             x: modelData.x
-            y: Math.round(modelData.y - height / 2)
+            wordBaseline: modelData.baseline
             width: modelData.width
             size: cardText.pixelSize
+            linePitch: cardText.lineHeight
         }
     }
     TextEdit {
