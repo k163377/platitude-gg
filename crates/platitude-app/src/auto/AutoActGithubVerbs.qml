@@ -225,19 +225,20 @@ Item {
         onTriggered: {
             const want = choiceTimer.rows[Math.min(choiceTimer.step, choiceTimer.rows.length - 1)]
             const item = graphPane.view.itemAtIndex(want)
-            // A row far down has no delegate until the view is over it: sent there, and pressed on a later tick.
-            if (!item) {
-                Awaited.at("github_choice", "row " + want)
-                graphPane.view.positionViewAtIndex(want, ListView.Contain)
-                return
-            }
             if (choiceTimer.step < choiceTimer.rows.length) {
+                // A row far down has no delegate until the view is over it: sent there, and pressed on a later tick.
+                // The row built is what the press stands on, and the step is grounded on it by name.
+                if (!Awaited.all("github_choice_row_" + want, { "row": item !== null })) {
+                    graphPane.view.positionViewAtIndex(want, ListView.Contain)
+                    return
+                }
                 Awaited.at("github_choice", "press " + choiceTimer.step)
                 item.leftClick(choiceTimer.step === 0 ? Qt.NoModifier : Qt.ControlModifier)
                 choiceTimer.step++
                 return
             }
-            if (!Awaited.all("github_choice", { "chosen": page.chosenCount === 2,
+            if (!Awaited.all("github_choice", { "row": item !== null,
+                                                 "chosen": page.chosenCount === 2,
                                                  "comparing": detailsModel.comparing,
                                                  "page": PageSettled.settled(page) }))
                 return

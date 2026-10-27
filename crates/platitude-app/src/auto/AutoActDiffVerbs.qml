@@ -585,6 +585,7 @@ Item {
             if (line < 0) {
                 // waits(ceiling): the shortfall still reports and fails; this only names it before the watchdog
                 lineRunTimer.waited += lineRunTimer.interval
+                // waits(ceiling): the count above, read against the same ceiling
                 if (lineRunTimer.waited < 5000)
                     return
                 acts.finish(lineRunTimer)

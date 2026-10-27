@@ -1,9 +1,13 @@
 //! Step input identities: a file's object id, except that a Rust or QML
-//! file is identified by what it says once its comments are gone, and a
-//! directory by its entries so identified — Markdown left out of both. A
-//! comment reworded, a doc line added or a blank line moved changes no
-//! key, so the greens stand; a string, a name or a number moved changes
-//! the key, since nothing is read for meaning beyond the comments.
+//! file is identified by its code as the language's lexer cuts it
+//! (`crate::lex::normalized`), and a directory by its entries so
+//! identified — Markdown left out of both. A comment reworded, a doc line
+//! added or a blank line moved between tokens changes no key, so the
+//! greens stand; a literal's every character, a name, a number and a
+//! line end the code may hang a statement on are the key's, since beyond
+//! the lexical layer nothing is read for meaning. The steps keyed on it
+//! are the ones that build or run the app, which no comment reaches
+//! (`plan::owed`); a tool that reads the sources keys on the bytes.
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -114,145 +118,26 @@ fn code_ids_from_batch(batch: &[u8], rust: &[bool]) -> Result<Vec<String>, Strin
     Ok(ids)
 }
 
-/// The id of a file's code: a fingerprint of its text with the comments
-/// out and the blank lines and trailing spaces gone. `code:` so a listing
-/// cannot mistake it for a blob's.
+/// The id of a file's code: a fingerprint of its normalized text
+/// (`crate::lex::normalized`), or of its every byte where the lexical
+/// reading stopped short — no two inputs then share a key. `code:` /
+/// `bytes:` so a listing cannot mistake either for a blob's.
 pub(super) fn code_id(text: &str, rust: bool) -> String {
+    let lang = if rust {
+        crate::lex::Lang::Rust
+    } else {
+        crate::lex::Lang::Qml
+    };
+    let (prefix, keyed) = match crate::lex::normalized(text, lang) {
+        Some(normalized) => ("code", normalized),
+        None => ("bytes", text.to_string()),
+    };
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for line in without_comments(text, rust).lines() {
-        let line = line.trim_end();
-        if line.is_empty() {
-            continue;
-        }
-        for byte in line.bytes().chain(std::iter::once(b'\n')) {
-            hash ^= u64::from(byte);
-            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-        }
+    for byte in keyed.bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }
-    format!("code:{hash:016x}")
-}
-
-/// The text with its comments taken out — `//` to the end of the line,
-/// `/* */` (nested, as Rust allows) — and everything else kept as it is,
-/// strings first of all: `"…"` with its escapes; for Rust (`rust`) its
-/// `r#"…"#`, `b"…"` and char literals; for QML `'…'` and `` `…` ``. A `//`
-/// inside any of those is text, not a comment.
-pub(super) fn without_comments(text: &str, rust: bool) -> String {
-    let chars: Vec<char> = text.chars().collect();
-    let mut out = String::with_capacity(text.len());
-    let mut i = 0;
-    while i < chars.len() {
-        let c = chars[i];
-        let next = chars.get(i + 1).copied();
-        if c == '/' && next == Some('/') {
-            while i < chars.len() && chars[i] != '\n' {
-                i += 1;
-            }
-            continue;
-        }
-        if c == '/' && next == Some('*') {
-            let mut depth = 1;
-            i += 2;
-            while i < chars.len() && depth > 0 {
-                if chars[i] == '/' && chars.get(i + 1) == Some(&'*') {
-                    depth += 1;
-                    i += 2;
-                } else if chars[i] == '*' && chars.get(i + 1) == Some(&'/') {
-                    depth -= 1;
-                    i += 2;
-                } else {
-                    if chars[i] == '\n' {
-                        out.push('\n');
-                    }
-                    i += 1;
-                }
-            }
-            continue;
-        }
-        if let Some(end) = string_end(&chars, i, rust) {
-            out.extend(&chars[i..end]);
-            i = end;
-            continue;
-        }
-        out.push(c);
-        i += 1;
-    }
-    out
-}
-
-/// Where the string starting at `at` ends (one past its closing quote), or
-/// `None` where no string starts there. A raw string `r#"…"#` ends at the
-/// matching hashes; `"…"`, `'…'` and `` `…` `` at their quote, an escaped
-/// one skipped. In Rust a `'` is a char literal only when a quote closes
-/// it within a character or an escape — `'a` of a lifetime opens nothing.
-fn string_end(chars: &[char], at: usize, rust: bool) -> Option<usize> {
-    let c = chars[at];
-    let before = at.checked_sub(1).map(|p| chars[p]);
-    let word_before = before.is_some_and(|b| b.is_alphanumeric() || b == '_');
-    if !rust {
-        return match c {
-            '"' | '\'' | '`' => quoted_end(chars, at, c),
-            _ => None,
-        };
-    }
-    // r"…" / r#"…"# / br"…" / br#"…"#
-    if (c == 'r' || (c == 'b' && chars.get(at + 1) == Some(&'r'))) && !word_before {
-        let mut j = at + if c == 'b' { 2 } else { 1 };
-        let mut hashes = 0;
-        while chars.get(j) == Some(&'#') {
-            hashes += 1;
-            j += 1;
-        }
-        if chars.get(j) == Some(&'"') {
-            j += 1;
-            loop {
-                let quote = chars[j..].iter().position(|ch| *ch == '"')?;
-                j += quote + 1;
-                if chars[j..]
-                    .iter()
-                    .take(hashes)
-                    .filter(|ch| **ch == '#')
-                    .count()
-                    == hashes
-                {
-                    return Some(j + hashes);
-                }
-            }
-        }
-        return None;
-    }
-    if c == 'b' && chars.get(at + 1) == Some(&'"') && !word_before {
-        return quoted_end(chars, at + 1, '"');
-    }
-    if c == '"' {
-        return quoted_end(chars, at, c);
-    }
-    if c == '\'' {
-        // A char literal closes within one character or one escape.
-        return if chars.get(at + 1) == Some(&'\\') {
-            chars[at + 2..]
-                .iter()
-                .position(|ch| *ch == '\'')
-                .map(|p| at + 3 + p)
-        } else if chars.get(at + 2) == Some(&'\'') {
-            Some(at + 3)
-        } else {
-            None
-        };
-    }
-    None
-}
-
-fn quoted_end(chars: &[char], open: usize, quote: char) -> Option<usize> {
-    let mut j = open + 1;
-    while j < chars.len() {
-        match chars[j] {
-            '\\' => j += 2,
-            ch if ch == quote => return Some(j + 1),
-            _ => j += 1,
-        }
-    }
-    None
+    format!("{prefix}:{hash:016x}")
 }
 
 pub(super) fn from_listing(listing: &[u8]) -> BTreeMap<String, String> {
@@ -292,7 +177,7 @@ pub(super) fn from_listing(listing: &[u8]) -> BTreeMap<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{code_id, code_ids_from_batch, from_listing, without_comments};
+    use super::{code_id, code_ids_from_batch, from_listing};
 
     #[test]
     fn directory_inputs_keep_names_modes_and_gitlinks_but_not_markdown() {
@@ -328,41 +213,42 @@ mod tests {
         );
     }
 
+    /// What the key must tell apart: a literal's own blank line or
+    /// trailing space, a `//` that is text, and a line end a statement
+    /// may hang on. What it must not: a comment, and spacing between
+    /// tokens.
     #[test]
-    fn a_slash_pair_inside_a_string_or_char_is_text() {
-        let rust = [
-            "let u = \"https://x\";\n",
-            "let r = r#\"a // b\"#;\n",
-            "let r = r\"a // b\";\n",
-            "let b = b\"a // b\";\n",
-            "let c = '/'; let d = \"//\"; // gone\n",
-            "let e = \"a \\\" // b\";\n",
-        ];
-        let qml = ["x: \"https://x\"\n", "x: 'https://x'\n", "x: `https://x`\n"];
-        for (kept, is_rust) in rust
-            .iter()
-            .map(|k| (*k, true))
-            .chain(qml.iter().map(|k| (*k, false)))
-        {
-            let without = without_comments(kept, is_rust);
-            assert!(without.contains("//"), "{kept:?} -> {without:?}");
-            assert!(!without.contains("gone"), "{kept:?} -> {without:?}");
-            assert!(
-                without.trim_end().ends_with(';')
-                    || without.trim_end().ends_with('`')
-                    || without.trim_end().ends_with('"')
-                    || without.trim_end().ends_with('\''),
-                "{kept:?} -> {without:?}"
-            );
-        }
-        // A lifetime opens no string, so the comment after it goes.
-        let lifetime = "fn f<'a>(x: &'a str) {} // gone\n";
-        assert_eq!(
-            without_comments(lifetime, true),
-            "fn f<'a>(x: &'a str) {} \n"
+    fn a_literals_spacing_and_a_statements_line_end_are_the_code_ids_and_a_comment_is_not() {
+        let one = "let s = r\"a\n\nb\";\n";
+        let other = "let s = r\"a\nb\";\n";
+        assert_ne!(code_id(one, true), code_id(other, true));
+        let spaced = "x: `a \n b`\n";
+        let tight = "x: `a\n b`\n";
+        assert_ne!(code_id(spaced, false), code_id(tight, false));
+        assert_ne!(
+            code_id("let u = \"https://x\";\n", true),
+            code_id("let u = \"https:\";\n", true)
         );
-        // Nested block comments, as Rust reads them.
-        assert_eq!(without_comments("a /* x /* y */ z */ b", true), "a  b");
+        assert_ne!(code_id("return\nx\n", false), code_id("return x\n", false));
+        assert_eq!(code_id("a /* c */ b\n", true), code_id("a   b\n", true));
+        assert_eq!(code_id("a\n\n\nb // c\n", false), code_id("a\nb\n", false));
+    }
+
+    /// A file the reading stops short on is keyed on its bytes: a comment
+    /// moved in it moves the key, and its key says so.
+    #[test]
+    fn a_file_read_short_is_keyed_on_its_bytes() {
+        let open = "Item {\n    text: `a ${ b\n}\n";
+        assert!(
+            code_id(open, false).starts_with("bytes:"),
+            "{}",
+            code_id(open, false)
+        );
+        assert_ne!(
+            code_id(open, false),
+            code_id("// c\nItem {\n    text: `a ${ b\n}\n", false)
+        );
+        assert!(code_id("Item {}\n", false).starts_with("code:"));
     }
 
     #[test]

@@ -8,8 +8,9 @@
 //! The app's harness has no runner: its beats all come from the one type
 //! that names the cadence, and the run's own clock is its budget, the way
 //! `crate::wait` is this runner's. What is named is a span of time a file
-//! spelled for itself ([`SPANS`]) and a count of milliseconds it keeps
-//! ([`keeps_a_count`]).
+//! spelled for itself ([`SPANS`]), a count of milliseconds it keeps
+//! ([`keeps_a_count`]), frames it counts for itself ([`counts_frames`])
+//! and a count of its own beats held against a number ([`beats`]).
 
 use super::source::{self, Lang, has_token, line_of};
 use super::{Candidate, Exception, Finding};
@@ -43,6 +44,18 @@ pub(super) fn scan(file: &str, text: &str, kind: Kind) -> (Vec<Finding>, Vec<Exc
     let code = source::code_view(text, Lang::Qml);
     let chars: Vec<char> = code.chars().collect();
     let mut candidates = Vec::new();
+    // What the lexical reading could not settle is not passed: the rest of the file is unread, and said so.
+    if let Some((line, _)) = source::unread(text, Lang::Qml) {
+        candidates.push(Candidate {
+            first: line,
+            last: line,
+            shown: line,
+            rule: "unread",
+        });
+    }
+    if kind == Kind::Harness {
+        candidates.extend(beats(file, &code));
+    }
     for (at, line) in code.lines().enumerate() {
         let number = at + 1;
         let mut named = |rule| {
@@ -62,6 +75,9 @@ pub(super) fn scan(file: &str, text: &str, kind: Kind) -> (Vec<Finding>, Vec<Exc
             }
             if keeps_a_count(line) {
                 named("elapsed");
+            }
+            if counts_frames(file, line) {
+                named("frames");
             }
         }
     }
@@ -134,6 +150,396 @@ fn keeps_a_count(line: &str) -> bool {
         .is_some_and(|(_, added)| has_token(added, "interval"))
 }
 
+/// The files that count the window's frames for everyone else: the one
+/// render boundary a wait on a layout reads is `Awaited.still` /
+/// `Awaited.drawnSince`, fed by `WindowHarness`; the shot driver reads
+/// frames for the ceiling's line, and the perf drivers measure them.
+const FRAME_KEEPERS: [&str; 5] = [
+    "Awaited.qml",
+    "WindowHarness.qml",
+    "AutoShotDriver.qml",
+    "PagePerfDriver.qml",
+    "WindowPerfDriver.qml",
+];
+
+/// Whether `line` counts frames of its own — `frameSwapped`,
+/// `framesSwapped` or the window's `frameCounter` — outside the files
+/// that keep the count for everyone: a wait "two frames from here" written
+/// again, in place of `Awaited.drawnSince`.
+fn counts_frames(file: &str, line: &str) -> bool {
+    let name = file.rsplit(['/', '\\']).next().unwrap_or(file);
+    !FRAME_KEEPERS.contains(&name)
+        && ["frameSwapped", "framesSwapped", "frameCounter"]
+            .iter()
+            .any(|word| has_token(line, word))
+}
+
+/// The beat counts of a harness file held against a number, as
+/// candidates: a wait of "so many beats from here", which is the
+/// sampler's interval times a count — a clock.
+///
+/// What is read, and what is guaranteed: a count is a name an
+/// `onTriggered:` handler steps anywhere in its body — `x++`, `++x`,
+/// `x--`, `x += …`, `x -= …`, `x = x + …`, `x = x - …`, under any guard,
+/// with or without a `;` — that is neither a `let` / `const` / `var` of
+/// the handler's own (a local does not outlive the beat, so it counts
+/// nothing across beats; a `for` index is one) nor a stage's step: one
+/// inside a block an `if` on that same name selects, with a named wait
+/// read in that block before it (`Awaited.all` / `still` / `drawnSince`,
+/// the one way a stage asks the product — `if (x === 1) { if
+/// (!Awaited.all(…)) return; x++ }`). A block its counter's value alone
+/// selects, stepped on nothing the product answered, counts firings:
+/// `if (x === 0) { x++ }` is one. A name is the whole `.`-joined path,
+/// so `a.step` is not `b.step`; a bare name is the same property as a
+/// qualified one ending in it. Such a count held with `<`, `>`, `<=`,
+/// `>=`, `===`, `!==`, `==` or `!=` against a number other than zero,
+/// anywhere in the file, is named at that line — whatever the comparison
+/// then decides, since a count of beats is a reading of the clock
+/// wherever it is read. Held against another value (the beat it was
+/// asked in, `asked !== beats - 1`) it is a reading of order, not time,
+/// and zero is "none yet", an edge, not a count. A handler whose braces
+/// never close is not read, and is named as such (`unread`): what cannot
+/// be read is not passed. The files that keep frames for everyone
+/// ([`FRAME_KEEPERS`]) are not read for beats either.
+fn beats(file: &str, code: &str) -> Vec<Candidate> {
+    let name = file.rsplit(['/', '\\']).next().unwrap_or(file);
+    if FRAME_KEEPERS.contains(&name) {
+        return Vec::new();
+    }
+    let tokens = crate::lex::tokens(code);
+    let mut counters: Vec<String> = Vec::new();
+    let mut candidates = Vec::new();
+    for (open, close) in handlers(&tokens) {
+        let Some(close) = close else {
+            candidates.push(Candidate {
+                first: tokens[open].line,
+                last: tokens[open].line,
+                shown: tokens[open].line,
+                rule: "unread",
+            });
+            continue;
+        };
+        let body = &tokens[open..close];
+        let locals = declared_in(body);
+        for stepped in stepped_in(body) {
+            if !locals.contains(&stepped) && !counters.contains(&stepped) {
+                counters.push(stepped);
+            }
+        }
+    }
+    for line in compared_with_a_number(&tokens, &counters) {
+        if candidates
+            .iter()
+            .any(|c| c.first == line && c.rule == "beats")
+        {
+            continue;
+        }
+        candidates.push(Candidate {
+            first: line,
+            last: line,
+            shown: line,
+            rule: "beats",
+        });
+    }
+    candidates
+}
+
+/// Each `onTriggered:` handler of `tokens`, as the index of its first
+/// token and one past its last: a braced body to its matching brace (or
+/// `None` where that brace never comes), a bare expression to the end of
+/// its line.
+fn handlers(tokens: &[crate::lex::Token]) -> Vec<(usize, Option<usize>)> {
+    let mut out = Vec::new();
+    for (at, token) in tokens.iter().enumerate() {
+        if token.text != "onTriggered" || tokens.get(at + 1).is_none_or(|t| t.text != ":") {
+            continue;
+        }
+        let first = at + 2;
+        if tokens.get(first).is_some_and(|t| t.text == "{") {
+            let mut depth = 0;
+            let mut close = None;
+            for (i, t) in tokens.iter().enumerate().skip(first) {
+                match t.text.as_str() {
+                    "{" => depth += 1,
+                    "}" => {
+                        depth -= 1;
+                        if depth == 0 {
+                            close = Some(i + 1);
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            out.push((first, close));
+        } else {
+            let line = token.line;
+            let end = tokens[first..]
+                .iter()
+                .position(|t| t.line != line)
+                .map_or(tokens.len(), |n| first + n);
+            out.push((first, Some(end)));
+        }
+    }
+    out
+}
+
+/// The names a `let` / `const` / `var` of `body` declares, a
+/// destructuring's names among them.
+fn declared_in(body: &[crate::lex::Token]) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < body.len() {
+        if matches!(body[i].text.as_str(), "let" | "const" | "var") {
+            i += 1;
+            while i < body.len() {
+                let text = body[i].text.as_str();
+                if is_name(text) && !matches!(text, "of" | "in") {
+                    out.push(text.to_string());
+                } else if !matches!(text, "," | "[" | "]" | "{" | "}" | ":") {
+                    break;
+                }
+                i += 1;
+            }
+            continue;
+        }
+        i += 1;
+    }
+    out
+}
+
+fn is_name(text: &str) -> bool {
+    text.chars()
+        .next()
+        .is_some_and(|c| c.is_alphabetic() || c == '_' || c == '$')
+}
+
+/// The `.`-joined name ending at `last`, with the index of its first
+/// token, if a name ends there.
+fn name_ending_at(tokens: &[crate::lex::Token], last: usize) -> Option<(String, usize)> {
+    if !tokens.get(last).is_some_and(|t| is_name(&t.text)) {
+        return None;
+    }
+    let mut first = last;
+    while first >= 2 && tokens[first - 1].text == "." && is_name(&tokens[first - 2].text) {
+        first -= 2;
+    }
+    Some((joined(&tokens[first..=last]), first))
+}
+
+/// The `.`-joined name beginning at `first`, with the index past it, if
+/// a name begins there.
+fn name_beginning_at(tokens: &[crate::lex::Token], first: usize) -> Option<(String, usize)> {
+    if !tokens.get(first).is_some_and(|t| is_name(&t.text)) {
+        return None;
+    }
+    let mut last = first;
+    while tokens.get(last + 1).is_some_and(|t| t.text == ".")
+        && tokens.get(last + 2).is_some_and(|t| is_name(&t.text))
+    {
+        last += 2;
+    }
+    Some((joined(&tokens[first..=last]), last + 1))
+}
+
+fn joined(tokens: &[crate::lex::Token]) -> String {
+    tokens.iter().map(|t| t.text.as_str()).collect()
+}
+
+/// Whether two names are one property: the same path, or a bare name
+/// and a qualified one ending in it.
+fn same_property(a: &str, b: &str) -> bool {
+    let last = |name: &str| name.rsplit('.').next().unwrap_or(name).to_string();
+    a == b || (!a.contains('.') && a == last(b)) || (!b.contains('.') && b == last(a))
+}
+
+/// The names `body` steps as counts: each stepped outside every block an
+/// `if` on that name selects.
+fn stepped_in(body: &[crate::lex::Token]) -> Vec<String> {
+    let mut out = Vec::new();
+    for (i, token) in body.iter().enumerate() {
+        let stepped = match token.text.as_str() {
+            "++" | "--" => name_ending_at(body, i.wrapping_sub(1))
+                .map(|(name, _)| name)
+                .or_else(|| name_beginning_at(body, i + 1).map(|(name, _)| name)),
+            "+=" | "-=" => name_ending_at(body, i.wrapping_sub(1)).map(|(name, _)| name),
+            "=" => {
+                // `x = x + …` / `a.x = a.x - …`: the same name on both sides, then a `+` or `-`.
+                let Some((left, _)) = name_ending_at(body, i.wrapping_sub(1)) else {
+                    continue;
+                };
+                let Some((right, after)) = name_beginning_at(body, i + 1) else {
+                    continue;
+                };
+                let stepped = body
+                    .get(after)
+                    .is_some_and(|t| matches!(t.text.as_str(), "+" | "-"));
+                (left == right && stepped).then_some(right)
+            }
+            _ => None,
+        };
+        if let Some(name) = stepped
+            && !stage_step(body, i, &name)
+            && !out.contains(&name)
+        {
+            out.push(name);
+        }
+    }
+    out
+}
+
+/// Whether the step at `at` is a stage's: inside a block an `if` on `name`
+/// (or the `if` chain its `else` continues) selects, with a named wait
+/// read in that block before it — `Awaited.all`, `still` or `drawnSince`,
+/// the one way a stage asks the product, whose terms are what it answered.
+/// A block its counter's value alone selects, stepped on nothing the
+/// product answered, counts firings.
+fn stage_step(body: &[crate::lex::Token], at: usize, name: &str) -> bool {
+    let Some(open) = selecting_block(body, at, name) else {
+        return false;
+    };
+    (open + 1..at).any(|i| {
+        body[i].text == "Awaited"
+            && body.get(i + 1).is_some_and(|t| t.text == ".")
+            && body
+                .get(i + 2)
+                .is_some_and(|t| matches!(t.text.as_str(), "all" | "still" | "drawnSince"))
+            && body.get(i + 3).is_some_and(|t| t.text == "(")
+    })
+}
+
+/// The `{` of the innermost block around `at` whose `if` (or the `if`
+/// chain its `else` continues) reads `name` in its condition.
+fn selecting_block(body: &[crate::lex::Token], at: usize, name: &str) -> Option<usize> {
+    let mut depth = 0;
+    let mut i = at;
+    while i > 0 {
+        i -= 1;
+        match body[i].text.as_str() {
+            "}" => depth += 1,
+            "{" if depth > 0 => depth -= 1,
+            "{" if condition_reads(body, i, name) => return Some(i),
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Whether the block opening at `open` is selected by an `if` whose
+/// condition reads `name` — directly, or through the `else` chain it
+/// hangs on.
+fn condition_reads(body: &[crate::lex::Token], open: usize, name: &str) -> bool {
+    let mut before = open;
+    loop {
+        if before == 0 {
+            return false;
+        }
+        before -= 1;
+        match body[before].text.as_str() {
+            ")" => {
+                let Some(open_paren) = matching_paren(body, before) else {
+                    return false;
+                };
+                if open_paren == 0 || body[open_paren - 1].text != "if" {
+                    return false;
+                }
+                if body[open_paren + 1..before]
+                    .iter()
+                    .enumerate()
+                    .any(|(k, t)| {
+                        is_name(&t.text)
+                            && name_ending_at(body, open_paren + 1 + k)
+                                .is_some_and(|(read, _)| same_property(&read, name))
+                    })
+                {
+                    return true;
+                }
+                // `else if (…)`: the chain above may select on the name too — read on from the `if`, so the
+                // next step back lands on the `else`.
+                if open_paren >= 2 && body[open_paren - 2].text == "else" {
+                    before = open_paren - 1;
+                    continue;
+                }
+                return false;
+            }
+            "else" => {
+                // `} else {`: back over the block before it to its own `if`.
+                if before == 0 || body[before - 1].text != "}" {
+                    return false;
+                }
+                let mut depth = 0;
+                let mut j = before - 1;
+                loop {
+                    match body[j].text.as_str() {
+                        "}" => depth += 1,
+                        "{" => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    if j == 0 {
+                        return false;
+                    }
+                    j -= 1;
+                }
+                return condition_reads(body, j, name);
+            }
+            _ => return false,
+        }
+    }
+}
+
+/// The `(` matching the `)` at `close`.
+fn matching_paren(body: &[crate::lex::Token], close: usize) -> Option<usize> {
+    let mut depth = 0;
+    let mut i = close;
+    loop {
+        match body[i].text.as_str() {
+            ")" => depth += 1,
+            "(" => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+        if i == 0 {
+            return None;
+        }
+        i -= 1;
+    }
+}
+
+/// The lines on which one of `counters` is held against a number other
+/// than zero.
+fn compared_with_a_number(tokens: &[crate::lex::Token], counters: &[String]) -> Vec<usize> {
+    const OPERATORS: [&str; 8] = ["===", "!==", "==", "!=", "<=", ">=", "<", ">"];
+    let a_count =
+        |text: &str| text.chars().all(|c| c.is_ascii_digit()) && text.chars().any(|c| c != '0');
+    let counted =
+        |name: Option<String>| name.is_some_and(|n| counters.iter().any(|c| same_property(c, &n)));
+    let mut lines = Vec::new();
+    for (i, token) in tokens.iter().enumerate() {
+        if !OPERATORS.contains(&token.text.as_str()) {
+            continue;
+        }
+        let left_name = name_ending_at(tokens, i.wrapping_sub(1)).map(|(name, _)| name);
+        let right = name_beginning_at(tokens, i + 1).map(|(name, _)| name);
+        let left_number = i.checked_sub(1).is_some_and(|j| a_count(&tokens[j].text));
+        let right_number = tokens.get(i + 1).is_some_and(|t| a_count(&t.text));
+        if ((counted(left_name) && right_number) || (counted(right) && left_number))
+            && !lines.contains(&token.line)
+        {
+            lines.push(token.line);
+        }
+    }
+    lines
+}
+
 /// One call of a name looked for, read off the whole code view rather
 /// than one line, since a call may wrap across lines.
 struct Call {
@@ -183,7 +589,7 @@ fn opens_a_statement(chars: &[char], at: usize) -> bool {
         return true;
     };
     matches!(chars[before], ';' | '{' | '}')
-        || (chars[before + 1..at].contains(&'\n') && !source::opens_a_value(chars, at))
+        || (chars[before + 1..at].contains(&'\n') && !crate::lex::opens_a_value(chars, at))
 }
 
 /// Every call of `name` in the code view. A call that is never closed is
@@ -430,5 +836,220 @@ Timer {
         let (findings, exceptions) = scan("WindowActs.qml", text, Kind::Harness);
         assert!(findings.is_empty(), "{findings:?}");
         assert_eq!(exceptions.len(), 1);
+    }
+
+    /// A verb counting the window's frames for itself is a wait of "two
+    /// frames from here" written again; the count lives in `Awaited`.
+    #[test]
+    fn a_frame_count_of_a_verbs_own_is_named_and_the_keepers_are_not() {
+        let text = "\
+Item {
+    property int framesSwapped: 0
+    function laid() { return acts.framesSwapped >= wanted }
+    function drawn() { return window.frameCounter > before }
+}
+";
+        assert_eq!(
+            harness(text),
+            vec![(2, "frames"), (3, "frames"), (4, "frames")]
+        );
+        for keeper in ["Awaited.qml", "WindowHarness.qml", "AutoShotDriver.qml"] {
+            let (findings, _) = scan(&format!("src/auto/{keeper}"), text, Kind::Harness);
+            assert!(findings.is_empty(), "{keeper}: {findings:?}");
+        }
+    }
+
+    /// A count that goes up once per beat, held against a number, is a
+    /// wait of "so many beats from here"; the same count held against
+    /// the beat it was asked in is a reading of order, and a count of
+    /// presses made is no beat at all.
+    #[test]
+    fn a_beat_count_held_against_a_number_is_named() {
+        let text = "\
+SampleTimer {
+    onTriggered: {
+        acts.beats++
+        if (acts.beats < 3)
+            return
+        if (acts.asked !== acts.beats - 1)
+            stop()
+        if (2 <= acts.beats || acts.beats === 0)
+            acts.read()
+    }
+    function pressed() { item.click(); acts.presses++; return acts.presses < 2 }
+}
+";
+        assert_eq!(harness(text), vec![(4, "beats"), (8, "beats")]);
+    }
+
+    /// The count is read by what it is, not by where it stands or how it
+    /// is punctuated: behind a guard, with a `;`, as `+= 1` or `x = x + 1`,
+    /// in a bare handler, and held against the number in a function of
+    /// the file's own.
+    #[test]
+    fn a_beat_count_is_a_count_however_it_is_spelled_and_wherever_it_is_read() {
+        let guarded = "\
+SampleTimer {
+    onTriggered: {
+        if (!acts.ready)
+            return;
+        acts.beats++;
+        if (acts.beats >= 3) acts.read()
+    }
+}
+";
+        assert_eq!(harness(guarded), vec![(6, "beats")]);
+        let added = "\
+SampleTimer {
+    onTriggered: {
+        acts.ticks += 1
+        acts.turns = acts.turns + 1
+    }
+    function laid() { return acts.ticks > 2 && 4 !== acts.turns }
+}
+";
+        assert_eq!(harness(added), vec![(6, "beats")]);
+        let bare =
+            "SampleTimer { onTriggered: acts.beats++ }\nfunction f() { return acts.beats === 2 }\n";
+        assert_eq!(harness(bare), vec![(2, "beats")]);
+    }
+
+    /// A local of the handler's own does not outlive the beat; a count
+    /// stepped outside a handler is no beat; and a handler that never
+    /// closes is named, not passed.
+    #[test]
+    fn a_handlers_local_counts_nothing_and_an_unclosed_handler_is_named() {
+        let local = "\
+SampleTimer {
+    onTriggered: {
+        for (let i = 0; i < 320; i++)
+            acts.probe(i)
+        const [n, m] = acts.pair()
+        if (n === 150)
+            acts.read()
+    }
+}
+";
+        assert_eq!(harness(local), vec![]);
+        let elsewhere = "\
+Item {
+    function pressed() { acts.presses++ }
+    SampleTimer { onTriggered: { if (acts.presses < 2) return } }
+}
+";
+        assert_eq!(harness(elsewhere), vec![]);
+        let unclosed = "\
+SampleTimer {
+    onTriggered: {
+        acts.beats++
+        if (acts.beats < 3)
+            return
+";
+        assert_eq!(harness(unclosed), vec![(2, "unread")]);
+    }
+
+    /// A stage counter advances inside the block its own value selects,
+    /// on what the product answered there by name: no beat. And one
+    /// object's `step` is not another's.
+    #[test]
+    fn a_stage_counter_and_another_objects_count_are_no_beats() {
+        let stages = "\
+SampleTimer {
+    onTriggered: {
+        if (acts.step === 0) {
+            if (!Awaited.all(\"row\", { \"row\": item !== null }))
+                return
+            item.click()
+            acts.step++
+            return
+        } else if (acts.step === 1) {
+            if (!Awaited.all(\"card\", { \"card\": card.opened }))
+                return
+            acts.step += 1
+        } else {
+            if (!Awaited.still(\"laid\", card.y))
+                return;
+            acts.step = acts.step + 1
+        }
+        if (acts.step === 3)
+            acts.finish()
+    }
+}
+";
+        assert_eq!(harness(stages), vec![]);
+        let siblings = "\
+Item {
+    SampleTimer { onTriggered: { pressTimer.tries++ } }
+    SampleTimer { onTriggered: { if (fileTimer.tries === 1) acts.read() } }
+    function laid() { return pressTimer.tries > 2 }
+}
+";
+        assert_eq!(harness(siblings), vec![(4, "beats")]);
+    }
+
+    /// A counter stepped on its own value alone counts firings, however
+    /// the chain is laid out, and a guard on the counter grounds nothing.
+    #[test]
+    fn a_counter_stepped_on_its_own_value_alone_counts_firings() {
+        let chain = "\
+SampleTimer {
+    onTriggered: {
+        if (acts.step === 0) { acts.step++; return }
+        else if (acts.step === 1) { acts.step++; return }
+        if (acts.step === 2) acts.finish()
+    }
+}
+";
+        assert_eq!(
+            harness(chain),
+            vec![(4, "beats"), (5, "beats")],
+            "zero is an edge, not a count"
+        );
+        let spread = "\
+SampleTimer {
+    onTriggered: {
+        if (acts.step === 0) {
+            acts.step++;
+            return;
+        }
+        else if (acts.step === 1)
+        {
+            if (acts.step > 5) return
+            acts.step += 1
+        }
+        if (acts.step === 2)
+            acts.finish()
+    }
+}
+";
+        assert_eq!(harness(spread).len(), 3, "{:?}", harness(spread));
+    }
+
+    /// A chain's later branch is selected by the counter through the
+    /// `else` it hangs on, whatever its own condition reads.
+    #[test]
+    fn a_stage_in_a_chains_later_branch_is_selected_through_the_else() {
+        let chain = "\
+SampleTimer {
+    onTriggered: {
+        if (acts.step === 0) {
+            if (!Awaited.all(\"row\", { \"row\": item !== null }))
+                return
+            acts.step++
+        } else if (!card.opened) {
+            if (!Awaited.all(\"card\", { \"card\": card.asked }))
+                return
+            acts.step++
+        } else {
+            if (!Awaited.still(\"laid\", card.y))
+                return
+            acts.step++
+        }
+        if (acts.step === 3)
+            acts.finish()
+    }
+}
+";
+        assert_eq!(harness(chain), vec![]);
     }
 }

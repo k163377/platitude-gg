@@ -6,7 +6,7 @@
 //! suites with their support modules, the `#[cfg(test)]` blocks (a
 //! `mod`, a `fn` or an `impl`) and `*_tests.rs` files of every crate,
 //! the QtTest files, and the app's own automation harness — and what it
-//! names is four shapes (.claude/rules/core.md §非同期・並行テスト):
+//! names is five shapes (.claude/rules/core.md §非同期・並行テスト):
 //!
 //! - `sleep`: a sleep or a `yield_now` spent in place of an answer.
 //! - `deadline`: a clock read, or a `timeout` given a budget of its own.
@@ -14,6 +14,10 @@
 //! - `naked`: a tracked completion (`outcome()`), a session boundary
 //!   (`wait_for_graph_passes`, `wait_for_snapshot_reads`) or a
 //!   hand-stepped tick awaited with no backstop under it.
+//! - `unread`: a file whose lexical reading stopped short — a literal, a
+//!   comment or a template's `${…}` left open, a `/` that reads two ways
+//!   (`crate::lex::Unread`) — named at the place: what stands past it was
+//!   not read, and is not passed as read.
 //!
 //! Of this runner's own crate it reads the tool bodies too, and names a
 //! `sleep` (in the code or in a PowerShell script the code writes) or a

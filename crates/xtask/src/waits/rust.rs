@@ -193,6 +193,15 @@ pub(super) fn scan(file: &str, text: &str, scope: Scope) -> Scanned {
         .unwrap_or_default();
     let (mut test_statements, mut body_statements) = (0, 0);
     let mut candidates = Vec::new();
+    // What the lexical reading could not settle is not passed: the rest of the file is unread, and said so.
+    if let Some((line, _)) = source::unread(text, Lang::Rust) {
+        candidates.push(Candidate {
+            first: line,
+            last: line,
+            shown: line,
+            rule: "unread",
+        });
+    }
     for s in statements(&code, said.as_deref().unwrap_or(&code)) {
         let of_tests = scope == Scope::Whole || regions.iter().any(|r| r.contains(&s.first));
         let named = if of_tests {

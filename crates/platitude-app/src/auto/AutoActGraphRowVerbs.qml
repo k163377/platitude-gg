@@ -247,7 +247,8 @@ Item {
                 const want = chooseTimer.rows[chooseTimer.step]
                 const item = graphPane.view.itemAtIndex(want)
                 // A row far down has no delegate until the view is over it: sent there, and pressed on a later tick.
-                if (!item) {
+                // The row built is what the press stands on, and the step is grounded on it by name.
+                if (!Awaited.all("graph_choose_row_" + want, { "row": item !== null })) {
                     graphPane.view.positionViewAtIndex(want, ListView.Contain)
                     return
                 }

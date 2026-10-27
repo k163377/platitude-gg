@@ -509,10 +509,23 @@ fn tree_ids(here: &str, rev: &str) -> Result<TreeIds, String> {
     // sources key on the whole file.
     let whole = parse_ls_tree(&output.stdout);
     let listing = super::inputs::with_code_ids(here, &output.stdout)?;
-    Ok(TreeIds {
-        whole,
-        code: parse_ls_tree(&listing),
-    })
+    let code = parse_ls_tree(&listing);
+    // A file the lexical reading stopped short on is keyed on its bytes
+    // (`inputs::code_id`), and said: a key that moves on every edit of it
+    // is then no mystery.
+    let read_short: Vec<&str> = code
+        .iter()
+        .filter(|(_, id)| id.starts_with("bytes:"))
+        .map(|(path, _)| path.as_str())
+        .collect();
+    if !read_short.is_empty() {
+        println!(
+            "gate: {} file(s) read short, keyed on their bytes: {}",
+            read_short.len(),
+            read_short.join(" ")
+        );
+    }
+    Ok(TreeIds { whole, code })
 }
 
 /// `ls-tree -z`: `<mode> <type> <id>\t<path>` per entry, NUL after each
@@ -730,10 +743,6 @@ struct Counted {
     left: usize,
 }
 
-/// Product components in the reach that stand in the item tree and no
-/// registered line shows — not as themselves, and not through a wearer
-/// (a component worn as another's root is composed by the wearer,
-/// `shown::Composition`).
 /// The product components the change reaches that no registered line
 /// promises to show (`Lines::promised`): a green of every line is
 /// evidence of none of them. What a line's run brings up by composition

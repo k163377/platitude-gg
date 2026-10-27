@@ -1,10 +1,12 @@
 //! A source file as the scanner reads it: the code with its comments and
-//! string literals blanked out, the `#[cfg(test)]` regions of a Rust
-//! file, and the markers that let a timed wait stand.
+//! string literals blanked out (`crate::lex` says where they are), the
+//! `#[cfg(test)]` regions of a Rust file, and the markers that let a timed
+//! wait stand.
 
 use std::ops::RangeInclusive;
 
 use super::{Candidate, Exception, Finding};
+use crate::lex::word_before;
 
 /// Why a timed wait is allowed to stand, as its marker names it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -89,73 +91,36 @@ fn parse_marker(rest: &str) -> Result<Purpose, String> {
     Ok(purpose)
 }
 
-pub(super) use crate::lex::{Lang, opens_a_value};
-use crate::lex::{
-    block_comment_len, char_literal_len, line_comment_len, quoted_len, raw_string_len, regex_len,
-    word_before,
-};
+pub(super) use crate::lex::Lang;
 
 /// `text` with every comment and literal (strings, Rust chars and raw
-/// strings, QML regular expressions — [`regex_len`]) replaced by spaces,
-/// line for line; a lifetime's `'` is kept.
+/// strings, QML regular expressions and a template's text — `crate::lex`)
+/// replaced by spaces, line for line; a lifetime's `'` is kept, and so is
+/// the code inside a template's `${…}`. Where the reading stopped short,
+/// the view is blank from there, and [`unread`] says so.
 pub(super) fn code_view(text: &str, lang: Lang) -> String {
-    view(text, lang, false)
+    view(text, lang, false).0
 }
 
 /// `text` with its comments blanked and its strings kept, character for
 /// character beside [`code_view`].
 pub(super) fn strings_view(text: &str, lang: Lang) -> String {
-    view(text, lang, true)
+    view(text, lang, true).0
 }
 
-fn view(text: &str, lang: Lang, keep_strings: bool) -> String {
+/// Where the lexical reading of `text` stopped, as the line it stopped on
+/// and why — a literal, a comment or a template's expression left open, a
+/// `/` that reads two ways (`crate::lex::Unread`). What stands past it is
+/// not read, and a scan names it rather than passing it.
+pub(super) fn unread(text: &str, lang: Lang) -> Option<(usize, &'static str)> {
     let chars: Vec<char> = text.chars().collect();
-    let mut out = String::with_capacity(text.len());
-    let mut i = 0;
-    while i < chars.len() {
-        let c = chars[i];
-        let next = chars.get(i + 1).copied();
-        let comment = c == '/' && matches!(next, Some('/' | '*'));
-        let skipped = if c == '/' && next == Some('/') {
-            line_comment_len(&chars, i)
-        } else if c == '/' && next == Some('*') {
-            block_comment_len(&chars, i, lang)
-        } else if lang == Lang::Qml && c == '/' {
-            regex_len(&chars, i)
-        } else if c == '"' || (lang == Lang::Qml && matches!(c, '\'' | '`')) {
-            quoted_len(&chars, i, c)
-        } else if lang == Lang::Rust && c == 'r' && !word_before(&chars, i) {
-            raw_string_len(&chars, i)
-        } else if lang == Lang::Rust
-            && matches!(c, 'b' | 'c')
-            && next == Some('r')
-            && !word_before(&chars, i)
-        {
-            // `br"…"` / `cr"…"`: the raw string under its byte or C prefix.
-            match raw_string_len(&chars, i + 1) {
-                0 => 0,
-                raw => raw + 1,
-            }
-        } else if lang == Lang::Rust && c == '\'' {
-            char_literal_len(&chars, i)
-        } else {
-            0
-        };
-        if skipped == 0 {
-            out.push(c);
-            i += 1;
-            continue;
-        }
-        if comment || !keep_strings {
-            for blanked in &chars[i..i + skipped] {
-                out.push(if *blanked == '\n' { '\n' } else { ' ' });
-            }
-        } else {
-            out.extend(&chars[i..i + skipped]);
-        }
-        i += skipped;
-    }
-    out
+    crate::lex::lexemes(&chars, lang)
+        .1
+        .map(|u| (line_of(&chars, u.at), u.what))
+}
+
+fn view(text: &str, lang: Lang, keep_strings: bool) -> (String, Option<crate::lex::Unread>) {
+    crate::lex::blanked(text, lang, keep_strings)
 }
 
 /// The line ranges of a Rust file's `#[cfg(test)]` blocks — a `mod`, a

@@ -26,7 +26,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use super::graph::{collect, stem_of, strip_comments};
+use super::graph::{collect, stem_of};
 
 /// The Qt types a component's root chain ends in when it stands only
 /// while open.
@@ -91,7 +91,9 @@ impl Composition {
         let mut components = BTreeMap::new();
         let mut stripped = BTreeMap::new();
         for (file, text) in sources {
-            let code = blank_quoted(&strip_comments(text));
+            // Comments and literals blanked, line for line; a QML string can hold a brace that would throw the
+            // frames off (`crate::lex`).
+            let code = crate::lex::blanked(text, crate::lex::Lang::Qml, false).0;
             let module = if file.contains("/auto/") {
                 Module::Harness
             } else {
@@ -465,47 +467,6 @@ fn loader_binds_active(bytes: &[u8], from: usize) -> bool {
         k += 1;
     }
     false
-}
-
-/// The bodies of single-quoted and template strings blanked, keeping the
-/// line count: `strip_comments` knows Rust's strings, and a QML string
-/// in `'…'` or `` `…` `` can hold a brace that would throw the frames
-/// off. A tick with no closing one on its line is left as it is.
-fn blank_quoted(code: &str) -> String {
-    let bytes = code.as_bytes();
-    let mut out = code.to_string().into_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        let quote = bytes[i];
-        if quote != b'\'' && quote != b'`' {
-            i += 1;
-            continue;
-        }
-        let mut j = i + 1;
-        let mut closed = None;
-        while j < bytes.len() {
-            match bytes[j] {
-                b'\\' => j += 2,
-                b'\n' if quote == b'\'' => break,
-                b if b == quote => {
-                    closed = Some(j);
-                    break;
-                }
-                _ => j += 1,
-            }
-        }
-        let Some(end) = closed else {
-            i += 1;
-            continue;
-        };
-        for b in &mut out[i + 1..end] {
-            if *b != b'\n' {
-                *b = b' ';
-            }
-        }
-        i = end + 1;
-    }
-    String::from_utf8(out).unwrap_or_else(|_| code.to_string())
 }
 
 /// The components a file loads by URL: every `"Name.qml"` in it.

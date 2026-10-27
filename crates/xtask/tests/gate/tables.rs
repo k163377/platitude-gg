@@ -125,11 +125,47 @@ fn a_comment_moved_in_the_harness_keeps_every_lines_green() {
     sb.write(
         &sb.seat,
         "crates/platitude-app/src/auto/Driver.qml",
-        "// The harness's one driver, said in a comment.\nItem { width: 1 }\n",
+        "// The harness's one driver, said in a comment.\nItem { width: 1; text: \"a  b\" }\n",
     );
     sb.commit_all(&sb.seat, "feat(app): the driver widens", &[]);
     sb.gate_ok(&sb.seat, &[]);
     assert!(sb.ran().contains("verify stash --preset basic"));
+    // Spacing between tokens is no part of the code; spacing inside a literal is the literal's.
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/auto/Driver.qml",
+        "// The harness's one driver, said in a comment.\n\nItem {   width: 1;   text: \"a  b\" }   \n",
+    );
+    sb.commit_all(&sb.seat, "style(app): the driver spaced out", &[]);
+    let text = sb.gate_ok(&sb.seat, &[]);
+    assert!(
+        text.contains("cached verify stash --preset basic"),
+        "{text}"
+    );
+    assert!(!sb.ran().contains("verify stash --preset basic"));
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/auto/Driver.qml",
+        "// The harness's one driver, said in a comment.\n\nItem {   width: 1;   text: \"a b\" }   \n",
+    );
+    sb.commit_all(&sb.seat, "fix(app): the driver's text", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    assert!(sb.ran().contains("verify stash --preset basic"));
+    // The same for a Rust file the app is built from: a comment moves no key of the shipped build or the verbs.
+    let rust = "crates/platitude-core/src/refs.rs";
+    let text = std::fs::read_to_string(sb.seat.join(rust)).expect("the seeded file");
+    sb.write(
+        &sb.seat,
+        rust,
+        &format!("// A note that moves no code.\n{text}"),
+    );
+    sb.commit_all(&sb.seat, "docs(core): a note on refs", &[]);
+    let text = sb.gate_ok(&sb.seat, &[]);
+    assert!(
+        text.contains("cached verify stash --preset basic") && text.contains("cached shipped"),
+        "{text}"
+    );
+    assert!(!sb.ran().contains("verify stash --preset basic"));
 }
 
 /// A fixture moved runs every line: the presets are what a run stands on.

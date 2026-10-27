@@ -107,7 +107,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
             .into_iter()
             .map(|row| format!("no registered line reaches the judgment row {row} — its runs would pass on the picture alone: register a line that puts the app in that state, or take the row out")),
     );
-    complaints.extend(unreached_harness_files(&root, &harness)?);
+    complaints.extend(unreached_harness_files(&harness));
     if complaints.is_empty() {
         return Ok(());
     }
@@ -307,15 +307,25 @@ fn typed(lines: &Lines, tiers: &Tiers) -> Vec<crate::verify::verbs::Typed> {
 
 /// A harness file no other QML file names and nothing loads by URL is a
 /// branch no verb reaches (rules-refs/app-ui.md「ハーネスの枝は動詞から到達
-/// できる形で足す」).
-fn unreached_harness_files(root: &Path, harness: &Harness) -> Result<Vec<String>, String> {
+/// できる形で足す」). Read off the code: a name in a comment reaches
+/// nothing.
+fn unreached_harness_files(harness: &Harness) -> Vec<String> {
+    let mentions: Vec<(&String, String)> = harness
+        .mentions
+        .iter()
+        .map(|(other, text)| {
+            (
+                other,
+                crate::lex::blanked(text, crate::lex::Lang::Qml, true).0,
+            )
+        })
+        .collect();
     let mut out = Vec::new();
     for file in &harness.files {
         let stem = crate::gate::stem_of(file);
-        let named = harness
-            .mentions
+        let named = mentions
             .iter()
-            .any(|(other, text)| *other != *file && names_type(text, &stem));
+            .any(|(other, code)| *other != file && names_type(code, &stem));
         if !named {
             out.push(format!(
                 "{file} is named by no other QML file and loaded by nothing — a harness branch \
@@ -323,8 +333,7 @@ fn unreached_harness_files(root: &Path, harness: &Harness) -> Result<Vec<String>
             ));
         }
     }
-    let _ = root;
-    Ok(out)
+    out
 }
 
 /// Whether `text` holds `stem` as a word of its own — a type declared,
@@ -505,6 +514,16 @@ mod tests {
         ));
         assert!(super::names_type("property TabProbe probe", "TabProbe"));
         assert!(!super::names_type("AutoActDriverFoo {}", "AutoActDriver"));
+        let in_a_comment = crate::lex::blanked(
+            "// see PageHarness.qml\nItem {}",
+            crate::lex::Lang::Qml,
+            true,
+        )
+        .0;
+        assert!(
+            !super::names_type(&in_a_comment, "PageHarness"),
+            "a comment reaches nothing"
+        );
         assert!(!super::names_type("myAwaited", "Awaited"));
     }
 
