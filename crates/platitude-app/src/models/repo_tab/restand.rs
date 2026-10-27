@@ -58,7 +58,7 @@ impl RepoTab {
         self.write_watch = WriteWatch::default();
         self.clear_write_group();
         self.write_answers = Vec::new();
-        self.commit_out = crate::ops::Press::default();
+        self.commit_out = crate::ops::TreeOut::default();
         self.commit_answer = -1;
         self.diff_reread = crate::ops::DiffReread::default();
         self.tree_seen = 0;

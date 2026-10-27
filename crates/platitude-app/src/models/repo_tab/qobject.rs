@@ -192,7 +192,8 @@ impl RepoTab {
     qproperty!("pacedWorktrees", Member = paced_worktrees, Notify = changed);
     // Where the editor's own commit answered in this notify, or -1 —
     // matched by the press's id, whatever order the answers came in
-    // (`ops::Press`).
+    // (`ops::TreeOut`). Its other wait — the tree itself — is asked for
+    // (`takeCommitLanding`).
     qproperty!("commitAnswer", Member = commit_answer, Notify = changed);
     // …and where the stash press that took the worktree away
     // answered. Its other wait — the tree itself — is asked for
@@ -1099,10 +1100,20 @@ impl RepoTab {
     /// this window's own stash is what emptied it, and settles that press
     /// (`ops::TreeOut`). Asked from both halves of the pair (a status
     /// landing, a write answering) — the first gets nothing — and asking
-    /// spends it, so there is nothing for a binding to follow.
+    /// spends it, so there is nothing for a binding to follow. The answer
+    /// is the write's fence — the first report of HEAD after it
+    /// (`WorktreeModel.headSeq` at or above it looked after the write) —
+    /// or 0 for no.
     #[qslot]
-    fn take_stash_landing(&mut self) -> bool {
-        self.stash_landing_taken()
+    fn take_stash_landing(&mut self) -> i32 {
+        self.stash_landing_taken().map_or(0, bridge_id)
+    }
+
+    /// The same for the editor's commit: its fence where it took the
+    /// whole tree, or 0 — a commit that left files took no tree.
+    #[qslot]
+    fn take_commit_landing(&mut self) -> i32 {
+        self.commit_landing_taken().map_or(0, bridge_id)
     }
 
     /// The open file was read again because a write answered, so the

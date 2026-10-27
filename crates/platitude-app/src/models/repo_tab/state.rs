@@ -100,7 +100,7 @@ impl Default for RepoTab {
             write_tag_op: false,
             write_fetched: false,
             write_answers: Vec::new(),
-            commit_out: crate::ops::Press::default(),
+            commit_out: crate::ops::TreeOut::default(),
             commit_answer: -1,
             stash_out: crate::ops::TreeOut::default(),
             stash_answer: -1,
@@ -210,9 +210,16 @@ impl RepoTab {
         self.tree_emptied = emptied;
     }
 
-    /// Behind `takeStashLanding` (`ops::TreeOut`).
-    pub(super) fn stash_landing_taken(&mut self) -> bool {
+    /// Behind `takeStashLanding` (`ops::TreeOut`): the write's fence where
+    /// the stash took the tree.
+    pub(super) fn stash_landing_taken(&mut self) -> Option<u64> {
         self.stash_out.taken(self.tree_seen, self.tree_emptied)
+    }
+
+    /// Behind `takeCommitLanding` (`ops::TreeOut`): the write's fence where
+    /// the editor's commit took the whole tree.
+    pub(super) fn commit_landing_taken(&mut self) -> Option<u64> {
+        self.commit_out.taken(self.tree_seen, self.tree_emptied)
     }
 
     /// Behind `takeDiffRead` (`ops::DiffReread`).
@@ -327,7 +334,8 @@ impl RepoTab {
     ///
     /// The press records the id it was accepted under in the same breath:
     /// the answer cannot say whose press it was, and only its own answer
-    /// empties the editor (`ops::Press`).
+    /// empties the editor — and only its own tree read, taken after that
+    /// answer, lands the page (`ops::TreeOut`).
     pub(super) fn commit_from_fields(
         &mut self,
         subject: String,

@@ -165,6 +165,11 @@ const CLAIMS: &[(&str, Arg, &[&str])] = &[
     ),
     // The worktree row gone with the status the write asked for.
     ("rebase-plan-run", Arg::Is(""), &["rebase_plan_ran"]),
+    // The commit's landing: the tree emptied, the WIP face left and HEAD's
+    // row — as the write left it — selected, whichever of the answer and
+    // the status drained first; files left keep the face.
+    ("commit", Arg::Starts(""), &["landed_on_head"]),
+    ("amend", Arg::Starts(""), &["landed_on_head"]),
     // The panel drawn for the width and page it was measured over, and the
     // four buttons' shape over the fetch's answer: the opening fetch lands
     // after the panel does, and would redraw it under the picture.

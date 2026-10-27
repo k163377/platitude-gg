@@ -402,7 +402,7 @@ impl RepoTab {
         // there: a copy in the group would have the page act on the one
         // answer twice.
         let mut answered_for = false;
-        if self.commit_out.answered(id, at) {
+        if self.commit_out.answered(id, at, !landed, head_seq) {
             self.read_commit_out();
             answered_for = true;
         }
@@ -432,8 +432,9 @@ impl RepoTab {
         self.last_write_error = error;
     }
 
-    /// What the editor's commit is waiting for, copied to a plain member
-    /// for bindings to read.
+    /// Where the editor's commit answered, copied to a plain member for
+    /// bindings to read. The tree it waits for is not copied: asking
+    /// spends it (`takeCommitLanding`).
     fn read_commit_out(&mut self) {
         self.commit_answer = self
             .commit_out

@@ -695,7 +695,10 @@ fn a_drain_whose_answer_had_an_owner_leaves_the_group_saying_nothing() {
 /// The report of HEAD a write's answer names as the first whose counts
 /// can speak for what it left, and the tree those counts describe.
 const FENCE: u64 = 41;
+/// A report from before the write, whose counts are the tree as it was.
+const IN_FLIGHT: u64 = 40;
 const EMPTIED: bool = true;
+const STILL_DIRTY: bool = false;
 
 /// One answer as the bridge carries it, naming that report.
 fn fenced(id: u64, kind: K, error: &str) -> TabMsg {
@@ -760,9 +763,9 @@ fn the_landing_stands_until_the_tree_is_read() {
         "while where it answered went with its own notify"
     );
     tab.tree_was_read(FENCE, EMPTIED);
-    assert!(tab.stash_landing_taken());
+    assert!(tab.stash_landing_taken().is_some());
     assert!(
-        !tab.stash_landing_taken(),
+        tab.stash_landing_taken().is_none(),
         "one press empties one tree, and the reading settles it"
     );
 }
@@ -778,7 +781,7 @@ fn a_refused_stash_claims_no_tree_and_keeps_its_words() {
         "error: Your local changes would be overwritten",
     )]);
     tab.tree_was_read(FENCE, EMPTIED);
-    assert!(!tab.stash_landing_taken());
+    assert!(tab.stash_landing_taken().is_none());
     assert!(
         tab.write_answer_at(tab.stash_answer)
             .is_some_and(|a| a.failed),
@@ -797,7 +800,7 @@ fn somebody_elses_stash_answer_claims_no_tree() {
     let mut tab = RepoTab::default();
     tab.absorb(vec![fenced(SOMEBODY_ELSE, K::Stash, "")]);
     tab.tree_was_read(FENCE, EMPTIED);
-    assert!(!tab.stash_landing_taken());
+    assert!(tab.stash_landing_taken().is_none());
     assert_eq!(tab.stash_answer, -1);
     assert!(
         tab.write_stale_diff,
@@ -811,10 +814,13 @@ fn somebody_elses_stash_answer_claims_no_tree() {
 fn a_tree_read_empty_before_the_answer_still_lands_the_press() {
     let mut tab = tree_stashed();
     tab.tree_was_read(FENCE, EMPTIED);
-    assert!(!tab.stash_landing_taken(), "nothing to settle on yet");
+    assert!(
+        tab.stash_landing_taken().is_none(),
+        "nothing to settle on yet"
+    );
     tab.absorb(vec![fenced(OURS, K::Stash, "")]);
     assert!(
-        tab.stash_landing_taken(),
+        tab.stash_landing_taken().is_some(),
         "the answer settles on the tree already read"
     );
 }
@@ -836,12 +842,65 @@ fn a_landing_owed_in_the_drain_that_refuses_somebody_elses_write() {
         "the group is the push's, and its branch returns early"
     );
     assert!(
-        tab.stash_landing_taken(),
+        tab.stash_landing_taken().is_some(),
         "while the press's own exit is owed in this very notify"
     );
     assert!(
-        !tab.stash_landing_taken(),
+        tab.stash_landing_taken().is_none(),
         "and owed once — nothing is left for a later status to pay again"
+    );
+}
+
+/// The editor's commit, waiting for the reading that finds the tree gone
+/// (`state::commit_from_fields`).
+fn tree_committed() -> RepoTab {
+    let mut tab = RepoTab::default();
+    tab.commit_out.asked(Some(OURS));
+    tab
+}
+
+// The commit's own landing names the write's fence in either order of
+// answer and status: the landing that follows reads HEAD at or after it,
+// never the report in hand — an amend of nothing leaves the counts as they
+// were, and the HEAD in hand is the one it replaced.
+#[test]
+fn the_commit_that_emptied_the_tree_lands_on_its_fence_whichever_half_comes_first() {
+    let mut tab = tree_committed();
+    tab.absorb(vec![fenced(OURS, K::Commit, "")]);
+    tab.tree_was_read(IN_FLIGHT, EMPTIED);
+    assert!(
+        tab.commit_landing_taken().is_none(),
+        "a status from before the write is the tree as it was"
+    );
+    tab.tree_was_read(FENCE, EMPTIED);
+    assert_eq!(tab.commit_landing_taken(), Some(FENCE));
+    assert!(tab.commit_landing_taken().is_none(), "paid once");
+
+    let mut tab = tree_committed();
+    tab.tree_was_read(FENCE, EMPTIED);
+    assert!(
+        tab.commit_landing_taken().is_none(),
+        "nothing to settle on yet"
+    );
+    tab.absorb(vec![fenced(OURS, K::Commit, "")]);
+    assert_eq!(tab.commit_landing_taken(), Some(FENCE));
+}
+
+// A commit that left files took no tree, and a refused one took nothing —
+// while the editor still hears the refusal.
+#[test]
+fn a_commit_that_left_files_or_was_refused_claims_no_tree() {
+    let mut tab = tree_committed();
+    tab.absorb(vec![fenced(OURS, K::Commit, "")]);
+    tab.tree_was_read(FENCE, STILL_DIRTY);
+    assert!(tab.commit_landing_taken().is_none());
+    let mut tab = tree_committed();
+    tab.absorb(vec![fenced(OURS, K::Commit, "nothing to commit")]);
+    tab.tree_was_read(FENCE, EMPTIED);
+    assert!(tab.commit_landing_taken().is_none());
+    assert!(
+        tab.write_answer_at(tab.commit_answer)
+            .is_some_and(|a| a.failed)
     );
 }
 

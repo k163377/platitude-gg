@@ -30,6 +30,15 @@ Item {
     readonly property var commitMenuState: driver.commitMenuState
     readonly property var stashDeleteItem: driver.stashDeleteItem
 
+    /// The commit's landing, read at every picture (`landed_on_head`, `verify::verbs::CLAIMS`): the tree emptied,
+    /// the WIP face left and HEAD's row selected — HEAD as the write left it, not the row the report in hand named
+    /// (`RepoPage.leaveWipWhenDone`); a tree with files left keeps the face.
+    function claimLanding() {
+        Awaited.claim("landed_on_head", () => page.treeClean
+            ? (!page.wipShown && page.selectedOid === worktree.headOid)
+            : page.wipShown)
+    }
+
     /// Runs `act` if it is this family's and says whether it was; each verb belongs to one family (`AutoActDriver`).
     function run(act, arg) {
         if (act === "commit") {
@@ -37,6 +46,7 @@ Item {
             repoTab.stageAll()
             wipPane.setMessage(arg === "" ? "chore: commit from the headless run" : arg, "")
             commitAnswer.armed = true
+            acts.claimLanding()
             page.commitNow()
         } else if (act === "commit-refused" || act === "notice-over-diff") {
             // Against a `pre-commit` hook that says no (`--preset hooked`): its words come down as a report
@@ -72,6 +82,7 @@ Item {
             page.amending = true
             wipPane.setMessage(arg, "")
             commitAnswer.armed = true
+            acts.claimLanding()
             page.commitNow()
         } else if (act === "amend-reset-author") {
             // The authorship offer needs HEAD read first, so amend is toggled and the timer waits.

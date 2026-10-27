@@ -347,8 +347,9 @@ pub struct RepoTab {
     /// The commit the editor sent, waiting for the answer that empties
     /// its boxes — by the id the press wrote down
     /// (`state::commit_from_fields`), whatever order the answers arrive
-    /// in (`ops::Press`).
-    commit_out: crate::ops::Press,
+    /// in (`ops::TreeOut`: it can empty the tree, and whether the status that
+    /// finds it empty is its doing is asked for, `takeCommitLanding`).
+    commit_out: crate::ops::TreeOut,
     /// Where the editor's own answer stands in `write_answers`, or -1
     /// where this notify carried none.
     commit_answer: i32,
@@ -361,8 +362,8 @@ pub struct RepoTab {
     /// HEAD its counts stood beside, and whether they left it empty
     /// (`noteTreeRead`).
     ///
-    /// Kept once: `diff_reread` and `stash_out` are both answered against
-    /// it, and two copies could disagree. Written whether or not anything
+    /// Kept once: `diff_reread`, `stash_out` and `commit_out` are all
+    /// answered against it, and two copies could disagree. Written whether or not anything
     /// waits — status and answer are drained apart, and this often
     /// arrives first.
     tree_seen: u64,

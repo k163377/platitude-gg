@@ -14,7 +14,7 @@
 ///
 /// What git said is on the answer itself (`RepoTab::write_answer_at`); this
 /// holds only whose press it was. Owners that remember more hold one of
-/// these (`TreeOut`, `BranchDeleteOut`); the editor's commit is a bare one.
+/// these (`TreeOut`, `BranchDeleteOut`).
 #[derive(Debug, Default)]
 pub struct Press {
     /// The write this press is waiting on, as the bridge carries an

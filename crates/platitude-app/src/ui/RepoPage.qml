@@ -2017,8 +2017,9 @@ FocusScope {
         page.absorbStashAnswer()
         page.absorbWorktreeAnswer()
         page.absorbWorktreeMove()
-        // The status and this answer drain apart: the tree a stash emptied may already be read, with nothing left to
-        // ask. No edge of its own — the landing is the edge, and with nothing standing it is a poll it ignores.
+        // The status and this answer drain apart: the tree a stash or a commit of ours emptied may already be read,
+        // with nothing left to ask. Whose doing an empty tree is, the press says (`takeStashLanding` /
+        // `takeCommitLanding`, asked inside); a poll with no edge of its own moves nobody.
         page.leaveWipWhenDone(false)
         page.absorbLeftoverAnswer()
     }
@@ -2334,10 +2335,8 @@ FocusScope {
     /// Automation only, the same way (`worktree-stand`: a WORKTREES row stands the tab in that worktree, and the
     /// landing is the window's).
     readonly property alias pageSidebar: sidebarPane
-    /// Automation only: the lists whose rows `PageSettled` waits for the view to build.
-    readonly property alias pageDetails: detailsPane
+    /// Automation only: the pane whose read `PageSettled` waits for (`diff`); the lists are found by walking the page.
     readonly property alias pageDiff: diffPane
-    readonly property alias pageCarried: carriedPane
     /// Whether the refs listing has landed — the read that also settles how many remotes there are, and so what the
     /// band's fetch button may be (`fetch-tip`).
     readonly property bool pageRefsLoaded: branchesModel.refsLoaded
@@ -3152,8 +3151,9 @@ FocusScope {
     property bool pendingHeadSelect: false
     /// The first report of HEAD that may answer the landing (`WorktreeModel.headSeq`). A write's answer names it
     /// (`RepoTab.writeAnswerHeadSeq`): the report in hand at that arming may predate the write, with a stale HEAD that
-    /// has a row. An arming read out of a report already in hand (the tree emptying, the selected commit vanishing)
-    /// takes that very report.
+    /// has a row. An arming read out of a report already in hand — a tree somebody else emptied, the selected commit
+    /// vanishing — takes that very report; a tree this page's own press emptied arms on the write's fence
+    /// (`takeStashLanding` / `takeCommitLanding`).
     property int pendingHeadFromSeq: 0
     // Whether the reader asked for the landing, in which case the viewport goes to it too — a commit they meant to make
     // is no answer off screen. The other ways it is owed happen *to* the window (a terminal commit, a rewrite under the
@@ -3184,23 +3184,26 @@ FocusScope {
         // off it. The landing below stays armed for the reader coming back to their own row.
         if (!page.wipWritable)
             return
-        // Whether this window's own stash emptied it (`ops::TreeOut`), **asked from both sides of the pair**: the
-        // status and the answer arrive in no fixed order, and the first asks and gets nothing.
-        const ourStash = repoTab.takeStashLanding()
+        // Whether a press of this window's own emptied it — the stash, or the editor's commit (`ops::TreeOut`) —
+        // **asked from both sides of the pair**: the status and the answer arrive in no fixed order, and the first
+        // asks and gets nothing. Answered with the write's fence, the first report of HEAD after it.
+        const ours = Math.max(repoTab.takeStashLanding(), repoTab.takeCommitLanding())
         if (!page.treeClean)
             return
         // **A landing of our own is an edge in itself**: the press is what moved.
-        if ((!edge && !ourStash) || !page.wipShown || worktree.opText !== "")
+        if ((!edge && ours === 0) || !page.wipShown || worktree.opText !== "")
             return
-        if (!ourStash && (wipPane.subjectText !== "" || wipPane.bodyText !== ""))
+        if (ours === 0 && (wipPane.subjectText !== "" || wipPane.bodyText !== ""))
             return
         page.wipShown = false
         page.pendingHeadSelect = true
-        // The status this is read out of **is** the one that answers: its HEAD report is already in hand (`hub::sink`
+        // Ours lands on HEAD as the write left it — the first report after the write, whatever report is in hand: an
+        // amend of nothing leaves the counts as they were, and the report in hand may be of the commit it replaced. A
+        // tree somebody else emptied lands on the report this status was read beside, already in hand (`hub::sink`
         // sends it ahead of the status).
-        page.pendingHeadFromSeq = worktree.headSeq
+        page.pendingHeadFromSeq = ours > 0 ? ours : worktree.headSeq
         // Only ours is a landing anybody asked for, so only ours takes the viewport along.
-        page.pendingHeadAsked = ourStash
+        page.pendingHeadAsked = ours > 0
     }
     function tryPendingHeadSelect() {
         if (!page.pendingHeadSelect || !worktree.headKnown)

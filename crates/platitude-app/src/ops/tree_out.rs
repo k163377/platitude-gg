@@ -1,12 +1,13 @@
-//! The stash that took the uncommitted changes away, and the tree turning out
-//! to be empty behind it.
+//! A press that took the uncommitted changes away — a stash, or the
+//! editor's commit of all of them — and the tree turning out to be empty
+//! behind it.
 
 use super::Press;
 
-/// One stash press that empties the worktree, from the press to the
-/// reading that shows the tree gone.
+/// One press that can empty the worktree — a stash, or the editor's
+/// commit — from the press to the reading that shows the tree gone.
 ///
-/// git answering says the entry was made; what the page waits for is the
+/// git answering says the write was made; what the page waits for is the
 /// status behind it showing the tree empty, and only then does whose doing
 /// that was matter — somebody committing the same changes in a terminal
 /// empties the tree the same way, over the message the reader is still
@@ -41,9 +42,9 @@ pub struct TreeOut {
 }
 
 impl TreeOut {
-    /// The stash went to the queue under `accepted`. Whatever an earlier
+    /// The press went to the queue under `accepted`. Whatever an earlier
     /// press left standing goes: the tree emptying next is the work of the
-    /// stash asked for last.
+    /// press asked for last.
     pub fn asked(&mut self, accepted: Option<u64>) {
         self.ours = false;
         self.after = 0;
@@ -75,18 +76,23 @@ impl TreeOut {
     /// counts stood beside the report numbered `seen`, and `emptied` is
     /// whether they left nothing in it.
     ///
-    /// Says whether this window's own stash is what emptied it. The page
-    /// asks from both sides of the pair — where a status lands and where a
-    /// write answers. The first status that can speak for the press settles
-    /// it either way: a tree still dirty was not emptied by the stash, and a
-    /// later emptying is somebody else's.
-    pub fn taken(&mut self, seen: u64, emptied: bool) -> bool {
+    /// Says whether this window's own press is what emptied it, and with
+    /// which fence: the first report of HEAD after the write, which is
+    /// where a landing on what the write left reads HEAD from — the report
+    /// in hand may be of the commit the write replaced, and an amend of
+    /// nothing leaves the counts as they were. The page asks from both
+    /// sides of the pair — where a status lands and where a write answers.
+    /// The first status that can speak for the press settles it either
+    /// way: a tree still dirty was not emptied by the press, and a later
+    /// emptying is somebody else's.
+    pub fn taken(&mut self, seen: u64, emptied: bool) -> Option<u64> {
         if !self.ours || self.after == 0 || seen < self.after {
-            return false;
+            return None;
         }
+        let after = self.after;
         self.ours = false;
         self.after = 0;
-        emptied
+        emptied.then_some(after)
     }
 
     /// Where this press's own answer stands in this notify, or `None`

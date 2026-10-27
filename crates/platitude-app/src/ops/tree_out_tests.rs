@@ -33,9 +33,9 @@ fn landed() -> TreeOut {
 }
 
 #[test]
-fn the_tree_that_empties_after_our_own_stash_is_ours() {
+fn the_tree_that_empties_after_our_own_press_is_ours_with_the_writes_fence() {
     let mut out = landed();
-    assert!(out.taken(FENCE, EMPTIED));
+    assert_eq!(out.taken(FENCE, EMPTIED), Some(FENCE));
 }
 
 // Dropped when read, the emptying is gone: the next status has no change
@@ -44,12 +44,12 @@ fn the_tree_that_empties_after_our_own_stash_is_ours() {
 fn a_tree_read_empty_before_the_answer_is_still_ours() {
     let mut out = pressed();
     assert!(
-        !out.taken(FENCE, EMPTIED),
+        out.taken(FENCE, EMPTIED).is_none(),
         "nothing to settle on until git answers"
     );
     assert!(out.answered(OURS, 0, false, FENCE));
     assert!(
-        out.taken(FENCE, EMPTIED),
+        out.taken(FENCE, EMPTIED).is_some(),
         "and the answer settles on the tree already read"
     );
 }
@@ -59,15 +59,15 @@ fn somebody_elses_answer_in_between_leaves_the_landing_standing() {
     let mut out = landed();
     assert!(!out.answered(SOMEBODY_ELSE, 1, false, AFTERWARDS));
     assert!(out.ours(), "the fetch answered for itself and nothing else");
-    assert!(out.taken(FENCE, EMPTIED));
+    assert!(out.taken(FENCE, EMPTIED).is_some());
 }
 
 #[test]
 fn a_status_from_before_the_write_settles_nothing() {
     let mut out = landed();
-    assert!(!out.taken(IN_FLIGHT, STILL_DIRTY));
+    assert!(out.taken(IN_FLIGHT, STILL_DIRTY).is_none());
     assert!(out.ours(), "the status that can answer is still coming");
-    assert!(out.taken(FENCE, EMPTIED));
+    assert!(out.taken(FENCE, EMPTIED).is_some());
 }
 
 #[test]
@@ -79,28 +79,28 @@ fn an_answer_to_somebody_elses_write_claims_nothing() {
 }
 
 #[test]
-fn a_stash_git_refused_took_no_tree_away() {
+fn a_press_git_refused_took_no_tree_away() {
     let mut out = pressed();
     assert!(out.answered(OURS, 0, true, FENCE));
-    assert!(!out.taken(FENCE, EMPTIED));
+    assert!(out.taken(FENCE, EMPTIED).is_none());
     assert_eq!(out.answer(), Some(0), "and the page still has to say it");
 }
 
 // Half a stash (`stash push -- paths`) never empties the tree.
 #[test]
-fn a_tree_the_stash_did_not_empty_settles_the_press_all_the_same() {
+fn a_tree_the_press_did_not_empty_settles_it_all_the_same() {
     let mut out = landed();
-    assert!(!out.taken(FENCE, STILL_DIRTY));
+    assert!(out.taken(FENCE, STILL_DIRTY).is_none());
     assert!(!out.ours());
-    assert!(!out.taken(AFTERWARDS, EMPTIED));
+    assert!(out.taken(AFTERWARDS, EMPTIED).is_none());
 }
 
 // The next tree to empty — somebody committing in a terminal — is theirs.
 #[test]
 fn one_press_empties_one_tree() {
     let mut out = landed();
-    assert!(out.taken(FENCE, EMPTIED));
-    assert!(!out.taken(AFTERWARDS, EMPTIED));
+    assert!(out.taken(FENCE, EMPTIED).is_some());
+    assert!(out.taken(AFTERWARDS, EMPTIED).is_none());
 }
 
 #[test]
@@ -110,10 +110,10 @@ fn the_press_that_came_last_is_the_one_the_tree_answers_for() {
     assert!(!out.ours(), "the standing landing went with the new press");
     assert!(out.answered(SOMEBODY_ELSE, 1, false, AFTERWARDS));
     assert!(
-        !out.taken(FENCE, EMPTIED),
+        out.taken(FENCE, EMPTIED).is_none(),
         "that press named a later report"
     );
-    assert!(out.taken(AFTERWARDS, EMPTIED));
+    assert!(out.taken(AFTERWARDS, EMPTIED).is_some());
 }
 
 #[test]
@@ -121,14 +121,14 @@ fn a_press_the_queue_took_nothing_for_claims_no_tree() {
     let mut out = landed();
     out.asked(None);
     assert!(!out.answered(OURS, 0, false, FENCE));
-    assert!(!out.taken(AFTERWARDS, EMPTIED));
+    assert!(out.taken(AFTERWARDS, EMPTIED).is_none());
 }
 
 #[test]
 fn a_tree_nobody_here_emptied_is_not_claimed() {
     let mut out = TreeOut::default();
     assert!(!out.answered(OURS, 0, false, FENCE));
-    assert!(!out.taken(AFTERWARDS, EMPTIED));
+    assert!(out.taken(AFTERWARDS, EMPTIED).is_none());
 }
 
 #[test]
@@ -138,5 +138,5 @@ fn the_answers_place_goes_with_its_notify_and_the_wait_does_not() {
     out.new_notify();
     assert_eq!(out.answer(), None);
     assert!(out.ours(), "the tree it took away is still to be read");
-    assert!(out.taken(FENCE, EMPTIED));
+    assert!(out.taken(FENCE, EMPTIED).is_some());
 }
