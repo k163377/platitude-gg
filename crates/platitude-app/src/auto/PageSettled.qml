@@ -2,9 +2,9 @@ pragma Singleton
 import QtQuick
 import platitude.ui
 
-/// Whether a page has stopped arriving — the one rule every sampler that waits for the whole of a page asks (the
-/// census walk, the badge verbs' arm, the page verbs' baseline). A copy that drops a term settles a run early, and
-/// that run writes a census line for a window still arriving (rules-refs/app-ui.md「ページ全体を待つ正本は
+/// Whether a page has stopped arriving — the one rule every sampler that waits for the whole of a page asks
+/// (the completion's hold, the badge verbs' arm, the page verbs' baseline). A copy that drops a term settles a run
+/// early, and that run writes a census line for a window still arriving (rules-refs/app-ui.md「ページ全体を待つ正本は
 /// `PageSettled.settled()` 1 本」). A sampler waiting for one thing of its own (a tab count, a refs read) keeps its
 /// own wait.
 ///
@@ -101,6 +101,12 @@ QtObject {
     /// the page under the window — the completion's hold (`WindowHarness.finish`) comes after the report.
     function windowSettled(window) {
         return !window || !window.curPage || pageSettled.settled(window.curPage)
+    }
+
+    /// The window's page settled, and one there: the term a window's act waits on when it goes on to read the page
+    /// (`windowSettled` is content with no page yet).
+    function settledUnder(window) {
+        return !!window && !!window.curPage && pageSettled.settled(window.curPage)
     }
 
     /// The lists the page shows, by name, for the rows term: every `ListView` on screen under the page, found by

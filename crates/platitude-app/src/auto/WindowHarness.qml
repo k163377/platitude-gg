@@ -158,7 +158,10 @@ Item {
     /// drive — `placing` (the view re-centring after `Metrics.anchorDelayMs`) and `readings` (the pacer's reads of
     /// other worktrees) — which no report reads. Everything else a run waits for itself before its report, a
     /// window's act included (`PageSettled.windowSettled` in the wait its report follows: this hold comes after the
-    /// report, and would hold a report already read), or its completion is a breach (`Awaited.completed`).
+    /// report, and would hold a report already read), or its completion is a breach (`Awaited.completed`). Once
+    /// held, the hold lasts until the page owes nothing: what an ambient term's settling sets moving — a seat the
+    /// re-centring displaced from under a stand-in hand (`RowHoverHost`), a walk the pacer's read asked for — is the
+    /// hold's too, not the verb's, which completed over the ambient terms alone.
     readonly property var ambientTerms: ["placing", "readings"]
     function ambient(owed) {
         return owed.every(term => harness.ambientTerms.indexOf(term) >= 0)
@@ -167,8 +170,10 @@ Item {
         id: completionWait
         onTriggered: {
             const owed = census.pageMissing()
-            if (owed.length > 0 && harness.ambient(owed))
+            if (owed.length > 0) {
+                Awaited.note("completion waiting=" + owed.join(","))
                 return
+            }
             completionWait.stop()
             harness.finish()
         }
@@ -222,7 +227,6 @@ Item {
         mainUi: harness.mainUi
         gate: harness.gate
         chrome: harness.chrome
-        censusState: census.settled ? "settled" : "arriving"
         // The claims and the walk in the picture's own turn: a frame later is the stretch a read could land in.
         onPictured: artifact => {
             Awaited.pictured(artifact)

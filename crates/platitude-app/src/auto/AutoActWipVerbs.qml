@@ -1032,7 +1032,8 @@ Item {
             mergeCommitTimer.start()
         }
         onTriggered: {
-            if (!Awaited.all("merge_commit_ready", { "ready": driver.wroteAndSettled(), "page": PageSettled.settled(page) }))
+            if (!Awaited.all("merge_commit_ready", { "ready": driver.wroteAndSettled(),
+                                                     "page": PageSettled.settled(page) }))
                 return
             // The graph holding the commit, checked against the id HEAD moved from: refs and the walk arrive behind
             // the write and each other, so the old tip would pass.

@@ -59,7 +59,7 @@ Item {
             acts.bandBeats++
             // The page whole (`PageSettled`): the worktree row's tally comes with the rows agreeing with the status.
             if (identityDialog.opened || topBar.bandTabsWidth <= 0
-                    || window.curPage === null || !PageSettled.settled(window.curPage)
+                    || !PageSettled.settledUnder(window)
                     || !topBar.opBadgeShown || !topBar.conflictBadgeShown
                     || !topBar.identityBadgeShown)
                 return
@@ -204,19 +204,16 @@ Item {
         property bool badgeSaid: false
         onTriggered: {
             const page = window.curPage
-            if (!Awaited.all("stale_act_ready", { "ready": !(page === null),
-                                                  "page": PageSettled.windowSettled(window) }))
+            // Over a settled page (`PageSettled`): a status landing after the arm asks for a swap rebuild that undoes
+            // either fault, and the census then walks the other state
+            // (rules-refs/app-ui.md「`STALE GRAPH` の動確は `graph-stale` / `graph-stopped`」).
+            if (!Awaited.all("stale_act_ready", { "page": PageSettled.settledUnder(window) }))
                 return
             const graph = page.pageGraph
             if (!staleActTimer.faultArmed) {
                 // Only over a graph that was whole, or the badge stands for the opening
                 // (rules-refs/app-ui.md「動詞の前提条件は入力を出す枝で読む」).
                 if (graph.loading || graph.finishCount <= 0 || graph.rowTotal <= 0)
-                    return
-                // And only once nothing is on its way to rebuild it, asked of the census's own rule (`PageSettled`):
-                // a status landing after the arm asks for a swap rebuild that undoes either fault, and the census then
-                // walks the other state (rules-refs/app-ui.md「`STALE GRAPH` の動確は `graph-stale` / `graph-stopped`」).
-                if (!PageSettled.settled(page))
                     return
                 staleActTimer.faultArmed = true
                 // Asked once; the harness keeps it up, since what undoes it is invisible from here
@@ -322,7 +319,7 @@ Item {
             acts.bandBeats++
             if (!Awaited.all("old_git_ready", {
                 "band": topBar.bandTabsWidth > 0,
-                "page": window.curPage !== null && PageSettled.settled(window.curPage) }))
+                "page": PageSettled.settledUnder(window) }))
                 return
             // `-fold` brings its own width: a folded group with nothing red in it, where the mark's colour is its whole
             // meaning (デザイン規約 §状態).

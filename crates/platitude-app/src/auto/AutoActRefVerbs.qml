@@ -71,10 +71,10 @@ Item {
             page.holdGoneRows = true
             page.openRefMenu("tag", arg, arg, tagsModel.oidOfName(arg))
             refMenu.openSub(refTagCard)
-            // Armed, so the run ends on the write's settle with the rows still held away: the display is the hold's,
-            // the reads behind it are the write's, and a picture between the two is of a page still arriving.
-            driver.beginWrite(act)
-            refTagDeleteItem.completeHold()
+            // Pressed as a hold, so the run ends on the write's settle with the rows still held away: the display is
+            // the hold's, the reads behind it are the write's, and a picture between the two is of a page still
+            // arriving.
+            driver.holdToEnd(refTagDeleteItem)
             goneRowTimer.start()
         } else if (act === "delete-stood-down") {
             // The other end of `delete-gone`: waits for the in-between to be over. The screen cannot tell a row the
@@ -563,7 +563,8 @@ Item {
                 || repoTab.lastError !== tagGoneTimer.errorBefore
         }
         onTriggered: {
-            if (!Awaited.all("tag_gone_ready", { "ready": driver.wroteAndSettled(), "page": PageSettled.settled(page) }))
+            if (!Awaited.all("tag_gone_ready", { "ready": driver.wroteAndSettled(),
+                                                 "page": PageSettled.settled(page) }))
                 return
             const now = tagsModel.tagSides(tagGoneTimer.tag)
             // Refused, nothing moves: the answer is what is shot.
@@ -673,7 +674,8 @@ Item {
     SampleTimer {
         id: refusedRowTimer
         onTriggered: {
-            if (!Awaited.all("refused_row_ready", { "ready": driver.wroteAndSettled(), "page": PageSettled.settled(page) }))
+            if (!Awaited.all("refused_row_ready", { "ready": driver.wroteAndSettled(),
+                                                    "page": PageSettled.settled(page) }))
                 return
             refusedRowTimer.stop()
             Harness.report("ref_menu delete=" + refDeleteItem.code
@@ -682,7 +684,8 @@ Item {
             driver.complete()
         }
     }
-    // The row taken away ahead of git's answer, waited on the list: a barrier would wait out the state photographed.
+    // The row taken away at the press, waited off the list, and the write behind it settled: the page holds the
+    // rows away past the answer (`holdGoneRows`), so the in-between is what the picture is of.
     SampleTimer {
         id: goneRowTimer
         onTriggered: {
@@ -710,7 +713,8 @@ Item {
             driver.inputWent(true)
         }
         onTriggered: {
-            if (!Awaited.all("stood_down_ready", { "ready": driver.wroteAndSettled(), "page": PageSettled.settled(page) }))
+            if (!Awaited.all("stood_down_ready", { "ready": driver.wroteAndSettled(),
+                                                   "page": PageSettled.settled(page) }))
                 return
             // The rows stay off screen until a listing taken after the write is drawn; this is it arriving
             // (`ops::StandIn`).

@@ -129,7 +129,7 @@ Item {
             if (!Awaited.all("tab_drag_landed", {
                 "moved": paths !== tabDragTimer.before,
                 "laid": tabProbe.tabItemCount() === pageRepeater.count,
-                "page": window.curPage !== null && PageSettled.settled(window.curPage) }))
+                "page": PageSettled.settledUnder(window) }))
                 return
             stop()
             // `moved=` leads: an order that merely changed would pass with any two tabs swapped.
@@ -166,7 +166,7 @@ Item {
             const shift = topBar.heldTabShift()
             if (!Awaited.all("tab_hold_lifted", {
                 "shift": shift !== 0,
-                "page": window.curPage !== null && PageSettled.settled(window.curPage) }))
+                "page": PageSettled.settledUnder(window) }))
                 return
             stop()
             Harness.report("tab_hold lifted=true at=" + (Harness.autoActArg || 0)
@@ -256,7 +256,8 @@ Item {
             const page = window.curPage
             if (!carriedOpenTimer.asked) {
                 if (!Awaited.all("carried_open_ready", {
-                    "ready": !(page === null || page.pageTab.state !== "open" || page.pageGraph.finishCount === 0) }))
+                    "open": page !== null && page.pageTab.state === "open",
+                    "walked": page !== null && page.pageGraph.finishCount > 0 }))
                     return
                 const row = carriedOpenTimer.carriedRow(page.pageGraph)
                 if (row < 0)
@@ -311,7 +312,8 @@ Item {
             const page = window.curPage
             if (!worktreeStandTimer.asked) {
                 if (!Awaited.all("worktree_stand_ready", {
-                    "ready": !(page === null || page.pageTab.state !== "open" || page.pageGraph.finishCount === 0) }))
+                    "open": page !== null && page.pageTab.state === "open",
+                    "walked": page !== null && page.pageGraph.finishCount > 0 }))
                     return
                 // `log=` needs rows before the switch. An opening's reads are not logged (`Recording::UserOnly`), so
                 // the run turns background reads on and asks for one (`refreshQuick`).
@@ -378,7 +380,7 @@ Item {
                 // would count as the graph thrown away (`standKept`).
                 if (!Awaited.all("worktree_made_ready", {
                     "open": page !== null && page.pageTab.state === "open",
-                    "page": page !== null && PageSettled.settled(page) }))
+                    "page": PageSettled.settledUnder(window) }))
                     return
                 worktreeMadeTimer.from = page.pageTab.repoPath
                 acts.holdStand(page)
@@ -389,7 +391,10 @@ Item {
             if (page === null || page.pageTab.state !== "open")
                 return
             const refused = worktreeMadeTimer.reported !== "" && worktreeMadeTimer.reported !== "worktree-hook"
-            if (refused && acts.standsIn(page, worktreeMadeTimer.from) && page.noticeCard.settled) {
+            if (refused && acts.standsIn(page, worktreeMadeTimer.from)) {
+                if (!Awaited.all("worktree_refused_ready", { "bar": page.noticeCard.settled,
+                                                             "page": PageSettled.settled(page) }))
+                    return
                 stop()
                 Harness.report("worktree_refused stood=false said=" + page.noticeCard.label
                                   + " place=" + page.noticeCard.detailPlace
@@ -466,8 +471,9 @@ Item {
             const page = window.curPage
             if (worktreeDraftTimer.step === 0) {
                 if (!Awaited.all("worktree_draft_ready", {
-                    "ready": !(page === null || page.pageTab.state !== "open" || page.pageTab.standing
-                        || !page.pageWorktree.loaded || page.pageGraph.finishCount === 0) }))
+                    "open": page !== null && page.pageTab.state === "open" && !page.pageTab.standing,
+                    "loaded": page !== null && page.pageWorktree.loaded,
+                    "walked": page !== null && page.pageGraph.finishCount > 0 }))
                     return
                 const trees = page.pageSidebar.worktreesModel
                 if (trees.shown() < 2)
@@ -605,7 +611,8 @@ Item {
             const page = window.curPage
             if (worktreeTipTimer.step === 0) {
                 if (!Awaited.all("worktree_tip_ready", {
-                    "ready": !(page === null || page.pageTab.state !== "open" || page.pageGraph.finishCount === 0) }))
+                    "open": page !== null && page.pageTab.state === "open",
+                    "walked": page !== null && page.pageGraph.finishCount > 0 }))
                     return
                 const trees = page.pageSidebar.worktreesModel
                 const row = Harness.autoActArg === "" ? 1 : Number(Harness.autoActArg)
@@ -866,7 +873,7 @@ Item {
             if (!Awaited.all("tab_width_act_ready", {
                 "ready": !(topBar.bandTabCount <= 0 || topBar.bandTabRun <= 0
                     || tabProbe.tabItemCount() !== topBar.bandTabCount),
-                "page": window.curPage !== null && PageSettled.settled(window.curPage) }))
+                "page": PageSettled.settledUnder(window) }))
                 return
             stop()
             Harness.report(

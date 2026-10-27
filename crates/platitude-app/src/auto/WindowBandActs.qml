@@ -43,6 +43,10 @@ Item {
         onTriggered: {
             const verb = "force_push_hold"
             if (topBar.holdPushBusy) {
+                // The ring is held, so the page can be waited for: the row the opening selected is still reading
+                // its details, and the mode was latched on the edge (`pushModeAtBusy`).
+                if (!Awaited.all("force_push_hold_landed", { "page": PageSettled.windowSettled(window) }))
+                    return
                 stop()
                 Harness.report("push_hold mode=" + acts.pushModeAtBusy + " busy=" + topBar.holdPushBusy)
                 window.finishAutoAct()
@@ -135,7 +139,8 @@ Item {
         onTriggered: {
             // No tabs is a valid band: readiness is the window and the bar, and `tabsW=0` says the rest.
             if (!Awaited.all("band_act_ready", {
-                "ready": !(!window.visible || mainUi.width <= 0 || topBar.width <= 0),
+                "shown": window.visible,
+                "sized": mainUi.width > 0 && topBar.width > 0,
                 "page": PageSettled.windowSettled(window) }))
                 return
             stop()
@@ -164,7 +169,7 @@ Item {
         onTriggered: {
             if (!Awaited.all("ops_panel_ready", {
                 "loaded": acts.opsPanelLoaded(),
-                "page": window.curPage !== null && PageSettled.settled(window.curPage) }))
+                "page": PageSettled.settledUnder(window) }))
                 return
             const wanted = parseInt(Harness.autoActArg)
             if (!isNaN(wanted) && wanted > 0 && Math.round(window.width) !== wanted
@@ -254,9 +259,10 @@ Item {
             // Both listings, not a beat: they land on separate reads. Every repository lists its own worktree, so
             // zero worktrees is a listing not yet landed.
             if (!Awaited.all("ops_door_ready", {
-                "ready": !(!window.visible || topBar.width <= 0 || window.curPage === null
-                    || !window.curPage.pageRefsLoaded || window.curPage.pageWorktrees.total <= 0),
-                "page": window.curPage !== null && PageSettled.settled(window.curPage) }))
+                "shown": window.visible && topBar.width > 0,
+                "refs": window.curPage !== null && window.curPage.pageRefsLoaded,
+                "worktrees": window.curPage !== null && window.curPage.pageWorktrees.total > 0,
+                "page": PageSettled.settledUnder(window) }))
                 return
             const branchDoor = Harness.autoAct === "ops-branch" || Harness.autoAct === "ops-branch-folder"
             if (opsDoorTimer.opened === 0) {
@@ -430,7 +436,7 @@ Item {
             // `push -f` after on a diverged branch).
             if (!Awaited.all("band_actions_ready", {
                 "band": topBar.bandTabsWidth > 0 && topBar.actionNaturalW > Theme.railWidth,
-                "page": window.curPage !== null && PageSettled.settled(window.curPage),
+                "page": PageSettled.settledUnder(window),
                 // The opening fetch answered: push's wording and the alert are the worktree's after it.
                 "fetch": window.curPage !== null && acts.fetchSettled(window.curPage.pageTab) }))
                 return

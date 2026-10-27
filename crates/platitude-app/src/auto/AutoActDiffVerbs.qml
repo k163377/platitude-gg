@@ -604,7 +604,7 @@ Item {
         property bool hand: false
         property bool took: false
         onTriggered: {
-            if (!Awaited.all("escape_ready", { "ready": !(page.diffShown || diffPane.view.visible) }))
+            if (!Awaited.all("diff_escape_ready", { "ready": !(page.diffShown || diffPane.view.visible) }))
                 return
             escapeTimer.stop()
             Harness.report("diff_escape took=" + escapeTimer.took
@@ -832,14 +832,12 @@ Item {
                 codeGrowTimer.rowAgain = diffPane.codeWidestRow
                 // All the way right with the widest row on screen — otherwise a short line in view answers `ends=`.
                 codeGrowTimer.step = 4
-                codeGrowTimer.lastReach = ""
                 diffPane.sendCode(diffPane.codeMax)
                 return
             }
             // The send is immediate, but the rows are redrawn a layout later: wait for the ink to stand still.
             const ink = diffPane.codeInkRight()
             const now = Math.round(diffPane.codeAt) + "," + Math.round(ink)
-            codeGrowTimer.lastReach = now
             if (!Awaited.still("code_grow_reach", now))
                 return
             codeGrowTimer.ink = ink
@@ -861,11 +859,9 @@ Item {
         property real measured0: 0
         property real drawn0: 0
         property int rows0: 0
-        property string lastReach: ""
         function begin(atLine) {
             codeShrinkTimer.line = atLine
             codeShrinkTimer.wrote = false
-            codeShrinkTimer.lastReach = ""
             codeShrinkTimer.start()
         }
         function report() {
@@ -913,7 +909,6 @@ Item {
             if (!acts.wroteAndSettled() || diffPane.view.count === 0)
                 return
             const now = acts.reachNow()
-            codeShrinkTimer.lastReach = now
             if (!Awaited.still("code_shrink_reach", now))
                 return
             acts.finish(codeShrinkTimer)
@@ -930,11 +925,9 @@ Item {
         property real at0: 0
         property real max0: 0
         property real drawn0: 0
-        property string lastReach: ""
         function begin() {
             codeSwapTimer.step = 0
             codeSwapTimer.landed = ""
-            codeSwapTimer.lastReach = ""
             codeSwapTimer.start()
         }
         function report() {
@@ -982,7 +975,6 @@ Item {
             if (page.diffKey !== codeSwapTimer.landed || page.diffSettling || !acts.viewLaidOut())
                 return
             const now = acts.reachNow()
-            codeSwapTimer.lastReach = now
             if (!Awaited.still("code_swap_reach", now))
                 return
             acts.finish(codeSwapTimer)

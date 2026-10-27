@@ -357,7 +357,6 @@ Item {
         readonly property string bucket: wipRereadTimer.how === "staged" ? "staged" : "unstaged"
         readonly property string path: wipRereadTimer.how === "staged" ? "src/twice.kt"
             : wipRereadTimer.how === "gone" ? "src/flipped.kt" : "src/mixed.kt"
-        property real waitedFrom: 0
         /// The file written: the same one saved over in place — with a second line of the other ending (`same`), or
         /// with its endings put right and a change kept, so the row stays and its mark goes (`fixed`) — or a new one
         /// sorted above every row.
@@ -468,8 +467,6 @@ Item {
                     // (`QQuickDeliveryAgentPrivate::deliverHoverEvent`).
                     wipPane.hand.stir(wipRereadTimer.at)
                     wipPane.eolHoverCard.contentPointed = false
-                    // waits(timed): the absence is read from here — a card that must not open gets its rest twice over
-                    wipRereadTimer.waitedFrom = Date.now()
                     wipRereadTimer.step = 5
                     return
                 }
@@ -477,10 +474,11 @@ Item {
                 return
             }
             if (wipRereadTimer.step === 5) {
-                // waits(timed): the product's rest, as a floor: a card that would open has opened by then
-                if (Date.now() - wipRereadTimer.waitedFrom < 2 * Metrics.tipDelayMs)
-                    return
-                if (!Awaited.all("wip_reread_still", { "page": PageSettled.settled(page) }))
+                // A card that must not open: the hover Qt hands what is under the hand comes with the next frame, and
+                // a seat it asks is deciding until its rest runs out (`PageSettled`'s `hover:` term) — read after
+                // both, what has not opened by then was never asked for.
+                if (!Awaited.all("wip_reread_still", { "drawn": Awaited.drawnSince("wip_reread_stirred"),
+                                                       "page": PageSettled.settled(page) }))
                     return
                 wipRereadTimer.left = wipRereadTimer.read()
                 wipRereadTimer.done()
@@ -525,7 +523,6 @@ Item {
         property string stage: "moved"
         property int step: 0
         property bool stood: false
-        property real waitedFrom: 0
         property point at: Qt.point(-1, -1)
         /// How often the run put the hand on the row again (step 1).
         property int nudges: 0
@@ -607,14 +604,15 @@ Item {
                     tipSlideTimer.done("slid")
                     return
                 }
-                // waits(timed): the absence is read from here — the tip that must not come gets its rest twice over
-                tipSlideTimer.waitedFrom = Date.now()
                 tipSlideTimer.step = 2
                 return
             }
             if (tipSlideTimer.step === 2) {
-                // waits(timed): the product's rest, as a floor: a tip that would come has come by then
-                if (Date.now() - tipSlideTimer.waitedFrom < 2 * Metrics.tipDelayMs)
+                // The tip that must not come: the rows rebuilt under the hand are a polish away, and a seat one of them
+                // asks is deciding until its rest runs out (`PageSettled`'s `rows:` and `hover:` terms) — read after
+                // both, a tip not out by then was never asked for.
+                if (!Awaited.all("tip_slide_rested", { "drawn": Awaited.drawnSince("tip_slide_folded"),
+                                                       "page": PageSettled.settled(page) }))
                     return
                 if (tipSlideTimer.stage === "still") {
                     tipSlideTimer.done("still")

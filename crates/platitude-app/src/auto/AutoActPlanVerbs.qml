@@ -97,7 +97,9 @@ Item {
         property bool sawOnto: false
         onTriggered: {
             if (!Awaited.all("plan_loading_ready", {
-                "ready": !(!page.planLoadHeld || !page.planShown || page.planActive) }))
+                "held": page.planLoadHeld,
+                "shown": page.planShown,
+                "inactive": !page.planActive }))
                 return
             planLoadingTimer.stop()
             Harness.report("plan_loading held=true shown=true standing=" + page.planActive
@@ -117,7 +119,8 @@ Item {
         }
         onTriggered: {
             const plan = page.rebasePlan
-            if (!Awaited.all("plan_open_ready", { "ready": !(!plan.active || plan.loading || plan.stepCount === 0) }))
+            if (!Awaited.all("plan_open_ready", { "active": plan.active, "loaded": !plan.loading,
+                                                  "steps": plan.stepCount > 0 }))
                 return
             if (planOpenTimer.act === "rebase-plan" && page.planPushed === 0)
                 return

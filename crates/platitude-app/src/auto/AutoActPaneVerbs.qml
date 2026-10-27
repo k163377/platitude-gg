@@ -455,7 +455,9 @@ Item {
             const bar = detailsPane.filesBar
             // Laid out and with somewhere to go, or the run would go green on no bar at all.
             if (!Awaited.all("pane_bar_ready", {
-                "ready": !(!view || view.count <= 0 || view.height <= 0 || view.contentHeight <= view.height + 1) }))
+                "rows": !!view && view.count > 0,
+                "sized": !!view && view.height > 0,
+                "overflows": !!view && view.contentHeight > view.height + 1 }))
                 return
             if (!paneBarTimer.sent) {
                 paneBarTimer.sent = true

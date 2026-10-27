@@ -62,6 +62,17 @@ Item {
     function a() { return { "key": "a" } }
     function b() { return { "key": "b" } }
 
+    /// A seat held the way the product holds one: a property value of a part that comes and goes with its rows.
+    Component {
+        id: seatHolder
+        Item {
+            readonly property HoverSeat held: HoverSeat {
+                restMs: 20
+                graceMs: 20
+            }
+        }
+    }
+
     TestCase {
         name: "HoverSeat"
         when: windowShown
@@ -95,6 +106,23 @@ Item {
         /// seat (`HandWatch.underCover`), and `tst_handwatch.qml` weighs a real one.
         function coverUp(up) {
             hand.covered += up ? 1 : -1
+        }
+
+        /// Every seat standing is named to `Hovers` while it stands, and one deciding is named by its target
+        /// (`Hovers.deciding`); a seat gone with its holder is off the list — the holder's destruction tells the seat's
+        /// handler while the seat still stands (`Component.onDestruction`), so the entry it made is the one it takes.
+        function test_a_seat_is_named_to_hovers_while_it_stands() {
+            const holder = seatHolder.createObject(root)
+            const kept = holder.held
+            verify(Hovers.seats.has(kept))
+            compare(Hovers.deciding().indexOf("named"), -1)
+            kept.point({ "key": "named" })
+            compare(kept.state, "waiting")
+            verify(Hovers.deciding().indexOf("named") >= 0)
+            tryCompare(kept, "state", "shown")
+            compare(Hovers.deciding().indexOf("named"), -1)
+            holder.destroy()
+            tryVerify(() => !Hovers.seats.has(kept))
         }
 
         function test_a_rest_then_shown_then_the_beat_closes() {

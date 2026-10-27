@@ -179,7 +179,7 @@ Item {
         property string line: ""
         property int plain: 0
         onTriggered: {
-            if (!Awaited.all("tip_ready", { "ready": diffPane.findBar.tipShown }))
+            if (!Awaited.all("diff_find_tip_ready", { "ready": diffPane.findBar.tipShown }))
                 return
             tipTimer.stop()
             page.releasePressedAway(null)
@@ -194,7 +194,7 @@ Item {
         id: settled
         property string act: ""
         onTriggered: {
-            if (!Awaited.all("settled_ready", { "ready": acts.standingDrawn() }))
+            if (!Awaited.all("diff_find_settled_ready", { "ready": acts.standingDrawn() }))
                 return
             settled.stop()
             const bar = diffPane.findBar

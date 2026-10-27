@@ -699,9 +699,12 @@ Item {
             // graph already has (the upstream's), so every other gate here opens while the WIP row still leashes the
             // old tip and the counts still say behind.
             if (!Awaited.all("tip_landed_ready", {
-                "ready": !(tipLandedTimer.answeredOp === "" || page.pendingHeadSelect || repoTab.busyCount !== 0
-                    || repoTab.settling || row < 0 || !graphPane.rowOnScreen(row)
-                    || page.selectedOid !== worktree.headOid || !driver.cardSettled) }))
+                "answered": tipLandedTimer.answeredOp !== "",
+                "landed": !page.pendingHeadSelect,
+                "idle": repoTab.busyCount === 0 && !repoTab.settling,
+                "row": row >= 0 && graphPane.rowOnScreen(row),
+                "head": page.selectedOid === worktree.headOid,
+                "card": driver.cardSettled }))
                 return
             tipLandedTimer.stop()
             Harness.report(
@@ -791,7 +794,9 @@ Item {
         id: mergeStoppedTimer
         onTriggered: {
             if (!Awaited.all("merge_stopped_ready", {
-                "ready": !(repoTab.busyCount !== 0 || !page.wipShown || worktree.conflictCount === 0) }))
+                "idle": repoTab.busyCount === 0,
+                "wip": page.wipShown,
+                "conflicts": worktree.conflictCount > 0 }))
                 return
             mergeStoppedTimer.stop()
             Harness.report(
@@ -817,7 +822,9 @@ Item {
             // the status that says the stop, and only the write's settle says both are in
             // (`session::write::settle_after`).
             if (!Awaited.all("op_stopped_ready", {
-                "ready": !(!driver.wroteAndSettled() || !page.wipShown || worktree.conflictCount === 0) }))
+                "written": driver.wroteAndSettled(),
+                "wip": page.wipShown,
+                "conflicts": worktree.conflictCount > 0 }))
                 return
             opStoppedTimer.stop()
             Harness.report(

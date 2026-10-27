@@ -46,7 +46,6 @@ Item {
             menuBlockTimer.owner = head === "" ? "eol" : head
             menuBlockTimer.stage = tail === "" ? "menu" : tail
             menuBlockTimer.step = 0
-            menuBlockTimer.waitedFrom = 0
             menuBlockTimer.start()
         } else if (act === "author-swap") {
             // `<from>:<to>` among `author` / `mates` / `parents`: one card out, the hand off its line and onto the
@@ -168,7 +167,6 @@ Item {
         property int step: 0
         /// The display went in the turn the menu's door returned.
         property bool downAtOnce: false
-        property real waitedFrom: 0
         readonly property string first: "src/flipped.kt"
         readonly property string second: "src/mixed.kt"
         function shown() {
@@ -338,15 +336,15 @@ Item {
                     return
                 }
                 menuBlockTimer.askOther()
-                // waits(timed): the absence is read from here — nothing may come under the menu in twice its rest
-                menuBlockTimer.waitedFrom = Date.now()
                 menuBlockTimer.step = 4
                 return
             }
             if (menuBlockTimer.step === 4) {
-                // Past the rest the other target would have waited: nothing came out under the menu.
-                // waits(timed): the product's rest, as a floor: a card that would come has come by then
-                if (Date.now() - menuBlockTimer.waitedFrom < 2 * Metrics.tipDelayMs)
+                // Nothing may come out under the menu: a seat the ask reached is deciding until its rest runs out
+                // (`PageSettled`'s `hover:` term), one the menu holds back keeps the ask and decides nothing — read
+                // after a frame and the page, what is not out was held back.
+                if (!Awaited.all("menu_block_asked", { "drawn": Awaited.drawnSince("menu_block_other"),
+                                                       "page": PageSettled.settled(page) }))
                     return
                 if (menuBlockTimer.stage === "other") {
                     menuBlockTimer.done("other")

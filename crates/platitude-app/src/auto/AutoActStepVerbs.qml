@@ -234,8 +234,10 @@ Item {
         onTriggered: {
             const row = graphPane.view.currentIndex
             if (!Awaited.all("graph_hold_report_ready", {
-                "ready": !(row < 0 || graphPane.stepSettling || page.selectedOid !== graphModel.oidAt(row)
-                    || !driver.cardSettled) }))
+                "row": row >= 0,
+                "settled": !graphPane.stepSettling,
+                "selected": row >= 0 && page.selectedOid === graphModel.oidAt(row),
+                "card": driver.cardSettled }))
                 return
             graphHoldReport.stop()
             Harness.report(
@@ -341,7 +343,8 @@ Item {
     SampleTimer {
         id: fileShutReport
         onTriggered: {
-            if (!Awaited.all("file_shut_report_ready", { "ready": !(page.diffShown), "page": PageSettled.settled(page) }))
+            if (!Awaited.all("file_shut_report_ready", { "ready": !(page.diffShown),
+                                                         "page": PageSettled.settled(page) }))
                 return
             fileShutReport.stop()
             const walk = fileStepTimer.walk
@@ -364,8 +367,10 @@ Item {
             const walk = fileStepTimer.walk
             // The landed diff asked for, arrived (a pane still reading photographs empty), and its lit row built.
             if (!Awaited.all("file_step_report_ready", {
-                "ready": !(!page.diffShown || page.diffPath === fileStepTimer.path || !diffPane.diffSettled()
-                    || walk.litPath() === ""),
+                "shown": page.diffShown,
+                "moved": page.diffPath !== fileStepTimer.path,
+                "diff": diffPane.diffSettled(),
+                "lit": !!walk && walk.litPath() !== "",
                 "page": PageSettled.settled(page) }))
                 return
             fileStepReport.stop()

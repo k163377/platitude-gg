@@ -527,10 +527,10 @@ Item {
         /// (`AutoActPlanVerbs`); on the others it would always read the same.
         property bool saysPlan: false
         onTriggered: {
-            if (!Awaited.all("notice_barrier_ready", { "ready": page.noticeCard.settled }))
-                return
-            // A diff the verb opened under the bar (`notice-over-diff`) is a git subprocess away: waited out too.
-            if (page.diffShown && !diffPane.diffSettled())
+            // And the page: a diff the verb opened under the bar (`notice-over-diff`) is a git subprocess away, and a
+            // refusal's reread lands after its bar.
+            if (!Awaited.all("notice_barrier_ready", { "bar": page.noticeCard.settled,
+                                                       "page": PageSettled.settled(page) }))
                 return
             noticeBarrier.stop()
             Harness.report(driver.noticeLine(noticeBarrier.saysPlan))
@@ -567,7 +567,7 @@ Item {
         onTriggered: {
             const words = diffPane.hunkWordsApart()
             // -1: the heading's row is not built yet.
-            if (!Awaited.all("heading_barrier_ready", { "ready": !(words < 0) }))
+            if (!Awaited.all("heading_barrier_ready", { "row": words >= 0, "page": PageSettled.settled(page) }))
                 return
             headingBarrier.stop()
             const caption = diffPane.captionApart()
@@ -581,7 +581,8 @@ Item {
     SampleTimer {
         id: menuGoneBarrier
         onTriggered: {
-            if (!Awaited.all("menu_gone_barrier_ready", { "ready": !(driver.menuGoing.visible) }))
+            if (!Awaited.all("menu_gone_barrier_ready", { "gone": !driver.menuGoing.visible,
+                                                          "page": PageSettled.settled(page) }))
                 return
             menuGoneBarrier.stop()
             driver.complete()

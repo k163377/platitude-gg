@@ -175,8 +175,10 @@ Item {
         }
         onTriggered: {
             const item = graphPane.view.itemAtIndex(reclickGraphTimer.row)
-            // Not laid out yet: latching a click here would wait for an answer to a question nobody put.
-            if (!Awaited.all("reclick_graph_ready", { "ready": item }))
+            // Not laid out yet: latching a click here would wait for an answer to a question nobody put. Named for
+            // the step: the scroll pools the row and the box's return rebuilds it, which is the last step's row
+            // coming, not the first step's reached again.
+            if (!Awaited.all("reclick_graph_row/" + acts.reclickGraphStep, { "row": !!item }))
                 return
             if (acts.reclickGraphStep === 0) {
                 // Written where a real pointer writes it, so the row makes every decision after that itself
@@ -186,8 +188,10 @@ Item {
                 item.leftClick(Qt.NoModifier)
                 acts.reclickGraphStep = 1
             } else if (acts.reclickGraphStep === 1) {
-                // Inside the double-click window a second click would be half a double-click.
-                if (item.clickGuarded)
+                // Inside the double-click window a second click would be half a double-click; and the details the
+                // first click asked for land first, or `-mark` completes over that read.
+                if (!Awaited.all("reclick_graph_second", { "window": !item.clickGuarded,
+                                                           "details": page.pageDetailsSettled }))
                     return
                 // waits(measured): the origin of the `wait=` below, which the report prints and nothing here reads
                 acts.reclickGraphAt = Date.now()

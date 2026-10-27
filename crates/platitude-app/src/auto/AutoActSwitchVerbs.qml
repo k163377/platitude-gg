@@ -406,7 +406,9 @@ Item {
         property int stashes: -1
         onTriggered: {
             if (!Awaited.all("switch_stopped_landed_ready", {
-                "ready": !(!driver.wroteAndSettled() || worktree.opCommand !== "" || !graphPane.askCard.shut),
+                "written": driver.wroteAndSettled(),
+                "done": worktree.opCommand === "",
+                "shut": graphPane.askCard.shut,
                 "stashes": switchStoppedLandedTimer.stashes < 0
                     || stashesModel.total === switchStoppedLandedTimer.stashes,
                 "page": PageSettled.settled(page) }))

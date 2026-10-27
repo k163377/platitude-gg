@@ -112,7 +112,7 @@ Item {
         /// Whether a fetch went out for this run, to wait out.
         property bool fetched: false
         onTriggered: {
-            if (!Awaited.all("card_ready", { "ready": acts.menuLive("github_card", cardTimer.fetched) }))
+            if (!Awaited.all("github_card_ready", { "ready": acts.menuLive("github_card", cardTimer.fetched) }))
                 return
             cardTimer.stop()
             page.openRowMenu(graphModel.oidAt(cardTimer.row))
@@ -147,7 +147,7 @@ Item {
         property string remote: ""
         property bool others: false
         onTriggered: {
-            if (!Awaited.all("remote_ready", { "ready": acts.menuLive("github_remote", false) }))
+            if (!Awaited.all("github_remote_ready", { "ready": acts.menuLive("github_remote", false) }))
                 return
             remoteTimer.stop()
             page.openRemoteMenu(remoteTimer.remote)

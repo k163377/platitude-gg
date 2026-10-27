@@ -44,9 +44,9 @@ Item {
         // In scene coordinates: a margin that misses is what this looks for.
         onTriggered: {
             const at = mainUi.mapToItem(null, 0, 0)
-            if (!Awaited.all("fill_report_ready", {
-                "ready": !(at.x !== 0 || at.y !== 0 || mainUi.width !== window.width
-                    || mainUi.height !== window.height),
+            if (!Awaited.all("window_fill_report_ready", {
+                "placed": at.x === 0 && at.y === 0,
+                "filled": mainUi.width === window.width && mainUi.height === window.height,
                 "page": PageSettled.windowSettled(window) }))
                 return
             stop()
@@ -81,7 +81,7 @@ Item {
                 // empty band's. With no repository to open (`--restore`) the floor is the blank page's.
                 if (!Awaited.all("window_floor_blank", {
                     "page": Harness.autoOpen === ""
-                        || (window.curPage !== null && PageSettled.settled(window.curPage)),
+                        || PageSettled.settledUnder(window),
                     "floor": window.width >= window.floorWidth && window.height >= window.floorHeight }))
                     return
                 // Through the report stage like the other forms: the band's floor is `bandRow.Layout.minimumWidth`,
@@ -94,7 +94,7 @@ Item {
             // arrives (`WindowBody.floorPage`). Its tree read too, or the face stands at four zeroes and `wipScrolls=`
             // answers for an empty pane.
             if (!Awaited.all("window_floor_page", {
-                "page": window.curPage !== null && PageSettled.settled(window.curPage) }))
+                "page": PageSettled.settledUnder(window) }))
                 return
             if (!floorActTimer.shapeRequested) {
                 floorActTimer.shapeRequested = true

@@ -90,6 +90,43 @@ Item {
         property bool pageLanding: false
         property var pageGraphPane: ({placing: false})
         property var pageGraph: graphState
+        property bool diffShown: false
+        property bool diffDone: true
+        property var pageDiff: ({diffSettled: () => page.diffDone})
+    }
+    /// A page that is an item with a list on it (a `RepoPage` is one): the rows term walks the page for its lists.
+    Item {
+        id: listedPage
+        y: 200
+        width: 200
+        height: 40
+        property var pageTab: ({state: "open"})
+        property var pageWorktree: ({loaded: true, wipRowStands: false})
+        property bool pageRefsLoaded: true
+        property bool pageDetailsSettled: true
+        property bool pageCarriedSettled: true
+        property bool pageLanding: false
+        property var pageGraphPane: ({placing: false})
+        property var pageGraph: graphState
+        ListModel {
+            id: listedRows
+        }
+        AppListView {
+            id: listed
+            anchors.fill: parent
+            cacheBuffer: 0
+            model: listedRows
+            delegate: Item {
+                width: listed.width
+                height: 20
+            }
+        }
+    }
+    /// A seat deciding what the hand gets (`HoverSeat`), as the product's rows and tips hold one.
+    readonly property HoverSeat deciding: HoverSeat {
+        id: decidingSeat
+        restMs: 20
+        graceMs: 20
     }
     readonly property QtObject graphState: QtObject {
         id: graphState
@@ -145,6 +182,11 @@ Item {
             graphState.failed = false
             graphState.stale = false
             page.pageCarriedSettled = true
+            page.diffShown = false
+            page.diffDone = true
+            listedRows.clear()
+            listed.visible = true
+            decidingSeat.takeDown("cleanup", false)
             census.atCompletion = null
             census.harnessBranch = null
             window.curPage = null
@@ -292,6 +334,54 @@ Item {
             compare(census.pageMissing(), ["readings"])
             graphState.readings.done = true
             compare(census.pageMissing(), [])
+        }
+
+        // A diff shown is a read of the page's while the pane is still reading it.
+        function test_a_diff_still_reading_is_owed() {
+            page.diffShown = true
+            page.diffDone = false
+            compare(Automation.PageSettled.missing(page), ["diff"])
+            page.diffDone = true
+            verify(Automation.PageSettled.settled(page))
+        }
+
+        // A seat resting before it opens something under the hand, or beating before it takes it down, is a decision
+        // on its way (`hover:<key>`, the key spelled safe for the line).
+        function test_a_hover_decision_on_its_way_is_owed() {
+            verify(Automation.PageSettled.settled(page))
+            decidingSeat.point({ "key": "row:1" })
+            compare(Automation.PageSettled.missing(page), ["hover:row_1"])
+            tryCompare(decidingSeat, "state", "shown")
+            verify(Automation.PageSettled.settled(page))
+            decidingSeat.unpoint("row:1")
+            compare(Automation.PageSettled.missing(page), ["hover:row_1"])
+            tryCompare(decidingSeat, "state", "idle")
+            verify(Automation.PageSettled.settled(page))
+        }
+
+        // The rows of a list the page shows come a polish after the model lands: owed until the view has built them,
+        // found by walking the page; a list not shown owes nothing.
+        function test_a_lists_rows_are_owed_until_the_view_has_built_them() {
+            verify(Automation.PageSettled.settled(listedPage))
+            listedRows.append({})
+            compare(Automation.PageSettled.missing(listedPage), ["rows:AppListView"])
+            verify(waitForRendering(listed))
+            verify(Automation.PageSettled.settled(listedPage))
+            listed.visible = false
+            listedRows.append({})
+            verify(Automation.PageSettled.settled(listedPage))
+        }
+
+        // A window with no page yet is settled for an act that reads nothing of a page, and not for one that does.
+        function test_a_window_is_settled_with_no_page_or_with_its_page_settled() {
+            verify(Automation.PageSettled.windowSettled(window))
+            verify(!Automation.PageSettled.settledUnder(window))
+            window.curPage = page
+            verify(Automation.PageSettled.windowSettled(window))
+            verify(Automation.PageSettled.settledUnder(window))
+            graphState.loading = true
+            verify(!Automation.PageSettled.windowSettled(window))
+            verify(!Automation.PageSettled.settledUnder(window))
         }
     }
 }

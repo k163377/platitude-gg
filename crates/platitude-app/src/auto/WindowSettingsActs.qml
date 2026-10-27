@@ -112,6 +112,8 @@ Item {
             // A stock-take that named nothing ends both verbs: an empty list is a card with nothing to drop, which
             // closes itself (`AppCombo.hasList`), so neither `opened` nor the loading edge can follow.
             if (acts.toolsCameBack && acts.gitPane.toolChoices.length === 0) {
+                if (!Awaited.all("settings_tools_none", { "page": PageSettled.windowSettled(window) }))
+                    return
                 stop()
                 acts.reportTool()
                 Harness.report("merge_editor_none this machine's stock-take named no merge editor, "
@@ -206,7 +208,7 @@ Item {
             // The screen asks as it opens, so an answer is coming either way; after a pick, this is the later ask's.
             if (!Awaited.all("git_path_answered", {
                 "state": AppBackend.gitPathState !== "" && AppBackend.gitPathState !== "checking",
-                "page": window.curPage !== null && PageSettled.settled(window.curPage) }))
+                "page": PageSettled.settledUnder(window) }))
                 return
             gitPathTimer.stop()
             // The write the way out makes, with the screen still up for the picture: the file a seeded run started
@@ -585,7 +587,8 @@ Item {
                 toolEnterTimer.pressedShut = true
                 return
             }
-            if (settingsDialog.opened)
+            if (!Awaited.all("tools_enter_left", { "shut": !settingsDialog.opened,
+                                                   "page": PageSettled.windowSettled(window) }))
                 return
             toolEnterTimer.stop()
             Harness.report("merge_editor_enter stood=" + toolEnterTimer.stood + " left=true")

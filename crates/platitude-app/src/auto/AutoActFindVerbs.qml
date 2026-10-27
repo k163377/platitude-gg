@@ -474,7 +474,8 @@ Item {
     SampleTimer {
         id: commandsSweepTimer
         onTriggered: {
-            if (!Awaited.all("commands_sweep_ready", { "ready": driver.wroteAndSettled(), "page": PageSettled.settled(page) }))
+            if (!Awaited.all("commands_sweep_ready", { "ready": driver.wroteAndSettled(),
+                                                       "page": PageSettled.settled(page) }))
                 return
             if (!page.commandsShown || page.pageCommands.running || page.pageCommands.rowsHeld() < 2)
                 return

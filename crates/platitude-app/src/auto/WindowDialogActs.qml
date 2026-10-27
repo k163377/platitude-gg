@@ -112,7 +112,7 @@ Item {
                 "done": !cloneModel.cloning,
                 "answer": act === "clone-refused" ? cloneDialog.refusal !== ""
                                                   : pageRepeater.count > cloneTimer.tabsBefore,
-                "page": window.curPage !== null && PageSettled.settled(window.curPage) }))
+                "page": PageSettled.settledUnder(window) }))
                 return
             cloneTimer.stop()
             acts.reportClone()
@@ -461,7 +461,9 @@ Item {
         running: Harness.autoAct === "gate-sweep"
         onTriggered: {
             if (!Awaited.all("gate_sweep_ready", {
-                "ready": !(!AppBackend.alreadyRunning || !gate.visible || AppBackend.heldElsewhere === ""),
+                "running": AppBackend.alreadyRunning,
+                "gate": gate.visible,
+                "held": AppBackend.heldElsewhere !== "",
                 "page": PageSettled.windowSettled(window) }))
                 return
             stop()

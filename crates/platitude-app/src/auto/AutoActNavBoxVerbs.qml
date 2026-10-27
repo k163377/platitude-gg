@@ -191,7 +191,8 @@ Item {
             // animates in after the words, so a shot on the answer alone catches it still on its way down
             // (`NoticeBar.settled`).
             if (!Awaited.all("rename_taken_ready", {
-                "ready": !(repoTab.busyCount !== 0 || !page.noticeCard.open || !page.noticeCard.settled) }))
+                "idle": repoTab.busyCount === 0,
+                "bar": page.noticeCard.open && page.noticeCard.settled }))
                 return
             renameTakenTimer.stop()
             Harness.report("rename_taken open=" + (sidebarPane.editKey !== "")

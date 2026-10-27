@@ -181,8 +181,6 @@ Item {
     }
 
     /// The one rule (`PageSettled`) of the page in front — the same the page and badge verbs wait on, never a copy.
-    /// A binding, so the ceiling's line reads it as it stands (`AutoShotDriver.censusState`).
-    readonly property bool settled: census.pageSettled()
     function pageSettled() {
         return census.pageMissing().length === 0
     }
@@ -222,7 +220,8 @@ Item {
         if (artifact !== "app")
             return
         const owed = census.pageMissing()
-        Harness.report("census run=" + Awaited.runId + " page=" + (owed.length === 0 ? "settled" : "arriving:" + owed.join(","))
+        Harness.report("census run=" + Awaited.runId
+                       + " page=" + (owed.length === 0 ? "settled" : "arriving:" + owed.join(","))
                        + " " + census.terms())
         Harness.report("census=" + Object.keys(census.met).sort().join(","))
     }

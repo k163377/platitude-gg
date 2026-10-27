@@ -352,7 +352,8 @@ Item {
     SampleTimer {
         id: worktreeHeldTimer
         onTriggered: {
-            if (!Awaited.all("worktree_held_ready", { "ready": driver.wroteAndSettled(), "page": PageSettled.settled(page) }))
+            if (!Awaited.all("worktree_held_ready", { "ready": driver.wroteAndSettled(),
+                                                      "page": PageSettled.settled(page) }))
                 return
             worktreeHeldTimer.stop()
             const branch = repoTab.goneWorktreeBranch

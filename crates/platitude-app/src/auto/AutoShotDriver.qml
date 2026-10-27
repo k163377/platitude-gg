@@ -44,15 +44,11 @@ Item {
     /// could land in.
     signal pictured(string artifact)
 
-    /// Whether the page had settled, for the watchdog's line alone. Bound by whoever holds the census
-    /// (`WindowHarness`).
-    property string censusState: "-"
     /// Where the run's own write had got to, for the watchdog's line — written by the page that claimed the run
     /// (`Main.noteAutoActWrite` ← `AutoActDriver`), so a run that never reached a page keeps the dash.
     property string writeState: "-"
-    /// Frames swapped and when the last one was (-1 for none), for the watchdog's line: it separates a term stuck over
-    /// a scene still drawing from one over a scene that stopped (`Awaited` names the term).
-    property int framesSwapped: 0
+    /// When the last frame swapped (-1 for none), for the watchdog's line: with the frames counted (`Awaited.frames`)
+    /// it separates a term stuck over a scene still drawing from one over a scene that stopped.
     property real lastFrameAt: -1
 
     function claimPageAct() {
@@ -92,7 +88,6 @@ Item {
     Connections {
         target: driver.window
         function onFrameSwapped() {
-            driver.framesSwapped++
             driver.lastFrameAt = PerfProbe.clockMs()
             driver.scheduleShot()
         }
@@ -115,10 +110,8 @@ Item {
         interval: Math.max(Harness.autoWatchdogMs, 1)
         onTriggered: {
             console.warn("auto-act watchdog expired verb=" + Harness.autoAct)
-            // `census=arriving`: the window still had a read on its way (`WindowCensus.pageSettled`).
             console.warn("shot state grabbing=" + driver.appGrabbing + " saved=" + driver.appSaved
-                         + " parts=" + driver.shotParts + " ink=" + Ink.owed
-                         + " census=" + driver.censusState)
+                         + " parts=" + driver.shotParts + " ink=" + Ink.owed)
             // What the write barrier was holding, if the run wanted a write
             // (rules-refs/app-ui.md「天井まで行った run は…」).
             console.warn("write state " + driver.writeState)
@@ -126,7 +119,7 @@ Item {
             const now = PerfProbe.clockMs()
             console.warn("awaited " + (Awaited.said === "" ? "unsaid"
                                        : Awaited.said + " for " + Math.round(now - Awaited.since) + "ms"))
-            console.warn("frames swapped=" + driver.framesSwapped + " last="
+            console.warn("frames swapped=" + Awaited.frames + " last="
                          + (driver.lastFrameAt < 0 ? "never" : Math.round(now - driver.lastFrameAt) + "ms ago"))
             // Which of the page's reads never came (`PageSettled`) — from the verb's side it looks like its own term.
             const page = driver.window ? driver.window.curPage : null

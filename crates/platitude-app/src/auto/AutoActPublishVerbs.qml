@@ -232,7 +232,9 @@ Item {
         id: pushTargetTimer
         onTriggered: {
             if (!Awaited.all("push_target_ready", {
-                "ready": !(!worktree.loaded || repoTab.state !== "open" || repoTab.busyCount > 0) }))
+                "loaded": worktree.loaded,
+                "open": repoTab.state === "open",
+                "idle": repoTab.busyCount === 0 }))
                 return
             pushTargetTimer.stop()
             Harness.report("push_target label=" + page.pushTargetLabel
@@ -341,7 +343,8 @@ Item {
     SampleTimer {
         id: fetchedRefListTimer
         onTriggered: {
-            if (!Awaited.all("fetched_ref_list_ready", { "ready": driver.wroteAndSettled(), "page": PageSettled.settled(page) }))
+            if (!Awaited.all("fetched_ref_list_ready", { "ready": driver.wroteAndSettled(),
+                                                         "page": PageSettled.settled(page) }))
                 return
             // `<row>` or `<row>:<tag>` — the second reports that one tag's line.
             const asked = ("" + Harness.autoActArg).split(":")

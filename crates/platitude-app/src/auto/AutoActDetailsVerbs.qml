@@ -318,7 +318,9 @@ Item {
             // Both sides have to exist and the row has to have stopped moving — the same wait as `details-sweep`.
             const row = detailsPane.valueRow
             if (!Awaited.all("details_hand_ready", {
-                "ready": !(!driver.cardSettled || !row.valueReady("hash") || row.shownValue("hash") === "") }))
+                "card": driver.cardSettled,
+                "value": row.valueReady("hash"),
+                "shown": row.shownValue("hash") !== "" }))
                 return
             const geom = row.valueGeom("hash")
             if (!Awaited.still("details_hand_geom", geom))
@@ -427,7 +429,9 @@ Item {
             const want = plate.parents
             const first = driver.detailsModel.parentHex
             if (!Awaited.all("details_parents_ready", {
-                "ready": !(!driver.cardSettled || detailsPane.width <= 0 || (want.length > 0 ? want[0] : "") !== first) }))
+                "card": driver.cardSettled,
+                "sized": detailsPane.width > 0,
+                "first": (want.length > 0 ? want[0] : "") === first }))
                 return
             // Settled when two samples agree: the pane lays out more than once on its way to a commit, and a width
             // asked for arrives a frame after the row it resizes.
@@ -595,7 +599,8 @@ Item {
         // answer, and what this verb is about is tens of pixels.
         onTriggered: {
             if (!Awaited.all("details_fit_ready", {
-                "ready": !(!driver.cardSettled || detailsPane.width <= 0 || detailsPane.height <= 0) }))
+                "card": driver.cardSettled,
+                "sized": detailsPane.width > 0 && detailsPane.height > 0 }))
                 return
             // The row has to have stopped moving: mid-layout the row and its block are both some other width, and
             // `fills` answers true about a frame nobody sees.
