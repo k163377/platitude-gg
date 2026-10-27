@@ -382,6 +382,31 @@ pub(crate) fn opens_a_value(chars: &[char], at: usize) -> bool {
     VALUE_WORDS.contains(&word_ending_at(chars, before).as_str())
 }
 
+/// Whether a statement begins at `at`: after a `;`, a brace, the start
+/// of the file, the `)` closing a condition ([`CONDITION_WORDS`]), an
+/// `else` or a `do`, or a line that ended on a value (QML supplies the
+/// `;`). Not the same question as [`opens_a_value`]: after `else` or a
+/// condition's `)` both a value and a statement may begin, and after a
+/// line that ended on an operator neither does.
+pub(crate) fn opens_a_statement(chars: &[char], at: usize) -> bool {
+    let Some(before) = chars[..at].iter().rposition(|c| !c.is_whitespace()) else {
+        return true;
+    };
+    let c = chars[before];
+    if matches!(c, ';' | '{' | '}') {
+        return true;
+    }
+    if c == ')' && closes_a_condition(chars, before) {
+        return true;
+    }
+    if (c.is_alphanumeric() || c == '_')
+        && matches!(word_ending_at(chars, before).as_str(), "else" | "do")
+    {
+        return true;
+    }
+    chars[before + 1..at].contains(&'\n') && !opens_a_value(chars, at)
+}
+
 /// Whether the `)` at `close` closes the parenthesis of a
 /// [`CONDITION_WORDS`] word.
 fn closes_a_condition(chars: &[char], close: usize) -> bool {
@@ -521,18 +546,43 @@ const OPERATORS: [&str; 19] = [
     "||", "??", "::", "->",
 ];
 
-/// The tokens of `code` — a code view, its comments and literals already
-/// blank: names (a `.`-joined path is several), numbers, and operators or
-/// punctuation one at a time. Spacing is no token.
-pub(crate) fn tokens(code: &str) -> Vec<Token> {
-    let chars: Vec<char> = code.chars().collect();
+/// The tokens of `text` in `lang`: names (a `.`-joined path is several),
+/// numbers, operators or punctuation one at a time, and each literal as
+/// one token of its own text — a string, a regular expression, a piece of
+/// a template with the `` ` ``, `${` and `}` that bound it — so that none
+/// of them reads as a name, a keyword or a bracket, and a line closing on
+/// one closes as a line closing on a name does. Comments and spacing are
+/// no token. Where the lexical reading stopped ([`lexemes`]) the tokens
+/// stop with it: what stands past that is not read.
+pub(crate) fn tokens(text: &str, lang: Lang) -> Vec<Token> {
+    let chars: Vec<char> = text.chars().collect();
+    let (lexemes, _) = lexemes(&chars, lang);
     let mut out = Vec::new();
     let mut line = 1;
+    for lexeme in lexemes {
+        let span = &chars[lexeme.start..lexeme.end];
+        match lexeme.kind {
+            Kind::Code => cut_code(span, &mut line, &mut out),
+            Kind::Literal => {
+                out.push(Token {
+                    text: span.iter().collect(),
+                    line,
+                });
+                line += span.iter().filter(|c| **c == '\n').count();
+            }
+            Kind::Comment => line += span.iter().filter(|c| **c == '\n').count(),
+        }
+    }
+    out
+}
+
+/// The tokens of a stretch of code, `line` carried across it.
+fn cut_code(chars: &[char], line: &mut usize, out: &mut Vec<Token>) {
     let mut i = 0;
     while i < chars.len() {
         let c = chars[i];
         if c == '\n' {
-            line += 1;
+            *line += 1;
         }
         if c.is_whitespace() {
             i += 1;
@@ -556,16 +606,38 @@ pub(crate) fn tokens(code: &str) -> Vec<Token> {
         };
         out.push(Token {
             text: chars[i..i + len].iter().collect(),
-            line,
+            line: *line,
         });
         i += len;
     }
-    out
+}
+
+/// The index of the `close` matching the `open` at `at`.
+pub(crate) fn matching_close(
+    tokens: &[crate::lex::Token],
+    at: usize,
+    open: &str,
+    close: &str,
+) -> Option<usize> {
+    let mut depth = 0;
+    for (k, token) in tokens.iter().enumerate().skip(at) {
+        if token.text == open {
+            depth += 1;
+        } else if token.text == close {
+            depth -= 1;
+            if depth == 0 {
+                return Some(k);
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Kind, Lang, Unread, lexemes, normalized, opens_a_value, tokens};
+    use super::{
+        Kind, Lang, Unread, lexemes, normalized, opens_a_statement, opens_a_value, tokens,
+    };
 
     fn kinds(text: &str, lang: Lang) -> (Vec<(Kind, String)>, Option<Unread>) {
         let chars: Vec<char> = text.chars().collect();
@@ -759,9 +831,35 @@ mod tests {
         assert_eq!(kept, "a: 'x'     ");
     }
 
+    /// A literal is one token of its own text, a template's pieces one each with the code between them cut as
+    /// code; a comment is none; the lines are the file's.
+    /// A statement's head is read where the ignored rule needs it: under a bare condition or an `else`, on the
+    /// condition's own line, after a line that ended on a value — and not where a line goes on.
     #[test]
-    fn tokens_are_names_numbers_and_operators_with_their_lines() {
-        let read: Vec<(String, usize)> = tokens("acts.beats++;\nif (x <= 10) a = b + 1")
+    fn a_statement_begins_after_a_condition_an_else_or_a_line_that_ended_on_a_value() {
+        let heads = |text: &str| {
+            let chars: Vec<char> = text.chars().collect();
+            opens_a_statement(&chars, text.find("go").expect("go"))
+        };
+        assert!(heads("if (ok)\n    go()"));
+        assert!(heads("if (ok) go()"));
+        assert!(heads("while (f(x))\n    go()"));
+        assert!(heads("else\n    go()"));
+        assert!(heads("do go()"));
+        assert!(heads("x = 1\ngo()"));
+        assert!(heads("{ go()"));
+        assert!(heads("go()"));
+        assert!(!heads("f(a)\n    .go()"));
+        assert!(!heads("a +\n    go()"));
+        assert!(!heads("f(a)\n    + go()"));
+        assert!(!heads("f(a) go()"));
+    }
+
+    #[test]
+    fn tokens_are_names_numbers_operators_and_literals_with_their_lines() {
+        let text =
+            "acts.beats++; // a comment\nif (x <= 10) a = b + 1\nc = 'y' + `t ${z}\n` + \"w\"";
+        let read: Vec<(String, usize)> = tokens(text, Lang::Qml)
             .into_iter()
             .map(|t| (t.text, t.line))
             .collect();
@@ -770,10 +868,25 @@ mod tests {
             texts,
             [
                 "acts", ".", "beats", "++", ";", "if", "(", "x", "<=", "10", ")", "a", "=", "b",
-                "+", "1"
+                "+", "1", "c", "=", "'y'", "+", "`t ${", "z", "}\n`", "+", "\"w\""
             ]
         );
         assert_eq!(read[3].1, 1);
         assert_eq!(read[5].1, 2);
+        assert_eq!(read[16].1, 3, "the line after a comment");
+        assert_eq!(
+            read[22].1, 3,
+            "a template's last piece stands where it begins"
+        );
+        assert_eq!(read[24].1, 4, "the line after a template that spans two");
+        let short: Vec<String> = tokens("a = 1 // c\nb = \"open", Lang::Qml)
+            .into_iter()
+            .map(|t| t.text)
+            .collect();
+        assert_eq!(
+            short,
+            ["a", "=", "1"],
+            "the stretch the stop is in is no token"
+        );
     }
 }

@@ -226,8 +226,10 @@ fn report(findings: &[Finding], exceptions: &[Exception], read: &Read) -> Result
         "{} wait(s) that spend the clock or read no answer: end a wait on the answer \
          (a completion handle, an event, a hand-driven poll), take the budget from the suite \
          (`bounded`) — or, in this runner's own body, the wait from `crate::wait` (`Wait`, \
-         `receive`, `stood`) — read what a wait answered, or say on the line why this one \
-         stands (`// waits(<purpose>): <reason>`, purposes paced / ceiling / measured / timed)",
+         `receive`, `stood`) — read what a wait answered, put a count of beats or frames on the \
+         edge it waits for (`Awaited.still` / `drawnSince` / `built`, a property of the product's), \
+         fix what an `unread` file or handler stopped the reading on, or say on the line why this \
+         one stands (`// waits(<purpose>): <reason>`, purposes paced / ceiling / measured / timed)",
         findings.len()
     ))
 }
