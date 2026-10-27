@@ -28,7 +28,8 @@ Item {
     SampleTimer {
         running: Harness.autoAct === "open-picker"
         onTriggered: {
-            if (!folderDialog.visible)
+            if (!Awaited.all("open_picker_ready", { "shown": folderDialog.visible,
+                                                    "page": PageSettled.windowSettled(window) }))
                 return
             stop()
             Harness.report(acts.pickerLine())
@@ -86,7 +87,9 @@ Item {
                     cloneTimer.opened = true
                     return
                 }
-                if (!cloneDialog.opened)
+                // The page behind the dialog whole (`PageSettled`): it is in the picture too.
+                if (!Awaited.all("clone_dialog_ready", { "dialog": cloneDialog.opened,
+                                                          "page": PageSettled.settled(window.curPage) }))
                     return
                 if (act === "clone-dialog") {
                     cloneTimer.stop()
@@ -104,13 +107,12 @@ Item {
                 cloneTimer.asked = true
                 return
             }
-            if (cloneModel.cloning)
-                return
             // git's answer: the refusal line, or the new tab with its page open (what the picture is of).
-            if (act === "clone-refused"
-                ? cloneDialog.refusal === ""
-                : (pageRepeater.count <= cloneTimer.tabsBefore
-                   || window.curPage === null || window.curPage.pageTab.state !== "open"))
+            if (!Awaited.all("clone_landed", {
+                "done": !cloneModel.cloning,
+                "answer": act === "clone-refused" ? cloneDialog.refusal !== ""
+                                                  : pageRepeater.count > cloneTimer.tabsBefore,
+                "page": window.curPage !== null && PageSettled.settled(window.curPage) }))
                 return
             cloneTimer.stop()
             acts.reportClone()
@@ -151,7 +153,8 @@ Item {
     SampleTimer {
         id: pickAnswerTimer
         onTriggered: {
-            if (!openFailedDialog.opened)
+            if (!Awaited.all("pick_answer_ready", { "ready": openFailedDialog.opened,
+                                                    "page": PageSettled.windowSettled(window) }))
                 return
             if (Harness.autoAct === "open-dialog-sweep") {
                 pickAnswerTimer.stop()
@@ -179,7 +182,8 @@ Item {
     SampleTimer {
         id: pickSettleTimer
         onTriggered: {
-            if (openFailedDialog.opened)
+            if (!Awaited.all("pick_settle_ready", { "ready": !(openFailedDialog.opened),
+                                                    "page": PageSettled.windowSettled(window) }))
                 return
             pickSettleTimer.stop()
             acts.reportPick()
@@ -219,8 +223,10 @@ Item {
         id: failTabTimer
         property bool commandsRequested: false
         onTriggered: {
-            if (window.curPage === null || window.curPage.pageTab.state !== "error"
-                    || window.curPage.pageTab.errorKind === "")
+            if (!Awaited.all("fail_tab_ready", {
+                "ready": !(window.curPage === null || window.curPage.pageTab.state !== "error"
+                    || window.curPage.pageTab.errorKind === ""),
+                "page": PageSettled.windowSettled(window) }))
                 return
             if (Harness.autoAct === "open-fail-tab-log" && window.curPage !== null)
                 if (!failTabTimer.commandsRequested) {
@@ -268,7 +274,8 @@ Item {
                               && AppBackend.identityState === "ready"
                               && AppBackend.identityUnsaved
                               && identityDialog.opened
-            if (!wholeReady && !halfReady)
+            if (!Awaited.all("identity_ready", { "ready": wholeReady || halfReady,
+                                                 "page": PageSettled.windowSettled(window) }))
                 return
             stop()
             Harness.report(
@@ -292,7 +299,9 @@ Item {
     SampleTimer {
         running: Harness.autoAct === "identity-tip"
         onTriggered: {
-            if (!identityDialog.opened || !AppBackend.identityUnsaved)
+            if (!Awaited.all("identity_tip_dismiss_ready", { "dialog": identityDialog.opened,
+                                                             "unsaved": AppBackend.identityUnsaved,
+                                                             "page": PageSettled.windowSettled(window) }))
                 return
             window.dismissIdentity()
             stop()
@@ -304,7 +313,8 @@ Item {
     SampleTimer {
         id: identityTipTimer
         onTriggered: {
-            if (identityDialog.opened)
+            if (!Awaited.all("identity_tip_ready", { "ready": !(identityDialog.opened),
+                                                     "page": PageSettled.windowSettled(window) }))
                 return
             topBar.statePointedAt = true
             stop()
@@ -319,7 +329,8 @@ Item {
     SampleTimer {
         id: identityTipReport
         onTriggered: {
-            if (!topBar.stateCardOpen)
+            if (!Awaited.all("identity_tip_report_ready", { "ready": topBar.stateCardOpen,
+                                                            "page": PageSettled.windowSettled(window) }))
                 return
             stop()
             // `rows=` is read without waiting for the card's layout (unlike `badges-hover`): one row cannot come out of
@@ -350,7 +361,8 @@ Item {
         property bool retried: false
         property int seqBefore: -1
         onTriggered: {
-            if (window.curPage === null)
+            // Not the settled page: the commit below moves it, and the landings read it settled by name.
+            if (!Awaited.all("quit_ready", { "ready": !(window.curPage === null) }))
                 return
             const tab = window.curPage.pageTab
             if (!quitTimer.committed) {
@@ -371,7 +383,8 @@ Item {
                 return
             }
             if (Harness.autoAct === "quit-waits") {
-                if (!quitWaitDialog.opened)
+                if (!Awaited.all("quit_wait_landed", { "dialog": quitWaitDialog.opened,
+                                                       "page": PageSettled.windowSettled(window) }))
                     return
                 stop()
                 Harness.report("quit_wait dialog=" + quitWaitDialog.opened
@@ -389,13 +402,16 @@ Item {
                 return
             }
             // The held write landed under the lock: `writeSeq` past `seqBefore` is its answer, busy at zero the queue
-            // done with it.
-            if (!quitWaitDialog.opened || tab.busyCount !== 0 || tab.writeSeq <= quitTimer.seqBefore)
-                return
-            // And reached the screen: the answer comes before the status is read again (`session::write::run_write`),
-            // and this commit takes the worktree row off: ending on the answer flips `WipTallyRow` in the census.
+            // done with it. And reached the screen: the answer comes before the status is read again
+            // (`session::write::run_write`), and this commit takes the worktree row off: ending on the answer flips
+            // `WipTallyRow` in the census.
             const page = window.curPage
-            if (page.pageWorktree.wipRowStands || !PageSettled.settled(page))
+            if (!Awaited.all("quit_lock_landed", {
+                "dialog": quitWaitDialog.opened,
+                "idle": tab.busyCount === 0,
+                "landed": tab.writeSeq > quitTimer.seqBefore,
+                "row": !page.pageWorktree.wipRowStands,
+                "page": PageSettled.settled(page) }))
                 return
             stop()
             Harness.report("quit_lock dialog=" + quitWaitDialog.opened
@@ -424,7 +440,8 @@ Item {
                 window.close()
                 return
             }
-            if (!quitWaitDialog.opened)
+            if (!Awaited.all("quit_save_ready", { "dialog": quitWaitDialog.opened,
+                                                  "page": PageSettled.windowSettled(window) }))
                 return
             stop()
             Harness.report("quit_save dialog=" + quitWaitDialog.opened
@@ -443,7 +460,9 @@ Item {
         id: gateSweepTimer
         running: Harness.autoAct === "gate-sweep"
         onTriggered: {
-            if (!AppBackend.alreadyRunning || !gate.visible || AppBackend.heldElsewhere === "")
+            if (!Awaited.all("gate_sweep_ready", {
+                "ready": !(!AppBackend.alreadyRunning || !gate.visible || AppBackend.heldElsewhere === ""),
+                "page": PageSettled.windowSettled(window) }))
                 return
             stop()
             // `held=`: an empty gate has air and no fields.

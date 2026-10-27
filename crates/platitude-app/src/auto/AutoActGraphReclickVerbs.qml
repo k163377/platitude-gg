@@ -176,7 +176,7 @@ Item {
         onTriggered: {
             const item = graphPane.view.itemAtIndex(reclickGraphTimer.row)
             // Not laid out yet: latching a click here would wait for an answer to a question nobody put.
-            if (!item)
+            if (!Awaited.all("reclick_graph_ready", { "ready": item }))
                 return
             if (acts.reclickGraphStep === 0) {
                 // Written where a real pointer writes it, so the row makes every decision after that itself
@@ -270,7 +270,7 @@ Item {
         property int row: 0
         onTriggered: {
             const item = graphPane.view.itemAtIndex(laneClickTimer.row)
-            if (!item)
+            if (!Awaited.all("lane_click_ready", { "ready": item }))
                 return
             if (acts.laneClickStep === 0) {
                 // The strip is only up while the lanes overflow, so the column is squeezed to its floor first.
@@ -323,7 +323,7 @@ Item {
         }
         onTriggered: {
             const item = graphPane.view.itemAtIndex(elsewhereClickTimer.row)
-            if (!item)
+            if (!Awaited.all("elsewhere_click_ready", { "ready": item }))
                 return
             const step = acts.elsewhereStep
             // Spaced from the click before: inside its window the next press would be half a double-click.

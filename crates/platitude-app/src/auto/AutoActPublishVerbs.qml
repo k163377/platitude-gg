@@ -184,7 +184,8 @@ Item {
     SampleTimer {
         id: pushDefaultTimer
         onTriggered: {
-            if (repoTab.markedOrigin !== driver.markWanted || repoTab.busyCount > 0)
+            if (!Awaited.all("push_default_ready", {
+                "ready": !(repoTab.markedOrigin !== driver.markWanted || repoTab.busyCount > 0) }))
                 return
             pushDefaultTimer.stop()
             // The judged fields lead, and together: `must_say` reads one run of the line.
@@ -230,7 +231,8 @@ Item {
     SampleTimer {
         id: pushTargetTimer
         onTriggered: {
-            if (!worktree.loaded || repoTab.state !== "open" || repoTab.busyCount > 0)
+            if (!Awaited.all("push_target_ready", {
+                "ready": !(!worktree.loaded || repoTab.state !== "open" || repoTab.busyCount > 0) }))
                 return
             pushTargetTimer.stop()
             Harness.report("push_target label=" + page.pushTargetLabel
@@ -275,7 +277,8 @@ Item {
     SampleTimer {
         id: publishMarkedTimer
         onTriggered: {
-            if (repoTab.markedOrigin !== driver.markWanted || repoTab.busyCount > 0)
+            if (!Awaited.all("publish_marked_ready", {
+                "ready": !(repoTab.markedOrigin !== driver.markWanted || repoTab.busyCount > 0) }))
                 return
             if (!publishFlow.publishAsking) {
                 page.pushNow()
@@ -299,7 +302,8 @@ Item {
     SampleTimer {
         id: remoteMenuTimer
         onTriggered: {
-            if (repoTab.markedOrigin !== driver.markWanted || !driver.menusLive())
+            if (!Awaited.all("remote_menu_ready", {
+                "ready": !(repoTab.markedOrigin !== driver.markWanted || !driver.menusLive()) }))
                 return
             if (!driver.remoteMenu.opened && !page.openRemoteMenu(driver.remoteTarget))
                 return
@@ -318,7 +322,8 @@ Item {
     SampleTimer {
         id: remoteUrlTimer
         onTriggered: {
-            if (repoTab.markedOrigin !== driver.markWanted || repoTab.busyCount > 0)
+            if (!Awaited.all("remote_url_ready", {
+                "ready": !(repoTab.markedOrigin !== driver.markWanted || repoTab.busyCount > 0) }))
                 return
             if (!driver.remoteDialog.visible) {
                 driver.publishFlow.startEditRemote(driver.remoteTarget)
@@ -336,7 +341,7 @@ Item {
     SampleTimer {
         id: fetchedRefListTimer
         onTriggered: {
-            if (!driver.wroteAndSettled())
+            if (!Awaited.all("fetched_ref_list_ready", { "ready": driver.wroteAndSettled(), "page": PageSettled.settled(page) }))
                 return
             // `<row>` or `<row>:<tag>` — the second reports that one tag's line.
             const asked = ("" + Harness.autoActArg).split(":")
@@ -358,7 +363,7 @@ Item {
     SampleTimer {
         id: pushRetryTimer
         onTriggered: {
-            if (!page.pushFailed || repoTab.busyCount !== 0)
+            if (!Awaited.all("push_retry_ready", { "ready": !(!page.pushFailed || repoTab.busyCount !== 0) }))
                 return
             pushRetryTimer.stop()
             // `branch=` is every branch a refusal is remembered against — the record itself, not the branch
@@ -396,7 +401,7 @@ Item {
         onTriggered: {
             // Waits while git is out (the opening's fetch shows in `autoFetchRunning`, the rest in `busyCount`) and on
             // an ask still waiting for its answer.
-            if (repoTab.busyCount !== 0 || repoTab.autoFetchRunning)
+            if (!Awaited.all("fetch_fail_ready", { "ready": !(repoTab.busyCount !== 0 || repoTab.autoFetchRunning) }))
                 return
             if (acts.fetchAskSeq >= 0 && repoTab.writeSeq <= acts.fetchAskSeq)
                 return
@@ -468,7 +473,8 @@ Item {
     SampleTimer {
         id: publishSurfaceTimer
         onTriggered: {
-            if (!remoteDialog.visible && !publishFlow.publishChecked)
+            if (!Awaited.all("publish_surface_ready", {
+                "ready": !(!remoteDialog.visible && !publishFlow.publishChecked) }))
                 return
             publishSurfaceTimer.stop()
             // What the far side's answer made of the bar: the line under the question, the reader's only word of it.
@@ -483,7 +489,8 @@ Item {
     SampleTimer {
         id: publishRemotesTimer
         onTriggered: {
-            if (!publishFlow.publishChecked || !graphPane.askCard.settled)
+            if (!Awaited.all("publish_remotes_ready", {
+                "ready": !(!publishFlow.publishChecked || !graphPane.askCard.settled) }))
                 return
             if (!publishFlow.publishRemotesOpen()) {
                 publishFlow.openPublishRemotes()
@@ -499,7 +506,8 @@ Item {
     SampleTimer {
         id: publishDismissTimer
         onTriggered: {
-            if (!publishFlow.publishChecked || !graphPane.askCard.settled)
+            if (!Awaited.all("publish_dismiss_ready", {
+                "ready": !(!publishFlow.publishChecked || !graphPane.askCard.settled) }))
                 return
             publishDismissTimer.stop()
             graphPane.askCard.dismiss()
@@ -515,7 +523,7 @@ Item {
     SampleTimer {
         id: publishGoneTimer
         onTriggered: {
-            if (!graphPane.askCard.shut)
+            if (!Awaited.all("publish_gone_ready", { "ready": graphPane.askCard.shut }))
                 return
             publishGoneTimer.stop()
             driver.complete()
@@ -525,7 +533,7 @@ Item {
     SampleTimer {
         id: publishDialogTimer
         onTriggered: {
-            if (!remoteDialog.visible)
+            if (!Awaited.all("publish_dialog_ready", { "ready": remoteDialog.visible }))
                 return
             publishDialogTimer.stop()
             driver.complete()
@@ -550,7 +558,7 @@ Item {
     SampleTimer {
         id: publishSettleTimer
         onTriggered: {
-            if (!publishFlow.publishChecked)
+            if (!Awaited.all("publish_settle_ready", { "ready": publishFlow.publishChecked }))
                 return
             publishSettleTimer.stop()
             Harness.report("publish settled far="
@@ -594,7 +602,8 @@ Item {
         /// its watchdog.
         property bool byKey: false
         onTriggered: {
-            if (!publishFlow.publishChecked || !graphPane.askAnswerable)
+            if (!Awaited.all("publish_answer_ready", {
+                "ready": !(!publishFlow.publishChecked || !graphPane.askAnswerable) }))
                 return
             publishAnswerTimer.stop()
             // `far` is what the far side holds — not the other line's `state`, which is this end's push state.

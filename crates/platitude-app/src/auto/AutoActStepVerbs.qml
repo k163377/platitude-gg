@@ -167,9 +167,13 @@ Item {
         property int refused: 0
         onTriggered: {
             const row = graphPane.view.currentIndex
-            if (row < 0 || (graphStepTimer.diffPath === "" && page.selectedOid
-                            !== graphModel.oidAt(row))
-                    || !driver.cardSettled)
+            // `walked`: the settle behind the last step has landed it (`GraphRowWalk.settling`) — the diff it brings is
+            // asked for then, and `page` waits for that read and its rows.
+            if (!Awaited.all("graph_step_report_ready", {
+                "ready": !(row < 0 || (graphStepTimer.diffPath === "" && page.selectedOid !== graphModel.oidAt(row))
+                    || !driver.cardSettled),
+                "walked": !graphPane.stepSettling,
+                "page": PageSettled.settled(page) }))
                 return
             graphStepReport.stop()
             Harness.report(
@@ -229,8 +233,9 @@ Item {
         property int refused: 0
         onTriggered: {
             const row = graphPane.view.currentIndex
-            if (row < 0 || graphPane.stepSettling
-                    || page.selectedOid !== graphModel.oidAt(row) || !driver.cardSettled)
+            if (!Awaited.all("graph_hold_report_ready", {
+                "ready": !(row < 0 || graphPane.stepSettling || page.selectedOid !== graphModel.oidAt(row)
+                    || !driver.cardSettled) }))
                 return
             graphHoldReport.stop()
             Harness.report(
@@ -336,7 +341,7 @@ Item {
     SampleTimer {
         id: fileShutReport
         onTriggered: {
-            if (page.diffShown)
+            if (!Awaited.all("file_shut_report_ready", { "ready": !(page.diffShown), "page": PageSettled.settled(page) }))
                 return
             fileShutReport.stop()
             const walk = fileStepTimer.walk
@@ -358,8 +363,10 @@ Item {
         onTriggered: {
             const walk = fileStepTimer.walk
             // The landed diff asked for, arrived (a pane still reading photographs empty), and its lit row built.
-            if (!page.diffShown || page.diffPath === fileStepTimer.path || !diffPane.diffSettled()
-                    || walk.litPath() === "")
+            if (!Awaited.all("file_step_report_ready", {
+                "ready": !(!page.diffShown || page.diffPath === fileStepTimer.path || !diffPane.diffSettled()
+                    || walk.litPath() === ""),
+                "page": PageSettled.settled(page) }))
                 return
             fileStepReport.stop()
             Harness.report(
@@ -403,7 +410,7 @@ Item {
         }
         onTriggered: {
             const row = changesFoldTimer.folderRow()
-            if (!row)
+            if (!Awaited.all("changes_fold_ready", { "ready": row, "page": PageSettled.settled(page) }))
                 return
             const strikes = changesFoldTimer.reopen ? 2 : 1
             if (row.isFolded !== (changesFoldTimer.struck % 2 === 1))
@@ -457,7 +464,8 @@ Item {
         property int from: -1
         property bool stopped: false
         onTriggered: {
-            if (!diffPane.diffSettled())
+            if (!Awaited.all("diff_step_report_ready", { "ready": diffPane.diffSettled(),
+                                                          "page": PageSettled.settled(page) }))
                 return
             diffStepReport.stop()
             Harness.report(

@@ -38,18 +38,14 @@ Item {
     // Every PGG_AUTO_ACT run has one explicit completion edge; a verb without one meets the watchdog.
     readonly property bool causal: Harness.autoAct !== ""
 
-    /// The window's picture is on disk, so its scene is the settled one — the completion edge often builds that scene
-    /// (`grabApp`). Whatever reads the tree for what this run showed hears it here (`WindowCensus`), still ahead of the
-    /// quit.
-    signal appPictured()
+    /// A picture is on disk — `app` (the window, whose scene is the settled one: the completion edge often builds
+    /// that scene, `grabApp`), `overlay` or `scene`. Whatever reads the tree for what this run shows hears it here
+    /// (`WindowHarness` → `WindowCensus`, `Awaited`), in the picture's own turn: a frame later is the stretch a read
+    /// could land in.
+    signal pictured(string artifact)
 
-    /// The census walk as a part like the other two: it waits for the window to stop arriving, often later than the
-    /// verb's own edge (`WindowCensus`), and without the part the run would quit out from under it.
-    readonly property bool waitsForCensus: driver.causal
-    function censusDone() {
-        driver.partDone()
-    }
-    /// What the census is doing, for the watchdog's line alone. Bound by whoever holds one (`WindowHarness`).
+    /// Whether the page had settled, for the watchdog's line alone. Bound by whoever holds the census
+    /// (`WindowHarness`).
     property string censusState: "-"
     /// Where the run's own write had got to, for the watchdog's line — written by the page that claimed the run
     /// (`Main.noteAutoActWrite` ← `AutoActDriver`), so a run that never reached a page keeps the dash.
@@ -119,7 +115,7 @@ Item {
         interval: Math.max(Harness.autoWatchdogMs, 1)
         onTriggered: {
             console.warn("auto-act watchdog expired verb=" + Harness.autoAct)
-            // `census=waiting`: the window still had a read on its way (`WindowCensus.pageSettled`).
+            // `census=arriving`: the window still had a read on its way (`WindowCensus.pageSettled`).
             console.warn("shot state grabbing=" + driver.appGrabbing + " saved=" + driver.appSaved
                          + " parts=" + driver.shotParts + " ink=" + Ink.owed
                          + " census=" + driver.censusState)
@@ -159,6 +155,7 @@ Item {
         const overlayOk = mirror.grabToImage(function (res) {
             const saved = res.saveToFile(Harness.shotDir + "/overlay.png")
             console.warn("overlay saved=" + saved + " popups=" + popups + " yield=" + yielded)
+            driver.pictured("overlay")
             driver.partDone()
         })
         if (!overlayOk) {
@@ -176,7 +173,6 @@ Item {
         driver.sceneWanted = holding > 0 && driver.sceneMirror !== null && driver.sceneMirror.item !== null
         driver.overlayWanted = overlayMirror.item !== null
         driver.shotParts = 1 + (driver.overlayWanted ? 1 : 0) + (driver.sceneWanted ? 1 : 0)
-                           + (driver.waitsForCensus ? 1 : 0)
         driver.grabApp()
     }
     /// The popups' texture, refreshed once app.png is saved, as the composite is: a popup's marks are owed like the
@@ -201,6 +197,7 @@ Item {
         const ok = scene.grabToImage(function (res) {
             const saved = res.saveToFile(Harness.shotDir + "/scene.png")
             console.warn("scene saved=" + saved)
+            driver.pictured("scene")
             driver.partDone()
         })
         if (!ok) {
@@ -227,7 +224,7 @@ Item {
             driver.appSaved = true
             const saved = res.saveToFile(path)
             console.warn("screenshot saved=" + saved + " ink=" + driver.inkWaited + " path=" + path)
-            driver.appPictured()
+            driver.pictured("app")
             driver.refreshOverlay()
             if (driver.sceneWanted && !driver.sceneAsked) {
                 driver.sceneAsked = true
@@ -239,7 +236,7 @@ Item {
             console.warn("grabToImage returned false")
             driver.appGrabbing = false
             driver.appSaved = true
-            driver.appPictured()
+            driver.pictured("app")
             driver.refreshOverlay()
             driver.partDone()
         }

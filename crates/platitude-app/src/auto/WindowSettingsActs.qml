@@ -24,24 +24,21 @@ Item {
         value: Harness.autoAct === "avatar-row-lit" ? 0 : -1
     }
 
-    /// The frame count the last send to the chapters' foot was made at, or -1 before the first.
-    property int footSentAtFrame: -1
-    /// Whether the chapters stand at their foot in a frame drawn after the last send; sends them there until they do.
-    /// The foot is read off the column's height, which can grow after a send: the opened screen's first layout pass
-    /// lays every chapter out again, and a send made before it leaves `AVATARS` below the view.
+    /// Whether a send to the chapters' foot has been made.
+    property bool footSent: false
+    /// Whether the chapters stand at their foot in a frame drawn after the last send (`Awaited.drawnSince`); sends
+    /// them there until they do. The foot is read off the column's height, which can grow after a send: the opened
+    /// screen's first layout pass lays every chapter out again, and a send made before it leaves `AVATARS` below the
+    /// view.
     function chaptersAtFoot() {
         Awaited.at(Harness.autoAct, "foot")
-        if (acts.footSentAtFrame >= 0 && acts.window.frameCounter <= acts.footSentAtFrame) {
-            // `update()`, asked again each beat: a still offscreen scene swaps nothing unasked
-            // (rules-refs/app-ui.md「`frameSwapped` を待つなら頼むのは `window.update()`」).
-            acts.window.update()
+        if (acts.footSent && !Awaited.drawnSince("chapters_foot"))
             return false
-        }
-        if (acts.footSentAtFrame >= 0 && acts.settingsDialog.autoAtChapterFoot())
+        if (acts.footSent && acts.settingsDialog.autoAtChapterFoot())
             return true
         acts.settingsDialog.autoShowChapterFoot()
-        acts.footSentAtFrame = acts.window.frameCounter
-        acts.window.update()
+        acts.footSent = true
+        Awaited.forget("chapters_foot")
         return false
     }
 
@@ -126,7 +123,8 @@ Item {
                         ? (acts.toolLoadingSeen && acts.gitPane.toolListOpen)
                         : (acts.gitPane.toolsSettled && acts.gitPane.toolChoices.length > 0
                            && acts.gitPane.toolListOpen)
-            if (!ready)
+            if (!Awaited.all("settings_tools_ready", { "ready": ready,
+                                                       "page": PageSettled.windowSettled(window) }))
                 return
             stop()
             acts.reportTool()
@@ -162,9 +160,10 @@ Item {
                     acts.repoPane.autoOfferRepos()
                 repoSettingsTimer.acted = true
             }
-            if (!acts.repoPane.autoRepoReady)
-                return
-            if (Harness.autoAct === "settings-repo-pick" && !acts.repoPane.autoRepoComboOpen)
+            if (!Awaited.all("repo_settings_ready", {
+                "read": acts.repoPane.autoRepoReady,
+                "list": Harness.autoAct !== "settings-repo-pick" || acts.repoPane.autoRepoComboOpen,
+                "page": PageSettled.windowSettled(window) }))
                 return
             repoSettingsTimer.stop()
             Harness.report("repo_config " + acts.repoPane.repoTally())
@@ -205,7 +204,9 @@ Item {
                 return
             }
             // The screen asks as it opens, so an answer is coming either way; after a pick, this is the later ask's.
-            if (AppBackend.gitPathState === "" || AppBackend.gitPathState === "checking")
+            if (!Awaited.all("git_path_answered", {
+                "state": AppBackend.gitPathState !== "" && AppBackend.gitPathState !== "checking",
+                "page": window.curPage !== null && PageSettled.settled(window.curPage) }))
                 return
             gitPathTimer.stop()
             // The write the way out makes, with the screen still up for the picture: the file a seeded run started
@@ -222,7 +223,7 @@ Item {
     SampleTimer {
         id: processesTimer
         running: Harness.autoAct === "settings-processes"
-        /// The box has been typed; the tick after is the store's answer.
+        /// The box has been typed; the store's answer is the count it then holds.
         property bool acted: false
         onTriggered: {
             if (!settingsDialog.opened) {
@@ -234,6 +235,11 @@ Item {
                 processesTimer.acted = true
                 return
             }
+            // Typed nothing: the store's default stands, and the read is of that.
+            if (!Awaited.all("git_processes_ready", {
+                "applied": Harness.autoActArg === "" || String(AppBackend.gitConcurrency) === Harness.autoActArg,
+                "page": PageSettled.windowSettled(window) }))
+                return
             processesTimer.stop()
             Harness.report("git_processes " + acts.appPane.processesTally())
             window.finishAutoAct()
@@ -248,7 +254,7 @@ Item {
     SampleTimer {
         id: refreshTimer
         running: Harness.autoAct === "settings-refresh"
-        /// The chapter has been worked; the tick after is the store's answer.
+        /// The chapter has been worked; the store's answer is the tally standing still across a swapped frame.
         property bool acted: false
         onTriggered: {
             if (!settingsDialog.opened) {
@@ -262,6 +268,10 @@ Item {
                 refreshTimer.acted = true
                 return
             }
+            if (!Awaited.all("settings_refresh_ready", {
+                "store": Awaited.still("settings_refresh_tally", acts.appPane.refreshTally()),
+                "page": PageSettled.windowSettled(window) }))
+                return
             refreshTimer.stop()
             Harness.report("settings_refresh " + acts.appPane.refreshTally())
             window.finishAutoAct()
@@ -295,7 +305,8 @@ Item {
                 return
             }
             // The fields are written as the close ends.
-            if (settingsDialog.visible)
+            if (!Awaited.all("refresh_leave_ready", { "shut": !settingsDialog.visible,
+                                                      "page": PageSettled.windowSettled(window) }))
                 return
             refreshLeaveTimer.stop()
             Harness.report("settings_refresh_leave " + acts.appPane.refreshStore() + " open=" + settingsDialog.opened)
@@ -323,13 +334,17 @@ Item {
                 return
             }
             // The offer arrives a subprocess after the pick.
-            if (!AppBackend.gitPathOffersRestart)
+            if (!Awaited.all("git_leave_offered", { "offer": AppBackend.gitPathOffersRestart }))
                 return
             if (!gitLeaveTimer.left) {
                 settingsDialog.escapeOut()
                 gitLeaveTimer.left = true
                 return
             }
+            // The way out either asks about the path or has closed the screen.
+            if (!Awaited.all("git_leave_asked", { "asked": settingsDialog.askingGitPath || !settingsDialog.opened,
+                                                  "page": PageSettled.windowSettled(window) }))
+                return
             gitLeaveTimer.stop()
             Harness.report("settings_git_leave offers=" + AppBackend.gitPathOffersRestart
                            + " armed=" + settingsDialog.askingGitPath
@@ -365,11 +380,11 @@ Item {
                     return
                 endingsTimer.acted = true
             }
-            if (!acts.repoPane.autoEndingsReady
-                    || acts.repoPane.autoEndingHeld !== endingsTimer.wanted)
-                return
-            // Last, so the picture holds the chapter that was written into.
-            if (!acts.chaptersAtFoot())
+            // Last the foot, so the picture holds the chapter that was written into.
+            if (!Awaited.all("settings_eol_ready", {
+                "held": acts.repoPane.autoEndingsReady && acts.repoPane.autoEndingHeld === endingsTimer.wanted,
+                "foot": acts.chaptersAtFoot(),
+                "page": PageSettled.windowSettled(window) }))
                 return
             endingsTimer.stop()
             Harness.report("line_endings " + acts.repoPane.endingsTally())
@@ -400,7 +415,8 @@ Item {
                     return
                 categorySwitchTimer.acted = true
             }
-            if (!acts.gitPane.visible)
+            if (!Awaited.all("settings_switch_ready", { "git": acts.gitPane.visible,
+                                                        "page": PageSettled.windowSettled(window) }))
                 return
             categorySwitchTimer.stop()
             Harness.report("settings_switch was_app=" + categorySwitchTimer.wasApp
@@ -432,7 +448,8 @@ Item {
                 settingsDialog.escapeOut()
                 return
             }
-            if (settingsDialog.opened)
+            if (!Awaited.all("settings_escape_ready", { "shut": !settingsDialog.opened,
+                                                        "page": PageSettled.windowSettled(window) }))
                 return
             escapeTimer.stop()
             // `global=` / `repo=` name which chapter thought it held an edit. `save=` is the global chapter's Save,
@@ -473,7 +490,8 @@ Item {
                 settingsDialog.escapeOut()
                 leaveTimer.acted = true
             }
-            if (!settingsDialog.askingLeave)
+            if (!Awaited.all("settings_leave_asked", { "asked": settingsDialog.askingLeave,
+                                                       "page": PageSettled.windowSettled(window) }))
                 return
             leaveTimer.stop()
             // `save=`: the typing that stops the way out must also light the Save the reader is sent to.
@@ -500,12 +518,13 @@ Item {
                 settingsDialog.openAt(sweepTimer.cat)
                 return
             }
-            if (!sweepTimer.shown)
-                return
             // git: the repository group's identity and line endings (the latter grows a line); app: the version probe.
-            if (sweepTimer.cat === "git"
-                ? (!acts.repoPane.autoRepoReady || !acts.repoPane.autoEndingsReady)
-                : AppBackend.gitPathState === "checking")
+            if (!Awaited.all("settings_sweep_ready", {
+                "shown": sweepTimer.shown,
+                "read": sweepTimer.cat === "git"
+                    ? (acts.repoPane.autoRepoReady && acts.repoPane.autoEndingsReady)
+                    : AppBackend.gitPathState !== "checking",
+                "page": PageSettled.windowSettled(window) }))
                 return
             sweepTimer.stop()
             // `release=`: the hand that gives the keyboard back when a press lands where nothing takes it is standing
@@ -547,10 +566,11 @@ Item {
                     return
                 // Asked again while it is shut, for the turn of the loop the field puts between the press and the
                 // list (`AppCombo.pressField`).
-                if (!acts.gitPane.toolListOpen) {
+                if (!acts.gitPane.toolListOpen)
                     acts.gitPane.pressToolField()
+                if (!Awaited.all("tools_enter_ready", { "list": acts.gitPane.toolListOpen,
+                                                        "page": PageSettled.windowSettled(window) }))
                     return
-                }
                 toolEnterTimer.arrived = true
             }
             if (!toolEnterTimer.pressedUnderList) {
@@ -581,7 +601,8 @@ Item {
         /// A candidate's name has been put in the box (a spelled one may not be in this repository).
         property bool typed: false
         onTriggered: {
-            if (!settingsDialog.opened)
+            if (!Awaited.all("avatar_enter_ready", { "ready": settingsDialog.opened,
+                                                     "page": PageSettled.windowSettled(window) }))
                 return
             if (!avatarEnterTimer.typed) {
                 if (acts.appPane.authorChoices.length === 0)
@@ -640,12 +661,13 @@ Item {
                 }
                 avatarCardTimer.acted = true
             }
-            // The removal's answer arrives after the hold: the store letting the row go.
-            if (act === "avatar-remove" && acts.appPane.autoAvatarRows >= avatarCardTimer.rowsBefore)
-                return
-            // Last, so the picture holds `AVATARS`, the category's foot, out of the resting view's reach. Not for the
-            // candidate list: its popup stays where the field stood, and scrolling would leave it off its box.
-            if (act !== "avatar-combo" && !acts.chaptersAtFoot())
+            // The removal's answer arrives after the hold: the store letting the row go. Last the foot, so the
+            // picture holds `AVATARS`, the category's foot, out of the resting view's reach — not for the candidate
+            // list: its popup stays where the field stood, and scrolling would leave it off its box.
+            if (!Awaited.all("avatar_card_ready", {
+                "removed": act !== "avatar-remove" || acts.appPane.autoAvatarRows < avatarCardTimer.rowsBefore,
+                "foot": act === "avatar-combo" || acts.chaptersAtFoot(),
+                "page": PageSettled.windowSettled(window) }))
                 return
             avatarCardTimer.stop()
             Harness.report("avatar_card rows=" + acts.appPane.autoAvatarRows
@@ -730,7 +752,8 @@ Item {
                 return
             }
             const went = Math.abs(handTimer.at() - handTimer.fromAt) > 8
-            if (handTimer.took && (!went || hand.ticks < 2))
+            if (!Awaited.all("settings_hand_ready", { "went": !handTimer.took || (went && hand.ticks >= 2),
+                                                      "page": PageSettled.windowSettled(window) }))
                 return
             handTimer.stop()
             Harness.report("settings_hand surface=" + Harness.autoActArg

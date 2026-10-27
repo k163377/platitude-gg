@@ -172,7 +172,7 @@ Item {
         id: avatarTipReport
         onTriggered: {
             const tip = Tips.box
-            if (!tip.visible)
+            if (!Awaited.all("avatar_tip_report_ready", { "ready": tip.visible }))
                 return
             avatarTipReport.stop()
             Harness.report("avatar_tip tip=" + tip.visible
@@ -212,7 +212,10 @@ Item {
         id: findSettled
         onTriggered: {
             const card = graphPane.findCard
-            if (!card.open || card.opacity < 1 || graphPane.findShift !== (card.findClears ? card.height : 0))
+            if (!Awaited.all("find_settled_ready", {
+                "ready": !(!card.open || card.opacity < 1
+                    || graphPane.findShift !== (card.findClears ? card.height : 0)),
+                "page": PageSettled.settled(page) }))
                 return
             findSettled.stop()
             const pin = graphPane.headPin
@@ -266,7 +269,7 @@ Item {
         property string key: ""
         onTriggered: {
             const card = graphPane.findCard
-            if (!card.typingStopped)
+            if (!Awaited.all("find_hinted_ready", { "ready": card.typingStopped }))
                 return
             findHinted.stop()
             if (findHinted.key === "") {
@@ -300,7 +303,11 @@ Item {
                 card.actOnNote()
                 return
             }
-            if (graphModel.growing || card.furtherFrom >= 0 || !card.typingStopped)
+            if (!Awaited.all("find_further_landed", {
+                "grown": !graphModel.growing,
+                "stepped": card.furtherFrom < 0,
+                "typed": card.typingStopped,
+                "page": PageSettled.settled(page) }))
                 return
             findFurther.stop()
             // `focus=`: the caret stayed in the box; `at=`: the search went to what it found (0 where it stands on no
@@ -315,7 +322,9 @@ Item {
     SampleTimer {
         id: findDropSettled
         onTriggered: {
-            if (graphPane.findCard.opacity > 0 && graphPane.findCard.opacity < 1)
+            if (!Awaited.all("find_drop_settled_ready", {
+                "ready": !(graphPane.findCard.opacity > 0 && graphPane.findCard.opacity < 1),
+                "page": PageSettled.settled(page) }))
                 return
             findDropSettled.stop()
             Harness.report("find_drop open=" + graphPane.findCard.open
@@ -396,7 +405,8 @@ Item {
                 commandsEscapeTimer.took = page.escapePressed()
                 return
             }
-            if (page.commandsShown)
+            if (!Awaited.all("commands_escape_shut", { "shut": !page.commandsShown,
+                                                       "page": PageSettled.settled(page) }))
                 return
             commandsEscapeTimer.stop()
             // The mark goes with its panel; a red left behind is what a picture of the shut window cannot show.
@@ -463,20 +473,16 @@ Item {
     // spot hides at the middle, and one read at the end would report only the last try.
     SampleTimer {
         id: commandsSweepTimer
-        /// Where the ground began at the previous sample, for the settle below.
-        property string lastGeom: ""
         onTriggered: {
-            if (!driver.wroteAndSettled())
+            if (!Awaited.all("commands_sweep_ready", { "ready": driver.wroteAndSettled(), "page": PageSettled.settled(page) }))
                 return
             if (!page.commandsShown || page.pageCommands.running || page.pageCommands.rowsHeld() < 2)
                 return
             // The layout has to be still: rows arrive a frame ahead of the view, and a sweep aimed at ground about
             // to be a row lands on neither.
             const geom = Math.round(page.commandsGroundTop) + "," + page.pageCommands.rowsHeld()
-            if (geom !== commandsSweepTimer.lastGeom) {
-                commandsSweepTimer.lastGeom = geom
+            if (!Awaited.still("commands_sweep_geom", geom))
                 return
-            }
             commandsSweepTimer.stop()
             let reach = 0
             let tries = 0

@@ -84,6 +84,7 @@ impl RepoTab {
         self.move_ask_lost = 0;
         self.paced_worktrees = Vec::new();
         self.auto_fetch_running = false;
+        self.auto_fetch_seq = 0;
         self.fetch_failures = 0;
         self.fetch_log_raised = false;
         self.auto_fetch_suspended = false;

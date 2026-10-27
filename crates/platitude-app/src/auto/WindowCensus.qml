@@ -4,11 +4,13 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// Every QML component a verb's run showed, by type name, reported as `census=A,B,C` for verify-ui to record
-/// (`crates/xtask/verb-census.txt`). The union of two walks — at the picture and at the settled edge — with `lost=`
-/// naming what the picture had and the settled edge did not (反映前テストの機械化 §census; the walk's rules are the
-/// `WindowCensus` line of rules-refs/app-ui.md). Not `went=`: another verb's line uses it, and `must_say` matches by
-/// substring.
+/// Every QML component a verb's run shows, by type name, walked at two moments and never merged: at the verb's
+/// completion (`markCompletion`) and at each picture (`reportAt`). The picture's walk is the census — `census=A,B,C`,
+/// which verify-ui holds against the line's registered row (`xtask::verify::observed`; the table itself,
+/// `crates/xtask/verb-lines.txt`, is written by people) — and the two walks held against each other are the one
+/// claim every run makes of every picture: the parts standing in it are the parts the verb completed on
+/// (反映前テストの機械化 §観測 / §検証時点; the walk's rules are the `WindowCensus` line of rules-refs/app-ui.md).
+/// Not `went=`: another verb's line uses it, and `must_say` matches by substring.
 ///
 /// Popups stand under the window's overlay, a child of the root item, so one walk from the root sees them too.
 Item {
@@ -20,9 +22,7 @@ Item {
     /// not what the run showed (`harnessHolds`).
     property Item harnessBranch: null
 
-    /// Every name any walk met, as keys — the census itself.
-    property var seen: ({})
-    /// The names the current walk met, to hold the two walks against each other.
+    /// The names the current walk met, as keys.
     property var met: ({})
 
     /// The window is noted itself: a Window is no item, so the root item's tree never names `Main`.
@@ -43,15 +43,15 @@ Item {
         const text = String(object)
         const mark = text.indexOf("_QMLTYPE_")
         if (mark > 0) {
-            const name = text.substring(0, mark)
-            census.seen[name] = true
-            census.met[name] = true
+            census.met[text.substring(0, mark)] = true
         }
     }
 
     /// A pooled delegate can still be `visible` and keep its old index; the view no longer returns it for that row.
     /// Headers and footers have the attached view too, but no row index. A row's `index` can be an action value
     /// (`ChosenCommitRow` always says -1), so find its list position by its geometry, not that property's value.
+    /// A delegate the view keeps beyond its viewport (the cache buffer, built a frame at a time) is in no picture
+    /// and counts for nothing: the census is what the picture shows.
     function inList(object) {
         if (!(object instanceof Item))
             return true
@@ -69,7 +69,10 @@ Item {
         if (!object.visible)
             return false
         const point = object.mapToItem(view.contentItem, object.width / 2, object.height / 2)
-        return view.itemAtIndex(view.indexAt(point.x, point.y)) === object
+        if (view.itemAtIndex(view.indexAt(point.x, point.y)) !== object)
+            return false
+        const box = object.mapToItem(view, 0, 0, object.width, object.height)
+        return box.x < view.width && box.x + box.width > 0 && box.y < view.height && box.y + box.height > 0
     }
 
     /// What every item has, so the names a type adds stand out.
@@ -177,106 +180,65 @@ Item {
             visit(loaded, shown, false)
     }
 
-    /// The page's property edges wake the wait; the core's counted reads are queried again by the sampler below.
-    readonly property bool settled: census.pageSettled()
-
     /// The one rule (`PageSettled`) of the page in front — the same the page and badge verbs wait on, never a copy.
+    /// A binding, so the ceiling's line reads it as it stands (`AutoShotDriver.censusState`).
+    readonly property bool settled: census.pageSettled()
     function pageSettled() {
-        return PageSettled.settled(census.window ? census.window.curPage : null)
+        return census.pageMissing().length === 0
+    }
+    /// The page's reads still on their way (`PageSettled.missing`), for the completion's line and the census's.
+    function pageMissing() {
+        return PageSettled.missing(census.window ? census.window.curPage : null)
     }
 
-    /// Both walks are reported; the shot driver holds the run open until this, so the second walk is never quit out
-    /// from under.
-    signal walked()
-    property bool waiting: false
-    /// The picture came before the window settled, so the second walk is from a later moment. Kept past `waiting`,
-    /// which that walk clears before it reports.
-    property bool waited: false
-    /// A frame has been asked for, and the settled walk is taken at its `afterAnimating` — unless a read goes out
-    /// first, and the settled edge after it arms the next one.
-    property bool armed: false
-    /// What the picture's walk met (`lost`).
-    property var atShot: ({})
-    function report() {
+    /// What the walk at the verb's completion met, held against each picture's walk; null until the verb completes.
+    /// Never moved after: a view that builds its rows, or a read that lands, between the completion and a picture
+    /// is a verb that completed on a scene still moving, and the picture's claim says so.
+    property var atCompletion: null
+
+    /// The walk at the verb's completion (`WindowHarness.finish`), in the completing turn: the set of parts the run
+    /// completed on.
+    function markCompletion() {
+        census.walk()
+        census.atCompletion = census.met
+    }
+
+    /// The walk at a picture (`AutoShotDriver.pictured`), in the picture's own turn. The claim every run makes of
+    /// every picture: `pictured … name=window holds=` — the parts standing are the parts it completed on, named by
+    /// what came (`gained=`) and what went (`lost=`); a read landing between the completion and the picture moves
+    /// the set, and the picture is then of a state the run never claimed. At the app's picture, the census itself
+    /// follows: `census=<names>`, read one word at a time by the parent (`verify::observed::Observed::in_lines`).
+    function reportAt(artifact) {
         if (Harness.autoAct === "")
             return
-        census.waiting = true
-        census.waited = !census.pageSettled()
-        // In the picture's own turn, not on a frame: waiting for one is the stretch where the verb's leftover beats
-        // fire.
         census.walk()
-        census.atShot = census.met
-        census.arm()
-    }
-    onSettledChanged: {
-        if (census.settled)
-            census.arm()
-        else
-            census.armed = false
-    }
-    function arm() {
-        if (!census.waiting || census.armed || !census.pageSettled())
+        const before = census.atCompletion === null ? ({}) : census.atCompletion
+        const gained = Object.keys(census.met).filter(name => before[name] !== true).sort()
+        const lost = Object.keys(before).filter(name => census.met[name] !== true).sort()
+        const holds = census.atCompletion !== null && gained.length === 0 && lost.length === 0
+        Harness.report("pictured run=" + Awaited.runId + " artifact=" + artifact + " name=window holds=" + holds
+                       + " gained=" + (gained.length === 0 ? "none" : gained.join("/"))
+                       + " lost=" + (lost.length === 0 ? "none" : lost.join("/")))
+        if (artifact !== "app")
             return
-        census.armed = true
-        // A quiet scene draws no frame of its own; asked for one, the window polishes its items and says so.
-        census.window.requestUpdate()
-    }
-    Connections {
-        target: census.window
-        enabled: census.armed
-        function onAfterAnimating() {
-            // A read went out since the ask: the next settled edge re-arms.
-            if (!census.pageSettled()) {
-                census.armed = false
-                return
-            }
-            census.take()
-        }
+        const owed = census.pageMissing()
+        Harness.report("census run=" + Awaited.runId + " page=" + (owed.length === 0 ? "settled" : "arriving:" + owed.join(","))
+                       + " " + census.terms())
+        Harness.report("census=" + Object.keys(census.met).sort().join(","))
     }
 
-    // Core's counted reads can end without changing a model (an unchanged graph pass). Its query has no property
-    // edge, so sample the same predicate rather than relying on the binding above to wake this last part of the run.
-    SampleTimer {
-        running: census.waiting
-        onTriggered: census.arm()
-    }
-
-    /// Why the window said `settled`, on the run's own line, so a census that moves says why. Only terms that can
-    /// still differ once it says yes: through `failed` / `stale` a run settles on whatever pass stands, which may hold
+    /// Why the page said `settled` or `arriving` at the picture, on the run's own line. Only terms that can still
+    /// differ once it says yes: through `failed` / `stale` a run settles on whatever pass stands, which may hold
     /// no worktree row — and `WipTallyRow` (behind `GraphRowDelegate`'s loader) is the one component that stands
     /// or falls with that row.
     function terms() {
         const page = census.window ? census.window.curPage : null
-        const said = "waited=" + census.waited
         if (!page)
-            return said + " state=nopage"
+            return "state=nopage"
         const graph = page.pageGraph
         const state = page.pageTab.state === "" ? "none" : page.pageTab.state
-        return said + " state=" + state + " finish=" + graph.finishCount
+        return "state=" + state + " finish=" + graph.finishCount
             + " failed=" + graph.failed + " stale=" + graph.stale + " wipRow=" + graph.wipRow
             + " wipRowStands=" + page.pageWorktree.wipRowStands
-    }
-
-    /// What the picture's walk met and this one did not: taken away by what the verb left running.
-    function lost() {
-        return Object.keys(census.atShot).filter(name => census.met[name] !== true).sort()
-    }
-
-    /// The settled edge's walk and the two lines, taken once however many times the window settles.
-    function take() {
-        census.waiting = false
-        census.armed = false
-        walk()
-        const left = census.lost()
-        // A line of its own, first: everything after `census=` is a name. The answer's line is read one word at a
-        // time (`gate::census::page_settled_in`).
-        Harness.report("census page=" + (census.pageSettled() ? "settled" : "arriving") + " " + census.terms()
-                       + " lost=" + (left.length === 0 ? "none" : left.join("/")))
-        Harness.report("census=" + Object.keys(census.seen).sort().join(","))
-        // From the event loop: the ending this releases may quit the application, so the frame finishes first.
-        Qt.callLater(census.done)
-    }
-    function done() {
-        census.walked()
     }
 }

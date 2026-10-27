@@ -64,7 +64,8 @@ Item {
     SampleTimer {
         running: Harness.autoAct === "fetch-busy"
         onTriggered: {
-            if (!topBar.holdFetchBusy)
+            if (!Awaited.all("fetch_busy_ready", { "ready": topBar.holdFetchBusy,
+                                                   "page": PageSettled.windowSettled(window) }))
                 return
             stop()
             Harness.report("fetch_busy busy=" + topBar.holdFetchBusy
@@ -80,9 +81,10 @@ Item {
         running: Harness.autoAct === "fetch-tip"
         onTriggered: {
             // The graph too: the band settles first, and the picture is not to have a half-drawn page under it.
-            if (window.curPage === null
-                    || !window.curPage.pageRefsLoaded
-                    || window.curPage.pageGraph.rowTotal < 1)
+            if (!Awaited.all("fetch_tip_ready", {
+                "ready": !(window.curPage === null || !window.curPage.pageRefsLoaded
+                    || window.curPage.pageGraph.rowTotal < 1),
+                "page": PageSettled.windowSettled(window) }))
                 return
             const tab = window.curPage.pageTab
             if (tab.busyCount !== 0 || tab.autoFetchRunning)
@@ -108,7 +110,9 @@ Item {
         running: Harness.autoAct === "stash-state"
         onTriggered: {
             // Not the graph, unlike `fetch-tip`: `empty` has no rows, so it is judged on its worktree alone.
-            if (window.curPage === null || !window.curPage.pageWorktree.loaded)
+            if (!Awaited.all("stash_state_ready", {
+                "ready": !(window.curPage === null || !window.curPage.pageWorktree.loaded),
+                "page": PageSettled.windowSettled(window) }))
                 return
             const tab = window.curPage.pageTab
             if (tab.busyCount !== 0 || tab.autoFetchRunning)
@@ -130,7 +134,9 @@ Item {
         running: Harness.autoAct === "band"
         onTriggered: {
             // No tabs is a valid band: readiness is the window and the bar, and `tabsW=0` says the rest.
-            if (!window.visible || mainUi.width <= 0 || topBar.width <= 0)
+            if (!Awaited.all("band_act_ready", {
+                "ready": !(!window.visible || mainUi.width <= 0 || topBar.width <= 0),
+                "page": PageSettled.windowSettled(window) }))
                 return
             stop()
             Harness.report(
@@ -156,7 +162,9 @@ Item {
         /// A frame has been asked for and not yet drawn (`reportOpsPanel`).
         property bool drawing: false
         onTriggered: {
-            if (!acts.opsPanelLoaded())
+            if (!Awaited.all("ops_panel_ready", {
+                "loaded": acts.opsPanelLoaded(),
+                "page": window.curPage !== null && PageSettled.settled(window.curPage) }))
                 return
             const wanted = parseInt(Harness.autoActArg)
             if (!isNaN(wanted) && wanted > 0 && Math.round(window.width) !== wanted
@@ -173,8 +181,12 @@ Item {
             opsPanelTimer.drawing = topBar.grabToImage(() => {
                 opsPanelTimer.drawing = false
                 if (opsPanelTimer.running && acts.opsPanelLoaded() && topBar.width === mainUi.width
-                        && acts.opsPanelKey() === drawnFor)
+                        && acts.opsPanelKey() === drawnFor) {
+                    // Read again at the pictures: a fetch answering between the report and the picture rewrites
+                    // the counts the report named.
+                    Awaited.claim("ops_panel", () => acts.opsPanelLoaded() && acts.opsPanelKey() === drawnFor)
                     acts.reportOpsPanel()
+                }
             })
         }
     }
@@ -188,8 +200,19 @@ Item {
         if (!window.visible || topBar.width <= 0 || window.curPage === null
                 || !window.curPage.pageRefsLoaded || !window.curPage.pageWorktree.loaded)
             return false
-        const tab = window.curPage.pageTab
-        return tab.busyCount === 0 && !tab.autoFetchRunning
+        return acts.fetchSettled(window.curPage.pageTab)
+    }
+    /// Whether the fetch the page makes on its own at the opening has answered, and nothing is running now: a
+    /// `busyCount` of 0 read before that fetch began is the moment before it, not after it, and a picture taken
+    /// then is of counts the answer rewrites. Read off the count of answers (`RepoTab.autoFetchSeq`), since the
+    /// running flag falls between two beats and the answer rides one notify. A repository with no remote, or a
+    /// page whose fetching is suspended, makes no such fetch.
+    function fetchSettled(tab) {
+        if (tab.busyCount !== 0 || tab.autoFetchRunning)
+            return false
+        if (tab.remoteNames.length === 0 || tab.autoFetchSuspended)
+            return true
+        return tab.autoFetchSeq > 0
     }
     function reportOpsPanel() {
         opsPanelTimer.stop()
@@ -230,9 +253,10 @@ Item {
         onTriggered: {
             // Both listings, not a beat: they land on separate reads. Every repository lists its own worktree, so
             // zero worktrees is a listing not yet landed.
-            if (!window.visible || topBar.width <= 0 || window.curPage === null
-                    || !window.curPage.pageRefsLoaded
-                    || window.curPage.pageWorktrees.total <= 0)
+            if (!Awaited.all("ops_door_ready", {
+                "ready": !(!window.visible || topBar.width <= 0 || window.curPage === null
+                    || !window.curPage.pageRefsLoaded || window.curPage.pageWorktrees.total <= 0),
+                "page": window.curPage !== null && PageSettled.settled(window.curPage) }))
                 return
             const branchDoor = Harness.autoAct === "ops-branch" || Harness.autoAct === "ops-branch-folder"
             if (opsDoorTimer.opened === 0) {
@@ -293,7 +317,8 @@ Item {
         /// Presses gone in. The second lands only on a card observed standing, as a hand's would.
         property int pressed: 0
         onTriggered: {
-            if (!window.visible || topBar.width <= 0)
+            if (!Awaited.all("app_menu_act_ready", { "ready": !(!window.visible || topBar.width <= 0),
+                                                     "page": PageSettled.windowSettled(window) }))
                 return
             const twice = Harness.autoAct === "app-menu-reclick"
             if (appMenuActTimer.pressed === 0) {
@@ -350,7 +375,8 @@ Item {
         property bool shut: false
         property bool pressed: false
         onTriggered: {
-            if (acts.window.curPage === null)
+            if (!Awaited.all("tip_link_ready", { "ready": !(acts.window.curPage === null),
+                                                 "page": PageSettled.windowSettled(window) }))
                 return
             const page = acts.window.curPage
             const tab = page.pageTab
@@ -402,8 +428,11 @@ Item {
             // Every width is measured off the set's shared box (`TopBar.widestAction`), zero until the band has
             // loaded — and off push's wording, which the worktree decides (`publish` until the first status,
             // `push -f` after on a diverged branch).
-            if (topBar.bandTabsWidth <= 0 || topBar.actionNaturalW <= Theme.railWidth
-                    || window.curPage === null || !window.curPage.pageWorktree.loaded)
+            if (!Awaited.all("band_actions_ready", {
+                "band": topBar.bandTabsWidth > 0 && topBar.actionNaturalW > Theme.railWidth,
+                "page": window.curPage !== null && PageSettled.settled(window.curPage),
+                // The opening fetch answered: push's wording and the alert are the worktree's after it.
+                "fetch": window.curPage !== null && acts.fetchSettled(window.curPage.pageTab) }))
                 return
             // The `!` before the window is sized: a real refusal from git (`--preset longnames` will not fast-forward,
             // as `push-retry` sets up). Sent through the page, because in this state the button is a hold and its
@@ -474,7 +503,15 @@ Item {
     }
     /// `folded=`, `even=` and `find=` are what the picture cannot answer: one width says nothing of where the shape
     /// changes, and cells a pixel apart look alike.
+    /// The panel's shape as the report names it, for the claim read again at the pictures.
+    function bandActionsKey() {
+        return [topBar.actionsFolded, topBar.actionsDeep, topBar.actionsBoxed, topBar.actionsEven, topBar.findFolded,
+                topBar.actionAlertShown, topBar.stateMarkShown, window.width].join("/")
+    }
     function reportBandActions() {
+        const key = acts.bandActionsKey()
+        Awaited.claim("band_actions", () => acts.bandActionsKey() === key
+                      && acts.fetchSettled(window.curPage.pageTab))
         Harness.report(
             "band_actions fits=" + (window.width >= Math.ceil(window.floorWidth))
             // The seven judged lead together: `must_say` catches only neighbours in one substring. `deep=` is the

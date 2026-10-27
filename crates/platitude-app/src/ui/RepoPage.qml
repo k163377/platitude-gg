@@ -2334,6 +2334,10 @@ FocusScope {
     /// Automation only, the same way (`worktree-stand`: a WORKTREES row stands the tab in that worktree, and the
     /// landing is the window's).
     readonly property alias pageSidebar: sidebarPane
+    /// Automation only: the lists whose rows `PageSettled` waits for the view to build.
+    readonly property alias pageDetails: detailsPane
+    readonly property alias pageDiff: diffPane
+    readonly property alias pageCarried: carriedPane
     /// Whether the refs listing has landed — the read that also settles how many remotes there are, and so what the
     /// band's fetch button may be (`fetch-tip`).
     readonly property bool pageRefsLoaded: branchesModel.refsLoaded

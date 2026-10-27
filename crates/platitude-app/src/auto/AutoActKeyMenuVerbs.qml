@@ -197,6 +197,9 @@ Item {
             }
             if (!acts.landed(keyMenuTimer.surface, keyMenuTimer.rest))
                 return
+            // The press moved the selection, and the pane that follows it has its rows (`PageSettled`).
+            if (!Awaited.all("key_menu_page", { "page": PageSettled.settled(acts.page) }))
+                return
             keyMenuTimer.stop()
             acts.ask(keyMenuTimer.surface, keyMenuTimer.rest)
             acts.driver.complete()

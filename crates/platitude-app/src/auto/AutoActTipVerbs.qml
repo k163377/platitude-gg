@@ -93,7 +93,7 @@ Item {
     SampleTimer {
         id: signatureTimer
         onTriggered: {
-            if (!page.signatureIsForSelection)
+            if (!Awaited.all("signature_ready", { "ready": page.signatureIsForSelection }))
                 return
             signatureTimer.stop()
             Harness.report("signature kind=" + page.selectedSignatureKind
@@ -116,7 +116,7 @@ Item {
     SampleTimer {
         id: signatureTipReport
         onTriggered: {
-            if (!detailsPane.signatureTipShown)
+            if (!Awaited.all("signature_tip_report_ready", { "ready": detailsPane.signatureTipShown }))
                 return
             signatureTipReport.stop()
             Harness.report("signature_tip code=" + page.selectedSignatureCode
@@ -137,7 +137,7 @@ Item {
     SampleTimer {
         id: stashTipReport
         onTriggered: {
-            if (!detailsPane.summaryTipShown)
+            if (!Awaited.all("stash_tip_report_ready", { "ready": detailsPane.summaryTipShown }))
                 return
             stashTipReport.stop()
             Harness.report(
@@ -204,7 +204,7 @@ Item {
         id: pathTipReport
         onTriggered: {
             const tip = Tips.box
-            if (!tip.visible)
+            if (!Awaited.all("path_tip_report_ready", { "ready": tip.visible }))
                 return
             pathTipReport.stop()
             Harness.report("path_tip pane="
@@ -223,7 +223,7 @@ Item {
     SampleTimer {
         id: tipCopyTimer
         onTriggered: {
-            if (unstagedModel.total === 0)
+            if (!Awaited.all("tip_copy_ready", { "ready": !(unstagedModel.total === 0) }))
                 return
             wipPane.pointedTipRow = 0
             const tip = Tips.box
@@ -243,7 +243,7 @@ Item {
     SampleTimer {
         id: tipSweepTimer
         onTriggered: {
-            if (unstagedModel.total === 0)
+            if (!Awaited.all("tip_sweep_ready", { "ready": !(unstagedModel.total === 0) }))
                 return
             wipPane.pointedTipRow = 0
             const tip = Tips.box
@@ -258,7 +258,7 @@ Item {
     SampleTimer {
         id: authorCardTimer
         onTriggered: {
-            if (!driver.cardSettled)
+            if (!Awaited.all("author_card_ready", { "ready": driver.cardSettled }))
                 return
             if (Harness.autoAct === "author-card-open")
                 detailsPane.messageBlock.showAuthor(true)
@@ -279,16 +279,13 @@ Item {
     // frame after the row it resizes.
     SampleTimer {
         id: coAuthorTimer
-        property string lastGeom: ""
         onTriggered: {
-            if (!driver.cardSettled || detailsPane.width <= 0)
+            if (!Awaited.all("co_author_ready", { "ready": !(!driver.cardSettled || detailsPane.width <= 0) }))
                 return
             const geom = Math.round(detailsPane.width) + "/" + Math.round(detailsPane.valueRow.width)
                 + "/" + detailsPane.messageBlock.matesFolded
-            if (geom !== coAuthorTimer.lastGeom) {
-                coAuthorTimer.lastGeom = geom
+            if (!Awaited.still("co_author_geom", geom))
                 return
-            }
             if (Harness.autoAct === "co-authors-open")
                 detailsPane.messageBlock.showCoAuthors(true)
             if (Harness.autoAct === "co-authors-open" && !detailsPane.authorCards.matesCardOpen)

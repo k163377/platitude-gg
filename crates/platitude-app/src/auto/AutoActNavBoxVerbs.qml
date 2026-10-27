@@ -127,12 +127,10 @@ Item {
             if (!sidebarPane.editRefused)
                 sidebarPane.submitEdit(arg)
             renameTakenTimer.start()
-        } else if (act === "rename-tag-box" || act === "rename-branch-box" || act === "rename-tag-box-early") {
+        } else if (act === "rename-tag-box" || act === "rename-branch-box") {
             // The box opened with the argument typed in, so a name the box itself refuses can be photographed
             // (デザイン規約 §答えの要らない報せ「押す前に断れるものは、名前の箱で断る」). `was=` names the row, so a
-            // run that opened the box on the wrong one says so. `-early` photographs the refusal before its tip,
-            // which waits the usual rest (`TipAsk.typed` → `TipSeat`).
-            tagNameBoxTimer.early = act === "rename-tag-box-early"
+            // run that opened the box on the wrong one says so.
             tagNameBoxTimer.begin(arg, act === "rename-branch-box" ? "branch" : "tag")
         } else if (act === "replace-remote" || act === "replace-remote-box"
                    || act === "replace-remote-go" || act === "replace-remote-tip") {
@@ -192,7 +190,8 @@ Item {
             // git's answer is the bar coming down — the box keeps the name either way — and the bar settled: its height
             // animates in after the words, so a shot on the answer alone catches it still on its way down
             // (`NoticeBar.settled`).
-            if (repoTab.busyCount !== 0 || !page.noticeCard.open || !page.noticeCard.settled)
+            if (!Awaited.all("rename_taken_ready", {
+                "ready": !(repoTab.busyCount !== 0 || !page.noticeCard.open || !page.noticeCard.settled) }))
                 return
             renameTakenTimer.stop()
             Harness.report("rename_taken open=" + (sidebarPane.editKey !== "")
@@ -216,8 +215,6 @@ Item {
         id: tagNameBoxTimer
         property string typed: ""
         property string kind: "tag"
-        /// Report the refusal as soon as the box stands, without its tip (`rename-tag-box-early`).
-        property bool early: false
         /// The branch named before the `:`, `""` for HEAD's.
         property string row: ""
         function begin(arg, kind) {
@@ -240,11 +237,11 @@ Item {
             const row = model.rowOfName(was)
             const list = navProbe.listOf(tagNameBoxTimer.kind)
             const open = row >= 0 && list.rowBoxShown(row) && list.rowFocused(row)
-            if (!open)
+            if (!Awaited.all("tag_name_box_ready", { "ready": open }))
                 return
             // Only a refused name raises a tip to wait for.
             const tipped = list.rowTipShown(row)
-            if (sidebarPane.editRefused && !tipped && !tagNameBoxTimer.early)
+            if (sidebarPane.editRefused && !tipped)
                 return
             tagNameBoxTimer.stop()
             Harness.report(tagNameBoxTimer.kind + "_name_box was=" + was
@@ -299,7 +296,7 @@ Item {
         property bool points: false
         property bool pointed: false
         onTriggered: {
-            if (!graphPane.askCard.settled)
+            if (!Awaited.all("replace_ask_ready", { "ready": graphPane.askCard.settled }))
                 return
             if (replaceAskTimer.points && !graphPane.askCard.tipStanding) {
                 graphPane.askCard.pointedAt = true
@@ -761,19 +758,16 @@ Item {
                 }
             }
             // Nothing is read until the layout stops moving: the lines are measured on a layout and the section's
-            // height follows that, so on the opening pass neither has arrived and the lines read as out of view. Two
-            // beats with the same geometry is the list standing still.
-            if (navTipTimer.opens) {
-                const geom = sidebarPane.rowFactsGeom()
-                if (geom !== navTipTimer.stood) {
-                    navTipTimer.stood = geom
-                    return
-                }
-                // Nor until the supplement (a worktree's path) has answered either way: it comes up a rest after
-                // the lines, and read in between the picture has it half out on one run and not at all on the next.
-                if (!navTipTimer.acted && (navProbe.factsSays() !== "") !== tip.visible)
-                    return
-            }
+            // height follows that, so on the opening pass neither has arrived and the lines read as out of view. The
+            // geometry standing across a swapped frame is the list standing still (`Awaited.still`). Nor until the
+            // supplement (a worktree's path) has answered either way: it comes up a rest after the lines, and read in
+            // between the picture has it half out on one run and not at all on the next. And the page: a row the
+            // hand pressed selects its commit, whose read is the page's.
+            if (!Awaited.all("nav_tip_landed", {
+                "laid": !navTipTimer.opens || Awaited.still("nav_tip_geom", sidebarPane.rowFactsGeom()),
+                "said": !navTipTimer.opens || navTipTimer.acted || (navProbe.factsSays() !== "") === tip.visible,
+                "page": PageSettled.settled(page) }))
+                return
             navTipTimer.stop()
             // The list is the subject at the foot, so it has a line of its own: `shown=` is the row inside what the
             // list shows, `back=` the list's position against the run's note from before the hand arrived.
@@ -890,7 +884,7 @@ Item {
             return driver.wroteAndSettled()
         }
         onTriggered: {
-            if (repoTab.busyCount !== 0)
+            if (!Awaited.all("nav_open_tag_ready", { "ready": !(repoTab.busyCount !== 0) }))
                 return
             if (!navOpenTagTimer.ready())
                 return
@@ -1021,9 +1015,11 @@ Item {
                 if (sidebarPane.editKey !== key || drawn <= 0)
                     return
                 if (navNameBoxTimer.away) {
-                    // Far enough that the row is out of the list, near enough that the view still holds its delegate —
-                    // otherwise what went is the row and not the box.
-                    list.scrollRows(4)
+                    // Just out of the view from where the row stands, near enough that the view still holds its
+                    // delegate — otherwise what went is the row and not the box. A list too short to scroll the row
+                    // out is the fixture's shortfall, named here instead of waited out.
+                    if (!Awaited.all("nav_name_box_away", { "room": list.scrollRowOut(row) }))
+                        return
                     navNameBoxTimer.step = 2
                     return
                 }
@@ -1061,7 +1057,7 @@ Item {
         property string route: ""
         onTriggered: {
             const item = graphPane.view.itemAtIndex(0)
-            if (!item)
+            if (!Awaited.all("box_out_ready", { "ready": item }))
                 return
             if (acts.boxOutStep === 0) {
                 // Opened by the gesture itself, two clicks: a box put up any other way leaves the gesture with no

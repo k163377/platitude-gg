@@ -139,30 +139,16 @@ Item {
     }
     // A menu row's words take their widths from a `RowLayout` on polish, so a cut name (`AppMenuItem.nameCut`) read in
     // the beat its card opens answers for the row before that layout ran — whole, as if it fit. Under load the
-    // sampler's beat lands there. A reading waits two swapped frames from the first time it is asked for a card: one
-    // whose polish ran before the ask answers for the shape before it.
-    property int framesSwapped: 0
-    Connections {
-        target: page.Window.window
-        function onFrameSwapped() {
-            driver.framesSwapped++
-        }
-    }
+    // sampler's beat lands there. A reading waits two swapped frames from the first time it is asked for a card
+    // (`Awaited.drawnSince`): one whose polish ran before the ask answers for the shape before it.
     property var framesCard: null
-    property int framesCardWanted: -1
     /// Whether `card`'s rows have been laid out since the first ask about it: false while the frames are still to come.
     function cardLaidOut(card) {
         if (driver.framesCard !== card) {
             driver.framesCard = card
-            driver.framesCardWanted = driver.framesSwapped + 2
+            Awaited.forget("card_laid_out")
         }
-        if (driver.framesSwapped < driver.framesCardWanted) {
-            // `update()`, asked again each beat: a still offscreen scene swaps nothing unasked
-            // (rules-refs/app-ui.md「`frameSwapped` を待つなら頼むのは `window.update()`」).
-            page.Window.window.update()
-            return false
-        }
-        return true
+        return Awaited.drawnSince("card_laid_out")
     }
     /// Where a TAG card's rows reach, in the one report line both entrances' verbs say it with
     /// (`AutoActRefVerbs.reachWords`).
@@ -321,10 +307,19 @@ Item {
         barrierRendered.begin()
     }
 
+    /// Set while `runAutoAct` dispatches. A verb that completes in the dispatching turn — a menu opened and read in
+    /// one go — has no wait of its own, and what it set going (the row it selected being read) is the page's: its
+    /// completion goes through the page's settle (`settledBarrier`), as a verb that owns no completion does.
+    property bool inDispatch: false
+
     function complete() {
         // A broken run was already ended by `sayBroken`; a barrier landing afterwards would finish it green.
         if (repoTab.writeContractBroken())
             return
+        if (driver.inDispatch) {
+            settledBarrier.start()
+            return
+        }
         // Whichever barrier brought the run here, not while that menu is still on its way out (`menuGoing`).
         if (driver.menuGoing !== null && driver.menuGoing.visible) {
             menuGoneBarrier.start()
@@ -451,10 +446,20 @@ Item {
     /// the row" need not measure it.
     readonly property int pastLineEnd: 9999
 
-    // The render boundary is `AutoShotDriver`'s (rules/app-ui.md §UI 自動化), so completing is all this does.
+    // The render boundary is `AutoShotDriver`'s (rules/app-ui.md §UI 自動化); what is waited for here is the page
+    // the verb acted on — a menu opened over a row it selected brings that row's reads, and the picture is of them.
     readonly property QtObject barrierRendered: QtObject {
         id: barrierRendered
         function begin() {
+            settledBarrier.start()
+        }
+    }
+    SampleTimer {
+        id: settledBarrier
+        onTriggered: {
+            if (!Awaited.all("page_settled", { "page": PageSettled.settled(page) }))
+                return
+            settledBarrier.stop()
             driver.complete()
         }
     }
@@ -484,16 +489,19 @@ Item {
                 writeBarrier.stop()
                 return
             }
-            if (!driver.wroteAndSettled()) {
-                // This sampler can be what is still ticking at the ceiling, so it keeps that line current.
+            const wrote = driver.wroteAndSettled()
+            // This sampler can be what is still ticking at the ceiling, so it keeps that line current.
+            if (!wrote)
                 driver.noteWrite()
-                return
-            }
-            if (driver.statusOwed && !driver.owedStatusLanded())
-                return
-            // A write refused with a report brings its bar down on the answer, and the bar grows into place
-            // (`NoticeBar` の `Behavior`): shot on the answer, it is half open.
-            if (page.noticeCard.open && !page.noticeCard.settled)
+            // The checkpoint every write verb reaches: its write answered and read back, the status its answer
+            // named in, and the report a refusal raised standing still — a refused write brings its bar down on
+            // the answer, and the bar grows into place (`NoticeBar` の `Behavior`): shot on the answer, it is half
+            // open.
+            if (!Awaited.all("write_settled", {
+                "written": wrote,
+                "status": !driver.statusOwed || driver.owedStatusLanded(),
+                "notice": !(page.noticeCard.open && !page.noticeCard.settled),
+                "page": PageSettled.settled(page) }))
                 return
             writeBarrier.stop()
             // `mine=false`: passed without a write of its own; `settled=`: the last boundary that write reached.
@@ -519,7 +527,7 @@ Item {
         /// (`AutoActPlanVerbs`); on the others it would always read the same.
         property bool saysPlan: false
         onTriggered: {
-            if (!page.noticeCard.settled)
+            if (!Awaited.all("notice_barrier_ready", { "ready": page.noticeCard.settled }))
                 return
             // A diff the verb opened under the bar (`notice-over-diff`) is a git subprocess away: waited out too.
             if (page.diffShown && !diffPane.diffSettled())
@@ -559,7 +567,7 @@ Item {
         onTriggered: {
             const words = diffPane.hunkWordsApart()
             // -1: the heading's row is not built yet.
-            if (words < 0)
+            if (!Awaited.all("heading_barrier_ready", { "ready": !(words < 0) }))
                 return
             headingBarrier.stop()
             const caption = diffPane.captionApart()
@@ -573,7 +581,7 @@ Item {
     SampleTimer {
         id: menuGoneBarrier
         onTriggered: {
-            if (driver.menuGoing.visible)
+            if (!Awaited.all("menu_gone_barrier_ready", { "ready": !(driver.menuGoing.visible) }))
                 return
             menuGoneBarrier.stop()
             driver.complete()
@@ -593,7 +601,7 @@ Item {
             const cut = driver.treeGoneRow.indexOf(":")
             const from = driver.treeGoneRow.substring(0, cut)
             const path = driver.treeGoneRow.substring(cut + 1)
-            if (unstagedModel.holdsPath(from, path))
+            if (!Awaited.all("tree_barrier_ready", { "ready": !(unstagedModel.holdsPath(from, path)) }))
                 return
             treeBarrier.stop()
             // `landed=` tells a file resolved into the index from one discarded out of the tree ("" = nowhere).
@@ -609,8 +617,9 @@ Item {
     SampleTimer {
         id: graphBarrier
         onTriggered: {
-            if (graphModel.rowOf(driver.graphGoneOid) >= 0
-                    || stashesModel.total === driver.stashTotalBefore)
+            if (!Awaited.all("graph_barrier_ready", {
+                "ready": !(graphModel.rowOf(driver.graphGoneOid) >= 0
+                    || stashesModel.total === driver.stashTotalBefore) }))
                 return
             graphBarrier.stop()
             Harness.report("graph_settled gone=true top=" + driver.graphTopKind()
@@ -640,6 +649,12 @@ Item {
     SampleTimer {
         id: autoActTimer
         onTriggered: {
+            // A window's act completed the run while this page was still arriving: nothing is left to dispatch, and a
+            // checkpoint reached now would be one after the completion.
+            if (Awaited.done) {
+                autoActTimer.stop()
+                return
+            }
             // Tabs are constructed before their active index settles. The page that becomes current claims the one
             // process-wide verb; pages opened by that verb can never replay it.
             if (!driver.claimed) {
@@ -648,8 +663,16 @@ Item {
                 driver.claimed = true
             }
             // `open` only means the path was accepted; the baseline is HEAD known and `PageSettled` — without the rows
-            // agreeing with the status, a verb naming rows by number (`3:5:6`) presses one row off.
-            if (repoTab.state !== "open" || !worktree.headKnown || !PageSettled.settled(page))
+            // agreeing with the status, a verb naming rows by number (`3:5:6`) presses one row off. A run holding the
+            // worktree row back on purpose (`:row-late`, `AutoActCardFlowVerbs`) starts on the page that hold keeps
+            // from settling, and lets the row through itself.
+            // The one checkpoint every page verb reaches: the page it acts on has arrived. A verb that acts and
+            // completes in the same beat (a menu opened) has no wait of its own beyond it.
+            const holdsTheRow = Harness.autoActArg.endsWith(":row-late")
+            if (!Awaited.all("page_ready", {
+                "open": repoTab.state === "open",
+                "head": worktree.headKnown,
+                "settled": PageSettled.settled(page) || holdsTheRow }))
                 return
             autoActTimer.stop()
             driver.runAutoAct()
@@ -711,6 +734,7 @@ Item {
         if (act === "perf") return // WindowPerfDriver owns this verb's causal completion.
         driver.prepareCompletion(act)
         // First family to know the verb runs it; each verb is named by exactly one.
+        driver.inDispatch = true
         const known =
             wipVerbs.run(act, arg)
             || fileRowVerbs.run(act, arg)
@@ -741,6 +765,7 @@ Item {
             || recoverVerbs.run(act, arg)
             || branchPushVerbs.run(act, arg)
             || githubVerbs.run(act, arg)
+        driver.inDispatch = false
         if (!known && !driver.completionDeferred && !driver.writeExpected) {
             // A misspelling: window verbs are in the completion ledger, so a verb known to neither is
             // nobody's. Left to the watchdog.

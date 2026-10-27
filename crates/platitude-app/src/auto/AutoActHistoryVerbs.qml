@@ -98,6 +98,8 @@ Item {
                 hardResetItem.completeHold()
             }
         } else if (act === "menu-wait") {
+            // Photographed during the write it presses: the page's reads are on their way by design.
+            Awaited.arriving = ["*"]
             menuWaitTimer.begin(arg)
         } else if (act === "commit-menu" || act === "reset-menu"
                    || act === "branch-card" || act === "tag-card") {
@@ -236,11 +238,14 @@ Item {
     /// (`status`), and the graph's rows carrying it (`row`). The reads go on under a replay
     /// (`RepoSession::begin_poll`) and the first one stands the row up for the operation at whatever moment the pace
     /// gives it, so a picture of the rewrite, and the census walked after it, wait for that read rather than race it.
-    /// Asked for each beat until the status has the row (`RepoTab.pollNow`).
+    /// Asked for each beat until the status has the row (`RepoTab.pollNow`). With it the selected row's own read
+    /// (`details`) and the rows the lists show (`PageSettled.rowsBuilt`): a replay keeps the page's reads coming, so
+    /// the picture is held to these, not to the page settling.
     function replayRow() {
         if (!worktree.wipRowStands)
             repoTab.pollNow()
-        return { "status": worktree.wipRowStands, "row": graphModel.wipRow }
+        return { "status": worktree.wipRowStands, "row": graphModel.wipRow,
+                 "details": page.pageDetailsSettled, "rows": PageSettled.rowsBuilt(page) }
     }
 
     // The drop row is a count of presses or a click by whether anything else holds the branch tip, read once as the
@@ -447,8 +452,22 @@ Item {
                     return
                 if (!menuWaitTimer.raise())
                     return
-                menuWaitTimer.stage = menuWaitTimer.mode === "replay" ? "row" : "up"
-                if (menuWaitTimer.mode === "after" || menuWaitTimer.mode === "replay")
+                menuWaitTimer.stage = menuWaitTimer.mode === "replay" ? "row"
+                                    : menuWaitTimer.mode === "after" ? "up" : "during"
+            } else if (menuWaitTimer.stage === "during") {
+                // The menu stands over the write still out; the reads the press invalidated (the selected commit's
+                // own, the lists' rows) land under the hook's sleep, and the picture is of them landed. A write
+                // that lands first says so, as above.
+                if (driver.wroteAndSettled()) {
+                    menuWaitTimer.stop()
+                    Harness.report("menu_wait_missed the write landed before its reads could settle under the menu")
+                    driver.complete()
+                    return
+                }
+                if (!Awaited.all("menu_wait_during", {
+                    "menu": commitMenu.visible,
+                    "details": page.pageDetailsSettled,
+                    "rows": PageSettled.rowsBuilt(page) }))
                     return
                 menuWaitTimer.stop()
                 menuWaitTimer.report("during")
@@ -622,7 +641,8 @@ Item {
     SampleTimer {
         id: pullBranchTimer
         onTriggered: {
-            if (repoTab.busyCount !== 0 || repoTab.writeSeq === driver.writeSeqBefore)
+            if (!Awaited.all("pull_branch_ready", {
+                "ready": !(repoTab.busyCount !== 0 || repoTab.writeSeq === driver.writeSeqBefore) }))
                 return
             const branch = pullPressTimer.branch
             // Both slots answer "" for a name the listing lost, which must not read as level.
@@ -643,7 +663,9 @@ Item {
     SampleTimer {
         id: pullAheadTimer
         onTriggered: {
-            if (repoTab.busyCount !== 0 || repoTab.writeSeq === driver.writeSeqBefore)
+            if (!Awaited.all("pull_ahead_ready", {
+                "ready": !(repoTab.busyCount !== 0 || repoTab.writeSeq === driver.writeSeqBefore),
+                "page": PageSettled.settled(page) }))
                 return
             if (!page.commandsShown) {
                 page.toggleCommands()
@@ -676,10 +698,10 @@ Item {
             // publish ahead of the status, the rebuilt graph and the sidebar, and a fast-forward lands on a row the
             // graph already has (the upstream's), so every other gate here opens while the WIP row still leashes the
             // old tip and the counts still say behind.
-            if (tipLandedTimer.answeredOp === "" || page.pendingHeadSelect
-                    || repoTab.busyCount !== 0 || repoTab.settling || row < 0
-                    || !graphPane.rowOnScreen(row) || page.selectedOid !== worktree.headOid
-                    || !driver.cardSettled)
+            if (!Awaited.all("tip_landed_ready", {
+                "ready": !(tipLandedTimer.answeredOp === "" || page.pendingHeadSelect || repoTab.busyCount !== 0
+                    || repoTab.settling || row < 0 || !graphPane.rowOnScreen(row)
+                    || page.selectedOid !== worktree.headOid || !driver.cardSettled) }))
                 return
             tipLandedTimer.stop()
             Harness.report(
@@ -744,9 +766,10 @@ Item {
             // moves HEAD ahead of the status that follows (`session::write::run_write`), and `--hard` is judged on the
             // tree.
             // A status counted before the write cannot reach that number.
-            if (repoTab.busyCount !== 0 || resetLandedTimer.armed === 0
-                    || worktree.headOid !== resetLandedTimer.target
-                    || worktree.statusSeq < resetLandedTimer.armed)
+            if (!Awaited.all("reset_landed_ready", {
+                "ready": !(repoTab.busyCount !== 0 || resetLandedTimer.armed === 0
+                    || worktree.headOid !== resetLandedTimer.target || worktree.statusSeq < resetLandedTimer.armed),
+                "page": PageSettled.settled(page) }))
                 return
             const row = graphModel.rowOf(resetLandedTimer.target)
             if (row < 0 || !driver.cardSettled)
@@ -767,7 +790,8 @@ Item {
     SampleTimer {
         id: mergeStoppedTimer
         onTriggered: {
-            if (repoTab.busyCount !== 0 || !page.wipShown || worktree.conflictCount === 0)
+            if (!Awaited.all("merge_stopped_ready", {
+                "ready": !(repoTab.busyCount !== 0 || !page.wipShown || worktree.conflictCount === 0) }))
                 return
             mergeStoppedTimer.stop()
             Harness.report(
@@ -792,7 +816,8 @@ Item {
             // The whole write barrier: the stash and worktree listings are reads of their own, landing apart from
             // the status that says the stop, and only the write's settle says both are in
             // (`session::write::settle_after`).
-            if (!driver.wroteAndSettled() || !page.wipShown || worktree.conflictCount === 0)
+            if (!Awaited.all("op_stopped_ready", {
+                "ready": !(!driver.wroteAndSettled() || !page.wipShown || worktree.conflictCount === 0) }))
                 return
             opStoppedTimer.stop()
             Harness.report(
@@ -816,7 +841,7 @@ Item {
     SampleTimer {
         id: rewordTimer
         onTriggered: {
-            if (!driver.cardSettled)
+            if (!Awaited.all("reword_ready", { "ready": driver.cardSettled, "page": PageSettled.settled(page) }))
                 return
             rewordTimer.stop()
             // "edit-message-focus" types nothing: the caret is photographed over the commit's own body.
@@ -871,7 +896,7 @@ Item {
     SampleTimer {
         id: saveRefusedTimer
         onTriggered: {
-            if (!detailsPane.saveRowShown)
+            if (!Awaited.all("save_refused_ready", { "ready": detailsPane.saveRowShown }))
                 return
             detailsPane.savePointedAt = true
             const tip = detailsPane.saveTip

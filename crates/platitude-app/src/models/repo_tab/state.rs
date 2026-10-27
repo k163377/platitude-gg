@@ -130,6 +130,7 @@ impl Default for RepoTab {
             move_ask_lost: 0,
             move_ask_seq: 0,
             auto_fetch_running: false,
+            auto_fetch_seq: 0,
             fetch_failures: 0,
             fetch_log_raised: false,
             auto_fetch_suspended: false,

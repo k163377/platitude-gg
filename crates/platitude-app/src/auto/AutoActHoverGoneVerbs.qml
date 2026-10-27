@@ -202,7 +202,8 @@ Item {
                     "landed": rewritten ? graphModel.headRowOid !== listRereadTimer.headBefore
                                         : graphModel.headLabels.length > listRereadTimer.namesBefore,
                     "list": rewritten ? !refList.opened
-                                      : refList.opened && refList.records.length > listRereadTimer.namesBefore
+                                      : refList.opened && refList.records.length > listRereadTimer.namesBefore,
+                    "page": PageSettled.settled(page)
                 }))
                 return
             listRereadTimer.done("after")
@@ -395,7 +396,9 @@ Item {
             const row = wipRereadTimer.under()
             wipRereadTimer.stop()
             Harness.report("wip_reread how=" + wipRereadTimer.how + " " + wipRereadTimer.left
-                           + (wipRereadTimer.how === "above" ? " moved_lit=" + (row !== null && row.washLit) : "")
+                           + (wipRereadTimer.how === "above"
+                              ? " moved_lit=" + (row !== null && row.washLit) + " after_card=" + wipPane.eolCardOpen
+                              : "")
                            + " under=" + (row !== null ? row.fullName : "") + " reads=" + wipRereadTimer.reads)
             driver.complete()
         }
@@ -477,11 +480,18 @@ Item {
                 // waits(timed): the product's rest, as a floor: a card that would open has opened by then
                 if (Date.now() - wipRereadTimer.waitedFrom < 2 * Metrics.tipDelayMs)
                     return
+                if (!Awaited.all("wip_reread_still", { "page": PageSettled.settled(page) }))
+                    return
                 wipRereadTimer.left = wipRereadTimer.read()
                 wipRereadTimer.done()
                 return
             }
             if (wipRereadTimer.step === 3) {
+                // The row the read left under the hand asks for its tip or card after the rest: the forms that end
+                // here end on that decision; `above` reads first, then moves the hand (below).
+                if (wipRereadTimer.how !== "above"
+                        && !Awaited.all("wip_reread_landed", { "page": PageSettled.settled(page) }))
+                    return
                 wipRereadTimer.left = wipRereadTimer.read()
                 if (wipRereadTimer.how !== "above") {
                     wipRereadTimer.done()
@@ -492,6 +502,11 @@ Item {
                 wipRereadTimer.step = 4
                 return
             }
+            // The two pixels were a tremor: the hold lifts (`HandWatch`), and the row under the hand asks for its own
+            // card, which comes after the rest — the run ends on it, so the picture is of the state the tremor leaves
+            // and not of the rest half spent.
+            if (!Awaited.all("wip_reread_moved", { "card": wipPane.eolCardOpen, "page": PageSettled.settled(page) }))
+                return
             wipRereadTimer.done()
         }
     }

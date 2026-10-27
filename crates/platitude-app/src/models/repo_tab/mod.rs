@@ -441,6 +441,11 @@ pub struct RepoTab {
     /// Auto fetch, reported apart from the shared busy/error
     /// surface, which an offline machine would set off every interval.
     auto_fetch_running: bool,
+    /// How many automatic fetches have answered since the tab stood
+    /// here, clean or not: the answer's edge, kept — `auto_fetch_running`
+    /// falls between two reads, and the answer itself rides one notify
+    /// (`write_answers`).
+    auto_fetch_seq: i32,
     /// Fetches that came back with something to say, in a row, whoever
     /// asked for them. Any fetch that comes back clean puts it to zero.
     fetch_failures: i32,

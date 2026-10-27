@@ -44,7 +44,10 @@ Item {
         // In scene coordinates: a margin that misses is what this looks for.
         onTriggered: {
             const at = mainUi.mapToItem(null, 0, 0)
-            if (at.x !== 0 || at.y !== 0 || mainUi.width !== window.width || mainUi.height !== window.height)
+            if (!Awaited.all("fill_report_ready", {
+                "ready": !(at.x !== 0 || at.y !== 0 || mainUi.width !== window.width
+                    || mainUi.height !== window.height),
+                "page": PageSettled.windowSettled(window) }))
                 return
             stop()
             Harness.report(
@@ -76,10 +79,10 @@ Item {
             if (Harness.autoActArg === "") {
                 // The band's marks come off the page's tree (`BandStateGroup`), so a floor read before it is an
                 // empty band's. With no repository to open (`--restore`) the floor is the blank page's.
-                if (Harness.autoOpen !== ""
-                        && (window.curPage === null || !window.curPage.pageWorktree.loaded))
-                    return
-                if (window.width < window.floorWidth || window.height < window.floorHeight)
+                if (!Awaited.all("window_floor_blank", {
+                    "page": Harness.autoOpen === ""
+                        || (window.curPage !== null && PageSettled.settled(window.curPage)),
+                    "floor": window.width >= window.floorWidth && window.height >= window.floorHeight }))
                     return
                 // Through the report stage like the other forms: the band's floor is `bandRow.Layout.minimumWidth`,
                 // written in the layout's own pass, so a mark just put up is not in it yet.
@@ -90,7 +93,8 @@ Item {
             // Asked of a real page: until a tab opens, `window.floorPage` is the blank one, lost when the real page
             // arrives (`WindowBody.floorPage`). Its tree read too, or the face stands at four zeroes and `wipScrolls=`
             // answers for an empty pane.
-            if (window.curPage === null || !window.curPage.pageWorktree.loaded)
+            if (!Awaited.all("window_floor_page", {
+                "page": window.curPage !== null && PageSettled.settled(window.curPage) }))
                 return
             if (!floorActTimer.shapeRequested) {
                 floorActTimer.shapeRequested = true
@@ -172,16 +176,15 @@ Item {
             if (Harness.autoActArg === "fold"
                     && window.floorPage.sidebarCollapsed)
                 return
-            if ((Harness.autoActArg === "log" || Harness.autoActArg === "rail")
-                    && !window.floorPage.commandsOpen)
-                return
             // The block scrolls even when not shown, so only `wipShown` catches a face taken away behind the run
             // (`RepoPage.leaveWipWhenDone`).
-            if (Harness.autoActArg === "wip"
-                    && (!window.floorPage.wipShown
-                        || !window.floorPage.wipBlockScrolls))
-                return
-            if (!acts.menuReadAfterFrames())
+            if (!Awaited.all("window_floor_landed", {
+                "log": !(Harness.autoActArg === "log" || Harness.autoActArg === "rail")
+                    || window.floorPage.commandsOpen,
+                "wip": Harness.autoActArg !== "wip"
+                    || (window.floorPage.wipShown && window.floorPage.wipBlockScrolls),
+                "laid": acts.menuReadAfterFrames(),
+                "page": PageSettled.windowSettled(window) }))
                 return
             stop()
             acts.reportFloor()
@@ -192,29 +195,16 @@ Item {
     // Read off the layout itself (デザイン規約 §窓の床「左メニューが全部入る」): the floor's own sum would agree with
     // itself whatever the rail drew. A `SplitView` and a `Column` lay out on polish, so a reading waits two swapped
     // frames after it is asked for — one whose polish ran before the ask answers for the shape before it.
-    property int framesSwapped: 0
-    Connections {
-        target: acts.window
-        function onFrameSwapped() {
-            acts.framesSwapped++
-        }
-    }
-    property int menuFramesWanted: -1
     /// Every reading held, and the last one's two numbers.
     property bool menuHeld: true
     property real menuEnd: 0
     property real menuRoom: 0
-    /// Whether the menu has been read for the stage asking: false while the frames it waits for are still to come.
+    /// Whether the menu has been read for the stage asking: false while the frames it waits for are still to come
+    /// (`Awaited.drawnSince`, forgotten once read so the next stage waits its own frames).
     function menuReadAfterFrames() {
-        if (acts.menuFramesWanted < 0)
-            acts.menuFramesWanted = acts.framesSwapped + 2
-        if (acts.framesSwapped < acts.menuFramesWanted) {
-            // `update()`, asked again each beat: a still offscreen scene swaps nothing unasked
-            // (rules-refs/app-ui.md「`frameSwapped` を待つなら頼むのは `window.update()`」).
-            acts.window.update()
+        if (!Awaited.drawnSince("menu_read"))
             return false
-        }
-        acts.menuFramesWanted = -1
+        Awaited.forget("menu_read")
         const pane = window.floorPage.pageSidebar
         if (pane.collapsed) {
             const rail = pane.autoRail
@@ -300,7 +290,9 @@ Item {
     SampleTimer {
         id: stateReportTimer
         onTriggered: {
-            if (Harness.autoActArg === "minimize" && window.visibility !== Window.Maximized)
+            if (!Awaited.all("state_report_ready", {
+                "ready": !(Harness.autoActArg === "minimize" && window.visibility !== Window.Maximized),
+                "page": PageSettled.windowSettled(window) }))
                 return
             if (Harness.autoActArg === "change"
                     && (window.curPage === null

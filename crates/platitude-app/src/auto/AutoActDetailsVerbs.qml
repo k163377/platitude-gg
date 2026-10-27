@@ -158,7 +158,8 @@ Item {
     SampleTimer {
         id: detailsFailure
         onTriggered: {
-            if (driver.detailsModel.loading || !driver.repoTab.lastError.startsWith("details: "))
+            if (!Awaited.all("details_failure_ready", {
+                "ready": !(driver.detailsModel.loading || !driver.repoTab.lastError.startsWith("details: ")) }))
                 return
             detailsFailure.stop()
             Harness.report("details_failure loading=false error=true")
@@ -176,7 +177,7 @@ Item {
         /// The value picked out first (`-away`), or empty.
         property string firstWhich: ""
         onTriggered: {
-            if (!driver.cardSettled)
+            if (!Awaited.all("details_select_ready", { "ready": driver.cardSettled }))
                 return
             if (!detailsSelectTimer.asked) {
                 if (detailsSelectTimer.firstWhich !== "")
@@ -215,7 +216,7 @@ Item {
         property string boxState: ""
         onTriggered: {
             const older = fieldMenuTimer.boxState === "readonly"
-            if (older ? !driver.cardSettled : !page.wipShown)
+            if (!Awaited.all("field_menu_ready", { "ready": !(older ? !driver.cardSettled : !page.wipShown) }))
                 return
             fieldMenuTimer.stop()
             const box = older ? detailsPane.messageBlock.summaryBox : wipPane.commitBlock.messageSeat.summaryBox
@@ -268,7 +269,7 @@ Item {
         property string was: ""
         onTriggered: {
             const row = detailsPane.valueRow
-            if (!driver.cardSettled || !row.valueReady("hash"))
+            if (!Awaited.all("hash_tip_ready", { "ready": !(!driver.cardSettled || !row.valueReady("hash")) }))
                 return
             if (!hashTipTimer.asked) {
                 row.forceHashTip(true)
@@ -313,17 +314,15 @@ Item {
     /// told apart. A run enters the hand's own functions, so whether a press reaches the plate is `tst_hashplate`'s.
     SampleTimer {
         id: detailsHandTimer
-        property string lastGeom: ""
         onTriggered: {
             // Both sides have to exist and the row has to have stopped moving — the same wait as `details-sweep`.
             const row = detailsPane.valueRow
-            if (!driver.cardSettled || !row.valueReady("hash") || row.shownValue("hash") === "")
+            if (!Awaited.all("details_hand_ready", {
+                "ready": !(!driver.cardSettled || !row.valueReady("hash") || row.shownValue("hash") === "") }))
                 return
             const geom = row.valueGeom("hash")
-            if (geom !== detailsHandTimer.lastGeom) {
-                detailsHandTimer.lastGeom = geom
+            if (!Awaited.still("details_hand_geom", geom))
                 return
-            }
             detailsHandTimer.stop()
             const before = driver.clipboard.lastCopied
             row.dragHash()
@@ -356,22 +355,21 @@ Item {
         id: detailsSweepTimer
         /// `author` / `date` / `mate` / `hash` / `parent`.
         property string which: ""
-        property string lastGeom: ""
         onTriggered: {
             // Both sides of the comparison have to exist first: the details arrive a frame ahead of the row that
             // draws them, so after `cardSettled` the value can still be empty, or its field width-less — which the
             // sweep passes over as if absent.
             const which = detailsSweepTimer.which
-            if (!driver.cardSettled || !detailsPane.valueRow.valueReady(which) || detailsPane.valueRow.shownValue(which) === "")
+            if (!Awaited.all("details_sweep_ready", {
+                "ready": !(!driver.cardSettled || !detailsPane.valueRow.valueReady(which)
+                    || detailsPane.valueRow.shownValue(which) === "") }))
                 return
             // And the row has to have stopped moving: the pane lays out more than once on its way to a commit, and a
             // sweep over a half-laid-out row lands on the line above. Two samples with the same geometry is the
             // settle — no number, so it holds at any pane width.
             const geom = detailsPane.valueRow.valueGeom(which)
-            if (geom !== detailsSweepTimer.lastGeom) {
-                detailsSweepTimer.lastGeom = geom
+            if (!Awaited.still("details_sweep_geom", geom))
                 return
-            }
             detailsSweepTimer.stop()
             const want = detailsPane.valueRow.shownValue(which)
             // Every corner of the gap: a reach that only works level with the words passes in the middle.
@@ -422,23 +420,21 @@ Item {
     /// link is cut alike (`even`), the name and the date lines are whole (`crowd`) and the pane holds its row (`fits`).
     SampleTimer {
         id: detailsParentsTimer
-        property string lastGeom: ""
         onTriggered: {
             const row = detailsPane.valueRow
             const plate = row.plate
             // What the plate was handed: git's parents, or a stash's base alone. `git=` says how many git has.
             const want = plate.parents
             const first = driver.detailsModel.parentHex
-            if (!driver.cardSettled || detailsPane.width <= 0 || (want.length > 0 ? want[0] : "") !== first)
+            if (!Awaited.all("details_parents_ready", {
+                "ready": !(!driver.cardSettled || detailsPane.width <= 0 || (want.length > 0 ? want[0] : "") !== first) }))
                 return
             // Settled when two samples agree: the pane lays out more than once on its way to a commit, and a width
             // asked for arrives a frame after the row it resizes.
             const geom = Math.round(detailsPane.width) + "/" + Math.round(row.parentRoom) + "/"
                 + Math.round(plate.parentLineWidth) + "/" + plate.parentsShown
-            if (geom !== detailsParentsTimer.lastGeom) {
-                detailsParentsTimer.lastGeom = geom
+            if (!Awaited.still("details_parents_geom", geom))
                 return
-            }
             detailsParentsTimer.stop()
             let drawn = 0
             let order = true
@@ -474,17 +470,14 @@ Item {
     /// name's, the date's), and the face's middle less the capitals'; `-` is a word not drawn.
     SampleTimer {
         id: detailsAlignTimer
-        property string lastGeom: ""
         onTriggered: {
             const row = detailsPane.valueRow
-            if (!driver.cardSettled || detailsPane.width <= 0)
+            if (!Awaited.all("details_align_ready", { "ready": !(!driver.cardSettled || detailsPane.width <= 0) }))
                 return
             const b = row.baselines()
             const geom = Math.round(detailsPane.width) + "/" + b.name + "/" + b.hash + "/" + b.date + "/" + b.parent
-            if (geom !== detailsAlignTimer.lastGeom) {
-                detailsAlignTimer.lastGeom = geom
+            if (!Awaited.still("details_align_geom", geom))
                 return
-            }
             detailsAlignTimer.stop()
             const capitalsMiddle = b.date - WordFace.capitalMiddle(b.dateSize)
             const faceOff = b.face < 0 ? 0 : b.face - capitalsMiddle
@@ -518,7 +511,6 @@ Item {
         id: parentsCardTimer
         property bool going: false
         property string stage: "settle"
-        property string lastGeom: ""
         property string want: ""
         property real seatY: 0
         property real plateWidth: 0
@@ -531,10 +523,8 @@ Item {
                 if (!driver.cardSettled || !plate.moreStands)
                     return
                 const geom = Math.round(detailsPane.width) + "/" + Math.round(plate.parentLineWidth)
-                if (geom !== parentsCardTimer.lastGeom) {
-                    parentsCardTimer.lastGeom = geom
+                if (!Awaited.still("parents_card_geom", geom))
                     return
-                }
                 parentsCardTimer.stage = "open"
                 // The first hash's row of pixels before the card comes out: the card's first hash has to stand on it.
                 parentsCardTimer.seatY = plate.linkAt(0).field.mapToItem(null, 0, 0).y
@@ -550,10 +540,8 @@ Item {
                 // The line lays itself out again as the card comes out; read it once two samples agree.
                 const arrow = plate.arrowBox(null)
                 const opened = Math.round(plate.parentLineWidth) + "/" + Math.round(arrow.x)
-                if (opened !== parentsCardTimer.lastGeom) {
-                    parentsCardTimer.lastGeom = opened
+                if (!Awaited.still("parents_card_geom", opened))
                     return
-                }
                 if (parentsCardTimer.going) {
                     parentsCardTimer.stage = "go"
                     parentsCardTimer.want = plate.parents[1]
@@ -605,17 +593,15 @@ Item {
         id: detailsFitTimer
         // `fits=` is `contentOverflow < 1`: a pane width the splitter left on a fraction can put a fraction in the
         // answer, and what this verb is about is tens of pixels.
-        property string lastGeom: ""
         onTriggered: {
-            if (!driver.cardSettled || detailsPane.width <= 0 || detailsPane.height <= 0)
+            if (!Awaited.all("details_fit_ready", {
+                "ready": !(!driver.cardSettled || detailsPane.width <= 0 || detailsPane.height <= 0) }))
                 return
             // The row has to have stopped moving: mid-layout the row and its block are both some other width, and
             // `fills` answers true about a frame nobody sees.
             const geom = detailsPane.valueRow.width + "x" + detailsPane.valueRow.parent.width
-            if (geom !== detailsFitTimer.lastGeom) {
-                detailsFitTimer.lastGeom = geom
+            if (!Awaited.still("details_fit_geom", geom))
                 return
-            }
             detailsFitTimer.stop()
             Harness.report(
             "details_fit fills=" + detailsPane.valueRow.fillsBlock + " fits=" + (detailsPane.contentOverflow < 1)
@@ -630,12 +616,10 @@ Item {
     }
     SampleTimer {
         id: cornerTimer
-        /// What the corner answered at the previous sample, for the settle below.
-        property string lastSaid: ""
         // `shown=` is the label's own visibility: reporting the room that decided it would go
         // green with the binding cut.
         onTriggered: {
-            if (gitCorner.parent === null || gitCorner.width <= 0)
+            if (!Awaited.all("corner_ready", { "ready": !(gitCorner.parent === null || gitCorner.width <= 0) }))
                 return
             // The pane has to be done arriving: a details pane still reading its file list leaves its whole bottom
             // bare, so the corner reads as standing whatever the commit holds (`DetailsPane.bottomRoomSettled`). The
@@ -645,10 +629,8 @@ Item {
             // And it has to have stopped moving, as in `details-fit`. Both halves are needed: the settle alone can be
             // two samples agreeing about a list that has not arrived.
             const said = gitCorner.visible + "/" + Math.round(gitCorner.roomLeft)
-            if (said !== cornerTimer.lastSaid) {
-                cornerTimer.lastSaid = said
+            if (!Awaited.still("corner_said", said))
                 return
-            }
             cornerTimer.stop()
             Harness.report(
             "git_corner pane=" + (page.wipShown ? "wip" : "details")
@@ -669,7 +651,6 @@ Item {
         /// Whether to take the pane's room away again afterwards, by raising the command log under it — the one way a
         /// headless run can make the pane shorter than the box it is already holding.
         property bool squeeze: false
-        property int frameBefore: 0
         /// Which end the grip is carried past (`divider-refuse`), or empty for the ordinary pull. With the grip in
         /// hand the box answers (規約 §掴める境界は答える).
         property string refuse: ""
@@ -677,7 +658,7 @@ Item {
             if (descGrowTimer.pane.width <= 0 || descGrowTimer.pane.height <= 0 || descGrowTimer.pane.descCap <= 0)
                 return
             descGrowTimer.stop()
-            descGrowTimer.frameBefore = page.Window.window.frameCounter
+            Awaited.forget("desc_grow")
             if (descGrowTimer.refuse !== "") {
                 descGrowTimer.pane.pullDescriptionPast(
                     descGrowTimer.refuse === "desc-max")
@@ -698,7 +679,8 @@ Item {
     SampleTimer {
         id: descGrowSettle
         onTriggered: {
-            if (page.Window.window.frameCounter <= descGrowTimer.frameBefore)
+            if (!Awaited.all("desc_grow_settle_ready", { "drawn": Awaited.drawnSince("desc_grow"),
+                                                          "page": PageSettled.settled(page) }))
                 return
             if (descGrowTimer.refuse !== "" && !page.refusalShown)
                 return

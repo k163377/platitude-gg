@@ -141,7 +141,8 @@ Item {
             // waits(measured): printed in the report below and compared with nothing — the verb ends on `ready()`
             stageRowTimer.waited += stageRowTimer.interval
             const arrived = stageRowTimer.ready()
-            if (!arrived)
+            // The page too: the rows the read brought are built a polish after it lands (`rows:diff`).
+            if (!Awaited.all("diff_rows_ready", { "ready": arrived, "page": PageSettled.settled(page) }))
                 return
             stageRowTimer.stop()
             const act = Harness.autoAct
@@ -308,17 +309,14 @@ Item {
     // a fixture with no bar never reports and ends at the watchdog.
     SampleTimer {
         id: diffBarTimer
-        property string lastGeom: ""
         onTriggered: {
             // Settle: the rows' height read until two looks agree (the view lays them out a frame after they arrive),
             // and the bar out.
-            if (diffPane.view.count <= 0 || !diffPane.textHand.barOut)
+            if (!Awaited.all("diff_bar_ready", { "ready": !(diffPane.view.count <= 0 || !diffPane.textHand.barOut) }))
                 return
             const geom = Math.round(diffPane.view.contentHeight) + "," + diffPane.view.count
-            if (geom !== diffBarTimer.lastGeom) {
-                diffBarTimer.lastGeom = geom
+            if (!Awaited.still("diff_bar_geom", geom))
                 return
-            }
             diffBarTimer.stop()
             Harness.report("diff_bar " + diffPane.textHand.barTally())
             renderedBarrier.begin()
@@ -333,16 +331,13 @@ Item {
     // is a fixture with nowhere to press.
     SampleTimer {
         id: diffBlankTimer
-        property string lastGeom: ""
         onTriggered: {
             // Settle: the rows' height read until two looks agree, as `diffBarTimer` does.
-            if (diffPane.view.count <= 0)
+            if (!Awaited.all("diff_blank_ready", { "ready": !(diffPane.view.count <= 0) }))
                 return
             const geom = Math.round(diffPane.view.contentHeight) + "," + diffPane.view.count
-            if (geom !== diffBlankTimer.lastGeom) {
-                diffBlankTimer.lastGeom = geom
+            if (!Awaited.still("diff_blank_geom", geom))
                 return
-            }
             diffBlankTimer.stop()
             const before = acts.blankTally(true)
             const across = acts.spanTakes()
@@ -608,7 +603,7 @@ Item {
         property bool hand: false
         property bool took: false
         onTriggered: {
-            if (page.diffShown || diffPane.view.visible)
+            if (!Awaited.all("escape_ready", { "ready": !(page.diffShown || diffPane.view.visible) }))
                 return
             escapeTimer.stop()
             Harness.report("diff_escape took=" + escapeTimer.took
@@ -656,7 +651,11 @@ Item {
             }
             // The landing is the output: off its old key, with rows (or closed), and done rereading.
             const now = page.diffKey
-            if (!acts.wroteAndSettled() || now === followTimer.was || (page.diffShown && diffPane.view.count === 0))
+            if (!Awaited.all("diff_follow_landed", {
+                "written": acts.wroteAndSettled(),
+                "moved": now !== followTimer.was,
+                "rows": !(page.diffShown && diffPane.view.count === 0),
+                "page": PageSettled.settled(page) }))
                 return
             followTimer.stop()
             followTimer.landed = now
@@ -839,10 +838,9 @@ Item {
             // The send is immediate, but the rows are redrawn a layout later: wait for the ink to stand still.
             const ink = diffPane.codeInkRight()
             const now = Math.round(diffPane.codeAt) + "," + Math.round(ink)
-            if (now !== codeGrowTimer.lastReach) {
-                codeGrowTimer.lastReach = now
+            codeGrowTimer.lastReach = now
+            if (!Awaited.still("code_grow_reach", now))
                 return
-            }
             codeGrowTimer.ink = ink
             codeGrowTimer.room = diffPane.view.width
             acts.finish(codeGrowTimer)
@@ -914,10 +912,9 @@ Item {
             if (!acts.wroteAndSettled() || diffPane.view.count === 0)
                 return
             const now = acts.reachNow()
-            if (now !== codeShrinkTimer.lastReach) {
-                codeShrinkTimer.lastReach = now
+            codeShrinkTimer.lastReach = now
+            if (!Awaited.still("code_shrink_reach", now))
                 return
-            }
             acts.finish(codeShrinkTimer)
         }
     }
@@ -984,10 +981,9 @@ Item {
             if (page.diffKey !== codeSwapTimer.landed || page.diffSettling || !acts.viewLaidOut())
                 return
             const now = acts.reachNow()
-            if (now !== codeSwapTimer.lastReach) {
-                codeSwapTimer.lastReach = now
+            codeSwapTimer.lastReach = now
+            if (!Awaited.still("code_swap_reach", now))
                 return
-            }
             acts.finish(codeSwapTimer)
         }
     }
@@ -997,18 +993,15 @@ Item {
     // stays the hunk's (規約 §diff の中のステージ).
     SampleTimer {
         id: diffSweepTimer
-        property string lastGeom: ""
         onTriggered: {
             // Settle: the view lays the rows out a frame after they arrive, and ground about to become a row is
             // neither.
             const hand = diffPane.textHand
-            if (diffPane.view.count <= 0)
+            if (!Awaited.all("diff_sweep_ready", { "ready": !(diffPane.view.count <= 0) }))
                 return
             const geom = Math.round(hand.groundTop) + "," + diffPane.view.count
-            if (geom !== diffSweepTimer.lastGeom) {
-                diffSweepTimer.lastGeom = geom
+            if (!Awaited.still("diff_sweep_geom", geom))
                 return
-            }
             diffSweepTimer.stop()
             let reach = 0
             let tries = 0

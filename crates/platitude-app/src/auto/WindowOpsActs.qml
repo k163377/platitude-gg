@@ -38,7 +38,8 @@ Item {
         property int pressShot: 0
         onTriggered: {
             const page = acts.window.curPage
-            if (!acts.window.visible || page === null)
+            if (!Awaited.all("pick_ready", { "ready": !(!acts.window.visible || page === null),
+                                             "page": PageSettled.windowSettled(window) }))
                 return
             const door = Harness.autoAct === "ops-branch-pick" ? "branch"
                        : Harness.autoAct === "ops-worktree-pick" ? "worktree" : "repo"

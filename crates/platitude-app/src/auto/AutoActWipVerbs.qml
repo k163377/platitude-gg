@@ -358,7 +358,7 @@ Item {
         property bool moved: false
         property string leftPath: ""
         onTriggered: {
-            if (graphModel.finishCount === 0 || !worktree.loaded)
+            if (!Awaited.all("carried_read_ready", { "ready": !(graphModel.finishCount === 0 || !worktree.loaded) }))
                 return
             if (!carriedReadTimer.asked) {
                 const row = driver.rowOfWorktree(Harness.autoActArg)
@@ -400,10 +400,13 @@ Item {
             if (driver.carriedPane.nameCut && !driver.carriedPane.nameTipShown)
                 return
             if (carriedReadTimer.walked) {
-                // The run ends on the file the step asked for — a pane still reading it photographs empty. A step
-                // that moved nothing has no second read to wait for.
-                if (carriedReadTimer.moved
-                        && (!page.diffShown || page.diffPath === carriedReadTimer.leftPath))
+                // The run ends on the file the step asked for — a pane still reading it photographs empty, and its
+                // rows are built a polish after the read (`PageSettled`). A step that moved nothing has no second
+                // read to wait for.
+                if (!Awaited.all("carried_read_landed", {
+                    "moved": !carriedReadTimer.moved
+                        || (page.diffShown && page.diffPath !== carriedReadTimer.leftPath),
+                    "page": PageSettled.settled(page) }))
                     return
                 carriedReadTimer.stop()
                 driver.complete()
@@ -458,7 +461,7 @@ Item {
             return ""
         }
         onTriggered: {
-            if (graphModel.finishCount === 0 || !worktree.loaded)
+            if (!Awaited.all("carried_stand_ready", { "ready": !(graphModel.finishCount === 0 || !worktree.loaded) }))
                 return
             if (!carriedStandTimer.asked) {
                 // The same road in as `carried-read`.
@@ -476,7 +479,10 @@ Item {
             const files = page.wipUnstaged
             if (page.carriedPath === "" || files.carriedAt !== page.carriedPath || files.total === 0)
                 return
-            if (driver.carriedPane.view.count === 0 || gitCorner.width <= 0)
+            // `folderPath=` and `litRows=` are read off the rows as built (`Awaited.built`).
+            if (!Awaited.all("carried_stand_rows", {
+                "rows": driver.carriedPane.view.count > 0 && Awaited.built(driver.carriedPane.view),
+                "corner": gitCorner.width > 0 }))
                 return
             carriedStandTimer.stop()
             // `corner=` is the label's own visibility; the room it was handed would go green with the binding cut.
@@ -561,6 +567,9 @@ Item {
                     return
                 }
                 if (!carriedMenuTimer.applying) {
+                    // The pane behind the menu has its rows (`PageSettled`'s carried and rows terms).
+                    if (!Awaited.all("carried_menu_pane", { "page": PageSettled.settled(page) }))
+                        return
                     carriedMenuTimer.stop()
                     // Read off the rows as drawn: `apply=false` is the row taken off, `held=true` greyed, `says=` why.
                     Harness.report("carried_menu open=" + driver.carriedOpenItem.visible
@@ -608,7 +617,7 @@ Item {
     SampleTimer {
         id: wipLanesTimer
         onTriggered: {
-            if (driver.graphTopKind() !== "wip")
+            if (!Awaited.all("wip_lanes_ready", { "ready": !(driver.graphTopKind() !== "wip") }))
                 return
             wipLanesTimer.stop()
             Harness.report("wip_lanes geometry=" + graphModel.geometryAt(0)
@@ -620,7 +629,7 @@ Item {
     SampleTimer {
         id: amendAuthorTimer
         onTriggered: {
-            if (repoTab.headAuthorName === "")
+            if (!Awaited.all("amend_author_ready", { "ready": !(repoTab.headAuthorName === "") }))
                 return
             amendAuthorTimer.stop()
             Harness.report("amend_author differs=" + repoTab.headAuthorDiffers
@@ -676,10 +685,9 @@ Item {
     SampleTimer {
         id: halfSettledTimer
         onTriggered: {
-            if (!driver.wroteAndSettled()
-                    || worktree.headOid === driver.headOidBefore
-                    || graphModel.rowOf(worktree.headOid) < 0
-                    || !graphModel.wipRow)
+            if (!Awaited.all("half_settled_ready", {
+                "ready": !(!driver.wroteAndSettled() || worktree.headOid === driver.headOidBefore
+                    || graphModel.rowOf(worktree.headOid) < 0 || !graphModel.wipRow) }))
                 return
             halfSettledTimer.stop()
             Harness.report("wip_half stage=after busy=false"
@@ -693,7 +701,7 @@ Item {
     SampleTimer {
         id: resetAuthorTimer
         onTriggered: {
-            if (repoTab.headAuthorName === "")
+            if (!Awaited.all("reset_author_ready", { "ready": !(repoTab.headAuthorName === "") }))
                 return
             resetAuthorTimer.stop()
             Harness.report("head_author differs="
@@ -717,10 +725,9 @@ Item {
     SampleTimer {
         id: resetAuthorLandedTimer
         onTriggered: {
-            if (!driver.wroteAndSettled()
-                    || worktree.headOid === driver.headOidBefore
-                    || graphModel.rowOf(worktree.headOid) < 0
-                    || !driver.cardSettled)
+            if (!Awaited.all("reset_author_landed_ready", {
+                "ready": !(!driver.wroteAndSettled() || worktree.headOid === driver.headOidBefore
+                    || graphModel.rowOf(worktree.headOid) < 0 || !driver.cardSettled) }))
                 return
             resetAuthorLandedTimer.stop()
             Harness.report("reset_author was=" + driver.headOidBefore.substring(0, 8)
@@ -737,7 +744,7 @@ Item {
     SampleTimer {
         id: opExitTimer
         onTriggered: {
-            if (!page.wipShown || !wipPane.offersOpExit("--abort"))
+            if (!Awaited.all("op_exit_ready", { "ready": !(!page.wipShown || !wipPane.offersOpExit("--abort")) }))
                 return
             opExitTimer.stop()
             Harness.report("op_exit card=" + wipPane.offersOpExit("--abort")
@@ -752,7 +759,7 @@ Item {
         id: eolCommitTimer
         onTriggered: {
             // Only the card is waited for — asking after the count first would be reading the input side.
-            if (!wipPane.eolCardOpen)
+            if (!Awaited.all("eol_commit_ready", { "ready": wipPane.eolCardOpen }))
                 return
             eolCommitTimer.stop()
             Harness.report("eol_commit staged=" + worktree.stagedCount
@@ -768,7 +775,8 @@ Item {
         /// The branch this run merged to stop on, `""` for a run that reads the tree as it opened.
         property string merged: ""
         onTriggered: {
-            if (!worktree.loaded || !worktree.headKnown)
+            if (!Awaited.all("amend_row_ready", { "ready": !(!worktree.loaded || !worktree.headKnown),
+                                                   "page": PageSettled.settled(page) }))
                 return
             if (amendRowTimer.merged !== "" && !worktree.opMerging)
                 return
@@ -788,7 +796,7 @@ Item {
     SampleTimer {
         id: amendTipTimer
         onTriggered: {
-            if (wipPane.subjectText === "")
+            if (!Awaited.all("amend_tip_ready", { "ready": !(wipPane.subjectText === "") }))
                 return
             wipPane.pointAtCommit = true
             const tip = Tips.box
@@ -806,7 +814,7 @@ Item {
     SampleTimer {
         id: commitFaceTimer
         onTriggered: {
-            if (!wipPane.signingTipShown)
+            if (!Awaited.all("commit_face_ready", { "ready": wipPane.signingTipShown }))
                 return
             commitFaceTimer.stop()
             Harness.report("commit_face signs=" + repoTab.signsCommits
@@ -865,7 +873,8 @@ Item {
                 if (!Awaited.all("eol_gone_card", {
                         "card": wipPane.eolCardOpen,
                         // The staging before the button's card is waited out before the next write is armed.
-                        "wrote": !eolGoneTimer.button || driver.wroteAndSettled()
+                        "wrote": !eolGoneTimer.button || driver.wroteAndSettled(),
+                        "page": PageSettled.settled(page)
                     }))
                     return
                 wipPane.eolHoverCard.contentPointed = true
@@ -882,7 +891,15 @@ Item {
                 eolGoneTimer.step = 2
                 return
             }
-            if (!Awaited.all("eol_gone", { "gone": !wipPane.eolCardOpen }))
+            if (!Awaited.all("eol_gone", { "gone": !wipPane.eolCardOpen, "page": PageSettled.settled(page) }))
+                return
+            // The hand off the button and the card's place before the picture: a hand resting on the commit button
+            // asks for its tip after the usual rest, and a tip arriving between the completion and a picture is a
+            // window that moved. Lifted, the ask is withdrawn (`TipAsk.asked`), and `Tips.current` is null once no
+            // tip is shown or waiting.
+            wipPane.pointAtCommit = false
+            wipPane.eolHoverCard.contentPointed = false
+            if (!Awaited.all("eol_gone_hand", { "tip": Tips.current === null }))
                 return
             eolGoneTimer.stop()
             Harness.report("eol_gone button=" + eolGoneTimer.button + " card=" + wipPane.eolCardOpen
@@ -1004,7 +1021,7 @@ Item {
             mergeCommitTimer.start()
         }
         onTriggered: {
-            if (!driver.wroteAndSettled())
+            if (!Awaited.all("merge_commit_ready", { "ready": driver.wroteAndSettled(), "page": PageSettled.settled(page) }))
                 return
             // The graph holding the commit, checked against the id HEAD moved from: refs and the walk arrive behind
             // the write and each other, so the old tip would pass.

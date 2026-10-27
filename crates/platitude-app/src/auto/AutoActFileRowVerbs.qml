@@ -206,8 +206,9 @@ Item {
             // optional — it can end before this page exists; verify-ui verbs.md §通信中(リング)と起動直後の狙い方); and
             // `headBehind`: the refs are a feed of their own and land after the rows, and under `--preset behind`
             // only the fetch moves it off zero.
-            if (graphModel.rowTotal < acts.openFetchRows || repoTab.autoFetchRunning
-                    || branchesModel.headBehind < 1)
+            if (!Awaited.all("open_fetch_ready", {
+                "ready": !(graphModel.rowTotal < acts.openFetchRows || repoTab.autoFetchRunning
+                    || branchesModel.headBehind < 1) }))
                 return
             // The fetched row arrives chipless and takes the remote name a pass later. Row zero is that row: the
             // preset opens on a clean tree, so no worktree row stands above it.

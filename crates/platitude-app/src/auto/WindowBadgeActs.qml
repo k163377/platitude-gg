@@ -57,8 +57,9 @@ Item {
         property int requestedWidth: -1
         onTriggered: {
             acts.bandBeats++
+            // The page whole (`PageSettled`): the worktree row's tally comes with the rows agreeing with the status.
             if (identityDialog.opened || topBar.bandTabsWidth <= 0
-                    || window.curPage === null || !window.curPage.pageWorktree.loaded
+                    || window.curPage === null || !PageSettled.settled(window.curPage)
                     || !topBar.opBadgeShown || !topBar.conflictBadgeShown
                     || !topBar.identityBadgeShown)
                 return
@@ -109,13 +110,13 @@ Item {
                         ? window.width < badgesActTimer.requestedWidth
                         : Math.round(window.width) !== badgesActTimer.requestedWidth)))
                 return
-            if (badgesActTimer.wantsCard) {
-                // Open and laid out: a `ColumnLayout` settles on polish with no `forceLayout()`, so a report written
-                // in the frame a row arrives reads the card from before it (`BandStateCard.laidOut`).
-                if (!topBar.stateCardOpen || !topBar.stateCardLaidOut)
-                    return
-            }
-            if (!acts.bandLaidOutAfterFrames())
+            // The card open and laid out where one is wanted: a `ColumnLayout` settles on polish with no
+            // `forceLayout()`, so a report written in the frame a row arrives reads the card from before it
+            // (`BandStateCard.laidOut`). The band's shape is read every beat (`bandLaidOutAfterFrames`).
+            if (!Awaited.all("badges_ready", {
+                "card": !badgesActTimer.wantsCard || (topBar.stateCardOpen && topBar.stateCardLaidOut),
+                "laid": acts.bandLaidOutAfterFrames(),
+                "page": PageSettled.windowSettled(window) }))
                 return
             stop()
             acts.reportBadges()
@@ -127,30 +128,16 @@ Item {
     // frames once what it waits for is there, as the left menu's does (`WindowFrameActs.menuReadAfterFrames`) — there
     // the whole time: a beat that turned back before asking (a badge gone again, the card not laid out) starts the
     // count over, or the report would go out in the very beat the shape came back.
-    property int framesSwapped: 0
-    Connections {
-        target: acts.window
-        function onFrameSwapped() {
-            acts.framesSwapped++
-        }
-    }
     /// Counted by each verb's sampler at the top of its beat, so the wait sees a beat it was not asked in.
     property int bandBeats: 0
     property int bandAskedAt: -1
-    property int bandFramesWanted: -1
+    /// Whether two frames have swapped since the band's shape was first asked about on a run of beats
+    /// (`Awaited.drawnSince`): a beat that turned back before asking starts the count over.
     function bandLaidOutAfterFrames() {
         if (acts.bandAskedAt !== acts.bandBeats - 1)
-            acts.bandFramesWanted = -1
+            Awaited.forget("band_laid_out")
         acts.bandAskedAt = acts.bandBeats
-        if (acts.bandFramesWanted < 0)
-            acts.bandFramesWanted = acts.framesSwapped + 2
-        if (acts.framesSwapped < acts.bandFramesWanted) {
-            // `update()`, asked again each beat: a still offscreen scene swaps nothing unasked
-            // (rules-refs/app-ui.md「`frameSwapped` を待つなら頼むのは `window.update()`」).
-            acts.window.update()
-            return false
-        }
-        return true
+        return Awaited.drawnSince("band_laid_out")
     }
     /// Which rule painted the folded group's mark (デザイン規約 §ウィンドウの縁「色は最も重い状態が決める」), read off
     /// the band's own colour — recomputing the rule here would agree with itself whatever the band did.
@@ -217,7 +204,8 @@ Item {
         property bool badgeSaid: false
         onTriggered: {
             const page = window.curPage
-            if (page === null)
+            if (!Awaited.all("stale_act_ready", { "ready": !(page === null),
+                                                  "page": PageSettled.windowSettled(window) }))
                 return
             const graph = page.pageGraph
             if (!staleActTimer.faultArmed) {
@@ -268,7 +256,8 @@ Item {
         property bool earlyWorktree: false
         onTriggered: {
             const page = acts.window.curPage
-            if (!page)
+            // Not the settled page: `early=` is read while the hold keeps the page arriving, by design.
+            if (!Awaited.all("wip_landing_ready", { "ready": page }))
                 return
             const graph = page.pageGraph
             if (!wipLandingTimer.read) {
@@ -289,7 +278,7 @@ Item {
                 }
                 return
             }
-            if (!graph.wipRow || !PageSettled.settled(page))
+            if (!Awaited.all("wip_landing_landed", { "landed": graph.wipRow, "page": PageSettled.settled(page) }))
                 return
             stop()
             Harness.report("wip_landing held=true otherTop=true early=" + wipLandingTimer.early
@@ -331,7 +320,9 @@ Item {
         property int requestedWidth: -1
         onTriggered: {
             acts.bandBeats++
-            if (topBar.bandTabsWidth <= 0)
+            if (!Awaited.all("old_git_ready", {
+                "band": topBar.bandTabsWidth > 0,
+                "page": window.curPage !== null && PageSettled.settled(window.curPage) }))
                 return
             // `-fold` brings its own width: a folded group with nothing red in it, where the mark's colour is its whole
             // meaning (デザイン規約 §状態).
@@ -435,9 +426,10 @@ Item {
                 stateRequested = true
                 return
             }
-            if (Harness.autoAct === "no-lfs-card" && (!topBar.stateCardOpen || !topBar.stateCardLaidOut))
-                return
-            if (!acts.bandLaidOutAfterFrames())
+            if (!Awaited.all("no_lfs_ready", {
+                "card": Harness.autoAct !== "no-lfs-card" || (topBar.stateCardOpen && topBar.stateCardLaidOut),
+                "laid": acts.bandLaidOutAfterFrames(),
+                "page": PageSettled.windowSettled(window) }))
                 return
             stop()
             // `count=` is the model's, which the card's sentence says: the picture cannot be read for a number. The

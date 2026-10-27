@@ -71,6 +71,9 @@ Item {
             page.holdGoneRows = true
             page.openRefMenu("tag", arg, arg, tagsModel.oidOfName(arg))
             refMenu.openSub(refTagCard)
+            // Armed, so the run ends on the write's settle with the rows still held away: the display is the hold's,
+            // the reads behind it are the write's, and a picture between the two is of a page still arriving.
+            driver.beginWrite(act)
             refTagDeleteItem.completeHold()
             goneRowTimer.start()
         } else if (act === "delete-stood-down") {
@@ -265,7 +268,7 @@ Item {
         property string after: ""
         onTriggered: {
             // The precondition is read here and nowhere else (app-ui.md §UI 自動化).
-            if (!driver.menusLive())
+            if (!Awaited.all("delete_row_ready", { "ready": driver.menusLive() }))
                 return
             deleteRowTimer.stop()
             const arg = Harness.autoActArg
@@ -317,7 +320,8 @@ Item {
         property string tag: ""
         property int row: 0
         onTriggered: {
-            if (!driver.wroteAndSettled() || !driver.menusLive())
+            if (!Awaited.all("tag_chip_ready", { "ready": !(!driver.wroteAndSettled() || !driver.menusLive()),
+                                                  "page": PageSettled.settled(page) }))
                 return
             const oid = graphModel.oidAt(tagChipTimer.row)
             if (oid === "")
@@ -334,7 +338,8 @@ Item {
     SampleTimer {
         id: blockedTipTimer
         onTriggered: {
-            if (acts.blockedTipRow === null || !acts.blockedTipRow.tip.shown)
+            if (!Awaited.all("blocked_tip_ready", {
+                "ready": !(acts.blockedTipRow === null || !acts.blockedTipRow.tip.shown) }))
                 return
             blockedTipTimer.stop()
             Harness.report(
@@ -357,7 +362,7 @@ Item {
         property var row: null
         onTriggered: {
             const card = pullBlockedTimer.onChip ? commitMenu : refMenu
-            if (!card.opened || !pullBlockedTimer.row.tip.shown)
+            if (!Awaited.all("pull_blocked_ready", { "ready": !(!card.opened || !pullBlockedTimer.row.tip.shown) }))
                 return
             pullBlockedTimer.stop()
             Harness.report("pull_blocked where=" + (pullBlockedTimer.onChip ? "chip" : "row")
@@ -375,7 +380,7 @@ Item {
         /// Whether the card went up on a remote-tracking row — the half that names the branch it lands in.
         property bool onRemote: false
         onTriggered: {
-            if (!refMenu.opened)
+            if (!Awaited.all("pull_menu_ready", { "ready": refMenu.opened }))
                 return
             pullMenuTimer.stop()
             // `sentence=` / `into=`: every row names the branch that moves (デザイン規約 §取り込んで合流させる) — on the
@@ -394,7 +399,7 @@ Item {
     SampleTimer {
         id: chipMenuTimer
         onTriggered: {
-            if (!refMenu.opened && !commitMenu.opened)
+            if (!Awaited.all("chip_menu_ready", { "ready": !(!refMenu.opened && !commitMenu.opened) }))
                 return
             chipMenuTimer.stop()
             // `ref=` must stay down: a second menu on the chip's side is the split this entrance is joined to prevent.
@@ -412,7 +417,7 @@ Item {
         id: createTagTimer
         onTriggered: {
             const oid = tagsModel.oidOfName(Harness.autoActArg)
-            if (oid === "" || repoTab.busyCount !== 0)
+            if (!Awaited.all("create_tag_ready", { "ready": !(oid === "" || repoTab.busyCount !== 0) }))
                 return
             createTagTimer.stop()
             Harness.report("create_tag tag=" + Harness.autoActArg
@@ -472,7 +477,7 @@ Item {
             return true
         }
         onTriggered: {
-            if (!tagMenuTimer.ready() || !driver.menusLive())
+            if (!Awaited.all("tag_menu_ready", { "ready": !(!tagMenuTimer.ready() || !driver.menusLive()) }))
                 return
             tagMenuTimer.stop()
             page.openRefMenu("tag", tagMenuTimer.tag, tagMenuTimer.tag,
@@ -558,7 +563,7 @@ Item {
                 || repoTab.lastError !== tagGoneTimer.errorBefore
         }
         onTriggered: {
-            if (!driver.wroteAndSettled())
+            if (!Awaited.all("tag_gone_ready", { "ready": driver.wroteAndSettled(), "page": PageSettled.settled(page) }))
                 return
             const now = tagsModel.tagSides(tagGoneTimer.tag)
             // Refused, nothing moves: the answer is what is shot.
@@ -668,7 +673,7 @@ Item {
     SampleTimer {
         id: refusedRowTimer
         onTriggered: {
-            if (!driver.wroteAndSettled())
+            if (!Awaited.all("refused_row_ready", { "ready": driver.wroteAndSettled(), "page": PageSettled.settled(page) }))
                 return
             refusedRowTimer.stop()
             Harness.report("ref_menu delete=" + refDeleteItem.code
@@ -681,7 +686,9 @@ Item {
     SampleTimer {
         id: goneRowTimer
         onTriggered: {
-            if (tagsModel.rowOfName(Harness.autoActArg) >= 0)
+            if (!Awaited.all("gone_row_ready", { "ready": !(tagsModel.rowOfName(Harness.autoActArg) >= 0),
+                                                  "written": driver.wroteAndSettled(),
+                                                  "page": PageSettled.settled(page) }))
                 return
             goneRowTimer.stop()
             Harness.report("gone_row tag=" + Harness.autoActArg
@@ -703,7 +710,7 @@ Item {
             driver.inputWent(true)
         }
         onTriggered: {
-            if (!driver.wroteAndSettled())
+            if (!Awaited.all("stood_down_ready", { "ready": driver.wroteAndSettled(), "page": PageSettled.settled(page) }))
                 return
             // The rows stay off screen until a listing taken after the write is drawn; this is it arriving
             // (`ops::StandIn`).

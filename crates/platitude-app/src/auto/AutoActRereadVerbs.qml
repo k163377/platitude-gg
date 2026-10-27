@@ -147,7 +147,8 @@ Item {
                 return
             }
             if (!Awaited.all("nav_reread_read", { "settled": driver.wroteAndSettled(), "read": navTimer.reads > 0,
-                                                  "weighed": !acts.sidebar.rowKeep.busy }))
+                                                  "weighed": !acts.sidebar.rowKeep.busy,
+                                                  "page": PageSettled.settled(page) }))
                 return
             navTimer.stop()
             const row = navTimer.row
@@ -214,7 +215,8 @@ Item {
             if (!Awaited.all("recover_reread_read", { "settled": driver.wroteAndSettled(),
                                                       "answered": acts.page.recoverAnswered,
                                                       "moved": !pane.cardOpen || pane.cardAt !== recoverTimer.atBefore,
-                                                      "weighed": !pane.rowKeep.busy }))
+                                                      "weighed": !pane.rowKeep.busy,
+                                                      "page": PageSettled.settled(acts.page) }))
                 return
             recoverTimer.stop()
             const card = pane.entryHoverCard

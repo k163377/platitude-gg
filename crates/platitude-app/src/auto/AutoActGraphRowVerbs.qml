@@ -264,8 +264,12 @@ Item {
             // answered for this choice — `selectionLoaded`, since a failed read also stops loading and leaves the
             // empty list a no-change choice has — and the commit list laid out, since an unlaid-out view measures 0.
             const lit = chooseTimer.litRows()
-            if (page.chosenCount !== chooseTimer.wanted() || lit !== chooseTimer.wanted()
-                    || !detailsModel.selectionLoaded || !detailsPane.chosenListDrawn)
+            if (!Awaited.all("graph_choose_landed", {
+                "chosen": page.chosenCount === chooseTimer.wanted(),
+                "lit": lit === chooseTimer.wanted(),
+                "read": detailsModel.selectionLoaded,
+                "drawn": detailsPane.chosenListDrawn,
+                "page": PageSettled.settled(page) }))
                 return
             chooseTimer.stop()
             if (chooseTimer.after !== "") {
@@ -321,19 +325,32 @@ Item {
                               + " lit=" + chooseTimer.litRows())
             driver.complete()
         }
+        /// The double's own answer and the row's, read at the clicks (`chosen_dbl`); the report waits for the reads
+        /// the clicks set going.
+        property bool dblClicked: false
+        property bool dblLed: false
+        property bool dblMovable: false
         onTriggered: {
             if (chooseTimer.after === "dbl") {
-                // As the area delivers the pair: two clicks, then the double the second is also reported as.
-                const at = graphPane.view.itemAtIndex(chooseTimer.rows[chooseTimer.rows.length - 1])
-                if (!at)
+                if (!chosenRowTimer.dblClicked) {
+                    // As the area delivers the pair: two clicks, then the double the second is also reported as.
+                    const at = graphPane.view.itemAtIndex(chooseTimer.rows[chooseTimer.rows.length - 1])
+                    if (!at)
+                        return
+                    at.leftClick(Qt.ControlModifier)
+                    // `led=` is the row's own answer: a `switch` would land ticks later, so the branch on screen says
+                    // nothing yet. `movable=` rules out a row that turns the gesture down for leading nowhere.
+                    chosenRowTimer.dblLed = at.doubleClick(Qt.ControlModifier)
+                    chosenRowTimer.dblMovable = at.movable
+                    chosenRowTimer.dblClicked = true
+                    return
+                }
+                // The clicks moved the choice; its read is the page's.
+                if (!Awaited.all("chosen_dbl_landed", { "page": PageSettled.settled(page) }))
                     return
                 chosenRowTimer.stop()
-                at.leftClick(Qt.ControlModifier)
-                const led = at.doubleClick(Qt.ControlModifier)
-                // `led=` is the row's own answer: a `switch` would land ticks later, so the branch on screen says
-                // nothing yet. `movable=` rules out a row that turns the gesture down for leading nowhere.
-                Harness.report("chosen_dbl led=" + led
-                                  + " movable=" + at.movable
+                Harness.report("chosen_dbl led=" + chosenRowTimer.dblLed
+                                  + " movable=" + chosenRowTimer.dblMovable
                                   + " naming=" + (graphPane.namingOid !== "")
                                   + " branch=" + worktree.branch)
                 driver.complete()
@@ -506,7 +523,7 @@ Item {
         /// The commit read before the press, for the report's `read=`.
         property string readOid: ""
         onTriggered: {
-            if (!refList.opened)
+            if (!Awaited.all("list_choose_ready", { "ready": refList.opened }))
                 return
             if (!listChooseTimer.pressed) {
                 listChooseTimer.readOid = page.selectedOid
@@ -517,7 +534,11 @@ Item {
             }
             // `selectionLoaded` for the reason `chooseTimer` gives.
             const lit = acts.litRowsTo(refListOpenTimer.row)
-            if (page.chosenCount !== 2 || lit !== 2 || !detailsModel.selectionLoaded)
+            if (!Awaited.all("list_choose_landed", {
+                "chosen": page.chosenCount === 2,
+                "lit": lit === 2,
+                "read": detailsModel.selectionLoaded,
+                "page": PageSettled.settled(page) }))
                 return
             listChooseTimer.stop()
             Harness.report("ref_list_choose chosen=" + page.chosenCount
@@ -532,7 +553,7 @@ Item {
     SampleTimer {
         id: listMenuTimer
         onTriggered: {
-            if (!refList.opened)
+            if (!Awaited.all("list_menu_ready", { "ready": refList.opened }))
                 return
             if (!refList.menuRow(refListOpenTimer.menuRow))
                 return
@@ -553,7 +574,7 @@ Item {
     SampleTimer {
         id: listLitTimer
         onTriggered: {
-            if (!refList.opened)
+            if (!Awaited.all("list_lit_ready", { "ready": refList.opened }))
                 return
             if (!refList.pointRow(refListOpenTimer.litRow))
                 return
@@ -571,7 +592,7 @@ Item {
     SampleTimer {
         id: refListShownTimer
         onTriggered: {
-            if (!refList.opened)
+            if (!Awaited.all("ref_list_shown_ready", { "ready": refList.opened }))
                 return
             const stacked = graphPane.view.itemAtIndex(refListOpenTimer.row)
             if (!stacked)
@@ -598,7 +619,12 @@ Item {
             if (headListTimer.pressed) {
                 const at = graphModel.headRow
                 const item = at >= 0 ? graphPane.view.itemAtIndex(at) : null
-                if (refList.opened || page.selectedOid !== headListTimer.want || !driver.cardSettled || !item)
+                if (!Awaited.all("graph_head_list_landed", {
+                    "list": !refList.opened,
+                    "selected": page.selectedOid === headListTimer.want,
+                    "card": driver.cardSettled,
+                    "row": item !== null,
+                    "page": PageSettled.settled(page) }))
                     return
                 headListTimer.stop()
                 const listAfter = refList.opened
@@ -686,7 +712,7 @@ Item {
         property real firstX: 0
         onTriggered: {
             const at = graphPane.view.itemAtIndex(cardReturnTimer.row)
-            if (!at)
+            if (!Awaited.all("card_return_ready", { "ready": at }))
                 return
             // The rest, and then the wait it opens after. Both are the row's own (`GraphRowDelegate.settlePointed`).
             if (!rowCard.opened) {
@@ -721,7 +747,7 @@ Item {
         property int row: 0
         property bool byNumber: false
         onTriggered: {
-            if (!rowCard.opened && !refList.opened)
+            if (!Awaited.all("row_card_ready", { "ready": !(!rowCard.opened && !refList.opened) }))
                 return
             // A pass that moved the row lays its delegates out again, so the row can be a beat from standing.
             const row = rowCardTimer.byNumber ? rowCardTimer.row : graphModel.rowOf(rowCardTimer.oidHex)
@@ -822,17 +848,14 @@ Item {
     // sampled (`SweepPad.airPoints`).
     SampleTimer {
         id: cardSweepTimer
-        property string lastGeom: ""
         onTriggered: {
             // The commit's words first: a card fills in after it opens, and one swept before hands back `1970-01-01`.
-            if (!rowCard.opened || rowCard.subject === "")
+            if (!Awaited.all("card_sweep_ready", { "ready": !(!rowCard.opened || rowCard.subject === "") }))
                 return
             // And stopped laying out: mid-layout its fields are at some other width (the wait `details-sweep` takes).
             const geom = Math.round(rowCard.width) + "x" + Math.round(rowCard.height)
-            if (geom !== cardSweepTimer.lastGeom) {
-                cardSweepTimer.lastGeom = geom
+            if (!Awaited.still("card_sweep_geom", geom))
                 return
-            }
             cardSweepTimer.stop()
             Harness.report("card_sweep "
                 + rowCard.background.pad.sweepAir(9, "open=" + rowCard.opened))
@@ -1107,7 +1130,7 @@ Item {
         property string oidHex: ""
         property bool asked: false
         onTriggered: {
-            if (!commitMenu.opened)
+            if (!Awaited.all("menu_hover_ready", { "ready": commitMenu.opened }))
                 return
             if (!menuHoverTimer.asked) {
                 const row = graphPane.view.itemAtIndex(graphModel.rowOf(menuHoverTimer.oidHex))

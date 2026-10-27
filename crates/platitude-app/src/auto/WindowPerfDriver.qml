@@ -72,6 +72,8 @@ Item {
         driver.reportDisplay("complete")
         Harness.noteMemory("perf-done")
         Harness.report("perf_done open=" + (driver.page !== null))
+        // The measurement's own end, as the one stage this verb reaches (`Awaited.at`).
+        Awaited.at("perf", "done")
         if (PerfProbe.verifying)
             window.finishAutoAct()
     }

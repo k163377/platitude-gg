@@ -352,7 +352,7 @@ Item {
     SampleTimer {
         id: worktreeHeldTimer
         onTriggered: {
-            if (!driver.wroteAndSettled())
+            if (!Awaited.all("worktree_held_ready", { "ready": driver.wroteAndSettled(), "page": PageSettled.settled(page) }))
                 return
             worktreeHeldTimer.stop()
             const branch = repoTab.goneWorktreeBranch
@@ -371,7 +371,8 @@ Item {
     SampleTimer {
         id: worktreeGoneTimer
         onTriggered: {
-            if (!driver.wroteAndSettled() || repoTab.goneWorktree !== "")
+            if (!Awaited.all("worktree_gone_ready", {
+                "ready": !(!driver.wroteAndSettled() || repoTab.goneWorktree !== "") }))
                 return
             worktreeGoneTimer.stop()
             // The judged two first; the worktree and the count are the preset's.
@@ -386,7 +387,7 @@ Item {
         id: pinEdgeTimer
         onTriggered: {
             // No row at all is the other state (`nav-open head:<filter>`).
-            if (branchesModel.headRow < 0)
+            if (!Awaited.all("pin_edge_ready", { "ready": !(branchesModel.headRow < 0) }))
                 return
             // Re-applied every tick: a list asked for its end before its layout pass has nowhere to go. A section
             // showing every row keeps answering 0 and the run waits out its watchdog — hence the preset in verbs.md.
@@ -594,9 +595,8 @@ Item {
     SampleTimer {
         id: navRailTimer
         onTriggered: {
-            if (sidebarPane.width <= 0 || sidebarPane.height <= 0)
-                return
-            if (page.diffShown && !diffPane.diffSettled())
+            if (!Awaited.all("nav_rail_ready", { "ready": !(sidebarPane.width <= 0 || sidebarPane.height <= 0),
+                                                  "page": PageSettled.settled(page) }))
                 return
             // The popup itself, not `kind`: that clears as the exit begins (`SectionPeekPopup.onAboutToHide`).
             if (acts.peekGoneWanted && sidebarPane.peekSection.visible)
@@ -852,7 +852,10 @@ Item {
                 acts.reclickStep = 4
             } else if (acts.reclickStep === 4) {
                 // Armed, the box opens in the peeked section once that wait runs out (SidebarRowGestures.startEdit).
-                if (acts.reclickArmed && sidebarPane.editKey === "")
+                // The click chose the row's commit too: its read is the page's.
+                if (!Awaited.all("nav_reclick_landed", {
+                    "box": !acts.reclickArmed || sidebarPane.editKey !== "",
+                    "page": PageSettled.settled(page) }))
                     return
                 reclickTimer.stop()
                 Harness.report(
@@ -900,7 +903,7 @@ Item {
         }
         onTriggered: {
             const list = navProbe.listOf(elsewhereTimer.kind)
-            if (!list)
+            if (!Awaited.all("elsewhere_ready", { "ready": list }))
                 return
             const step = acts.elsewhereStep
             if (step === 0 || step === 3 || step === 5) {
@@ -923,8 +926,11 @@ Item {
                                                                              detailsPane.height / 2))
                 acts.elsewhereStep = 3
             } else {
-                // Armed, the box opens on the row once the wait runs out (`SidebarRowGestures.startEdit`).
-                if (acts.elsewhereArmed && sidebarPane.editKey === "")
+                // Armed, the box opens on the row once the wait runs out (`SidebarRowGestures.startEdit`); the clicks
+                // chose rows, whose reads land on the page.
+                if (!Awaited.all("nav_reclick_elsewhere_landed", {
+                    "box": !acts.elsewhereArmed || sidebarPane.editKey !== "",
+                    "page": PageSettled.settled(page) }))
                     return
                 elsewhereTimer.stop()
                 Harness.report(
@@ -944,7 +950,7 @@ Item {
     SampleTimer {
         id: navAddRemoteTimer
         onTriggered: {
-            if (!remoteDialog.visible)
+            if (!Awaited.all("nav_add_remote_ready", { "ready": remoteDialog.visible }))
                 return
             navAddRemoteTimer.stop()
             Harness.report("nav_add_remote dialog=" + remoteDialog.visible
@@ -958,7 +964,7 @@ Item {
     SampleTimer {
         id: navSectionTimer
         onTriggered: {
-            if (sidebarPane.height <= 0)
+            if (!Awaited.all("nav_section_ready", { "ready": !(sidebarPane.height <= 0) }))
                 return
             navSectionTimer.stop()
             Harness.report(
@@ -974,7 +980,7 @@ Item {
     SampleTimer {
         id: navFilterTimer
         onTriggered: {
-            if (sidebarPane.width <= 0)
+            if (!Awaited.all("nav_filter_ready", { "ready": !(sidebarPane.width <= 0) }))
                 return
             navFilterTimer.stop()
             Harness.report(

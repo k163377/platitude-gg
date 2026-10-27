@@ -186,6 +186,7 @@ impl RepoTab {
                 TabMsg::AutoFetch { running, error } => {
                     self.auto_fetch_running = running;
                     if !running {
+                        self.auto_fetch_seq += 1;
                         self.fetch_settled(&error, false);
                     }
                 }

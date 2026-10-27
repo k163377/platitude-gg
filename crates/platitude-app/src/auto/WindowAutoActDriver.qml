@@ -68,7 +68,8 @@ Item {
         property bool clearRequested: false
         property bool was: false
         onTriggered: {
-            if (window.curPage === null)
+            if (!Awaited.all("commands_clear_act_ready", { "ready": !(window.curPage === null),
+                                                           "page": PageSettled.windowSettled(window) }))
                 return
             if (!commandsClearActTimer.clearRequested) {
                 if (!driver.commandsWrongSeen
@@ -109,7 +110,8 @@ Item {
         property bool hadLine: false
         property bool wasOpen: false
         onTriggered: {
-            if (window.curPage === null)
+            if (!Awaited.all("fetch_recover_act_ready", { "ready": !(window.curPage === null),
+                                                          "page": PageSettled.windowSettled(window) }))
                 return
             if (!fetchRecoverActTimer.fetchRequested) {
                 if (!driver.commandsWrongSeen || !driver.errorLineSeen || !window.curPage.commandsShown)

@@ -57,7 +57,8 @@ Item {
             const landing = arg.split(":")
             switchLandsTimer.branch = landing[0]
             switchLandsTimer.stashes = landing.length > 1 ? Number(landing[1]) : -1
-            page.switchToRef("branch", landing[0])
+            // Through the write barrier: the landing is the status the write's settle brings.
+            driver.pressWrite("switch-lands", () => page.switchToRef("branch", landing[0]) !== false)
             switchLandsTimer.start()
         } else if (act === "switch-held") {
             // A branch another worktree holds: the press stands the tab in that worktree and raises nothing
@@ -152,7 +153,7 @@ Item {
     SampleTimer {
         id: moveAskTimer
         onTriggered: {
-            if (!graphPane.askCard.settled)
+            if (!Awaited.all("move_ask_ready", { "ready": graphPane.askCard.settled }))
                 return
             moveAskTimer.stop()
             // `code=` empty is part of the claim: git has no single word for this move (規約 §git 用語のコード表記).
@@ -297,7 +298,7 @@ Item {
     SampleTimer {
         id: askSweepTimer
         onTriggered: {
-            if (!graphPane.askCard.settled)
+            if (!Awaited.all("ask_sweep_ready", { "ready": graphPane.askCard.settled }))
                 return
             askSweepTimer.stop()
             Harness.report("ask_sweep "
@@ -310,9 +311,13 @@ Item {
         property string branch: ""
         property int stashes: -1
         onTriggered: {
-            if (repoTab.busyCount !== 0 || worktree.branch !== switchLandsTimer.branch)
-                return
-            if (switchLandsTimer.stashes >= 0 && stashesModel.total !== switchLandsTimer.stashes)
+            // `conflicts=` is the status the write's settle brings (`session::write::settle_after`): a pop that
+            // conflicted leaves its entry, and the entry lands with the refs before the status does.
+            if (!Awaited.all("switch_lands_ready", {
+                "written": driver.wroteAndSettled(),
+                "branch": worktree.branch === switchLandsTimer.branch,
+                "stashes": switchLandsTimer.stashes < 0 || stashesModel.total === switchLandsTimer.stashes,
+                "page": PageSettled.settled(page) }))
                 return
             switchLandsTimer.stop()
             // `log=`: a refused move raises the command log (デザイン規約 §git が言ったことを読む場所), and a shut
@@ -332,7 +337,9 @@ Item {
         property bool held: false
         property int writesBefore: 0
         onTriggered: {
-            if (repoTab.busyCount !== 0 || worktree.branch !== switchTwiceTimer.branch)
+            if (!Awaited.all("switch_twice_ready", {
+                "ready": !(repoTab.busyCount !== 0 || worktree.branch !== switchTwiceTimer.branch),
+                "page": PageSettled.settled(page) }))
                 return
             switchTwiceTimer.stop()
             // `writes=` counts the same claim from the write side, read once the tree has settled.
@@ -367,7 +374,7 @@ Item {
         id: switchStoppedTimer
         property bool go: false
         onTriggered: {
-            if (!graphPane.askCard.settled)
+            if (!Awaited.all("switch_stopped_ready", { "ready": graphPane.askCard.settled }))
                 return
             switchStoppedTimer.stop()
             Harness.report("switch_stopped code=" + graphPane.askCode
@@ -398,11 +405,11 @@ Item {
         id: switchStoppedLandedTimer
         property int stashes: -1
         onTriggered: {
-            if (!driver.wroteAndSettled()
-                    || worktree.opCommand !== "" || !graphPane.askCard.shut)
-                return
-            if (switchStoppedLandedTimer.stashes >= 0
-                    && stashesModel.total !== switchStoppedLandedTimer.stashes)
+            if (!Awaited.all("switch_stopped_landed_ready", {
+                "ready": !(!driver.wroteAndSettled() || worktree.opCommand !== "" || !graphPane.askCard.shut),
+                "stashes": switchStoppedLandedTimer.stashes < 0
+                    || stashesModel.total === switchStoppedLandedTimer.stashes,
+                "page": PageSettled.settled(page) }))
                 return
             switchStoppedLandedTimer.stop()
             Harness.report("switch_stopped_landed branch=" + worktree.branch
@@ -418,7 +425,7 @@ Item {
         id: switchMarkTimer
         property string want: ""
         onTriggered: {
-            if (!refMenu.opened)
+            if (!Awaited.all("switch_mark_ready", { "ready": refMenu.opened }))
                 return
             switchMarkTimer.stop()
             // `indent=`: without the menu's hold column the `!` draws over the menu's edge (`AppMenu.holdIndent`).
@@ -445,7 +452,7 @@ Item {
         property string wantName: ""
         property bool typed: false
         onTriggered: {
-            if (!graphPane.askCard.settled)
+            if (!Awaited.all("upstream_ask_ready", { "ready": graphPane.askCard.settled }))
                 return
             if (upstreamAskTimer.types && !upstreamAskTimer.typed) {
                 upstreamFlow.setBranchName(upstreamAskTimer.wantName)
@@ -560,7 +567,8 @@ Item {
     SampleTimer {
         id: unsetLandedTimer
         onTriggered: {
-            if (!driver.wroteAndSettled())
+            if (!Awaited.all("unset_landed_ready", { "ready": driver.wroteAndSettled(),
+                                                      "page": PageSettled.settled(page) }))
                 return
             const left = branchesModel.upstreamNamed(unsetUpstreamTimer.branch)
             if (left !== "" && !repoTab.writeRefused)

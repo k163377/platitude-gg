@@ -105,7 +105,7 @@ Item {
     SampleTimer {
         id: graphTailTimer
         onTriggered: {
-            if (graphModel.loading || graphModel.rowTotal === 0)
+            if (!Awaited.all("graph_tail_ready", { "ready": !(graphModel.loading || graphModel.rowTotal === 0) }))
                 return
             // A ListView builds only near its viewport, so the far-end footer is asked for, then looked for.
             const tail = graphPane.view.footerItem
@@ -253,6 +253,10 @@ Item {
                         graphPane.view.positionViewAtEnd()
                     return
                 }
+                // The row stood aside to and the view's move are the page's reads: waited for before the run
+                // answers, since the forms that end here (`below`, `lit`) have no later wait of their own.
+                if (!Awaited.all("graph_head_page", { "page": PageSettled.settled(page) }))
+                    return
                 graphHeadTimer.answered = true
                 if (act === "graph-head-lit") {
                     // Hover cannot be injected, so the hand is put where the pointer's own arrival would put it: on
@@ -283,6 +287,9 @@ Item {
                     graphPane.view.positionViewAtBeginning()
                 return
             }
+            // The press selected HEAD's row: its read is the page's (`PageSettled`).
+            if (!Awaited.all("graph_head_landed", { "page": PageSettled.settled(page) }))
+                return
             graphHeadTimer.stop()
             graphHeadTimer.report()
         }
@@ -296,6 +303,9 @@ Item {
         id: graphDividerTimer
         /// Whether `pin-lit` has moved the selection off HEAD's row; once, or the view would never stay at its end.
         property bool stoodAside: false
+        /// The divider's pointer rested over its row: the row's seat decides on its card after the rest, and the run
+        /// ends on that decision (`PageSettled`), not inside it.
+        property bool rested: false
         /// The rows on screen wearing a highlight ground, and how many of them draw the graph divider's line again over
         /// it (`GraphRowDelegate.groundLines`) — the line as drawn, not its conditions.
         function ruledRows() {
@@ -338,8 +348,17 @@ Item {
                     graphPane.view.positionViewAtEnd()
                     return
                 }
+                // The row `pin-lit` selected has its read and the view its place (`PageSettled`).
+                if (!graphDividerTimer.rested) {
+                    if (!Awaited.all("graph_divider_pin_page", { "page": PageSettled.settled(page) }))
+                        return
+                    graphPane.restDividerPointer(true, pin.y + pin.rowMidY)
+                    graphDividerTimer.rested = true
+                    return
+                }
+                if (!Awaited.all("graph_divider_pin_landed", { "page": PageSettled.settled(page) }))
+                    return
                 graphDividerTimer.stop()
-                graphPane.restDividerPointer(true, pin.y + pin.rowMidY)
                 Harness.report("graph_divider_pin shown=" + pin.visible
                                   + " ruled=" + pin.lines.graphShown
                                   + " line=" + graphPane.graphDividerLineShown
@@ -353,8 +372,16 @@ Item {
                 Awaited.at("graph_divider", "row")
                 return
             }
+            if (!graphDividerTimer.rested) {
+                if (!Awaited.all("graph_divider_row_page", { "page": PageSettled.settled(page) }))
+                    return
+                graphPane.restDividerPointer(true, below.mapToItem(graphPane, 0, below.height / 2).y)
+                graphDividerTimer.rested = true
+                return
+            }
+            if (!Awaited.all("graph_divider_row_landed", { "page": PageSettled.settled(page) }))
+                return
             graphDividerTimer.stop()
-            graphPane.restDividerPointer(true, below.mapToItem(graphPane, 0, below.height / 2).y)
             Harness.report("graph_divider shown=" + graphPane.graphDividerShown
                               + " line=" + graphPane.graphDividerLineShown
                               + " refuses=" + graphPane.graphDividerRefuses
@@ -375,7 +402,7 @@ Item {
             graphPanTimer.start()
         }
         onTriggered: {
-            if (graphPane.graphXMax <= 0)
+            if (!Awaited.all("graph_pan_ready", { "ready": !(graphPane.graphXMax <= 0) }))
                 return
             // The pointer is what puts this bar on screen (デザイン規約 §グラフを横へ送る); `-away` checks it goes too.
             graphPane.restPointer(true)
@@ -427,8 +454,8 @@ Item {
             const view = detailsPane.filesWalk.view
             const bar = detailsPane.filesBar
             // Laid out and with somewhere to go, or the run would go green on no bar at all.
-            if (!view || view.count <= 0 || view.height <= 0
-                    || view.contentHeight <= view.height + 1)
+            if (!Awaited.all("pane_bar_ready", {
+                "ready": !(!view || view.count <= 0 || view.height <= 0 || view.contentHeight <= view.height + 1) }))
                 return
             if (!paneBarTimer.sent) {
                 paneBarTimer.sent = true
@@ -469,7 +496,8 @@ Item {
         }
         onTriggered: {
             // The commit has to have arrived, or the box holds no text.
-            if (detailsModel.loading || detailsModel.shaHex !== page.selectedOid)
+            if (!Awaited.all("text_bar_ready", {
+                "ready": !(detailsModel.loading || detailsModel.shaHex !== page.selectedOid) }))
                 return
             if (!textBarTimer.rolled) {
                 // The reader in the box, then one notch down, repeated until the box has moved.
@@ -550,7 +578,8 @@ Item {
     SampleTimer {
         id: middleScrollTimer
         onTriggered: {
-            if (graphPane.autoPanning && graphPane.graphX < graphPane.graphXMax - 0.5)
+            if (!Awaited.all("middle_scroll_ready", {
+                "ready": !(graphPane.autoPanning && graphPane.graphX < graphPane.graphXMax - 0.5) }))
                 return
             middleScrollTimer.stop()
             Harness.report(

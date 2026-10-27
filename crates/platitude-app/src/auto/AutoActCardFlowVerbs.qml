@@ -28,8 +28,13 @@ Item {
             // HEAD's row card, taken down by a menu raised on its row (a blocker: a dismissal), and the hand that
             // never left: nothing comes back while it stays, a tremor is its own move and the card comes back after
             // the rest. The argument is the stage to stop at — `card` / `menu` / `dismissed` / `back` (`back` when
-            // none).
-            cardLatchTimer.stage = arg === "" ? "back" : arg
+            // none). `back:row-late` runs `back` with the worktree row held back (`PGG_FAULT_HOLD_WIP_ROW`, raised
+            // by `xtask::verify::child` for this argument) and let through after the tremor, so the rebuild that
+            // brings the row lands under the rest — the order a slow read gives by chance, made the run's own.
+            const colon = arg.indexOf(":")
+            const stage = colon < 0 ? arg : arg.substring(0, colon)
+            cardLatchTimer.rowLate = colon >= 0 && arg.substring(colon + 1) === "row-late"
+            cardLatchTimer.stage = stage === "" ? "back" : stage
             cardLatchTimer.step = 0
             cardLatchTimer.start()
         } else if (act === "card-rewrite") {
@@ -50,8 +55,13 @@ Item {
     // dismissed, the hand still where it was: nothing comes back; a tremor is the hand's own move, and the card comes
     // back after the rest (デザイン規約 §左メニューの所作「手が動いたかの見切り」). `tremor_card=` is read in the tremor's own
     // turn: the card put out then (`visible`, up from the open call on, where `opened` waits out the enter
-    // transition). No stage stops at the tremor: the rest it starts runs on under the picture and the census, so what
-    // they show would be the machine's speed.
+    // transition). No stage stops at the tremor: the rest it starts runs on under the picture, so what it shows would
+    // be the machine's speed.
+    //
+    // `back` completes once the page has stopped arriving too: a rebuild landing after the card came back slides the
+    // rows under the hand and takes the card down for another rest (`RowHoverHost`, `HoverSeat.displace`), so a
+    // picture taken then is of the card gone — the state the run never claimed. The claim is read again at the
+    // picture (`Awaited.claim`).
     SampleTimer {
         id: cardLatchTimer
         property string stage: "back"
@@ -59,12 +69,35 @@ Item {
         property point at: Qt.point(-1, -1)
         property string oidHex: ""
         property bool tremorCard: false
+        /// The worktree row is held back and let through after the tremor (`run`).
+        property bool rowLate: false
+        /// Whether the hold was up when it was let through (`GraphModel.letTheWorktreeRowThrough`): a `row-late` run
+        /// that found none read the ordinary order and does not pass as the controlled one.
+        property bool rowHeld: false
         function done(stage) {
             cardLatchTimer.stop()
             Harness.report("card_latch stage=" + stage + " card=" + rowCard.opened + " menu=" + commitMenu.opened
                               + " latched=" + (rowHost.cardLatched !== "")
-                              + " tremor_card=" + cardLatchTimer.tremorCard)
+                              + " tremor_card=" + cardLatchTimer.tremorCard
+                              + (cardLatchTimer.rowLate ? " row_held=" + cardLatchTimer.rowHeld : ""))
+            if (stage === "back")
+                Awaited.claim("card_latch", () => rowCard.opened)
             driver.complete()
+        }
+        /// The rows moved under a hand that did not — a rebuild landing under the rest (`HandWatch.stillHeld`): the
+        /// card went with them and nothing opens until the hand's own move, so it goes onto HEAD's row where that
+        /// stands now, as a reader's would (one place apart at least — a tremor where the row is where it was).
+        function handBackOnHead() {
+            if (!graphPane.hand.stillHeld || rowCard.opened || graphModel.loading || graphModel.headRow < 0)
+                return
+            const row = graphPane.view.itemAtIndex(graphModel.headRow)
+            if (row === null)
+                return
+            let next = row.mapToItem(null, row.width / 2, row.height / 2)
+            if (next.x === graphPane.hand.at.x && next.y === graphPane.hand.at.y)
+                next = Qt.point(next.x + 2, next.y)
+            cardLatchTimer.at = next
+            graphPane.hand.stir(next)
         }
         onTriggered: {
             if (cardLatchTimer.step === 0) {
@@ -79,6 +112,7 @@ Item {
                 return
             }
             if (cardLatchTimer.step === 1) {
+                cardLatchTimer.handBackOnHead()
                 if (!Awaited.all("card_latch_card", { "card": rowCard.opened }))
                     return
                 if (cardLatchTimer.stage === "card") {
@@ -109,11 +143,17 @@ Item {
                 }
                 graphPane.hand.stir(Qt.point(cardLatchTimer.at.x + 2, cardLatchTimer.at.y))
                 cardLatchTimer.tremorCard = rowCard.visible
+                // The row let through now lands its rebuild under the rest the tremor started.
+                if (cardLatchTimer.rowLate)
+                    cardLatchTimer.rowHeld = graphModel.letTheWorktreeRowThrough()
                 cardLatchTimer.step = 4
                 return
             }
-            // The tremor was the hand's own move: the ask kept rests again, and the card comes back.
-            if (!Awaited.all("card_latch_back", { "card": rowCard.opened }))
+            // The tremor was the hand's own move: the ask kept rests again, and the card comes back — and stays,
+            // once nothing is still on its way to the page. Rows that landed under the still hand meanwhile took
+            // it down until the hand's own next move: the hand goes back onto HEAD's row.
+            cardLatchTimer.handBackOnHead()
+            if (!Awaited.all("card_latch_back", { "card": rowCard.opened, "settled": PageSettled.settled(page) }))
                 return
             cardLatchTimer.done("back")
         }

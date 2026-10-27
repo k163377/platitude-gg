@@ -164,7 +164,7 @@ Item {
     SampleTimer {
         id: cardTimer
         onTriggered: {
-            if (!sidebarPane.autoRecover.cardOpen)
+            if (!Awaited.all("card_ready", { "ready": sidebarPane.autoRecover.cardOpen }))
                 return
             cardTimer.stop()
             acts.frame()
@@ -175,7 +175,8 @@ Item {
     SampleTimer {
         id: restoreTimer
         onTriggered: {
-            if (driver.repoTab.writeSeq === acts.writesBefore || driver.repoTab.busyCount > 0)
+            if (!Awaited.all("restore_ready", {
+                "ready": !(driver.repoTab.writeSeq === acts.writesBefore || driver.repoTab.busyCount > 0) }))
                 return
             // Brought back: the list reads again with the entry put down. Refused: the band stands as it was, with
             // the write's error on the page.

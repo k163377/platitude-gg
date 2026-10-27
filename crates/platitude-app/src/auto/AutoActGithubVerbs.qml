@@ -112,7 +112,7 @@ Item {
         /// Whether a fetch went out for this run, to wait out.
         property bool fetched: false
         onTriggered: {
-            if (!acts.menuLive("github_card", cardTimer.fetched))
+            if (!Awaited.all("card_ready", { "ready": acts.menuLive("github_card", cardTimer.fetched) }))
                 return
             cardTimer.stop()
             page.openRowMenu(graphModel.oidAt(cardTimer.row))
@@ -147,7 +147,7 @@ Item {
         property string remote: ""
         property bool others: false
         onTriggered: {
-            if (!acts.menuLive("github_remote", false))
+            if (!Awaited.all("remote_ready", { "ready": acts.menuLive("github_remote", false) }))
                 return
             remoteTimer.stop()
             page.openRemoteMenu(remoteTimer.remote)
@@ -198,7 +198,8 @@ Item {
             // is photographed and recorded over whichever of the diff's rows the scheduler let in. With no menu standing
             // there is no card to wait for: the line below says so, and the run is judged on it.
             if (!Awaited.all("github_file", {
-                "diff": !commitFileMenu.showing || (page.diffPath === fileTimer.path && diffPane.diffSettled())
+                "diff": !commitFileMenu.showing || (page.diffPath === fileTimer.path && diffPane.diffSettled()),
+                "page": PageSettled.settled(page)
             }))
                 return
             fileTimer.stop()
@@ -237,7 +238,8 @@ Item {
                 return
             }
             if (!Awaited.all("github_choice", { "chosen": page.chosenCount === 2,
-                                                 "comparing": detailsModel.comparing }))
+                                                 "comparing": detailsModel.comparing,
+                                                 "page": PageSettled.settled(page) }))
                 return
             choiceTimer.stop()
             item.askMenu()

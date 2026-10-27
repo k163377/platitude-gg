@@ -438,7 +438,7 @@ Item {
             // A reason comes up after the tip's delay, on the window's one tip.
             const tip = Tips.box
             const tipped = tip.visible && tip.text === why
-            if (!Awaited.all("worktree_rename_box", { "tip": tipped || !(refused || withheld) }))
+            if (!Awaited.all("worktree_rename_tip", { "tip": tipped || !(refused || withheld) }))
                 return
             renameTimer.say("worktree_rename_box where=" + (renameTimer.onGraph ? "graph" : "nav")
                             + " open=" + open

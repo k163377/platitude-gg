@@ -96,7 +96,8 @@ Item {
         property int sawRows: -1
         property bool sawOnto: false
         onTriggered: {
-            if (!page.planLoadHeld || !page.planShown || page.planActive)
+            if (!Awaited.all("plan_loading_ready", {
+                "ready": !(!page.planLoadHeld || !page.planShown || page.planActive) }))
                 return
             planLoadingTimer.stop()
             Harness.report("plan_loading held=true shown=true standing=" + page.planActive
@@ -116,7 +117,7 @@ Item {
         }
         onTriggered: {
             const plan = page.rebasePlan
-            if (!plan.active || plan.loading || plan.stepCount === 0)
+            if (!Awaited.all("plan_open_ready", { "ready": !(!plan.active || plan.loading || plan.stepCount === 0) }))
                 return
             if (planOpenTimer.act === "rebase-plan" && page.planPushed === 0)
                 return
@@ -188,7 +189,11 @@ Item {
             }
         }
     }
-    // The run's landing: the plan away, the write answered by name, the old head's row gone and the new one drawn.
+    // The run's landing: the plan away, the write answered by name, the old head's row gone and the new one drawn,
+    // and the status the write asked for in (`statusFrom`, the report number its answer named — a status read while
+    // the rebase was out stands the worktree row up for the operation, and a picture taken on the answer alone is of
+    // that row, which the status after the write takes away). `wip=` is the row at the picture, so the claim is
+    // read, not inferred from what stood around it.
     SampleTimer {
         id: planRanTimer
         property string headBefore: ""
@@ -196,11 +201,15 @@ Item {
         property string answeredOp: ""
         property bool answeredStopped: false
         property bool answeredError: false
+        /// The report of HEAD that can carry the status behind the answer (`RepoTab.writeAnswerHeadSeq`), 0 until
+        /// the answer names one.
+        property int statusFrom: 0
         function begin(oid) {
             planRanTimer.headBefore = oid
             planRanTimer.answeredOp = ""
             planRanTimer.answeredStopped = false
             planRanTimer.answeredError = false
+            planRanTimer.statusFrom = 0
             planRanTimer.start()
         }
         onTriggered: {
@@ -210,13 +219,21 @@ Item {
                     || graphModel.rowOf(worktree.headOid) < 0
                     || graphModel.rowOf(planRanTimer.headBefore) >= 0)
                 return
+            if (!Awaited.all("rebase_plan_ran", {
+                                 "status": planRanTimer.statusFrom !== 0
+                                           && worktree.statusSeq >= planRanTimer.statusFrom,
+                                 "settled": PageSettled.settled(page)
+                             }))
+                return
             planRanTimer.stop()
             Harness.report("rebase_plan_ran op=" + planRanTimer.answeredOp
                               + " moved=" + (worktree.headOid !== planRanTimer.headBefore)
                               + " gone=" + (graphModel.rowOf(planRanTimer.headBefore) < 0)
                               + " stopped=" + planRanTimer.answeredStopped
                               + " plan=" + page.rebasePlan.active
-                              + " error=" + planRanTimer.answeredError)
+                              + " error=" + planRanTimer.answeredError
+                              + " wip=" + graphModel.wipRow)
+            Awaited.claim("rebase_plan_ran", () => !graphModel.wipRow && graphModel.rowOf(worktree.headOid) >= 0)
             renderedBarrier.begin()
         }
     }
@@ -235,6 +252,7 @@ Item {
                     planRanTimer.answeredOp = tab.writeAnswerOp(i)
                     planRanTimer.answeredStopped = tab.writeAnswerStopped(i)
                     planRanTimer.answeredError = tab.writeAnswerFailed(i)
+                    planRanTimer.statusFrom = tab.writeAnswerHeadSeq(i)
                 }
                 if (planEditStopTimer.running && planEditStopTimer.listingFrom < 0)
                     planEditStopTimer.listingFrom = tab.writeAnswerReadsFrom(i)

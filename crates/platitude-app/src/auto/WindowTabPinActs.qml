@@ -32,11 +32,22 @@ Item {
     /// The floor, because whether N tabs overflow depends on the installed fonts (`tab-widths` differs per OS), as
     /// for `tab-edge`. Nothing here closes a tab or takes the page down, so every precondition is read on every tick
     /// (app-ui.md §UI 自動化). `verb` is the report prefix, so the crowding diagnostic names which verb stalled.
+    /// The stages in order, and the furthest reached: a precondition read again on a later tick (the page, which
+    /// the floor's resize unsettles) is the same stage, not a step back, so it is not said again.
+    readonly property var stages: ["rows", "page", "floor", "crowded", "front", "front-arrives", "run", "pin"]
+    property int furthest: -1
+    function at(verb, stage) {
+        const index = acts.stages.indexOf(stage)
+        if (index < acts.furthest)
+            return
+        acts.furthest = index
+        Awaited.at(verb, stage)
+    }
     function staged(front, verb) {
         // The stand-in is drawn off the front tab's item, and a row the model just gained has none until the next
         // layout.
         if (acts.pageRepeater.count < 2 || acts.tabProbe.tabItemCount() !== acts.pageRepeater.count) {
-            Awaited.at(verb, "rows")
+            acts.at(verb, "rows")
             return false
         }
         // And the page under the strip settled, so the photograph holds a settled repository (the switch below
@@ -44,13 +55,13 @@ Item {
         const page = acts.window.curPage
         if (page === null || page.pageTab.state !== "open"
                 || !page.pageWorktree.loaded || page.pageGraph.finishCount === 0) {
-            Awaited.at(verb, "page")
+            acts.at(verb, "page")
             return false
         }
         if (!acts.floorSet) {
             acts.window.width = Math.ceil(acts.window.floorWidth)
             acts.floorSet = true
-            Awaited.at(verb, "floor")
+            acts.at(verb, "floor")
             return false
         }
         // A strip that fits has no edge for the stand-in to ride; which width crowds it cannot be assumed, so
@@ -67,28 +78,28 @@ Item {
                                   + " floorW=" + Math.ceil(acts.window.floorWidth))
             }
             acts.settling = true
-            Awaited.at(verb, "crowded")
+            acts.at(verb, "crowded")
             return false
         }
         if (!acts.frontSet) {
             acts.frontSet = true
             acts.tabsModel.setCurrentIndex(front)
-            Awaited.at(verb, "front")
+            acts.at(verb, "front")
             return false
         }
         if (acts.tabsModel.currentIndex !== front) {
-            Awaited.at(verb, "front-arrives")
+            acts.at(verb, "front-arrives")
             return false
         }
         if (!acts.runSent) {
             // Latched on the strip's answer: a strip with nowhere to travel was never sent, and counting it as sent
             // leaves the wait to the watchdog.
             acts.runSent = acts.topBar.sendTabRunAway()
-            Awaited.at(verb, "run")
+            acts.at(verb, "run")
             return false
         }
         if (!acts.topBar.tabPinShown) {
-            Awaited.at(verb, "pin")
+            acts.at(verb, "pin")
             return false
         }
         return true
@@ -102,7 +113,8 @@ Item {
         running: Harness.autoAct === "tab-pin"
         readonly property int front: Number(Harness.autoActArg || 0)
         onTriggered: {
-            if (!acts.staged(tabPinTimer.front, "tab_pin"))
+            if (!Awaited.all("tab_pin_ready", { "ready": acts.staged(tabPinTimer.front, "tab_pin"),
+                                                "page": PageSettled.windowSettled(window) }))
                 return
             stop()
             // The line is judged as one run of words (`verify/verbs.rs`), so the order is the table's, with `left=` —
@@ -146,7 +158,8 @@ Item {
             if (!Awaited.all("tab_pin_go", {
                     "still": !acts.topBar.tabRunTravelling,
                     "whole": acts.topBar.frontTabWhole,
-                    "pinGone": !acts.topBar.tabPinShown
+                    "pinGone": !acts.topBar.tabPinShown,
+                    "page": PageSettled.windowSettled(window)
                 }))
                 return
             stop()
@@ -198,7 +211,8 @@ Item {
                     "pinGone": !acts.topBar.tabPinShown,
                     "open": page !== null && page.pageTab.state === "open",
                     "worktree": page !== null && page.pageWorktree.loaded,
-                    "graph": page !== null && page.pageGraph.finishCount !== 0
+                    "graph": page !== null && page.pageGraph.finishCount !== 0,
+                    "page": PageSettled.windowSettled(window)
                 })) {
                 // The strip's account of the ask when it changes, so a run stuck here says whether the ask was
                 // answered and where a travel would go.
@@ -253,7 +267,8 @@ Item {
                         "pinGone": !acts.topBar.tabPinShown,
                         "open": page !== null && page.pageTab.state === "open",
                         "worktree": page !== null && page.pageWorktree.loaded,
-                        "graph": page !== null && page.pageGraph.finishCount !== 0
+                        "graph": page !== null && page.pageGraph.finishCount !== 0,
+                        "page": PageSettled.windowSettled(window)
                     })) {
                     // The ask's account meanwhile, as in `tab-open-go`.
                     const account = acts.topBar.frontAskAccount()

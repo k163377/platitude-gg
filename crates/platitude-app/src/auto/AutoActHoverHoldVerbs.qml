@@ -270,6 +270,11 @@ Item {
         }
         onTriggered: {
             const owner = menuBlockTimer.owner
+            // Past the first step, the page the stage reads is whole (`PageSettled`): the row activated at step 0
+            // brings a card and a file list, and `author-files` a diff.
+            if (menuBlockTimer.step > 0
+                    && !Awaited.all("menu_block_page/" + menuBlockTimer.step, { "page": PageSettled.settled(page) }))
+                return
             if (menuBlockTimer.step === 0) {
                 if (owner === "eol" || owner === "eol-key") {
                     page.showWip()

@@ -84,7 +84,7 @@ Item {
         id: rowTimer
         onTriggered: {
             const row = acts.pushRow()
-            if (!driver.rowTipStood(row, row.blocked))
+            if (!Awaited.all("row_ready", { "ready": driver.rowTipStood(row, row.blocked) }))
                 return
             rowTimer.stop()
             // The free words last: a claim is one substring.
@@ -127,7 +127,8 @@ Item {
     SampleTimer {
         id: askTimer
         onTriggered: {
-            if (!publishFlow.publishChecked || !graphPane.askCard.settled || !graphPane.askAnswerable)
+            if (!Awaited.all("ask_ready", {
+                "ready": !(!publishFlow.publishChecked || !graphPane.askCard.settled || !graphPane.askAnswerable) }))
                 return
             askTimer.stop()
             Harness.report("push_branch_ask local=" + publishFlow.publishLocal
@@ -157,7 +158,8 @@ Item {
     SampleTimer {
         id: landedTimer
         onTriggered: {
-            if (repoTab.busyCount !== 0 || repoTab.writeSeq === driver.writeSeqBefore)
+            if (!Awaited.all("landed_ready", {
+                "ready": !(repoTab.busyCount !== 0 || repoTab.writeSeq === driver.writeSeqBefore) }))
                 return
             const facts = branchesModel.branchPush(acts.branch, repoTab.defaultRemote)
             if (facts.state !== "clean" && !repoTab.writeRefused)

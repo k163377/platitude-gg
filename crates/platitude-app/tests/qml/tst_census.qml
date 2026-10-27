@@ -78,9 +78,6 @@ Item {
         id: window
         property Item contentItem: root
         property var curPage: null
-        property int updateRequests: 0
-        signal afterAnimating()
-        function requestUpdate() { updateRequests++ }
     }
 
     readonly property QtObject page: QtObject {
@@ -131,7 +128,6 @@ Item {
 
         function read(list) {
             window.contentItem = list
-            census.seen = ({})
             census.walk()
             return Object.keys(census.met).sort()
         }
@@ -149,8 +145,7 @@ Item {
             graphState.failed = false
             graphState.stale = false
             page.pageCarriedSettled = true
-            census.waiting = false
-            census.armed = false
+            census.atCompletion = null
             census.harnessBranch = null
             window.curPage = null
         }
@@ -215,17 +210,31 @@ Item {
             verify(read(chosen).indexOf("ChosenCommitRow") >= 0)
         }
 
-        function test_the_union_keeps_a_component_shown_at_the_first_edge() {
+        // The completion's walk is held as it was: a later walk moves `met`, never `atCompletion`, so the picture's
+        // walk is held against what the verb completed on (`reportAt`'s `lost=`).
+        function test_the_completions_walk_is_held_while_later_walks_move() {
             files.model = 1
             files.forceLayout()
             verify(waitForRendering(root))
-            read(files)
+            window.contentItem = files
+            census.markCompletion()
+            verify(census.atCompletion.FileRowDelegate === true)
             files.visible = false
-            census.atShot = census.met
             census.walk()
             verify(census.met.FileRowDelegate !== true)
-            verify(census.seen.FileRowDelegate === true)
-            verify(census.lost().indexOf("FileRowDelegate") >= 0)
+            verify(census.atCompletion.FileRowDelegate === true)
+        }
+
+        // A delegate the view keeps beyond its viewport (the cache buffer) is in no picture and is not counted.
+        function test_a_delegate_beyond_the_viewport_is_not_counted() {
+            files.cacheBuffer = 400
+            files.model = 30
+            files.forceLayout()
+            verify(waitForRendering(root))
+            tryVerify(() => files.itemAtIndex(5) !== null)
+            verify(census.inList(files.itemAtIndex(0)))
+            verify(!census.inList(files.itemAtIndex(5)))
+            files.cacheBuffer = 0
         }
 
         function test_a_part_an_item_holds_by_name_is_counted() {
@@ -240,7 +249,6 @@ Item {
         function test_a_closed_submenu_reached_first_as_owned_then_as_offered_is_counted() {
             census.visited = ({})
             census.met = ({})
-            census.seen = ({})
             census.visit(submenu, true, false)
             verify(census.met.AppMenu !== true)
             census.visit(submenu, true, true)
@@ -276,18 +284,14 @@ Item {
             verify(Automation.PageSettled.settled(page))
         }
 
-        function test_an_unchanged_read_ending_without_a_property_edge_still_arms_the_walk() {
+        // A read ending without a property edge (a field of the JS object, as the core's query has none) is read
+        // fresh by the function the completion's hold samples (`WindowHarness.completionWait`), not by a binding.
+        function test_the_pages_missing_reads_are_read_fresh_each_time() {
             graphState.readings.done = false
             window.curPage = page
-            census.waiting = true
-            compare(census.settled, false)
-            verify(!census.armed)
-            const asked = window.updateRequests
-            // A field of the JS object emits no property change: the core query has the same absence of an edge.
+            compare(census.pageMissing(), ["readings"])
             graphState.readings.done = true
-            compare(census.settled, false)
-            tryCompare(census, "armed", true)
-            compare(window.updateRequests, asked + 1)
+            compare(census.pageMissing(), [])
         }
     }
 }

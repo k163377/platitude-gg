@@ -40,7 +40,7 @@ Item {
     SampleTimer {
         id: stashLandTimer
         onTriggered: {
-            if (unstagedModel.total !== 0)
+            if (!Awaited.all("stash_land_ready", { "ready": !(unstagedModel.total !== 0) }))
                 return
             if (!page.wipShown && !driver.cardSettled)
                 return
@@ -69,7 +69,8 @@ Item {
     SampleTimer {
         id: opExitLandTimer
         onTriggered: {
-            if (!driver.wroteAndSettled() || worktree.opText !== "")
+            if (!Awaited.all("op_exit_land_ready", { "ready": !(!driver.wroteAndSettled() || worktree.opText !== ""),
+                                                      "page": PageSettled.settled(page) }))
                 return
             if (!page.wipShown) {
                 if (!driver.cardSettled)
