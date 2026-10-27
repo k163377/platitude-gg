@@ -20,6 +20,7 @@ mod hook;
 mod keepsakes;
 mod land;
 mod lanes;
+mod lex;
 mod linux;
 mod locks;
 mod note;
