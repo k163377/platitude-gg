@@ -52,6 +52,11 @@ QtObject {
     property int restMs: Metrics.tipDelayMs
     property int graceMs: Metrics.hoverKeepMs
 
+    // Named to `Hovers` for as long as it stands, so whoever asks whether a hover decision is on its way is answered
+    // for every seat at once.
+    Component.onCompleted: Hovers.enter(seat)
+    Component.onDestruction: Hovers.leave(seat)
+
     /// `idle` / `waiting` / `shown` / `leaving`.
     readonly property string state: seat.stateNow
     property string stateNow: "idle"

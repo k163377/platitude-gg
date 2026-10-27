@@ -237,6 +237,7 @@ fn main() {
     qrc::embed!("ui/NavFactLine.qml");
     qrc::embed!("ui/NavFacts.qml");
     qrc::embed!("ui/Tips.qml");
+    qrc::embed!("ui/Hovers.qml");
     qrc::embed!("ui/NavHeader.qml");
     qrc::embed!("ui/NavIcon.qml");
     qrc::embed!("ui/NavItemDelegate.qml");

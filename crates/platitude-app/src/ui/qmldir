@@ -12,6 +12,7 @@ singleton KeyMenu 1.0 KeyMenu.qml
 singleton OutsidePress 1.0 OutsidePress.qml
 singleton NavFacts 1.0 NavFacts.qml
 singleton Tips 1.0 Tips.qml
+singleton Hovers 1.0 Hovers.qml
 ActionButton 1.0 ActionButton.qml
 ActionButtonLabel 1.0 ActionButtonLabel.qml
 ActionButtonSeat 1.0 ActionButtonSeat.qml

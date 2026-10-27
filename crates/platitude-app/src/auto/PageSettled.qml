@@ -1,5 +1,6 @@
 pragma Singleton
 import QtQuick
+import platitude.ui
 
 /// Whether a page has stopped arriving — the one rule every sampler that waits for the whole of a page asks (the
 /// census walk, the badge verbs' arm, the page verbs' baseline). A copy that drops a term settles a run early, and
@@ -25,6 +26,10 @@ import QtQuick
 /// taken.
 ///
 /// A move the view is owed is the page still arriving (rules-refs/app-ui.md「`PageSettled` は表示の置き直しも待つ」).
+///
+/// So is a hover decision on its way (`hover:<key>`): a seat resting before it opens a card, a list or a tooltip
+/// under the hand, or beating before it takes one down (`Hovers.deciding`). What stands at the completion would not
+/// stand a moment later, and the picture's walk would name it (`WindowCensus.reportAt`).
 ///
 /// So are the rows of a list on screen that the view has not built yet (`Awaited.built`): the model landed, the
 /// delegates come a polish later, and a run that completes between the two photographs rows its completion never
@@ -75,6 +80,8 @@ QtObject {
         }
         if (page.pageGraphPane.placing)
             owed.push("placing")
+        for (const key of Hovers.deciding())
+            owed.push("hover:" + key.replace(/[^A-Za-z0-9_.-]/g, "_"))
         for (const [name, view] of pageSettled.lists(page))
             if (!Awaited.built(view))
                 owed.push("rows:" + name)
