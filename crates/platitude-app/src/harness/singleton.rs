@@ -51,6 +51,9 @@ pub struct Harness {
     /// Swallow the verb's completion: the act runs, the loop turns, and
     /// nothing reports done (`xtask::verify::faults`).
     fault_hold_act: bool,
+    /// Have one picture's readings of the page say a read is on its way
+    /// (`Knobs::fault_owed_at_shot`; `WindowHarness.owedForPicture`).
+    fault_owed_at_shot: String,
 }
 
 impl Default for Harness {
@@ -73,6 +76,7 @@ impl Default for Harness {
             perf_font_walk: knobs.perf_font_walk,
             automated: knobs.automated,
             fault_hold_act: knobs.fault_hold_act,
+            fault_owed_at_shot: knobs.fault_owed_at_shot.clone(),
         }
     }
 }
@@ -97,6 +101,7 @@ impl Harness {
     qproperty!("perfFontWalk", Member = perf_font_walk, Constant);
     qproperty!("automated", Member = automated, Constant);
     qproperty!("faultHoldAct", Member = fault_hold_act, Constant);
+    qproperty!("faultOwedAtShot", Member = fault_owed_at_shot, Constant);
 
     /// The reporting channel the harness reads its answers off (QML →
     /// tracing → `xtask`).

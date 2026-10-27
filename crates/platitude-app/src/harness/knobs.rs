@@ -63,6 +63,13 @@ pub(crate) struct Knobs {
     /// one (`PGG_AUTO_ACT=quit-save-held`, `xtask::verify::child`). Empty:
     /// no save is held.
     pub fault_hold_save: String,
+    /// `PGG_FAULT_OWED_AT_SHOT` — `<artifact>-<before|during|shown>`:
+    /// have that picture's readings of the page say a read is on its way
+    /// at the attempt's first reading (`before`), at its second, as the
+    /// grab answers (`during`), or never (`shown`), with a mark drawn into
+    /// the content for the readings the fault stands through
+    /// (`WindowHarness.owedForPicture`; `xtask::verify::shot_check`).
+    pub fault_owed_at_shot: String,
     /// `PGG_AUTO_SELECT` — select the newest commit and open the first
     /// changed file, so a picture has something in every pane.
     pub select: bool,
@@ -158,6 +165,7 @@ fn read() -> Knobs {
         fault_hold_act: on("PGG_FAULT_HOLD_ACT"),
         fault_hold_wip_row: on("PGG_FAULT_HOLD_WIP_ROW"),
         fault_hold_save: text("PGG_FAULT_HOLD_SAVE"),
+        fault_owed_at_shot: text("PGG_FAULT_OWED_AT_SHOT"),
         select: on("PGG_AUTO_SELECT"),
         scroll: on("PGG_AUTO_SCROLL"),
         perf: on("PGG_AUTO_PERF"),
@@ -225,7 +233,8 @@ mod tests {
             knobs.fault_hang.is_empty()
                 && !knobs.fault_no_deadline
                 && !knobs.fault_hold_act
-                && knobs.fault_hold_save.is_empty(),
+                && knobs.fault_hold_save.is_empty()
+                && knobs.fault_owed_at_shot.is_empty(),
             "a run nobody is driving is held by nothing, keeps its own deadline, and finishes what it starts"
         );
         assert!(

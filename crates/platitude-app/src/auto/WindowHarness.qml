@@ -161,8 +161,10 @@ Item {
     /// report, and would hold a report already read), or its completion is a breach (`Awaited.completed`). Once
     /// held, the hold lasts until the page owes nothing: what an ambient term's settling sets moving — a seat the
     /// re-centring displaced from under a stand-in hand (`RowHoverHost`), a walk the pacer's read asked for — is the
-    /// hold's too, not the verb's, which completed over the ambient terms alone.
-    readonly property var ambientTerms: ["placing", "readings"]
+    /// hold's too, not the verb's, which completed over the ambient terms alone. `fault` is the read a check
+    /// injects into a picture's readings (`owedForPicture`), ambient like the two.
+    readonly property var ambientTerms: Harness.faultOwedAtShot === "" ? ["placing", "readings"]
+                                                                        : ["placing", "readings", "fault"]
     function ambient(owed) {
         return owed.every(term => harness.ambientTerms.indexOf(term) >= 0)
     }
@@ -199,6 +201,43 @@ Item {
     function holdsPicture(owed) {
         return owed.some(term => harness.ambientTerms.indexOf(term) >= 0)
             && owed.every(term => harness.ambientTerms.indexOf(term) >= 0 || Awaited.expects(term))
+    }
+    /// The page as the shot driver reads it for a picture (`AutoShotDriver.pageOwed`), and the one fault injected
+    /// there: `PGG_FAULT_OWED_AT_SHOT=<artifact>-<when>` has that picture's readings say a read `fault` is on its way
+    /// at the attempt's first reading (`before`: the page not settled as the picture is called for) or its second
+    /// (`during`: a read landing as the grab answers), and stands a mark in the content (`faultMark`) from the first
+    /// reading until the one after the fault — the readings a careless driver's texture would be drawn in. A saved
+    /// picture with the mark is one the driver should have thrown away, and `cargo xtask shot-check` decodes the
+    /// pictures for it (`xtask::verify::shot_check`). `shown` stands the mark and says no fault: the proof that the
+    /// mark reaches a picture at all.
+    readonly property string faultArtifact: Harness.faultOwedAtShot.split("-")[0]
+    readonly property string faultWhen: Harness.faultOwedAtShot.split("-").slice(1).join("-")
+    property int faultReadings: 0
+    property bool faultMarked: false
+    function owedForPicture(artifact) {
+        const owed = census.pageMissing()
+        if (artifact !== harness.faultArtifact)
+            return owed
+        harness.faultReadings++
+        if (harness.faultReadings === 1)
+            harness.faultMarked = true
+        const at = harness.faultWhen === "before" ? 1 : harness.faultWhen === "during" ? 2 : 0
+        if (harness.faultReadings === at)
+            return owed.concat(["fault"])
+        if (at > 0 && harness.faultReadings > at)
+            harness.faultMarked = false
+        return owed
+    }
+    // Inside the content, so the window's picture and the scene's mirror of it draw it; the colour is the one
+    // `shot-check` looks for, a hue the theme has nowhere.
+    Rectangle {
+        id: faultMark
+        parent: harness.mainUi
+        visible: harness.faultMarked
+        width: 24
+        height: 24
+        z: 100000
+        color: "#ff00ff"
     }
 
     WindowCensus {
@@ -238,14 +277,15 @@ Item {
         window: harness.window
         overlayMirror: shotMirrors.overlayMirror
         sceneMirror: shotMirrors.sceneMirror
-        pictureHeld: () => harness.holdsPicture(census.pageMissing())
+        pageOwed: artifact => harness.owedForPicture(artifact)
+        pictureHeld: owed => harness.holdsPicture(owed)
         mainUi: harness.mainUi
         gate: harness.gate
         chrome: harness.chrome
         // The claims and the walk in the picture's own turn: a frame later is the stretch a read could land in.
-        onPictured: artifact => {
+        onPictured: (artifact, owed) => {
             Awaited.pictured(artifact)
-            census.reportAt(artifact)
+            census.reportAt(artifact, owed)
         }
     }
 

@@ -48,8 +48,12 @@ Item {
             /// Textures still owed. The refresh is asked once app.png is saved, so this mirrors the scene that picture
             /// came from (`AutoShotDriver`).
             property int owed: 0
-            signal ready()
-            function refresh() {
+            /// The attempt the textures were asked for (`AutoShotDriver.Attempt.number`), said back with `ready`: a
+            /// completion is read into no attempt but its own.
+            property int asked: 0
+            signal ready(int attempt)
+            function refresh(attempt) {
+                sceneShot.asked = attempt
                 // Where each stands in the window: the body stands in from the edge (`Main.edgeInset`), and a
                 // source stretched over the whole window would draw it wider than it is.
                 sceneShot.seat(uiSource)
@@ -71,7 +75,7 @@ Item {
             function landed() {
                 sceneShot.owed--
                 if (sceneShot.owed === 0)
-                    sceneShot.ready()
+                    sceneShot.ready(sceneShot.asked)
             }
             ShaderEffectSource {
                 id: uiSource
