@@ -39,6 +39,7 @@
 //! safe.
 
 mod builtins;
+mod calls;
 mod origin;
 mod parse;
 mod product;
