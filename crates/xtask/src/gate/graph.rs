@@ -69,6 +69,11 @@ pub(crate) struct Graph {
     /// module file -> the `cfg` predicates on the target system its `mod`
     /// declaration stands under, and its ancestors' ([`cfg_holds`]).
     pub(crate) only_on: BTreeMap<String, Vec<String>>,
+    /// reader -> the files only its tests read: what its `#[cfg(test)]`
+    /// items alone name (`built::test_only`), and the snapshots its tests
+    /// compare against. No build of the reader reads them
+    /// ([`Graph::built_inputs`]).
+    pub(crate) test_only: BTreeMap<String, BTreeSet<String>>,
     pub unresolved: Vec<(String, String)>,
     /// `#[qobject]` type names the app defines -> file.
     app_types: BTreeMap<String, String>,
@@ -93,8 +98,8 @@ pub(crate) struct Graph {
 ///
 /// The selection reads the difference too: a file handed data did not
 /// change, so a step that file's name selects (the verbs through
-/// `verify` / `demo`, `qmltest` through its runner, the wedge through its
-/// record) is owed only by a file handed `Whole`, and so is clippy, which
+/// `verify` / `demo`, the wedge through its record) is owed only by a
+/// file handed `Whole`, and so is clippy, which
 /// reads code alone; the tests of a file handed data are owed either way
 /// — a test of it may read the data.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -373,6 +378,20 @@ impl Graph {
     /// product it reads off the real tree are. The QML rule is not read
     /// back: a Rust file naming a QML file keeps it in its key.
     pub(crate) fn inputs(&self, files: &[String]) -> BTreeSet<String> {
+        self.closure(files, false)
+    }
+
+    /// [`Graph::inputs`] as a run of the binary `files` are compiled into
+    /// reads them: the code the build compiles, less what only their tests
+    /// read ([`Graph::test_only`]), and the files that code opens as they
+    /// stand ([`Carried::AsData`]) — each an input, and nothing its own
+    /// code reads one (a directory's files are its id's).
+    pub(crate) fn built_inputs(&self, files: &[String]) -> BTreeSet<String> {
+        self.closure(files, true)
+    }
+
+    /// [`Graph::inputs`], or with `built` [`Graph::built_inputs`].
+    fn closure(&self, files: &[String], built: bool) -> BTreeSet<String> {
         // Each file found, with whether a sandboxed module stands between
         // it and a start (`guarded`); found without one, it stays found.
         type Queue = std::collections::VecDeque<(String, bool)>;
@@ -386,7 +405,8 @@ impl Graph {
         let mut found: BTreeMap<String, bool> = BTreeMap::new();
         let mut queue = Queue::new();
         // Files read only as a binding: in the key for their own text, and
-        // walked no further (a `pub use` passes no data — `Resolved`).
+        // walked no further (a `pub use` passes no data — `Resolved`); and,
+        // built, files opened as they stand.
         let mut bound: BTreeSet<String> = BTreeSet::new();
         for file in files {
             take(&mut found, &mut queue, file, self.sandboxed(file));
@@ -395,11 +415,14 @@ impl Graph {
             let Some(read) = self.deps.get(&reader) else {
                 continue;
             };
+            let tests_alone = self.test_only.get(&reader).filter(|_| built);
             for file in read {
-                if guarded && as_data(file, &reader) {
+                if (guarded && as_data(file, &reader))
+                    || tests_alone.is_some_and(|t| t.contains(file))
+                {
                     continue;
                 }
-                if self.bound_only(&reader, file) {
+                if self.bound_only(&reader, file) || (built && self.takes_as_data(&reader, file)) {
                     bound.insert(file.clone());
                     continue;
                 }
@@ -451,46 +474,23 @@ pub(crate) fn build(root: &Path) -> Result<Graph, String> {
     }
     for file in &files {
         let (raw, code) = &texts[file];
-        let bare = bare_roots(&g, file, code);
-        let mut bound = BTreeSet::new();
-        let mut read = BTreeSet::new();
-        for segments in paths_in(code, &g.crate_roots, &bare) {
-            let targets = resolve(&g, file, &segments, 0);
-            if targets.is_empty() {
-                g.unresolved.push((file.clone(), segments.join("::")));
-            }
-            read.extend(targets.reads);
-            bound.extend(targets.bindings);
+        let named = named_in(&g, root, file, raw, code);
+        for path in &named.unresolved {
+            g.unresolved.push((file.clone(), path.clone()));
         }
-        for target in read.iter().chain(&bound) {
+        for target in named.read.iter().chain(&named.bound) {
             g.edge(file, target);
         }
         // Bound through and also read for something of its own: a read.
-        let bound_only: BTreeSet<String> = bound.difference(&read).cloned().collect();
+        let bound_only: BTreeSet<String> = named.bound.difference(&named.read).cloned().collect();
         if !bound_only.is_empty() {
             g.bindings.insert(file.clone(), bound_only);
         }
-        // An integration binary's strings lay out its sandbox; they read
-        // nothing of this tree.
-        let bodies = string_bodies(raw);
-        if g.modules.get(file).is_some_and(|m| m.test_binary.is_none()) {
-            for target in literal_paths(root, file, &bodies) {
-                g.data_edge(file, &target);
-            }
+        for target in named.data.iter().chain(&named.bins) {
+            g.data_edge(file, target);
         }
-        // cargo hands a test the built bin by name, within the package only.
-        let package = g
-            .modules
-            .get(file)
-            .map(|m| m.package.clone())
-            .unwrap_or_default();
-        for name in bin_exe_names(&bodies) {
-            match g.binaries.get(&(package.clone(), name.clone())).cloned() {
-                Some(bin) => g.data_edge(file, &bin),
-                None => g
-                    .unresolved
-                    .push((file.clone(), format!("{BIN_EXE}{name}"))),
-            }
+        if let Some(only) = built::test_only(&g, root, file, raw, &named) {
+            g.test_only.insert(file.clone(), only);
         }
     }
     // Every module is compiled as its package's manifest and build script
@@ -519,6 +519,59 @@ pub(crate) fn build(root: &Path) -> Result<Graph, String> {
         }
     }
     Ok(g)
+}
+
+/// What one file's text names: the files its paths resolve into, read as
+/// code or only as a binding ([`Resolved`]); the files its strings name
+/// ([`literal_paths`]); the bins it shoots ([`bin_exe_names`]); and what
+/// resolved nowhere.
+#[derive(Default)]
+struct Named {
+    read: BTreeSet<String>,
+    bound: BTreeSet<String>,
+    data: Vec<String>,
+    bins: Vec<String>,
+    unresolved: Vec<String>,
+}
+
+impl Named {
+    fn all(&self) -> impl Iterator<Item = &String> {
+        self.read
+            .iter()
+            .chain(&self.bound)
+            .chain(&self.data)
+            .chain(&self.bins)
+    }
+}
+
+/// What `file` names, read off `raw` and its `code` ([`strip_comments`]).
+fn named_in(g: &Graph, root: &Path, file: &str, raw: &str, code: &str) -> Named {
+    let mut named = Named::default();
+    let bare = bare_roots(g, file, code);
+    for segments in paths_in(code, &g.crate_roots, &bare) {
+        let targets = resolve(g, file, &segments, 0);
+        if targets.is_empty() {
+            named.unresolved.push(segments.join("::"));
+        }
+        named.read.extend(targets.reads);
+        named.bound.extend(targets.bindings);
+    }
+    // An integration binary's strings lay out its sandbox; they read
+    // nothing of this tree.
+    let bodies = string_bodies(raw);
+    let module = g.modules.get(file);
+    if module.is_some_and(|m| m.test_binary.is_none()) {
+        named.data = literal_paths(root, file, &bodies);
+    }
+    // cargo hands a test the built bin by name, within the package only.
+    let package = module.map(|m| m.package.clone()).unwrap_or_default();
+    for name in bin_exe_names(&bodies) {
+        match g.binaries.get(&(package.clone(), name.clone())) {
+            Some(bin) => named.bins.push(bin.clone()),
+            None => named.unresolved.push(format!("{BIN_EXE}{name}")),
+        }
+    }
+    named
 }
 
 /// Whether the file defines tests of its own: a test attribute of any
@@ -1533,6 +1586,7 @@ fn snapshots(root: &Path, g: &mut Graph) -> Result<(), String> {
         };
         if let Some(owner) = owner {
             g.data_edge(&owner, &snap);
+            g.test_only.entry(owner).or_default().insert(snap);
         }
     }
     Ok(())
@@ -1694,6 +1748,8 @@ pub(crate) fn collect(
     }
     Ok(())
 }
+
+mod built;
 
 #[cfg(test)]
 mod bindings;

@@ -28,6 +28,7 @@ mod language;
 mod leftovers;
 mod permit;
 mod pins;
+mod qmltests;
 mod seats;
 mod selection;
 mod shell;

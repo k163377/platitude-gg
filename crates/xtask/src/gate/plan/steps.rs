@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use super::{
-    Ask, CARGO, Counted, DOCKERFILE, DOCS, IMAGE, QMLTEST, Reading, Side, Step, app, clippy_config,
-    core, deny_policy, harness, qml_dirs, under,
+    Ask, CARGO, Counted, DOCKERFILE, DOCS, IMAGE, Keyed, QMLTEST, Reading, Side, Step, app,
+    clippy_config, core, deny_policy, harness, qml_dirs, under,
 };
 use crate::gate::graph::{Carried, Graph, Reach, stem_of};
 use crate::gate::tiers::Tier;
@@ -40,6 +40,7 @@ fn step<S: AsRef<str>>(
         beside: false,
         command,
         inputs: inputs.iter().map(|s| s.as_ref().to_string()).collect(),
+        keyed: Keyed::Bytes,
         contract: String::new(),
     }
 }
@@ -166,7 +167,12 @@ pub(super) fn select(
     let mut sorted = sort(g, reach, read.everything);
     let mut steps = always_steps();
     steps.extend(deny_steps(g, changed, read.everything));
-    steps.extend(qmltest_steps(reach, read.everything));
+    steps.extend(qmltest_steps(
+        &qmltest_reads(g, read.dir),
+        reach,
+        changed,
+        read.everything,
+    ));
     // Its configuration is clippy's alone, read by every crate's run and
     // by nothing a test or a build reads.
     if changed.contains(&clippy_config()) {
@@ -262,47 +268,120 @@ fn deny_steps(g: &Graph, changed: &[String], everything: bool) -> Vec<Step> {
     vec![step("deny", Side::Host, false, xtask(&["deny"]), &inputs)]
 }
 
-/// The QtTest files, when the change reaches them or the QML module they
-/// read. Both sides: the two Qt builds paint through different stacks,
-/// and these ask when a Canvas has painted.
-///
-/// Ahead of clippy: it compiles nothing of the app. Its inputs are the
-/// whole module, because the staging copies all of it and a test can
-/// resolve through any of it (`crate::qmltest`).
-///
-/// `everything` selects it outright: neither the qmldir nor a QtTest file is a
-/// node of the source graph.
-fn qmltest_steps(reach: &Reach, everything: bool) -> Vec<Step> {
+/// The module that starts a run in the container, spelled in pieces for
+/// the reason [`record_of_a_wedge`]'s files are.
+fn launcher() -> String {
+    format!("{}/{}", "crates/xtask/src", "linux")
+}
+
+/// What a QML test run reads, by the boundary it reaches the run across —
+/// each a set of the step's inputs.
+#[derive(Default)]
+struct QmlTestReads {
+    /// The runner as cargo builds and runs it: the static closure of its
+    /// entry as built (`Graph::built_inputs` of [`QMLTEST`], no read its
+    /// tests alone make) — the staging and what it stages from, Qt's
+    /// selection (the `PATH` that finds `qmltestrunner`, the offscreen
+    /// fonts' variable) and the pin it holds the Qt to —, and what cargo
+    /// builds it from ([`CARGO`]), whose `.cargo` `[env]` the run inherits.
+    runner: BTreeSet<String>,
+    /// Across the `qmltestrunner` process: what the runner stages and hands
+    /// it — the product's module and its qmldir, the tests' directory with
+    /// their stubs and helpers ([`qml_dirs`]) — and what the tests load off
+    /// the tree past that, by relative import and as far as it leads
+    /// (`imports::loaded_from`: the harness's module).
+    process: BTreeSet<String>,
+    /// Across the container, the Linux side's alone: the image the run
+    /// starts in ([`IMAGE`] — the Dockerfile's `ENV`: the Qt on `PATH`,
+    /// `QMAKE`, `LD_LIBRARY_PATH`, `LANG`; the pin its Qt is built at) and
+    /// the module that builds it, starts the run in it and hands the run
+    /// its environment, mounts and command line ([`launcher`]): the
+    /// module's own files its build compiles. Past the module its closure
+    /// queues, announces and records the run, and what it names across
+    /// (the marks of a ticket and an announcement) no QML test reads.
+    container: BTreeSet<String>,
+}
+
+fn qmltest_reads(g: &Graph, dir: &Path) -> QmlTestReads {
+    let mut runner = g.built_inputs(&[QMLTEST.to_string()]);
+    runner.extend(cargo_inputs(&[]));
     let (ui, tests) = qml_dirs();
-    // The qmldir counts (it declares the singletons), and so does the
-    // runner, whose staging a run resolves through — when its code moved,
-    // not when the QML it stages did (`graph::Carried`); of the tests
-    // directory every file the tests read — their own and the helpers they
-    // import —, which is all of it but the prose.
-    let reads = |(file, carried): (&String, &Carried)| {
-        (file == QMLTEST && *carried == Carried::Whole)
-            || under(file, &ui)
-            || (under(file, &tests) && !file.ends_with(".md"))
-    };
-    if !everything && !reach.iter().any(reads) {
-        return Vec::new();
+    let mut process = super::imports::loaded_from(dir, std::slice::from_ref(&tests));
+    process.extend([ui, tests]);
+    let module = launcher();
+    let entry = format!("{module}.rs");
+    // A directory node is another reader's data, not a file compiled in.
+    let mut container: BTreeSet<String> = g
+        .built_inputs(std::slice::from_ref(&entry))
+        .into_iter()
+        .filter(|file| !file.ends_with('/') && (*file == entry || under(file, &module)))
+        .collect();
+    container.extend(IMAGE.map(String::from));
+    QmlTestReads {
+        runner,
+        process,
+        container,
     }
-    let inputs = [ui, tests, QMLTEST.to_string()];
-    let mut linux_inputs = inputs.to_vec();
-    linux_inputs.extend(IMAGE.map(String::from));
-    let mut host = step("qmltest", Side::Host, false, xtask(&["qmltest"]), &inputs);
-    let mut linux = step(
-        "qmltest-linux",
-        Side::Linux,
-        false,
-        xtask(&["linux", "qmltest"]),
-        &linux_inputs,
-    );
-    // Qt's runner over a staging copy: no cargo directory and no release,
-    // so neither chain has to wait for it (`gate::sides::side`).
-    host.beside = true;
-    linux.beside = true;
-    vec![host, linux]
+}
+
+/// The QtTest files, owed by a change to anything a run of them reads
+/// ([`QmlTestReads`]) and keyed on all of it. Both sides: the two Qt
+/// builds paint through different stacks, and these ask when a Canvas has
+/// painted.
+///
+/// Owed by what the change touched, not by what it reaches: a file read
+/// only by what the runner's tests read reaches the runner in the source
+/// graph and is no input of a run. The reach says only whether the side
+/// compiles a touched file. `everything` selects it outright: the tests
+/// are no nodes of the source graph.
+///
+/// Keyed on the Rust's code and every other file's bytes (`Keyed`): the
+/// runner reads each test's text for its cases (`crate::qmltest`), and a
+/// QML warning a test may hold itself to names its line and column, which
+/// a comment moves.
+///
+/// Ahead of clippy: it compiles nothing of the app.
+fn qmltest_steps(
+    reads: &QmlTestReads,
+    reach: &Reach,
+    changed: &[String],
+    everything: bool,
+) -> Vec<Step> {
+    let host: Vec<String> = reads.runner.union(&reads.process).cloned().collect();
+    let mut linux = host.clone();
+    linux.extend(reads.container.iter().cloned());
+    let moved = |inputs: &[String]| {
+        everything
+            || changed.iter().any(|file| {
+                reach.contains_key(file) && inputs.iter().any(|input| under(file, input))
+            })
+    };
+    let mut steps = Vec::new();
+    if moved(&host) {
+        steps.push(step(
+            "qmltest",
+            Side::Host,
+            false,
+            xtask(&["qmltest"]),
+            &host,
+        ));
+    }
+    if moved(&linux) {
+        steps.push(step(
+            "qmltest-linux",
+            Side::Linux,
+            false,
+            xtask(&["linux", "qmltest"]),
+            &linux,
+        ));
+    }
+    for qmltest in &mut steps {
+        // Qt's runner over a staging copy: no cargo directory and no
+        // release, so neither chain has to wait for it (`gate::sides::side`).
+        qmltest.beside = true;
+        qmltest.keyed = Keyed::RustCode;
+    }
+    steps
 }
 
 /// The files a stopped run's record passes through: what the app writes,
@@ -840,7 +919,8 @@ mod tests {
     /// of everything.
     #[test]
     fn the_qt_runner_runs_beside_both_chains() {
-        let qml = super::qmltest_steps(&Reach::default(), true);
+        let reads = super::QmlTestReads::default();
+        let qml = super::qmltest_steps(&reads, &Reach::default(), &[], true);
         let ids: Vec<&str> = qml.iter().map(|s| s.id.as_str()).collect();
         assert_eq!(ids, ["qmltest", "qmltest-linux"]);
         assert!(qml.iter().all(|s| s.beside && !s.release), "{ids:?}");
@@ -849,5 +929,53 @@ mod tests {
                 .iter()
                 .all(|s| !s.beside && !s.release)
         );
+    }
+
+    /// The boundaries as this tree draws them: the runner as built holds
+    /// Qt's selection and its pin and none of the product's Rust, which
+    /// only what its tests read leads to; the tests load the harness's
+    /// module by relative import; the container adds the image and its
+    /// launcher, and nothing that only schedules the run.
+    #[test]
+    fn a_qml_test_run_reads_its_runner_as_built_and_what_crosses_into_it() {
+        let root = crate::tree::workspace_root();
+        let g = crate::gate::graph::build(&root).expect("the graph of this tree");
+        let reads = super::qmltest_reads(&g, &root);
+        let (ui, tests) = super::qml_dirs();
+        let qt = format!("{}/{}", "crates/xtask/src", "qt.rs");
+        let runner = [super::QMLTEST, qt.as_str(), crate::qt::PIN];
+        for named in runner.iter().chain(&super::CARGO) {
+            assert!(reads.runner.contains(*named), "{named}: {:?}", reads.runner);
+        }
+        for named in [&ui, &tests] {
+            assert!(
+                reads.process.contains(named),
+                "{named}: {:?}",
+                reads.process
+            );
+        }
+        let elsewhere: Vec<&String> = reads
+            .runner
+            .iter()
+            .filter(|f| f.ends_with(".rs") && !f.starts_with("crates/xtask/src/"))
+            .collect();
+        assert!(elsewhere.is_empty(), "{elsewhere:?}");
+        assert!(
+            g.inputs(&[super::QMLTEST.to_string()]).len() > reads.runner.len(),
+            "the closure its tests read is wider"
+        );
+        let harness = format!("crates/{}/src/auto", "platitude-app");
+        assert!(reads.process.contains(&harness), "{:?}", reads.process);
+        let module = super::launcher();
+        assert!(reads.container.contains(&format!("{module}.rs")));
+        assert!(reads.container.contains(&format!("{module}/container.rs")));
+        assert!(!reads.container.contains(&format!("{module}/tests.rs")));
+        let outside: Vec<&String> = reads
+            .container
+            .iter()
+            .filter(|f| !super::under(f, &module) && !super::IMAGE.contains(&f.as_str()))
+            .filter(|f| **f != format!("{module}.rs"))
+            .collect();
+        assert!(outside.is_empty(), "{outside:?}");
     }
 }

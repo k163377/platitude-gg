@@ -2,6 +2,7 @@
 //! its diff, the steps that reach selects, and which of those are already
 //! green for the inputs they read.
 
+mod imports;
 mod pins;
 mod steps;
 
@@ -48,11 +49,25 @@ pub(crate) struct Step {
     /// What the step reads, as workspace paths (a directory covers
     /// everything under it): the cache key is their object ids.
     pub inputs: BTreeSet<String>,
+    /// Which id of each input the key takes, for a step that neither
+    /// builds nor reads the app ([`owed`] keys those on the code).
+    pub keyed: Keyed,
     /// What the step is held to beyond its inputs, in the key too: a
     /// verify-ui line's promised parts and judgment (`steps::binary_steps`),
     /// so a row or a claim moved runs the line again and a green of
     /// another contract answers for nothing. Empty for the other steps.
     pub contract: String,
+}
+
+/// Which id of an input a step's key takes ([`TreeIds`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Keyed {
+    /// Every byte: a tool that reads the sources sees them all.
+    Bytes,
+    /// A Rust file's code, every other file's bytes: a program built from
+    /// Rust, which no comment of its reaches, over files it or what it
+    /// runs reads as they stand (`steps::qmltest_steps`).
+    RustCode,
 }
 
 /// One step the branch owes.
@@ -174,8 +189,8 @@ const CARGO: [&str; 5] = [
     ".cargo",
     VENDOR,
 ];
-/// What a QML test run reads besides [`qml_dirs`]: the recipe that
-/// stages the module for it.
+/// The QML test runner's entry, whose closure as built is what a run of
+/// it is (`steps::qmltest_reads`).
 const QMLTEST: &str = "crates/xtask/src/qmltest.rs";
 /// The markdown this tree reads as rules (`crate::docs`).
 const DOCS: [&str; 4] = [
@@ -465,11 +480,14 @@ fn owed(
             } else {
                 // A step that builds or reads the app sees no comment (`shipped`, the verbs, `bare`), so its key
                 // is of the code alone; a tool that reads the sources (fmt, clippy, waits with its markers, docs,
-                // structure, the tests with their doc-tests) sees every byte.
+                // structure, the tests with their doc-tests) sees every byte; a step says otherwise (`Keyed`).
                 let ids = if step.release || step.id == "shipped" {
                     &ids.code
                 } else {
-                    &ids.whole
+                    match step.keyed {
+                        Keyed::Bytes => &ids.whole,
+                        Keyed::RustCode => &ids.rust,
+                    }
                 };
                 let key = cache_key(ids, &step);
                 let cached = !ask.fresh && store.step_green(&key);
@@ -480,12 +498,13 @@ fn owed(
         .collect())
 }
 
-/// The object ids of every path in the tree, twice over: as git holds
-/// them (`whole`), and with a Rust or QML file's id its code's
-/// (`code`, `inputs::with_code_ids`).
+/// The object ids of every path in the tree, three times over: as git
+/// holds them (`whole`), with a Rust or QML file's id its code's (`code`),
+/// and with a Rust file's alone its code's (`rust`) — `inputs::with_code_ids`.
 struct TreeIds {
     whole: BTreeMap<String, String>,
     code: BTreeMap<String, String>,
+    rust: BTreeMap<String, String>,
 }
 
 /// The object id of every path in the tree at `rev` from one `git ls-tree`;
@@ -508,8 +527,9 @@ fn tree_ids(here: &str, rev: &str) -> Result<TreeIds, String> {
     // built app out (`inputs::with_code_ids`); the tools that read the
     // sources key on the whole file.
     let whole = parse_ls_tree(&output.stdout);
-    let listing = super::inputs::with_code_ids(here, &output.stdout)?;
-    let code = parse_ls_tree(&listing);
+    let listings = super::inputs::with_code_ids(here, &output.stdout)?;
+    let code = parse_ls_tree(&listings.code);
+    let rust = parse_ls_tree(&listings.rust);
     // A file the lexical reading stopped short on is keyed on its bytes
     // (`inputs::code_id`), and said: a key that moves on every edit of it
     // is then no mystery.
@@ -525,7 +545,7 @@ fn tree_ids(here: &str, rev: &str) -> Result<TreeIds, String> {
             read_short.join(" ")
         );
     }
-    Ok(TreeIds { whole, code })
+    Ok(TreeIds { whole, code, rust })
 }
 
 /// `ls-tree -z`: `<mode> <type> <id>\t<path>` per entry, NUL after each

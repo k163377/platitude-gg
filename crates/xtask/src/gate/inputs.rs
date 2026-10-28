@@ -7,7 +7,9 @@
 //! line end the code may hang a statement on are the key's, since beyond
 //! the lexical layer nothing is read for meaning. The steps keyed on it
 //! are the ones that build or run the app, which no comment reaches
-//! (`plan::owed`); a tool that reads the sources keys on the bytes.
+//! (`plan::owed`); a tool that reads the sources keys on the bytes, and a
+//! run of a Rust program over sources it reads as text (`qmltest`) on the
+//! Rust files' code and every other file's bytes.
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -17,10 +19,16 @@ fn read_for_code(path: &str) -> bool {
     path.ends_with(".rs") || path.ends_with(".qml")
 }
 
-/// The listing with every Rust and QML blob's id replaced by the id of
-/// its code (`code_id`), read in one `git cat-file --batch` from `here` —
+/// The listing twice over, with blobs' ids replaced by the ids of their
+/// code (`code_id`): every Rust and QML blob's (`code`), and the Rust
+/// blobs' alone (`rust`). Read in one `git cat-file --batch` from `here` —
 /// the tree under test, at the revision the listing is of.
-pub(super) fn with_code_ids(here: &str, listing: &[u8]) -> Result<Vec<u8>, String> {
+pub(super) struct CodeListings {
+    pub code: Vec<u8>,
+    pub rust: Vec<u8>,
+}
+
+pub(super) fn with_code_ids(here: &str, listing: &[u8]) -> Result<CodeListings, String> {
     let text = String::from_utf8_lossy(listing).into_owned();
     let entries: Vec<&str> = text.split('\0').collect();
     let wanted: Vec<(&str, &str)> = entries
@@ -33,7 +41,10 @@ pub(super) fn with_code_ids(here: &str, listing: &[u8]) -> Result<Vec<u8>, Strin
         })
         .collect();
     if wanted.is_empty() {
-        return Ok(listing.to_vec());
+        return Ok(CodeListings {
+            code: listing.to_vec(),
+            rust: listing.to_vec(),
+        });
     }
     let mut child = std::process::Command::new("git")
         .arg("-C")
@@ -71,21 +82,27 @@ pub(super) fn with_code_ids(here: &str, listing: &[u8]) -> Result<Vec<u8>, Strin
     for ((id, _), code) in wanted.iter().zip(code_ids) {
         by_blob.insert(id, code);
     }
-    let mut out = Vec::with_capacity(listing.len());
-    for entry in entries {
-        if entry.is_empty() {
-            continue;
+    let rewritten = |of: fn(&str) -> bool| {
+        let mut out = Vec::with_capacity(listing.len());
+        for entry in &entries {
+            if entry.is_empty() {
+                continue;
+            }
+            let rewritten = entry.split_once('\t').and_then(|(head, path)| {
+                let mut fields = head.split(' ');
+                let (mode, kind, id) = (fields.next()?, fields.next()?, fields.next()?);
+                let code = by_blob.get(id).filter(|_| of(path))?;
+                Some(format!("{mode} {kind} {code}\t{path}"))
+            });
+            out.extend_from_slice(rewritten.as_deref().unwrap_or(entry).as_bytes());
+            out.push(0);
         }
-        let rewritten = entry.split_once('\t').and_then(|(head, path)| {
-            let mut fields = head.split(' ');
-            let (mode, kind, id) = (fields.next()?, fields.next()?, fields.next()?);
-            let code = by_blob.get(id)?;
-            Some(format!("{mode} {kind} {code}\t{path}"))
-        });
-        out.extend_from_slice(rewritten.as_deref().unwrap_or(entry).as_bytes());
-        out.push(0);
-    }
-    Ok(out)
+        out
+    };
+    Ok(CodeListings {
+        code: rewritten(read_for_code),
+        rust: rewritten(|path| path.ends_with(".rs")),
+    })
 }
 
 /// The code ids of the blobs as `git cat-file --batch` printed them —

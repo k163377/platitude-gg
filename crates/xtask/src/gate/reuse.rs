@@ -20,7 +20,7 @@ use crate::subprocess::{common_git_dir, git_query};
 
 /// The format the file is written in. A reader that does not know this
 /// number reads nothing.
-const VERSION: &str = "graph-cache 4";
+const VERSION: &str = "graph-cache 5";
 
 /// How many built graphs a repository keeps: more than the commit at hand
 /// and its parent, so a seat rebasing onto a tree another seat has read
@@ -165,7 +165,8 @@ fn sweep(shelf: &Path) {
 /// One record per line, fields tab-separated: `M` a module, `D` a file
 /// and everything it reads, `B` a reader and the files it reads as a
 /// binding alone (`graph::Resolved`), `T` a reader and the files it takes
-/// as data alone (`graph::Carried::AsData`), `O` a module and the `cfg`
+/// as data alone (`graph::Carried::AsData`), `E` a reader and the files
+/// only its tests read (`Graph::test_only`), `O` a module and the `cfg`
 /// predicates on the system it is compiled under, `U` a path that resolved
 /// nowhere. Tabs because a workspace path can hold a space and never one
 /// of these.
@@ -191,7 +192,11 @@ fn write(graph: &Graph) -> String {
         }
         out.push('\n');
     }
-    for (tag, readers) in [("B", &graph.bindings), ("T", &graph.read_as_data)] {
+    for (tag, readers) in [
+        ("B", &graph.bindings),
+        ("T", &graph.read_as_data),
+        ("E", &graph.test_only),
+    ] {
         for (reader, files) in readers {
             out.push_str(tag);
             out.push('\t');
@@ -280,6 +285,11 @@ fn read(text: &str) -> Option<Graph> {
                 let data: BTreeSet<String> = fields.map(str::to_string).collect();
                 graph.read_as_data.insert(reader, data);
             }
+            "E" => {
+                let reader = fields.next()?.to_string();
+                let tested: BTreeSet<String> = fields.map(str::to_string).collect();
+                graph.test_only.insert(reader, tested);
+            }
             "O" => {
                 let file = fields.next()?.to_string();
                 graph
@@ -353,6 +363,9 @@ fn same(one: &Graph, other: &Graph) -> Result<(), String> {
     }
     if one.read_as_data != other.read_as_data {
         return Err("the reads as data differ".into());
+    }
+    if one.test_only != other.test_only {
+        return Err("the reads of the tests alone differ".into());
     }
     if one.only_on != other.only_on {
         return Err("the systems a module is compiled on differ".into());

@@ -455,7 +455,7 @@ pub(super) fn app_did_not_build(log: &Path) -> bool {
 mod tests {
     use std::path::Path;
 
-    use super::super::plan::{Side, Step};
+    use super::super::plan::{Keyed, Side, Step};
     use super::{Required, a_copy_is_wanted, app_did_not_build, launched};
 
     fn words(line: &[&str]) -> Vec<String> {
@@ -476,6 +476,7 @@ mod tests {
                     .chain(line.split_whitespace().map(String::from))
                     .collect(),
                 inputs: std::collections::BTreeSet::new(),
+                keyed: Keyed::Bytes,
                 contract: String::new(),
             },
             key: "k".to_string(),
