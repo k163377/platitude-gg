@@ -216,6 +216,57 @@ fn a_change_at_each_boundary_of_a_qml_test_run_owes_it_and_runs_it() {
 /// the tests' prose. A comment in the runner's Rust is planned and keeps
 /// the stamp; a comment in a test is part of the text the runner reads
 /// for its cases, and runs both again.
+/// A helper a test imports by a single-quoted path spelled across lines
+/// with a comment in it — an import Qt takes as it takes the double-quoted
+/// one-line spelling — and what that helper imports in turn are what a
+/// run reads: a change to either plans both steps, moves their keys and
+/// runs them, and the run after, with nothing changed, is the stamps'.
+#[test]
+fn a_helper_imported_in_any_spelling_owes_the_qml_tests_until_they_run_again() {
+    let (sb, _) = with_the_qml_runner("qmltest-import");
+    let helper = "crates/platitude-app/shared/helper.js";
+    let inner = "crates/platitude-app/shared/inner.js";
+    let test = census("        function test_it() { compare(Extra.answer(), 42) }\n").replace(
+        "import QtTest\n",
+        "import QtTest\nimport\n    '../../shared/helper.js' /* the shared answer */\n    as Extra\n",
+    );
+    sb.write(&sb.seat, TEST, &test);
+    sb.write(
+        &sb.seat,
+        helper,
+        ".import 'inner.js' as Inner\nfunction answer() { return Inner.base() + 41 }\n",
+    );
+    sb.write(&sb.seat, inner, "function base() { return 1 }\n");
+    sb.commit_all(&sb.seat, "test: a shared helper", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    sb.ran().holds(BOTH);
+    for (file, text) in [
+        (
+            helper,
+            ".import 'inner.js' as Inner\nfunction answer() { return Inner.base() + 42 }\n",
+        ),
+        (inner, "function base() { return 0 }\n"),
+    ] {
+        let before = keys(&sb);
+        let base = sb.head(&sb.seat);
+        sb.write(&sb.seat, file, text);
+        sb.commit_all(&sb.seat, &format!("test: {file} answers otherwise"), &[]);
+        let after = keys(&sb);
+        for id in BOTH {
+            assert_ne!(before.get(*id), after.get(*id), "{file}: {id}");
+        }
+        let plan = sb.gate_ok(&sb.seat, &["--main", &base, "--dry-run"]);
+        assert!(
+            plan.contains("] qmltest  key ") && plan.contains("] qmltest-linux  key "),
+            "{file}\n{plan}"
+        );
+        sb.gate_ok(&sb.seat, &[]);
+        sb.ran().holds(BOTH);
+        sb.gate_ok(&sb.seat, &[]);
+        sb.ran().lacks(BOTH);
+    }
+}
+
 #[test]
 fn what_a_qml_test_run_does_not_read_keeps_its_green() {
     let (sb, _) = with_the_qml_runner("qmltest-unread");
@@ -267,6 +318,130 @@ fn what_a_qml_test_run_does_not_read_keeps_its_green() {
         &census("        // The census, read from the window it takes.\n"),
     );
     sb.commit_all(&sb.seat, "docs(app-ui): the census", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    sb.ran().holds(BOTH);
+}
+
+/// A component a test loads, however the load is written — a value joined,
+/// chosen, resolved, a template; a property bound, assigned inside
+/// parentheses or by a computed key — and however its path is spelled as a
+/// URL — escaped, with a query and a fragment, through `..` spelled as
+/// escapes —, is the file Qt reads: it is owed both runs when it changes,
+/// until they run again; then a run with nothing changed is their stamps'.
+#[test]
+fn a_component_loaded_by_any_spelling_of_its_path_owes_the_qml_tests() {
+    let (sb, _) = with_the_qml_runner("qmltest-loader");
+    let card = "crates/platitude-app/shared/Card.qml";
+    let spaced = "crates/platitude-app/shared/Card View.qml";
+    for (n, (load, file)) in [
+        ("Loader { source: \"../../shared/\" + \"Card.qml\" }", card),
+        ("Loader { source: Qt.resolvedUrl(`../../shared/Card.qml`) }", card),
+        (
+            "Loader { source: true ? '../../shared/' + 'Card.qml' : \"../../shared/Card.qml\" }",
+            card,
+        ),
+        (
+            "Loader { id: card }\n        Component.onCompleted: { (card.source = \"../../shared/\" + \"Card.qml\") }",
+            card,
+        ),
+        (
+            "Loader { id: card }\n        Component.onCompleted: card[\"source\"] = (\"../../shared/Card.qml\")",
+            card,
+        ),
+        ("Loader { source: \"../../shared/Card%20View.qml\" }", spaced),
+        ("Loader { source: \"../../shared/Card\\u0020View.qml\" }", spaced),
+        (
+            "Loader { source: \"../../shared/x/%2E%2E/%43ard.qml?at=1#top\" }",
+            card,
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let test = census(&format!("        {load}\n"));
+        sb.write(&sb.seat, TEST, &test);
+        sb.write(
+            &sb.seat,
+            file,
+            &format!("import QtQuick\nItem {{ width: {} }}\n", 42 + n),
+        );
+        sb.commit_all(&sb.seat, &format!("test: a card loaded by {load}"), &[]);
+        sb.gate_ok(&sb.seat, &[]);
+        sb.ran().holds(BOTH);
+        let before = keys(&sb);
+        let base = sb.head(&sb.seat);
+        sb.write(
+            &sb.seat,
+            file,
+            &format!("import QtQuick\nItem {{ width: {} }}\n", 52 + n),
+        );
+        sb.commit_all(&sb.seat, "test: the card widens", &[]);
+        let after = keys(&sb);
+        for id in BOTH {
+            assert!(after.contains_key(*id), "{load}: {id} unkeyed");
+            assert_ne!(before.get(*id), after.get(*id), "{load}: {id}");
+        }
+        let plan = sb.gate_ok(&sb.seat, &["--main", &base, "--dry-run"]);
+        assert!(
+            plan.contains("] qmltest  key ") && plan.contains("] qmltest-linux  key "),
+            "{load}\n{plan}"
+        );
+        sb.gate_ok(&sb.seat, &[]);
+        sb.ran().holds(BOTH);
+        sb.gate_ok(&sb.seat, &[]);
+        sb.ran().lacks(BOTH);
+    }
+}
+
+/// A load whose target nothing here works out — a value read off a name,
+/// a property written by a destructuring or added to, a path Qt reads
+/// otherwise than as written (a backslash, an escaped separator) — names
+/// no input a key could answer for: both runs are owed on every gate,
+/// nothing changed or not, run, and stamp nothing to be reused; the plan
+/// says why.
+#[test]
+fn a_load_nothing_works_out_runs_the_qml_tests_on_every_gate() {
+    let (sb, _) = with_the_qml_runner("qmltest-unworked");
+    for load in [
+        "property string where: \"Card\"\n        Loader { source: \"../../shared/\" + where + \".qml\" }",
+        "Loader { id: card }\n        Component.onCompleted: [card.source] = [\"../../shared/Card.qml\"]",
+        "Loader { id: card; source: \"../../shared/Card\" }\n        Component.onCompleted: card.source += \".qml\"",
+        "Loader { source: \"..\\\\..\\\\shared\\\\Card.qml\" }",
+        "Loader { source: \"../../shared%2FCard.qml\" }",
+    ] {
+        sb.write(&sb.seat, TEST, &census(&format!("        {load}\n")));
+        sb.commit_all(&sb.seat, &format!("test: a card loaded by {load}"), &[]);
+        sb.gate_ok(&sb.seat, &[]);
+        sb.ran().holds(BOTH);
+        let plan = sb.gate_ok(&sb.seat, &["--dry-run"]);
+        assert!(
+            plan.contains("] qmltest  unkeyed") && plan.contains("] qmltest-linux  unkeyed"),
+            "{load}\n{plan}"
+        );
+        sb.gate_ok(&sb.seat, &[]);
+        sb.ran().holds(BOTH);
+        let ledger = sb.ledger(&sb.seat);
+        for id in BOTH {
+            assert!(
+                ledger
+                    .iter()
+                    .any(|(_, step, outcome)| step == id && outcome == "ran"),
+                "{load}: {id} reused a stamp: {ledger:?}"
+            );
+        }
+    }
+    let base = sb.head(&sb.seat);
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/shared/Card.qml",
+        "import QtQuick\nItem {}\n",
+    );
+    sb.commit_all(&sb.seat, "test: a card appears", &[]);
+    let plan = sb.gate_ok(&sb.seat, &["--main", &base, "--dry-run"]);
+    assert!(
+        plan.contains("] qmltest  unkeyed") && plan.contains("] qmltest-linux  unkeyed"),
+        "{plan}"
+    );
     sb.gate_ok(&sb.seat, &[]);
     sb.ran().holds(BOTH);
 }

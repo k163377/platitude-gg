@@ -42,6 +42,7 @@ fn step<S: AsRef<str>>(
         inputs: inputs.iter().map(|s| s.as_ref().to_string()).collect(),
         keyed: Keyed::Bytes,
         contract: String::new(),
+        unkeyed: None,
     }
 }
 
@@ -301,13 +302,17 @@ struct QmlTestReads {
     /// queues, announces and records the run, and what it names across
     /// (the marks of a ticket and an announcement) no QML test reads.
     container: BTreeSet<String>,
+    /// Why what the tests load cannot all be named, where it cannot
+    /// (`imports::Loaded::unbounded`): no key answers for a run of them.
+    unbounded: Option<String>,
 }
 
 fn qmltest_reads(g: &Graph, dir: &Path) -> QmlTestReads {
     let mut runner = g.built_inputs(&[QMLTEST.to_string()]);
     runner.extend(cargo_inputs(&[]));
     let (ui, tests) = qml_dirs();
-    let mut process = super::imports::loaded_from(dir, std::slice::from_ref(&tests));
+    let loaded = super::imports::loaded_from(dir, std::slice::from_ref(&tests));
+    let mut process = loaded.paths;
     process.extend([ui, tests]);
     let module = launcher();
     let entry = format!("{module}.rs");
@@ -322,6 +327,7 @@ fn qmltest_reads(g: &Graph, dir: &Path) -> QmlTestReads {
         runner,
         process,
         container,
+        unbounded: loaded.unbounded,
     }
 }
 
@@ -339,7 +345,9 @@ fn qmltest_reads(g: &Graph, dir: &Path) -> QmlTestReads {
 /// Keyed on the Rust's code and every other file's bytes (`Keyed`): the
 /// runner reads each test's text for its cases (`crate::qmltest`), and a
 /// QML warning a test may hold itself to names its line and column, which
-/// a comment moves.
+/// a comment moves. Where what the tests load cannot all be named
+/// (`QmlTestReads::unbounded`), no key answers for a run: both are owed on
+/// every gate, and run.
 ///
 /// Ahead of clippy: it compiles nothing of the app.
 fn qmltest_steps(
@@ -353,6 +361,7 @@ fn qmltest_steps(
     linux.extend(reads.container.iter().cloned());
     let moved = |inputs: &[String]| {
         everything
+            || reads.unbounded.is_some()
             || changed.iter().any(|file| {
                 reach.contains_key(file) && inputs.iter().any(|input| under(file, input))
             })
@@ -381,6 +390,7 @@ fn qmltest_steps(
         // release, so neither chain has to wait for it (`gate::sides::side`).
         qmltest.beside = true;
         qmltest.keyed = Keyed::RustCode;
+        qmltest.unkeyed.clone_from(&reads.unbounded);
     }
     steps
 }

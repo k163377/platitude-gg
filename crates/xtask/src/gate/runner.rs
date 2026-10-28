@@ -478,6 +478,7 @@ mod tests {
                 inputs: std::collections::BTreeSet::new(),
                 keyed: Keyed::Bytes,
                 contract: String::new(),
+                unkeyed: None,
             },
             key: "k".to_string(),
             cached,

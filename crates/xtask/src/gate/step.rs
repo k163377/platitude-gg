@@ -113,6 +113,7 @@ pub(super) fn run_one(
             println!("[{name}] ok     {id} ({secs}s)");
             crate::watched::print_shots(name, &log);
             if !required.step.always
+                && required.step.unkeyed.is_none()
                 && let Err(why) = ground.store.mark_step(
                     &required.key,
                     &format!("{id}\n{}\n", required.step.command.join(" ")),

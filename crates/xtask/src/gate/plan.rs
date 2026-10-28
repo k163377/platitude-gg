@@ -5,6 +5,7 @@
 mod imports;
 mod pins;
 mod steps;
+mod urls;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -57,6 +58,10 @@ pub(crate) struct Step {
     /// so a row or a claim moved runs the line again and a green of
     /// another contract answers for nothing. Empty for the other steps.
     pub contract: String,
+    /// Why no key answers for what it reads, where none can — a load
+    /// nothing names (`steps::qmltest_steps`): it runs on every gate, and
+    /// its green stamps nothing.
+    pub unkeyed: Option<String>,
 }
 
 /// Which id of an input a step's key takes ([`TreeIds`]).
@@ -475,7 +480,7 @@ fn owed(
         .into_iter()
         .filter(|step| !(ask.host_only && step.side == Side::Linux))
         .map(|step| {
-            let (key, cached) = if step.always {
+            let (key, cached) = if step.always || step.unkeyed.is_some() {
                 (String::new(), false)
             } else {
                 // A step that builds or reads the app sees no comment (`shipped`, the verbs, `bare`), so its key
@@ -953,7 +958,9 @@ fn step_row(r: &Required, keys: bool) -> String {
         Side::Linux => "linux",
     };
     let mut row = format!("  {standing:<6} [{side:<5}] {}", r.step.id);
-    if keys && !r.step.always {
+    if let Some(why) = &r.step.unkeyed {
+        row.push_str(&format!("  unkeyed: {why}"));
+    } else if keys && !r.step.always {
         row.push_str(&format!("  key {}", r.key));
     }
     row.push('\n');
