@@ -496,8 +496,9 @@ Item {
     WindowStage {
         id: actionsActTimer
         name: "band_actions"
-        /// The `!` pushed for (`-alert`), then the window brought to the shape's width.
-        order: Harness.autoAct === "band-actions-alert" ? ["pushed", "sized"] : ["sized"]
+        /// The `!` pushed for (`-alert`), then the window brought to the shape's width, then the panel's shape kept once
+        /// it has stood across a frame at that width.
+        order: Harness.autoAct === "band-actions-alert" ? ["pushed", "sized", "shaped"] : ["sized", "shaped"]
         running: Harness.autoAct === "band-actions"
                  || Harness.autoAct === "band-actions-none"
                  || Harness.autoAct === "band-actions-fold"
@@ -559,25 +560,31 @@ Item {
             // Sized once the rest holds — push's wording, which the width is measured off, is the worktree's once the
             // opening fetch has answered — and asked again each beat until the window takes it. The target does not
             // move with the window's width, so this closes no ring.
-            if (!op.at("sized")) {
+            if (!op.at("sized") && !op.at("shaped")) {
                 if (!Awaited.all("band_actions_ready", op.terms(true, false)))
                     return
                 const wanted = op.wanted()
-                if (!op.input("sized", () => {
-                        if (Math.round(window.width) !== wanted) {
-                            window.width = wanted
-                            window.height = Math.ceil(window.floorHeight)
-                        }
-                        return Math.round(window.width) === wanted
-                    }))
-                    return
-            }
-            if (!Awaited.all("band_actions_ready", op.terms(true, true)))
+                op.input("sized", () => {
+                    if (Math.round(window.width) !== wanted) {
+                        window.width = wanted
+                        window.height = Math.ceil(window.floorHeight)
+                    }
+                    return Math.round(window.width) === wanted
+                })
                 return
-            // The shape the run completes on, kept: the completion and the pictures stand on the panel still in it.
-            op.witness("shape", acts.bandActionsKey())
-            Awaited.claim("band_actions", () => acts.bandActionsKey() === op.witnessed("shape")
-                          && acts.fetchSettled(window.curPage.pageTab))
+            }
+            if (op.at("sized")) {
+                if (!Awaited.all("band_actions_ready", op.terms(true, true)))
+                    return
+                // The panel lays its cells out a polish after the window takes the width: its shape is kept once it
+                // has stood across a frame, and the completion and the pictures stand on the panel still in it.
+                if (!op.still("band_actions_shape", acts.bandActionsKey()))
+                    return
+                op.witness("shape", acts.bandActionsKey())
+                op.advance("shaped")
+                Awaited.claim("band_actions", () => acts.bandActionsKey() === op.witnessed("shape")
+                              && acts.fetchSettled(window.curPage.pageTab))
+            }
             // Which button the mark is on: `alert=` is the pair or-ed (`TopBar.actionAlertShown`).
             op.complete({
                 "name": "band_actions_shaped",

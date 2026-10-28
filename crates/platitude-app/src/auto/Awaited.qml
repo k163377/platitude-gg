@@ -351,6 +351,10 @@ QtObject {
                        + " name=" + name)
         return value
     }
+    /// Whether `op`'s running generation kept a value under `name`.
+    function kept(op, name) {
+        return awaited.recordOf(op).witnesses[name] !== undefined
+    }
     /// The value `op`'s running generation kept under `name`. A name never kept throws.
     function witnessed(op, name) {
         const record = awaited.recordOf(op)

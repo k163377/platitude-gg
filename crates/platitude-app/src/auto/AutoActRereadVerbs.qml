@@ -66,9 +66,11 @@ Item {
         return item.mapToItem(null, item.width / 2, Math.min(item.height, Theme.rowHeight) / 2)
     }
     /// Whether the delegate `row` still stands for its row with its top where it was in the window (`at`) — not
-    /// pooled, and not destroyed with a row the read took out (null).
+    /// pooled, and not destroyed with a row the read took out: a witness keeps the reference, which outlives its
+    /// object and answers no method once it is gone.
     function standsAt(row, at) {
-        return row !== null && row.pooled !== true && Math.abs(row.mapToItem(null, 0, 0).y - at) < 1
+        return row !== null && typeof row.mapToItem === "function" && row.pooled !== true
+            && Math.abs(row.mapToItem(null, 0, 0).y - at) < 1
     }
 
     // nav-reread. The open row's seat (`OpenRowSeat`) and the panel's keeper (`SidebarPane.rowKeep`).

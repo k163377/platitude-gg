@@ -267,9 +267,9 @@ Item {
     // and the run is `find` again. Two screens: a jump builds the incoming rows before letting go of the outgoing
     // ones, so drawn delegates are handed on only on the second.
     //
-    // Witnessed on the way: `grabbed`, whether the grab could be asked; `frame`, what its callback latches once the
-    // frame that drew the search is drawn — it answers in a later turn, past the press; `moved`, whether the scroll
-    // moved the view.
+    // Witnessed on the way: `grabbed`, whether the grab could be asked; `drawn`, kept by its callback when the frame
+    // that drew the search is drawn — it answers in a later turn, past the press, while the generation still runs;
+    // `moved`, whether the scroll moved the view.
     PageStage {
         id: findScrolled
         name: "find_scrolled"
@@ -281,16 +281,15 @@ Item {
                                                           "searching": graphModel.searching }))
                     return
                 op.input("grab_asked", () => {
-                    const frame = op.witness("frame", { "drawn": false })
                     op.witness("grabbed", graphPane.view.grabToImage(() => {
-                        frame.drawn = true
+                        if (op.running)
+                            op.witness("drawn", true)
                     }))
                 })
                 return
             }
             // A view that could not be grabbed scrolls without waiting for a frame, and says so (`grabbed=false`).
-            if (!Awaited.all("find_scrolled_drawn", { "drawn": !op.witnessed("grabbed")
-                                                               || op.witnessed("frame").drawn }))
+            if (!Awaited.all("find_scrolled_drawn", { "drawn": !op.witnessed("grabbed") || op.kept("drawn") }))
                 return
             op.input("scrolled", () => {
                 const view = graphPane.view

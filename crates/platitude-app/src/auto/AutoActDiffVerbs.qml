@@ -7,10 +7,10 @@ import platitude.ui
 /// The diff pane's verbs. Most wait first for a changed row of the first hunk (`stageRowTimer`) and branch from there;
 /// the rest are chains of their own that the dispatch starts by name.
 ///
-/// **One file on purpose**: every operation but `colourPlaceTimer` and `argRefused` is started by id from
-/// `stageRowTimer`'s tail (rules-refs/structure.md「dispatcher が id で start する切片は独立ファイルにできない」), and
-/// `colour-place` shares `readY` with `keep-place` and `reachNow` with `code-grow` / `-shrink` / `-swap`. A split
-/// needs each family to own its entry first (the open and the first-hunk wait), as `AutoActSplitVerbs` does.
+/// **One file on purpose**: every operation but `argRefused` is started by id from `stageRowTimer`'s tail
+/// (rules-refs/structure.md「dispatcher が id で start する切片は独立ファイルにできない」). A split needs each family to
+/// own its entry first (the open and the first-hunk wait), as `AutoActSplitVerbs` and `AutoActColourVerbs` do; the
+/// reader's place and reach they share are the driver's (`readY`, `diffReach`).
 // An `Item` only because `QtObject` has no default property to hold the timers.
 Item {
     id: acts

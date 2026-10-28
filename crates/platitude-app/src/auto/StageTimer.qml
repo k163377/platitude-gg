@@ -69,9 +69,13 @@ SampleTimer {
         let answer
         try {
             answer = press()
-        } finally {
+        } catch (e) {
+            // Part of the input may have gone in: pressed again on the next beat it would go in twice.
             Awaited.pressing(null, "")
+            Awaited.breach(op, "a press that threw: " + e)
+            return false
         }
+        Awaited.pressing(null, "")
         if (answer === false)
             return false
         return Awaited.transition(op, stage, report === undefined ? undefined : () => report(answer), true)
@@ -100,6 +104,12 @@ SampleTimer {
     // reach(read)
     function witnessed(name) {
         return Awaited.witnessed(op, name)
+    }
+    /// Whether this generation has kept a fact under `name` — an edge an answer keeps when it comes (a frame's grab
+    /// answering in a later turn), read as the edge it is.
+    // reach(read)
+    function kept(name) {
+        return Awaited.kept(op, name)
     }
     /// Completes the run from here once `spec.when` holds — `{ when, report, arriving, lost, name }`:
     ///
