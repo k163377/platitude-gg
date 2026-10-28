@@ -536,6 +536,7 @@ fn embed_harness_qml() {
     qrc::embed!("auto/AutoActPublishVerbs.qml");
     qrc::embed!("auto/AutoActRecoverVerbs.qml");
     qrc::embed!("auto/AutoActRefVerbs.qml");
+    qrc::embed!("auto/AutoActRowMenuVerbs.qml");
     qrc::embed!("auto/AutoActStepVerbs.qml");
     qrc::embed!("auto/AutoActKeyMenuVerbs.qml");
     qrc::embed!("auto/AutoActSplitVerbs.qml");
