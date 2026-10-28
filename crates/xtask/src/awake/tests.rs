@@ -642,6 +642,43 @@ fn an_unreadable_existing_claim_is_not_replaced() {
     assert_eq!(std::fs::read_to_string(path).unwrap(), existing);
 }
 
+/// A claim the machine went down in the middle of writing — sized and never
+/// filled, or empty — is nobody's record: the next hook claims over it, as
+/// it would over no claim at all, where an unreadable record someone wrote
+/// stays (`an_unreadable_existing_claim_is_not_replaced`).
+#[test]
+fn a_claim_torn_by_the_machine_going_down_is_claimed_over() {
+    let dir = scratch("torn-activity");
+    beating(&dir);
+    let path = dir.join(claim_file("s"));
+    for torn in [vec![0u8; 681], Vec::new()] {
+        std::fs::write(&path, &torn).expect("the torn record");
+        apply(&dir, &claim_file("s"), &writer(1, 3), Mark::Prompt).expect("claimed over");
+        let ours = std::fs::read_to_string(&path).expect("this hook's claim");
+        assert!(Claim::parse(&ours).is_some(), "{ours:?}");
+    }
+}
+
+/// A claim is written beside itself and put in place, so nothing but the
+/// claim is left once the hook is done; and a file left beside it by a
+/// writer that went down before its rename goes with the next write.
+#[test]
+fn a_claim_is_put_in_place_whole_and_a_dead_writers_leftover_goes() {
+    let dir = scratch("written-whole");
+    beating(&dir);
+    let leftover = dir.join(format!("r{CLAIM_FORMAT}.s.writing-1"));
+    std::fs::write(&leftover, [0u8; 16]).expect("a dead writer's leftover");
+    apply(&dir, &claim_file("s"), &writer(1, 3), Mark::Prompt).expect("claimed");
+    let beside: Vec<String> = std::fs::read_dir(&*dir)
+        .expect("the directory")
+        .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+        .filter(|name| name.contains(".writing-"))
+        .collect();
+    assert!(beside.is_empty(), "{beside:?}");
+    let ours = std::fs::read_to_string(dir.join(claim_file("s"))).expect("the claim");
+    assert!(Claim::parse(&ours).is_some(), "{ours:?}");
+}
+
 /// What turns a run of this test binary into a link of the hook chain: the
 /// directory the claims live in, and the Claude process owning them.
 const CHAIN_DIR: &str = "PGG_AWAKE_DIR";

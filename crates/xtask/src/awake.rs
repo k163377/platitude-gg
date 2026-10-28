@@ -96,7 +96,11 @@
 //! transcripts, with it let go, so no seat's slow step holds up another's.
 //! The holder validates the snapshot and applies its OS request under the
 //! lock; changed activity discards the old verdict and keeps protection
-//! until the next reading. An incompatible claim is never overwritten.
+//! until the next reading. An incompatible claim is never overwritten; one
+//! a write the machine went down in left empty or zeroed is nobody's, and
+//! the next hook writes over it. A hook writes a claim beside itself and
+//! puts it in place once it is on the disk, so going down mid-write leaves
+//! the claim before or after, not torn.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -405,6 +409,7 @@ fn apply(dir: &Path, name: &str, writer: &Writer, mark: Mark<'_>) -> Result<Opti
             .map_err(|e| format!("could not write {}: {e}", heard.display()))?;
         let path = dir.join(name);
         let before = match std::fs::read_to_string(&path) {
+            Ok(text) if torn(&text) => None,
             Ok(text) => Some(
                 Claim::parse(&text)
                     .ok_or("the existing activity does not read; it was not overwritten")?,
@@ -416,8 +421,7 @@ fn apply(dir: &Path, name: &str, writer: &Writer, mark: Mark<'_>) -> Result<Opti
             remove(&path)?;
             return Ok(None);
         };
-        std::fs::write(&path, claim.line())
-            .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+        write_whole(&path, &claim.line())?;
         if holder_fresh(dir) {
             return Ok(None);
         }
@@ -434,6 +438,55 @@ fn apply(dir: &Path, name: &str, writer: &Writer, mark: Mark<'_>) -> Result<Opti
     }
     Ok(Some(pid))
 }
+
+/// Whether a claim's text is what a write the machine went down in the
+/// middle of leaves: nothing, or the zeros a file reads as whose length
+/// reached the disk before its bytes did (an unexpected restart left a
+/// session's claims so — 2026-10-27). Nobody wrote that, so it is no other
+/// build's record to keep: the next hook writes over it as over no claim.
+/// Left in place, the session could never claim again, and no holder
+/// would start for it.
+fn torn(text: &str) -> bool {
+    text.bytes().all(|byte| byte == 0)
+}
+
+/// Writes `text` as the whole of `path` so that the machine going down in
+/// the middle leaves the claim as it was or as it is now, never one sized
+/// and not filled ([`torn`]): written beside it, flushed to the disk, and
+/// put in its place. Called under the lock, so a file beside a claim from
+/// a write that never reached its rename is litter of a writer gone, and
+/// goes first.
+fn write_whole(path: &Path, text: &str) -> Result<(), String> {
+    use std::io::Write;
+    let stem = path.with_extension("");
+    if let (Some(dir), Some(stem)) = (path.parent(), stem.file_name().and_then(|s| s.to_str())) {
+        let litter = format!("{stem}.{WRITING}-");
+        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            if entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name.starts_with(&litter))
+            {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+    let beside = path.with_extension(format!("{WRITING}-{}", std::process::id()));
+    let written = std::fs::File::create(&beside)
+        .and_then(|mut file| {
+            file.write_all(text.as_bytes())?;
+            file.sync_all()
+        })
+        .and_then(|()| std::fs::rename(&beside, path));
+    written.map_err(|e| {
+        let _ = std::fs::remove_file(&beside);
+        format!("could not write {}: {e}", path.display())
+    })
+}
+
+/// The extension of a claim being written beside itself ([`write_whole`]):
+/// no `*.claim` listing names it.
+const WRITING: &str = "writing";
 
 /// This [`REVISION`]'s holder's name.
 fn holder_path(dir: &Path) -> PathBuf {
