@@ -18,6 +18,18 @@
 //!   and reads only what is there when it is read — no value carried in
 //!   from the code it was written in.
 //!
+//! A write is judged by what it changes, not by the name it is written
+//! through: the origin of the value changed (`origin`) — made by the code
+//! itself, a harness property's, the product's — follows a value through
+//! locals, arguments and returns, so a local naming the harness's array
+//! changes that array when it is pushed to, and an array the code made is
+//! its own to build. What a container holds is kept apart from the
+//! container, by the site that made it, so a borrowed value a callee puts
+//! inside its caller's array is borrowed when the caller reads it out; the
+//! language's own functions answer and put by their contracts
+//! (`builtins`). A change through a value of no known origin is not passed
+//! as safe.
+//!
 //! A call is followed to what it calls: a harness function's code is read
 //! as the caller's own; a function of the machinery's answers by the
 //! contexts it declares (`// reach(<contexts>[; <arg>=<context>…])`, only
@@ -26,6 +38,8 @@
 //! (`product`). A call none of these answers is `unread`: not passed as
 //! safe.
 
+mod builtins;
+mod origin;
 mod parse;
 mod product;
 mod program;

@@ -7,6 +7,8 @@
 use std::collections::HashMap;
 use std::ops::Range;
 
+use super::builtins;
+use super::origin::{Origin, Site};
 use super::parse::{Doc, UnitKind, is_name};
 use super::product::{self, Does, Product};
 use super::scan::{Facts, Head, Path, WriteKind};
@@ -100,6 +102,20 @@ pub(super) struct Program {
     bindings: HashMap<(usize, usize, usize), Option<Value>>,
     /// The same, as the reading under way finds it.
     collected: HashMap<(usize, usize, usize), Option<Value>>,
+    /// Where what each caller hands a harness function's parameter came
+    /// from, joined over the callers — read and used as `bindings` are.
+    pub(super) origin_bindings: HashMap<(usize, usize, usize), Origin>,
+    origin_collected: HashMap<(usize, usize, usize), Origin>,
+    /// Each local's and each function's return's origin, once read in this
+    /// reading (`super::origin`).
+    pub(super) local_origins: HashMap<(usize, String), Origin>,
+    pub(super) return_origins: HashMap<(usize, usize), Origin>,
+    pub(super) prop_origins: HashMap<(usize, usize, String), Origin>,
+    /// What each container holds, by the site that made it, as the reading
+    /// before found every put — read by this reading (`super::origin`).
+    pub(super) contents: HashMap<Site, Origin>,
+    /// The same, as the reading under way puts it.
+    pub(super) contents_collected: HashMap<Site, Origin>,
 }
 
 /// The harness object each property holds, by `(doc, object, name)`, once
@@ -136,6 +152,13 @@ impl Program {
             prop_values: std::cell::RefCell::new(HashMap::new()),
             bindings: HashMap::new(),
             collected: HashMap::new(),
+            origin_bindings: HashMap::new(),
+            origin_collected: HashMap::new(),
+            local_origins: HashMap::new(),
+            return_origins: HashMap::new(),
+            prop_origins: HashMap::new(),
+            contents: HashMap::new(),
+            contents_collected: HashMap::new(),
         };
         program.declarations();
         program
@@ -164,7 +187,7 @@ impl Program {
         }
     }
 
-    fn facts_of(&mut self, d: usize, u: usize) -> &Facts {
+    pub(super) fn facts_of(&mut self, d: usize, u: usize) -> &Facts {
         if !self.facts.contains_key(&(d, u)) {
             let doc = &self.docs[d];
             let facts = super::scan::facts(&doc.tokens, doc.units[u].body.clone());
@@ -190,15 +213,23 @@ impl Program {
     /// before all its callers were seen is read with all of them now.
     pub fn again(&mut self) {
         self.bindings = std::mem::take(&mut self.collected);
+        self.origin_bindings = std::mem::take(&mut self.origin_collected);
+        self.contents = std::mem::take(&mut self.contents_collected);
+        self.local_origins.clear();
+        self.return_origins.clear();
+        self.prop_origins.clear();
         self.codes.clear();
         self.roots.clear();
         self.top.clear();
     }
 
-    /// Whether the reading just made bound a parameter otherwise than the
-    /// one before it: then it is read again.
+    /// Whether the reading just made bound a parameter, or put something
+    /// inside a container, otherwise than the one before it: then it is read
+    /// again.
     pub fn learned(&self) -> bool {
         self.collected != self.bindings
+            || self.origin_collected != self.origin_bindings
+            || self.contents_collected != self.contents
     }
 
     /// What an argument's tokens stand for in `code`, where they are one
@@ -289,7 +320,7 @@ impl Program {
     }
 
     /// `name` on the object: a property, a function, or one of its type's.
-    fn member(&self, d: usize, o: usize, name: &str) -> Option<Value> {
+    pub(super) fn member(&self, d: usize, o: usize, name: &str) -> Option<Value> {
         let object = &self.docs[d].objects[o];
         if object.props.iter().any(|p| p.name == name) {
             return Some(match self.prop_value(d, o, name) {
@@ -329,7 +360,7 @@ impl Program {
 
     /// The product type a property holds, where it is known: its declared
     /// type, or its value's.
-    fn prop_type(&self, d: usize, o: usize, name: &str) -> Option<String> {
+    pub(super) fn prop_type(&self, d: usize, o: usize, name: &str) -> Option<String> {
         let prop = self.docs[d].objects[o]
             .props
             .iter()
@@ -426,6 +457,16 @@ impl Program {
 
     /// A name as code of object `o` sees it, past its own locals: the
     /// object's members, the file's ids, the root's members, the globals.
+    /// `scope_name` for the origin's reading.
+    pub(super) fn scope_value(&self, d: usize, o: usize, name: &str) -> Value {
+        self.scope_name(d, o, name)
+    }
+
+    /// `path_value` for the origin's reading.
+    pub(super) fn path_value_at(&self, d: usize, o: usize, range: Range<usize>) -> Option<Value> {
+        self.path_value(d, o, range)
+    }
+
     fn scope_name(&self, d: usize, o: usize, name: &str) -> Value {
         // An id before the scope object's own names: `driver: driver` binds the id.
         if let Some(i) = self.docs[d]
@@ -494,7 +535,7 @@ impl Program {
     }
 
     /// What the head of a path stands for in `code`.
-    fn head(&mut self, code: usize, name: &str) -> Value {
+    pub(super) fn head(&mut self, code: usize, name: &str) -> Value {
         let mut current = Some(code);
         let mut own = true;
         while let Some(c) = current {
@@ -547,7 +588,7 @@ impl Program {
     }
 
     /// What a path stands for, member by member.
-    fn resolve(&mut self, code: usize, path: &Path) -> Value {
+    pub(super) fn resolve(&mut self, code: usize, path: &Path) -> Value {
         let mut value = match &path.head {
             Head::Name(name) => self.head(code, name),
             Head::Value => Value::Unknown,
@@ -582,10 +623,17 @@ impl Program {
             }
             let (effect, contexts) = self.call(code, &call.path, call.args.len());
             if let Some(Effect::Calls(callee)) = &effect {
-                let (cd, cu) = (self.codes[*callee].doc, self.codes[*callee].unit);
-                for (i, arg) in call.args.iter().enumerate() {
-                    let value = self.arg_value(code, d, arg.clone());
-                    self.bind(cd, cu, i, value);
+                self.hand_on(code, *callee, &call.args);
+            }
+            self.puts(code, &call.path, &call.args);
+            // A global function that changes the value it is handed first (`Object.assign`) changes it in place.
+            if let (Head::Name(object), [method]) = (&call.path.head, call.path.members.as_slice())
+                && builtins::global_puts(object, method).is_some()
+                && let Some(first) = call.args.first().cloned()
+            {
+                let origin = self.origin_of(code, first);
+                if let Some(changed) = self.change(code, origin, None, &call.path, false, &[]) {
+                    called.push((changed, call.line, call.path.at));
                 }
             }
             for (arg, context) in contexts {
@@ -696,6 +744,29 @@ impl Program {
         }
     }
 
+    /// Records what a call in `code` hands each parameter of the harness
+    /// function whose code is `callee`: the object it names, and where its
+    /// value came from.
+    fn hand_on(&mut self, code: usize, callee: usize, args: &[Range<usize>]) {
+        let d = self.codes[code].doc;
+        let (cd, cu) = (self.codes[callee].doc, self.codes[callee].unit);
+        for (i, arg) in args.iter().enumerate() {
+            let value = self.arg_value(code, d, arg.clone());
+            self.bind(cd, cu, i, value);
+            // A value the caller made, handed down, is the callee's to build as the caller's own.
+            let origin = match self.origin_of(code, arg.clone()) {
+                made @ Origin::Fresh { maker, .. } if maker == code => made.handed_to(callee),
+                other => other,
+            };
+            let joined = self
+                .origin_collected
+                .remove(&(cd, cu, i))
+                .unwrap_or(Origin::Unset)
+                .join(origin);
+            self.origin_collected.insert((cd, cu, i), joined);
+        }
+    }
+
     /// Carves an argument of a call in `code` out as a code of its own,
     /// read in `context`; answers the stretches it carved beside the
     /// argument (the arrow a local the argument names was given).
@@ -803,6 +874,10 @@ impl Program {
                             return (self.product_call(ty, &method, &spelled), Vec::new());
                         }
                     },
+                    // What it changes is its first argument's, judged by that argument's origin (`read`).
+                    Value::Global(g) if builtins::global_puts(g, &method).is_some() => {
+                        return (None, Vec::new());
+                    }
                     Value::Global(g) => {
                         return match product::global(g, &method) {
                             Does::Read => (None, Vec::new()),
@@ -916,7 +991,10 @@ impl Program {
         }
     }
 
-    /// What a write does.
+    /// What a write does, judged by what it changes: a name given a new
+    /// value changes the name — a local's own, or the harness property the
+    /// name is — and anything else changes the value the path names, whose
+    /// origin says whose it is (`super::origin`).
     fn write(
         &mut self,
         code: usize,
@@ -925,7 +1003,8 @@ impl Program {
         starts: &[(Value, usize)],
     ) -> Option<Effect> {
         let step = *kind == WriteKind::Step;
-        if path.members.is_empty() {
+        let in_place = matches!(kind, WriteKind::Mutate | WriteKind::Put(_));
+        if path.members.is_empty() && !in_place {
             let Head::Name(name) = &path.head else {
                 return Some(Effect::Unread(path.spelled()));
             };
@@ -948,23 +1027,44 @@ impl Program {
                 _ => Some(Effect::Unread(path.spelled())),
             };
         }
-        let receiver = path.receiver()?;
-        let name = path.members.last()?.clone();
-        let target = match self.resolve(code, &receiver) {
-            Value::Captured(_, Some(alias)) => *alias,
-            other => other,
+        // What is changed: the value itself, changed in place, or the one whose member is given a value.
+        let (changed, member) = if in_place {
+            (path.clone(), None)
+        } else {
+            (path.receiver()?, path.members.last().cloned())
         };
-        // Through a parameter its callers do not all hand one object: its object could be the harness's or the
-        // product's, so it is not followed.
-        if let Head::Name(head) = &receiver.head
-            && receiver.members.is_empty()
-            && !object_value(&target)
-            && self.is_param(code, head)
-        {
-            return Some(Effect::Unread(path.spelled()));
-        }
-        match target {
-            Value::Object(d, o) if d < self.harness => {
+        let origin = self.path_origin(code, &changed);
+        self.written_into(code, &origin, kind, in_place);
+        self.change(code, origin, member, path, step, starts)
+    }
+
+    /// What changing a value of `origin` does — in place, or its `member`
+    /// given a value.
+    pub(super) fn change(
+        &mut self,
+        code: usize,
+        origin: Origin,
+        member: Option<String>,
+        path: &Path,
+        step: bool,
+        starts: &[(Value, usize)],
+    ) -> Option<Effect> {
+        match origin {
+            // Holds nothing to change.
+            Origin::Plain => None,
+            // Made by this code: its own to build.
+            Origin::Fresh { maker, .. } if maker == code => None,
+            // Made by the code this one was carved from: a value carried out of it.
+            Origin::Fresh { .. } => Some(Effect::Smuggle(path.spelled())),
+            Origin::Shared(d, o, p) => Some(Effect::Write {
+                target: (d, o, p),
+                step,
+                config: false,
+            }),
+            Origin::Object(Value::Object(d, o)) if d < self.harness => {
+                let Some(name) = member else {
+                    return Some(Effect::Unread(path.spelled()));
+                };
                 let own = self.member(d, o, &name);
                 if own.is_none() && name == "running" && self.is_operation(d, o) {
                     return Some(Effect::Start);
@@ -983,31 +1083,9 @@ impl Program {
                     config,
                 })
             }
-            // The product's, or a value read off it and held in a local of this code or the one it was carved from.
-            Value::Prop(..)
-            | Value::Product(_)
-            | Value::Object(..)
-            | Value::Local
-            | Value::Captured(..) => Some(Effect::Input(path.spelled())),
-            _ if receiver.head == Head::Value => Some(Effect::Input(path.spelled())),
-            _ => Some(Effect::Unread(path.spelled())),
+            Origin::Object(_) | Origin::Product => Some(Effect::Input(path.spelled())),
+            Origin::Unset | Origin::Unknown => Some(Effect::Unread(path.spelled())),
         }
-    }
-
-    /// Whether `name` is a parameter of `code`'s function or of an arrow in it.
-    fn is_param(&mut self, code: usize, name: &str) -> bool {
-        let (d, u, range, parent) = {
-            let c = &self.codes[code];
-            (c.doc, c.unit, c.range.clone(), c.parent)
-        };
-        if parent.is_none() && self.docs[d].units[u].params.iter().any(|p| p == name) {
-            return true;
-        }
-        self.facts_of(d, u)
-            .within(&range)
-            .locals
-            .iter()
-            .any(|l| l.name == name && l.init.is_none())
     }
 
     fn is_local(&mut self, code: usize, name: &str) -> bool {

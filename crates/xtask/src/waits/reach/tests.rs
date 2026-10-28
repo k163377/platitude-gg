@@ -389,6 +389,98 @@ fn a_report_carrying_a_value_read_before_is_named_alike_in_every_form() {
     assert_eq!(rules(&common), wanted, "{common:?}");
 }
 
+/// A change to the harness's state is judged by what it changes, not by
+/// the name it is written through: the family's array pushed to directly,
+/// through a local naming it, in a helper, through a helper's parameter,
+/// through what a helper returns, or by a global that changes its first
+/// argument, is a stage kept by hand in a beat and a reading that acts in
+/// a report — the same rule each way.
+#[test]
+fn a_change_to_shared_state_is_named_through_every_alias() {
+    let ticks = "    property var ticks: []";
+    let helpers = "    function sampledEnough() {\n        const samples = acts.ticks\n        samples.push(true)\n        \
+                   return samples.length >= 2\n    }\n    function add(list) {\n        list.push(true)\n    }\n    \
+                   function samples() {\n        return acts.ticks\n    }";
+    let forms = [
+        "            acts.ticks.push(true)",
+        "            const samples = acts.ticks\n            samples.push(true)",
+        "            if (!acts.sampledEnough())\n                return",
+        "            acts.add(acts.ticks)",
+        "            acts.samples().push(true)",
+        "            const kept = acts.ticks\n            kept[0] = false",
+        "            Object.assign(acts.ticks, [true])",
+    ];
+    for form in forms {
+        let beat = found(&driver(""), &verbs(&format!("{ticks}\n{helpers}"), form));
+        assert_eq!(
+            rules(&beat),
+            ["stage"].into_iter().collect(),
+            "{form}: {beat:?}"
+        );
+    }
+    let report = found(
+        &driver(""),
+        &verbs(
+            ticks,
+            "            op.complete({ \"when\": () => ({}), \"report\": () => {\n                \
+             const samples = acts.ticks\n                samples.push(true)\n                \
+             return \"n=\" + samples.length\n            } })",
+        ),
+    );
+    assert_eq!(rules(&report), ["read"].into_iter().collect(), "{report:?}");
+}
+
+/// A change through a value nothing says the origin of — an element a
+/// callback is handed, what a call nobody answers for returns — is not
+/// passed as a change to something of the code's own.
+#[test]
+fn a_change_through_a_value_of_no_known_origin_is_named() {
+    let ticks = "    property var ticks: []";
+    for beat in [
+        "            acts.ticks.forEach(t => t.push(true))",
+        "            const got = pane.things.countOf(\"a\")\n            got.push(true)",
+    ] {
+        let read = found(&driver(""), &verbs(ticks, beat));
+        assert!(
+            rules(&read).contains("unread") || rules(&read).contains("input"),
+            "{beat}: {read:?}"
+        );
+        assert!(!read.is_empty(), "{beat}");
+    }
+}
+
+/// A value the code made itself is its own to build: an array a beat or
+/// a report fills with lines, a copy of the family's array, an object
+/// it gives fields. One made by the beat and filled from a press is a
+/// value carried out of the press.
+#[test]
+fn a_value_the_code_made_is_its_own_to_build() {
+    let ticks = "    property var ticks: []";
+    let built = found(
+        &driver(""),
+        &verbs(
+            ticks,
+            "            const lines = []\n            lines.push(\"a\")\n            const copy = acts.ticks.slice()\n            \
+             copy.push(true)\n            const o = {}\n            o.n = lines.length\n            \
+             op.complete({ \"when\": () => ({}), \"report\": () => {\n                const out = [\"x\"]\n                \
+             out.push(\"y=\" + acts.ticks.length)\n                return out\n            } })",
+        ),
+    );
+    assert!(built.is_empty(), "{built:?}");
+    let carried = found(
+        &driver(""),
+        &verbs(
+            "",
+            "            const got = []\n            op.input(\"chosen\", () => {\n                got.push(pane.chosen)\n            })",
+        ),
+    );
+    assert_eq!(
+        rules(&carried),
+        ["stage"].into_iter().collect(),
+        "{carried:?}"
+    );
+}
+
 /// A value carried out of a press into the beat's own local is state kept
 /// by hand, and so is a property of the operation given a reading; a
 /// property given its value right before the operation that holds it
@@ -456,4 +548,104 @@ fn a_reach_declared_outside_the_machinery_is_named() {
         ["reach"].into_iter().collect(),
         "{declared:?}"
     );
+}
+
+/// Each line of `body` set in by `by`.
+fn indented(body: &str, by: &str) -> String {
+    body.lines()
+        .map(|line| format!("{by}{line}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// `body` run in a report that answers `answer`.
+fn in_report(body: &str, answer: &str) -> String {
+    format!(
+        "            op.complete({{ \"when\": () => ({{}}), \"report\": () => {{\n{}\n                \
+         return {answer}\n            }} }})",
+        indented(body, "                ")
+    )
+}
+
+/// The family's borrowed array, put inside a container the code made and
+/// changed there: named the same whether the code puts it in itself, a
+/// helper puts it into the code's container — under the name the code
+/// holds it by or another — or a function of the language's own copies it
+/// in, in a beat and in a report alike.
+#[test]
+fn a_borrowed_value_put_inside_the_codes_own_container_is_named_however_it_got_there() {
+    let members = "    property var ticks: []\n    function keep(box, borrowed) {\n        box.push(borrowed)\n    }\n    \
+                   function wrap() {\n        return [acts.ticks]\n    }";
+    let forms = [
+        "const box = []\nbox.push(acts.ticks)\nbox[0].push(true)",
+        "const box = [acts.ticks]\nbox[0].push(true)",
+        "const box = []\nbox[0] = acts.ticks\nbox[0].push(true)",
+        "const box = {}\nbox.samples = acts.ticks\nbox.samples.push(true)",
+        "const box = []\nacts.keep(box, acts.ticks)\nbox[0].push(true)",
+        "const box = []\nconst same = box\nacts.keep(same, acts.ticks)\nbox[0].push(true)",
+        "const o = Object.assign({}, { samples: acts.ticks })\no.samples.push(true)",
+        "const c = [].concat([acts.ticks])\nc[0].push(true)",
+        "const c = [...[acts.ticks]]\nc[0].push(true)",
+        "acts.wrap()[0].push(true)",
+        "Object.values({ s: acts.ticks })[0].push(true)",
+    ];
+    for form in forms {
+        let beat = found(
+            &driver(""),
+            &verbs(members, &indented(form, "            ")),
+        );
+        assert_eq!(
+            rules(&beat),
+            ["stage"].into_iter().collect(),
+            "beat {form}: {beat:?}"
+        );
+        let report = found(&driver(""), &verbs(members, &in_report(form, "\"x\"")));
+        assert_eq!(
+            rules(&report),
+            ["read"].into_iter().collect(),
+            "report {form}: {report:?}"
+        );
+    }
+}
+
+/// What nothing was put inside, and what a call no contract answers for
+/// returns, are of no known origin: a change through them is not passed.
+#[test]
+fn a_change_through_a_container_of_unknown_contents_is_named() {
+    for beat in [
+        "const box = []\nbox[0].push(true)",
+        "const got = [].nothingTheTableHolds()\ngot.push(true)",
+        "const parsed = Object.nothingTheTableHolds({})\nparsed.push(true)",
+    ] {
+        let read = found(
+            &driver(""),
+            &verbs(
+                "    property var ticks: []",
+                &indented(beat, "            "),
+            ),
+        );
+        assert_eq!(
+            rules(&read),
+            ["unread"].into_iter().collect(),
+            "{beat}: {read:?}"
+        );
+    }
+}
+
+/// Containers the code made, holding only what it made, are its own to
+/// build however they are filled — by itself, by a helper it hands them
+/// to, or by a function of the language's own — in a beat and a report.
+#[test]
+fn containers_holding_only_what_the_code_made_are_its_own_to_build() {
+    let members = "    property var ticks: []\n    function collect(list) {\n        list.push({ k: 1 })\n    }";
+    let body = "const out = []\nout.push(acts.ticks.length)\nout.push({ n: 2 })\nout[1].n = 3\n\
+                const rows = []\nacts.collect(rows)\nrows[0].k = 2\nconst o = Object.assign({}, { n: 1 })\no.n = 2\n\
+                const copy = out.slice()\ncopy.push(4)\nconst parsed = JSON.parse(\"{}\")\nparsed.a = 1";
+    let beat = found(
+        &driver(""),
+        &verbs(members, &indented(body, "            ")),
+    );
+    assert!(beat.is_empty(), "{beat:?}");
+    let report = found(&driver(""), &verbs(members, &in_report(body, "out")));
+    assert!(report.is_empty(), "{report:?}");
 }

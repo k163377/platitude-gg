@@ -73,8 +73,10 @@ pub(super) enum WriteKind {
     Constant,
     /// Stepped: `++`, `--`, `+=`, `x = x + …`.
     Step,
-    /// Changed in place: an element set, a `push`, a `delete`.
+    /// Changed in place: a `push`, a `delete`, an element stepped.
     Mutate,
+    /// Changed in place by a value put into it (`a[i] = v`): the value's tokens.
+    Put(Range<usize>),
 }
 
 pub(super) struct Write {
@@ -100,6 +102,8 @@ pub(super) struct Facts {
     pub paths: Vec<(Path, usize)>,
     /// Paths held against a number other than zero, with their lines.
     pub compares: Vec<(Path, usize)>,
+    /// Each `return`'s value: its tokens, and the token of its `return`.
+    pub returns: Vec<(Range<usize>, usize)>,
 }
 
 impl Facts {
@@ -147,6 +151,12 @@ impl Facts {
                 .compares
                 .iter()
                 .filter(|(p, _)| inside(p.at))
+                .cloned()
+                .collect(),
+            returns: self
+                .returns
+                .iter()
+                .filter(|(_, at)| inside(*at))
                 .cloned()
                 .collect(),
         }
@@ -211,6 +221,12 @@ pub(super) fn facts(tokens: &[Token], range: Range<usize>) -> Facts {
     let end = range.end;
     let mut k = range.start;
     while k < end {
+        if tokens[k].text == "return" {
+            let stop = expression_end(tokens, k + 1, end);
+            if stop > k + 1 {
+                out.returns.push((k + 1..stop, k));
+            }
+        }
         if let Some(next) = declares(tokens, k, end, &mut out) {
             k = next;
             continue;
@@ -408,7 +424,12 @@ fn after_path(
                     .get(close + 1)
                     .is_some_and(|t| matches!(t.text.as_str(), "=" | "+=" | "-=" | "++" | "--"))
             {
-                out.writes.push(written(WriteKind::Mutate));
+                let kind = if tokens[close + 1].text == "=" {
+                    WriteKind::Put(close + 2..expression_end(tokens, close + 2, end))
+                } else {
+                    WriteKind::Mutate
+                };
+                out.writes.push(written(kind));
             }
             last + 1
         }

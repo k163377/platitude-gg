@@ -30,6 +30,10 @@ pub(in crate::waits) fn findings(
     judge(&mut program)
 }
 
+/// How many times the program is read again before a reading that has not
+/// stood still is named.
+const PASSES: usize = 16;
+
 pub(super) fn judge(program: &mut Program) -> Vec<Finding> {
     let mut found: BTreeSet<(usize, usize, &'static str)> = BTreeSet::new();
     let mut what: HashMap<(usize, usize, &'static str), String> = HashMap::new();
@@ -41,12 +45,21 @@ pub(super) fn judge(program: &mut Program) -> Vec<Finding> {
     for (d, line) in program.misdeclared.clone() {
         found.insert((d, line, "reach"));
     }
-    // Read until what the calls hand their parameters stands still: a helper handed an operation is read as the
-    // operation's own code.
+    // Read until what the calls hand their parameters, and what the containers hold, stands still: a helper handed
+    // an operation is read as the operation's own code, and what a callee puts inside its caller's array reaches the
+    // caller a reading later. A reading that never stands still is not passed as safe.
     let mut passes = 0;
     let (beats, declared_reads) = loop {
         let read = read_roots(program);
-        if !program.learned() || passes == 4 {
+        if !program.learned() {
+            break read;
+        }
+        if passes == PASSES {
+            found.insert((0, 1, "unread"));
+            what.insert(
+                (0, 1, "unread"),
+                format!("what the calls hand on and the containers hold did not stand still in {PASSES} readings"),
+            );
             break read;
         }
         program.again();
