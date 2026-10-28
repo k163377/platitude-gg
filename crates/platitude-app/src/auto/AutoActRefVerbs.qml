@@ -40,7 +40,6 @@ Item {
     readonly property var commitDeleteItem: driver.commitDeleteItem
     readonly property var switchCommitItem: driver.switchCommitItem
     readonly property var pullCommitItem: driver.pullCommitItem
-    readonly property var renderedBarrier: driver.barrierRendered
     readonly property var writeBarrier: driver.barrierWrite
 
     /// Where a TAG card's rows reach, as one line: the remote the deletes go to, whether that row is up and out, its
@@ -61,8 +60,8 @@ Item {
             // The plain one is finished by the write barrier `dispatchFinished` puts up, armed by the press; `-go` and
             // `-refused` own their completion (`AutoActCompletion.defersCompletion`) and go on off the press.
             driver.beginWrite(act)
-            deleteRowTimer.after = act === "delete-branch-go" ? "hold"
-                                 : act === "delete-branch-refused" ? "refused" : ""
+            deleteRowTimer.afterPress = act === "delete-branch-go" ? "hold"
+                                      : act === "delete-branch-refused" ? "refused" : ""
             deleteRowTimer.start()
         } else if (act === "delete-gone") {
             // The row and its chip leave at the press, git asked behind them (デザイン規約 §消す操作は先に画面から消す).
@@ -110,8 +109,10 @@ Item {
             // may hold `/`, so the cut is the configured one (`GitFacts.remoteOfRef`).
             remotesModel.toggleFolder(GitFacts.remoteOfRef(arg, repoTab.remoteNames))
             page.openRefMenu("remote", arg, arg, remotesModel.oidOfName(arg))
-            Harness.report("ref_menu kind=remote delete=" + refDeleteItem.code
-                              + " " + refDeleteItem.text)
+            // The row as the menu offered it, read here, ahead of the press below: the completion reads its report
+            // past the write.
+            const deleteOffered = "ref_menu kind=remote delete=" + refDeleteItem.code + " " + refDeleteItem.text
+            driver.reportAtCompletion(() => deleteOffered)
             if (act === "delete-remote-go" || act === "remote-refused")
                 driver.holdToEnd(refDeleteItem)
             // The far side keeps the branch (`--preset protected`): the refusal comes back as a report, in a bar.
@@ -197,7 +198,7 @@ Item {
             const litOn = arg === "" ? worktree.branch : arg
             page.openRefMenu("branch", litOn, litOn, branchesModel.oidOfName(litOn))
             refMenu.currentIndex = 1
-            Harness.report("menu_highlight index=" + refMenu.currentIndex)
+            driver.reportAtCompletion(() => "menu_highlight index=" + refMenu.currentIndex)
         } else if (act === "delete-branch-early" || act === "delete-branch-early-far") {
             // The early answer dresses the delete row before any click; the menu goes up from the sampler
             // (`earlyDeleteTimer`). `-far` differs only in the repository: its branch's tip is outside the drawn rows
@@ -217,11 +218,11 @@ Item {
             commitMenu.openSub(commitTagCard)
             tagHereCommitItem.triggered()
             // `<name>:box` stops at the box the row opened — the chip column's name box, as a tag's (`GraphRowChips`).
+            // The verb owns its completion (the named one ends on TAGS), so the box completes from the dispatch.
             if (arg.endsWith(":box")) {
                 graphPane.view.namingText = arg.slice(0, -4)
-                Harness.report("create_tag box=" + (graphPane.view.namingOid !== "")
-                                  + " mode=" + graphPane.view.namingMode)
-                renderedBarrier.begin()
+                driver.act.complete(() => "create_tag box=" + (graphPane.view.namingOid !== "")
+                                          + " mode=" + graphPane.view.namingMode)
             } else {
                 graphPane.view.namingSubmitted(acts.createTagOid, arg, "tag")
                 createTagTimer.start()
@@ -247,116 +248,131 @@ Item {
         }
         return true
     }
-    /// Whether the delete went out, reported either way — the page's own answer (`RepoPage.deleteRowAsked`); latching
-    /// on a press the page dropped would wait on a write nobody made. On false the caller finishes the run and this
-    /// line fails it (`verify/verbs/nav.rs`). `busy=` is read after the press; `offered=` / `blocked=` say whether a
-    /// reader had the press at all.
-    function deleteRowLanded(row) {
-        Harness.report("delete_row asked=" + page.deleteRowAsked
-                          + " busy=" + repoTab.busyCount
-                          + " offered=" + row.offered
-                          + " blocked=" + (row.blockedReason !== ""))
-        return page.deleteRowAsked
+    /// Whether the delete went out, said either way — the page's own answer (`RepoPage.deleteRowAsked`); latching on a
+    /// press the page dropped would wait on a write nobody made. On false the run completes and this line fails it
+    /// (`verify/verbs/nav.rs`). Read at the press: `busy=` is the moment after it; `offered=` / `blocked=` say whether
+    /// a reader had the press at all.
+    function deleteRowLine(row) {
+        return "delete_row asked=" + page.deleteRowAsked
+               + " busy=" + repoTab.busyCount
+               + " offered=" + row.offered
+               + " blocked=" + (row.blockedReason !== "")
     }
     // The delete asked of the left pane's menu. The menu goes up and the row is pressed here, not in `run`: a menu
     // opened while a write runs greys its delete row (`AppMenu.runningWhy`) and the page drops the request
     // (`RepoPage.deleteRow`).
-    SampleTimer {
+    PageStage {
         id: deleteRowTimer
+        name: "delete_row"
+        order: ["pressed"]
         /// After the press: `hold` runs the held `-D` git's refusal leaves, `refused` reads the row it turned into,
         /// and "" is the plain delete, which the write barrier finishes.
-        property string after: ""
+        property string afterPress: ""
+        /// The `delete_row` line, read at the press.
+        property string said: ""
         onTriggered: {
+            const op = deleteRowTimer
             // The precondition is read here and nowhere else (app-ui.md §UI 自動化).
             if (!Awaited.all("delete_row_ready", { "ready": driver.menusLive() }))
                 return
-            deleteRowTimer.stop()
-            const arg = Harness.autoActArg
-            const oid = branchesModel.oidOfName(arg)
-            page.openRefMenu("branch", arg, arg, oid)
-            page.deleteRow("branch", arg, arg, oid)
-            if (!acts.deleteRowLanded(refDeleteItem)) {
-                driver.complete()
+            if (!op.input("pressed", () => {
+                    const arg = Harness.autoActArg
+                    const oid = branchesModel.oidOfName(arg)
+                    page.openRefMenu("branch", arg, arg, oid)
+                    page.deleteRow("branch", arg, arg, oid)
+                    op.said = acts.deleteRowLine(refDeleteItem)
+                    if (page.deleteRowAsked)
+                        driver.inputWent(true)
+                }))
+                return
+            // The page dropped the press: nothing will be written, and the line read at the press is the run's end.
+            if (!page.deleteRowAsked) {
+                op.complete(() => op.said)
                 return
             }
-            driver.inputWent(true)
-            if (deleteRowTimer.after === "hold")
+            op.say(() => op.said)
+            op.stop()
+            if (op.afterPress === "hold")
                 forceDeleteTimer.start()
-            else if (deleteRowTimer.after === "refused")
+            else if (op.afterPress === "refused")
                 refusedRowTimer.start()
         }
     }
     // git's refusal has to come back before the row it turns into `-D` (the warning's three presses) can be pressed
     // through — or photographed. The plain delete is pressed too, so a count is no sign of the refusal; this one is.
     // The menu went up before that delete, so the write greys none of its rows (`AppMenu.waiting`); a row out of
-    // reach still takes no press (`AppMenuItem.completeHold`), and the sampler presses again on its next beat, naming
-    // the stage it waits at.
-    SampleTimer {
+    // reach still takes no press (`AppMenuItem.completeHold`), and the sampler presses again on its next beat.
+    PageStage {
         id: forceDeleteTimer
-        /// The refusal is in hand. Latched: a press that did not go has armed the watch again (`beginWrite`), so the
-        /// first delete no longer reads as written through.
-        property bool refused: false
+        name: "force_delete"
+        order: ["refused", "pressed"]
+        /// The row as it stood when pressed, read at the press: its handler runs inside it (`holdToEnd`).
+        property string said: ""
         onTriggered: {
-            if (!forceDeleteTimer.refused) {
-                if (!driver.wroteAndSettled() || refDeleteItem.holdPresses < Metrics.holdPressesWarned)
+            const op = forceDeleteTimer
+            // The refusal in hand is a stage: a press that did not go has armed the watch again (`beginWrite`), so
+            // the first delete no longer reads as written through.
+            if (op.at("start")) {
+                if (!Awaited.all("force_delete_refused", {
+                        "written": driver.wroteAndSettled(),
+                        "warned": refDeleteItem.holdPresses >= Metrics.holdPressesWarned }))
                     return
-                forceDeleteTimer.refused = true
+                op.advance("refused")
             }
-            // The row as it stood when pressed: its handler runs inside the press (`holdToEnd`).
-            const said = "ref_menu delete=" + refDeleteItem.text + " note=" + refDeleteItem.note
-            const went = driver.holdToEnd(refDeleteItem)
-            Awaited.at(Harness.autoAct, went ? "pressed" : "row in reach")
-            if (!went)
+            if (!op.input("pressed", () => {
+                    op.said = "ref_menu delete=" + refDeleteItem.text + " note=" + refDeleteItem.note
+                    return driver.holdToEnd(refDeleteItem)
+                }, () => op.said))
                 return
-            forceDeleteTimer.stop()
-            Harness.report(said)
+            op.stop()
             writeBarrier.start()
         }
     }
     // PGG_AUTO_ACT=tag-chip-menu: once this run's fetch is read through, the graph row's menu on that tag's chip, its
     // TAG card open.
-    SampleTimer {
+    PageStage {
         id: tagChipTimer
+        name: "tag_chip"
+        order: ["opened"]
         property string tag: ""
         property int row: 0
         onTriggered: {
-            if (!Awaited.all("tag_chip_ready", { "ready": !(!driver.wroteAndSettled() || !driver.menusLive()),
-                                                  "page": PageSettled.settled(page) }))
-                return
             const oid = graphModel.oidAt(tagChipTimer.row)
-            if (oid === "")
+            if (!Awaited.all("tag_chip_ready", { "ready": !(!driver.wroteAndSettled() || !driver.menusLive()),
+                                                  "page": PageSettled.settled(page),
+                                                  "oid": oid !== "" }))
                 return
-            tagChipTimer.stop()
-            page.openRowMenu(oid, { "kind": "tag", "name": tagChipTimer.tag })
-            commitMenu.openSub(commitTagCard)
-            Harness.report(acts.reachWords(commitTagCard))
-            renderedBarrier.begin()
+            if (!tagChipTimer.input("opened", () => {
+                    page.openRowMenu(oid, { "kind": "tag", "name": tagChipTimer.tag })
+                    commitMenu.openSub(commitTagCard)
+                }))
+                return
+            tagChipTimer.complete(() => acts.reachWords(commitTagCard))
         }
     }
     // Waits on the window's tip itself (it opens after `tipDelayMs`): read sooner, the line says false while the shot
     // holds it.
-    SampleTimer {
+    PageStage {
         id: blockedTipTimer
+        name: "blocked_tip"
         onTriggered: {
             if (!Awaited.all("blocked_tip_ready", {
                 "ready": !(acts.blockedTipRow === null || !acts.blockedTipRow.tip.shown) }))
                 return
-            blockedTipTimer.stop()
-            Harness.report(
-            "delete_blocked code=" + acts.blockedTipRow.code
-            + " tip=" + acts.blockedTipRow.tip.shown
-            + " aside=" + driver.tipAside(Tips.box)
-            // The name the holding worktree goes by (`RefBranchMenu.holderLeaf`), empty on other rows — the sentence is
-            // tst_branchcard's to judge.
-            + " holder=" + refBranchCard.holderLeaf
-            + " reason=" + acts.blockedTipRow.blockedReason)
-            driver.complete()
+            blockedTipTimer.complete(() => "delete_blocked code=" + acts.blockedTipRow.code
+                + " tip=" + acts.blockedTipRow.tip.shown
+                + " aside=" + driver.tipAside(Tips.box)
+                // The name the holding worktree goes by (`RefBranchMenu.holderLeaf`), empty on other rows — the
+                // sentence is tst_branchcard's to judge.
+                + " holder=" + refBranchCard.holderLeaf
+                + " reason=" + acts.blockedTipRow.blockedReason)
         }
     }
     /// The greyed `pull` row and its tip. The line claims what the picture cannot: offered, out rather than pale
     /// (`AppMenuItem.blocked`, which decides colour and press), and the sentence about the divergence.
-    SampleTimer {
+    PageStage {
         id: pullBlockedTimer
+        name: "pull_blocked"
         /// Which entrance this run came in by, and the row it left standing there.
         property bool onChip: false
         property var row: null
@@ -364,67 +380,62 @@ Item {
             const card = pullBlockedTimer.onChip ? commitMenu : refMenu
             if (!Awaited.all("pull_blocked_ready", { "ready": !(!card.opened || !pullBlockedTimer.row.tip.shown) }))
                 return
-            pullBlockedTimer.stop()
-            Harness.report("pull_blocked where=" + (pullBlockedTimer.onChip ? "chip" : "row")
-                              + " offered=" + pullBlockedTimer.row.offered
-                              + " blocked=" + pullBlockedTimer.row.blocked
-                              + " tip=" + pullBlockedTimer.row.tip.shown
-                              + " says=" + pullBlockedTimer.row.blockedReason)
-            driver.complete()
+            pullBlockedTimer.complete(() => "pull_blocked where=" + (pullBlockedTimer.onChip ? "chip" : "row")
+                                             + " offered=" + pullBlockedTimer.row.offered
+                                             + " blocked=" + pullBlockedTimer.row.blocked
+                                             + " tip=" + pullBlockedTimer.row.tip.shown
+                                             + " says=" + pullBlockedTimer.row.blockedReason)
         }
     }
     /// The `pull` row as the card opens. Whether it was offered is the claim (`offers::pull_row`): a row wired to
     /// nothing frames like one that reaches git.
-    SampleTimer {
+    PageStage {
         id: pullMenuTimer
+        name: "pull_menu"
         /// Whether the card went up on a remote-tracking row — the half that names the branch it lands in.
         property bool onRemote: false
         onTriggered: {
             if (!Awaited.all("pull_menu_ready", { "ready": refMenu.opened }))
                 return
-            pullMenuTimer.stop()
             // `sentence=` / `into=`: every row names the branch that moves (デザイン規約 §取り込んで合流させる) — on the
             // upstream's row, one the row does not name. `runs=`: what the press would run — `here` (`git pull`) or
             // `aside` (the fast-forward). The name last: it is free text.
-            Harness.report("pull_menu open=" + refMenu.opened
-                              + " kind=" + (pullMenuTimer.onRemote ? "remote" : "branch")
-                              + " pull=" + refPullItem.offered
-                              + " code=" + refPullItem.code
-                              + " sentence=" + (refPullItem.refSentence !== "")
-                              + " runs=" + driver.refRowMenu.pullRuns
-                              + " into=" + (refPullItem.offered ? refPullItem.refName : ""))
-            driver.complete()
+            pullMenuTimer.complete(() => "pull_menu open=" + refMenu.opened
+                                          + " kind=" + (pullMenuTimer.onRemote ? "remote" : "branch")
+                                          + " pull=" + refPullItem.offered
+                                          + " code=" + refPullItem.code
+                                          + " sentence=" + (refPullItem.refSentence !== "")
+                                          + " runs=" + driver.refRowMenu.pullRuns
+                                          + " into=" + (refPullItem.offered ? refPullItem.refName : ""))
         }
     }
-    SampleTimer {
+    PageStage {
         id: chipMenuTimer
+        name: "chip_menu"
         onTriggered: {
             if (!Awaited.all("chip_menu_ready", { "ready": !(!refMenu.opened && !commitMenu.opened) }))
                 return
-            chipMenuTimer.stop()
             // `ref=` must stay down: a second menu on the chip's side is the split this entrance is joined to prevent.
-            Harness.report("chip_menu ref=" + refMenu.opened
-                                       + " commit=" + commitMenu.opened
-                                       + " switch=" + switchCommitItem.offered
-                                       + " delete=" + commitDeleteItem.code
-                                       + " " + commitDeleteItem.text)
-            driver.complete()
+            chipMenuTimer.complete(() => "chip_menu ref=" + refMenu.opened
+                                          + " commit=" + commitMenu.opened
+                                          + " switch=" + switchCommitItem.offered
+                                          + " delete=" + commitDeleteItem.code
+                                          + " " + commitDeleteItem.text)
         }
     }
     // Waits for the name in TAGS, not the write barrier, which photographs the sidebar from before
     // (rules-refs/app-ui.md「その書き込みが無効化した読み直しより先に来る」).
-    SampleTimer {
+    PageStage {
         id: createTagTimer
+        name: "create_tag"
         onTriggered: {
             const oid = tagsModel.oidOfName(Harness.autoActArg)
             if (!Awaited.all("create_tag_ready", { "ready": !(oid === "" || repoTab.busyCount !== 0) }))
                 return
-            createTagTimer.stop()
-            Harness.report("create_tag tag=" + Harness.autoActArg
-                              + " row=" + tagsModel.rowOfName(Harness.autoActArg)
-                              + " total=" + tagsModel.total
-                              + " at=" + (oid === acts.createTagOid))
-            renderedBarrier.begin()
+            createTagTimer.complete(() => "create_tag tag=" + Harness.autoActArg
+                                           + " row=" + tagsModel.rowOfName(Harness.autoActArg)
+                                           + " total=" + tagsModel.total
+                                           + " at=" + (tagsModel.oidOfName(Harness.autoActArg) === acts.createTagOid))
         }
     }
     property string createTagOid: ""
@@ -436,8 +447,10 @@ Item {
     // the report spells it out. `wants` is what the run waits for: that reading lands well after the fetch it rides
     // out with (rules-refs/core.md「タグのリモート状態は `ls-remote --tags` で訊くしかない」), so waiting on the fetch
     // alone photographs the plain row as the forced one.
-    SampleTimer {
+    PageStage {
         id: tagMenuTimer
+        name: "tag_menu"
+        order: ["opened"]
         /// The tag, and what must be known before the card is worth photographing: `drift` (a remote has the name on
         /// another commit) or `remote` (a remote has it at all). Either fetches first.
         property string tag: ""
@@ -453,6 +466,8 @@ Item {
             tagMenuTimer.tip = parts.length > 1 && parts[parts.length - 1] === "tip"
             tagMenuTimer.wants = parts.length > 1 && parts[1] !== "tip" ? parts[1] : ""
             tagMenuTimer.press = pressing
+            // A run that presses presses one row of the card it stood up.
+            tagMenuTimer.order = pressing === "" ? ["opened"] : ["opened", "pressed"]
             // `read` waits for every remote's reading, so it waits on its own fetch by its id (`nav-open-tag`'s wait):
             // a name several remotes carry frames as one only one of them does while the others are still unread.
             if (tagMenuTimer.wants === "read")
@@ -476,82 +491,102 @@ Item {
             }
             return true
         }
-        onTriggered: {
-            if (!Awaited.all("tag_menu_ready", { "ready": !(!tagMenuTimer.ready() || !driver.menusLive()) }))
-                return
-            tagMenuTimer.stop()
-            page.openRefMenu("tag", tagMenuTimer.tag, tagMenuTimer.tag,
-                             tagsModel.oidOfName(tagMenuTimer.tag), true)
-            // The rows are one card in (デザイン規約 §メニュー の入れ子); opened so the picture shows them.
-            refMenu.openSub(refTagCard)
-            // Every row the menu grew, in one line: a card missing a row, or a row greyed for drift, frames like one
-            // never offered or simply out (デザイン規約 §左メニューの所作 の削除の表). The order is the judging order —
-            // `must_say` matches one stretch of the line: the sides and the rows they decide first, the push row's
-            // shape after (`verify/verbs/remote.rs`). The offer is asked first: `blocked` is a binding and answers
-            // whether or not the row is drawn.
+        /// Every row the menu grew, in one line: a card missing a row, or a row greyed for drift, frames like one never
+        /// offered or simply out (デザイン規約 §左メニューの所作 の削除の表). The order is the judging order — `must_say`
+        /// matches one stretch of the line: the sides and the rows they decide first, the push row's shape after
+        /// (`verify/verbs/remote.rs`). The offer is asked first: `blocked` is a binding and answers whether or not the
+        /// row is drawn. Then where the card's rows reach.
+        function menuLines() {
             const outRows = [refRemoteTagDeleteItem.offered && refRemoteTagDeleteItem.blocked ? "remote" : "",
                              refTagBothDeleteItem.offered && refTagBothDeleteItem.blocked ? "both" : ""]
                             .filter(w => w !== "")
-            Harness.report("tag_menu tag=" + tagMenuTimer.tag
-                              + " sides=" + tagsModel.tagSides(tagMenuTimer.tag)
-                              + " local_del=" + refTagDeleteItem.offered
-                              + " remote_del=" + refRemoteTagDeleteItem.offered
-                              + " both_del=" + refTagBothDeleteItem.offered
-                              // The remote-reaching rows standing but out; `none` is a claim of its own.
-                              + " blocked=" + (outRows.length === 0 ? "none" : outRows.join(","))
-                              + " tag_here=" + refTagHereItem.offered
-                              + " push=" + refPushTagItem.offered
-                              + " code=" + refPushTagItem.code
-                              + " held=" + (refPushTagItem.holdPresses > 0)
-                              // The model's reading, as `ready()` polls: this family reaches only the
-                              // driver's properties.
-                              + " lease=" + tagsModel.remoteTagDrift(tagMenuTimer.tag, repoTab.defaultRemote)
-                              + " text=" + refPushTagItem.text)
-            Harness.report(acts.reachWords(refTagCard))
-            if (tagMenuTimer.press === "" && tagMenuTimer.tip) {
-                // Forced through the property the real hover writes; the branch card's wait answers for it.
-                acts.blockedTipRow = refRemoteTagDeleteItem
-                acts.blockedTipRow.tipForced = true
-                blockedTipTimer.start()
-                return
+            return ["tag_menu tag=" + tagMenuTimer.tag
+                    + " sides=" + tagsModel.tagSides(tagMenuTimer.tag)
+                    + " local_del=" + refTagDeleteItem.offered
+                    + " remote_del=" + refRemoteTagDeleteItem.offered
+                    + " both_del=" + refTagBothDeleteItem.offered
+                    // The remote-reaching rows standing but out; `none` is a claim of its own.
+                    + " blocked=" + (outRows.length === 0 ? "none" : outRows.join(","))
+                    + " tag_here=" + refTagHereItem.offered
+                    + " push=" + refPushTagItem.offered
+                    + " code=" + refPushTagItem.code
+                    + " held=" + (refPushTagItem.holdPresses > 0)
+                    // The model's reading, as `ready()` polls: this family reaches only the driver's properties.
+                    + " lease=" + tagsModel.remoteTagDrift(tagMenuTimer.tag, repoTab.defaultRemote)
+                    + " text=" + refPushTagItem.text,
+                    acts.reachWords(refTagCard)]
+        }
+        onTriggered: {
+            const op = tagMenuTimer
+            if (op.at("start")) {
+                if (!Awaited.all("tag_menu_ready", { "ready": !(!op.ready() || !driver.menusLive()) }))
+                    return
+                if (!op.input("opened", () => {
+                        page.openRefMenu("tag", op.tag, op.tag, tagsModel.oidOfName(op.tag), true)
+                        // The rows are one card in (デザイン規約 §メニュー の入れ子); opened so the picture shows them.
+                        refMenu.openSub(refTagCard)
+                    }))
+                    return
+                if (op.press === "" && !op.tip) {
+                    op.complete(() => op.menuLines())
+                    return
+                }
+                // The card as it opened, before anything is pressed on it.
+                op.say(() => op.menuLines())
+                if (op.press === "") {
+                    // Forced through the property the real hover writes; the branch card's wait answers for it.
+                    acts.blockedTipRow = refRemoteTagDeleteItem
+                    acts.blockedTipRow.tipForced = true
+                    op.stop()
+                    blockedTipTimer.start()
+                    return
+                }
             }
-            if (tagMenuTimer.press === "") {
-                driver.complete()
-                return
-            }
-            if (tagMenuTimer.press === "remote-refuse") {
+            // A row out of reach takes no press and answers false (`holdToEnd`): pressed again on the next beat.
+            if (op.press === "remote-refuse") {
                 // Nothing moves, so there is no reading of this name to wait for: what the run waits on is the bar.
-                driver.holdToEnd(refRemoteTagDeleteItem)
+                if (!op.input("pressed", () => driver.holdToEnd(refRemoteTagDeleteItem)))
+                    return
+                op.stop()
                 driver.barrierNotice.start()
                 return
             }
-            if (tagMenuTimer.press === "remote-delete" || tagMenuTimer.press === "both-delete") {
-                // Judged on the sidebar after: waits for this name's reading to change, as `createTagTimer` does.
-                tagGoneTimer.was = tagsModel.tagSides(tagMenuTimer.tag)
-                tagGoneTimer.tag = tagMenuTimer.tag
-                tagGoneTimer.errorBefore = repoTab.lastError
-                tagGoneTimer.noticeBefore = page.noticeCard.open ? page.noticeCard.label : ""
-                driver.holdToEnd(tagMenuTimer.press === "remote-delete" ? refRemoteTagDeleteItem
-                                                                         : refTagBothDeleteItem)
+            if (op.press === "remote-delete" || op.press === "both-delete") {
+                // Judged on the sidebar after: waits for this name's reading to change, as `createTagTimer` does — what
+                // it is held against is read at the press.
+                if (!op.input("pressed", () => {
+                        tagGoneTimer.was = tagsModel.tagSides(op.tag)
+                        tagGoneTimer.tag = op.tag
+                        tagGoneTimer.errorBefore = repoTab.lastError
+                        tagGoneTimer.noticeBefore = page.noticeCard.open ? page.noticeCard.label : ""
+                        return driver.holdToEnd(op.press === "remote-delete" ? refRemoteTagDeleteItem
+                                                                             : refTagBothDeleteItem)
+                    }))
+                    return
+                op.stop()
                 tagGoneTimer.start()
                 return
             }
             // The forced push is held, and the barrier is armed at the hold's end (`holdToEnd`): this run's own fetch
             // answers during the hold, and a barrier armed here would pass on it with nothing pushed.
-            if (refPushTagItem.holdPresses > 0)
-                driver.holdToEnd(refPushTagItem)
-            else
-                driver.pressWrite("push-tag", () => {
-                    refPushTagItem.triggered()
-                    return true
-                })
+            if (!op.input("pressed", () => {
+                    if (refPushTagItem.holdPresses > 0)
+                        return driver.holdToEnd(refPushTagItem)
+                    return driver.pressWrite("push-tag", () => {
+                        refPushTagItem.triggered()
+                        return true
+                    })
+                }))
+                return
+            op.stop()
             writeBarrier.start()
         }
     }
     // A tag delete, judged on the sidebar it leaves. The edge is the name's own reading: gone from both sides it
     // answers nothing, gone from the remote alone it drops back to `here` (no row goes).
-    SampleTimer {
+    PageStage {
         id: tagGoneTimer
+        name: "tag_gone"
         property string tag: ""
         property string was: ""
         /// What the page already said before the press: only an answer that moved these is this write's refusal.
@@ -563,148 +598,156 @@ Item {
                 || repoTab.lastError !== tagGoneTimer.errorBefore
         }
         onTriggered: {
+            const op = tagGoneTimer
+            const now = tagsModel.tagSides(op.tag)
+            // The reading moved, or the write came back refused with nothing moved.
             if (!Awaited.all("tag_gone_ready", { "ready": driver.wroteAndSettled(),
-                                                 "page": PageSettled.settled(page) }))
+                                                 "page": PageSettled.settled(page),
+                                                 "answered": now !== op.was || op.refused() }))
                 return
-            const now = tagsModel.tagSides(tagGoneTimer.tag)
-            // Refused, nothing moves: the answer is what is shot.
-            if (now === tagGoneTimer.was && tagGoneTimer.refused()) {
-                tagGoneTimer.stop()
-                Harness.report("tag_kept tag=" + tagGoneTimer.tag + " sides=" + now)
-                if (page.noticeCard.open)
-                    driver.barrierNotice.start()
-                else
-                    renderedBarrier.begin()
+            if (now !== op.was) {
+                op.complete(() => "tag_gone tag=" + op.tag
+                                  + " was=" + op.was
+                                  + " sides=" + tagsModel.tagSides(op.tag)
+                                  + " row=" + tagsModel.rowOfName(op.tag)
+                                  + " total=" + tagsModel.total)
                 return
             }
-            if (now === tagGoneTimer.was)
+            // Refused, nothing moves: the answer is what is shot — a bar it raised, read by the bar's barrier.
+            const kept = () => "tag_kept tag=" + op.tag + " sides=" + tagsModel.tagSides(op.tag)
+            if (page.noticeCard.open) {
+                driver.reportAtCompletion(kept)
+                op.stop()
+                driver.barrierNotice.start()
                 return
-            tagGoneTimer.stop()
-            Harness.report("tag_gone tag=" + tagGoneTimer.tag
-                              + " was=" + tagGoneTimer.was
-                              + " sides=" + now
-                              + " row=" + tagsModel.rowOfName(tagGoneTimer.tag)
-                              + " total=" + tagsModel.total)
-            renderedBarrier.begin()
+            }
+            op.complete(kept)
         }
     }
     // Waits on the early answer: nothing here writes.
-    SampleTimer {
+    PageStage {
         id: earlyDeleteTimer
-        /// Whether the menu is up yet; until then every tick is the input's branch only.
-        property bool menuUp: false
+        name: "delete_early"
+        order: ["menu_up"]
         onTriggered: {
+            const op = earlyDeleteTimer
             const arg = Harness.autoActArg
-            if (!earlyDeleteTimer.menuUp) {
+            if (op.at("start")) {
                 // The precondition is read here and nowhere else (app-ui.md §UI 自動化): the delete row is live only
                 // on a menu raised while nothing runs (`AppMenu.runningWhy`), and the BRANCH card it reads works its
                 // answers out once as the menu opens — put up a tick early, it asks nobody and the run waits out the
                 // watchdog.
-                if (!driver.menusLive())
+                if (!Awaited.all("delete_early_live", { "live": driver.menusLive() }))
                     return
-                earlyDeleteTimer.menuUp = true
-                page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
+                if (!op.input("menu_up", () => {
+                        page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
+                    }))
+                    return
                 if (refBranchCard.deleteAsked)
                     return
                 // Not landed (the name has no commit, or its delete is out), so nothing will come to latch on. Reported
                 // as facts, not the reason's sentence.
-                earlyDeleteTimer.stop()
-                Harness.report("delete_early asked=false"
+                op.complete(() => "delete_early asked=false"
                                   + " oid=" + (branchesModel.oidOfName(arg) !== "")
                                   + " offered=" + refDeleteItem.offered
                                   + " blocked=" + (refDeleteItem.blockedReason !== ""))
-                driver.complete()
                 return
             }
             // `code` cannot tell "not answered yet" from "answered merged" — both wear `branch --delete`. The answer is
             // in hand when the graph gave it as the card opened (`RefBranchMenu.deleteAnswered`) or git echoes the
             // branch asked about, which the asking clears before the question goes out (app-ui.md §UI 自動化).
-            const fromRows = refBranchCard.deleteAnswered
-            if (!fromRows && repoTab.branchDeleteAsked !== arg)
+            if (!Awaited.all("delete_early_answered", {
+                    "answered": refBranchCard.deleteAnswered || repoTab.branchDeleteAsked === arg }))
                 return
-            earlyDeleteTimer.stop()
             // Both sides say the same three words; `unknown` is git's alone, what a run whose reads fell over says.
-            Harness.report("delete_early asked=true"
-                                       + " from=" + (fromRows ? "rows" : "git")
-                                       + " merged=" + (fromRows ? (refBranchCard.deleteMerged ? "yes" : "no")
-                                                                : repoTab.branchDeleteMerged)
-                                       + " code=" + refDeleteItem.code
-                                       + " presses=" + refDeleteItem.holdPresses
-                                       + " note=" + refDeleteItem.note)
-            driver.complete()
+            op.complete(() => {
+                const fromRows = refBranchCard.deleteAnswered
+                return "delete_early asked=true"
+                       + " from=" + (fromRows ? "rows" : "git")
+                       + " merged=" + (fromRows ? (refBranchCard.deleteMerged ? "yes" : "no")
+                                                : repoTab.branchDeleteMerged)
+                       + " code=" + refDeleteItem.code
+                       + " presses=" + refDeleteItem.holdPresses
+                       + " note=" + refDeleteItem.note
+            })
         }
     }
     // The delete asked from the graph row. The subject is the menu going: the row stays up for a refusal
     // (`BranchDeleteRow`'s plain delete, `onHeld`), so a delete git takes has to take the menu down — and a closed menu
     // frames like one nobody opened. `code=` tells a landing from a refusal, which leaves the row wearing `branch -D`.
-    SampleTimer {
+    PageStage {
         id: chipDeleteTimer
-        /// Whether the row has been pressed; until then every tick is the input's branch only.
-        property bool pressed: false
+        name: "chip_delete"
+        order: ["pressed"]
+        /// The `delete_row` line, read at the press.
+        property string said: ""
         onTriggered: {
-            if (!chipDeleteTimer.pressed) {
+            const op = chipDeleteTimer
+            if (op.at("start")) {
                 // The precondition is read here and nowhere else (app-ui.md §UI 自動化): a menu raised while a write
                 // runs greys its rows, and the page drops the request.
-                if (!driver.menusLive())
+                if (!Awaited.all("chip_delete_live", { "live": driver.menusLive() }))
                     return
-                const arg = Harness.autoActArg
-                page.openRowMenu(branchesModel.oidOfName(arg), { "kind": "branch", "name": arg })
-                // The row's own presses: the plain delete's two, which keep the menu up (`BranchDeleteRow`'s
-                // `onHeld`).
-                commitDeleteItem.completeHold()
-                if (!acts.deleteRowLanded(commitDeleteItem)) {
-                    chipDeleteTimer.stop()
-                    driver.complete()
+                if (!op.input("pressed", () => {
+                        const arg = Harness.autoActArg
+                        page.openRowMenu(branchesModel.oidOfName(arg), { "kind": "branch", "name": arg })
+                        // The row's own presses: the plain delete's two, which keep the menu up (`BranchDeleteRow`'s
+                        // `onHeld`).
+                        commitDeleteItem.completeHold()
+                        op.said = acts.deleteRowLine(commitDeleteItem)
+                        if (page.deleteRowAsked)
+                            driver.inputWent(true)
+                    }))
+                    return
+                // The page dropped the press: nothing will be written, and the line read at the press is the run's end.
+                if (!page.deleteRowAsked) {
+                    op.complete(() => op.said)
                     return
                 }
-                chipDeleteTimer.pressed = true
-                driver.inputWent(true)
+                op.say(() => op.said)
                 return
             }
-            if (!driver.wroteAndSettled())
+            if (!Awaited.all("chip_delete_landed", { "written": driver.wroteAndSettled() }))
                 return
-            chipDeleteTimer.stop()
-            Harness.report("chip_delete branch=" + Harness.autoActArg
+            op.complete(() => "chip_delete branch=" + Harness.autoActArg
                               + " row=" + branchesModel.rowOfName(Harness.autoActArg)
                               + " code=" + commitDeleteItem.code
                               + " menu=" + commitMenu.opened)
-            driver.complete()
         }
     }
-    SampleTimer {
+    PageStage {
         id: refusedRowTimer
+        name: "refused_row"
         onTriggered: {
             if (!Awaited.all("refused_row_ready", { "ready": driver.wroteAndSettled(),
                                                     "page": PageSettled.settled(page) }))
                 return
-            refusedRowTimer.stop()
-            Harness.report("ref_menu delete=" + refDeleteItem.code
-                                       + " " + refDeleteItem.text
-                                       + " note=" + refDeleteItem.note)
-            driver.complete()
+            refusedRowTimer.complete(() => "ref_menu delete=" + refDeleteItem.code
+                                            + " " + refDeleteItem.text
+                                            + " note=" + refDeleteItem.note)
         }
     }
     // The row taken away at the press, waited off the list, and the write behind it settled: the page holds the
     // rows away past the answer (`holdGoneRows`), so the in-between is what the picture is of.
-    SampleTimer {
+    PageStage {
         id: goneRowTimer
+        name: "gone_row"
         onTriggered: {
             if (!Awaited.all("gone_row_ready", { "ready": !(tagsModel.rowOfName(Harness.autoActArg) >= 0),
                                                   "written": driver.wroteAndSettled(),
                                                   "page": PageSettled.settled(page) }))
                 return
-            goneRowTimer.stop()
-            Harness.report("gone_row tag=" + Harness.autoActArg
-                              + " row=" + tagsModel.rowOfName(Harness.autoActArg)
-                              + " total=" + tagsModel.total
-                              + " chips=" + (graphModel.goneChips.length > 0))
-            driver.complete()
+            goneRowTimer.complete(() => "gone_row tag=" + Harness.autoActArg
+                                         + " row=" + tagsModel.rowOfName(Harness.autoActArg)
+                                         + " total=" + tagsModel.total
+                                         + " chips=" + (graphModel.goneChips.length > 0))
         }
     }
     // …and the row let go of again, the half no picture holds. Waited on the gone set: the write answers before the
     // listing that takes the row away for good is asked for, so a barrier would report the middle as the end.
-    SampleTimer {
+    PageStage {
         id: stoodDownTimer
+        name: "stood_down"
         /// Whether the row was stood in for, read off the gone set at the press — the slot fills it before the press
         /// returns, and sampling could miss the window. Without it a press that took nothing away passes the wait.
         property bool stood: false
@@ -713,20 +756,17 @@ Item {
             driver.inputWent(true)
         }
         onTriggered: {
-            if (!Awaited.all("stood_down_ready", { "ready": driver.wroteAndSettled(),
-                                                   "page": PageSettled.settled(page) }))
-                return
-            // The rows stay off screen until a listing taken after the write is drawn; this is it arriving
+            // The rows stay off screen until a listing taken after the write is drawn; `let_go` is it arriving
             // (`ops::StandIn`).
-            if (graphModel.goneChips.length > 0)
+            if (!Awaited.all("stood_down_ready", { "ready": driver.wroteAndSettled(),
+                                                   "page": PageSettled.settled(page),
+                                                   "let_go": graphModel.goneChips.length === 0 }))
                 return
-            stoodDownTimer.stop()
-            Harness.report("stood_down tag=" + Harness.autoActArg
-                              + " stood=" + stoodDownTimer.stood
-                              + " row=" + tagsModel.rowOfName(Harness.autoActArg)
-                              + " total=" + tagsModel.total
-                              + " chips=" + (graphModel.goneChips.length > 0))
-            renderedBarrier.begin()
+            stoodDownTimer.complete(() => "stood_down tag=" + Harness.autoActArg
+                                           + " stood=" + stoodDownTimer.stood
+                                           + " row=" + tagsModel.rowOfName(Harness.autoActArg)
+                                           + " total=" + tagsModel.total
+                                           + " chips=" + (graphModel.goneChips.length > 0))
         }
     }
 }

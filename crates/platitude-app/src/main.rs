@@ -544,12 +544,15 @@ fn embed_harness_qml() {
     qrc::embed!("auto/AutoActWipVerbs.qml");
     qrc::embed!("auto/AutoShotDriver.qml");
     qrc::embed!("auto/Awaited.qml");
+    qrc::embed!("auto/CompletionRoute.qml");
     qrc::embed!("auto/NavProbe.qml");
     qrc::embed!("auto/PageAutoStart.qml");
     qrc::embed!("auto/PageHarness.qml");
     qrc::embed!("auto/PagePerfDriver.qml");
     qrc::embed!("auto/PageReports.qml");
     qrc::embed!("auto/PageSettled.qml");
+    qrc::embed!("auto/PageStage.qml");
+    qrc::embed!("auto/StageTimer.qml");
     qrc::embed!("auto/TabProbe.qml");
     qrc::embed!("auto/WindowAutoActDriver.qml");
     qrc::embed!("auto/WindowBadgeActs.qml");
@@ -563,6 +566,7 @@ fn embed_harness_qml() {
     qrc::embed!("auto/WindowPerfDriver.qml");
     qrc::embed!("auto/WindowSettingsActs.qml");
     qrc::embed!("auto/WindowShotMirrors.qml");
+    qrc::embed!("auto/WindowStage.qml");
     qrc::embed!("auto/WindowTabActs.qml");
     qrc::embed!("auto/WindowTabPinActs.qml");
     qrc::embed!("auto/qmldir");

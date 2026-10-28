@@ -7,7 +7,7 @@ import platitude.ui
 /// The diff pane's verbs. Most wait first for a changed row of the first hunk (`stageRowTimer`) and branch from there;
 /// the rest are chains of their own that the dispatch starts by name.
 ///
-/// **One file on purpose**: every sampler but `colourPlaceTimer` is started by id from `stageRowTimer`'s tail
+/// **One file on purpose**: every operation but `colourPlaceTimer` is started by id from `stageRowTimer`'s tail
 /// (rules-refs/structure.md「dispatcher が id で start する切片は独立ファイルにできない」), and `colour-place` shares
 /// `readY` with `keep-place` and `reachNow` with `code-grow` / `-shrink` / `-swap`. A split needs each family to own
 /// its entry first (the open and the first-hunk wait), as `AutoActSplitVerbs` does.
@@ -24,10 +24,13 @@ Item {
     readonly property var diffPane: driver.diffPane
     readonly property var graphPane: driver.graphPane
     readonly property var diffRowMenu: driver.diffRowMenu
-    readonly property var renderedBarrier: driver.barrierRendered
     readonly property var writeBarrier: driver.barrierWrite
     /// The verbs that open a file's preview: each waits for the decode and reports what the pane shows.
     readonly property var previews: ["preview", "preview-unstaged", "preview-staged", "preview-close"]
+    /// The verbs whose own operation takes over at the rows. `diff-sweep`, `-bar` and `-blank` read the laid-out
+    /// view, a frame behind the rows — their operations wait for it.
+    readonly property var samplerActs: ["diff-sweep", "diff-bar", "diff-blank", "keep-place", "code-send", "code-grow",
+                                        "code-shrink", "code-swap", "line-run", "diff-follow", "line-back"]
 
     /// Runs `act` if it is this family's and says whether it was; `AutoActDriver` asks each family in turn.
     function run(act, arg) {
@@ -48,82 +51,146 @@ Item {
             // A missing path is the run's own mistake and must read as one: git takes an empty pathspec as the whole
             // tree, so the pane would fill with a plausible diff and the verb would report rows of no file.
             if (filePath === "") {
-                Harness.report("diff_arg act=" + act + " named=false")
-                renderedBarrier.begin()
+                driver.act.complete(() => "diff_arg act=" + act + " named=false")
                 // True even here — falsy reads as "not mine" to the dispatch chain.
                 return true
             }
             page.toggleDiff(named ? head : "unstaged", filePath,
                             unstagedModel.origOf(filePath))
-            stageRowTimer.begin()
+            acts.beginRows(act)
         } else if (acts.previews.indexOf(act) >= 0) {
-            // Completion is the pane settling (`stageRowTimer`). No path: said and stopped on the rendered barrier — no
+            // Completion is the pane settling (`stageRowTimer`). No path: said and completed in the dispatch — no
             // read would answer a wait, and the missing must_say line fails the run.
             if (arg === "") {
-                Harness.report("diff_arg act=" + act + " named=false")
-                renderedBarrier.begin()
+                driver.act.complete(() => "diff_arg act=" + act + " named=false")
             } else {
                 page.toggleDiff(act === "preview" ? "untracked"
                                 : act === "preview-staged" ? "staged" : "unstaged", arg, "")
-                stageRowTimer.begin()
+                acts.beginRows(act)
             }
         } else if (act === "colour-place") {
             page.showWip()
             page.toggleDiff("unstaged", arg, "")
-            colourPlaceTimer.begin()
+            colourPlaceTimer.since = PerfProbe.clockMs()
+            colourPlaceTimer.start()
         } else {
             return false
         }
         return true
     }
 
+    /// Starts the wait for the rows, with the stages `act` goes through there.
+    function beginRows(act) {
+        stageRowTimer.order = acts.rowStages(act)
+        stageRowTimer.since = PerfProbe.clockMs()
+        stageRowTimer.start()
+    }
+    /// The stages `stageRowTimer` goes through for `act` before it completes or hands the run on: `rows`, said first,
+    /// where another operation takes over; then the one input the verb puts in at the rows, if it has one.
+    function rowStages(act) {
+        if (act === "diff-escape")
+            return ["rows", "escaped"]
+        if (act === "hunk-tools")
+            return ["rows", "tools"]
+        if (act === "stage-hunk" || act === "stage-line")
+            return ["rows", "pressed"]
+        if (act === "discard-hunk-go" || acts.samplerActs.indexOf(act) >= 0)
+            return ["rows"]
+        const once = { "diff-band-sweep": "swept", "diff-tick": "ticked", "preview-close": "closed",
+                       "line-tools": "tools", "diff-select": "picked", "diff-copy": "picked", "diff-menu": "picked",
+                       "diff-copy-removed": "picked" }
+        return once[act] === undefined ? [] : [once[act]]
+    }
+    /// Hands the run to the operation of `act` (one of `samplerActs`), with the first changed line the rows landed
+    /// on for the two that write it.
+    function startSampler(act, line) {
+        if (act === "keep-place")
+            keepPlaceTimer.changedLine = line
+        if (act === "code-shrink")
+            codeShrinkTimer.changedLine = line
+        const samplers = {
+            "diff-sweep": diffSweepTimer,
+            "diff-bar": diffBarTimer,
+            "diff-blank": diffBlankTimer,
+            "keep-place": keepPlaceTimer,
+            "code-send": codeSendTimer,
+            "code-grow": codeGrowTimer,
+            "code-shrink": codeShrinkTimer,
+            "code-swap": codeSwapTimer,
+            "line-run": lineRunTimer,
+            "diff-follow": followTimer,
+            "line-back": lineBackTimer
+        }
+        samplers[act].start()
+    }
+
     /// The drag the four text verbs share (デザイン規約 §diff の中身をコピーする), entered through the functions the hand's
     /// own handlers call (`DiffTextSelect`) since hover and a real button cannot be injected. It runs from the head of
     /// the first line past the first removed one so the selection holds both sides — a one-sided drag passes on half
-    /// the rule.
+    /// the rule. Answers what the drag picked, read as it lands.
     function pickDiffText(act) {
         const removedRow = diffPane.firstRemovedRow()
         const lastRow = Math.min(diffPane.view.count - 1, removedRow + 1)
         diffPane.pickText(0, 1, 0, lastRow, driver.pastLineEnd)
         // `door=`: a headless drag delivers no press, so whether the press sheet that brings the keyboard is on top is
         // asked directly — without the keyboard, `Ctrl+C` cannot take the selection.
-        Harness.report("diff_pick door=" + diffPane.doorOnTop() + " " + diffPane.pickTally()
-                          + " removedRow=" + removedRow + " to=" + lastRow)
+        const picked = "diff_pick door=" + diffPane.doorOnTop() + " " + diffPane.pickTally()
+                       + " removedRow=" + removedRow + " to=" + lastRow
         if (act === "diff-select")
-            return
+            return picked
         if (act === "diff-copy") {
             diffPane.copySelection()
-            acts.reportCopy("diff_copy")
-            return
+            return picked
         }
         // Right-click inside the drag, so the selection stands — the half of the rule these verbs test.
         diffPane.askCodeMenu(0, removedRow, 0)
         if (act === "diff-copy-removed") {
             diffRowMenu.menu.close()
             diffRowMenu.copyRemovedNow()
-            acts.reportCopy("diff_copy_removed")
         }
+        return picked
     }
     /// What reached the clipboard, read off `ClipboardHelper.lastCopied` (the clipboard cannot be read back).
     /// `holdsRemoved=` is the claim: false for the plain copy, true for the menu's second row.
-    function reportCopy(name) {
+    function copyLine(name) {
         const text = driver.clipboard.lastCopied
         const removed = diffPane.diffModel.removedText()
-        Harness.report(name + " holdsRemoved=" + (removed !== "" && text.indexOf(removed) >= 0)
-                          + " lines=" + (text === "" ? 0 : text.split("\n").length))
+        return name + " holdsRemoved=" + (removed !== "" && text.indexOf(removed) >= 0)
+               + " lines=" + (text === "" ? 0 : text.split("\n").length)
+    }
+    /// Which line endings the pane decided on: the picture cannot say which kind.
+    function endingsLine() {
+        const d = diffPane.diffModel
+        return "line_endings kind=" + d.endingKind + " scope=" + d.endingScope
+               + " lines=" + d.endingLines + " text=" + Words.lineEndings(d.endingKind, d.endingFrom,
+                   d.endingTo, d.endingLines, d.endingScope, d.endingExt)
+    }
+    /// Whether a hunk or a line puts a seat out, and the band's word: a line's mark comes up under a hand alone, so a
+    /// picture without one cannot say whether the lines offer one. `why=` and `mode=` are the lines over the rows as
+    /// they stand, `order=` which of them stand, top to bottom (`DiffFileNotices`).
+    function piecesLine() {
+        const notes = diffPane.notices
+        return "diff_pieces offered=" + diffPane.piecesOffered + " whole=" + diffPane.stageOffered
+               + " why=" + notes.wholeShown + " mode=" + notes.modeShown
+               + " order=" + notes.fileLinesOrder
+    }
+    /// `kind=` and `pictures=` (sides decoded) are what the picture cannot tell: an unread pane and a `file:` URL
+    /// naming nothing both photograph as an empty frame.
+    function previewLine() {
+        return "preview_pane kind=" + diffPane.diffModel.previewKind
+               + " binary=" + diffPane.diffModel.isBinary
+               + " pictures=" + diffPane.picturesShown
     }
     // Waits for the rows, never a fixed time (rules-refs/app-ui.md「diff の行を触る自動化フックは行の到着で計る」). No
-    // ceiling: a row that never lands is ended by the watchdog. A slower beat of its own: each tick walks the rows.
-    // waits(paced): the loop ends on the diff having arrived
-    Timer {
+    // ceiling: a row that never lands is ended by the watchdog.
+    PageStage {
         id: stageRowTimer
-        interval: 50
-        repeat: true
-        property int waited: 0
-        function begin() {
-            stageRowTimer.waited = 0
-            stageRowTimer.start()
-        }
+        name: "diff_rows"
+        /// When the dispatch asked for the file (`PerfProbe.clockMs`), for the report's `waited=` — a diagnosis,
+        /// compared with nothing.
+        property real since: 0
+        /// The first changed line as the rows landed, for the stage that acts on it.
+        property int changedLine: -1
         // Whether what the verb is about to name is on screen — by default a changed line of the first hunk.
         function ready() {
             // These need no changed line, and demanding one would hold them to the watchdog: `diff-file` may open a
@@ -137,86 +204,90 @@ Item {
                 return diffPane.diffSettled() && diffPane.picturesSettled
             return diffPane.firstChangedLine(0) >= 0
         }
-        onTriggered: {
-            // waits(measured): printed in the report below and compared with nothing — the verb ends on `ready()`
-            stageRowTimer.waited += stageRowTimer.interval
-            const arrived = stageRowTimer.ready()
-            // The page too: the rows the read brought are built a polish after it lands (`rows:diff`).
-            if (!Awaited.all("diff_rows_ready", { "ready": arrived, "page": PageSettled.settled(page) }))
-                return
-            stageRowTimer.stop()
-            const act = Harness.autoAct
-            // The first changed line — a hunk numbers its context lines too (`firstChangedLine`).
-            const line = diffPane.firstChangedLine(0)
-            // Said before acting, so a verb that then fails its write reports both.
-            Harness.report("diff_row act=" + act + " ready=" + arrived
-                              + " rows=" + diffPane.view.count
-                              + " line=" + line
-                              + " waited=" + stageRowTimer.waited)
-            // The line endings get a report line: the picture cannot say which kind the pane decided on.
+        /// The verbs that end at the rows: each reads what it came for — after its one input, if it has one — and
+        /// completes. `rowLine` is the rows as they landed, said first.
+        function endAtRows(act, line, rowLine) {
+            const op = stageRowTimer
             if (act === "diff-file") {
-                const d = diffPane.diffModel
-                Harness.report("line_endings kind=" + d.endingKind + " scope=" + d.endingScope
-                                  + " lines=" + d.endingLines + " text=" + Words.lineEndings(d.endingKind, d.endingFrom,
-                                      d.endingTo, d.endingLines, d.endingScope, d.endingExt))
-                // Whether a hunk or a line puts a seat out, and the band's word: a line's mark comes up under a hand
-                // alone, so a picture without one cannot say whether the lines offer one. `why=` and `mode=` are the
-                // lines over the rows as they stand, `order=` which of them stand, top to bottom (`DiffFileNotices`).
-                const notes = diffPane.notices
-                Harness.report("diff_pieces offered=" + diffPane.piecesOffered + " whole=" + diffPane.stageOffered
-                                  + " why=" + notes.wholeShown + " mode=" + notes.modeShown
-                                  + " order=" + notes.fileLinesOrder)
-                driver.complete()
+                op.complete(() => [rowLine, acts.endingsLine(), acts.piecesLine()])
                 return
             }
             // Sweeps the band's path (規約 §右のペインの字は掴める). `cut=` is what the picture cannot answer: whether the
             // field holds a value longer than the band.
             if (act === "diff-band-sweep") {
-                Harness.report("diff_band_sweep "
-                    + diffPane.headerHand.sweepAir(7, "cut=" + diffPane.headerCut))
-                driver.complete()
+                let swept = ""
+                op.input("swept", () => {
+                    swept = diffPane.headerHand.sweepAir(7, "cut=" + diffPane.headerCut)
+                })
+                op.complete(() => [rowLine, "diff_band_sweep " + swept])
                 return
             }
             // Which rows name the two sides: the picture cannot say how many should have, and a resolved conflict is
             // where none did.
             if (act === "conflict-sides") {
-                Harness.report("conflict_sides " + diffPane.sideTally())
-                driver.complete()
+                op.complete(() => [rowLine, "conflict_sides " + diffPane.sideTally()])
                 return
             }
             // The page's tick. The file is untouched, so core answers with nothing (`RepoSession::refresh_diff`): the
-            // ask itself is the edge, read in the same beat. `loading=`: a tick must not reload the pane like a click.
+            // ask itself is the edge, read as it goes in. `loading=`: a tick must not reload the pane like a click.
             if (act === "diff-tick") {
-                const asked = page.pollDiff()
-                Harness.report("diff_tick asked=" + asked
-                                  + " loading=" + diffPane.diffModel.loading
-                                  + " rows=" + diffPane.view.count)
-                driver.complete()
+                let ticked = ""
+                op.input("ticked", () => {
+                    const asked = page.pollDiff()
+                    ticked = "diff_tick asked=" + asked
+                             + " loading=" + diffPane.diffModel.loading
+                             + " rows=" + diffPane.view.count
+                })
+                op.complete(() => [rowLine, ticked])
                 return
             }
-            // `kind=` and `pictures=` (sides decoded) are what the picture cannot tell: an unread pane and a `file:`
-            // URL naming nothing both photograph as an empty frame.
             if (acts.previews.indexOf(act) >= 0) {
-                const was = diffPane.diffModel.previewKind
-                Harness.report("preview_pane kind=" + was
-                                  + " binary=" + diffPane.diffModel.isBinary
-                                  + " pictures=" + diffPane.picturesShown)
                 if (act !== "preview-close") {
-                    driver.complete()
+                    op.complete(() => [rowLine, acts.previewLine()])
                     return
                 }
-                // Closed by the header `✕`'s own path. Whether the decoded pictures left the process is read from
-                // outside; QML can only say the pane let go of the URLs (`url=empty`).
-                page.closeDiffToGraph()
-                Harness.report("preview_close was=" + was
-                                  + " kind=" + diffPane.diffModel.previewKind
-                                  + " shown=" + page.diffShown
-                                  + " pictures=" + diffPane.picturesShown
-                                  + " url=" + (diffPane.diffModel.previewNewUrl === ""
-                                               && diffPane.diffModel.previewOldUrl === "" ? "empty" : "held"))
-                renderedBarrier.begin()
+                // Closed by the header `✕`'s own path, once the pane has been read: after the close nothing of it is
+                // left to read. Whether the decoded pictures left the process is read from outside; QML can only say
+                // the pane let go of the URLs (`url=empty`).
+                const stood = acts.previewLine()
+                const was = diffPane.diffModel.previewKind
+                op.input("closed", () => {
+                    page.closeDiffToGraph()
+                })
+                op.complete(() => [rowLine, stood,
+                                   "preview_close was=" + was
+                                   + " kind=" + diffPane.diffModel.previewKind
+                                   + " shown=" + page.diffShown
+                                   + " pictures=" + diffPane.picturesShown
+                                   + " url=" + (diffPane.diffModel.previewNewUrl === ""
+                                                && diffPane.diffModel.previewOldUrl === "" ? "empty" : "held")])
                 return
             }
+            // Hover cannot be injected, so the row the pointer would be on is named.
+            if (act === "line-tools") {
+                op.input("tools", () => {
+                    diffPane.showLineTools(0, line)
+                })
+                op.complete(() => rowLine)
+                return
+            }
+            if (act === "diff-select" || act === "diff-copy" || act === "diff-menu" || act === "diff-copy-removed") {
+                let picked = ""
+                op.input("picked", () => {
+                    picked = acts.pickDiffText(act)
+                })
+                op.complete(() => [rowLine, picked].concat(
+                                act === "diff-copy" ? [acts.copyLine("diff_copy")]
+                                : act === "diff-copy-removed" ? [acts.copyLine("diff_copy_removed")] : []))
+                return
+            }
+            // `discard-hunk`: the rows it would take are the whole of it.
+            op.complete(() => rowLine)
+        }
+        /// The verbs that go on from the rows: each puts its one input in, once, and hands the run to the operation
+        /// that waits for what it set going.
+        function goOn(act, line) {
+            const op = stageRowTimer
             // Escape enters the page's own handler, the one line `Keys.onEscapePressed` calls
             // (`RepoPage.escapePressed`; verify-ui「注入はハンドラ本体そのものへ入れる」). `took=` and `shown=` are
             // separate failures the picture cannot tell apart.
@@ -224,80 +295,90 @@ Item {
                 // The hand enters the pane first (`DiffPane.handArrived`, the wheel's path): closing the pane that
                 // holds the keyboard is the case that breaks — where the keyboard lands decides whether a second
                 // Escape reaches anything.
-                diffPane.handArrived()
-                escapeTimer.hand = diffPane.view.activeFocus
-                escapeTimer.took = page.escapePressed()
+                op.input("escaped", () => {
+                    diffPane.handArrived()
+                    escapeTimer.hand = diffPane.view.activeFocus
+                    escapeTimer.took = page.escapePressed()
+                })
+                op.stop()
                 escapeTimer.start()
-                return
-            }
-            // Hover cannot be injected, so the row the pointer would be on is named.
-            if (act === "line-tools") {
-                diffPane.showLineTools(0, line)
-                renderedBarrier.begin()
                 return
             }
             // A heading's own row is line -1 (`flatten_patches`). Its words are judged once the row is built
             // (`AutoActDriver.headingBarrier`).
             if (act === "hunk-tools") {
-                diffPane.showLineTools(0, -1)
+                op.input("tools", () => {
+                    diffPane.showLineTools(0, -1)
+                })
+                op.stop()
                 driver.barrierHeading.start()
                 return
             }
-            if (act === "diff-select" || act === "diff-copy" || act === "diff-menu" || act === "diff-copy-removed") {
-                acts.pickDiffText(act)
-                renderedBarrier.begin()
-                return
-            }
-            // The verbs whose sampler takes over from here. `diff-sweep`, `-bar` and `-blank` read the laid-out view,
-            // a frame behind the rows — their timers wait for it.
-            const samplers = {
-                "diff-sweep": () => diffSweepTimer.start(),
-                "diff-bar": () => diffBarTimer.start(),
-                "diff-blank": () => diffBlankTimer.start(),
-                "keep-place": () => keepPlaceTimer.begin(line),
-                "code-send": () => codeSendTimer.begin(),
-                "code-grow": () => codeGrowTimer.begin(),
-                "code-shrink": () => codeShrinkTimer.begin(line),
-                "code-swap": () => codeSwapTimer.begin(),
-                "line-run": () => lineRunTimer.begin(),
-                "diff-follow": () => followTimer.begin(),
-                "line-back": () => lineBackTimer.begin()
-            }
-            if (samplers[act]) {
-                samplers[act]()
+            if (acts.samplerActs.indexOf(act) >= 0) {
+                op.stop()
+                acts.startSampler(act, line)
                 return
             }
             if (act === "stage-hunk" || act === "stage-line") {
                 // A line through its own `+` mark, a hunk through its heading's word.
-                driver.pressWrite(act, () => {
+                const pressed = op.input("pressed", () => driver.pressWrite(act, () => {
                     if (act === "stage-line")
                         diffPane.stageLine(0, line)
                     else
                         page.stageSelection(0, -1)
                     return true
-                })
+                }))
+                if (!pressed)
+                    return
+                op.stop()
                 stagedTimer.start()
                 return
             }
-            // A hunk is the smallest discard. The write is armed on the hold's end (`holdToEnd`), which the button
-            // takes only once it is no longer waiting on git (`holdWhenLive`).
-            if (act === "discard-hunk-go") {
-                driver.holdWhenLive(diffPane, () => stagedTimer.start())
-            } else {
-                renderedBarrier.begin()
+            // `discard-hunk-go`. A hunk is the smallest discard. The write is armed on the hold's end (`holdToEnd`),
+            // which the button takes only once it is no longer waiting on git (`holdWhenLive`).
+            op.stop()
+            driver.holdWhenLive(diffPane, () => stagedTimer.start())
+        }
+        onTriggered: {
+            const op = stageRowTimer
+            const act = Harness.autoAct
+            if (op.at("start")) {
+                const arrived = op.ready()
+                // The page too: the rows the read brought are built a polish after it lands (`rows:diff`).
+                if (!Awaited.all("diff_rows_ready", { "ready": arrived, "page": PageSettled.settled(page) }))
+                    return
+                // The first changed line — a hunk numbers its context lines too (`firstChangedLine`).
+                const line = diffPane.firstChangedLine(0)
+                // Read as the rows land, and said before acting, so a verb that then fails its write reports both.
+                const rowLine = "diff_row act=" + act + " ready=" + arrived
+                                + " rows=" + diffPane.view.count
+                                + " line=" + line
+                                + " waited=" + Math.round(PerfProbe.clockMs() - op.since)
+                if (op.order[0] !== "rows") {
+                    op.endAtRows(act, line, rowLine)
+                    return
+                }
+                op.changedLine = line
+                op.advance("rows", () => rowLine)
             }
+            op.goOn(act, op.changedLine)
         }
     }
     // The three in-pane writes (line, hunk, discarded hunk). One that empties its side moves the pane to the next file
     // (`diff-follow`), so the run ends on where the pane lands, not on the write's answer — else the shot is an empty
     // body under the next file's name and the census misses `DiffRowDelegate`.
-    SampleTimer {
+    PageStage {
         id: stagedTimer
+        name: "diff_staged"
+        order: ["landed"]
         onTriggered: {
             // A closed pane is done. What it lands on need not have rows — a picture, a binary or an embedded
             // repository has none (`DiffPane.diffSettled`) — so waiting for rows would hold those to the watchdog.
-            if (!acts.wroteAndSettled() || (page.diffShown && !(diffPane.diffSettled() && diffPane.picturesSettled)))
+            if (!Awaited.all("diff_staged", {
+                "written": acts.wroteAndSettled(),
+                "landed": !(page.diffShown && !(diffPane.diffSettled() && diffPane.picturesSettled)) }))
                 return
+            stagedTimer.advance("landed")
             stagedTimer.stop()
             // The write barrier reports the rest (the contract, the status owed, the row taken out of its bucket).
             writeBarrier.start()
@@ -307,19 +388,18 @@ Item {
     // the rows, so a hand covering the frame takes every press on the trough. Claims: `clear=` (the hand's right edge
     // against the bar's left) and `reach=` (the hand still answers at its last pixel). The settle waits for the bar, so
     // a fixture with no bar never reports and ends at the watchdog.
-    SampleTimer {
+    PageStage {
         id: diffBarTimer
+        name: "diff_bar"
         onTriggered: {
-            // Settle: the rows' height read until two looks agree (the view lays them out a frame after they arrive),
-            // and the bar out.
+            // Settle: the rows' height read until it stands across a frame (the view lays them out a frame after they
+            // arrive), and the bar out.
             if (!Awaited.all("diff_bar_ready", { "ready": !(diffPane.view.count <= 0 || !diffPane.textHand.barOut) }))
                 return
             const geom = Math.round(diffPane.view.contentHeight) + "," + diffPane.view.count
-            if (!Awaited.still("diff_bar_geom", geom))
+            if (!diffBarTimer.still("diff_bar_geom", geom))
                 return
-            diffBarTimer.stop()
-            Harness.report("diff_bar " + diffPane.textHand.barTally())
-            renderedBarrier.begin()
+            diffBarTimer.complete(() => "diff_bar " + diffPane.textHand.barTally())
         }
     }
 
@@ -329,31 +409,38 @@ Item {
     // `DiffModel.selectRow` does), or a hand that selects nothing at all passes. `quiet=` covers a second pass after a
     // sideways send too (`DiffCodeScroll.offset`); `sent=` says the code moved and that pass still had rows. `rows=0`
     // is a fixture with nowhere to press.
-    SampleTimer {
+    PageStage {
         id: diffBlankTimer
+        name: "diff_blank"
+        order: ["dragged"]
+        /// What the drags found, read as each let go.
+        property var found: null
         onTriggered: {
-            // Settle: the rows' height read until two looks agree, as `diffBarTimer` does.
+            const op = diffBlankTimer
+            // Settle: the rows' height read until it stands across a frame, as `diffBarTimer` does.
             if (!Awaited.all("diff_blank_ready", { "ready": !(diffPane.view.count <= 0) }))
                 return
             const geom = Math.round(diffPane.view.contentHeight) + "," + diffPane.view.count
-            if (!Awaited.still("diff_blank_geom", geom))
+            if (!op.still("diff_blank_geom", geom))
                 return
-            diffBlankTimer.stop()
-            const before = acts.blankTally(true)
-            const across = acts.spanTakes()
-            // Half the shortest reachable line, so every row pressed still ends inside the pane for the second pass.
-            diffPane.sendCode(Math.min(diffPane.codeMax, before.shortest / 2))
-            const after = acts.blankTally(false)
-            // The claim's drags end selecting nothing, so one is left standing for the camera.
-            acts.standPastTheEnd()
-            Harness.report("diff_blank quiet=" + (before.quiet && after.quiet)
-                              + " clamped=" + before.clamped
-                              + " backwards=" + before.backwards
-                              + " across=" + across
-                              + " sent=" + (diffPane.codeAt > 0 && after.rows > 0)
-                              + " rows=" + before.rows + "/" + after.rows
+            op.input("dragged", () => {
+                const before = acts.blankTally(true)
+                const across = acts.spanTakes()
+                // Half the shortest reachable line, so every row pressed still ends inside the pane for the second
+                // pass.
+                diffPane.sendCode(Math.min(diffPane.codeMax, before.shortest / 2))
+                const after = acts.blankTally(false)
+                // The claim's drags end selecting nothing, so one is left standing for the camera.
+                acts.standPastTheEnd()
+                op.found = { "before": before, "across": across, "after": after }
+            })
+            op.complete(() => "diff_blank quiet=" + (op.found.before.quiet && op.found.after.quiet)
+                              + " clamped=" + op.found.before.clamped
+                              + " backwards=" + op.found.before.backwards
+                              + " across=" + op.found.across
+                              + " sent=" + (diffPane.codeAt > 0 && op.found.after.rows > 0)
+                              + " rows=" + op.found.before.rows + "/" + op.found.after.rows
                               + " at=" + Math.round(diffPane.codeAt))
-            renderedBarrier.begin()
         }
     }
     /// Drags beside every row whose line ends inside the pane: once wholly in the blank, and with `fromHead` also from
@@ -473,245 +560,228 @@ Item {
     function wroteAndSettled() {
         return driver.wroteAndSettled() && !page.diffSettling
     }
-    /// The end of a sampler that says its own claims (`report()`): stopped, said, then the frame waited for.
-    function finish(timer) {
-        timer.stop()
-        timer.report()
-        renderedBarrier.begin()
-    }
     /// How far down the reader is taken before the rebuild (`keep-place`) or the colour swap (`colour-place`); both are
     /// judged on getting exactly this back.
     readonly property real readY: 400
-    function reportPlace(at, room) {
-        Harness.report("diff_place at=" + Math.round(at)
-                          + " want=" + Math.round(acts.readY)
-                          + " room=" + Math.round(room))
+    /// Where the view stands now, against `readY` and the room it has.
+    function placeLine() {
+        return "diff_place at=" + Math.round(diffPane.view.contentY)
+               + " want=" + Math.round(acts.readY)
+               + " room=" + Math.round(diffPane.view.maxY)
     }
     // line-back: one line staged from the diff, then the whole file moved from the file list — the diff must follow
     // both. The rows shrink, come back on unstage, and staging the file empties the side, so the pane follows it
-    // (`RepoPage.followEmptySide`). Each step waits for its write and then for the pane's rows, which are the output.
-    SampleTimer {
+    // (`RepoPage.followEmptySide`). Each stage waits for its write and then for the pane's rows, which are the output.
+    PageStage {
         id: lineBackTimer
-        property int step: 0
+        name: "line_back"
+        order: ["line_staged", "path_unstaged", "path_staged"]
         property int rows0: 0
         property int rows1: 0
+        /// Whether the rows had shrunk, and come back, as the next press went in.
         property bool shrank: false
         property bool back: false
-        function begin() {
-            lineBackTimer.step = 0
-            lineBackTimer.shrank = false
-            lineBackTimer.back = false
-            lineBackTimer.start()
-        }
         onTriggered: {
+            const op = lineBackTimer
             const rows = diffPane.view.count
-            if (lineBackTimer.step === 0) {
+            if (op.at("start")) {
                 const line = diffPane.firstChangedLine(0)
                 if (!Awaited.all("line_back_line", { "line": line >= 0 }))
                     return
-                lineBackTimer.rows0 = rows
-                driver.pressWrite("stage-line", () => {
-                    diffPane.stageLine(0, line)
-                    return true
+                op.input("line_staged", () => {
+                    op.rows0 = rows
+                    return driver.pressWrite("stage-line", () => {
+                        diffPane.stageLine(0, line)
+                        return true
+                    })
                 })
-                lineBackTimer.step = 1
                 return
             }
-            if (lineBackTimer.step === 1) {
+            if (op.at("line_staged")) {
                 if (!Awaited.all("line_back_shrunk", { "written": acts.wroteAndSettled(),
-                                                       "shrunk": rows < lineBackTimer.rows0 }))
+                                                       "shrunk": rows < op.rows0 }))
                     return
-                lineBackTimer.rows1 = rows
-                lineBackTimer.shrank = true
                 // The file list's own `−` path.
-                driver.pressWrite("unstage-path", () => {
-                    repoTab.unstagePath(page.diffPath)
-                    return true
+                op.input("path_unstaged", () => {
+                    op.rows1 = rows
+                    op.shrank = rows < op.rows0
+                    return driver.pressWrite("unstage-path", () => {
+                        repoTab.unstagePath(page.diffPath)
+                        return true
+                    })
                 })
-                lineBackTimer.step = 2
                 return
             }
-            if (lineBackTimer.step === 2) {
+            if (op.at("path_unstaged")) {
                 if (!Awaited.all("line_back_back", { "written": acts.wroteAndSettled(),
-                                                     "back": rows === lineBackTimer.rows0 }))
+                                                     "back": rows === op.rows0 }))
                     return
-                lineBackTimer.back = true
-                driver.pressWrite("stage-path", () => {
-                    repoTab.stagePath(page.diffPath)
-                    return true
+                op.input("path_staged", () => {
+                    op.back = rows === op.rows0
+                    return driver.pressWrite("stage-path", () => {
+                        repoTab.stagePath(page.diffPath)
+                        return true
+                    })
                 })
-                lineBackTimer.step = 3
                 return
             }
-            if (!acts.wroteAndSettled() || page.diffKind !== "staged" || rows === 0)
+            if (!Awaited.all("line_back_followed", { "written": acts.wroteAndSettled(),
+                                                     "staged": page.diffKind === "staged",
+                                                     "rows": rows !== 0 }))
                 return
-            lineBackTimer.stop()
-            Harness.report("line_back back=" + lineBackTimer.back
-                              + " shrank=" + lineBackTimer.shrank
+            op.complete(() => "line_back back=" + op.back
+                              + " shrank=" + op.shrank
                               + " followed=" + page.diffKey
-                              + " rows0=" + lineBackTimer.rows0
-                              + " rows1=" + lineBackTimer.rows1)
-            renderedBarrier.begin()
+                              + " rows0=" + op.rows0
+                              + " rows1=" + op.rows1)
         }
     }
     // line-run: lines staged one after another. The pane refuses a press while its rows are still coming
     // (`RepoPage.diffSettling`), so each waits on exactly that. Settling tied to a file-list signal sent only when its
-    // rows differ never ends at the second line of a file already on both sides — the case this pins.
-    SampleTimer {
+    // rows differ never ends at the second line of a file already on both sides — the case this pins. A line that
+    // never comes is named by the ceiling (`line_run_ready waiting=line`).
+    PageStage {
         id: lineRunTimer
+        name: "line_run"
+        order: ["first_line", "second_line", "third_line"]
         readonly property int want: 3
-        property int done: 0
-        /// How long (ms) the list has gone without a row to name.
-        property int waited: 0
-        function begin() {
-            lineRunTimer.done = 0
-            lineRunTimer.waited = 0
-            lineRunTimer.start()
-        }
-        function report() {
-            Harness.report("line_run staged=" + lineRunTimer.done
-                              + " want=" + lineRunTimer.want
-                              + " rows=" + diffPane.view.count
-                              + " waited=" + lineRunTimer.waited)
+        /// How many lines have gone in: the stages this generation has reached.
+        function staged() {
+            for (let n = lineRunTimer.order.length; n > 0; n--) {
+                if (lineRunTimer.at(lineRunTimer.order[n - 1]))
+                    return n
+            }
+            return 0
         }
         onTriggered: {
-            if (page.diffSettling)
-                return
-            if (lineRunTimer.done === lineRunTimer.want) {
-                acts.finish(lineRunTimer)
-                return
-            }
+            const op = lineRunTimer
+            const done = op.at(op.order[op.order.length - 1])
             // The list builds its items a frame after the rows arrive, so an early empty answer is not "none" and is
             // waited on.
             const line = diffPane.firstChangedLine(0)
-            if (line < 0) {
-                // waits(ceiling): the shortfall still reports and fails; this only names it before the watchdog
-                lineRunTimer.waited += lineRunTimer.interval
-                // waits(ceiling): the count above, read against the same ceiling
-                if (lineRunTimer.waited < 5000)
-                    return
-                acts.finish(lineRunTimer)
+            if (!Awaited.all("line_run_ready", { "settled": !page.diffSettling, "line": done || line >= 0 }))
+                return
+            if (done) {
+                const staged = op.staged()
+                op.complete(() => "line_run staged=" + staged
+                                  + " want=" + op.want
+                                  + " rows=" + diffPane.view.count)
                 return
             }
-            lineRunTimer.waited = 0
-            lineRunTimer.done++
-            diffPane.stageLine(0, line)
+            op.input(op.order[op.staged()], () => {
+                diffPane.stageLine(0, line)
+            })
         }
     }
     // diff-escape, read once the pane has left the screen: the swap is the layout's, and in the key's own turn the page
     // still holds the keyboard through the outgoing pane. `kept=`: the page is a focus scope, so it keeps the keyboard
     // and the next Escape lands (`tests/qml/tst_escape.qml`).
-    SampleTimer {
+    PageStage {
         id: escapeTimer
+        name: "diff_escape"
+        /// Whether the rows held the keyboard once the hand was in, and whether the page took the key — read as the
+        /// key went in (`stageRowTimer`).
         property bool hand: false
         property bool took: false
         onTriggered: {
             if (!Awaited.all("diff_escape_ready", { "ready": !(page.diffShown || diffPane.view.visible) }))
                 return
-            escapeTimer.stop()
-            Harness.report("diff_escape took=" + escapeTimer.took
-                              + " shown=" + page.diffShown
-                              + " key=" + (page.diffKey === "" ? "empty" : "held")
-                              + " folded=" + page.sidebarCollapsed
-                              + " hand=" + escapeTimer.hand
-                              + " kept=" + page.activeFocus
-                              // One item holds active focus, so this also says nothing else kept it: the arrows
-                              // now reach `GraphPane.stepRow`.
-                              + " graph=" + graphPane.view.activeFocus)
-            renderedBarrier.begin()
+            escapeTimer.complete(() => "diff_escape took=" + escapeTimer.took
+                                        + " shown=" + page.diffShown
+                                        + " key=" + (page.diffKey === "" ? "empty" : "held")
+                                        + " folded=" + page.sidebarCollapsed
+                                        + " hand=" + escapeTimer.hand
+                                        + " kept=" + page.activeFocus
+                                        // One item holds active focus, so this also says nothing else kept it: the
+                                        // arrows now reach `GraphPane.stepRow`.
+                                        + " graph=" + graphPane.view.activeFocus)
         }
     }
     // diff-follow: where the pane lands when its file is moved whole from the file list — the next file on that side,
     // or the same file on its new side when none is left (デザイン規約 §diff の中のステージ).
-    SampleTimer {
+    PageStage {
         id: followTimer
-        property int step: 0
+        name: "diff_follow"
+        order: ["moved_file"]
         property string was: ""
-        property string landed: ""
         property bool alone: false
-        function begin() {
-            followTimer.step = 0
-            followTimer.landed = ""
-            followTimer.start()
-        }
         onTriggered: {
-            if (followTimer.step === 0) {
+            const op = followTimer
+            if (op.at("start")) {
                 if (!Awaited.all("diff_follow_rows", { "rows": diffPane.view.count > 0 }))
                     return
-                followTimer.was = page.diffKey
-                // Read before the write takes the file off this side.
-                followTimer.alone = unstagedModel.besidePath(page.diffKind, page.diffPath) === ""
-                // The file list's own `+` / `−` path.
-                driver.pressWrite("follow:" + page.diffKind, () => {
-                    if (page.diffKind === "staged")
-                        repoTab.unstagePath(page.diffPath)
-                    else
-                        repoTab.stagePath(page.diffPath)
-                    return true
+                op.input("moved_file", () => {
+                    op.was = page.diffKey
+                    // Read before the write takes the file off this side.
+                    op.alone = unstagedModel.besidePath(page.diffKind, page.diffPath) === ""
+                    // The file list's own `+` / `−` path.
+                    return driver.pressWrite("follow:" + page.diffKind, () => {
+                        if (page.diffKind === "staged")
+                            repoTab.unstagePath(page.diffPath)
+                        else
+                            repoTab.stagePath(page.diffPath)
+                        return true
+                    })
                 })
-                followTimer.step = 1
                 return
             }
             // The landing is the output: off its old key, with rows (or closed), and done rereading.
             const now = page.diffKey
             if (!Awaited.all("diff_follow_landed", {
                 "written": acts.wroteAndSettled(),
-                "moved": now !== followTimer.was,
+                "moved": now !== op.was,
                 "rows": !(page.diffShown && diffPane.view.count === 0),
                 "page": PageSettled.settled(page) }))
                 return
-            followTimer.stop()
-            followTimer.landed = now
-            Harness.report("diff_follow shown=" + page.diffShown
-                              + " alone=" + followTimer.alone
-                              + " was=" + followTimer.was
-                              + " landed=" + followTimer.landed)
-            renderedBarrier.begin()
+            op.complete(() => "diff_follow shown=" + page.diffShown
+                              + " alone=" + op.alone
+                              + " was=" + op.was
+                              + " landed=" + page.diffKey)
         }
     }
     // code-send: half by the bar's own path, the rest by the hand that carries the rows too. Reads where the code and
     // rows ended up — a bar bound to nothing still takes a press, a hand wired to nothing still starts. Waits for
-    // `viewLaidOut`; nowhere sideways to go is said and stopped (rules-refs/app-ui.md「欠けた前提は言って止まる」).
-    SampleTimer {
+    // `viewLaidOut`; nowhere sideways to go is said and completed from `start`, which is why no `order` is declared
+    // (rules-refs/app-ui.md「欠けた前提は言って止まる」).
+    PageStage {
         id: codeSendTimer
-        property bool sent: false
-        function begin() {
-            codeSendTimer.sent = false
-            codeSendTimer.start()
-        }
-        function report() {
-            Harness.report("code_send bar=" + diffPane.codeBarShown
-                              + " hand=" + diffPane.codeHandOn
-                              + " at=" + Math.round(diffPane.codeAt)
-                              + " max=" + Math.round(diffPane.codeMax)
-                              + " measured=" + Math.round(diffPane.codeMeasured)
-                              + " drawn=" + Math.round(diffPane.codeDrawn)
-                              + " down=" + Math.round(diffPane.view.contentY))
+        name: "code_send"
+        function line() {
+            return "code_send bar=" + diffPane.codeBarShown
+                   + " hand=" + diffPane.codeHandOn
+                   + " at=" + Math.round(diffPane.codeAt)
+                   + " max=" + Math.round(diffPane.codeMax)
+                   + " measured=" + Math.round(diffPane.codeMeasured)
+                   + " drawn=" + Math.round(diffPane.codeDrawn)
+                   + " down=" + Math.round(diffPane.view.contentY)
         }
         onTriggered: {
-            if (!codeSendTimer.sent) {
-                if (!acts.viewLaidOut())
+            const op = codeSendTimer
+            if (op.at("start")) {
+                if (!Awaited.all("code_send_laid", { "laid": acts.viewLaidOut() }))
                     return
                 if (diffPane.codeMax <= 0) {
-                    acts.finish(codeSendTimer)
+                    op.complete(() => op.line())
                     return
                 }
                 // The anchor's ring is part of the picture, so the hand is left running for the shot.
-                diffPane.sendCode(diffPane.codeMax / 2)
-                const mid = Qt.point(diffPane.view.width / 2, diffPane.view.height / 2)
-                diffPane.startCodeHand(mid)
-                diffPane.driftCodeHand(Qt.point(mid.x + 120, mid.y + 120))
-                codeSendTimer.sent = true
+                op.input("sent", () => {
+                    diffPane.sendCode(diffPane.codeMax / 2)
+                    const mid = Qt.point(diffPane.view.width / 2, diffPane.view.height / 2)
+                    diffPane.startCodeHand(mid)
+                    diffPane.driftCodeHand(Qt.point(mid.x + 120, mid.y + 120))
+                })
                 return
             }
             // Both of the hand's axes must be seen moving: rows down, code past the bar's half.
-            if (diffPane.view.contentY <= 0 || diffPane.codeAt <= diffPane.codeMax / 2)
+            if (!Awaited.all("code_send_moved", {
+                "moved": !(diffPane.view.contentY <= 0 || diffPane.codeAt <= diffPane.codeMax / 2) }))
                 return
-            acts.finish(codeSendTimer)
+            op.complete(() => op.line())
         }
     }
-    // The reach as one string (measured, drawn, widest row), compared look to look until it stops moving: delegates are
-    // built a layout after the jump, and a `Text` answers at the family's advance until its fallback font resolves
+    // The reach as one string (measured, drawn, widest row), held until it stands across a frame: delegates are built a
+    // layout after the jump, and a `Text` answers at the family's advance until its fallback font resolves
     // (`DiffTextMetrics`). The row is in it so a width filed under the wrong row shows as movement.
     function reachNow() {
         return Math.round(diffPane.codeMeasured) + "," + Math.round(diffPane.codeDrawn)
@@ -728,11 +798,11 @@ Item {
     //    (`DiffPane.codeInkRight` against the pane's own gap). The only claim that catches a reach running past every
     //    line — `codeMax` derives from the same width, so it agrees with itself everywhere else.
     //
-    // The send is last, so the shot stands at the diff's end, the only frame where room past the text would show.
-    SampleTimer {
+    // The send is last, so the shot stands at the diff's end, the only frame where room past the text would show. A
+    // diff that fits its frame completes from `start`, which is why no `order` is declared.
+    PageStage {
         id: codeGrowTimer
-        /// 0 reading the head, 1 sent to the foot, 2 back at the head, 3 at the foot again, 4 sent to the far end.
-        property int step: 0
+        name: "code_grow"
         property real measured: 0
         property real drawn0: 0
         property real drawn: 0
@@ -740,34 +810,17 @@ Item {
         property real again: 0
         property int row: -1
         property int rowAgain: -1
-        /// Text end and frame edge at the far end.
+        /// Text end and frame edge at the far end, read once the ink stood there.
         property real ink: 0
         property real room: 0
-        /// The reach at the previous look of this step (`acts.reachNow`).
-        property string lastReach: ""
-        function begin() {
-            codeGrowTimer.step = 0
-            codeGrowTimer.lastReach = ""
-            codeGrowTimer.start()
-        }
-        /// Whether the row jumped to is built and the widths have stopped moving.
+        /// Whether the row jumped to is built and the widths have stood across a frame since the jump.
         function arrived(atRow) {
-            if (!diffPane.view.itemAtIndex(atRow))
-                return false
-            const now = acts.reachNow()
-            if (now === codeGrowTimer.lastReach)
-                return true
-            codeGrowTimer.lastReach = now
-            return false
-        }
-        function goTo(y) {
-            codeGrowTimer.lastReach = ""
-            diffPane.scrollTo(y)
+            return !!diffPane.view.itemAtIndex(atRow) && codeGrowTimer.still("reach", acts.reachNow())
         }
         /// The gap past the text at the far end. The pane holds exactly `Theme.spaceSm` there, so more is a reach past
         /// every line and less one that stopped short.
         readonly property real tail: codeGrowTimer.room - codeGrowTimer.ink
-        function report() {
+        function line() {
             const grew = codeGrowTimer.drawn > codeGrowTimer.drawn0
             const past = codeGrowTimer.drawn > codeGrowTimer.measured
             const kept = codeGrowTimer.row >= 0
@@ -777,320 +830,327 @@ Item {
             // A pixel of slack: the send's gutter and the row's are separate items that round independently.
             const ends = codeGrowTimer.ink > 0
                     && Math.abs(codeGrowTimer.tail - Theme.spaceSm) <= 1
-            Harness.report("code_grow grew=" + grew + " past=" + past + " kept=" + kept + " ends=" + ends
-                              + " measured=" + Math.round(codeGrowTimer.measured)
-                              + " drawn0=" + Math.round(codeGrowTimer.drawn0)
-                              + " drawn=" + Math.round(codeGrowTimer.drawn)
-                              + " back=" + Math.round(codeGrowTimer.back)
-                              + " again=" + Math.round(codeGrowTimer.again)
-                              + " row=" + codeGrowTimer.row
-                              + " rowAgain=" + codeGrowTimer.rowAgain
-                              + " at=" + Math.round(diffPane.codeAt)
-                              + " max=" + Math.round(diffPane.codeMax)
-                              + " ink=" + Math.round(codeGrowTimer.ink)
-                              + " room=" + Math.round(codeGrowTimer.room)
-                              + " tail=" + Math.round(codeGrowTimer.tail)
-                              + " want=" + Math.round(Theme.spaceSm)
-                              + " down=" + Math.round(diffPane.view.maxY))
+            return "code_grow grew=" + grew + " past=" + past + " kept=" + kept + " ends=" + ends
+                   + " measured=" + Math.round(codeGrowTimer.measured)
+                   + " drawn0=" + Math.round(codeGrowTimer.drawn0)
+                   + " drawn=" + Math.round(codeGrowTimer.drawn)
+                   + " back=" + Math.round(codeGrowTimer.back)
+                   + " again=" + Math.round(codeGrowTimer.again)
+                   + " row=" + codeGrowTimer.row
+                   + " rowAgain=" + codeGrowTimer.rowAgain
+                   + " at=" + Math.round(diffPane.codeAt)
+                   + " max=" + Math.round(diffPane.codeMax)
+                   + " ink=" + Math.round(codeGrowTimer.ink)
+                   + " room=" + Math.round(codeGrowTimer.room)
+                   + " tail=" + Math.round(codeGrowTimer.tail)
+                   + " want=" + Math.round(Theme.spaceSm)
+                   + " down=" + Math.round(diffPane.view.maxY)
         }
         onTriggered: {
+            const op = codeGrowTimer
             const foot = diffPane.view.count - 1
-            if (codeGrowTimer.step === 0) {
+            if (op.at("start")) {
                 if (!Awaited.all("code_grow_laid", { "laid": acts.viewLaidOut() }))
                     return
-                // A diff that fits its frame has no row to arrive from below: said and stopped
+                // A diff that fits its frame has no row to arrive from below: said and completed
                 // (rules-refs/app-ui.md「欠けた前提は言って止まる」).
                 if (diffPane.view.maxY <= 0) {
-                    acts.finish(codeGrowTimer)
+                    op.complete(() => op.line())
                     return
                 }
-                codeGrowTimer.measured = diffPane.codeMeasured
-                codeGrowTimer.drawn0 = diffPane.codeDrawn
-                codeGrowTimer.step = 1
-                codeGrowTimer.goTo(diffPane.view.maxY)
+                op.input("foot_sent", () => {
+                    op.measured = diffPane.codeMeasured
+                    op.drawn0 = diffPane.codeDrawn
+                    diffPane.scrollTo(diffPane.view.maxY)
+                })
                 return
             }
-            if (codeGrowTimer.step === 1) {
-                if (!Awaited.all("code_grow_foot", { "arrived": codeGrowTimer.arrived(foot) }))
+            if (op.at("foot_sent")) {
+                if (!Awaited.all("code_grow_foot", { "arrived": op.arrived(foot) }))
                     return
-                codeGrowTimer.drawn = diffPane.codeDrawn
-                codeGrowTimer.row = diffPane.codeWidestRow
-                codeGrowTimer.step = 2
-                codeGrowTimer.goTo(0)
+                op.input("top_sent", () => {
+                    op.drawn = diffPane.codeDrawn
+                    op.row = diffPane.codeWidestRow
+                    diffPane.scrollTo(0)
+                })
                 return
             }
-            if (codeGrowTimer.step === 2) {
-                if (!Awaited.all("code_grow_top", { "arrived": codeGrowTimer.arrived(0) }))
+            if (op.at("top_sent")) {
+                if (!Awaited.all("code_grow_top", { "arrived": op.arrived(0) }))
                     return
-                codeGrowTimer.back = diffPane.codeDrawn
-                codeGrowTimer.step = 3
-                codeGrowTimer.goTo(diffPane.view.maxY)
+                op.input("foot_again_sent", () => {
+                    op.back = diffPane.codeDrawn
+                    diffPane.scrollTo(diffPane.view.maxY)
+                })
                 return
             }
-            if (codeGrowTimer.step === 3) {
-                if (!Awaited.all("code_grow_foot_again", { "arrived": codeGrowTimer.arrived(foot) }))
+            if (op.at("foot_again_sent")) {
+                if (!Awaited.all("code_grow_foot_again", { "arrived": op.arrived(foot) }))
                     return
-                codeGrowTimer.again = diffPane.codeDrawn
-                codeGrowTimer.rowAgain = diffPane.codeWidestRow
                 // All the way right with the widest row on screen — otherwise a short line in view answers `ends=`.
-                codeGrowTimer.step = 4
-                diffPane.sendCode(diffPane.codeMax)
+                op.input("far_sent", () => {
+                    op.again = diffPane.codeDrawn
+                    op.rowAgain = diffPane.codeWidestRow
+                    diffPane.sendCode(diffPane.codeMax)
+                })
                 return
             }
             // The send is immediate, but the rows are redrawn a layout later: wait for the ink to stand still.
             const ink = diffPane.codeInkRight()
             const now = Math.round(diffPane.codeAt) + "," + Math.round(ink)
-            if (!Awaited.still("code_grow_reach", now))
+            if (!Awaited.all("code_grow_reach", { "still": op.still("code_grow_reach", now) }))
                 return
-            codeGrowTimer.ink = ink
-            codeGrowTimer.room = diffPane.view.width
-            acts.finish(codeGrowTimer)
+            op.ink = ink
+            op.room = diffPane.view.width
+            op.complete(() => op.line())
         }
     }
     // code-shrink: the same file reread with its widest line staged out (`--preset widelate`'s `top.txt`, whose first
     // changed row is that line). At risk is the place along the row: a reach answering zero between the two readings,
     // or latching its largest value, loses it. `kept=` the place, `shrank=` less room, `narrower=` both halves of the
-    // reach came down.
-    SampleTimer {
+    // reach came down. Nowhere sideways to go completes from `start`, which is why no `order` is declared.
+    PageStage {
         id: codeShrinkTimer
+        name: "code_shrink"
         /// The first hunk's line that gets staged — the file's widest.
-        property int line: -1
-        property bool wrote: false
+        property int changedLine: -1
         property real at0: 0
         property real max0: 0
         property real measured0: 0
         property real drawn0: 0
         property int rows0: 0
-        function begin(atLine) {
-            codeShrinkTimer.line = atLine
-            codeShrinkTimer.wrote = false
-            codeShrinkTimer.start()
-        }
-        function report() {
+        function line() {
             const kept = codeShrinkTimer.at0 > 0
                     && Math.round(diffPane.codeAt) === Math.round(codeShrinkTimer.at0)
             const shrank = diffPane.codeMax < codeShrinkTimer.max0
             const narrower = diffPane.codeMeasured < codeShrinkTimer.measured0
                     && diffPane.codeDrawn < codeShrinkTimer.drawn0
-            Harness.report("code_shrink kept=" + kept + " shrank=" + shrank + " narrower=" + narrower
-                              + " at0=" + Math.round(codeShrinkTimer.at0)
-                              + " at=" + Math.round(diffPane.codeAt)
-                              + " max0=" + Math.round(codeShrinkTimer.max0)
-                              + " max=" + Math.round(diffPane.codeMax)
-                              + " measured0=" + Math.round(codeShrinkTimer.measured0)
-                              + " measured=" + Math.round(diffPane.codeMeasured)
-                              + " drawn0=" + Math.round(codeShrinkTimer.drawn0)
-                              + " drawn=" + Math.round(diffPane.codeDrawn)
-                              + " rows0=" + codeShrinkTimer.rows0
-                              + " rows=" + diffPane.view.count)
+            return "code_shrink kept=" + kept + " shrank=" + shrank + " narrower=" + narrower
+                   + " at0=" + Math.round(codeShrinkTimer.at0)
+                   + " at=" + Math.round(diffPane.codeAt)
+                   + " max0=" + Math.round(codeShrinkTimer.max0)
+                   + " max=" + Math.round(diffPane.codeMax)
+                   + " measured0=" + Math.round(codeShrinkTimer.measured0)
+                   + " measured=" + Math.round(diffPane.codeMeasured)
+                   + " drawn0=" + Math.round(codeShrinkTimer.drawn0)
+                   + " drawn=" + Math.round(diffPane.codeDrawn)
+                   + " rows0=" + codeShrinkTimer.rows0
+                   + " rows=" + diffPane.view.count
         }
         onTriggered: {
-            if (!codeShrinkTimer.wrote) {
-                if (!acts.viewLaidOut())
+            const op = codeShrinkTimer
+            if (op.at("start")) {
+                if (!Awaited.all("code_shrink_laid", { "laid": acts.viewLaidOut() }))
                     return
                 // Nowhere sideways to go is no place to keep.
                 if (diffPane.codeMax <= 0) {
-                    acts.finish(codeShrinkTimer)
+                    op.complete(() => op.line())
                     return
                 }
-                // An eighth along: short of where the shorter reading ends, so `kept=` means kept, not clamped.
-                diffPane.sendCode(diffPane.codeMax / 8)
-                codeShrinkTimer.at0 = diffPane.codeAt
-                codeShrinkTimer.max0 = diffPane.codeMax
-                codeShrinkTimer.measured0 = diffPane.codeMeasured
-                codeShrinkTimer.drawn0 = diffPane.codeDrawn
-                codeShrinkTimer.rows0 = diffPane.view.count
-                driver.pressWrite("stage-line", () => {
-                    diffPane.stageLine(0, codeShrinkTimer.line)
-                    return true
+                op.input("wrote", () => {
+                    // An eighth along: short of where the shorter reading ends, so `kept=` means kept, not clamped.
+                    diffPane.sendCode(diffPane.codeMax / 8)
+                    op.at0 = diffPane.codeAt
+                    op.max0 = diffPane.codeMax
+                    op.measured0 = diffPane.codeMeasured
+                    op.drawn0 = diffPane.codeDrawn
+                    op.rows0 = diffPane.view.count
+                    return driver.pressWrite("stage-line", () => {
+                        diffPane.stageLine(0, op.changedLine)
+                        return true
+                    })
                 })
-                codeShrinkTimer.wrote = true
                 return
             }
             // The write, the reread, then the reread rows' widths standing still.
-            if (!acts.wroteAndSettled() || diffPane.view.count === 0)
+            const written = acts.wroteAndSettled()
+            const rows = diffPane.view.count !== 0
+            if (!Awaited.all("code_shrink_reach", {
+                "written": written,
+                "rows": rows,
+                "still": written && rows && op.still("code_shrink_reach", acts.reachNow()) }))
                 return
-            const now = acts.reachNow()
-            if (!Awaited.still("code_shrink_reach", now))
-                return
-            acts.finish(codeShrinkTimer)
+            op.complete(() => op.line())
         }
     }
     // code-swap: switching file drops both place and width. The second file is the row beside the first in the list
     // (`NavSectionModel.beside_path`). `room=` makes `dropped=` mean something — a file with nowhere sideways to go
     // sits at its left edge regardless (`--preset widelate`'s `plain.txt` is narrower yet still wider than the pane).
-    SampleTimer {
+    // Nowhere sideways to go, or no file beside, completes before the swap, which is why no `order` is declared.
+    PageStage {
         id: codeSwapTimer
-        property int step: 0
+        name: "code_swap"
         property string was: ""
+        /// The file swapped to, as it was asked for.
         property string landed: ""
         property real at0: 0
         property real max0: 0
         property real drawn0: 0
-        function begin() {
-            codeSwapTimer.step = 0
-            codeSwapTimer.landed = ""
-            codeSwapTimer.start()
-        }
-        function report() {
+        function line() {
             const dropped = codeSwapTimer.at0 > 0 && Math.round(diffPane.codeAt) === 0
             const room = diffPane.codeMax > 0
             const narrower = diffPane.codeDrawn > 0 && diffPane.codeDrawn < codeSwapTimer.drawn0
-            Harness.report("code_swap dropped=" + dropped + " room=" + room + " narrower=" + narrower
-                              + " at0=" + Math.round(codeSwapTimer.at0)
-                              + " at=" + Math.round(diffPane.codeAt)
-                              + " max0=" + Math.round(codeSwapTimer.max0)
-                              + " max=" + Math.round(diffPane.codeMax)
-                              + " drawn0=" + Math.round(codeSwapTimer.drawn0)
-                              + " measured=" + Math.round(diffPane.codeMeasured)
-                              + " drawn=" + Math.round(diffPane.codeDrawn)
-                              + " was=" + codeSwapTimer.was
-                              + " landed=" + codeSwapTimer.landed)
+            return "code_swap dropped=" + dropped + " room=" + room + " narrower=" + narrower
+                   + " at0=" + Math.round(codeSwapTimer.at0)
+                   + " at=" + Math.round(diffPane.codeAt)
+                   + " max0=" + Math.round(codeSwapTimer.max0)
+                   + " max=" + Math.round(diffPane.codeMax)
+                   + " drawn0=" + Math.round(codeSwapTimer.drawn0)
+                   + " measured=" + Math.round(diffPane.codeMeasured)
+                   + " drawn=" + Math.round(diffPane.codeDrawn)
+                   + " was=" + codeSwapTimer.was
+                   + " landed=" + codeSwapTimer.landed
         }
         onTriggered: {
-            if (codeSwapTimer.step === 0) {
+            const op = codeSwapTimer
+            if (op.at("start")) {
                 if (!Awaited.all("code_swap_laid", { "laid": acts.viewLaidOut() }))
                     return
                 if (diffPane.codeMax <= 0) {
-                    acts.finish(codeSwapTimer)
+                    op.complete(() => op.line())
                     return
                 }
-                diffPane.sendCode(diffPane.codeMax / 2)
-                codeSwapTimer.at0 = diffPane.codeAt
-                codeSwapTimer.max0 = diffPane.codeMax
-                codeSwapTimer.drawn0 = diffPane.codeDrawn
-                codeSwapTimer.was = page.diffKey
+                op.input("sent", () => {
+                    diffPane.sendCode(diffPane.codeMax / 2)
+                    op.at0 = diffPane.codeAt
+                    op.max0 = diffPane.codeMax
+                    op.drawn0 = diffPane.codeDrawn
+                    op.was = page.diffKey
+                })
                 // `<bucket>:<path>` of the row beside this one under the same heading; none ends the run here.
                 const beside = unstagedModel.besidePath(page.diffKind, page.diffPath)
                 if (beside === "") {
-                    acts.finish(codeSwapTimer)
+                    op.complete(() => op.line())
                     return
                 }
-                const cut = beside.indexOf(":")
-                const path = beside.substring(cut + 1)
-                codeSwapTimer.landed = beside
-                page.toggleDiff(beside.substring(0, cut), path, unstagedModel.origOf(path))
-                codeSwapTimer.step = 1
+                op.input("swapped", () => {
+                    const cut = beside.indexOf(":")
+                    const path = beside.substring(cut + 1)
+                    op.landed = beside
+                    page.toggleDiff(beside.substring(0, cut), path, unstagedModel.origOf(path))
+                })
                 return
             }
             // On the other file, done reading and laid out, before its width counts.
-            if (page.diffKey !== codeSwapTimer.landed || page.diffSettling || !acts.viewLaidOut())
+            const there = page.diffKey === op.landed
+            const read = !page.diffSettling
+            const laid = acts.viewLaidOut()
+            if (!Awaited.all("code_swap_reach", {
+                "landed": there,
+                "read": read,
+                "laid": laid,
+                "still": there && read && laid && op.still("code_swap_reach", acts.reachNow()) }))
                 return
-            const now = acts.reachNow()
-            if (!Awaited.still("code_swap_reach", now))
-                return
-            acts.finish(codeSwapTimer)
+            op.complete(() => op.line())
         }
     }
     // diff-sweep: the text taken from the ground under a short file's last row (規約 §diff の中身をコピーする), shaped
     // like `details-sweep`. `reach=` sweeps from nine starts, each judged over a cleared selection — one start (the
     // middle hides it) or one read at the end would pass a partial reach. `ours=`: a press on a hunk heading's words
     // stays the hunk's (規約 §diff の中のステージ).
-    SampleTimer {
+    PageStage {
         id: diffSweepTimer
+        name: "diff_sweep"
+        order: ["swept"]
+        /// What the sweeps and the heading's press found, read as each landed.
+        property var found: null
         onTriggered: {
+            const op = diffSweepTimer
             // Settle: the view lays the rows out a frame after they arrive, and ground about to become a row is
             // neither.
             const hand = diffPane.textHand
             if (!Awaited.all("diff_sweep_ready", { "ready": !(diffPane.view.count <= 0) }))
                 return
             const geom = Math.round(hand.groundTop) + "," + diffPane.view.count
-            if (!Awaited.still("diff_sweep_geom", geom))
+            if (!op.still("diff_sweep_geom", geom))
                 return
-            diffSweepTimer.stop()
-            let reach = 0
-            let tries = 0
-            const across = [0.05, 0.5, 0.95]
-            const down = [0.05, 0.5, 0.95]
-            for (let i = 0; i < across.length; i++) {
-                for (let j = 0; j < down.length; j++) {
-                    tries++
-                    diffPane.diffModel.clearSelect()
-                    if (hand.sweepFromGround(across[i], down[j]) && diffPane.diffModel.selHasNew)
-                        reach++
+            op.input("swept", () => {
+                let reach = 0
+                let tries = 0
+                const across = [0.05, 0.5, 0.95]
+                const down = [0.05, 0.5, 0.95]
+                for (let i = 0; i < across.length; i++) {
+                    for (let j = 0; j < down.length; j++) {
+                        tries++
+                        diffPane.diffModel.clearSelect()
+                        if (hand.sweepFromGround(across[i], down[j]) && diffPane.diffModel.selHasNew)
+                            reach++
+                    }
                 }
-            }
-            // The last sweep's wash stays for the shot; the heading press below is refused and takes nothing down.
-            const hunkRow = hand.firstHunkRow()
-            const ours = hunkRow < 0 || hand.pressOnHunk(hunkRow)
+                // The last sweep's wash stays for the shot; the heading press below is refused and takes nothing down.
+                const hunkRow = hand.firstHunkRow()
+                const ours = hunkRow < 0 || hand.pressOnHunk(hunkRow)
+                op.found = { "reach": reach, "tries": tries, "hunkRow": hunkRow, "ours": ours }
+            })
             // `ground=false` is a fixture with nowhere to sweep from. `ours=false` is the pass, as in `details_sweep`.
-            Harness.report("diff_sweep reach=" + reach + "/" + tries
-                              + " ground=" + hand.hasGround
-                              + " ours=" + ours
-                              + " hunkRow=" + hunkRow
+            op.complete(() => "diff_sweep reach=" + op.found.reach + "/" + op.found.tries
+                              + " ground=" + diffPane.textHand.hasGround
+                              + " ours=" + op.found.ours
+                              + " hunkRow=" + op.found.hunkRow
                               + " " + diffPane.pickTally())
-            renderedBarrier.begin()
         }
     }
     // keep-place: read part way down a long diff, then write — the file read again must leave the view on the same
     // place: the line staged above it goes, and the rows on screen stay where they stand (`DiffModel.layOutKept`, Qt
     // keeping the rows on screen as rows above them go). Waits for `viewLaidOut` (before it the scroll goes nowhere); a
-    // laid-out diff with less than `readY` of room is said and stopped (rules-refs/app-ui.md「欠けた前提は言って止まる」).
-    SampleTimer {
+    // laid-out diff with less than `readY` of room is said and completed from `start`, which is why no `order` is
+    // declared (rules-refs/app-ui.md「欠けた前提は言って止まる」).
+    PageStage {
         id: keepPlaceTimer
+        name: "keep_place"
         /// The first hunk's line whose staging reads the diff again under the reader.
-        property int line: -1
-        property bool wrote: false
-        /// The file's reads since the write (`DiffModel.rowsArrived`).
+        property int changedLine: -1
+        /// The file's reads (`DiffModel.rowsArrived`), counted by the connection below, and the count as the write
+        /// went in.
         property int reads: 0
-        property Connections reading: Connections {
-            target: diffPane.diffModel
-            function onRowsArrived() { keepPlaceTimer.reads++ }
-        }
-        function begin(atLine) {
-            keepPlaceTimer.line = atLine
-            keepPlaceTimer.wrote = false
-            keepPlaceTimer.start()
-        }
+        property int readsAtWrite: 0
         onTriggered: {
-            if (!keepPlaceTimer.wrote) {
-                if (!acts.viewLaidOut())
+            const op = keepPlaceTimer
+            if (op.at("start")) {
+                if (!Awaited.all("keep_place_laid", { "laid": acts.viewLaidOut() }))
                     return
                 if (diffPane.view.maxY < acts.readY) {
-                    keepPlaceTimer.stop()
-                    acts.reportPlace(diffPane.view.contentY, diffPane.view.maxY)
-                    renderedBarrier.begin()
+                    op.complete(() => acts.placeLine())
                     return
                 }
-                diffPane.scrollTo(acts.readY)
-                keepPlaceTimer.reads = 0
-                driver.pressWrite("stage-selection", () => {
-                    page.stageSelection(0, keepPlaceTimer.line)
-                    return true
+                op.input("wrote", () => {
+                    diffPane.scrollTo(acts.readY)
+                    op.readsAtWrite = op.reads
+                    return driver.pressWrite("stage-selection", () => {
+                        page.stageSelection(0, op.changedLine)
+                        return true
+                    })
                 })
-                keepPlaceTimer.wrote = true
                 return
             }
             // Then the file read again and weighed by the pane. A write that emptied this side never lands, and the
             // run waits out the watchdog.
-            if (!driver.wroteAndSettled() || keepPlaceTimer.reads === 0 || diffPane.rowKeep.busy)
+            if (!Awaited.all("keep_place_read", { "written": driver.wroteAndSettled(),
+                                                  "read": op.reads > op.readsAtWrite,
+                                                  "kept": !diffPane.rowKeep.busy }))
                 return
-            keepPlaceTimer.stop()
-            acts.reportPlace(diffPane.view.contentY, diffPane.view.maxY)
-            renderedBarrier.begin()
+            op.complete(() => acts.placeLine())
+        }
+    }
+    Connections {
+        target: keepPlaceTimer.running ? diffPane.diffModel : null
+        function onRowsArrived() {
+            keepPlaceTimer.reads++
         }
     }
     // colour-place: a reader scrolled before the colours land. They rewrite every row (`DiffModel::repaint_rows`),
     // which must cost neither the place nor the width. `held=`: rows are markup either way (`markup::styled`), so the
     // colour tags are neither drawn nor measured and `rows_gen` does not move — a row measured in another format reads
     // its `<font …>` tags as letters, and a reading counted as new drops every filed width.
-    // waits(paced): the run ends on the colours having landed, and the beat only decides how close the last look is
-    Timer {
+    PageStage {
         id: colourPlaceTimer
-        interval: 50
-        repeat: true
-        property int waited: 0
-        property bool scrolled: false
+        name: "colour_place"
+        order: ["scrolled", "coloured"]
+        /// When the dispatch asked for the file (`PerfProbe.clockMs`), for the report's `waited=` — a diagnosis,
+        /// compared with nothing.
+        property real since: 0
         property real measuredWas: 0
         property real drawnWas: 0
-        /// The reach at the previous look since the colours landed, so rows mid-rewrite are not read.
-        property string lastReach: ""
-        function begin() {
-            colourPlaceTimer.waited = 0
-            colourPlaceTimer.scrolled = false
-            colourPlaceTimer.lastReach = ""
-            colourPlaceTimer.start()
-        }
         /// Keeps the reach as the reading before. Also taken at the scroll: a small diff can be coloured within one
         /// look, and a row that answered `firstChangedLine` is already built and measured.
         function look() {
@@ -1098,9 +1158,8 @@ Item {
             colourPlaceTimer.drawnWas = diffPane.codeDrawn
         }
         onTriggered: {
-            // waits(measured): printed in the report and compared with nothing — the run ends on `coloured`
-            colourPlaceTimer.waited += colourPlaceTimer.interval
-            if (!colourPlaceTimer.scrolled) {
+            const op = colourPlaceTimer
+            if (op.at("start")) {
                 // The open again while the pane is not reading this file: asked once and lost, nothing else brings
                 // the rows.
                 if (!page.diffShown || page.diffKey !== "unstaged:" + Harness.autoActArg)
@@ -1108,37 +1167,37 @@ Item {
                 // Scroll as soon as the rows are there, before the colours.
                 if (!Awaited.all("colour_place", { "rows": diffPane.firstChangedLine(0) >= 0 }))
                     return
-                diffPane.scrollTo(acts.readY)
-                colourPlaceTimer.scrolled = true
-                colourPlaceTimer.look()
+                op.input("scrolled", () => {
+                    diffPane.scrollTo(acts.readY)
+                    op.look()
+                })
                 return
             }
-            if (!diffPane.diffModel.coloured) {
-                Awaited.at("colour_place", "coloured")
-                colourPlaceTimer.look()
-                return
+            if (op.at("scrolled")) {
+                if (!Awaited.all("colour_place_coloured", { "coloured": diffPane.diffModel.coloured })) {
+                    op.look()
+                    return
+                }
+                op.advance("coloured")
             }
-            const now = acts.reachNow()
-            if (now !== colourPlaceTimer.lastReach) {
-                Awaited.at("colour_place", "still")
-                colourPlaceTimer.lastReach = now
+            // The rows are rewritten as the colours land: read once the reach has stood across a frame since.
+            if (!Awaited.all("colour_place_still", { "still": op.still("colour_place_reach", acts.reachNow()) }))
                 return
-            }
-            colourPlaceTimer.stop()
-            const held = colourPlaceTimer.drawnWas > 0
-                    && Math.round(diffPane.codeMeasured) === Math.round(colourPlaceTimer.measuredWas)
-                    && Math.round(diffPane.codeDrawn) === Math.round(colourPlaceTimer.drawnWas)
-            Harness.report("colour_place coloured="
-                              + diffPane.diffModel.coloured
-                              + " at=" + Math.round(diffPane.view.contentY)
-                              + " held=" + held
-                              + " rows=" + diffPane.view.count
-                              + " waited=" + colourPlaceTimer.waited
-                              + " measured0=" + Math.round(colourPlaceTimer.measuredWas)
-                              + " measured=" + Math.round(diffPane.codeMeasured)
-                              + " drawn0=" + Math.round(colourPlaceTimer.drawnWas)
-                              + " drawn=" + Math.round(diffPane.codeDrawn))
-            driver.complete()
+            const waited = Math.round(PerfProbe.clockMs() - op.since)
+            op.complete(() => {
+                const held = op.drawnWas > 0
+                        && Math.round(diffPane.codeMeasured) === Math.round(op.measuredWas)
+                        && Math.round(diffPane.codeDrawn) === Math.round(op.drawnWas)
+                return "colour_place coloured=" + diffPane.diffModel.coloured
+                       + " at=" + Math.round(diffPane.view.contentY)
+                       + " held=" + held
+                       + " rows=" + diffPane.view.count
+                       + " waited=" + waited
+                       + " measured0=" + Math.round(op.measuredWas)
+                       + " measured=" + Math.round(diffPane.codeMeasured)
+                       + " drawn0=" + Math.round(op.drawnWas)
+                       + " drawn=" + Math.round(diffPane.codeDrawn)
+            })
         }
     }
 }

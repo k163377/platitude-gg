@@ -117,7 +117,9 @@ Item {
             // The row menu on the first stash's row; the argument "go" holds the delete row down.
             const menuOid = stashesModel.oidOfName(stashesModel.nameAt(0))
             page.openRowMenu(menuOid)
-            Harness.report("row_menu stash=" + commitMenuState.menuStashRef)
+            // Read as the menu opens: under `go` the drop takes the entry, and the menu with it, before the completion.
+            const menuStash = commitMenuState.menuStashRef
+            driver.reportAtCompletion(() => "row_menu stash=" + menuStash)
             if (act === "delete-stash-row" && arg === "go") {
                 // The drop takes this row off the graph — the same edge stash-pop-row waits on.
                 driver.graphGoneOid = menuOid
@@ -141,7 +143,7 @@ Item {
             // argument is its `<path>/`, trailing slash included.
             page.showWip()
             embeddedTimer.path = arg === "" ? "vendor/nest/" : arg
-            embeddedTimer.begin()
+            embeddedTimer.start()
         } else if (act === "wip") {
             page.showWip()
         } else if (act === "wip-lanes") {
@@ -157,17 +159,19 @@ Item {
             // The menu on that worktree's uncommitted row — the argument is the worktree, as above — and, for the
             // two that apply, its work brought here.
             carriedMenuTimer.applying = act !== "carried-menu"
+            // The apply arms its write and presses the row; the bare menu is read where it stands.
+            carriedMenuTimer.order = carriedMenuTimer.applying ? ["armed", "pressed"] : []
             carriedMenuTimer.start()
         } else if (act === "wip-tally") {
             // The kinds must add up to `rows` (`status::Kinds` counts rows); a drift means two statuses were read.
             page.showWip()
-            Harness.report("wip_tally added=" + graphPane.view.wipAdded
-                              + " modified=" + graphPane.view.wipModified
-                              + " deleted=" + graphPane.view.wipDeleted
-                              + " renamed=" + graphPane.view.wipRenamed
-                              + " copied=" + graphPane.view.wipCopied
-                              + " conflicted=" + graphPane.view.wipConflicted
-                              + " rows=" + unstagedModel.total)
+            driver.reportAtCompletion(() => "wip_tally added=" + graphPane.view.wipAdded
+                                            + " modified=" + graphPane.view.wipModified
+                                            + " deleted=" + graphPane.view.wipDeleted
+                                            + " renamed=" + graphPane.view.wipRenamed
+                                            + " copied=" + graphPane.view.wipCopied
+                                            + " conflicted=" + graphPane.view.wipConflicted
+                                            + " rows=" + unstagedModel.total)
         } else if (act === "wip-commit-half") {
             // Commits the staged half of `--preset dirty`, so the uncommitted row survives and is redrawn above the
             // new HEAD — staged as found, as staging everything would leave no row. `during` stops with the write out
@@ -191,31 +195,42 @@ Item {
                                arg === "" ? "And the description under it." : arg)
             if (act === "wip-message-focus")
                 wipPane.focusDescription()
-            Harness.report("message_focus pane=wip focused="
-                              + wipPane.descriptionFocused
-                              + " color=" + wipPane.descriptionColor)
+            driver.reportAtCompletion(() => "message_focus pane=wip focused="
+                                            + wipPane.descriptionFocused
+                                            + " color=" + wipPane.descriptionColor)
         } else if (act === "merge-commit") {
             // Emptied first: the claim is that an empty box still records the merge's own message
             // (デザイン規約 §進行中の操作から出る).
             page.showWip()
             wipPane.clearMessage()
-            mergeCommitTimer.begin()
-            Harness.report("merge_commit pressed=" + wipPane.pressCommit())
+            mergeCommitTimer.wanted = worktree.opSubject
+            mergeCommitTimer.headWas = worktree.headOid
+            // Read now: the landing clears the editor, so afterwards every run would say the boxes were empty.
+            mergeCommitTimer.typed = wipPane.subjectText !== "" || wipPane.bodyText !== ""
+            mergeCommitTimer.start()
+            // The press's own answer, read by the completion `mergeCommitTimer` makes.
+            const commitPressed = wipPane.pressCommit()
+            driver.reportAtCompletion(() => "merge_commit pressed=" + commitPressed)
         } else if (act === "op-exit" || act === "op-exit-go") {
             // "-go" runs the named row to its end (`OpExitRow.completeHold`). The argument is the bare word, as the
             // option parser turns away a positional starting with `--` (`verify::options`). Required: without it
             // nothing matches and the line says `op_exit_held false`.
             page.showWip()
-            if (act === "op-exit-go")
-                Harness.report("op_exit_held " + wipPane.completeOpExit("--" + arg))
-            else
+            if (act === "op-exit-go") {
+                const exitHeld = wipPane.completeOpExit("--" + arg)
+                driver.reportAtCompletion(() => "op_exit_held " + exitHeld)
+            } else {
                 opExitTimer.start()
+            }
         } else if (act === "op-exit-lands") {
             // "-go" followed to where it puts the reader, a status later than the write's own answer
             // (`AutoActDriver.awaitOpExitLanding`). The bare word as above, defaulting to `continue`.
             page.showWip()
-            Harness.report("op_exit_held " + driver.pressWrite("op-exit", () => wipPane.completeOpExit(
-                "--" + (arg === "" ? "continue" : arg))))
+            const landHeld = driver.pressWrite("op-exit", () => wipPane.completeOpExit(
+                "--" + (arg === "" ? "continue" : arg)))
+            // Said by the dispatch at the press: the landing's completion reads its own line alone
+            // (`AutoActLandings.opExitLandTimer`).
+            driver.act.say(() => "op_exit_held " + landHeld)
             driver.awaitOpExitLanding()
         } else if (act === "eol-commit") {
             // The shot is the state before anyone decides.
@@ -272,7 +287,7 @@ Item {
             const goneParts = ("" + arg).split(":")
             eolGoneTimer.button = goneParts.indexOf("button") >= 0
             eolGoneTimer.inside = goneParts.indexOf("inside") >= 0
-            eolGoneTimer.step = 0
+            eolGoneTimer.order = (eolGoneTimer.button ? ["staged"] : []).concat(eolGoneTimer.inside ? [] : ["away"])
             eolGoneTimer.start()
         } else if (act === "eol-walk" || act === "eol-stay") {
             // The rows moved under a still hand with the card out. `eol-walk` sends the list a whole row, so another
@@ -280,8 +295,8 @@ Item {
             // the stage to stop at — `gone` / `back` (`back` when none).
             page.showWip()
             eolWalkTimer.stay = act === "eol-stay"
-            eolWalkTimer.stage = arg === "" ? "back" : arg
-            eolWalkTimer.step = 0
+            eolWalkTimer.stopAt = arg === "" ? "back" : arg
+            eolWalkTimer.order = eolWalkTimer.stopAt === "gone" ? ["scrolled"] : ["scrolled", "tremor"]
             eolWalkTimer.start()
         } else {
             return false
@@ -290,15 +305,16 @@ Item {
     }
     /// The editor's own answer, latched off its edge (`RepoPage.commitAnswered`). Not the write barrier: the press is
     /// two writes, staging then commit, and the barrier takes whichever answers first. `empty=` / `amend=` are read
-    /// off the pane — the boxes let go and the amend row with them.
+    /// off the pane at the answer — the boxes let go and the amend row with them — and said by the completion the
+    /// write barrier makes.
     Connections {
         target: acts.page
         enabled: commitAnswer.armed
         function onCommitAnswered(landed) {
             commitAnswer.armed = false
-            Harness.report("commit_answered landed=" + landed
-                              + " empty=" + (wipPane.subjectText === "" && wipPane.bodyText === "")
-                              + " amend=" + page.amending)
+            const empty = wipPane.subjectText === "" && wipPane.bodyText === ""
+            const amend = page.amending
+            driver.reportAtCompletion(() => "commit_answered landed=" + landed + " empty=" + empty + " amend=" + amend)
             // Completed behind the status the commit's own answer asks for (`RepoTab.commitAnswer`) — the staging
             // answers first, with a status that predates the commit.
             driver.owedStatusAt(repoTab.commitAnswer)
@@ -311,155 +327,172 @@ Item {
     }
     // The row is chosen through its own signal, where a click lands — it is not there until the status arrives. Then
     // the pane's answer about this path is waited for (`DiffPane.diffSettled`).
-    SampleTimer {
+    PageStage {
         id: embeddedTimer
+        name: "wip_embedded"
+        order: ["clicked"]
         property string path: ""
-        property bool clicked: false
-        function begin() {
-            embeddedTimer.clicked = false
-            embeddedTimer.start()
-        }
         onTriggered: {
-            if (!embeddedTimer.clicked) {
-                const row = wipPane.filesWalk.rowFor("untracked", embeddedTimer.path)
-                if (!row)
-                    return
-                embeddedTimer.clicked = true
-                row.fileClicked("untracked", embeddedTimer.path, "", Qt.NoModifier)
+            if (embeddedTimer.at("start")) {
+                // No row yet is no click: the beat after asks again.
+                embeddedTimer.input("clicked", () => {
+                    const row = wipPane.filesWalk.rowFor("untracked", embeddedTimer.path)
+                    if (!row)
+                        return false
+                    row.fileClicked("untracked", embeddedTimer.path, "", Qt.NoModifier)
+                    return true
+                })
                 return
             }
-            if (!page.diffShown || page.diffPath !== embeddedTimer.path || !diffPane.diffSettled())
+            if (!Awaited.all("wip_embedded_read", { "shown": page.diffShown,
+                                                    "path": page.diffPath === embeddedTimer.path,
+                                                    "settled": diffPane.diffSettled() }))
                 return
-            embeddedTimer.stop()
             // `sha8=`: the commit a stage would point at, empty where that repository has none — the pane's two
             // sentences for this row.
-            Harness.report("wip_embedded path=" + page.diffPath
-                              + " embedded=" + diffPane.diffModel.embedded
-                              + " rows=" + diffPane.view.count
-                              + " sha8=" + diffPane.diffModel.embeddedSha8)
-            driver.complete()
+            embeddedTimer.complete(() => "wip_embedded path=" + page.diffPath
+                                         + " embedded=" + diffPane.diffModel.embedded
+                                         + " rows=" + diffPane.view.count
+                                         + " sha8=" + diffPane.diffModel.embeddedSha8)
         }
     }
     // The press has to land on rows that are on screen, so the diff is read first.
-    SampleTimer {
+    PageStage {
         id: stalePartTimer
+        name: "stale_part"
+        order: ["pressed"]
         property string bucket: ""
         property string path: ""
         onTriggered: {
-            if (!page.diffShown || driver.diffPane.diffModel.loading)
+            if (!Awaited.all("stale_part_ready", { "shown": page.diffShown,
+                                                   "loaded": !driver.diffPane.diffModel.loading }))
+                return
+            const pressed = stalePartTimer.input("pressed", () => {
+                driver.pressWrite("stage-selection", () => {
+                    repoTab.stageSelection(stalePartTimer.bucket, stalePartTimer.path, "", 0, -1, 1)
+                    return true
+                })
+            })
+            if (!pressed)
                 return
             stalePartTimer.stop()
-            driver.pressWrite("stage-selection", () => {
-                repoTab.stageSelection(stalePartTimer.bucket, stalePartTimer.path, "", 0, -1, 1)
-                return true
-            })
             driver.barrierNotice.start()
         }
     }
     // Another worktree's uncommitted row read in this window, with every writing control down
     // (P3-確認事項 §別の worktree の未コミット行). Every field is read off the output side — built from `writable`,
     // each would go green with the disabling unwired (app-ui.md §UI 自動化).
-    SampleTimer {
+    PageStage {
         id: carriedReadTimer
-        property bool asked: false
-        property bool opened: false
-        /// The step to the next file: made, whether it moved, and from which file. A one-file worktree steps and
-        /// stays, so no move is waited for there.
-        property bool walked: false
+        name: "carried_read"
+        order: ["asked", "opened", "walked"]
+        /// The step to the next file: whether it moved, and from which file. A one-file worktree steps and stays, so
+        /// no move is waited for there.
         property bool moved: false
         property string leftPath: ""
+        /// What the pane showed before the step, which opens another file: its lines, the first lit row's file, and
+        /// how many rows were lit.
+        property int lines: 0
+        property bool lit: false
+        property int litRows: 0
         onTriggered: {
+            const op = carriedReadTimer
             if (!Awaited.all("carried_read_ready", { "ready": !(graphModel.finishCount === 0 || !worktree.loaded) }))
                 return
-            if (!carriedReadTimer.asked) {
-                const row = driver.rowOfWorktree(Harness.autoActArg)
-                if (row < 0)
-                    return
+            if (op.at("start")) {
                 // Through the row itself, so the row's own decision is the one taken (verify-ui §壊れない動詞の実装と反復).
-                const item = graphPane.view.itemAtIndex(row)
-                if (item === null)
-                    return
-                item.leftClick(Qt.NoModifier)
-                carriedReadTimer.asked = true
+                op.input("asked", () => {
+                    const row = driver.rowOfWorktree(Harness.autoActArg)
+                    const item = row < 0 ? null : graphPane.view.itemAtIndex(row)
+                    if (item === null)
+                        return false
+                    item.leftClick(Qt.NoModifier)
+                    return true
+                })
                 return
             }
             // Until the worktree's own files arrive the lists hold this window's.
             const files = page.wipUnstaged
-            if (page.carriedPath === "" || files.carriedAt !== page.carriedPath || files.total === 0)
+            if (!Awaited.all("carried_read_files", {
+                    "files": !(page.carriedPath === "" || files.carriedAt !== page.carriedPath || files.total === 0) }))
                 return
-            if (!carriedReadTimer.opened) {
-                // The pane's own numbering — one run, and a folder row in the tree view answers with no key at all.
-                let key = ""
-                for (let i = 0; key === "" && i < files.shownRows; i++)
-                    key = files.fileKeyAt(i)
-                if (key === "")
-                    return
-                const cut = key.indexOf(":")
-                // Pressed on the row, so what is read is what the row makes of the model — handing the model's answer
-                // to `openDiff` would skip that (verify-ui §壊れない動詞の実装と反復). Null until the list builds the row.
-                const row = driver.carriedPane.filesWalk.rowFor(key.substring(0, cut), key.substring(cut + 1))
-                if (row === null)
-                    return
-                row.press()
-                carriedReadTimer.opened = true
+            if (op.at("asked")) {
+                op.input("opened", () => {
+                    // The pane's own numbering — one run, and a folder row in the tree view answers with no key at all.
+                    let key = ""
+                    for (let i = 0; key === "" && i < files.shownRows; i++)
+                        key = files.fileKeyAt(i)
+                    if (key === "")
+                        return false
+                    const cut = key.indexOf(":")
+                    // Pressed on the row, so what is read is what the row makes of the model — handing the model's
+                    // answer to `openDiff` would skip that (verify-ui §壊れない動詞の実装と反復). Null until the list
+                    // builds the row.
+                    const row = driver.carriedPane.filesWalk.rowFor(key.substring(0, cut), key.substring(cut + 1))
+                    if (row === null)
+                        return false
+                    row.press()
+                    return true
+                })
                 return
             }
-            if (!driver.diffPane.diffSettled())
+            if (!Awaited.all("carried_read_diff", { "diff": driver.diffPane.diffSettled() }))
                 return
             // A cut name is whole only in its hover tip, which waits out `tipDelayMs`; a name that fits has none.
             driver.carriedPane.namePointedAt = true
-            if (driver.carriedPane.nameCut && !driver.carriedPane.nameTipShown)
+            if (!Awaited.all("carried_read_tip", {
+                    "tip": !(driver.carriedPane.nameCut && !driver.carriedPane.nameTipShown) }))
                 return
-            if (carriedReadTimer.walked) {
+            if (op.at("walked")) {
                 // The run ends on the file the step asked for — a pane still reading it photographs empty, and its
                 // rows are built a polish after the read (`PageSettled`). A step that moved nothing has no second
                 // read to wait for.
                 if (!Awaited.all("carried_read_landed", {
-                    "moved": !carriedReadTimer.moved
-                        || (page.diffShown && page.diffPath !== carriedReadTimer.leftPath),
+                    "moved": !op.moved || (page.diffShown && page.diffPath !== op.leftPath),
                     "page": PageSettled.settled(page) }))
                     return
-                carriedReadTimer.stop()
-                driver.complete()
+                op.complete(() => [])
                 return
             }
-            // Read before the step below, which opens another file.
-            const lines = driver.diffPane.view.count
-            // `lit=` is only the first lit row (as `file_step` reads it), so a list lighting every row still passes
-            // it; `litRows=` counts them (`FileRowWalk.litRows`).
-            const lit = driver.carriedPane.filesWalk.litPath() === page.diffPath
-            const litRows = driver.carriedPane.filesWalk.litRows()
-            // One arrow step through the pane's own walk. Rows are found by the side their bytes are on even in this
-            // one list — handed the run's name for the bucket, the walk starts from nowhere and stays put.
-            carriedReadTimer.leftPath = page.diffPath
-            const stepped = driver.carriedPane.filesWalk.stepFile(1, false)
-            carriedReadTimer.walked = true
-            carriedReadTimer.moved = stepped
-            // The preset's worktree holds one path staged and written again, so `files=1` and a `tally=` of one are
-            // the fold (per side both would be two). `cut=`/`tip=`: the band cuts the long name, its hover carries it.
-            // `lines=` goes last, past what the table pins (`verify::outcome` matches a substring). The tally is in
-            // the order the row draws it.
-            const tally = graphModel.carriedTally(page.selectedRow)
-            const counts = tally ? [tally.added, tally.modified, tally.deleted,
-                                    tally.renamed, tally.copied, tally.conflicted] : []
-            Harness.report("carried_read worktree=" + files.carriedName
-                              + " files=" + files.total
-                              + " tally=" + counts.join(",")
-                              + " lit=" + lit
-                              + " litRows=" + litRows
-                              + " cut=" + driver.carriedPane.nameCut
-                              + " tip=" + driver.carriedPane.nameTipShown
-                              + " stepped=" + stepped
-                              + " stageFile=" + driver.diffPane.stageOffered
-                              + " pieces=" + driver.diffPane.piecesOffered
-                              + " lines=" + lines)
+            op.input("walked", () => {
+                // Read before the step below, which opens another file.
+                op.lines = driver.diffPane.view.count
+                // `lit=` is only the first lit row (as `file_step` reads it), so a list lighting every row still
+                // passes it; `litRows=` counts them (`FileRowWalk.litRows`).
+                op.lit = driver.carriedPane.filesWalk.litPath() === page.diffPath
+                op.litRows = driver.carriedPane.filesWalk.litRows()
+                // One arrow step through the pane's own walk. Rows are found by the side their bytes are on even in
+                // this one list — handed the run's name for the bucket, the walk starts from nowhere and stays put.
+                op.leftPath = page.diffPath
+                op.moved = driver.carriedPane.filesWalk.stepFile(1, false)
+            }, () => {
+                // The preset's worktree holds one path staged and written again, so `files=1` and a `tally=` of one
+                // are the fold (per side both would be two). `cut=`/`tip=`: the band cuts the long name, its hover
+                // carries it. `lines=` goes last, past what the table pins (`verify::outcome` matches a substring).
+                // The tally is in the order the row draws it.
+                const tally = graphModel.carriedTally(page.selectedRow)
+                const counts = tally ? [tally.added, tally.modified, tally.deleted,
+                                        tally.renamed, tally.copied, tally.conflicted] : []
+                return "carried_read worktree=" + files.carriedName
+                       + " files=" + files.total
+                       + " tally=" + counts.join(",")
+                       + " lit=" + op.lit
+                       + " litRows=" + op.litRows
+                       + " cut=" + driver.carriedPane.nameCut
+                       + " tip=" + driver.carriedPane.nameTipShown
+                       + " stepped=" + op.moved
+                       + " stageFile=" + driver.diffPane.stageOffered
+                       + " pieces=" + driver.diffPane.piecesOffered
+                       + " lines=" + op.lines
+            })
         }
     }
     // The same pane at rest, nothing read: `litRows=` must be 0 here, which `carried-read` cannot show. The corner is
     // claimed here too — `corner` cannot reach another worktree's pane.
-    SampleTimer {
+    PageStage {
         id: carriedStandTimer
-        property bool asked: false
+        name: "carried_stand"
+        order: ["asked"]
         /// The first folder row's path, empty where every path is at the root. This model folds by `<run>:<path>`, so
         /// a row handed the fold key as its path says `whole:src` (`FileRowDelegate.foldKey`).
         function folderPath() {
@@ -474,178 +507,161 @@ Item {
         onTriggered: {
             if (!Awaited.all("carried_stand_ready", { "ready": !(graphModel.finishCount === 0 || !worktree.loaded) }))
                 return
-            if (!carriedStandTimer.asked) {
+            if (carriedStandTimer.at("start")) {
                 // The same road in as `carried-read`.
-                const row = driver.rowOfWorktree(Harness.autoActArg)
-                if (row < 0)
-                    return
-                const item = graphPane.view.itemAtIndex(row)
-                if (item === null)
-                    return
-                item.leftClick(Qt.NoModifier)
-                carriedStandTimer.asked = true
+                carriedStandTimer.input("asked", () => {
+                    const row = driver.rowOfWorktree(Harness.autoActArg)
+                    const item = row < 0 ? null : graphPane.view.itemAtIndex(row)
+                    if (item === null)
+                        return false
+                    item.leftClick(Qt.NoModifier)
+                    return true
+                })
                 return
             }
             // The worktree's own files arrived and their rows built: until then nothing is lit or bare.
             const files = page.wipUnstaged
-            if (page.carriedPath === "" || files.carriedAt !== page.carriedPath || files.total === 0)
+            if (!Awaited.all("carried_stand_files", {
+                    "files": !(page.carriedPath === "" || files.carriedAt !== page.carriedPath || files.total === 0) }))
                 return
             // `folderPath=` and `litRows=` are read off the rows as built (`Awaited.built`).
             if (!Awaited.all("carried_stand_rows", {
                 "rows": driver.carriedPane.view.count > 0 && Awaited.built(driver.carriedPane.view),
                 "corner": gitCorner.width > 0 }))
                 return
-            carriedStandTimer.stop()
             // `corner=` is the label's own visibility; the room it was handed would go green with the binding cut.
-            Harness.report("carried_stand worktree=" + files.carriedName
-                              + " files=" + files.total
-                              + " litRows=" + driver.carriedPane.filesWalk.litRows()
-                              + " reading=" + page.diffShown
-                              + " corner=" + gitCorner.visible
-                              + " folderPath=" + carriedStandTimer.folderPath()
-                              + " room=" + Math.round(gitCorner.roomLeft))
-            driver.complete()
+            carriedStandTimer.complete(() => "carried_stand worktree=" + page.wipUnstaged.carriedName
+                                              + " files=" + page.wipUnstaged.total
+                                              + " litRows=" + driver.carriedPane.filesWalk.litRows()
+                                              + " reading=" + page.diffShown
+                                              + " corner=" + gitCorner.visible
+                                              + " folderPath=" + carriedStandTimer.folderPath()
+                                              + " room=" + Math.round(gitCorner.roomLeft))
         }
     }
     // PGG_AUTO_ACT=notice-link: the notice bar's place word pressed, and the panel it names coming up marked
     // (デザイン規約 §hover のツールチップ「送った先は名乗る」) — as `fetch-tip-link` presses a tip's. Nothing ran, so
     // the panel is down before the press, and `open=` is the press's own doing.
-    SampleTimer {
+    PageStage {
         id: noticeLinkTimer
-        property bool pressed: false
+        name: "notice_link"
+        order: ["pressed"]
         /// Whether the panel stood before the press — read at the press, so `open=` is shown to be the press's doing.
         property bool openBefore: false
+        /// Whether the place word took the press — the press's own answer.
+        property bool took: false
         onTriggered: {
-            if (!noticeLinkTimer.pressed) {
-                if (!page.noticeCard.settled) {
-                    Awaited.at(Harness.autoAct, "bar")
+            const op = noticeLinkTimer
+            if (op.at("start")) {
+                if (!Awaited.all("notice_link_bar", { "bar": page.noticeCard.settled }))
                     return
-                }
-                noticeLinkTimer.pressed = true
-                noticeLinkTimer.openBefore = page.commandsOpen
-                if (!page.noticeCard.pressDetailLink()) {
-                    noticeLinkTimer.stop()
-                    Harness.report("notice_link pressed=false")
-                    driver.complete()
-                }
+                const pressed = op.input("pressed", () => {
+                    op.openBefore = page.commandsOpen
+                    op.took = page.noticeCard.pressDetailLink()
+                })
+                // A word that took no press ends the run on it.
+                if (pressed && !op.took)
+                    op.complete(() => "notice_link pressed=false")
                 return
             }
             // The panel is built as it is raised (`RepoPage.commandsSeat`), so wait for it to exist.
-            if (!page.commandsOpen || page.commandsPane === null) {
-                Awaited.at(Harness.autoAct, "log")
+            if (!Awaited.all("notice_link_log", { "log": page.commandsOpen, "pane": page.commandsPane !== null }))
                 return
-            }
-            noticeLinkTimer.stop()
-            Harness.report("notice_link pressed=true before=" + noticeLinkTimer.openBefore
+            op.complete(() => "notice_link pressed=true before=" + op.openBefore
                               + " open=" + page.commandsShown
                               + " lit=" + page.commandsPane.attention
                               + " bar=" + page.noticeCard.open)
-            driver.complete()
         }
     }
     // Another worktree's uncommitted row right-clicked through the row itself (`GraphRowDelegate.askMenu`), its menu
     // waited for up; the apply verbs then press the menu's row as a click does (`AppMenuItem.triggered`) and wait for
     // what that leaves — this tree read again, or the bar a refusal comes down in (`barrierNotice`).
-    SampleTimer {
+    PageStage {
         id: carriedMenuTimer
+        name: "carried_menu"
+        order: ["armed", "pressed"]
         property bool applying: false
-        property bool armed: false
-        property bool pressed: false
         /// The six tallies a row draws, in the order it draws them (`GraphModel::carried_tally`).
         function tally(counts) {
             return counts ? [counts.added, counts.modified, counts.deleted,
                              counts.renamed, counts.copied, counts.conflicted].join(",") : ""
         }
         onTriggered: {
-            if (graphModel.finishCount === 0 || !worktree.loaded) {
-                Awaited.at(Harness.autoAct, "graph")
+            const op = carriedMenuTimer
+            if (!Awaited.all("carried_menu_graph", { "graph": !(graphModel.finishCount === 0 || !worktree.loaded) }))
                 return
-            }
-            if (!carriedMenuTimer.pressed) {
+            if (!op.at("pressed")) {
                 // Asked again every beat until it stands: the row can arrive, or be rebuilt, after the first ask.
-                if (!driver.carriedMenu.visible) {
-                    Awaited.at(Harness.autoAct, "row")
+                const up = driver.carriedMenu.visible
+                if (!up) {
                     const row = driver.rowOfWorktree(Harness.autoActArg)
                     const item = row < 0 ? null : graphPane.view.itemAtIndex(row)
                     // Through the menu key's door (`GraphRowWalk.menuFromKeys`), which stands the menu at the row: a
                     // run has no pointer, and `popup()` would put it in the window's corner.
                     if (item !== null)
                         KeyMenu.ask(item.mapToItem(null, 0, Theme.graphRowHeight), () => item.askMenu())
-                    return
                 }
-                if (!driver.carriedMenu.opened) {
-                    Awaited.at(Harness.autoAct, "menu")
+                if (!Awaited.all("carried_menu_up", { "row": up, "menu": driver.carriedMenu.opened }))
                     return
-                }
-                if (!carriedMenuTimer.applying) {
+                if (!op.applying) {
                     // The pane behind the menu has its rows (`PageSettled`'s carried and rows terms).
                     if (!Awaited.all("carried_menu_pane", { "page": PageSettled.settled(page) }))
                         return
-                    carriedMenuTimer.stop()
                     // Read off the rows as drawn: `apply=false` is the row taken off, `held=true` greyed, `says=` why.
-                    Harness.report("carried_menu open=" + driver.carriedOpenItem.visible
+                    op.complete(() => "carried_menu open=" + driver.carriedOpenItem.visible
                                       + " apply=" + driver.carriedApplyItem.visible
                                       + " held=" + driver.carriedApplyItem.blocked
                                       + " name=" + driver.carriedOpenItem.codeName
                                       + " says=" + driver.carriedApplyItem.blockedWhy)
-                    driver.complete()
                     return
                 }
-                Awaited.at(Harness.autoAct, "press")
-                if (!carriedMenuTimer.armed) {
-                    if (!driver.beginWrite(Harness.autoAct))
-                        return
-                    carriedMenuTimer.armed = true
-                }
+                if (op.at("start") && !op.input("armed", () => driver.beginWrite(Harness.autoAct)))
+                    return
                 // Pressed only where a hand could: the row there and not greyed (`AppMenuItem.blocked`).
-                const row = driver.carriedApplyItem
-                if (!driver.inputWent(row.visible && !row.blocked && (row.triggered(), true)))
-                    return
-                carriedMenuTimer.pressed = true
-                if (Harness.autoAct === "carried-apply-refused") {
-                    carriedMenuTimer.stop()
+                const pressed = op.input("pressed", () => {
+                    const row = driver.carriedApplyItem
+                    return driver.inputWent(row.visible && !row.blocked && (row.triggered(), true))
+                })
+                if (pressed && Harness.autoAct === "carried-apply-refused") {
+                    op.stop()
                     driver.barrierNotice.start()
                 }
                 return
             }
-            if (!driver.wroteAndSettled() || page.noticeCard.open && !page.noticeCard.settled) {
-                Awaited.at(Harness.autoAct, "landing")
+            if (!Awaited.all("carried_menu_landing", {
+                    "written": driver.wroteAndSettled(),
+                    "notice": !(page.noticeCard.open && !page.noticeCard.settled) }))
                 return
-            }
-            carriedMenuTimer.stop()
             // `here=` is this tree's own row after the apply, `there=` the row the work came from — still drawn, with
             // what it had.
-            Harness.report("carried_apply notice=" + page.noticeCard.open
+            op.complete(() => "carried_apply notice=" + page.noticeCard.open
                               + " here=" + [graphPane.view.wipAdded, graphPane.view.wipModified,
                                             graphPane.view.wipDeleted, graphPane.view.wipRenamed,
                                             graphPane.view.wipCopied, graphPane.view.wipConflicted].join(",")
-                              + " there=" + carriedMenuTimer.tally(
+                              + " there=" + op.tally(
                                   graphModel.carriedTally(driver.rowOfWorktree(Harness.autoActArg)))
                               + " conflicts=" + worktree.conflictCount)
-            driver.complete()
         }
     }
-    SampleTimer {
+    PageStage {
         id: wipLanesTimer
+        name: "wip_lanes"
         onTriggered: {
             if (!Awaited.all("wip_lanes_ready", { "ready": !(driver.graphTopKind() !== "wip") }))
                 return
-            wipLanesTimer.stop()
-            Harness.report("wip_lanes geometry=" + graphModel.geometryAt(0)
-                              + " lanes=" + graphModel.maxLanes)
-            driver.complete()
+            wipLanesTimer.complete(() => "wip_lanes geometry=" + graphModel.geometryAt(0)
+                                          + " lanes=" + graphModel.maxLanes)
         }
     }
     // Waits for HEAD's author; until it arrives the offer to take it over is not in the picture.
-    SampleTimer {
+    PageStage {
         id: amendAuthorTimer
+        name: "amend_author"
         onTriggered: {
             if (!Awaited.all("amend_author_ready", { "ready": !(repoTab.headAuthorName === "") }))
                 return
-            amendAuthorTimer.stop()
-            Harness.report("amend_author differs=" + repoTab.headAuthorDiffers
-                              + " name=" + repoTab.headAuthorName)
-            driver.complete()
+            amendAuthorTimer.complete(() => "amend_author differs=" + repoTab.headAuthorDiffers
+                                             + " name=" + repoTab.headAuthorName)
         }
     }
     readonly property QtObject halfWatch: QtObject {
@@ -672,190 +688,188 @@ Item {
     }
     // Completed a turn after the notify that carried the edge. The run ends either way: a commit that landed with no
     // notify raising busy had no `during` to stop at, and says so on a line outside what the verb is judged on.
-    SampleTimer {
+    PageStage {
         id: halfDuringTimer
+        name: "half_during"
         onTriggered: {
+            if (!Awaited.all("half_during_ready", {
+                    "edge": halfWatch.caught || worktree.headOid !== driver.headOidBefore }))
+                return
             if (!halfWatch.caught) {
-                if (worktree.headOid === driver.headOidBefore)
-                    return
-                halfDuringTimer.stop()
-                Harness.report("wip_half_missed the commit landed before any notify carried a raised busy, so this "
-                                  + "run had no moment with the write out and the picture still to stop at")
-                driver.complete()
+                halfDuringTimer.complete(() => "wip_half_missed the commit landed before any notify carried a raised "
+                                                + "busy, so this run had no moment with the write out and the picture "
+                                                + "still to stop at")
                 return
             }
-            halfDuringTimer.stop()
             // What the latch found; the page's numbers are the latched ones, not the settled page's.
-            Harness.report("wip_half stage=during busy=true moved=false"
-                              + " wipRow=" + halfWatch.sawWipRow
-                              + " rows=" + halfWatch.sawRows)
-            driver.complete()
+            halfDuringTimer.complete(() => "wip_half stage=during busy=true moved=false"
+                                           + " wipRow=" + halfWatch.sawWipRow
+                                           + " rows=" + halfWatch.sawRows)
         }
     }
     // The far side: the write settled, the graph holding the new HEAD, and the row drawn again above it.
-    SampleTimer {
+    PageStage {
         id: halfSettledTimer
+        name: "half_settled"
         onTriggered: {
             if (!Awaited.all("half_settled_ready", {
                 "ready": !(!driver.wroteAndSettled() || worktree.headOid === driver.headOidBefore
                     || graphModel.rowOf(worktree.headOid) < 0 || !graphModel.wipRow) }))
                 return
-            halfSettledTimer.stop()
-            Harness.report("wip_half stage=after busy=false"
-                              + " moved=" + (worktree.headOid !== driver.headOidBefore)
-                              + " wipRow=" + graphModel.wipRow
-                              + " rows=" + unstagedModel.total)
-            driver.complete()
+            halfSettledTimer.complete(() => "wip_half stage=after busy=false"
+                                            + " moved=" + (worktree.headOid !== driver.headOidBefore)
+                                            + " wipRow=" + graphModel.wipRow
+                                            + " rows=" + unstagedModel.total)
         }
     }
     // Waits for HEAD's author, before which there is no offer to tick.
-    SampleTimer {
+    PageStage {
         id: resetAuthorTimer
+        name: "reset_author"
+        order: ["committed"]
         onTriggered: {
             if (!Awaited.all("reset_author_ready", { "ready": !(repoTab.headAuthorName === "") }))
                 return
-            resetAuthorTimer.stop()
-            Harness.report("head_author differs="
-                              + repoTab.headAuthorDiffers
-                              + " name=" + repoTab.headAuthorName)
-            wipPane.setResetAuthorChecked(true)
-            wipPane.setMessage(Harness.autoActArg, "")
-            // A deferred run: nothing raises its barrier, so the commit is sent and waited out here. HEAD is re-read
-            // now — the page's opening fetch can have answered since `prepareCompletion` read it.
-            driver.headOidBefore = worktree.headOid
-            driver.pressWrite("commit", () => {
-                page.commitNow()
-                return true
+            // HEAD's author as the commit below finds it.
+            resetAuthorTimer.say(() => "head_author differs="
+                                        + repoTab.headAuthorDiffers
+                                        + " name=" + repoTab.headAuthorName)
+            const committed = resetAuthorTimer.input("committed", () => {
+                wipPane.setResetAuthorChecked(true)
+                wipPane.setMessage(Harness.autoActArg, "")
+                // A deferred run: nothing raises its barrier, so the commit is sent and waited out here. HEAD is
+                // re-read now — the page's opening fetch can have answered since `prepareCompletion` read it.
+                driver.headOidBefore = worktree.headOid
+                driver.pressWrite("commit", () => {
+                    page.commitNow()
+                    return true
+                })
             })
+            if (!committed)
+                return
+            resetAuthorTimer.stop()
             resetAuthorLandedTimer.start()
         }
     }
     // Past the write barrier: the amend answers before the rebuild, so the barrier frames the replaced commit. The
     // edge is the graph holding the new HEAD — not the old one going, which a stash on top keeps drawn. Where the
     // selection lands differs by repository, so the pane is waited for and `shown=` says whose author is pictured.
-    SampleTimer {
+    PageStage {
         id: resetAuthorLandedTimer
+        name: "reset_author_landed"
         onTriggered: {
             if (!Awaited.all("reset_author_landed_ready", {
                 "ready": !(!driver.wroteAndSettled() || worktree.headOid === driver.headOidBefore
                     || graphModel.rowOf(worktree.headOid) < 0 || !driver.cardSettled) }))
                 return
-            resetAuthorLandedTimer.stop()
-            Harness.report("reset_author was=" + driver.headOidBefore.substring(0, 8)
-                              + " head=" + worktree.headOid.substring(0, 8)
-                              + " shown=" + detailsModel.shaHex.substring(0, 8)
-                              + " author=" + detailsModel.authorName
-                              + " committer=" + detailsModel.committerName)
-            driver.complete()
+            resetAuthorLandedTimer.complete(() => "reset_author was=" + driver.headOidBefore.substring(0, 8)
+                                                   + " head=" + worktree.headOid.substring(0, 8)
+                                                   + " shown=" + detailsModel.shaHex.substring(0, 8)
+                                                   + " author=" + detailsModel.authorName
+                                                   + " committer=" + detailsModel.committerName)
         }
     }
     // What stands beside the exit card (デザイン規約 §進行中の操作から出る): a stopped rebase, pick or revert hides the
     // message boxes and the commit button, a stopped merge keeps them — its `--continue` is that button. Read off the
     // drawn items (an item's `visible` is false under a hidden parent), once the card stands on the worktree face.
-    SampleTimer {
+    PageStage {
         id: opExitTimer
+        name: "op_exit"
         onTriggered: {
             if (!Awaited.all("op_exit_ready", { "ready": !(!page.wipShown || !wipPane.offersOpExit("--abort")) }))
                 return
-            opExitTimer.stop()
-            Harness.report("op_exit card=" + wipPane.offersOpExit("--abort")
-                              + " box=" + wipPane.commitBlock.messageSeat.visible
-                              + " button=" + wipPane.commitBlock.commitSeat.visible
-                              + " op=" + worktree.opText)
-            driver.complete()
+            opExitTimer.complete(() => "op_exit card=" + wipPane.offersOpExit("--abort")
+                                        + " box=" + wipPane.commitBlock.messageSeat.visible
+                                        + " button=" + wipPane.commitBlock.commitSeat.visible
+                                        + " op=" + worktree.opText)
         }
     }
     // Staging has to land before the button can know what it carries.
-    SampleTimer {
+    PageStage {
         id: eolCommitTimer
+        name: "eol_commit"
         onTriggered: {
             // Only the card is waited for — asking after the count first would be reading the input side.
             if (!Awaited.all("eol_commit_ready", { "ready": wipPane.eolCardOpen }))
                 return
-            eolCommitTimer.stop()
-            Harness.report("eol_commit staged=" + worktree.stagedCount
-                              + " warned=" + worktree.eolStagedCount
-                              + " card=" + wipPane.eolCardOpen)
-            driver.complete()
+            eolCommitTimer.complete(() => "eol_commit staged=" + worktree.stagedCount
+                                           + " warned=" + worktree.eolStagedCount
+                                           + " card=" + wipPane.eolCardOpen)
         }
     }
     // The row is read once the status has landed and HEAD is known (the row stands only over a commit), and — after a
     // merge this verb pressed — once that merge's stop has reached the pane: the tick has to have met it.
-    SampleTimer {
+    PageStage {
         id: amendRowTimer
+        name: "amend_row"
         /// The branch this run merged to stop on, `""` for a run that reads the tree as it opened.
         property string merged: ""
         onTriggered: {
             if (!Awaited.all("amend_row_ready", { "ready": !(!worktree.loaded || !worktree.headKnown),
-                                                   "page": PageSettled.settled(page) }))
+                                                   "page": PageSettled.settled(page),
+                                                   "merged": !(amendRowTimer.merged !== "" && !worktree.opMerging) }))
                 return
-            if (amendRowTimer.merged !== "" && !worktree.opMerging)
-                return
-            amendRowTimer.stop()
-            Harness.report("amend_row shown=" + wipPane.commitBlock.amendRowShown
-                              + " barred=" + wipPane.commitBlock.amendBarred
-                              + " op=" + worktree.opText
-                              + " ticked=" + wipPane.commitBlock.amendChecked
-                              + " amending=" + page.amending)
-            driver.complete()
+            amendRowTimer.complete(() => "amend_row shown=" + wipPane.commitBlock.amendRowShown
+                                          + " barred=" + wipPane.commitBlock.amendBarred
+                                          + " op=" + worktree.opText
+                                          + " ticked=" + wipPane.commitBlock.amendChecked
+                                          + " amending=" + page.amending)
         }
     }
     // Two things land apart: HEAD's message into the box and git's answer about the amend. The pointer goes on once
     // the message is in, and the tip comes up only on a button that refuses — git's answer is what greys it, and the
     // run waits on the tip, never on the answer it reports (`empties=` is read, not waited for). The tip's own words
     // are read too: a refusal for anything else names that instead.
-    SampleTimer {
+    PageStage {
         id: amendTipTimer
+        name: "amend_tip"
         onTriggered: {
             if (!Awaited.all("amend_tip_ready", { "ready": !(wipPane.subjectText === "") }))
                 return
             wipPane.pointAtCommit = true
-            const tip = Tips.box
-            if (!tip.visible)
+            if (!Awaited.all("amend_tip_shown", { "tip": Tips.box.visible }))
                 return
-            amendTipTimer.stop()
-            Harness.report("amend_tip empties=" + repoTab.amendEmpties
-                              + " enabled=" + wipPane.commitBlock.commitEnabled
-                              + " tip=" + tip.visible
-                              + " why=" + tip.text)
-            driver.complete()
+            amendTipTimer.complete(() => "amend_tip empties=" + repoTab.amendEmpties
+                                          + " enabled=" + wipPane.commitBlock.commitEnabled
+                                          + " tip=" + Tips.box.visible
+                                          + " why=" + Tips.box.text)
         }
     }
     // The tick's tip comes out on the shared delay, so the setting being on is not yet the tip being up.
-    SampleTimer {
+    PageStage {
         id: commitFaceTimer
+        name: "commit_face"
         onTriggered: {
             if (!Awaited.all("commit_face_ready", { "ready": wipPane.signingTipShown }))
                 return
-            commitFaceTimer.stop()
-            Harness.report("commit_face signs=" + repoTab.signsCommits
-                              + " tip=" + wipPane.signingTipShown)
-            driver.complete()
+            commitFaceTimer.complete(() => "commit_face signs=" + repoTab.signsCommits
+                                            + " tip=" + wipPane.signingTipShown)
         }
     }
     // The marks arrive with the status read, so the row named for its sentence has to be named again once they are in.
-    SampleTimer {
+    PageStage {
         id: eolHoverTimer
+        name: "eol_hover"
         onTriggered: {
             wipPane.pointEol(Harness.autoActArg)
-            if (!wipPane.eolCardOpen)
+            if (!Awaited.all("eol_hover_card", { "card": wipPane.eolCardOpen }))
                 return
-            eolHoverTimer.stop()
-            Harness.report("eol_hover bucket=" + wipPane.pointedEolBucket + " path=" + wipPane.pointedEolPath
-                              + " card=" + wipPane.eolCardOpen
-                              + " text=" + wipPane.pointedEolText)
-            driver.complete()
+            eolHoverTimer.complete(() => "eol_hover bucket=" + wipPane.pointedEolBucket
+                                          + " path=" + wipPane.pointedEolPath
+                                          + " card=" + wipPane.eolCardOpen
+                                          + " text=" + wipPane.pointedEolText)
         }
     }
     // PGG_AUTO_ACT=eol-gone. The card is asked for as the hover asks (the row's, or the button's once something is
     // staged), the hand is put in it as the card reads a hand (`AppCard.contentPointed`), and the warning is taken
     // away with one write: the card goes, held hand or not (`WipPane.weighEol`).
-    SampleTimer {
+    PageStage {
         id: eolGoneTimer
+        name: "eol_gone"
+        order: ["away"]
         property bool button: false
         /// Stop with the card out and the hand in it, before the write that takes the warning away.
         property bool inside: false
-        property int step: 0
         /// Everything staged (`stage-all`) or unstaged (`unstage-all`), through the driver's door for a write.
         function pressAll(what) {
             return driver.pressWrite(what, () => {
@@ -867,41 +881,36 @@ Item {
             })
         }
         onTriggered: {
-            if (eolGoneTimer.step === 0) {
-                // The button's form stages everything first; the row's form starts on the rows as they are.
-                if (!Awaited.all("eol_gone_stage", {
-                        "pressed": !eolGoneTimer.button || eolGoneTimer.pressAll("stage-all") }))
+            const op = eolGoneTimer
+            // The button's form stages everything first; the row's form starts on the rows as they are.
+            if (op.button && op.at("start")) {
+                // Pressed until it takes.
+                if (!op.input("staged", () => op.pressAll("stage-all")))
                     return
-                if (eolGoneTimer.button) {
-                    // The button warns only while it can be pressed (`WipCommitBlock.eolWarned`): a message first.
-                    wipPane.setMessage("feat: something", "")
-                    wipPane.pointAtCommit = true
-                }
-                eolGoneTimer.step = 1
+                // The button warns only while it can be pressed (`WipCommitBlock.eolWarned`): a message first.
+                wipPane.setMessage("feat: something", "")
+                wipPane.pointAtCommit = true
                 return
             }
-            if (eolGoneTimer.step === 1) {
-                if (!eolGoneTimer.button)
+            if (op.at("start") || op.at("staged")) {
+                if (!op.button)
                     wipPane.pointEol("src/flipped.kt")
                 if (!Awaited.all("eol_gone_card", {
                         "card": wipPane.eolCardOpen,
                         // The staging before the button's card is waited out before the next write is armed.
-                        "wrote": !eolGoneTimer.button || driver.wroteAndSettled(),
+                        "wrote": !op.button || driver.wroteAndSettled(),
                         "page": PageSettled.settled(page)
                     }))
                     return
                 wipPane.eolHoverCard.contentPointed = true
-                if (eolGoneTimer.inside) {
-                    eolGoneTimer.stop()
-                    Harness.report("eol_gone button=" + eolGoneTimer.button + " stage=inside card="
+                if (op.inside) {
+                    op.complete(() => "eol_gone button=" + op.button + " stage=inside card="
                                       + wipPane.eolCardOpen + " warned=" + worktree.eolStagedCount)
-                    driver.complete()
                     return
                 }
-                const away = eolGoneTimer.button ? "unstage-all" : "stage-all"
-                if (!Awaited.all("eol_gone_write", { "pressed": eolGoneTimer.pressAll(away) }))
-                    return
-                eolGoneTimer.step = 2
+                const away = op.button ? "unstage-all" : "stage-all"
+                // Pressed until it takes.
+                op.input("away", () => op.pressAll(away))
                 return
             }
             if (!Awaited.all("eol_gone", { "gone": !wipPane.eolCardOpen, "page": PageSettled.settled(page) }))
@@ -914,10 +923,8 @@ Item {
             wipPane.eolHoverCard.contentPointed = false
             if (!Awaited.all("eol_gone_hand", { "tip": Tips.current === null }))
                 return
-            eolGoneTimer.stop()
-            Harness.report("eol_gone button=" + eolGoneTimer.button + " card=" + wipPane.eolCardOpen
+            op.complete(() => "eol_gone button=" + op.button + " card=" + wipPane.eolCardOpen
                               + " gone=" + !wipPane.eolCardOpen + " warned=" + worktree.eolStagedCount)
-            driver.complete()
         }
     }
     // PGG_AUTO_ACT=eol-walk / eol-stay. The hand on the row's words as the pane hears it (`HandWatch.stir`), the card
@@ -931,133 +938,138 @@ Item {
     // (`visible`, up from the open call on, where `opened` waits out the enter transition). No stage stops at the
     // tremor: the rest it starts runs on under the picture and the census, so what they show would be the machine's
     // speed.
-    SampleTimer {
+    PageStage {
         id: eolWalkTimer
+        name: "eol_walk"
+        order: ["scrolled", "tremor"]
         property bool stay: false
-        property string stage: "back"
-        property int step: 0
-        property point at: Qt.point(-1, -1)
-        /// The row under the hand after the scroll: the one that arrived, or the one the hand stayed on.
-        property var under: null
+        /// The stage the run stops at: `gone` (the card down) or `back` (the card up again).
+        property string stopAt: "back"
+        /// Where the hand rests, in the window's frame.
+        property point handAt: Qt.point(-1, -1)
         property bool tremorLit: false
         property bool tremorCard: false
         function unstagedList() {
             const pane = wipPane.bucketPanes.find(pane => pane.section === "unstaged")
             return pane === undefined ? null : pane.list
         }
+        /// The row under the hand after the scroll: the one that arrived, or the one the hand stayed on.
         function rowUnderHand() {
             const list = eolWalkTimer.unstagedList()
             if (list === null)
                 return null
-            const p = list.mapFromItem(null, eolWalkTimer.at.x, eolWalkTimer.at.y)
+            const p = list.mapFromItem(null, eolWalkTimer.handAt.x, eolWalkTimer.handAt.y)
             return list.itemAt(p.x, p.y + list.contentY)
         }
-        function done(stage) {
-            eolWalkTimer.stop()
+        /// The run's line at the stage it stopped at, read off the rows as they stand.
+        function line(stopped) {
             const row = wipPane.rowFor("src/flipped.kt")
-            const under = eolWalkTimer.under
-            Harness.report((eolWalkTimer.stay ? "eol_stay" : "eol_walk") + " stage=" + stage
-                              + " gone=" + !wipPane.eolCardOpen + " slid_lit=" + (row !== null && row.washLit)
-                              + " under_lit=" + (under !== null && under.washLit) + " tremor=" + eolWalkTimer.tremorLit
-                              + " tremor_card=" + eolWalkTimer.tremorCard + " back=" + wipPane.eolCardOpen
-                              + " path=" + wipPane.pointedEolPath)
-            driver.complete()
+            const under = eolWalkTimer.rowUnderHand()
+            return (eolWalkTimer.stay ? "eol_stay" : "eol_walk") + " stage=" + stopped
+                   + " gone=" + !wipPane.eolCardOpen + " slid_lit=" + (row !== null && row.washLit)
+                   + " under_lit=" + (under !== null && under.washLit) + " tremor=" + eolWalkTimer.tremorLit
+                   + " tremor_card=" + eolWalkTimer.tremorCard + " back=" + wipPane.eolCardOpen
+                   + " path=" + wipPane.pointedEolPath
         }
         onTriggered: {
-            const row = wipPane.rowFor("src/flipped.kt")
-            if (eolWalkTimer.step === 0) {
+            const op = eolWalkTimer
+            if (op.at("start")) {
+                const row = wipPane.rowFor("src/flipped.kt")
                 wipPane.pointEol("src/flipped.kt")
                 if (!Awaited.all("eol_walk_card", { "card": wipPane.eolCardOpen, "row": row !== null }))
                     return
-                eolWalkTimer.at = row.mapToItem(null, row.width / 2, row.height / 2)
-                wipPane.hand.stir(eolWalkTimer.at)
-                eolWalkTimer.unstagedList().contentY += eolWalkTimer.stay ? 1 : Theme.rowHeight
-                eolWalkTimer.step = 1
+                op.input("scrolled", () => {
+                    op.handAt = row.mapToItem(null, row.width / 2, row.height / 2)
+                    wipPane.hand.stir(op.handAt)
+                    op.unstagedList().contentY += op.stay ? 1 : Theme.rowHeight
+                })
                 return
             }
-            if (eolWalkTimer.step === 1) {
+            if (op.at("scrolled")) {
                 if (!Awaited.all("eol_walk_gone", { "gone": !wipPane.eolCardOpen }))
                     return
-                eolWalkTimer.under = eolWalkTimer.rowUnderHand()
-                if (eolWalkTimer.stage === "gone") {
-                    eolWalkTimer.done("gone")
+                if (op.stopAt === "gone") {
+                    op.complete(() => op.line("gone"))
                     return
                 }
-                wipPane.hand.stir(Qt.point(eolWalkTimer.at.x + 2, eolWalkTimer.at.y))
-                eolWalkTimer.tremorLit = eolWalkTimer.under !== null && eolWalkTimer.under.washLit
-                eolWalkTimer.tremorCard = wipPane.eolHoverCard.visible
-                eolWalkTimer.step = 2
+                op.input("tremor", () => {
+                    const under = op.rowUnderHand()
+                    wipPane.hand.stir(Qt.point(op.handAt.x + 2, op.handAt.y))
+                    op.tremorLit = under !== null && under.washLit
+                    op.tremorCard = wipPane.eolHoverCard.visible
+                })
                 return
             }
             // The row under the hand asks for its card — its own, or the one kept through the hold: it comes after
             // the rest the tremor started.
             if (!Awaited.all("eol_walk_back", { "card": wipPane.eolCardOpen }))
                 return
-            eolWalkTimer.done("back")
+            op.complete(() => op.line("back"))
         }
     }
     // The band's Stash button, pressed until it takes: it is down while the opening fetch keeps the tab busy. The row
     // that has to go is read here, once the worktree row leads — it can arrive after the graph's first pass (a
     // stopped merge), and read earlier the verb would wait on the newest commit.
-    SampleTimer {
+    PageStage {
         id: stashPressTimer
+        name: "stash_press"
+        order: ["pressed"]
         /// `stash-lands`: pressed from the worktree row with its pane open, taken here so the row is there.
         property bool fromWip: false
         onTriggered: {
-            if (driver.graphTopKind() !== "wip" || page.pageBand === null)
+            if (!Awaited.all("stash_press_ready", { "wip": driver.graphTopKind() === "wip",
+                                                    "band": page.pageBand !== null }))
                 return
-            const going = graphModel.oidAt(0)
-            if (stashPressTimer.fromWip) {
-                graphPane.setCurrentRow(0)
-                page.showWip()
-            }
-            if (!driver.inputWent(page.pageBand.stashNow()))
-                return
-            driver.graphGoneOid = going
-            stashPressTimer.stop()
+            const pressed = stashPressTimer.input("pressed", () => {
+                const going = graphModel.oidAt(0)
+                if (stashPressTimer.fromWip) {
+                    graphPane.setCurrentRow(0)
+                    page.showWip()
+                }
+                if (!driver.inputWent(page.pageBand.stashNow()))
+                    return false
+                driver.graphGoneOid = going
+                return true
+            })
+            if (pressed)
+                stashPressTimer.stop()
         }
     }
     // Two waits: the write lands, then HEAD's own message comes back — only the new commit can say the empty box
     // committed the merge's words.
-    SampleTimer {
+    PageStage {
         id: mergeCommitTimer
+        name: "merge_commit"
+        order: ["asked"]
         property string wanted: ""
         property bool typed: false
+        /// HEAD's commit answer count when its message was asked for again.
         property int seenHead: -1
         property string headWas: ""
-        function begin() {
-            mergeCommitTimer.wanted = worktree.opSubject
-            mergeCommitTimer.headWas = worktree.headOid
-            // Read now: the landing clears the editor, so afterwards every run would say the boxes were empty.
-            mergeCommitTimer.typed = wipPane.subjectText !== "" || wipPane.bodyText !== ""
-            mergeCommitTimer.seenHead = -1
-            mergeCommitTimer.start()
-        }
         onTriggered: {
-            if (!Awaited.all("merge_commit_ready", { "ready": driver.wroteAndSettled(),
-                                                     "page": PageSettled.settled(page) }))
-                return
+            const op = mergeCommitTimer
             // The graph holding the commit, checked against the id HEAD moved from: refs and the walk arrive behind
             // the write and each other, so the old tip would pass.
-            if (!worktree.headKnown || worktree.headOid === mergeCommitTimer.headWas
-                    || graphModel.rowOf(worktree.headOid) < 0
-                    || driver.graphTopKind() === "wip")
+            if (!Awaited.all("merge_commit_ready", { "ready": driver.wroteAndSettled(),
+                                                     "page": PageSettled.settled(page),
+                                                     "head": !(!worktree.headKnown || worktree.headOid === op.headWas
+                                                               || graphModel.rowOf(worktree.headOid) < 0
+                                                               || driver.graphTopKind() === "wip") }))
                 return
-            if (mergeCommitTimer.seenHead < 0) {
-                mergeCommitTimer.seenHead = repoTab.headCommitSeq
-                repoTab.requestHeadCommit()
+            if (op.at("start")) {
+                op.input("asked", () => {
+                    op.seenHead = repoTab.headCommitSeq
+                    repoTab.requestHeadCommit()
+                })
                 return
             }
-            if (repoTab.headCommitSeq === mergeCommitTimer.seenHead)
+            if (!Awaited.all("merge_commit_answered", { "answered": repoTab.headCommitSeq !== op.seenHead }))
                 return
-            mergeCommitTimer.stop()
-            Harness.report(
+            op.complete(() => driver.verbReport().concat([
                 "merge_committed merging=" + (worktree.opText !== "")
-                + " kept=" + (mergeCommitTimer.wanted !== ""
-                              && repoTab.headSubject === mergeCommitTimer.wanted)
-                + " typed=" + mergeCommitTimer.typed
-                + " head=" + repoTab.headSubject)
-            driver.complete()
+                + " kept=" + (op.wanted !== "" && repoTab.headSubject === op.wanted)
+                + " typed=" + op.typed
+                + " head=" + repoTab.headSubject]))
         }
     }
 }

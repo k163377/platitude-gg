@@ -88,19 +88,21 @@ Item {
         menu.y = p.y
     }
 
-    SampleTimer {
+    // The menu raised, its WORKTREE card opened, and the mode's one thing done on the card's rows. Only the menu's run
+    // has an `order`: the add and the box end at `raised` where their row is not offered.
+    PageStage {
         id: worktreeTimer
+        name: "worktree_make"
         property string kind: ""
         property string ref: ""
-        property string name: ""
+        /// What is typed into the box.
+        property string naming: ""
         property bool onGraph: false
         /// `menu` stands the rows; `add` presses `worktree add`; `box` stops at the name box; `new` types a name and
         /// sends it; `refused` makes a branch of that name first, so git turns the worktree down (デザイン規約
         /// §答えの要らない報せ).
         property string mode: ""
         property string oid: ""
-        /// 0 = raise the menu, 1 = open its WORKTREE card and act on it, 2 = wait for the box.
-        property int step: 0
         // The menu, its WORKTREE card and the card's two rows are asked for, not held: the census follows what a timer
         // holds by name, and would count a row held here as shown in every run (`WindowCensus.visit`).
         function menu() {
@@ -135,7 +137,7 @@ Item {
             if (worktreeTimer.onGraph)
                 rest = rest.slice(0, -6)
             const named = rest.indexOf("=")
-            worktreeTimer.name = named < 0 ? "" : rest.substring(named + 1)
+            worktreeTimer.naming = named < 0 ? "" : rest.substring(named + 1)
             rest = named < 0 ? rest : rest.substring(0, named)
             const cut = rest.indexOf(":")
             worktreeTimer.kind = rest.substring(0, cut)
@@ -146,7 +148,7 @@ Item {
             if (worktreeTimer.kind === "remote" && !worktreeTimer.onGraph)
                 acts.remotesModel.toggleFolder(GitFacts.remoteOfRef(worktreeTimer.ref, acts.repoTab.remoteNames))
             worktreeTimer.mode = mode
-            worktreeTimer.step = 0
+            worktreeTimer.order = mode === "menu" ? ["raised"] : []
             worktreeTimer.start()
         }
         /// Raises the menu through the row's own door. False while the row is not there yet.
@@ -175,141 +177,153 @@ Item {
             acts.standMenuOn(worktreeTimer.menu(), item)
             return true
         }
-        function say(line) {
-            worktreeTimer.stop()
-            Harness.report(line)
-        }
         onTriggered: {
+            const op = worktreeTimer
             // Asked as the menu opens (`offers::worktree_rows`): opened while a write runs, the rows grey until it ends
             // (`AppMenu.runningWhy`).
-            if (!acts.driver.menusLive())
+            if (!Awaited.all("worktree_menus_live", { "live": acts.driver.menusLive() }))
                 return
-            if (worktreeTimer.step === 0) {
-                if (!Awaited.all("worktree_menu_raised", { "raised": worktreeTimer.raise() }))
-                    return
-                worktreeTimer.step = 1
+            if (op.at("start")) {
+                op.input("raised", () => op.raise())
                 return
             }
-            if (worktreeTimer.step === 1) {
-                if (!worktreeTimer.menu().opened)
+            if (op.at("raised")) {
+                if (!Awaited.all("worktree_menu_open", { "menu": op.menu().opened }))
                     return
                 // The rows are one level in (デザイン規約 §メニュー の入れ子): opened as a hand opens it, so the
                 // picture shows them.
-                const card = worktreeTimer.card()
-                if (card.applies && !card.opened) {
-                    worktreeTimer.menu().openSub(card)
+                const card = op.card()
+                if (!Awaited.all("worktree_card_open", { "card": !card.applies || card.opened })) {
+                    op.menu().openSub(card)
                     return
                 }
-                worktreeTimer.act()
+                op.act()
                 return
             }
-            worktreeTimer.awaitBox()
+            op.awaitBox()
         }
         function act() {
-            const add = worktreeTimer.addItem()
-            const here = worktreeTimer.hereItem()
-            if (worktreeTimer.mode === "menu") {
+            const op = worktreeTimer
+            const add = op.addItem()
+            const here = op.hereItem()
+            if (op.mode === "menu") {
                 // Whether the folder is cut is the row's layout's to say (`AutoActDriver.cardLaidOut`).
-                const laidOut = acts.driver.cardLaidOut(worktreeTimer.card())
+                const laidOut = acts.driver.cardLaidOut(op, op.card())
                 if (!Awaited.all("worktree_add_menu", { "card_laid_out": laidOut }))
                     return
                 // A greyed row says why on its hover alone, and a cut folder comes back whole on it.
-                const tip = Tips.box
                 const wants = add.offered && (add.blocked || add.nameCut)
                 if (!Awaited.all("worktree_add_menu", { "tip_beside": acts.driver.rowTipStood(add, wants) }))
                     return
-                worktreeTimer.say("worktree_add_menu card=" + worktreeTimer.card().opened
-                              + " here=" + here.offered
-                              + " add=" + add.offered
-                              + " folder=" + add.codeName
-                              + " blocked=" + add.blocked
-                              + " tip=" + add.tip.shown
-                              + " aside=" + acts.driver.tipAside(tip)
-                              + " mark=" + worktreeTimer.tipMark(tip)
-                              + " cut=" + add.nameCut
-                              // What the hover says. Last, because it is a sentence.
-                              + " says=" + (tip.visible ? tip.text : ""))
-                acts.driver.complete()
-                return
-            }
-            if (worktreeTimer.mode === "add") {
-                // Nothing to press: the line says why, and the run ends on it rather than at the watchdog.
-                if (!add.offered || add.blocked) {
-                    worktreeTimer.say("worktree_add offered=" + add.offered + " blocked=" + add.blocked)
-                    acts.driver.complete()
-                    return
-                }
-                worktreeTimer.stop()
-                // A click, as a hand makes it: the row's handler, then the menus fold. The landing is the window's.
-                acts.driver.pressWrite("worktree-add", () => {
-                    add.triggered()
-                    worktreeTimer.menu().dismiss()
-                    return true
+                op.complete(() => {
+                    const row = op.addItem()
+                    const tip = Tips.box
+                    return "worktree_add_menu card=" + op.card().opened
+                           + " here=" + op.hereItem().offered
+                           + " add=" + row.offered
+                           + " folder=" + row.codeName
+                           + " blocked=" + row.blocked
+                           + " tip=" + row.tip.shown
+                           + " aside=" + acts.driver.tipAside(tip)
+                           + " mark=" + op.tipMark(tip)
+                           + " cut=" + row.nameCut
+                           // What the hover says. Last, because it is a sentence.
+                           + " says=" + (tip.visible ? tip.text : "")
                 })
                 return
             }
+            if (op.mode === "add") {
+                // Nothing to press: the line says why, and the run ends on it rather than at the watchdog.
+                if (!add.offered || add.blocked) {
+                    op.complete(() => "worktree_add offered=" + op.addItem().offered
+                                      + " blocked=" + op.addItem().blocked)
+                    return
+                }
+                // A click, as a hand makes it: the row's handler, then the menus fold. The landing is the window's.
+                op.input("pressed", () => acts.driver.pressWrite("worktree-add", () => {
+                    add.triggered()
+                    op.menu().dismiss()
+                    return true
+                }))
+                op.stop()
+                return
+            }
             if (!here.offered) {
-                worktreeTimer.say("worktree_box offered=false")
-                acts.driver.complete()
+                op.complete(() => "worktree_box offered=false")
                 return
             }
             // The row opens the box where the menu was raised (`RepoPage.startWorktreeAt`).
-            here.triggered()
-            worktreeTimer.menu().dismiss()
-            worktreeTimer.step = 2
+            op.input("box_asked", () => {
+                here.triggered()
+                op.menu().dismiss()
+            })
+        }
+        /// Whether the box refuses what it holds, and why — on the graph's box, or the left menu's.
+        function boxRefused() {
+            return worktreeTimer.onGraph ? acts.graphPane.namingRefused : acts.sidebarPane.editRefused
+        }
+        function boxWhy() {
+            return worktreeTimer.onGraph ? acts.page.graphNameRefusedWhy : acts.sidebarPane.editRefusedWhy
         }
         /// The box is up: typed into on the graph, then stood, sent, or sent behind a branch of the same name.
         function awaitBox() {
-            if (worktreeTimer.onGraph) {
+            const op = worktreeTimer
+            if (op.onGraph) {
                 const view = acts.graphPane.view
-                const row = acts.graphModel.rowOf(worktreeTimer.oid)
+                const row = acts.graphModel.rowOf(op.oid)
                 const item = row < 0 ? null : view.itemAtIndex(row)
-                if (view.namingOid !== worktreeTimer.oid || item === null || !item.naming)
+                if (!Awaited.all("worktree_box_open", {
+                        "box": view.namingOid === op.oid && item !== null && item.naming }))
                     return
-                if (worktreeTimer.name !== "" && view.namingText !== worktreeTimer.name) {
+                if (!Awaited.all("worktree_box_typed", {
+                        "typed": op.naming === "" || view.namingText === op.naming })) {
                     // In the way a recycled delegate puts it back (`GraphRowDelegate.takeNamingFocus`), so the box on
                     // screen holds what the run says.
-                    view.namingText = worktreeTimer.name
+                    view.namingText = op.naming
                     item.takeNamingFocus()
                     return
                 }
-            } else if (acts.sidebarPane.editKey === "") {
+            } else if (!Awaited.all("worktree_box_open", { "box": acts.sidebarPane.editKey !== "" })) {
                 return
             }
-            if (worktreeTimer.mode === "box") {
-                const refused = worktreeTimer.onGraph ? acts.graphPane.namingRefused : acts.sidebarPane.editRefused
-                const why = worktreeTimer.onGraph ? acts.page.graphNameRefusedWhy : acts.sidebarPane.editRefusedWhy
+            if (op.mode === "box") {
                 // A refused name says why in the box's tip, which comes up after the tip's delay: the picture waits for
                 // it, read off the window's one tip (`Tips.box`).
                 const tip = Tips.box
-                const tipped = tip.visible && tip.text === why
-                if (refused && !tipped)
+                if (!Awaited.all("worktree_box_tip", {
+                        "tip": !op.boxRefused() || (tip.visible && tip.text === op.boxWhy()) }))
                     return
-                worktreeTimer.say("worktree_box where=" + (worktreeTimer.onGraph ? "graph" : "nav")
-                              + " open=true"
-                              + " mode=" + (worktreeTimer.onGraph ? acts.graphPane.namingMode : "worktree")
-                              + " refused=" + refused
-                              + " tip=" + tipped
-                              + " mark=" + worktreeTimer.tipMark(tip)
-                              + " why=" + why)
-                acts.driver.barrierRendered.begin()
+                op.complete(() => {
+                    const shown = Tips.box
+                    const why = op.boxWhy()
+                    return "worktree_box where=" + (op.onGraph ? "graph" : "nav")
+                           + " open=true"
+                           + " mode=" + (op.onGraph ? acts.graphPane.namingMode : "worktree")
+                           + " refused=" + op.boxRefused()
+                           + " tip=" + (shown.visible && shown.text === why)
+                           + " mark=" + op.tipMark(shown)
+                           + " why=" + why
+                })
                 return
             }
-            worktreeTimer.stop()
-            if (worktreeTimer.mode === "refused")
+            if (op.mode === "refused") {
                 // Somebody else takes the name first — through the product's own door, ahead in the queue — while the
                 // box still holds it unrefused: the refs that would refuse it have not been read again yet.
-                acts.repoTab.createBranch(worktreeTimer.name, worktreeTimer.oid, false)
+                op.input("taken", () => {
+                    acts.repoTab.createBranch(op.naming, op.oid, false)
+                })
+            }
             // The box's Enter, past its refusal gate (which has nothing to refuse yet), on the road it takes.
-            acts.driver.pressWrite("worktree-new", () => {
-                if (worktreeTimer.onGraph)
-                    acts.graphPane.view.namingSubmitted(worktreeTimer.oid, worktreeTimer.name, "worktree")
+            op.input("sent", () => acts.driver.pressWrite("worktree-new", () => {
+                if (op.onGraph)
+                    acts.graphPane.view.namingSubmitted(op.oid, op.naming, "worktree")
                 else
-                    acts.sidebarPane.submitEdit(worktreeTimer.name)
+                    acts.sidebarPane.submitEdit(op.naming)
                 return true
-            })
+            }))
+            op.stop()
             // git turns the worktree down: the bar is the answer, the log stays shut (`write_notice log=`).
-            if (worktreeTimer.mode === "refused")
+            if (op.mode === "refused")
                 acts.driver.barrierNotice.start()
         }
     }
@@ -320,18 +334,18 @@ Item {
     /// `<folder>[=<name>][@graph]`: `-box` stops at the box (holding `<name>` where one is given — the left menu's
     /// opened through its door holding it, since nothing types into it) or at the reason no box opened; `worktree-rename`
     /// sends `<name>` and waits for the listing that names the new folder (デザイン規約 §グラフ行のダブルクリック).
-    SampleTimer {
+    /// `worktree-rename` has no `order`: a rename withheld from the box ends on the reason after the second click.
+    PageStage {
         id: renameTimer
+        name: "worktree_rename"
         property string folder: ""
-        property string name: ""
+        /// What is typed into the box.
+        property string naming: ""
         property bool typed: false
         property bool onGraph: false
         property bool sends: false
         property string full: ""
         property string oid: ""
-        /// 0 = the first click, 1 = the second once the double-click window has passed, 2 = the box or the reason,
-        /// 3 = the listing after the send.
-        property int step: 0
         function begin(arg, sends) {
             let rest = "" + arg
             renameTimer.onGraph = rest.endsWith("@graph")
@@ -339,15 +353,13 @@ Item {
                 rest = rest.slice(0, -6)
             const named = rest.indexOf("=")
             renameTimer.typed = named >= 0
-            renameTimer.name = named < 0 ? "" : rest.substring(named + 1)
+            renameTimer.naming = named < 0 ? "" : rest.substring(named + 1)
             renameTimer.folder = named < 0 ? rest : rest.substring(0, named)
             renameTimer.sends = sends
-            renameTimer.step = 0
+            renameTimer.order = sends ? []
+                              : renameTimer.typed && !renameTimer.onGraph ? ["box_asked"]
+                              : ["first_click", "second_click"]
             renameTimer.start()
-        }
-        function say(line) {
-            renameTimer.stop()
-            Harness.report(line)
         }
         /// The graph row the worktree stands on, null while it is not laid out.
         function graphItem() {
@@ -375,107 +387,136 @@ Item {
             return !list || list.rowGuarded(acts.rowOf("worktree", renameTimer.folder))
         }
         onTriggered: {
-            Awaited.at("worktree_rename", renameTimer.step)
-            if (renameTimer.step === 0) {
-                const at = acts.rowOf("worktree", renameTimer.folder)
+            const op = renameTimer
+            if (op.at("start")) {
+                const at = acts.rowOf("worktree", op.folder)
                 if (!Awaited.all("worktree_rename_row", { "row": at >= 0 }))
                     return
-                renameTimer.full = acts.worktreesModel.fullAt(at)
-                renameTimer.oid = acts.worktreesModel.headOfWorktree(renameTimer.full)
+                op.full = acts.worktreesModel.fullAt(at)
+                op.oid = acts.worktreesModel.headOfWorktree(op.full)
                 // The left menu's box holds a name only through its door (`SidebarPane.beginRename`).
-                if (renameTimer.typed && !renameTimer.onGraph && !renameTimer.sends) {
-                    acts.sidebarPane.beginRename("worktreeFolder", renameTimer.full, renameTimer.name)
-                    renameTimer.step = 2
+                if (op.typed && !op.onGraph && !op.sends) {
+                    op.input("box_asked", () => {
+                        acts.sidebarPane.beginRename("worktreeFolder", op.full, op.naming)
+                    })
                     return
                 }
-                if (!Awaited.all("worktree_rename_first", { "clicked": renameTimer.click() }))
-                    return
-                renameTimer.step = 1
+                op.input("first_click", () => op.click())
                 return
             }
-            if (renameTimer.step === 1) {
+            if (op.at("first_click")) {
                 // Inside the double-click window a second click would be half a double-click.
-                const open = !renameTimer.guarded()
-                if (!Awaited.all("worktree_rename_second", { "window": open, "clicked": open && renameTimer.click() }))
+                if (!Awaited.all("worktree_rename_second", { "window": !op.guarded() }))
                     return
-                renameTimer.step = 2
+                op.input("second_click", () => op.click())
                 return
             }
-            if (renameTimer.step === 2) {
-                renameTimer.awaitBox()
+            if (op.at("sent")) {
+                op.awaitListing()
                 return
             }
-            renameTimer.awaitListing()
+            op.awaitBox()
         }
-        function awaitBox() {
+        /// Where the box stands: open (on the graph's row, or the left menu's), or withheld with a reason.
+        function boxOpen() {
             const view = acts.graphPane.view
             const item = renameTimer.onGraph ? renameTimer.graphItem() : null
             const list = acts.navProbe.listOf("worktree")
             const at = acts.rowOf("worktree", renameTimer.folder)
-            const open = renameTimer.onGraph ? view.namingOid === renameTimer.oid && item !== null && item.naming
-                                             : acts.sidebarPane.editKey !== "" && at >= 0 && list.rowBoxWidth(at) > 0
-            const withheld = renameTimer.onGraph ? acts.graphPane.renameWithheld : acts.sidebarPane.renameWithheld
+            return renameTimer.onGraph ? view.namingOid === renameTimer.oid && item !== null && item.naming
+                                       : acts.sidebarPane.editKey !== "" && at >= 0 && list.rowBoxWidth(at) > 0
+        }
+        function withheld() {
+            return renameTimer.onGraph ? acts.graphPane.renameWithheld : acts.sidebarPane.renameWithheld
+        }
+        function boxRefused() {
+            return renameTimer.boxOpen()
+                   && (renameTimer.onGraph ? acts.graphPane.namingRefused : acts.sidebarPane.editRefused)
+        }
+        function boxWhy() {
+            return renameTimer.withheld()
+                   ? (renameTimer.onGraph ? acts.graphPane.view.withheldWhy : acts.sidebarPane.withheldWhy)
+                   : renameTimer.onGraph ? acts.page.graphNameRefusedWhy : acts.sidebarPane.editRefusedWhy
+        }
+        function awaitBox() {
+            const op = renameTimer
+            const view = acts.graphPane.view
+            const open = op.boxOpen()
+            const withheld = op.withheld()
             if (!Awaited.all("worktree_rename_box", { "box_or_reason": open || withheld }))
                 return
-            if (open && renameTimer.onGraph && renameTimer.typed && view.namingText !== renameTimer.name) {
+            if (!Awaited.all("worktree_rename_typed", {
+                    "typed": !(open && op.onGraph && op.typed) || view.namingText === op.naming })) {
                 // In the way a recycled delegate puts it back (`GraphRowDelegate.takeNamingFocus`).
-                view.namingText = renameTimer.name
-                item.takeNamingFocus()
+                view.namingText = op.naming
+                op.graphItem().takeNamingFocus()
                 return
             }
-            if (open && renameTimer.sends) {
-                renameTimer.step = 3
-                acts.driver.pressWrite("worktree-rename", () => {
-                    if (renameTimer.onGraph)
-                        view.namingSubmitted(renameTimer.oid, renameTimer.name, "rename")
+            if (open && op.sends) {
+                op.input("sent", () => acts.driver.pressWrite("worktree-rename", () => {
+                    if (op.onGraph)
+                        view.namingSubmitted(op.oid, op.naming, "rename")
                     else
-                        acts.sidebarPane.submitEdit(renameTimer.name)
+                        acts.sidebarPane.submitEdit(op.naming)
                     return true
-                })
+                }))
                 return
             }
-            const refused = open && (renameTimer.onGraph ? acts.graphPane.namingRefused : acts.sidebarPane.editRefused)
-            const why = withheld ? (renameTimer.onGraph ? view.withheldWhy : acts.sidebarPane.withheldWhy)
-                      : renameTimer.onGraph ? acts.page.graphNameRefusedWhy : acts.sidebarPane.editRefusedWhy
             // A reason comes up after the tip's delay, on the window's one tip.
             const tip = Tips.box
-            const tipped = tip.visible && tip.text === why
-            if (!Awaited.all("worktree_rename_tip", { "tip": tipped || !(refused || withheld) }))
+            const tipped = tip.visible && tip.text === op.boxWhy()
+            if (!Awaited.all("worktree_rename_tip", { "tip": tipped || !(op.boxRefused() || withheld) }))
                 return
-            renameTimer.say("worktree_rename_box where=" + (renameTimer.onGraph ? "graph" : "nav")
-                            + " open=" + open
-                            + " withheld=" + withheld
-                            + " kind=" + (!open ? "" : renameTimer.onGraph ? view.namingKind
-                                                                         : acts.sidebarPane.editKind)
-                            + " placeholder=" + (!open ? "" : renameTimer.onGraph ? item.nameBoxPlaceholder
-                                                                                : list.rowBoxPlaceholder(at))
-                            + " text=" + (!open ? "" : renameTimer.onGraph ? view.namingText
-                                                                         : acts.sidebarPane.editText)
-                            + " refused=" + refused
-                            + " tip=" + tipped
-                            + " mark=" + worktreeTimer.tipMark(tip)
-                            // Last, because it is a sentence.
-                            + " why=" + why)
-            acts.driver.barrierRendered.begin()
+            op.complete(() => {
+                const shown = op.boxOpen()
+                const why = op.boxWhy()
+                const tip = Tips.box
+                const list = acts.navProbe.listOf("worktree")
+                const at = acts.rowOf("worktree", op.folder)
+                const kind = !shown ? "" : op.onGraph ? view.namingKind : acts.sidebarPane.editKind
+                const placeholder = !shown ? "" : op.onGraph ? op.graphItem().nameBoxPlaceholder
+                                                             : list.rowBoxPlaceholder(at)
+                const text = !shown ? "" : op.onGraph ? view.namingText : acts.sidebarPane.editText
+                return "worktree_rename_box where=" + (op.onGraph ? "graph" : "nav")
+                       + " open=" + shown
+                       + " withheld=" + op.withheld()
+                       + " kind=" + kind
+                       + " placeholder=" + placeholder
+                       + " text=" + text
+                       + " refused=" + op.boxRefused()
+                       + " tip=" + (tip.visible && tip.text === why)
+                       + " mark=" + worktreeTimer.tipMark(tip)
+                       // Last, because it is a sentence.
+                       + " why=" + why
+            })
+        }
+        /// The listing as it stands: whether the box is down, the new folder listed and the old one gone.
+        function listing() {
+            return {
+                "box": renameTimer.onGraph ? acts.graphPane.view.namingOid !== "" : acts.sidebarPane.editKey !== "",
+                "listed": acts.rowOf("worktree", renameTimer.naming) >= 0,
+                "gone": acts.rowOf("worktree", renameTimer.folder) < 0
+            }
         }
         /// The new folder listed, the old one gone, the box down, nothing running.
         function awaitListing() {
-            const box = renameTimer.onGraph ? acts.graphPane.view.namingOid !== "" : acts.sidebarPane.editKey !== ""
-            const listed = acts.rowOf("worktree", renameTimer.name) >= 0
-            const gone = acts.rowOf("worktree", renameTimer.folder) < 0
+            const op = renameTimer
+            const now = op.listing()
             // Settled too: the new listing sets the other worktrees' reads going, and a picture taken under them is of
             // a page still arriving.
-            if (!Awaited.all("worktree_renamed", { "idle": acts.repoTab.busyCount === 0, "box_down": !box,
-                                                   "listed": listed, "gone": gone,
+            if (!Awaited.all("worktree_renamed", { "idle": acts.repoTab.busyCount === 0, "box_down": !now.box,
+                                                   "listed": now.listed, "gone": now.gone,
                                                    "settled": PageSettled.settled(acts.page) }))
                 return
-            renameTimer.say("worktree_renamed where=" + (renameTimer.onGraph ? "graph" : "nav")
-                            + " from=" + renameTimer.folder
-                            + " to=" + renameTimer.name
-                            + " listed=" + listed
-                            + " gone=" + gone
-                            + " box=" + box)
-            acts.driver.barrierRendered.begin()
+            op.complete(() => {
+                const landed = op.listing()
+                return "worktree_renamed where=" + (op.onGraph ? "graph" : "nav")
+                       + " from=" + op.folder
+                       + " to=" + op.naming
+                       + " listed=" + landed.listed
+                       + " gone=" + landed.gone
+                       + " box=" + landed.box
+            })
         }
     }
 }

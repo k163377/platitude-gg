@@ -1,21 +1,26 @@
 //! The run's contract: the structured lines the harness says under the
 //! run's own id (`auto/Awaited.qml`, `auto/WindowCensus.qml`), read as the
-//! sequence of events they are and held to the one order a run has — its
-//! checkpoints in order, one completion, then its pictures, each saved
-//! after the completion, each walked, each claim read at it, and the
+//! sequence of events they are. Each operation keeps its own chain of
+//! stages ([`super::stages`]) — the page's and the window's are not
+//! ordered against each other — and the run as a whole has one order: its
+//! stage lines numbered in turn, one completion, then its pictures, each
+//! saved after the completion, each walked, each claim read at it, and the
 //! census named right after its walk. A run passes on this as much as on
 //! its must-say line: a picture nobody claimed, a claim never read, a
-//! claim that did not hold, a checkpoint reached twice, a part the row
-//! promised and the picture lacks, a completion or a picture on a page
-//! still arriving, a completion said twice or counting checkpoints it did
-//! not have, a picture before the completion, a picture asked for and not
-//! saved or saved without being asked for — each is a breach, named
-//! (反映前テストの機械化 §検証時点). What a line says never stands in
-//! place of what an earlier one said: the first completion stands, a
-//! second is a breach, and a breach found while reading is not taken
-//! back by a line that follows.
+//! claim that did not hold, a stage moved against its operation's chain,
+//! a stage the harness refused, a part the row promised and the picture
+//! lacks, a completion or a picture on a page still arriving, a
+//! completion said twice, counting stages it did not have or from a
+//! generation that is over, a picture before the completion, a picture
+//! asked for and not saved or saved without being asked for — each is a
+//! breach, named (反映前テストの機械化 §検証時点). What a line says never
+//! stands in place of what an earlier one said: the first completion
+//! stands, a second is a breach, and a breach found while reading is not
+//! taken back by a line that follows.
 
 use std::collections::BTreeSet;
+
+use super::stages::Stages;
 
 /// What one `pictured` line said.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,15 +42,13 @@ pub(super) struct Pictured {
 pub(super) struct Said {
     /// The verb the first completion named, once it came.
     pub completed: Option<String>,
-    /// How many checkpoints that completion counted.
-    pub completed_after: usize,
     /// The page's reads still on their way when the verb completed
-    /// (`PageSettled.missing`), and the ones the verb said it would
-    /// complete over (`Awaited.arriving`).
+    /// (`PageSettled.missing`), and the ones the completion said it would
+    /// complete over (`StageTimer.complete`'s `arriving`).
     pub arriving: Vec<String>,
     pub expected: Vec<String>,
-    /// Every checkpoint, in the order said.
-    pub checkpoints: Vec<String>,
+    /// The operations' chains, as their lines moved them.
+    pub stages: Stages,
     pub pictured: Vec<Pictured>,
     /// The census at the app's picture, once it came.
     pub census: Option<BTreeSet<String>>,
@@ -63,7 +66,7 @@ pub(super) struct Said {
 }
 
 /// A comma-separated list of names, as the harness joins them.
-fn names(list: &str) -> Vec<String> {
+pub(super) fn names(list: &str) -> Vec<String> {
     list.split(',')
         .map(str::trim)
         .filter(|n| !n.is_empty())
@@ -72,7 +75,7 @@ fn names(list: &str) -> Vec<String> {
 }
 
 /// The value after `key=` in a line of `key=value` words.
-fn field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
+pub(super) fn field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
     line.split_whitespace().find_map(|word| {
         word.strip_prefix(key)
             .and_then(|rest| rest.strip_prefix('='))
@@ -92,6 +95,27 @@ fn saved_artifact(line: &str) -> Option<&'static str> {
     } else {
         None
     }
+}
+
+/// The kinds of structured line, each named by the word before its `run=`.
+const KINDS: [&str; 8] = [
+    "begin",
+    "stage",
+    "stage_breach",
+    "complete",
+    "pictured",
+    "pictures",
+    "picture",
+    "census",
+];
+
+/// Which structured line `line` is: the word right before its first ` run=`
+/// (`INFO bench: stage run=…`), so a word the rest of the line carries —
+/// `to=complete`, a breach's reason — never decides it.
+fn kind_of(line: &str) -> Option<&'static str> {
+    let at = line.find(" run=")?;
+    let word = line[..at].rsplit(' ').next()?;
+    KINDS.iter().copied().find(|kind| *kind == word)
 }
 
 /// What the run's lines say, read in order against `run` — the run's
@@ -126,16 +150,7 @@ pub(super) fn read(lines: &[String], run: &str) -> Said {
             said.census = Some(names(parts).into_iter().collect());
             continue;
         }
-        let Some(kind) = [
-            "checkpoint ",
-            "pictured ",
-            "pictures ",
-            "picture ",
-            "complete ",
-            "census ",
-        ]
-        .into_iter()
-        .find(|kind| line.contains(kind) && field(line, "run").is_some()) else {
+        let Some(kind) = kind_of(line) else {
             continue;
         };
         if field(line, "run") != Some(run) {
@@ -149,14 +164,24 @@ pub(super) fn read(lines: &[String], run: &str) -> Said {
             );
             census_due = false;
         }
+        let completed = said.completed.is_some();
         match kind {
-            "checkpoint " => checkpoint(&mut said, line),
-            "complete " => complete(&mut said, line),
-            "pictured " => pictured(&mut said, line),
-            "pictures " => pictures(&mut said, line),
-            "picture " => picture(&mut said, line),
+            "begin" => {
+                let found = said.stages.begin(line, completed);
+                said.sequence.extend(found);
+            }
+            "stage" => stage(&mut said, line),
+            "stage_breach" => said.sequence.push(format!(
+                "the harness refused a stage: {}",
+                line.split_once("stage_breach ")
+                    .map_or(line.as_str(), |(_, rest)| rest)
+            )),
+            "complete" => complete(&mut said, line),
+            "pictured" => pictured(&mut said, line),
+            "pictures" => pictures(&mut said, line),
+            "picture" => picture(&mut said, line),
             _ => {
-                if said.completed.is_none() {
+                if !completed {
                     said.sequence.push(
                         "the window was walked for a picture before the completion".to_string(),
                     );
@@ -174,43 +199,42 @@ pub(super) fn read(lines: &[String], run: &str) -> Said {
     said
 }
 
-/// A `checkpoint` line: the next in `seq`, and before the completion.
-fn checkpoint(said: &mut Said, line: &str) {
-    let name = field(line, "name").unwrap_or("?").to_string();
-    if said.completed.is_some() {
-        said.sequence
-            .push(format!("the checkpoint `{name}` came after the completion"));
-    }
-    let due = said.checkpoints.len() + 1;
+/// A `stage` line: the next in `seq`, and a move of its operation's chain.
+fn stage(said: &mut Said, line: &str) {
+    let due = said.stages.said + 1;
     let seq = field(line, "seq").and_then(|n| n.parse::<usize>().ok());
     if seq != Some(due) {
         said.sequence.push(format!(
-            "the checkpoint `{name}` came with seq={} where {due} was due",
+            "the stage line `{}` came with seq={} where {due} was due",
+            field(line, "to").unwrap_or("?"),
             field(line, "seq").unwrap_or("none")
         ));
     }
-    said.checkpoints.push(name);
+    let found = said.stages.stage(line, said.completed.is_some());
+    said.sequence.extend(found);
 }
 
-/// A `complete` line: the first stands, and counts the checkpoints
-/// reached before it.
+/// A `complete` line: the first stands, counts the stage lines said
+/// before it, and comes from its operation's current generation standing
+/// at `complete`.
 fn complete(said: &mut Said, line: &str) {
     if said.completed.is_some() {
         said.sequence
             .push("the completion was said twice; the first stands".to_string());
         return;
     }
-    let counted = field(line, "checkpoints")
+    let counted = field(line, "stages")
         .and_then(|n| n.parse().ok())
         .unwrap_or(0);
-    if counted != said.checkpoints.len() {
+    if counted != said.stages.said {
         said.sequence.push(format!(
-            "the completion counted {counted} checkpoint(s) where {} had been reached",
-            said.checkpoints.len()
+            "the completion counted {counted} stage line(s) where {} had been said",
+            said.stages.said
         ));
     }
+    let found = said.stages.completion(line);
+    said.sequence.extend(found);
     said.completed = Some(field(line, "verb").unwrap_or("?").to_string());
-    said.completed_after = counted;
     said.arriving = field(line, "page")
         .and_then(|page| page.strip_prefix("arriving:"))
         .map(names)
@@ -301,23 +325,11 @@ pub(super) fn breaches(
         // exit's, said elsewhere.
         return out;
     }
-    match &said.completed {
-        None => out.push("the pictures came with no completion said by name".to_string()),
-        Some(_) if said.completed_after == 0 => out.push(
-            "the verb completed having reached no checkpoint — it named nothing it waited for \
-             (`Awaited.all` / `Awaited.at`)"
-                .to_string(),
-        ),
-        Some(_) => {}
+    if said.completed.is_none() {
+        out.push("the pictures came with no completion said by name".to_string());
     }
     out.extend(arriving_breach(said));
     out.extend(picture_breaches(said));
-    let mut seen = BTreeSet::new();
-    for name in &said.checkpoints {
-        if !seen.insert(name) {
-            out.push(format!("the checkpoint `{name}` was reached twice"));
-        }
-    }
     for artifact in &said.saved {
         match said
             .pictured
@@ -362,7 +374,8 @@ fn arriving_breach(said: &Said) -> Option<String> {
     (!unexpected.is_empty()).then(|| {
         format!(
             "the verb completed on a page still arriving ({}) — its report read a page the reads had not \
-             finished with (`PageSettled.missing`; a verb that photographs that names it in `Awaited.arriving`)",
+             finished with (`PageSettled.missing`; a verb that photographs that declares it in its completion, \
+             `StageTimer.complete`)",
             unexpected.join(" ")
         )
     })
@@ -436,8 +449,8 @@ fn picture_breaches(said: &Said) -> Vec<String> {
                 if !unexpected.is_empty() {
                     out.push(format!(
                         "{}.png was taken on a page still arriving ({}) — a state about to move, whatever parts \
-                         it shows (`WindowCensus.reportAt`; a verb that photographs that names it in \
-                         `Awaited.arriving`)",
+                         it shows (`WindowCensus.reportAt`; a verb that photographs that declares it in its \
+                         completion, `StageTimer.complete`)",
                         p.artifact,
                         unexpected.join(" ")
                     ));
@@ -495,13 +508,25 @@ mod tests {
         text.lines().map(str::to_string).collect()
     }
 
-    /// A run as the harness says one, in order: the checkpoints, the
-    /// completion, then each picture saved, its claims read, and the
+    /// The page's operation that claims and dispatches, as the harness
+    /// says it: begun, then its two stages.
+    const ACT: [&str; 3] = [
+        "INFO bench: begin run=r1 owner=page op=act gen=1 order=claimed,dispatched",
+        "INFO bench: stage run=r1 owner=page op=act gen=1 from=start to=claimed seq=?",
+        "INFO bench: stage run=r1 owner=page op=act gen=1 from=claimed to=dispatched seq=?",
+    ];
+
+    /// A run as the harness says one, in order: the operations' stages,
+    /// the completion, then each picture saved, its claims read, and the
     /// window walked and its census named at the app's.
     const WELL: &str = "\
-INFO bench: checkpoint run=r1 name=card_latch_row seq=1
-INFO bench: checkpoint run=r1 name=card_latch_back seq=2
-INFO bench: complete run=r1 verb=card-latch checkpoints=2 page=settled
+INFO bench: begin run=r1 owner=page op=act gen=1 order=claimed,dispatched
+INFO bench: stage run=r1 owner=page op=act gen=1 from=start to=claimed seq=1
+INFO bench: stage run=r1 owner=page op=act gen=1 from=claimed to=dispatched seq=2
+INFO bench: begin run=r1 owner=page op=card_latch gen=1
+INFO bench: stage run=r1 owner=page op=card_latch gen=1 from=start to=back seq=3
+INFO bench: stage run=r1 owner=page op=card_latch gen=1 from=back to=complete seq=4
+INFO bench: complete run=r1 verb=card-latch owner=page op=card_latch gen=1 stages=4 page=settled
 INFO bench: pictures run=r1 wanted=app,overlay
 screenshot saved=true ink=0 path=x/app.png
 INFO bench: picture run=r1 artifact=app saved=true
@@ -514,6 +539,14 @@ INFO bench: picture run=r1 artifact=overlay saved=true
 INFO bench: pictured run=r1 artifact=overlay name=card_latch holds=true
 INFO bench: pictured run=r1 artifact=overlay name=window holds=true gained=none lost=none page=settled
 ";
+
+    /// The lines of `WELL` from its completion on: the pictures.
+    fn pictures() -> String {
+        WELL.split_once("INFO bench: complete ")
+            .map(|(_, rest)| rest.split_once('\n').map_or("", |(_, after)| after))
+            .unwrap_or("")
+            .to_string()
+    }
 
     fn declared(names: &[&str]) -> BTreeSet<String> {
         names.iter().map(|n| (*n).to_string()).collect()
@@ -528,7 +561,7 @@ INFO bench: pictured run=r1 artifact=overlay name=window holds=true gained=none 
     fn a_run_that_said_everything_its_row_asks_breaches_nothing() {
         let said = read(&lines(WELL), "r1");
         assert_eq!(said.completed.as_deref(), Some("card-latch"));
-        assert_eq!(said.checkpoints, ["card_latch_row", "card_latch_back"]);
+        assert_eq!(said.stages.said, 4);
         assert_eq!(said.saved.len(), 2);
         assert!(said.sequence.is_empty(), "{:?}", said.sequence);
         assert!(
@@ -547,17 +580,26 @@ INFO bench: pictured run=r1 artifact=overlay name=window holds=true gained=none 
     #[test]
     fn an_event_dropped_repeated_or_out_of_order_is_a_breach_that_stands() {
         let dropped = WELL.replace(
-            "INFO bench: checkpoint run=r1 name=card_latch_back seq=2\n",
+            "INFO bench: stage run=r1 owner=page op=card_latch gen=1 from=start to=back seq=3\n",
             "",
         );
-        assert_eq!(
-            read(&lines(&dropped), "r1").sequence,
-            ["the completion counted 2 checkpoint(s) where 1 had been reached"]
+        let found = read(&lines(&dropped), "r1").sequence;
+        assert!(
+            found
+                .contains(&"the stage line `complete` came with seq=4 where 3 was due".to_string())
+                && found.contains(
+                    &"page/card_latch moved from back to complete where it stood at start"
+                        .to_string()
+                )
+                && found.contains(
+                    &"the completion counted 4 stage line(s) where 3 had been said".to_string()
+                ),
+            "{found:?}"
         );
         let twice = WELL.replace(
-            "INFO bench: complete run=r1 verb=card-latch checkpoints=2 page=settled\n",
-            "INFO bench: complete run=r1 verb=card-latch checkpoints=2 page=settled\n\
-             INFO bench: complete run=r1 verb=other checkpoints=2 page=settled\n",
+            "INFO bench: complete run=r1 verb=card-latch owner=page op=card_latch gen=1 stages=4 page=settled\n",
+            "INFO bench: complete run=r1 verb=card-latch owner=page op=card_latch gen=1 stages=4 page=settled\n\
+             INFO bench: complete run=r1 verb=other owner=page op=card_latch gen=1 stages=4 page=settled\n",
         );
         let said = read(&lines(&twice), "r1");
         assert_eq!(
@@ -569,15 +611,21 @@ INFO bench: pictured run=r1 artifact=overlay name=window holds=true gained=none 
             !breaches(&said, &[], None).is_empty(),
             "nothing after it takes a breach back"
         );
-        let misnumbered = WELL.replace("name=card_latch_back seq=2", "name=card_latch_back seq=3");
+        let misnumbered = WELL.replace("to=complete seq=4", "to=complete seq=5");
         assert_eq!(
             read(&lines(&misnumbered), "r1").sequence,
-            ["the checkpoint `card_latch_back` came with seq=3 where 2 was due"]
+            ["the stage line `complete` came with seq=5 where 4 was due"]
         );
-        let late = format!("{WELL}INFO bench: checkpoint run=r1 name=card_latch_after seq=3\n");
+        let late = format!(
+            "{WELL}INFO bench: begin run=r1 owner=window op=late gen=1\n\
+             INFO bench: stage run=r1 owner=window op=late gen=1 from=start to=pressed seq=5\n"
+        );
         assert_eq!(
             read(&lines(&late), "r1").sequence,
-            ["the checkpoint `card_latch_after` came after the completion"]
+            [
+                "window/late began generation 1 after the completion",
+                "window/late moved to pressed after the completion",
+            ]
         );
         let early_claim =
             moved_first("INFO bench: pictured run=r1 artifact=app name=card_latch holds=true");
@@ -604,6 +652,28 @@ INFO bench: pictured run=r1 artifact=overlay name=window holds=true gained=none 
         assert_eq!(
             read(&lines(&unnamed), "r1").sequence,
             ["the census walked and named no parts: `census=` did not follow `census run=`"]
+        );
+    }
+
+    /// A line's kind is the word before its `run=`: a stage's move to
+    /// `complete` and a breach whose reason names one are never read as a
+    /// completion.
+    #[test]
+    fn a_word_later_in_a_line_never_decides_its_kind() {
+        let said = read(&lines(WELL), "r1");
+        assert_eq!(said.completed.as_deref(), Some("card-latch"));
+        let refused = WELL.replace(
+            "INFO bench: complete run=r1",
+            "INFO bench: stage_breach run=r1 owner=page op=x gen=1 stage=start why=complete run=r2 twice\n\
+             INFO bench: complete run=r1",
+        );
+        let said = read(&lines(&refused), "r1");
+        assert_eq!(said.of_another_run, 0);
+        assert_eq!(
+            said.sequence,
+            [
+                "the harness refused a stage: run=r1 owner=page op=x gen=1 stage=start why=complete run=r2 twice"
+            ]
         );
     }
 
@@ -646,61 +716,128 @@ INFO bench: pictured run=r1 artifact=overlay name=window holds=true gained=none 
         );
     }
 
+    /// A completion is of an operation's own transition: from a
+    /// generation that is over, from one standing short of `complete`, or
+    /// the end a breach made, it is no completion of the verb's.
     #[test]
-    fn a_completion_on_no_checkpoint_a_repeated_one_and_another_runs_lines_are_breaches() {
-        let counted = WELL
-            .replace(
-                "INFO bench: checkpoint run=r1 name=card_latch_row seq=1\n",
-                "",
-            )
-            .replace(
-                "INFO bench: checkpoint run=r1 name=card_latch_back seq=2\n",
-                "",
-            )
-            .replace("checkpoints=2", "checkpoints=0");
-        assert!(
-            breaches(&read(&lines(&counted), "r1"), &[], None)[0].contains("reached no checkpoint")
+    fn a_completion_off_its_operations_chain_and_another_runs_lines_are_breaches() {
+        let unmoved = WELL.replace(
+            "INFO bench: stage run=r1 owner=page op=card_latch gen=1 from=back to=complete seq=4\n",
+            "",
         );
-        let twice = WELL.replace("name=card_latch_back seq=2", "name=card_latch_row seq=2");
         assert!(
-            breaches(&read(&lines(&twice), "r1"), &[], None)
-                .iter()
-                .any(|b| b == "the checkpoint `card_latch_row` was reached twice")
+            read(&lines(&unmoved), "r1").sequence.contains(
+                &"page/card_latch completed standing at back — no transition to complete came before"
+                    .to_string()
+            )
         );
-        let stale =
+        let stale = WELL.replace(
+            "INFO bench: complete run=r1",
+            "INFO bench: begin run=r1 owner=page op=card_latch gen=2\nINFO bench: complete run=r1",
+        );
+        assert!(
+            read(&lines(&stale), "r1").sequence.contains(
+                &"page/card_latch completed from generation 1, which is over: generation 2 began"
+                    .to_string()
+            )
+        );
+        let broken = WELL.replace(
+            "owner=page op=card_latch gen=1 stages=4",
+            "owner=none op=none gen=0 stages=4",
+        );
+        assert!(
+            read(&lines(&broken), "r1")
+                .sequence
+                .contains(&"the run was ended by a breach, not completed".to_string())
+        );
+        let other =
             format!("{WELL}INFO bench: pictured run=r0 artifact=app name=window holds=false\n");
-        let said = read(&lines(&stale), "r1");
+        let said = read(&lines(&other), "r1");
         assert_eq!(said.of_another_run, 1);
         assert!(breaches(&said, &[], None)[0].contains("another run"));
     }
 
+    /// Two operations with no join between them: every interleaving of
+    /// their lines, and every observation said between them, passes or
+    /// fails alike — here, every one passes.
+    #[test]
+    fn independent_operations_pass_alike_in_every_interleaving() {
+        let window = [
+            "INFO bench: begin run=r1 owner=window op=clear gen=1 order=pressed,cleared",
+            "INFO bench: stage run=r1 owner=window op=clear gen=1 from=start to=pressed seq=?",
+            "INFO bench: stage run=r1 owner=window op=clear gen=1 from=pressed to=cleared seq=?",
+        ];
+        let noise = "INFO bench: clear_ready waiting=page";
+        let mut verdicts = BTreeSet::new();
+        for mask in 0u32..(1 << 6) {
+            if mask.count_ones() != 3 {
+                continue;
+            }
+            let (mut a, mut w) = (ACT.iter(), window.iter());
+            let mut said = Vec::new();
+            for bit in 0..6 {
+                let next = if mask & (1 << bit) != 0 {
+                    a.next()
+                } else {
+                    w.next()
+                };
+                said.push(next.expect("three of each").to_string());
+                // The observations between them: said or not, held or not.
+                if bit % 2 == 0 {
+                    said.push(noise.to_string());
+                    said.push("INFO bench: clear_ready waiting=nothing".to_string());
+                }
+            }
+            let mut seq = 0;
+            for line in &mut said {
+                if line.contains("seq=?") {
+                    seq += 1;
+                    *line = line.replace("seq=?", &format!("seq={seq}"));
+                }
+            }
+            said.push(format!(
+                "INFO bench: stage run=r1 owner=window op=clear gen=1 from=cleared to=complete seq={}",
+                seq + 1
+            ));
+            said.push(format!(
+                "INFO bench: complete run=r1 verb=commands-clear owner=window op=clear gen=1 stages={} \
+                 page=settled",
+                seq + 1
+            ));
+            said.extend(lines(&pictures()));
+            verdicts.insert(breaches(&read(&said, "r1"), &[], None));
+        }
+        assert_eq!(verdicts.len(), 1, "{verdicts:?}");
+        assert!(verdicts.iter().all(Vec::is_empty), "{verdicts:?}");
+    }
+
     #[test]
     fn a_completion_on_an_arriving_page_is_a_breach_unless_the_verb_said_it_would() {
-        let completion = "checkpoints=2 page=settled";
-        let arriving = WELL.replace(completion, "checkpoints=2 page=arriving:graph,rows:wip0");
+        let completion = "stages=4 page=settled";
+        let arriving = WELL.replace(completion, "stages=4 page=arriving:graph,rows:wip0");
         let said = read(&lines(&arriving), "r1");
         assert_eq!(said.arriving, ["graph", "rows:wip0"]);
         assert_eq!(
             breaches(&said, &[], None),
             [
                 "the verb completed on a page still arriving (graph rows:wip0) — its report read a page the reads \
-              had not finished with (`PageSettled.missing`; a verb that photographs that names it in \
-              `Awaited.arriving`)"
+                 had not finished with (`PageSettled.missing`; a verb that photographs that declares it in its \
+                 completion, `StageTimer.complete`)"
             ]
         );
         let declared = WELL.replace(
             completion,
-            "checkpoints=2 page=arriving:graph expected=graph,details",
+            "stages=4 page=arriving:graph expected=graph,details",
         );
         assert!(breaches(&read(&lines(&declared), "r1"), &[], None).is_empty());
         let half = WELL.replace(
             completion,
-            "checkpoints=2 page=arriving:graph,details expected=graph",
+            "stages=4 page=arriving:graph,details expected=graph",
         );
         assert!(breaches(&read(&lines(&half), "r1"), &[], None)[0].contains("arriving (details)"));
         let any = WELL.replace(
             completion,
-            "checkpoints=2 page=arriving:graph,details expected=*",
+            "stages=4 page=arriving:graph,details expected=*",
         );
         assert!(breaches(&read(&lines(&any), "r1"), &[], None).is_empty());
     }
@@ -723,12 +860,13 @@ INFO bench: pictured run=r1 artifact=overlay name=window holds=true gained=none 
             breaches(&said, &[], None),
             [
                 "overlay.png was taken on a page still arriving (readings) — a state about to move, whatever parts \
-                 it shows (`WindowCensus.reportAt`; a verb that photographs that names it in `Awaited.arriving`)"
+                 it shows (`WindowCensus.reportAt`; a verb that photographs that declares it in its completion, \
+                 `StageTimer.complete`)"
             ]
         );
         let declared = arriving.replace(
-            "checkpoints=2 page=settled",
-            "checkpoints=2 page=settled expected=readings",
+            "stages=4 page=settled",
+            "stages=4 page=settled expected=readings",
         );
         assert!(breaches(&read(&lines(&declared), "r1"), &[], None).is_empty());
         let unsaid = WELL.replace(

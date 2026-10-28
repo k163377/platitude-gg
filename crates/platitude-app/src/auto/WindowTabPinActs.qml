@@ -18,139 +18,109 @@ Item {
     required property TopBar topBar
     required property TabProbe tabProbe
 
-    /// Staging progress, shared by the timers below: only one verb runs in a process.
-    property bool floorSet: false
-    property bool frontSet: false
-    property bool runSent: false
-    /// The crowding wait: a tick spent on the floor, and its diagnostic said.
-    property bool settling: false
-    property bool told: false
-
-    /// Stages the strip: the window on its floor so the strip overflows, tab `front` in front, and the run sent to
-    /// whichever end leaves it off screen. Answers true once the stand-in stands; each earlier tick advances one step.
+    /// Stages the strip for `op`: the window on its floor so the strip overflows (`floor`), tab `front` in front
+    /// (`front`), and the run sent to whichever end leaves it off screen (`run`) — the first three stages of every
+    /// verb below. Answers true once the stand-in stands; each earlier beat puts at most one of those inputs in.
     ///
     /// The floor, because whether N tabs overflow depends on the installed fonts (`tab-widths` differs per OS), as
-    /// for `tab-edge`. Nothing here closes a tab or takes the page down, so every precondition is read on every tick
-    /// (app-ui.md §UI 自動化). `verb` is the report prefix, so the crowding diagnostic names which verb stalled.
-    /// The stages in order, and the furthest reached: a precondition read again on a later tick (the page, which
-    /// the floor's resize unsettles) is the same stage, not a step back, so it is not said again.
-    readonly property var stages: ["rows", "page", "floor", "crowded", "front", "front-arrives", "run", "pin"]
-    property int furthest: -1
-    function at(verb, stage) {
-        const index = acts.stages.indexOf(stage)
-        if (index < acts.furthest)
-            return
-        acts.furthest = index
-        Awaited.at(verb, stage)
-    }
-    function staged(front, verb) {
+    /// for `tab-edge`. Nothing here closes a tab or takes the page down, so every precondition is read on every beat
+    /// (app-ui.md §UI 自動化). `verb` is the diagnostic's prefix, so the crowding line names which verb stalled.
+    function staged(op, front, verb) {
         // The stand-in is drawn off the front tab's item, and a row the model just gained has none until the next
         // layout.
-        if (acts.pageRepeater.count < 2 || acts.tabProbe.tabItemCount() !== acts.pageRepeater.count) {
-            acts.at(verb, "rows")
+        if (acts.pageRepeater.count < 2 || acts.tabProbe.tabItemCount() !== acts.pageRepeater.count)
             return false
-        }
         // And the page under the strip settled, so the photograph holds a settled repository (the switch below
         // builds a new page).
         const page = acts.window.curPage
         if (page === null || page.pageTab.state !== "open"
-                || !page.pageWorktree.loaded || page.pageGraph.finishCount === 0) {
-            acts.at(verb, "page")
+                || !page.pageWorktree.loaded || page.pageGraph.finishCount === 0)
             return false
-        }
-        if (!acts.floorSet) {
-            acts.window.width = Math.ceil(acts.window.floorWidth)
-            acts.floorSet = true
-            acts.at(verb, "floor")
+        if (op.at("start")) {
+            op.input("floor", () => {
+                acts.window.width = Math.ceil(acts.window.floorWidth)
+            })
             return false
         }
         // A strip that fits has no edge for the stand-in to ride; which width crowds it cannot be assumed, so
         // wait on the strip's own word.
         if (!acts.topBar.bandTabScrolls) {
-            // Still uncrowded a tick after the floor: nothing left to wait for, so say the band's numbers once — a
-            // tick late, so the resize has laid out — to choose the tab count against.
-            if (acts.settling && !acts.told) {
-                acts.told = true
-                Harness.report(verb + " crowded=false tabs=" + acts.pageRepeater.count
-                                  + " content=" + Math.round(acts.topBar.bandTabContent)
-                                  + " view=" + Math.round(acts.topBar.bandTabsWidth)
-                                  + " windowW=" + Math.round(acts.window.width)
-                                  + " floorW=" + Math.ceil(acts.window.floorWidth))
-            }
-            acts.settling = true
-            acts.at(verb, "crowded")
+            // Still uncrowded once the floor has laid out (the band's numbers standing across a frame): nothing left
+            // to wait for, so say the band's numbers to choose the tab count against.
+            const band = verb + " crowded=false tabs=" + acts.pageRepeater.count
+                         + " content=" + Math.round(acts.topBar.bandTabContent)
+                         + " view=" + Math.round(acts.topBar.bandTabsWidth)
+                         + " windowW=" + Math.round(acts.window.width)
+                         + " floorW=" + Math.ceil(acts.window.floorWidth)
+            if (op.still("band", band))
+                Awaited.note(band)
             return false
         }
-        if (!acts.frontSet) {
-            acts.frontSet = true
-            acts.tabsModel.setCurrentIndex(front)
-            acts.at(verb, "front")
+        if (op.at("floor")) {
+            op.input("front", () => acts.tabsModel.setCurrentIndex(front))
             return false
         }
-        if (acts.tabsModel.currentIndex !== front) {
-            acts.at(verb, "front-arrives")
+        if (acts.tabsModel.currentIndex !== front)
+            return false
+        if (op.at("front")) {
+            // The strip's answer is the press's: a strip with nowhere to travel was never sent, and is asked again.
+            op.input("run", () => acts.topBar.sendTabRunAway())
             return false
         }
-        if (!acts.runSent) {
-            // Latched on the strip's answer: a strip with nowhere to travel was never sent, and counting it as sent
-            // leaves the wait to the watchdog.
-            acts.runSent = acts.topBar.sendTabRunAway()
-            acts.at(verb, "run")
-            return false
-        }
-        if (!acts.topBar.tabPinShown) {
-            acts.at(verb, "pin")
-            return false
-        }
-        return true
+        return acts.topBar.tabPinShown
     }
 
     // PGG_AUTO_ACT=tab-pin: the stand-in at the edge the tab in front went out of. The argument is that tab's index —
     // the first (default) rides the left edge, the last the right. `onScreen=false` is said because a front tab
     // genuinely at the edge frames the same.
-    SampleTimer {
+    WindowStage {
         id: tabPinTimer
+        name: "tab_pin"
+        order: ["floor", "front", "run"]
         running: Harness.autoAct === "tab-pin"
         readonly property int front: Number(Harness.autoActArg || 0)
         onTriggered: {
-            if (!Awaited.all("tab_pin_ready", { "ready": acts.staged(tabPinTimer.front, "tab_pin"),
-                                                "page": PageSettled.windowSettled(window) }))
+            // The staging first, on its own: its diagnostic is the beat's one line while it waits.
+            if (!acts.staged(tabPinTimer, tabPinTimer.front, "tab_pin"))
                 return
-            stop()
+            if (!Awaited.all("tab_pin_ready", { "page": PageSettled.windowSettled(window) }))
+                return
             // The line is judged as one run of words (`verify/verbs.rs`), so the order is the table's, with `left=` —
             // fixed only by the default argument — at its end. `kept=` / `crushed=`: a name cut away to the mark
             // photographs as a short name would — on the stand-in (`TabPin.nameKept`) and on the rows behind it,
             // which no picture here holds.
-            Harness.report(
-                "tab_pin kept=" + acts.topBar.tabPinNameKept
-                + " crushed=" + acts.tabProbe.tabNamesCrushed()
-                + " stood=" + acts.topBar.tabPinShown
-                + " onScreen=" + acts.topBar.frontTabWhole
-                + " left=" + acts.topBar.tabPinRidesLeft
-                + " at=" + tabPinTimer.front
-                + " run=" + acts.topBar.runOffset()
-                + " tabs=" + acts.pageRepeater.count
-                + " active=" + acts.tabsModel.currentIndex)
-            acts.window.finishAutoAct()
+            tabPinTimer.complete(() => "tab_pin kept=" + acts.topBar.tabPinNameKept
+                                        + " crushed=" + acts.tabProbe.tabNamesCrushed()
+                                        + " stood=" + acts.topBar.tabPinShown
+                                        + " onScreen=" + acts.topBar.frontTabWhole
+                                        + " left=" + acts.topBar.tabPinRidesLeft
+                                        + " at=" + tabPinTimer.front
+                                        + " run=" + acts.topBar.runOffset()
+                                        + " tabs=" + acts.pageRepeater.count
+                                        + " active=" + acts.tabsModel.currentIndex)
         }
     }
 
     // PGG_AUTO_ACT=tab-pin-go: the stand-in pressed; the strip travels until its row is whole and the stand-in steps
     // aside. `travelled=` (`from=` → `run=`) is said because a strip that was never sent away frames the same.
-    SampleTimer {
+    WindowStage {
         id: tabPinGoTimer
+        name: "tab_pin_go"
+        order: ["floor", "front", "run", "pressed"]
         running: Harness.autoAct === "tab-pin-go"
         readonly property int front: Number(Harness.autoActArg || 0)
-        property bool pressed: false
         property int from: 0
         onTriggered: {
             // The staging gates the press only: read again afterwards, it would wait for the stand-in this verb takes
             // away (app-ui.md §UI 自動化).
-            if (!tabPinGoTimer.pressed) {
-                if (!acts.staged(tabPinGoTimer.front, "tab_pin_go"))
+            if (!tabPinGoTimer.at("pressed")) {
+                if (!acts.staged(tabPinGoTimer, tabPinGoTimer.front, "tab_pin_go"))
                     return
-                tabPinGoTimer.from = acts.topBar.runOffset()
-                tabPinGoTimer.pressed = acts.topBar.pressTabPin()
+                // The press is its own answer: a stand-in not there takes none, and is pressed again.
+                tabPinGoTimer.input("pressed", () => {
+                    tabPinGoTimer.from = acts.topBar.runOffset()
+                    return acts.topBar.pressTabPin()
+                })
                 return
             }
             // The travel takes a moment (`TabStrip.showFrontTab`); a mid-flight shot is neither answer, so wait for
@@ -162,18 +132,15 @@ Item {
                     "page": PageSettled.windowSettled(window)
                 }))
                 return
-            stop()
             // `crushed=` as in `tab-pin`, for the tab in front this picture holds at the crowded strip's width.
-            Harness.report(
-                "tab_pin_go crushed=" + acts.tabProbe.tabNamesCrushed()
-                + " gone=" + !acts.topBar.tabPinShown
-                + " onScreen=" + acts.topBar.frontTabWhole
-                + " travelled=" + (acts.topBar.runOffset() !== tabPinGoTimer.from)
-                + " at=" + tabPinGoTimer.front
-                + " from=" + tabPinGoTimer.from
-                + " run=" + acts.topBar.runOffset()
-                + " tabs=" + acts.pageRepeater.count)
-            acts.window.finishAutoAct()
+            tabPinGoTimer.complete(() => "tab_pin_go crushed=" + acts.tabProbe.tabNamesCrushed()
+                                          + " gone=" + !acts.topBar.tabPinShown
+                                          + " onScreen=" + acts.topBar.frontTabWhole
+                                          + " travelled=" + (acts.topBar.runOffset() !== tabPinGoTimer.from)
+                                          + " at=" + tabPinGoTimer.front
+                                          + " from=" + tabPinGoTimer.from
+                                          + " run=" + acts.topBar.runOffset()
+                                          + " tabs=" + acts.pageRepeater.count)
         }
     }
 
@@ -182,22 +149,25 @@ Item {
     // tab in front, so the run is at the far end the new tab arrives at. The argument is a repository the strip has
     // not got — everything handed to the run at startup is already in it. `travelled=` is said because a strip
     // already sitting on that end frames the same.
-    SampleTimer {
+    WindowStage {
         id: tabOpenGoTimer
+        name: "tab_open_go"
+        order: ["floor", "front", "run", "opened"]
         running: Harness.autoAct === "tab-open-go"
-        property bool opened: false
         property int from: 0
         property int had: 0
+        /// The strip's account of the ask as last said (`frontAskAccount`): a diagnosis, said when it changes.
         property string account: ""
         onTriggered: {
-            if (!tabOpenGoTimer.opened) {
+            if (!tabOpenGoTimer.at("opened")) {
                 // The staging gates the opening only, as in `tab-pin-go`.
-                if (!acts.staged(0, "tab_open_go") || Harness.autoActArg === "")
+                if (!acts.staged(tabOpenGoTimer, 0, "tab_open_go") || Harness.autoActArg === "")
                     return
-                tabOpenGoTimer.from = acts.topBar.runOffset()
-                tabOpenGoTimer.had = acts.pageRepeater.count
-                tabOpenGoTimer.opened = true
-                acts.tabsModel.openRepositoryPath(Harness.autoActArg)
+                tabOpenGoTimer.input("opened", () => {
+                    tabOpenGoTimer.from = acts.topBar.runOffset()
+                    tabOpenGoTimer.had = acts.pageRepeater.count
+                    acts.tabsModel.openRepositoryPath(Harness.autoActArg)
+                })
                 return
             }
             // The new tab's item comes with the next layout, and until then the strip answers for the tabs it
@@ -219,20 +189,17 @@ Item {
                 const account = acts.topBar.frontAskAccount()
                 if (account !== tabOpenGoTimer.account) {
                     tabOpenGoTimer.account = account
-                    Harness.report("tab_open_go strip " + account)
+                    Awaited.note("tab_open_go strip " + account)
                 }
                 return
             }
-            stop()
-            Harness.report(
-                "tab_open_go arrived=" + acts.topBar.frontTabWhole
-                + " gone=" + !acts.topBar.tabPinShown
-                + " travelled=" + (acts.topBar.runOffset() !== tabOpenGoTimer.from)
-                + " from=" + tabOpenGoTimer.from
-                + " run=" + acts.topBar.runOffset()
-                + " tabs=" + acts.pageRepeater.count
-                + " active=" + acts.tabsModel.currentIndex)
-            acts.window.finishAutoAct()
+            tabOpenGoTimer.complete(() => "tab_open_go arrived=" + acts.topBar.frontTabWhole
+                                           + " gone=" + !acts.topBar.tabPinShown
+                                           + " travelled=" + (acts.topBar.runOffset() !== tabOpenGoTimer.from)
+                                           + " from=" + tabOpenGoTimer.from
+                                           + " run=" + acts.topBar.runOffset()
+                                           + " tabs=" + acts.pageRepeater.count
+                                           + " active=" + acts.tabsModel.currentIndex)
         }
     }
 
@@ -240,27 +207,32 @@ Item {
     // handler's own body), then the run narrowing under the new tab. The press ends the ask, so the strip stays put
     // and the stand-in comes up for the cut tab (デザイン規約 §タブの所作「帯自身の所作は頼みの外」). Narrowed by
     // widening the window off its floor and giving the width back, so the run ends as the staging's own.
-    SampleTimer {
+    WindowStage {
         id: tabMovedOnTimer
+        name: "tab_open_moved_on"
+        order: ["floor", "front", "run", "opened", "pressed", "widened", "narrowed"]
         running: Harness.autoAct === "tab-open-moved-on"
-        property string step: "stage"
         property int had: 0
+        /// The run's width with the window on its floor, read as the window widens.
         property real floorRun: 0
         property int from: 0
+        /// As `tab-open-go`'s: a diagnosis, said when it changes.
         property string account: ""
         onTriggered: {
-            if (tabMovedOnTimer.step === "stage") {
-                if (!acts.staged(0, "tab_open_moved_on") || Harness.autoActArg === "")
+            const op = tabMovedOnTimer
+            if (op.at("start") || op.at("floor") || op.at("front") || op.at("run")) {
+                if (!acts.staged(op, 0, "tab_open_moved_on") || Harness.autoActArg === "")
                     return
-                tabMovedOnTimer.had = acts.pageRepeater.count
-                tabMovedOnTimer.step = "arrive"
-                acts.tabsModel.openRepositoryPath(Harness.autoActArg)
+                op.input("opened", () => {
+                    op.had = acts.pageRepeater.count
+                    acts.tabsModel.openRepositoryPath(Harness.autoActArg)
+                })
                 return
             }
-            if (tabMovedOnTimer.step === "arrive") {
+            if (op.at("opened")) {
                 const page = acts.window.curPage
                 if (!Awaited.all("tab_open_moved_on", {
-                        "tab": acts.pageRepeater.count === tabMovedOnTimer.had + 1,
+                        "tab": acts.pageRepeater.count === op.had + 1,
                         "item": acts.tabProbe.tabItemCount() === acts.pageRepeater.count,
                         "still": !acts.topBar.tabRunTravelling,
                         "whole": acts.topBar.frontTabWhole,
@@ -272,43 +244,45 @@ Item {
                     })) {
                     // The ask's account meanwhile, as in `tab-open-go`.
                     const account = acts.topBar.frontAskAccount()
-                    if (account !== tabMovedOnTimer.account) {
-                        tabMovedOnTimer.account = account
-                        Harness.report("tab_open_moved_on strip " + account)
+                    if (account !== op.account) {
+                        op.account = account
+                        Awaited.note("tab_open_moved_on strip " + account)
                     }
                     return
                 }
-                acts.window.pressLandedAnywhere()
-                tabMovedOnTimer.floorRun = acts.topBar.bandTabRun
-                acts.window.width = Math.ceil(acts.window.floorWidth) + 120
-                tabMovedOnTimer.step = "wide"
-                Awaited.at("tab_open_moved_on", "wide")
+                // The press anywhere, then the window off its floor, in the one beat.
+                op.input("pressed", () => acts.window.pressLandedAnywhere())
+                op.input("widened", () => {
+                    op.floorRun = acts.topBar.bandTabRun
+                    acts.window.width = Math.ceil(acts.window.floorWidth) + 120
+                })
                 return
             }
-            if (tabMovedOnTimer.step === "wide") {
-                if (acts.topBar.bandTabRun <= tabMovedOnTimer.floorRun || acts.topBar.tabRunTravelling)
+            if (op.at("widened")) {
+                if (acts.topBar.bandTabRun <= op.floorRun || acts.topBar.tabRunTravelling)
                     return
-                tabMovedOnTimer.from = acts.topBar.runOffset()
-                acts.window.width = Math.ceil(acts.window.floorWidth)
-                tabMovedOnTimer.step = "narrow"
-                Awaited.at("tab_open_moved_on", "narrow")
+                op.input("narrowed", () => {
+                    op.from = acts.topBar.runOffset()
+                    acts.window.width = Math.ceil(acts.window.floorWidth)
+                })
                 return
             }
             // Back at the staging's run: settled either way — standing with the stand-in up, or travelled until the
             // tab is whole — so the report can judge which.
-            if (acts.topBar.bandTabRun > tabMovedOnTimer.floorRun || acts.topBar.tabRunTravelling
-                    || !(acts.topBar.tabPinShown || acts.topBar.frontTabWhole))
+            if (!Awaited.all("tab_open_moved_on_narrowed", {
+                    "narrow": acts.topBar.bandTabRun <= op.floorRun,
+                    "still": !acts.topBar.tabRunTravelling,
+                    "standing": acts.topBar.tabPinShown || acts.topBar.frontTabWhole }))
                 return
-            stop()
-            const account = acts.topBar.frontAskAccount()
-            Harness.report(
-                "tab_open_moved_on travelled=" + (acts.topBar.runOffset() !== tabMovedOnTimer.from)
-                + " stood=" + acts.topBar.tabPinShown
-                + " ask=" + (account.indexOf("ask=true") === 0)
-                + " from=" + tabMovedOnTimer.from
-                + " run=" + acts.topBar.runOffset()
-                + " strip " + account)
-            acts.window.finishAutoAct()
+            op.complete(() => {
+                const account = acts.topBar.frontAskAccount()
+                return "tab_open_moved_on travelled=" + (acts.topBar.runOffset() !== op.from)
+                       + " stood=" + acts.topBar.tabPinShown
+                       + " ask=" + (account.indexOf("ask=true") === 0)
+                       + " from=" + op.from
+                       + " run=" + acts.topBar.runOffset()
+                       + " strip " + account
+            })
         }
     }
 }

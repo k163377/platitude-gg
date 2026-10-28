@@ -30,7 +30,6 @@ Item {
     readonly property var refSwitchItem: driver.refSwitchItem
     readonly property var commitMenu: driver.commitMenu
     readonly property var dropCommitItem: driver.dropCommitItem
-    readonly property var renderedBarrier: driver.barrierRendered
 
     /// Runs `act` if it is this family's and says whether it was; `AutoActDriver` asks each family in turn.
     function run(act, arg) {
@@ -84,7 +83,8 @@ Item {
             // a new ask, past the latch the first click left (`SectionPeekPopup.toggleAt`, `HoverSeat.press`).
             page.foldByHand(true)
             peekAgainTimer.kind = arg === "" ? "branch" : arg
-            peekAgainTimer.step = 0
+            // Its subject is the section standing again, not its going.
+            acts.peekGoneWanted = false
             peekAgainTimer.start()
         } else if (act === "menu-peek") {
             // The folded rail's section and a standing menu (デザイン規約 §左メニューを畳む). `behind` rests on the
@@ -94,8 +94,11 @@ Item {
             // swapped: BRANCHES stays and TAGS never comes in.
             page.foldByHand(true)
             menuPeekTimer.how = arg === "" ? "behind" : arg
-            menuPeekTimer.step = 0
             menuPeekTimer.opened = false
+            // The menu or the section first, as `how` names, then the other.
+            menuPeekTimer.order = menuPeekTimer.how === "behind" ? ["menu_raised", "walked"]
+                                : menuPeekTimer.how === "under" ? ["peek_asked", "menu_raised"]
+                                : ["peek_asked", "walked"]
             menuPeekTimer.start()
         } else if (act === "nav-peek-open") {
             // A row opened inside the peeked section: what is read is that the popup makes room and stays up while
@@ -109,9 +112,9 @@ Item {
             // presses again so the round trip is read whole.
             const backing = arg.endsWith(":back")
             const tagName = backing ? arg.substring(0, arg.length - ":back".length) : arg
-            acts.tagEyeOid = tagsModel.oidOfName(tagName)
-            acts.tagEyeBack = backing
-            acts.tagEyeStep = 0
+            tagEyeTimer.oid = tagsModel.oidOfName(tagName)
+            tagEyeTimer.back = backing
+            tagEyeTimer.order = backing ? ["hidden", "shown"] : ["hidden"]
             tagEyeTimer.start()
         } else if (act === "nav-jump") {
             // One click on a row of the left panel (デザイン規約 §左メニューの所作), put in at the row's own `leftClick`
@@ -121,15 +124,15 @@ Item {
             // The rename gesture (two clicks on one row) in the peeked section. "-away" lets the pointer leave in
             // between, and a list that went and came back reads the second as a first click (デザイン規約 §左メニューの所作).
             page.foldByHand(true)
-            acts.reclickAway = act === "nav-reclick-away"
-            acts.reclickArmed = false
-            acts.reclickStep = 0
+            reclickTimer.away = act === "nav-reclick-away"
+            reclickTimer.armed = false
+            reclickTimer.order = reclickTimer.away ? ["first_click", "walked_off", "gone", "second_click"]
+                                                   : ["first_click", "second_click"]
             reclickTimer.start()
         } else if (act === "nav-reclick-elsewhere") {
             // The same gesture on the open list by the hand's own road — each click a press through the window's
             // watcher, then the release the row answers at — with a press on the details pane after the first
             // (デザイン規約 §左メニューの所作「間を空けた 2 回目」).
-            acts.elsewhereStep = 0
             elsewhereTimer.start()
         } else if (act === "nav-add-remote") {
             // The `+` of the REMOTES band, live even while the band is unavailable (デザイン規約 §左メニューの所作), put
@@ -163,8 +166,6 @@ Item {
             const seatParts = ("" + arg).split(":")
             pinSeatTimer.row = seatParts[0] === "" ? 0 : Number(seatParts[0])
             pinSeatTimer.rest = seatParts.length > 1 ? Number(seatParts[1]) : -1
-            pinSeatTimer.folded = false
-            pinSeatTimer.stood = ""
             pinSeatTimer.start()
         } else if (act === "nav-close") {
             // Sections stay packed against the top; a closed header resting at the pane's foot is the failure.
@@ -237,8 +238,10 @@ Item {
         menu.x = p.x
         menu.y = p.y
     }
-    SampleTimer {
+    // The menu and its card are asked for again each beat until they stand; the removal is pressed once.
+    PageStage {
         id: worktreeMenuTimer
+        name: "worktree_menu"
         property string worktree: ""
         property bool onGraph: false
         property bool press: false
@@ -269,77 +272,78 @@ Item {
             acts.standMenuOn(acts.commitMenu, item)
             return true
         }
+        /// Whether the menu stands on the branch the worktree has out, which brings the BRANCH card.
+        function branchCard() {
+            return worktreeMenuTimer.onGraph ? driver.commitBranchCard.applies : driver.refBranchCard.applies
+        }
         onTriggered: {
+            const op = worktreeMenuTimer
+            const card = op.card
             // The row's gate is read as the menu opens (`RefWorktreeMenu.standOn`): opened while a write runs, every
             // row greys until it ends (`AppMenu.runningWhy`).
-            if (!driver.menusLive())
+            const live = driver.menusLive()
+            const raised = live && op.menu.opened
+            if (live && !raised)
+                op.raise()
+            if (!Awaited.all("worktree_menu_open", { "live": live, "menu": raised }))
                 return
-            if (!worktreeMenuTimer.menu.opened) {
-                worktreeMenuTimer.raise()
-                return
-            }
-            const card = worktreeMenuTimer.card
             // A row the card has nothing for (no place for a new worktree, nothing to take away): the menu is the
             // whole answer. The repository's own worktree has a card — the rows that make a worktree — with no
             // `worktree remove`.
-            if (!card.applies && !worktreeMenuTimer.press) {
-                worktreeMenuTimer.stop()
-                Harness.report("worktree_menu worktree=" + worktreeMenuTimer.worktree + " card=false"
-                                  + " branch=" + (worktreeMenuTimer.onGraph ? driver.commitBranchCard.applies
-                                                                            : driver.refBranchCard.applies))
-                driver.complete()
+            if (!card.applies && !op.press) {
+                op.complete(() => "worktree_menu worktree=" + op.worktree + " card=false"
+                                  + " branch=" + op.branchCard())
                 return
             }
             // The card is one level in (デザイン規約 §メニュー の入れ子); opened so the picture shows its row.
-            if (!card.opened) {
-                worktreeMenuTimer.menu.openSub(card)
+            const opened = card.opened
+            if (!opened)
+                op.menu.openSub(card)
+            if (!Awaited.all("worktree_menu_card", { "card": opened }))
                 return
-            }
             const item = card.removeWorktreeItem
-            if (!worktreeMenuTimer.press) {
+            if (!op.press) {
                 // Whether the folder is cut is the row's layout's to say (`AutoActDriver.cardLaidOut`).
-                if (!Awaited.all("worktree_menu", { "card_laid_out": driver.cardLaidOut(card) }))
+                if (!Awaited.all("worktree_menu", { "card_laid_out": driver.cardLaidOut(op, card) }))
                     return
                 // A greyed row says why on its hover alone, and a cut folder comes back whole on it.
                 // A row not on offer has no hover, and its folder no room to be cut in.
                 const wants = item.offered && (item.blocked || item.nameCut)
                 if (!Awaited.all("worktree_menu", { "tip_beside": driver.rowTipStood(item, wants) }))
                     return
-                worktreeMenuTimer.stop()
-                Harness.report("worktree_menu worktree=" + worktreeMenuTimer.worktree
-                                  + " card=" + card.opened
-                                  + " offered=" + item.offered
-                                  + " blocked=" + item.blocked
-                                  + " tip=" + item.tip.shown
-                                  + " code=" + item.code
-                                  // Whether the menu stands on the branch the worktree has out, which brings the
-                                  // BRANCH card.
-                                  + " branch=" + (worktreeMenuTimer.onGraph ? driver.commitBranchCard.applies
-                                                                            : driver.refBranchCard.applies)
-                                  + " presses=" + item.holdPresses
-                                  // Whether the folder came out whole: the row bids for it, and a bid a fraction
-                                  // short elides it on one OS only (`AppMenuItem.implicitWidth`).
-                                  + " cut=" + item.nameCut
-                                  // What the hover says. Last, because it is a sentence.
-                                  + " says=" + (item.tip.shown ? item.tip.words : ""))
-                driver.complete()
+                op.complete(() => {
+                    const row = op.card.removeWorktreeItem
+                    return "worktree_menu worktree=" + op.worktree
+                           + " card=" + op.card.opened
+                           + " offered=" + row.offered
+                           + " blocked=" + row.blocked
+                           + " tip=" + row.tip.shown
+                           + " code=" + row.code
+                           + " branch=" + op.branchCard()
+                           + " presses=" + row.holdPresses
+                           // Whether the folder came out whole: the row bids for it, and a bid a fraction short
+                           // elides it on one OS only (`AppMenuItem.implicitWidth`).
+                           + " cut=" + row.nameCut
+                           // What the hover says. Last, because it is a sentence.
+                           + " says=" + (row.tip.shown ? row.tip.words : "")
+                })
                 return
             }
             // The presses, as a hand makes them: the row's handler folds the menus and asks for the removal. A row out
-            // of reach takes none (`AppMenuItem.completeHold`), and the sampler presses again on its next beat, naming
-            // the stage it waits at. The in-between is held before the press: a demo repository's listing would let
-            // it go before a picture could be grabbed (`RepoPage.holdGoneRows`).
-            if (worktreeMenuTimer.holding)
-                page.holdGoneRows = true
-            const went = driver.pressWrite("worktree-remove", () => item.completeHold())
-            Awaited.at(Harness.autoAct, went ? "pressed" : "row in reach")
-            if (!went)
+            // of reach takes none (`AppMenuItem.completeHold`), and the sampler presses again on its next beat. The
+            // in-between is held before the press: a demo repository's listing would let it go before a picture could
+            // be grabbed (`RepoPage.holdGoneRows`).
+            if (!op.input("pressed", () => {
+                    if (op.holding)
+                        page.holdGoneRows = true
+                    return driver.pressWrite("worktree-remove", () => item.completeHold())
+                }))
                 return
-            worktreeMenuTimer.stop()
+            op.stop()
             // git keeps the worktree and says why: the bar is the answer, and the log stays shut (`write_notice log=`).
-            if (worktreeMenuTimer.refused)
+            if (op.refused)
                 driver.barrierNotice.start()
-            else if (worktreeMenuTimer.holding)
+            else if (op.holding)
                 worktreeHeldTimer.start()
             else
                 worktreeGoneTimer.start()
@@ -349,214 +353,221 @@ Item {
     // what the worktree marked — its chip on the graph (on no branch), or its branch's frame and the branches list's
     // tree mark. The screen cannot tell a mark the window hides from one the refs no longer carry, so the claim is the
     // gone set and the branch row's own word (`mark=`, empty where `HELD` was).
-    SampleTimer {
+    PageStage {
         id: worktreeHeldTimer
+        name: "worktree_held"
         onTriggered: {
             if (!Awaited.all("worktree_held_ready", { "ready": driver.wroteAndSettled(),
                                                       "page": PageSettled.settled(page) }))
                 return
-            worktreeHeldTimer.stop()
-            const branch = repoTab.goneWorktreeBranch
-            const list = navProbe.listOf("branch")
-            const at = branch === "" ? -1 : branchesModel.rowOfName(branch)
-            const row = at < 0 || !list ? null : list.itemAtIndex(at)
-            Harness.report("worktree_held row=" + acts.worktreeRow(worktreeMenuTimer.worktree)
-                              + " chips=" + graphModel.goneChips.join(",")
-                              + " branch=" + branch
-                              + " mark=" + (row === null ? "" : row.change)
-                              + " worktree=" + worktreeMenuTimer.worktree)
-            renderedBarrier.begin()
+            worktreeHeldTimer.complete(() => {
+                const branch = repoTab.goneWorktreeBranch
+                const list = navProbe.listOf("branch")
+                const at = branch === "" ? -1 : branchesModel.rowOfName(branch)
+                const row = at < 0 || !list ? null : list.itemAtIndex(at)
+                return "worktree_held row=" + acts.worktreeRow(worktreeMenuTimer.worktree)
+                       + " chips=" + graphModel.goneChips.join(",")
+                       + " branch=" + branch
+                       + " mark=" + (row === null ? "" : row.change)
+                       + " worktree=" + worktreeMenuTimer.worktree
+            })
         }
     }
     // A removed worktree, judged on the list it leaves: gone at the press and still gone once git's listing is in.
-    SampleTimer {
+    PageStage {
         id: worktreeGoneTimer
+        name: "worktree_gone"
         onTriggered: {
             if (!Awaited.all("worktree_gone_ready", {
                 "ready": !(!driver.wroteAndSettled() || repoTab.goneWorktree !== "") }))
                 return
-            worktreeGoneTimer.stop()
             // The judged two first; the worktree and the count are the preset's.
-            Harness.report("worktree_gone row=" + acts.worktreeRow(worktreeMenuTimer.worktree)
-                              + " log=" + page.commandsOpen
-                              + " worktree=" + worktreeMenuTimer.worktree
-                              + " total=" + worktreesModel.total)
-            renderedBarrier.begin()
+            worktreeGoneTimer.complete(() => "worktree_gone row=" + acts.worktreeRow(worktreeMenuTimer.worktree)
+                                             + " log=" + page.commandsOpen
+                                             + " worktree=" + worktreeMenuTimer.worktree
+                                             + " total=" + worktreesModel.total)
         }
     }
-    SampleTimer {
+    PageStage {
         id: pinEdgeTimer
+        name: "nav_pin_edge"
+        /// Where the list came to rest at the last ask for its end (`NavProbe.scrollBranchesToEnd`).
+        property real rested: 0
         onTriggered: {
+            const op = pinEdgeTimer
             // No row at all is the other state (`nav-open head:<filter>`).
             if (!Awaited.all("pin_edge_ready", { "ready": !(branchesModel.headRow < 0) }))
                 return
             // Re-applied every tick: a list asked for its end before its layout pass has nowhere to go. A section
             // showing every row keeps answering 0 and the run waits out its watchdog — hence the preset in verbs.md.
-            const rested = navProbe.scrollBranchesToEnd()
+            op.rested = navProbe.scrollBranchesToEnd()
             // The row leaving first, then the stand-in: one up because the row left the list some other way is a
             // different state wearing the same picture.
-            if (navProbe.rowInView("branch", branchesModel.headRow))
+            if (!Awaited.all("pin_edge_pinned", {
+                    "left": !navProbe.rowInView("branch", branchesModel.headRow),
+                    "pin": navProbe.headPinShown && navProbe.headPinAbove }))
                 return
-            if (!navProbe.headPinShown || !navProbe.headPinAbove)
-                return
-            pinEdgeTimer.stop()
-            Harness.report(
-            "nav_pin_edge pin=" + navProbe.headPinShown
-            + " above=" + navProbe.headPinAbove
-            + " rowshown=" + navProbe.rowInView("branch", branchesModel.headRow)
-            + " name=" + branchesModel.headName
-            // Riding above, that is the list's top whatever the pane's height, so the number can be claimed.
-            + " y=" + Math.round(navProbe.headPinY)
-            // Last: the repository's own numbers, outside the judgement.
-            + " row=" + branchesModel.headRow
-            + " rested=" + Math.round(rested))
-            driver.complete()
+            op.complete(() => "nav_pin_edge pin=" + navProbe.headPinShown
+                              + " above=" + navProbe.headPinAbove
+                              + " rowshown=" + navProbe.rowInView("branch", branchesModel.headRow)
+                              + " name=" + branchesModel.headName
+                              // Riding above, that is the list's top whatever the pane's height, so the number can be
+                              // claimed.
+                              + " y=" + Math.round(navProbe.headPinY)
+                              // Last: the repository's own numbers, outside the judgement.
+                              + " row=" + branchesModel.headRow
+                              + " rested=" + Math.round(op.rested))
         }
     }
-    SampleTimer {
+    PageStage {
         id: pinSeatTimer
+        name: "nav_pin_seat"
+        order: ["folded"]
         property int row: 0
         /// The row the hand rests on once the fold has landed, -1 for none (`NavProbe.pointTipAt`).
         property int rest: -1
-        property bool folded: false
-        /// The geometry the last beat read: two beats alike say the layout pass handing out the seat has settled.
-        property string stood: ""
         onTriggered: {
+            const op = pinSeatTimer
             // BRANCHES arrives on a read of its own, and a click on a still-empty list folds nothing.
-            if (!pinSeatTimer.folded) {
-                if (!navProbe.clickRow("branch", pinSeatTimer.row))
-                    return
-                pinSeatTimer.folded = true
+            if (op.at("start")) {
+                op.input("folded", () => navProbe.clickRow("branch", op.row))
                 return
             }
-            // The row leaving first, then the stand-in (as in `nav-pin-edge`).
-            if (branchesModel.headRow >= 0 || !navProbe.headPinShown)
-                return
-            if (navProbe.headPinUnder !== pinSeatTimer.row)
-                return
+            // The row leaving first, then the stand-in (as in `nav-pin-edge`), under the row the fold shut.
+            const seated = branchesModel.headRow < 0 && navProbe.headPinShown && navProbe.headPinUnder === op.row
             // Re-applied every beat: the delegate arrives a layout after the model's rows, and a miss reads as a row
             // with nothing to open.
-            if (pinSeatTimer.rest >= 0) {
-                navProbe.pointTipAt("branch", pinSeatTimer.rest)
-                if (!navProbe.rowFactsOpen)
-                    return
-            }
+            if (seated && op.rest >= 0)
+                navProbe.pointTipAt("branch", op.rest)
+            const open = seated && (op.rest < 0 || navProbe.rowFactsOpen)
+            // The seat standing across a swapped frame: the layout pass handing it out has settled.
             const geom = Math.round(navProbe.headPinY) + "+" + Math.round(navProbe.headPinSeatY())
-            if (geom !== pinSeatTimer.stood) {
-                pinSeatTimer.stood = geom
+            if (!Awaited.all("nav_pin_seat", {
+                    "gone": branchesModel.headRow < 0,
+                    "pin": navProbe.headPinShown,
+                    "under": navProbe.headPinUnder === op.row,
+                    "open": open,
+                    "still": open && op.still("nav_pin_seat_geom", geom) }))
                 return
-            }
-            pinSeatTimer.stop()
-            Harness.report(
-            "nav_pin_seat row=" + pinSeatTimer.row
-            + " pin=" + navProbe.headPinShown
-            // The rested row opened — what moved the seat.
-            + " open=" + navProbe.rowFactsOpen
-            // The judged fields are one stretch (`under=` .. `says=`). `sat=` compares the stand-in's own `y` with the
-            // seat row's geometry — one number worked out from both ends.
-            + " under=" + navProbe.headPinUnder
-            + " sat=" + (Math.round(navProbe.headPinY) === Math.round(navProbe.headPinSeatY()))
-            + " lit=" + navProbe.headPinLit
-            + " depth=" + branchesModel.headDepth
-            + " says=" + branchesModel.headShownName
-            // Unjudged, for a reader.
-            + " at=" + Math.round(navProbe.headPinY)
-            + " gap=" + Math.round(navProbe.headPinSeatY())
-            + " above=" + navProbe.headPinAbove
-            + " name=" + branchesModel.headName)
-            driver.complete()
+            op.complete(() => "nav_pin_seat row=" + op.row
+                              + " pin=" + navProbe.headPinShown
+                              // The rested row opened — what moved the seat.
+                              + " open=" + navProbe.rowFactsOpen
+                              // The judged fields are one stretch (`under=` .. `says=`). `sat=` compares the stand-in's
+                              // own `y` with the seat row's geometry — one number worked out from both ends.
+                              + " under=" + navProbe.headPinUnder
+                              + " sat=" + (Math.round(navProbe.headPinY) === Math.round(navProbe.headPinSeatY()))
+                              + " lit=" + navProbe.headPinLit
+                              + " depth=" + branchesModel.headDepth
+                              + " says=" + branchesModel.headShownName
+                              // Unjudged, for a reader.
+                              + " at=" + Math.round(navProbe.headPinY)
+                              + " gap=" + Math.round(navProbe.headPinSeatY())
+                              + " above=" + navProbe.headPinAbove
+                              + " name=" + branchesModel.headName)
         }
     }
-    SampleTimer {
+    PageStage {
         id: peekOpenTimer
+        name: "nav_peek_open"
         property int want: 0
         onTriggered: {
             // Re-applied every beat, as the rest in `pinSeatTimer` is.
             navProbe.pointPeekTipAt(peekOpenTimer.want)
-            const name = navProbe.peekNameAt(peekOpenTimer.want)
-            if (name === "" || !navProbe.rowFactsOpen)
+            if (!Awaited.all("nav_peek_open", { "row": navProbe.peekNameAt(peekOpenTimer.want) !== "",
+                                                "open": navProbe.rowFactsOpen }))
                 return
-            peekOpenTimer.stop()
-            Harness.report("nav_peek_open row=" + peekOpenTimer.want + " name=" + name
-                + " peek=" + navProbe.peekStanding + " open=" + navProbe.rowFactsOpen
-                + " says=" + navProbe.rowFactsWords())
-            driver.complete()
+            peekOpenTimer.complete(() => "nav_peek_open row=" + peekOpenTimer.want
+                                         + " name=" + navProbe.peekNameAt(peekOpenTimer.want)
+                                         + " peek=" + navProbe.peekStanding + " open=" + navProbe.rowFactsOpen
+                                         + " says=" + navProbe.rowFactsWords())
         }
     }
-    // PGG_AUTO_ACT=menu-peek. Each step waits for the one before to land: the rail and the sections with rows to open
+    // PGG_AUTO_ACT=menu-peek. Each stage waits for the one before to land: the rail and the sections with rows to open
     // (else a cell refuses for want of rows, not for the menu), the section or the menu up, then — for those that walk
     // the hand off — the beat that closes a section left alone, run out.
-    SampleTimer {
+    PageStage {
         id: menuPeekTimer
+        name: "menu_peek"
         property string how: ""
-        property int step: 0
         /// The section came out for the rest: what makes its absence at the end a close, not a refusal.
         property bool opened: false
         onTriggered: {
-            if (menuPeekTimer.step === 0) {
+            const op = menuPeekTimer
+            if (op.at("start")) {
                 if (!Awaited.all("menu_peek_rail", {
                         "folded": page.sidebarCollapsed && sidebarPane.width > 0,
                         "branches": branchesModel.total > 0,
-                        "tags": menuPeekTimer.how !== "own-swap" || tagsModel.total > 0,
+                        "tags": op.how !== "own-swap" || tagsModel.total > 0,
                         "head": graphModel.rowOf(worktree.headOid) >= 0
                     }))
                     return
-                if (menuPeekTimer.how === "behind")
-                    page.openRowMenu(worktree.headOid)
-                else
-                    navProbe.peekAt("branch")
-                menuPeekTimer.step = 1
-            } else if (menuPeekTimer.step === 1) {
-                if (menuPeekTimer.how === "behind") {
-                    if (!Awaited.all("menu_peek_menu", { "menu": commitMenu.opened }))
-                        return
+                if (op.how === "behind") {
+                    op.input("menu_raised", () => {
+                        page.openRowMenu(worktree.headOid)
+                    })
+                } else {
+                    op.input("peek_asked", () => {
+                        navProbe.peekAt("branch")
+                    })
+                }
+                return
+            }
+            if (op.how === "behind" && op.at("menu_raised")) {
+                if (!Awaited.all("menu_peek_menu", { "menu": commitMenu.opened }))
+                    return
+                op.input("walked", () => {
                     navProbe.peekAt("branch")
                     // Read at the rest, before the walk off: a section that never opened also reads as gone.
-                    menuPeekTimer.opened = sidebarPane.peekSection.visible
+                    op.opened = sidebarPane.peekSection.visible
                     navProbe.peekAway("branch")
-                    menuPeekTimer.step = 2
-                } else if (menuPeekTimer.how === "under") {
-                    if (!Awaited.all("menu_peek_open", { "peek": navProbe.peekStanding }))
-                        return
-                    menuPeekTimer.opened = true
+                })
+                return
+            }
+            if (op.how === "under" && op.at("peek_asked")) {
+                if (!Awaited.all("menu_peek_open", { "peek": navProbe.peekStanding }))
+                    return
+                op.input("menu_raised", () => {
+                    op.opened = navProbe.peekStanding
                     page.openRowMenu(worktree.headOid)
-                    menuPeekTimer.step = 2
-                } else {
-                    // The current branch's row: the list's first row may be a folder, which raises no menu.
-                    const row = navProbe.peek.sectionModel
-                              ? navProbe.peek.sectionModel.rowOfName(worktree.branch) : -1
-                    if (!Awaited.all("menu_peek_open", { "peek": navProbe.peekStanding, "row": row >= 0 }))
-                        return
+                })
+                return
+            }
+            if (op.at("peek_asked")) {
+                // The current branch's row: the list's first row may be a folder, which raises no menu.
+                const row = navProbe.peek.sectionModel
+                          ? navProbe.peek.sectionModel.rowOfName(worktree.branch) : -1
+                const standing = navProbe.peekStanding
+                if (!Awaited.all("menu_peek_open", { "peek": standing, "row": row >= 0 }))
+                    return
+                op.input("walked", () => {
                     // Not built yet: no press has gone in.
                     if (!navProbe.peek.list.rightClickRow(row))
-                        return
+                        return false
                     navProbe.peekAway("branch")
                     navProbe.peekOut()
-                    if (menuPeekTimer.how === "own-swap") {
+                    if (op.how === "own-swap") {
                         // On to the TAGS cell and off it: `opened=` says whether TAGS took the held section's place.
                         navProbe.peekAt("tag")
-                        menuPeekTimer.opened = sidebarPane.peekKind === "tag"
+                        op.opened = sidebarPane.peekKind === "tag"
                         navProbe.peekAway("tag")
                     } else {
-                        menuPeekTimer.opened = true
+                        op.opened = standing
                     }
-                    menuPeekTimer.step = 2
-                }
-            } else {
-                if (!Awaited.all("menu_peek_after", {
-                        "menu": page.menuStanding,
-                        "beat": menuPeekTimer.how === "under" || !navProbe.peek.settling
-                    }))
-                    return
-                menuPeekTimer.stop()
-                Harness.report("menu_peek how=" + menuPeekTimer.how
-                    + " menu=" + page.menuStanding
-                    + " opened=" + menuPeekTimer.opened
-                    + " peek=" + sidebarPane.peekKind
-                    + " shown=" + sidebarPane.peekSection.visible
-                    + " raised=" + page.menuArea)
-                driver.complete()
+                })
+                return
             }
+            if (!Awaited.all("menu_peek_after", {
+                    "menu": page.menuStanding,
+                    "beat": op.how === "under" || !navProbe.peek.settling
+                }))
+                return
+            op.complete(() => "menu_peek how=" + op.how
+                              + " menu=" + page.menuStanding
+                              + " opened=" + op.opened
+                              + " peek=" + sidebarPane.peekKind
+                              + " shown=" + sidebarPane.peekSection.visible
+                              + " raised=" + page.menuArea)
         }
     }
     /// Whether this act's subject is the peeked section going away. `run()` writes it on every road to the beat, so a
@@ -564,68 +575,71 @@ Item {
     property bool peekGoneWanted: false
     // PGG_AUTO_ACT=nav-peek-again: rest on the cell, click it shut, click it again. Each click waits for the one
     // before to land — the section gone, then standing — and the rail's answer is read as `nav-peek`'s is.
-    SampleTimer {
+    PageStage {
         id: peekAgainTimer
+        name: "peek_again"
+        order: ["shut_tap", "open_tap", "back"]
         property string kind: ""
-        property int step: 0
         onTriggered: {
+            const op = peekAgainTimer
             const up = sidebarPane.peekSection.visible
-            if (peekAgainTimer.step === 0) {
+            if (op.at("start")) {
                 // Rested on the cell each beat until the section stands: asked again, the seat runs on
                 // (`HoverSeat.point`).
                 if (!up)
-                    navProbe.peekAt(peekAgainTimer.kind)
+                    navProbe.peekAt(op.kind)
                 if (!Awaited.all("peek_again_open", { "up": up }))
                     return
-                navProbe.peekTap(peekAgainTimer.kind)
-                peekAgainTimer.step = 1
-            } else if (peekAgainTimer.step === 1) {
+                op.input("shut_tap", () => {
+                    navProbe.peekTap(op.kind)
+                })
+            } else if (op.at("shut_tap")) {
                 if (!Awaited.all("peek_again_shut", { "down": !up }))
                     return
-                navProbe.peekTap(peekAgainTimer.kind)
-                peekAgainTimer.step = 2
+                op.input("open_tap", () => {
+                    navProbe.peekTap(op.kind)
+                })
             } else {
                 if (!Awaited.all("peek_again_back", { "up": up }))
                     return
-                peekAgainTimer.stop()
-                acts.peekGoneWanted = false
+                op.advance("back")
+                op.stop()
                 navRailTimer.start()
             }
         }
     }
     // Three waits: the splitter handing the pane its width; the diff's read having landed (`DiffPane.diffSettled`),
-    // since a pane still reading frames like one that has; and, for `peekGoneWanted`, the section having gone.
-    SampleTimer {
+    // since a pane still reading frames like one that has; and, for `peekGoneWanted`, the section having gone — the
+    // popup itself, not `kind`: that clears as the exit begins (`SectionPeekPopup.onAboutToHide`).
+    PageStage {
         id: navRailTimer
+        name: "nav_rail"
         onTriggered: {
             if (!Awaited.all("nav_rail_ready", { "ready": !(sidebarPane.width <= 0 || sidebarPane.height <= 0),
-                                                  "page": PageSettled.settled(page) }))
+                                                  "page": PageSettled.settled(page),
+                                                  "gone": !acts.peekGoneWanted || !sidebarPane.peekSection.visible }))
                 return
-            // The popup itself, not `kind`: that clears as the exit begins (`SectionPeekPopup.onAboutToHide`).
-            if (acts.peekGoneWanted && sidebarPane.peekSection.visible)
-                return
-            navRailTimer.stop()
-            const counts = navProbe.countsInk()
-            Harness.report(
-            // The first three are neighbours so one `must_say` substring judges them (デザイン規約 §左メニューを畳む).
-            "nav_rail collapsed=" + page.sidebarCollapsed
-            + " diff=" + page.diffShown
-            + " editing=" + sidebarPane.editKey
-            + " width=" + Math.round(sidebarPane.width)
-            + " peek=" + sidebarPane.peekKind
-            // `top` equals `cell` (the opening mark's top edge) or the list walked off its cell; `end` <= `pane` says
-            // it grew down and stopped at the pane's foot.
-            + " top=" + Math.round(navProbe.peekY)
-            + " cell=" + Math.round(sidebarPane.peekTop)
-            + " end=" + Math.round(navProbe.peekBottom)
-            + " pane=" + Math.round(sidebarPane.height)
-            // The counts clear of their marks, and where their ink fell in the cells, for a run that came out false —
-            // with the face's own numbers the rail seated them by (`NavProbe.countsInk`), which a run on a machine
-            // with no desk (macOS) cannot be asked for again.
-            + " counts=" + counts.clear
-            + " ink=" + counts.top.toFixed(1) + ":" + counts.bottom.toFixed(1)
-            + " face=" + counts.face)
-            driver.complete()
+            navRailTimer.complete(() => {
+                const counts = navProbe.countsInk()
+                // The first three are neighbours so one `must_say` substring judges them (デザイン規約 §左メニューを畳む).
+                return "nav_rail collapsed=" + page.sidebarCollapsed
+                       + " diff=" + page.diffShown
+                       + " editing=" + sidebarPane.editKey
+                       + " width=" + Math.round(sidebarPane.width)
+                       + " peek=" + sidebarPane.peekKind
+                       // `top` equals `cell` (the opening mark's top edge) or the list walked off its cell; `end` <=
+                       // `pane` says it grew down and stopped at the pane's foot.
+                       + " top=" + Math.round(navProbe.peekY)
+                       + " cell=" + Math.round(sidebarPane.peekTop)
+                       + " end=" + Math.round(navProbe.peekBottom)
+                       + " pane=" + Math.round(sidebarPane.height)
+                       // The counts clear of their marks, and where their ink fell in the cells, for a run that came
+                       // out false — with the face's own numbers the rail seated them by (`NavProbe.countsInk`), which
+                       // a run on a machine with no desk (macOS) cannot be asked for again.
+                       + " counts=" + counts.clear
+                       + " ink=" + counts.top.toFixed(1) + ":" + counts.bottom.toFixed(1)
+                       + " face=" + counts.face
+            })
         }
     }
     /// PGG_AUTO_ACT=doors-held: the branch rebased onto and right-clicked. Not the current one — `switch` is only
@@ -641,43 +655,45 @@ Item {
         }
     }
     // The doors, tried once the replay is under way. Each is read back, since a refused door frames like an untouched
-    // pane; the picture is for the rest of the pane staying live.
-    /// Whether the doors have been tried; after that the sampler waits for the blocked row's tooltip, the last thing
-    /// to arrive (`Metrics.tipDelayMs`).
-    property bool heldTried: false
-    SampleTimer {
+    // pane; the picture is for the rest of the pane staying live. After that the sampler waits for the blocked row's
+    // tooltip, the last thing to arrive (`Metrics.tipDelayMs`).
+    PageStage {
         id: navHeldTimer
+        name: "doors_held"
+        order: ["tried"]
         onTriggered: {
-            if (acts.heldTried) {
-                if (!refSwitchItem.tip.shown)
+            const op = navHeldTimer
+            if (op.at("start")) {
+                if (!Awaited.all("doors_held_replay", { "replay": page.autoReplayHeld }))
                     return
-                navHeldTimer.stop()
-                acts.reportHeld()
-                renderedBarrier.begin()
+                op.input("tried", () => {
+                    // ---- the graph's two doors, before the pane's ----------------
+                    // Every switch on the graph side ends at `RepoPage.switchToRef`; `false` is a press it turned away.
+                    acts.heldSwitch = page.switchToRef("branch", acts.heldBranch) === false
+                    // The row menu keeps its rows, greyed; `drop` is read as the one row that cannot be undone — on
+                    // show, as a replay's mid-rewrite HEAD would take it off a menu standing on it
+                    // (`RepoPage.treeAtAsk`).
+                    page.openRowMenu(worktree.headOid)
+                    acts.heldRowMenu = commitMenu.opened
+                    acts.heldDrop = dropCommitItem.present && dropCommitItem.blocked
+                    commitMenu.close()
+                    // ---- and the pane's ------------------------------------------
+                    // The box, asked for where a hand asks. The double-click's refusal shares its gate
+                    // (`SidebarRowGestures.held`) and goes unreported: a run cannot tell a refused switch from one not
+                    // landed.
+                    sidebarPane.beginRename("branch", acts.heldBranch, acts.heldBranch)
+                    // The ref menu's rows stay and grey (`AppMenu.heldReason`); the reason is a tooltip, forced since a
+                    // pointer cannot be put on a row (verify-ui §hover の絵の撮り方).
+                    acts.heldMenu = page.openRefMenu("branch", acts.heldBranch, acts.heldBranch,
+                                                    branchesModel.oidOfName(acts.heldBranch), true)
+                    acts.heldBox = sidebarPane.editKey !== ""
+                    refSwitchItem.tipForced = true
+                })
                 return
             }
-            if (!page.autoReplayHeld)
+            if (!Awaited.all("doors_held_tip", { "tip": refSwitchItem.tip.shown }))
                 return
-            acts.heldTried = true
-            // ---- the graph's two doors, before the pane's ----------------
-            // Every switch on the graph side ends at `RepoPage.switchToRef`; `false` is a press it turned away.
-            acts.heldSwitch = page.switchToRef("branch", acts.heldBranch) === false
-            // The row menu keeps its rows, greyed; `drop` is read as the one row that cannot be undone — on show, as a
-            // replay's mid-rewrite HEAD would take it off a menu standing on it (`RepoPage.treeAtAsk`).
-            page.openRowMenu(worktree.headOid)
-            acts.heldRowMenu = commitMenu.opened
-            acts.heldDrop = dropCommitItem.present && dropCommitItem.blocked
-            commitMenu.close()
-            // ---- and the pane's ------------------------------------------
-            // The box, asked for where a hand asks. The double-click's refusal shares its gate
-            // (`SidebarRowGestures.held`) and goes unreported: a run cannot tell a refused switch from one not landed.
-            sidebarPane.beginRename("branch", acts.heldBranch, acts.heldBranch)
-            // The ref menu's rows stay and grey (`AppMenu.heldReason`); the reason is a tooltip, forced since a pointer
-            // cannot be put on a row (verify-ui §hover の絵の撮り方).
-            acts.heldMenu = page.openRefMenu("branch", acts.heldBranch, acts.heldBranch,
-                                            branchesModel.oidOfName(acts.heldBranch), true)
-            acts.heldBox = sidebarPane.editKey !== ""
-            refSwitchItem.tipForced = true
+            op.complete(() => acts.heldLine())
         }
     }
     /// What each door did, read at the press.
@@ -686,76 +702,76 @@ Item {
     property bool heldSwitch: false
     property bool heldRowMenu: false
     property bool heldDrop: false
-    function reportHeld() {
+    function heldLine() {
         // `frozen=`: a run that caught the plan's whole-pane freeze instead would pass for that verb's picture.
-        Harness.report("doors_held held=" + (page.doorsHeldWhy !== "")
-                          + " frozen=" + page.sidebarFrozen
-                          // The graph's side.
-                          + " road=" + acts.heldSwitch
-                          + " rowmenu=" + acts.heldRowMenu
-                          + " drop=" + acts.heldDrop
-                          // The pane's.
-                          + " box=" + acts.heldBox
-                          + " plus=" + navProbe.headOf("remote").addHeld
-                          + " menu=" + acts.heldMenu
-                          + " switchrow=" + refSwitchItem.blocked
-                          + " why=" + (refSwitchItem.blockedWhy !== ""))
+        return "doors_held held=" + (page.doorsHeldWhy !== "")
+               + " frozen=" + page.sidebarFrozen
+               // The graph's side.
+               + " road=" + acts.heldSwitch
+               + " rowmenu=" + acts.heldRowMenu
+               + " drop=" + acts.heldDrop
+               // The pane's.
+               + " box=" + acts.heldBox
+               + " plus=" + navProbe.headOf("remote").addHeld
+               + " menu=" + acts.heldMenu
+               + " switchrow=" + refSwitchItem.blocked
+               + " why=" + (refSwitchItem.blockedWhy !== "")
     }
     // PGG_AUTO_ACT=tags-eye: the eye moves the walk, so the answer is the named tag's commit's row (a tag whose
     // commit a branch also reaches keeps its row, and frames like a switch that did nothing).
     //
     // The graph is emptied before it is rebuilt, so the row is read only after `finishCount` moves. Tags back on
     // lands twice, tag-less first (rules-refs/core.md「2 段ストリーミング」), and the row being back tells the second
-    // pass. The press waits for the row too, in step 0 alone: the page is current after the tag-less pass
+    // pass. The press waits for the row too, at the start alone: the page is current after the tag-less pass
     // (rules-refs/app-ui.md「動詞の前提条件は入力を出す枝で読む」).
-    property string tagEyeOid: ""
-    property int tagEyeFinish: 0
-    property bool tagEyeBack: false
-    /// 0 = waiting for the tags to be in the graph to take out, 1 = for the row to go, 2 = for it to come back.
-    property int tagEyeStep: 0
-    SampleTimer {
+    PageStage {
         id: tagEyeTimer
+        name: "tag_eye"
+        /// The named tag's commit, and whether the eye is pressed again to bring the tags back.
+        property string oid: ""
+        property bool back: false
+        /// The graph's passes as the eye was last pressed (`GraphModel.finishCount`).
+        property int finish: 0
         onTriggered: {
-            const there = graphModel.rowOf(acts.tagEyeOid) >= 0
-            if (acts.tagEyeStep === 0) {
+            const op = tagEyeTimer
+            const there = graphModel.rowOf(op.oid) >= 0
+            const passed = graphModel.finishCount !== op.finish
+            if (op.at("start")) {
                 if (!Awaited.all("tag_eye_there", { "there": there }))
                     return
-                acts.tagEyeStep = 1
-                acts.tagEyeFinish = graphModel.finishCount
-                navProbe.tapTagEye()
+                op.input("hidden", () => {
+                    op.finish = graphModel.finishCount
+                    navProbe.tapTagEye()
+                })
                 return
             }
-            if (graphModel.finishCount === acts.tagEyeFinish)
-                return
-            if (acts.tagEyeStep === 1) {
-                if (!Awaited.all("tag_eye_gone", { "gone": !there }))
+            if (op.at("hidden")) {
+                if (!Awaited.all("tag_eye_gone", { "passed": passed, "gone": !there }))
                     return
-                if (acts.tagEyeBack) {
-                    acts.tagEyeStep = 2
-                    acts.tagEyeFinish = graphModel.finishCount
-                    navProbe.tapTagEye()
+                if (op.back) {
+                    op.input("shown", () => {
+                        op.finish = graphModel.finishCount
+                        navProbe.tapTagEye()
+                    })
                     return
                 }
-            } else if (!there)
+            } else if (!Awaited.all("tag_eye_back", { "passed": passed, "there": there })) {
                 return
-            tagEyeTimer.stop()
+            }
             // `shown=` is the switch's own answer: a press that never reached the band photographs a real state.
-            Harness.report("tags_eye shown=" + repoTab.tagsShown
-                              + " there=" + there
+            op.complete(() => "tags_eye shown=" + repoTab.tagsShown
+                              + " there=" + (graphModel.rowOf(op.oid) >= 0)
                               + " tag=" + Harness.autoActArg
                               + " rows=" + graphModel.rowTotal
                               + " tags=" + tagsModel.total)
-            driver.complete()
         }
     }
     // PGG_AUTO_ACT=nav-jump: the claim is read off the graph's row for the commit, lit and laid out
     // (`GraphRowDelegate.selected`) — the page's selection is the click's own bookkeeping.
-    /// What the row named when pressed, and whether the press is in. Read before the click: a recycled delegate
-    /// asked afterwards can show another row's name.
-    property string jumpWant: ""
-    property bool jumpPressed: false
-    SampleTimer {
+    PageStage {
         id: jumpTimer
+        name: "nav_jump"
+        order: ["clicked"]
         /// The argument `<section>[:<row>]`, the row 0 by default.
         readonly property string kind: {
             const arg = Harness.autoActArg
@@ -767,52 +783,58 @@ Item {
             const cut = arg.indexOf(":")
             return cut < 0 ? 0 : Number(arg.substring(cut + 1))
         }
+        /// What the row named when pressed. Read before the click: a recycled delegate asked afterwards can show
+        /// another row's name.
+        property string want: ""
         onTriggered: {
-            const list = navProbe.listOf(jumpTimer.kind)
-            if (!list)
-                return
-            if (!acts.jumpPressed) {
+            const op = jumpTimer
+            const list = navProbe.listOf(op.kind)
+            if (op.at("start")) {
                 // A row not laid out yet, or naming no commit, is not a press (`NavList.rowOidAt`).
-                const oid = list.rowOidAt(jumpTimer.row)
-                if (oid === "" || !list.clickRow(jumpTimer.row))
+                if (!Awaited.all("nav_jump_row", { "list": !!list, "row": !!list && list.rowOidAt(op.row) !== "" }))
                     return
-                acts.jumpWant = oid
-                acts.jumpPressed = true
+                op.input("clicked", () => {
+                    const oid = list.rowOidAt(op.row)
+                    if (!list.clickRow(op.row))
+                        return false
+                    op.want = oid
+                })
                 return
             }
-            if (page.selectedOid !== acts.jumpWant || !driver.cardSettled)
-                return
-            const at = graphModel.rowOf(acts.jumpWant)
+            const landing = graphModel.rowOf(op.want)
             // A commit the walk never reached is an answer: the page had settled before the click (`PageSettled`), so
             // the row will not arrive. Not so another worktree's HEAD: the walk that draws it follows the worktrees'
             // listing, which the settle does not wait for. A row the model has but the view has not laid out yet is
             // waited for.
-            const item = at >= 0 ? graphPane.view.itemAtIndex(at) : null
-            if (!Awaited.all("nav_jump", { "row": at >= 0 || jumpTimer.kind !== "worktree",
-                                           "laid": at < 0 || !!item }))
+            const item = landing >= 0 ? graphPane.view.itemAtIndex(landing) : null
+            if (!Awaited.all("nav_jump", { "list": !!list,
+                                           "selected": page.selectedOid === op.want,
+                                           "card": driver.cardSettled,
+                                           "row": landing >= 0 || op.kind !== "worktree",
+                                           "laid": landing < 0 || !!item }))
                 return
-            jumpTimer.stop()
-            Harness.report("nav_jump section=" + jumpTimer.kind
-                              + " row=" + jumpTimer.row
-                              // `same=` makes `lit=` about this jump.
-                              + " same=" + (!!item && item.oid_hex === acts.jumpWant)
-                              + " lit=" + (!!item && item.selected)
-                              // The left panel's half: the clicked row keeps the mark (`NavItemDelegate` の chosenBox).
-                              + " marked=" + (sidebarPane.activeKey !== "")
-                              // A jump puts the history up whatever was being read (`RepoPage.jumpToRef`).
-                              + " wip=" + page.wipShown
-                              + " at=" + at
-                              + " name=" + list.rowNameAt(jumpTimer.row))
-            driver.complete()
+            op.complete(() => {
+                const at = graphModel.rowOf(op.want)
+                const row = at >= 0 ? graphPane.view.itemAtIndex(at) : null
+                return "nav_jump section=" + op.kind
+                       + " row=" + op.row
+                       // `same=` makes `lit=` about this jump.
+                       + " same=" + (!!row && row.oid_hex === op.want)
+                       + " lit=" + (!!row && row.selected)
+                       // The left panel's half: the clicked row keeps the mark (`NavItemDelegate` の chosenBox).
+                       + " marked=" + (sidebarPane.activeKey !== "")
+                       // A jump puts the history up whatever was being read (`RepoPage.jumpToRef`).
+                       + " wip=" + page.wipShown
+                       + " at=" + at
+                       + " name=" + navProbe.listOf(op.kind).rowNameAt(op.row)
+            })
         }
     }
-    // PGG_AUTO_ACT=nav-reclick / nav-reclick-away: every step waits for its own answer — the row existing, the first
+    // PGG_AUTO_ACT=nav-reclick / nav-reclick-away: every stage waits for its own answer — the row existing, the first
     // click's double-click window passing (`rowGuarded`), and for "-away" the section having gone.
-    property bool reclickAway: false
-    property bool reclickArmed: false
-    property int reclickStep: 0
-    SampleTimer {
+    PageStage {
         id: reclickTimer
+        name: "nav_reclick"
         /// The argument `<section>[:<row>]`, the row 0 by default — a section folding names into folders has no
         /// row to rename at its top.
         readonly property string kind: {
@@ -825,6 +847,10 @@ Item {
             const cut = arg.indexOf(":")
             return cut < 0 ? 0 : Number(arg.substring(cut + 1))
         }
+        /// Whether the pointer leaves the section between the two clicks.
+        property bool away: false
+        /// Whether the second click armed the rename, read at that click: the wait is short and turns into the box.
+        property bool armed: false
         // A section with no rows yet opens nothing (NavRail.enterAt), so the arrival is repeated until one stands.
         function peeked() {
             if (sidebarPane.peekKind !== "")
@@ -833,66 +859,71 @@ Item {
             return false
         }
         onTriggered: {
+            const op = reclickTimer
             const section = sidebarPane.peekSection
-            if (acts.reclickStep === 0) {
-                const peeked = reclickTimer.peeked()
-                if (!Awaited.all("nav_reclick_first", { "peeked": peeked,
-                                                        "clicked": peeked && section.clickRow(reclickTimer.row) }))
+            if (op.at("start")) {
+                if (!Awaited.all("nav_reclick_first", { "peeked": op.peeked() }))
                     return
-                acts.reclickStep = acts.reclickAway ? 1 : 3
-            } else if (acts.reclickStep === 1) {
+                op.input("first_click", () => section.clickRow(op.row))
+                return
+            }
+            if (op.away && op.at("first_click")) {
                 // The hand off the section it is on.
                 if (!Awaited.all("nav_reclick_away", { "peek": sidebarPane.peekKind !== "" }))
                     return
-                navProbe.peekAway(reclickTimer.kind)
-                acts.reclickStep = 2
-            } else if (acts.reclickStep === 2) {
+                op.input("walked_off", () => {
+                    navProbe.peekAway(op.kind)
+                })
+                return
+            }
+            if (op.at("walked_off")) {
                 // The pointer leaving is answered a beat later (SectionPeekPopup.settle).
                 if (!Awaited.all("nav_reclick_gone", { "gone": sidebarPane.peekKind === "" }))
                     return
-                acts.reclickStep = 3
-            } else if (acts.reclickStep === 3) {
-                // Inside the double-click window a second click would be half a double-click.
-                const peeked = reclickTimer.peeked()
-                const open = peeked && !section.rowGuarded(reclickTimer.row)
-                if (!Awaited.all("nav_reclick_second", { "peeked": peeked, "window": open,
-                                                         "clicked": open && section.clickRow(reclickTimer.row) }))
-                    return
-                // Read here: the wait is short and turns into the box.
-                acts.reclickArmed = section.rowArmed(reclickTimer.row)
-                acts.reclickStep = 4
-            } else if (acts.reclickStep === 4) {
-                // Armed, the box opens in the peeked section once that wait runs out (SidebarRowGestures.startEdit).
-                // The click chose the row's commit too: its read is the page's.
-                if (!Awaited.all("nav_reclick_landed", {
-                    "box": !acts.reclickArmed || sidebarPane.editKey !== "",
-                    "page": PageSettled.settled(page) }))
-                    return
-                reclickTimer.stop()
-                Harness.report(
-                "nav_reclick section=" + reclickTimer.kind
-                + " row=" + reclickTimer.row
-                + " marked=" + sidebarPane.activeKey
-                + " away=" + acts.reclickAway
-                + " armed=" + acts.reclickArmed
-                // The fold stays for a box, the box is there, and it has the keyboard (デザイン規約 §左メニューを畳む).
-                + " collapsed=" + page.sidebarCollapsed
-                + " box=" + (sidebarPane.editKey !== "")
-                + " focused=" + section.rowFocused(reclickTimer.row)
-                + " peek=" + sidebarPane.peekKind
-                + " editing=" + sidebarPane.editKey)
-                driver.complete()
+                op.advance("gone")
+                return
             }
+            if (op.at("first_click") || op.at("gone")) {
+                // Inside the double-click window a second click would be half a double-click.
+                const peeked = op.peeked()
+                const open = peeked && !section.rowGuarded(op.row)
+                if (!Awaited.all("nav_reclick_second", { "peeked": peeked, "window": open }))
+                    return
+                op.input("second_click", () => {
+                    if (!section.clickRow(op.row))
+                        return false
+                    op.armed = section.rowArmed(op.row)
+                })
+                return
+            }
+            // Armed, the box opens in the peeked section once that wait runs out (SidebarRowGestures.startEdit).
+            // The click chose the row's commit too: its read is the page's.
+            if (!Awaited.all("nav_reclick_landed", {
+                "box": !op.armed || sidebarPane.editKey !== "",
+                "page": PageSettled.settled(page) }))
+                return
+            op.complete(() => "nav_reclick section=" + op.kind
+                              + " row=" + op.row
+                              + " marked=" + sidebarPane.activeKey
+                              + " away=" + op.away
+                              + " armed=" + op.armed
+                              // The fold stays for a box, the box is there, and it has the keyboard
+                              // (デザイン規約 §左メニューを畳む).
+                              + " collapsed=" + page.sidebarCollapsed
+                              + " box=" + (sidebarPane.editKey !== "")
+                              + " focused=" + sidebarPane.peekSection.rowFocused(op.row)
+                              + " peek=" + sidebarPane.peekKind
+                              + " editing=" + sidebarPane.editKey)
         }
     }
     // PGG_AUTO_ACT=nav-reclick-elsewhere: a click is two beats, as a hand's is — the press (the window's watcher, then
     // the row's own handler) and then the release the row answers at; the gesture settles the press in between. The
     // first click, a press on the details pane, the click back (`pane=`: no box), and the next one (`armed=`, `box=`).
-    property int elsewhereStep: 0
-    property bool elsewherePane: false
-    property bool elsewhereArmed: false
-    SampleTimer {
+    PageStage {
         id: elsewhereTimer
+        name: "nav_reclick_elsewhere"
+        order: ["first_press", "first_release", "pane_press", "back_press", "back_release", "next_press",
+                "next_release"]
         /// The argument `<section>[:<row>]`, the row 0 by default.
         readonly property string kind: {
             const arg = Harness.autoActArg
@@ -904,6 +935,9 @@ Item {
             const cut = arg.indexOf(":")
             return cut < 0 ? 0 : Number(arg.substring(cut + 1))
         }
+        /// Whether the click back armed the rename, and whether the next one did, each read at its release.
+        property bool pane: false
+        property bool armed: false
         /// The press half on the row; false while the row is not built.
         function press(list) {
             const at = list.rowPoint(elsewhereTimer.row)
@@ -913,96 +947,97 @@ Item {
             return list.pressRow(elsewhereTimer.row)
         }
         onTriggered: {
-            const list = navProbe.listOf(elsewhereTimer.kind)
+            const op = elsewhereTimer
+            const list = navProbe.listOf(op.kind)
             if (!Awaited.all("elsewhere_ready", { "ready": list }))
                 return
-            const step = acts.elsewhereStep
-            if (acts.elsewhereStep === 0 || acts.elsewhereStep === 3 || acts.elsewhereStep === 5) {
-                // Spaced from the click before: inside its window this would be half a double-click.
-                const open = !list.rowGuarded(elsewhereTimer.row)
-                if (!Awaited.all("elsewhere_press/" + step, { "window": open,
-                                                              "pressed": open && elsewhereTimer.press(list) }))
-                    return
-                acts.elsewhereStep = step + 1
-            } else if (acts.elsewhereStep === 1 || acts.elsewhereStep === 4 || acts.elsewhereStep === 6) {
-                if (!Awaited.all("elsewhere_release/" + step, { "released": list.releaseRow(elsewhereTimer.row) }))
-                    return
-                if (step === 4)
-                    acts.elsewherePane = list.rowArmed(elsewhereTimer.row)
-                if (step === 6)
-                    acts.elsewhereArmed = list.rowArmed(elsewhereTimer.row)
-                acts.elsewhereStep = step === 1 ? 2 : step + 1
-            } else if (acts.elsewhereStep === 2) {
-                if (!Awaited.all("elsewhere_window", { "window": !list.rowGuarded(elsewhereTimer.row) }))
-                    return
-                page.Window.window.caretHand.pressedAt(detailsPane.mapToItem(null, detailsPane.width / 2,
-                                                                             detailsPane.height / 2))
-                acts.elsewhereStep = 3
-            } else {
+            if (op.at("next_release")) {
                 // Armed, the box opens on the row once the wait runs out (`SidebarRowGestures.startEdit`); the clicks
                 // chose rows, whose reads land on the page.
                 if (!Awaited.all("nav_reclick_elsewhere_landed", {
-                    "box": !acts.elsewhereArmed || sidebarPane.editKey !== "",
+                    "box": !op.armed || sidebarPane.editKey !== "",
                     "page": PageSettled.settled(page) }))
                     return
-                elsewhereTimer.stop()
-                Harness.report(
-                "nav_reclick_elsewhere section=" + elsewhereTimer.kind
-                + " row=" + elsewhereTimer.row
-                + " marked=" + sidebarPane.activeKey
-                + " pane=" + acts.elsewherePane
-                + " armed=" + acts.elsewhereArmed
-                + " box=" + (sidebarPane.editKey !== "")
-                + " editing=" + sidebarPane.editKey)
-                driver.complete()
+                op.complete(() => "nav_reclick_elsewhere section=" + op.kind
+                                  + " row=" + op.row
+                                  + " marked=" + sidebarPane.activeKey
+                                  + " pane=" + op.pane
+                                  + " armed=" + op.armed
+                                  + " box=" + (sidebarPane.editKey !== "")
+                                  + " editing=" + sidebarPane.editKey)
+                return
             }
+            const pressing = op.at("start") ? "first_press"
+                           : op.at("pane_press") ? "back_press"
+                           : op.at("back_release") ? "next_press" : ""
+            if (pressing !== "") {
+                // Spaced from the click before: inside its window this would be half a double-click.
+                if (!Awaited.all("elsewhere_press/" + pressing, { "window": !list.rowGuarded(op.row) }))
+                    return
+                op.input(pressing, () => op.press(list))
+                return
+            }
+            if (op.at("first_release")) {
+                if (!Awaited.all("elsewhere_window", { "window": !list.rowGuarded(op.row) }))
+                    return
+                op.input("pane_press", () => {
+                    page.Window.window.caretHand.pressedAt(detailsPane.mapToItem(null, detailsPane.width / 2,
+                                                                                 detailsPane.height / 2))
+                })
+                return
+            }
+            // The release half, once its press is in; false while the row is not built.
+            const releasing = op.at("first_press") ? "first_release"
+                            : op.at("back_press") ? "back_release" : "next_release"
+            op.input(releasing, () => {
+                if (!list.releaseRow(op.row))
+                    return false
+                if (releasing === "back_release")
+                    op.pane = list.rowArmed(op.row)
+                if (releasing === "next_release")
+                    op.armed = list.rowArmed(op.row)
+            })
         }
     }
     /// PGG_AUTO_ACT=nav-add-remote: the run stops with the real dialog on screen. `collapsed=` says which door it came
     /// through, and that the folded one left the list folded (デザイン規約 §左メニューを畳む).
-    SampleTimer {
+    PageStage {
         id: navAddRemoteTimer
+        name: "nav_add_remote"
         onTriggered: {
             if (!Awaited.all("nav_add_remote_ready", { "ready": remoteDialog.visible }))
                 return
-            navAddRemoteTimer.stop()
-            Harness.report("nav_add_remote dialog=" + remoteDialog.visible
-                              + " collapsed=" + page.sidebarCollapsed
-                              + " remotes=" + remotesModel.total
-                              + " name=" + remoteDialog.wantedName)
-            driver.complete()
+            navAddRemoteTimer.complete(() => "nav_add_remote dialog=" + remoteDialog.visible
+                                             + " collapsed=" + page.sidebarCollapsed
+                                             + " remotes=" + remotesModel.total
+                                             + " name=" + remoteDialog.wantedName)
         }
     }
     // The column has to be laid out again before the header that was closed can say where it ended up.
-    SampleTimer {
+    PageStage {
         id: navSectionTimer
+        name: "nav_section"
         onTriggered: {
             if (!Awaited.all("nav_section_ready", { "ready": !(sidebarPane.height <= 0) }))
                 return
-            navSectionTimer.stop()
-            Harness.report(
-            "nav_section closed=" + Harness.autoActArg
-            + " header=" + Math.round(
-                navProbe.headerTopOf(Harness.autoActArg))
-            + " ground=" + Math.round(navProbe.groundTop)
-            + " pane=" + Math.round(sidebarPane.height))
-            driver.complete()
+            navSectionTimer.complete(() => "nav_section closed=" + Harness.autoActArg
+                                           + " header=" + Math.round(navProbe.headerTopOf(Harness.autoActArg))
+                                           + " ground=" + Math.round(navProbe.groundTop)
+                                           + " pane=" + Math.round(sidebarPane.height))
         }
     }
     /// What each section's model kept under the filter; the picture says what was drawn.
-    SampleTimer {
+    PageStage {
         id: navFilterTimer
+        name: "nav_filter"
         onTriggered: {
             if (!Awaited.all("nav_filter_ready", { "ready": !(sidebarPane.width <= 0) }))
                 return
-            navFilterTimer.stop()
-            Harness.report(
-            "nav_filter typed=" + Harness.autoActArg
-            + " branches=" + branchesModel.shown() + "/" + branchesModel.total
-            + " remotes=" + remotesModel.shown() + "/" + remotesModel.total
-            + " tags=" + tagsModel.shown() + "/" + tagsModel.total
-            + " stashes=" + stashesModel.shown() + "/" + stashesModel.total)
-            driver.complete()
+            navFilterTimer.complete(() => "nav_filter typed=" + Harness.autoActArg
+                                          + " branches=" + branchesModel.shown() + "/" + branchesModel.total
+                                          + " remotes=" + remotesModel.shown() + "/" + remotesModel.total
+                                          + " tags=" + tagsModel.shown() + "/" + tagsModel.total
+                                          + " stashes=" + stashesModel.shown() + "/" + stashesModel.total)
         }
     }
 }

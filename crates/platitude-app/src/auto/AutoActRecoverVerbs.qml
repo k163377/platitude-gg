@@ -67,58 +67,62 @@ Item {
             if (!page.recoverOpen)
                 page.toggleRecover()
         }
+        // The hand's rest and the band's press are each the stage the frame waits behind.
+        recoverTimer.order = acts.cardWanted ? ["rested"] : acts.restoreWanted ? ["pressed"] : []
         recoverTimer.start()
         return true
     }
 
-    function frame() {
+    /// The run's line, read off the seat, the list, the graph and the tab as they stand.
+    function frameLine() {
         const graph = page.pageGraph
         const view = acts.driver.graphPane.view
-        Harness.report("recover open=" + page.recoverOpen
-                       + " entries=" + page.recoverEntries.length
-                       // What the filter left, and whether an entry's card is out.
-                       + " listed=" + sidebarPane.autoRecover.shownEntries.count
-                       + " card=" + sidebarPane.autoRecover.cardOpen
-                       + " pick=" + page.recoverPick
-                       + " shown=" + graph.provisionalOn
-                       // Whether a part of the picked entry comes back alone too: its band's per-part presses.
-                       + " byPart=" + (page.recoverPicked !== null && page.recoverPicked.byPart)
-                       + " tip=" + graph.provisionalTipRow
-                       + " span=" + graph.provisionalFirst + "-" + graph.provisionalLast
-                       // Whether the view went to the picked entry: its tip's row on screen, and where the view stands.
-                       + " tipShown=" + (graph.provisionalTipRow >= 0 && view.rowOnScreen(graph.provisionalTipRow))
-                       + " y=" + Math.round(view.contentY)
-                       // Per part, whether what it would bring back is on the graph.
-                       + " reach=" + page.recoverReach.join("/")
-                       // The restores this tab answered, and how the last one's work came back.
-                       + " restores=" + driver.repoTab.restoreSeq
-                       + " how=" + driver.repoTab.restoreHow
-                       + " refused=" + (driver.repoTab.lastWriteError !== "")
-                       + " lit=" + page.recoverLit
-                       // How many times the seat lit since a `blink` began it.
-                       + " blinks=" + acts.blinks
-                       + " width=" + Math.round(sidebarPane.width))
-        driver.complete()
+        return "recover open=" + page.recoverOpen
+               + " entries=" + page.recoverEntries.length
+               // What the filter left, and whether an entry's card is out.
+               + " listed=" + sidebarPane.autoRecover.shownEntries.count
+               + " card=" + sidebarPane.autoRecover.cardOpen
+               + " pick=" + page.recoverPick
+               + " shown=" + graph.provisionalOn
+               // Whether a part of the picked entry comes back alone too: its band's per-part presses.
+               + " byPart=" + (page.recoverPicked !== null && page.recoverPicked.byPart)
+               + " tip=" + graph.provisionalTipRow
+               + " span=" + graph.provisionalFirst + "-" + graph.provisionalLast
+               // Whether the view went to the picked entry: its tip's row on screen, and where the view stands.
+               + " tipShown=" + (graph.provisionalTipRow >= 0 && view.rowOnScreen(graph.provisionalTipRow))
+               + " y=" + Math.round(view.contentY)
+               // Per part, whether what it would bring back is on the graph.
+               + " reach=" + page.recoverReach.join("/")
+               // The restores this tab answered, and how the last one's work came back.
+               + " restores=" + driver.repoTab.restoreSeq
+               + " how=" + driver.repoTab.restoreHow
+               + " refused=" + (driver.repoTab.lastWriteError !== "")
+               + " lit=" + page.recoverLit
+               // How many times the seat lit since a `blink` began it.
+               + " blinks=" + acts.blinks
+               + " width=" + Math.round(sidebarPane.width)
     }
 
     // Waits for the splitter to hand the pane the width the fold asked for and for the list's read, picks the entry
     // as a press does, and waits for the graph to draw it — then frames it, or first rests the hand on an entry or
     // presses the band's `Restore`.
-    SampleTimer {
+    PageStage {
         id: recoverTimer
+        name: "recover"
         onTriggered: {
-            if (sidebarPane.width <= 0 || sidebarPane.height <= 0)
-                return
-            if (acts.foldWanted !== (Math.round(sidebarPane.width) === Theme.railWidth))
+            if (!Awaited.all("recover_ready", {
+                    "sized": !(sidebarPane.width <= 0 || sidebarPane.height <= 0),
+                    "fold": acts.foldWanted === (Math.round(sidebarPane.width) === Theme.railWidth) }))
                 return
             // A blink is told by its count once it is over: the seat out, the animation stopped.
             if (acts.blinkWanted && !Awaited.all("recover_blink", { "over": !page.recoverBlinking }))
                 return
             // The list's read is the reflogs' answer, not the press: an open list frames once it has one.
-            if (page.recoverOpen && !page.recoverAnswered)
+            if (!Awaited.all("recover_answered", { "answered": !(page.recoverOpen && !page.recoverAnswered) }))
                 return
+            // Asked again each beat until the list holds the pick.
             if (acts.pickWanted >= 0 && page.recoverPick !== acts.pickWanted) {
-                if (acts.pickWanted >= page.recoverEntries.length)
+                if (!Awaited.all("recover_entry", { "listed": acts.pickWanted < page.recoverEntries.length }))
                     return
                 page.pickRecover(acts.pickWanted)
             }
@@ -132,24 +136,27 @@ Item {
                                                                        "drawn_or_past": drawn || past,
                                                                        "walked": graph.provisionalWalked }))
                 return
-            if (acts.cardWanted && !sidebarPane.autoRecover.restOnShown(0))
-                return
-            recoverTimer.stop()
             if (acts.cardWanted) {
+                // The rest answers whether it took: the beat after asks again.
+                if (!recoverTimer.input("rested", () => sidebarPane.autoRecover.restOnShown(0)))
+                    return
+                recoverTimer.stop()
                 cardTimer.start()
                 return
             }
             if (acts.restoreWanted) {
-                acts.restoresBefore = driver.repoTab.restoreSeq
-                acts.writesBefore = driver.repoTab.writeSeq
-                if (!driver.pressWrite("restore", () => page.restoreRecover(acts.restorePart))) {
-                    recoverTimer.start()
+                const pressed = recoverTimer.input("pressed", () => {
+                    acts.restoresBefore = driver.repoTab.restoreSeq
+                    acts.writesBefore = driver.repoTab.writeSeq
+                    return driver.pressWrite("restore", () => page.restoreRecover(acts.restorePart))
+                })
+                if (!pressed)
                     return
-                }
+                recoverTimer.stop()
                 restoreTimer.start()
                 return
             }
-            acts.frame()
+            recoverTimer.complete(() => acts.frameLine())
         }
     }
     // Counts the seat's lightings while a blink is wanted: each one is the seat coming on.
@@ -161,30 +168,29 @@ Item {
         }
     }
     // The card is out once it says it opened.
-    SampleTimer {
+    PageStage {
         id: cardTimer
+        name: "recover_card"
         onTriggered: {
             if (!Awaited.all("recover_card_ready", { "ready": sidebarPane.autoRecover.cardOpen }))
                 return
-            cardTimer.stop()
-            acts.frame()
+            cardTimer.complete(() => acts.frameLine())
         }
     }
     // The restore answered — the write's own count moved — and the list read again after it, the entry put down; the
     // write's reads behind it are the driver's to wait out before the picture (`AutoActDriver.writeBarrier`).
-    SampleTimer {
+    PageStage {
         id: restoreTimer
+        name: "recover_restore"
         onTriggered: {
-            if (!Awaited.all("recover_restore_ready", {
-                "ready": !(driver.repoTab.writeSeq === acts.writesBefore || driver.repoTab.busyCount > 0) }))
-                return
             // Brought back: the list reads again with the entry put down. Refused: the band stands as it was, with
             // the write's error on the page.
             const brought = driver.repoTab.restoreSeq !== acts.restoresBefore
-            if (brought && (page.recoverPick >= 0 || !page.recoverAnswered))
+            if (!Awaited.all("recover_restore_ready", {
+                "ready": !(driver.repoTab.writeSeq === acts.writesBefore || driver.repoTab.busyCount > 0),
+                "put_down": !(brought && (page.recoverPick >= 0 || !page.recoverAnswered)) }))
                 return
-            restoreTimer.stop()
-            acts.frame()
+            restoreTimer.complete(() => acts.frameLine())
         }
     }
 }

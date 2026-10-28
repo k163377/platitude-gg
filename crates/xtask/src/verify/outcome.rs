@@ -32,7 +32,7 @@ pub(super) struct Outcome {
     /// What the run's contract owed and did not deliver
     /// (`super::contract::breaches`): a claim never read or fallen, a
     /// picture the window moved under, a part the row promised and the
-    /// picture lacks, a completion on no checkpoint. Empty for a run that
+    /// picture lacks, a stage off its operation's chain. Empty for a run that
     /// kept it; a red whatever else the run said.
     pub(super) contract: Vec<String>,
     /// Whether the identity a held save wrote is in the run's gitconfig
@@ -361,8 +361,9 @@ mod tests {
         let opts = super::super::options::parse(&["card-latch".to_string()]).expect("a line");
         let said = |pictured: &str| -> Vec<String> {
             [
-                "INFO bench: checkpoint run=r1 name=card_latch_back seq=1",
-                "INFO bench: complete run=r1 verb=card-latch checkpoints=1",
+                "INFO bench: begin run=r1 owner=page op=card_latch gen=1",
+                "INFO bench: stage run=r1 owner=page op=card_latch gen=1 from=start to=complete seq=1",
+                "INFO bench: complete run=r1 verb=card-latch owner=page op=card_latch gen=1 stages=1",
                 "INFO bench: pictures run=r1 wanted=app",
                 "screenshot saved=true ink=0 path=x/app.png",
                 "INFO bench: picture run=r1 artifact=app saved=true",

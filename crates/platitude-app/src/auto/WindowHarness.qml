@@ -56,8 +56,10 @@ Item {
         Hand.away = Harness.automated
         // A turning ring photographs differently every time.
         Motion.stilled = Harness.shotDir !== ""
-        // The window whose frames the waits on a layout count (`Awaited.still` / `drawnSince`).
+        // The window whose frames the waits on a layout count (`StageTimer.still` / `drawnSince`), and the route
+        // every completion takes (`CompletionRoute`).
         Awaited.window = harness.window
+        Awaited.route = completionRoute
         harness.screensUp = true
     }
 
@@ -124,62 +126,45 @@ Item {
     function noteWriteState(state) {
         shotDriver.writeState = state
     }
+
+    /// Every completion's route (`Awaited.route`), over the page's reads: once it has read the report it completes
+    /// through the window's door, so the quit gate yields to the run (`finish`).
+    CompletionRoute {
+        id: completionRoute
+        owed: () => census.pageMissing()
+        onReadied: harness.window.finishAutoAct()
+    }
     /// One run has one ending: the parts standing are walked in the completing turn (`WindowCensus.markCompletion`)
     /// and the completion said by name with what the page still owed (`Awaited.completed`); then the pictures wait
     /// for one swapped frame (`settle`) — the frame a view builds its rows in, and the frame a read landing in the
     /// completing turn would draw — so that what the completion left moving is in the picture, and the picture's walk
     /// against the completion's names it (`WindowCensus.reportAt`). The walk is not taken again: a run that
     /// completed on a moving scene fails, naming what moved, instead of settling into a state it never claimed.
+    /// Reached only once the route read the report; the window's call without one is a breach's end.
     function finish() {
-        // A run ordered to hold its act has none (`PGG_FAULT_HOLD_ACT`): only the ceiling ends it — the shape
-        // `cargo xtask wedge-check` reads back (`xtask::verify::faults`).
         if (Harness.faultHoldAct)
             return
         if (Harness.autoAct === "") {
             shotDriver.finish()
             return
         }
-        if (harness.settlingFrom >= 0 || completionWait.running)
+        if (!completionRoute.read) {
+            completionRoute.finishFrom(null)
             return
-        if (census.atCompletion === null) {
-            const owed = census.pageMissing()
-            if (owed.length > 0 && harness.ambient(owed)) {
-                Awaited.note("completion waiting=" + owed.join(","))
-                completionWait.start()
-                return
-            }
-            census.markCompletion()
-            Awaited.completed(Harness.autoAct, owed)
         }
+        if (harness.settlingFrom >= 0 || census.atCompletion !== null)
+            return
+        census.markCompletion()
+        Awaited.completed(Harness.autoAct, completionRoute.completing, census.pageMissing())
         harness.settlingFrom = Awaited.frames
         harness.window.update()
     }
-    /// The page's reads a completion is held for here, never named by the verb: the two the product's own timers
-    /// drive — `placing` (the view re-centring after `Metrics.anchorDelayMs`) and `readings` (the pacer's reads of
-    /// other worktrees) — which no report reads. Everything else a run waits for itself before its report, a
-    /// window's act included (`PageSettled.windowSettled` in the wait its report follows: this hold comes after the
-    /// report, and would hold a report already read), or its completion is a breach (`Awaited.completed`). Once
-    /// held, the hold lasts until the page owes nothing: what an ambient term's settling sets moving — a seat the
-    /// re-centring displaced from under a stand-in hand (`RowHoverHost`), a walk the pacer's read asked for — is the
-    /// hold's too, not the verb's, which completed over the ambient terms alone. `fault` is the read a check
+    /// The page's reads a picture waits out, never named by the verb: the two the product's own timers drive —
+    /// `placing` (the view re-centring after `Metrics.anchorDelayMs`) and `readings` (the pacer's reads of other
+    /// worktrees) — which can be owed again after the completion's hold has passed them. `fault` is the read a check
     /// injects into a picture's readings (`owedForPicture`), ambient like the two.
     readonly property var ambientTerms: Harness.faultOwedAtShot === "" ? ["placing", "readings"]
                                                                         : ["placing", "readings", "fault"]
-    function ambient(owed) {
-        return owed.every(term => harness.ambientTerms.indexOf(term) >= 0)
-    }
-    SampleTimer {
-        id: completionWait
-        onTriggered: {
-            const owed = census.pageMissing()
-            if (owed.length > 0) {
-                Awaited.note("completion waiting=" + owed.join(","))
-                return
-            }
-            completionWait.stop()
-            harness.finish()
-        }
-    }
     /// The frame the completion waits out, -1 while no completion is settling.
     property int settlingFrom: -1
     function settle() {
@@ -246,7 +231,7 @@ Item {
         harnessBranch: harness
     }
 
-    // The render boundary the waits on a layout read (`Awaited.still` / `drawnSince`), and the completion's walk
+    // The render boundary the waits on a layout read (`StageTimer.still` / `drawnSince`), and the completion's walk
     // (`settle`).
     Connections {
         target: harness.window

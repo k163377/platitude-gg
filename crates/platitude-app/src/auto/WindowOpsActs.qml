@@ -16,13 +16,18 @@ Item {
     required property TopBar topBar
 
     // PGG_AUTO_ACT=ops-branch-pick <branch> / ops-worktree-pick <folder> / ops-repo-pick: the card opened the way a
-    // press on its name opens it, the row pressed, and the window read where the press put it.
-    SampleTimer {
+    // press on its name opens it, the row pressed, and the window read where the press put it. The branch's card holds
+    // its rows; the repository's two hang off a tier of the name's card.
+    // No order: the repository door with one tab says so and ends before any card (a precondition missing).
+    WindowStage {
         id: pickTimer
+        name: "ops_pick"
         running: Harness.autoAct === "ops-branch-pick" || Harness.autoAct === "ops-worktree-pick"
                  || Harness.autoAct === "ops-repo-pick"
-        /// 0 = open the card, 1 = open its tier (the repository's two), 2 = press the row, 3 = wait for the landing.
-        property int step: 0
+        /// What the card's (or the tier's) press answered (`opened=`).
+        property bool opened: false
+        /// Whether the row was on the card as it was pressed (`found=`).
+        property bool found: false
         /// The error line the tab stood on as the row was pressed — a new one is the move turned away.
         property string errorBefore: ""
         property int wantedTab: -1
@@ -38,91 +43,91 @@ Item {
         /// `failed`, "" while not asked.
         property string pressShot: ""
         onTriggered: {
+            const op = pickTimer
             const page = acts.window.curPage
             const door = Harness.autoAct === "ops-branch-pick" ? "branch"
                        : Harness.autoAct === "ops-worktree-pick" ? "worktree" : "repo"
-            if (pickTimer.step === 0) {
+            if (op.at("start")) {
                 // Read here alone: the move the later stages wait for unsettles the page, and a guard read every beat
-                // across them would be reached again behind their checkpoints.
+                // across them would hold them up for the move's own reads.
                 if (!Awaited.all("ops_pick_ready", { "shown": acts.window.visible,
                                                  "ready": page !== null && acts.ready(page),
                                                  "page": PageSettled.windowSettled(window) }))
                     return
-                // The repository door needs a second tab; with one, the run says so now rather than at the ceiling.
+                // The repository door needs a second tab: with one, the staging went wrong, said and ended at once.
                 if (door === "repo" && acts.pageRepeater.count < 2) {
-                    if (acts.tabsModel.opening)
-                        return
-                    Harness.report("ops_pick step=open door=repo tabs=" + acts.pageRepeater.count)
-                    acts.finish(door, false)
+                    const tabs = acts.pageRepeater.count
+                    op.complete(() => ["ops_pick step=open door=repo tabs=" + tabs, acts.pickLine(door, false)])
                     return
                 }
                 // For the repository's two, the name's own card first: a tier hangs off a row on that card.
-                const opened = door === "branch" ? acts.topBar.openBranchMenu() : acts.topBar.openStandMenu()
-                pickTimer.step = door === "branch" ? 2 : 1
-                Harness.report("ops_pick step=open door=" + door + " opened=" + opened)
+                op.input("card", () => {
+                    op.opened = door === "branch" ? acts.topBar.openBranchMenu() : acts.topBar.openStandMenu()
+                }, () => "ops_pick step=open door=" + door + " opened=" + op.opened)
                 return
             }
-            if (pickTimer.step === 1) {
+            if (op.at("card") && door !== "branch") {
                 if (!Awaited.all("ops_pick_stand_menu", { "menu": acts.topBar.standMenuOpen }))
                     return
-                const opened = door === "worktree" ? acts.topBar.openStandWorktrees() : acts.topBar.openStandRepos()
-                pickTimer.step = 2
-                Harness.report("ops_pick step=tier door=" + door + " opened=" + opened)
+                op.input("tier", () => {
+                    op.opened = door === "worktree" ? acts.topBar.openStandWorktrees() : acts.topBar.openStandRepos()
+                }, () => "ops_pick step=tier door=" + door + " opened=" + op.opened)
                 return
             }
-            if (pickTimer.step === 2) {
+            if (!op.at("pressed")) {
                 // Card and tab read in the turn that presses, not the tick that opened the card: a read landing
                 // between the two can start something the move is then refused over.
                 const wanted = door === "branch" ? "branch" : door === "worktree" ? "worktrees" : "repos"
                 if (!Awaited.all("ops_pick_tier", { "door": acts.topBar.standDoor === wanted,
                                                     "ready": acts.ready(page) }))
                     return
-                pickTimer.from = door === "branch" ? acts.topBar.branchName : page.pageTab.repoPath
-                pickTimer.fromNames = acts.names()
-                pickTimer.errorBefore = page.pageTab.lastError
-                let pressed = false
-                if (door === "branch") {
-                    pressed = acts.topBar.pickBranchRow(Harness.autoActArg)
-                } else if (door === "worktree") {
-                    pressed = acts.topBar.pickWorktreeRow(Harness.autoActArg)
-                } else {
-                    for (let i = 0; i < acts.pageRepeater.count && !pressed; i++) {
-                        if (i === acts.tabsModel.currentIndex)
-                            continue
-                        pressed = acts.topBar.pickRepoRow(i)
-                        if (pressed)
-                            pickTimer.wantedTab = i
+                // A row not on the card goes in as a press that found nothing: the landing then has nothing to wait
+                // for, and the run ends on `found=false` rather than at the ceiling.
+                op.input("pressed", () => {
+                    op.from = door === "branch" ? acts.topBar.branchName : page.pageTab.repoPath
+                    op.fromNames = acts.names()
+                    op.errorBefore = page.pageTab.lastError
+                    let pressed = false
+                    if (door === "branch") {
+                        pressed = acts.topBar.pickBranchRow(Harness.autoActArg)
+                    } else if (door === "worktree") {
+                        pressed = acts.topBar.pickWorktreeRow(Harness.autoActArg)
+                    } else {
+                        for (let i = 0; i < acts.pageRepeater.count && !pressed; i++) {
+                            if (i === acts.tabsModel.currentIndex)
+                                continue
+                            pressed = acts.topBar.pickRepoRow(i)
+                            if (pressed)
+                                op.wantedTab = i
+                        }
                     }
-                }
-                pickTimer.pressNames = acts.names()
-                // waits(measured): the origin of `headMs=` below, which the report prints and nothing here reads
-                pickTimer.pressedAt = Date.now()
-                // The panel of the tab moved to before it has read anything, which the run's own shot, taken at the
-                // landing, cannot show; the next frame is drawn long before git can answer. A grab that could not be
-                // asked for is said as such rather than waited on.
-                if (door === "repo" && pressed) {
-                    const asked = Harness.shotDir !== "" && acts.topBar.grabToImage(shot => {
-                        pickTimer.pressShot = shot.saveToFile(Harness.shotDir + "/pressed.png") ? "saved" : "failed"
-                    })
-                    if (!asked)
-                        pickTimer.pressShot = "failed"
-                }
-                pickTimer.step = 3
-                Harness.report("ops_pick step=pressed door=" + door + " found=" + pressed)
-                // A row not on the card: nothing to wait for, so finish now rather than at the ceiling.
-                if (!pressed)
-                    acts.finish(door, false)
+                    op.found = pressed
+                    op.pressNames = acts.names()
+                    // waits(measured): the origin of `headMs=` below, which the report prints and nothing here reads
+                    op.pressedAt = Date.now()
+                    // The panel of the tab moved to before it has read anything, which the run's own shot, taken at
+                    // the landing, cannot show; the next frame is drawn long before git can answer. A grab that could
+                    // not be asked for is said as such rather than waited on.
+                    if (door === "repo" && pressed) {
+                        const asked = Harness.shotDir !== "" && acts.topBar.grabToImage(shot => {
+                            op.pressShot = shot.saveToFile(Harness.shotDir + "/pressed.png") ? "saved" : "failed"
+                        })
+                        op.pressShot = asked ? op.pressShot : "failed"
+                    }
+                }, () => "ops_pick step=pressed door=" + door + " found=" + op.found)
                 return
             }
-            if (door === "repo" && pickTimer.headAt === 0 && acts.topBar.branchName !== "")
+            if (door === "repo" && op.headAt === 0 && acts.topBar.branchName !== "")
                 // waits(measured): the other end of `headMs=`, to the sampler's tick — printed and compared with nothing
-                pickTimer.headAt = Date.now()
+                op.headAt = Date.now()
             // A move turned away (a worded refusal, or a worktree that would not open) is an answer too, not a ceiling.
             const refused = page.pageTab.state === "error"
-                            || (page.pageTab.lastError !== "" && page.pageTab.lastError !== pickTimer.errorBefore)
-            if (!refused && (!acts.landed(door, page) || (door === "repo" && pickTimer.pressShot === "")))
+                            || (page.pageTab.lastError !== "" && page.pageTab.lastError !== op.errorBefore)
+            if (!Awaited.all("ops_pick_landed", {
+                    "landed": !op.found || refused
+                              || (acts.landed(door, page) && (door !== "repo" || op.pressShot !== "")) }))
                 return
-            acts.finish(door, true)
+            op.complete(() => acts.pickLine(door, op.found))
         }
     }
 
@@ -148,27 +153,26 @@ Item {
         return acts.topBar.repoName + "/" + acts.topBar.worktreeName
     }
 
-    function finish(door, found) {
-        pickTimer.stop()
+    /// The run's line, read as the run completes: where the press left the window.
+    function pickLine(door, found) {
         const page = acts.window.curPage
-        Harness.report("ops_pick door=" + door + " found=" + found
-                       + " landed=" + (found && acts.landed(door, page))
-                       + " card=" + acts.topBar.standDoor
-                       // The repository door moves the tab in front in the press itself: names already the landing's
-                       // then, and not the ones before, were known at the move without waiting on git (the run's
-                       // repositories are named apart, `Route::NamedPresets`).
-                       + (door === "repo" ? " named=" + (found && pickTimer.pressNames === acts.names()
-                                                         && pickTimer.pressNames !== pickTimer.fromNames) : "")
-                       // Diagnosis only: the tab moved to reads its repository from the start (`Hub::release_tab`),
-                       // so this door's press leaves the branch unknown until the status answers.
-                       + (door === "repo"
-                          ? " headMs=" + (pickTimer.headAt > 0 ? Math.round(pickTimer.headAt - pickTimer.pressedAt) : -1)
-                            + " pressShot=" + (pickTimer.pressShot === "saved")
-                          : "")
-                       + " error=" + (page.pageTab.lastError !== pickTimer.errorBefore)
-                       + " from=" + pickTimer.from
-                       + " branch=" + acts.topBar.branchName
-                       + " where=" + GitFacts.pathLeaf(page.pageTab.repoPath))
-        acts.window.finishAutoAct()
+        return "ops_pick door=" + door + " found=" + found
+               + " landed=" + (found && acts.landed(door, page))
+               + " card=" + acts.topBar.standDoor
+               // The repository door moves the tab in front in the press itself: names already the landing's then,
+               // and not the ones before, were known at the move without waiting on git (the run's repositories are
+               // named apart, `Route::NamedPresets`).
+               + (door === "repo" ? " named=" + (found && pickTimer.pressNames === acts.names()
+                                                 && pickTimer.pressNames !== pickTimer.fromNames) : "")
+               // Diagnosis only: the tab moved to reads its repository from the start (`Hub::release_tab`), so this
+               // door's press leaves the branch unknown until the status answers.
+               + (door === "repo"
+                  ? " headMs=" + (pickTimer.headAt > 0 ? Math.round(pickTimer.headAt - pickTimer.pressedAt) : -1)
+                    + " pressShot=" + (pickTimer.pressShot === "saved")
+                  : "")
+               + " error=" + (page.pageTab.lastError !== pickTimer.errorBefore)
+               + " from=" + pickTimer.from
+               + " branch=" + acts.topBar.branchName
+               + " where=" + GitFacts.pathLeaf(page.pageTab.repoPath)
     }
 }

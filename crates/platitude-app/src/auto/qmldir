@@ -32,6 +32,7 @@ AutoActTipVerbs 1.0 AutoActTipVerbs.qml
 AutoActWipVerbs 1.0 AutoActWipVerbs.qml
 AutoActSplitVerbs 1.0 AutoActSplitVerbs.qml
 AutoShotDriver 1.0 AutoShotDriver.qml
+CompletionRoute 1.0 CompletionRoute.qml
 singleton Awaited 1.0 Awaited.qml
 NavProbe 1.0 NavProbe.qml
 singleton PageSettled 1.0 PageSettled.qml
@@ -39,6 +40,8 @@ PageAutoStart 1.0 PageAutoStart.qml
 PageHarness 1.0 PageHarness.qml
 PagePerfDriver 1.0 PagePerfDriver.qml
 PageReports 1.0 PageReports.qml
+PageStage 1.0 PageStage.qml
+StageTimer 1.0 StageTimer.qml
 TabProbe 1.0 TabProbe.qml
 WindowAutoActDriver 1.0 WindowAutoActDriver.qml
 WindowBadgeActs 1.0 WindowBadgeActs.qml
@@ -52,5 +55,6 @@ WindowOpsActs 1.0 WindowOpsActs.qml
 WindowPerfDriver 1.0 WindowPerfDriver.qml
 WindowSettingsActs 1.0 WindowSettingsActs.qml
 WindowShotMirrors 1.0 WindowShotMirrors.qml
+WindowStage 1.0 WindowStage.qml
 WindowTabActs 1.0 WindowTabActs.qml
 WindowTabPinActs 1.0 WindowTabPinActs.qml

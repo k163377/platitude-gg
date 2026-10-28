@@ -19,6 +19,10 @@
 //!   frames it counts for itself, and a count of its own beats held
 //!   against a number where no wait's answer selects the step
 //!   ([`qml`], [`beats`]).
+//! - `sampler`, `owner`, `report`, `completion`, `awaited`, `stage`: the
+//!   harness's stages move, and its runs complete and report, only
+//!   through its operations — a structure no marker lets go
+//!   ([`stages`]).
 //! - `unread`: a file whose lexical reading stopped short — a literal, a
 //!   comment or a template's `${…}` left open, a `/` that reads two ways
 //!   (`crate::lex::Unread`) — or a handler the beats proof cannot read as
@@ -46,11 +50,10 @@
 
 mod audit;
 mod beats;
-mod cond;
 mod qml;
 mod rust;
 mod source;
-mod stmts;
+mod stages;
 
 pub use audit::run;
 

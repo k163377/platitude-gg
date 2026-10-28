@@ -60,36 +60,37 @@ Item {
 
     // PGG_AUTO_ACT=commands-clear. Answered at the band: the rows and the line both feed one mark, read on both sides
     // of the press (`was=` is the half the picture cannot hold). The standing panel is a precondition read only in
-    // the branch that presses (rules-refs/app-ui.md「動詞の前提条件は入力を出す枝で読む」): the press takes it down, so a
-    // check every tick would bar the report.
-    SampleTimer {
+    // the stage that presses (rules-refs/app-ui.md「動詞の前提条件は入力を出す枝で読む」): the press takes it down.
+    // The failing command is the page's dispatch (`AutoActFindVerbs`), so the press joins it: a failure latched before
+    // it — the opening fetch's — is not the one this run clears.
+    WindowStage {
         id: commandsClearActTimer
+        name: "commands_clear"
+        order: ["cleared"]
+        after: ["page/act/dispatched"]
         running: Harness.autoAct === "commands-clear"
-        property bool clearRequested: false
         property bool was: false
         onTriggered: {
-            if (!Awaited.all("commands_clear_act_ready", { "ready": !(window.curPage === null),
-                                                           "page": PageSettled.windowSettled(window) }))
-                return
-            if (!commandsClearActTimer.clearRequested) {
-                if (!driver.commandsWrongSeen
-                        || window.curPage.pageCommands.running
-                        || !window.curPage.commandsShown)
+            if (commandsClearActTimer.at("start")) {
+                if (!Awaited.all("commands_clear_ready", {
+                        "joined": commandsClearActTimer.joined(),
+                        "wrong": driver.commandsWrongSeen,
+                        "idle": window.curPage !== null && !window.curPage.pageCommands.running,
+                        "shown": window.curPage !== null && window.curPage.commandsShown }))
                     return
-                commandsClearActTimer.was = driver.commandsWrongSeen
-                commandsClearActTimer.clearRequested = true
-                window.curPage.clearCommandLog()
+                commandsClearActTimer.input("cleared", () => {
+                    commandsClearActTimer.was = driver.commandsWrongSeen
+                    window.curPage.clearCommandLog()
+                })
                 return
             }
-            if (window.curPage.commandsWrong || window.curPage.commandsShown)
+            if (!Awaited.all("commands_clear_cleared", {
+                    "cleared": !window.curPage.commandsWrong && !window.curPage.commandsShown }))
                 return
-            stop()
-            Harness.report(
-                "commands_clear was=" + commandsClearActTimer.was
-                + " wrong=" + window.curPage.commandsWrong
-                + " open=" + window.curPage.commandsShown
-                + " mark=" + window.curPage.commandsMarkColor)
-            window.finishAutoAct()
+            commandsClearActTimer.complete(() => "commands_clear was=" + commandsClearActTimer.was
+                                                 + " wrong=" + window.curPage.commandsWrong
+                                                 + " open=" + window.curPage.commandsShown
+                                                 + " mark=" + window.curPage.commandsMarkColor)
         }
     }
 
@@ -99,47 +100,49 @@ Item {
     // `-held` is the same run over a panel the reader put up first; the two part only on the last `open=` (down for
     // one, up for the other). The close happens inside the drain that zeroes the count, so it needs no wait of its own.
     //
-    // The standing panel is read only in the branch that fetches, as in `commands-clear`. Both halves of the failure
+    // The standing panel is read only in the stage that fetches, as in `commands-clear`. Both halves of the failure
     // — the mark and the line, which arrive in no fixed order — are latched before the fetch goes, since the report
-    // claims both (rules-refs/app-ui.md「報告行が主張する到着は、前提条件でも全部待つ」).
-    SampleTimer {
+    // claims both (rules-refs/app-ui.md「報告行が主張する到着は、前提条件でも全部待つ」). The refusal is the page's
+    // dispatch (`AutoActPublishVerbs`), which the fetch joins.
+    WindowStage {
         id: fetchRecoverActTimer
+        name: "fetch_recover"
+        order: ["fetched"]
+        after: ["page/act/dispatched"]
         running: Harness.autoAct === "fetch-recover" || Harness.autoAct === "fetch-recover-held"
-        property bool fetchRequested: false
         property bool was: false
         property bool hadLine: false
         property bool wasOpen: false
         onTriggered: {
-            if (!Awaited.all("fetch_recover_act_ready", { "ready": !(window.curPage === null),
-                                                          "page": PageSettled.windowSettled(window) }))
-                return
-            if (!fetchRecoverActTimer.fetchRequested) {
-                if (!driver.commandsWrongSeen || !driver.errorLineSeen || !window.curPage.commandsShown)
+            if (fetchRecoverActTimer.at("start")) {
+                if (!Awaited.all("fetch_recover_ready", {
+                        "joined": fetchRecoverActTimer.joined(),
+                        "wrong": driver.commandsWrongSeen,
+                        "line": driver.errorLineSeen,
+                        "shown": window.curPage !== null && window.curPage.commandsShown }))
                     return
-                fetchRecoverActTimer.was = driver.commandsWrongSeen
-                fetchRecoverActTimer.hadLine = driver.errorLineSeen
-                fetchRecoverActTimer.wasOpen = window.curPage.commandsShown
-                fetchRecoverActTimer.fetchRequested = true
-                window.curPage.pageTab.fetch("")
-                // A run that ends at the ceiling after this line was waiting for the recovery to take the news down.
-                Harness.report("fetch_recover step=fetched")
+                // A run that ends at the ceiling after this stage was waiting for the recovery to take the news down.
+                fetchRecoverActTimer.input("fetched", () => {
+                    fetchRecoverActTimer.was = driver.commandsWrongSeen
+                    fetchRecoverActTimer.hadLine = driver.errorLineSeen
+                    fetchRecoverActTimer.wasOpen = window.curPage.commandsShown
+                    window.curPage.pageTab.fetch("")
+                })
                 return
             }
-            if (window.curPage.commandsWrong
-                    || window.curPage.pageTab.lastError !== ""
-                    || window.curPage.pageTab.busyCount !== 0
-                    || window.curPage.pageTab.fetchFailures !== 0)
+            if (!Awaited.all("fetch_recover_recovered", {
+                    "quiet": !(window.curPage.commandsWrong
+                               || window.curPage.pageTab.lastError !== ""
+                               || window.curPage.pageTab.busyCount !== 0
+                               || window.curPage.pageTab.fetchFailures !== 0) }))
                 return
-            stop()
-            Harness.report(
-                "fetch_recover was=" + fetchRecoverActTimer.was
-                + " hadline=" + fetchRecoverActTimer.hadLine
-                + " wasopen=" + fetchRecoverActTimer.wasOpen
-                + " wrong=" + window.curPage.commandsWrong
-                + " line=" + (window.curPage.pageTab.lastError !== "")
-                + " failures=" + window.curPage.pageTab.fetchFailures
-                + " open=" + window.curPage.commandsShown)
-            window.finishAutoAct()
+            fetchRecoverActTimer.complete(() => "fetch_recover was=" + fetchRecoverActTimer.was
+                                                + " hadline=" + fetchRecoverActTimer.hadLine
+                                                + " wasopen=" + fetchRecoverActTimer.wasOpen
+                                                + " wrong=" + window.curPage.commandsWrong
+                                                + " line=" + (window.curPage.pageTab.lastError !== "")
+                                                + " failures=" + window.curPage.pageTab.fetchFailures
+                                                + " open=" + window.curPage.commandsShown)
         }
     }
 

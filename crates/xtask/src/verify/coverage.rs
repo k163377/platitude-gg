@@ -126,7 +126,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
 /// its argument and the fixture it runs on), the tier it runs in, the
 /// judgment row it must say, the claims it must picture, and the parts the
 /// table promises its picture shows beyond the `*` row. What the run
-/// waited for is the run's own to say (`checkpoint` lines in its log).
+/// waited for is the run's own to say (`stage` lines in its log).
 fn ledger(lines: &Lines, tiers: &Tiers) -> Result<(), String> {
     println!("line\ttier\tmust_say\tclaims\tpromises");
     for line in lines.lines() {

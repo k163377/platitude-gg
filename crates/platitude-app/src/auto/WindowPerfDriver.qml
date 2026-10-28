@@ -72,10 +72,18 @@ Item {
         driver.reportDisplay("complete")
         Harness.noteMemory("perf-done")
         Harness.report("perf_done open=" + (driver.page !== null))
-        // The measurement's own end, as the one stage this verb reaches (`Awaited.at`).
-        Awaited.at("perf", "done")
-        if (PerfProbe.verifying)
-            window.finishAutoAct()
+    }
+    // A verify run's completion of `perf` (`PerfProbe.verifying`): the measurement's own end (`finished`) is the one
+    // stage this verb reaches, and the completion's hold reads the page out after it.
+    WindowStage {
+        id: perfDone
+        name: "perf"
+        running: PerfProbe.verifying && driver.finished
+        onTriggered: {
+            if (!Awaited.all("perf_done", { "finished": driver.finished }))
+                return
+            perfDone.complete(() => [])
+        }
     }
 
     Connections {

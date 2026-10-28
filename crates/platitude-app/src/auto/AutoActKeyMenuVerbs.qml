@@ -33,7 +33,10 @@ Item {
         const cut = arg.indexOf(":")
         keyMenuTimer.surface = cut > 0 ? arg.substring(0, cut) : arg
         keyMenuTimer.rest = cut > 0 ? arg.substring(cut + 1) : ""
-        keyMenuTimer.begin()
+        // The diff is opened first, a stage of its own: the drag needs its rows.
+        keyMenuTimer.order = keyMenuTimer.surface === "diff" ? ["diff_opened", "pressed", "asked"]
+                                                             : ["pressed", "asked"]
+        keyMenuTimer.start()
         return true
     }
 
@@ -67,23 +70,20 @@ Item {
             // The row's own click (`NavList.clickRow`), which brings the keyboard (`NavList.takeKeyboard`).
             return list.clickRow(index)
         }
-        Harness.report("key_menu surface=" + surface + " unknown")
+        Awaited.note("key_menu surface=" + surface + " unknown")
         return true
     }
     function headRow() {
         return acts.graphModel.rowOf(acts.worktree.headOid)
     }
-    /// The diff opens first, then a drag from the head of the first line past the first removed one, then the hand
-    /// arrives on the text (`DiffPane.handArrived`, the wheel's and a press's door for the keyboard).
-    property bool diffAsked: false
+    /// The diff opens first (`openDiff`), then a drag from the head of the first line past the first removed one, then
+    /// the hand arrives on the text (`DiffPane.handArrived`, the wheel's and a press's door for the keyboard).
     property int diffLastRow: -1
+    function openDiff(path) {
+        acts.page.showWip()
+        acts.page.toggleDiff("unstaged", path, acts.unstagedModel.origOf(path))
+    }
     function pressDiff(path) {
-        if (!acts.diffAsked) {
-            acts.page.showWip()
-            acts.page.toggleDiff("unstaged", path, acts.unstagedModel.origOf(path))
-            acts.diffAsked = true
-            return false
-        }
         // The rows built, too: the first removed line is looked for among them (`DiffPane.firstRemovedRow`).
         if (acts.diffPane.diffModel.loading || acts.diffPane.view.count < 3 || !acts.diffPane.view.itemAtIndex(2))
             return false
@@ -105,64 +105,76 @@ Item {
     }
 
     // ---- the keyboard arrived ------------------------------------------------------------------------------------
-    function landed(surface, rest) {
+    /// What says the keyboard is on the surface, as the terms of one observation.
+    function landing(surface, rest) {
         if (surface === "graph")
-            return acts.graphPane.view.activeFocus && acts.graphPane.view.currentIndex === acts.headRow() + 1
+            return { "landed": acts.graphPane.view.activeFocus
+                               && acts.graphPane.view.currentIndex === acts.headRow() + 1 }
         if (surface === "files") {
             const row = acts.wipPane.filesWalk.rowFor("unstaged", rest)
             // The click also opened the file's diff (`RepoPage.toggleDiff`), a git subprocess away: what the run
             // photographs and records is the pane with its rows (`DiffPane.diffSettled`).
-            return Awaited.all("key_menu", {
+            return {
                 "keyboard": !!row && row.ListView.view.activeFocus,
                 "diff": acts.page.diffKey === "unstaged:" + rest && acts.diffPane.diffSettled()
-            })
+            }
         }
         if (surface === "diff")
-            return acts.diffPane.view.activeFocus && acts.diffPane.diffModel.selHasNew
+            return { "landed": acts.diffPane.view.activeFocus && acts.diffPane.diffModel.selHasNew }
         if (surface === "nav") {
             const list = acts.navList(rest)
-            return !!list && list.activeFocus
+            return { "landed": !!list && list.activeFocus }
         }
-        return true
+        return ({})
     }
 
     // ---- the key ------------------------------------------------------------------------------------------------
-    /// Asks, the way `rest` names on the graph (`key`, `request`, `pointer`) and through the key elsewhere, and reads
-    /// where the menu stood against the foot of the target's left end. The target is read after the asking: the
-    /// surface brings it on screen first.
+    /// How the menu is asked for: the way `rest` names on the graph (`key`, `request`, `pointer`), the key elsewhere.
+    function via(surface, rest) {
+        return surface === "graph" && rest !== "" ? rest : "key"
+    }
+    /// Asks for the menu.
     function ask(surface, rest) {
-        let via = "key"
-        let menu = null
-        let foot = null
         if (surface === "graph") {
             const view = acts.graphPane.view
-            via = rest === "" ? "key" : rest
-            if (via === "key") {
+            if (acts.via(surface, rest) === "key") {
                 acts.graphPane.menuFromKeys()
             } else {
                 // The window's own handler, which every request reaches that nothing above took
                 // (`Main.keyMenuAsked`): the window's origin for one with no place, the pointer's point for xcb's —
                 // here the middle of the list.
-                view.Window.window.keyMenuAsked(via === "request" ? Qt.point(0, 0)
+                view.Window.window.keyMenuAsked(rest === "request" ? Qt.point(0, 0)
                                                 : view.mapToItem(null, view.width / 2, view.height / 2))
             }
+        } else if (surface === "files") {
+            acts.wipPane.menuFromKeys()
+        } else if (surface === "diff") {
+            acts.diffPane.menuFromKeys()
+        } else if (surface === "nav") {
+            acts.navList(rest).menuFromKeys()
+        }
+    }
+    /// Where the menu stood against the foot of the target's left end. The target is read after the asking: the
+    /// surface brings it on screen first.
+    function menuLine(surface, rest) {
+        let menu = null
+        let foot = null
+        if (surface === "graph") {
+            const view = acts.graphPane.view
             menu = acts.driver.commitMenu
             const item = view.itemAtIndex(view.currentIndex)
             foot = item ? item.mapToItem(null, 0, Theme.graphRowHeight) : null
         } else if (surface === "files") {
-            acts.wipPane.menuFromKeys()
             menu = acts.driver.fileMenu
             const row = acts.wipPane.filesWalk.rowFor("unstaged", rest)
             foot = row ? row.mapToItem(null, 0, Theme.rowHeight) : null
         } else if (surface === "diff") {
-            acts.diffPane.menuFromKeys()
             menu = acts.driver.diffRowMenu.menu
             // The drag ended on its last row, past the line's end: the foot of that row, wherever along it.
             const item = acts.diffPane.view.itemAtIndex(acts.diffLastRow)
             foot = item ? item.mapToItem(null, 0, item.height) : null
         } else if (surface === "nav") {
             const list = acts.navList(rest)
-            list.menuFromKeys()
             menu = acts.driver.refMenu
             const item = list.itemAtIndex(acts.navIndex(rest))
             foot = item ? item.mapToItem(null, 0, item.lineHeight) : null
@@ -173,36 +185,42 @@ Item {
         // that the card stands right of the row's head.
         const under = opened && foot !== null && Math.abs(at.y - foot.y) <= 1
                       && (surface === "diff" ? at.x > foot.x : Math.abs(at.x - foot.x) <= 1)
-        Harness.report("key_menu on=" + surface + " via=" + via + " opened=" + opened + " under=" + under
-                          + " at=" + (at ? Math.round(at.x) + "," + Math.round(at.y) : "none")
-                          + " foot=" + (foot ? Math.round(foot.x) + "," + Math.round(foot.y) : "none"))
+        return "key_menu on=" + surface + " via=" + acts.via(surface, rest) + " opened=" + opened + " under=" + under
+               + " at=" + (at ? Math.round(at.x) + "," + Math.round(at.y) : "none")
+               + " foot=" + (foot ? Math.round(foot.x) + "," + Math.round(foot.y) : "none")
     }
 
     // Presses, waits for the keyboard to land (and on the file list for the diff the click opened), then asks. No
     // ceiling: a target that never lands is ended by the watchdog.
-    SampleTimer {
+    PageStage {
         id: keyMenuTimer
+        name: "key_menu"
+        order: ["pressed", "asked"]
         property string surface: ""
         property string rest: ""
-        property bool pressed: false
-        function begin() {
-            keyMenuTimer.pressed = false
-            acts.diffAsked = false
-            keyMenuTimer.start()
-        }
         onTriggered: {
-            if (!keyMenuTimer.pressed) {
-                keyMenuTimer.pressed = acts.press(keyMenuTimer.surface, keyMenuTimer.rest)
+            const op = keyMenuTimer
+            if (op.surface === "diff" && op.at("start")) {
+                op.input("diff_opened", () => {
+                    acts.openDiff(op.rest)
+                })
                 return
             }
-            if (!acts.landed(keyMenuTimer.surface, keyMenuTimer.rest))
+            if (!op.at("pressed")) {
+                // Pressed until what it lands on is there.
+                op.input("pressed", () => acts.press(op.surface, op.rest))
+                return
+            }
+            if (!Awaited.all("key_menu", acts.landing(op.surface, op.rest)))
                 return
             // The press moved the selection, and the pane that follows it has its rows (`PageSettled`).
             if (!Awaited.all("key_menu_page", { "page": PageSettled.settled(acts.page) }))
                 return
-            keyMenuTimer.stop()
-            acts.ask(keyMenuTimer.surface, keyMenuTimer.rest)
-            acts.driver.complete()
+            const asked = op.input("asked", () => {
+                acts.ask(op.surface, op.rest)
+            })
+            if (asked)
+                op.complete(() => acts.menuLine(op.surface, op.rest))
         }
     }
 }

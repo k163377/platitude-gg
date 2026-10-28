@@ -48,15 +48,18 @@ Item {
     function run(act, arg) {
         if (act !== "middle-hand")
             return false
-        handTimer.begin(arg)
+        handTimer.surface = arg
+        // The choice's two presses are stages of their own, before the hand's.
+        handTimer.order = arg === "chosen" ? ["chose_first", "chose_last", "pressed"] : ["pressed"]
+        handTimer.start()
         return true
     }
 
     // ---- the surfaces ------------------------------------------------------------------------------------------
     /// The surface an argument names, once it holds more than it has room for: its hand, how far it has gone (`at`)
     /// and which way it has room (`down`); until then `wait`, what it waits for. The requests on the way are made again
-    /// every tick until their effect shows (rules/app-ui.md §UI 自動化), except the choice's two presses, made once
-    /// each off the timer's count.
+    /// every tick until their effect shows (rules/app-ui.md §UI 自動化), except the choice's two presses, each an input
+    /// made once as a stage of `handTimer`.
     function seat(name) {
         if (name === "files" || name === "block")
             return acts.detailsSeat(name, worktree.headOid)
@@ -201,15 +204,17 @@ Item {
 
     /// The choice of commits, made as `graph-choose-range` makes it: a plain press, then Shift on the last.
     function chosenSeat() {
-        if (handTimer.pressedChoice < 2) {
-            const want = handTimer.pressedChoice === 0 ? acts.chosenFrom : acts.chosenTo
+        if (!handTimer.at("chose_last")) {
+            const first = handTimer.at("start")
+            const want = first ? acts.chosenFrom : acts.chosenTo
             const item = graphPane.view.itemAtIndex(want)
             if (!item) {
                 graphPane.view.positionViewAtIndex(want, ListView.Contain)
                 return acts.waiting("row " + want + " laid out")
             }
-            item.leftClick(handTimer.pressedChoice === 0 ? Qt.NoModifier : Qt.ShiftModifier)
-            handTimer.pressedChoice++
+            handTimer.input(first ? "chose_first" : "chose_last", () => {
+                item.leftClick(first ? Qt.NoModifier : Qt.ShiftModifier)
+            })
             return acts.waiting("the choice")
         }
         if (page.chosenCount !== acts.chosenTo - acts.chosenFrom + 1 || !detailsModel.selectionLoaded
@@ -303,74 +308,69 @@ Item {
     }
 
     // ---- the press, the drift, the claim --------------------------------------------------------------------------
-    SampleTimer {
+    PageStage {
         id: handTimer
+        name: "middle_hand"
+        order: ["pressed"]
         property string surface: ""
-        /// What the surface was last seen waiting for, reported when it changes (rules/app-ui.md §UI 自動化).
-        property string waitingFor: ""
         property var standing: null
         property real fromAt: 0
+        /// Where the press went in, in the hand's frame.
+        property point pressAt: Qt.point(0, 0)
         property bool took: false
         /// Whether something under the hand claimed the point, read before the press: the hand steps aside then, and
         /// nothing else says why a press started nothing.
         property bool claimed: false
-        /// How many of the choice's two presses have gone in, and the log's row count the last read was asked at.
-        property int pressedChoice: 0
+        /// The log's row count the last read was asked at.
         property int readAt: -1
         /// The hand's frame on the last tick; pressed once it has stood still for one — a box grows to its words a
         /// layout after they land, and an earlier press anchors the ring off the box's middle.
         property string seatSize: ""
-        function begin(name) {
-            handTimer.surface = name
-            handTimer.waitingFor = ""
-            handTimer.standing = null
-            handTimer.pressedChoice = 0
-            handTimer.readAt = -1
-            handTimer.seatSize = ""
-            handTimer.start()
+        /// Whether the surface has gone further than a rounding since the press.
+        function went() {
+            return Math.abs(handTimer.standing.at() - handTimer.fromAt) > acts.moved
         }
         onTriggered: {
-            if (handTimer.standing === null) {
-                const seat = acts.seat(handTimer.surface)
+            const op = handTimer
+            if (!op.at("pressed")) {
+                const seat = acts.seat(op.surface)
                 if (seat.wait !== undefined) {
-                    if (seat.wait !== handTimer.waitingFor) {
-                        handTimer.waitingFor = seat.wait
-                        Harness.report("middle_hand surface=" + handTimer.surface + " waiting=" + seat.wait)
-                    }
+                    // What the surface waits for, said when it changes (rules/app-ui.md §UI 自動化).
+                    Awaited.note("middle_hand surface=" + op.surface + " waiting=" + seat.wait)
                     return
                 }
                 const size = seat.hand.width + "x" + seat.hand.height
-                if (size !== handTimer.seatSize) {
-                    handTimer.seatSize = size
+                if (size !== op.seatSize) {
+                    op.seatSize = size
                     return
                 }
-                handTimer.standing = seat
-                handTimer.fromAt = seat.at()
-                const at = acts.pressPoint(seat)
-                handTimer.claimed = seat.hand.claimedAt(at)
-                handTimer.took = seat.hand.press(at)
-                if (handTimer.took)
-                    seat.hand.drift(Qt.point(at.x, at.y + (seat.down ? acts.reach : -acts.reach)))
-                Harness.report("middle_hand surface=" + handTimer.surface + " pressed took=" + handTimer.took
-                               + " claimed=" + handTimer.claimed
-                               + " at=" + Math.round(at.x) + "," + Math.round(at.y))
+                op.input("pressed", () => {
+                    op.standing = seat
+                    op.fromAt = seat.at()
+                    op.pressAt = acts.pressPoint(seat)
+                    op.claimed = seat.hand.claimedAt(op.pressAt)
+                    op.took = seat.hand.press(op.pressAt)
+                    if (op.took)
+                        seat.hand.drift(Qt.point(op.pressAt.x, op.pressAt.y + (seat.down ? acts.reach : -acts.reach)))
+                }, () => "middle_hand surface=" + op.surface + " pressed took=" + op.took
+                         + " claimed=" + op.claimed
+                         + " at=" + Math.round(op.pressAt.x) + "," + Math.round(op.pressAt.y))
                 return
             }
-            const hand = handTimer.standing.hand
-            const went = Math.abs(handTimer.standing.at() - handTimer.fromAt) > acts.moved
             // A hand that stepped aside has nothing to wait for; one that took the press waits for the surface to go.
-            if (handTimer.took && (!went || hand.ticks < 2))
+            if (!Awaited.all("middle_hand_went", { "went": !op.took || (op.went() && op.standing.hand.ticks >= 2) }))
                 return
-            handTimer.stop()
-            const answered = handTimer.claimed ? !handTimer.took : handTimer.took && went && hand.scrolling
-            Harness.report("middle_hand surface=" + handTimer.surface
-                           + " answered=" + answered
-                           + " took=" + handTimer.took
-                           + " claimed=" + handTimer.claimed
-                           + " moved=" + went
-                           + " scrolling=" + hand.scrolling
-                           + " ticks=" + hand.ticks)
-            driver.complete()
+            op.complete(() => {
+                const hand = op.standing.hand
+                const answered = op.claimed ? !op.took : op.took && op.went() && hand.scrolling
+                return "middle_hand surface=" + op.surface
+                       + " answered=" + answered
+                       + " took=" + op.took
+                       + " claimed=" + op.claimed
+                       + " moved=" + op.went()
+                       + " scrolling=" + hand.scrolling
+                       + " ticks=" + hand.ticks
+            })
         }
     }
 }

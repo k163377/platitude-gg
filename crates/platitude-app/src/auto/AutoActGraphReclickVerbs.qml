@@ -42,11 +42,14 @@ Item {
             // The argument is `<行>[:<付ける名前>]` (row 0 by default); `graph-rename` carries the gesture to git.
             const renameCut = arg.indexOf(":")
             reclickGraphTimer.row = Number(renameCut < 0 ? (arg === "" ? "0" : arg) : arg.substring(0, renameCut))
-            reclickGraphTimer.name = renameCut < 0 ? "" : arg.substring(renameCut + 1)
+            reclickGraphTimer.naming = renameCut < 0 ? "" : arg.substring(renameCut + 1)
             reclickGraphTimer.scrolls = act === "graph-reclick-scrolled"
             reclickGraphTimer.marks = act === "graph-reclick-mark"
             reclickGraphTimer.points = act === "graph-reclick-still"
             reclickGraphTimer.fits = false
+            // The rename says the box before it goes through to git.
+            reclickGraphTimer.order = act === "graph-rename" ? ["first_click", "second_click", "box", "submitted"]
+                                                             : ["first_click", "second_click"]
             // The submit is ticks away: armed now, the watch catches the ask whenever it comes
             // (`AutoActDriver.beginWrite`).
             if (act === "graph-rename")
@@ -67,11 +70,12 @@ Item {
             }
             reclickGraphTimer.puts = fitParts.length > 2
             reclickGraphTimer.typed = fitParts.slice(2).join(":")
-            reclickGraphTimer.name = ""
+            reclickGraphTimer.naming = ""
             reclickGraphTimer.scrolls = false
             reclickGraphTimer.marks = false
             reclickGraphTimer.points = false
             reclickGraphTimer.fits = true
+            reclickGraphTimer.order = ["first_click", "second_click"]
             reclickGraphTimer.start()
         } else if (act === "graph-reclick-list" || act === "graph-reclick-across" || act === "ref-list-pick") {
             // At the card the chip unfolds into; the argument `<行>[:<カードの行>]` defaults to the card's first row.
@@ -80,6 +84,10 @@ Item {
             reclickListTimer.card = listParts.length > 1 ? Number(listParts[1]) : 0
             reclickListTimer.picks = act === "ref-list-pick"
             reclickListTimer.across = act === "graph-reclick-across"
+            // The pick's double-click hands the run to the write barrier; across, the row's click was the first.
+            reclickListTimer.order = reclickListTimer.picks ? ["expanded", "picked"]
+                                   : reclickListTimer.across ? ["expanded", "named"]
+                                   : ["expanded", "first_click", "named"]
             if (reclickListTimer.picks)
                 driver.beginWrite("ref-list-pick")
             reclickListTimer.start()
@@ -95,17 +103,15 @@ Item {
         }
         return true
     }
-    // Every step waits for its own answer: the row before its click, the card before its rows, and the double-click
+    // Every stage waits for its own answer: the row before its click, the card before its rows, and the double-click
     // window before a second click counts as a second.
-    property bool reclickGraphArmed: false
-    property int reclickGraphStep: 0
-    /// When the second click went in, for the report's `wait=` — a diagnosis, judged by nothing.
-    property real reclickGraphAt: 0
-    SampleTimer {
+    PageStage {
         id: reclickGraphTimer
+        name: "reclick_graph"
+        order: ["first_click", "second_click"]
         property int row: 0
         /// The name to type once the box is open (`graph-rename`); empty for the runs that stop at the box.
-        property string name: ""
+        property string naming: ""
         /// Whether the history scrolls away between the second click and the box: the delegate is pooled, the
         /// gesture survives it (`ReclickGesture`), and the box has to be sent back into view.
         property bool scrolls: false
@@ -119,6 +125,10 @@ Item {
         property bool fits: false
         property bool puts: false
         property string typed: ""
+        /// Whether the second click armed the rename, read at that click.
+        property bool armed: false
+        /// When the second click went in, for the report's `wait=` — a diagnosis, judged by nothing.
+        property real secondAt: 0
         /// What a press at `x` along the row lands on, asked of the areas themselves: the lane strip over the list and
         /// the row's own area both hand it to the row (`GraphLanePan.pressLanded`); past them it is the box's, or
         /// nothing's.
@@ -131,7 +141,9 @@ Item {
                 return "row"
             return x >= item.nameBoxX && x < item.nameBoxX + item.nameBoxWidth ? "box" : "none"
         }
-        function reportFit(item) {
+        /// The box's seat and width (`graph-rename-fit`), read off the row as it stands when it is called.
+        function fitLine() {
+            const item = graphPane.view.itemAtIndex(reclickGraphTimer.row)
             // The column's frame; the column stands at the row's left.
             const boxX = item.nameBoxX
             const right = boxX + item.nameBoxWidth
@@ -152,91 +164,95 @@ Item {
             const underR = strip.visible ? Math.min(right, strip.mapToItem(item, strip.width, 0).x) : 0
             const onBox = underR - underL > 2 ? (underL + underR) / 2 : boxX + item.nameBoxWidth / 2
             const probes = [boxX / 2, onBox, (right + item.width) / 2]
-            Harness.report(
-            "graph_rename_fit row=" + reclickGraphTimer.row
-            + " armed=" + acts.reclickGraphArmed
-            + " box=" + (graphPane.namingOid !== "")
-            + " mode=" + graphPane.namingMode
-            + " hits=" + probes.map(x => reclickGraphTimer.landsAt(item, x)).join("/")
-            // What a rest beside the box opens: nothing, the column being the box's (`GraphRowDelegate.partAt`).
-            + " rest_left=" + (item.partAt(probes[0]) || "none")
-            + " stands=" + stands
-            + " selected=" + item.nameBoxSelected
-            + " strip=" + graphPane.lanePan.visible
-            + " typed=" + graphPane.namingText
-            + " opened=" + graphPane.namingOpenedWith
-            + " label_w=" + Math.round(item.labelsW)
-            + " box_x=" + Math.round(boxX)
-            + " box_w=" + Math.round(item.nameBoxWidth)
-            + " right=" + Math.round(right)
-            + " chip_right=" + Math.round(chipRight)
-            + " reach=" + Math.round(reach))
-            driver.complete()
+            return "graph_rename_fit row=" + reclickGraphTimer.row
+                   + " armed=" + reclickGraphTimer.armed
+                   + " box=" + (graphPane.namingOid !== "")
+                   + " mode=" + graphPane.namingMode
+                   + " hits=" + probes.map(x => reclickGraphTimer.landsAt(item, x)).join("/")
+                   // What a rest beside the box opens: nothing, the column being the box's (`GraphRowDelegate.partAt`).
+                   + " rest_left=" + (item.partAt(probes[0]) || "none")
+                   + " stands=" + stands
+                   + " selected=" + item.nameBoxSelected
+                   + " strip=" + graphPane.lanePan.visible
+                   + " typed=" + graphPane.namingText
+                   + " opened=" + graphPane.namingOpenedWith
+                   + " label_w=" + Math.round(item.labelsW)
+                   + " box_x=" + Math.round(boxX)
+                   + " box_w=" + Math.round(item.nameBoxWidth)
+                   + " right=" + Math.round(right)
+                   + " chip_right=" + Math.round(chipRight)
+                   + " reach=" + Math.round(reach)
         }
         onTriggered: {
             const item = graphPane.view.itemAtIndex(reclickGraphTimer.row)
-            // Each step asks for the row itself: not laid out yet, a click would wait for an answer to a question
+            // Each stage asks for the row itself: not laid out yet, a click would wait for an answer to a question
             // nobody put, and the scroll pools the row until the box's return rebuilds it.
-            if (acts.reclickGraphStep === 0) {
+            if (reclickGraphTimer.at("start")) {
                 if (!Awaited.all("reclick_graph_row", { "row": !!item }))
                     return
-                // Written where a real pointer writes it, so the row makes every decision after that itself
-                // (`GraphRowDelegate.settlePointed`).
-                if (reclickGraphTimer.points)
-                    item.pointerRowX = item.labelsW - 2
-                item.leftClick(Qt.NoModifier)
-                acts.reclickGraphStep = 1
-            } else if (acts.reclickGraphStep === 1) {
+                reclickGraphTimer.input("first_click", () => {
+                    // Written where a real pointer writes it, so the row makes every decision after that itself
+                    // (`GraphRowDelegate.settlePointed`).
+                    if (reclickGraphTimer.points)
+                        item.pointerRowX = item.labelsW - 2
+                    item.leftClick(Qt.NoModifier)
+                })
+                return
+            }
+            if (reclickGraphTimer.at("first_click")) {
                 // Inside the double-click window a second click would be half a double-click; and the details the
                 // first click asked for land first, or `-mark` completes over that read.
                 if (!Awaited.all("reclick_graph_second", { "row": !!item,
                                                            "window": !!item && !item.clickGuarded,
                                                            "details": page.pageDetailsSettled }))
                     return
-                // waits(measured): the origin of the `wait=` below, which the report prints and nothing here reads
-                acts.reclickGraphAt = Date.now()
-                item.leftClick(Qt.NoModifier)
-                // Read where it is set: the wait is short and the box is what it turns into.
-                acts.reclickGraphArmed = item.renameArmed
-                // Far enough that the clicked row is pooled, well outside the view's buffer.
-                if (reclickGraphTimer.scrolls)
-                    graphPane.view.positionViewAtIndex(reclickGraphTimer.row + 200, ListView.Beginning)
+                reclickGraphTimer.input("second_click", () => {
+                    // waits(measured): the origin of the `wait=` below, which the report prints and nothing here reads
+                    reclickGraphTimer.secondAt = Date.now()
+                    item.leftClick(Qt.NoModifier)
+                    // Read where it is set: the wait is short and the box is what it turns into.
+                    reclickGraphTimer.armed = item.renameArmed
+                    // Far enough that the clicked row is pooled, well outside the view's buffer.
+                    if (reclickGraphTimer.scrolls)
+                        graphPane.view.positionViewAtIndex(reclickGraphTimer.row + 200, ListView.Beginning)
+                })
+                // Ends inside the wait, in the turn the second click went in where the page owes nothing: `mark=` is
+                // the chip's (`RefChip.waiting`), which a picture a beat late frames as the box instead.
                 if (reclickGraphTimer.marks) {
-                    // Ends inside the wait; `mark=` is read off the chip (`RefChip.waiting`), since a picture a
-                    // beat late frames the box instead.
-                    reclickGraphTimer.stop()
-                    Harness.report(
-                    "graph_reclick_mark row=" + reclickGraphTimer.row
-                    + " armed=" + acts.reclickGraphArmed
-                    + " mark=" + item.chipWaiting
-                    + " box=" + (graphPane.namingOid !== "")
-                    + " window=" + Application.styleHints.mouseDoubleClickInterval)
-                    driver.complete()
-                    return
+                    reclickGraphTimer.complete(() => {
+                        const row = graphPane.view.itemAtIndex(reclickGraphTimer.row)
+                        return "graph_reclick_mark row=" + reclickGraphTimer.row
+                               + " armed=" + reclickGraphTimer.armed
+                               + " mark=" + (row !== null && row.chipWaiting)
+                               + " box=" + (graphPane.namingOid !== "")
+                               + " window=" + Application.styleHints.mouseDoubleClickInterval
+                    })
                 }
-                acts.reclickGraphStep = 2
-            } else if (acts.reclickGraphStep === 2) {
-                // The box open where one was armed, and its row sent back into view, a beat after it opens
-                // (`RepoPage.startRename`).
-                if (!Awaited.all("reclick_graph_box", {
-                    "row": !!item,
-                    "box": !acts.reclickGraphArmed || graphPane.namingOid !== "",
-                    "shown": !reclickGraphTimer.scrolls || graphPane.rowOnScreen(reclickGraphTimer.row) }))
-                    return
-                reclickGraphTimer.stop()
-                if (reclickGraphTimer.fits) {
-                    if (reclickGraphTimer.puts) {
-                        // In the way a recycled delegate puts it back (`GraphRowDelegate.takeNamingFocus`), so the box
-                        // on screen holds what the run says.
-                        graphPane.view.namingText = reclickGraphTimer.typed
-                        item.takeNamingFocus()
-                    }
-                    reclickGraphTimer.reportFit(item)
-                    return
+                return
+            }
+            // The box open where one was armed, and its row sent back into view, a beat after it opens
+            // (`RepoPage.startRename`).
+            if (!Awaited.all("reclick_graph_box", {
+                "row": !!item,
+                "box": !reclickGraphTimer.armed || graphPane.namingOid !== "",
+                "shown": !reclickGraphTimer.scrolls || graphPane.rowOnScreen(reclickGraphTimer.row) }))
+                return
+            if (reclickGraphTimer.fits) {
+                if (reclickGraphTimer.puts) {
+                    // In the way a recycled delegate puts it back (`GraphRowDelegate.takeNamingFocus`), so the box on
+                    // screen holds what the run says.
+                    graphPane.view.namingText = reclickGraphTimer.typed
+                    item.takeNamingFocus()
                 }
-                Harness.report(
-                "graph_reclick row=" + reclickGraphTimer.row
-                + " armed=" + acts.reclickGraphArmed
+                reclickGraphTimer.complete(() => reclickGraphTimer.fitLine())
+                return
+            }
+            // The hand leaves the chip it rested on: the wait over, the row's card would come up on its rest after the
+            // report, and whether the picture and the census caught it would be the machine's pace.
+            if (reclickGraphTimer.points)
+                item.pointerRowX = -1
+            const line = () => "graph_reclick row=" + reclickGraphTimer.row
+                + " armed=" + reclickGraphTimer.armed
                 + " box=" + (graphPane.namingOid !== "")
                 // Nothing hover opened or closed under the wait (`GraphList.renameWaiting`).
                 + " list=" + refList.opened
@@ -248,66 +264,65 @@ Item {
                 + " branch=" + worktree.branch
                 // The scrolled run's whole claim.
                 + " shown=" + graphPane.rowOnScreen(reclickGraphTimer.row)
-                // Includes the sampler's beat, so read as "about the window".
+                // Includes the sampler's beat and the completion's hold, so read as "about the window".
                 // waits(measured): printed beside the window it is read against, and judged by nothing
-                + " wait=" + (Date.now() - acts.reclickGraphAt)
-                + " window=" + Application.styleHints.mouseDoubleClickInterval)
-                // The hand leaves the chip it rested on: the wait over, the row's card would come up on its rest
-                // after the report, and whether the picture and the census caught it would be the machine's pace.
-                if (reclickGraphTimer.points)
-                    item.pointerRowX = -1
-                if (reclickGraphTimer.name === "") {
-                    driver.complete()
-                    return
-                }
-                // Through to git, by the path the field's own Enter takes. The write barrier finishes this one.
-                graphPane.view.namingSubmitted(graphModel.oidAt(reclickGraphTimer.row),
-                                               reclickGraphTimer.name, graphPane.namingMode)
-                driver.inputWent(true)
+                + " wait=" + (Date.now() - reclickGraphTimer.secondAt)
+                + " window=" + Application.styleHints.mouseDoubleClickInterval
+            if (reclickGraphTimer.naming === "") {
+                reclickGraphTimer.complete(line)
+                return
             }
+            // The box as the gesture left it, said before the name goes through to git by the path the field's own
+            // Enter takes; the write barrier completes this one.
+            reclickGraphTimer.advance("box", line)
+            reclickGraphTimer.input("submitted", () => {
+                graphPane.view.namingSubmitted(graphModel.oidAt(reclickGraphTimer.row),
+                                               reclickGraphTimer.naming, graphPane.namingMode)
+                driver.inputWent(true)
+            })
+            reclickGraphTimer.stop()
         }
     }
     // PGG_AUTO_ACT=graph-reclick-lanes: the same gesture through the strip over the lane column, which takes presses
     // of its own wherever the lanes overflow their column (`GraphLanePan`).
-    property bool laneClickArmed: false
-    property int laneClickStep: 0
-    SampleTimer {
+    PageStage {
         id: laneClickTimer
+        name: "lane_click"
+        order: ["squeezed", "first_strike", "second_strike"]
         property int row: 0
+        property bool armed: false
         onTriggered: {
             const item = graphPane.view.itemAtIndex(laneClickTimer.row)
             // A point in the strip's own frame, over this row — the strip works out which row that is.
             const strikes = () => graphPane.lanePan.clickAt(1, item.mapToItem(graphPane, 0, item.height / 2).y)
-            if (acts.laneClickStep === 0) {
+            if (laneClickTimer.at("start")) {
                 if (!Awaited.all("lane_click_row", { "row": !!item }))
                     return
                 // The strip is only up while the lanes overflow, so the column is squeezed to its floor first.
-                page.setGraphColumns(graphPane.labelW, 0)
-                acts.laneClickStep = 1
-            } else if (acts.laneClickStep === 1) {
-                const strip = !!item && graphPane.lanePan.visible
-                if (!Awaited.all("lane_click_first", { "strip": strip, "struck": strip && strikes() }))
+                laneClickTimer.input("squeezed", () => page.setGraphColumns(graphPane.labelW, 0))
+            } else if (laneClickTimer.at("squeezed")) {
+                if (!Awaited.all("lane_click_first", { "strip": !!item && graphPane.lanePan.visible }))
                     return
-                acts.laneClickStep = 2
-            } else if (acts.laneClickStep === 2) {
+                laneClickTimer.input("first_strike", strikes)
+            } else if (laneClickTimer.at("first_strike")) {
                 // Inside the double-click window a second click would be half a double-click.
-                const open = !!item && !graphPane.view.clickGuarded
-                if (!Awaited.all("lane_click_second", { "window": open, "struck": open && strikes() }))
+                if (!Awaited.all("lane_click_second", { "window": !!item && !graphPane.view.clickGuarded }))
                     return
-                acts.laneClickArmed = item.renameArmed
-                acts.laneClickStep = 3
-            } else if (acts.laneClickStep === 3) {
-                if (acts.laneClickArmed && graphPane.namingOid === "")
+                laneClickTimer.input("second_strike", () => {
+                    if (!strikes())
+                        return false
+                    laneClickTimer.armed = item.renameArmed
+                    return true
+                })
+            } else {
+                if (!Awaited.all("lane_click_box", { "box": !laneClickTimer.armed || graphPane.namingOid !== "" }))
                     return
-                laneClickTimer.stop()
-                Harness.report(
-                "graph_reclick_lanes row=" + laneClickTimer.row
-                + " strip=" + graphPane.lanePan.visible
-                + " armed=" + acts.laneClickArmed
-                + " box=" + (graphPane.namingOid !== "")
-                + " typed=" + graphPane.namingText
-                + " branch=" + worktree.branch)
-                driver.complete()
+                laneClickTimer.complete(() => "graph_reclick_lanes row=" + laneClickTimer.row
+                                              + " strip=" + graphPane.lanePan.visible
+                                              + " armed=" + laneClickTimer.armed
+                                              + " box=" + (graphPane.namingOid !== "")
+                                              + " typed=" + graphPane.namingText
+                                              + " branch=" + worktree.branch)
             }
         }
     }
@@ -316,72 +331,75 @@ Item {
     // the next one names (`armed=` / `box=`; デザイン規約 §左メニューの所作「間を空けた 2 回目」). Every press goes in as
     // a hand's does, the window's watcher first (`FocusRelease.pressedAt`), and the steps where the arrows enter
     // (`GraphPane.stepRow`).
-    property bool elsewherePane: false
-    property bool elsewhereStepped: false
-    property bool elsewhereArmed: false
-    property int elsewhereStep: 0
-    SampleTimer {
+    PageStage {
         id: elsewhereClickTimer
+        name: "reclick_elsewhere"
+        order: ["first_click", "pane_press", "back_click", "step_down", "step_up", "stepped_click", "naming_click"]
         property int row: 0
+        property bool pane: false
+        property bool stepped: false
+        property bool armed: false
         function press(item) {
             page.Window.window.caretHand.pressedAt(item.mapToItem(null, 2, item.height / 2))
             item.leftClick(Qt.NoModifier)
         }
         onTriggered: {
-            const item = graphPane.view.itemAtIndex(elsewhereClickTimer.row)
-            if (!Awaited.all("elsewhere_click_ready", { "ready": item }))
-                return
-            const step = acts.elsewhereStep
-            // Spaced from the click before: inside its window the next press would be half a double-click.
-            if ((step === 1 || step === 3 || step === 6) && item.clickGuarded)
-                return
-            if (step === 0) {
-                elsewhereClickTimer.press(item)
-            } else if (step === 1) {
-                page.Window.window.caretHand.pressedAt(detailsPane.mapToItem(null, detailsPane.width / 2,
-                                                                             detailsPane.height / 2))
-            } else if (step === 2) {
-                // A beat after: the gesture settles an input once it is through (`ReclickGesture.settle`).
-                elsewhereClickTimer.press(item)
-                acts.elsewherePane = item.renameArmed
-            } else if (step === 3) {
-                if (!graphPane.stepRow(1))
+            const op = elsewhereClickTimer
+            if (op.at("naming_click")) {
+                // The box up, and the reads the steps set going in: the step back asks the row's details again and
+                // puts the row in place, and a report before they land is of a page still arriving (`PageSettled`).
+                if (!Awaited.all("elsewhere_named", { "box": !op.armed || graphPane.namingOid !== "",
+                                                      "page": PageSettled.settled(page) }))
                     return
-            } else if (step === 4) {
-                if (!graphPane.stepRow(-1))
-                    return
-            } else if (step === 5) {
-                // Back on the row once the step is read (`GraphRowWalk.noteStep`): read later, it would land after
-                // the click and come between this click and the next.
-                if (graphPane.stepSettling)
-                    return
-                elsewhereClickTimer.press(item)
-                acts.elsewhereStepped = item.renameArmed
-            } else if (step === 6) {
-                elsewhereClickTimer.press(item)
-                acts.elsewhereArmed = item.renameArmed
-            } else {
-                if (acts.elsewhereArmed && graphPane.namingOid === "")
-                    return
-                elsewhereClickTimer.stop()
-                Harness.report(
-                "graph_reclick_elsewhere row=" + elsewhereClickTimer.row
-                + " pane=" + acts.elsewherePane
-                + " step=" + acts.elsewhereStepped
-                + " armed=" + acts.elsewhereArmed
-                + " box=" + (graphPane.namingOid !== "")
-                + " typed=" + graphPane.namingText
-                + " branch=" + worktree.branch)
-                driver.complete()
+                op.complete(() => "graph_reclick_elsewhere row=" + op.row
+                                  + " pane=" + op.pane
+                                  + " step=" + op.stepped
+                                  + " armed=" + op.armed
+                                  + " box=" + (graphPane.namingOid !== "")
+                                  + " typed=" + graphPane.namingText
+                                  + " branch=" + worktree.branch)
                 return
             }
-            acts.elsewhereStep = step + 1
+            const item = graphPane.view.itemAtIndex(op.row)
+            // Spaced from the click before: inside its window the next press would be half a double-click.
+            const afterClick = op.at("first_click") || op.at("back_click") || op.at("stepped_click")
+            if (!Awaited.all("elsewhere_click_ready", { "ready": item,
+                                                        "spaced": !!item && (!afterClick || !item.clickGuarded),
+                                                        "stepped": !op.at("step_up") || !graphPane.stepSettling }))
+                return
+            if (op.at("start")) {
+                op.input("first_click", () => op.press(item))
+            } else if (op.at("first_click")) {
+                op.input("pane_press", () => page.Window.window.caretHand.pressedAt(
+                             detailsPane.mapToItem(null, detailsPane.width / 2, detailsPane.height / 2)))
+            } else if (op.at("pane_press")) {
+                // A beat after: the gesture settles an input once it is through (`ReclickGesture.settle`).
+                op.input("back_click", () => {
+                    op.press(item)
+                    op.pane = item.renameArmed
+                })
+            } else if (op.at("back_click")) {
+                op.input("step_down", () => graphPane.stepRow(1))
+            } else if (op.at("step_down")) {
+                op.input("step_up", () => graphPane.stepRow(-1))
+            } else if (op.at("step_up")) {
+                // Back on the row once the step is read (`GraphRowWalk.noteStep`): read later, it would land after
+                // the click and come between this click and the next.
+                op.input("stepped_click", () => {
+                    op.press(item)
+                    op.stepped = item.renameArmed
+                })
+            } else {
+                op.input("naming_click", () => {
+                    op.press(item)
+                    op.armed = item.renameArmed
+                })
+            }
         }
     }
-    property bool reclickListArmed: false
-    property int reclickListStep: 0
-    SampleTimer {
+    PageStage {
         id: reclickListTimer
+        name: "reclick_list"
         property int row: 0
         property int card: 0
         /// Whether this run is the double-click that moves or the two clicks that name.
@@ -389,66 +407,63 @@ Item {
         /// Whether the first click goes to the row and the second to the card its chip opens — what a reader does
         /// unawares, since the card comes up on the chip's own seat after a rest.
         property bool across: false
+        property bool armed: false
         onTriggered: {
-            if (acts.reclickListStep === 0) {
-                const item = graphPane.view.itemAtIndex(reclickListTimer.row)
+            const op = reclickListTimer
+            if (op.at("start")) {
+                const item = graphPane.view.itemAtIndex(op.row)
                 if (!Awaited.all("reclick_list_row", { "row": item !== null }))
                     return
-                if (reclickListTimer.across)
-                    item.leftClick(Qt.NoModifier)
                 // Hover cannot be injected, so this enters where the row's own rest timer would (`ref-list`).
-                graphPane.view.chipExpandRequested(item.oid_hex, reclickListTimer.row,
-                                                   item.chipItem.records, item.chipItem)
-                acts.reclickListStep = 1
-            } else if (acts.reclickListStep === 1) {
+                op.input("expanded", () => {
+                    if (op.across)
+                        item.leftClick(Qt.NoModifier)
+                    graphPane.view.chipExpandRequested(item.oid_hex, op.row, item.chipItem.records, item.chipItem)
+                })
+            } else if (op.at("expanded")) {
                 // The card lays its rows out as it is shown; until it is up there is no row to click.
                 if (!Awaited.all("reclick_list_open", { "list": refList.opened }))
                     return
-                if (reclickListTimer.picks) {
-                    if (!driver.inputWent(refList.doubleClickRow(reclickListTimer.card)))
-                        return
-                    reclickListTimer.stop()
-                    Harness.report("ref_list_pick row=" + reclickListTimer.row
-                                      + " card=" + reclickListTimer.card
-                                      + " list=" + refList.opened)
-                    // The write barrier finishes this one.
+                if (op.picks) {
+                    // The write barrier completes this one.
+                    if (op.input("picked", () => driver.inputWent(refList.doubleClickRow(op.card)),
+                                 () => "ref_list_pick row=" + op.row + " card=" + op.card + " list=" + refList.opened))
+                        op.stop()
                     return
                 }
                 // Inside the window the row's click opened, a click here is the other half of a double-click.
-                const open = !reclickListTimer.across || !refList.rowGuarded(reclickListTimer.card)
-                if (!Awaited.all("reclick_list_first", { "window": open,
-                                                         "clicked": open && refList.clickRow(reclickListTimer.card) }))
+                if (!Awaited.all("reclick_list_first", { "window": !op.across || !refList.rowGuarded(op.card) }))
                     return
-                if (reclickListTimer.across) {
-                    // The row's click was the first: one click on the card is already the second.
-                    acts.reclickListArmed = refList.rowArmed(reclickListTimer.card)
-                    acts.reclickListStep = 3
+                // The row's click was the first, across: one click on the card is already the second.
+                op.input(op.across ? "named" : "first_click", () => {
+                    if (!refList.clickRow(op.card))
+                        return false
+                    if (op.across)
+                        op.armed = refList.rowArmed(op.card)
+                    return true
+                })
+            } else if (op.at("first_click")) {
+                if (!Awaited.all("reclick_list_second", { "window": !refList.rowGuarded(op.card) }))
                     return
-                }
-                acts.reclickListStep = 2
-            } else if (acts.reclickListStep === 2) {
-                const open = !refList.rowGuarded(reclickListTimer.card)
-                if (!Awaited.all("reclick_list_second", { "window": open,
-                                                          "clicked": open && refList.clickRow(reclickListTimer.card) }))
+                op.input("named", () => {
+                    if (!refList.clickRow(op.card))
+                        return false
+                    op.armed = refList.rowArmed(op.card)
+                    return true
+                })
+            } else {
+                if (!Awaited.all("reclick_list_box", { "box": !op.armed || graphPane.namingOid !== "" }))
                     return
-                acts.reclickListArmed = refList.rowArmed(reclickListTimer.card)
-                acts.reclickListStep = 3
-            } else if (acts.reclickListStep === 3) {
-                if (acts.reclickListArmed && graphPane.namingOid === "")
-                    return
-                reclickListTimer.stop()
-                Harness.report(
-                "graph_reclick_list row=" + reclickListTimer.row
-                + " card=" + reclickListTimer.card
-                + " armed=" + acts.reclickListArmed
-                + " box=" + (graphPane.namingOid !== "")
-                // The card came down for the box — it stood on the column the box opens in.
-                + " list=" + refList.opened
-                + " mode=" + graphPane.namingMode
-                + " kind=" + graphPane.namingKind
-                + " typed=" + graphPane.namingText
-                + " branch=" + worktree.branch)
-                driver.complete()
+                op.complete(() => "graph_reclick_list row=" + op.row
+                                  + " card=" + op.card
+                                  + " armed=" + op.armed
+                                  + " box=" + (graphPane.namingOid !== "")
+                                  // The card came down for the box — it stood on the column the box opens in.
+                                  + " list=" + refList.opened
+                                  + " mode=" + graphPane.namingMode
+                                  + " kind=" + graphPane.namingKind
+                                  + " typed=" + graphPane.namingText
+                                  + " branch=" + worktree.branch)
             }
         }
     }
@@ -459,60 +474,60 @@ Item {
     // press), a row that turned the double-click away (the card stays up: `list=true`), and a page that took the
     // press and asked for no worktree (`asked=` empty — the whole road from the press to that ask runs inside the
     // press). Waiting only for the worktree, any of them would sit out the ceiling saying nothing about why.
-    SampleTimer {
+    // No order: a row that is no held branch completes at the card, before any press (`held=false`).
+    PageStage {
         id: listHeldTimer
+        name: "ref_list_held"
         property int row: 0
         property int card: 0
-        property int step: 0
         /// Read before the press: after it this page reads that worktree, and would answer with itself.
         property string wanted: ""
         property bool held: false
         /// What the page asked to open on the press (`RepoPage.openRepositoryPathRequested`), latched.
         property string asked: ""
-        function report(stood) {
-            listHeldTimer.stop()
-            Harness.report("ref_list_held stood=" + stood
-                              + " list=" + refList.opened
-                              + " held=" + listHeldTimer.held
-                              + " row=" + listHeldTimer.row
-                              + " card=" + listHeldTimer.card
-                              + " asked=" + listHeldTimer.asked
-                              + " wanted=" + listHeldTimer.wanted
-                              + " where=" + repoTab.repoPath)
-            driver.complete()
+        function line(stood) {
+            return "ref_list_held stood=" + stood
+                   + " list=" + refList.opened
+                   + " held=" + listHeldTimer.held
+                   + " row=" + listHeldTimer.row
+                   + " card=" + listHeldTimer.card
+                   + " asked=" + listHeldTimer.asked
+                   + " wanted=" + listHeldTimer.wanted
+                   + " where=" + repoTab.repoPath
+        }
+        function stood() {
+            return repoTab.repoPath.toLowerCase() === listHeldTimer.wanted.toLowerCase()
         }
         onTriggered: {
-            if (listHeldTimer.step === 0) {
-                const item = graphPane.view.itemAtIndex(listHeldTimer.row)
+            const op = listHeldTimer
+            if (op.at("start")) {
+                const item = graphPane.view.itemAtIndex(op.row)
                 if (!Awaited.all("ref_list_held_row", { "row": item !== null }))
                     return
                 // Hover cannot be injected, so this enters where the row's own rest timer would (`ref-list`).
-                graphPane.view.chipExpandRequested(item.oid_hex, listHeldTimer.row, item.chipItem.records,
-                                                   item.chipItem)
-                listHeldTimer.step = 1
-            } else if (listHeldTimer.step === 1) {
+                op.input("expanded", () => graphPane.view.chipExpandRequested(item.oid_hex, op.row,
+                                                                               item.chipItem.records, item.chipItem))
+            } else if (op.at("expanded")) {
                 if (!Awaited.all("ref_list_held_open", { "list": refList.opened }))
                     return
                 // The card is up, so its records are this run's answer: a row that is no held branch never will be.
-                const rec = refList.records[listHeldTimer.card]
-                listHeldTimer.held = rec !== undefined && rec.kind === "branch" && rec.held
-                if (!listHeldTimer.held) {
-                    listHeldTimer.report(false)
+                const rec = refList.records[op.card]
+                op.held = rec !== undefined && rec.kind === "branch" && rec.held
+                if (!op.held) {
+                    op.complete(() => op.line(false))
                     return
                 }
                 // The chip's mark rides the ref joins; the listing the page asks may land a tick apart.
-                listHeldTimer.wanted = sidebarPane.worktreesModel.worktreeHolding(rec.name)
-                const named = listHeldTimer.wanted !== ""
-                if (!Awaited.all("ref_list_held_press", {
-                    "wanted": named, "pressed": named && refList.doubleClickRow(listHeldTimer.card) }))
+                op.wanted = sidebarPane.worktreesModel.worktreeHolding(rec.name)
+                if (!Awaited.all("ref_list_held_press", { "wanted": op.wanted !== "" }))
                     return
-                listHeldTimer.step = 2
+                op.input("pressed", () => refList.doubleClickRow(op.card))
             } else {
-                Awaited.at("ref_list_held", "landing")
-                const stood = repoTab.repoPath.toLowerCase() === listHeldTimer.wanted.toLowerCase()
-                if (!refList.opened && listHeldTimer.asked !== "" && !(stood && PageSettled.settled(page)))
+                // The landing: turned away (the card up), or asked for nothing, or stood in the worktree it holds.
+                if (!Awaited.all("ref_list_held_landing", {
+                        "ended": refList.opened || op.asked === "" || (op.stood() && PageSettled.settled(page)) }))
                     return
-                listHeldTimer.report(stood)
+                op.complete(() => op.line(op.stood()))
             }
         }
     }

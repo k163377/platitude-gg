@@ -18,6 +18,7 @@ mod run;
 mod seed;
 mod shim;
 mod shot_check;
+mod stages;
 mod verbs;
 mod wedge;
 

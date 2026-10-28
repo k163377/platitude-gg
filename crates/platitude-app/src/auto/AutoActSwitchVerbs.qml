@@ -75,6 +75,8 @@ Item {
             // hand arrives. The argument is `<branch>[:<stashes>]`, as for `switch-lands`.
             const leave = arg.split(":")
             switchStoppedTimer.go = act.endsWith("-go")
+            // "-go" says the bar as it stopped, then answers it.
+            switchStoppedTimer.order = switchStoppedTimer.go ? ["stopped", "answered"] : []
             switchStoppedLandedTimer.stashes = leave.length > 1 ? Number(leave[1]) : -1
             page.switchToRef("branch", leave[0])
             switchStoppedTimer.start()
@@ -103,7 +105,10 @@ Item {
             localUpstreamAskTimer.pick = points ? "replace" : want.length > 1 ? want[1] : (goes ? "add" : "")
             localUpstreamAskTimer.answers = goes
             localUpstreamAskTimer.points = points
-            localUpstreamAskTimer.pointed = false
+            // The pick, then the hand on the pill, then the bar said as it stands and answered — each where asked.
+            localUpstreamAskTimer.order = (localUpstreamAskTimer.pick !== "" ? ["picked"] : [])
+                .concat(points ? ["pointed"] : [])
+                .concat(goes ? ["said", "answered"] : [])
             const local = worktree.branch
             sidebarPane.beginRename("branch", local, local)
             sidebarPane.submitEdit(want[0])
@@ -119,8 +124,10 @@ Item {
             upstreamAskTimer.answers = act === "set-upstream-go" || act === "set-upstream-enter"
             upstreamAskTimer.byKey = act === "set-upstream-enter"
             upstreamAskTimer.lists = act === "set-upstream-list"
-            upstreamAskTimer.typed = false
-            upstreamAskTimer.dropped = false
+            // The name typed, then the list dropped, then the bar said as it stands and answered — each where asked.
+            upstreamAskTimer.order = (upstreamAskTimer.types ? ["typed"] : [])
+                .concat(upstreamAskTimer.lists ? ["dropped"] : [])
+                .concat(upstreamAskTimer.answers ? ["said", "answered"] : [])
             // Through the row itself, so a build whose row stopped reaching the question stalls here.
             page.openRefMenu("branch", on, on, branchesModel.oidOfName(on))
             refMenu.openSub(refBranchCard)
@@ -150,30 +157,29 @@ Item {
         }
         return true
     }
-    SampleTimer {
+    PageStage {
         id: moveAskTimer
+        name: "move_ask"
         onTriggered: {
             if (!Awaited.all("move_ask_ready", { "ready": graphPane.askCard.settled }))
                 return
-            moveAskTimer.stop()
             // `code=` empty is part of the claim: git has no single word for this move (規約 §git 用語のコード表記).
             // `says=`: the bar's line as it stands — the count core read, judged where it lands; last, being words.
-            Harness.report("move_ask hold=" + graphPane.askHold
-                              + " code=" + graphPane.askCode
-                              + " branch=" + worktree.branch
-                              + " says=" + graphPane.askDetail)
-            driver.complete()
+            moveAskTimer.complete(() => "move_ask hold=" + graphPane.askHold
+                                         + " code=" + graphPane.askCode
+                                         + " branch=" + worktree.branch
+                                         + " says=" + graphPane.askDetail)
         }
     }
     /// Three beats, each on bars that have stopped moving: the report settled before the question is raised (a bar
     /// on its way has no Escape shortcut yet — `open` enables it), the question settled, and both after the press.
     /// The picture cannot tell one live Escape from two, so all four claims are in the line.
-    SampleTimer {
+    PageStage {
         id: askOverNoticeTimer
+        name: "ask_over_notice"
+        order: ["asked", "escaped"]
         /// The remote ref the question is raised on, as `move-ask` takes it.
         property string ref: ""
-        property bool asked: false
-        property bool pressed: false
         /// What was read at the press, kept because the press is what takes one of the two away.
         property string stood: ""
         property string holds: ""
@@ -187,127 +193,134 @@ Item {
             return !card.settled && !card.shut
         }
         onTriggered: {
+            const op = askOverNoticeTimer
             // Each bar is waited for only inside the beat that needs it (app-ui.md §UI 自動化): the press takes one
             // away, so a `settled` read on every tick would wait out the watchdog.
-            if (!askOverNoticeTimer.asked) {
-                if (!page.noticeCard.settled)
+            if (op.at("start")) {
+                if (!Awaited.all("ask_over_notice_report", { "notice": page.noticeCard.settled }))
                     return
-                askOverNoticeTimer.asked = true
-                page.switchToRef("remote", askOverNoticeTimer.ref)
+                op.input("asked", () => {
+                    page.switchToRef("remote", op.ref)
+                })
                 return
             }
-            if (!askOverNoticeTimer.pressed) {
-                if (!graphPane.askCard.settled)
+            if (op.at("asked")) {
+                if (!Awaited.all("ask_over_notice_question", { "question": graphPane.askCard.settled }))
                     return
-                askOverNoticeTimer.pressed = true
-                askOverNoticeTimer.askStood = graphPane.askCard.open
-                askOverNoticeTimer.noticeStood = page.noticeCard.open
-                askOverNoticeTimer.stood = askOverNoticeTimer.naming(askOverNoticeTimer.askStood,
-                                                                     askOverNoticeTimer.noticeStood)
-                const askEsc = graphPane.askCard.escapes
-                const noticeEsc = page.noticeCard.escapes
-                askOverNoticeTimer.holds = askOverNoticeTimer.naming(askEsc, noticeEsc)
-                // What Escape itself runs, on whichever bar holds it: a build that handed it to the wrong bar is
-                // judged on what that bar did, and one that handed it to neither presses nothing.
-                if (askEsc)
-                    graphPane.askCard.dismiss()
-                else if (noticeEsc)
-                    page.noticeCard.dismiss()
+                op.input("escaped", () => {
+                    op.askStood = graphPane.askCard.open
+                    op.noticeStood = page.noticeCard.open
+                    op.stood = op.naming(op.askStood, op.noticeStood)
+                    const askEsc = graphPane.askCard.escapes
+                    const noticeEsc = page.noticeCard.escapes
+                    op.holds = op.naming(askEsc, noticeEsc)
+                    // What Escape itself runs, on whichever bar holds it: a build that handed it to the wrong bar is
+                    // judged on what that bar did, and one that handed it to neither presses nothing.
+                    if (askEsc)
+                        graphPane.askCard.dismiss()
+                    else if (noticeEsc)
+                        page.noticeCard.dismiss()
+                })
                 return
             }
-            if (askOverNoticeTimer.moving(graphPane.askCard) || askOverNoticeTimer.moving(page.noticeCard))
+            if (!Awaited.all("ask_over_notice_still", { "question": !op.moving(graphPane.askCard),
+                                                        "notice": !op.moving(page.noticeCard) }))
                 return
-            askOverNoticeTimer.stop()
-            Harness.report("ask_over_notice stood=" + askOverNoticeTimer.stood
-                              + " holds=" + askOverNoticeTimer.holds
-                              + " went=" + askOverNoticeTimer.naming(
-                                  askOverNoticeTimer.askStood && !graphPane.askCard.open,
-                                  askOverNoticeTimer.noticeStood && !page.noticeCard.open)
-                              + " left=" + askOverNoticeTimer.naming(graphPane.askCard.open, page.noticeCard.open))
-            driver.complete()
+            op.complete(() => "ask_over_notice stood=" + op.stood
+                              + " holds=" + op.holds
+                              + " went=" + op.naming(op.askStood && !graphPane.askCard.open,
+                                                     op.noticeStood && !page.noticeCard.open)
+                              + " left=" + op.naming(graphPane.askCard.open, page.noticeCard.open))
         }
     }
     // The carry-the-upstream question, read once the bar has settled.
-    SampleTimer {
+    PageStage {
         id: localUpstreamAskTimer
+        name: "local_upstream_ask"
         /// Which of the three answers the run picks, empty for the bar as it comes down.
         property string pick: ""
         /// Whether the picked answer is then given to the bar.
         property bool answers: false
-        /// The chooser is answered once; the beats after it are the bar re-dressing around the choice.
-        property bool picked: false
-        /// Whether the report line has gone out.
-        property bool said: false
         /// Whether a hand goes on the pill (`-tip`) — a beat after the pick, so the tip sits against the picked word.
         property bool points: false
-        /// Whether it has gone on — said as it is taken.
-        property bool pointed: false
+        function line() {
+            return driver.carryWords("branch", localUpstreamAskTimer.pick)
+                   + (localUpstreamAskTimer.points ? " tip=" + graphPane.askCard.tipStanding : "")
+        }
         onTriggered: {
-            if (!localUpstreamAskTimer.said) {
-                if (!graphPane.askCard.settled)
+            const op = localUpstreamAskTimer
+            if (op.at("answered")) {
+                // `leave` writes nothing: the end is the bar going back up, not a barrier.
+                if (!Awaited.all("local_upstream_shut", { "shut": graphPane.askCard.shut }))
                     return
-                if (localUpstreamAskTimer.pick !== "" && !localUpstreamAskTimer.picked) {
-                    // Through the field's own door (`RenameCarryFlow.pickChoice` — no injected click opens a popup
-                    // offscreen), re-applied until it takes: the form's `Loader` is a frame behind the bar.
-                    if (!page.pickCarryChoice(driver.carryChoiceIndex(localUpstreamAskTimer.pick)))
-                        return
-                    localUpstreamAskTimer.picked = true
-                    return
-                }
-                if (localUpstreamAskTimer.points && !graphPane.askCard.tipStanding) {
-                    // Put back on every beat until the tip stands: it is the hand the tip opens for.
-                    graphPane.askCard.pointedAt = true
-                    if (!localUpstreamAskTimer.pointed) {
-                        localUpstreamAskTimer.pointed = true
-                        // For a run that stalls at the tip: `pill=` is the answer worn, `words=` whether it has a tip.
-                        Harness.report("rename_carry step=pointed pill=" + graphPane.askCard.accept
-                                       + " words=" + (graphPane.askCard.tip !== ""))
-                    }
-                    return
-                }
-                localUpstreamAskTimer.said = true
-                Harness.report(driver.carryWords("branch", localUpstreamAskTimer.pick)
-                               + (localUpstreamAskTimer.points ? " tip=" + graphPane.askCard.tipStanding : ""))
-                if (!localUpstreamAskTimer.answers) {
-                    localUpstreamAskTimer.stop()
-                    driver.complete()
-                    return
-                }
-                // Held or clicked, as the bar asks.
-                if (graphPane.askHold) {
-                    driver.holdToEnd(graphPane)
-                } else if (localUpstreamAskTimer.pick === "leave") {
-                    // `leave` writes nothing: the beats below wait for the bar to go back up, not for a barrier.
-                    page.answerRowAsk()
-                    return
-                } else {
-                    driver.pressWrite("answer-ask", () => { page.answerRowAsk(); return true })
-                }
-                localUpstreamAskTimer.stop()
-                writeBarrier.start()
+                op.complete(() => [])
                 return
             }
-            if (!graphPane.askCard.shut)
+            if (!op.at("said")) {
+                if (!Awaited.all("local_upstream_ask_ready", { "bar": graphPane.askCard.settled }))
+                    return
+                if (op.pick !== "" && op.at("start")) {
+                    // Through the field's own door (`RenameCarryFlow.pickChoice` — no injected click opens a popup
+                    // offscreen), re-applied until it takes: the form's `Loader` is a frame behind the bar. The beats
+                    // after it are the bar re-dressing around the choice.
+                    op.input("picked", () => page.pickCarryChoice(driver.carryChoiceIndex(op.pick)))
+                    return
+                }
+                if (op.points && !op.at("pointed")) {
+                    // For a run that stalls at the tip: `pill=` is the answer worn, `words=` whether it has a tip.
+                    op.input("pointed", () => {
+                        graphPane.askCard.pointedAt = true
+                    }, () => "rename_carry step=pointed pill=" + graphPane.askCard.accept
+                             + " words=" + (graphPane.askCard.tip !== ""))
+                    return
+                }
+                if (op.points && !Awaited.all("local_upstream_tip", { "tip": graphPane.askCard.tipStanding })) {
+                    // Put back on every beat until the tip stands: it is the hand the tip opens for.
+                    graphPane.askCard.pointedAt = true
+                    return
+                }
+                if (!op.answers) {
+                    op.complete(() => op.line())
+                    return
+                }
+                // The bar as it stands, before the answer takes it down.
+                if (!op.advance("said", () => op.line()))
+                    return
+            }
+            // Held or clicked, as the bar asks; a press that did not take is pressed again on the next beat.
+            const held = graphPane.askHold
+            if (!op.input("answered", () => {
+                    if (held)
+                        return driver.holdToEnd(graphPane)
+                    if (op.pick === "leave") {
+                        page.answerRowAsk()
+                        return true
+                    }
+                    return driver.pressWrite("answer-ask", () => { page.answerRowAsk(); return true })
+                }))
                 return
-            localUpstreamAskTimer.stop()
-            driver.complete()
+            // `leave` writes nothing: the beats above wait for the bar to go back up, not for a barrier.
+            if (!held && op.pick === "leave")
+                return
+            op.stop()
+            writeBarrier.start()
         }
     }
     // Swept only once settled — on its way down the bar's words are at another width. `words=` keeps a green run
     // on an empty bar from passing for one on a question.
-    SampleTimer {
+    PageStage {
         id: askSweepTimer
+        name: "ask_sweep"
         onTriggered: {
             if (!Awaited.all("ask_sweep_ready", { "ready": graphPane.askCard.settled }))
                 return
-            askSweepTimer.stop()
-            Harness.report("ask_sweep "
+            askSweepTimer.complete(() => "ask_sweep "
                 + graphPane.askCard.pad.sweepAir(7, "words=" + (graphPane.askCard.label !== "")))
-            driver.complete()
         }
     }
-    SampleTimer {
+    PageStage {
         id: switchLandsTimer
+        name: "switch_lands"
         property string branch: ""
         property int stashes: -1
         onTriggered: {
@@ -319,20 +332,19 @@ Item {
                 "stashes": switchLandsTimer.stashes < 0 || stashesModel.total === switchLandsTimer.stashes,
                 "page": PageSettled.settled(page) }))
                 return
-            switchLandsTimer.stop()
             // `log=`: a refused move raises the command log (デザイン規約 §git が言ったことを読む場所), and a shut
             // panel frames like one never raised.
-            Harness.report("switch_landed branch=" + worktree.branch
-                              + " stashes=" + stashesModel.total
-                              + " wanted=" + switchLandsTimer.stashes
-                              + " conflicts=" + worktree.conflictCount
-                              + " log=" + page.commandsOpen)
-            driver.complete()
+            switchLandsTimer.complete(() => "switch_landed branch=" + worktree.branch
+                                             + " stashes=" + stashesModel.total
+                                             + " wanted=" + switchLandsTimer.stashes
+                                             + " conflicts=" + worktree.conflictCount
+                                             + " log=" + page.commandsOpen)
         }
     }
     // The claim is `held=` (the second press turned away): gated and ungated builds frame alike.
-    SampleTimer {
+    PageStage {
         id: switchTwiceTimer
+        name: "switch_twice"
         property string branch: ""
         property bool held: false
         property int writesBefore: 0
@@ -341,68 +353,79 @@ Item {
                 "ready": !(repoTab.busyCount !== 0 || worktree.branch !== switchTwiceTimer.branch),
                 "page": PageSettled.settled(page) }))
                 return
-            switchTwiceTimer.stop()
             // `writes=` counts the same claim from the write side, read once the tree has settled.
-            Harness.report("switch_twice held=" + switchTwiceTimer.held
-                              + " writes=" + (repoTab.writeSeq - switchTwiceTimer.writesBefore)
-                              + " branch=" + worktree.branch
-                              + " log=" + page.commandsOpen)
-            driver.complete()
+            switchTwiceTimer.complete(() => "switch_twice held=" + switchTwiceTimer.held
+                                             + " writes=" + (repoTab.writeSeq - switchTwiceTimer.writesBefore)
+                                             + " branch=" + worktree.branch
+                                             + " log=" + page.commandsOpen)
         }
     }
     // The page stays through the restand (`Hub::restand_tab`), so this driver reads the answer. Either end ends the
     // run: a build that raised a bar instead never moves the tab, and `bar=` is what it fails on.
-    SampleTimer {
+    PageStage {
         id: switchHeldTimer
+        name: "switch_held"
         property string wanted: ""
-        onTriggered: {
-            const stood = switchHeldTimer.wanted !== ""
+        function stood() {
+            return switchHeldTimer.wanted !== ""
                 && repoTab.repoPath.toLowerCase() === switchHeldTimer.wanted.toLowerCase()
-            const barUp = graphPane.askCard.settled
-            if (!barUp && !(stood && PageSettled.settled(page)))
+        }
+        onTriggered: {
+            if (!Awaited.all("switch_held_ended", {
+                    "ended": graphPane.askCard.settled || (switchHeldTimer.stood() && PageSettled.settled(page)) }))
                 return
-            switchHeldTimer.stop()
-            Harness.report("switch_held stood=" + stood
-                              + " bar=" + barUp
-                              + " wanted=" + switchHeldTimer.wanted
-                              + " where=" + repoTab.repoPath)
-            driver.complete()
+            switchHeldTimer.complete(() => "switch_held stood=" + switchHeldTimer.stood()
+                                            + " bar=" + graphPane.askCard.settled
+                                            + " wanted=" + switchHeldTimer.wanted
+                                            + " where=" + repoTab.repoPath)
         }
     }
     // Waited on all the way down (`AskBar.settled`): while it opens, the bar is a red line with no words in it.
-    SampleTimer {
+    PageStage {
         id: switchStoppedTimer
+        name: "switch_stopped"
         property bool go: false
+        function line() {
+            return "switch_stopped code=" + graphPane.askCode
+                   + " accept=" + graphPane.askCard.accept
+                   + " hold=" + graphPane.askHold
+                   + " bang=" + graphPane.askAlert
+                   + " op=" + worktree.opCommand
+                   + " branch=" + worktree.branch
+                   + " log=" + page.commandsOpen
+        }
         onTriggered: {
-            if (!Awaited.all("switch_stopped_ready", { "ready": graphPane.askCard.settled }))
-                return
-            switchStoppedTimer.stop()
-            Harness.report("switch_stopped code=" + graphPane.askCode
-                              + " accept=" + graphPane.askCard.accept
-                              + " hold=" + graphPane.askHold
-                              + " bang=" + graphPane.askAlert
-                              + " op=" + worktree.opCommand
-                              + " branch=" + worktree.branch
-                              + " log=" + page.commandsOpen)
-            if (!switchStoppedTimer.go) {
-                driver.complete()
-                return
+            const op = switchStoppedTimer
+            if (op.at("start")) {
+                if (!Awaited.all("switch_stopped_ready", { "ready": graphPane.askCard.settled }))
+                    return
+                if (!op.go) {
+                    op.complete(() => op.line())
+                    return
+                }
+                // The bar as it stopped, before the answer takes it down.
+                if (!op.advance("stopped", () => op.line()))
+                    return
             }
             // Held or clicked, as the bar asks — a held pill ignores a click, a click pill has no hold. Each way in
-            // arms its own watch.
-            if (graphPane.askHold)
-                driver.holdToEnd(graphPane)
-            else
-                driver.pressWrite("answer-ask", () => {
-                    page.answerRowAsk()
-                    return true
-                })
+            // arms its own watch; a press that did not take is pressed again on the next beat.
+            if (!op.input("answered", () => {
+                    if (graphPane.askHold)
+                        return driver.holdToEnd(graphPane)
+                    return driver.pressWrite("answer-ask", () => {
+                        page.answerRowAsk()
+                        return true
+                    })
+                }))
+                return
+            op.stop()
             switchStoppedLandedTimer.start()
         }
     }
     // Where the answer put the reader: past the write's answer, and the stash count waited for (`switch-lands`).
-    SampleTimer {
+    PageStage {
         id: switchStoppedLandedTimer
+        name: "switch_stopped_landed"
         property int stashes: -1
         onTriggered: {
             if (!Awaited.all("switch_stopped_landed_ready", {
@@ -413,108 +436,114 @@ Item {
                     || stashesModel.total === switchStoppedLandedTimer.stashes,
                 "page": PageSettled.settled(page) }))
                 return
-            switchStoppedLandedTimer.stop()
-            Harness.report("switch_stopped_landed branch=" + worktree.branch
-                              + " op=" + worktree.opCommand
-                              + " conflicts=" + worktree.conflictCount
-                              + " stashes=" + stashesModel.total
-                              + " wanted=" + switchStoppedLandedTimer.stashes
-                              + " log=" + page.commandsOpen)
-            driver.complete()
+            switchStoppedLandedTimer.complete(() => "switch_stopped_landed branch=" + worktree.branch
+                                                     + " op=" + worktree.opCommand
+                                                     + " conflicts=" + worktree.conflictCount
+                                                     + " stashes=" + stashesModel.total
+                                                     + " wanted=" + switchStoppedLandedTimer.stashes
+                                                     + " log=" + page.commandsOpen)
         }
     }
-    SampleTimer {
+    PageStage {
         id: switchMarkTimer
+        name: "switch_mark"
         property string want: ""
         onTriggered: {
             if (!Awaited.all("switch_mark_ready", { "ready": refMenu.opened }))
                 return
-            switchMarkTimer.stop()
             // `indent=`: without the menu's hold column the `!` draws over the menu's edge (`AppMenu.holdIndent`).
-            Harness.report("switch_mark offered=" + refSwitchItem.offered
-                              + " asks=" + refSwitchItem.asks
-                              + " want=" + switchMarkTimer.want
-                              + " indent=" + (refMenu.holdIndent > 0))
-            driver.complete()
+            switchMarkTimer.complete(() => "switch_mark offered=" + refSwitchItem.offered
+                                            + " asks=" + refSwitchItem.asks
+                                            + " want=" + switchMarkTimer.want
+                                            + " indent=" + (refMenu.holdIndent > 0))
         }
     }
     /// `set-upstream…` (`UpstreamFlow`): the form loads as the bar opens, so nothing is answered before
     /// `AskBar.settled`.
-    SampleTimer {
+    PageStage {
         id: upstreamAskTimer
+        name: "upstream_ask"
         property bool answers: false
         /// Answers with Enter in the name box instead of the pill (`UpstreamFlow.enterBranch`).
         property bool byKey: false
         /// Drops the name box's list first, through the press's own door (`UpstreamFlow.openBranches`) — no
         /// injected click reaches a popup offscreen.
         property bool lists: false
-        property bool dropped: false
         /// Whether the run writes a name into the box at all — `wantName` may be the empty one.
         property bool types: false
         property string wantName: ""
-        property bool typed: false
+        // `there=` is whether the answered name exists here — it drives the bar's line, not the pill (a name not here
+        // is an answer: デザイン規約 §ブランチが測られる相手を決める). `unsetting=` / `pill=`: an emptied name turns the
+        // question into taking the upstream off, the pill read off the bar itself. `rows=` / `open=`: an empty list and
+        // an unplumbed one frame alike. `says=`: the bar's line, read off the bar too — last, being words.
+        function line() {
+            return "upstream branch=" + upstreamFlow.branch
+                   + " remote=" + upstreamFlow.remote
+                   + " rows=" + upstreamFlow.branches.length
+                   + " open=" + upstreamFlow.branchesOpen()
+                   + " name=" + upstreamFlow.branchName
+                   + " there=" + upstreamFlow.targetIsThere
+                   + " answerable=" + graphPane.askAnswerable
+                   + " unsetting=" + upstreamFlow.unsetting
+                   + " pill=" + graphPane.askCard.accept
+                   + " presses=" + graphPane.askCard.holdPresses
+                   + " says=" + graphPane.askCard.detail
+        }
         onTriggered: {
-            if (!Awaited.all("upstream_ask_ready", { "ready": graphPane.askCard.settled }))
-                return
-            if (upstreamAskTimer.types && !upstreamAskTimer.typed) {
-                upstreamFlow.setBranchName(upstreamAskTimer.wantName)
-                upstreamAskTimer.typed = true
-                return
-            }
-            if (upstreamAskTimer.lists) {
-                if (!upstreamAskTimer.dropped) {
-                    // Marked only if the door was there; a form without its name box yet is asked again next tick.
-                    upstreamAskTimer.dropped = upstreamFlow.openBranches()
+            const op = upstreamAskTimer
+            if (!op.at("said")) {
+                if (!Awaited.all("upstream_ask_ready", { "ready": graphPane.askCard.settled }))
+                    return
+                if (op.types && op.at("start")) {
+                    op.input("typed", () => {
+                        upstreamFlow.setBranchName(op.wantName)
+                    })
+                    return
+                }
+                if (op.lists && !op.at("dropped")) {
+                    // Gone in only if the door was there; a form without its name box yet is asked again next tick.
+                    op.input("dropped", () => upstreamFlow.openBranches())
                     return
                 }
                 // The popup opens a turn after the press (`AppCombo.pressField`), so the popup itself is read.
-                if (!upstreamFlow.branchesOpen())
+                if (!Awaited.all("upstream_ask_set", { "open": !op.lists || upstreamFlow.branchesOpen(),
+                                                       "answerable": !op.answers || graphPane.askAnswerable }))
+                    return
+                if (!op.answers) {
+                    op.complete(() => op.line())
+                    return
+                }
+                // The bar as it stands, before the answer takes it down.
+                if (!op.advance("said", () => op.line()))
                     return
             }
-            if (upstreamAskTimer.answers && !graphPane.askAnswerable)
-                return
-            upstreamAskTimer.stop()
-            // `there=` is whether the answered name exists here — it drives the bar's line, not the pill (a name not
-            // here is an answer: デザイン規約 §ブランチが測られる相手を決める). `unsetting=` / `pill=`: an emptied name
-            // turns the question into taking the upstream off, the pill read off the bar itself. `rows=` / `open=`: an
-            // empty list and an unplumbed one frame alike. `says=`: the bar's line, read off the bar too — last, being
-            // words.
-            Harness.report("upstream branch=" + upstreamFlow.branch
-                              + " remote=" + upstreamFlow.remote
-                              + " rows=" + upstreamFlow.branches.length
-                              + " open=" + upstreamFlow.branchesOpen()
-                              + " name=" + upstreamFlow.branchName
-                              + " there=" + upstreamFlow.targetIsThere
-                              + " answerable=" + graphPane.askAnswerable
-                              + " unsetting=" + upstreamFlow.unsetting
-                              + " pill=" + graphPane.askCard.accept
-                              + " presses=" + graphPane.askCard.holdPresses
-                              + " says=" + graphPane.askCard.detail)
-            if (!upstreamAskTimer.answers) {
-                driver.complete()
-                return
-            }
             // The gesture a person is given: a held pill is not answered by a click, nor by a key (a run of `-enter`
-            // on one waits out the watchdog by rule).
-            if (graphPane.askHold && !upstreamAskTimer.byKey) {
-                driver.holdToEnd(graphPane)
-            } else {
-                driver.pressWrite("answer-ask", () => {
-                    if (upstreamAskTimer.byKey)
-                        return upstreamFlow.enterBranch()
-                    page.answerRowAsk()
-                    return true
-                })
-            }
+            // on one waits out the watchdog by rule). A press that did not take is pressed again on the next beat.
+            if (!op.input("answered", () => {
+                    if (graphPane.askHold && !op.byKey)
+                        return driver.holdToEnd(graphPane)
+                    return driver.pressWrite("answer-ask", () => {
+                        if (op.byKey)
+                            return upstreamFlow.enterBranch()
+                        page.answerRowAsk()
+                        return true
+                    })
+                }))
+                return
+            op.stop()
             upstreamShutTimer.start()
         }
     }
     // The bar goes back up as the question is answered: the write barrier is waited from there, so the picture is not
     // of the bar half way up (`AskBar.shut`).
-    SampleTimer {
+    PageStage {
         id: upstreamShutTimer
+        name: "upstream_shut"
+        order: ["shut"]
         onTriggered: {
-            if (!graphPane.askCard.shut)
+            if (!Awaited.all("upstream_shut_ready", { "shut": graphPane.askCard.shut }))
+                return
+            if (!upstreamShutTimer.advance("shut"))
                 return
             upstreamShutTimer.stop()
             writeBarrier.start()
@@ -522,62 +551,79 @@ Item {
     }
     /// `unset-upstream[-go]`: the card goes up once nothing is out (a card raised under a write greys its rows), the
     /// row is read off it, and `-go` presses it through to the listing the write's refresh publishes.
-    SampleTimer {
+    PageStage {
         id: unsetUpstreamTimer
+        name: "unset_upstream"
+        order: ["opened"]
         property string branch: ""
         property bool onChip: false
         property bool goes: false
         /// The card the run stood up; null until then.
         property var card: null
-        onTriggered: {
-            if (unsetUpstreamTimer.card === null) {
-                // The precondition is read here and nowhere else (app-ui.md §UI 自動化).
-                if (!driver.menusLive())
-                    return
-                const oid = branchesModel.oidOfName(unsetUpstreamTimer.branch)
-                if (unsetUpstreamTimer.onChip) {
-                    page.openRowMenu(oid, { "kind": "branch", "name": unsetUpstreamTimer.branch })
-                    driver.commitMenu.openSub(driver.commitBranchCard)
-                    unsetUpstreamTimer.card = driver.commitBranchCard
-                } else {
-                    page.openRefMenu("branch", unsetUpstreamTimer.branch, unsetUpstreamTimer.branch, oid)
-                    refMenu.openSub(refBranchCard)
-                    unsetUpstreamTimer.card = refBranchCard
-                }
-                return
-            }
-            unsetUpstreamTimer.stop()
+        // The shape is fixed as the card opens: seat, chip, what it names, the plain delete's presses and ink.
+        function line() {
             const row = unsetUpstreamTimer.card.unsetUpstreamItem
-            // The shape is fixed as the card opens: seat, chip, what it names, the plain delete's presses and ink.
-            Harness.report("unset_upstream where=" + (unsetUpstreamTimer.onChip ? "chip" : "row")
-                              + " offered=" + row.offered
-                              + " code=" + row.code
-                              + " presses=" + row.holdPresses
-                              + " plain=" + (row.holdTone === Theme.textPrimary)
-                              + " text=" + row.text)
-            if (!unsetUpstreamTimer.goes || !row.offered) {
-                driver.complete()
+            return "unset_upstream where=" + (unsetUpstreamTimer.onChip ? "chip" : "row")
+                   + " offered=" + row.offered
+                   + " code=" + row.code
+                   + " presses=" + row.holdPresses
+                   + " plain=" + (row.holdTone === Theme.textPrimary)
+                   + " text=" + row.text
+        }
+        onTriggered: {
+            const op = unsetUpstreamTimer
+            if (op.at("start")) {
+                // The precondition is read here and nowhere else (app-ui.md §UI 自動化).
+                if (!Awaited.all("unset_upstream_live", { "live": driver.menusLive() }))
+                    return
+                op.input("opened", () => {
+                    const oid = branchesModel.oidOfName(op.branch)
+                    if (op.onChip) {
+                        page.openRowMenu(oid, { "kind": "branch", "name": op.branch })
+                        driver.commitMenu.openSub(driver.commitBranchCard)
+                        op.card = driver.commitBranchCard
+                    } else {
+                        page.openRefMenu("branch", op.branch, op.branch, oid)
+                        refMenu.openSub(refBranchCard)
+                        op.card = refBranchCard
+                    }
+                })
                 return
             }
-            // The row closes the card itself (`RefBranchMenu`'s `onHeld`).
-            driver.holdToEnd(row)
+            // Read a beat after the card went up.
+            if (!Awaited.all("unset_upstream_card", { "card": op.card !== null }))
+                return
+            if (!op.goes || !op.card.unsetUpstreamItem.offered) {
+                op.complete(() => op.line())
+                return
+            }
+            // Said before the press, which closes the card (`RefBranchMenu`'s `onHeld`); the landing presses it.
+            op.say(() => op.line())
+            op.stop()
             unsetLandedTimer.start()
         }
     }
-    // git's answer, judged on the branch's own row: the listing the write's refresh publishes names no upstream for it,
-    // listed or gone (`NavSectionModel.upstreamNamed`).
-    SampleTimer {
+    // The row's press, then git's answer, judged on the branch's own row: the listing the write's refresh publishes
+    // names no upstream for it, listed or gone (`NavSectionModel.upstreamNamed`).
+    PageStage {
         id: unsetLandedTimer
+        name: "unset_landed"
+        order: ["pressed"]
         onTriggered: {
-            if (!Awaited.all("unset_landed_ready", { "ready": driver.wroteAndSettled(),
-                                                      "page": PageSettled.settled(page) }))
+            const op = unsetLandedTimer
+            if (op.at("start")) {
+                // The row closes the card itself (`RefBranchMenu`'s `onHeld`). A row out of reach takes no press and
+                // answers false (`holdToEnd`): pressed again on the next beat.
+                op.input("pressed", () => driver.holdToEnd(unsetUpstreamTimer.card.unsetUpstreamItem))
                 return
+            }
             const left = branchesModel.upstreamNamed(unsetUpstreamTimer.branch)
-            if (left !== "" && !repoTab.writeRefused)
+            if (!Awaited.all("unset_landed_ready", { "ready": driver.wroteAndSettled(),
+                                                      "page": PageSettled.settled(page),
+                                                      "unnamed": left === "" || repoTab.writeRefused }))
                 return
-            unsetLandedTimer.stop()
-            Harness.report("unset_upstream_landed refused=" + repoTab.writeRefused + " upstream=" + left)
-            driver.complete()
+            op.complete(() => "unset_upstream_landed refused=" + repoTab.writeRefused
+                              + " upstream=" + branchesModel.upstreamNamed(unsetUpstreamTimer.branch))
         }
     }
 }

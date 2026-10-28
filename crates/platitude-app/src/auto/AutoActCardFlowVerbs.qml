@@ -34,15 +34,19 @@ Item {
             const colon = arg.indexOf(":")
             const stage = colon < 0 ? arg : arg.substring(0, colon)
             cardLatchTimer.rowLate = colon >= 0 && arg.substring(colon + 1) === "row-late"
-            cardLatchTimer.stage = stage === "" ? "back" : stage
-            cardLatchTimer.step = 0
+            cardLatchTimer.stopAt = stage === "" ? "back" : stage
+            // The inputs on the way to the stop: one more for each stop past `card`. A stop it does not know runs on to
+            // `back`.
+            const reach = ["card", "menu", "dismissed", "back"].indexOf(cardLatchTimer.stopAt)
+            cardLatchTimer.order = ["stirred", "menu_raised", "dismissed", "tremor"].slice(0, reach < 0 ? 4 : reach + 1)
             cardLatchTimer.start()
         } else if (act === "card-rewrite") {
             // The card with the hand inside it, and the row rewritten in place under it by the commit this run
             // makes: the card stays. The argument is the stage to stop at — `inside` / `rewritten`.
             page.showWip()
-            cardRewriteTimer.stage = arg === "" ? "rewritten" : arg
-            cardRewriteTimer.step = 0
+            cardRewriteTimer.stopAt = arg === "" ? "rewritten" : arg
+            cardRewriteTimer.order = cardRewriteTimer.stopAt === "inside" ? ["stirred"]
+                                                                          : ["stirred", "typed", "committed"]
             cardRewriteTimer.start()
         } else {
             return false
@@ -62,11 +66,14 @@ Item {
     // rows under the hand and takes the card down for another rest (`RowHoverHost`, `HoverSeat.displace`), so a
     // picture taken then is of the card gone — the state the run never claimed. The claim is read again at the
     // picture (`Awaited.claim`).
-    SampleTimer {
+    PageStage {
         id: cardLatchTimer
-        property string stage: "back"
-        property int step: 0
-        property point at: Qt.point(-1, -1)
+        name: "card_latch"
+        order: ["stirred", "menu_raised", "dismissed", "tremor"]
+        /// The stage the run stops at: `card` / `menu` / `dismissed` / `back`.
+        property string stopAt: "back"
+        /// Where the hand rests, in the window's frame.
+        property point handAt: Qt.point(-1, -1)
         property string oidHex: ""
         property bool tremorCard: false
         /// The worktree row is held back and let through after the tremor (`run`).
@@ -74,15 +81,12 @@ Item {
         /// Whether the hold was up when it was let through (`GraphModel.letTheWorktreeRowThrough`): a `row-late` run
         /// that found none read the ordinary order and does not pass as the controlled one.
         property bool rowHeld: false
-        function done(stage) {
-            cardLatchTimer.stop()
-            Harness.report("card_latch stage=" + stage + " card=" + rowCard.opened + " menu=" + commitMenu.opened
-                              + " latched=" + (rowHost.cardLatched !== "")
-                              + " tremor_card=" + cardLatchTimer.tremorCard
-                              + (cardLatchTimer.rowLate ? " row_held=" + cardLatchTimer.rowHeld : ""))
-            if (stage === "back")
-                Awaited.claim("card_latch", () => rowCard.opened)
-            driver.complete()
+        /// The run's line at the stage it stopped at.
+        function line(stopped) {
+            return "card_latch stage=" + stopped + " card=" + rowCard.opened + " menu=" + commitMenu.opened
+                   + " latched=" + (rowHost.cardLatched !== "")
+                   + " tremor_card=" + cardLatchTimer.tremorCard
+                   + (cardLatchTimer.rowLate ? " row_held=" + cardLatchTimer.rowHeld : "")
         }
         /// The rows moved under a hand that did not — a rebuild landing under the rest (`HandWatch.stillHeld`): the
         /// card went with them and nothing opens until the hand's own move, so it goes onto HEAD's row where that
@@ -96,66 +100,72 @@ Item {
             let next = row.mapToItem(null, row.width / 2, row.height / 2)
             if (next.x === graphPane.hand.at.x && next.y === graphPane.hand.at.y)
                 next = Qt.point(next.x + 2, next.y)
-            cardLatchTimer.at = next
+            cardLatchTimer.handAt = next
             graphPane.hand.stir(next)
         }
         onTriggered: {
-            if (cardLatchTimer.step === 0) {
+            const op = cardLatchTimer
+            if (op.at("start")) {
                 const row = graphModel.loading || graphModel.headRow < 0 ? null
                           : graphPane.view.itemAtIndex(graphModel.headRow)
                 if (!Awaited.all("card_latch_row", { "row": row !== null }))
                     return
-                cardLatchTimer.oidHex = row.oid_hex
-                cardLatchTimer.at = row.mapToItem(null, row.width / 2, row.height / 2)
-                graphPane.hand.stir(cardLatchTimer.at)
-                cardLatchTimer.step = 1
+                op.input("stirred", () => {
+                    op.oidHex = row.oid_hex
+                    op.handAt = row.mapToItem(null, row.width / 2, row.height / 2)
+                    graphPane.hand.stir(op.handAt)
+                })
                 return
             }
-            if (cardLatchTimer.step === 1) {
-                cardLatchTimer.handBackOnHead()
+            if (op.at("stirred")) {
+                op.handBackOnHead()
                 if (!Awaited.all("card_latch_card", { "card": rowCard.opened }))
                     return
-                if (cardLatchTimer.stage === "card") {
-                    cardLatchTimer.done("card")
+                if (op.stopAt === "card") {
+                    op.complete(() => op.line("card"))
                     return
                 }
-                page.openRowMenu(cardLatchTimer.oidHex)
-                cardLatchTimer.step = 2
+                op.input("menu_raised", () => {
+                    page.openRowMenu(op.oidHex)
+                })
                 return
             }
-            if (cardLatchTimer.step === 2) {
+            if (op.at("menu_raised")) {
                 if (!Awaited.all("card_latch_menu", { "menu": commitMenu.opened, "down": !rowCard.opened }))
                     return
-                if (cardLatchTimer.stage === "menu") {
-                    cardLatchTimer.done("menu")
+                if (op.stopAt === "menu") {
+                    op.complete(() => op.line("menu"))
                     return
                 }
-                commitMenu.dismiss()
-                cardLatchTimer.step = 3
+                op.input("dismissed", () => {
+                    commitMenu.dismiss()
+                })
                 return
             }
-            if (cardLatchTimer.step === 3) {
+            if (op.at("dismissed")) {
                 if (!Awaited.all("card_latch_dismissed", { "gone": !commitMenu.opened }))
                     return
-                if (cardLatchTimer.stage === "dismissed") {
-                    cardLatchTimer.done("dismissed")
+                if (op.stopAt === "dismissed") {
+                    op.complete(() => op.line("dismissed"))
                     return
                 }
-                graphPane.hand.stir(Qt.point(cardLatchTimer.at.x + 2, cardLatchTimer.at.y))
-                cardLatchTimer.tremorCard = rowCard.visible
-                // The row let through now lands its rebuild under the rest the tremor started.
-                if (cardLatchTimer.rowLate)
-                    cardLatchTimer.rowHeld = graphModel.letTheWorktreeRowThrough()
-                cardLatchTimer.step = 4
+                op.input("tremor", () => {
+                    graphPane.hand.stir(Qt.point(op.handAt.x + 2, op.handAt.y))
+                    op.tremorCard = rowCard.visible
+                    // The row let through now lands its rebuild under the rest the tremor started.
+                    if (op.rowLate)
+                        op.rowHeld = graphModel.letTheWorktreeRowThrough()
+                })
                 return
             }
             // The tremor was the hand's own move: the ask kept rests again, and the card comes back — and stays,
             // once nothing is still on its way to the page. Rows that landed under the still hand meanwhile took
             // it down until the hand's own next move: the hand goes back onto HEAD's row.
-            cardLatchTimer.handBackOnHead()
+            op.handBackOnHead()
             if (!Awaited.all("card_latch_back", { "card": rowCard.opened, "settled": PageSettled.settled(page) }))
                 return
-            cardLatchTimer.done("back")
+            Awaited.claim("card_latch", () => rowCard.opened)
+            op.complete(() => op.line("back"))
         }
     }
     // PGG_AUTO_ACT=card-rewrite. The card with the hand inside it (`AppCard.contentPointed`), and the row rewritten
@@ -164,54 +174,55 @@ Item {
     // reread is no reader's doing: the card the hand is in stays, the view putting itself back over that row as far as
     // it can (デザイン規約 §hover のツールチップ「外乱では閉じない」). Its state is final in the turn the reread lands.
     // `inside` stops with the card out, before the commit.
-    SampleTimer {
+    PageStage {
         id: cardRewriteTimer
-        property string stage: "rewritten"
-        property int step: 0
+        name: "card_rewrite"
+        order: ["stirred", "typed", "committed"]
+        /// The stage the run stops at: `inside` / `rewritten`.
+        property string stopAt: "rewritten"
         property string headBefore: ""
-        function done(stage) {
-            cardRewriteTimer.stop()
-            Harness.report("card_rewrite stage=" + stage + " card=" + rowCard.opened + " moved="
-                              + (graphModel.oidAt(graphModel.headRow) !== cardRewriteTimer.headBefore))
-            driver.complete()
+        /// The run's line at the stage it stopped at.
+        function line(stopped) {
+            return "card_rewrite stage=" + stopped + " card=" + rowCard.opened + " moved="
+                   + (graphModel.oidAt(graphModel.headRow) !== cardRewriteTimer.headBefore)
         }
         onTriggered: {
-            if (cardRewriteTimer.step === 0) {
+            const op = cardRewriteTimer
+            if (op.at("start")) {
                 const row = graphModel.loading || graphModel.headRow < 0 ? null
                           : graphPane.view.itemAtIndex(graphModel.headRow)
                 if (!Awaited.all("card_rewrite_row", { "row": row !== null }))
                     return
-                cardRewriteTimer.headBefore = graphModel.oidAt(graphModel.headRow)
-                graphPane.hand.stir(row.mapToItem(null, row.width / 2, row.height / 2))
-                cardRewriteTimer.step = 1
+                op.input("stirred", () => {
+                    op.headBefore = graphModel.oidAt(graphModel.headRow)
+                    graphPane.hand.stir(row.mapToItem(null, row.width / 2, row.height / 2))
+                })
                 return
             }
-            if (cardRewriteTimer.step === 1) {
+            if (op.at("stirred")) {
                 if (!Awaited.all("card_rewrite_card", { "card": rowCard.opened }))
                     return
                 rowCard.contentPointed = true
-                if (cardRewriteTimer.stage === "inside") {
-                    cardRewriteTimer.done("inside")
+                if (op.stopAt === "inside") {
+                    op.complete(() => op.line("inside"))
                     return
                 }
                 // Only what the preset staged goes in: the tree stays dirty, so its row stays at the top and the new
                 // commit takes HEAD's row — the one under the hand — in place (`GraphModel::splice_notified`).
-                wipPane.setMessage("feat: something", "")
-                cardRewriteTimer.step = 2
+                op.input("typed", () => {
+                    wipPane.setMessage("feat: something", "")
+                })
                 return
             }
-            if (cardRewriteTimer.step === 2) {
+            if (op.at("typed")) {
                 // Pressed once the button is live: asked each beat until it takes.
-                if (!Awaited.all("card_rewrite_commit",
-                                 { "pressed": driver.pressWrite("commit", () => wipPane.pressCommit()) }))
-                    return
-                cardRewriteTimer.step = 3
+                op.input("committed", () => driver.pressWrite("commit", () => wipPane.pressCommit()))
                 return
             }
             if (!Awaited.all("card_rewrite_landed", {
-                                 "moved": graphModel.oidAt(graphModel.headRow) !== cardRewriteTimer.headBefore }))
+                                 "moved": graphModel.oidAt(graphModel.headRow) !== op.headBefore }))
                 return
-            cardRewriteTimer.done("rewritten")
+            op.complete(() => op.line("rewritten"))
         }
     }
 }

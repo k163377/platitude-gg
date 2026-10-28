@@ -56,26 +56,30 @@ Item {
 
     // What remains after a middle-click. The two tabs are a precondition of the press only: read again after it, the
     // verb's own answer (one tab fewer) becomes a wait nothing can end.
-    SampleTimer {
+    WindowStage {
         id: middleCloseTimer
+        name: "middle_close"
+        order: ["clicked"]
         running: Harness.autoAct === "middle-close"
-        property bool requested: false
         property int beforeCount: -1
         property string closedPath: ""
         onTriggered: {
-            if (!middleCloseTimer.requested) {
+            const op = middleCloseTimer
+            if (op.at("start")) {
                 if (pageRepeater.count < 2)
                     return
-                middleCloseTimer.beforeCount = pageRepeater.count
-                const at = Number(Harness.autoActArg)
-                middleCloseTimer.closedPath = tabProbe.tabPathAt(at)
-                // Latched on the strip's answer: a row the model just gained has no item until the next layout.
-                middleCloseTimer.requested = topBar.middleClickTab(at)
+                // The strip's answer is the press's: a row the model just gained has no item until the next layout.
+                op.input("clicked", () => {
+                    op.beforeCount = pageRepeater.count
+                    const at = Number(Harness.autoActArg)
+                    op.closedPath = tabProbe.tabPathAt(at)
+                    return topBar.middleClickTab(at)
+                })
                 return
             }
             // The strip must be laid out before it is read back: until then its items answer by their old indices,
             // and index 0 is the closed tab's own item (`TabProbe.settleStrip`).
-            if (pageRepeater.count >= middleCloseTimer.beforeCount)
+            if (pageRepeater.count >= op.beforeCount)
                 return
             tabProbe.settleStrip()
             if (tabProbe.tabItemCount() !== pageRepeater.count)
@@ -87,28 +91,27 @@ Item {
                 "open": kept !== null && kept.pageTab.state === "open",
                 "page": kept !== null && PageSettled.settled(kept) }))
                 return
-            stop()
             // `gone=` leads: a count that merely fell would pass with the wrong tab closed.
-            Harness.report("middle_close gone="
-                              + !tabProbe.hasTabPath(middleCloseTimer.closedPath)
-                              + " tabs=" + pageRepeater.count
-                              + " active=" + tabsModel.currentIndex
-                              + " open=" + tabProbe.tabPaths())
-            window.finishAutoAct()
+            op.complete(() => "middle_close gone=" + !tabProbe.hasTabPath(op.closedPath)
+                               + " tabs=" + pageRepeater.count
+                               + " active=" + tabsModel.currentIndex
+                               + " open=" + tabProbe.tabPaths())
         }
     }
 
     // The strip's order after a tab was carried across it, read off the items (the drag settles against where the
-    // tabs actually sit). The tabs it needs are a precondition of the carry, read in that branch alone.
-    SampleTimer {
+    // tabs actually sit). The tabs it needs are a precondition of the carry, read in that stage alone.
+    WindowStage {
         id: tabDragTimer
+        name: "tab_drag"
+        order: ["carried"]
         running: Harness.autoAct === "tab-drag"
-        property bool requested: false
         property string before: ""
         property int from: 0
         property int to: 0
         onTriggered: {
-            if (!tabDragTimer.requested) {
+            const op = tabDragTimer
+            if (op.at("start")) {
                 // Every row laid out: the carry measures against the tabs' own places.
                 if (pageRepeater.count < 2 || tabProbe.tabItemCount() !== pageRepeater.count)
                     return
@@ -117,130 +120,130 @@ Item {
                 const front = window.curPage
                 if (front === null || !PageSettled.settled(front))
                     return
-                const asked = (Harness.autoActArg || "3:1").split(":")
-                tabDragTimer.from = Number(asked[0])
-                tabDragTimer.to = Number(asked[1])
-                tabDragTimer.before = tabProbe.tabPaths()
-                // Latched on the strip's answer, as the middle click is: a carry that found no tab never happened.
-                tabDragTimer.requested = topBar.dragTabTo(tabDragTimer.from, tabDragTimer.to)
+                // The strip's answer is the press's, as the middle click's is: a carry that found no tab never
+                // happened.
+                op.input("carried", () => {
+                    const asked = (Harness.autoActArg || "3:1").split(":")
+                    op.from = Number(asked[0])
+                    op.to = Number(asked[1])
+                    op.before = tabProbe.tabPaths()
+                    return topBar.dragTabTo(op.from, op.to)
+                })
                 return
             }
-            const paths = tabProbe.tabPaths()
             if (!Awaited.all("tab_drag_landed", {
-                "moved": paths !== tabDragTimer.before,
+                "moved": tabProbe.tabPaths() !== op.before,
                 "laid": tabProbe.tabItemCount() === pageRepeater.count,
                 "page": PageSettled.settledUnder(window) }))
                 return
-            stop()
             // `moved=` leads: an order that merely changed would pass with any two tabs swapped.
-            const was = tabDragTimer.before.split(",")
-            Harness.report("tab_drag moved="
-                              + (paths.split(",")[tabDragTimer.to] === was[tabDragTimer.from])
-                              + " from=" + tabDragTimer.from
-                              + " to=" + tabDragTimer.to
-                              + " tabs=" + pageRepeater.count
-                              + " active=" + tabsModel.currentIndex
-                              + " open=" + paths)
-            window.finishAutoAct()
+            op.complete(() => {
+                const paths = tabProbe.tabPaths()
+                const was = op.before.split(",")
+                return "tab_drag moved=" + (paths.split(",")[op.to] === was[op.from])
+                       + " from=" + op.from
+                       + " to=" + op.to
+                       + " tabs=" + pageRepeater.count
+                       + " active=" + tabsModel.currentIndex
+                       + " open=" + paths
+            })
         }
     }
 
     // A tab drawn off its row while the hand is still on it. A settled strip frames the same whether the tab was drawn
     // under the hand or only jumped, so the transform's offset is reported.
-    SampleTimer {
+    WindowStage {
         id: tabHoldTimer
+        name: "tab_hold"
+        order: ["lifted"]
         running: Harness.autoAct === "tab-hold"
-        property bool requested: false
         onTriggered: {
-            if (!tabHoldTimer.requested) {
+            if (tabHoldTimer.at("start")) {
                 if (pageRepeater.count < 2 || tabProbe.tabItemCount() !== pageRepeater.count)
                     return
                 const front = window.curPage
                 if (front === null || !PageSettled.settled(front))
                     return
-                tabHoldTimer.requested = topBar.holdTabAt(Number(Harness.autoActArg || 0))
+                tabHoldTimer.input("lifted", () => topBar.holdTabAt(Number(Harness.autoActArg || 0)))
                 return
             }
             // Nothing after the lift is waited for but the page the hand is over: a hand that has not let go is
             // the whole state, and the page under it is in the picture.
-            const shift = topBar.heldTabShift()
             if (!Awaited.all("tab_hold_lifted", {
-                "shift": shift !== 0,
+                "shift": topBar.heldTabShift() !== 0,
                 "page": PageSettled.settledUnder(window) }))
                 return
-            stop()
-            Harness.report("tab_hold lifted=true at=" + (Harness.autoActArg || 0)
-                              + " shift=" + shift
-                              + " active=" + tabsModel.currentIndex
-                              + " open=" + tabProbe.tabPaths())
-            window.finishAutoAct()
+            tabHoldTimer.complete(() => "tab_hold lifted=true at=" + (Harness.autoActArg || 0)
+                                         + " shift=" + topBar.heldTabShift()
+                                         + " active=" + tabsModel.currentIndex
+                                         + " open=" + tabProbe.tabPaths())
         }
     }
 
     // The strip travelling under a tab held past its end. The window goes down to its floor first: whether N tabs
     // overflow depends on the installed fonts (`tab-widths` differs per OS), and this needs overflow on every machine.
-    SampleTimer {
+    // The tab is let go once the run has reached the end, and the picture is of the strip it was dropped on.
+    WindowStage {
         id: tabEdgeTimer
+        name: "tab_edge"
+        order: ["floored", "carried", "dropped"]
         running: Harness.autoAct === "tab-edge"
-        property bool sized: false
-        property bool settling: false
-        property bool told: false
-        property bool requested: false
         property int from: 0
         onTriggered: {
-            if (!tabEdgeTimer.requested) {
+            const op = tabEdgeTimer
+            if (op.at("start") || op.at("floored")) {
                 if (pageRepeater.count < 2 || tabProbe.tabItemCount() !== pageRepeater.count)
                     return
                 const front = window.curPage
                 if (front === null || !PageSettled.settled(front))
                     return
-                if (!tabEdgeTimer.sized) {
-                    window.width = Math.ceil(window.floorWidth)
-                    tabEdgeTimer.sized = true
+                if (op.at("start")) {
+                    op.input("floored", () => {
+                        window.width = Math.ceil(window.floorWidth)
+                    })
                     return
                 }
                 // Waited on the strip's own word that it scrolls: which width crowds it cannot be assumed.
                 if (!topBar.bandTabScrolls) {
-                    // Still uncrowded a tick after the floor took: this staging cannot carry it. Said once, a tick
-                    // late so the resize has laid out, with the band's numbers to choose the tab count against.
-                    if (tabEdgeTimer.settling && !tabEdgeTimer.told) {
-                        tabEdgeTimer.told = true
-                        Harness.report("tab_edge crowded=false tabs=" + pageRepeater.count
-                                          + " content=" + Math.round(topBar.bandTabContent)
-                                          + " view=" + Math.round(topBar.bandTabsWidth)
-                                          + " windowW=" + Math.round(window.width)
-                                          + " floorW=" + Math.ceil(window.floorWidth))
-                    }
-                    tabEdgeTimer.settling = true
+                    // Still uncrowded once the floor has laid out (the band's numbers standing across a frame): this
+                    // staging cannot carry it. Said with the band's numbers to choose the tab count against.
+                    const band = "tab_edge crowded=false tabs=" + pageRepeater.count
+                                 + " content=" + Math.round(topBar.bandTabContent)
+                                 + " view=" + Math.round(topBar.bandTabsWidth)
+                                 + " windowW=" + Math.round(window.width)
+                                 + " floorW=" + Math.ceil(window.floorWidth)
+                    if (op.still("band", band))
+                        Awaited.note(band)
                     return
                 }
-                tabEdgeTimer.from = Number(Harness.autoActArg || 0)
-                tabEdgeTimer.requested = topBar.carryTabPastEnd(tabEdgeTimer.from)
+                op.input("carried", () => {
+                    op.from = Number(Harness.autoActArg || 0)
+                    return topBar.carryTabPastEnd(op.from)
+                })
                 return
             }
             if (!Awaited.all("tab_edge_landed", { "end": topBar.runAtEnd(),
                                                   "held": topBar.heldTabIndex() === pageRepeater.count - 1,
                                                   "page": PageSettled.windowSettled(window) }))
                 return
-            stop()
-            topBar.dropCarriedTab()
-            Harness.report("tab_edge landed=true from=" + tabEdgeTimer.from
-                              + " run=" + topBar.runOffset()
-                              + " content=" + Math.round(topBar.bandTabContent)
-                              + " view=" + Math.round(topBar.bandTabsWidth)
-                              + " tabs=" + pageRepeater.count
-                              + " active=" + tabsModel.currentIndex
-                              + " open=" + tabProbe.tabPaths())
-            window.finishAutoAct()
+            op.input("dropped", () => topBar.dropCarriedTab())
+            op.complete(() => "tab_edge landed=true from=" + op.from
+                               + " run=" + topBar.runOffset()
+                               + " content=" + Math.round(topBar.bandTabContent)
+                               + " view=" + Math.round(topBar.bandTabsWidth)
+                               + " tabs=" + pageRepeater.count
+                               + " active=" + tabsModel.currentIndex
+                               + " open=" + tabProbe.tabPaths())
         }
     }
 
     // Another worktree's uncommitted row, double-clicked, stands this tab in that worktree (デザイン規約 §タブの所作).
     // Window-level because the landing is the strip's answer: the page stays.
-    SampleTimer {
+    WindowStage {
         id: carriedOpenTimer
+        name: "carried_open"
+        order: ["asked"]
         running: Harness.autoAct === "carried-open"
-        property bool asked: false
         property int beforeCount: -1
         property string wanted: ""
         /// The first row of another worktree's uncommitted work, or -1. Off the model: a row off screen has no
@@ -253,13 +256,14 @@ Item {
             return -1
         }
         onTriggered: {
-            const page = window.curPage
-            if (!carriedOpenTimer.asked) {
+            const op = carriedOpenTimer
+            if (op.at("start")) {
+                const page = window.curPage
                 if (!Awaited.all("carried_open_ready", {
                     "open": page !== null && page.pageTab.state === "open",
                     "walked": page !== null && page.pageGraph.finishCount > 0 }))
                     return
-                const row = carriedOpenTimer.carriedRow(page.pageGraph)
+                const row = op.carriedRow(page.pageGraph)
                 if (row < 0)
                     return
                 // Through the row's own handler: calling the page would go green with the row's decision never
@@ -267,12 +271,13 @@ Item {
                 const item = page.pageGraphPane.view.itemAtIndex(row)
                 if (item === null)
                     return
-                carriedOpenTimer.wanted = page.pageGraph.carriedPath(row)
-                carriedOpenTimer.beforeCount = pageRepeater.count
-                acts.holdStand(page)
-                if (item.doubleClick(Qt.NoModifier) !== true)
-                    return
-                carriedOpenTimer.asked = true
+                // The row's answer is the press's: a double-click it did not take is pressed again.
+                op.input("asked", () => {
+                    op.wanted = page.pageGraph.carriedPath(row)
+                    op.beforeCount = pageRepeater.count
+                    acts.holdStand(page)
+                    return item.doubleClick(Qt.NoModifier) === true
+                })
                 return
             }
             // The strip did not grow, and the page in front reads the asked worktree — neither shows in a picture.
@@ -280,51 +285,54 @@ Item {
             // settled cannot see it, as both worktrees are dirty in this preset.
             const front = window.curPage
             if (!Awaited.all("carried_open_landed", {
-                "tabs": pageRepeater.count === carriedOpenTimer.beforeCount,
+                "tabs": pageRepeater.count === op.beforeCount,
                 "open": front !== null && front.pageTab.state === "open",
                 "page": front !== null && PageSettled.settled(front),
-                "stood": front !== null && acts.standsIn(front, carriedOpenTimer.wanted),
-                "rows": front !== null && front.pageGraph.carriedRowOf(carriedOpenTimer.wanted) < 0 }))
+                "stood": front !== null && acts.standsIn(front, op.wanted),
+                "rows": front !== null && front.pageGraph.carriedRowOf(op.wanted) < 0 }))
                 return
-            stop()
-            Harness.report("carried_open tabs=" + pageRepeater.count
-                              + " grew=" + (pageRepeater.count !== carriedOpenTimer.beforeCount)
-                              + " stood=" + acts.standsIn(front, carriedOpenTimer.wanted)
-                              + " drew=" + acts.standDrew(front)
-                              + " kept=" + acts.standKept(front)
-                              + " wanted=" + carriedOpenTimer.wanted
-                              + " where=" + front.pageTab.repoPath)
-            window.finishAutoAct()
+            op.complete(() => {
+                const front = window.curPage
+                return "carried_open tabs=" + pageRepeater.count
+                       + " grew=" + (pageRepeater.count !== op.beforeCount)
+                       + " stood=" + acts.standsIn(front, op.wanted)
+                       + " drew=" + acts.standDrew(front)
+                       + " kept=" + acts.standKept(front)
+                       + " wanted=" + op.wanted
+                       + " where=" + front.pageTab.repoPath
+            })
         }
     }
 
     // A WORKTREES row stands this tab in that worktree — the carried row's landing, by the left menu's door
     // (デザイン規約 §左メニューの所作). Window-level for the reason above.
-    SampleTimer {
+    WindowStage {
         id: worktreeStandTimer
+        name: "worktree_stand"
+        order: ["log_asked", "asked"]
         running: Harness.autoAct === "worktree-stand"
-        property bool asked: false
-        /// The logged read below has been asked for (once, not per tick).
-        property bool logging: false
         property int beforeCount: -1
         property string wanted: ""
         onTriggered: {
+            const op = worktreeStandTimer
             const page = window.curPage
-            if (!worktreeStandTimer.asked) {
+            if (!op.at("asked")) {
                 if (!Awaited.all("worktree_stand_ready", {
                     "open": page !== null && page.pageTab.state === "open",
                     "walked": page !== null && page.pageGraph.finishCount > 0 }))
                     return
                 // `log=` needs rows before the switch. An opening's reads are not logged (`Recording::UserOnly`), so
-                // the run turns background reads on and asks for one (`refreshQuick`).
-                if (page.pageCommands.rowsHeld() === 0) {
-                    if (!worktreeStandTimer.logging) {
-                        worktreeStandTimer.logging = true
+                // a log with none turns background reads on and asks for one (`refreshQuick`), once.
+                if (op.at("start")) {
+                    op.input("log_asked", () => {
+                        if (page.pageCommands.rowsHeld() !== 0)
+                            return
                         page.pageCommands.setBackgroundReads(true)
                         page.pageTab.refreshQuick()
-                    }
-                    return
+                    })
                 }
+                if (page.pageCommands.rowsHeld() === 0)
+                    return
                 // The argument is a WORKTREES row, default 1 = the first linked worktree (row 0 is the worktree
                 // stood in).
                 const trees = page.pageSidebar.worktreesModel
@@ -334,95 +342,102 @@ Item {
                 const full = trees.fullAt(row)
                 if (full === "" || acts.standsIn(page, full))
                     return
-                worktreeStandTimer.wanted = full
-                worktreeStandTimer.beforeCount = pageRepeater.count
-                acts.holdStand(page)
                 // The pane's own door — the one the row's double-click calls (`SidebarRowGestures.activateRow`).
-                page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfWorktree(full))
-                worktreeStandTimer.asked = true
+                op.input("asked", () => {
+                    op.wanted = full
+                    op.beforeCount = pageRepeater.count
+                    acts.holdStand(page)
+                    page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfWorktree(full))
+                })
                 return
             }
-            const front = window.curPage
             if (!Awaited.all("worktree_stand_landed", {
-                "tabs": pageRepeater.count === worktreeStandTimer.beforeCount,
-                "open": front !== null && front.pageTab.state === "open",
-                "page": front !== null && PageSettled.settled(front),
-                "stood": front !== null && acts.standsIn(front, worktreeStandTimer.wanted) }))
+                "tabs": pageRepeater.count === op.beforeCount,
+                "open": page !== null && page.pageTab.state === "open",
+                "page": page !== null && PageSettled.settled(page),
+                "stood": page !== null && acts.standsIn(page, op.wanted) }))
                 return
-            stop()
-            Harness.report("worktree_stand tabs=" + pageRepeater.count
-                              + " grew=" + (pageRepeater.count !== worktreeStandTimer.beforeCount)
-                              + " stood=" + acts.standsIn(front, worktreeStandTimer.wanted)
-                              + " drew=" + acts.standDrew(front)
-                              + " kept=" + acts.standKept(front)
-                              + " log=" + acts.standLogKept(front)
-                              + " wanted=" + worktreeStandTimer.wanted
-                              + " where=" + front.pageTab.repoPath)
-            window.finishAutoAct()
+            op.complete(() => {
+                const front = window.curPage
+                return "worktree_stand tabs=" + pageRepeater.count
+                       + " grew=" + (pageRepeater.count !== op.beforeCount)
+                       + " stood=" + acts.standsIn(front, op.wanted)
+                       + " drew=" + acts.standDrew(front)
+                       + " kept=" + acts.standKept(front)
+                       + " log=" + acts.standLogKept(front)
+                       + " wanted=" + op.wanted
+                       + " where=" + front.pageTab.repoPath
+            })
         }
     }
 
     // A worktree made from a menu stands this tab in it (デザイン規約 §worktree を作る): the page presses
-    // (`AutoActWorktreeVerbs`) and the landing is read here, the page being stood elsewhere by it. Taken as the tab
-    // first settles — the press comes several beats later, and the move behind it takes git's answer and two more
-    // processes.
-    SampleTimer {
+    // (`AutoActWorktreeVerbs`) and the landing is read here, the page being stood elsewhere by it. The tab is taken as
+    // it first settles — the page's press comes several beats after its dispatch, and the move behind it takes git's
+    // answer and two more processes.
+    WindowStage {
         id: worktreeMadeTimer
+        name: "worktree_made"
+        order: ["stand_held"]
         running: Harness.autoAct === "worktree-new" || Harness.autoAct === "worktree-add"
         property string from: ""
         /// The kind of the report the press's answer raised, latched off the page's signal (`Connections` below): a
         /// worktree made over a failed `post-checkout` reports and moves too, so the bar alone does not end the run.
         property string reported: ""
         onTriggered: {
+            const op = worktreeMadeTimer
             const page = window.curPage
-            if (worktreeMadeTimer.from === "") {
+            if (op.at("start")) {
                 // Settled, as the page's own verb waits to be before it presses: the opening's graph still landing
                 // would count as the graph thrown away (`standKept`).
                 if (!Awaited.all("worktree_made_ready", {
                     "open": page !== null && page.pageTab.state === "open",
                     "page": PageSettled.settledUnder(window) }))
                     return
-                worktreeMadeTimer.from = page.pageTab.repoPath
+                op.from = page.pageTab.repoPath
                 acts.holdStand(page)
+                op.advance("stand_held")
                 return
             }
             // Answered with a report instead (a preset whose git says no after the press): the tab stays, and the bar
             // is the run's subject once it is down.
             if (page === null || page.pageTab.state !== "open")
                 return
-            const refused = worktreeMadeTimer.reported !== "" && worktreeMadeTimer.reported !== "worktree-hook"
-            if (refused && acts.standsIn(page, worktreeMadeTimer.from)) {
+            const refused = op.reported !== "" && op.reported !== "worktree-hook"
+            if (refused && acts.standsIn(page, op.from)) {
                 if (!Awaited.all("worktree_refused_ready", { "bar": page.noticeCard.settled,
                                                              "page": PageSettled.settled(page) }))
                     return
-                stop()
-                Harness.report("worktree_refused stood=false said=" + page.noticeCard.label
-                                  + " place=" + page.noticeCard.detailPlace
-                                  + " says=" + page.noticeCard.detail)
-                window.finishAutoAct()
+                op.complete(() => {
+                    const page = window.curPage
+                    return "worktree_refused stood=false said=" + page.noticeCard.label
+                           + " place=" + page.noticeCard.detailPlace
+                           + " says=" + page.noticeCard.detail
+                })
                 return
             }
             if (!Awaited.all("worktree_made_landed", {
-                "stood": !acts.standsIn(page, worktreeMadeTimer.from),
+                "stood": !acts.standsIn(page, op.from),
                 "page": PageSettled.settled(page),
                 "branch": page.pageWorktree.branch !== "",
-                "notice": worktreeMadeTimer.reported === "" || page.noticeCard.settled }))
+                "notice": op.reported === "" || page.noticeCard.settled }))
                 return
-            stop()
-            const where = page.pageTab.repoPath
-            // A made worktree's report (`postcheckout`) is the page's, which stood anew: the bar came along.
-            const said = worktreeMadeTimer.reported === "" ? ""
-                : " said=" + page.noticeCard.label + " place=" + page.noticeCard.detailPlace
-                  + " says=" + page.noticeCard.detail
-            Harness.report("worktree_made stood=" + !acts.standsIn(page, worktreeMadeTimer.from)
-                              + " worktree=" + GitFacts.pathLeaf(where)
-                              + " branch=" + page.pageWorktree.branch
-                              + " tabs=" + pageRepeater.count
-                              + " kept=" + acts.standKept(page)
-                              + " log=" + page.commandsOpen
-                              + said
-                              + " where=" + where)
-            window.finishAutoAct()
+            op.complete(() => {
+                const page = window.curPage
+                const where = page.pageTab.repoPath
+                // A made worktree's report (`postcheckout`) is the page's, which stood anew: the bar came along.
+                const said = op.reported === "" ? ""
+                    : " said=" + page.noticeCard.label + " place=" + page.noticeCard.detailPlace
+                      + " says=" + page.noticeCard.detail
+                return "worktree_made stood=" + !acts.standsIn(page, op.from)
+                       + " worktree=" + GitFacts.pathLeaf(where)
+                       + " branch=" + page.pageWorktree.branch
+                       + " tabs=" + pageRepeater.count
+                       + " kept=" + acts.standKept(page)
+                       + " log=" + page.commandsOpen
+                       + said
+                       + " where=" + where
+            })
         }
     }
     Connections {
@@ -438,11 +453,12 @@ Item {
     // waits on in the worktree arrived at, of the renames left asking in the one left (`RepoPage.leaveWorktree`):
     // their answers were that session's and do not come, so a wait left standing takes the next session's answer
     // for its own.
-    SampleTimer {
+    WindowStage {
         id: worktreeDraftTimer
+        name: "worktree_draft"
+        /// Write and leave, then read the other worktree's empty box and come back, then read the words again.
+        order: ["left", "returned"]
         running: Harness.autoAct === "worktree-draft"
-        /// 0 = write and leave, 1 = read the other worktree's empty box and come back, 2 = read the words again.
-        property int step: 0
         /// Words no repository can produce.
         readonly property string typed: "chore: words written in one worktree"
         /// The worktree they were written in, and the one stood in between.
@@ -468,8 +484,9 @@ Item {
             return false
         }
         onTriggered: {
+            const op = worktreeDraftTimer
             const page = window.curPage
-            if (worktreeDraftTimer.step === 0) {
+            if (op.at("start")) {
                 if (!Awaited.all("worktree_draft_ready", {
                     "open": page !== null && page.pageTab.state === "open" && !page.pageTab.standing,
                     "loaded": page !== null && page.pageWorktree.loaded,
@@ -481,52 +498,55 @@ Item {
                 const full = trees.fullAt(1)
                 if (full === "" || acts.standsIn(page, full))
                     return
-                worktreeDraftTimer.home = page.pageTab.repoPath
-                worktreeDraftTimer.away = full
-                page.pageWip.setMessage(worktreeDraftTimer.typed, "")
-                // A branch's and a tag's rename still asking when the tab moves, set as the ask leaves them: git
-                // answers a local rename well inside the beat a move takes, so only a held-up git opens the window.
-                page.pendingRenameRemote = "origin"
-                page.pendingRenameTo = "renamed"
-                page.pendingRenameTagRemote = "origin"
-                page.pendingRenameTagFrom = "v1"
-                page.pendingRenameTagTo = "v2"
-                acts.holdStand(page)
-                if (!worktreeDraftTimer.standIn(page, full))
-                    return
-                worktreeDraftTimer.step = 1
+                // The row's answer is the press's: a row not listed yet stands nothing, and is asked again.
+                op.input("left", () => {
+                    op.home = page.pageTab.repoPath
+                    op.away = full
+                    page.pageWip.setMessage(op.typed, "")
+                    // A branch's and a tag's rename still asking when the tab moves, set as the ask leaves them: git
+                    // answers a local rename well inside the beat a move takes, so only a held-up git opens the
+                    // window.
+                    page.pendingRenameRemote = "origin"
+                    page.pendingRenameTo = "renamed"
+                    page.pendingRenameTagRemote = "origin"
+                    page.pendingRenameTagFrom = "v1"
+                    page.pendingRenameTagTo = "v2"
+                    acts.holdStand(page)
+                    return op.standIn(page, full)
+                })
                 return
             }
-            if (worktreeDraftTimer.step === 1) {
+            if (op.at("left")) {
                 if (!Awaited.all("worktree_draft_away", {
-                    "stood": worktreeDraftTimer.settled(page, worktreeDraftTimer.away),
+                    "stood": op.settled(page, op.away),
                     "page": page !== null && PageSettled.settled(page) }))
                     return
-                worktreeDraftTimer.awayEmpty = page.pageWip.subjectText === "" && page.pageWip.bodyText === ""
-                const held = []
-                if (page.pendingRenameRemote !== "")
-                    held.push("branch")
-                if (page.pendingRenameTagRemote !== "")
-                    held.push("tag")
-                worktreeDraftTimer.waits = held.length > 0 ? held.join("+") : "none"
-                if (!worktreeDraftTimer.standIn(page, worktreeDraftTimer.home))
-                    return
-                worktreeDraftTimer.step = 2
+                op.input("returned", () => {
+                    op.awayEmpty = page.pageWip.subjectText === "" && page.pageWip.bodyText === ""
+                    const held = []
+                    if (page.pendingRenameRemote !== "")
+                        held.push("branch")
+                    if (page.pendingRenameTagRemote !== "")
+                        held.push("tag")
+                    op.waits = held.length > 0 ? held.join("+") : "none"
+                    return op.standIn(page, op.home)
+                })
                 return
             }
             if (!Awaited.all("worktree_draft_home", {
-                "stood": worktreeDraftTimer.settled(page, worktreeDraftTimer.home),
+                "stood": op.settled(page, op.home),
                 "page": page !== null && PageSettled.settled(page) }))
                 return
-            stop()
-            Harness.report("worktree_draft empty=" + worktreeDraftTimer.awayEmpty
-                              + " back=" + (page.pageWip.subjectText === worktreeDraftTimer.typed)
-                              // …and the pane holding them is the one on screen, the same half `tab-carry` reads.
-                              + " wip=" + page.wipShown
-                              + " kept=" + acts.standKept(page)
-                              + " waits=" + worktreeDraftTimer.waits
-                              + " away=" + worktreeDraftTimer.away)
-            window.finishAutoAct()
+            op.complete(() => {
+                const page = window.curPage
+                return "worktree_draft empty=" + op.awayEmpty
+                       + " back=" + (page.pageWip.subjectText === op.typed)
+                       // …and the pane holding them is the one on screen, the same half `tab-carry` reads.
+                       + " wip=" + page.wipShown
+                       + " kept=" + acts.standKept(page)
+                       + " waits=" + op.waits
+                       + " away=" + op.away
+            })
         }
     }
 
@@ -534,11 +554,12 @@ Item {
     // new folder on a session of its own, the page and the words written there kept (デザイン規約 §タブの所作).
     // The argument is `<folder>=<new name>`; the tab is stood in `<folder>` first, by its WORKTREES row. The rename goes
     // in through the left menu's box door (`SidebarPane.beginRename` — the gesture is `worktree-rename`'s to judge).
-    SampleTimer {
+    WindowStage {
         id: worktreeFollowTimer
+        name: "worktree_follow"
+        /// Stand in the folder, then write the words and send the rename, then read where the tab stands.
+        order: ["stood_in", "renamed"]
         running: Harness.autoAct === "worktree-rename-stand"
-        /// 0 = stand in the folder, 1 = write the words and send the rename, 2 = read where the tab stands.
-        property int step: 0
         readonly property string typed: "chore: words written before the rename"
         readonly property string folder: Harness.autoActArg.split("=")[0]
         readonly property string renamed: Harness.autoActArg.split("=")[1] || ""
@@ -546,70 +567,80 @@ Item {
         property string to: ""
         property int beforeCount: -1
         onTriggered: {
+            const op = worktreeFollowTimer
             const page = window.curPage
             if (page === null)
                 return
             const trees = page.pageSidebar.worktreesModel
-            if (worktreeFollowTimer.step === 0) {
+            if (op.at("start")) {
                 if (!Awaited.all("worktree_follow_ready", {
                     "ready": !(page.pageTab.state !== "open" || page.pageTab.standing
                         || !page.pageWorktree.loaded || page.pageGraph.finishCount === 0) }))
                     return
-                for (let row = 0; row < trees.shown(); row++) {
-                    if (trees.nameAt(row) !== worktreeFollowTimer.folder)
-                        continue
-                    worktreeFollowTimer.from = trees.fullAt(row)
-                    if (!acts.standsIn(page, worktreeFollowTimer.from))
-                        worktreeDraftTimer.standIn(page, worktreeFollowTimer.from)
-                    worktreeFollowTimer.step = 1
-                }
+                // The folder's row is the press's answer: a folder not listed yet stands nothing, and is asked again.
+                op.input("stood_in", () => {
+                    let found = false
+                    for (let row = 0; row < trees.shown(); row++) {
+                        if (trees.nameAt(row) !== op.folder)
+                            continue
+                        op.from = trees.fullAt(row)
+                        if (!acts.standsIn(page, op.from))
+                            worktreeDraftTimer.standIn(page, op.from)
+                        found = true
+                    }
+                    return found
+                })
                 return
             }
-            if (worktreeFollowTimer.step === 1) {
+            if (op.at("stood_in")) {
                 if (!Awaited.all("worktree_follow_stood", {
-                    "stood": worktreeDraftTimer.settled(page, worktreeFollowTimer.from),
+                    "stood": worktreeDraftTimer.settled(page, op.from),
                     "page": PageSettled.settled(page) }))
                     return
-                const place = trees.renamedWorktreeFor(worktreeFollowTimer.from, worktreeFollowTimer.renamed)
+                const place = trees.renamedWorktreeFor(op.from, op.renamed)
                 if (place === undefined)
                     return
-                worktreeFollowTimer.to = place.path
-                worktreeFollowTimer.beforeCount = pageRepeater.count
-                page.pageWip.setMessage(worktreeFollowTimer.typed, "")
-                acts.holdStand(page)
-                page.pageSidebar.beginRename("worktreeFolder", worktreeFollowTimer.from, worktreeFollowTimer.folder)
-                page.pageSidebar.submitEdit(worktreeFollowTimer.renamed)
-                worktreeFollowTimer.step = 2
+                op.input("renamed", () => {
+                    op.to = place.path
+                    op.beforeCount = pageRepeater.count
+                    page.pageWip.setMessage(op.typed, "")
+                    acts.holdStand(page)
+                    page.pageSidebar.beginRename("worktreeFolder", op.from, op.folder)
+                    page.pageSidebar.submitEdit(op.renamed)
+                })
                 return
             }
             if (!Awaited.all("worktree_follow_landed", {
-                "stood": worktreeDraftTimer.settled(page, worktreeFollowTimer.to),
+                "stood": worktreeDraftTimer.settled(page, op.to),
                 "page": PageSettled.settled(page) }))
                 return
-            stop()
-            Harness.report("worktree_follow stood=" + acts.standsIn(page, worktreeFollowTimer.to)
-                              + " tabs=" + pageRepeater.count
-                              + " grew=" + (pageRepeater.count !== worktreeFollowTimer.beforeCount)
-                              + " kept=" + acts.standKept(page)
-                              + " draft=" + (page.pageWip.subjectText === worktreeFollowTimer.typed)
-                              + " box=" + (page.pageSidebar.editKey !== "")
-                              + " gone=" + (trees.worktreeFacts(worktreeFollowTimer.from) === undefined)
-                              + " where=" + page.pageTab.repoPath)
-            window.finishAutoAct()
+            op.complete(() => {
+                const page = window.curPage
+                return "worktree_follow stood=" + acts.standsIn(page, op.to)
+                       + " tabs=" + pageRepeater.count
+                       + " grew=" + (pageRepeater.count !== op.beforeCount)
+                       + " kept=" + acts.standKept(page)
+                       + " draft=" + (page.pageWip.subjectText === op.typed)
+                       + " box=" + (page.pageSidebar.editKey !== "")
+                       + " gone=" + (page.pageSidebar.worktreesModel.worktreeFacts(op.from) === undefined)
+                       + " where=" + page.pageTab.repoPath
+            })
         }
     }
 
     // The hover over a tab standing in a linked worktree says that worktree's path, not the repository's
     // (デザイン規約 §hover のツールチップ).
-    SampleTimer {
+    WindowStage {
         id: worktreeTipTimer
+        name: "worktree_tip"
+        /// Stand this tab in a linked worktree, then put the hand on it, then read what came out.
+        order: ["stood_in", "pointed"]
         running: Harness.autoAct === "worktree-tip"
-        /// 0 = stand this tab in a linked worktree, 1 = put the hand on it, 2 = read what came out.
-        property int step: 0
         property string wanted: ""
         onTriggered: {
+            const op = worktreeTipTimer
             const page = window.curPage
-            if (worktreeTipTimer.step === 0) {
+            if (op.at("start")) {
                 if (!Awaited.all("worktree_tip_ready", {
                     "open": page !== null && page.pageTab.state === "open",
                     "walked": page !== null && page.pageGraph.finishCount > 0 }))
@@ -621,35 +652,35 @@ Item {
                 const full = trees.fullAt(row)
                 if (full === "" || acts.standsIn(page, full))
                     return
-                worktreeTipTimer.wanted = full
-                worktreeTipTimer.step = 1
-                page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfWorktree(full))
+                op.input("stood_in", () => {
+                    op.wanted = full
+                    page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfWorktree(full))
+                })
                 return
             }
-            if (worktreeTipTimer.step === 1) {
+            if (op.at("stood_in")) {
                 // The tab item as well as the page: it arrives with the next layout, and a hand on nothing waits
                 // forever.
                 if (!Awaited.all("worktree_tip_stood", {
-                    "stood": page !== null && acts.standsIn(page, worktreeTipTimer.wanted),
+                    "stood": page !== null && acts.standsIn(page, op.wanted),
                     "tabs": tabProbe.tabItemCount() > 0,
                     "page": page !== null && PageSettled.settled(page) }))
                     return
-                worktreeTipTimer.step = 2
-                tabProbe.pointAtTab(0)
+                op.input("pointed", () => tabProbe.pointAtTab(0))
                 return
             }
-            const tip = Tips.box
             // The tip is on a delay, so this waits it out.
-            if (!Awaited.all("worktree_tip_shown", { "tip": tip.visible,
+            if (!Awaited.all("worktree_tip_shown", { "tip": Tips.box.visible,
                                                      "page": PageSettled.windowSettled(window) }))
                 return
-            stop()
             // `worktree=` is the claim; `native=` is the spelling, read as `tab-name` reads it.
-            Harness.report("worktree_tip tip=" + tip.visible
-                              + " worktree=" + (tip.text.toLowerCase() === worktreeTipTimer.wanted.toLowerCase())
-                              + " native=" + tip.text.includes("\\")
-                              + " said=" + tip.text)
-            window.finishAutoAct()
+            op.complete(() => {
+                const tip = Tips.box
+                return "worktree_tip tip=" + tip.visible
+                       + " worktree=" + (tip.text.toLowerCase() === op.wanted.toLowerCase())
+                       + " native=" + tip.text.includes("\\")
+                       + " said=" + tip.text
+            })
         }
     }
 
@@ -658,11 +689,13 @@ Item {
     // At `away` the tab left behind has no page (`Hub::release_tab`), so the strip's row answers (`TabProbe.tabTrees`).
     //
     // Two repositories, the linked worktrees in front: `--preset basic --preset worktrees`.
-    SampleTimer {
+    WindowStage {
         id: worktreeKeptTimer
+        name: "worktree_kept"
+        /// Stand this tab in a linked worktree, then leave it, then (unless the run stops away) come back to it.
+        order: (Harness.autoActArg || "").indexOf("away") < 0 ? ["stood_in", "left", "returned"]
+                                                               : ["stood_in", "left"]
         running: Harness.autoAct === "worktree-kept"
-        /// 0 = stand this tab in a linked worktree, 1 = wait for it, 2 = leave it, 3 = come back to it.
-        property int step: 0
         /// The strip index of the tab that was stood, and the worktree it was stood in.
         property int seat: -1
         property string wanted: ""
@@ -677,85 +710,85 @@ Item {
             return page !== null && page.pageTab.state === "open"
                    && page.pageWorktree.loaded && page.pageGraph.finishCount > 0
         }
-        function tell(page) {
+        /// The run's line, read as it completes.
+        function line() {
+            const page = window.curPage
             tabProbe.settleStrip()
             const trees = tabProbe.tabTrees().split(",")
-            Harness.report("worktree_kept tabs=" + pageRepeater.count
-                              + " kept=" + (trees[worktreeKeptTimer.seat] !== undefined
-                                            && trees[worktreeKeptTimer.seat] !== "")
-                              + " front=" + (tabsModel.currentIndex === worktreeKeptTimer.seat)
-                              + " stood=" + acts.standsIn(page, worktreeKeptTimer.wanted)
-                              // `kept=` is off the model, which names the worktree even after the strip gave the run up
-                              // for room; 0 here is that (デザイン規約 §ウィンドウの縁 の譲る順).
-                              + " wide=" + tabProbe.tabTreeWidths()
-                              + " says=" + tabProbe.tabTrees()
-                              + " wanted=" + worktreeKeptTimer.wanted)
-            window.finishAutoAct()
+            return "worktree_kept tabs=" + pageRepeater.count
+                   + " kept=" + (trees[worktreeKeptTimer.seat] !== undefined && trees[worktreeKeptTimer.seat] !== "")
+                   + " front=" + (tabsModel.currentIndex === worktreeKeptTimer.seat)
+                   + " stood=" + acts.standsIn(page, worktreeKeptTimer.wanted)
+                   // `kept=` is off the model, which names the worktree even after the strip gave the run up for
+                   // room; 0 here is that (デザイン規約 §ウィンドウの縁 の譲る順).
+                   + " wide=" + tabProbe.tabTreeWidths()
+                   + " says=" + tabProbe.tabTrees()
+                   + " wanted=" + worktreeKeptTimer.wanted
         }
         onTriggered: {
+            const op = worktreeKeptTimer
             const page = window.curPage
-            if (!worktreeKeptTimer.whole(page))
+            if (!op.whole(page))
                 return
-            if (worktreeKeptTimer.step === 0) {
-                // Two tabs — read in this branch alone, as the verb then moves the strip.
+            if (op.at("start")) {
+                // Two tabs — read in this stage alone, as the verb then moves the strip.
                 if (!Awaited.all("worktree_kept_ready", { "tabs": pageRepeater.count >= 2,
                                                           "page": PageSettled.settled(page) }))
                     return
                 const trees = page.pageSidebar.worktreesModel
-                const row = worktreeKeptTimer.row
+                const row = op.row
                 if (trees.shown() <= row)
                     return
                 const full = trees.fullAt(row)
                 if (full === "" || acts.standsIn(page, full))
                     return
-                worktreeKeptTimer.wanted = full
-                worktreeKeptTimer.seat = tabsModel.currentIndex
-                worktreeKeptTimer.step = 1
-                page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfWorktree(full))
+                op.input("stood_in", () => {
+                    op.wanted = full
+                    op.seat = tabsModel.currentIndex
+                    page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfWorktree(full))
+                })
                 return
             }
-            if (worktreeKeptTimer.step === 1) {
-                if (!Awaited.all("worktree_kept_stood", { "stood": acts.standsIn(page, worktreeKeptTimer.wanted),
+            if (op.at("stood_in")) {
+                if (!Awaited.all("worktree_kept_stood", { "stood": acts.standsIn(page, op.wanted),
                                                           "page": PageSettled.settled(page) }))
                     return
-                worktreeKeptTimer.step = 2
-                tabsModel.setCurrentIndex(worktreeKeptTimer.seat === 0 ? 1 : 0)
+                op.input("left", () => tabsModel.setCurrentIndex(op.seat === 0 ? 1 : 0))
                 return
             }
-            if (worktreeKeptTimer.step === 2) {
-                if (!Awaited.all("worktree_kept_away", { "away": tabsModel.currentIndex !== worktreeKeptTimer.seat,
+            if (op.at("left")) {
+                if (!Awaited.all("worktree_kept_away", { "away": tabsModel.currentIndex !== op.seat,
                                                          "page": PageSettled.settled(page) }))
                     return
-                if (!worktreeKeptTimer.comesBack) {
-                    stop()
-                    worktreeKeptTimer.tell(page)
+                if (!op.comesBack) {
+                    op.complete(() => op.line())
                     return
                 }
-                worktreeKeptTimer.step = 3
-                tabsModel.setCurrentIndex(worktreeKeptTimer.seat)
+                op.input("returned", () => tabsModel.setCurrentIndex(op.seat))
                 return
             }
-            if (!Awaited.all("worktree_kept_back", { "front": tabsModel.currentIndex === worktreeKeptTimer.seat,
-                                                     "stood": acts.standsIn(page, worktreeKeptTimer.wanted),
+            if (!Awaited.all("worktree_kept_back", { "front": tabsModel.currentIndex === op.seat,
+                                                     "stood": acts.standsIn(page, op.wanted),
                                                      "page": PageSettled.settled(page) }))
                 return
-            stop()
-            worktreeKeptTimer.tell(page)
+            op.complete(() => op.line())
         }
     }
 
     // Reopening an existing path selects the tab it already has.
-    SampleTimer {
+    WindowStage {
         id: openAgainTimer
+        name: "open_again"
+        order: ["asked"]
         running: Harness.autoAct === "open-again"
-        property bool requested: false
         property string asked: ""
         property int beforeCount: -1
         /// The tab the ask should bring to the front; -1 when the run named its own path, whose spelling does not say
         /// which tab holds it.
         property int wantIndex: -1
         onTriggered: {
-            if (!openAgainTimer.requested) {
+            const op = openAgainTimer
+            if (op.at("start")) {
                 if (pageRepeater.count === 0)
                     return
                 // With no argument, the strip's own spelling of tab 0 — "" until the next layout, and asking with ""
@@ -763,19 +796,20 @@ Item {
                 const path = Harness.autoActArg !== "" ? Harness.autoActArg : tabProbe.tabPathAt(0)
                 if (path === "")
                     return
-                openAgainTimer.asked = path
-                openAgainTimer.wantIndex = Harness.autoActArg !== "" ? -1 : 0
-                openAgainTimer.beforeCount = pageRepeater.count
-                openAgainTimer.requested = true
-                tabsModel.openRepositoryPath(path)
+                op.input("asked", () => {
+                    op.asked = path
+                    op.wantIndex = Harness.autoActArg !== "" ? -1 : 0
+                    op.beforeCount = pageRepeater.count
+                    tabsModel.openRepositoryPath(path)
+                })
                 return
             }
             // Tab 0 asked from a strip standing on another has somewhere to arrive; else "went to its tab" and "did
             // nothing" report the same.
-            if (pageRepeater.count !== openAgainTimer.beforeCount
+            if (pageRepeater.count !== op.beforeCount
                     || tabsModel.currentIndex < 0
-                    || (openAgainTimer.wantIndex >= 0
-                        && tabsModel.currentIndex !== openAgainTimer.wantIndex)
+                    || (op.wantIndex >= 0
+                        && tabsModel.currentIndex !== op.wantIndex)
                     // The strip is read back below (`middle-close` above).
                     || tabProbe.tabItemCount() !== pageRepeater.count)
                 return
@@ -785,12 +819,10 @@ Item {
                 "open": front !== null && front.pageTab.state === "open",
                 "page": front !== null && PageSettled.settled(front) }))
                 return
-            stop()
-            Harness.report("open_again tabs=" + pageRepeater.count
-                              + " active=" + tabsModel.currentIndex
-                              + " asked=" + openAgainTimer.asked
-                              + " open=" + tabProbe.tabPaths())
-            window.finishAutoAct()
+            op.complete(() => "open_again tabs=" + pageRepeater.count
+                               + " active=" + tabsModel.currentIndex
+                               + " asked=" + op.asked
+                               + " open=" + tabProbe.tabPaths())
         }
     }
 
@@ -798,11 +830,12 @@ Item {
     // Each landing waits for a whole page — a page still opening answers like an emptied one. Waited on
     // `currentTabId`, not the row (rows renumber). The page is a different object at each landing (built and taken
     // down with its tab), so nothing but the words may be held across one.
-    SampleTimer {
+    WindowStage {
         id: tabCarryTimer
+        name: "tab_carry"
+        /// Mark the first tab and leave it, then read the second and come back, then read the first again.
+        order: ["away", "back"]
         running: Harness.autoAct === "tab-carry"
-        /// 0 = mark the first tab, 1 = read the second, 2 = read the first again.
-        property int step: 0
         /// The tab the mark was left on.
         property int firstTab: -1
         /// Words no repository can produce.
@@ -816,58 +849,60 @@ Item {
                    && page.pageWorktree.loaded && page.pageGraph.finishCount > 0
         }
         onTriggered: {
+            const op = tabCarryTimer
             const page = window.curPage
-            // Named for the stage: the strip's moves unsettle the page between the stages, and one name read every
-            // beat would be reached again behind the stages' checkpoints.
-            if (!Awaited.all("tab_carry_ready/" + tabCarryTimer.step, { "ready": tabCarryTimer.whole(page),
-                                                                       "page": PageSettled.windowSettled(window) }))
+            if (!Awaited.all("tab_carry_ready", { "ready": op.whole(page),
+                                                  "page": PageSettled.windowSettled(window) }))
                 return
-            if (tabCarryTimer.step === 0) {
+            if (op.at("start")) {
                 // Two tabs — read at the first landing alone, as the verb then moves the strip.
                 if (!Awaited.all("tab_carry_tabs", { "tabs": pageRepeater.count >= 2 }))
                     return
                 // A layout nobody starts in, so "it followed" cannot be read off a page that was already like this.
-                page.foldByHand(true)
-                page.commandsOpen = true
-                page.pageWip.setMessage(tabCarryTimer.typed, "")
-                tabCarryTimer.firstTab = tabsModel.currentTabId
-                tabCarryTimer.step = 1
-                tabsModel.setCurrentIndex(tabsModel.currentIndex === 0 ? 1 : 0)
+                op.input("away", () => {
+                    page.foldByHand(true)
+                    page.commandsOpen = true
+                    page.pageWip.setMessage(op.typed, "")
+                    op.firstTab = tabsModel.currentTabId
+                    tabsModel.setCurrentIndex(tabsModel.currentIndex === 0 ? 1 : 0)
+                })
                 return
             }
-            if (tabCarryTimer.step === 1) {
-                if (!Awaited.all("tab_carry_moved", { "moved": tabsModel.currentTabId !== tabCarryTimer.firstTab }))
+            if (op.at("away")) {
+                if (!Awaited.all("tab_carry_moved", { "moved": tabsModel.currentTabId !== op.firstTab }))
                     return
-                tabCarryTimer.folded = page.sidebarCollapsed
-                tabCarryTimer.log = page.commandsOpen
-                tabCarryTimer.otherEmpty = page.pageWip.subjectText === ""
-                                           && page.pageWip.bodyText === ""
-                tabCarryTimer.step = 2
-                tabsModel.setCurrentIndex(tabsModel.currentIndex === 0 ? 1 : 0)
+                op.input("back", () => {
+                    op.folded = page.sidebarCollapsed
+                    op.log = page.commandsOpen
+                    op.otherEmpty = page.pageWip.subjectText === "" && page.pageWip.bodyText === ""
+                    tabsModel.setCurrentIndex(tabsModel.currentIndex === 0 ? 1 : 0)
+                })
                 return
             }
-            if (!Awaited.all("tab_carry_back", { "back": tabsModel.currentTabId === tabCarryTimer.firstTab }))
+            if (!Awaited.all("tab_carry_back", { "back": tabsModel.currentTabId === op.firstTab }))
                 return
-            stop()
             // `sessions=` is the release: two tabs in the strip, one repository in memory.
-            Harness.report("tab_carry tabs=" + pageRepeater.count
-                              + " sessions=" + Harness.openSessionCount()
-                              + " folded=" + tabCarryTimer.folded
-                              + " log=" + tabCarryTimer.log
-                              + " empty=" + tabCarryTimer.otherEmpty
-                              + " back=" + (page.pageWip.subjectText === tabCarryTimer.typed)
-                              // …and the pane holding them is the one on screen: words put back behind the commit
-                              // details are only half of them being kept.
-                              + " wip=" + page.wipShown)
-            window.finishAutoAct()
+            op.complete(() => {
+                const page = window.curPage
+                return "tab_carry tabs=" + pageRepeater.count
+                       + " sessions=" + Harness.openSessionCount()
+                       + " folded=" + op.folded
+                       + " log=" + op.log
+                       + " empty=" + op.otherEmpty
+                       + " back=" + (page.pageWip.subjectText === op.typed)
+                       // …and the pane holding them is the one on screen: words put back behind the commit
+                       // details are only half of them being kept.
+                       + " wip=" + page.wipShown
+            })
         }
     }
 
     // PGG_AUTO_ACT=tab-widths: numbers, since a strip that narrowed the wrong tabs frames like one that got it right.
     // `room=` says which give-up the strip is living on (the mark's room first, the names after). `crushed=` is what
     // the widths cannot say — a name drawn away to the mark alone (`TabProbe.tabNamesCrushed`).
-    SampleTimer {
+    WindowStage {
         id: tabWidthActTimer
+        name: "tab_width_act"
         running: Harness.autoAct === "tab-widths"
         onTriggered: {
             // Every row laid out: both readings walk the view's items, and a just-gained row has none until the next
@@ -877,9 +912,7 @@ Item {
                     || tabProbe.tabItemCount() !== topBar.bandTabCount),
                 "page": PageSettled.settledUnder(window) }))
                 return
-            stop()
-            Harness.report(
-                "tab_widths crushed=" + tabProbe.tabNamesCrushed()
+            tabWidthActTimer.complete(() => "tab_widths crushed=" + tabProbe.tabNamesCrushed()
                 // The state reached, judged with the crush count: how many tabs crowd the band is the platform's
                 // answer (`TabStrip.tabNamesCut`).
                 + " cut=" + topBar.tabNamesCut
@@ -895,24 +928,26 @@ Item {
                 + " view=" + Math.round(topBar.bandTabsWidth)
                 + " scrolls=" + topBar.bandTabScrolls
                 + " widths=" + tabProbe.tabWidths())
-            window.finishAutoAct()
         }
     }
 
     // PGG_AUTO_ACT=tab-mark <index>: the tab the hand is on — one of the others, or the picture says nothing new.
-    SampleTimer {
+    WindowStage {
         id: tabMarkActTimer
+        name: "tab_mark_act"
+        order: ["pointed"]
         running: Harness.autoAct === "tab-mark"
-        property bool requested: false
         property string beforeMarks: ""
         onTriggered: {
+            const op = tabMarkActTimer
             const pointed = Number(Harness.autoActArg || 1)
             if (topBar.bandTabCount < pointed)
                 return
-            if (!tabMarkActTimer.requested) {
-                tabMarkActTimer.requested = true
-                tabMarkActTimer.beforeMarks = tabProbe.tabMarks()
-                tabProbe.pointAtTab(pointed)
+            if (op.at("start")) {
+                op.input("pointed", () => {
+                    op.beforeMarks = tabProbe.tabMarks()
+                    tabProbe.pointAtTab(pointed)
+                })
                 return
             }
             // The marks, and the pointed tab's path, which comes up a rest after the hand (`TabItemDelegate`): ended
@@ -920,75 +955,70 @@ Item {
             // read as that tab's by its target.
             const tip = Tips.box
             if (!Awaited.all("tab_marks", {
-                    "marks": tabProbe.tabMarks() !== tabMarkActTimer.beforeMarks,
+                    "marks": tabProbe.tabMarks() !== op.beforeMarks,
                     "tip": tip.visible && tip.parent === tabProbe.view.itemAtIndex(pointed),
                     "page": PageSettled.windowSettled(window)
                 }))
                 return
-            stop()
-            Harness.report(
-                "tab_marks tabs=" + topBar.bandTabCount
-                + " current=" + tabsModel.currentIndex
-                + " pointed=" + pointed
-                + " marks=" + tabProbe.tabMarks())
-            window.finishAutoAct()
+            op.complete(() => "tab_marks tabs=" + topBar.bandTabCount
+                               + " current=" + tabsModel.currentIndex
+                               + " pointed=" + pointed
+                               + " marks=" + tabProbe.tabMarks())
         }
     }
 
     // PGG_AUTO_ACT=tab-name <index>: the names a strip of namesakes settled on, and the hover's whole path for the
     // pointed tab — one question, asked of the strip and of the hover (デザイン規約 §タブの所作 / §hover のツールチップ).
-    SampleTimer {
+    WindowStage {
         id: tabNameActTimer
+        name: "tab_name_act"
+        order: ["pointed"]
         running: Harness.autoAct === "tab-name"
-        property bool requested: false
         readonly property int pointed: Number(Harness.autoActArg || 0)
         onTriggered: {
+            const op = tabNameActTimer
             // Every row laid out first: an unreached row answers "", which reads like a blank name.
             if (!Awaited.all("tab_name_act_ready", {
                 "ready": !(topBar.bandTabCount === 0 || tabProbe.tabItemCount() < topBar.bandTabCount),
                 "page": PageSettled.windowSettled(window) }))
                 return
-            if (!tabNameActTimer.requested) {
-                tabNameActTimer.requested = true
-                tabProbe.pointAtTab(tabNameActTimer.pointed)
+            if (op.at("start")) {
+                op.input("pointed", () => tabProbe.pointAtTab(op.pointed))
                 return
             }
-            const tip = Tips.box
-            if (!tip.visible)
+            if (!Tips.box.visible)
                 return
-            stop()
             // `unique=`: no two tabs read alike. `native=`: a backslash in a name or its hover is Windows' own
             // spelling leaking through (規約 §パスの区切り).
-            const titles = tabProbe.tabTitles()
-            const names = titles.split(",")
-            Harness.report(
-                "tab_names tabs=" + topBar.bandTabCount
-                + " pointed=" + tabNameActTimer.pointed
-                + " unique=" + names.every((name, at) => names.indexOf(name) === at)
-                + " native=" + (names.some(name => name.includes("\\")) || tip.text.includes("\\"))
-                + " tip=" + tip.visible
-                + " titles=" + titles
-                + " said=" + tip.text)
-            window.finishAutoAct()
+            op.complete(() => {
+                const tip = Tips.box
+                const titles = tabProbe.tabTitles()
+                const names = titles.split(",")
+                return "tab_names tabs=" + topBar.bandTabCount
+                       + " pointed=" + op.pointed
+                       + " unique=" + names.every((name, at) => names.indexOf(name) === at)
+                       + " native=" + (names.some(name => name.includes("\\")) || tip.text.includes("\\"))
+                       + " tip=" + tip.visible
+                       + " titles=" + titles
+                       + " said=" + tip.text
+            })
         }
     }
 
     // PGG_AUTO_ACT=solo: the harness holds the real lock on the config directory before starting this process, so the
     // picture is of the mechanism.
-    SampleTimer {
+    WindowStage {
         id: soloActTimer
+        name: "solo_act"
         running: Harness.autoAct === "solo"
         onTriggered: {
             if (!Awaited.all("solo_act_ready", { "ready": !(!AppBackend.alreadyRunning || !gate.visible),
                                                  "page": PageSettled.windowSettled(window) }))
                 return
-            stop()
-            Harness.report(
-                "solo blocked=" + AppBackend.alreadyRunning
-                + " held=" + (AppBackend.heldElsewhere !== "")
-                + " gate=" + gate.visible
-                + " main=" + mainUi.visible)
-            window.finishAutoAct()
+            soloActTimer.complete(() => "solo blocked=" + AppBackend.alreadyRunning
+                                        + " held=" + (AppBackend.heldElsewhere !== "")
+                                        + " gate=" + gate.visible
+                                        + " main=" + mainUi.visible)
         }
     }
 }

@@ -83,7 +83,10 @@ pub(super) fn scan(file: &str, text: &str, kind: Kind) -> (Vec<Finding>, Vec<Exc
     }
     if kind == Kind::Harness {
         candidates.sort_by_key(|c| c.first);
-        return source::judged(file, text, &code, candidates);
+        let (mut findings, exceptions) = source::judged(file, text, &code, candidates);
+        // Allowed structure, not a span of time: no marker lets these stand.
+        findings.extend(super::stages::findings(file, text));
+        return (findings, exceptions);
     }
     for name in ANSWERED_WAITS {
         for call in calls(&code, name) {
@@ -152,7 +155,7 @@ fn keeps_a_count(line: &str) -> bool {
 
 /// The files that count the window's frames for everyone else: the one
 /// render boundary a wait on a layout reads is `Awaited.still` /
-/// `Awaited.drawnSince`, fed by `WindowHarness`; the shot driver reads
+/// `StageTimer.drawnSince`, fed by `WindowHarness`; the shot driver reads
 /// frames for the ceiling's line, and the perf drivers measure them.
 const FRAME_KEEPERS: [&str; 5] = [
     "Awaited.qml",
@@ -165,7 +168,7 @@ const FRAME_KEEPERS: [&str; 5] = [
 /// Whether `line` counts frames of its own — `frameSwapped`,
 /// `framesSwapped` or the window's `frameCounter` — outside the files
 /// that keep the count for everyone: a wait "two frames from here" written
-/// again, in place of `Awaited.drawnSince`.
+/// again, in place of `StageTimer.drawnSince`.
 fn counts_frames(file: &str, line: &str) -> bool {
     let name = file.rsplit(['/', '\\']).next().unwrap_or(file);
     !FRAME_KEEPERS.contains(&name)
@@ -292,7 +295,7 @@ mod tests {
 
     /// The same, by the harness's rules.
     fn harness(text: &str) -> Vec<(usize, &'static str)> {
-        let (findings, _) = scan("WindowActs.qml", text, Kind::Harness);
+        let (findings, _) = scan("src/auto/WindowPerfDriver.qml", text, Kind::Harness);
         findings.iter().map(|f| (f.line, f.rule)).collect()
     }
 
@@ -474,13 +477,13 @@ Timer {
     interval: Math.max(Harness.autoWatchdogMs, 1)
 }
 ";
-        let (findings, exceptions) = scan("WindowActs.qml", text, Kind::Harness);
+        let (findings, exceptions) = scan("src/auto/WindowPerfDriver.qml", text, Kind::Harness);
         assert!(findings.is_empty(), "{findings:?}");
         assert_eq!(exceptions.len(), 1);
     }
 
     /// A verb counting the window's frames for itself is a wait of "two
-    /// frames from here" written again; the count lives in `Awaited`.
+    /// frames from here" written again; the count lives in `Awaited`, read through `StageTimer.drawnSince`.
     #[test]
     fn a_frame_count_of_a_verbs_own_is_named_and_the_keepers_are_not() {
         let text = "\
@@ -490,8 +493,12 @@ Item {
     function drawn() { return window.frameCounter > before }
 }
 ";
+        let (findings, _) = scan("src/auto/AutoActFooVerbs.qml", text, Kind::Harness);
         assert_eq!(
-            harness(text),
+            findings
+                .iter()
+                .map(|f| (f.line, f.rule))
+                .collect::<Vec<_>>(),
             vec![(2, "frames"), (3, "frames"), (4, "frames")]
         );
         for keeper in ["Awaited.qml", "WindowHarness.qml", "AutoShotDriver.qml"] {

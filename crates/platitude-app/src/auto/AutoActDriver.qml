@@ -139,16 +139,18 @@ Item {
     }
     // A menu row's words take their widths from a `RowLayout` on polish, so a cut name (`AppMenuItem.nameCut`) read in
     // the beat its card opens answers for the row before that layout ran — whole, as if it fit. Under load the
-    // sampler's beat lands there. A reading waits two swapped frames from the first time it is asked for a card
-    // (`Awaited.drawnSince`): one whose polish ran before the ask answers for the shape before it.
+    // sampler's beat lands there. A reading waits two swapped frames from the first time `op` asks for a card in its
+    // stage (`StageTimer.drawnSince`): one whose polish ran before the ask answers for the shape before it.
     property var framesCard: null
-    /// Whether `card`'s rows have been laid out since the first ask about it: false while the frames are still to come.
-    function cardLaidOut(card) {
+    property int framesCardSerial: 0
+    /// Whether `card`'s rows have been laid out since `op` first asked about it: false while the frames are still to
+    /// come.
+    function cardLaidOut(op, card) {
         if (driver.framesCard !== card) {
             driver.framesCard = card
-            Awaited.forget("card_laid_out")
+            driver.framesCardSerial++
         }
-        return Awaited.drawnSince("card_laid_out")
+        return op.drawnSince("card_laid_out#" + driver.framesCardSerial)
     }
     /// Where a TAG card's rows reach, in the one report line both entrances' verbs say it with
     /// (`AutoActRefVerbs.reachWords`).
@@ -156,11 +158,37 @@ Item {
         return refVerbs.reachWords(card)
     }
 
-    property bool claimed: false
     /// The page starts this once its models are attached: a verb run before them would act on a repository nothing
     /// has read yet.
     function begin() {
         autoActTimer.start()
+    }
+    /// The page's operation that claims the run and dispatches the verb (`autoActTimer`): the one a verb completing in
+    /// the dispatching turn completes from.
+    readonly property alias act: autoActTimer
+
+    /// The report of a verb whose completion one of the barriers below makes (`dispatchFinished`, `barrierWrite`,
+    /// `barrierNotice`): handed over unread as the verb dispatches or presses, and read by whichever operation
+    /// completes — once the completion's hold has passed (`CompletionRoute`). Handed once.
+    property var owedReport: null
+    function reportAtCompletion(report) {
+        if (driver.owedReport !== null) {
+            Awaited.breach(autoActTimer, "handed a second report for the completion")
+            return
+        }
+        driver.owedReport = report
+    }
+    /// The lines of `owedReport`, for a completing operation's report to read with its own.
+    function verbReport() {
+        if (driver.owedReport === null)
+            return []
+        const answer = driver.owedReport()
+        return Array.isArray(answer) ? answer : [answer]
+    }
+    /// What the page holds a completion for besides its reads (`Awaited.pageHolds`): a menu this run took down on the
+    /// product's behalf still on its way out (`menuGoing`).
+    function completionHolds() {
+        return { "menuGone": driver.menuGoing === null || !driver.menuGoing.visible }
     }
 
     // A read-only verb completes on a rendered surface. A write also waits out its own answer: its request leaving
@@ -250,6 +278,7 @@ Item {
         driver.stashTotalBefore = stashesModel.total
         driver.stashWanted = ""
         driver.popWanted = ""
+        driver.owedReport = null
     }
 
     /// Whether the top stash entry wears the summary this run typed, read off the reflog subject git wrote. A tail
@@ -297,35 +326,19 @@ Item {
             + " pill=" + driver.graphPane.askCard.accept
     }
 
-    function dispatchFinished() {
-        if (driver.completionDeferred)
+    /// The end of a verb's dispatch, in the beat of `op` — the operation that dispatched it (`act`, or the one that
+    /// waited out its rows): a verb that owns no completion completes here on the report it handed over
+    /// (`reportAtCompletion`) — what it set going (the row it selected being read) is the page's, and the completion's
+    /// hold waits the page out before the report is read — or a write verb's barrier takes over.
+    function dispatchFinished(op) {
+        // Completed in the dispatch itself (`act.complete`).
+        if (driver.completionDeferred || op.at("complete"))
             return
         if (driver.writeExpected) {
             writeBarrier.start()
             return
         }
-        barrierRendered.begin()
-    }
-
-    /// Set while `runAutoAct` dispatches. A verb that completes in the dispatching turn — a menu opened and read in
-    /// one go — has no wait of its own, and what it set going (the row it selected being read) is the page's: its
-    /// completion goes through the page's settle (`settledBarrier`), as a verb that owns no completion does.
-    property bool inDispatch: false
-
-    function complete() {
-        // A broken run was already ended by `sayBroken`; a barrier landing afterwards would finish it green.
-        if (repoTab.writeContractBroken())
-            return
-        if (driver.inDispatch) {
-            settledBarrier.start()
-            return
-        }
-        // Whichever barrier brought the run here, not while that menu is still on its way out (`menuGoing`).
-        if (driver.menuGoing !== null && driver.menuGoing.visible) {
-            menuGoneBarrier.start()
-            return
-        }
-        page.Window.window.finishAutoAct()
+        op.complete(() => driver.verbReport())
     }
 
     /// **The one way a verb makes a write.** `what` names the press for the lines a failure and a watchdog leave;
@@ -429,14 +442,14 @@ Item {
         holdRetry.then = then
         holdRetry.start()
     }
-    SampleTimer {
+    PageStage {
         id: holdRetry
+        name: "hold_retry"
         property var held: null
         property var then: null
         onTriggered: {
-            const went = driver.holdToEnd(holdRetry.held)
-            Awaited.at(Harness.autoAct, went ? "pressed" : "live")
-            if (!went)
+            // The press is its own reading: a button waiting on git answers false, and nothing moved.
+            if (!holdRetry.input("pressed", () => driver.holdToEnd(holdRetry.held)))
                 return
             holdRetry.stop()
             holdRetry.then()
@@ -446,23 +459,6 @@ Item {
     /// the row" need not measure it.
     readonly property int pastLineEnd: 9999
 
-    // The render boundary is `AutoShotDriver`'s (rules/app-ui.md §UI 自動化); what is waited for here is the page
-    // the verb acted on — a menu opened over a row it selected brings that row's reads, and the picture is of them.
-    readonly property QtObject barrierRendered: QtObject {
-        id: barrierRendered
-        function begin() {
-            settledBarrier.start()
-        }
-    }
-    SampleTimer {
-        id: settledBarrier
-        onTriggered: {
-            if (!Awaited.all("page_settled", { "page": PageSettled.settled(page) }))
-                return
-            settledBarrier.stop()
-            driver.complete()
-        }
-    }
     // Arms `statusOwedFrom` for a run with no index of its own (`owedStatusAt`) on the first answer after the arm
     // that was asked for (`RepoTab.writeAnswerAsked`): the opening and interval fetches answer on the same notify,
     // and arming on one waits for a report a status read before the press already carries.
@@ -479,10 +475,20 @@ Item {
             }
         }
     }
+    /// What the write barrier says of the write: `mine=false` passed without a write of its own; `settled=` the last
+    /// boundary that write reached. A write a verb pressed that came back as a report says so the way the notice verbs
+    /// do, for a run of that verb over a preset that refuses it (`verify/verbs`'s `WithPreset` rows).
+    function writeLines() {
+        return ["write_barrier mine=" + (repoTab.watchedWriteId() !== 0)
+                + " settled=" + (repoTab.writeWatchStage() === "settled"),
+                page.noticeCard.open ? driver.noticeLine() : ""]
+    }
     // The run's own write through all its boundaries (`wroteAndSettled`). Never wait for busy to *rise*: the answer
     // can be absorbed before this sampler sees the flag up. A [`statusOwed`] verb also waits `owedStatusLanded`.
-    SampleTimer {
+    // Completes the run where no later barrier is owed; otherwise hands on to the one that is.
+    PageStage {
         id: writeBarrier
+        name: "write_barrier"
         onTriggered: {
             // Ended by `sayBroken`; `wroteAndSettled` stays false for good, so this would tick to the ceiling.
             if (repoTab.writeContractBroken()) {
@@ -493,36 +499,34 @@ Item {
             // This sampler can be what is still ticking at the ceiling, so it keeps that line current.
             if (!wrote)
                 driver.noteWrite()
-            // The checkpoint every write verb reaches: its write answered and read back, the status its answer
-            // named in, and the report a refusal raised standing still — a refused write brings its bar down on
-            // the answer, and the bar grows into place (`NoticeBar` の `Behavior`): shot on the answer, it is half
-            // open.
+            // Every write verb's: its write answered and read back, the status its answer named in, and the report a
+            // refusal raised standing still — a refused write brings its bar down on the answer, and the bar grows into
+            // place (`NoticeBar` の `Behavior`): shot on the answer, it is half open.
             if (!Awaited.all("write_settled", {
                 "written": wrote,
                 "status": !driver.statusOwed || driver.owedStatusLanded(),
                 "notice": !(page.noticeCard.open && !page.noticeCard.settled),
                 "page": PageSettled.settled(page) }))
                 return
+            if (driver.treeGoneRow === "" && driver.graphGoneOid === "") {
+                writeBarrier.complete(() => driver.writeLines().concat(driver.verbReport()))
+                return
+            }
+            writeBarrier.advance("settled", () => driver.writeLines())
             writeBarrier.stop()
-            // `mine=false`: passed without a write of its own; `settled=`: the last boundary that write reached.
-            Harness.report("write_barrier mine=" + (repoTab.watchedWriteId() !== 0)
-                           + " settled=" + (repoTab.writeWatchStage() === "settled"))
-            // A write a verb pressed that came back as a report says so the way the notice verbs do, for a run of
-            // that verb over a preset that refuses it (`verify/verbs`'s `WithPreset` rows).
-            if (page.noticeCard.open)
-                Harness.report(driver.noticeLine())
-            if (driver.treeGoneRow === "")
-                driver.afterTreeSettled()
-            else
+            if (driver.treeGoneRow !== "")
                 treeBarrier.start()
+            else
+                graphBarrier.start()
         }
     }
     readonly property alias barrierWrite: writeBarrier
     /// The bar a write that did not happen comes down in, waited on until fully down (`NoticeBar.settled`): a picture
     /// taken on the answer catches the words written and the height still nothing. One barrier for every kind of
     /// report (`Words.writeReported`) — each run claims the same things (verify-ui verbs.md「報せバーの 10 本」).
-    SampleTimer {
+    PageStage {
         id: noticeBarrier
+        name: "notice_barrier"
         /// Whether the line also says `plan=` — only for the verbs whose bar comes up instead of a plan
         /// (`AutoActPlanVerbs`); on the others it would always read the same.
         property bool saysPlan: false
@@ -532,9 +536,7 @@ Item {
             if (!Awaited.all("notice_barrier_ready", { "bar": page.noticeCard.settled,
                                                        "page": PageSettled.settled(page) }))
                 return
-            noticeBarrier.stop()
-            Harness.report(driver.noticeLine(noticeBarrier.saysPlan))
-            driver.complete()
+            noticeBarrier.complete(() => [driver.noticeLine(noticeBarrier.saysPlan)].concat(driver.verbReport()))
         }
     }
     readonly property alias barrierNotice: noticeBarrier
@@ -562,76 +564,86 @@ Item {
     /// built otherwise (a button deeper by its hold mark, a field), and whether the pair shares a baseline is what the
     /// face answers for a line — a few pixels apart reads in a picture as the words' own setting. The distances ride
     /// along for a run that came out false.
-    SampleTimer {
+    PageStage {
         id: headingBarrier
+        name: "heading_barrier"
         onTriggered: {
-            const words = diffPane.hunkWordsApart()
             // -1: the heading's row is not built yet.
-            if (!Awaited.all("heading_barrier_ready", { "row": words >= 0, "page": PageSettled.settled(page) }))
+            if (!Awaited.all("heading_barrier_ready", { "row": diffPane.hunkWordsApart() >= 0,
+                                                        "page": PageSettled.settled(page) }))
                 return
-            headingBarrier.stop()
-            const caption = diffPane.captionApart()
-            Harness.report("hunk_tools level=" + (words < 1) + " caption=" + (caption < 1)
-                              + " words=" + words + " head=" + caption)
-            driver.complete()
+            headingBarrier.complete(() => {
+                const words = diffPane.hunkWordsApart()
+                const caption = diffPane.captionApart()
+                return ["hunk_tools level=" + (words < 1) + " caption=" + (caption < 1)
+                        + " words=" + words + " head=" + caption].concat(driver.verbReport())
+            })
         }
     }
     readonly property alias barrierHeading: headingBarrier
-    // Holds `complete` until `menuGoing` has finished its exit transition.
-    SampleTimer {
-        id: menuGoneBarrier
-        onTriggered: {
-            if (!Awaited.all("menu_gone_barrier_ready", { "gone": !driver.menuGoing.visible,
-                                                          "page": PageSettled.settled(page) }))
-                return
-            menuGoneBarrier.stop()
-            driver.complete()
+    /// Where a verb's own operation `op` goes once the tree row its write took is out: the graph's barrier if a graph
+    /// row is owed too, else the completion from `op`.
+    function afterTreeSettled(op) {
+        if (driver.graphGoneOid === "") {
+            op.complete(() => driver.verbReport())
+            return
         }
-    }
-    function afterTreeSettled() {
-        if (driver.graphGoneOid === "")
-            barrierRendered.begin()
-        else
-            graphBarrier.start()
+        op.stop()
+        graphBarrier.start()
     }
     // Waits `treeGoneRow` out of the bucket it was named in. A write git refused leaves the row, and the run to the
     // watchdog — which is the diagnosis.
-    SampleTimer {
+    PageStage {
         id: treeBarrier
+        name: "tree_barrier"
+        /// `landed=` tells a file resolved into the index from one discarded out of the tree ("" = nowhere).
+        function settledLine() {
+            const cut = driver.treeGoneRow.indexOf(":")
+            const path = driver.treeGoneRow.substring(cut + 1)
+            return "tree_settled from=" + driver.treeGoneRow.substring(0, cut)
+                   + " landed=" + unstagedModel.bucketOf(path)
+                   + " conflicts=" + worktree.conflictCount
+                   + " staged=" + worktree.stagedCount
+                   + " unstaged=" + (worktree.unstagedCount + worktree.untrackedCount)
+        }
         onTriggered: {
             const cut = driver.treeGoneRow.indexOf(":")
-            const from = driver.treeGoneRow.substring(0, cut)
-            const path = driver.treeGoneRow.substring(cut + 1)
-            if (!Awaited.all("tree_barrier_ready", { "ready": !(unstagedModel.holdsPath(from, path)) }))
+            if (!Awaited.all("tree_barrier_ready", {
+                "ready": !unstagedModel.holdsPath(driver.treeGoneRow.substring(0, cut),
+                                                  driver.treeGoneRow.substring(cut + 1)) }))
                 return
+            if (driver.graphGoneOid === "") {
+                treeBarrier.complete(() => [treeBarrier.settledLine()].concat(driver.verbReport()))
+                return
+            }
+            treeBarrier.advance("settled", () => treeBarrier.settledLine())
             treeBarrier.stop()
-            // `landed=` tells a file resolved into the index from one discarded out of the tree ("" = nowhere).
-            Harness.report("tree_settled from=" + from
-                              + " landed=" + unstagedModel.bucketOf(path)
-                              + " conflicts=" + worktree.conflictCount
-                              + " staged=" + worktree.stagedCount
-                              + " unstaged=" + (worktree.unstagedCount + worktree.untrackedCount))
-            driver.afterTreeSettled()
+            graphBarrier.start()
         }
     }
     // Waits `graphGoneOid` off the graph and the stash total off its old value (see `graphGoneOid`).
-    SampleTimer {
+    PageStage {
         id: graphBarrier
+        name: "graph_barrier"
+        function settledLine() {
+            return "graph_settled gone=true top=" + driver.graphTopKind()
+                   + " named=" + driver.stashNamed()
+                   + " back=" + driver.stashCameBack()
+                   + " rows=" + graphModel.rowTotal
+                   + " stashes=" + stashesModel.total
+        }
         onTriggered: {
             if (!Awaited.all("graph_barrier_ready", {
                 "ready": !(graphModel.rowOf(driver.graphGoneOid) >= 0
                     || stashesModel.total === driver.stashTotalBefore) }))
                 return
+            if (Harness.autoAct !== "stash-lands") {
+                graphBarrier.complete(() => [graphBarrier.settledLine()].concat(driver.verbReport()))
+                return
+            }
+            graphBarrier.advance("settled", () => graphBarrier.settledLine())
             graphBarrier.stop()
-            Harness.report("graph_settled gone=true top=" + driver.graphTopKind()
-                              + " named=" + driver.stashNamed()
-                              + " back=" + driver.stashCameBack()
-                              + " rows=" + graphModel.rowTotal
-                              + " stashes=" + stashesModel.total)
-            if (Harness.autoAct === "stash-lands")
-                driver.awaitStashLanding()
-            else
-                barrierRendered.begin()
+            driver.awaitStashLanding()
         }
     }
     /// The two landings a press can have — where the write put the reader (`AutoActLandings`).
@@ -647,38 +659,43 @@ Item {
         landings.awaitOpExit()
     }
 
-    SampleTimer {
+    /// Claims the run for this page and dispatches the verb once the page it acts on has arrived.
+    PageStage {
         id: autoActTimer
+        name: "act"
+        order: ["claimed", "dispatched"]
         onTriggered: {
             // A window's act completed the run while this page was still arriving: nothing is left to dispatch, and a
-            // checkpoint reached now would be one after the completion.
+            // stage reached now would be one after the completion.
             if (Awaited.done) {
                 autoActTimer.stop()
                 return
             }
             // Tabs are constructed before their active index settles. The page that becomes current claims the one
-            // process-wide verb; pages opened by that verb can never replay it.
-            if (!driver.claimed) {
-                if (!page.pageCurrent || !page.Window.window.claimAutoPageAct())
+            // process-wide verb; pages opened by that verb can never replay it. The claim is its own reading: it
+            // answers false for every page but the one that took it.
+            if (autoActTimer.at("start")) {
+                if (!autoActTimer.input("claimed", () => page.pageCurrent && page.Window.window.claimAutoPageAct()))
                     return
-                driver.claimed = true
+                Awaited.pageHolds = driver.completionHolds
             }
             // `open` only means the path was accepted; the baseline is HEAD known and `PageSettled` — without the rows
             // agreeing with the status, a verb naming rows by number (`3:5:6`) presses one row off. A run holding the
             // worktree row back on purpose (`:row-late`, `AutoActCardFlowVerbs`) starts on the page that hold keeps
             // from settling, and lets the row through itself.
-            // The one checkpoint every page verb reaches: the page it acts on has arrived. A verb that acts and
-            // completes in the same beat (a menu opened) has no wait of its own beyond it.
             const holdsTheRow = Harness.autoActArg.endsWith(":row-late")
             if (!Awaited.all("page_ready", {
                 "open": repoTab.state === "open",
                 "head": worktree.headKnown,
                 "settled": PageSettled.settled(page) || holdsTheRow }))
                 return
-            autoActTimer.stop()
+            autoActTimer.advance("dispatched")
             driver.runAutoAct()
+            // A verb that completed in its dispatch stopped this already.
+            autoActTimer.stop()
         }
     }
+
     // The commit an argument names: an object name, "row:<n>" off the graph, or HEAD when empty — the demo
     // repository is built fresh every run, so its object names cannot be spelled ahead.
     function autoActOid(arg) {
@@ -734,8 +751,8 @@ Item {
         const arg = Harness.autoActArg
         if (act === "perf") return // WindowPerfDriver owns this verb's causal completion.
         driver.prepareCompletion(act)
-        // First family to know the verb runs it; each verb is named by exactly one.
-        driver.inDispatch = true
+        // First family to know the verb runs it; each verb is named by exactly one. A verb that completes in the
+        // dispatching turn — a menu opened and read in one go — completes from `act`, whose beat this is.
         const known =
             wipVerbs.run(act, arg)
             || fileRowVerbs.run(act, arg)
@@ -766,7 +783,6 @@ Item {
             || recoverVerbs.run(act, arg)
             || branchPushVerbs.run(act, arg)
             || githubVerbs.run(act, arg)
-        driver.inDispatch = false
         if (!known && !driver.completionDeferred && !driver.writeExpected) {
             // A misspelling: window verbs are in the completion ledger, so a verb known to neither is
             // nobody's. Left to the watchdog.
@@ -778,6 +794,6 @@ Item {
         Harness.report("auto_act ran=" + act)
         // The file-row acts are still waiting on their rows; `fileRowsTimer` finishes their dispatch.
         if (driver.fileRowActs.indexOf(act) < 0)
-            driver.dispatchFinished()
+            driver.dispatchFinished(autoActTimer)
     }
 }

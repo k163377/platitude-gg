@@ -300,6 +300,8 @@ Item {
             const now = PerfProbe.clockMs()
             console.warn("awaited " + (Awaited.said === "" ? "unsaid"
                                        : Awaited.said + " for " + Math.round(now - Awaited.since) + "ms"))
+            // Where each operation still in a generation stands (`StageTimer`): the stalled one is among them.
+            console.warn("stages " + Awaited.standing())
             console.warn("frames swapped=" + Awaited.frames + " last="
                          + (driver.lastFrameAt < 0 ? "never" : Math.round(now - driver.lastFrameAt) + "ms ago"))
             // Which of the page's reads never came (`PageSettled`) — from the verb's side it looks like its own term.

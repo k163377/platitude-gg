@@ -40,16 +40,19 @@ Item {
     // The save rewrites the global configuration, and on Windows a git started while git replaces it cannot read it —
     // the opening tab's reads among them, which the product asks once more (gitの扱い.md §設定の書き換えと重なった読み).
     // A hand types for seconds first; the run submits once the tab it opened has settled (`PageSettled`), as a hand
-    // would, and says so.
-    SampleTimer {
+    // would, and says so. Never completes: the hooks run beside a verb, or with none, and the save is an input the
+    // verb waits on, not a run's ending.
+    WindowStage {
         id: submitTimer
+        name: "identity_save"
+        order: ["submitted"]
         onTriggered: {
             const opened = Harness.autoOpen === ""
                 || hooks.page !== null && hooks.page.pageTab.state !== "" && PageSettled.settled(hooks.page)
             if (!Awaited.all("identity_save", { "page": opened }))
                 return
-            stop()
-            hooks.identityDialog.submit()
+            submitTimer.input("submitted", () => hooks.identityDialog.submit())
+            submitTimer.stop()
         }
     }
 

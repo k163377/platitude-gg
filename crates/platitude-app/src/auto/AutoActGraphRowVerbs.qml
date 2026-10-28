@@ -26,7 +26,6 @@ Item {
     readonly property var rowHost: driver.rowHost
     readonly property var detailsPane: driver.detailsPane
     readonly property var diffPane: driver.diffPane
-    readonly property var renderedBarrier: driver.barrierRendered
 
     /// `graph-choose`'s rows, `:`-separated; `fallback` when fewer than two are named.
     function rowsArg(arg, fallback) {
@@ -61,6 +60,21 @@ Item {
         return "covers=" + covers + " over=" + over + " left=" + left + " top=" + top + " foot=" + foot
     }
 
+    /// Sets the choice going: `rows` pressed one per beat, the first plain and the rest held (Shift where `sweeps`,
+    /// else Ctrl), and — where `goesOn` names one — what `chosenRowTimer` goes on to once the choice stands.
+    function choose(rows, sweeps, goesOn) {
+        chooseTimer.rows = rows
+        chooseTimer.sweeps = sweeps
+        chooseTimer.goesOn = goesOn
+        chooseTimer.order = rows.map((_, i) => chooseTimer.pressStage(i)).concat(goesOn === "" ? [] : ["chosen"])
+        // The said card's and the diff's own waits are not stages; the double, the drop and the sweep press.
+        chosenRowTimer.order = goesOn === "dbl" ? ["double_clicked"]
+                             : goesOn === "diff" ? ["diff_asked"]
+                             : goesOn === "drop" ? ["plain_press", "held_press"]
+                             : goesOn === "sweep" ? ["swept"] : []
+        chooseTimer.start()
+    }
+
     /// Runs `act` if it is one of this family's, and says whether it was.
     function run(act, arg) {
         if (act === "row-part") {
@@ -68,9 +82,9 @@ Item {
             // leaves the decision to the row — the decision is what the verb tests, so `chipExpandRequested` (as
             // `ref-list` does) would prove nothing about the boundary.
             const parts = arg.split(":")
-            rowPartReport.row = Number(parts[0])
-            rowPartReport.want = parts[2]
-            rowPartReport.x = Number(parts[1])
+            rowPartTimer.row = Number(parts[0])
+            rowPartTimer.want = parts[2]
+            rowPartTimer.x = Number(parts[1])
             rowPartTimer.start()
         } else if (act === "ref-list-leave") {
             // The hand onto the stretch of a chip column the chip's card leaves bare, the list out, and then the hand
@@ -81,7 +95,6 @@ Item {
             const leave = arg.split(":")
             leaveTimer.from = leave[0]
             leaveTimer.to = leave.length > 1 ? leave[1] : ""
-            leaveTimer.step = 0
             leaveTimer.start()
         } else if (act === "list-menu") {
             // The right-click on a row of the stacked list (デザイン規約 §グラフ行の右クリック). The argument is
@@ -97,15 +110,16 @@ Item {
             // given is HEAD's, the one commit sure to have a chip (row 0 is the uncommitted row on a dirty preset).
             refListOpenTimer.row = arg === "" ? -1 : Number(arg)
             refListOpenTimer.cards = act === "ref-list-card"
+            // Asked back by commit: HEAD's row has one.
+            rowCardTimer.byNumber = false
             refListOpenTimer.start()
         } else if (act === "graph-head-list") {
             // Written where the pointer writes on the stand-in (`GraphHeadPin.pointerX`): whether the stand-in asks at
             // all is the point, so `chipExpandRequested` directly would prove nothing. `click` then presses the card's
-            // first row — the stand-in's press.
-            headListTimer.pointed = false
+            // first row — the stand-in's press — off a selection moved off HEAD first, and probes the row left under
+            // the still pointer.
             headListTimer.click = arg === "click"
-            headListTimer.pressed = false
-            headListTimer.movedOff = false
+            headListTimer.order = headListTimer.click ? ["moved_off", "pointed", "pressed", "probed"] : ["pointed"]
             headListTimer.start()
         } else if (act === "ref-list-lit") {
             // The pointer resting on a row of the stacked list. The argument is `<行>[:<カードの行>]`.
@@ -157,12 +171,11 @@ Item {
             // The note under a cut message, pressed at `CommitHoverCard.askMessage` (the click handler's own body).
             cardMessageTimer.row = arg === "" ? 0 : Number(arg)
             cardMessageTimer.escapes = act === "card-message-esc"
-            cardMessageTimer.asked = false
+            cardMessageTimer.order = cardMessageTimer.escapes ? ["asked", "escaped"] : ["asked"]
             cardMessageTimer.start()
         } else if (act === "card-note-lit") {
             // The same note rested on, written where a real pointer writes (verify-ui スキル §hover の絵の撮り方).
             cardNoteTimer.row = arg === "" ? 0 : Number(arg)
-            cardNoteTimer.pointed = false
             cardNoteTimer.start()
         } else if (act === "menu-hover") {
             // Same row and default as `commit-menu`; the row under the menu is then asked for its card.
@@ -171,7 +184,6 @@ Item {
                 hoverOid = graphModel.oidAt(graphModel.rowOf(worktree.headOid) + 1)
             page.openRowMenu(hoverOid)
             menuHoverTimer.oidHex = hoverOid
-            menuHoverTimer.asked = false
             menuHoverTimer.start()
         } else if (act === "menu-list") {
             // The chip's stacked list and a standing menu (デザイン規約 §メニュー): `behind` asks for HEAD's list with
@@ -179,33 +191,36 @@ Item {
             // first row and takes the hand off the chip — the one menu it stays under (`list-menu` reads that menu's
             // cards, at once).
             menuListTimer.how = arg === "" ? "behind" : arg
-            menuListTimer.step = 0
+            // `swap` has no order: with no other chipped row in view it ends where it would have moved the hand.
+            menuListTimer.order = menuListTimer.how === "behind" ? ["row_menu", "list_asked"]
+                                : menuListTimer.how === "under" ? ["list_opened", "row_menu"]
+                                : menuListTimer.how === "own" ? ["list_opened", "list_menu", "hand_off"] : []
             menuListTimer.start()
         } else if (act === "graph-choose-dbl") {
             // Toggling a row out of the choice and back in, quickly, arrives as a double-click, modifier and all
             // (`tst_moddblclick`), and the plain double-click is `switch` (デザイン規約 §複数のコミットを選ぶ). The
             // argument is the rows, as `graph-choose` takes them.
-            chooseTimer.begin(acts.rowsArg(arg, [1, 3, 5]), false, "dbl")
+            acts.choose(acts.rowsArg(arg, [1, 3, 5]), false, "dbl")
         } else if (act === "graph-choose-diff") {
             // A row of the merged file list opens each chosen commit's own patch of it, stacked
             // (デザイン規約 §複数のコミットを選ぶ). The argument is the path; the rows are fixed at three of
             // `--preset basic`, two of which touch `src/topic.txt`.
             chooseTimer.diffPath = arg === "" ? "src/topic.txt" : arg
-            chooseTimer.begin([3, 5, 6], false, "diff")
+            acts.choose([3, 5, 6], false, "diff")
         } else if (act === "graph-choose-drop") {
             // A commit taken back out of the chosen list with Ctrl (デザイン規約 §複数のコミットを選ぶ). The argument
             // is the rows, as `graph-choose` takes them.
-            chooseTimer.begin(acts.rowsArg(arg, [1, 3, 5]), false, "drop")
+            acts.choose(acts.rowsArg(arg, [1, 3, 5]), false, "drop")
         } else if (act === "graph-choose-said" || act === "graph-choose-sweep") {
             // A row of the chosen list: its card saying the whole message (`said`), or its words dragged away
             // (`sweep`). The argument is the rows, as `graph-choose` takes them.
-            chooseTimer.begin(acts.rowsArg(arg, [1, 3, 5]), false, act === "graph-choose-said" ? "said" : "sweep")
+            acts.choose(acts.rowsArg(arg, [1, 3, 5]), false, act === "graph-choose-said" ? "said" : "sweep")
         } else if (act === "graph-choose" || act === "graph-choose-range") {
             // The first press is plain; the held ones after it move only the choice (デザイン規約 §複数のコミットを選ぶ).
             // The argument is the rows, `:`-separated — Ctrl one at a time, or `-range`'s one Shift press from the
             // first to the last, so that one wants exactly two.
             const sweeps = act === "graph-choose-range"
-            chooseTimer.begin(acts.rowsArg(arg, sweeps ? [1, 5] : [1, 3, 5]), sweeps, "")
+            acts.choose(acts.rowsArg(arg, sweeps ? [1, 5] : [1, 3, 5]), sweeps, "")
         } else {
             return false
         }
@@ -213,25 +228,29 @@ Item {
     }
     // Pressed at the row's own click (`GraphRowDelegate.leftClick`): what a held modifier does is decided there and in
     // the page, so writing the choice directly would test neither.
-    SampleTimer {
+    PageStage {
         id: chooseTimer
+        name: "graph_choose"
         property var rows: []
         /// Whether the presses after the first sweep a range (Shift) or take one row each (Ctrl).
         property bool sweeps: false
-        property int step: 0
-        /// The commit the plain press landed on, for the report's `read=`.
+        /// The commit the plain press landed on, read at it, for the report's `read=`.
         property string readOid: ""
         /// What `chosenRowTimer` goes on to once the choice stands (`said` / `sweep` / `drop` / `diff` / `dbl`); `""`
         /// stops at the choice itself.
-        property string after: ""
+        property string goesOn: ""
         property string diffPath: ""
-        function begin(rows, sweeps, after) {
-            chooseTimer.rows = rows
-            chooseTimer.sweeps = sweeps
-            chooseTimer.after = after
-            chooseTimer.step = 0
-            chooseTimer.readOid = ""
-            chooseTimer.start()
+        /// The stage the press on the `i`th row is, named by that row: the plain one, then the held ones.
+        function pressStage(i) {
+            return (i === 0 ? "plain_" : "held_") + chooseTimer.rows[i]
+        }
+        /// How many presses have gone in, read off where the generation stands.
+        function pressesIn() {
+            for (let i = chooseTimer.rows.length - 1; i >= 0; i--) {
+                if (chooseTimer.at(chooseTimer.pressStage(i)))
+                    return i + 1
+            }
+            return 0
         }
         /// How many commits the presses should end up holding.
         function wanted() {
@@ -243,179 +262,213 @@ Item {
             return acts.litRowsTo(Math.max(0, ...chooseTimer.rows))
         }
         onTriggered: {
-            if (chooseTimer.step < chooseTimer.rows.length) {
-                const want = chooseTimer.rows[chooseTimer.step]
+            const op = chooseTimer
+            const done = op.pressesIn()
+            if (done < op.rows.length) {
+                const want = op.rows[done]
                 const item = graphPane.view.itemAtIndex(want)
-                // A row far down has no delegate until the view is over it: sent there, and pressed on a later tick.
-                // The row built is what the press stands on, and the step is grounded on it by name.
+                // A row far down has no delegate until the view is over it: sent there, and pressed on a later beat.
+                // The row built is what the press stands on, and the stage is named by it.
                 if (!Awaited.all("graph_choose_row_" + want, { "row": item !== null })) {
                     graphPane.view.positionViewAtIndex(want, ListView.Contain)
                     return
                 }
-                if (chooseTimer.step === 0) {
-                    chooseTimer.readOid = item.oid_hex
-                    item.leftClick(Qt.NoModifier)
-                } else {
-                    item.leftClick(chooseTimer.sweeps ? Qt.ShiftModifier : Qt.ControlModifier)
-                }
-                chooseTimer.step++
+                op.input(op.pressStage(done), () => {
+                    if (done === 0) {
+                        op.readOid = item.oid_hex
+                        item.leftClick(Qt.NoModifier)
+                    } else {
+                        item.leftClick(op.sweeps ? Qt.ShiftModifier : Qt.ControlModifier)
+                    }
+                })
                 return
             }
             // Every press is in; four things have to land: the tally, the rows' highlight of it, the pane having
             // answered for this choice — `selectionLoaded`, since a failed read also stops loading and leaves the
             // empty list a no-change choice has — and the commit list laid out, since an unlaid-out view measures 0.
-            const lit = chooseTimer.litRows()
+            const lit = op.litRows()
             if (!Awaited.all("graph_choose_landed", {
-                "chosen": page.chosenCount === chooseTimer.wanted(),
-                "lit": lit === chooseTimer.wanted(),
+                "chosen": page.chosenCount === op.wanted(),
+                "lit": lit === op.wanted(),
                 "read": detailsModel.selectionLoaded,
                 "drawn": detailsPane.chosenListDrawn,
                 "page": PageSettled.settled(page) }))
                 return
-            chooseTimer.stop()
-            if (chooseTimer.after !== "") {
+            if (op.goesOn !== "") {
+                op.advance("chosen")
+                op.stop()
                 chosenRowTimer.start()
                 return
             }
-            Harness.report("graph_choose chosen=" + page.chosenCount
-                              + " lit=" + lit
-                              + " read=" + (page.selectedOid === chooseTimer.readOid)
+            op.complete(() => "graph_choose chosen=" + page.chosenCount
+                              + " lit=" + op.litRows()
+                              + " read=" + (page.selectedOid === op.readOid)
                               + " wip=" + page.wipShown
                               // How far the commit list runs past its view, margins counted: a choice this small
                               // fits, so anything but 0 scrolls to reach nothing.
                               + " spare=" + detailsPane.chosenListSpare
                               + " compared=" + detailsModel.comparing
                               + " files=" + detailsModel.fileTotal
-                              + " rows=" + chooseTimer.rows.join(","))
-            driver.complete()
+                              + " rows=" + op.rows.join(","))
         }
     }
-    // Everything that goes on from a standing choice (`chooseTimer.after`), each put in at the thing that answers it.
-    SampleTimer {
+    // Everything that goes on from a standing choice (`chooseTimer.goesOn`), each put in at the thing that answers it.
+    PageStage {
         id: chosenRowTimer
-        /// How far the drop has got: plain press, held press, then the pane's answer. Latched: each press goes in once.
-        property int dropStep: 0
-        /// The commit the presses land on, and what the row said about a press without the modifier.
+        name: "chosen_row"
+        /// The drop's readings at its presses: the commit they land on, what the row said about a press without the
+        /// modifier, and the commits held after the plain press — unchanged means the words underneath kept their
+        /// press.
         property string dropOid: ""
-        property bool dropTakes: true
-        /// Commits held after the plain press — unchanged means the words underneath kept their press.
+        property var dropTakes: true
         property int dropKept: -1
-        /// Two presses at the row's own functions; only the held second one is the row's, the plain first the words'.
-        function dropOne(row) {
-            if (chosenRowTimer.dropStep === 0) {
-                chosenRowTimer.dropOid = row.oid_hex
-                chosenRowTimer.dropTakes = row.takesPress(Qt.NoModifier)
-                row.leftClick(Qt.NoModifier)
-                chosenRowTimer.dropStep = 1
-                return
-            }
-            if (chosenRowTimer.dropStep === 1) {
-                chosenRowTimer.dropKept = page.chosenCount
-                row.leftClick(Qt.ControlModifier)
-                chosenRowTimer.dropStep = 2
-                return
-            }
-            if (page.chosenCount !== chooseTimer.wanted() - 1 || !detailsModel.selectionLoaded)
-                return
-            chosenRowTimer.stop()
-            Harness.report("chosen_drop takes=" + chosenRowTimer.dropTakes
-                              + " kept=" + chosenRowTimer.dropKept
-                              + " dropped=" + (page.chosenOids[chosenRowTimer.dropOid] !== true)
-                              + " hand=" + row.dropStands
-                              + " chosen=" + page.chosenCount
-                              + " lit=" + chooseTimer.litRows())
-            driver.complete()
-        }
         /// The double's own answer and the row's, read at the clicks (`chosen_dbl`); the report waits for the reads
         /// the clicks set going.
-        property bool dblClicked: false
-        property bool dblLed: false
-        property bool dblMovable: false
-        onTriggered: {
-            if (chooseTimer.after === "dbl") {
-                if (!chosenRowTimer.dblClicked) {
-                    // As the area delivers the pair: two clicks, then the double the second is also reported as.
-                    const at = graphPane.view.itemAtIndex(chooseTimer.rows[chooseTimer.rows.length - 1])
-                    if (!at)
-                        return
+        property var dblLed: false
+        property var dblMovable: false
+        /// What the sweep came away with, read as it swept.
+        property string swept: ""
+        /// The two clicks, then the double the second is also reported as.
+        function doubled() {
+            const op = chosenRowTimer
+            if (op.at("start")) {
+                const at = graphPane.view.itemAtIndex(chooseTimer.rows[chooseTimer.rows.length - 1])
+                if (!Awaited.all("chosen_dbl_row", { "row": !!at }))
+                    return
+                // As the area delivers the pair. `led=` is the row's own answer: a `switch` would land beats later, so
+                // the branch on screen says nothing yet. `movable=` rules out a row that turns the gesture down for
+                // leading nowhere.
+                op.input("double_clicked", () => {
                     at.leftClick(Qt.ControlModifier)
-                    // `led=` is the row's own answer: a `switch` would land ticks later, so the branch on screen says
-                    // nothing yet. `movable=` rules out a row that turns the gesture down for leading nowhere.
-                    chosenRowTimer.dblLed = at.doubleClick(Qt.ControlModifier)
-                    chosenRowTimer.dblMovable = at.movable
-                    chosenRowTimer.dblClicked = true
-                    return
-                }
-                // The clicks moved the choice; its read is the page's.
-                if (!Awaited.all("chosen_dbl_landed", { "page": PageSettled.settled(page) }))
-                    return
-                chosenRowTimer.stop()
-                Harness.report("chosen_dbl led=" + chosenRowTimer.dblLed
-                                  + " movable=" + chosenRowTimer.dblMovable
-                                  + " naming=" + (graphPane.namingOid !== "")
-                                  + " branch=" + worktree.branch)
-                driver.complete()
+                    op.dblLed = at.doubleClick(Qt.ControlModifier)
+                    op.dblMovable = at.movable
+                })
                 return
             }
-            if (chooseTimer.after === "diff") {
-                // Through the page's own opener, the one a file row's press goes to; the stack is the shot, so its rows
-                // are waited for.
-                if (!page.diffShown) {
-                    page.toggleDiff("commit", chooseTimer.diffPath, "")
-                    return
+            // The clicks moved the choice; its read is the page's.
+            if (!Awaited.all("chosen_dbl_landed", { "page": PageSettled.settled(page) }))
+                return
+            op.complete(() => "chosen_dbl led=" + op.dblLed
+                              + " movable=" + op.dblMovable
+                              + " naming=" + (graphPane.namingOid !== "")
+                              + " branch=" + worktree.branch)
+        }
+        /// Through the page's own opener, the one a file row's press goes to; the stack is the shot, so its rows are
+        /// waited for.
+        function stacked() {
+            const op = chosenRowTimer
+            if (op.at("start")) {
+                op.input("diff_asked", () => {
+                    if (!page.diffShown)
+                        page.toggleDiff("commit", chooseTimer.diffPath, "")
+                })
+                return
+            }
+            // Each band's own mode change is a row of its own (`encode::flatten_patches`), worded by the pane:
+            // `modes=` counts them, `mode=` is the first as the row puts it. The stack is a few rows, read off their
+            // delegates — so once every one is built, which comes a beat after the rows.
+            const items = []
+            for (let i = 0; i < diffPane.view.count; i++)
+                items.push(diffPane.view.itemAtIndex(i))
+            if (!Awaited.all("chosen_diff_rows", {
+                    "shown": page.diffShown,
+                    "diff": page.diffShown && diffPane.diffSettled(),
+                    "rows": diffPane.view.count !== 0,
+                    "built": items.every(item => item !== null) }))
+                return
+            op.complete(() => {
+                const modeRows = []
+                for (let i = 0; i < diffPane.view.count; i++) {
+                    const item = diffPane.view.itemAtIndex(i)
+                    if (item !== null && item.kind === "mode")
+                        modeRows.push(Words.modeLineOf(item.text))
                 }
-                if (!diffPane.diffSettled() || diffPane.view.count === 0)
-                    return
-                // Each band's own mode change is a row of its own (`encode::flatten_patches`), worded by the pane:
-                // `modes=` counts them, `mode=` is the first as the row puts it. The stack is a few rows, read off
-                // their delegates — so once every one is built, which comes a beat after the rows.
-                const items = []
-                for (let i = 0; i < diffPane.view.count; i++)
-                    items.push(diffPane.view.itemAtIndex(i))
-                if (items.some(item => item === null))
-                    return
-                chosenRowTimer.stop()
-                const modeRows = items.filter(item => item.kind === "mode").map(item => Words.modeLineOf(item.text))
-                Harness.report("chosen_diff bands=" + diffPane.diffModel.commitBands
-                                  + " chosen=" + page.chosenCount
-                                  + " path=" + page.diffPath
-                                  + " modes=" + modeRows.length
-                                  + " mode=" + (modeRows.length > 0 ? modeRows[0] : ""))
-                driver.complete()
+                return "chosen_diff bands=" + diffPane.diffModel.commitBands
+                       + " chosen=" + page.chosenCount
+                       + " path=" + page.diffPath
+                       + " modes=" + modeRows.length
+                       + " mode=" + (modeRows.length > 0 ? modeRows[0] : "")
+            })
+        }
+        /// Two presses at the row's own functions; only the held second one is the row's, the plain first the words'.
+        function dropped(row) {
+            const op = chosenRowTimer
+            if (op.at("start")) {
+                op.input("plain_press", () => {
+                    op.dropOid = row.oid_hex
+                    op.dropTakes = row.takesPress(Qt.NoModifier)
+                    row.leftClick(Qt.NoModifier)
+                })
+                return
+            }
+            if (op.at("plain_press")) {
+                op.input("held_press", () => {
+                    op.dropKept = page.chosenCount
+                    row.leftClick(Qt.ControlModifier)
+                })
+                return
+            }
+            if (!Awaited.all("chosen_drop_landed", { "chosen": page.chosenCount === chooseTimer.wanted() - 1,
+                                                     "read": detailsModel.selectionLoaded }))
+                return
+            op.complete(() => {
+                const now = detailsPane.chosenRowAt(0)
+                return "chosen_drop takes=" + op.dropTakes
+                       + " kept=" + op.dropKept
+                       + " dropped=" + (page.chosenOids[op.dropOid] !== true)
+                       + " hand=" + (!!now && now.dropStands)
+                       + " chosen=" + page.chosenCount
+                       + " lit=" + chooseTimer.litRows()
+            })
+        }
+        onTriggered: {
+            const op = chosenRowTimer
+            const goesOn = chooseTimer.goesOn
+            if (goesOn === "dbl") {
+                op.doubled()
+                return
+            }
+            if (goesOn === "diff") {
+                op.stacked()
                 return
             }
             const row = detailsPane.chosenRowAt(0)
-            if (!row || !row.rowReady())
+            if (!Awaited.all("chosen_row_ready", { "row": !!row && row.rowReady() }))
                 return
-            if (chooseTimer.after === "drop") {
-                chosenRowTimer.dropOne(row)
+            if (goesOn === "drop") {
+                op.dropped(row)
                 return
             }
-            if (chooseTimer.after === "said") {
-                // Entered where the row's rest would open its card (hover cannot be injected).
-                if (!rowCard.opened) {
+            if (goesOn === "said") {
+                // Entered where the row's rest would open its card (hover cannot be injected), until it is up.
+                if (!Awaited.all("chosen_said_card", { "card": rowCard.opened })) {
                     row.askCard()
                     return
                 }
-                chosenRowTimer.stop()
                 // `held=` stays right after `lit=`: the wall's run is judged on the three before it, and `must_say`
                 // reads one unbroken stretch of the line.
-                Harness.report("chosen_said open=" + rowCard.opened
-                                  + " door=" + rowCard.asksForMore
-                                  + " lit=" + row.lit
-                                  + " held=" + rowCard.messageCut
-                                  + " cut=" + row.summaryCut)
-                driver.complete()
+                op.complete(() => {
+                    const now = detailsPane.chosenRowAt(0)
+                    return "chosen_said open=" + rowCard.opened
+                           + " door=" + rowCard.asksForMore
+                           + " lit=" + (!!now && now.lit)
+                           + " held=" + rowCard.messageCut
+                           + " cut=" + (!!now && now.summaryCut)
+                })
                 return
             }
-            chosenRowTimer.stop()
-            Harness.report("chosen_sweep " + row.sweep.sweepAir(9, ""))
-            driver.complete()
+            op.input("swept", () => {
+                op.swept = row.sweep.sweepAir(9, "")
+            })
+            op.complete(() => "chosen_sweep " + op.swept)
         }
     }
-    // The chip expansion, entered once the row's delegate exists; `-card` hands over to `rowCardTimer`.
-    SampleTimer {
+    // The chip expansion, entered once the row's delegate exists; `-card` hands over to `rowCardTimer`, the others to
+    // the operation that does their one thing on the list.
+    PageStage {
         id: refListOpenTimer
+        name: "ref_list_open"
+        order: ["expanded"]
         property int row: 0
         property bool cards: false
         /// Which row of the list `list-menu` presses; -1 for the verbs that only open it.
@@ -427,30 +480,33 @@ Item {
         /// Which row of the list `ref-list-follow` presses the name under; -1 for the verbs that press none.
         property int followRow: -1
         onTriggered: {
+            const op = refListOpenTimer
             // -1 stands for HEAD's row, which is only known once the graph has loaded.
-            if (refListOpenTimer.row < 0)
-                refListOpenTimer.row = graphModel.loading || graphModel.rowTotal === 0 ? -1 : graphModel.headRow
-            const stacked = refListOpenTimer.row < 0 ? null : graphPane.view.itemAtIndex(refListOpenTimer.row)
-            if (!stacked)
+            if (op.row < 0)
+                op.row = graphModel.loading || graphModel.rowTotal === 0 ? -1 : graphModel.headRow
+            const stacked = op.row < 0 ? null : graphPane.view.itemAtIndex(op.row)
+            if (!Awaited.all("ref_list_open_row", { "row": !!stacked }))
                 return
-            refListOpenTimer.stop()
-            if (refListOpenTimer.cards)
-                graphPane.view.rowHoverRequested(stacked, true)
-            graphPane.view.chipExpandRequested(
-                stacked.oid_hex, stacked.index, stacked.chipItem.records, stacked.chipItem)
-            if (refListOpenTimer.cards) {
-                graphPane.view.rowHoverRequested(stacked, true)
+            op.input("expanded", () => {
+                if (op.cards)
+                    graphPane.view.rowHoverRequested(stacked, true)
+                graphPane.view.chipExpandRequested(
+                    stacked.oid_hex, stacked.index, stacked.chipItem.records, stacked.chipItem)
+                if (op.cards)
+                    graphPane.view.rowHoverRequested(stacked, true)
+            })
+            op.stop()
+            if (op.cards) {
                 rowCardTimer.oidHex = stacked.oid_hex
-                rowCardTimer.row = refListOpenTimer.row
-                rowCardTimer.byNumber = false
+                rowCardTimer.row = op.row
                 rowCardTimer.start()
-            } else if (refListOpenTimer.menuRow >= 0)
+            } else if (op.menuRow >= 0)
                 listMenuTimer.start()
-            else if (refListOpenTimer.litRow >= 0)
+            else if (op.litRow >= 0)
                 listLitTimer.start()
-            else if (refListOpenTimer.chooseRow >= 0)
+            else if (op.chooseRow >= 0)
                 listChooseTimer.start()
-            else if (refListOpenTimer.followRow >= 0)
+            else if (op.followRow >= 0)
                 listFollowTimer.start()
             else
                 refListShownTimer.start()
@@ -458,79 +514,87 @@ Item {
     }
     // The name under a row of that list, pressed or rested on once the list is up. The landing is read off the graph —
     // the selection is the press's own bookkeeping — as the graph's row for that commit lit and laid out (`nav-jump`).
-    SampleTimer {
+    // No `order`: a row with nothing under its name ends at `start`.
+    PageStage {
         id: listFollowTimer
+        name: "list_follow"
         property bool lit: false
-        property bool pressed: false
+        /// Where the row's name goes, read once the row is built.
         property var to: null
         /// Whether the rows under the card were told the rest of the gesture is not theirs, read at the press: the
         /// hush lasts one double-click window, and a busy machine reads the landing later.
         property bool hushed: false
+        function said() {
+            return " row=" + refListOpenTimer.row + " card=" + refListOpenTimer.followRow
+        }
         onTriggered: {
+            const op = listFollowTimer
             const at = refListOpenTimer.followRow
-            if (!listFollowTimer.pressed) {
-                if (!refList.opened)
-                    return
+            if (op.at("start")) {
                 // A row the list has not built is not a row with nothing under it.
-                if (!refList.rowAt(at))
+                if (!Awaited.all("list_follow_row", { "list": refList.opened,
+                                                      "row": refList.opened && !!refList.rowAt(at) }))
                     return
-                listFollowTimer.to = refList.mateTo(at)
-                const said = " row=" + refListOpenTimer.row + " card=" + at
-                if (listFollowTimer.to === null) {
+                op.to = refList.mateTo(at)
+                if (op.to === null) {
                     // Nothing under that name to press: that is the answer.
-                    listFollowTimer.stop()
-                    Harness.report((listFollowTimer.lit ? "ref_list_follow_lit" : "ref_list_follow") + said
+                    op.complete(() => (op.lit ? "ref_list_follow_lit" : "ref_list_follow") + op.said()
                                       + " followed=false list=" + refList.opened)
-                    driver.complete()
                     return
                 }
-                if (listFollowTimer.lit) {
+                if (op.lit) {
                     // A real hand on the name is on its row too and lights both; the band is judged against that wash.
-                    refList.pointRow(at)
-                    refList.pointMate(at)
-                    listFollowTimer.stop()
-                    Harness.report("ref_list_follow_lit" + said
+                    op.input("pointed", () => {
+                        refList.pointRow(at)
+                        refList.pointMate(at)
+                    })
+                    op.complete(() => "ref_list_follow_lit" + op.said()
                                       + " list=" + refList.opened
                                       + " aimed=" + refList.mateAimed(at)
-                                      + " to=" + listFollowTimer.to.key)
-                    renderedBarrier.begin()
+                                      + " to=" + op.to.key)
                     return
                 }
-                refList.followRow(at)
-                listFollowTimer.hushed = graphPane.rowClicksHushed
-                listFollowTimer.pressed = true
+                op.input("followed", () => {
+                    refList.followRow(at)
+                    op.hushed = graphPane.rowClicksHushed
+                })
                 return
             }
-            const want = listFollowTimer.to.oid
-            if (refList.opened || page.selectedOid !== want || !driver.cardSettled)
-                return
+            const want = op.to.oid
             const landedAt = graphModel.rowOf(want)
             const item = landedAt >= 0 ? graphPane.view.itemAtIndex(landedAt) : null
-            if (landedAt >= 0 && !item)
+            if (!Awaited.all("list_follow_landed", { "list": !refList.opened,
+                                                     "selected": page.selectedOid === want,
+                                                     "card": driver.cardSettled,
+                                                     "row": landedAt < 0 || !!item }))
                 return
-            listFollowTimer.stop()
-            Harness.report("ref_list_follow row=" + refListOpenTimer.row + " card=" + at
-                              + " followed=true list=" + refList.opened
-                              + " landed=" + (!!item && item.oid_hex === want && item.selected)
-                              + " hushed=" + listFollowTimer.hushed
-                              + " to=" + listFollowTimer.to.key + " at=" + landedAt)
-            driver.complete()
+            op.complete(() => {
+                const now = graphModel.rowOf(want)
+                const landed = now >= 0 ? graphPane.view.itemAtIndex(now) : null
+                return "ref_list_follow row=" + refListOpenTimer.row + " card=" + at
+                       + " followed=true list=" + refList.opened
+                       + " landed=" + (!!landed && landed.oid_hex === want && landed.selected)
+                       + " hushed=" + op.hushed
+                       + " to=" + op.to.key + " at=" + now
+            })
         }
     }
-    // The held click on a row of that list once it is up; the rows draw the choice a tick behind the press.
-    SampleTimer {
+    // The held click on a row of that list once it is up; the rows draw the choice a beat behind the press.
+    PageStage {
         id: listChooseTimer
-        property bool pressed: false
+        name: "list_choose"
+        order: ["chosen"]
         /// The commit read before the press, for the report's `read=`.
         property string readOid: ""
         onTriggered: {
+            const op = listChooseTimer
             if (!Awaited.all("list_choose_ready", { "ready": refList.opened }))
                 return
-            if (!listChooseTimer.pressed) {
-                listChooseTimer.readOid = page.selectedOid
-                if (!refList.chooseRow(refListOpenTimer.chooseRow, Qt.ControlModifier))
-                    return
-                listChooseTimer.pressed = true
+            if (op.at("start")) {
+                op.input("chosen", () => {
+                    op.readOid = page.selectedOid
+                    return refList.chooseRow(refListOpenTimer.chooseRow, Qt.ControlModifier)
+                })
                 return
             }
             // `selectionLoaded` for the reason `chooseTimer` gives.
@@ -541,204 +605,234 @@ Item {
                 "read": detailsModel.selectionLoaded,
                 "page": PageSettled.settled(page) }))
                 return
-            listChooseTimer.stop()
-            Harness.report("ref_list_choose chosen=" + page.chosenCount
-                              + " lit=" + lit
-                              + " read=" + (page.selectedOid === listChooseTimer.readOid)
+            op.complete(() => "ref_list_choose chosen=" + page.chosenCount
+                              + " lit=" + acts.litRowsTo(refListOpenTimer.row)
+                              + " read=" + (page.selectedOid === op.readOid)
                               + " list=" + refList.opened
                               + " row=" + refListOpenTimer.row)
-            driver.complete()
         }
     }
     // The right-click on a row of that list, once it is up (an unopened popup has no rows).
-    SampleTimer {
+    PageStage {
         id: listMenuTimer
+        name: "list_menu"
+        order: ["menu_raised"]
         onTriggered: {
+            const op = listMenuTimer
             if (!Awaited.all("list_menu_ready", { "ready": refList.opened }))
                 return
-            if (!refList.menuRow(refListOpenTimer.menuRow))
+            if (!op.input("menu_raised", () => refList.menuRow(refListOpenTimer.menuRow)))
                 return
-            listMenuTimer.stop()
             // `list=` is read with the menu up: the card has to still stand under it (デザイン規約 §メニュー の例外).
             // `worktree=` / `branch=` / `tag=`: which card the named row brought up is what this gesture decides. The
             // WORKTREE card stands on every commit (`Create worktree here…`), so `worktree=` is whether it stands on a
             // worktree.
-            Harness.report("list_menu list=" + refList.opened
+            op.complete(() => "list_menu list=" + refList.opened
                               + " menu=" + commitMenu.opened
                               + " worktree=" + (driver.commitWorktreeCard.path !== "")
                               + " branch=" + commitBranchCard.applies
                               + " tag=" + commitTagCard.applies
                               + " rows=" + commitMenu.offeredRows)
-            driver.complete()
         }
     }
-    SampleTimer {
+    PageStage {
         id: listLitTimer
+        name: "list_lit"
+        order: ["pointed"]
         onTriggered: {
+            const op = listLitTimer
             if (!Awaited.all("list_lit_ready", { "ready": refList.opened }))
                 return
-            if (!refList.pointRow(refListOpenTimer.litRow))
+            if (!op.input("pointed", () => refList.pointRow(refListOpenTimer.litRow)))
                 return
-            listLitTimer.stop()
             // `lit=` is read off the row: the wash is one shade over the card's ground. `nowhere=`: only a row with
             // nowhere to go has no name colour to stand in for its wash.
-            Harness.report("ref_list_lit row=" + refListOpenTimer.litRow
+            op.complete(() => "ref_list_lit row=" + refListOpenTimer.litRow
                               + " list=" + refList.opened
                               + " lit=" + refList.rowLit(refListOpenTimer.litRow)
                               + " nowhere=" + refList.rowLeadsNowhere(refListOpenTimer.litRow))
-            driver.complete()
         }
     }
     // The bare verb's own end: the list is up (an unopened popup frames as the plain screen).
-    SampleTimer {
+    PageStage {
         id: refListShownTimer
+        name: "ref_list_shown"
         onTriggered: {
-            if (!Awaited.all("ref_list_shown_ready", { "ready": refList.opened }))
-                return
             const stacked = graphPane.view.itemAtIndex(refListOpenTimer.row)
-            if (!stacked)
+            if (!Awaited.all("ref_list_shown_ready", { "ready": refList.opened, "row": !!stacked }))
                 return
-            refListShownTimer.stop()
-            Harness.report("ref_list " + acts.coverOf(stacked.chipItem.chipItem) + " row=" + refListOpenTimer.row)
-            renderedBarrier.begin()
+            refListShownTimer.complete(() => {
+                const now = graphPane.view.itemAtIndex(refListOpenTimer.row)
+                return "ref_list " + (now === null ? "covers=false" : acts.coverOf(now.chipItem.chipItem))
+                       + " row=" + refListOpenTimer.row
+            })
         }
     }
     // The view is sent to its end until the stand-in is up on the top edge (as `graph-head` does); then the pointer
     // goes onto its chip and the card is waited for on that chip, since a card on a row's chip is up too.
-    SampleTimer {
+    PageStage {
         id: headListTimer
-        property bool pointed: false
+        name: "graph_head_list"
         property bool click: false
-        property bool pressed: false
-        property bool movedOff: false
         /// As `listFollowTimer.hushed`.
         property bool hushed: false
         property string want: ""
+        /// The probe after the press, read as it went: the list as the press left it, the first row in view, the part
+        /// of it the still pointer is on, whether that opened anything, and the pane's hold on the hand.
+        property bool listAfter: false
+        property int underAt: -1
+        property string part: ""
+        property bool opened: false
+        property bool held: false
+        property var holding: false
         onTriggered: {
+            const op = headListTimer
             const pin = graphPane.headPin
             // Pressed: the landing is read off the graph — the stand-in's row laid out and lit, the card gone.
-            if (headListTimer.pressed) {
+            if (op.at("pressed")) {
                 const at = graphModel.headRow
                 const item = at >= 0 ? graphPane.view.itemAtIndex(at) : null
                 if (!Awaited.all("graph_head_list_landed", {
                     "list": !refList.opened,
-                    "selected": page.selectedOid === headListTimer.want,
+                    "selected": page.selectedOid === op.want,
                     "card": driver.cardSettled,
                     "row": item !== null,
                     "page": PageSettled.settled(page) }))
                     return
-                headListTimer.stop()
-                const listAfter = refList.opened
                 // The row now where the stand-in stood is told the still pointer is on its chip and must open nothing
                 // — the hand it came under did not walk to it (`HandWatch.rowsMoved`, which the press sent; the seat
                 // keeps the ask for the hand's first walk) — the chip's half, where a card opens at once, is the one
                 // that can go wrong.
-                // The first row in view: at the head of the list `contentY` sits in the top margin, above row 0.
-                const underAt = graphPane.view.indexAt(1, Math.max(0, graphPane.view.contentY) + 1)
-                const under = underAt >= 0 ? graphPane.view.itemAtIndex(underAt) : null
-                if (under)
-                    under.pointerRowX = under.labelsW / 2
-                const part = under ? under.pointedPart : ""
-                const opened = refList.opened || rowHost.listPointed
-                const held = part === "chip" && !opened
-                if (under)
-                    under.pointerRowX = -1
-                Harness.report("graph_head_list_click list=" + listAfter
-                                  // The row read, lit, and the one the keyboard walks from — all three are the press's.
-                                  + " landed=" + (item.oid_hex === headListTimer.want && item.selected
-                                                  && graphPane.view.currentIndex === at)
-                                  + " pin=" + pin.visible
-                                  + " hushed=" + headListTimer.hushed
-                                  + " held=" + held
-                                  + " at=" + at
-                                  // What `held=` is made of, for a reader of a red run.
-                                  + " under=" + underAt + " part=" + part + " opened=" + opened
-                                  + " holding=" + graphPane.rowHandHeld)
-                driver.complete()
+                op.input("probed", () => {
+                    op.listAfter = refList.opened
+                    // The first row in view: at the head of the list `contentY` sits in the top margin, above row 0.
+                    const underAt = graphPane.view.indexAt(1, Math.max(0, graphPane.view.contentY) + 1)
+                    const under = underAt >= 0 ? graphPane.view.itemAtIndex(underAt) : null
+                    if (under)
+                        under.pointerRowX = under.labelsW / 2
+                    op.underAt = underAt
+                    op.part = under ? under.pointedPart : ""
+                    op.opened = refList.opened || rowHost.listPointed
+                    op.held = op.part === "chip" && !op.opened
+                    if (under)
+                        under.pointerRowX = -1
+                    op.holding = graphPane.rowHandHeld
+                })
+                op.complete(() => {
+                    const at = graphModel.headRow
+                    const item = at >= 0 ? graphPane.view.itemAtIndex(at) : null
+                    return "graph_head_list_click list=" + op.listAfter
+                           // The row read, lit, and the one the keyboard walks from — all three are the press's.
+                           + " landed=" + (item !== null && item.oid_hex === op.want && item.selected
+                                           && graphPane.view.currentIndex === at)
+                           + " pin=" + pin.visible
+                           + " hushed=" + op.hushed
+                           + " held=" + op.held
+                           + " at=" + at
+                           // What `held=` is made of, for a reader of a red run.
+                           + " under=" + op.underAt + " part=" + op.part + " opened=" + op.opened
+                           + " holding=" + op.holding
+                })
                 return
             }
-            if (graphModel.loading || graphModel.rowTotal === 0 || !pin.wanted)
+            if (!Awaited.all("graph_head_list_graph", {
+                    "graph": !graphModel.loading && graphModel.rowTotal !== 0, "wanted": pin.wanted }))
                 return
             // Off HEAD first, once: the page opens on HEAD, so a press that picked nothing would still read green.
-            if (headListTimer.click && !headListTimer.movedOff) {
+            if (op.click && op.at("start")) {
                 const off = graphModel.headRow + 1
-                if (off >= graphModel.rowTotal)
+                if (!Awaited.all("graph_head_list_off", { "below": off < graphModel.rowTotal }))
                     return
-                page.activateRow(graphModel.oidAt(off), off)
-                headListTimer.movedOff = true
+                op.input("moved_off", () => {
+                    page.activateRow(graphModel.oidAt(off), off)
+                })
                 return
             }
-            if (!headListTimer.pointed) {
-                if (!pin.visible || !pin.rowAbove) {
+            if (op.at("start") || op.at("moved_off")) {
+                if (!Awaited.all("graph_head_list_pin", { "pin": pin.visible && pin.rowAbove })) {
                     graphPane.view.positionViewAtEnd()
                     return
                 }
-                headListTimer.pointed = true
                 // The middle of the front card, where a hand reaching for the name lands — put on the pane's hand
                 // (`HandWatch.stir`), which the stand-in reads it off, so the press below has a hand to hold still.
-                const front = pin.chipItem.chipItem
-                graphPane.hand.stir(front.mapToItem(null, front.width / 2, front.height / 2))
+                op.input("pointed", () => {
+                    const front = pin.chipItem.chipItem
+                    graphPane.hand.stir(front.mapToItem(null, front.width / 2, front.height / 2))
+                })
                 return
             }
-            if (!refList.opened || rowHost.listAnchor !== pin.chipItem)
+            if (!Awaited.all("graph_head_list_open", { "list": refList.opened,
+                                                       "on": rowHost.listAnchor === pin.chipItem }))
                 return
-            if (headListTimer.click) {
+            if (op.click) {
                 // In at the card's own row, the way a hand presses it (`RefListPopup.clickRow`).
-                headListTimer.want = graphModel.oidAt(graphModel.headRow)
-                if (!refList.clickRow(0))
-                    return
-                headListTimer.hushed = graphPane.rowClicksHushed
-                headListTimer.pressed = true
+                op.input("pressed", () => {
+                    op.want = graphModel.oidAt(graphModel.headRow)
+                    if (!refList.clickRow(0))
+                        return false
+                    op.hushed = graphPane.rowClicksHushed
+                    return true
+                })
                 return
             }
-            headListTimer.stop()
             // `on=` is the stand-in's own "is the card on me", which takes its sheets down; `covers=` is read after.
-            Harness.report("graph_head_list shown=" + pin.visible
+            op.complete(() => "graph_head_list shown=" + pin.visible
                               + " list=" + refList.opened
                               + " on=" + pin.listOnThisChip
                               + " " + acts.coverOf(pin.chipItem.chipItem)
                               + " above=" + pin.rowAbove
                               + " names=" + pin.records.length)
-            renderedBarrier.begin()
         }
     }
-    // Samples until the card is up (`tipDelayMs` after the rest), then makes the return in one turn.
-    SampleTimer {
+    // Rests on the row until the card is up (`tipDelayMs` after the rest), then makes the return in one turn.
+    PageStage {
         id: cardReturnTimer
+        name: "card_return"
+        order: ["returned"]
         /// The row the hand rests on, leaves and comes back to.
         property int row: 0
         /// Where the card stood the first time, and the pointer x that put it there. The return is at another x: the
         /// seat follows the pointer, so only then would a reopened card move.
         property real seat: 0
         property real firstX: 0
+        /// The return read in its own turn: the hold, the card, whether it moved, and whose card it is.
+        property var held: false
+        property var cardOpen: false
+        property var moved: false
+        property var sameOid: false
         onTriggered: {
-            const at = graphPane.view.itemAtIndex(cardReturnTimer.row)
+            const op = cardReturnTimer
+            const at = graphPane.view.itemAtIndex(op.row)
             if (!Awaited.all("card_return_ready", { "ready": at }))
                 return
             // The rest, and then the wait it opens after. Both are the row's own (`GraphRowDelegate.settlePointed`).
-            if (!rowCard.opened) {
-                cardReturnTimer.firstX = Math.round(at.width / 3)
-                at.pointerRowX = cardReturnTimer.firstX
+            if (!Awaited.all("card_return_open", { "card": rowCard.opened })) {
+                op.firstX = Math.round(at.width / 3)
+                at.pointerRowX = op.firstX
                 return
             }
-            cardReturnTimer.stop()
-            cardReturnTimer.seat = rowCard.x
             // Off the row into the card and back a little further along, read in the same turn: pointer to hold is one
             // synchronous stretch, so the hold is back before the beat can start or not at all
             // (rules-refs/app-ui.md「動詞の前提条件は入力を出す枝で読む」).
-            at.pointerRowX = -1
-            at.pointerRowX = cardReturnTimer.firstX * 2
-            Harness.report(
-                "row_card_return held=" + rowHost.cardPointed
-                + " open=" + rowCard.opened
-                + " moved=" + (rowCard.x !== cardReturnTimer.seat)
-                + " oid=" + (rowHost.cardOid === at.oid_hex))
-            driver.complete()
+            op.input("returned", () => {
+                op.seat = rowCard.x
+                at.pointerRowX = -1
+                at.pointerRowX = op.firstX * 2
+                op.held = rowHost.cardPointed
+                op.cardOpen = rowCard.opened
+                op.moved = rowCard.x !== op.seat
+                op.sameOid = rowHost.cardOid === at.oid_hex
+            })
+            op.complete(() => "row_card_return held=" + op.held
+                              + " open=" + op.cardOpen
+                              + " moved=" + op.moved
+                              + " oid=" + op.sameOid)
         }
     }
     // The card is opened synchronously; this just lets the layout settle before it is measured and photographed.
-    SampleTimer {
+    PageStage {
         id: rowCardTimer
+        name: "row_card"
         /// The commit the card was asked of, so its row can be asked back whether it is lit — by commit, as the row
         /// answers (`GraphRowDelegate.cardOnThisRow`): another worktree's rows land on a pass of their own and can
         /// shift the row number between the hover and this read.
@@ -747,167 +841,178 @@ Item {
         /// other worktree's row share the all-zero id.
         property int row: 0
         property bool byNumber: false
+        /// The row the card was asked of, as it stands now.
+        function rowNow() {
+            return rowCardTimer.byNumber ? rowCardTimer.row : graphModel.rowOf(rowCardTimer.oidHex)
+        }
         onTriggered: {
-            if (!Awaited.all("row_card_ready", { "ready": !(!rowCard.opened && !refList.opened) }))
-                return
             // A pass that moved the row lays its delegates out again, so the row can be a beat from standing.
-            const row = rowCardTimer.byNumber ? rowCardTimer.row : graphModel.rowOf(rowCardTimer.oidHex)
+            const row = rowCardTimer.rowNow()
             const asked = row >= 0 ? graphPane.view.itemAtIndex(row) : null
-            if (row >= 0 && !asked)
+            if (!Awaited.all("row_card_ready", { "ready": !(!rowCard.opened && !refList.opened),
+                                                 "row": row < 0 || !!asked }))
                 return
-            rowCardTimer.stop()
-            Harness.report(
-            // `lit=` next to `open=`: the pair is judged as one unbroken stretch (`verify::verbs::must_say`).
-            "row_card open=" + rowCard.opened
-            + " lit=" + (asked ? asked.lit : false)
-            + " credit=" + Math.round(rowCard.creditWidth)
-            + " cut=" + rowCard.creditCut
-            + " list=" + refList.opened
-            + " subject=" + (rowCard.subject !== "")
-            + " body=" + (rowCard.body !== ""))
-            driver.complete()
+            rowCardTimer.complete(() => {
+                const at = rowCardTimer.rowNow()
+                const now = at >= 0 ? graphPane.view.itemAtIndex(at) : null
+                // `lit=` next to `open=`: the pair is judged as one unbroken stretch (`verify::verbs::must_say`).
+                return "row_card open=" + rowCard.opened
+                       + " lit=" + (now ? now.lit : false)
+                       + " credit=" + Math.round(rowCard.creditWidth)
+                       + " cut=" + rowCard.creditCut
+                       + " list=" + refList.opened
+                       + " subject=" + (rowCard.subject !== "")
+                       + " body=" + (rowCard.body !== "")
+            })
         }
     }
     // The press on that card's note, and where it leaves the reader; the shot is of the arrival.
-    SampleTimer {
+    PageStage {
         id: cardMessageTimer
+        name: "card_message"
         property int row: 0
-        property bool asked: false
         /// Whether the run goes on to put the mark away with Escape, entered at the key handler's body
         /// (`RepoPage.escapePressed`); the key reaching it is held by `tests/qml/tst_escape.qml`.
         property bool escapes: false
         /// Which commit the press was of, kept because the card takes its own copy down with it.
         property string oidHex: ""
+        /// Whether this page answered the Escape, read as it was pressed.
+        property var took: false
         onTriggered: {
-            if (!cardMessageTimer.asked) {
-                const hovered = graphPane.view.itemAtIndex(cardMessageTimer.row)
-                if (!hovered)
+            const op = cardMessageTimer
+            if (op.at("start")) {
+                const hovered = graphPane.view.itemAtIndex(op.row)
+                if (!Awaited.all("card_message_row", { "row": !!hovered }))
                     return
                 graphPane.view.rowHoverRequested(hovered, true)
                 // The note stands only under a cut message (規約 §hover のツールチップ), and a card fills its fields in
                 // after it opens.
-                if (!rowCard.opened || !rowCard.messageCut)
+                if (!Awaited.all("card_message_cut", { "card": rowCard.opened, "cut": rowCard.messageCut }))
                     return
-                cardMessageTimer.oidHex = hovered.oid_hex
-                rowCard.askMessage()
-                cardMessageTimer.asked = true
+                op.input("asked", () => {
+                    op.oidHex = hovered.oid_hex
+                    rowCard.askMessage()
+                })
                 return
             }
             // The arrival: the card gone and the pane holding that commit's message — a shot before it frames whatever
             // was open before.
-            if (rowCard.opened || detailsPane.details.shaHex !== cardMessageTimer.oidHex)
+            if (!Awaited.all("card_message_arrived", { "card": !rowCard.opened,
+                                                       "read": detailsPane.details.shaHex === op.oidHex }))
                 return
-            cardMessageTimer.stop()
             // Its own sentence: the two runs are judged on opposite answers, each as one unbroken stretch of a line.
-            if (cardMessageTimer.escapes) {
-                const took = page.escapePressed()
-                Harness.report(
-                    "card_message_esc mark=" + detailsPane.attention
-                    + " took=" + took
-                    + " picked=" + (page.selectedRow === cardMessageTimer.row))
-                driver.complete()
+            if (op.escapes) {
+                op.input("escaped", () => {
+                    op.took = page.escapePressed()
+                })
+                op.complete(() => "card_message_esc mark=" + detailsPane.attention
+                                  + " took=" + op.took
+                                  + " picked=" + (page.selectedRow === op.row))
                 return
             }
-            Harness.report(
-                "card_message open=" + rowCard.opened
-                + " picked=" + (page.selectedRow === cardMessageTimer.row)
-                + " mark=" + detailsPane.attention
-                + " shown=" + (detailsPane.boxSubject !== "")
-                + " row=" + page.selectedRow)
-            driver.complete()
+            op.complete(() => "card_message open=" + rowCard.opened
+                              + " picked=" + (page.selectedRow === op.row)
+                              + " mark=" + detailsPane.attention
+                              + " shown=" + (detailsPane.boxSubject !== "")
+                              + " row=" + page.selectedRow)
         }
     }
-    // The hand resting on that note: put in once the note is there (as the press waits), read a sample later off the
+    // The hand resting on that note: put in once the note is there (as the press waits), read a beat later off the
     // paint.
-    SampleTimer {
+    PageStage {
         id: cardNoteTimer
+        name: "card_note"
+        order: ["pointed"]
         property int row: 0
-        property bool pointed: false
         onTriggered: {
-            if (!cardNoteTimer.pointed) {
-                const hovered = graphPane.view.itemAtIndex(cardNoteTimer.row)
-                if (!hovered)
+            const op = cardNoteTimer
+            if (op.at("start")) {
+                const hovered = graphPane.view.itemAtIndex(op.row)
+                if (!Awaited.all("card_note_row", { "row": !!hovered }))
                     return
                 graphPane.view.rowHoverRequested(hovered, true)
-                if (!rowCard.opened || !rowCard.messageCut)
+                if (!Awaited.all("card_note_cut", { "card": rowCard.opened, "cut": rowCard.messageCut }))
                     return
-                rowCard.notePointedAt = true
-                cardNoteTimer.pointed = true
+                op.input("pointed", () => {
+                    rowCard.notePointedAt = true
+                })
                 return
             }
-            cardNoteTimer.stop()
+            if (!Awaited.all("card_note_pointed", { "pointed": rowCard.notePointedAt }))
+                return
             // `lit=` is the rule (the line under the words is the words' colour); `word=` pins the step, which `lit=`
             // alone cannot (規約 §hover のツールチップ).
-            Harness.report(
-                "card_note lit=" + Qt.colorEqual(rowCard.noteRuleColor, rowCard.noteWordColor)
-                + " word=" + rowCard.noteWordColor
-                + " rule=" + rowCard.noteRuleColor)
-            driver.complete()
+            op.complete(() => "card_note lit=" + Qt.colorEqual(rowCard.noteRuleColor, rowCard.noteWordColor)
+                              + " word=" + rowCard.noteWordColor
+                              + " rule=" + rowCard.noteRuleColor)
         }
     }
     // The same card's words taken from the air around them (規約 §hover のツールチップ); the starts are the air itself,
     // sampled (`SweepPad.airPoints`).
-    SampleTimer {
+    PageStage {
         id: cardSweepTimer
+        name: "card_sweep"
+        order: ["swept"]
+        /// What the sweep came away with, read as it swept.
+        property string swept: ""
         onTriggered: {
+            const op = cardSweepTimer
             // The commit's words first: a card fills in after it opens, and one swept before hands back `1970-01-01`.
             if (!Awaited.all("card_sweep_ready", { "ready": !(!rowCard.opened || rowCard.subject === "") }))
                 return
             // And stopped laying out: mid-layout its fields are at some other width (the wait `details-sweep` takes).
             const geom = Math.round(rowCard.width) + "x" + Math.round(rowCard.height)
-            if (!Awaited.still("card_sweep_geom", geom))
+            if (!Awaited.all("card_sweep_still", { "geom": op.still("card_sweep_geom", geom) }))
                 return
-            cardSweepTimer.stop()
-            Harness.report("card_sweep "
-                + rowCard.background.pad.sweepAir(9, "open=" + rowCard.opened))
-            driver.complete()
+            op.input("swept", () => {
+                op.swept = rowCard.background.pad.sweepAir(9, "open=" + rowCard.opened)
+            })
+            op.complete(() => "card_sweep " + op.swept)
         }
     }
-    // The point asked along the row and the card expected of it, for the report.
-    readonly property QtObject rowPartReport: QtObject {
-        id: rowPartReport
+    // Waits for either card: a moved boundary opens the other, and waiting for the right one would run to the watchdog.
+    PageStage {
+        id: rowPartTimer
+        name: "row_part"
+        order: ["pointed"]
+        // The point asked along the row and the card expected of it, for the report.
         property int row: 0
         property string want: ""
         property real x: 0
-        property bool probed: false
-    }
-    // Waits for either card: a moved boundary opens the other, and waiting for the right one would run to the watchdog.
-    SampleTimer {
-        id: rowPartTimer
         onTriggered: {
-            if (!rowPartReport.probed) {
-                const item = graphPane.view.itemAtIndex(rowPartReport.row)
-                if (!item)
+            const op = rowPartTimer
+            if (op.at("start")) {
+                const item = graphPane.view.itemAtIndex(op.row)
+                if (!Awaited.all("row_part_row", { "row": !!item }))
                     return
-                item.pointerRowX = rowPartReport.x
-                rowPartReport.probed = true
+                op.input("pointed", () => {
+                    item.pointerRowX = op.x
+                })
                 return
             }
-            if (!refList.opened && !rowCard.opened)
+            if (!Awaited.all("row_part_card", { "card": refList.opened || rowCard.opened }))
                 return
-            rowPartTimer.stop()
-            const got = refList.opened ? "chip" : "row"
-            Harness.report(
-            "row_part x=" + rowPartReport.x
-            + " want=" + rowPartReport.want
-            + " got=" + got
-            + " list=" + refList.opened
-            + " card=" + rowCard.opened
-            + " agrees=" + (got === rowPartReport.want
-                            && refList.opened !== rowCard.opened))
-            driver.complete()
+            op.complete(() => {
+                const got = refList.opened ? "chip" : "row"
+                return "row_part x=" + op.x
+                       + " want=" + op.want
+                       + " got=" + got
+                       + " list=" + refList.opened
+                       + " card=" + rowCard.opened
+                       + " agrees=" + (got === op.want && refList.opened !== rowCard.opened)
+            })
         }
     }
-    // PGG_AUTO_ACT=ref-list-leave. Each step goes in once the one before has landed, and the last waits out the beat
+    // PGG_AUTO_ACT=ref-list-leave. Each stage goes in once the one before has landed, and the last waits out the beat
     // the leave started (`RowHoverHost.listSettling`) — a leave that starts none is read at once, which is the list
-    // left standing with no hand near it.
-    SampleTimer {
+    // left standing with no hand near it. No `order`: a row whose chip leaves no bare stretch ends at `start`.
+    PageStage {
         id: leaveTimer
+        name: "ref_list_leave"
         /// Where the hand comes on (a row number or `head`), and where it goes after (`off` / `back` / `menu` / a row
         /// number).
         property string from: ""
         property string to: ""
-        property int step: 0
         /// The hand goes on to another row's column (`to` is its number) rather than staying about this one.
         function crosses() {
             return leaveTimer.to !== "off" && leaveTimer.to !== "back" && leaveTimer.to !== "menu"
@@ -951,107 +1056,118 @@ Item {
             return hand.x >= card.x && hand.x < card.x + face.width
                    && hand.y >= card.y && hand.y < card.y + face.height
         }
+        /// The card as it stood when the hand went: whether it lay over the hand, and its box.
+        function noteCard(item) {
+            leaveTimer.covered = leaveTimer.coveredAt(item, leaveTimer.handX)
+            leaveTimer.firstBox = leaveTimer.boxOf()
+        }
         onTriggered: {
-            if (graphModel.loading || graphModel.rowTotal === 0)
+            const op = leaveTimer
+            if (!Awaited.all("ref_list_leave_graph", { "graph": !graphModel.loading && graphModel.rowTotal !== 0 }))
                 return
-            const item = leaveTimer.surface(leaveTimer.from)
-            if (leaveTimer.step === 0) {
-                if (leaveTimer.from === "head" && item.wanted && (!item.visible || !item.rowAbove)) {
+            const item = op.surface(op.from)
+            if (op.at("start")) {
+                if (op.from === "head" && item.wanted && (!item.visible || !item.rowAbove)) {
                     graphPane.view.positionViewAtEnd()
                     return
                 }
-                if (leaveTimer.from !== "head" && item === null) {
-                    graphPane.view.positionViewAtIndex(Number(leaveTimer.from), ListView.Contain)
+                if (op.from !== "head" && item === null) {
+                    graphPane.view.positionViewAtIndex(Number(op.from), ListView.Contain)
                     return
                 }
-                const other = leaveTimer.crosses() ? leaveTimer.surface(leaveTimer.to) : null
+                const other = op.crosses() ? op.surface(op.to) : null
                 if (!Awaited.all("ref_list_leave", {
                         "from": item !== null && item.visible && item.chipItem.visible,
-                        "to": !leaveTimer.crosses() || (other !== null && other.visible && other.chipItem.visible)
+                        "to": !op.crosses() || (other !== null && other.visible && other.chipItem.visible)
                     }))
                     return
-                leaveTimer.handX = leaveTimer.bareX(item)
-                if (leaveTimer.handX < 0 || (other !== null && leaveTimer.bareX(other) < 0)) {
-                    leaveTimer.stop()
-                    Harness.report("ref_list_leave to=" + leaveTimer.to + " bare=false")
-                    driver.complete()
+                op.handX = op.bareX(item)
+                if (op.handX < 0 || (other !== null && op.bareX(other) < 0)) {
+                    op.complete(() => "ref_list_leave to=" + op.to + " bare=false")
                     return
                 }
-                item.pointerCrossed(true, leaveTimer.handX)
-                leaveTimer.step = 1
+                op.input("came_on", () => {
+                    item.pointerCrossed(true, op.handX)
+                })
                 return
             }
-            if (leaveTimer.step === 1) {
-                // A tick after the ask, so the card stands where it was placed.
+            if (op.at("came_on")) {
+                // A beat after the ask, so the card stands where it was placed.
                 if (!Awaited.all("ref_list_leave", {
                         "list": refList.opened, "on": rowHost.listAnchor === item.chipItem }))
                     return
-                leaveTimer.covered = leaveTimer.coveredAt(item, leaveTimer.handX)
-                leaveTimer.firstBox = leaveTimer.boxOf()
-                if (leaveTimer.to === "off") {
-                    item.pointerCrossed(false, 0)
-                } else if (leaveTimer.to === "back") {
-                    item.pointerCrossed(false, 0)
-                    item.pointerCrossed(true, leaveTimer.handX)
-                } else if (leaveTimer.to === "menu") {
+                if (op.to === "menu") {
                     // Into the card, and a right-click on its first row: that row's menu stands on the list
                     // (`RepoPage.menuArea` = `refList`). Not built yet: no press has gone in.
-                    if (!refList.menuRow(0))
-                        return
-                    item.pointerCrossed(false, 0)
-                    leaveTimer.step = 3
+                    op.input("menu_raised", () => {
+                        op.noteCard(item)
+                        if (!refList.menuRow(0))
+                            return false
+                        item.pointerCrossed(false, 0)
+                        return true
+                    })
                     return
-                } else {
-                    // Qt tells the row the hand came onto before the row it left (`deliverHoverEvent`: the rows under
-                    // the point, then the ones no longer under it).
-                    const other = leaveTimer.surface(leaveTimer.to)
-                    other.pointerCrossed(true, leaveTimer.bareX(other))
-                    item.pointerCrossed(false, 0)
                 }
-                leaveTimer.heldAfter = rowHost.listPointed
-                leaveTimer.settlingAfter = rowHost.listSettling
-                leaveTimer.step = 2
+                op.input("left", () => {
+                    op.noteCard(item)
+                    if (op.to === "off") {
+                        item.pointerCrossed(false, 0)
+                    } else if (op.to === "back") {
+                        item.pointerCrossed(false, 0)
+                        item.pointerCrossed(true, op.handX)
+                    } else {
+                        // Qt tells the row the hand came onto before the row it left (`deliverHoverEvent`: the rows
+                        // under the point, then the ones no longer under it).
+                        const other = op.surface(op.to)
+                        other.pointerCrossed(true, op.bareX(other))
+                        item.pointerCrossed(false, 0)
+                    }
+                    op.heldAfter = rowHost.listPointed
+                    op.settlingAfter = rowHost.listSettling
+                })
                 return
             }
-            if (leaveTimer.step === 3) {
+            if (op.at("menu_raised")) {
                 // The hand back on the chip's column while the menu stands, and the menu let go of as Escape does:
                 // its close lets the menu's hold go and the hand decides again (`RowHoverHost.menuOnList`).
                 if (!Awaited.all("ref_list_leave", { "menu": commitMenu.opened }))
                     return
-                item.pointerCrossed(true, leaveTimer.handX)
-                leaveTimer.heldAfter = rowHost.listPointed
-                leaveTimer.settlingAfter = rowHost.listSettling
-                commitMenu.dismiss()
-                leaveTimer.step = 2
+                op.input("back_on", () => {
+                    item.pointerCrossed(true, op.handX)
+                    op.heldAfter = rowHost.listPointed
+                    op.settlingAfter = rowHost.listSettling
+                    commitMenu.dismiss()
+                })
                 return
             }
             if (!Awaited.all("ref_list_leave", { "menu": !commitMenu.visible, "beat": !rowHost.listSettling }))
                 return
-            leaveTimer.stop()
-            const target = leaveTimer.to === "off" ? null
-                         : leaveTimer.crosses() ? leaveTimer.surface(leaveTimer.to) : item
-            Harness.report("ref_list_leave to=" + leaveTimer.to
-                              + " covered=" + leaveTimer.covered
-                              + " list=" + refList.opened
-                              + " on=" + (target !== null && rowHost.listAnchor === target.chipItem)
-                              + " same=" + (leaveTimer.boxOf() === leaveTimer.firstBox)
-                              // How the leave was taken, for a reader of a red run.
-                              + " held=" + leaveTimer.heldAfter
-                              + " settling=" + leaveTimer.settlingAfter
-                              + " x=" + leaveTimer.handX
-                              + " box=" + leaveTimer.firstBox + "->" + leaveTimer.boxOf())
-            driver.complete()
+            op.complete(() => {
+                const came = op.surface(op.from)
+                const target = op.to === "off" ? null
+                             : op.crosses() ? op.surface(op.to) : came
+                return "ref_list_leave to=" + op.to
+                       + " covered=" + op.covered
+                       + " list=" + refList.opened
+                       + " on=" + (target !== null && rowHost.listAnchor === target.chipItem)
+                       + " same=" + (op.boxOf() === op.firstBox)
+                       // How the leave was taken, for a reader of a red run.
+                       + " held=" + op.heldAfter
+                       + " settling=" + op.settlingAfter
+                       + " x=" + op.handX
+                       + " box=" + op.firstBox + "->" + op.boxOf()
+            })
         }
     }
     // PGG_AUTO_ACT=menu-list. The list is HEAD's — the one commit sure to have a chip — and a graph row's menu the row
-    // under it's, as `menu-hover` raises it. Each step waits for the one before to land; the list goes, or stays out,
+    // under it's, as `menu-hover` raises it. Each stage waits for the one before to land; the list goes, or stays out,
     // in the same turn as the ask, so the answer is read once the menu is up — for `own`, once the beat the hand's
     // leaving started has run out. `swap` raises the menu on the list and puts the hand on another row's chip: the
     // list is the menu's and is not handed over (`kept=`).
-    SampleTimer {
+    PageStage {
         id: menuListTimer
+        name: "menu_list"
         property string how: ""
-        property int step: 0
         /// The nearest built row below HEAD's with a chip of its own, or null.
         function otherChipped(head) {
             for (let i = head + 1; i < graphPane.view.count; i++) {
@@ -1063,90 +1179,107 @@ Item {
             }
             return null
         }
+        /// HEAD's row, or -1 while the graph has none to say.
+        function headRow() {
+            return graphModel.loading || graphModel.rowTotal === 0 ? -1 : graphModel.headRow
+        }
         onTriggered: {
-            const head = graphModel.loading || graphModel.rowTotal === 0 ? -1 : graphModel.headRow
+            const op = menuListTimer
+            const head = op.headRow()
             const stacked = head < 0 ? null : graphPane.view.itemAtIndex(head)
             const other = head < 0 ? "" : graphModel.oidAt(head + 1)
-            if (menuListTimer.step === 0) {
+            if (op.at("start")) {
                 if (!Awaited.all("menu_list_rows", { "head": stacked !== null, "other": other !== "" }))
                     return
-                if (menuListTimer.how === "behind")
-                    page.openRowMenu(other)
-                else
-                    graphPane.view.chipExpandRequested(stacked.oid_hex, stacked.index, stacked.chipItem.records,
-                                                       stacked.chipItem)
-                menuListTimer.step = 1
-            } else if (menuListTimer.step === 1) {
-                if (menuListTimer.how === "behind") {
-                    if (!Awaited.all("menu_list_menu", { "menu": commitMenu.opened, "head": stacked !== null }))
-                        return
-                    graphPane.view.chipExpandRequested(stacked.oid_hex, stacked.index, stacked.chipItem.records,
-                                                       stacked.chipItem)
-                    menuListTimer.step = 2
-                } else {
-                    if (!Awaited.all("menu_list_open", { "list": refList.opened }))
-                        return
-                    if (menuListTimer.how === "under") {
+                if (op.how === "behind") {
+                    op.input("row_menu", () => {
                         page.openRowMenu(other)
-                    } else {
-                        // Not built yet: no press has gone in.
-                        if (!refList.menuRow(0))
-                            return
-                        if (menuListTimer.how === "swap") {
-                            const next = menuListTimer.otherChipped(head)
-                            if (next === null) {
-                                menuListTimer.stop()
-                                Harness.report("menu_list how=swap other=none")
-                                driver.complete()
-                                return
-                            }
-                            // The hand onto the other row's chip, as that row reports it.
-                            graphPane.view.chipExpandRequested(next.oid_hex, next.index, next.chipItem.records,
-                                                               next.chipItem)
-                        } else {
-                            // The hand off the chip, as its row reports it (`GraphRowDelegate.settlePointed`).
-                            graphPane.view.chipCollapseRequested(stacked.oid_hex, stacked.chipItem)
-                        }
-                    }
-                    menuListTimer.step = 2
+                    })
+                } else {
+                    op.input("list_opened", () => {
+                        graphPane.view.chipExpandRequested(stacked.oid_hex, stacked.index, stacked.chipItem.records,
+                                                           stacked.chipItem)
+                    })
                 }
-            } else {
-                if (!Awaited.all("menu_list_after", {
-                        "menu": commitMenu.opened,
-                        "beat": menuListTimer.how !== "own" || !rowHost.listSettling
-                    }))
-                    return
-                menuListTimer.stop()
-                Harness.report("menu_list how=" + menuListTimer.how + " menu=" + commitMenu.opened
-                                  + " list=" + refList.opened + " raised=" + page.menuArea
-                                  + " kept=" + (refList.opened && stacked !== null
-                                                && rowHost.refListOid === stacked.oid_hex))
-                driver.complete()
+                return
             }
+            if (op.how === "behind" && op.at("row_menu")) {
+                if (!Awaited.all("menu_list_menu", { "menu": commitMenu.opened, "head": stacked !== null }))
+                    return
+                op.input("list_asked", () => {
+                    graphPane.view.chipExpandRequested(stacked.oid_hex, stacked.index, stacked.chipItem.records,
+                                                       stacked.chipItem)
+                })
+                return
+            }
+            if (op.at("list_opened")) {
+                if (!Awaited.all("menu_list_open", { "list": refList.opened }))
+                    return
+                if (op.how === "under") {
+                    op.input("row_menu", () => {
+                        page.openRowMenu(other)
+                    })
+                    return
+                }
+                // Not built yet: no press has gone in.
+                if (!op.input("list_menu", () => refList.menuRow(0)))
+                    return
+                if (op.how === "swap") {
+                    const next = op.otherChipped(head)
+                    if (next === null) {
+                        op.complete(() => "menu_list how=swap other=none")
+                        return
+                    }
+                    // The hand onto the other row's chip, as that row reports it.
+                    op.input("hand_moved", () => {
+                        graphPane.view.chipExpandRequested(next.oid_hex, next.index, next.chipItem.records,
+                                                           next.chipItem)
+                    })
+                    return
+                }
+                // The hand off the chip, as its row reports it (`GraphRowDelegate.settlePointed`).
+                op.input("hand_off", () => {
+                    graphPane.view.chipCollapseRequested(stacked.oid_hex, stacked.chipItem)
+                })
+                return
+            }
+            if (!Awaited.all("menu_list_after", {
+                    "menu": commitMenu.opened,
+                    "beat": op.how !== "own" || !rowHost.listSettling
+                }))
+                return
+            op.complete(() => {
+                const at = op.headRow()
+                const now = at < 0 ? null : graphPane.view.itemAtIndex(at)
+                return "menu_list how=" + op.how + " menu=" + commitMenu.opened
+                       + " list=" + refList.opened + " raised=" + page.menuArea
+                       + " kept=" + (refList.opened && now !== null && rowHost.refListOid === now.oid_hex)
+            })
         }
     }
     // The row under a standing menu, asked for its card where the row's own ask goes in (`rowHoverRequested`). Asked
-    // once the menu is up, read a turn later: a card that was going to open opens synchronously.
-    SampleTimer {
+    // once the menu is up, read a beat later: a card that was going to open opens synchronously.
+    PageStage {
         id: menuHoverTimer
+        name: "menu_hover"
+        order: ["asked"]
         property string oidHex: ""
-        property bool asked: false
         onTriggered: {
+            const op = menuHoverTimer
             if (!Awaited.all("menu_hover_ready", { "ready": commitMenu.opened }))
                 return
-            if (!menuHoverTimer.asked) {
-                const row = graphPane.view.itemAtIndex(graphModel.rowOf(menuHoverTimer.oidHex))
-                // Not laid out yet: latching here would wait for an answer to a question nobody put.
-                if (!row)
+            if (op.at("start")) {
+                const row = graphPane.view.itemAtIndex(graphModel.rowOf(op.oidHex))
+                // Not laid out yet: asking now would wait for an answer to a question nobody put.
+                if (!Awaited.all("menu_hover_row", { "row": !!row }))
                     return
-                menuHoverTimer.asked = true
-                graphPane.view.rowHoverRequested(row, true)
+                op.input("asked", () => {
+                    graphPane.view.rowHoverRequested(row, true)
+                })
                 return
             }
-            menuHoverTimer.stop()
-            Harness.report("menu_hover menu=" + commitMenu.opened + " card=" + rowCard.opened
+            op.complete(() => "menu_hover menu=" + commitMenu.opened + " card=" + rowCard.opened
                               + " list=" + refList.opened)
-            driver.complete()
         }
     }
 }
