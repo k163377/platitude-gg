@@ -492,7 +492,7 @@ Item {
                     }))
                     return
             }
-            // The seat standing across a swapped frame: the layout pass handing it out has settled.
+            // The seat standing across a polish pass: the layout pass handing it out has settled.
             const geom = Math.round(navProbe.headPinY) + "+" + Math.round(navProbe.headPinSeatY())
             if (!Awaited.all("nav_pin_seat_still", { "still": op.seated() && op.still("nav_pin_seat_geom", geom) }))
                 return

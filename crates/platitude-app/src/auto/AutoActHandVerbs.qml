@@ -483,7 +483,7 @@ Item {
                     op.note("middle_hand surface=" + op.surface + " waiting=" + seat.wait)
                     return
                 }
-                // Pressed once the hand's frame has stood across a swapped frame — a box grows to its words a layout
+                // Pressed once the hand's frame has stood across a polish pass — a box grows to its words a layout
                 // after they land, and an earlier press anchors the ring off the box's middle.
                 if (!op.still("middle_hand_seat", seat.hand.width + "x" + seat.hand.height))
                     return

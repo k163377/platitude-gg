@@ -33,7 +33,7 @@ Item {
     //
     // The reach before the colours is witnessed: as the scroll left it (`scrolled`) — a small diff can be coloured
     // within one look, and a row that answered `firstChangedLine` is already built and measured — and once the rows
-    // the scroll brought in stood across a frame (`looked`), null where the colours came first.
+    // the scroll brought in stood across a polish pass (`looked`), null where the colours came first.
     PageStage {
         id: colourPlaceTimer
         name: "colour_place"
@@ -103,7 +103,7 @@ Item {
                     return
                 op.advance("coloured")
             }
-            // The rows are rewritten as the colours land: read once the reach has stood across a frame since.
+            // The rows are rewritten as the colours land: read once the reach has stood across a polish pass since.
             if (!Awaited.all("colour_place_still", { "still": op.still("colour_place_reach", driver.diffReach()) }))
                 return
             op.complete({ "when": () => ({ "coloured": diffPane.diffModel.coloured }), "report": () => op.line() })

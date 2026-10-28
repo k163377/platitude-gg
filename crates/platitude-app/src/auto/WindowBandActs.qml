@@ -186,9 +186,9 @@ Item {
             }
             if (!Awaited.all("ops_panel_ready", op.terms()))
                 return
-            // Read off a drawn frame: the layout places the counts on the way to a frame, so on the tick they still
+            // Read off a laid-out panel: the layout places the counts in a polish pass, so on the tick they still
             // sit where the previous reading put them — the panel's readings (`opsPanelKey`) standing across a
-            // swapped frame (`still`). What a frame was drawn for is kept, and the completion and the pictures stand
+            // polish pass (`still`). What that pass laid out is kept, and the completion and the pictures stand
             // on the panel still reading it.
             const key = acts.opsPanelKey()
             if (!op.still("ops_panel_drawn", key))
@@ -496,8 +496,8 @@ Item {
     WindowStage {
         id: actionsActTimer
         name: "band_actions"
-        /// The `!` pushed for (`-alert`), then the window brought to the shape's width, then the panel's shape kept once
-        /// it has stood across a frame at that width.
+        /// The `!` pushed for (`-alert`), then the window brought to the shape's width, then the panel's shape kept
+        /// once it has stood across a polish pass at that width.
         order: Harness.autoAct === "band-actions-alert" ? ["pushed", "sized", "shaped"] : ["sized", "shaped"]
         running: Harness.autoAct === "band-actions"
                  || Harness.autoAct === "band-actions-none"
@@ -577,7 +577,7 @@ Item {
                 if (!Awaited.all("band_actions_ready", op.terms(true, true)))
                     return
                 // The panel lays its cells out a polish after the window takes the width: its shape is kept once it
-                // has stood across a frame, and the completion and the pictures stand on the panel still in it.
+                // has stood across a polish pass, and the completion and the pictures stand on the panel still in it.
                 if (!op.still("band_actions_shape", acts.bandActionsKey()))
                     return
                 op.witness("shape", acts.bandActionsKey())

@@ -367,12 +367,13 @@ pub enum GraphMsg {
     },
 }
 
-/// Command-log messages: one git invocation, start and end.
+/// Command-log messages: one git invocation, start and end, and the end of
+/// a write's commands.
 ///
-/// Both halves carry `run`, the session they came from: the log outlives
-/// sessions, each numbers its invocations from one, and matched by id
-/// alone a new session's first command would answer for the old one's
-/// row (`CommandsModel::Invocation`).
+/// Both halves of an invocation carry `run`, the session they came from:
+/// the log outlives sessions, each numbers its invocations from one, and
+/// matched by id alone a new session's first command would answer for the
+/// old one's row (`CommandsModel::Invocation`).
 #[derive(Debug)]
 pub enum CommandMsg {
     Started {
@@ -385,6 +386,9 @@ pub enum CommandMsg {
         /// when git said no, and its row neither reddens the mark nor
         /// raises the panel (デザイン規約 §git が言ったことを読む場所).
         asked: bool,
+        /// The write it ran under (`OperationId::as_u64`), 0 for a read
+        /// outside any.
+        operation: u64,
     },
     Finished {
         run: u64,
@@ -404,6 +408,13 @@ pub enum CommandMsg {
         elapsed_ms: i64,
         message: String,
     },
+    /// The write `operation` has settled, and every command it ran was
+    /// said ahead of this on the same feed: a write's run has returned
+    /// before its `SessionEvent::WriteSettled` goes out, and each command
+    /// says its start and end from inside that run
+    /// (`process::Executor::execute`). The log's receipt of a write's
+    /// records, a write with no command included (`CommandsModel.recorded`).
+    Settled { operation: u64 },
 }
 
 /// The badge's two halves, several times a second while a replaying write

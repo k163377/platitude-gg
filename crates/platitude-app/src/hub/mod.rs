@@ -11,7 +11,6 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use platitude_core::OperationKind;
 use platitude_core::details::DiffTarget;
 use platitude_core::opstate::OpState;
 use platitude_core::parse::diff::FilePatch;
@@ -24,6 +23,7 @@ use platitude_core::session::{
 use platitude_core::settings::{Settings, State, Store};
 use platitude_core::stash::StashEntry;
 use platitude_core::status::WorktreeStatus;
+use platitude_core::{OperationId, OperationKind};
 use qtbridge::QmlMethodInvoker;
 
 #[cfg(test)]

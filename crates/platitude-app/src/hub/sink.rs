@@ -379,15 +379,13 @@ impl SessionSink for BridgeSink {
                     settled,
                 });
             }
-            // `operation` is not drawn yet: the log reads one command per
-            // row.
             SessionEvent::CommandStarted {
                 id,
                 display,
                 full,
                 at_ms,
                 asked,
-                operation: _,
+                operation,
             } => self.feeds.commands.push(CommandMsg::Started {
                 run: self.run,
                 id,
@@ -395,6 +393,7 @@ impl SessionSink for BridgeSink {
                 full,
                 at_ms,
                 asked,
+                operation: operation.map_or(0, OperationId::as_u64),
             }),
             SessionEvent::CommandFinished {
                 id,
@@ -562,7 +561,12 @@ impl SessionSink for BridgeSink {
                     error: error.unwrap_or_default(),
                 });
             }
+            // The log's receipt as well as the tab's: the write's commands
+            // went out on the log's feed, which drains apart from the tab's.
             SessionEvent::WriteSettled { id, .. } => {
+                self.feeds.commands.push(CommandMsg::Settled {
+                    operation: id.as_u64(),
+                });
                 self.feeds
                     .tab
                     .push(TabMsg::WriteSettled { id: id.as_u64() });

@@ -42,12 +42,44 @@ QtObject {
     property string said: ""
     property real since: 0
 
-    /// The window the run draws in and how many frames it has swapped, fed by `WindowHarness`: the one render
-    /// boundary a wait on a layout reads (`StageTimer.still` / `drawnSince`). A frame swapped is a polish run before
-    /// it; a scene that stopped swaps nothing unasked, so a wait there asks for a frame each time it is read
-    /// (rules-refs/app-ui.md「`frameSwapped` を待つなら頼むのは `window.update()`」).
+    /// The window the run draws in, and how many frames it has swapped, fed by `WindowHarness`: what the pictures wait
+    /// a frame on (`WindowHarness.settle`) and the ceiling's line counts — no boundary of a layout's, since on a
+    /// threaded render loop a swap reaches this thread after the GUI thread may have moved on (`polishes`).
     property var window: null
     property int frames: 0
+    /// How many polish passes the window has made. Every render loop polishes the window's items and says
+    /// `afterAnimating` in one call on this thread, before the scene graph syncs
+    /// (`QSGThreadedRenderLoop::polishAndSync`, `QSGGuiThreadRenderLoop` / `QSGSoftwareRenderLoop::renderWindow`): a
+    /// pass counted after a reading began after it, and laid out every item asked of it before then. A swapped frame
+    /// says no such thing — on a threaded loop it comes from the render thread, after the GUI thread may have moved
+    /// on. A window that cannot render makes no pass.
+    property int polishes: 0
+    readonly property Connections polishing: Connections {
+        target: awaited.window
+        function onAfterAnimating() {
+            awaited.polishes++
+        }
+    }
+
+    /// The one boundary every layout wait stands on (`StageTimer.still` / `laidOutSince`, `CompletionRoute`): a mark
+    /// of the passes so far, taken where a wait first sees what it waits on, and whether a pass has begun since — one
+    /// that laid out every item asked of it before the mark, sizing it or leaving it with none. Not the end of work of
+    /// another kind — a read on its way, a font being shaped — which a wait reads off that work's own answer.
+    // reach(read)
+    function layoutMark() {
+        return awaited.polishes
+    }
+    // reach(read)
+    function layoutPassedSince(mark) {
+        return awaited.polishes > mark
+    }
+    /// Asks for the pass a layout wait still short waits on: a still scene runs none unasked; a window that cannot
+    /// render runs none at all, and the wait holds.
+    // reach(beat)
+    function askLayout() {
+        if (awaited.window !== null)
+            awaited.window.update()
+    }
 
     /// The completion route: `WindowHarness`, which holds a completion until its reads are in and then reads its
     /// report (`finishFrom`). Set by the harness as it is built.
@@ -65,7 +97,8 @@ QtObject {
     /// buffer beyond it a frame at a time, off screen). So the row under the viewport's top-left corner stands for the
     /// whole viewport, and a verb that reads rows (`itemAtIndex`) or completes on a list reads this first: read in
     /// the beat the rows landed, the list is empty of delegates and the picture is not. A list with no rows has
-    /// nothing to build; one with no size shows nothing.
+    /// nothing to build; one with no size shows nothing — or has not been laid out yet, which the completion waits a
+    /// polish pass over (`PageSettled.unsized`).
     // reach(read)
     function built(view) {
         if (!view || view.count === undefined || view.count === 0)
@@ -418,7 +451,7 @@ QtObject {
         return from.record.gen === from.gen
     }
 
-    /// The marks `still` / `drawnSince` keep for `op`, which die with its stage and its generation.
+    /// The marks `still` / `laidOutSince` keep for `op`, which die with its stage and its generation.
     function marksOf(op) {
         return awaited.recordOf(op).marks
     }

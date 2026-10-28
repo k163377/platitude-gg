@@ -915,7 +915,7 @@ Item {
             }
             // Nothing is read until the layout stops moving: the lines are measured on a layout and the section's
             // height follows that, so on the opening pass neither has arrived and the lines read as out of view. The
-            // geometry standing across a swapped frame is the list standing still (`StageTimer.still`).
+            // geometry standing across a polish pass is the list standing still (`StageTimer.still`).
             if (!Awaited.all("nav_tip_laid", {
                     "laid": !op.opens || op.still("nav_tip_geom", sidebarPane.rowFactsGeom()) }))
                 return

@@ -495,11 +495,11 @@ Item {
             })
         }
     }
-    /// The run's end: the band's resume pressed (`fetch-resume`), a hand put on the button (`fetch-hover`) or nothing
-    /// (`fetch-fail`), then the button read. Its witnesses: the stopped button and the `writeSeq` the resume's fetch was
-    /// asked at, read as the press goes in (`stopped`, `askSeq`) — resuming takes the first down, so it is kept there
-    /// or lost; whether the word was at full before the hand went on (`restFull`) — what a picture with a hand on the
-    /// button cannot hold.
+    /// The run's end: the band's resume pressed (`fetch-resume`), a hand put on the button (`fetch-hover`) or
+    /// nothing (`fetch-fail`), then the button read. Its witnesses: the stopped button and the `writeSeq` the resume's
+    /// fetch was asked at, read as the press goes in (`stopped`, `askSeq`) — resuming takes the first down, so it is
+    /// kept there or lost; whether the word was at full before the hand went on (`restFull`) — what a picture with a
+    /// hand on the button cannot hold.
     PageStage {
         id: fetchEndTimer
         name: "fetch_fail_end"

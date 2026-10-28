@@ -15,6 +15,12 @@ import platitude.ui
 /// (`witnessesRead`). A verb condition that falls during the hold is waited for again, or ends the run as a breach
 /// where the verb said so (`lost: "fail"`); its input is never pressed again. Checked at once, so a completion with
 /// nothing to wait for completes in the turn it was asked.
+///
+/// A list the page shows with rows and no size (`unsized`) holds the completion for a polish pass of the window that
+/// began after the reading (`Awaited.polishes`): no size is the layout's answer or a polish not run yet — a log raised
+/// in the reading's turn — and only a pass that took the list in tells the two apart, sizing it and building its rows
+/// in the one pass, or leaving it with none (`sized:<list>`). A frame swapped is no such pass.
+/// A window that cannot render runs none, and the completion holds.
 /// Built by `WindowHarness` over the page's reads, and by the QtTests over reads they hold back themselves.
 // An `Item` only because `QtObject` has no default property to hold the sampler below.
 Item {
@@ -22,6 +28,11 @@ Item {
 
     /// What the page still owes now (`PageSettled.missing`'s names).
     required property var owed
+    /// The lists the page shows with rows and no size now (`PageSettled.unsized`'s names).
+    property var unsized: () => []
+    /// The lists with rows and no size the hold first read, and how many polish passes the window had made then:
+    /// `{ key, polish }`, null while there are none.
+    property var sizing: null
     /// The completion asked for, and whether its report has been read and said: the one way to the completion's walk.
     property var completing: null
     property bool asked: false
@@ -29,7 +40,7 @@ Item {
     /// What the page owed at the reading the report was read on and checked against — the state the report read,
     /// which the completion's line says.
     property var owedAtRead: []
-    /// The witnesses the report read, as `name@stage` (`Awaited.witnessed`).
+    /// The witnesses the report read, as `<owner>/<op>/<gen>/<stage>/<name>` (`Awaited.witnessed`).
     property var witnessesRead: []
 
     /// The report was read and said; the run completes on what it read, in this turn.
@@ -87,7 +98,25 @@ Item {
         }
         for (const name in holds)
             terms[name] = Boolean(holds[name])
-        return { "when": when, "owed": owed, "terms": terms }
+        const unsized = route.unsized()
+        const sized = route.sizing !== null && route.sizing.key === unsized.join(",")
+            && Awaited.layoutPassedSince(route.sizing.polish)
+        for (const name of unsized)
+            terms["sized:" + name] = sized
+        return { "when": when, "owed": owed, "unsized": unsized, "terms": terms }
+    }
+    /// Marks the lists with rows and no size where the hold first reads them, and asks for the pass it waits on — a
+    /// still scene renders none unasked.
+    function markSizing(unsized) {
+        const key = unsized.join(",")
+        if (key === "") {
+            route.sizing = null
+            return
+        }
+        if (route.sizing === null || route.sizing.key !== key)
+            route.sizing = { "key": key, "polish": Awaited.layoutMark() }
+        if (!Awaited.layoutPassedSince(route.sizing.polish))
+            Awaited.askLayout()
     }
     /// Whether two readings are of one state: the same terms holding, and the same reads owed.
     function same(a, b) {
@@ -105,6 +134,7 @@ Item {
         const first = route.reading()
         if (first === null)
             return
+        route.markSizing(first.unsized)
         const fell = Object.keys(first.when).filter(term => !first.when[term])
         if (fell.length > 0 && from.lost === "fail") {
             hold.stop()

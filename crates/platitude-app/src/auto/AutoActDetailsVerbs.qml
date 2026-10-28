@@ -470,8 +470,8 @@ Item {
                     || detailsPane.valueRow.shownValue(which) === "") }))
                 return
             // And the row has to have stopped moving: the pane lays out more than once on its way to a commit, and a
-            // sweep over a half-laid-out row lands on the line above. The geometry standing across a frame is the
-            // settle — no number, so it holds at any pane width.
+            // sweep over a half-laid-out row lands on the line above. The geometry standing across a polish pass is
+            // the settle — no number, so it holds at any pane width.
             if (!op.still("details_sweep_geom", detailsPane.valueRow.valueGeom(which)))
                 return
             op.input("swept", () => {
@@ -696,7 +696,7 @@ Item {
             if (op.at("card_asked")) {
                 if (!Awaited.all("parents_card_open", op.open()))
                     return
-                // The line lays itself out again as the card comes out; read it once it stands across a frame.
+                // The line lays itself out again as the card comes out; read it once it stands across a polish pass.
                 const arrow = plate.arrowBox(null)
                 const opened = Math.round(plate.parentLineWidth) + "/" + Math.round(arrow.x)
                 if (!op.still("parents_card_geom", opened))
@@ -782,8 +782,8 @@ Item {
         }
     }
     // The message has to be in the box, and the box laid out with it, before there is a ceiling to pull on. The
-    // layout runs after the pull, so it is read two frames later: in the same breath the list still reports its old
-    // height.
+    // layout runs after the pull, so it is read once a polish pass begun after the pull has run: in the same breath
+    // the list still reports its old height.
     //
     // `keeps=` says what the box borrowed room from (the author card / the commit button) is still on screen — the
     // picture cannot, because the overflow draws over the window's own footer.
@@ -837,7 +837,7 @@ Item {
                 })
                 return
             }
-            if (!Awaited.all("desc_grow_drawn", { "drawn": op.drawnSince("desc_grow") }))
+            if (!Awaited.all("desc_grow_drawn", { "drawn": op.laidOutSince("desc_grow") }))
                 return
             op.complete({
                 "name": "desc_grow_settle_ready",

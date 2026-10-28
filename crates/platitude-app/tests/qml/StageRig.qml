@@ -9,11 +9,14 @@ Item {
     id: rig
 
     property var owing: []
+    /// The lists with rows and no size the page shows (`PageSettled.unsized`).
+    property var unsized: []
     readonly property alias route: route
 
     Automation.CompletionRoute {
         id: route
         owed: () => rig.owing
+        unsized: () => rig.unsized
         onReadied: Automation.Awaited.completed("stages", route.completing, route.owedAtRead, route.witnessesRead)
     }
 

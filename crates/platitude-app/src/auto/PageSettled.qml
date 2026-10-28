@@ -22,8 +22,7 @@ import platitude.ui
 ///
 /// A landing the page owes itself is a read on its way (`RepoPage.pageLanding`): both ends of that move settle every
 /// other term, so without it a run reads settled before and after the move (`AutoActCompletion.owesStatus`). What
-/// this holds is a verb's completion (`complete … page=`, `WindowHarness.finish`), never the moment a picture is
-/// taken.
+/// this holds is a verb's completion (`complete … page=`, `CompletionRoute`), never the moment a picture is taken.
 ///
 /// A move the view is owed is the page still arriving (rules-refs/app-ui.md「`PageSettled` は表示の置き直しも待つ」).
 ///
@@ -33,7 +32,14 @@ import platitude.ui
 ///
 /// So are the rows of a list on screen that the view has not built yet (`Awaited.built`): the model landed, the
 /// delegates come a polish later, and a run that completes between the two photographs rows its completion never
-/// saw. Every list the page shows is asked (`lists`); one hidden, or with nothing in it, owes nothing.
+/// saw. Every list the page shows is asked (`lists`); one hidden, or with nothing in it, owes nothing. One with rows
+/// and no size is named apart (`unsized`): no size can be the layout's answer or its polish not yet run.
+///
+/// So are the command log's records of every write the tab saw settle (`records`): the write's answer and settle
+/// reach the tab on its feed, its commands reach the log on another, and nothing but the order the drains were
+/// posted in puts one before the other (`hub::Feeds`) — a completion on the answer would walk a log still
+/// arriving. Asked by the write's own receipt, never by a row: a write runs any number of commands, none included
+/// (`CommandsModel.recorded`).
 ///
 /// A tab still at the picker, or one whose path was refused, is done: nothing is coming, and answering no would hold
 /// the run until the watchdog.
@@ -70,6 +76,8 @@ QtObject {
             owed.push("carried")
         if (page.diffShown && page.pageDiff && !page.pageDiff.diffSettled())
             owed.push("diff")
+        if (!pageSettled.recorded(page))
+            owed.push("records")
         if (!graph.failed && !graph.stale) {
             if (!graph.readingsSettled())
                 owed.push("readings")
@@ -88,6 +96,21 @@ QtObject {
         return owed
     }
 
+    /// Whether the command log holds every command of the writes the tab saw settle, by the log's receipt for each.
+    function recorded(page) {
+        const log = page.pageCommands
+        return page.pageTab.settledWrites().every(id => log.recorded(id))
+    }
+
+    /// The lists the page shows with rows and no size, by name. `built` answers for them — a list with no size shows
+    /// nothing — but a list just raised has none until the polish that lays it out, and builds its rows in that same
+    /// polish: only a polish pass that began after the reading tells the two apart (`CompletionRoute`).
+    function unsized(page) {
+        return pageSettled.lists(page)
+            .filter(([, view]) => view.count > 0 && (view.width <= 0 || view.height <= 0))
+            .map(([name]) => name)
+    }
+
     /// Whether every list the page shows has built its rows (the `rows:` terms alone) — for a verb that photographs a
     /// page with reads still on their way by design (`Awaited.arriving`), whose picture still has to hold the rows
     /// its completion saw.
@@ -98,7 +121,7 @@ QtObject {
     }
 
     /// The window's page settled, or no page yet: the term a window's act waits on before its report, which reads
-    /// the page under the window — the completion's hold (`WindowHarness.finish`) comes after the report.
+    /// the page under the window — the completion's hold (`CompletionRoute`) holds the report on the same reads.
     function windowSettled(window) {
         return !window || !window.curPage || pageSettled.settled(window.curPage)
     }

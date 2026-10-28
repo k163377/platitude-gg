@@ -188,6 +188,10 @@ Item {
     function pageMissing() {
         return PageSettled.missing(census.window ? census.window.curPage : null)
     }
+    /// The page's lists with rows and no size yet (`PageSettled.unsized`), which the completion waits a polish over.
+    function pageUnsized() {
+        return PageSettled.unsized(census.window ? census.window.curPage : null)
+    }
 
     /// What the walk at the verb's completion met, held against each picture's walk; null until the verb completes.
     /// Never moved after: a view that builds its rows, or a read that lands, between the completion and a picture

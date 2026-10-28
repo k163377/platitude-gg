@@ -196,7 +196,7 @@ Item {
     // ---- whether the left menu stands whole in the room the page gives it ----
     // Read off the layout itself (デザイン規約 §窓の床「左メニューが全部入る」): the floor's own sum would agree with
     // itself whatever the rail drew. A `SplitView` and a `Column` lay out on polish, so a reading is taken once the
-    // menu's numbers have stood across a swapped frame — one taken before the polish answers for the shape before it.
+    // menu's numbers have stood across a polish pass — one taken before the polish answers for the shape before it.
     /// The menu's end and the room the page gives it, read off the layout now.
     function menuReading() {
         const pane = window.floorPage.pageSidebar
@@ -212,7 +212,7 @@ Item {
         const last = pane.autoSections.headOf("tag")
         return { "end": last.y + last.implicitHeight, "room": pane.autoSections.height }
     }
-    /// Whether the menu's reading has stood across a swapped frame in `op`'s stage (`StageTimer.still`), asked every
+    /// Whether the menu's reading has stood across a polish pass in `op`'s stage (`StageTimer.still`), asked every
     /// beat: while the window is not `ready` for it the asked value is none, so a reading that turned back waits
     /// again.
     function menuStood(op, ready) {

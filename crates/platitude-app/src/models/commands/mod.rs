@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, QmlObject, qobject};
@@ -12,6 +13,8 @@ use crate::hub::{CommandMsg, Feed};
 use super::text_position::{LayoutPosition, SelectionEnds, SourcePosition};
 use super::{impl_notify_runs, push_run, qml_register};
 
+#[cfg(test)]
+mod records_tests;
 mod selection;
 #[cfg(test)]
 mod selection_tests;
@@ -25,6 +28,11 @@ use selection::clock_of;
 
 /// Rows kept per tab. The oldest fall off the end.
 const KEEP: usize = 500;
+
+/// Writes whose records the log remembers having taken in. The tab asks
+/// after the few it saw settle last (`RepoTab::settled_writes`), so this
+/// only has to reach further back than they do.
+const KEEP_RECEIPTS: usize = 64;
 
 #[derive(QModelItem, Default, Clone)]
 pub struct CommandItem {
@@ -90,14 +98,16 @@ impl platitude_core::mem::Footprint for CommandWash {
     }
 }
 
-/// A row's invocation: the id its end arrives under, and whether the
-/// reader asked for it (an unasked fetch's row raises nothing —
-/// デザイン規約 §git が言ったことを読む場所). `run` is part of the key
-/// because the log outlives a session (`CommandMsg`).
+/// A row's invocation: the id its end arrives under, whether the reader
+/// asked for it (an unasked fetch's row raises nothing —
+/// デザイン規約 §git が言ったことを読む場所), and the write it ran under (0
+/// for none). `run` is part of the key because the log outlives a session
+/// (`CommandMsg`).
 struct Invocation {
     run: u64,
     id: u64,
     asked: bool,
+    operation: u64,
 }
 
 #[derive(Default)]
@@ -119,6 +129,10 @@ pub struct CommandsModel {
     sel_ends: Option<SelectionEnds>,
     feed: Option<Arc<Feed<CommandMsg>>>,
     tab_id: i32,
+    /// The writes whose every command this log has taken in, oldest first
+    /// (`CommandMsg::Settled`): what a write's records being in reads off,
+    /// however many rows it left — none included.
+    receipts: VecDeque<u64>,
 }
 
 impl QListModel for CommandsModel {
@@ -325,13 +339,49 @@ impl CommandsModel {
         held
     }
 
+    /// Whether every command the write with this id ran is in the log —
+    /// the log's own receipt for it, not a row found: a write runs any
+    /// number of commands, none included (`CommandMsg::Settled`).
+    #[qslot]
+    fn recorded(&self, operation: i32) -> bool {
+        u64::try_from(operation).is_ok_and(|operation| self.receipts.contains(&operation))
+    }
+
+    /// How many of the log's rows the write with this id ran.
+    #[qslot]
+    fn rows_of(&self, operation: i32) -> i32 {
+        let Ok(operation) = u64::try_from(operation) else {
+            return 0;
+        };
+        let rows = self
+            .ids
+            .iter()
+            .filter(|got| got.operation == operation)
+            .count();
+        i32::try_from(rows).unwrap_or(i32::MAX)
+    }
+
     #[qslot]
     fn drain(&mut self) {
         let Some(feed) = self.feed.clone() else {
             return;
         };
+        if self.take_in(crate::harness::records_through(feed.drain())) {
+            self.changed();
+        }
+        if crate::harness::memprobe::enabled() {
+            crate::harness::memprobe::note("command-rows", self.tab_id, &self.rows);
+        }
+    }
+}
+qml_register!(CommandsModel, "CommandsModel", singleton = false);
+
+impl CommandsModel {
+    /// Applies what the feed brought, in its order; answers whether a row
+    /// or the log's state moved.
+    fn take_in(&mut self, messages: Vec<CommandMsg>) -> bool {
         let mut touched = false;
-        for msg in crate::harness::records_through(feed.drain()) {
+        for msg in messages {
             match msg {
                 CommandMsg::Started {
                     run,
@@ -340,6 +390,7 @@ impl CommandsModel {
                     full,
                     at_ms,
                     asked,
+                    operation,
                 } => {
                     let mut gone = 0;
                     while self.rows.len() >= KEEP {
@@ -349,7 +400,12 @@ impl CommandsModel {
                     if gone > 0 {
                         self.shift_selection(gone);
                     }
-                    self.ids.push(Invocation { run, id, asked });
+                    self.ids.push(Invocation {
+                        run,
+                        id,
+                        asked,
+                        operation,
+                    });
                     let args = display
                         .split_once(' ')
                         .map(|(_, rest)| rest.to_string())
@@ -421,17 +477,17 @@ impl CommandsModel {
                         self.failure();
                     }
                 }
+                CommandMsg::Settled { operation } => {
+                    self.receipts.push_back(operation);
+                    if self.receipts.len() > KEEP_RECEIPTS {
+                        self.receipts.pop_front();
+                    }
+                }
             }
         }
-        if touched {
-            self.changed();
-        }
-        if crate::harness::memprobe::enabled() {
-            crate::harness::memprobe::note("command-rows", self.tab_id, &self.rows);
-        }
+        touched
     }
 }
-qml_register!(CommandsModel, "CommandsModel", singleton = false);
 
 impl platitude_core::mem::Footprint for CommandItem {
     fn heap_bytes(&self) -> usize {

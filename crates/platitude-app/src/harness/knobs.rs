@@ -72,8 +72,8 @@ pub(crate) struct Knobs {
     pub fault_owed_at_shot: String,
     /// `PGG_FAULT_HOLD_RECORDS` — hold the command log's records back from
     /// the first row a reader asked for, until the run lets them through:
-    /// a write's answer on the tab ahead of its commands on the log, the
-    /// order two feeds can drain in (`harness::faults::records_through`;
+    /// a write's answer on the tab ahead of its commands on the log, an
+    /// order no contract of the two feeds rules out (`harness::held_records`;
     /// `xtask::verify::records_check`).
     pub fault_hold_records: bool,
     /// `PGG_AUTO_SELECT` — select the newest commit and open the first

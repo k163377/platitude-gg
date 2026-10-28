@@ -476,6 +476,13 @@ impl RepoTab {
         bridge_id(self.write_watch.id())
     }
 
+    /// The writes this tab saw settle last, by id: the ones the command
+    /// log's receipts are asked after (`PageSettled`'s `records`).
+    #[qslot]
+    pub(crate) fn settled_writes(&self) -> Vec<i32> {
+        self.settled.iter().map(|id| bridge_id(*id)).collect()
+    }
+
     /// git stopped part-way through that one and left the operation
     /// standing.
     #[qslot]

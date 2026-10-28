@@ -165,12 +165,12 @@ Item {
     // The band's two rows (`TopBar`'s `bandRow` and its shadow `bandAsked`) lay out on polish, so in the beat the last
     // badge arrives, or the window reaches its width, the group still has the width the row gave it before — on macOS
     // the identity badge's alone, read as a shadow that disagrees. Every report of the band's shape waits for the
-    // shape to stand across a swapped frame once what it waits for is there, as the left menu's does
+    // shape to stand across a polish pass once what it waits for is there, as the left menu's does
     // (`WindowFrameActs.menuStood`) — asked the whole time: a beat that turned back (a badge gone again, the card not
     // laid out) reads as another value and starts the wait over, or the report would go out in the very beat the
     // shape came back.
     /// Whether the band's shape — `line`, the report's reading of it, "" while what it waits for is not all there —
-    /// has stood across a swapped frame (`StageTimer.still`, under `op`'s stage). Asked every beat.
+    /// has stood across a polish pass (`StageTimer.still`, under `op`'s stage). Asked every beat.
     function bandStood(op, line) {
         return op.still("band_laid", line)
     }

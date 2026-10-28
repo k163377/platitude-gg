@@ -5,7 +5,7 @@ import "stages.js" as Stages
 import "../../src/auto" as Automation
 
 // The page's own holds on a completion that cannot be read — the page that claimed the run gone with its driver — end
-// the run at once as a breach that says so, rather than standing to the ceiling (`CompletionRoute.held`).
+// the run at once as a breach that says so, rather than standing to the ceiling (`CompletionRoute.reading`).
 Item {
     id: root
 

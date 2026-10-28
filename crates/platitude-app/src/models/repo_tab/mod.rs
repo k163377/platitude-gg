@@ -102,6 +102,11 @@ pub struct RepoTab {
     /// write stands its rows on that reading, so it waits on this
     /// (`settling`).
     unsettled: Vec<u64>,
+    /// The writes this tab saw settle last, oldest first — whoever asked
+    /// for them. Their commands reach the command log on a feed of its own
+    /// (`hub::Feeds`), and the log's receipt is asked after by these ids
+    /// (`settled_writes`, `CommandsModel.recorded`).
+    settled: std::collections::VecDeque<u64>,
     /// A write is in `unsettled`, or the models have not drained the reads
     /// behind the last one out yet (`TabMsg::ReadsDrained`).
     settling: bool,
@@ -491,6 +496,11 @@ struct WriteAnswer {
     report_name: String,
     report_fact: String,
 }
+
+/// How many settled writes' ids the tab keeps for the log's receipts to be
+/// asked after: a run asks after its own writes, and others' — an unasked
+/// fetch — may settle between.
+const KEEP_SETTLED: usize = 8;
 
 /// A session's running number (a write's id, a HEAD report's) as the
 /// bridge carries it. Both count from one and never reach `i32::MAX`, so

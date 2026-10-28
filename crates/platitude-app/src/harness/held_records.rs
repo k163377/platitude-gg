@@ -2,9 +2,10 @@
 //! (`PGG_FAULT_HOLD_RECORDS`): from the first row a reader asked for,
 //! everything the log's feed brings stays off the log until the run lets
 //! it through. A write's answer then reaches the tab ahead of its commands
-//! reaching the log — an order the two feeds (`hub::Feeds`) are free to
-//! drain in, made the run's own (`xtask::verify::records_check`). A build
-//! without the harness lets everything through.
+//! reaching the log — an order no contract of the two feeds
+//! (`hub::Feeds`) rules out, made the run's own
+//! (`xtask::verify::records_check`). A build without the harness lets
+//! everything through.
 
 use crate::hub::CommandMsg;
 

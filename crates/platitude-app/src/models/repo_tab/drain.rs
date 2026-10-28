@@ -251,6 +251,10 @@ impl RepoTab {
                 // fetch settles too, under an id nothing here started.
                 TabMsg::WriteSettled { id, .. } => {
                     self.write_watch.settled(id);
+                    self.settled.push_back(id);
+                    if self.settled.len() > KEEP_SETTLED {
+                        self.settled.pop_front();
+                    }
                     if let Some(at) = self.unsettled.iter().position(|out| *out == id) {
                         self.unsettled.remove(at);
                         if self.unsettled.is_empty()

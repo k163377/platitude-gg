@@ -56,8 +56,8 @@ Item {
         Hand.away = Harness.automated
         // A turning ring photographs differently every time.
         Motion.stilled = Harness.shotDir !== ""
-        // The window whose frames the waits on a layout count (`StageTimer.still` / `drawnSince`), and the route
-        // every completion takes (`CompletionRoute`).
+        // The window whose polish passes the waits on a layout stand on (`Awaited.polishes`) and whose frames the
+        // pictures wait out, and the route every completion takes (`CompletionRoute`).
         Awaited.window = harness.window
         Awaited.route = completionRoute
         harness.screensUp = true
@@ -132,6 +132,7 @@ Item {
     CompletionRoute {
         id: completionRoute
         owed: () => census.pageMissing()
+        unsized: () => census.pageUnsized()
         onReadied: harness.window.finishAutoAct()
     }
     /// One run has one ending: the parts standing are walked in the completing turn (`WindowCensus.markCompletion`)
@@ -159,9 +160,12 @@ Item {
                           completionRoute.witnessesRead)
         harness.settlingFrom = Awaited.frames
         harness.window.update()
-        // Nothing waited on the records held back: the completion stood before them, and lets them in now.
-        if (Harness.faultHoldRecords)
+        // What the completion stood on of the run's write in the log; records still held were waited on by nothing,
+        // and come in now.
+        if (Harness.faultHoldRecords) {
+            harness.sayRecords()
             harness.letRecordsThrough("after-completion")
+        }
     }
     /// The page's reads a picture waits out, never named by the verb: the two the product's own timers drive —
     /// `placing` (the view re-centring after `Metrics.anchorDelayMs`) and `readings` (the pacer's reads of other
@@ -249,6 +253,14 @@ Item {
                 harness.letRecordsThrough("held name=" + name)
         }
     }
+    function sayRecords() {
+        const page = harness.window.curPage
+        if (!page)
+            return
+        const write = page.pageTab.watchedWriteId()
+        Awaited.note("fault_records op=" + write + " recorded=" + page.pageCommands.recorded(write)
+                     + " rows=" + page.pageCommands.rowsOf(write))
+    }
     function letRecordsThrough(how) {
         const page = harness.window.curPage
         if (!page)
@@ -258,8 +270,8 @@ Item {
             Awaited.note("fault_records released=" + how + " held=" + held)
     }
 
-    // The render boundary the waits on a layout read (`StageTimer.still` / `drawnSince`), and the completion's walk
-    // (`settle`).
+    // The frames the completion's pictures wait out (`settle`) and the ceiling's line counts — no layout wait's
+    // boundary (`Awaited.polishes`).
     Connections {
         target: harness.window
         function onFrameSwapped() {

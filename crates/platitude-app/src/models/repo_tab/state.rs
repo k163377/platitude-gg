@@ -25,6 +25,7 @@ impl Default for RepoTab {
             busy_count: 0,
             busy_op: String::new(),
             unsettled: Vec::new(),
+            settled: std::collections::VecDeque::new(),
             settling: false,
             standing: false,
             replaying: false,

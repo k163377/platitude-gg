@@ -367,7 +367,7 @@ Item {
                 // Nothing may come out under the menu: a seat the ask reached is deciding until its rest runs out
                 // (`PageSettled`'s `hover:` term), one the menu holds back keeps the ask and decides nothing — read
                 // after a frame and the page, what is not out was held back.
-                if (!Awaited.all("menu_block_asked", { "drawn": op.drawnSince("menu_block_other"),
+                if (!Awaited.all("menu_block_asked", { "drawn": op.laidOutSince("menu_block_other"),
                                                        "page": PageSettled.settled(page) }))
                     return
                 if (op.stage === "other") {

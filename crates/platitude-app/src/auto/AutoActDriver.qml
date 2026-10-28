@@ -136,19 +136,21 @@ Item {
     }
     // A menu row's words take their widths from a `RowLayout` on polish, so a cut name (`AppMenuItem.nameCut`) read in
     // the beat its card opens answers for the row before that layout ran — whole, as if it fit. Under load the
-    // sampler's beat lands there. A reading waits two swapped frames from the first time `op` asks for a card in its
-    // stage (`StageTimer.drawnSince`): one whose polish ran before the ask answers for the shape before it.
-    property var framesCard: null
-    property int framesCardSerial: 0
-    /// Whether `card`'s rows have been laid out since `op` first asked about it: false while the frames are still to
-    /// come.
+    // sampler's beat lands there. A reading waits for a polish pass begun after the first time `op` asks for a card in
+    // its stage (`StageTimer.laidOutSince`).
+    /// The card last asked about, and a serial that moves with it: a card asked about after another starts a wait of
+    /// its own.
+    property var askedCard: null
+    property int askedCardSerial: 0
+    /// Whether `card`'s rows have been laid out since `op` first asked about it: false until a polish pass begun after
+    /// the ask.
     // reach(beat)
     function cardLaidOut(op, card) {
-        if (driver.framesCard !== card) {
-            driver.framesCard = card
-            driver.framesCardSerial++
+        if (driver.askedCard !== card) {
+            driver.askedCard = card
+            driver.askedCardSerial++
         }
-        return op.drawnSince("card_laid_out#" + driver.framesCardSerial)
+        return op.laidOutSince("card_laid_out#" + driver.askedCardSerial)
     }
     /// Where a TAG card's rows reach, in the one report line both entrances' verbs say it with
     /// (`AutoActRefVerbs.reachWords`).
@@ -159,9 +161,9 @@ Item {
     /// How far down a diff's reader is taken before the rebuild (`keep-place`) or the colour swap (`colour-place`);
     /// both are judged on getting exactly this back.
     readonly property real readY: 400
-    // The diff's reach as one string (measured, drawn, widest row), held until it stands across a frame: delegates are
-    // built a layout after the jump, and a `Text` answers at the family's advance until its fallback font resolves
-    // (`DiffTextMetrics`). The row is in it so a width filed under the wrong row shows as movement.
+    // The diff's reach as one string (measured, drawn, widest row), held until it stands across a polish pass:
+    // delegates are built a layout after the jump, and a `Text` answers at the family's advance until its fallback
+    // font resolves (`DiffTextMetrics`). The row is in it so a width filed under the wrong row shows as movement.
     function diffReach() {
         return Math.round(diffPane.codeMeasured) + "," + Math.round(diffPane.codeDrawn)
                 + "," + diffPane.codeWidestRow

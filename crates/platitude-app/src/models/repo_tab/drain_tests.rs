@@ -1141,6 +1141,22 @@ fn a_write_settles_after_its_answer_not_at_it() {
     assert!(!tab.settling);
 }
 
+/// Every write the tab sees settle is kept by id, oldest first and
+/// bounded, whoever asked for it — the ones the command log's receipts are
+/// asked after.
+#[test]
+fn the_writes_seen_settle_are_kept_for_the_logs_receipts() {
+    let mut tab = RepoTab::default();
+    assert!(tab.settled_writes().is_empty());
+    tab.absorb(vec![
+        TabMsg::WriteSettled { id: 4 },
+        TabMsg::WriteSettled { id: 2 },
+    ]);
+    assert_eq!(tab.settled_writes(), vec![4, 2]);
+    tab.absorb((10..20).map(|id| TabMsg::WriteSettled { id }).collect());
+    assert_eq!(tab.settled_writes(), (12..20).collect::<Vec<i32>>());
+}
+
 /// A write this tab did not ask for itself — a restore off the discard
 /// record — is counted from its start; one asked for before the models
 /// have drained the last keeps the tab settling.

@@ -498,7 +498,7 @@ Item {
                 // A card that must not open: the hover Qt hands what is under the hand comes with the next frame, and
                 // a seat it asks is deciding until its rest runs out (`PageSettled`'s `hover:` term) — read after
                 // both, what has not opened by then was never asked for.
-                if (!Awaited.all("wip_reread_still", { "drawn": op.drawnSince("wip_reread_stirred"),
+                if (!Awaited.all("wip_reread_still", { "drawn": op.laidOutSince("wip_reread_stirred"),
                                                        "page": PageSettled.settled(page) }))
                     return
                 op.complete({ "name": "wip_reread_still", "when": () => ({ "page": PageSettled.settled(page) }),
@@ -631,7 +631,7 @@ Item {
                 // The tip that must not come: the rows rebuilt under the hand are a polish away, and a seat one of them
                 // asks is deciding until its rest runs out (`PageSettled`'s `rows:` and `hover:` terms) — read after
                 // both, a tip not out by then was never asked for.
-                if (!Awaited.all("tip_slide_rested", { "drawn": op.drawnSince("tip_slide_folded"),
+                if (!Awaited.all("tip_slide_rested", { "drawn": op.laidOutSince("tip_slide_folded"),
                                                        "page": PageSettled.settled(page) }))
                     return
                 if (op.stage === "still") {

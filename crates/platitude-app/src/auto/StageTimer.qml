@@ -136,39 +136,41 @@ SampleTimer {
         Awaited.begin(op)
     }
 
-    /// Whether `value` has stood across a swapped frame: true once the value read now is the one read at an earlier
-    /// frame — a layout still moving between them would have changed it. In place of "two samples agree", whose two
-    /// samples can both fall before one layout pass: here a polish ran between. Kept for this stage of this generation
-    /// only: a value that stood before the stage moved says nothing of the next.
+    /// Whether `value` has stood across a polish pass of the window begun after it was read (`Awaited.layoutMark`):
+    /// true once the value read now is the one read before such a pass — a layout still moving across it would have
+    /// changed it, and a value laid out to nothing stands as well as any. In place of "two samples agree", whose two
+    /// samples can both fall before one layout pass, and of a frame said swapped, which can be one begun before the
+    /// read. Kept for this stage of this generation only: a value that stood before the stage moved says nothing of
+    /// the next.
     // reach(beat)
     function still(name, value) {
         const marks = Awaited.marksOf(op)
         const mark = marks[name]
         if (mark === undefined || mark.value !== value) {
-            marks[name] = { "value": value, "frame": Awaited.frames }
-            Awaited.window.update()
+            marks[name] = { "value": value, "polish": Awaited.layoutMark() }
+            Awaited.askLayout()
             return false
         }
-        if (Awaited.frames <= mark.frame) {
-            Awaited.window.update()
+        if (!Awaited.layoutPassedSince(mark.polish)) {
+            Awaited.askLayout()
             return false
         }
         return true
     }
-    /// Whether two frames have swapped since `name` was first asked about in this stage: the first may have been drawn
-    /// from a polish that ran before the ask, the second cannot. For a layout asked for (a card opened, a group laid
-    /// out) whose shape has no property of its own to read. `name` names what was asked for — ask again under another
-    /// name for another thing.
+    /// Whether a polish pass of the window has begun since `name` was first asked about in this stage: a layout asked
+    /// for before the ask (a card opened, a group laid out) whose shape has no property of its own to read is laid out
+    /// by then. `name` names what was asked for — ask again under another name for another thing. A layout, not a
+    /// picture: what is painted is the grab's to say (`grabToImage`).
     // reach(beat)
-    function drawnSince(name) {
+    function laidOutSince(name) {
         const marks = Awaited.marksOf(op)
         let mark = marks[name]
         if (mark === undefined) {
-            mark = { "frame": Awaited.frames }
+            mark = { "polish": Awaited.layoutMark() }
             marks[name] = mark
         }
-        if (Awaited.frames < mark.frame + 2) {
-            Awaited.window.update()
+        if (!Awaited.layoutPassedSince(mark.polish)) {
+            Awaited.askLayout()
             return false
         }
         return true

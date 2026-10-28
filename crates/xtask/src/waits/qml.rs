@@ -153,10 +153,11 @@ fn keeps_a_count(line: &str) -> bool {
         .is_some_and(|(_, added)| has_token(added, "interval"))
 }
 
-/// The files that count the window's frames for everyone else: the one
-/// render boundary a wait on a layout reads is `Awaited.still` /
-/// `StageTimer.drawnSince`, fed by `WindowHarness`; the shot driver reads
-/// frames for the ceiling's line, and the perf drivers measure them.
+/// The files that count the window's frames or polish passes for everyone
+/// else: the one boundary a wait on a layout stands on is `Awaited`'s count
+/// of polish passes, read through `StageTimer.still` / `laidOutSince`; the
+/// harness feeds the frames the pictures wait out, the shot driver reads
+/// them for the ceiling's line, and the perf drivers measure them.
 const FRAME_KEEPERS: [&str; 5] = [
     "Awaited.qml",
     "WindowHarness.qml",
@@ -165,16 +166,25 @@ const FRAME_KEEPERS: [&str; 5] = [
     "WindowPerfDriver.qml",
 ];
 
-/// Whether `line` counts frames of its own — `frameSwapped`,
-/// `framesSwapped` or the window's `frameCounter` — outside the files
-/// that keep the count for everyone: a wait "two frames from here" written
-/// again, in place of `StageTimer.drawnSince`.
+/// Whether `line` counts frames or polish passes of its own —
+/// `frameSwapped`, `framesSwapped`, the window's `frameCounter`, its
+/// `afterAnimating`, `Awaited`'s `polishes` — outside the files that keep
+/// the count for everyone: a layout wait written again, in place of
+/// `StageTimer.still` / `laidOutSince`.
 fn counts_frames(file: &str, line: &str) -> bool {
     let name = file.rsplit(['/', '\\']).next().unwrap_or(file);
     !FRAME_KEEPERS.contains(&name)
-        && ["frameSwapped", "framesSwapped", "frameCounter"]
-            .iter()
-            .any(|word| has_token(line, word))
+        && [
+            "frameSwapped",
+            "onFrameSwapped",
+            "framesSwapped",
+            "frameCounter",
+            "afterAnimating",
+            "onAfterAnimating",
+            "polishes",
+        ]
+        .iter()
+        .any(|word| has_token(line, word))
 }
 
 /// One call of a name looked for, read off the whole code view rather
@@ -482,8 +492,9 @@ Timer {
         assert_eq!(exceptions.len(), 1);
     }
 
-    /// A verb counting the window's frames for itself is a wait of "two
-    /// frames from here" written again; the count lives in `Awaited`, read through `StageTimer.drawnSince`.
+    /// A verb counting the window's frames or polish passes for itself is a
+    /// layout wait written again; the count lives in `Awaited`, read through
+    /// `StageTimer.still` / `laidOutSince`.
     #[test]
     fn a_frame_count_of_a_verbs_own_is_named_and_the_keepers_are_not() {
         let text = "\
@@ -491,6 +502,8 @@ Item {
     property int framesSwapped: 0
     function laid() { return acts.framesSwapped >= wanted }
     function drawn() { return window.frameCounter > before }
+    function passed() { return Awaited.polishes > mark }
+    Connections { target: window; function onAfterAnimating() { acts.passes++ } }
 }
 ";
         let (findings, _) = scan("src/auto/AutoActFooVerbs.qml", text, Kind::Harness);
@@ -499,7 +512,14 @@ Item {
                 .iter()
                 .map(|f| (f.line, f.rule))
                 .collect::<Vec<_>>(),
-            vec![(2, "frames"), (3, "frames"), (4, "frames")]
+            vec![
+                (2, "frames"),
+                (3, "frames"),
+                (4, "frames"),
+                (5, "frames"),
+                (6, "frames"),
+                (5, "awaited")
+            ]
         );
         for keeper in ["Awaited.qml", "WindowHarness.qml", "AutoShotDriver.qml"] {
             let (findings, _) = scan(&format!("src/auto/{keeper}"), text, Kind::Harness);

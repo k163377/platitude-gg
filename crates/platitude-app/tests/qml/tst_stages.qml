@@ -218,21 +218,25 @@ Item {
             compare(Stages.breaches(Harness.said), [])
         }
 
-        /// A layout mark is the stage's and the generation's: one that stood across a frame in one stage satisfies no
-        /// wait of the next, nor of the next generation — each starts over from the frame it is first asked at. The
-        /// frames are counted here by hand, the boundary `WindowHarness` feeds the machinery with.
+        /// A layout mark is the stage's and the generation's: one that stood across a polish pass in one stage
+        /// satisfies no wait of the next, nor of the next generation — each starts over from the pass it is first asked
+        /// at. Frames said swapped satisfy none. The passes are counted here by hand, the boundary the window's
+        /// `afterAnimating` feeds the machinery with.
         function test_4_a_layout_mark_dies_with_its_stage_and_its_generation() {
             marksOp.start()
             verify(!marksOp.still("width", 5))
-            verify(!marksOp.drawnSince("card"))
+            verify(!marksOp.laidOutSince("card"))
             Automation.Awaited.frames = Automation.Awaited.frames + 2
+            verify(!marksOp.still("width", 5), "frames are no pass")
+            verify(!marksOp.laidOutSince("card"), "frames are no pass")
+            Automation.Awaited.polishes = Automation.Awaited.polishes + 1
             verify(marksOp.still("width", 5))
-            verify(marksOp.drawnSince("card"))
+            verify(marksOp.laidOutSince("card"))
             root.marksMove = true
             tryVerify(() => marksOp.at("moved"))
             verify(!marksOp.still("width", 5), "a mark of the stage before")
-            verify(!marksOp.drawnSince("card"), "a frame count of the stage before")
-            Automation.Awaited.frames = Automation.Awaited.frames + 2
+            verify(!marksOp.laidOutSince("card"), "a pass count of the stage before")
+            Automation.Awaited.polishes = Automation.Awaited.polishes + 1
             verify(marksOp.still("width", 5))
             marksOp.stop()
             marksOp.start()

@@ -35,11 +35,11 @@ Item {
         return acts.settingsDialog.opened
     }
 
-    /// Whether the chapters' column and where it stands scrolled to have stood across a swapped frame (`op`'s
+    /// Whether the chapters' column and where it stands scrolled to have stood across a polish pass (`op`'s
     /// `still`): the foot is read off the column's height, which can grow after a send — the opened screen's first
     /// layout pass lays every chapter out again, and a send made before it leaves `AVATARS` below the view. Read in
-    /// the beat before each send to the foot (`sendChaptersToFoot`), so the foot is judged in a frame drawn after
-    /// the last send.
+    /// the beat before each send to the foot (`sendChaptersToFoot`), so the foot is judged after a polish pass begun
+    /// after the last send.
     function chaptersStill(op) {
         return op.still("chapters_foot", acts.settingsDialog.chaptersContent + "@" + acts.settingsDialog.chaptersAt)
     }
@@ -834,7 +834,7 @@ Item {
                     handTimer.note("settings_hand surface=" + Harness.autoActArg + " waiting=" + wait)
                     return
                 }
-                // The hand's frame standing across a swapped frame, so the ring anchors in the card that is there,
+                // The hand's frame standing across a polish pass, so the ring anchors in the card that is there,
                 // not one still opening.
                 if (!handTimer.still("seat", hand.width + "x" + hand.height))
                     return

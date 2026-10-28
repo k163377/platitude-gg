@@ -9,6 +9,9 @@ Item {
     width: 400
     height: 300
     property int wipPooled: 0
+    /// The writes the fake tab saw settle, and the fake log's receipts (`PageSettled.recorded`).
+    property var settledIds: []
+    property var receipts: []
 
     Component {
         id: filePane
@@ -82,7 +85,8 @@ Item {
 
     readonly property QtObject page: QtObject {
         id: page
-        property var pageTab: ({state: "open"})
+        property var pageTab: ({state: "open", settledWrites: () => root.settledIds})
+        property var pageCommands: ({recorded: id => root.receipts.indexOf(id) >= 0})
         property var pageWorktree: ({loaded: true, wipRowStands: false})
         property bool pageRefsLoaded: true
         property bool pageDetailsSettled: true
@@ -100,7 +104,8 @@ Item {
         y: 200
         width: 200
         height: 40
-        property var pageTab: ({state: "open"})
+        property var pageTab: ({state: "open", settledWrites: () => root.settledIds})
+        property var pageCommands: ({recorded: id => root.receipts.indexOf(id) >= 0})
         property var pageWorktree: ({loaded: true, wipRowStands: false})
         property bool pageRefsLoaded: true
         property bool pageDetailsSettled: true
@@ -186,6 +191,8 @@ Item {
             page.diffDone = true
             listedRows.clear()
             listed.visible = true
+            root.settledIds = []
+            root.receipts = []
             decidingSeat.takeDown("cleanup", false)
             census.atCompletion = null
             census.harnessBranch = null
@@ -327,7 +334,7 @@ Item {
         }
 
         // A read ending without a property edge (a field of the JS object, as the core's query has none) is read
-        // fresh by the function the completion's hold samples (`WindowHarness.completionWait`), not by a binding.
+        // fresh by the function the completion's hold samples (`CompletionRoute.reading`), not by a binding.
         function test_the_pages_missing_reads_are_read_fresh_each_time() {
             graphState.readings.done = false
             window.curPage = page
@@ -370,6 +377,29 @@ Item {
             listed.visible = false
             listedRows.append({})
             verify(Automation.PageSettled.settled(listedPage))
+        }
+
+        // A write's answer reaches the tab and its commands the log on two feeds drained in either order: the page owes
+        // the records from the tab seeing the write settle until the log has that write's own receipt — another
+        // write's receipt answers nothing for it — and a receipt in first owes nothing.
+        function test_a_settled_writes_records_are_owed_until_the_log_has_its_receipt_data() {
+            return [{ tag: "answer first", logFirst: false }, { tag: "log first", logFirst: true }]
+        }
+        function test_a_settled_writes_records_are_owed_until_the_log_has_its_receipt(data) {
+            verify(Automation.PageSettled.settled(page))
+            if (data.logFirst) {
+                root.receipts = [7]
+                verify(Automation.PageSettled.settled(page))
+                root.settledIds = [7]
+                verify(Automation.PageSettled.settled(page))
+                return
+            }
+            root.settledIds = [7]
+            compare(Automation.PageSettled.missing(page), ["records"])
+            root.receipts = [8]
+            compare(Automation.PageSettled.missing(page), ["records"])
+            root.receipts = [8, 7]
+            verify(Automation.PageSettled.settled(page))
         }
 
         // A window with no page yet is settled for an act that reads nothing of a page, and not for one that does.
