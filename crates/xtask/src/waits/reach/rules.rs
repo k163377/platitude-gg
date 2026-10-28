@@ -207,8 +207,9 @@ fn said(program: &Program, effect: &Effect) -> String {
 type Place = (usize, usize);
 
 /// Every effect `root` reaches, with the place it stands at: its own, and
-/// those of each harness function it calls — with the call in the root's
-/// own file it was reached through, where it stands in another.
+/// those of each function it calls, the harness's or the product's — with
+/// the call in the root's own file it was reached through, where it stands
+/// in another.
 fn reach(program: &Program, root: usize) -> Vec<(Effect, Place, Option<Place>)> {
     let home = program.codes[root].doc;
     let mut out = Vec::new();
@@ -220,10 +221,12 @@ fn reach(program: &Program, root: usize) -> Vec<(Effect, Place, Option<Place>)> 
         }
         let doc = program.codes[code].doc;
         for (effect, line) in &program.codes[code].effects {
-            if let Effect::Calls(callee) = effect {
-                let callee_doc = program.codes[*callee].doc;
-                let via = via.or((callee_doc != home && doc == home).then_some((doc, *line)));
-                stack.push((*callee, via));
+            if let Effect::Calls(callees) = effect {
+                for callee in callees {
+                    let callee_doc = program.codes[*callee].doc;
+                    let via = via.or((callee_doc != home && doc == home).then_some((doc, *line)));
+                    stack.push((*callee, via));
+                }
             } else {
                 out.push((effect.clone(), (doc, *line), via));
             }

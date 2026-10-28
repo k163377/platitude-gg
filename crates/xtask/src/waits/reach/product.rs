@@ -1,13 +1,13 @@
-//! What a call into the product does, for the harness code that makes it:
-//! the product's own QML functions read for what they write, its Rust
-//! slots by the receiver Rust gives them, and the language's and Qt's own
-//! methods by the table below. A name none of them answers for is
-//! `Unknown`, and a caller takes it as nothing safe.
+//! The product as the harness's calls reach it: its QML functions and
+//! signals by name, its Rust slots by the receiver Rust gives them, and the
+//! language's and Qt's own methods by the tables below. Its functions are
+//! read as their caller's code (`super::calls`), so what one changes is
+//! judged as the harness's own code is (`super::origin`). A name none of
+//! them answers for is `Unknown`, and a caller takes it as nothing safe.
 
 use std::collections::HashMap;
 
 use super::parse::Doc;
-use super::scan::{self, Head};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Does {
@@ -20,7 +20,7 @@ pub(super) enum Does {
 }
 
 /// The language's and Qt's own methods that only read, by name.
-const READ: &[&str] = &[
+pub(super) const READ: &[&str] = &[
     // Values: strings, arrays, numbers, objects.
     "concat",
     "slice",
@@ -108,7 +108,7 @@ const READ: &[&str] = &[
 /// The language's and Qt's own methods that change the product, by name:
 /// a view moved, a focus taken, a popup opened, a timer started, a file
 /// written, an event loop told to go.
-const INPUT: &[&str] = &[
+pub(super) const INPUT: &[&str] = &[
     "forceActiveFocus",
     "positionViewAtIndex",
     "positionViewAtBeginning",
@@ -157,12 +157,6 @@ pub(super) struct Product {
     slots: HashMap<String, bool>,
     /// The same, by the type that declares it.
     typed_slots: HashMap<(String, String), bool>,
-    /// Each product file, by the type it declares.
-    types: HashMap<String, usize>,
-    /// What each name was found to do, once asked.
-    known: std::cell::RefCell<HashMap<String, Does>>,
-    /// What each function was found to do, once read.
-    read_functions: std::cell::RefCell<HashMap<(usize, usize), Does>>,
 }
 
 impl Product {
@@ -196,14 +190,6 @@ impl Product {
             signals,
             slots: by_name,
             typed_slots,
-            types: docs
-                .iter()
-                .enumerate()
-                .skip(from)
-                .map(|(d, doc)| (doc.name.clone(), d))
-                .collect(),
-            known: std::cell::RefCell::new(HashMap::new()),
-            read_functions: std::cell::RefCell::new(HashMap::new()),
         }
     }
 
@@ -214,159 +200,20 @@ impl Product {
             .map(|changes| if *changes { Does::Input } else { Does::Read })
     }
 
-    /// What calling `method` on something of the product's does.
-    pub fn does(&self, docs: &[Doc], method: &str) -> Does {
-        if let Some(known) = self.known.borrow().get(method) {
-            return *known;
-        }
-        // Asked again while being read (a function that calls itself): read so far.
-        self.known
-            .borrow_mut()
-            .insert(method.to_string(), Does::Read);
-        let found = self.read(docs, method);
-        self.known.borrow_mut().insert(method.to_string(), found);
-        found
+    /// Whether some Rust slot is named `method`, and whether some so named
+    /// can change what it is called on.
+    pub fn slot_named(&self, method: &str) -> Option<bool> {
+        self.slots.get(method).copied()
     }
 
-    fn read(&self, docs: &[Doc], method: &str) -> Does {
-        let mut found = Vec::new();
-        if INPUT.contains(&method) || self.signals.contains_key(method) {
-            return Does::Input;
-        }
-        if let Some(changes) = self.slots.get(method) {
-            found.push(if *changes { Does::Input } else { Does::Read });
-        }
-        if let Some(defined) = self.functions.get(method) {
-            for &(d, u) in defined {
-                found.push(self.function(docs, d, u));
-            }
-        }
-        if found.is_empty() {
-            return if READ.contains(&method) {
-                Does::Read
-            } else {
-                Does::Unknown
-            };
-        }
-        if found.contains(&Does::Input) || found.contains(&Does::Unknown) {
-            Does::Input
-        } else {
-            Does::Read
-        }
+    /// The product's QML functions named `method`, as `(file, unit)`.
+    pub fn functions_named(&self, method: &str) -> &[(usize, usize)] {
+        self.functions.get(method).map_or(&[], Vec::as_slice)
     }
 
-    /// What one product function does: an input where it writes anything
-    /// not its own or calls what is one; a call it cannot follow counts as
-    /// an input — the product's own code is not read on trust.
-    pub fn function(&self, docs: &[Doc], d: usize, u: usize) -> Does {
-        if let Some(known) = self.read_functions.borrow().get(&(d, u)) {
-            return *known;
-        }
-        self.read_functions.borrow_mut().insert((d, u), Does::Read);
-        let found = self.function_read(docs, d, u);
-        self.read_functions.borrow_mut().insert((d, u), found);
-        found
-    }
-
-    /// What a call inside file `d` does where the file itself answers for
-    /// it: a function of its own called bare, or one of the object an id of
-    /// its names — that object's own, or its type's. `None` where the file
-    /// does not answer, and the call is read by its name.
-    fn in_doc(&self, docs: &[Doc], d: usize, path: &scan::Path, method: &str) -> Option<Does> {
-        let doc = &docs[d];
-        let object = match (&path.head, path.members.len()) {
-            (Head::Name(_), 0) => None,
-            (Head::Name(head), 1) => Some(
-                doc.objects
-                    .iter()
-                    .position(|o| o.id.as_deref() == Some(head.as_str()))?,
-            ),
-            _ => return None,
-        };
-        let own: Vec<(usize, usize)> = doc
-            .units
-            .iter()
-            .enumerate()
-            .filter(|(_, unit)| {
-                unit.kind == super::parse::UnitKind::Function
-                    && unit.name == method
-                    && object.is_none_or(|o| unit.object == o)
-            })
-            .map(|(u, _)| (d, u))
-            .collect();
-        let typed: Vec<(usize, usize)> = object
-            .and_then(|o| self.types.get(&doc.objects[o].ty))
-            .map(|&t| {
-                docs[t]
-                    .units
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, unit)| {
-                        unit.kind == super::parse::UnitKind::Function
-                            && unit.object == 0
-                            && unit.name == method
-                    })
-                    .map(|(u, _)| (t, u))
-                    .collect()
-            })
-            .unwrap_or_default();
-        let found: Vec<(usize, usize)> = if own.is_empty() { typed } else { own };
-        if found.is_empty() {
-            return None;
-        }
-        let any_input = found
-            .into_iter()
-            .any(|(fd, fu)| self.function(docs, fd, fu) != Does::Read);
-        Some(if any_input { Does::Input } else { Does::Read })
-    }
-
-    fn function_read(&self, docs: &[Doc], d: usize, u: usize) -> Does {
-        let doc = &docs[d];
-        let unit = &doc.units[u];
-        let facts = scan::facts(&doc.tokens, unit.body.clone());
-        let own = |name: &str| {
-            unit.params.iter().any(|p| p == name) || facts.locals.iter().any(|l| l.name == name)
-        };
-        for write in &facts.writes {
-            match &write.path.head {
-                Head::Name(name) if own(name) && write.path.members.is_empty() => {}
-                _ => return Does::Input,
-            }
-        }
-        for call in &facts.calls {
-            let Some(method) = call.path.last() else {
-                return Does::Input;
-            };
-            if call.path.members.is_empty() {
-                let Head::Name(name) = &call.path.head else {
-                    return Does::Input;
-                };
-                if own(name) {
-                    return Does::Input;
-                }
-                if GLOBAL_FUNCTIONS.contains(&name.as_str()) {
-                    continue;
-                }
-            } else if let Head::Name(head) = &call.path.head
-                && GLOBALS.contains(&head.as_str())
-            {
-                match global(head, method) {
-                    Does::Read => continue,
-                    _ => return Does::Input,
-                }
-            }
-            if let Some(found) = self.in_doc(docs, d, &call.path, method) {
-                match found {
-                    Does::Read => continue,
-                    _ => return Does::Input,
-                }
-            }
-            match self.does(docs, method) {
-                Does::Read => {}
-                _ => return Does::Input,
-            }
-        }
-        Does::Read
+    /// Whether some object of the product declares a signal `name`.
+    pub fn is_signal(&self, name: &str) -> bool {
+        self.signals.contains_key(name)
     }
 }
 

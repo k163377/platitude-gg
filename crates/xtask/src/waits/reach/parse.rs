@@ -54,7 +54,15 @@ pub(super) struct Unit {
     pub object: usize,
     pub kind: UnitKind,
     pub name: String,
+    /// Each argument's parameter by its name — `""` for one taken apart or
+    /// a rest, which no name is.
     pub params: Vec<String>,
+    /// Every name its parameters bind, with the index of the argument each
+    /// is bound from.
+    pub bound: Vec<(usize, Bound)>,
+    /// What its parameter list evaluates as it binds — each default, each
+    /// computed key —: code of the unit's, outside its body.
+    pub evaluated: Vec<Range<usize>>,
     /// Its body: the tokens between its braces, or its expression.
     pub body: Range<usize>,
     pub line: usize,
@@ -279,7 +287,11 @@ fn function(doc: &mut Doc, object_at: usize, at: usize, end: usize) -> usize {
     let Some(close_paren) = matching_close(&doc.tokens, open_paren, "(", ")") else {
         return unread(doc, at, end);
     };
-    let params = params(&doc.tokens[open_paren + 1..close_paren]);
+    let UnitParams {
+        params,
+        bound,
+        evaluated,
+    } = unit_params(&doc.tokens[open_paren + 1..close_paren], open_paren + 1);
     let Some(open) = (close_paren + 1..end).find(|k| doc.tokens[*k].text == "{") else {
         return unread(doc, at, end);
     };
@@ -291,36 +303,212 @@ fn function(doc: &mut Doc, object_at: usize, at: usize, end: usize) -> usize {
         kind: UnitKind::Function,
         name,
         params,
+        bound,
+        evaluated,
         body: open + 1..close,
         line: doc.tokens[at].line,
     });
     close + 1
 }
 
-/// The names a parameter list declares: each parameter's first name, or
-/// the names a destructuring one takes apart; a type after `:` and a
-/// default after `=` are no name.
-pub(super) fn params(tokens: &[Token]) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut depth = 0;
-    let mut taking = true;
-    for token in tokens {
+/// A name a binding pattern binds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Bound {
+    pub name: String,
+    /// Its token's index.
+    pub at: usize,
+    /// What of the value it is bound to, as how many of the pattern's
+    /// brackets stand around it: 0 the value whole, 1 an element or field
+    /// of it, and so on — a rest (`[...rest]`) is one shallower, holding
+    /// what the value holds; `None` for a parameter list's own rest
+    /// (`...args`), the arguments gathered, which nothing here follows.
+    pub depth: Option<usize>,
+    /// The defaults (`= …`) that stand where the value holds nothing, each
+    /// with how deep in it the name stands.
+    pub defaults: Vec<(Range<usize>, usize)>,
+}
+
+/// What a binding pattern binds, and what binding by it evaluates.
+pub(super) struct Pattern {
+    pub bound: Vec<Bound>,
+    /// The expressions it runs as it binds — each default, each computed
+    /// key —, which are code where the pattern stands whether or not what
+    /// they give is bound to a name read after.
+    pub evaluated: Vec<Range<usize>>,
+}
+
+/// The names a binding pattern binds — a parameter list (`a: T, b = 1`),
+/// or a `[…]` / `{…}` taken apart — from `tokens`, whose first token is at
+/// `base`, and what binding by it evaluates. An object's keys (computed ones
+/// too), a parameter's type after `:` and the defaults bind nothing.
+pub(super) fn pattern_names(tokens: &[Token], base: usize) -> Pattern {
+    let mut out: Vec<Bound> = Vec::new();
+    let mut evaluated = Vec::new();
+    // The pattern's open brackets, and where the element each level is at
+    // began in `out` (`starts[0]` the list's own).
+    let mut open: Vec<&str> = Vec::new();
+    let mut starts = vec![0usize];
+    // The levels a `...` stands at: what is bound under one is a level shallower.
+    let mut rests: Vec<usize> = Vec::new();
+    let mut k = 0;
+    while let Some(token) = tokens.get(k) {
+        let text = token.text.as_str();
+        let level = open.len();
+        let before = k.checked_sub(1).map(|b| tokens[b].text.as_str());
+        match text {
+            // A computed key: an expression, then its target after `:`.
+            "[" if open.last() == Some(&"{") && matches!(before, Some("{" | ",")) => {
+                let past = skip_bracketed(tokens, k);
+                evaluated.push(base + k + 1..base + past.saturating_sub(1).max(k + 1));
+                k = past;
+                continue;
+            }
+            "[" | "{" => {
+                open.push(text);
+                starts.push(out.len());
+            }
+            "]" | "}" => {
+                if open.pop().is_some() {
+                    starts.pop();
+                }
+                rests.retain(|at| *at < level);
+            }
+            "," => starts[level] = out.len(),
+            "..." => rests.push(level),
+            // A default stands for the element it follows, at this level.
+            "=" => {
+                let end = default_end(tokens, k + 1);
+                for bound in &mut out[starts[level]..] {
+                    let inside = bound
+                        .depth
+                        .map_or(0, |d| d + rests.len())
+                        .saturating_sub(level);
+                    bound.defaults.push((base + k + 1..base + end, inside));
+                }
+                evaluated.push(base + k + 1..base + end);
+                k = end;
+                continue;
+            }
+            // A parameter's type, up to its default or the next parameter.
+            ":" if level == 0 => {
+                k += 1;
+                while tokens
+                    .get(k)
+                    .is_some_and(|t| t.text != "=" && t.text != ",")
+                {
+                    k += 1;
+                }
+                continue;
+            }
+            // An object's key: what it binds is its target, after `:`.
+            text if is_name(text)
+                && open.last() == Some(&"{")
+                && tokens.get(k + 1).is_some_and(|t| t.text == ":") =>
+            {
+                k += 2;
+                continue;
+            }
+            text if is_name(text) => out.push(Bound {
+                name: text.to_string(),
+                at: base + k,
+                depth: if rests.contains(&0) {
+                    None
+                } else {
+                    level.checked_sub(rests.len())
+                },
+                defaults: Vec::new(),
+            }),
+            _ => {}
+        }
+        k += 1;
+    }
+    Pattern {
+        bound: out,
+        evaluated,
+    }
+}
+
+/// The index past a bracketed stretch opened at `k`.
+fn skip_bracketed(tokens: &[Token], k: usize) -> usize {
+    let mut depth = 0usize;
+    for (j, token) in tokens.iter().enumerate().skip(k) {
         match token.text.as_str() {
             "(" | "[" | "{" => depth += 1,
-            ")" | "]" | "}" => depth -= 1,
-            "," if depth == 0 => taking = true,
-            ":" | "=" if depth == 0 => taking = false,
-            "..." => {}
-            text if taking && is_name(text) => {
-                out.push(text.to_string());
+            ")" | "]" | "}" => {
+                depth -= 1;
                 if depth == 0 {
-                    taking = false;
+                    return j + 1;
                 }
             }
             _ => {}
         }
     }
-    out
+    tokens.len()
+}
+
+/// Where an expression from `k` inside a pattern ends: at the `,` or the
+/// closing bracket of the stretch it stands in.
+fn default_end(tokens: &[Token], k: usize) -> usize {
+    let mut depth = 0usize;
+    for (j, token) in tokens.iter().enumerate().skip(k) {
+        match token.text.as_str() {
+            "(" | "[" | "{" => depth += 1,
+            ")" | "]" | "}" if depth == 0 => return j,
+            ")" | "]" | "}" => depth -= 1,
+            "," if depth == 0 => return j,
+            _ => {}
+        }
+    }
+    tokens.len()
+}
+
+/// What a unit's parameter list declares and evaluates (`Unit::params`,
+/// `Unit::bound`, `Unit::evaluated`).
+#[derive(Default)]
+pub(super) struct UnitParams {
+    pub params: Vec<String>,
+    pub bound: Vec<(usize, Bound)>,
+    pub evaluated: Vec<Range<usize>>,
+}
+
+/// A unit's parameter list `tokens`, whose first token is at `base`: each
+/// argument's parameter by its name, every name the list binds with the
+/// index of the argument it is bound from, and what it evaluates as it
+/// binds.
+pub(super) fn unit_params(tokens: &[Token], base: usize) -> UnitParams {
+    let mut commas = Vec::new();
+    let mut depth = 0usize;
+    for (k, token) in tokens.iter().enumerate() {
+        match token.text.as_str() {
+            "(" | "[" | "{" => depth += 1,
+            ")" | "]" | "}" => depth = depth.saturating_sub(1),
+            "," if depth == 0 => commas.push(base + k),
+            _ => {}
+        }
+    }
+    let mut params = vec![
+        String::new();
+        if tokens.is_empty() {
+            0
+        } else {
+            commas.len() + 1
+        }
+    ];
+    let mut bound = Vec::new();
+    let pattern = pattern_names(tokens, base);
+    for name in pattern.bound {
+        let arg = commas.iter().filter(|comma| **comma < name.at).count();
+        // A parameter that is one name stands first in its argument's stretch.
+        if name.at == base || commas.contains(&(name.at - 1)) {
+            params[arg] = name.name.clone();
+        }
+        bound.push((arg, name));
+    }
+    UnitParams {
+        params,
+        bound,
+        evaluated: pattern.evaluated,
+    }
 }
 
 /// `name: value` (a handler when the name is `on…`), or `Type on name {`.
@@ -415,7 +603,7 @@ fn handler(
     end: usize,
 ) -> (usize, Option<Range<usize>>) {
     let line = doc.tokens[at].line;
-    let mut params_of = Vec::new();
+    let mut taken = UnitParams::default();
     let mut start = at;
     if doc.tokens[at].text == "function" {
         let Some(open_paren) = (at..end).find(|k| doc.tokens[*k].text == "(") else {
@@ -424,7 +612,7 @@ fn handler(
         let Some(close_paren) = matching_close(&doc.tokens, open_paren, "(", ")") else {
             return (unread(doc, at, end), None);
         };
-        params_of = params(&doc.tokens[open_paren + 1..close_paren]);
+        taken = unit_params(&doc.tokens[open_paren + 1..close_paren], open_paren + 1);
         start = close_paren + 1;
     } else if doc.tokens[at].text == "("
         && let Some(close_paren) = matching_close(&doc.tokens, at, "(", ")")
@@ -433,12 +621,12 @@ fn handler(
             .get(close_paren + 1)
             .is_some_and(|t| t.text == "=>")
     {
-        params_of = params(&doc.tokens[at + 1..close_paren]);
+        taken = unit_params(&doc.tokens[at + 1..close_paren], at + 1);
         start = close_paren + 2;
     } else if is_name(&doc.tokens[at].text)
         && doc.tokens.get(at + 1).is_some_and(|t| t.text == "=>")
     {
-        params_of = vec![doc.tokens[at].text.clone()];
+        taken = unit_params(&doc.tokens[at..=at], at);
         start = at + 2;
     }
     let (body, after) = if doc.tokens.get(start).is_some_and(|t| t.text == "{") {
@@ -454,7 +642,9 @@ fn handler(
         object: object_at,
         kind: UnitKind::Handler,
         name: name.to_string(),
-        params: params_of,
+        params: taken.params,
+        bound: taken.bound,
+        evaluated: taken.evaluated,
         body,
         line,
     });

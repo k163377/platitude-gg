@@ -6,7 +6,7 @@
 
 use std::ops::Range;
 
-use super::parse::{expression_end, is_name, params};
+use super::parse::{Bound, expression_end, is_name, pattern_names};
 use crate::lex::{Token, matching_close};
 
 /// Where a path starts: a name, or the value of an expression before it
@@ -90,10 +90,25 @@ pub(super) struct Local {
     pub at: usize,
     /// Its initial value's tokens, where it is given one.
     pub init: Option<Range<usize>>,
+    /// A parameter — of a function or arrow spelled in the stretch, or a
+    /// `catch`'s: given whatever it is handed.
+    pub param: bool,
+    /// What of its value it is bound to (`parse::Bound::depth`): 0 the
+    /// value whole, 1 an element or field of it (`const [a] = x`), and so
+    /// on; `None` where nothing here follows what it is bound to — a
+    /// parameter list's own rest, a `for … of` / `in`'s name.
+    pub depth: Option<usize>,
+    /// The defaults a pattern gives it, each with how deep in it it stands.
+    pub defaults: Vec<(Range<usize>, usize)>,
 }
 
 #[derive(Default)]
 pub(super) struct Facts {
+    /// The stretch they were read from.
+    pub whole: Range<usize>,
+    /// Stretches read as part of them though outside `whole` — what a
+    /// unit's parameter list evaluates —, kept by `within` the whole.
+    pub beside: Vec<Range<usize>>,
     pub locals: Vec<Local>,
     pub calls: Vec<Call>,
     pub writes: Vec<Write>,
@@ -107,10 +122,35 @@ pub(super) struct Facts {
 }
 
 impl Facts {
-    /// The facts whose tokens fall in `range`.
+    /// Takes in what another stretch read, as these facts' own.
+    pub fn absorb(&mut self, other: Facts) {
+        self.locals.extend(other.locals);
+        self.calls.extend(other.calls);
+        self.writes.extend(other.writes);
+        self.paths.extend(other.paths);
+        self.compares.extend(other.compares);
+        self.returns.extend(other.returns);
+    }
+
+    /// Takes in what `range`, outside the stretch these were read from, read
+    /// as part of them (`beside`).
+    pub fn absorb_beside(&mut self, other: Facts, range: Range<usize>) {
+        self.absorb(other);
+        self.beside.push(range);
+    }
+
+    /// The facts whose tokens fall in `range` — and, for the whole stretch
+    /// they were read from, in what was read beside it.
     pub fn within(&self, range: &Range<usize>) -> Facts {
-        let inside = |at: usize| range.contains(&at);
+        let beside: &[Range<usize>] = if *range == self.whole {
+            &self.beside
+        } else {
+            &[]
+        };
+        let inside = |at: usize| range.contains(&at) || beside.iter().any(|b| b.contains(&at));
         Facts {
+            whole: range.clone(),
+            beside: beside.to_vec(),
             locals: self
                 .locals
                 .iter()
@@ -119,6 +159,9 @@ impl Facts {
                     name: l.name.clone(),
                     at: l.at,
                     init: l.init.clone(),
+                    param: l.param,
+                    depth: l.depth,
+                    defaults: l.defaults.clone(),
                 })
                 .collect(),
             calls: self
@@ -217,7 +260,10 @@ fn constant(text: &str) -> bool {
 
 /// The facts of `range` in `tokens`.
 pub(super) fn facts(tokens: &[Token], range: Range<usize>) -> Facts {
-    let mut out = Facts::default();
+    let mut out = Facts {
+        whole: range.clone(),
+        ..Facts::default()
+    };
     let end = range.end;
     let mut k = range.start;
     while k < end {
@@ -251,32 +297,60 @@ fn declares(tokens: &[Token], k: usize, end: usize, out: &mut Facts) -> Option<u
         name,
         at,
         init: None,
+        param: true,
+        depth: Some(0),
+        defaults: Vec::new(),
+    };
+    let param = |bound: Bound| Local {
+        name: bound.name,
+        at: bound.at,
+        init: None,
+        param: true,
+        depth: bound.depth,
+        defaults: bound.defaults,
     };
     if matches!(text, "let" | "const" | "var") {
         return Some(declaration(tokens, k + 1, end, out));
     }
-    if text == "catch" && tokens.get(k + 1).is_some_and(|t| t.text == "(") {
-        if let Some(name) = tokens.get(k + 2) {
-            out.locals.push(local(name.text.clone(), k + 2));
+    if text == "catch"
+        && tokens.get(k + 1).is_some_and(|t| t.text == "(")
+        && let Some(close) = matching_close(tokens, k + 1, "(", ")")
+    {
+        let pattern = pattern_names(&tokens[k + 2..close], k + 2);
+        for bound in pattern.bound {
+            out.locals.push(param(bound));
         }
-        return Some(k + 3);
+        evaluate(tokens, pattern.evaluated, out);
+        return Some(close + 1);
     }
     if text == "function" {
-        // A function's name and its parameters are the stretch's own names.
-        let mut j = k + 1;
-        if tokens.get(j).is_some_and(|t| is_name(&t.text)) {
-            out.locals.push(local(tokens[j].text.clone(), j));
-            j += 1;
+        // A function's name and its parameters are the stretch's own names; the name holds the function.
+        let named = tokens.get(k + 1).is_some_and(|t| is_name(&t.text));
+        let j = if named { k + 2 } else { k + 1 };
+        let close = tokens
+            .get(j)
+            .filter(|t| t.text == "(")
+            .and_then(|_| matching_close(tokens, j, "(", ")"));
+        if named {
+            let whole = close
+                .filter(|close| tokens.get(close + 1).is_some_and(|t| t.text == "{"))
+                .and_then(|close| matching_close(tokens, close + 1, "{", "}"))
+                .map(|end| k..end + 1);
+            out.locals.push(Local {
+                param: false,
+                init: whole,
+                ..local(tokens[k + 1].text.clone(), k + 1)
+            });
         }
-        if tokens.get(j).is_some_and(|t| t.text == "(")
-            && let Some(close) = matching_close(tokens, j, "(", ")")
-        {
-            for name in params(&tokens[j + 1..close]) {
-                out.locals.push(local(name, j));
-            }
-            return Some(close + 1);
+        let Some(close) = close else {
+            return Some(j);
+        };
+        let pattern = pattern_names(&tokens[j + 1..close], j + 1);
+        for bound in pattern.bound {
+            out.locals.push(param(bound));
         }
-        return Some(j);
+        evaluate(tokens, pattern.evaluated, out);
+        return Some(close + 1);
     }
     // An arrow's parameters.
     if text == "("
@@ -286,9 +360,11 @@ fn declares(tokens: &[Token], k: usize, end: usize, out: &mut Facts) -> Option<u
         && before != Some(".")
         && !before.is_some_and(|b| is_name(b) && !KEYWORDS.contains(&b))
     {
-        for name in params(&tokens[k + 1..close]) {
-            out.locals.push(local(name, k));
+        let pattern = pattern_names(&tokens[k + 1..close], k + 1);
+        for bound in pattern.bound {
+            out.locals.push(param(bound));
         }
+        evaluate(tokens, pattern.evaluated, out);
         return Some(close + 2);
     }
     if is_name(text) && tokens.get(k + 1).is_some_and(|t| t.text == "=>") && before != Some(".") {
@@ -312,7 +388,8 @@ fn declares(tokens: &[Token], k: usize, end: usize, out: &mut Facts) -> Option<u
 fn path_at(tokens: &[Token], k: usize, end: usize, out: &mut Facts) -> Option<(Path, usize)> {
     let text = tokens[k].text.as_str();
     let before = k.checked_sub(1).map(|b| tokens[b].text.as_str());
-    if is_name(text) && before != Some(".") && !KEYWORDS.contains(&text) {
+    // `this` heads a path as a name does: what it stands for is read where it is spelled (`Program::this_origin`).
+    if is_name(text) && before != Some(".") && (!KEYWORDS.contains(&text) || text == "this") {
         return Some(read_path(tokens, k, Head::Name(text.to_string()), end));
     }
     if text == "."
@@ -491,6 +568,14 @@ fn arguments(tokens: &[Token], open: usize, close: usize) -> Vec<Range<usize>> {
     out
 }
 
+/// Reads what binding by a pattern evaluates — its defaults, its computed
+/// keys — as code where the pattern stands.
+fn evaluate(tokens: &[Token], evaluated: Vec<Range<usize>>, out: &mut Facts) {
+    for range in evaluated {
+        out.absorb(facts(tokens, range));
+    }
+}
+
 /// The names of a `let` / `const` / `var` from `at`, with their values;
 /// answers where reading goes on (the first value, read as code).
 fn declaration(tokens: &[Token], at: usize, end: usize, out: &mut Facts) -> usize {
@@ -499,39 +584,46 @@ fn declaration(tokens: &[Token], at: usize, end: usize, out: &mut Facts) -> usiz
         let Some(token) = tokens.get(k) else {
             return end;
         };
-        let names: Vec<(String, usize)> = match token.text.as_str() {
+        let names: Vec<Bound> = match token.text.as_str() {
             "[" | "{" => {
                 let close_text = if token.text == "[" { "]" } else { "}" };
                 let Some(close) = matching_close(tokens, k, &token.text, close_text) else {
                     return k + 1;
                 };
-                let names = (k + 1..close)
-                    .filter(|j| {
-                        is_name(&tokens[*j].text)
-                            && !tokens.get(j + 1).is_some_and(|t| t.text == ":")
-                    })
-                    .map(|j| (tokens[j].text.clone(), j))
-                    .collect();
+                let pattern = pattern_names(&tokens[k..=close], k);
+                evaluate(tokens, pattern.evaluated, out);
                 k = close + 1;
-                names
+                pattern.bound
             }
             text if is_name(text) => {
                 k += 1;
-                vec![(text.to_string(), k - 1)]
+                vec![Bound {
+                    name: text.to_string(),
+                    at: k - 1,
+                    depth: Some(0),
+                    defaults: Vec::new(),
+                }]
             }
             _ => return k,
         };
+        // A loop's name is given what the loop walks, which nothing here follows.
+        let walked = tokens
+            .get(k)
+            .is_some_and(|t| t.text == "of" || t.text == "in");
         let init = if tokens.get(k).is_some_and(|t| t.text == "=") {
             let stop = expression_end(tokens, k + 1, end);
             Some(k + 1..stop)
         } else {
             None
         };
-        for (name, at) in names {
+        for bound in names {
             out.locals.push(Local {
-                name,
-                at,
+                name: bound.name,
+                at: bound.at,
                 init: init.clone(),
+                param: false,
+                depth: bound.depth.filter(|_| !walked),
+                defaults: bound.defaults,
             });
         }
         match init {
@@ -540,12 +632,7 @@ fn declaration(tokens: &[Token], at: usize, end: usize, out: &mut Facts) -> usiz
                 let after = range.end;
                 if tokens.get(after).is_some_and(|t| t.text == ",") && after < end {
                     // Read the value first, then the next name.
-                    let inner = facts(tokens, range.clone());
-                    out.locals.extend(inner.locals);
-                    out.calls.extend(inner.calls);
-                    out.writes.extend(inner.writes);
-                    out.paths.extend(inner.paths);
-                    out.compares.extend(inner.compares);
+                    out.absorb(facts(tokens, range.clone()));
                     k = after + 1;
                     continue;
                 }

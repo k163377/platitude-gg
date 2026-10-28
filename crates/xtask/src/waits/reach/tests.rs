@@ -89,6 +89,27 @@ Item {
     function rowAt(i) {
         return i + 1
     }
+    property var ticks: []
+    function sampledEnough() {
+        const samples = pane.ticks
+        samples.push(true)
+        return samples.length >= 2
+    }
+    function addTick() {
+        pane.ticks.push(true)
+    }
+    function addTo(list) {
+        list.push(true)
+    }
+    function holdTicks(box) {
+        box.push(pane.ticks)
+    }
+    function freshRows() {
+        const rows = []
+        rows.push({ n: 1 })
+        rows[0].n = 2
+        return rows
+    }
 }
 "#;
 
@@ -118,7 +139,7 @@ impl ListThing {
 "#;
 
 /// The page's driver: the machinery's file, with the verbs' family in it.
-fn driver(common: &str) -> String {
+pub(super) fn driver(common: &str) -> String {
     format!(
         r#"import QtQuick
 Item {{
@@ -132,7 +153,7 @@ Item {{
 }
 
 /// A verb family with one operation, its beat and helpers as given.
-fn verbs(members: &str, beat: &str) -> String {
+pub(super) fn verbs(members: &str, beat: &str) -> String {
     format!(
         r#"import QtQuick
 Item {{
@@ -156,7 +177,7 @@ Item {{
 
 /// The rules found over a program of the fixtures above, with `driver`'s
 /// common functions and `verbs` as the family.
-fn found(driver_text: &str, verbs_text: &str) -> Vec<(String, usize, &'static str)> {
+pub(super) fn found(driver_text: &str, verbs_text: &str) -> Vec<(String, usize, &'static str)> {
     let harness = vec![
         (
             "src/auto/StageTimer.qml".to_string(),
@@ -187,7 +208,7 @@ fn found(driver_text: &str, verbs_text: &str) -> Vec<(String, usize, &'static st
         .collect()
 }
 
-fn rules(found: &[(String, usize, &'static str)]) -> BTreeSet<&'static str> {
+pub(super) fn rules(found: &[(String, usize, &'static str)]) -> BTreeSet<&'static str> {
     found.iter().map(|(_, _, rule)| *rule).collect()
 }
 
@@ -430,14 +451,14 @@ fn a_change_to_shared_state_is_named_through_every_alias() {
     assert_eq!(rules(&report), ["read"].into_iter().collect(), "{report:?}");
 }
 
-/// A change through a value nothing says the origin of — an element a
+/// A change through a value nothing says the origin of — an accumulator a
 /// callback is handed, what a call nobody answers for returns — is not
 /// passed as a change to something of the code's own.
 #[test]
 fn a_change_through_a_value_of_no_known_origin_is_named() {
     let ticks = "    property var ticks: []";
     for beat in [
-        "            acts.ticks.forEach(t => t.push(true))",
+        "            acts.ticks.reduce((sum, t) => {\n                sum.push(t)\n                return sum\n            }, [])",
         "            const got = pane.things.countOf(\"a\")\n            got.push(true)",
     ] {
         let read = found(&driver(""), &verbs(ticks, beat));
@@ -551,7 +572,7 @@ fn a_reach_declared_outside_the_machinery_is_named() {
 }
 
 /// Each line of `body` set in by `by`.
-fn indented(body: &str, by: &str) -> String {
+pub(super) fn indented(body: &str, by: &str) -> String {
     body.lines()
         .map(|line| format!("{by}{line}"))
         .collect::<Vec<_>>()
@@ -559,7 +580,7 @@ fn indented(body: &str, by: &str) -> String {
 }
 
 /// `body` run in a report that answers `answer`.
-fn in_report(body: &str, answer: &str) -> String {
+pub(super) fn in_report(body: &str, answer: &str) -> String {
     format!(
         "            op.complete({{ \"when\": () => ({{}}), \"report\": () => {{\n{}\n                \
          return {answer}\n            }} }})",
@@ -647,5 +668,148 @@ fn containers_holding_only_what_the_code_made_are_its_own_to_build() {
     );
     assert!(beat.is_empty(), "{beat:?}");
     let report = found(&driver(""), &verbs(members, &in_report(body, "out")));
+    assert!(report.is_empty(), "{report:?}");
+}
+
+/// The product's own function, called from a beat or a report, is read as
+/// the caller's code by the same rule a helper of the harness's is: its
+/// array taken into a local and pushed to is the product changed, the
+/// harness's array handed to it and pushed to is the harness's state, and
+/// the product's array it puts inside the caller's container is the
+/// product's however the caller reaches it. A press may change the product
+/// through it, not the harness's state; arrays it makes are its own.
+#[test]
+fn a_change_through_a_function_of_the_products_is_named_as_the_harnesss_own() {
+    let members = "    property var ticks: []";
+    let forms = [
+        ("if (!pane.sampledEnough())\n    return", "input"),
+        ("pane.addTick()", "input"),
+        ("pane.addTo(acts.ticks)", "stage"),
+        (
+            "const box = []\npane.holdTicks(box)\nbox[0].push(true)",
+            "input",
+        ),
+    ];
+    for (form, in_beat) in forms {
+        let beat = found(
+            &driver(""),
+            &verbs(members, &indented(form, "            ")),
+        );
+        assert_eq!(
+            rules(&beat),
+            [in_beat].into_iter().collect(),
+            "beat {form}: {beat:?}"
+        );
+        let report = found(&driver(""), &verbs(members, &in_report(form, "\"x\"")));
+        assert_eq!(
+            rules(&report),
+            ["read"].into_iter().collect(),
+            "report {form}: {report:?}"
+        );
+    }
+    let pressed = found(
+        &driver(""),
+        &verbs(
+            members,
+            "            op.input(\"added\", () => {\n                pane.addTick()\n                \
+             pane.addTo(acts.ticks)\n            })",
+        ),
+    );
+    assert_eq!(
+        rules(&pressed),
+        ["stage"].into_iter().collect(),
+        "{pressed:?}"
+    );
+    let own = found(
+        &driver(""),
+        &verbs(
+            members,
+            "            const rows = pane.freshRows()\n            rows[0].n = 3",
+        ),
+    );
+    assert!(own.is_empty(), "{own:?}");
+}
+
+/// What a function handed to a call answers keeps where it came from —
+/// spelled as an arrow or a `function`, a block or an expression, or named
+/// as a function of the family's — and what such a function changes is the
+/// caller's change: a borrowed array returned into a new container, or
+/// pushed to through a parameter the call hands its elements, is named in a
+/// beat and a report alike, a parameter shadowing a local of the code's own
+/// included.
+#[test]
+fn what_a_callback_answers_or_changes_keeps_where_it_came_from() {
+    let members = "    property var ticks: []\n    function borrow() {\n        return acts.ticks\n    }\n    \
+                   function bump() {\n        acts.ticks.push(true)\n    }";
+    let forms = [
+        "const box = Array.from([0], () => acts.ticks)\nbox[0].push(true)",
+        "const box = [0].map(() => acts.ticks)\nbox[0].push(true)",
+        "const box = [0].map(n => {\n    return acts.ticks\n})\nbox[0].push(true)",
+        "const box = [0].map(acts.borrow)\nbox[0].push(true)",
+        "const box = [0].flatMap(() => [acts.ticks])\nbox[0].push(true)",
+        "[0].forEach(acts.bump)",
+        "const t = []\nacts.ticks.forEach(t => t.push(true))",
+        "acts.ticks.forEach(function (t) {\n    t.push(true)\n})",
+    ];
+    for form in forms {
+        let beat = found(
+            &driver(""),
+            &verbs(members, &indented(form, "            ")),
+        );
+        assert_eq!(
+            rules(&beat),
+            ["stage"].into_iter().collect(),
+            "beat {form}: {beat:?}"
+        );
+        let report = found(&driver(""), &verbs(members, &in_report(form, "\"x\"")));
+        assert_eq!(
+            rules(&report),
+            ["read"].into_iter().collect(),
+            "report {form}: {report:?}"
+        );
+    }
+}
+
+/// A call of a shape no contract holds — a reviver the table does not
+/// read, an argument more than the function takes, a function handed by a
+/// value no code answers for — is not passed as one of a shape it holds.
+#[test]
+fn a_call_of_a_shape_no_contract_holds_is_named() {
+    for beat in [
+        "const parsed = JSON.parse(\"[]\", (k, v) => v)\nparsed.push(true)",
+        "const mapped = [1].map(x => x, 2, 3)\nmapped.push(true)",
+        "const keys = Object.keys({}, 1)\nkeys.push(true)",
+        "[0].forEach(acts.nothingAnswersFor)",
+    ] {
+        let read = found(
+            &driver(""),
+            &verbs(
+                "    property var ticks: []",
+                &indented(beat, "            "),
+            ),
+        );
+        assert_eq!(
+            rules(&read),
+            ["unread"].into_iter().collect(),
+            "{beat}: {read:?}"
+        );
+    }
+}
+
+/// Containers built only of what the code makes, through functions it
+/// hands to calls, are its own to build.
+#[test]
+fn containers_built_through_callbacks_of_what_the_code_makes_are_its_own() {
+    let body = "const rows = [1, 2].map(n => ({ n: n }))\nrows[0].n = 3\n\
+                const built = Array.from([1], n => [n])\nbuilt[0].push(2)\n\
+                const parts = \"a:b\".split(\":\").map(Number)\nparts.push(1)\n\
+                const flat = [1].flatMap(n => [{ n: n }])\nflat[0].n = 2";
+    let members = "    property var ticks: []";
+    let beat = found(
+        &driver(""),
+        &verbs(members, &indented(body, "            ")),
+    );
+    assert!(beat.is_empty(), "{beat:?}");
+    let report = found(&driver(""), &verbs(members, &in_report(body, "rows")));
     assert!(report.is_empty(), "{report:?}");
 }

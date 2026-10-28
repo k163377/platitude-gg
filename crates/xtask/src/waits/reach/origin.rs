@@ -21,7 +21,9 @@
 use std::collections::BTreeSet;
 use std::ops::Range;
 
-use super::builtins::{self, Answers, GlobalAnswers};
+use super::builtins::{self, Answers, CONSTRUCTED, GlobalAnswers, Made};
+use super::calls::function_body;
+use super::members::{ANY, Assigned};
 use super::parse::is_name;
 use super::program::{Program, Value};
 use super::scan::{Head, Path, WriteKind};
@@ -161,14 +163,13 @@ impl Program {
         let Some(method) = path.last() else {
             return;
         };
-        if let (Head::Name(object), [_]) = (&path.head, path.members.as_slice())
-            && super::product::GLOBALS.contains(&object.as_str())
-        {
-            let (Some(from), Some(first)) = (builtins::global_puts(object, method), args.first())
+        if let Some(object) = self.global_of(code, path) {
+            let (Some(from), Some(first)) = (builtins::global_puts(&object, method), args.first())
             else {
                 return;
             };
             let container = self.origin_of(code, first.clone());
+            self.give(&container, ANY);
             for arg in args.iter().skip(from) {
                 let given = self.element_origin(code, arg.clone());
                 let held = self.inside_of(&given);
@@ -180,6 +181,9 @@ impl Program {
             return;
         };
         let container = self.path_origin(code, &receiver);
+        if !self.language_method(&container, method) {
+            return;
+        }
         for arg in args.iter().skip(from) {
             let given = self.element_origin(code, arg.clone());
             self.store(&container, given);
@@ -267,6 +271,7 @@ impl Program {
                     let element = self.element_origin(code, base + 1 + from..base + 1 + to);
                     self.store_at(site, element);
                 }
+                self.made_at(site, Made::Array);
                 return Origin::made(code, site);
             }
             "{" if matching_close(t, 0, "{", "}") == Some(t.len() - 1) => {
@@ -280,17 +285,31 @@ impl Program {
                     let value = self.element_origin(code, at..base + 1 + to);
                     self.store_at(site, value);
                 }
+                self.made_at(site, Made::Object);
                 return Origin::made(code, site);
             }
             // Constructed: a container nothing is known to be put inside yet.
-            "new" => return Origin::made(code, site),
+            "new" => {
+                let language = t
+                    .get(1)
+                    .is_some_and(|ty| CONSTRUCTED.contains(&ty.text.as_str()));
+                self.made_at(
+                    site,
+                    if language {
+                        Made::Constructed
+                    } else {
+                        Made::Borrowing
+                    },
+                );
+                return Origin::made(code, site);
+            }
             "function" => return Origin::Plain,
             _ => {}
         }
         if literal(&first.text) && t.len() == 1 {
             return Origin::Plain;
         }
-        if arrow(t) {
+        if function_body(t).is_some() {
             return Origin::Plain;
         }
         self.chain_origin(code, t, base)
@@ -386,6 +405,7 @@ impl Program {
     /// Where the value a path names in `code` came from.
     pub(super) fn path_origin(&mut self, code: usize, path: &Path) -> Origin {
         let mut origin = match &path.head {
+            Head::Name(name) if name == "this" => self.this_origin(code, path.at),
             Head::Name(name) => self.name_origin(code, name),
             Head::Value => self.value_head_origin(code, path.at),
         };
@@ -405,15 +425,28 @@ impl Program {
                 (c.doc, c.unit, c.range.clone(), c.parent)
             };
             if parent.is_none()
-                && let Some(i) = self.docs[d].units[u].params.iter().position(|p| p == name)
+                && let Some((i, bound)) = self.docs[d].units[u]
+                    .bound
+                    .iter()
+                    .find(|(_, bound)| bound.name == name)
+                    .cloned()
             {
+                let Some(depth) = bound.depth else {
+                    return Origin::Unknown;
+                };
                 // Handed nothing yet in this reading: the bottom, so that a function handing its own parameter on
                 // reaches what its callers hand it. Handed nothing at all, a change through it is not followed.
-                return self
+                let handed = self
                     .origin_bindings
                     .get(&(d, u, i))
                     .cloned()
                     .unwrap_or(Origin::Unset);
+                let mut origin = self.inside_times(handed, depth);
+                for (default, inside) in bound.defaults {
+                    let given = self.origin_of(c, default);
+                    origin = origin.join(self.inside_times(given, inside));
+                }
+                return origin;
             }
             if self
                 .facts_of(d, u)
@@ -468,9 +501,8 @@ impl Program {
         origin
     }
 
-    /// What a harness property typed `var` is given: its own value, the
-    /// value each instance binds it to, and each value the harness's code
-    /// assigns it.
+    /// What a harness property typed `var` is given, as the harness's
+    /// own state where the harness made it (`Program::assigned_values`).
     fn given_origin(&mut self, d: usize, o: usize, p: &str) -> Origin {
         // What the harness made and gave the property is the property's own state.
         let own = |origin: Origin| match origin {
@@ -478,61 +510,13 @@ impl Program {
             other => other,
         };
         let mut given = Origin::Unset;
-        let value = self.docs[d].objects[o]
-            .props
-            .iter()
-            .find(|prop| prop.name == p)
-            .and_then(|prop| prop.value.clone());
-        if let Some(range) = value {
-            given = given.join(own(self.object_value_origin(d, o, range)));
-        }
-        for d2 in 0..self.harness {
-            for o2 in 0..self.docs[d2].objects.len() {
-                let object = &self.docs[d2].objects[o2];
-                if o != 0 || object.ty != self.docs[d].name {
-                    continue;
-                }
-                if let Some((_, range)) = object.bindings.iter().find(|(b, _)| b == p).cloned() {
-                    given = given.join(own(self.object_value_origin(d2, o2, range)));
-                }
-            }
-        }
-        for d2 in 0..self.harness {
-            for u2 in 0..self.docs[d2].units.len() {
-                let unit_object = self.docs[d2].units[u2].object;
-                let writes: Vec<(Path, WriteKind)> = {
-                    let body = self.docs[d2].units[u2].body.clone();
-                    self.facts_of(d2, u2)
-                        .within(&body)
-                        .writes
-                        .into_iter()
-                        .map(|w| (w.path, w.kind))
-                        .collect()
-                };
-                for (path, kind) in writes {
-                    let assigns = match (&path.head, path.members.as_slice()) {
-                        (Head::Name(head), [member]) => {
-                            member == p
-                                && self.scope_value(d2, unit_object, head) == Value::Object(d, o)
-                        }
-                        (Head::Name(head), []) => {
-                            head == p && d2 == d && (unit_object == o || o == 0)
-                        }
-                        _ => false,
-                    };
-                    if !assigns {
-                        continue;
-                    }
-                    given = given.join(own(match kind {
-                        WriteKind::Value(rhs) => {
-                            let code = self.code_of(d2, u2);
-                            self.origin_of(code, rhs)
-                        }
-                        WriteKind::Constant | WriteKind::Step => Origin::Plain,
-                        WriteKind::Mutate | WriteKind::Put(_) => Origin::Unset,
-                    }));
-                }
-            }
+        for assigned in self.assigned_values(d, o, p) {
+            let origin = match assigned {
+                Assigned::Spelled(sd, so, range) => self.object_value_origin(sd, so, range),
+                Assigned::InCode(code, rhs) => self.origin_of(code, rhs),
+                Assigned::Plain => Origin::Plain,
+            };
+            given = given.join(own(origin));
         }
         given
     }
@@ -585,6 +569,7 @@ impl Program {
                 origin,
                 Origin::Plain | Origin::Fresh { .. } | Origin::Shared(..)
             )
+            && self.language_member(&origin, name)
         {
             return Origin::Plain;
         }
@@ -652,16 +637,20 @@ impl Program {
             return Origin::Unknown;
         };
         let site = (self.codes[code].doc, path.at);
-        if let (Head::Name(head), 1) = (&path.head, path.members.len())
-            && super::product::GLOBALS.contains(&head.as_str())
-        {
-            return match builtins::global(head, &method) {
-                Some(answers) => self.global_answer(code, answers, site, args),
+        let listed = self.arguments(code, &args);
+        if let Some(head) = self.global_of(code, path) {
+            let spread = self.spreads(code, &listed);
+            return match builtins::global(&head, &method, listed.len(), spread) {
+                Some((answers, made)) => {
+                    self.made_at(site, made);
+                    self.global_answer(code, answers, site, &listed)
+                }
                 None => Origin::Unknown,
             };
         }
         match self.resolve(code, path) {
-            Value::Function(fd, fu) if fd < self.harness => {
+            // The harness's function or the product's: what its own code returns, read as the caller's.
+            Value::Function(fd, fu) => {
                 if self.declared.contains_key(&(fd, fu)) {
                     return Origin::Unknown;
                 }
@@ -669,6 +658,7 @@ impl Program {
             }
             Value::Global(g) if builtins::PLAIN_FUNCTIONS.contains(&g.as_str()) => Origin::Plain,
             Value::Global(g) if builtins::NEW_FUNCTIONS.contains(&g.as_str()) => {
+                self.made_at(site, Made::Constructed);
                 Origin::made(code, site)
             }
             _ if path.members.is_empty() => Origin::Unknown,
@@ -678,6 +668,18 @@ impl Program {
                 self.method_origin(code, receiver_origin, &method, site, args)
             }
         }
+    }
+
+    /// Whether any of a call's arguments is spread, so that their count is
+    /// not known.
+    fn spreads(&self, code: usize, args: &[Range<usize>]) -> bool {
+        let d = self.codes[code].doc;
+        args.iter().any(|arg| {
+            self.docs[d]
+                .tokens
+                .get(arg.start)
+                .is_some_and(|t| t.text == "...")
+        })
     }
 
     /// The elements of a call's argument list, `args` its tokens.
@@ -695,9 +697,8 @@ impl Program {
         code: usize,
         answers: GlobalAnswers,
         site: Site,
-        args: Range<usize>,
+        args: &[Range<usize>],
     ) -> Origin {
-        let args = self.arguments(code, &args);
         let first = |program: &mut Program| match args.first() {
             Some(arg) => program.origin_of(code, arg.clone()),
             None => Origin::Unknown,
@@ -716,9 +717,14 @@ impl Program {
             }
             GlobalAnswers::NewOfArguments => {
                 for arg in args {
-                    let element = self.element_origin(code, arg);
+                    let element = self.element_origin(code, arg.clone());
                     self.store_at(site, element);
                 }
+                Origin::made(code, site)
+            }
+            GlobalAnswers::NewOfCallback(at) => {
+                let answered = self.callback_answers(code, args[at].clone());
+                self.store_at(site, answered);
                 Origin::made(code, site)
             }
             GlobalAnswers::NewDeep => {
@@ -742,9 +748,18 @@ impl Program {
         if matches!(receiver, Origin::Object(_) | Origin::Product) {
             return Origin::Product;
         }
-        let Some(answers) = builtins::method(method) else {
+        if receiver == Origin::Unset {
+            return Origin::Unset;
+        }
+        if !self.language_method(&receiver, method) {
+            return Origin::Unknown;
+        }
+        let args = self.arguments(code, &args);
+        let Some(answers) = builtins::method(method, args.len(), self.spreads(code, &args)) else {
             return Origin::Unknown;
         };
+        // A method of the language's that answers a new container answers an array.
+        self.made_at(site, Made::Array);
         match answers {
             Answers::Plain => Origin::Plain,
             Answers::NewPlain => {
@@ -759,7 +774,7 @@ impl Program {
             Answers::NewJoined => {
                 let held = self.inside_of(&receiver);
                 self.store_at(site, held);
-                for arg in self.arguments(code, &args) {
+                for arg in args {
                     let element = self.element_origin(code, arg);
                     let inside = self.inside_of(&element);
                     self.store_at(site, element);
@@ -767,12 +782,56 @@ impl Program {
                 }
                 Origin::made(code, site)
             }
-            Answers::NewUnknown => {
-                self.store_at(site, Origin::Unknown);
+            Answers::NewOfCallback(at) => {
+                let answered = self.callback_answers(code, args[at].clone());
+                self.store_at(site, answered);
+                Origin::made(code, site)
+            }
+            Answers::NewOfCallbackFlat(at) => {
+                let answered = self.callback_answers(code, args[at].clone());
+                let flattened = self.inside_of(&answered);
+                self.store_at(site, answered);
+                self.store_at(site, flattened);
                 Origin::made(code, site)
             }
             Answers::Inside => self.inside_of(&receiver),
             Answers::Receiver => receiver,
+        }
+    }
+
+    /// What a function handed to a call answers: a function spelled there
+    /// answers its returned values, read as the code it is spelled in reads
+    /// them — its parameters by what the call hands them (`param_origin`);
+    /// a harness or product function named there answers what its code
+    /// returns; anything else answers a value of no known origin.
+    pub(super) fn callback_answers(&mut self, code: usize, arg: Range<usize>) -> Origin {
+        let d = self.codes[code].doc;
+        if let Some(body) = function_body(&self.docs[d].tokens[arg.clone()]) {
+            let body = arg.start + body.start..arg.start + body.end;
+            let tokens = &self.docs[d].tokens;
+            let block = tokens[body.start].text == "{"
+                && matching_close(tokens, body.start, "{", "}") == Some(body.end - 1);
+            if !block {
+                return self.origin_of(code, body);
+            }
+            let returns = super::scan::facts(tokens, body).returns;
+            let mut answered = Origin::Unset;
+            for (value, _) in returns {
+                answered = answered.join(self.origin_of(code, value));
+            }
+            // Returning nothing answers `undefined`.
+            return if answered == Origin::Unset {
+                Origin::Plain
+            } else {
+                answered
+            };
+        }
+        if self.names_plain_function(code, arg.clone()) {
+            return Origin::Plain;
+        }
+        match self.named_callback(code, arg) {
+            Some((fd, fu)) => self.return_origin(fd, fu).handed_to(code),
+            None => Origin::Unknown,
         }
     }
 
@@ -793,10 +852,27 @@ impl Program {
         let mut origin = Origin::Unset;
         let mut given = false;
         for local in facts.locals.iter().filter(|l| l.name == name) {
-            if let Some(init) = local.init.clone() {
-                origin = origin.join(self.origin_of(code, init));
+            let Some(depth) = local.depth else {
+                origin = origin.join(Origin::Unknown);
                 given = true;
+                continue;
+            };
+            let whole = if local.param {
+                self.param_origin(code, local.at)
+            } else if let Some(init) = local.init.clone() {
+                self.origin_of(code, init)
+            } else {
+                continue;
+            };
+            // A name a pattern binds is what the value holds, as deep as the
+            // pattern reaches, or a default where it holds nothing.
+            let mut bound = self.inside_times(whole, depth);
+            for (default, inside) in local.defaults.clone() {
+                let given = self.origin_of(code, default);
+                bound = bound.join(self.inside_times(given, inside));
             }
+            origin = origin.join(bound);
+            given = true;
         }
         for write in &facts.writes {
             if write.path.head != Head::Name(name.to_string()) || !write.path.members.is_empty() {
@@ -819,8 +895,13 @@ impl Program {
         origin
     }
 
-    /// Where the value a harness function returns came from, as its own
-    /// code made or holds it.
+    /// What `origin` holds, `times` containers deep.
+    pub(super) fn inside_times(&mut self, origin: Origin, times: usize) -> Origin {
+        (0..times).fold(origin, |held, _| self.inside_of(&held))
+    }
+
+    /// Where the value a function of the harness or the product returns came
+    /// from, as its own code made or holds it.
     fn return_origin(&mut self, d: usize, u: usize) -> Origin {
         if let Some(known) = self.return_origins.get(&(d, u)) {
             return known.clone();
@@ -846,22 +927,13 @@ fn dot(t: &[Token], k: usize) -> bool {
     t[k].text == "." || (t[k].text == "?" && t.get(k + 1).is_some_and(|n| n.text == "."))
 }
 
-fn literal(text: &str) -> bool {
+pub(super) fn literal(text: &str) -> bool {
     matches!(text, "true" | "false" | "null" | "undefined")
         || text.starts_with('"')
         || text.starts_with('\'')
         || text.starts_with('`')
         || (text.starts_with('/') && text.len() > 1)
         || text.chars().next().is_some_and(|c| c.is_ascii_digit())
-}
-
-fn arrow(t: &[Token]) -> bool {
-    if t.len() >= 2 && is_name(&t[0].text) && t[1].text == "=>" {
-        return true;
-    }
-    t[0].text == "("
-        && matching_close(t, 0, "(", ")")
-            .is_some_and(|close| t.get(close + 1).is_some_and(|n| n.text == "=>"))
 }
 
 /// The `?` and `:` of a conditional at the top level of `t`.

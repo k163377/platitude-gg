@@ -38,8 +38,12 @@
 //! (`product`). A call none of these answers is `unread`: not passed as
 //! safe.
 
+#[cfg(test)]
+mod bindings;
 mod builtins;
 mod calls;
+mod handed;
+mod members;
 mod origin;
 mod parse;
 mod product;

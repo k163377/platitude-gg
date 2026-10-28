@@ -1,13 +1,19 @@
 //! The harness read as one program: each name resolved to what it stands
 //! for, each call to what it calls, and each stretch of code to what it
-//! does ([`Effect`]) — a harness function's effects being its caller's, a
-//! function of the machinery's answering by the reach it declares
-//! (`// reach(…)`), and the product answering by `super::product`.
+//! does ([`Effect`]) — a function's effects being its caller's, the
+//! harness's and the product's alike, a function of the machinery's
+//! answering by the reach it declares (`// reach(…)`), and the product's
+//! Rust and the language's own by their tables (`super::product`,
+//! `super::builtins`). What differs between the two sides is whose a value
+//! is: a change to the product's is an input, a change to the harness's its
+//! state, wherever the code that makes it stands.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::ops::Range;
 
-use super::builtins;
+use super::builtins::{self, Made};
+use super::calls::function_body;
+use super::members::Holder;
 use super::origin::{Origin, Site};
 use super::parse::{Doc, UnitKind, is_name};
 use super::product::{self, Product};
@@ -51,8 +57,9 @@ pub(super) enum Effect {
     Input(String),
     /// A value of the stretch it was carved from, read inside.
     Captured(String),
-    /// A harness function's code, whose effects are the caller's.
-    Calls(usize),
+    /// A function's code — the harness's or the product's — whose effects
+    /// are the caller's; several where a call by name may reach any of them.
+    Calls(Vec<usize>),
     /// A function of the machinery's, by the reach it declares.
     Declared(String, Vec<Context>),
     /// An operation started, stopped or restarted.
@@ -98,7 +105,7 @@ pub(super) struct Program {
     prop_values: std::cell::RefCell<PropValues>,
     /// What each caller hands a harness function's parameter, by `(doc,
     /// unit, index)`: the one object every call names, or `None` where calls
-    /// differ — read in a first pass, used by the second ([`Program::again`]).
+    /// differ — found by one reading, read by the next ([`Program::again`]).
     bindings: HashMap<(usize, usize, usize), Option<Value>>,
     /// The same, as the reading under way finds it.
     collected: HashMap<(usize, usize, usize), Option<Value>>,
@@ -116,6 +123,19 @@ pub(super) struct Program {
     pub(super) contents: HashMap<Site, Origin>,
     /// The same, as the reading under way puts it.
     pub(super) contents_collected: HashMap<Site, Origin>,
+    /// The members each value is given of its own, by name, as the reading
+    /// before found them — read by this reading (`super::members`).
+    pub(super) members: HashMap<Holder, BTreeSet<String>>,
+    /// The same, as the reading under way gives them.
+    pub(super) members_collected: HashMap<Holder, BTreeSet<String>>,
+    /// The harness properties whose values are being proven the language's
+    /// (`super::members`), and each answer reached with none pending, by
+    /// the member asked of it — for this reading.
+    pub(super) proving: Vec<(usize, usize, String)>,
+    pub(super) language_props: HashMap<(usize, usize, String, String), bool>,
+    /// What each container is, by the site that made it, as the contract
+    /// that made it says (`super::members`).
+    pub(super) kinds: HashMap<Site, Made>,
 }
 
 /// The harness object each property holds, by `(doc, object, name)`, once
@@ -159,6 +179,11 @@ impl Program {
             prop_origins: HashMap::new(),
             contents: HashMap::new(),
             contents_collected: HashMap::new(),
+            members: HashMap::new(),
+            members_collected: HashMap::new(),
+            proving: Vec::new(),
+            language_props: HashMap::new(),
+            kinds: HashMap::new(),
         };
         program.declarations();
         program
@@ -190,7 +215,14 @@ impl Program {
     pub(super) fn facts_of(&mut self, d: usize, u: usize) -> &Facts {
         if !self.facts.contains_key(&(d, u)) {
             let doc = &self.docs[d];
-            let facts = super::scan::facts(&doc.tokens, doc.units[u].body.clone());
+            let mut facts = super::scan::facts(&doc.tokens, doc.units[u].body.clone());
+            // What its parameter list evaluates as it binds is the unit's code too.
+            for range in &doc.units[u].evaluated {
+                facts.absorb_beside(
+                    super::scan::facts(&doc.tokens, range.clone()),
+                    range.clone(),
+                );
+            }
             self.facts.insert((d, u), facts);
         }
         &self.facts[&(d, u)]
@@ -208,13 +240,17 @@ impl Program {
         code
     }
 
-    /// Reads the program again from nothing, keeping what the first reading
-    /// learned of the parameters each call hands on (`bindings`): a code read
-    /// before all its callers were seen is read with all of them now.
+    /// Reads the program again from nothing, keeping what the reading before
+    /// learned — what each call hands its parameters, what each container
+    /// was put and given (`bindings`, `contents`, `members`): a code read
+    /// before all its callers were seen is read with all of them now. Run
+    /// until a reading learns nothing new, or the rule gives up (`rules`).
     pub fn again(&mut self) {
         self.bindings = std::mem::take(&mut self.collected);
         self.origin_bindings = std::mem::take(&mut self.origin_collected);
         self.contents = std::mem::take(&mut self.contents_collected);
+        self.members = std::mem::take(&mut self.members_collected);
+        self.language_props.clear();
         self.local_origins.clear();
         self.return_origins.clear();
         self.prop_origins.clear();
@@ -230,6 +266,7 @@ impl Program {
         self.collected != self.bindings
             || self.origin_collected != self.origin_bindings
             || self.contents_collected != self.contents
+            || self.members_collected != self.members
     }
 
     /// What an argument's tokens stand for in `code`, where they are one
@@ -543,11 +580,20 @@ impl Program {
                 let c = &self.codes[c];
                 (c.doc, c.unit, c.range.clone(), c.parent)
             };
+            let unit = &self.docs[d].units[u];
+            let is_param =
+                parent.is_none() && unit.bound.iter().any(|(_, bound)| bound.name == name);
+            // A parameter every caller hands the same object stands for that object — one named whole, given no
+            // default.
             let param = parent
                 .is_none()
-                .then(|| self.docs[d].units[u].params.iter().position(|p| p == name))
-                .flatten();
-            // A parameter every caller hands the same object stands for that object.
+                .then(|| unit.params.iter().position(|p| p == name))
+                .flatten()
+                .filter(|_| {
+                    unit.bound
+                        .iter()
+                        .all(|(_, bound)| bound.name != name || bound.defaults.is_empty())
+                });
             if let Some(Some(bound)) = param.and_then(|i| self.bindings.get(&(d, u, i))).cloned() {
                 return if own {
                     bound
@@ -555,7 +601,6 @@ impl Program {
                     Value::Captured(name.to_string(), Some(Box::new(bound)))
                 };
             }
-            let is_param = param.is_some();
             let local = self
                 .facts_of(d, u)
                 .within(&range)
@@ -622,13 +667,19 @@ impl Program {
                 continue;
             }
             let (effect, contexts) = self.call(code, &call.path, call.args.len());
-            if let Some(Effect::Calls(callee)) = &effect {
-                self.hand_on(code, *callee, &call.args);
+            if let Some(Effect::Calls(callees)) = &effect {
+                for callee in callees.clone() {
+                    self.hand_on(code, callee, &call.args);
+                }
             }
             self.puts(code, &call.path, &call.args);
+            if let Some(called_back) = self.callback(code, &call.path, &call.args) {
+                called.push((called_back, call.line, call.path.at));
+            }
             // A global function that changes the value it is handed first (`Object.assign`) changes it in place.
-            if let (Head::Name(object), [method]) = (&call.path.head, call.path.members.as_slice())
-                && builtins::global_puts(object, method).is_some()
+            if let (Some(object), Some(method)) =
+                (self.global_of(code, &call.path), call.path.last())
+                && builtins::global_puts(&object, method).is_some()
                 && let Some(first) = call.args.first().cloned()
             {
                 let origin = self.origin_of(code, first);
@@ -699,6 +750,9 @@ impl Program {
             let value = self.resolve(code, path);
             compares.push((value, path.spelled(), *line));
         }
+        if d >= self.harness {
+            as_the_products(&mut effects);
+        }
         self.codes[code].effects = effects;
         self.codes[code].compares = compares;
     }
@@ -730,9 +784,7 @@ impl Program {
                 .find(|l| &l.name == name);
             if let Some(local) = local {
                 let init = local.init?;
-                if !arrow(&self.docs[d].tokens[init.clone()]) {
-                    return None;
-                }
+                function_body(&self.docs[d].tokens[init.clone()])?;
                 let child = self.new_code(d, u, init.clone(), Some(code));
                 self.read(child);
                 return Some((child, Some(init)));
@@ -744,9 +796,29 @@ impl Program {
         }
     }
 
-    /// Records what a call in `code` hands each parameter of the harness
-    /// function whose code is `callee`: the object it names, and where its
-    /// value came from.
+    /// Records what a call in `code` that calls back the function whose
+    /// code is `callee` hands each of its parameters: `handed`, the callee's
+    /// to build where the caller made it.
+    pub(super) fn hand_over(&mut self, code: usize, callee: usize, handed: &Origin) {
+        let (cd, cu) = (self.codes[callee].doc, self.codes[callee].unit);
+        let handed = match handed.clone() {
+            made @ Origin::Fresh { maker, .. } if maker == code => made.handed_to(callee),
+            other => other,
+        };
+        for i in 0..self.docs[cd].units[cu].params.len() {
+            self.bind(cd, cu, i, None);
+            let joined = self
+                .origin_collected
+                .remove(&(cd, cu, i))
+                .unwrap_or(Origin::Unset)
+                .join(handed.clone());
+            self.origin_collected.insert((cd, cu, i), joined);
+        }
+    }
+
+    /// Records what a call in `code` hands each parameter of the function
+    /// whose code is `callee`: the object it names, and where its value came
+    /// from.
     fn hand_on(&mut self, code: usize, callee: usize, args: &[Range<usize>]) {
         let d = self.codes[code].doc;
         let (cd, cu) = (self.codes[callee].doc, self.codes[callee].unit);
@@ -781,7 +853,7 @@ impl Program {
         let (d, u) = (self.codes[code].doc, self.codes[code].unit);
         match context {
             ArgContext::Of(context) => {
-                if arrow(&self.docs[d].tokens[range.clone()]) {
+                if function_body(&self.docs[d].tokens[range.clone()]).is_some() {
                     let child = self.new_code(d, u, range, Some(code));
                     self.read(child);
                     self.roots.push(Root {
@@ -818,7 +890,7 @@ impl Program {
                     if !matches!(field.as_str(), "when" | "report") {
                         continue;
                     }
-                    if arrow(&self.docs[d].tokens[value.clone()]) {
+                    if function_body(&self.docs[d].tokens[value.clone()]).is_some() {
                         let child = self.new_code(d, u, value, Some(code));
                         self.read(child);
                         self.roots.push(Root {
@@ -859,6 +931,10 @@ impl Program {
             }
             return match self.head(code, name) {
                 Value::Captured(..) => Some(Effect::Smuggle(name.clone())),
+                // Of the product's: an input.
+                Value::Prop(d, ..) | Value::Object(d, _) if d >= self.harness => {
+                    Some(Effect::Input(path.spelled()))
+                }
                 Value::Prop(d, o, p) => Some(Effect::Write {
                     target: (d, o, p),
                     step,
@@ -880,6 +956,9 @@ impl Program {
             (path.receiver()?, path.members.last().cloned())
         };
         let origin = self.path_origin(code, &changed);
+        if let Some(name) = &member {
+            self.give(&origin, name);
+        }
         self.written_into(code, &origin, kind, in_place);
         self.change(code, origin, member, path, step, starts)
     }
@@ -939,7 +1018,11 @@ impl Program {
             let c = &self.codes[code];
             (c.doc, c.unit, c.range.clone(), c.parent)
         };
-        (parent.is_none() && self.docs[d].units[u].params.iter().any(|p| p == name))
+        (parent.is_none()
+            && self.docs[d].units[u]
+                .bound
+                .iter()
+                .any(|(_, bound)| bound.name == name))
             || self
                 .facts_of(d, u)
                 .within(&range)
@@ -958,6 +1041,16 @@ pub(super) enum ArgContext {
     Spec,
 }
 
+/// The effects of the product's own code, which is not read on trust: what
+/// it does that cannot be followed is an input.
+fn as_the_products(effects: &mut [(Effect, usize)]) {
+    for (effect, _) in effects {
+        if let Effect::Unread(what) = effect {
+            *effect = Effect::Input(std::mem::take(what));
+        }
+    }
+}
+
 /// Whether a value is known to be an object — the harness's, or the
 /// product's of an object type — and not a value read off one.
 fn object_value(value: &Value) -> bool {
@@ -966,22 +1059,6 @@ fn object_value(value: &Value) -> bool {
         Value::Product(Some(ty)) => ty.chars().next().is_some_and(char::is_uppercase),
         _ => false,
     }
-}
-
-/// Whether `tokens` are a function: an arrow or a `function`.
-fn arrow(tokens: &[crate::lex::Token]) -> bool {
-    let Some(first) = tokens.first() else {
-        return false;
-    };
-    if first.text == "function" {
-        return true;
-    }
-    if is_name(&first.text) && tokens.get(1).is_some_and(|t| t.text == "=>") {
-        return true;
-    }
-    first.text == "("
-        && crate::lex::matching_close(tokens, 0, "(", ")")
-            .is_some_and(|close| tokens.get(close + 1).is_some_and(|t| t.text == "=>"))
 }
 
 /// The fields of an object literal spanning `range`: each key and its

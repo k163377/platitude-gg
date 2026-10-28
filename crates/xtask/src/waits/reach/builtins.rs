@@ -1,8 +1,28 @@
-//! What the language's own functions answer, and what they put inside the
-//! values they are handed — each a contract the origin rule reads
-//! (`super::origin`). A function the tables do not hold answers a value of
-//! no known origin, and a change through that value is not passed as
-//! safe.
+//! What the language's own functions answer, what they put inside the
+//! values they are handed, and which functions they call back — each a
+//! contract for a shape of call, by the number of its arguments, that the
+//! origin rule reads (`super::origin`). A call the tables do not hold in
+//! that shape — another number of arguments, a spread where the count
+//! matters — answers a value of no known origin, and a change through that
+//! value is not passed as safe.
+
+/// How many arguments a contract holds for: at least, and at most.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct Arity(pub usize, pub usize);
+
+/// Any number, a spread included.
+const ANY: Arity = Arity(0, usize::MAX);
+
+impl Arity {
+    /// Whether a call of `count` arguments — `spread` where one is spread,
+    /// so the count is not known — is of this shape.
+    fn holds(self, count: usize, spread: bool) -> bool {
+        if spread {
+            return self == ANY;
+        }
+        self.0 <= count && count <= self.1
+    }
+}
 
 /// What a method of the language's own values answers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -16,83 +36,91 @@ pub(super) enum Answers {
     /// A new container holding what the receiver holds, each argument, and
     /// what each argument holds (`concat`).
     NewJoined,
-    /// A new container of what a function it is handed answers: not known.
-    NewUnknown,
+    /// A new container of what the function at the argument answers
+    /// (`map`): its answers are read (`Program::callback_answers`).
+    NewOfCallback(usize),
+    /// A new container of what the function at the argument answers, one
+    /// level flattened: an answer that is a container gives what it holds
+    /// (`flatMap`).
+    NewOfCallbackFlat(usize),
     /// A value the receiver holds (`find`).
     Inside,
     /// The receiver itself (`sort`).
     Receiver,
 }
 
-/// The methods of arrays and strings, by what they answer.
-pub(super) const METHODS: [(&str, Answers); 53] = [
-    ("join", Answers::Plain),
-    ("toString", Answers::Plain),
-    ("valueOf", Answers::Plain),
-    ("substring", Answers::Plain),
-    ("substr", Answers::Plain),
-    ("toLowerCase", Answers::Plain),
-    ("toUpperCase", Answers::Plain),
-    ("trim", Answers::Plain),
-    ("trimStart", Answers::Plain),
-    ("trimEnd", Answers::Plain),
-    ("replace", Answers::Plain),
-    ("replaceAll", Answers::Plain),
-    ("padStart", Answers::Plain),
-    ("padEnd", Answers::Plain),
-    ("repeat", Answers::Plain),
-    ("toFixed", Answers::Plain),
-    ("toPrecision", Answers::Plain),
-    ("indexOf", Answers::Plain),
-    ("lastIndexOf", Answers::Plain),
-    ("includes", Answers::Plain),
-    ("some", Answers::Plain),
-    ("every", Answers::Plain),
-    ("findIndex", Answers::Plain),
-    ("findLastIndex", Answers::Plain),
-    ("localeCompare", Answers::Plain),
-    ("charAt", Answers::Plain),
-    ("charCodeAt", Answers::Plain),
-    ("codePointAt", Answers::Plain),
-    ("startsWith", Answers::Plain),
-    ("endsWith", Answers::Plain),
-    ("test", Answers::Plain),
-    ("hasOwnProperty", Answers::Plain),
-    ("forEach", Answers::Plain),
+use Answers::{
+    Inside, NewInside, NewJoined, NewOfCallback, NewOfCallbackFlat, NewPlain, Plain, Receiver,
+};
+
+/// The methods of arrays and strings: what each answers, called with how
+/// many arguments.
+const METHODS: [(&str, Arity, Answers); 53] = [
+    ("join", Arity(0, 1), Plain),
+    ("toString", Arity(0, 1), Plain),
+    ("valueOf", Arity(0, 0), Plain),
+    ("substring", Arity(1, 2), Plain),
+    ("substr", Arity(1, 2), Plain),
+    ("toLowerCase", Arity(0, 0), Plain),
+    ("toUpperCase", Arity(0, 0), Plain),
+    ("trim", Arity(0, 0), Plain),
+    ("trimStart", Arity(0, 0), Plain),
+    ("trimEnd", Arity(0, 0), Plain),
+    ("replace", Arity(2, 2), Plain),
+    ("replaceAll", Arity(2, 2), Plain),
+    ("padStart", Arity(1, 2), Plain),
+    ("padEnd", Arity(1, 2), Plain),
+    ("repeat", Arity(1, 1), Plain),
+    ("toFixed", Arity(0, 1), Plain),
+    ("toPrecision", Arity(0, 1), Plain),
+    ("indexOf", Arity(1, 2), Plain),
+    ("lastIndexOf", Arity(1, 2), Plain),
+    ("includes", Arity(1, 2), Plain),
+    ("some", Arity(1, 2), Plain),
+    ("every", Arity(1, 2), Plain),
+    ("findIndex", Arity(1, 2), Plain),
+    ("findLastIndex", Arity(1, 2), Plain),
+    ("localeCompare", Arity(1, 3), Plain),
+    ("charAt", Arity(0, 1), Plain),
+    ("charCodeAt", Arity(0, 1), Plain),
+    ("codePointAt", Arity(0, 1), Plain),
+    ("startsWith", Arity(1, 2), Plain),
+    ("endsWith", Arity(1, 2), Plain),
+    ("test", Arity(1, 1), Plain),
+    ("hasOwnProperty", Arity(1, 1), Plain),
+    ("forEach", Arity(1, 2), Plain),
     // The length the receiver has after the put.
-    ("push", Answers::Plain),
-    ("unshift", Answers::Plain),
-    ("split", Answers::NewPlain),
-    ("match", Answers::NewPlain),
-    ("exec", Answers::NewPlain),
-    ("slice", Answers::NewInside),
-    ("filter", Answers::NewInside),
-    ("flat", Answers::NewInside),
+    ("push", ANY, Plain),
+    ("unshift", ANY, Plain),
+    ("split", Arity(0, 2), NewPlain),
+    ("match", Arity(1, 1), NewPlain),
+    ("exec", Arity(1, 1), NewPlain),
+    ("slice", Arity(0, 2), NewInside),
+    ("filter", Arity(1, 2), NewInside),
+    ("flat", Arity(0, 1), NewInside),
     // What it took out.
-    ("splice", Answers::NewInside),
-    ("concat", Answers::NewJoined),
-    ("map", Answers::NewUnknown),
-    ("flatMap", Answers::NewUnknown),
-    ("find", Answers::Inside),
-    ("findLast", Answers::Inside),
-    ("at", Answers::Inside),
-    ("pop", Answers::Inside),
-    ("shift", Answers::Inside),
-    ("sort", Answers::Receiver),
-    ("reverse", Answers::Receiver),
-    ("fill", Answers::Receiver),
+    ("splice", ANY, NewInside),
+    ("concat", ANY, NewJoined),
+    ("map", Arity(1, 2), NewOfCallback(0)),
+    ("flatMap", Arity(1, 2), NewOfCallbackFlat(0)),
+    ("find", Arity(1, 2), Inside),
+    ("findLast", Arity(1, 2), Inside),
+    ("at", Arity(1, 1), Inside),
+    ("pop", Arity(0, 0), Inside),
+    ("shift", Arity(0, 0), Inside),
+    ("sort", Arity(0, 1), Receiver),
+    ("reverse", Arity(0, 0), Receiver),
+    ("fill", Arity(1, 3), Receiver),
 ];
 
-/// What the method `name` answers; none for one the table does not hold.
-pub(super) fn method(name: &str) -> Option<Answers> {
+/// What the method `name` answers called with `count` arguments (`spread`
+/// where one is spread); none for a shape the table does not hold.
+pub(super) fn method(name: &str, count: usize, spread: bool) -> Option<Answers> {
     METHODS
         .iter()
-        .find(|(method, _)| *method == name)
-        .map(|(_, answers)| *answers)
+        .find(|(method, arity, _)| *method == name && arity.holds(count, spread))
+        .map(|(_, _, answers)| *answers)
 }
-
-/// The members of arrays and strings that are plain values.
-pub(super) const PLAIN_MEMBERS: [&str; 1] = ["length"];
 
 /// The methods that put their arguments inside their receiver, from the
 /// argument at the index on (`splice` puts what follows its start and its
@@ -108,6 +136,103 @@ pub(super) fn puts(name: &str) -> Option<usize> {
         .map(|(_, from)| *from)
 }
 
+/// What a function handed to a call is called with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Given {
+    /// Each element of the values it walks — the receiver's, or the first
+    /// argument's (`Array.from`) — and its index and the values whole,
+    /// which the elements stand for.
+    Elements,
+    /// What nothing says: an accumulator (`reduce`), a key and value read
+    /// back from text (`JSON.parse`).
+    Unknown,
+}
+
+/// A function a call calls back: the argument it is at, what it is called
+/// with, and the argument the call binds its `this` to where it takes one
+/// (`thisArg` — a `function`'s own `this`; an arrow's is its maker's).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct CallsBack {
+    pub at: usize,
+    pub given: Given,
+    pub this_at: Option<usize>,
+}
+
+const fn back(at: usize, given: Given, this_at: Option<usize>) -> CallsBack {
+    CallsBack { at, given, this_at }
+}
+
+/// The methods that call a function they are handed, and how. What the
+/// function does is the caller's.
+const CALLS_BACK: [(&str, CallsBack); 15] = [
+    ("map", back(0, Given::Elements, Some(1))),
+    ("flatMap", back(0, Given::Elements, Some(1))),
+    ("filter", back(0, Given::Elements, Some(1))),
+    ("find", back(0, Given::Elements, Some(1))),
+    ("findLast", back(0, Given::Elements, Some(1))),
+    ("findIndex", back(0, Given::Elements, Some(1))),
+    ("findLastIndex", back(0, Given::Elements, Some(1))),
+    ("some", back(0, Given::Elements, Some(1))),
+    ("every", back(0, Given::Elements, Some(1))),
+    ("forEach", back(0, Given::Elements, Some(1))),
+    ("sort", back(0, Given::Elements, None)),
+    ("reduce", back(0, Given::Unknown, None)),
+    ("reduceRight", back(0, Given::Unknown, None)),
+    ("replace", back(1, Given::Unknown, None)),
+    ("replaceAll", back(1, Given::Unknown, None)),
+];
+
+/// How `name` calls back a function it is handed, where it takes one.
+pub(super) fn calls_back(name: &str) -> Option<CallsBack> {
+    CALLS_BACK
+        .iter()
+        .find(|(method, _)| *method == name)
+        .map(|(_, how)| *how)
+}
+
+/// Whether `name` is a method of arrays and strings the tables hold: a call
+/// of any other on a value the code holds calls a function the value holds,
+/// which nothing here follows.
+pub(super) fn is_method(name: &str) -> bool {
+    METHODS.iter().any(|(method, _, _)| *method == name)
+        || puts(name).is_some()
+        || calls_back(name).is_some()
+}
+
+/// What a new container a contract answers is, which says whose its
+/// members are (`super::members`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Made {
+    /// An array: the language's members.
+    Array,
+    /// What JSON text reads back as: arrays and objects of plain values and
+    /// of each other, no function among them.
+    Json,
+    /// A language constructor's value (`new Map`, `Error(…)`).
+    Constructed,
+    /// An object the code spells: its members are its keys'.
+    Object,
+    /// A value whose members are another's it is made from
+    /// (`Object.create`), or a constructor's nothing here knows: no member
+    /// of it is known to be the language's.
+    Borrowing,
+}
+
+/// The constructors whose values are the language's own.
+pub(super) const CONSTRUCTED: [&str; 11] = [
+    "Array",
+    "Map",
+    "Set",
+    "Date",
+    "RegExp",
+    "Error",
+    "TypeError",
+    "RangeError",
+    "Object",
+    "String",
+    "Number",
+];
+
 /// What a function of a global object answers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum GlobalAnswers {
@@ -117,6 +242,9 @@ pub(super) enum GlobalAnswers {
     /// A new container holding what its first argument holds
     /// (`Object.values`, `Array.from`).
     NewInsideOfFirst,
+    /// A new container of what the function at the argument answers for
+    /// each element of the first argument (`Array.from(values, f)`).
+    NewOfCallback(usize),
     /// A new container of its arguments (`Array.of`).
     NewOfArguments,
     /// A new container whose insides are new containers alike: a value read
@@ -126,23 +254,39 @@ pub(super) enum GlobalAnswers {
     First,
 }
 
-/// What `object.method` answers for a global object; none for a function
-/// the table does not hold.
-pub(super) fn global(object: &str, method: &str) -> Option<GlobalAnswers> {
-    Some(match (object, method) {
-        ("Object", "keys") => GlobalAnswers::NewPlain,
-        ("Object", "values" | "entries" | "create") | ("Array", "from") => {
-            GlobalAnswers::NewInsideOfFirst
+/// What `object.method` answers for a global object called with `count`
+/// arguments (`spread` where one is spread), and what a new container it
+/// answers is; none for a function or a shape the table does not hold.
+pub(super) fn global(
+    object: &str,
+    method: &str,
+    count: usize,
+    spread: bool,
+) -> Option<(GlobalAnswers, Made)> {
+    let made = match (object, method) {
+        ("JSON", "parse") => Made::Json,
+        // Its members are the prototype's it is handed.
+        ("Object", "create") => Made::Borrowing,
+        _ => Made::Array,
+    };
+    let (arity, answers) = match (object, method) {
+        ("Object", "keys") => (Arity(1, 1), GlobalAnswers::NewPlain),
+        ("Object", "values" | "entries" | "create") => {
+            (Arity(1, 1), GlobalAnswers::NewInsideOfFirst)
         }
-        ("Object", "assign" | "freeze" | "seal" | "defineProperty" | "setPrototypeOf") => {
-            GlobalAnswers::First
-        }
-        ("Object", "is") | ("Array", "isArray") | ("JSON", "stringify") | ("Date", "now") => {
-            GlobalAnswers::Plain
-        }
-        ("Array", "of") => GlobalAnswers::NewOfArguments,
-        ("JSON", "parse") => GlobalAnswers::NewDeep,
-        ("Math" | "Number" | "String", _) => GlobalAnswers::Plain,
+        ("Array", "from") if count >= 2 => (Arity(2, 3), GlobalAnswers::NewOfCallback(1)),
+        ("Array", "from") => (Arity(1, 1), GlobalAnswers::NewInsideOfFirst),
+        ("Object", "assign") => (Arity(1, usize::MAX), GlobalAnswers::First),
+        ("Object", "freeze" | "seal") => (Arity(1, 1), GlobalAnswers::First),
+        ("Object", "defineProperty") => (Arity(3, 3), GlobalAnswers::First),
+        ("Object", "setPrototypeOf") => (Arity(2, 2), GlobalAnswers::First),
+        ("Object", "is") => (Arity(2, 2), GlobalAnswers::Plain),
+        ("Array", "isArray") => (Arity(1, 1), GlobalAnswers::Plain),
+        ("JSON", "stringify") => (Arity(1, 3), GlobalAnswers::Plain),
+        ("Date", "now") => (Arity(0, 0), GlobalAnswers::Plain),
+        ("Array", "of") => (ANY, GlobalAnswers::NewOfArguments),
+        ("JSON", "parse") => (Arity(1, 1), GlobalAnswers::NewDeep),
+        ("Math" | "Number" | "String", _) => (ANY, GlobalAnswers::Plain),
         // Values Qt makes: points, rectangles, colours, formatted text.
         (
             "Qt",
@@ -150,10 +294,21 @@ pub(super) fn global(object: &str, method: &str) -> Option<GlobalAnswers> {
         )
         | ("Qt", "darker" | "formatDate" | "formatTime" | "formatDateTime" | "md5" | "btoa")
         | ("Qt", "atob" | "fontFamilies" | "platform" | "resolvedUrl" | "url") => {
-            GlobalAnswers::Plain
+            (ANY, GlobalAnswers::Plain)
         }
         _ => return None,
-    })
+    };
+    arity.holds(count, spread).then_some((answers, made))
+}
+
+/// How `object.method` calls back a function it is handed: with the
+/// elements of its first argument, for `Array.from`.
+pub(super) fn global_calls_back(object: &str, method: &str) -> Option<CallsBack> {
+    match (object, method) {
+        ("Array", "from") => Some(back(1, Given::Elements, Some(2))),
+        ("JSON", "parse" | "stringify") => Some(back(1, Given::Unknown, None)),
+        _ => None,
+    }
 }
 
 /// The global functions that put what their arguments hold, from the one at
@@ -192,3 +347,6 @@ pub(super) const PLAIN_FUNCTIONS: [&str; 11] = [
 /// nothing known.
 pub(super) const NEW_FUNCTIONS: [&str; 6] =
     ["Array", "Error", "TypeError", "RangeError", "Map", "Set"];
+
+/// The members of arrays and strings that are plain values.
+pub(super) const PLAIN_MEMBERS: [&str; 1] = ["length"];
