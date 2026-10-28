@@ -116,7 +116,10 @@ pub(super) fn findings(file: &str, text: &str) -> Vec<Finding> {
             }
             // The page driver's own completion is its operations' (`dispatchFinished`, the barriers).
             "driver"
-                if next(1) == Some(".") && next(2) == Some("complete") && next(3) == Some("(") =>
+                if next(1) == Some(".")
+                    && next(2) == Some("complete")
+                    && next(3) == Some("(")
+                    && !COMPLETERS.contains(&name) =>
             {
                 found(token.line, "completion");
             }
@@ -284,7 +287,7 @@ mod tests {
             rules("src/auto/AutoActFooVerbs.qml", text),
             [(2, "sampler")]
         );
-        assert!(rules("src/auto/WindowHarness.qml", text).is_empty());
+        assert!(rules("src/auto/CompletionRoute.qml", text).is_empty());
         let staged = "Item {\n    PageStage {\n        name: \"x\"\n    }\n}\n";
         assert!(rules("src/auto/AutoActFooVerbs.qml", staged).is_empty());
     }

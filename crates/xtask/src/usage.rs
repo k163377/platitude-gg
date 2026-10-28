@@ -24,8 +24,9 @@ commands:
       name, a QML mention of a #[qobject] model — and runs the tests in
       that reach: unit tests by module path, the integration binary by
       module, clippy per crate entered, cargo-deny when deny.toml or a
-      manifest moved, qmltest when the product's QML module, the QtTest
-      files that read it, or the runner that stages it moved, shipped when
+      manifest moved, qmltest when a file under what a QtTest run reads
+      moved (the runner as built, the staged module, the tests and the QML
+      they import; on the container side its image too), shipped when
       the app's QML or entry point
       moved, every registered verify-ui line (crates/xtask/verb-lines.txt)
       when the app's QML or the harness that drives it is reached, bare
@@ -222,7 +223,8 @@ commands:
       because `import platitude.ui` resolves by directory name and the
       product's directory is called `ui`; the Rust-backed `platitude`
       module is staged all but empty, with the stand-ins under
-      tests/qml/stubs (`GitFacts`) as its singletons. Nothing of the app
+      tests/qml/stubs (`GitFacts`, `Harness`, `PerfProbe`) as its
+      singletons. Nothing of the app
       is compiled, so a file answers in a fraction of a second.
       Named files (by stem, `tst_ink`) run apart, one process each — the
       road for a file being written; the gate names none, and then every
@@ -232,11 +234,13 @@ commands:
       that case, and nothing here is optional, so a case simply absent is
       a run that fell short rather than one that was allowed to. A run
       that is not green is then run one file per process, which is what
-      says which file; the verdict stays the first run's either way, so
-      files that pass apart and fail together are not independent of
-      each other, and that is a failure of its own. `gate` runs it, on
-      both sides, when the change reaches that module or the tests
-      themselves; `cargo xtask linux qmltest` is the container.
+      says which file; the verdict stays the first run's either way. When
+      every file passes apart and they fail together, it names the last
+      file that finished green and the first that failed, and leaves the
+      cause undetermined; a run that is not green keeps its staging and a
+      manifest under target/qmltest/failed (the newest five). `gate` runs
+      it, on both sides, when a changed file lies under what a run reads;
+      `cargo xtask linux qmltest` is the container.
 
   deny
       cargo-deny over deny.toml: the bans that keep networking crates and

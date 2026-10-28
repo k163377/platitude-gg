@@ -186,8 +186,11 @@ Item {
         return Array.isArray(answer) ? answer : [answer]
     }
     /// What the page holds a completion for besides its reads (`Awaited.pageHolds`): a menu this run took down on the
-    /// product's behalf still on its way out (`menuGoing`).
+    /// product's behalf still on its way out (`menuGoing`). The page that claimed the run can be gone by then — a
+    /// window verb closing its tab, or standing it in another worktree — and a page gone holds nothing.
     function completionHolds() {
+        if (driver === null)
+            return ({})
         return { "menuGone": driver.menuGoing === null || !driver.menuGoing.visible }
     }
 

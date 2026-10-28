@@ -19,6 +19,10 @@ Item {
     property var completing: null
     property bool asked: false
     property bool read: false
+    /// What the page owed at the reading that let the report be read — the state the report read, which the
+    /// completion's line says. One reading for both: the page's reads move on a session's own thread
+    /// (`readingsSettled`), so a second reading in the same turn can name a read the report never saw.
+    property var owedAtRead: []
 
     /// The report was read and said; the run completes on what it read, in this turn.
     signal readied()
@@ -34,23 +38,34 @@ Item {
         }
         route.asked = true
         route.completing = from
+        if (from === null)
+            route.owedAtRead = route.owed()
         if (from === null || route.held()) {
             hold.stop()
             route.readReport()
-        } else {
+        } else if (!route.read) {
             hold.start()
         }
     }
     /// Whether the completion asked for may read its report now: the page owes nothing the completion did not declare
-    /// arriving, and the page's own holds are clear.
+    /// arriving, and the page's own holds are clear. Holds that cannot be read are a breach, said at once: the hold
+    /// would otherwise stand to the ceiling naming nothing.
     function held() {
         const declared = route.completing.arriving
         const terms = ({})
-        for (const term of route.owed()) {
+        route.owedAtRead = route.owed()
+        for (const term of route.owedAtRead) {
             if (declared.indexOf("*") < 0 && declared.indexOf(term) < 0)
                 terms["page:" + term] = false
         }
-        const holds = Awaited.pageHolds === null ? ({}) : Awaited.pageHolds()
+        let holds = ({})
+        try {
+            holds = Awaited.pageHolds === null ? ({}) : Awaited.pageHolds()
+        } catch (e) {
+            hold.stop()
+            Awaited.breach(route.completing.op, "the page's holds on the completion could not be read: " + e)
+            return false
+        }
         for (const name in holds)
             terms[name] = holds[name]
         return Awaited.all("completion", terms)
