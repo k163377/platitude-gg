@@ -4,9 +4,9 @@ import platitude.ui
 /// One operation of a run: a sampler whose stages move only through here (`Awaited` — 反映前テストの機械化 §検証時点).
 /// Each start is a generation, with stages, marks, witnesses and an order of its own; `again` begins the next by hand,
 /// for an operation that repeats on purpose. Its beat reads the product (`Awaited.all`) as often as it likes; it moves
-/// a stage (`advance`), puts an input in (`input`) or completes the run (`complete`) on the yes of the beat's latest
-/// reading, once per stage per generation. Not instantiated as itself: `PageStage` and `WindowStage` say whose
-/// operation it is.
+/// a stage (`advance`) or completes the run (`complete`) on the yes of the beat's latest reading, and puts an input
+/// in (`input`) on the press's own answer, once per stage per generation. Not instantiated as itself: `PageStage`
+/// and `WindowStage` say whose operation it is.
 ///
 /// Each function says where it may be called (`// reach(…)`, `cargo xtask waits`): in the operation's beat, in the
 /// press of an input, or in a reading — a report, a completion's `when` — which only reads.
@@ -57,10 +57,11 @@ SampleTimer {
         return Awaited.transition(op, stage, report)
     }
     /// Puts an input in, once per generation, as the move to `stage`: `press` is the product's own input path, and
-    /// answers false where the input did not go in (a row not there yet) — then nothing moved and the beat after tries
-    /// again. Answering nothing is an input that went in. `report`, if given, is read once the input went in, with
-    /// what `press` answered, as the stage's lines. A second input as the same stage is refused before it is pressed.
-    /// A fact the completion's report needs from the press is a witness (`witness`), not a value carried out of it.
+    /// answers false where the input did not go in (a row not there yet) — then nothing moved, nothing the press
+    /// witnessed stands, and the beat after tries again. Answering nothing is an input that went in. `report`, if
+    /// given, is read once the input went in, with what `press` answered, as the stage's lines. A second input as the
+    /// same stage is refused before it is pressed. A fact the completion's report needs from the press is a witness
+    /// (`witness`), not a value carried out of it.
     // reach(beat; 1=press, 2=read)
     function input(stage, press, report) {
         if (Awaited.refused(op, stage, true))
@@ -71,11 +72,11 @@ SampleTimer {
             answer = press()
         } catch (e) {
             // Part of the input may have gone in: pressed again on the next beat it would go in twice.
-            Awaited.pressing(null, "")
+            Awaited.pressed(op, true)
             Awaited.breach(op, "a press that threw: " + e)
             return false
         }
-        Awaited.pressing(null, "")
+        Awaited.pressed(op, answer !== false)
         if (answer === false)
             return false
         return Awaited.transition(op, stage, report === undefined ? undefined : () => report(answer), true)

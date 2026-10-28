@@ -81,7 +81,7 @@ QtObject {
             awaited.window.update()
     }
 
-    /// The completion route: `WindowHarness`, which holds a completion until its reads are in and then reads its
+    /// The completion route (`CompletionRoute`), which holds a completion until its reads are in and then reads its
     /// report (`finishFrom`). Set by the harness as it is built.
     property var route: null
     /// The page's own holds on a completion — its menu still on its way out (`AutoActDriver.completionHolds`) —
@@ -357,12 +357,33 @@ QtObject {
     // ---- Witnesses ----
 
     /// The operation whose input is being pressed (`StageTimer.input`), and the stage it presses as: a witness kept
-    /// in the press is that stage's.
+    /// in the press is that stage's, and stands only once the press went in (`pressed`).
     property var pressingOp: null
     property string pressingTo: ""
+    /// The names the press under way kept, and their `witness` lines, said once it went in.
+    property var pressKept: []
+    property var pressSaid: []
     function pressing(op, stage) {
         awaited.pressingOp = op
         awaited.pressingTo = stage
+        awaited.pressKept = []
+        awaited.pressSaid = []
+    }
+    /// Ends `op`'s press: one that went in says the witnesses it kept; one that put nothing in drops them, so the
+    /// press tried again keeps its own.
+    function pressed(op, wentIn) {
+        if (wentIn) {
+            for (const line of awaited.pressSaid)
+                Harness.report(line)
+        } else {
+            const record = awaited.recordOf(op)
+            for (const name of awaited.pressKept)
+                delete record.witnesses[name]
+        }
+        awaited.pressingOp = null
+        awaited.pressingTo = ""
+        awaited.pressKept = []
+        awaited.pressSaid = []
     }
     /// The operation whose report is being read, and the witnesses that report read, as
     /// `<owner>/<op>/<gen>/<stage>/<name>` — the words of the `witness` line each was kept under.
@@ -383,10 +404,17 @@ QtObject {
             awaited.breach(op, "witnessed " + name + " twice in one generation")
             return value
         }
-        const stage = awaited.pressingOp === op ? awaited.pressingTo : record.stage
+        const inPress = awaited.pressingOp === op
+        const stage = inPress ? awaited.pressingTo : record.stage
         record.witnesses[name] = { "value": value, "stage": stage }
-        Harness.report("witness run=" + awaited.runId + " " + awaited.placeOf(record) + " stage=" + stage
-                       + " name=" + name)
+        const line = "witness run=" + awaited.runId + " " + awaited.placeOf(record) + " stage=" + stage
+                     + " name=" + name
+        if (inPress) {
+            awaited.pressKept = awaited.pressKept.concat([name])
+            awaited.pressSaid = awaited.pressSaid.concat([line])
+        } else {
+            Harness.report(line)
+        }
         return value
     }
     /// Whether `op`'s running generation kept a value under `name`.
