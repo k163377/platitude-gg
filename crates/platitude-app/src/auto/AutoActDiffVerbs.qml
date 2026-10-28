@@ -613,13 +613,10 @@ Item {
     function wroteAndSettled() {
         return driver.wroteAndSettled() && !page.diffSettling
     }
-    /// How far down the reader is taken before the rebuild (`keep-place`) or the colour swap (`colour-place`); both are
-    /// judged on getting exactly this back.
-    readonly property real readY: 400
     /// Where the view stands now, against `readY` and the room it has.
     function placeLine() {
         return "diff_place at=" + Math.round(diffPane.view.contentY)
-               + " want=" + Math.round(acts.readY)
+               + " want=" + Math.round(driver.readY)
                + " room=" + Math.round(diffPane.view.maxY)
     }
     // line-back: one line staged from the diff, then the whole file moved from the file list — the diff must follow
@@ -846,13 +843,6 @@ Item {
                 "report": () => op.line() })
         }
     }
-    // The reach as one string (measured, drawn, widest row), held until it stands across a frame: delegates are built a
-    // layout after the jump, and a `Text` answers at the family's advance until its fallback font resolves
-    // (`DiffTextMetrics`). The row is in it so a width filed under the wrong row shows as movement.
-    function reachNow() {
-        return Math.round(diffPane.codeMeasured) + "," + Math.round(diffPane.codeDrawn)
-                + "," + diffPane.codeWidestRow
-    }
     // code-grow: a row the pick missed, arriving from below. The pane measures the model's longest lines by column
     // count before any row exists (`DiffTextMetrics.codeW`); the laid-out rows settle the real reach (`DiffReach`).
     // `--preset widelate`'s `late.txt` makes the two disagree: combining pairs fill the pick, and the line drawn widest
@@ -874,7 +864,7 @@ Item {
         name: "code_grow"
         /// Whether the row jumped to is built and the widths have stood across a frame since the jump.
         function arrived(atRow) {
-            return !!diffPane.view.itemAtIndex(atRow) && codeGrowTimer.still("reach", acts.reachNow())
+            return !!diffPane.view.itemAtIndex(atRow) && codeGrowTimer.still("reach", driver.diffReach())
         }
         /// What the walk witnessed under `name`; a diff that fits its frame walks nowhere, and says no width (0) and
         /// no row (-1) in its place.
@@ -1044,7 +1034,7 @@ Item {
             if (!Awaited.all("code_shrink_reach", {
                 "written": reread.written,
                 "rows": reread.rows,
-                "still": reread.written && reread.rows && op.still("code_shrink_reach", acts.reachNow()) }))
+                "still": reread.written && reread.rows && op.still("code_shrink_reach", driver.diffReach()) }))
                 return
             op.complete({ "name": "code_shrink_reach", "when": () => op.reread(), "report": () => op.line(true) })
         }
@@ -1118,7 +1108,7 @@ Item {
                 "landed": there.landed,
                 "read": there.read,
                 "laid": there.laid,
-                "still": there.landed && there.read && there.laid && op.still("code_swap_reach", acts.reachNow()) }))
+                "still": there.landed && there.read && there.laid && op.still("code_swap_reach", driver.diffReach()) }))
                 return
             op.complete({ "name": "code_swap_reach", "when": () => op.there(), "report": () => op.line(true, true) })
         }
@@ -1191,13 +1181,13 @@ Item {
             if (op.at("start")) {
                 if (!Awaited.all("keep_place_laid", { "laid": acts.viewLaidOut() }))
                     return
-                if (diffPane.view.maxY < acts.readY) {
+                if (diffPane.view.maxY < driver.readY) {
                     op.complete({ "name": "keep_place_laid", "when": () => ({ "laid": acts.viewLaidOut() }),
                                   "report": () => acts.placeLine() })
                     return
                 }
                 op.input("wrote", () => {
-                    diffPane.scrollTo(acts.readY)
+                    diffPane.scrollTo(driver.readY)
                     const reads = op.reads
                     const went = driver.pressWrite("stage-selection", () => {
                         page.stageSelection(0, op.changedLine)
@@ -1284,7 +1274,7 @@ Item {
                 if (!Awaited.all("colour_place", { "rows": diffPane.firstChangedLine(0) >= 0 }))
                     return
                 op.input("scrolled", () => {
-                    diffPane.scrollTo(acts.readY)
+                    diffPane.scrollTo(driver.readY)
                     op.witness("scrolled", op.reach())
                 })
                 return
@@ -1292,7 +1282,7 @@ Item {
             if (op.at("scrolled")) {
                 const coloured = diffPane.diffModel.coloured
                 if (!Awaited.all("colour_place_looked", {
-                        "looked": coloured || op.still("colour_place_before", acts.reachNow()) }))
+                        "looked": coloured || op.still("colour_place_before", driver.diffReach()) }))
                     return
                 op.witness("looked", coloured ? null : op.reach())
                 op.advance("looked")
@@ -1303,7 +1293,7 @@ Item {
                 op.advance("coloured")
             }
             // The rows are rewritten as the colours land: read once the reach has stood across a frame since.
-            if (!Awaited.all("colour_place_still", { "still": op.still("colour_place_reach", acts.reachNow()) }))
+            if (!Awaited.all("colour_place_still", { "still": op.still("colour_place_reach", driver.diffReach()) }))
                 return
             op.complete({ "when": () => ({ "coloured": diffPane.diffModel.coloured }), "report": () => op.line() })
         }

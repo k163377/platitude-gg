@@ -156,6 +156,17 @@ Item {
         return refVerbs.reachWords(card)
     }
 
+    /// How far down a diff's reader is taken before the rebuild (`keep-place`) or the colour swap (`colour-place`);
+    /// both are judged on getting exactly this back.
+    readonly property real readY: 400
+    // The diff's reach as one string (measured, drawn, widest row), held until it stands across a frame: delegates are
+    // built a layout after the jump, and a `Text` answers at the family's advance until its fallback font resolves
+    // (`DiffTextMetrics`). The row is in it so a width filed under the wrong row shows as movement.
+    function diffReach() {
+        return Math.round(diffPane.codeMeasured) + "," + Math.round(diffPane.codeDrawn)
+                + "," + diffPane.codeWidestRow
+    }
+
     /// The page starts this once its models are attached: a verb run before them would act on a repository nothing
     /// has read yet.
     function begin() {
