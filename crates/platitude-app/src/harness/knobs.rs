@@ -70,6 +70,12 @@ pub(crate) struct Knobs {
     /// the content for the readings the fault stands through
     /// (`WindowHarness.owedForPicture`; `xtask::verify::shot_check`).
     pub fault_owed_at_shot: String,
+    /// `PGG_FAULT_HOLD_RECORDS` — hold the command log's records back from
+    /// the first row a reader asked for, until the run lets them through:
+    /// a write's answer on the tab ahead of its commands on the log, the
+    /// order two feeds can drain in (`harness::faults::records_through`;
+    /// `xtask::verify::records_check`).
+    pub fault_hold_records: bool,
     /// `PGG_AUTO_SELECT` — select the newest commit and open the first
     /// changed file, so a picture has something in every pane.
     pub select: bool,
@@ -166,6 +172,7 @@ fn read() -> Knobs {
         fault_hold_wip_row: on("PGG_FAULT_HOLD_WIP_ROW"),
         fault_hold_save: text("PGG_FAULT_HOLD_SAVE"),
         fault_owed_at_shot: text("PGG_FAULT_OWED_AT_SHOT"),
+        fault_hold_records: on("PGG_FAULT_HOLD_RECORDS"),
         select: on("PGG_AUTO_SELECT"),
         scroll: on("PGG_AUTO_SCROLL"),
         perf: on("PGG_AUTO_PERF"),
@@ -234,7 +241,8 @@ mod tests {
                 && !knobs.fault_no_deadline
                 && !knobs.fault_hold_act
                 && knobs.fault_hold_save.is_empty()
-                && knobs.fault_owed_at_shot.is_empty(),
+                && knobs.fault_owed_at_shot.is_empty()
+                && !knobs.fault_hold_records,
             "a run nobody is driving is held by nothing, keeps its own deadline, and finishes what it starts"
         );
         assert!(

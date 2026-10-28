@@ -313,13 +313,25 @@ impl CommandsModel {
         self.changed();
     }
 
+    /// Automation: lowers the harness's hold on the log's records
+    /// (`PGG_FAULT_HOLD_RECORDS`) and takes in what it held, answering how
+    /// many messages that was, or -1 where no hold stood.
+    #[qslot]
+    fn let_records_through(&mut self) -> i32 {
+        let held = crate::harness::let_records_through();
+        if held >= 0 {
+            self.drain();
+        }
+        held
+    }
+
     #[qslot]
     fn drain(&mut self) {
         let Some(feed) = self.feed.clone() else {
             return;
         };
         let mut touched = false;
-        for msg in feed.drain() {
+        for msg in crate::harness::records_through(feed.drain()) {
             match msg {
                 CommandMsg::Started {
                     run,

@@ -412,6 +412,21 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       options:
         --no-build    reuse the release the gate's block already built
 
+  records-check
+      Holds a write's records back from the command log and reads what
+      the completion waited for. A write's answer reaches the tab and
+      its commands reach the log on two feeds that drain in no order of
+      their own, and a run that passed cannot say which came first; so
+      the log's records are held from the write's first asked command
+      (`--fault-hold-records`) until a wait stands on them alone. Three
+      registered lines — a push that lands, one refused into a report,
+      and a tag push refused in git's words after three commands, which
+      raises the log — must each pass, say the release came while held
+      and before the completion, complete on the write's records, and
+      stand the log's rows in the completion's walk where the log is up.
+      options:
+        --no-build    reuse the release the gate's block already built
+
   corpus [--force] [--path <dir>] [--against <repo>]
       Builds the repository `perf` measures against, and says where it
       is. 200,000 commits, 50,000 refs and a hundred thousand tracked

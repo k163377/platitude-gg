@@ -121,6 +121,7 @@ fn a_qml_change_owes_every_registered_line_and_no_rust_test() {
             "qmltest-linux",
             "shipped",
             "shot-check",
+            "records-check",
             "verify stash --preset basic",
             "verify-linux stash --preset basic",
             "bare"
@@ -172,6 +173,7 @@ fn a_qml_leaf_owes_every_line_and_reports_the_selection_by_what_they_show() {
             "qmltest-linux",
             "shipped",
             "shot-check",
+            "records-check",
             "verify stash --preset basic",
             "verify-linux stash --preset basic",
             "verify settings --preset basic",

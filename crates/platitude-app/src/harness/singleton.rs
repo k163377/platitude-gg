@@ -54,6 +54,9 @@ pub struct Harness {
     /// Have one picture's readings of the page say a read is on its way
     /// (`Knobs::fault_owed_at_shot`; `WindowHarness.owedForPicture`).
     fault_owed_at_shot: String,
+    /// Hold the command log's records back until the run lets them
+    /// through (`Knobs::fault_hold_records`; `WindowHarness`).
+    fault_hold_records: bool,
 }
 
 impl Default for Harness {
@@ -77,6 +80,7 @@ impl Default for Harness {
             automated: knobs.automated,
             fault_hold_act: knobs.fault_hold_act,
             fault_owed_at_shot: knobs.fault_owed_at_shot.clone(),
+            fault_hold_records: knobs.fault_hold_records,
         }
     }
 }
@@ -102,6 +106,7 @@ impl Harness {
     qproperty!("automated", Member = automated, Constant);
     qproperty!("faultHoldAct", Member = fault_hold_act, Constant);
     qproperty!("faultOwedAtShot", Member = fault_owed_at_shot, Constant);
+    qproperty!("faultHoldRecords", Member = fault_hold_records, Constant);
 
     /// The reporting channel the harness reads its answers off (QML →
     /// tracing → `xtask`).

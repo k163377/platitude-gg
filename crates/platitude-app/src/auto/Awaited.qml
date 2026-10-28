@@ -81,6 +81,9 @@ QtObject {
     /// beats; and the latest observation's answer inside it — null before the beat observed anything.
     property var beating: null
     property var observed: null
+    /// An observation that did not hold, with the terms it is waiting for — what a fault that holds a read back lets
+    /// it through on (`WindowHarness`, `PGG_FAULT_HOLD_RECORDS`).
+    signal waited(string name, var missing)
 
     /// Whether every term has come. `terms` maps a name to whether it is there; the missing names are said under
     /// `name` when they change. An observation only: it moves no stage, however often it is read. `name` is a name —
@@ -99,6 +102,8 @@ QtObject {
         awaited.note(name + " waiting=" + (missing.length === 0 ? "nothing" : missing.join(",")))
         const holds = missing.length === 0
         awaited.observed = holds
+        if (!holds)
+            awaited.waited(name, missing)
         return holds
     }
 

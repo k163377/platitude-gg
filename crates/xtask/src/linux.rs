@@ -136,12 +136,14 @@ pub(crate) const IN_CONTAINER: &str = "PGG_IN_CONTAINER";
 
 /// Task-runner verbs worth running in there. Naming one means `cargo xtask
 /// <verb>`, so the command reads the same as on the host.
-const XTASK_VERBS: [&str; 5] = [
+const XTASK_VERBS: [&str; 6] = [
     "verify-ui",
     "demo-repo",
     "qmltest",
     "sweep",
     "relied-messages",
+    // Drives verify-ui on its own: the container's records hold.
+    "records-check",
 ];
 
 /// Cargo verbs that build something (one-letter aliases included), and

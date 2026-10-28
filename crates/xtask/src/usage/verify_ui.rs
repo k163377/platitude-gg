@@ -94,6 +94,13 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           The fourth shape `wedge-check` drives — the
                           diagnostic ran out of time and the app was still
                           reaped and reported
+        --fault-hold-records
+                          hold the command log's records back from the
+                          write's first asked command, and let them
+                          through once a wait stands on them alone — or,
+                          where nothing waited, at the completion. What
+                          `records-check` drives: the completion has to
+                          wait for its write's records in the log
         --shot-dir <dir>  screenshot directory (default: the primary
                           checkout's target/tmp, kept)
         --config-dir <d>  settings.toml / state.toml directory. Fresh per

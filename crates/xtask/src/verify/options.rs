@@ -63,6 +63,10 @@ pub(super) struct Options {
     /// again can be read from outside: driven by `shot-check`
     /// (`super::shot_check`).
     pub(super) fault_owed_at_shot: String,
+    /// Hold the command log's records back from the write's first asked
+    /// command until a wait stands on them alone (`PGG_FAULT_HOLD_RECORDS`):
+    /// driven by `records-check` (`super::records_check`).
+    pub(super) fault_hold_records: bool,
     /// Stall the parent's own look at a run reaped at the ceiling
     /// (`super::look::look_at`) — the one fault that is the runner's own,
     /// driven by `wedge-check`.
@@ -119,6 +123,7 @@ impl Options {
             // A run made to see one order of the reads, or a read land in its picture.
             || !self.slow_git.is_empty()
             || !self.fault_owed_at_shot.is_empty()
+            || self.fault_hold_records
             // Read back one word per argument (`suite_words`): an argument
             // with a space comes back as several and the replay is refused.
             || self.arg.contains(char::is_whitespace)
@@ -212,6 +217,7 @@ impl Default for Options {
             fault_hold_act: false,
             fault_hold_save: String::new(),
             fault_owed_at_shot: String::new(),
+            fault_hold_records: false,
             fault_stall_look: false,
             shot_dir: None,
             config_dir: None,
@@ -305,6 +311,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
                 opts.fault_owed_at_shot = asked.clone();
             }
             "--fault-stall-look" => opts.fault_stall_look = true,
+            "--fault-hold-records" => opts.fault_hold_records = true,
             "--shot-dir" => {
                 opts.shot_dir = Some(typed_path(it.next().ok_or("--shot-dir needs a path")?));
             }

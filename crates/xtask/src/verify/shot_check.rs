@@ -216,7 +216,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
 /// Whether `args` say the release stands already — `--no-build`, the one
 /// word the gate's block hands a step after the first built it
 /// (`gate::sides::verbs`): the first case then builds nothing either.
-fn reuse_the_build(args: &[String], check: &str) -> Result<bool, String> {
+pub(super) fn reuse_the_build(args: &[String], check: &str) -> Result<bool, String> {
     match args {
         [] => Ok(false),
         [word] if word == "--no-build" => Ok(true),

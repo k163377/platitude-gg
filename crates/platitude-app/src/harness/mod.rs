@@ -9,6 +9,7 @@
 
 mod deadline;
 mod faults;
+mod held_records;
 mod knobs;
 pub(crate) mod memprobe;
 #[cfg(feature = "automation")]
@@ -22,6 +23,7 @@ pub(crate) use faults::{
     fail_graph_pass, held_save, hold_the_worktree_row, let_the_worktree_row_through, pass_hooks,
     walk_again_while_held,
 };
+pub(crate) use held_records::{let_records_through, records_through};
 pub(crate) use knobs::knobs;
 pub(crate) use settlement::readings_settled;
 

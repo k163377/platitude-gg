@@ -61,6 +61,7 @@ structure.lengths
 sweep.dry-run
 sweep.if-the-generation-moved
 sweep.now
+verify.records
 verify.shot
 verify.ui
 verify.verbs

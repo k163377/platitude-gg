@@ -193,6 +193,7 @@ pub(super) fn select(
     // reuse it beside the rest (`sides::verbs`).
     steps.extend(wedge_steps(reach, read.everything));
     steps.extend(shot_steps(g, reach, &sorted, read.everything));
+    steps.extend(records_steps(g, reach, &sorted, read));
     (steps, counted)
 }
 
@@ -502,6 +503,54 @@ fn shot_steps(g: &Graph, reach: &Reach, sorted: &Sorted, everything: bool) -> Ve
     shot.builds_app = true;
     shot.release = true;
     vec![shot]
+}
+
+/// The records check's own file, spelled in pieces as [`shot_check`]'s is.
+fn records_check() -> String {
+    format!("{}/{}", "crates/xtask/src/verify", "records_check.rs")
+}
+
+/// Three runs with a write's records held back from the command log
+/// (`verify::records_check`), owed as the verbs are: by the check reached
+/// as code, the harness's Rust half moved, or the app's QML — which the
+/// app's write path reaches through its entry (`qml_moved`). Its inputs
+/// are the same boundaries as [`shot_inputs`]'. The container's side is
+/// the whole tier's, as the verbs' lines there are (`Tiers::on_linux`):
+/// the order an event loop drains two feeds in is the platform's, and
+/// before a merge the host's answers for it.
+fn records_steps(g: &Graph, reach: &Reach, sorted: &Sorted, read: &Reading<'_>) -> Vec<Step> {
+    let own = reach.get(&records_check()) == Some(&Carried::Whole);
+    if !read.everything && !own && !harness_moved(reach) && !qml_moved(sorted, reach) {
+        return Vec::new();
+    }
+    let mut inputs: BTreeSet<String> = g.inputs(&[records_check()]).into_iter().collect();
+    inputs.extend(cargo_inputs(&[&app(), &core()]));
+    inputs.extend(harness());
+    let inputs: Vec<String> = inputs.into_iter().collect();
+    let mut checks = vec![step(
+        "records-check",
+        Side::Host,
+        false,
+        xtask(&["records-check"]),
+        &inputs,
+    )];
+    if read.whole_tier {
+        let mut linux_inputs = inputs.clone();
+        linux_inputs.extend(IMAGE.map(String::from));
+        checks.push(step(
+            "records-check-linux",
+            Side::Linux,
+            false,
+            xtask(&["linux", "records-check"]),
+            &linux_inputs,
+        ));
+    }
+    for check in &mut checks {
+        // It drives verify-ui: the same release build as the verbs.
+        check.builds_app = true;
+        check.release = true;
+    }
+    checks
 }
 
 /// clippy for every crate the reach enters as code, on both sides: the

@@ -159,6 +159,9 @@ Item {
                           completionRoute.witnessesRead)
         harness.settlingFrom = Awaited.frames
         harness.window.update()
+        // Nothing waited on the records held back: the completion stood before them, and lets them in now.
+        if (Harness.faultHoldRecords)
+            harness.letRecordsThrough("after-completion")
     }
     /// The page's reads a picture waits out, never named by the verb: the two the product's own timers drive —
     /// `placing` (the view re-centring after `Metrics.anchorDelayMs`) and `readings` (the pacer's reads of other
@@ -230,6 +233,29 @@ Item {
         id: census
         window: harness.window
         harnessBranch: harness
+    }
+
+    // The command log's records held back (`PGG_FAULT_HOLD_RECORDS`; `xtask::verify::records_check`) are let through
+    // once a wait stands on them alone: a sampler's whole wait the page, and the page owing nothing but them — the
+    // proof that the completion waited for the record and nothing else. A completion that never waited on them lets
+    // them in at its walk (`finish`), and the picture after it says what it gained.
+    Connections {
+        target: Awaited
+        enabled: Harness.faultHoldRecords
+        function onWaited(name, missing) {
+            const owed = census.pageMissing()
+            if (missing.every(term => term === "page" || term === "page:records")
+                    && owed.length === 1 && owed[0] === "records")
+                harness.letRecordsThrough("held name=" + name)
+        }
+    }
+    function letRecordsThrough(how) {
+        const page = harness.window.curPage
+        if (!page)
+            return
+        const held = page.pageCommands.letRecordsThrough()
+        if (held >= 0)
+            Awaited.note("fault_records released=" + how + " held=" + held)
     }
 
     // The render boundary the waits on a layout read (`StageTimer.still` / `drawnSince`), and the completion's walk

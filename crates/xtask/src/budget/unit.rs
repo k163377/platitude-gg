@@ -58,7 +58,7 @@ pub(crate) fn weight_of(command: &[String], no_build: bool) -> u32 {
     };
     match verb {
         Some("structure" | "waits" | "versions" | "docs" | "verbs" | "deny" | "qmltest") => LIGHT,
-        Some("verify-ui" | "wedge-check" | "shot-check") if no_build => LIGHT,
+        Some("verify-ui" | "wedge-check" | "shot-check" | "records-check") if no_build => LIGHT,
         _ => COMPILE,
     }
 }

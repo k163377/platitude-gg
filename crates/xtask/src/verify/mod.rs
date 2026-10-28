@@ -13,6 +13,7 @@ mod options;
 mod outcome;
 mod ownership;
 mod perf;
+mod records_check;
 mod repos;
 mod run;
 mod seed;
@@ -27,6 +28,7 @@ pub(crate) use faults::run as wedge_check;
 pub(crate) use look::look_into;
 pub(crate) use options::{canonical_line, suite_words};
 pub(crate) use ownership::{ResourceClaim, claim_dir, claim_resource, keep, sweep_yesterdays_runs};
+pub(crate) use records_check::run as records_check;
 pub use run::run;
 pub use shim::git_shim;
 pub(crate) use shot_check::run as shot_check;
@@ -70,4 +72,13 @@ pub(crate) static SHOT: command::Command = command::Command {
     permission: Permission::Plain,
 };
 
-pub(crate) static COMMANDS: &[&command::Command] = &[&UI, &VERBS, &WEDGE, &SHOT];
+pub(crate) static RECORDS: command::Command = command::Command {
+    id: "verify.records",
+    call: "records-check",
+    purpose: "whether a completion waits for its write's records in the command log",
+    run_in: Where::Seat,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&UI, &VERBS, &WEDGE, &SHOT, &RECORDS];
