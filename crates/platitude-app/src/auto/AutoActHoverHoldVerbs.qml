@@ -50,12 +50,12 @@ Item {
             menuBlockTimer.stage = tail === "" ? "menu" : tail
             // The menu key's door asks for the keyboard on the second file before it raises; an owner with no second
             // target ends at the menu whatever stage was named.
-            const ready = menuBlockTimer.display === "eol-key" ? "keyed" : "out"
-            menuBlockTimer.order = menuBlockTimer.stage === "card" ? ["rows"]
+            const ready = menuBlockTimer.display === "eol-key" ? ["rows", "out", "keyed"] : ["rows", "out"]
+            menuBlockTimer.order = menuBlockTimer.stage === "card" ? ["rows", "out"]
                                  : menuBlockTimer.stage === "menu" || !menuBlockTimer.asksAgain
-                                 ? ["rows", ready, "raised"]
-                                 : menuBlockTimer.stage === "other" ? ["rows", ready, "raised", "asked"]
-                                 : ["rows", ready, "raised", "asked", "down"]
+                                 ? ready.concat(["raised"])
+                                 : menuBlockTimer.stage === "other" ? ready.concat(["raised", "asked"])
+                                 : ready.concat(["raised", "asked", "down"])
             menuBlockTimer.start()
         } else if (act === "author-swap") {
             // `<from>:<to>` among `author` / `mates` / `parents`: one card out, the hand off its line and onto the
@@ -80,15 +80,16 @@ Item {
         name: "peek_hold"
         property string how: "menu"
         property bool released: false
-        /// The door the menu was raised through, to tell it still stands for that row.
-        property string door: ""
+        /// `door=`: the door the menu was raised through (`door`, witnessed as the hand walks off), to tell it still
+        /// stands for that row; none where nothing was held (`none` walks off nothing).
         function line(stage) {
+            const door = peekHoldTimer.how === "none" ? "" : peekHoldTimer.witnessed("door")
             return "peek_hold how=" + peekHoldTimer.how + " stage=" + stage
                    + " peek=" + sidebarPane.peekKind
                    + " shown=" + sidebarPane.peekSection.visible
                    + " menu=" + page.menuStanding
-                   + " door=" + (peekHoldTimer.door === "" ? "none" : !page.menuStanding ? "gone"
-                                 : page.menuKey === peekHoldTimer.door ? "kept" : "moved")
+                   + " door=" + (door === "" ? "none" : !page.menuStanding ? "gone"
+                                 : page.menuKey === door ? "kept" : "moved")
                    + " edit=" + (sidebarPane.editKey !== "")
         }
         onTriggered: {
@@ -117,7 +118,7 @@ Item {
                         navProbe.peekAway("branch")
                         navProbe.peekAt("tag")
                     })
-                    op.complete(() => op.line("swap"))
+                    op.complete({ "name": "peek_hold_swapped", "when": () => ({}), "report": () => op.line("swap") })
                     return
                 }
                 op.input("held", () => {
@@ -134,12 +135,12 @@ Item {
                 if (!Awaited.all("peek_hold_held", { "held": held }))
                     return
                 op.input("walked", () => {
-                    op.door = op.how === "menu" ? page.menuKey : ""
+                    op.witness("door", op.how === "menu" ? page.menuKey : "")
                     navProbe.peekAway("branch")
                     navProbe.peekAt("tag")
                 })
                 if (!op.released) {
-                    op.complete(() => op.line("held"))
+                    op.complete({ "name": "peek_hold_walked", "when": () => ({}), "report": () => op.line("held") })
                     return
                 }
                 // The hold lets go as the reader's Escape takes it: the menu closing by itself, the box dropped.
@@ -151,11 +152,10 @@ Item {
                 })
                 return
             }
-            if (!Awaited.all("peek_hold_released", {
-                    "tags": sidebarPane.peekKind === "tag" && sidebarPane.peekSection.visible
-                }))
-                return
-            op.complete(() => op.line("released"))
+            op.complete({
+                "name": "peek_hold_released",
+                "when": () => ({ "tags": sidebarPane.peekKind === "tag" && sidebarPane.peekSection.visible }),
+                "report": () => op.line("released") })
         }
     }
 
@@ -178,8 +178,6 @@ Item {
         /// The owner of the display put out (`owner=` in the line).
         property string display: "eol"
         property string stage: "menu"
-        /// The display went in the turn the menu's door returned.
-        property bool downAtOnce: false
         readonly property string first: "src/flipped.kt"
         readonly property string second: "src/mixed.kt"
         function shown() {
@@ -204,12 +202,31 @@ Item {
         /// Whether this owner has a second target to ask for under the menu (the later stages).
         readonly property bool asksAgain: menuBlockTimer.display === "eol" || menuBlockTimer.display === "eol-key"
                                           || menuBlockTimer.display === "author"
+        /// `down=`: the display went in the turn the menu's door returned (`down`, witnessed as the door returns);
+        /// false where no menu was raised.
         function line(stage) {
             return "menu_block owner=" + menuBlockTimer.display + " stage=" + stage
                    + " shown=" + menuBlockTimer.shown()
                    + " menu=" + page.menuStanding
-                   + " down=" + menuBlockTimer.downAtOnce
+                   + " down=" + (stage === "card" ? false : menuBlockTimer.witnessed("down"))
                    + " " + menuBlockTimer.said()
+        }
+        /// Asks for what the owner's display hangs off; says whether it is there: the two file rows, or the log's
+        /// answer — a row activated is in.
+        function askRows() {
+            const owner = menuBlockTimer.display
+            const eol = owner === "eol" || owner === "eol-key"
+            if (eol)
+                page.showWip()
+            else if (owner === "recover" && !page.recoverOpen)
+                page.toggleRecover()
+            else if (owner === "author" || owner === "tip")
+                page.activateRow(graphModel.oidAt(owner === "tip" ? 1 : 4))
+            else if (owner === "author-files")
+                page.activateRow(graphModel.oidAt(1))
+            return (!eol || wipPane.rowIn("unstaged", menuBlockTimer.first) !== null)
+                && (!eol || wipPane.rowIn("unstaged", menuBlockTimer.second) !== null)
+                && (owner !== "recover" || page.recoverAnswered)
         }
         /// Puts the display out the way its run stands in for a hand; says whether it is out.
         function putOut() {
@@ -243,6 +260,16 @@ Item {
             page.openRowMenu(worktree.headOid)
             return true
         }
+        /// The menu standing, and read: the commit's file menu opens the file's diff on the way
+        /// (`RepoPage.openCommitFileMenu`), read once that has landed, so the frame — and the census it records — has
+        /// the file's rows every time.
+        function menuStands() {
+            return {
+                "menu": page.menuStanding,
+                "read": menuBlockTimer.display !== "author-files"
+                        || (page.diffPath === "src/login.txt" && diffPane.diffSettled())
+            }
+        }
         function menuItself() {
             const owner = menuBlockTimer.display
             if (owner === "eol" || owner === "eol-key")
@@ -260,6 +287,8 @@ Item {
                 detailsPane.valueRow.showCoAuthors(true)
             }
         }
+        /// Takes the menu down the way `how` names. Answers true, or null where `back-item` found no row to take —
+        /// never false, which would be a press that did not go in.
         function takeDown(how) {
             const menu = menuBlockTimer.menuItself()
             if (how === "back-outside") {
@@ -270,13 +299,14 @@ Item {
                     const row = menu.itemAt(i)
                     if (row && row.present && row.enabled && row.text !== undefined && row.text.indexOf("Copy") === 0) {
                         row.click()
-                        return
+                        return true
                     }
                 }
-                Awaited.note("menu_block no row to take")
+                return null
             } else {
                 menu.close()
             }
+            return true
         }
         onTriggered: {
             const op = menuBlockTimer
@@ -287,48 +317,28 @@ Item {
                 return
             if (op.at("start")) {
                 // Asked again each beat until the rows are there.
-                const eol = owner === "eol" || owner === "eol-key"
-                if (eol)
-                    page.showWip()
-                else if (owner === "recover" && !page.recoverOpen)
-                    page.toggleRecover()
-                else if (owner === "author" || owner === "tip")
-                    page.activateRow(graphModel.oidAt(owner === "tip" ? 1 : 4))
-                else if (owner === "author-files")
-                    page.activateRow(graphModel.oidAt(1))
-                // What the owner's display hangs off: the two file rows, or the log's answer; a row activated is in.
-                if (!Awaited.all("menu_block_rows", {
-                        "first": !eol || wipPane.rowIn("unstaged", op.first) !== null,
-                        "second": !eol || wipPane.rowIn("unstaged", op.second) !== null,
-                        "read": owner !== "recover" || page.recoverAnswered
-                    }))
-                    return
-                op.advance("rows")
+                op.input("rows", () => op.askRows())
                 return
             }
             if (op.at("rows")) {
                 // Put out again each beat until it is.
-                const out = op.putOut()
-                if (!Awaited.all("menu_block_out", { "out": out }))
+                if (!op.input("out", () => op.putOut()))
                     return
-                if (op.stage === "card") {
-                    op.complete(() => op.line("card"))
+                if (op.stage === "card")
+                    op.complete({ "name": "menu_block_out", "when": () => ({ "out": op.shown() }),
+                                  "report": () => op.line("card") })
+                return
+            }
+            // The menu key's door asks for the row the keyboard stands on: the second file chosen and the keyboard on
+            // its list — no press, which would be another input over the card (`WipPane.menuFromKeys`).
+            if (op.at("out") && owner === "eol-key") {
+                // Not built yet: the menu key would ask a list the keyboard is not on.
+                if (!Awaited.all("menu_block_keys", { "row": wipPane.rowIn("unstaged", op.second) !== null }))
                     return
-                }
-                // The menu key's door asks for the row the keyboard stands on: the second file chosen and the
-                // keyboard on its list — no press, which would be another input over the card (`WipPane.menuFromKeys`).
-                if (owner === "eol-key") {
-                    const row = wipPane.filesWalk.rowFor("unstaged", op.second)
-                    // Not built yet: the menu key would ask a list the keyboard is not on.
-                    if (!Awaited.all("menu_block_keys", { "row": row !== null && row !== undefined }))
-                        return
-                    op.input("keyed", () => {
-                        wipPane.chooseOnly("unstaged", op.second)
-                        row.ListView.view.forceActiveFocus()
-                    })
-                    return
-                }
-                op.advance("out")
+                op.input("keyed", () => {
+                    wipPane.chooseOnly("unstaged", op.second)
+                    wipPane.rowIn("unstaged", op.second).ListView.view.forceActiveFocus()
+                })
                 return
             }
             if (op.at("out") || op.at("keyed")) {
@@ -336,23 +346,18 @@ Item {
                 op.input("raised", () => {
                     if (!op.raise())
                         return false
-                    op.downAtOnce = !op.shown()
+                    op.witness("down", !op.shown())
                 })
                 return
             }
             if (op.at("raised")) {
-                // The commit's file menu opens the file's diff on the way (`RepoPage.openCommitFileMenu`): read once
-                // that has landed, so the frame — and the census it records — has the file's rows every time.
-                if (!Awaited.all("menu_block_menu", {
-                        "menu": page.menuStanding,
-                        "read": owner !== "author-files"
-                                || (page.diffPath === "src/login.txt" && diffPane.diffSettled())
-                    }))
-                    return
                 if (op.stage === "menu" || !op.asksAgain) {
-                    op.complete(() => op.line("menu"))
+                    op.complete({ "name": "menu_block_menu", "when": () => op.menuStands(),
+                                  "report": () => op.line("menu") })
                     return
                 }
+                if (!Awaited.all("menu_block_menu", op.menuStands()))
+                    return
                 op.input("asked", () => {
                     op.askOther()
                 })
@@ -366,17 +371,18 @@ Item {
                                                        "page": PageSettled.settled(page) }))
                     return
                 if (op.stage === "other") {
-                    op.complete(() => op.line("other"))
+                    op.complete({ "name": "menu_block_other", "when": () => ({ "page": PageSettled.settled(page) }),
+                                  "report": () => op.line("other") })
                     return
                 }
-                op.input("down", () => {
-                    op.takeDown(op.stage)
-                })
+                op.input("down", () => op.takeDown(op.stage),
+                         taken => taken === null ? "menu_block no row to take" : "")
                 return
             }
-            if (!Awaited.all("menu_block_back", { "menu": !page.menuStanding, "shown": op.shown() }))
-                return
-            op.complete(() => op.line(op.stage))
+            op.complete({
+                "name": "menu_block_back",
+                "when": () => ({ "menu": !page.menuStanding, "shown": op.shown() }),
+                "report": () => op.line(op.stage) })
         }
     }
 
@@ -387,11 +393,9 @@ Item {
     PageStage {
         id: authorSwapTimer
         name: "author_swap"
-        order: ["swapped"]
+        order: ["out", "swapped"]
         property string from: "author"
         property string to: "mates"
-        /// The cards as the swap left them, read in its turn.
-        property string atOnce: ""
         function show(which, on) {
             if (which === "author")
                 detailsPane.valueRow.showAuthor(on)
@@ -413,30 +417,34 @@ Item {
             const op = authorSwapTimer
             if (op.at("start")) {
                 // The hand on the first line, written again each beat until its card is out.
-                const settled = driver.cardSettled
-                if (settled)
+                const out = op.input("out", () => {
+                    if (!driver.cardSettled)
+                        return false
                     op.show(op.from, true)
-                if (!Awaited.all("author_swap_from", {
-                        "settled": settled,
-                        "out": settled && op.open(op.from)
-                    }))
+                    return op.open(op.from)
+                })
+                if (!out)
                     return
+            }
+            if (op.at("out")) {
+                // In the turn the first card came out. `now`: the cards as the swap left them, read in its turn.
                 op.input("swapped", () => {
                     op.show(op.from, false)
                     op.show(op.to, true)
-                    op.atOnce = "open=" + op.count()
+                    op.witness("now", "open=" + op.count()
                         + " " + op.from + "=" + op.open(op.from)
-                        + " " + op.to + "=" + op.open(op.to)
+                        + " " + op.to + "=" + op.open(op.to))
                 })
                 return
             }
             // A beat later, on the page the swap left — which the completion's hold waits for as well.
-            if (!Awaited.all("author_swap_later", { "page": PageSettled.settled(page) }))
-                return
-            op.complete(() => "author_swap from=" + op.from + " to=" + op.to
-                              + " now: " + op.atOnce
-                              + " later: open=" + op.count()
-                              + " " + op.to + "=" + op.open(op.to))
+            op.complete({
+                "name": "author_swap_later",
+                "when": () => ({ "page": PageSettled.settled(page) }),
+                "report": () => "author_swap from=" + op.from + " to=" + op.to
+                                + " now: " + op.witnessed("now")
+                                + " later: open=" + op.count()
+                                + " " + op.to + "=" + op.open(op.to) })
         }
     }
 }

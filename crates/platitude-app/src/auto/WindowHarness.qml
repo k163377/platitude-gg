@@ -155,7 +155,8 @@ Item {
         if (harness.settlingFrom >= 0 || census.atCompletion !== null)
             return
         census.markCompletion()
-        Awaited.completed(Harness.autoAct, completionRoute.completing, completionRoute.owedAtRead)
+        Awaited.completed(Harness.autoAct, completionRoute.completing, completionRoute.owedAtRead,
+                          completionRoute.witnessesRead)
         harness.settlingFrom = Awaited.frames
         harness.window.update()
     }

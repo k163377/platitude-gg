@@ -53,11 +53,6 @@ Item {
                                     : act === "plan-escape" || act === "plan-escape-held" ? ["escaped"]
                                     : act === "plan-details-held" ? []
                                     : ["ran"]
-                planEditStopTimer.order = act === "rebase-edit-stop-out" ? ["stopped", "continued"] : []
-                planRewordTimer.act = act
-                planRewordTimer.order = act === "plan-reword-verb" ? ["typed", "saved", "picked", "back"]
-                                      : act === "plan-reword-ask" ? ["typed", "cancelled", "gone", "retyped"]
-                                      : ["typed", "cancelled"]
                 planOpenTimer.start()
             }
         } else if (act === "plan-off-branch") {
@@ -74,7 +69,7 @@ Item {
             page.startRebasePlan(refusedOid)
             commitMenu.close()
             // `plan=`: a window that opened a plan and put it away frames like one that never opened it.
-            driver.barrierNotice.saysPlan = true
+            driver.noticeSaysPlan()
             driver.barrierNotice.start()
         } else if (act === "plan-amend-kept") {
             // A half-written amend, then a plan opened from HEAD's own row (`planAmendTimer`).
@@ -110,27 +105,20 @@ Item {
         /// What the edge saw: read later they would be the plan's, as the model keeps filling while the face is held.
         property int sawRows: -1
         property bool sawOnto: false
-        onTriggered: {
-            if (!Awaited.all("plan_loading_ready", {
-                "held": page.planLoadHeld,
-                "shown": page.planShown,
-                "inactive": !page.planActive }))
-                return
-            planLoadingTimer.complete(() => "plan_loading held=true shown=true standing=" + page.planActive
-                                             + " rows=" + planLoadingTimer.sawRows
-                                             + " onto=" + planLoadingTimer.sawOnto)
-        }
+        onTriggered: planLoadingTimer.complete({
+            "name": "plan_loading_ready",
+            "when": () => ({ "held": page.planLoadHeld, "shown": page.planShown, "inactive": !page.planActive }),
+            "report": () => "plan_loading held=true shown=true standing=" + page.planActive
+                            + " rows=" + planLoadingTimer.sawRows
+                            + " onto=" + planLoadingTimer.sawOnto })
     }
     // The open: rows arrive through the feed, so the verbs wait for the plan to stand; the overview also waits for the
-    // publish answer, half of what its picture claims.
+    // publish answer, half of what its picture claims. The carried row's verb half way through the trip
+    // (`plan-fold-carry`) and whether Escape was taken (`plan-escape`) are the press's witnesses (`underHand`, `took`).
     PageStage {
         id: planOpenTimer
         name: "plan_open"
         property string act: ""
-        /// The carried row's verb half way through the trip (`plan-fold-carry`), read there.
-        property string underHand: ""
-        /// Whether Escape was taken (`plan-escape`), the press's own answer.
-        property bool took: false
         onTriggered: {
             const op = planOpenTimer
             const plan = page.rebasePlan
@@ -147,12 +135,12 @@ Item {
                     plan.setAction(2, "drop")
                     page.activateRow(worktree.headOid)
                 })
-                op.complete(() => {
+                op.complete({ "when": () => ({}), "report": () => {
                     const dressed = page.rebasePlan
                     return "rebase_plan rows=" + dressed.stepCount + " dirty=" + dressed.dirty
                            + " drops=" + dressed.dropCount + " onto=" + (dressed.ontoRef !== "")
                            + " pushed=" + page.planPushed + " selected=" + dressed.selectedRow
-                })
+                } })
             } else if (op.act === "rebase-plan-run") {
                 // The barrier is the old head's row going and the new one standing, not the dropped row — origin
                 // still reaches it (rules-refs/app-ui.md「プラン実行の write barrier」).
@@ -175,12 +163,13 @@ Item {
                 op.input("escaped", () => {
                     if (op.act === "plan-escape-held")
                         plan.setAction(1, "squash")
-                    op.took = page.escapePressed()
+                    op.witness("took", page.escapePressed())
                 })
-                op.complete(() => "plan_escape discards=" + page.planDiscards
-                                  + " took=" + op.took
-                                  + " held=" + page.planShown
-                                  + " dirty=" + page.rebasePlan.dirty)
+                op.complete({ "when": () => ({}),
+                              "report": () => "plan_escape discards=" + page.planDiscards
+                                              + " took=" + op.witnessed("took")
+                                              + " held=" + page.planShown
+                                              + " dirty=" + page.rebasePlan.dirty })
             } else if (op.act === "plan-fold-carry") {
                 // A fold carried down over the oldest place (where no fold can stand) and back, through the functions
                 // the row's `MouseArea` calls (`RebasePlanRow`), so the fold rule's two brackets are under test. Moves
@@ -193,17 +182,17 @@ Item {
                     plan.selectRow(carried)
                     planPane.view.moveBegan()
                     planPane.view.moveRequested(carried, carried + 1)
-                    op.underHand = plan.selectedAction
+                    op.witness("underHand", plan.selectedAction)
                     planPane.view.moveRequested(carried + 1, carried)
                     planPane.view.moveEnded()
                 })
-                op.complete(() => {
+                op.complete({ "when": () => ({}), "report": () => {
                     const carried = page.rebasePlan
-                    return "plan_fold_carry carried=" + op.underHand
+                    return "plan_fold_carry carried=" + op.witnessed("underHand")
                            + " landed=" + carried.selectedAction
                            + " row=" + carried.selectedRow + " rows=" + carried.stepCount
                            + " dirty=" + carried.dirty
-                })
+                } })
             } else if (op.act.startsWith("plan-reword")) {
                 // The newest row is already selected with the right pane on it; the verb makes the boxes the row's.
                 op.input("dressed", () => {
@@ -243,27 +232,30 @@ Item {
             planRanTimer.headBefore = oid
             planRanTimer.start()
         }
+        function landed() {
+            return {
+                "answered": planRanTimer.answeredOp !== "",
+                "idle": repoTab.busyCount === 0,
+                "closed": !page.rebasePlan.active,
+                "moved": worktree.headOid !== planRanTimer.headBefore && worktree.headOid !== "",
+                "drawn": graphModel.rowOf(worktree.headOid) >= 0,
+                "gone": graphModel.rowOf(planRanTimer.headBefore) < 0,
+                "status": planRanTimer.statusFrom !== 0 && worktree.statusSeq >= planRanTimer.statusFrom,
+                "settled": PageSettled.settled(page)
+            }
+        }
         onTriggered: {
-            if (!Awaited.all("rebase_plan_ran", {
-                                 "answered": planRanTimer.answeredOp !== "",
-                                 "idle": repoTab.busyCount === 0,
-                                 "closed": !page.rebasePlan.active,
-                                 "moved": worktree.headOid !== planRanTimer.headBefore && worktree.headOid !== "",
-                                 "drawn": graphModel.rowOf(worktree.headOid) >= 0,
-                                 "gone": graphModel.rowOf(planRanTimer.headBefore) < 0,
-                                 "status": planRanTimer.statusFrom !== 0
-                                           && worktree.statusSeq >= planRanTimer.statusFrom,
-                                 "settled": PageSettled.settled(page)
-                             }))
-                return
             Awaited.claim("rebase_plan_ran", () => !graphModel.wipRow && graphModel.rowOf(worktree.headOid) >= 0)
-            planRanTimer.complete(() => "rebase_plan_ran op=" + planRanTimer.answeredOp
-                                         + " moved=" + (worktree.headOid !== planRanTimer.headBefore)
-                                         + " gone=" + (graphModel.rowOf(planRanTimer.headBefore) < 0)
-                                         + " stopped=" + planRanTimer.answeredStopped
-                                         + " plan=" + page.rebasePlan.active
-                                         + " error=" + planRanTimer.answeredError
-                                         + " wip=" + graphModel.wipRow)
+            planRanTimer.complete({
+                "name": "rebase_plan_ran",
+                "when": () => planRanTimer.landed(),
+                "report": () => "rebase_plan_ran op=" + planRanTimer.answeredOp
+                                + " moved=" + (worktree.headOid !== planRanTimer.headBefore)
+                                + " gone=" + (graphModel.rowOf(planRanTimer.headBefore) < 0)
+                                + " stopped=" + planRanTimer.answeredStopped
+                                + " plan=" + page.rebasePlan.active
+                                + " error=" + planRanTimer.answeredError
+                                + " wip=" + graphModel.wipRow })
         }
     }
     /// Read out of the answers the notify carried (as `tipLandedTimer.answeredOp` is): one drain empties the queue and
@@ -301,11 +293,23 @@ Item {
     PageStage {
         id: planEditStopTimer
         name: "edit_stop"
+        order: Harness.autoAct === "rebase-edit-stop-out" ? ["stopped", "continued"] : []
         /// The rebase's `reads_from` (`RepoTab.writeAnswerReadsFrom`), -1 until its answer is in: a listing that
         /// looked at or above it saw the stop.
         property int listingFrom: -1
-        /// Whether the continuation's press went in (`-out`), its own answer.
-        property bool exitHeld: false
+        /// The stop standing: the answer in, nothing running, the edit marker up on the WIP face, the listing behind
+        /// the write in, and the page settled.
+        function stood() {
+            const answered = planEditStopTimer.listingFrom >= 0
+            return {
+                "answer": answered,
+                "idle": repoTab.busyCount === 0,
+                "wip": page.wipShown,
+                "editing": worktree.opEditing,
+                "worktrees": answered && driver.worktreesModel.listingLooked() >= planEditStopTimer.listingFrom,
+                "page": PageSettled.settled(page)
+            }
+        }
         function line() {
             return "edit_stop editing=" + worktree.opEditing
                    + " skipfree=" + worktree.opSkipFree
@@ -323,27 +327,19 @@ Item {
         }
         onTriggered: {
             const op = planEditStopTimer
-            const answered = op.listingFrom >= 0
-            if (!Awaited.all("edit_stop", {
-                    "answer": answered,
-                    "idle": repoTab.busyCount === 0,
-                    "wip": page.wipShown,
-                    "editing": worktree.opEditing,
-                    "worktrees": answered
-                                 && driver.worktreesModel.listingLooked() >= op.listingFrom,
-                    "page": PageSettled.settled(page)
-                }))
-                return
             if (planOpenTimer.act !== "rebase-edit-stop-out") {
-                op.complete(() => op.line())
+                op.complete({ "name": "edit_stop", "when": () => op.stood(), "report": () => op.line() })
                 return
             }
+            if (!Awaited.all("edit_stop", op.stood()))
+                return
             // The stop as it stood, said before the continuation takes it down; where that leaves the reader is the
-            // landing's (`AutoActDriver.awaitOpExitLanding`).
+            // landing's (`AutoActDriver.awaitOpExitLanding`). Whether the continuation's press went in is its own
+            // answer, kept as it went.
             op.advance("stopped", () => op.line())
             op.input("continued", () => {
-                op.exitHeld = driver.pressWrite("op-exit", () => wipPane.completeOpExit("--continue"))
-            }, () => "op_exit_held " + op.exitHeld)
+                op.witness("exitHeld", driver.pressWrite("op-exit", () => wipPane.completeOpExit("--continue")))
+            }, () => "op_exit_held " + op.witnessed("exitHeld"))
             op.stop()
             driver.awaitOpExitLanding()
         }
@@ -356,7 +352,10 @@ Item {
     PageStage {
         id: planRewordTimer
         name: "plan_reword"
-        property string act: ""
+        readonly property string act: Harness.autoAct
+        order: planRewordTimer.act === "plan-reword-verb" ? ["typed", "saved", "picked", "back"]
+             : planRewordTimer.act === "plan-reword-ask" ? ["typed", "cancelled", "gone", "retyped"]
+             : ["typed", "cancelled"]
         /// Typed into the reword row, then into the boxes after the plan is gone — neither the commit's message nor
         /// each other.
         readonly property string typed: "planned"
@@ -412,25 +411,27 @@ Item {
                 return
             }
             if (op.at("back")) {
-                if (!Awaited.all("plan_reword_back", { "editable": detailsPane.editable }))
-                    return
-                op.complete(() => {
-                    const back = page.rebasePlan
-                    return "plan_reword_verb verb=" + back.selectedAction
-                           + " restored=" + op.restored
-                           + " dirty=" + detailsPane.messageDirty
-                           + " editable=" + detailsPane.editable
-                           + " draft=" + (back.selectedMsgSubject === "")
-                })
+                op.complete({
+                    "name": "plan_reword_back",
+                    "when": () => ({ "editable": detailsPane.editable }),
+                    "report": () => {
+                        const back = page.rebasePlan
+                        return "plan_reword_verb verb=" + back.selectedAction
+                               + " restored=" + op.restored
+                               + " dirty=" + detailsPane.messageDirty
+                               + " editable=" + detailsPane.editable
+                               + " draft=" + (back.selectedMsgSubject === "")
+                    } })
                 return
             }
             if (op.at("cancelled")) {
-                if (!Awaited.all("plan_reword_gone", { "gone": !plan.active }))
-                    return
                 if (op.act !== "plan-reword-ask") {
-                    op.complete(() => op.outLine())
+                    op.complete({ "name": "plan_reword_gone", "when": () => ({ "gone": !page.rebasePlan.active }),
+                                  "report": () => op.outLine() })
                     return
                 }
+                if (!Awaited.all("plan_reword_gone", { "gone": !plan.active }))
+                    return
                 // Read before the boxes are typed into again. Published-ness is HEAD's own answer
                 // (`WorktreeModel.headPublished`), so the plan cannot have spent it; type again and read the warning
                 // with the boxes dirty.
@@ -441,11 +442,10 @@ Item {
                 return
             }
             // The picture waits out the rev-list only the retyping asks for.
-            if (!Awaited.all("plan_reword_retyped", { "page": PageSettled.settled(page) }))
-                return
-            op.complete(() => "plan_reword_ask dirty=" + detailsPane.messageDirty
-                              + " onhead=" + (page.selectedOid === worktree.headOid)
-                              + " published=" + page.selectedPublished)
+            op.complete({ "name": "plan_reword_retyped", "when": () => ({ "page": PageSettled.settled(page) }),
+                          "report": () => "plan_reword_ask dirty=" + detailsPane.messageDirty
+                                          + " onhead=" + (page.selectedOid === worktree.headOid)
+                                          + " published=" + page.selectedPublished })
         }
     }
     // A plain amend half written before any plan: typed, then a plan opened from HEAD's own row and cancelled — the one
@@ -463,9 +463,8 @@ Item {
         /// Whether the boxes rest on the commit's own message, as the closed plan must leave them (the text unsaved).
         readonly property bool restored: detailsPane.baseSubject === detailsModel.messageSubject
                                          && detailsPane.baseBody === detailsModel.messageBody
-        /// What `Discard` wore at the press (`RepoPage.planDiscards`). False is the claim: this text is not the plan's,
-        /// so the press costs nothing.
-        property bool guard: false
+        // What `Discard` wore at the press (`RepoPage.planDiscards`) is the press's witness (`guard`). False is the
+        // claim: this text is not the plan's, so the press costs nothing.
         onTriggered: {
             const op = planAmendTimer
             if (op.at("start")) {
@@ -492,19 +491,18 @@ Item {
                 if (!Awaited.all("plan_amend_stood", { "standing": page.planActive }))
                     return
                 op.input("cancelled", () => {
-                    op.guard = page.planDiscards
+                    op.witness("guard", page.planDiscards)
                     page.rebasePlan.cancelPlan()
                 })
                 return
             }
-            if (!Awaited.all("plan_amend_gone", { "gone": !page.planActive }))
-                return
-            op.complete(() => "plan_amend_kept kept="
-                              + (detailsPane.boxSubject === op.typed)
-                              + " restored=" + op.restored
-                              + " dirty=" + detailsPane.messageDirty
-                              + " editable=" + detailsPane.editable
-                              + " guard=" + op.guard)
+            op.complete({ "name": "plan_amend_gone", "when": () => ({ "gone": !page.planActive }),
+                          "report": () => "plan_amend_kept kept="
+                                          + (detailsPane.boxSubject === op.typed)
+                                          + " restored=" + op.restored
+                                          + " dirty=" + detailsPane.messageDirty
+                                          + " editable=" + detailsPane.editable
+                                          + " guard=" + op.witnessed("guard") })
         }
     }
     // The right pane's other doors while a plan stands. Neither writes, but both reach past the pane to where the
@@ -515,14 +513,9 @@ Item {
         id: planHeldTimer
         name: "plan_details_held"
         order: ["walked", "outside", "pressed", "cancelled"]
-        /// The commit the in-range hash pointed at, kept so the stages after it can say the selection reached it.
-        property string wantOid: ""
-        /// What each press did, read where it happened (at the end they would be the cancelled screen's). The resting
-        /// values fail, so a walk that stops early cannot pass.
-        property int sawRow: -1
-        property bool sawOid: false
-        property bool sawOutside: false
-        property bool sawDiff: true
+        // The witnesses: the commit the in-range hash pointed at (`wantOid`), kept so the stages after it can say the
+        // selection reached it, and what each press did (`sawRow`, `sawOid`, `sawOutside`, `sawDiff`), read where it
+        // happened — at the end they would be the cancelled screen's.
         /// The pane has settled on the page's selection, so its parent hash and file rows are this commit's.
         readonly property bool paneSettled: !detailsModel.loading && page.selectedOid !== ""
                                             && detailsModel.shaHex === page.selectedOid
@@ -546,22 +539,21 @@ Item {
                                                           "parent": detailsModel.parentHex !== "" }))
                     return
                 op.input("walked", () => {
-                    op.wantOid = detailsModel.parentHex
-                    page.jumpToRef(detailsModel.parentHex)
+                    page.jumpToRef(op.witness("wantOid", detailsModel.parentHex))
                 })
                 return
             }
             if (op.at("walked")) {
                 // Both halves of the walk down; the page's goes the long way, through `activateRow` and its details.
-                if (!Awaited.all("plan_details_walked", { "selected": page.selectedOid === op.wantOid,
+                if (!Awaited.all("plan_details_walked", { "selected": page.selectedOid === op.witnessed("wantOid"),
                                                           "pane": op.paneSettled }))
                     return
                 op.input("outside", () => {
-                    op.sawRow = plan.selectedRow
-                    op.sawOid = plan.selectedOid === page.selectedOid
+                    op.witness("sawRow", plan.selectedRow)
+                    op.witness("sawOid", plan.selectedOid === page.selectedOid)
                     // The walk out: the base is no row of the plan, refused on the spot, so it reads in the same beat.
                     page.jumpToRef(plan.ontoOid)
-                    op.sawOutside = page.selectedOid === op.wantOid
+                    op.witness("sawOutside", page.selectedOid === op.witnessed("wantOid"))
                 })
                 return
             }
@@ -573,20 +565,21 @@ Item {
                 // is written inside the call, so an unheld door is open by the next line.
                 op.input("pressed", () => {
                     row.press()
-                    op.sawDiff = page.diffShown
+                    op.witness("sawDiff", page.diffShown)
                 })
                 op.input("cancelled", () => {
                     plan.cancelPlan()
                 })
                 return
             }
-            if (!Awaited.all("plan_details_gone", { "gone": !(plan.active || page.planShown) }))
-                return
-            op.complete(() => "plan_details_held row=" + op.sawRow
-                              + " oid=" + op.sawOid
-                              + " outside=" + op.sawOutside
-                              + " diff=" + op.sawDiff
-                              + " centre=" + (page.planShown ? "plan" : page.diffShown ? "diff" : "graph"))
+            op.complete({
+                "name": "plan_details_gone",
+                "when": () => ({ "gone": !(page.rebasePlan.active || page.planShown) }),
+                "report": () => "plan_details_held row=" + op.witnessed("sawRow")
+                                + " oid=" + op.witnessed("sawOid")
+                                + " outside=" + op.witnessed("sawOutside")
+                                + " diff=" + op.witnessed("sawDiff")
+                                + " centre=" + (page.planShown ? "plan" : page.diffShown ? "diff" : "graph") })
         }
     }
 }

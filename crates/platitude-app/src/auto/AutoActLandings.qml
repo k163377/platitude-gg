@@ -39,24 +39,23 @@ Item {
     PageStage {
         id: stashLandTimer
         name: "stash_landed"
-        onTriggered: {
-            if (!Awaited.all("stash_land_ready", { "tree": unstagedModel.total === 0,
-                                                   "side": page.wipShown || driver.cardSettled }))
-                return
-            stashLandTimer.complete(() => {
-                const row = graphModel.rowOf(worktree.headOid)
-                return "stash_landed wip=" + page.wipShown
-                       + " follows=" + (page.selectedOid === worktree.headOid)
-                       + " onscreen=" + graphPane.rowOnScreen(row)
-                       + " lit=" + (graphPane.view.currentIndex === row)
-                       + " head=" + worktree.headOid.substring(0, 8)
-                       + " selected=" + page.selectedOid.substring(0, 8)
-                       + " row=" + row + " rows=" + graphModel.rowTotal
-                       // Last because it has spaces. A box filled by a standing merge (`absorbOpMessage`) holds the
-                       // merge's words, which must not name the entry (`WipPane.stashName`).
-                       + " entry=" + stashesModel.nameAt(0)
-            })
+        function line() {
+            const row = graphModel.rowOf(worktree.headOid)
+            return "stash_landed wip=" + page.wipShown
+                   + " follows=" + (page.selectedOid === worktree.headOid)
+                   + " onscreen=" + graphPane.rowOnScreen(row)
+                   + " lit=" + (graphPane.view.currentIndex === row)
+                   + " head=" + worktree.headOid.substring(0, 8)
+                   + " selected=" + page.selectedOid.substring(0, 8)
+                   + " row=" + row + " rows=" + graphModel.rowTotal
+                   // Last because it has spaces. A box filled by a standing merge (`absorbOpMessage`) holds the
+                   // merge's words, which must not name the entry (`WipPane.stashName`).
+                   + " entry=" + stashesModel.nameAt(0)
         }
+        onTriggered: stashLandTimer.complete({
+            "name": "stash_land_ready",
+            "when": () => ({ "tree": unstagedModel.total === 0, "side": page.wipShown || driver.cardSettled }),
+            "report": () => [stashLandTimer.line()].concat(driver.verbReport()) })
     }
     /// Where putting a stopped operation down leaves the reader — from every exit-card row, or the same command run in
     /// a terminal. Ended by the status, not the write: the page leaves the WIP face off the status that says the
@@ -68,31 +67,31 @@ Item {
     PageStage {
         id: opExitLandTimer
         name: "op_exit_landed"
-        onTriggered: {
-            // The graph rebuilds after the status, so the worktree row the operation held open over a clean tree is
-            // still drawn; waited out. Only on a clean tree: an abort that brings work back keeps that row.
-            if (!Awaited.all("op_exit_land_ready", {
-                    "written": driver.wroteAndSettled(),
-                    "down": worktree.opText === "",
-                    "side": page.wipShown || driver.cardSettled,
-                    "rowGone": page.wipShown || unstagedModel.total !== 0 || driver.graphTopKind() !== "wip",
-                    "page": PageSettled.settled(page) }))
-                return
-            opExitLandTimer.complete(() => {
-                const row = graphModel.rowOf(worktree.headOid)
-                return "op_exit_landed wip=" + page.wipShown
-                       + " op=" + worktree.opText
-                       + " follows=" + (page.selectedOid === worktree.headOid)
-                       + " onscreen=" + graphPane.rowOnScreen(row)
-                       // The main worktree's WORKTREES row: the branch HEAD stands on once the operation is down, the
-                       // folder where it is left on none (`quit`; デザイン規約 §左メニューの所作).
-                       + " home=" + driver.navProbe.homeWorktreeName()
-                       + " lit=" + (graphPane.view.currentIndex === row)
-                       + " files=" + unstagedModel.total
-                       + " head=" + worktree.headOid.substring(0, 8)
-                       + " selected=" + page.selectedOid.substring(0, 8)
-                       + " row=" + row
-            })
+        function line() {
+            const row = graphModel.rowOf(worktree.headOid)
+            return "op_exit_landed wip=" + page.wipShown
+                   + " op=" + worktree.opText
+                   + " follows=" + (page.selectedOid === worktree.headOid)
+                   + " onscreen=" + graphPane.rowOnScreen(row)
+                   // The main worktree's WORKTREES row: the branch HEAD stands on once the operation is down, the
+                   // folder where it is left on none (`quit`; デザイン規約 §左メニューの所作).
+                   + " home=" + driver.navProbe.homeWorktreeName()
+                   + " lit=" + (graphPane.view.currentIndex === row)
+                   + " files=" + unstagedModel.total
+                   + " head=" + worktree.headOid.substring(0, 8)
+                   + " selected=" + page.selectedOid.substring(0, 8)
+                   + " row=" + row
         }
+        // The graph rebuilds after the status, so the worktree row the operation held open over a clean tree is still
+        // drawn; waited out. Only on a clean tree: an abort that brings work back keeps that row.
+        onTriggered: opExitLandTimer.complete({
+            "name": "op_exit_land_ready",
+            "when": () => ({
+                "written": driver.wroteAndSettled(),
+                "down": worktree.opText === "",
+                "side": page.wipShown || driver.cardSettled,
+                "rowGone": page.wipShown || unstagedModel.total !== 0 || driver.graphTopKind() !== "wip",
+                "page": PageSettled.settled(page) }),
+            "report": () => [opExitLandTimer.line()].concat(driver.verbReport()) })
     }
 }

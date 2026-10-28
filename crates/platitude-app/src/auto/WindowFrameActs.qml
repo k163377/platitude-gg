@@ -26,8 +26,6 @@ Item {
         name: "window_fill"
         order: ["maximized", "filled", "windowed"]
         running: Harness.autoAct === "window-fill"
-        /// The maximised window as it was read before it was put back (`fillLine`).
-        property string filledLine: ""
         onTriggered: {
             const op = fillActTimer
             if (op.at("start")) {
@@ -45,19 +43,23 @@ Item {
                 return
             }
             // Read back once the state and the layout inside the new size have both landed. In scene coordinates: a
-            // margin that misses is what this looks for.
-            const at = mainUi.mapToItem(null, 0, 0)
-            if (!Awaited.all("window_fill_report_ready", {
-                    "placed": at.x === 0 && at.y === 0,
-                    "filled": mainUi.width === window.width && mainUi.height === window.height,
-                    "page": PageSettled.windowSettled(window) }))
-                return
-            if (!op.input("windowed", () => {
-                    op.filledLine = acts.fillLine()
-                    window.visibility = Window.Windowed
-                }))
-                return
-            op.complete(() => op.filledLine)
+            // margin that misses is what this looks for. The maximised window as it was read before it was put back
+            // (`fillLine`) is kept, and is the run's line.
+            if (op.at("filled")) {
+                const at = mainUi.mapToItem(null, 0, 0)
+                if (!Awaited.all("window_fill_report_ready", {
+                        "placed": at.x === 0 && at.y === 0,
+                        "filled": mainUi.width === window.width && mainUi.height === window.height,
+                        "page": PageSettled.windowSettled(window) }))
+                    return
+                if (!op.input("windowed", () => {
+                        op.witness("filledLine", acts.fillLine())
+                        window.visibility = Window.Windowed
+                    }))
+                    return
+            }
+            op.complete({ "name": "window_fill_windowed", "when": () => ({}),
+                          "report": () => op.witnessed("filledLine") })
         }
     }
     /// The maximised window: whether its contents reach the four edges, in scene coordinates.
@@ -128,24 +130,27 @@ Item {
                     })
                     return
                 }
-                // The face asked for stands: the window goes down to its floor, as far as a hand could drag it.
+                // The face asked for stands: the window goes down to its floor, as far as a hand could drag it. Where
+                // it stood then is kept: one that came back up otherwise looks never let down.
                 op.input("shrunk", () => {
                     if (arg !== "wip" && !floorPage.sidebarCollapsed && arg !== "log")
                         return false
                     window.width = Math.ceil(window.floorWidth)
                     window.height = Math.ceil(window.floorHeight)
-                    acts.floorStoodAt = window.width + "x" + window.height
+                    op.witness("floorStoodAt", window.width + "x" + window.height)
                     return true
                 })
                 return
             }
             if (op.at("shrunk")) {
-                // On the floor, before it moves: a folded window's rail is only ever read here in `fold`.
+                // On the floor, before it moves: a folded window's rail is only ever read here in `fold`, and the
+                // reading is kept.
                 const standing = window.width >= window.floorWidth && window.height >= window.floorHeight
                 if (!Awaited.all("window_floor_shrunk", {
                         "floor": standing,
-                        "laid": standing && acts.menuReadAfterFrames(op) }))
+                        "laid": acts.menuStood(op, standing) && standing }))
                     return
+                op.witness("menuFloored", acts.menuReading())
                 op.advance("floored")
                 return
             }
@@ -168,67 +173,67 @@ Item {
             }
             // The report's reading: `blank`, `risen`, or `floored` for `wip`. The block scrolls even when not shown,
             // so only `wipShown` catches a face taken away behind the run (`RepoPage.leaveWipWhenDone`).
-            const stands = window.width >= Math.ceil(window.floorWidth)
-                && window.height >= Math.ceil(window.floorHeight)
-                && !(arg === "fold" && window.floorPage.sidebarCollapsed)
-            if (!Awaited.all("window_floor_landed", {
-                    "floor": stands,
-                    "log": !logs || window.floorPage.commandsOpen,
-                    "wip": arg !== "wip"
-                        || (window.floorPage.wipShown && window.floorPage.wipBlockScrolls),
-                    "laid": stands && acts.menuReadAfterFrames(op),
-                    "page": PageSettled.windowSettled(window) }))
+            const terms = acts.floorLanded()
+            terms["laid"] = acts.menuStood(op, terms["floor"]) && terms["floor"]
+            if (!Awaited.all("window_floor_landed", terms))
                 return
-            op.complete(() => acts.floorLine())
+            op.complete({ "name": "window_floor_read", "when": () => acts.floorLanded(),
+                          "report": () => acts.floorLine() })
         }
     }
-    /// Where the window stood before the floor moved: one that came back up otherwise looks never let down.
-    property string floorStoodAt: ""
+    /// What the report's reading stands on, read now: the window on its floor with the face the argument asked for.
+    function floorLanded() {
+        const arg = Harness.autoActArg
+        const logs = arg === "log" || arg === "rail"
+        return { "floor": window.width >= Math.ceil(window.floorWidth)
+                          && window.height >= Math.ceil(window.floorHeight)
+                          && !(arg === "fold" && window.floorPage.sidebarCollapsed),
+                 "log": !logs || window.floorPage.commandsOpen,
+                 "wip": arg !== "wip" || (window.floorPage.wipShown && window.floorPage.wipBlockScrolls),
+                 "page": PageSettled.windowSettled(window) }
+    }
 
     // ---- whether the left menu stands whole in the room the page gives it ----
     // Read off the layout itself (デザイン規約 §窓の床「左メニューが全部入る」): the floor's own sum would agree with
-    // itself whatever the rail drew. A `SplitView` and a `Column` lay out on polish, so a reading waits two swapped
-    // frames after it is asked for — one whose polish ran before the ask answers for the shape before it.
-    /// Every reading held, and the last one's two numbers.
-    property bool menuHeld: true
-    property real menuEnd: 0
-    property real menuRoom: 0
-    /// The readings taken so far: each is waited for under a name of its own, so the next waits frames of its own.
-    property int menuReads: 0
-    /// Whether the menu has been read for `op`'s stage: false while the frames it waits for are still to come
-    /// (`StageTimer.drawnSince`).
-    function menuReadAfterFrames(op) {
-        if (!op.drawnSince("menu_read#" + acts.menuReads))
-            return false
-        acts.menuReads++
+    // itself whatever the rail drew. A `SplitView` and a `Column` lay out on polish, so a reading is taken once the
+    // menu's numbers have stood across a swapped frame — one taken before the polish answers for the shape before it.
+    /// The menu's end and the room the page gives it, read off the layout now.
+    function menuReading() {
         const pane = window.floorPage.pageSidebar
         if (pane.collapsed) {
             const rail = pane.autoRail
             // The rail's one child is the column of the fold block and the cells. It fills the rail, and what it laid
             // out runs past it when the rail is shorter — the rail does not clip.
             const column = rail.children[0]
-            acts.menuEnd = column.childrenRect.y + column.childrenRect.height
-            acts.menuRoom = rail.height
-        } else {
-            // The list's last band, at its own height: the layout gives a band no minimum, so a short list squeezes
-            // the bands rather than pushing the last one out.
-            const last = pane.autoSections.headOf("tag")
-            acts.menuEnd = last.y + last.implicitHeight
-            acts.menuRoom = pane.autoSections.height
+            return { "end": column.childrenRect.y + column.childrenRect.height, "room": rail.height }
         }
-        acts.menuHeld = acts.menuHeld && acts.menuEnd <= acts.menuRoom
-        return true
+        // The list's last band, at its own height: the layout gives a band no minimum, so a short list squeezes the
+        // bands rather than pushing the last one out.
+        const last = pane.autoSections.headOf("tag")
+        return { "end": last.y + last.implicitHeight, "room": pane.autoSections.height }
     }
-    /// `fits=` is the whole verdict: reporting the floor alone would pass with the window nowhere near it.
+    /// Whether the menu's reading has stood across a swapped frame in `op`'s stage (`StageTimer.still`), asked every
+    /// beat: while the window is not `ready` for it the asked value is none, so a reading that turned back waits
+    /// again.
+    function menuStood(op, ready) {
+        const reading = ready ? acts.menuReading() : null
+        return op.still("menu_laid", reading === null ? "" : reading.end + "/" + reading.room)
+    }
+    /// `fits=` is the whole verdict: reporting the floor alone would pass with the window nowhere near it. `menu=` is
+    /// every reading held: the one kept on the floor before it moved, and the one read now, whose numbers are said.
     function floorLine() {
         const floorW = Math.ceil(window.floorWidth)
         const floorH = Math.ceil(window.floorHeight)
+        const blank = Harness.autoActArg === ""
+        const floored = blank ? null : floorActTimer.witnessed("menuFloored")
+        const menu = acts.menuReading()
+        const held = (floored === null || floored.end <= floored.room) && menu.end <= menu.room
         return (
             // The verdict leads: `must_say` catches only neighbours in one substring.
             "window_floor fits="
             + (window.width >= floorW && window.height >= floorH)
             // Beside `fits=`: a floor summed short passes that one, the window standing on it.
-            + " menu=" + acts.menuHeld + " menuEnd=" + acts.menuEnd + " menuRoom=" + acts.menuRoom
+            + " menu=" + held + " menuEnd=" + menu.end + " menuRoom=" + menu.room
             + " floorW=" + floorW + " floorH=" + floorH
             // `floorW` is the larger of these two plus the edge's two columns (`Main.floorWidth`). Folding lowers
             // `pageW` only.
@@ -237,7 +242,8 @@ Item {
                            ? Math.ceil(window.floorPage.floorWidth) : 0)
             + " edge=" + window.edgeInset
             + " w=" + window.width + " h=" + window.height
-            + " from=" + (acts.floorStoodAt === "" ? "-" : acts.floorStoodAt)
+            // Where the window stood before the floor moved: one that came back up otherwise looks never let down.
+            + " from=" + (blank ? "-" : floorActTimer.witnessed("floorStoodAt"))
             // `tabs=0`: the floor was read off the blank page.
             + " tabs=" + pageRepeater.count
             + " folded=" + (window.floorPage !== null
@@ -259,8 +265,6 @@ Item {
         name: "state"
         order: ["asked", "landed", "stored"]
         running: Harness.autoAct === "state"
-        /// The line, read in the press that stores the window — for `minimize`, while it is still down.
-        property string storedLine: ""
         onTriggered: {
             const op = stateActTimer
             const minimize = Harness.autoActArg === "minimize"
@@ -288,29 +292,32 @@ Item {
                 return
             }
             // Read back once the splitters have taken the new sizes.
-            const page = window.curPage
-            if (!Awaited.all("state_report_ready", {
-                    "ready": !(minimize && window.visibility !== Window.Maximized),
-                    "page": PageSettled.windowSettled(window),
-                    "changed": Harness.autoActArg !== "change"
-                        || (page !== null && page.sidebarCollapsed && page.commandsOpen && page.commandsShown
-                            && Math.abs(page.stateDetailsWidth - 520) < 1) }))
-                return
-            // Reported up, then down: the file must hold the same once the window is down, which one report cannot
-            // show. Then back up for the shot (`grabToImage` gets nothing from a window that is down), and windowed:
-            // the offscreen platform maximises to its own 800x800 screen.
-            if (!op.input("stored", () => {
-                    if (minimize) {
+            if (op.at("landed")) {
+                const page = window.curPage
+                if (!Awaited.all("state_report_ready", {
+                        "ready": !(minimize && window.visibility !== Window.Maximized),
+                        "page": PageSettled.windowSettled(window),
+                        "changed": Harness.autoActArg !== "change"
+                            || (page !== null && page.sidebarCollapsed && page.commandsOpen && page.commandsShown
+                                && Math.abs(page.stateDetailsWidth - 520) < 1) }))
+                    return
+                // Reported up, then down: the file must hold the same once the window is down, which one report
+                // cannot show. Then back up for the shot (`grabToImage` gets nothing from a window that is down), and
+                // windowed: the offscreen platform maximises to its own 800x800 screen. The line, read in the press
+                // that stores the window — for `minimize`, while it is still down — is kept, and is the run's line.
+                if (!op.input("stored", () => {
+                        if (minimize) {
+                            window.reportState()
+                            window.visibility = Window.Minimized
+                        }
                         window.reportState()
-                        window.visibility = Window.Minimized
-                    }
-                    window.reportState()
-                    op.storedLine = acts.stateLine()
-                    if (minimize)
-                        window.visibility = Window.Windowed
-                }))
-                return
-            op.complete(() => op.storedLine)
+                        op.witness("storedLine", acts.stateLine())
+                        if (minimize)
+                            window.visibility = Window.Windowed
+                    }))
+                    return
+            }
+            op.complete({ "name": "state_stored", "when": () => ({}), "report": () => op.witnessed("storedLine") })
         }
     }
     function stateLine() {

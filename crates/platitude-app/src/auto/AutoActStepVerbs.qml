@@ -123,11 +123,34 @@ Item {
         /// A diff opened over the graph from CHANGES (a file the selected commit touched): the graph, swapped off
         /// screen, has to let the keyboard go or the arrows walk the selection behind the diff.
         property string diffPath: ""
-        /// Read as the walk went: the row it set off from, where the view stood before its last step (`landing=`), and
-        /// how many steps were refused.
-        property int from: -1
-        property real wasY: 0
-        property int refused: 0
+        /// The selection reached the lit row, the card caught up with it, and the settle behind the last step landed
+        /// it (`GraphRowWalk.settling`) — the diff it brings is asked for then, and `page` waits for that read and its
+        /// rows.
+        function walked() {
+            const row = graphPane.view.currentIndex
+            return {
+                "ready": !(row < 0 || (graphStepTimer.diffPath === "" && page.selectedOid !== graphModel.oidAt(row))
+                    || !driver.cardSettled),
+                "walked": !graphPane.stepSettling,
+                "page": PageSettled.settled(page) }
+        }
+        /// The run's line. Witnessed as the walk went: the row it set off from (`from`), where the view stood before
+        /// its last step (`wasY`, for `landing=`), and how many steps were refused (`refused`).
+        function line() {
+            const op = graphStepTimer
+            const at = graphPane.view.currentIndex
+            return "graph_step from=" + op.witnessed("from")
+                   + " row=" + at
+                   + " steps=" + op.steps
+                   + " landing=" + graphPane.stepLanding(at, op.witnessed("wasY"))
+                   + " back=" + (at === op.witnessed("from"))
+                   + " refused=" + op.witnessed("refused")
+                   + " focused=" + graphPane.view.activeFocus
+                   + " diff=" + page.diffShown
+                   + " onscreen=" + graphPane.rowOnScreen(at)
+                   + " selected=" + (page.selectedOid === graphModel.oidAt(at))
+                   + " card=" + (detailsModel.shaHex === page.selectedOid)
+        }
         onTriggered: {
             const op = graphStepTimer
             if (op.at("start")) {
@@ -158,43 +181,23 @@ Item {
                 op.input("walked", () => {
                     if (op.away)
                         graphPane.view.contentY = graphPane.view.clampY(Infinity)
-                    op.from = graphPane.view.currentIndex
+                    op.witness("from", graphPane.view.currentIndex)
                     let refused = 0
+                    let wasY = 0
                     const way = op.steps < 0 ? -1 : 1
                     for (let n = 0; n < Math.abs(op.steps); n++) {
                         // Before each step, so `landing=` reads the last one: a walk off the bottom moves the view
                         // every row.
-                        op.wasY = graphPane.view.contentY
+                        wasY = graphPane.view.contentY
                         if (!graphPane.stepRow(way))
                             refused++
                     }
-                    op.refused = refused
+                    op.witness("wasY", wasY)
+                    op.witness("refused", refused)
                 })
                 return
             }
-            const row = graphPane.view.currentIndex
-            // `walked`: the settle behind the last step has landed it (`GraphRowWalk.settling`) — the diff it brings is
-            // asked for then, and `page` waits for that read and its rows.
-            if (!Awaited.all("graph_step_report_ready", {
-                "ready": !(row < 0 || (op.diffPath === "" && page.selectedOid !== graphModel.oidAt(row))
-                    || !driver.cardSettled),
-                "walked": !graphPane.stepSettling,
-                "page": PageSettled.settled(page) }))
-                return
-            op.complete(() => {
-                const at = graphPane.view.currentIndex
-                return "graph_step from=" + op.from
-                       + " row=" + at
-                       + " steps=" + op.steps
-                       + " landing=" + graphPane.stepLanding(at, op.wasY)
-                       + " back=" + (at === op.from)
-                       + " refused=" + op.refused
-                       + " focused=" + graphPane.view.activeFocus
-                       + " diff=" + page.diffShown
-                       + " onscreen=" + graphPane.rowOnScreen(at)
-                       + " selected=" + (page.selectedOid === graphModel.oidAt(at))
-                       + " card=" + (detailsModel.shaHex === page.selectedOid)
-            })
+            op.complete({ "name": "graph_step_report_ready", "when": () => op.walked(), "report": () => op.line() })
         }
     }
     // The arrow held down: the opening press, then the repeats once its settle has expired, as an OS's first repeat
@@ -207,11 +210,29 @@ Item {
         order: ["opened", "repeated"]
         /// How many rows the run walks, the opening press included.
         property int steps: 6
-        /// Read as the walk went: the row it set off from, how many steps were refused, and `holdReads` as the hold
-        /// set off — the reads the walk asked for are the ones counted past it.
-        property int from: -1
-        property int refused: 0
-        property int readsFrom: 0
+        /// The hand off the key: the selection landed on the lit row and the card caught up.
+        function landed() {
+            const row = graphPane.view.currentIndex
+            return {
+                "row": row >= 0,
+                "settled": !graphPane.stepSettling,
+                "selected": row >= 0 && page.selectedOid === graphModel.oidAt(row),
+                "card": driver.cardSettled }
+        }
+        /// The run's line. Witnessed as the walk went: the row it set off from (`from`), `holdReads` as the hold set
+        /// off (`readsFrom`) — the reads the walk asked for are the ones counted past it — and how many steps were
+        /// refused, by the opening press (`openRefused`) and by the whole walk (`refused`).
+        function line() {
+            const op = graphHoldTimer
+            const at = graphPane.view.currentIndex
+            return "graph_hold from=" + op.witnessed("from")
+                   + " row=" + at
+                   + " steps=" + op.steps
+                   + " reads=" + (acts.holdReads - op.witnessed("readsFrom"))
+                   + " refused=" + op.witnessed("refused")
+                   + " selected=" + (page.selectedOid === graphModel.oidAt(at))
+                   + " card=" + (detailsModel.shaHex === page.selectedOid)
+        }
         onTriggered: {
             const op = graphHoldTimer
             if (op.at("start")) {
@@ -219,12 +240,12 @@ Item {
                     return
                 op.input("opened", () => {
                     graphPane.view.takeKeyboard()
-                    op.readsFrom = acts.holdReads
-                    op.from = graphPane.view.currentIndex
+                    op.witness("readsFrom", acts.holdReads)
+                    op.witness("from", graphPane.view.currentIndex)
                     let refused = 0
                     if (!graphPane.stepRow(1))
                         refused++
-                    op.refused = refused
+                    op.witness("openRefused", refused)
                 })
                 return
             }
@@ -234,32 +255,16 @@ Item {
                 if (!Awaited.all("graph_hold_settled", { "settled": !graphPane.stepSettling }))
                     return
                 op.input("repeated", () => {
-                    let refused = op.refused
+                    let refused = op.witnessed("openRefused")
                     for (let n = 1; n < op.steps; n++) {
                         if (!graphPane.stepRow(1, true))
                             refused++
                     }
-                    op.refused = refused
+                    op.witness("refused", refused)
                 })
                 return
             }
-            const row = graphPane.view.currentIndex
-            if (!Awaited.all("graph_hold_report_ready", {
-                "row": row >= 0,
-                "settled": !graphPane.stepSettling,
-                "selected": row >= 0 && page.selectedOid === graphModel.oidAt(row),
-                "card": driver.cardSettled }))
-                return
-            op.complete(() => {
-                const at = graphPane.view.currentIndex
-                return "graph_hold from=" + op.from
-                       + " row=" + at
-                       + " steps=" + op.steps
-                       + " reads=" + (acts.holdReads - op.readsFrom)
-                       + " refused=" + op.refused
-                       + " selected=" + (page.selectedOid === graphModel.oidAt(at))
-                       + " card=" + (detailsModel.shaHex === page.selectedOid)
-            })
+            op.complete({ "name": "graph_hold_report_ready", "when": () => op.landed(), "report": () => op.line() })
         }
     }
     /// Commits the walk has asked for, counted on the signal: the asks come and go inside a beat
@@ -282,15 +287,14 @@ Item {
         id: fileStepTimer
         name: "file_step"
         /// Which list (`changes` / `wip`) and how far. `overrun` (`-edge`) walks past the end: the count is only known
-        /// once the details arrive, so it is read as the walk goes.
+        /// once the details arrive, so it is read as the walk goes. The steps taken (`steps`) and whether one was
+        /// refused (`stopped`) are the walk's witnesses.
         property string pane: "changes"
         property int steps: 1
         property bool overrun: false
         /// The file clicked, and the bucket its row sits in (empty for the commit's list, whose files sit in none).
         property string bucket: ""
         property string path: ""
-        /// Whether a step was refused on the walk, read as it went.
-        property bool stopped: false
         /// `-shut`: a second click on the same row shuts the diff (`RepoPage.toggleDiff`) and the run stops there,
         /// both lists lighting nothing — the two verbs are read as a pair (デザイン規約 §diff のファイル一覧).
         property bool shut: false
@@ -324,15 +328,14 @@ Item {
                 if (!Awaited.all("file_step_read", { "read": read }))
                     return
                 op.input("walked", () => {
-                    if (op.overrun)
-                        op.steps = op.walk.view.count + 5
+                    const steps = op.witness("steps", op.overrun ? op.walk.view.count + 5 : op.steps)
                     let stopped = false
-                    const way = op.steps < 0 ? -1 : 1
-                    for (let n = 0; n < Math.abs(op.steps); n++) {
+                    const way = steps < 0 ? -1 : 1
+                    for (let n = 0; n < Math.abs(steps); n++) {
                         if (!op.walk.stepFile(way))
                             stopped = true
                     }
-                    op.stopped = stopped
+                    op.witness("stopped", stopped)
                 })
                 return
             }
@@ -344,34 +347,35 @@ Item {
                 return
             }
             if (op.shut) {
-                if (!Awaited.all("file_shut_report_ready", { "ready": !(page.diffShown),
-                                                             "page": PageSettled.settled(page) }))
-                    return
                 // `open` / `lit` / `focused` stay together and in this order: a `must_say` is one stretch of the line
                 // (`verify::verbs`).
-                op.complete(() => "file_shut path=" + op.path
-                                  + " pane=" + op.pane
-                                  + " open=" + page.diffShown
-                                  + " lit=" + (op.walk.litPath() !== "")
-                                  + " focused=" + op.walk.view.activeFocus)
+                op.complete({
+                    "name": "file_shut_report_ready",
+                    "when": () => ({ "ready": !(page.diffShown), "page": PageSettled.settled(page) }),
+                    "report": () => "file_shut path=" + op.path
+                                    + " pane=" + op.pane
+                                    + " open=" + page.diffShown
+                                    + " lit=" + (op.walk.litPath() !== "")
+                                    + " focused=" + op.walk.view.activeFocus })
                 return
             }
             // The landed diff asked for, arrived (a pane still reading photographs empty), and its lit row built.
-            if (!Awaited.all("file_step_report_ready", {
-                "shown": page.diffShown,
-                "moved": page.diffPath !== op.path,
-                "diff": diffPane.diffSettled(),
-                "lit": !!op.walk && op.walk.litPath() !== "",
-                "page": PageSettled.settled(page) }))
-                return
-            op.complete(() => "file_step pane=" + op.pane
-                              + " from=" + op.path
-                              + " steps=" + op.steps
-                              + " read=" + (page.diffKind + ":" + page.diffPath)
-                              + " moved=" + (page.diffPath !== op.path)
-                              + " stopped=" + op.stopped
-                              + " lit=" + (op.walk.litPath() === page.diffPath)
-                              + " focused=" + op.walk.view.activeFocus)
+            op.complete({
+                "name": "file_step_report_ready",
+                "when": () => ({
+                    "shown": page.diffShown,
+                    "moved": page.diffPath !== op.path,
+                    "diff": diffPane.diffSettled(),
+                    "lit": !!op.walk && op.walk.litPath() !== "",
+                    "page": PageSettled.settled(page) }),
+                "report": () => "file_step pane=" + op.pane
+                                + " from=" + op.path
+                                + " steps=" + op.witnessed("steps")
+                                + " read=" + (page.diffKind + ":" + page.diffPath)
+                                + " moved=" + (page.diffPath !== op.path)
+                                + " stopped=" + op.witnessed("stopped")
+                                + " lit=" + (op.walk.litPath() === page.diffPath)
+                                + " focused=" + op.walk.view.activeFocus })
         }
     }
     // A folder row of CHANGES struck shut, and open again for `-unfold`, by the row's own signal — the pane's handler
@@ -395,13 +399,19 @@ Item {
             }
             return null
         }
+        /// The folder row there, on a settled page, and `folded` as the last strike left it.
+        function landed(folded) {
+            const row = changesFoldTimer.folderRow()
+            return { "ready": row !== null, "page": PageSettled.settled(page),
+                     "landed": row !== null && row.isFolded === folded }
+        }
         onTriggered: {
             const op = changesFoldTimer
             const row = op.folderRow()
             // The row is shut exactly while the generation stands at `shut`, which is the wait between strikes: the
-            // toggle rebuilds the list, so a later beat's row is a new row.
-            if (!Awaited.all("changes_fold_ready", { "ready": row, "page": PageSettled.settled(page),
-                                                     "landed": !!row && row.isFolded === op.at("shut") }))
+            // toggle rebuilds the list, so a later beat's row is a new row. The run ends with it as its last strike
+            // left it — shut, or open again for `-unfold`.
+            if (!Awaited.all("changes_fold_ready", op.landed(op.at("shut"))))
                 return
             if (op.at("start") || (op.reopen && op.at("shut"))) {
                 // The commit's own files first, read only on this branch: a read landing after a strike clears every
@@ -415,16 +425,19 @@ Item {
                 })
                 return
             }
-            op.complete(() => {
-                const now = op.folderRow()
-                return "changes_fold path=" + op.path
-                       // One strike, or two for `-unfold`: each a stage this run went through.
-                       + " strikes=" + (op.reopen ? 2 : 1)
-                       + " shut=" + (now !== null && now.isFolded)
-                       + " turn=" + (now === null ? "" : now.foldTurn)
-                       + " rows=" + detailsPane.filesWalk.view.count
-                       + " tree=" + detailsModel.treeView
-            })
+            op.complete({
+                "name": "changes_fold_ready",
+                "when": () => op.landed(!op.reopen),
+                "report": () => {
+                    const now = op.folderRow()
+                    return "changes_fold path=" + op.path
+                           // One strike, or two for `-unfold`: each a stage this run went through.
+                           + " strikes=" + (op.reopen ? 2 : 1)
+                           + " shut=" + (now !== null && now.isFolded)
+                           + " turn=" + (now === null ? "" : now.foldTurn)
+                           + " rows=" + detailsPane.filesWalk.view.count
+                           + " tree=" + detailsModel.treeView
+                } })
         }
     }
     // The diff's arrows enter at `DiffPane.stepRows`, where `Keys.onDownPressed` does. The wait is for the view, not
@@ -436,9 +449,7 @@ Item {
         name: "diff_step"
         order: ["walked"]
         property int steps: 1
-        /// Read as the walk went: the row the view stood at, and whether a step was refused.
-        property int from: -1
-        property bool stopped: false
+        // Witnessed as the walk went: the row the view stood at (`from`), and whether a step was refused (`stopped`).
         onTriggered: {
             const op = diffStepTimer
             if (op.at("start")) {
@@ -448,7 +459,7 @@ Item {
                                                       "scrolls": !diffPane.atEnd }))
                     return
                 op.input("walked", () => {
-                    op.from = acts.diffRow()
+                    op.witness("from", acts.diffRow())
                     let stopped = false
                     const way = op.steps < 0 ? -1 : 1
                     for (let n = 0; n < Math.abs(op.steps); n++) {
@@ -458,20 +469,20 @@ Item {
                         if (!diffPane.stepRows(way))
                             stopped = true
                     }
-                    op.stopped = stopped
+                    op.witness("stopped", stopped)
                 })
                 return
             }
-            if (!Awaited.all("diff_step_report_ready", { "ready": diffPane.diffSettled(),
-                                                          "page": PageSettled.settled(page) }))
-                return
-            op.complete(() => "diff_step from=" + op.from
-                              + " rows=" + acts.diffRow()
-                              + " steps=" + op.steps
-                              + " moved=" + (acts.diffRow() !== op.from)
-                              + " atEnd=" + diffPane.atEnd
-                              + " stopped=" + op.stopped
-                              + " focused=" + diffPane.view.activeFocus)
+            op.complete({
+                "name": "diff_step_report_ready",
+                "when": () => ({ "ready": diffPane.diffSettled(), "page": PageSettled.settled(page) }),
+                "report": () => "diff_step from=" + op.witnessed("from")
+                                + " rows=" + acts.diffRow()
+                                + " steps=" + op.steps
+                                + " moved=" + (acts.diffRow() !== op.witnessed("from"))
+                                + " atEnd=" + diffPane.atEnd
+                                + " stopped=" + op.witnessed("stopped")
+                                + " focused=" + diffPane.view.activeFocus })
         }
     }
     /// Where the diff's view stands, in rows — the walk's unit, steadier than pixels on a report line.

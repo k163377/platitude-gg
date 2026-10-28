@@ -79,11 +79,8 @@ Item {
         id: perfDone
         name: "perf"
         running: PerfProbe.verifying && driver.finished
-        onTriggered: {
-            if (!Awaited.all("perf_done", { "finished": driver.finished }))
-                return
-            perfDone.complete(() => [])
-        }
+        onTriggered: perfDone.complete({ "name": "perf_done", "when": () => ({ "finished": driver.finished }),
+                                         "report": () => [] })
     }
 
     Connections {

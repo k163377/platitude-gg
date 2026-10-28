@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use super::source::{self, Purpose};
-use super::{Exception, Finding, qml, rust};
+use super::{Exception, Finding, qml, reach, rust, stages};
 
 /// The suites' common budgets, where a clock is read on purpose. Named by
 /// the tail of the path: a whole path in a string here would be an edge to
@@ -19,6 +19,11 @@ const SELF: &str = "/src/waits/";
 /// The directory of a crate's `src` that holds the app's automation
 /// harness, read as test code beside the window it drives.
 const HARNESS: &str = "auto";
+
+/// The directory of the same `src` that holds the window the harness
+/// drives: read by the reach rule for what the harness's calls into it do,
+/// and judged by nothing.
+const PRODUCT: &str = "ui";
 
 /// The Rust half of that same harness (the `PGG_*` record, the deadline
 /// thread, the drivers' clock). It is behind the same feature as
@@ -104,6 +109,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
             }
         }
     }
+    findings.extend(reached(&root, &files, &sources)?);
     // Otherwise the body rules name nothing and still say PASS.
     if read.tool_files == 0 {
         return Err(format!(
@@ -124,6 +130,54 @@ pub fn run(args: &[String]) -> Result<(), String> {
         }
     }
     report(&findings, &exceptions, &read)
+}
+
+/// The reach rule's findings ([`reach`]): the harness read as one
+/// program, with the product's QML and the app's Rust it calls into, from
+/// the crate that holds the harness.
+fn reached(
+    root: &Path,
+    files: &[PathBuf],
+    sources: &[(String, source::Lang, String)],
+) -> Result<Vec<Finding>, String> {
+    let harness: Vec<(String, String)> = sources
+        .iter()
+        .filter(|(relative, lang, _)| *lang == source::Lang::Qml && in_src_dir(relative, HARNESS))
+        .map(|(relative, _, text)| (relative.clone(), text.clone()))
+        .collect();
+    let Some(crate_dir) = harness.first().and_then(|(relative, _)| {
+        relative
+            .split('/')
+            .take(2)
+            .reduce(|_, b| b)
+            .map(str::to_string)
+    }) else {
+        return Ok(Vec::new());
+    };
+    let mut product = Vec::new();
+    let mut rust = Vec::new();
+    for file in files {
+        let relative = file
+            .strip_prefix(root)
+            .unwrap_or(file)
+            .to_string_lossy()
+            .replace('\\', "/");
+        if relative.split('/').nth(1) != Some(crate_dir.as_str()) {
+            continue;
+        }
+        let read = || std::fs::read_to_string(file).map_err(|e| format!("{relative}: {e}"));
+        if relative.ends_with(".qml") && in_src_dir(&relative, PRODUCT) {
+            product.push((relative.clone(), read()?));
+        } else if relative.ends_with(".rs") && relative.split('/').nth(2) == Some("src") {
+            rust.push(read()?);
+        }
+    }
+    Ok(reach::findings(
+        &harness,
+        &product,
+        &rust,
+        &stages::MACHINERY,
+    ))
 }
 
 /// The files another file declares as test modules (`#[cfg(test)] mod

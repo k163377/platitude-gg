@@ -107,6 +107,18 @@ Item {
             })
         return onTag
     }
+    /// Presses the graph's `row` with `modifiers` once its delegate is built. A row far down has none until the view
+    /// is over it: the view is sent there and the press answers false, to go in on a later beat.
+    function clickRow(row, modifiers) {
+        const view = graphPane.view
+        const item = view.itemAtIndex(row)
+        if (item === null) {
+            view.positionViewAtIndex(row, ListView.Contain)
+            return false
+        }
+        item.leftClick(modifiers)
+        return true
+    }
 
     PageStage {
         id: cardTimer
@@ -123,7 +135,8 @@ Item {
                 page.openRowMenu(graphModel.oidAt(cardTimer.row))
                 acts.stand(commitRowMenu.menu, commitRowMenu.githubCard, cardTimer.others)
             })
-            cardTimer.complete(() => acts.standLines("github_card", commitRowMenu.githubCard))
+            cardTimer.complete({ "when": () => ({}),
+                                 "report": () => acts.standLines("github_card", commitRowMenu.githubCard) })
         }
     }
 
@@ -148,7 +161,8 @@ Item {
                 page.openRefMenu(refTimer.kind, refTimer.refName, refTimer.refName, oid, "sidebar")
                 acts.stand(refRowMenu.menu, refRowMenu.githubCard, refTimer.others)
             })
-            refTimer.complete(() => acts.standLines("github_ref", refRowMenu.githubCard))
+            refTimer.complete({ "when": () => ({}),
+                                "report": () => acts.standLines("github_ref", refRowMenu.githubCard) })
         }
     }
 
@@ -165,7 +179,8 @@ Item {
                 page.openRemoteMenu(remoteTimer.remote)
                 acts.stand(remoteRowMenu.menu, remoteRowMenu.githubCard, remoteTimer.others)
             })
-            remoteTimer.complete(() => acts.standLines("github_remote", remoteRowMenu.githubCard))
+            remoteTimer.complete({ "when": () => ({}),
+                                   "report": () => acts.standLines("github_remote", remoteRowMenu.githubCard) })
         }
     }
 
@@ -187,25 +202,21 @@ Item {
         onTriggered: {
             const op = fileTimer
             if (op.at("start")) {
-                const item = graphPane.view.itemAtIndex(op.row)
-                if (!Awaited.all("github_file_row", { "row": item !== null })) {
-                    graphPane.view.positionViewAtIndex(op.row, ListView.Contain)
-                    return
-                }
-                op.input("row_clicked", () => {
-                    item.leftClick(Qt.NoModifier)
-                })
+                op.input("row_clicked", () => acts.clickRow(op.row, Qt.NoModifier))
                 return
             }
             if (op.at("row_clicked")) {
-                const file = detailsPane.filesWalk.rowFor("", op.path)
                 if (!Awaited.all("github_file", {
-                    "card": driver.cardSettled && detailsModel.shaHex === graphModel.oidAt(op.row),
-                    "file": file !== null
+                    "card": driver.cardSettled && detailsModel.shaHex === graphModel.oidAt(op.row)
                 }))
                     return
+                // The file's row once the list has built it: none yet, nothing goes in.
                 op.input("menu_asked", () => {
+                    const file = detailsPane.filesWalk.rowFor("", op.path)
+                    if (file === null)
+                        return false
                     file.askMenu()
+                    return true
                 })
                 return
             }
@@ -220,8 +231,9 @@ Item {
             op.input("opened", () => {
                 acts.stand(commitFileMenu.menu, commitFileMenu.githubCard, op.others)
             })
-            op.complete(() => ["github_file_menu open=" + commitFileMenu.showing + " read=" + page.diffPath]
-                              .concat(acts.standLines("github_file", commitFileMenu.githubCard)))
+            op.complete({ "when": () => ({}),
+                          "report": () => ["github_file_menu open=" + commitFileMenu.showing + " read=" + page.diffPath]
+                                          .concat(acts.standLines("github_file", commitFileMenu.githubCard)) })
         }
     }
 
@@ -242,20 +254,13 @@ Item {
         onTriggered: {
             const op = choiceTimer
             const pressing = op.at("start") ? 0 : op.at("first_press") ? 1 : -1
-            const want = op.rows[pressing < 0 ? op.rows.length - 1 : pressing]
-            const item = graphPane.view.itemAtIndex(want)
             if (pressing >= 0) {
-                // A row far down has no delegate until the view is over it: sent there, and pressed on a later tick.
-                // The row built is what the press stands on, and the observation is grounded on it by name.
-                if (!Awaited.all("github_choice_row_" + want, { "row": item !== null })) {
-                    graphPane.view.positionViewAtIndex(want, ListView.Contain)
-                    return
-                }
-                op.input(pressing === 0 ? "first_press" : "second_press", () => {
-                    item.leftClick(pressing === 0 ? Qt.NoModifier : Qt.ControlModifier)
-                })
+                // The row built is what the press stands on: one far down is sent for and pressed on a later tick.
+                op.input(pressing === 0 ? "first_press" : "second_press",
+                         () => acts.clickRow(op.rows[pressing], pressing === 0 ? Qt.NoModifier : Qt.ControlModifier))
                 return
             }
+            const item = graphPane.view.itemAtIndex(op.rows[op.rows.length - 1])
             if (!Awaited.all("github_choice", { "row": item !== null,
                                                  "chosen": page.chosenCount === 2,
                                                  "comparing": detailsModel.comparing,
@@ -265,9 +270,10 @@ Item {
                 item.askMenu()
                 acts.stand(commitRowMenu.choiceLevel, commitRowMenu.choiceGithubCard, op.others)
             })
-            op.complete(() => ["github_choice_menu choice=" + commitRowMenu.choiceShowing
-                               + " chosen=" + page.chosenCount]
-                              .concat(acts.standLines("github_choice", commitRowMenu.choiceGithubCard)))
+            op.complete({ "when": () => ({}),
+                          "report": () => ["github_choice_menu choice=" + commitRowMenu.choiceShowing
+                                           + " chosen=" + page.chosenCount]
+                                          .concat(acts.standLines("github_choice", commitRowMenu.choiceGithubCard)) })
         }
     }
 
@@ -289,14 +295,7 @@ Item {
         onTriggered: {
             const op = diffTimer
             if (op.at("start")) {
-                const item = graphPane.view.itemAtIndex(op.row)
-                if (!Awaited.all("diff_github_row", { "row": item !== null })) {
-                    graphPane.view.positionViewAtIndex(op.row, ListView.Contain)
-                    return
-                }
-                op.input("row_clicked", () => {
-                    item.leftClick(Qt.NoModifier)
-                })
+                op.input("row_clicked", () => acts.clickRow(op.row, Qt.NoModifier))
                 return
             }
             if (op.at("row_clicked")) {
@@ -320,13 +319,13 @@ Item {
                 diffPane.askCodeMenu(0, last, 0)
                 acts.stand(diffRowMenu.menu, diffRowMenu.githubCard, op.others)
             })
-            op.complete(() => {
+            op.complete({ "when": () => ({}), "report": () => {
                 const span = diffPane.diffModel.selectionLines()
                 const lines = span === undefined ? "none"
                                                  : (span.newer ? "new " : "old ") + span.first + "-" + span.last
                 return ["diff_github_menu open=" + diffRowMenu.showing + " lines=" + lines]
                        .concat(acts.standLines("diff_github", diffRowMenu.githubCard))
-            })
+            } })
         }
     }
 }

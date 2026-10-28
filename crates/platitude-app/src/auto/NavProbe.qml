@@ -79,8 +79,12 @@ QtObject {
     readonly property real peekY: probe.peek.y
     readonly property real peekBottom: probe.peek.y + probe.peek.height
 
-    /// `countsInk`'s ruler, given each count's font in turn.
-    property FontMetrics countFace: FontMetrics {}
+    /// `countsInk`'s ruler, on the counts' font: the first cell's, which is every cell's — one delegate seats them all
+    /// (`NavRail`). Bound, not set as it measures: `countsInk` is read by a completion's report, which only reads.
+    readonly property FontMetrics countFace: FontMetrics {
+        font: probe.rail.autoCells.count > 0 && probe.rail.autoCells.itemAt(0) !== null
+              ? probe.rail.autoCells.itemAt(0).autoCount.font : Qt.application.font
+    }
     /// PGG_AUTO_ACT=nav-fold: whether every count on the rail has its ink under its mark's box, centred in the room down
     /// to half a step over the cell's foot (デザイン規約 §左メニューを畳む), with the span the counts' ink takes in their
     /// cells. Read off each laid-out label and the ink of what it says — not the digits the rail seats them by — since
@@ -89,28 +93,31 @@ QtObject {
     function countsInk() {
         const cells = probe.rail.autoCells
         const floor = probe.rail.cellHeight - Theme.spaceXs / 2
-        const span = { clear: cells.count > 0, top: Infinity, bottom: -Infinity, face: "" }
+        const ruler = probe.countFace
+        let clear = cells.count > 0
+        let top = Infinity
+        let bottom = -Infinity
+        let face = ""
         for (let i = 0; i < cells.count; i++) {
             const cell = cells.itemAt(i)
             if (cell === null) {
-                span.clear = false
+                clear = false
                 continue
             }
             const count = cell.autoCount
-            probe.countFace.font = count.font
-            const ink = probe.countFace.tightBoundingRect(count.text)
-            const top = count.y + count.baselineOffset + ink.y
+            const ink = ruler.tightBoundingRect(count.text)
+            const inkTop = count.y + count.baselineOffset + ink.y
             const mark = cell.autoMark
-            const over = top - (mark.y + mark.height)
-            const under = floor - (top + ink.height)
-            span.clear = span.clear && over >= 0 && Math.abs(over - under) <= 1.5
-            span.top = Math.min(span.top, top)
-            span.bottom = Math.max(span.bottom, top + ink.height)
+            const over = inkTop - (mark.y + mark.height)
+            const under = floor - (inkTop + ink.height)
+            clear = clear && over >= 0 && Math.abs(over - under) <= 1.5
+            top = Math.min(top, inkTop)
+            bottom = Math.max(bottom, inkTop + ink.height)
             // The line's baseline and every digit's ink — the numbers the rail seats a count by.
-            const digits = probe.countFace.tightBoundingRect("0123456789")
-            span.face = count.baselineOffset.toFixed(2) + ":" + digits.y.toFixed(2) + ":" + digits.height.toFixed(2)
+            const digits = ruler.tightBoundingRect("0123456789")
+            face = count.baselineOffset.toFixed(2) + ":" + digits.y.toFixed(2) + ":" + digits.height.toFixed(2)
         }
-        return span
+        return { clear: clear, top: top, bottom: bottom, face: face }
     }
 
     /// PGG_AUTO_ACT=nav-tip: rest the pointer on one section's row, through the same `pointedTipRow` the file lists
@@ -139,20 +146,19 @@ QtObject {
     function rowFactsShown() {
         return probe.sidebar.rowFactsShown()
     }
-    /// PGG_AUTO_ACT=nav-open-foot bar: whether the open row had closed the moment the list's bar was taken — read
-    /// then, before the run asks for the row again under the held bar.
-    property bool shutByBar: false
-    /// PGG_AUTO_ACT=nav-open-then / nav-open-foot: what the hand does once the row is open.
+    /// PGG_AUTO_ACT=nav-open-then / nav-open-foot: what the hand does once the row is open. For `bar`, answers whether
+    /// the open row had closed the moment the list's bar was taken — read then, before the run asks for the row again
+    /// under the held bar.
     function afterOpen(what, kind, row) {
         if (what === "bar") {
             // The list's own bar taken — the one property a press on it writes (`AutoScrollBar`); the hand stays on
             // the row, as a real one on the bar over it does. Then the row is asked for again under the held bar,
             // which must open nothing (`SidebarRowGestures.openFacts`).
             Hand.heldBar = probe.listOf(kind).ScrollBar.vertical
-            probe.shutByBar = !probe.rowFactsOpen
+            const shut = !probe.rowFactsOpen
             probe.pointTipAt(kind, -1)
             probe.pointTipAt(kind, row)
-            return
+            return shut
         }
         const lines = probe.sidebar.openFactsItem()
         if (what === "rightclick") {

@@ -154,14 +154,15 @@ Item {
         name: "avatar_shown"
         property bool hovers: false
         onTriggered: {
-            if (!Awaited.all("avatar_shown_ready", { "card": driver.cardSettled }))
-                return
-            if (avatarShownTimer.hovers) {
+            if (avatarShownTimer.hovers && avatarShownTimer.at("start")) {
+                if (!Awaited.all("avatar_shown_ready", { "card": driver.cardSettled }))
+                    return
                 avatarShownTimer.input("pointed", () => {
                     detailsPane.avatarPointedAt = true
                 })
             }
-            avatarShownTimer.complete(() => driver.verbReport())
+            avatarShownTimer.complete({ "name": "avatar_shown_ready", "when": () => ({ "card": driver.cardSettled }),
+                                        "report": () => driver.verbReport() })
         }
     }
     // The badge's sentence, up only after `Metrics.tipDelayMs`. Read off the shared instance: the address it names
@@ -179,15 +180,16 @@ Item {
                 })
                 return
             }
-            if (!Awaited.all("avatar_tip_report_ready", { "ready": Tips.box.visible }))
-                return
-            avatarTipTimer.complete(() => {
-                const tip = Tips.box
-                return "avatar_tip tip=" + tip.visible
-                       + " named=" + (detailsModel.authorEmail !== ""
-                                      && tip.text.indexOf(detailsModel.authorEmail) >= 0)
-                       + " text=" + tip.text
-            })
+            avatarTipTimer.complete({
+                "name": "avatar_tip_report_ready",
+                "when": () => ({ "ready": Tips.box.visible }),
+                "report": () => {
+                    const tip = Tips.box
+                    return "avatar_tip tip=" + tip.visible
+                           + " named=" + (detailsModel.authorEmail !== ""
+                                          && tip.text.indexOf(detailsModel.authorEmail) >= 0)
+                           + " text=" + tip.text
+                } })
         }
     }
     // The picture is filed against the details' author, so the details land first. It is read off disk
@@ -210,15 +212,14 @@ Item {
                 })
                 return
             }
-            if (!Awaited.all("avatar", {
-                    "picture": detailsModel.avatarUrl !== "" || AppBackend.avatarErrorKind !== "",
-                    "tip": Tips.box.visible
-                }))
-                return
-            avatarAssignTimer.complete(() => "avatar email=" + detailsModel.authorEmail
-                                             + " details=" + (detailsModel.avatarUrl !== "")
-                                             + " rows=" + graphModel.avatarRowCount()
-                                             + " error=" + AppBackend.avatarErrorKind)
+            avatarAssignTimer.complete({
+                "name": "avatar",
+                "when": () => ({ "picture": detailsModel.avatarUrl !== "" || AppBackend.avatarErrorKind !== "",
+                                 "tip": Tips.box.visible }),
+                "report": () => "avatar email=" + detailsModel.authorEmail
+                                + " details=" + (detailsModel.avatarUrl !== "")
+                                + " rows=" + graphModel.avatarRowCount()
+                                + " error=" + AppBackend.avatarErrorKind })
         }
     }
     PageStage {
@@ -226,12 +227,14 @@ Item {
         name: "avatar_badge"
         order: ["clicked"]
         onTriggered: {
-            if (!Awaited.all("avatar_badge_ready", { "card": driver.cardSettled }))
-                return
-            avatarBadgeTimer.input("clicked", () => {
-                detailsPane.avatarClicked()
-            })
-            avatarBadgeTimer.complete(() => driver.verbReport())
+            if (avatarBadgeTimer.at("start")) {
+                if (!Awaited.all("avatar_badge_ready", { "card": driver.cardSettled }))
+                    return
+                avatarBadgeTimer.input("clicked", () => {
+                    detailsPane.avatarClicked()
+                })
+            }
+            avatarBadgeTimer.complete({ "when": () => ({}), "report": () => driver.verbReport() })
         }
     }
     // Read once the card has faded in and the graph's step out from under it has landed: both are animated, and a shot
@@ -240,34 +243,37 @@ Item {
     PageStage {
         id: findSettled
         name: "find_settled"
-        onTriggered: {
+        /// The card faded in and the graph stepped out from under it.
+        function settled() {
             const card = graphPane.findCard
-            if (!Awaited.all("find_settled_ready", {
+            return {
                 "ready": !(!card.open || card.opacity < 1
                     || graphPane.findShift !== (card.findClears ? card.height : 0)),
-                "page": PageSettled.settled(page) }))
-                return
-            // After the dispatch's own line, as it was handed over.
-            findSettled.complete(() => {
+                "page": PageSettled.settled(page) }
+        }
+        // After the dispatch's own line, as it was handed over.
+        onTriggered: findSettled.complete({
+            "name": "find_settled_ready",
+            "when": () => findSettled.settled(),
+            "report": () => {
                 const pin = graphPane.headPin
                 return driver.verbReport().concat([
                     "find_settled shift=" + Math.round(graphPane.findShift)
                     + " pin=" + (!pin.visible ? "none" : pin.wordsOpacity < 1 ? "dim" : "lit")])
-            })
-        }
+            } })
     }
     // PGG_AUTO_ACT=find-scroll: the scroll waits for the grab callback of the frame that drew the search
     // (rules/app-ui.md §UI 自動化). `grabbed=` says it did — otherwise the scroll lands in the same turn as the query
     // and the run is `find` again. Two screens: a jump builds the incoming rows before letting go of the outgoing
     // ones, so drawn delegates are handed on only on the second.
+    //
+    // Witnessed on the way: `grabbed`, whether the grab could be asked; `frame`, what its callback latches once the
+    // frame that drew the search is drawn — it answers in a later turn, past the press; `moved`, whether the scroll
+    // moved the view.
     PageStage {
         id: findScrolled
         name: "find_scrolled"
         order: ["grab_asked", "scrolled"]
-        property bool grabbed: false
-        property bool moved: false
-        /// The grab of the frame that drew the search, latched by its callback: null until that frame is drawn.
-        property var drawn: null
         onTriggered: {
             const op = findScrolled
             if (op.at("start")) {
@@ -275,115 +281,131 @@ Item {
                                                           "searching": graphModel.searching }))
                     return
                 op.input("grab_asked", () => {
-                    op.grabbed = graphPane.view.grabToImage(result => {
-                        findScrolled.drawn = result
-                    })
+                    const frame = op.witness("frame", { "drawn": false })
+                    op.witness("grabbed", graphPane.view.grabToImage(() => {
+                        frame.drawn = true
+                    }))
                 })
                 return
             }
             // A view that could not be grabbed scrolls without waiting for a frame, and says so (`grabbed=false`).
-            if (!Awaited.all("find_scrolled_drawn", { "drawn": !op.grabbed || op.drawn !== null }))
+            if (!Awaited.all("find_scrolled_drawn", { "drawn": !op.witnessed("grabbed")
+                                                               || op.witnessed("frame").drawn }))
                 return
             op.input("scrolled", () => {
                 const view = graphPane.view
                 const before = view.contentY
                 view.contentY = before + view.height
                 view.contentY = before + 2 * view.height
-                op.moved = view.contentY > before
+                op.witness("moved", view.contentY > before)
             })
-            op.complete(() => {
-                const pin = graphPane.headPin
-                return "find_scroll grabbed=" + op.grabbed + " moved=" + op.moved
-                       + " pin=" + (!pin.visible ? "none" : pin.wordsOpacity < 1 ? "dim" : "lit")
-                       + " matches=" + graphPane.findCard.matches
-            })
+            op.complete({
+                "when": () => ({}),
+                "report": () => {
+                    const pin = graphPane.headPin
+                    return "find_scroll grabbed=" + op.witnessed("grabbed") + " moved=" + op.witnessed("moved")
+                           + " pin=" + (!pin.visible ? "none" : pin.wordsOpacity < 1 ? "dim" : "lit")
+                           + " matches=" + graphPane.findCard.matches
+                } })
         }
     }
     // PGG_AUTO_ACT=find-hint / find-hint-key: waits on the card's own word that the typing stopped (`typingStopped`),
     // which a line with no note reaches all the same. `-key` then presses the held-back character and is shot on the
     // next frame — the one that keystroke took the note down in (規約 §コミットを探す). Its line is read in the turn of
-    // the keystroke: once the typing stops again, the note comes back.
+    // the keystroke, as it went in (`witness`): once the typing stops again, the note comes back.
     PageStage {
         id: findHinted
         name: "find_hinted"
         property string key: ""
-        /// Whether the note stood when the held-back character went in.
-        property bool before: false
+        /// The keystroke's line, from what was witnessed either side of it: whether the note stood when the held-back
+        /// character went in (`before`), and the card in the turn of the keystroke.
+        function keyLine() {
+            return "find_hint_key before=" + findHinted.witnessed("before")
+                   + " after=" + findHinted.witnessed("after")
+                   + " stopped=" + findHinted.witnessed("stopped") + " query=" + findHinted.witnessed("query")
+        }
         onTriggered: {
             const op = findHinted
-            const card = graphPane.findCard
             if (op.at("start")) {
-                if (!Awaited.all("find_hinted_ready", { "ready": card.typingStopped }))
-                    return
                 if (op.key === "") {
-                    op.complete(() => {
-                        const shown = graphPane.findCard
-                        return "find_hint stopped=true shown=" + shown.noteShown + " matches=" + shown.matches
-                               + " query=" + shown.query + " note=" + shown.note
-                    })
+                    op.complete({
+                        "name": "find_hinted_ready",
+                        "when": () => ({ "ready": graphPane.findCard.typingStopped }),
+                        "report": () => {
+                            const shown = graphPane.findCard
+                            return "find_hint stopped=true shown=" + shown.noteShown + " matches=" + shown.matches
+                                   + " query=" + shown.query + " note=" + shown.note
+                        } })
                     return
                 }
+                if (!Awaited.all("find_hinted_ready", { "ready": graphPane.findCard.typingStopped }))
+                    return
                 op.input("keyed", () => {
-                    op.before = card.noteShown
+                    const card = graphPane.findCard
+                    op.witness("before", card.noteShown)
                     card.query = card.query + op.key
-                }, () => "find_hint_key before=" + op.before + " after=" + card.noteShown
-                         + " stopped=" + card.typingStopped + " query=" + card.query)
+                    op.witness("after", card.noteShown)
+                    op.witness("stopped", card.typingStopped)
+                    op.witness("query", card.query)
+                })
                 return
             }
-            if (!Awaited.all("find_hint_key_settled", { "page": PageSettled.settled(page) }))
-                return
-            op.complete(() => driver.verbReport())
+            op.complete({ "name": "find_hint_key_settled", "when": () => ({ "page": PageSettled.settled(page) }),
+                          "report": () => op.keyLine() })
         }
     }
     // PGG_AUTO_ACT=find-further: the press waits for the note to stand with its acting words, then for the step it
     // asked for to land and the search to run again (`GraphFind.furtherFrom` going down). `before=` / `after=` are the
-    // rows loaded either side of it.
+    // rows loaded either side of it — `before` witnessed as the press went in.
     PageStage {
         id: findFurther
         name: "find_further"
         order: ["acted"]
-        property int before: -1
+        /// The step landed and the search ran again.
+        function landed() {
+            const card = graphPane.findCard
+            return {
+                "grown": !graphModel.growing,
+                "stepped": card.furtherFrom < 0,
+                "typed": card.typingStopped,
+                "page": PageSettled.settled(page) }
+        }
         onTriggered: {
             const op = findFurther
-            const card = graphPane.findCard
             if (op.at("start")) {
+                const card = graphPane.findCard
                 if (!Awaited.all("find_further_note", { "note": card.noteShown, "acting": card.noteAction !== "" }))
                     return
                 op.input("acted", () => {
-                    op.before = graphModel.rowTotal
+                    op.witness("before", graphModel.rowTotal)
                     card.actOnNote()
                 })
                 return
             }
-            if (!Awaited.all("find_further_landed", {
-                "grown": !graphModel.growing,
-                "stepped": card.furtherFrom < 0,
-                "typed": card.typingStopped,
-                "page": PageSettled.settled(page) }))
-                return
             // `focus=`: the caret stayed in the box; `at=`: the search went to what it found (0 where it stands on no
             // match).
-            op.complete(() => {
-                const landed = graphPane.findCard
-                return "find_further before=" + op.before + " after=" + graphModel.rowTotal
-                       + " focus=" + landed.boxFocused + " truncated=" + graphModel.truncated
-                       + " matches=" + landed.matches + " at=" + landed.atMatch + " note=" + landed.note
-            })
+            op.complete({
+                "name": "find_further_landed",
+                "when": () => op.landed(),
+                "report": () => {
+                    const landed = graphPane.findCard
+                    return "find_further before=" + op.witnessed("before") + " after=" + graphModel.rowTotal
+                           + " focus=" + landed.boxFocused + " truncated=" + graphModel.truncated
+                           + " matches=" + landed.matches + " at=" + landed.atMatch + " note=" + landed.note
+                } })
         }
     }
     // Shot at one end of the card's fade: caught in between, the card that stayed and the one leaving frame the same.
     PageStage {
         id: findDropSettled
         name: "find_drop_settled"
-        onTriggered: {
-            if (!Awaited.all("find_drop_settled_ready", {
-                "ready": !(graphPane.findCard.opacity > 0 && graphPane.findCard.opacity < 1),
-                "page": PageSettled.settled(page) }))
-                return
-            findDropSettled.complete(() => "find_drop open=" + graphPane.findCard.open
-                                            + " shown=" + (graphPane.findCard.opacity > 0)
-                                            + " query=" + graphPane.findCard.query)
-        }
+        onTriggered: findDropSettled.complete({
+            "name": "find_drop_settled_ready",
+            "when": () => ({ "ready": !(graphPane.findCard.opacity > 0 && graphPane.findCard.opacity < 1),
+                             "page": PageSettled.settled(page) }),
+            "report": () => "find_drop open=" + graphPane.findCard.open
+                            + " shown=" + (graphPane.findCard.opacity > 0)
+                            + " query=" + graphPane.findCard.query })
     }
     // The picture is filed against the details' author, so the details land first; the window completes the run.
     PageStage {
@@ -418,40 +440,38 @@ Item {
                 })
                 return
             }
-            if (!Awaited.all("commands_shut_shut", { "shut": !page.commandsShown }))
-                return
-            commandsShutTimer.complete(() => "commands_shut wrong=" + page.commandsWrong
-                                              + " open=" + page.commandsShown
-                                              + " folded=" + page.sidebarCollapsed
-                                              + " mark=" + page.commandsMarkColor)
+            commandsShutTimer.complete({ "name": "commands_shut_shut", "when": () => ({ "shut": !page.commandsShown }),
+                                         "report": () => "commands_shut wrong=" + page.commandsWrong
+                                                         + " open=" + page.commandsShown
+                                                         + " folded=" + page.sidebarCollapsed
+                                                         + " mark=" + page.commandsMarkColor })
         }
     }
     // PGG_AUTO_ACT=commands-escape: Esc on the panel a refusal raised (デザイン規約 §git が言ったことを読む場所),
     // entered at `escapePressed` where `Keys.onEscapePressed` enters. **`took=` is the claim**: a key that fell
-    // through to nobody would frame exactly like this.
+    // through to nobody would frame exactly like this — witnessed as the key went in.
     PageStage {
         id: commandsEscapeTimer
         name: "commands_escape"
         order: ["escaped"]
-        property bool took: false
         onTriggered: {
             if (commandsEscapeTimer.at("start")) {
                 if (!Awaited.all("commands_escape_ready", { "wrong": page.commandsWrong,
                                                             "shown": page.commandsShown }))
                     return
                 commandsEscapeTimer.input("escaped", () => {
-                    commandsEscapeTimer.took = page.escapePressed()
+                    commandsEscapeTimer.witness("took", page.escapePressed())
                 })
                 return
             }
-            if (!Awaited.all("commands_escape_shut", { "shut": !page.commandsShown,
-                                                       "page": PageSettled.settled(page) }))
-                return
             // The mark goes with its panel; a red left behind is what a picture of the shut window cannot show.
-            commandsEscapeTimer.complete(() => "commands_escape took=" + commandsEscapeTimer.took
-                                                + " open=" + page.commandsShown
-                                                + " wrong=" + page.commandsWrong
-                                                + " mark=" + page.commandsMarkColor)
+            commandsEscapeTimer.complete({
+                "name": "commands_escape_shut",
+                "when": () => ({ "shut": !page.commandsShown, "page": PageSettled.settled(page) }),
+                "report": () => "commands_escape took=" + commandsEscapeTimer.witnessed("took")
+                                + " open=" + page.commandsShown
+                                + " wrong=" + page.commandsWrong
+                                + " mark=" + page.commandsMarkColor })
         }
     }
     // PGG_AUTO_ACT=commands-select / commands-copy: a drag from the head of the first row to the end of the last —
@@ -465,12 +485,12 @@ Item {
     // still queued when this starts. The stash is pressed once their rows are in and nothing runs — the queue serves
     // it after them — and the barrier armed for it holds it in turn. Everything is read in the branch that acts
     // (rules/app-ui.md §UI 自動化).
+    //
+    // `rows`, witnessed at the drag: the rows the drag spans, read off the model — the panel's `(N)` is the view's, a
+    // frame behind in the tick a press lands in.
     PageStage {
         id: commandsPickTimer
         name: "commands_pick"
-        /// The rows the drag spans, read at the drag off the model: the panel's `(N)` is the view's, a frame behind
-        /// in the tick a press lands in.
-        property int rows: 0
         onTriggered: {
             const op = commandsPickTimer
             // Two rows: the write barrier alone can let a tick through while an opening read is the only row.
@@ -487,38 +507,40 @@ Item {
                 return
             }
             op.input("picked", () => {
-                op.rows = page.pageCommands.rowsHeld()
-                page.pickCommandText(0, 0, op.rows - 1, driver.pastLineEnd)
+                const rows = op.witness("rows", page.pageCommands.rowsHeld())
+                page.pickCommandText(0, 0, rows - 1, driver.pastLineEnd)
             })
             if (Harness.autoAct === "commands-select") {
                 // `holds=` is the model's selection, `worn=` what the rows draw of it (`CommandsPane.washTally`) —
                 // either alone passes a broken run.
-                op.complete(() => "commands_pick holds=" + (page.pageCommands.selectionText() !== "")
-                                  + " " + page.commandWashTally() + " held=" + op.rows)
+                op.complete({ "when": () => ({}),
+                              "report": () => "commands_pick holds=" + (page.pageCommands.selectionText() !== "")
+                                              + " " + page.commandWashTally() + " held=" + op.witnessed("rows") })
                 return
             }
             op.input("copied", () => {
                 page.copyCommandText()
             })
-            op.complete(() => {
-                const text = driver.clipboard.lastCopied
-                const lines = text === "" ? [] : text.split("\n")
-                const said = lines.filter(line => !line.startsWith("\t")).length
-                return "commands_copy perRow=" + (op.rows > 0 && said === op.rows)
-                       + " rows=" + op.rows + " said=" + said + " lines=" + lines.length
-            })
+            op.complete({
+                "when": () => ({}),
+                "report": () => {
+                    const rows = op.witnessed("rows")
+                    const text = driver.clipboard.lastCopied
+                    const lines = text === "" ? [] : text.split("\n")
+                    const said = lines.filter(line => !line.startsWith("\t")).length
+                    return "commands_copy perRow=" + (rows > 0 && said === rows)
+                           + " rows=" + rows + " said=" + said + " lines=" + lines.length
+                } })
         }
     }
     // PGG_AUTO_ACT=commands-sweep: the same drag, started on the ground under the last row
     // (規約 §git が言ったことを読む場所). Nine starts, each judged over a cleared selection: a reach that works from one
-    // spot hides at the middle, and one read at the end would report only the last try.
+    // spot hides at the middle, and one read at the end would report only the last try. `reach` / `tries`: how many of
+    // the starts reached a row, and of how many, counted at the sweep.
     PageStage {
         id: commandsSweepTimer
         name: "commands_sweep"
         order: ["swept"]
-        /// How many of the starts reached a row, and of how many, counted at the sweep.
-        property int reach: 0
-        property int tries: 0
         onTriggered: {
             const op = commandsSweepTimer
             if (!Awaited.all("commands_sweep_ready", { "ready": driver.wroteAndSettled(),
@@ -546,13 +568,14 @@ Item {
                             reach++
                     }
                 }
-                op.reach = reach
-                op.tries = tries
+                op.witness("reach", reach)
+                op.witness("tries", tries)
             })
             // `ground=false`: the log fills the panel, and `reach=0/9` then says nothing.
-            op.complete(() => "commands_sweep reach=" + op.reach + "/" + op.tries
-                              + " ground=" + page.commandsHasGround
-                              + " rows=" + page.pageCommands.rowsHeld())
+            op.complete({ "when": () => ({}),
+                          "report": () => "commands_sweep reach=" + op.witnessed("reach") + "/" + op.witnessed("tries")
+                                          + " ground=" + page.commandsHasGround
+                                          + " rows=" + page.pageCommands.rowsHeld() })
         }
     }
 }

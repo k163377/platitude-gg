@@ -18,15 +18,12 @@
 //! - `awaited`: a verb reads `Awaited` for what it observes and claims
 //!   ([`AWAITED_FOR_VERBS`]); its stages, records and routes are the
 //!   machinery's.
-//! - `stage`: inside an operation's body, no state of the harness's own —
-//!   a property of the file, or of `driver` / `acts` — is given a
-//!   constant, stepped or added to: that is a stage, and stages are the
-//!   operation's (`at` / `advance` / `input` / `complete`). A value read
-//!   off the product (`was = driver.commandsWrongSeen`) is a reading, and
-//!   stands; so does a local.
+//!
+//! What an operation's code does — the state it keeps, the inputs it puts
+//! in, wherever the code stands — is the reach rule's (`super::reach`).
 
 use super::Finding;
-use crate::lex::{Lang, Token, tokens};
+use crate::lex::{Lang, tokens};
 
 /// The files that keep plain samplers of their own: the operation's type,
 /// the completion's hold, the ceiling, and the measurement drivers, whose
@@ -59,7 +56,7 @@ const REPORTERS: [&str; 8] = [
 const COMPLETERS: [&str; 2] = ["WindowHarness.qml", "AutoActDriver.qml"];
 
 /// The files of the machinery itself, which read all of `Awaited`.
-const MACHINERY: [&str; 7] = [
+pub(super) const MACHINERY: [&str; 7] = [
     "Awaited.qml",
     "StageTimer.qml",
     "CompletionRoute.qml",
@@ -90,7 +87,6 @@ pub(super) fn findings(file: &str, text: &str) -> Vec<Finding> {
                 .unwrap_or_default(),
         });
     };
-    let ids = ids(&tokens);
     for (at, token) in tokens.iter().enumerate() {
         let next = |n: usize| tokens.get(at + n).map(|t| t.text.as_str());
         let before = at.checked_sub(1).map(|b| tokens[b].text.as_str());
@@ -134,139 +130,7 @@ pub(super) fn findings(file: &str, text: &str) -> Vec<Finding> {
             _ => {}
         }
     }
-    for (open, close) in operations(&tokens) {
-        for line in stage_writes(&tokens[open..close], &ids) {
-            found(line, "stage");
-        }
-    }
     out
-}
-
-/// The `id:`s the file declares, and the two names a verb family reaches
-/// the drivers' own state by.
-fn ids(tokens: &[Token]) -> Vec<String> {
-    let mut out: Vec<String> = ["driver", "acts"].map(String::from).to_vec();
-    for pair in tokens.windows(3) {
-        if pair[0].text == "id" && pair[1].text == ":" {
-            out.push(pair[2].text.clone());
-        }
-    }
-    out
-}
-
-/// Each operation's body (`PageStage {` / `WindowStage {` to its matching
-/// brace), as token indices.
-fn operations(tokens: &[Token]) -> Vec<(usize, usize)> {
-    let mut out = Vec::new();
-    for (at, token) in tokens.iter().enumerate() {
-        let is_operation = matches!(token.text.as_str(), "PageStage" | "WindowStage")
-            && tokens.get(at + 1).is_some_and(|t| t.text == "{");
-        if !is_operation {
-            continue;
-        }
-        if let Some(close) = crate::lex::matching_close(tokens, at + 1, "{", "}") {
-            out.push((at + 2, close));
-        }
-    }
-    out
-}
-
-/// Whether `token` is a literal a stage would be set to: a boolean, a
-/// number, a string, `null`.
-fn constant(token: &str) -> bool {
-    matches!(token, "true" | "false" | "null")
-        || token.starts_with('"')
-        || token.starts_with('\'')
-        || token.chars().next().is_some_and(|c| c.is_ascii_digit())
-}
-
-/// The lines in `body` that give harness state a constant or step it: the
-/// target a bare name or `<id>.<name>` with `<id>` one of `ids`, and not a
-/// local the body declares. A write to a product's property (`item.x`,
-/// `graphPane.y`) is an input, and stands.
-fn stage_writes(body: &[Token], ids: &[String]) -> Vec<usize> {
-    let locals: Vec<&str> = body
-        .windows(2)
-        .filter(|w| matches!(w[0].text.as_str(), "let" | "const" | "var"))
-        .map(|w| w[1].text.as_str())
-        .collect();
-    // The target ending at `end` (inclusive): `name` or `id . name`, owned by the harness.
-    let harness_target = |end: usize| -> bool {
-        let name = &body[end].text;
-        if !name
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_alphabetic() || c == '_')
-        {
-            return false;
-        }
-        let dotted = end >= 2 && body[end - 1].text == ".";
-        if dotted {
-            let head = &body[end - 2].text;
-            let deeper = end >= 3 && body[end - 3].text == ".";
-            !deeper && ids.iter().any(|id| id == head)
-        } else {
-            let after_dot = end >= 1 && body[end - 1].text == ".";
-            !after_dot
-                && !locals.contains(&name.as_str())
-                && !matches!(
-                    name.as_str(),
-                    "property" | "readonly" | "let" | "const" | "var"
-                )
-        }
-    };
-    // The value at `start` alone on its statement: a constant, or a negative one.
-    let constant_at = |start: usize| -> bool {
-        let value = if body.get(start).is_some_and(|t| t.text == "-") {
-            start + 1
-        } else {
-            start
-        };
-        body.get(value).is_some_and(|t| constant(&t.text))
-            && body.get(value + 1).is_none_or(|t| {
-                t.line != body[value].line || matches!(t.text.as_str(), ";" | "}" | ")")
-            })
-    };
-    let mut out = Vec::new();
-    for (at, token) in body.iter().enumerate() {
-        let hit = match token.text.as_str() {
-            "=" => at >= 1 && harness_target(at - 1) && constant_at(at + 1),
-            // On the line of what it steps: past a line's end it is the next statement's.
-            "++" | "--" => {
-                let postfix = at >= 1 && body[at - 1].line == token.line && harness_target(at - 1);
-                let prefix = body.get(at + 1).is_some_and(|t| t.line == token.line)
-                    && path_end(body, at + 1).is_some_and(harness_target);
-                postfix || prefix
-            }
-            "+=" | "-=" => at >= 1 && harness_target(at - 1),
-            _ => false,
-        };
-        if hit && !out.contains(&token.line) {
-            out.push(token.line);
-        }
-    }
-    out
-}
-
-/// The last token of the `.`-joined path that starts at `start`, if a
-/// name stands there.
-fn path_end(body: &[Token], start: usize) -> Option<usize> {
-    let name = |at: usize| {
-        body.get(at).is_some_and(|t| {
-            t.text
-                .chars()
-                .next()
-                .is_some_and(|c| c.is_alphabetic() || c == '_')
-        })
-    };
-    if !name(start) {
-        return None;
-    }
-    let mut end = start;
-    while body.get(end + 1).is_some_and(|t| t.text == ".") && name(end + 2) {
-        end += 2;
-    }
-    Some(end)
 }
 
 #[cfg(test)]
@@ -320,67 +184,5 @@ mod tests {
             ]
         );
         assert!(rules("src/auto/AutoActDriver.qml", text).is_empty());
-    }
-
-    /// The stage flags and counters a sampler kept for itself are named;
-    /// a reading off the product, a local and an input to the product
-    /// stand.
-    #[test]
-    fn harness_state_given_a_constant_or_stepped_inside_an_operation_is_a_stage() {
-        let text = "Item {
-    id: acts
-    property int step: 0
-    PageStage {
-        id: op
-        name: \"x\"
-        property bool pressed: false
-        property bool was: false
-        onTriggered: {
-            let tries = 0
-            tries++
-            op.was = driver.commandsWrongSeen
-            item.pointerRowX = 4
-            graphPane.view.contentY = 0
-            op.pressed = true
-            acts.step++
-            step = 2
-            ++acts.step
-            driver.writeExpected = false
-            acts.step += 1
-        }
-    }
-}
-";
-        assert_eq!(
-            rules("src/auto/AutoActFooVerbs.qml", text),
-            [
-                (15, "stage"),
-                (16, "stage"),
-                (17, "stage"),
-                (18, "stage"),
-                (19, "stage"),
-                (20, "stage")
-            ]
-        );
-    }
-
-    /// The dispatch sets an operation up before it runs: that is outside
-    /// its body, and stands.
-    #[test]
-    fn the_dispatch_configures_an_operation_and_is_no_stage() {
-        let text = "Item {
-    id: acts
-    function run(act, arg) {
-        op.fits = false
-        op.start()
-    }
-    PageStage {
-        id: op
-        name: \"x\"
-        property bool fits: false
-    }
-}
-";
-        assert!(rules("src/auto/AutoActFooVerbs.qml", text).is_empty());
     }
 }

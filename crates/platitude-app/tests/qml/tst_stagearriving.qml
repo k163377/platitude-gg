@@ -24,12 +24,13 @@ Item {
         name: "arriving"
         onTriggered: {
             root.beats = root.beats + 1
-            if (!op.at("start") || !Automation.Awaited.all("arriving_ready", { "ready": true }))
+            if (!op.at("start"))
                 return
-            op.complete(() => {
-                root.reportReads = root.reportReads + 1
-                return "arriving read"
-            }, ["graph"])
+            op.complete({ "name": "arriving_ready", "when": () => ({ "ready": true }), "arriving": ["graph"],
+                          "report": () => {
+                              root.reportReads = root.reportReads + 1
+                              return "arriving read"
+                          } })
         }
     }
     /// Beats while the operation stands completed: what "held this long" is counted on.

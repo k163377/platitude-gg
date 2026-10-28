@@ -35,18 +35,19 @@ Item {
             const stage = colon < 0 ? arg : arg.substring(0, colon)
             cardLatchTimer.rowLate = colon >= 0 && arg.substring(colon + 1) === "row-late"
             cardLatchTimer.stopAt = stage === "" ? "back" : stage
-            // The inputs on the way to the stop: one more for each stop past `card`. A stop it does not know runs on to
+            // The inputs on the way to the stop, up to the last its stop reads. A stop it does not know runs on to
             // `back`.
-            const reach = ["card", "menu", "dismissed", "back"].indexOf(cardLatchTimer.stopAt)
-            cardLatchTimer.order = ["stirred", "menu_raised", "dismissed", "tremor"].slice(0, reach < 0 ? 4 : reach + 1)
+            const reach = ({ "card": 2, "menu": 3, "dismissed": 4, "back": 6 })[cardLatchTimer.stopAt]
+            cardLatchTimer.order = ["stirred", "carded", "menu_raised", "dismissed", "tremor", "back"]
+                .slice(0, reach === undefined ? 6 : reach)
             cardLatchTimer.start()
         } else if (act === "card-rewrite") {
             // The card with the hand inside it, and the row rewritten in place under it by the commit this run
             // makes: the card stays. The argument is the stage to stop at — `inside` / `rewritten`.
             page.showWip()
             cardRewriteTimer.stopAt = arg === "" ? "rewritten" : arg
-            cardRewriteTimer.order = cardRewriteTimer.stopAt === "inside" ? ["stirred"]
-                                                                          : ["stirred", "typed", "committed"]
+            cardRewriteTimer.order = cardRewriteTimer.stopAt === "inside" ? ["stirred", "pointed"]
+                                                                          : ["stirred", "pointed", "typed", "committed"]
             cardRewriteTimer.start()
         } else {
             return false
@@ -69,24 +70,22 @@ Item {
     PageStage {
         id: cardLatchTimer
         name: "card_latch"
-        order: ["stirred", "menu_raised", "dismissed", "tremor"]
+        order: ["stirred", "carded", "menu_raised", "dismissed", "tremor", "back"]
         /// The stage the run stops at: `card` / `menu` / `dismissed` / `back`.
         property string stopAt: "back"
-        /// Where the hand rests, in the window's frame.
-        property point handAt: Qt.point(-1, -1)
-        property string oidHex: ""
-        property bool tremorCard: false
         /// The worktree row is held back and let through after the tremor (`run`).
         property bool rowLate: false
-        /// Whether the hold was up when it was let through (`GraphModel.letTheWorktreeRowThrough`): a `row-late` run
-        /// that found none read the ordinary order and does not pass as the controlled one.
-        property bool rowHeld: false
-        /// The run's line at the stage it stopped at.
+        /// The run's line at the stage it stopped at. `tremor_card=` is the card put out in the tremor's own turn,
+        /// and `row_held=` whether the hold was up when it was let through (`GraphModel.letTheWorktreeRowThrough`): a
+        /// `row-late` run that found none read the ordinary order and does not pass as the controlled one. Both are
+        /// false for a stop before the tremor.
         function line(stopped) {
+            const past = stopped === "back"
             return "card_latch stage=" + stopped + " card=" + rowCard.opened + " menu=" + commitMenu.opened
                    + " latched=" + (rowHost.cardLatched !== "")
-                   + " tremor_card=" + cardLatchTimer.tremorCard
-                   + (cardLatchTimer.rowLate ? " row_held=" + cardLatchTimer.rowHeld : "")
+                   + " tremor_card=" + (past ? cardLatchTimer.witnessed("tremorCard") : false)
+                   + (cardLatchTimer.rowLate
+                      ? " row_held=" + (past ? cardLatchTimer.witnessed("rowHeld") : false) : "")
         }
         /// The rows moved under a hand that did not — a rebuild landing under the rest (`HandWatch.stillHeld`): the
         /// card went with them and nothing opens until the hand's own move, so it goes onto HEAD's row where that
@@ -100,8 +99,13 @@ Item {
             let next = row.mapToItem(null, row.width / 2, row.height / 2)
             if (next.x === graphPane.hand.at.x && next.y === graphPane.hand.at.y)
                 next = Qt.point(next.x + 2, next.y)
-            cardLatchTimer.handAt = next
             graphPane.hand.stir(next)
+        }
+        function menuUp() {
+            return { "menu": commitMenu.opened, "down": !rowCard.opened }
+        }
+        function menuGone() {
+            return { "gone": !commitMenu.opened }
         }
         onTriggered: {
             const op = cardLatchTimer
@@ -111,61 +115,71 @@ Item {
                 if (!Awaited.all("card_latch_row", { "row": row !== null }))
                     return
                 op.input("stirred", () => {
-                    op.oidHex = row.oid_hex
-                    op.handAt = row.mapToItem(null, row.width / 2, row.height / 2)
-                    graphPane.hand.stir(op.handAt)
+                    op.witness("oid", row.oid_hex)
+                    graphPane.hand.stir(row.mapToItem(null, row.width / 2, row.height / 2))
                 })
                 return
             }
-            if (op.at("stirred")) {
+            // The card out — the hand put back onto HEAD's row each beat it is not, where rows landed under it.
+            if (op.at("stirred") && !op.input("carded", () => {
                 op.handBackOnHead()
-                if (!Awaited.all("card_latch_card", { "card": rowCard.opened }))
-                    return
+                return rowCard.opened
+            }))
+                return
+            if (op.at("carded")) {
                 if (op.stopAt === "card") {
-                    op.complete(() => op.line("card"))
+                    op.complete({ "name": "card_latch_card", "when": () => ({ "card": rowCard.opened }),
+                                  "report": () => op.line("card") })
                     return
                 }
                 op.input("menu_raised", () => {
-                    page.openRowMenu(op.oidHex)
+                    page.openRowMenu(op.witnessed("oid"))
                 })
                 return
             }
             if (op.at("menu_raised")) {
-                if (!Awaited.all("card_latch_menu", { "menu": commitMenu.opened, "down": !rowCard.opened }))
-                    return
                 if (op.stopAt === "menu") {
-                    op.complete(() => op.line("menu"))
+                    op.complete({ "name": "card_latch_menu", "when": () => op.menuUp(),
+                                  "report": () => op.line("menu") })
                     return
                 }
+                if (!Awaited.all("card_latch_menu", op.menuUp()))
+                    return
                 op.input("dismissed", () => {
                     commitMenu.dismiss()
                 })
                 return
             }
             if (op.at("dismissed")) {
-                if (!Awaited.all("card_latch_dismissed", { "gone": !commitMenu.opened }))
-                    return
                 if (op.stopAt === "dismissed") {
-                    op.complete(() => op.line("dismissed"))
+                    op.complete({ "name": "card_latch_dismissed", "when": () => op.menuGone(),
+                                  "report": () => op.line("dismissed") })
                     return
                 }
+                if (!Awaited.all("card_latch_dismissed", op.menuGone()))
+                    return
+                // A tremor from where the hand rests now, as the pane heard it last.
                 op.input("tremor", () => {
-                    graphPane.hand.stir(Qt.point(op.handAt.x + 2, op.handAt.y))
-                    op.tremorCard = rowCard.visible
+                    graphPane.hand.stir(Qt.point(graphPane.hand.at.x + 2, graphPane.hand.at.y))
+                    op.witness("tremorCard", rowCard.visible)
                     // The row let through now lands its rebuild under the rest the tremor started.
                     if (op.rowLate)
-                        op.rowHeld = graphModel.letTheWorktreeRowThrough()
+                        op.witness("rowHeld", graphModel.letTheWorktreeRowThrough())
                 })
                 return
             }
             // The tremor was the hand's own move: the ask kept rests again, and the card comes back — and stays,
             // once nothing is still on its way to the page. Rows that landed under the still hand meanwhile took
-            // it down until the hand's own next move: the hand goes back onto HEAD's row.
-            op.handBackOnHead()
-            if (!Awaited.all("card_latch_back", { "card": rowCard.opened, "settled": PageSettled.settled(page) }))
+            // it down until the hand's own next move: the hand goes back onto HEAD's row, each beat until both hold.
+            if (op.at("tremor") && !op.input("back", () => {
+                op.handBackOnHead()
+                return rowCard.opened && PageSettled.settled(page)
+            }))
                 return
             Awaited.claim("card_latch", () => rowCard.opened)
-            op.complete(() => op.line("back"))
+            op.complete({ "name": "card_latch_back",
+                          "when": () => ({ "card": rowCard.opened, "settled": PageSettled.settled(page) }),
+                          "report": () => op.line("back") })
         }
     }
     // PGG_AUTO_ACT=card-rewrite. The card with the hand inside it (`AppCard.contentPointed`), and the row rewritten
@@ -177,14 +191,16 @@ Item {
     PageStage {
         id: cardRewriteTimer
         name: "card_rewrite"
-        order: ["stirred", "typed", "committed"]
+        order: ["stirred", "pointed", "typed", "committed"]
         /// The stage the run stops at: `inside` / `rewritten`.
         property string stopAt: "rewritten"
-        property string headBefore: ""
-        /// The run's line at the stage it stopped at.
+        /// The run's line at the stage it stopped at. `moved=` is HEAD's row against the commit it showed as the
+        /// hand came onto it.
         function line(stopped) {
-            return "card_rewrite stage=" + stopped + " card=" + rowCard.opened + " moved="
-                   + (graphModel.oidAt(graphModel.headRow) !== cardRewriteTimer.headBefore)
+            return "card_rewrite stage=" + stopped + " card=" + rowCard.opened + " moved=" + cardRewriteTimer.moved()
+        }
+        function moved() {
+            return graphModel.oidAt(graphModel.headRow) !== cardRewriteTimer.witnessed("headBefore")
         }
         onTriggered: {
             const op = cardRewriteTimer
@@ -194,7 +210,7 @@ Item {
                 if (!Awaited.all("card_rewrite_row", { "row": row !== null }))
                     return
                 op.input("stirred", () => {
-                    op.headBefore = graphModel.oidAt(graphModel.headRow)
+                    op.witness("headBefore", graphModel.oidAt(graphModel.headRow))
                     graphPane.hand.stir(row.mapToItem(null, row.width / 2, row.height / 2))
                 })
                 return
@@ -202,9 +218,14 @@ Item {
             if (op.at("stirred")) {
                 if (!Awaited.all("card_rewrite_card", { "card": rowCard.opened }))
                     return
-                rowCard.contentPointed = true
+                op.input("pointed", () => {
+                    rowCard.contentPointed = true
+                })
+            }
+            if (op.at("pointed")) {
                 if (op.stopAt === "inside") {
-                    op.complete(() => op.line("inside"))
+                    op.complete({ "name": "card_rewrite_card", "when": () => ({ "card": rowCard.opened }),
+                                  "report": () => op.line("inside") })
                     return
                 }
                 // Only what the preset staged goes in: the tree stays dirty, so its row stays at the top and the new
@@ -219,10 +240,8 @@ Item {
                 op.input("committed", () => driver.pressWrite("commit", () => wipPane.pressCommit()))
                 return
             }
-            if (!Awaited.all("card_rewrite_landed", {
-                                 "moved": graphModel.oidAt(graphModel.headRow) !== op.headBefore }))
-                return
-            op.complete(() => op.line("rewritten"))
+            op.complete({ "name": "card_rewrite_landed", "when": () => ({ "moved": op.moved() }),
+                          "report": () => op.line("rewritten") })
         }
     }
 }

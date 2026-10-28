@@ -14,7 +14,7 @@ Item {
     Automation.CompletionRoute {
         id: route
         owed: () => rig.owing
-        onReadied: Automation.Awaited.completed("stages", route.completing, route.owedAtRead)
+        onReadied: Automation.Awaited.completed("stages", route.completing, route.owedAtRead, route.witnessesRead)
     }
 
     Component.onCompleted: Automation.Awaited.route = route

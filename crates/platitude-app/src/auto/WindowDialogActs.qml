@@ -30,12 +30,10 @@ Item {
         id: pickerTimer
         name: "open_picker"
         running: Harness.autoAct === "open-picker"
-        onTriggered: {
-            if (!Awaited.all("open_picker_ready", { "shown": folderDialog.visible,
-                                                    "page": PageSettled.windowSettled(window) }))
-                return
-            pickerTimer.complete(() => acts.pickerLine())
-        }
+        onTriggered: pickerTimer.complete({
+            "name": "open_picker_ready",
+            "when": () => ({ "shown": folderDialog.visible, "page": PageSettled.windowSettled(window) }),
+            "report": () => acts.pickerLine() })
     }
     /// `folder=` names this machine, so `beside_worktree=` is what is judged: whether the picker came up in the folder
     /// holding the worktree the tab stands in (`RepoTab.picker_folder_url`; the cases are verbs.md `open-picker`).
@@ -78,8 +76,10 @@ Item {
         name: "clone"
         order: Harness.autoAct === "clone-dialog" ? ["opened"] : ["opened", "asked"]
         running: acts.cloneAct
-        /// The strip's count as the clone was asked for — a picture cannot show that a tab is new.
-        property int tabsBefore: -1
+        /// The dialog up, with the page behind it whole (`PageSettled`): it is in the picture too.
+        function dialogTerms() {
+            return { "dialog": cloneDialog.opened, "page": PageSettled.settled(window.curPage) }
+        }
         onTriggered: {
             const op = cloneTimer
             const act = Harness.autoAct
@@ -93,44 +93,47 @@ Item {
                 return
             }
             if (op.at("opened")) {
-                // The page behind the dialog whole (`PageSettled`): it is in the picture too.
-                if (!Awaited.all("clone_dialog_ready", { "dialog": cloneDialog.opened,
-                                                          "page": PageSettled.settled(window.curPage) }))
-                    return
                 if (act === "clone-dialog") {
-                    op.complete(() => acts.cloneLine())
+                    op.complete({ "name": "clone_dialog_ready",
+                                  "when": () => op.dialogTerms(),
+                                  "report": () => acts.cloneLine() })
                     return
                 }
-                // Filled every beat until the box takes the fields: the submit goes once it can.
+                if (!Awaited.all("clone_dialog_ready", op.dialogTerms()))
+                    return
+                // Filled every beat until the box takes the fields: the submit goes once it can. The strip's count
+                // as the clone was asked for is kept — a picture cannot show that a tab is new.
                 op.input("asked", () => {
                     cloneDialog.setFields(acts.cloneFrom,
                                           act === "clone-go"
                                           ? "cloned-here" : GitFacts.cloneFolderName(acts.cloneFrom))
                     if (!cloneDialog.canSubmit)
                         return false
-                    op.tabsBefore = pageRepeater.count
+                    op.witness("tabsBefore", pageRepeater.count)
                     cloneDialog.submit()
                     return true
                 })
                 return
             }
             // git's answer: the refusal line, or the new tab with its page open (what the picture is of).
-            if (!Awaited.all("clone_landed", {
-                "done": !cloneModel.cloning,
-                "answer": act === "clone-refused" ? cloneDialog.refusal !== ""
-                                                  : pageRepeater.count > op.tabsBefore,
-                "page": PageSettled.settledUnder(window) }))
-                return
-            op.complete(() => acts.cloneLine())
+            op.complete({
+                "name": "clone_landed",
+                "when": () => ({ "done": !cloneModel.cloning,
+                                 "answer": Harness.autoAct === "clone-refused"
+                                           ? cloneDialog.refusal !== ""
+                                           : pageRepeater.count > op.witnessed("tabsBefore"),
+                                 "page": PageSettled.settledUnder(window) }),
+                "report": () => acts.cloneLine() })
         }
     }
-    /// The judged fields lead, together: `must_say` matches a run of the line (verbs.md).
+    /// The judged fields lead, together: `must_say` matches a run of the line (verbs.md). The bare dialog asks for
+    /// no clone, so nothing grew.
     function cloneLine() {
         return "clone dialog=" + cloneDialog.opened
             + " said=" + (cloneDialog.refusal !== "")
             + " cloning=" + cloneModel.cloning
-            + " grew=" + (cloneTimer.tabsBefore >= 0
-                          && pageRepeater.count > cloneTimer.tabsBefore)
+            + " grew=" + (Harness.autoAct !== "clone-dialog"
+                          && pageRepeater.count > cloneTimer.witnessed("tabsBefore"))
             + " folder=" + (cloneDialog.parentUrl !== "")
             + " tabs=" + pageRepeater.count
             + " name=" + cloneDialog.wantedName
@@ -154,8 +157,10 @@ Item {
         order: Harness.autoAct === "open-dialog-sweep" ? ["picked", "swept"]
              : acts.pickAnswers ? ["picked", "answered"] : ["picked"]
         running: acts.pickAct
-        /// What the sweep came away with (`SweepPad.sweepAir`), read as it swept.
-        property string swept: ""
+        /// The dialog up over the path put in, and the page behind it.
+        function answerTerms() {
+            return { "ready": openFailedDialog.opened, "page": PageSettled.windowSettled(window) }
+        }
         onTriggered: {
             const op = pickTimer
             if (op.at("start")) {
@@ -167,19 +172,14 @@ Item {
                 return
             }
             if (op.at("picked")) {
-                if (!Awaited.all("pick_answer_ready", { "ready": openFailedDialog.opened,
-                                                        "page": PageSettled.windowSettled(window) }))
-                    return
-                if (Harness.autoAct === "open-dialog-sweep") {
-                    // A modal has no seat for the command log, so its words are all a reader can take away
-                    // (規約 §右のペインの字は掴める). `kind=`: a dialog raised on `plain` has no line from git to sweep.
-                    if (!op.input("swept", () => {
-                            op.swept = openFailedDialog.background.pad.sweepAir(7, "kind=" + openFailedDialog.kind)
-                        }))
-                        return
-                    op.complete(() => "open_dialog_sweep " + op.swept)
+                if (Harness.autoAct !== "open-dialog-sweep" && !acts.pickAnswers) {
+                    op.complete({ "name": "pick_answer_ready",
+                                  "when": () => op.answerTerms(),
+                                  "report": () => acts.pickLine() })
                     return
                 }
+                if (!Awaited.all("pick_answer_ready", op.answerTerms()))
+                    return
                 if (acts.pickAnswers) {
                     op.input("answered", () => {
                         if (Harness.autoAct === "open-not-a-repo-retry")
@@ -189,13 +189,25 @@ Item {
                     })
                     return
                 }
-                op.complete(() => acts.pickLine())
+                // A modal has no seat for the command log, so its words are all a reader can take away
+                // (規約 §右のペインの字は掴める). `kind=`: a dialog raised on `plain` has no line from git to sweep. What
+                // the sweep came away with (`SweepPad.sweepAir`) is kept as it swept.
+                if (!op.input("swept", () => {
+                        op.witness("swept",
+                                   openFailedDialog.background.pad.sweepAir(7, "kind=" + openFailedDialog.kind))
+                    }))
+                    return
+            }
+            if (op.at("swept")) {
+                op.complete({ "name": "pick_swept",
+                              "when": () => op.answerTerms(),
+                              "report": () => "open_dialog_sweep " + op.witnessed("swept") })
                 return
             }
-            if (!Awaited.all("pick_settle_ready", { "ready": !(openFailedDialog.opened),
-                                                    "page": PageSettled.windowSettled(window) }))
-                return
-            op.complete(() => acts.pickLine())
+            op.complete({
+                "name": "pick_settle_ready",
+                "when": () => ({ "ready": !(openFailedDialog.opened), "page": PageSettled.windowSettled(window) }),
+                "report": () => acts.pickLine() })
         }
     }
 
@@ -214,8 +226,13 @@ Item {
                  || Harness.autoAct === "open-fail-tab-unreadable"
                  || Harness.autoAct === "open-fail-tab-log"
                  || Harness.autoAct === "open-fail-sweep"
-        /// What the sweep came away with (`SweepPad.sweepAir`), read as it swept.
-        property string swept: ""
+        /// The failed tab's screen standing, read now; `logged`: with the log it opened up.
+        function terms(logged) {
+            const page = window.curPage
+            return { "ready": !(page === null || page.pageTab.state !== "error" || page.pageTab.errorKind === ""),
+                     "page": PageSettled.windowSettled(window),
+                     "log": !logged || (page !== null && page.commandsShown) }
+        }
         onTriggered: {
             const op = failTabActTimer
             const page = window.curPage
@@ -237,35 +254,41 @@ Item {
                 })
                 return
             }
-            if (!Awaited.all("fail_tab_ready", {
-                "ready": !(page === null || page.pageTab.state !== "error"
-                    || page.pageTab.errorKind === ""),
-                "page": PageSettled.windowSettled(window),
-                "log": !op.at("logged") || (page !== null && page.commandsShown) }))
-                return
-            if (Harness.autoAct === "open-fail-tab-log" && op.at("tab")) {
-                op.input("logged", () => {
-                    page.toggleCommands()
-                })
-                return
-            }
-            if (Harness.autoAct === "open-fail-sweep") {
+            const logs = Harness.autoAct === "open-fail-tab-log"
+            const sweeps = Harness.autoAct === "open-fail-sweep"
+            if (op.at("tab") && (logs || sweeps)) {
+                if (!Awaited.all("fail_tab_ready", op.terms(false)))
+                    return
+                if (logs) {
+                    op.input("logged", () => {
+                        page.toggleCommands()
+                    })
+                    return
+                }
                 // The log's seat is here but the folder is not, and a reader pastes it into a shell
-                // (規約 §右のペインの字は掴める). `kind=`: three of the five screens have a line from git.
+                // (規約 §右のペインの字は掴める). `kind=`: three of the five screens have a line from git. What the
+                // sweep came away with (`SweepPad.sweepAir`) is kept as it swept.
                 if (!op.input("swept", () => {
-                        op.swept = page.openFailedHand.sweepAir(7, "kind=" + page.pageTab.errorKind)
+                        op.witness("swept", page.openFailedHand.sweepAir(7, "kind=" + page.pageTab.errorKind))
                     }))
                     return
-                op.complete(() => "open_fail_sweep " + op.swept)
+            }
+            if (sweeps) {
+                op.complete({ "name": "fail_tab_swept",
+                              "when": () => op.terms(false),
+                              "report": () => "open_fail_sweep " + op.witnessed("swept") })
                 return
             }
-            op.complete(() => {
-                const failed = window.curPage
-                return "open_fail_tab tabs=" + pageRepeater.count
-                    + " state=" + (failed !== null ? failed.pageTab.state : "-")
-                    + " kind=" + (failed !== null ? failed.pageTab.errorKind : "-")
-                    + " commands=" + (failed !== null ? failed.commandsShown : "-")
-            })
+            op.complete({
+                "name": "fail_tab_ready",
+                "when": () => op.terms(Harness.autoAct === "open-fail-tab-log"),
+                "report": () => {
+                    const failed = window.curPage
+                    return "open_fail_tab tabs=" + pageRepeater.count
+                        + " state=" + (failed !== null ? failed.pageTab.state : "-")
+                        + " kind=" + (failed !== null ? failed.pageTab.errorKind : "-")
+                        + " commands=" + (failed !== null ? failed.commandsShown : "-")
+                } })
         }
     }
     /// `dialog=` is the dialog's own `opened` — what was asked of it would pass with the binding cut. `tabs=` says the
@@ -283,7 +306,8 @@ Item {
         id: identityTimer
         name: "identity"
         running: Harness.autoAct === "identity" || Harness.autoAct === "identity-half"
-        onTriggered: {
+        /// The dialog up over the half the verb is about: nothing saved, or the name saved and the address not.
+        function ready() {
             const wholeReady = Harness.autoAct === "identity"
                                && AppBackend.identityState === "missing"
                                && identityDialog.opened
@@ -291,17 +315,18 @@ Item {
                               && AppBackend.identityState === "ready"
                               && AppBackend.identityUnsaved
                               && identityDialog.opened
-            if (!Awaited.all("identity_ready", { "ready": wholeReady || halfReady,
-                                                 "page": PageSettled.windowSettled(window) }))
-                return
-            identityTimer.complete(() => "identity state=" + AppBackend.identityState
-                                         + " dialog=" + identityDialog.opened
-                                         + " nameSaved=" + AppBackend.identityNameSaved
-                                         + " emailSaved=" + AppBackend.identityEmailSaved
-                                         + " unsaved=" + AppBackend.identityUnsaved
-                                         + " badge=" + topBar.identityBadgeShown
-                                         + " said=" + (AppBackend.identityError !== ""))
+            return wholeReady || halfReady
         }
+        onTriggered: identityTimer.complete({
+            "name": "identity_ready",
+            "when": () => ({ "ready": identityTimer.ready(), "page": PageSettled.windowSettled(window) }),
+            "report": () => "identity state=" + AppBackend.identityState
+                            + " dialog=" + identityDialog.opened
+                            + " nameSaved=" + AppBackend.identityNameSaved
+                            + " emailSaved=" + AppBackend.identityEmailSaved
+                            + " unsaved=" + AppBackend.identityUnsaved
+                            + " badge=" + topBar.identityBadgeShown
+                            + " said=" + (AppBackend.identityError !== "") })
     }
 
     // PGG_AUTO_ACT=identity-tip: the mark's reason, read where the pointer cannot go. `badge=` is the group in
@@ -341,16 +366,16 @@ Item {
                 return
             }
             // The card opens after its tip delay.
-            if (!Awaited.all("identity_tip_report_ready", { "ready": topBar.stateCardOpen,
-                                                            "page": PageSettled.windowSettled(window) }))
-                return
             // `rows=` is read without waiting for the card's layout (unlike `badges-hover`): one row cannot come out of
             // order, so `laidOut=` only says whether the picture has the card at full height.
-            op.complete(() => ["identity_tip step=carded laidOut=" + topBar.stateCardLaidOut,
-                               "identity_tip unsaved=" + AppBackend.identityUnsaved
-                               + " badge=" + (topBar.stateWordsShown || topBar.stateMarkShown)
-                               + " tip=" + topBar.stateCardOpen
-                               + " rows=" + topBar.stateCardRows])
+            op.complete({
+                "name": "identity_tip_report_ready",
+                "when": () => ({ "ready": topBar.stateCardOpen, "page": PageSettled.windowSettled(window) }),
+                "report": () => ["identity_tip step=carded laidOut=" + topBar.stateCardLaidOut,
+                                 "identity_tip unsaved=" + AppBackend.identityUnsaved
+                                 + " badge=" + (topBar.stateWordsShown || topBar.stateMarkShown)
+                                 + " tip=" + topBar.stateCardOpen
+                                 + " rows=" + topBar.stateCardRows] })
         }
     }
 
@@ -368,8 +393,6 @@ Item {
         name: "quit"
         order: Harness.autoAct === "quit-locked" ? ["committed", "closed", "retried"] : ["committed", "closed"]
         running: Harness.autoAct === "quit-waits" || Harness.autoAct === "quit-locked"
-        /// The write count as the commit went in: one past it is the held write's answer.
-        property int seqBefore: -1
         onTriggered: {
             const op = quitTimer
             const page = window.curPage
@@ -378,8 +401,9 @@ Item {
                 if (!Awaited.all("quit_ready", { "ready": !(page === null),
                                                  "open": tab !== null && tab.state === "open" }))
                     return
+                // The write count as the commit went in, kept: one past it is the held write's answer.
                 op.input("committed", () => {
-                    op.seqBefore = tab.writeSeq
+                    op.witness("seqBefore", tab.writeSeq)
                     tab.commit("chore: held by a sleeping hook", "", false, false)
                 })
                 return
@@ -396,13 +420,14 @@ Item {
                 return
             }
             if (Harness.autoAct === "quit-waits") {
-                if (!Awaited.all("quit_wait_landed", { "ready": !(page === null),
-                                                       "dialog": quitWaitDialog.opened,
-                                                       "page": PageSettled.windowSettled(window) }))
-                    return
-                op.complete(() => "quit_wait dialog=" + quitWaitDialog.opened
-                    + " window=" + window.visible
-                    + " busy=" + (window.curPage.pageTab.busyCount !== 0))
+                op.complete({
+                    "name": "quit_wait_landed",
+                    "when": () => ({ "ready": !(window.curPage === null),
+                                     "dialog": quitWaitDialog.opened,
+                                     "page": PageSettled.windowSettled(window) }),
+                    "report": () => "quit_wait dialog=" + quitWaitDialog.opened
+                        + " window=" + window.visible
+                        + " busy=" + (window.curPage.pageTab.busyCount !== 0) })
                 return
             }
             if (op.at("closed")) {
@@ -420,19 +445,23 @@ Item {
             // done with it. And reached the screen: the answer comes before the status is read again
             // (`session::write::run_write`), and this commit takes the worktree row off: ending on the answer flips
             // `WipTallyRow` in the census.
-            if (!Awaited.all("quit_lock_landed", {
-                "ready": !(page === null),
-                "dialog": quitWaitDialog.opened,
-                "idle": tab !== null && tab.busyCount === 0,
-                "landed": tab !== null && tab.writeSeq > op.seqBefore,
-                "row": page !== null && !page.pageWorktree.wipRowStands,
-                "page": PageSettled.settled(page) }))
-                return
-            op.complete(() => "quit_lock dialog=" + quitWaitDialog.opened
-                + " window=" + window.visible
-                + " escape=" + quitWaitDialog.escapes
-                + " vetoes=" + quitWaitDialog.vetoes
-                + " landed=" + (window.curPage.pageTab.writeSeq > op.seqBefore))
+            op.complete({
+                "name": "quit_lock_landed",
+                "when": () => {
+                    const page = window.curPage
+                    const tab = page !== null ? page.pageTab : null
+                    return { "ready": !(page === null),
+                             "dialog": quitWaitDialog.opened,
+                             "idle": tab !== null && tab.busyCount === 0,
+                             "landed": tab !== null && tab.writeSeq > op.witnessed("seqBefore"),
+                             "row": page !== null && !page.pageWorktree.wipRowStands,
+                             "page": PageSettled.settled(page) }
+                },
+                "report": () => "quit_lock dialog=" + quitWaitDialog.opened
+                    + " window=" + window.visible
+                    + " escape=" + quitWaitDialog.escapes
+                    + " vetoes=" + quitWaitDialog.vetoes
+                    + " landed=" + (window.curPage.pageTab.writeSeq > op.witnessed("seqBefore")) })
         }
     }
 
@@ -457,14 +486,14 @@ Item {
                 })
                 return
             }
-            if (!Awaited.all("quit_save_ready", { "dialog": quitWaitDialog.opened,
-                                                  "page": PageSettled.windowSettled(window) }))
-                return
-            op.complete(() => "quit_save dialog=" + quitWaitDialog.opened
-                + " window=" + window.visible
-                + " vetoes=" + quitWaitDialog.vetoes
-                + " busy=" + AppBackend.identityBusy
-                + " held=" + Harness.heldSaves())
+            op.complete({
+                "name": "quit_save_ready",
+                "when": () => ({ "dialog": quitWaitDialog.opened, "page": PageSettled.windowSettled(window) }),
+                "report": () => "quit_save dialog=" + quitWaitDialog.opened
+                    + " window=" + window.visible
+                    + " vetoes=" + quitWaitDialog.vetoes
+                    + " busy=" + AppBackend.identityBusy
+                    + " held=" + Harness.heldSaves() })
         }
     }
 
@@ -476,21 +505,29 @@ Item {
         name: "gate_sweep"
         order: ["swept"]
         running: Harness.autoAct === "gate-sweep"
-        /// What the sweep came away with (`SweepPad.sweepAir`), read as it swept.
-        property string swept: ""
+        /// The gate up over the lock held elsewhere, and the page.
+        function terms() {
+            return { "running": AppBackend.alreadyRunning,
+                     "gate": gate.visible,
+                     "held": AppBackend.heldElsewhere !== "",
+                     "page": PageSettled.windowSettled(window) }
+        }
         onTriggered: {
-            if (!Awaited.all("gate_sweep_ready", {
-                "running": AppBackend.alreadyRunning,
-                "gate": gate.visible,
-                "held": AppBackend.heldElsewhere !== "",
-                "page": PageSettled.windowSettled(window) }))
-                return
-            // `held=`: an empty gate has air and no fields.
-            if (!gateSweepTimer.input("swept", () => {
-                    gateSweepTimer.swept = gate.pad.sweepAir(7, "held=" + (AppBackend.heldElsewhere !== ""))
-                }))
-                return
-            gateSweepTimer.complete(() => "gate_sweep " + gateSweepTimer.swept)
+            if (gateSweepTimer.at("start")) {
+                if (!Awaited.all("gate_sweep_ready", gateSweepTimer.terms()))
+                    return
+                // `held=`: an empty gate has air and no fields. What the sweep came away with (`SweepPad.sweepAir`)
+                // is kept as it swept.
+                if (!gateSweepTimer.input("swept", () => {
+                        gateSweepTimer.witness("swept",
+                                               gate.pad.sweepAir(7, "held=" + (AppBackend.heldElsewhere !== "")))
+                    }))
+                    return
+            }
+            gateSweepTimer.complete({
+                "name": "gate_sweep_swept",
+                "when": () => gateSweepTimer.terms(),
+                "report": () => "gate_sweep " + gateSweepTimer.witnessed("swept") })
         }
     }
 }

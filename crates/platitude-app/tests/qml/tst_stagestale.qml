@@ -22,12 +22,13 @@ Item {
         id: op
         name: "stale"
         onTriggered: {
-            if (!op.at("start") || !Automation.Awaited.all("stale_ready", { "ready": op.generation() === 1 }))
+            if (!op.at("start") || op.generation() !== 1)
                 return
-            op.complete(() => {
-                root.reportReads = root.reportReads + 1
-                return "stale read"
-            })
+            op.complete({ "name": "stale_ready", "when": () => ({ "ready": true }),
+                          "report": () => {
+                              root.reportReads = root.reportReads + 1
+                              return "stale read"
+                          } })
         }
     }
 

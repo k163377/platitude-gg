@@ -24,29 +24,39 @@ Item {
         name: "ops_pick"
         running: Harness.autoAct === "ops-branch-pick" || Harness.autoAct === "ops-worktree-pick"
                  || Harness.autoAct === "ops-repo-pick"
-        /// What the card's (or the tier's) press answered (`opened=`).
-        property bool opened: false
-        /// Whether the row was on the card as it was pressed (`found=`).
-        property bool found: false
-        /// The error line the tab stood on as the row was pressed — a new one is the move turned away.
-        property string errorBefore: ""
-        property int wantedTab: -1
-        /// What the window stood on as the row was pressed (`from=`).
-        property string from: ""
-        /// The panel's names just before the press and in its turn — before the tab moved to has read anything.
-        property string fromNames: ""
-        property string pressNames: ""
-        /// When the press went in, and the first tick the panel named a branch after it (`headMs=`).
-        property real pressedAt: 0
-        property real headAt: 0
-        /// Whether the panel's own picture (`pressed.png`, the frame after the press) was saved: `saved` /
-        /// `failed`, "" while not asked.
-        property string pressShot: ""
+        /// The card the verb presses a row of.
+        readonly property string door: Harness.autoAct === "ops-branch-pick" ? "branch"
+                                     : Harness.autoAct === "ops-worktree-pick" ? "worktree" : "repo"
+        // Kept as the row is pressed: whether it was on the card (`found`), what the window stood on (`from`), the
+        // error line the tab stood on — a new one is the move turned away (`errorBefore`) — the tab asked for
+        // (`wantedTab`), the panel's names just before the press and in its turn, before the tab moved to has read
+        // anything (`fromNames`, `pressNames`), when the press went in (`pressedAt`), and whether the panel's own
+        // picture (`pressed.png`, the frame after the press) was saved (`pressShot`: `saved` / `failed`, kept as the
+        // grab answers). After it, the first tick the panel named a branch (`headAt`, `headMs=`).
+        /// The fact this generation kept under `name`, or `none` where it kept none: the run that ends before the
+        /// press, a grab not answered yet, a branch not named yet.
+        function keptOr(name, none) {
+            try {
+                return pickTimer.witnessed(name)
+            } catch (e) {
+                return none
+            }
+        }
+        /// Whether the press has landed, read now. A move turned away (a worded refusal, or a worktree that would
+        /// not open) is an answer too, not a ceiling.
+        function moved() {
+            const page = acts.window.curPage
+            const refused = page.pageTab.state === "error"
+                            || (page.pageTab.lastError !== ""
+                                && page.pageTab.lastError !== pickTimer.witnessed("errorBefore"))
+            return !pickTimer.witnessed("found") || refused
+                || (acts.landed(pickTimer.door, page)
+                    && (pickTimer.door !== "repo" || pickTimer.keptOr("pressShot", "") !== ""))
+        }
         onTriggered: {
             const op = pickTimer
             const page = acts.window.curPage
-            const door = Harness.autoAct === "ops-branch-pick" ? "branch"
-                       : Harness.autoAct === "ops-worktree-pick" ? "worktree" : "repo"
+            const door = op.door
             if (op.at("start")) {
                 // Read here alone: the move the later stages wait for unsettles the page, and a guard read every beat
                 // across them would hold them up for the move's own reads.
@@ -56,22 +66,29 @@ Item {
                     return
                 // The repository door needs a second tab: with one, the staging went wrong, said and ended at once.
                 if (door === "repo" && acts.pageRepeater.count < 2) {
-                    const tabs = acts.pageRepeater.count
-                    op.complete(() => ["ops_pick step=open door=repo tabs=" + tabs, acts.pickLine(door, false)])
+                    op.complete({
+                        "name": "ops_pick_alone",
+                        "when": () => ({ "alone": acts.pageRepeater.count < 2 }),
+                        "report": () => ["ops_pick step=open door=repo tabs=" + acts.pageRepeater.count,
+                                         acts.pickLine(op.door, false)] })
                     return
                 }
-                // For the repository's two, the name's own card first: a tier hangs off a row on that card.
+                // For the repository's two, the name's own card first: a tier hangs off a row on that card. What the
+                // card's press answered is kept (`opened=`).
                 op.input("card", () => {
-                    op.opened = door === "branch" ? acts.topBar.openBranchMenu() : acts.topBar.openStandMenu()
-                }, () => "ops_pick step=open door=" + door + " opened=" + op.opened)
+                    op.witness("opened",
+                               door === "branch" ? acts.topBar.openBranchMenu() : acts.topBar.openStandMenu())
+                }, () => "ops_pick step=open door=" + op.door + " opened=" + op.witnessed("opened"))
                 return
             }
             if (op.at("card") && door !== "branch") {
                 if (!Awaited.all("ops_pick_stand_menu", { "menu": acts.topBar.standMenuOpen }))
                     return
+                // …and what the tier's answered.
                 op.input("tier", () => {
-                    op.opened = door === "worktree" ? acts.topBar.openStandWorktrees() : acts.topBar.openStandRepos()
-                }, () => "ops_pick step=tier door=" + door + " opened=" + op.opened)
+                    op.witness("tierOpened", door === "worktree" ? acts.topBar.openStandWorktrees()
+                                                                 : acts.topBar.openStandRepos())
+                }, () => "ops_pick step=tier door=" + op.door + " opened=" + op.witnessed("tierOpened"))
                 return
             }
             if (!op.at("pressed")) {
@@ -84,50 +101,52 @@ Item {
                 // A row not on the card goes in as a press that found nothing: the landing then has nothing to wait
                 // for, and the run ends on `found=false` rather than at the ceiling.
                 op.input("pressed", () => {
-                    op.from = door === "branch" ? acts.topBar.branchName : page.pageTab.repoPath
-                    op.fromNames = acts.names()
-                    op.errorBefore = page.pageTab.lastError
+                    op.witness("from", door === "branch" ? acts.topBar.branchName : page.pageTab.repoPath)
+                    op.witness("fromNames", acts.names())
+                    op.witness("errorBefore", page.pageTab.lastError)
                     let pressed = false
                     if (door === "branch") {
                         pressed = acts.topBar.pickBranchRow(Harness.autoActArg)
                     } else if (door === "worktree") {
                         pressed = acts.topBar.pickWorktreeRow(Harness.autoActArg)
                     } else {
+                        let wantedTab = -1
                         for (let i = 0; i < acts.pageRepeater.count && !pressed; i++) {
                             if (i === acts.tabsModel.currentIndex)
                                 continue
                             pressed = acts.topBar.pickRepoRow(i)
                             if (pressed)
-                                op.wantedTab = i
+                                wantedTab = i
                         }
+                        op.witness("wantedTab", wantedTab)
                     }
-                    op.found = pressed
-                    op.pressNames = acts.names()
+                    op.witness("found", pressed)
+                    op.witness("pressNames", acts.names())
                     // waits(measured): the origin of `headMs=` below, which the report prints and nothing here reads
-                    op.pressedAt = Date.now()
+                    op.witness("pressedAt", Date.now())
                     // The panel of the tab moved to before it has read anything, which the run's own shot, taken at
                     // the landing, cannot show; the next frame is drawn long before git can answer. A grab that could
-                    // not be asked for is said as such rather than waited on.
+                    // not be asked for is said as such rather than waited on; one answering after the run ended is
+                    // kept by none.
                     if (door === "repo" && pressed) {
                         const asked = Harness.shotDir !== "" && acts.topBar.grabToImage(shot => {
-                            op.pressShot = shot.saveToFile(Harness.shotDir + "/pressed.png") ? "saved" : "failed"
+                            const saved = shot.saveToFile(Harness.shotDir + "/pressed.png") ? "saved" : "failed"
+                            if (op.running)
+                                op.witness("pressShot", saved)
                         })
-                        op.pressShot = asked ? op.pressShot : "failed"
+                        if (!asked)
+                            op.witness("pressShot", "failed")
                     }
-                }, () => "ops_pick step=pressed door=" + door + " found=" + op.found)
+                }, () => "ops_pick step=pressed door=" + op.door + " found=" + op.witnessed("found"))
                 return
             }
-            if (door === "repo" && op.headAt === 0 && acts.topBar.branchName !== "")
+            if (door === "repo" && op.keptOr("headAt", 0) === 0 && acts.topBar.branchName !== "")
                 // waits(measured): the other end of `headMs=`, to the sampler's tick — printed and compared with nothing
-                op.headAt = Date.now()
-            // A move turned away (a worded refusal, or a worktree that would not open) is an answer too, not a ceiling.
-            const refused = page.pageTab.state === "error"
-                            || (page.pageTab.lastError !== "" && page.pageTab.lastError !== op.errorBefore)
-            if (!Awaited.all("ops_pick_landed", {
-                    "landed": !op.found || refused
-                              || (acts.landed(door, page) && (door !== "repo" || op.pressShot !== "")) }))
-                return
-            op.complete(() => acts.pickLine(door, op.found))
+                op.witness("headAt", Date.now())
+            op.complete({
+                "name": "ops_pick_landed",
+                "when": () => ({ "landed": op.moved() }),
+                "report": () => acts.pickLine(op.door, op.witnessed("found")) })
         }
     }
 
@@ -146,32 +165,35 @@ Item {
             return acts.topBar.branchName === Harness.autoActArg
         if (door === "worktree")
             return GitFacts.pathLeaf(page.pageTab.repoPath) === Harness.autoActArg
-        return acts.tabsModel.currentIndex === pickTimer.wantedTab
+        return acts.tabsModel.currentIndex === pickTimer.witnessed("wantedTab")
     }
 
     function names() {
         return acts.topBar.repoName + "/" + acts.topBar.worktreeName
     }
 
-    /// The run's line, read as the run completes: where the press left the window.
+    /// The run's line, read as the run completes: where the press left the window. A run that ended before the press
+    /// kept nothing of it.
     function pickLine(door, found) {
         const page = acts.window.curPage
+        const headAt = pickTimer.keptOr("headAt", 0)
         return "ops_pick door=" + door + " found=" + found
                + " landed=" + (found && acts.landed(door, page))
                + " card=" + acts.topBar.standDoor
                // The repository door moves the tab in front in the press itself: names already the landing's then,
                // and not the ones before, were known at the move without waiting on git (the run's repositories are
                // named apart, `Route::NamedPresets`).
-               + (door === "repo" ? " named=" + (found && pickTimer.pressNames === acts.names()
-                                                 && pickTimer.pressNames !== pickTimer.fromNames) : "")
+               + (door === "repo" ? " named=" + (found && pickTimer.witnessed("pressNames") === acts.names()
+                                                 && pickTimer.witnessed("pressNames")
+                                                    !== pickTimer.witnessed("fromNames")) : "")
                // Diagnosis only: the tab moved to reads its repository from the start (`Hub::release_tab`), so this
                // door's press leaves the branch unknown until the status answers.
                + (door === "repo"
-                  ? " headMs=" + (pickTimer.headAt > 0 ? Math.round(pickTimer.headAt - pickTimer.pressedAt) : -1)
-                    + " pressShot=" + (pickTimer.pressShot === "saved")
+                  ? " headMs=" + (headAt > 0 ? Math.round(headAt - pickTimer.witnessed("pressedAt")) : -1)
+                    + " pressShot=" + (pickTimer.keptOr("pressShot", "") === "saved")
                   : "")
-               + " error=" + (page.pageTab.lastError !== pickTimer.errorBefore)
-               + " from=" + pickTimer.from
+               + " error=" + (page.pageTab.lastError !== pickTimer.keptOr("errorBefore", ""))
+               + " from=" + pickTimer.keptOr("from", "")
                + " branch=" + acts.topBar.branchName
                + " where=" + GitFacts.pathLeaf(page.pageTab.repoPath)
     }

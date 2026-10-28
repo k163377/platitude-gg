@@ -48,23 +48,18 @@ Item {
                 page.foldByHand(true)
             else
                 page.releasePressedAway(null)
-            driver.reportAtCompletion(() => "nav_drop how=" + arg
+            driver.reportAtCompletion(() => "nav_drop how=" + Harness.autoActArg
                                             + " collapsed=" + page.sidebarCollapsed
                                             + " box=" + (sidebarPane.editKey !== "")
                                             + " editing=" + sidebarPane.editKey)
         } else if (act === "nav-tip" || act === "nav-open") {
             // `<section>:<row>`, or `head` for the current branch's sticky stand-in. `nav-open` reads the lines a row
-            // opens under itself (`NavRowFacts`) instead of the shared tooltip.
-            navTipTimer.opens = act === "nav-open"
-            navTipTimer.then = ""
+            // opens under itself (`NavRowFacts`) instead of the shared tooltip (`navTipTimer.opens`).
             navTipTimer.begin(arg)
         } else if (act === "nav-open-foot") {
             // The same rest on the last row of an overflowing section scrolled to its end, with nowhere to open into:
             // the list has to move (`NavList.revealOpenRow`). `away` then leaves, and the list gives back what it took;
             // `bar` takes the list's bar instead, which closes the row and gives it back the same way.
-            navTipTimer.opens = true
-            navTipTimer.then = arg
-            navTipTimer.foot = true
             navTipTimer.begin("branch")
         } else if (act === "nav-drag-open") {
             // A press on a closed row's line that starts to move: the lines come out at once and the drag carries on
@@ -73,6 +68,8 @@ Item {
             dragOpenTimer.kind = parts[0] === "" ? "branch" : parts[0]
             dragOpenTimer.row = parts.length > 1 ? Number(parts[1]) : 2
             dragOpenTimer.held = parts.length > 2 ? parts[2] : ""
+            // The filter, where one is typed, before the press.
+            dragOpenTimer.order = dragOpenTimer.held !== "" ? ["filtered", "dragged"] : ["dragged"]
             dragOpenTimer.start()
         } else if (act === "nav-open-tip") {
             // The rest that opens a row, held on: the row opens, and a rest later the supplement it keeps (a worktree's
@@ -90,8 +87,6 @@ Item {
             // The open row, then the hand's next move: `away` leaves it, `edit` opens the name box on that row, `menu`
             // opens a menu elsewhere, `filter` types a filter that takes the row out, `rightclick-name` raises the
             // row's menu on its own line, and `rightclick` / `sweep` / `tap` act on the open lines themselves.
-            navTipTimer.opens = true
-            navTipTimer.then = arg
             navTipTimer.begin("branch:2")
         } else if (act === "nav-follow" || act === "nav-follow-lit") {
             // `<section>:<row>[:<filter>]`: the open row's first line that goes somewhere, pressed (the graph goes
@@ -186,17 +181,18 @@ Item {
             // git's answer is the bar coming down — the box keeps the name either way — and the bar settled: its height
             // animates in after the words, so a shot on the answer alone catches it still on its way down
             // (`NoticeBar.settled`).
-            if (!Awaited.all("rename_taken_ready", {
-                "idle": repoTab.busyCount === 0,
-                "bar": page.noticeCard.open && page.noticeCard.settled }))
-                return
-            renameTakenTimer.complete(() => "rename_taken open=" + (sidebarPane.editKey !== "")
-                                            + " refused=" + sidebarPane.editRefused
-                                            + " tone=" + page.noticeCard.tone
-                                            // The word of the line that opens the log, then the line. Last, because
-                                            // it is a sentence.
-                                            + " place=" + page.noticeCard.detailPlace
-                                            + " says=" + page.noticeCard.detail)
+            renameTakenTimer.complete({
+                "name": "rename_taken_ready",
+                "when": () => ({
+                    "idle": repoTab.busyCount === 0,
+                    "bar": page.noticeCard.open && page.noticeCard.settled }),
+                "report": () => "rename_taken open=" + (sidebarPane.editKey !== "")
+                                + " refused=" + sidebarPane.editRefused
+                                + " tone=" + page.noticeCard.tone
+                                // The word of the line that opens the log, then the line. Last, because it is a
+                                // sentence.
+                                + " place=" + page.noticeCard.detailPlace
+                                + " says=" + page.noticeCard.detail })
         }
     }
     // PGG_AUTO_ACT=rename-tag-box / rename-branch-box: the box on the first tag or on the branch HEAD is on, the
@@ -239,23 +235,25 @@ Item {
         function tipped(row) {
             return navProbe.listOf(tagNameBoxTimer.kind).rowTipShown(row)
         }
-        onTriggered: {
+        /// The box drawn and holding the keyboard; only a refused name raises a tip to wait for.
+        function ready() {
             const row = tagNameBoxTimer.rowOfBox()
             const open = tagNameBoxTimer.open(row)
-            // Only a refused name raises a tip to wait for.
-            if (!Awaited.all("tag_name_box_ready", {
-                    "ready": open,
-                    "tip": !sidebarPane.editRefused || (open && tagNameBoxTimer.tipped(row)) }))
-                return
-            tagNameBoxTimer.complete(() => {
-                const at = tagNameBoxTimer.rowOfBox()
-                return tagNameBoxTimer.kind + "_name_box was=" + tagNameBoxTimer.was()
-                       + " typed=" + tagNameBoxTimer.typed
-                       + " box=" + tagNameBoxTimer.open(at)
-                       + " refused=" + sidebarPane.editRefused
-                       + " tip=" + tagNameBoxTimer.tipped(at)
-                       + " text=" + Tips.box.text
-            })
+            return { "ready": open, "tip": !sidebarPane.editRefused || (open && tagNameBoxTimer.tipped(row)) }
+        }
+        onTriggered: {
+            tagNameBoxTimer.complete({
+                "name": "tag_name_box_ready",
+                "when": () => tagNameBoxTimer.ready(),
+                "report": () => {
+                    const at = tagNameBoxTimer.rowOfBox()
+                    return tagNameBoxTimer.kind + "_name_box was=" + tagNameBoxTimer.was()
+                           + " typed=" + tagNameBoxTimer.typed
+                           + " box=" + tagNameBoxTimer.open(at)
+                           + " refused=" + sidebarPane.editRefused
+                           + " tip=" + tagNameBoxTimer.tipped(at)
+                           + " text=" + Tips.box.text
+                } })
         }
     }
     // PGG_AUTO_ACT=nav-rename-far. Each stage waits for the one before to land — a list still building has no height to
@@ -263,14 +261,22 @@ Item {
     PageStage {
         id: farTimer
         name: "nav_far"
-        order: ["scrolled", "renamed"]
+        order: ["peeked", "scrolled", "renamed"]
         onTriggered: {
             const section = sidebarPane.peekSection
             if (farTimer.at("start")) {
-                if (!Awaited.all("nav_far_peek", { "peek": sidebarPane.peekKind !== "" })) {
+                // Rested on the cell each beat until the section stands.
+                farTimer.input("peeked", () => {
+                    if (sidebarPane.peekKind !== "")
+                        return true
                     navProbe.peekAt("tag")
+                    return false
+                })
+                return
+            }
+            if (farTimer.at("peeked")) {
+                if (!Awaited.all("nav_far_peek", { "peek": sidebarPane.peekKind !== "" }))
                     return
-                }
                 farTimer.input("scrolled", () => {
                     section.scrollToEnd()
                 })
@@ -285,13 +291,14 @@ Item {
                 })
                 return
             }
-            if (!Awaited.all("nav_far_box", { "box": sidebarPane.editKey !== "" }))
-                return
-            farTimer.complete(() => "nav_far row=" + tagsModel.nameAt(0)
-                                    + " shown=" + sidebarPane.peekSection.rowInView(0)
-                                    + " box=" + (sidebarPane.editKey !== "")
-                                    + " collapsed=" + page.sidebarCollapsed
-                                    + " editing=" + sidebarPane.editKey)
+            farTimer.complete({
+                "name": "nav_far_box",
+                "when": () => ({ "box": sidebarPane.editKey !== "" }),
+                "report": () => "nav_far row=" + tagsModel.nameAt(0)
+                                + " shown=" + sidebarPane.peekSection.rowInView(0)
+                                + " box=" + (sidebarPane.editKey !== "")
+                                + " collapsed=" + page.sidebarCollapsed
+                                + " editing=" + sidebarPane.editKey })
         }
     }
     // The replace's question, waited on until settled: a bar photographed before its words arrive is a red line with
@@ -313,13 +320,14 @@ Item {
                          + " words=" + (graphPane.askCard.tip !== ""))
                 return
             }
-            if (!Awaited.all("replace_ask_tip", { "tip": !replaceAskTimer.points || graphPane.askCard.tipStanding }))
-                return
             // `code=` empty is part of the claim: a push plus a delete is no one command, so the pill is in the
             // ordinary voice (規約 §git 用語のコード表記「どれもコマンドと 1 対 1 でない」).
-            replaceAskTimer.complete(() => "replace_ask hold=" + graphPane.askHold
-                                           + " code=" + graphPane.askCode
-                                           + (replaceAskTimer.points ? " tip=" + graphPane.askCard.tipStanding : ""))
+            replaceAskTimer.complete({
+                "name": "replace_ask_tip",
+                "when": () => ({ "tip": !replaceAskTimer.points || graphPane.askCard.tipStanding }),
+                "report": () => "replace_ask hold=" + graphPane.askHold
+                                + " code=" + graphPane.askCode
+                                + (replaceAskTimer.points ? " tip=" + graphPane.askCard.tipStanding : "") })
         }
     }
     // PGG_AUTO_ACT=rename-tag-remote / -go / -tip: the question that carries a tag's new name over to the remote
@@ -372,9 +380,10 @@ Item {
             const op = tagRemoteRenameTimer
             // Past the answer only `leave` is still running: it writes nothing, so the bar going back up is its end.
             if (op.at("answered")) {
-                if (!Awaited.all("tag_remote_rename_shut", { "shut": graphPane.askCard.shut }))
-                    return
-                op.complete(() => [])
+                op.complete({
+                    "name": "tag_remote_rename_shut",
+                    "when": () => ({ "shut": graphPane.askCard.shut }),
+                    "report": () => op.witnessed("bar") })
                 return
             }
             if (op.at("start")) {
@@ -415,26 +424,33 @@ Item {
                          + " words=" + (graphPane.askCard.tip !== ""))
                 return
             }
-            if (!Awaited.all("tag_remote_rename_tip", { "tip": !op.points || graphPane.askCard.tipStanding }))
-                return
             if (!op.holds) {
-                op.complete(() => op.line())
+                op.complete({
+                    "name": "tag_remote_rename_tip",
+                    "when": () => ({ "tip": !op.points || graphPane.askCard.tipStanding }),
+                    "report": () => op.line() })
                 return
             }
-            // Said before the answer goes in. The barrier is this operation's to start: the dispatch hands none to a
-            // verb that defers its completion (`AutoActDriver.dispatchFinished`). Only the answer that takes a name off
-            // the remote asks for a hold.
-            op.advance("said", () => op.line())
-            if (graphPane.askHold) {
-                op.input("answered", () => {
-                    driver.holdToEnd(graphPane)
-                })
-            } else if (op.choice === "leave") {
+            if (!Awaited.all("tag_remote_rename_tip", { "tip": !op.points || graphPane.askCard.tipStanding }))
+                return
+            // The bar as the answer finds it, kept before the answer goes in — the answer takes it down — and claimed
+            // by the completion: the write's barrier's (`reportAtCompletion`), or for `leave`, this operation's. The
+            // barrier is this operation's to start: the dispatch hands none to a verb that defers its completion
+            // (`AutoActDriver.dispatchFinished`). Only the answer that takes a name off the remote asks for a hold.
+            op.witness("bar", op.line())
+            op.advance("said")
+            if (!graphPane.askHold && op.choice === "leave") {
                 // Writes nothing: see the head of `onTriggered`.
                 op.input("answered", () => {
                     page.answerRowAsk()
                 })
                 return
+            }
+            driver.reportAtCompletion(() => tagRemoteRenameTimer.witnessed("bar"))
+            if (graphPane.askHold) {
+                op.input("answered", () => {
+                    driver.holdToEnd(graphPane)
+                })
             } else {
                 op.input("answered", () => {
                     driver.pressWrite("answer-ask", () => { page.answerRowAsk(); return true })
@@ -453,39 +469,42 @@ Item {
         property int row: 2
         /// A filter typed before the hand arrives, for a row that is folded away without one.
         property string held: ""
-        /// The row's name, read as the press went in.
-        property string rowName: ""
         onTriggered: {
             const op = dragOpenTimer
-            if (op.at("start")) {
-                // The filter, typed again until it takes; then the row, pressed again until it is there to press: a
-                // miss reads like a row that refused to open (`nav-open` の同じ歩き).
-                const filtered = op.held === "" || navProbe.typeFilter(op.held) === op.held
-                if (!Awaited.all("nav_drag_open_row", {
-                        "filtered": filtered,
-                        "row": filtered && navProbe.tipNameAt(op.kind, op.row) !== "" }))
+            // The filter, typed again until it takes; then the row, pressed again until it is there to press: a miss
+            // reads like a row that refused to open (`nav-open` の同じ歩き).
+            if (op.held !== "" && op.at("start")) {
+                op.input("filtered", () => navProbe.typeFilter(op.held) === op.held)
+                return
+            }
+            if (op.at("start") || op.at("filtered")) {
+                if (!Awaited.all("nav_drag_open_row", { "row": navProbe.tipNameAt(op.kind, op.row) !== "" }))
                     return
+                // The row's name, read as the press went in.
                 op.input("dragged", () => {
-                    op.rowName = navProbe.tipNameAt(op.kind, op.row)
-                    return navProbe.dragRow(op.kind, op.row)
+                    const name = navProbe.tipNameAt(op.kind, op.row)
+                    if (!navProbe.dragRow(op.kind, op.row))
+                        return false
+                    op.witness("rowName", name)
                 })
                 return
             }
             // The beat after the press, on the page it leaves.
-            if (!Awaited.all("nav_drag_open_dragged", { "page": PageSettled.settled(page) }))
-                return
-            op.complete(() => {
-                const took = navProbe.rowNameTook(op.kind, op.row)
-                return "nav_drag_open section=" + op.kind
-                    + " row=" + op.row + " name=" + op.rowName
-                    + " open=" + navProbe.rowFactsOpen
-                    + " caret=" + navProbe.rowNameCaret(op.kind, op.row)
-                    + " copied=" + (took !== "")
-                    // A drag that took the name is not a click — a second click on the row opens a name box
-                    // (`NavItemDelegate.lineClicked`).
-                    + " clicked=" + (sidebarPane.activeKey !== "")
-                    + " took=" + took
-            })
+            op.complete({
+                "name": "nav_drag_open_dragged",
+                "when": () => ({ "page": PageSettled.settled(page) }),
+                "report": () => {
+                    const took = navProbe.rowNameTook(op.kind, op.row)
+                    return "nav_drag_open section=" + op.kind
+                        + " row=" + op.row + " name=" + op.witnessed("rowName")
+                        + " open=" + navProbe.rowFactsOpen
+                        + " caret=" + navProbe.rowNameCaret(op.kind, op.row)
+                        + " copied=" + (took !== "")
+                        // A drag that took the name is not a click — a second click on the row opens a name box
+                        // (`NavItemDelegate.lineClicked`).
+                        + " clicked=" + (sidebarPane.activeKey !== "")
+                        + " took=" + took
+                } })
         }
     }
     // PGG_AUTO_ACT=nav-open-tip: the worktree's path the open row keeps for the hand that opened it. The picture
@@ -495,40 +514,61 @@ Item {
         name: "nav_open_tip"
         property string kind: "worktree"
         property int row: 3
+        /// The row open, and its supplement up.
+        function shown() {
+            return { "open": navProbe.rowFactsOpen, "tip": Tips.box.visible }
+        }
         onTriggered: {
-            // Re-applied every beat (`nav-open` の同じ歩き).
-            navProbe.pointTipAt(openTipTimer.kind, openTipTimer.row)
-            if (!Awaited.all("nav_open_tip", { "open": navProbe.rowFactsOpen, "tip": Tips.box.visible }))
+            const op = openTipTimer
+            // Re-applied every beat until it answers (`nav-open` の同じ歩き).
+            if (op.at("start") && !op.input("rested", () => {
+                    navProbe.pointTipAt(op.kind, op.row)
+                    const shown = op.shown()
+                    return shown.open && shown.tip
+                }))
                 return
-            openTipTimer.complete(() => {
-                const tip = Tips.box
-                return "nav_open_tip section=" + openTipTimer.kind
-                    + " row=" + openTipTimer.row
-                    + " open=" + navProbe.rowFactsOpen
-                    + " tip=" + tip.visible
-                    // An empty tip answers `tip=true` as well as a full one (`NavRowFacts.said`); weighed in the run,
-                    // since the path is this machine's own.
-                    + " same=" + (tip.text === navProbe.factsSays())
-                    // Last, since a path carries anything.
-                    + " says=" + navProbe.rowFactsWords()
-                    + " text=" + tip.text
-            })
+            op.complete({
+                "name": "nav_open_tip",
+                "when": () => op.shown(),
+                "report": () => {
+                    const tip = Tips.box
+                    return "nav_open_tip section=" + op.kind
+                        + " row=" + op.row
+                        + " open=" + navProbe.rowFactsOpen
+                        + " tip=" + tip.visible
+                        // An empty tip answers `tip=true` as well as a full one (`NavRowFacts.said`); weighed in the
+                        // run, since the path is this machine's own.
+                        + " same=" + (tip.text === navProbe.factsSays())
+                        // Last, since a path carries anything.
+                        + " says=" + navProbe.rowFactsWords()
+                        + " text=" + tip.text
+                } })
         }
     }
     // The row still has to be the one under the hand — a run that never reached it would answer the same way.
     PageStage {
         id: openHeldTimer
         name: "nav_open_held"
+        /// The row there under the hand, and the box still standing.
+        function held() {
+            return { "row": navProbe.tipNameAt("branch", 2) !== "", "box": sidebarPane.editKey !== "" }
+        }
         onTriggered: {
+            const op = openHeldTimer
             // The stand-in opens outright where a hand would sit out a rest, so a row that was going to open is open
-            // by the time the completion reads it.
-            navProbe.pointTipAt("branch", 2)
-            if (!Awaited.all("nav_open_held", { "row": navProbe.tipNameAt("branch", 2) !== "",
-                                                "box": sidebarPane.editKey !== "" }))
+            // by the time the completion reads it. Re-applied every beat until the row is there.
+            if (op.at("start") && !op.input("rested", () => {
+                    navProbe.pointTipAt("branch", 2)
+                    const held = op.held()
+                    return held.row && held.box
+                }))
                 return
-            openHeldTimer.complete(() => "nav_open_held row=2 name=" + navProbe.tipNameAt("branch", 2)
-                                         + " box=true open=" + navProbe.rowFactsOpen
-                                         + " lit=" + navProbe.rowWashLit("branch", 2))
+            op.complete({
+                "name": "nav_open_held",
+                "when": () => op.held(),
+                "report": () => "nav_open_held row=2 name=" + navProbe.tipNameAt("branch", 2)
+                                + " box=true open=" + navProbe.rowFactsOpen
+                                + " lit=" + navProbe.rowWashLit("branch", 2) })
         }
     }
     // PGG_AUTO_ACT=nav-follow / nav-follow-lit. The landing is read off the graph, not the press: the page's selection
@@ -543,11 +583,8 @@ Item {
         property int row: 0
         property string filter: ""
         property bool lit: false
-        /// The first of the open lines that goes somewhere, and where, read once the lines stand still.
-        property int line: -1
-        property var to: null
-        /// The row's name, read as it opened.
-        property string rowName: ""
+        // Witnessed: `rowName`, the row's name read as it opened; `line` and `to`, the first of the open lines that
+        // goes somewhere and where, read as the hand aims at it once the lines stand still.
         function begin(arg, lit) {
             const parts = ("" + arg).split(":")
             followTimer.kind = parts[0] === "" ? "remote" : parts[0]
@@ -556,16 +593,26 @@ Item {
             followTimer.lit = lit
             followTimer.start()
         }
-        function said() {
-            return " section=" + followTimer.kind + " row=" + followTimer.row + " line=" + followTimer.line
+        function said(line) {
+            return " section=" + followTimer.kind + " row=" + followTimer.row + " line=" + line
         }
         /// The open row's supplement is up, where it keeps one (a WORKTREES row's path, `NavRowFacts.says`): it comes
         /// up a rest after the lines, and every end below waits it out, or the picture holds the box or not by the
-        /// machine's pace. Said through `Awaited`, so a run stalled here names it.
+        /// machine's pace. A term of each end's `when`, so a run stalled here names it.
         function tipRested() {
             const lines = sidebarPane.openFactsItem()
-            return Awaited.all(followTimer.lit ? "nav_follow_lit" : "nav_follow",
-                               { "tip": lines === null || lines.says === "" || lines.tipShown })
+            return lines === null || lines.says === "" || lines.tipShown
+        }
+        /// Where the line pressed went: the graph's row for that commit, selected and laid out — a commit the walk
+        /// never reached is an answer; a row the model has but the view has not laid out is waited for — and the
+        /// supplement rested.
+        function landed() {
+            const want = followTimer.witnessed("to").oid
+            const landing = graphModel.rowOf(want)
+            return { "selected": page.selectedOid === want,
+                     "card": driver.cardSettled,
+                     "laid": landing < 0 || !!graphPane.view.itemAtIndex(landing),
+                     "tip": followTimer.tipRested() }
         }
         onTriggered: {
             const op = followTimer
@@ -582,11 +629,13 @@ Item {
             }
             // The rest, every beat until the row is open (`nav-open` の同じ歩き).
             if (op.at("start") || op.at("filtered")) {
-                navProbe.pointTipAt(op.kind, op.row)
-                if (!Awaited.all("nav_follow_open", { "open": navProbe.rowFactsOpen }))
-                    return
-                op.rowName = navProbe.tipNameAt(op.kind, op.row)
-                op.advance("opened")
+                if (!op.input("opened", () => {
+                        navProbe.pointTipAt(op.kind, op.row)
+                        if (!navProbe.rowFactsOpen)
+                            return false
+                        op.witness("rowName", navProbe.tipNameAt(op.kind, op.row))
+                    }))
+                    Awaited.all("nav_follow_open", { "open": navProbe.rowFactsOpen })
                 return
             }
             // Nothing is aimed until the lines stop moving: laid out a pass after they are built, a press worked out
@@ -595,60 +644,55 @@ Item {
                 if (!Awaited.all("nav_follow_geom", { "still": op.still("nav_follow_geom",
                                                                         sidebarPane.rowFactsGeom()) }))
                     return
-                op.line = navProbe.factsFirstGoing()
-                op.to = navProbe.factsGoesTo(op.line)
-                if (op.to === null) {
+                if (navProbe.factsGoesTo(navProbe.factsFirstGoing()) === null) {
                     // Lines that go nowhere are this row's answer — waiting on for a landing would spend the ceiling
                     // and take no picture.
-                    if (!op.tipRested())
-                        return
-                    op.complete(() => (op.lit ? "nav_follow_lit" : "nav_follow") + op.said()
-                                      + " followed=false name=" + op.rowName)
+                    op.complete({
+                        "name": op.lit ? "nav_follow_lit" : "nav_follow",
+                        "when": () => ({ "tip": op.tipRested() }),
+                        "report": () => (op.lit ? "nav_follow_lit" : "nav_follow") + op.said(navProbe.factsFirstGoing())
+                                        + " followed=false name=" + op.witnessed("rowName") })
                     return
                 }
                 op.input("aimed", () => {
+                    const line = op.witness("line", navProbe.factsFirstGoing())
+                    op.witness("to", navProbe.factsGoesTo(line))
                     if (op.lit)
-                        navProbe.pointFactsWords(op.line, true)
+                        navProbe.pointFactsWords(line, true)
                     else
-                        navProbe.followFactsLine(op.line)
+                        navProbe.followFactsLine(line)
                 })
                 return
             }
             if (op.lit) {
-                if (!op.tipRested())
-                    return
                 // `aimed=` is the band as drawn, `hand=` the cursor the area took — two parts, so either alone splits.
-                op.complete(() => "nav_follow_lit" + op.said()
-                                  + " aimed=" + navProbe.factsLineAimed(op.line)
-                                  + " hand=" + navProbe.factsHand()
-                                  + " open=" + navProbe.rowFactsOpen
-                                  + " to=" + op.to.key + " name=" + op.rowName)
+                op.complete({
+                    "name": "nav_follow_lit",
+                    "when": () => ({ "tip": op.tipRested() }),
+                    "report": () => "nav_follow_lit" + op.said(op.witnessed("line"))
+                                    + " aimed=" + navProbe.factsLineAimed(op.witnessed("line"))
+                                    + " hand=" + navProbe.factsHand()
+                                    + " open=" + navProbe.rowFactsOpen
+                                    + " to=" + op.witnessed("to").key + " name=" + op.witnessed("rowName") })
                 return
             }
-            // A commit the walk never reached is an answer; a row the model has but the view has not laid out is
-            // waited for.
-            const want = op.to.oid
-            const landing = graphModel.rowOf(want)
-            if (!Awaited.all("nav_follow_landed", {
-                    "selected": page.selectedOid === want,
-                    "card": driver.cardSettled,
-                    "laid": landing < 0 || !!graphPane.view.itemAtIndex(landing) }))
-                return
-            if (!op.tipRested())
-                return
-            op.complete(() => {
-                const at = graphModel.rowOf(want)
-                const item = at >= 0 ? graphPane.view.itemAtIndex(at) : null
-                return "nav_follow" + op.said()
-                       + " followed=true"
-                       + " landed=" + (!!item && item.oid_hex === want && item.selected)
-                       // The panel stays: the click mark is on the open row, not the one the line named
-                       // (デザイン規約「行き先はグラフ」).
-                       + " marked=" + (sidebarPane.activeKey === sidebarPane.openKey)
-                       + " box=" + (sidebarPane.editKey !== "")
-                       + " open=" + navProbe.rowFactsOpen
-                       + " to=" + op.to.key + " at=" + at + " name=" + op.rowName
-            })
+            op.complete({
+                "name": "nav_follow_landed",
+                "when": () => op.landed(),
+                "report": () => {
+                    const want = op.witnessed("to").oid
+                    const at = graphModel.rowOf(want)
+                    const item = at >= 0 ? graphPane.view.itemAtIndex(at) : null
+                    return "nav_follow" + op.said(op.witnessed("line"))
+                           + " followed=true"
+                           + " landed=" + (!!item && item.oid_hex === want && item.selected)
+                           // The panel stays: the click mark is on the open row, not the one the line named
+                           // (デザイン規約「行き先はグラフ」).
+                           + " marked=" + (sidebarPane.activeKey === sidebarPane.openKey)
+                           + " box=" + (sidebarPane.editKey !== "")
+                           + " open=" + navProbe.rowFactsOpen
+                           + " to=" + op.witnessed("to").key + " at=" + at + " name=" + op.witnessed("rowName")
+                } })
         }
     }
     // PGG_AUTO_ACT=nav-tip / nav-open / nav-open-then / nav-open-foot. Every run first opens a control row — the first
@@ -661,11 +705,11 @@ Item {
         property int row: 0
         property bool head: false
         /// Whether the run reads the lines a row opens (PGG_AUTO_ACT=nav-open) instead of the shared tooltip, and
-        /// what the hand does once the row is open (PGG_AUTO_ACT=nav-open-then).
-        property bool opens: false
-        property string then: ""
-        /// The name rested on, the last time before the hand moved on.
-        property string rested: ""
+        /// what the hand does once the row is open (PGG_AUTO_ACT=nav-open-then / nav-open-foot: the argument).
+        readonly property bool opens: Harness.autoAct === "nav-open" || Harness.autoAct === "nav-open-then"
+                                      || Harness.autoAct === "nav-open-foot"
+        readonly property string then: Harness.autoAct === "nav-open-then" || Harness.autoAct === "nav-open-foot"
+                                       ? Harness.autoActArg : ""
         /// A filter the current branch does not answer to, putting the stand-in on screen with no row anywhere
         /// (`HeadPinRow.seated`). The presets this argument runs on never overflow a section, so the half where the
         /// list scrolled out from under the row is `nav-pin-edge`'s.
@@ -675,12 +719,13 @@ Item {
         property int fold: -1
         /// Whether the row rested on is the last of its section, the list taken to its end first
         /// (PGG_AUTO_ACT=nav-open-foot). Scrolled once — not re-applied under a hand that has arrived.
-        property bool foot: false
-        /// Where the list stood when the hand arrived — the run's own note, held against what closing gives back
-        /// rather than the list's (`NavList.openRestY`).
-        property real restY: 0
-        /// Whether the control row was open as the hand left it.
-        property bool lit: false
+        readonly property bool foot: Harness.autoAct === "nav-open-foot"
+        /// Whether the hand moves on once the row is open (`afterOpen`).
+        readonly property bool moves: navTipTimer.opens && navTipTimer.then !== ""
+        // Witnessed: `lit`, whether the control row was open as the hand left it; at the foot, `row`, the section's
+        // last row, and `restY`, where the list stood when the hand arrived — the run's own note, held against what
+        // closing gives back rather than the list's (`NavList.openRestY`); and as the hand moves on, `rested`, the
+        // name rested on, and for `bar`, `shut` (`NavProbe.afterOpen`).
         function begin(arg) {
             const parts = ("" + arg).split(":")
             navTipTimer.head = parts[0] === "head"
@@ -692,33 +737,75 @@ Item {
             // `head:<filter>:<row>` — the folder to shut over the current branch; the filter is then usually empty.
             navTipTimer.fold = navTipTimer.head && parts.length > 2 ? Number(parts[2]) : -1
             navTipTimer.row = !navTipTimer.head && parts.length > 1 ? Number(parts[1]) : 0
-            // The control row first; then the fold or the scroll asked for; then, where one is asked, the hand's move.
+            // The control row first; then the fold or the scroll asked for; then the rest on the row; then, where one
+            // is asked, the hand's move.
             navTipTimer.order = ["lit"].concat(navTipTimer.fold >= 0 ? ["folded"] : [],
                                                navTipTimer.foot ? ["footed"] : [],
-                                               navTipTimer.opens && navTipTimer.then !== "" ? ["acted"] : [])
+                                               ["rested"],
+                                               navTipTimer.moves ? ["acted"] : [])
             navTipTimer.start()
         }
         function target() {
-            return navTipTimer.head ? branchesModel.headRow : navTipTimer.row
+            if (navTipTimer.head)
+                return branchesModel.headRow
+            return navTipTimer.foot ? navTipTimer.witnessed("row") : navTipTimer.row
+        }
+        /// The name under the hand as it is read; the stand-in has no tip, so what is read there is that the pointer is
+        /// on it.
+        function nameNow() {
+            return navTipTimer.head ? branchesModel.headName
+                                    : navProbe.tipNameAt(navTipTimer.kind, navTipTimer.target())
+        }
+        /// The name rested on: read as the hand moved on, where it does — a filter may take the row out after — else
+        /// as it is read.
+        function restedName() {
+            return navTipTimer.moves ? navTipTimer.witnessed("rested") : navTipTimer.nameNow()
+        }
+        /// The rest landed. An opening row is read on its own lines; elsewhere a row with words waits for the shared
+        /// tip to be up, one without for the control's tip to have left.
+        function restTerms() {
+            const words = navTipTimer.head ? navProbe.headPinWords
+                                           : navProbe.tipWordsAt(navTipTimer.kind, navTipTimer.target())
+            return { "row": navTipTimer.nameNow() !== "",
+                     "pin": !navTipTimer.head || navProbe.headPinLit,
+                     "open": !navTipTimer.opens || navProbe.rowFactsOpen,
+                     "tip": navTipTimer.opens || (words !== "") === Tips.box.visible }
+        }
+        function restHolds() {
+            const terms = navTipTimer.restTerms()
+            return terms.row && terms.pin && terms.open && terms.tip
+        }
+        /// What the completion stands on: the rest, until the hand moves on — nothing is waited on after, since what
+        /// opened is inside the row and goes with the pointer — and the supplement (a worktree's path) answered either
+        /// way: it comes up a rest after the lines, and read in between the picture has it half out on one run and
+        /// not at all on the next. And the page: a row the hand pressed selects its commit, whose read is the page's.
+        function landed() {
+            const moved = navTipTimer.moves
+            const rest = navTipTimer.restTerms()
+            return { "row": moved || rest.row, "pin": moved || rest.pin, "open": moved || rest.open,
+                     "tip": moved || rest.tip,
+                     "said": !navTipTimer.opens || moved || (navProbe.factsSays() !== "") === Tips.box.visible,
+                     "page": PageSettled.settled(page) }
         }
         /// The list is the subject at the foot, so it has a line of its own: `shown=` is the row inside what the list
         /// shows, `back=` the list's position against the run's note from before the hand arrived.
         function footLine() {
             const at = navProbe.listContentY(navTipTimer.kind)
+            const restY = navTipTimer.witnessed("restY")
             return "nav_open_foot what=" + navTipTimer.then
-                + " row=" + navTipTimer.target() + " name=" + navTipTimer.rested
+                + " row=" + navTipTimer.target() + " name=" + navTipTimer.restedName()
                 + " open=" + navProbe.rowFactsOpen
                 + " shown=" + navProbe.rowFactsShown()
-                + " back=" + (Math.round(at) === Math.round(navTipTimer.restY))
+                + " back=" + (Math.round(at) === Math.round(restY))
                 // `bar`: closed at the grab itself, not by the run's ask after it (`NavProbe.afterOpen`).
-                + (navTipTimer.then === "bar" ? " shut=" + navProbe.shutByBar : "")
-                + " rest=" + Math.round(navTipTimer.restY) + " at=" + Math.round(at)
+                + (navTipTimer.then === "bar" ? " shut=" + navTipTimer.witnessed("shut") : "")
+                + " rest=" + Math.round(restY) + " at=" + Math.round(at)
                 + " seat=" + sidebarPane.rowFactsGeom()
         }
         function thenLine() {
             const target = navTipTimer.target()
             return "nav_open_then what=" + navTipTimer.then
-                + " row=" + target + " name=" + navTipTimer.rested
+                + " row=" + target + " name=" + navTipTimer.restedName()
                 + " open=" + navProbe.rowFactsOpen
                 + " lit=" + navProbe.rowWashLit(navTipTimer.kind, target)
                 + " box=" + (sidebarPane.editKey !== "")
@@ -741,8 +828,8 @@ Item {
             const tip = Tips.box
             const words = navTipTimer.head ? navProbe.headPinWords : navProbe.tipWordsAt(navTipTimer.kind, target)
             return "nav_tip section=" + (navTipTimer.head ? "head" : navTipTimer.kind)
-                + " row=" + target + " name=" + navTipTimer.rested
-                + " lit=" + navTipTimer.lit + " wants=" + (words !== "")
+                + " row=" + target + " name=" + navTipTimer.restedName()
+                + " lit=" + navTipTimer.witnessed("lit") + " wants=" + (words !== "")
                 + " tip=" + tip.visible + " open=" + navProbe.rowFactsOpen
                 // Where the stand-in rested once a fold took its row: `sat=` weighs its own `y` against the holding
                 // row's seat, so other arithmetic shows; `at=` / `gap=` are the raw pair. Its words at rest are
@@ -765,23 +852,22 @@ Item {
         }
         onTriggered: {
             const op = navTipTimer
-            const tip = Tips.box
             if (op.at("start")) {
-                // Re-applied every beat: the delegate arrives on a later layout than the rows the model got, and a
-                // miss reads exactly like a row that answers a rest with nothing (`NavList.clickRow`).
-                navProbe.pointTipAt("worktree", 0)
-                if (!Awaited.all("nav_tip_control", { "open": navProbe.rowFactsOpen }))
-                    return
-                op.input("lit", () => {
-                    op.lit = navProbe.rowFactsOpen
-                    navProbe.pointTipAt("worktree", -1)
-                    // The filter goes in only now: it would take the control row out along with the stand-in's.
-                    if (op.hide !== "")
-                        navProbe.typeFilter(op.hide)
-                    if (op.head)
-                        sidebarPane.headPinPointed = true
-                    op.restY = navProbe.listContentY(op.kind)
-                })
+                // Re-applied every beat until the row opens: the delegate arrives on a later layout than the rows the
+                // model got, and a miss reads exactly like a row that answers a rest with nothing (`NavList.clickRow`).
+                if (!op.input("lit", () => {
+                        navProbe.pointTipAt("worktree", 0)
+                        if (!navProbe.rowFactsOpen)
+                            return false
+                        op.witness("lit", navProbe.rowFactsOpen)
+                        navProbe.pointTipAt("worktree", -1)
+                        // The filter goes in only now: it would take the control row out along with the stand-in's.
+                        if (op.hide !== "")
+                            navProbe.typeFilter(op.hide)
+                        if (op.head)
+                            sidebarPane.headPinPointed = true
+                    }))
+                    Awaited.all("nav_tip_control", { "open": navProbe.rowFactsOpen })
                 return
             }
             // The fold, once the view has built its row: BRANCHES arrives on a read of its own, and a click on row 0
@@ -800,56 +886,43 @@ Item {
                     return
                 op.input("footed", () => {
                     navProbe.scrollBranchesToEnd()
-                    op.row = list.count - 1
-                    op.restY = navProbe.listContentY("branch")
+                    op.witness("row", list.count - 1)
+                    op.witness("restY", navProbe.listContentY("branch"))
                 })
                 return
             }
-            const target = op.target()
-            const acted = op.at("acted")
-            // Nothing is waited on after the hand moves on: what opened is inside the row and goes with the pointer.
-            if (!acted) {
-                // Not once the hand has moved on: re-applying would put the pointer back on the row it walked off
-                // (`nav-open-then away`).
-                if (!op.head)
-                    navProbe.pointTipAt(op.kind, target)
-                // The stand-in has no tip, so what is read there is that the pointer is on it.
-                const name = op.head ? branchesModel.headName : navProbe.tipNameAt(op.kind, target)
-                const words = op.head ? navProbe.headPinWords : navProbe.tipWordsAt(op.kind, target)
-                // An opening row is read on its own lines; elsewhere a row with words waits for the shared tip to be
-                // up, one without for the control's tip to have left.
-                if (!Awaited.all("nav_tip_rested", {
-                        "row": name !== "",
-                        "pin": !op.head || navProbe.headPinLit,
-                        "open": !op.opens || navProbe.rowFactsOpen,
-                        "tip": op.opens || (words !== "") === tip.visible }))
-                    return
-                // After the hand moved on, a filter may have taken the row out, so the name is the one read now.
-                op.rested = name
-                if (op.opens && op.then !== "") {
-                    op.input("acted", () => {
-                        navProbe.afterOpen(op.then, op.kind, target)
-                    })
+            // The rest, re-applied every beat until it lands — and not once the hand has moved on: re-applying would
+            // put the pointer back on the row it walked off (`nav-open-then away`).
+            if (!op.at("rested") && !op.at("acted")) {
+                if (!op.input("rested", () => {
+                        if (!op.head)
+                            navProbe.pointTipAt(op.kind, op.target())
+                        return op.restHolds()
+                    })) {
+                    Awaited.all("nav_tip_rested", op.restTerms())
                     return
                 }
             }
+            // The name is read as the hand moves on: after it, a filter may have taken the row out.
+            if (op.moves && op.at("rested")) {
+                op.input("acted", () => {
+                    op.witness("rested", op.nameNow())
+                    const shut = navProbe.afterOpen(op.then, op.kind, op.target())
+                    if (op.then === "bar")
+                        op.witness("shut", shut)
+                })
+                return
+            }
             // Nothing is read until the layout stops moving: the lines are measured on a layout and the section's
             // height follows that, so on the opening pass neither has arrived and the lines read as out of view. The
-            // geometry standing across a swapped frame is the list standing still (`StageTimer.still`). Nor until the
-            // supplement (a worktree's path) has answered either way: it comes up a rest after the lines, and read in
-            // between the picture has it half out on one run and not at all on the next. And the page: a row the
-            // hand pressed selects its commit, whose read is the page's.
-            if (!Awaited.all("nav_tip_landed", {
-                "laid": !op.opens || op.still("nav_tip_geom", sidebarPane.rowFactsGeom()),
-                "said": !op.opens || acted || (navProbe.factsSays() !== "") === tip.visible,
-                "page": PageSettled.settled(page) }))
+            // geometry standing across a swapped frame is the list standing still (`StageTimer.still`).
+            if (!Awaited.all("nav_tip_laid", {
+                    "laid": !op.opens || op.still("nav_tip_geom", sidebarPane.rowFactsGeom()) }))
                 return
-            if (op.foot)
-                op.complete(() => op.footLine())
-            else if (op.then !== "")
-                op.complete(() => op.thenLine())
-            else
-                op.complete(() => op.tipLine())
+            op.complete({
+                "name": "nav_tip_landed",
+                "when": () => op.landed(),
+                "report": () => op.foot ? op.footLine() : op.then !== "" ? op.thenLine() : op.tipLine() })
         }
     }
     // PGG_AUTO_ACT=nav-open-tag: the lines a TAGS row opens under itself, one per remote carrying the name.
@@ -881,9 +954,9 @@ Item {
             navOpenTagTimer.wants = parts.length > 1 && parts[1] !== rest ? parts[1] : ""
             navOpenTagTimer.rest = rest === "tip" ? "line" : rest
             navOpenTagTimer.menuLine = menuLine
-            // The second rest where one is asked, or the menu on a line and its card.
-            navOpenTagTimer.order = menuLine >= 0 ? ["rested", "card"]
-                                  : navOpenTagTimer.rest !== "" ? ["rested"] : []
+            // The row opened; then the second rest where one is asked, or the menu on a line and its card.
+            navOpenTagTimer.order = ["opened"].concat(menuLine >= 0 ? ["rested", "card"]
+                                                      : navOpenTagTimer.rest !== "" ? ["rested"] : [])
             // Waited on by its ask's id (`rename-tag-remote` の同じ待ち).
             driver.pressWrite("fetch", () => {
                 repoTab.fetch("")
@@ -902,62 +975,85 @@ Item {
             }
             return driver.wroteAndSettled()
         }
+        /// The row open on the readings this run waits for.
+        function opened() {
+            const idle = !(repoTab.busyCount !== 0)
+            const read = idle && navOpenTagTimer.ready()
+            const row = read ? tagsModel.rowOfName(navOpenTagTimer.tag) : -1
+            return { "ready": idle, "read": read, "row": row >= 0, "open": row >= 0 && navProbe.rowFactsOpen }
+        }
+        /// What the completion stands on: the row open, and the menu or the second rest's tip where one is asked.
+        function landed() {
+            const opened = navOpenTagTimer.opened()
+            return { "ready": opened.ready, "read": opened.read, "row": opened.row, "open": opened.open,
+                     "menu": navOpenTagTimer.menuLine < 0 || refMenu.opened,
+                     "tip": navOpenTagTimer.menuLine >= 0 || navOpenTagTimer.rest === "" || Tips.box.visible }
+        }
         onTriggered: {
             const op = navOpenTagTimer
-            const idle = !(repoTab.busyCount !== 0)
-            const read = idle && op.ready()
-            // Asked and re-applied every beat: the fetch rebuilds the list under the hand (`nav-open` の同じ歩き).
-            const row = read ? tagsModel.rowOfName(op.tag) : -1
-            if (row >= 0)
-                navProbe.pointTipAt("tag", row)
-            const open = row >= 0 && navProbe.rowFactsOpen
+            const opened = op.opened()
+            if (op.at("start")) {
+                if (!Awaited.all("nav_open_tag_row", { "ready": opened.ready, "read": opened.read, "row": opened.row }))
+                    return
+                // Asked again every beat until the row opens (`nav-open` の同じ歩き).
+                op.input("opened", () => {
+                    navProbe.pointTipAt("tag", tagsModel.rowOfName(op.tag))
+                    return navProbe.rowFactsOpen
+                })
+                return
+            }
             // Nothing is read until the layout stops moving (`nav-open` の同じ待ち).
             if (!Awaited.all("nav_open_tag_ready", {
-                    "ready": idle,
-                    "read": read,
-                    "row": row >= 0,
-                    "open": open,
-                    "laid": open && op.still("nav_open_tag_geom", sidebarPane.rowFactsGeom()) }))
+                    "ready": opened.ready,
+                    "read": opened.read,
+                    "row": opened.row,
+                    "open": opened.open,
+                    "laid": opened.open && op.still("nav_open_tag_geom", sidebarPane.rowFactsGeom()) }))
                 return
             // Or the menu on one line, asked once — its answer is the card, not the line.
             if (op.menuLine >= 0) {
-                if (op.at("start")) {
+                if (op.at("opened")) {
                     op.input("rested", () => navProbe.factsLineMenu(op.menuLine))
                     return
                 }
-                if (!Awaited.all("nav_open_tag_menu", { "menu": refMenu.opened }))
-                    return
-                op.input("card", () => {
-                    refMenu.openSub(refTagCard)
-                })
-                op.complete(() => driver.tagReachWords(refTagCard))
+                if (op.at("rested")) {
+                    if (!Awaited.all("nav_open_tag_menu", { "menu": refMenu.opened }))
+                        return
+                    op.input("card", () => {
+                        refMenu.openSub(refTagCard)
+                    })
+                }
+                op.complete({
+                    "name": "nav_open_tag_menu",
+                    "when": () => op.landed(),
+                    "report": () => driver.tagReachWords(refTagCard) })
                 return
             }
             // Then the second rest, on the first line or the name, asked again until it takes: the lines are built a
             // pass after the row that opened them.
-            if (op.rest !== "") {
-                if (op.at("start")) {
-                    op.input("rested", () => op.rest === "name" ? navProbe.pointFactsName(true)
-                                                                 : navProbe.pointFactsLine(0, true))
-                    return
-                }
-                if (!Awaited.all("nav_open_tag_tip", { "tip": Tips.box.visible }))
-                    return
+            if (op.rest !== "" && op.at("opened")) {
+                op.input("rested", () => op.rest === "name" ? navProbe.pointFactsName(true)
+                                                             : navProbe.pointFactsLine(0, true))
+                return
             }
             // `sides=` (what the row's cloud is drawn from) and `says=` (the carriers the lines name) are the claim as
             // a pair: a cloud over no lines and lines naming an unheard-of remote frame alike.
-            op.complete(() => {
-                const tip = Tips.box
-                return "nav_open_tag tag=" + op.tag
-                    + " row=" + tagsModel.rowOfName(op.tag)
-                    + " sides=" + tagsModel.tagSides(op.tag)
-                    + " open=" + navProbe.rowFactsOpen
-                    + " shown=" + navProbe.rowFactsShown()
-                    + " seat=" + sidebarPane.rowFactsGeom()
-                    + " says=" + navProbe.rowFactsWords()
-                    // The line's supplement, read off the shared instance — last, after a sentence with free fields.
-                    + " tip=" + tip.visible + " text=" + (tip.visible ? tip.text : "")
-            })
+            op.complete({
+                "name": op.rest !== "" ? "nav_open_tag_tip" : "nav_open_tag_ready",
+                "when": () => op.landed(),
+                "report": () => {
+                    const tip = Tips.box
+                    return "nav_open_tag tag=" + op.tag
+                        + " row=" + tagsModel.rowOfName(op.tag)
+                        + " sides=" + tagsModel.tagSides(op.tag)
+                        + " open=" + navProbe.rowFactsOpen
+                        + " shown=" + navProbe.rowFactsShown()
+                        + " seat=" + sidebarPane.rowFactsGeom()
+                        + " says=" + navProbe.rowFactsWords()
+                        // The line's supplement, read off the shared instance — last, after a sentence with free
+                        // fields.
+                        + " tip=" + tip.visible + " text=" + (tip.visible ? tip.text : "")
+                } })
         }
     }
     // PGG_AUTO_ACT=nav-branch-box / nav-rename-box / nav-tag-box: how wide the box comes out on a row of that depth in
@@ -993,6 +1089,36 @@ Item {
             navNameBoxTimer.order = navNameBoxTimer.away ? ["opened", "walked"] : ["opened"]
             navNameBoxTimer.start()
         }
+        /// On the row and built: a row not laid out yet answers 0, like a row with no box.
+        function drawn() {
+            const row = navNameBoxTimer.section.rowOfName(navNameBoxTimer.ref)
+            return { "open": sidebarPane.editKey === navNameBoxTimer.kind + ":" + navNameBoxTimer.ref,
+                     "drawn": navProbe.listOf(navNameBoxTimer.kind).rowBoxWidth(row) > 0 }
+        }
+        /// The box as drawn. `focused=` is reported since a box that cannot be typed into looks the same in the
+        /// picture.
+        function line() {
+            const at = navNameBoxTimer.section.rowOfName(navNameBoxTimer.ref)
+            const view = navProbe.listOf(navNameBoxTimer.kind)
+            const drawn = view.rowBoxWidth(at)
+            const whole = view.rowBoxWhole(at)
+            return "nav_name_box mode=" + navNameBoxTimer.mode
+                   + " ref=" + navNameBoxTimer.ref
+                   + " row=" + at
+                   + " pane=" + Math.round(sidebarPane.width)
+                   // The room the row holds, the drawn width, and what reading it whole takes: whether it needed room
+                   // outside the pane and got it.
+                   + " seat=" + Math.round(view.rowBoxSeat(at))
+                   + " box=" + Math.round(drawn)
+                   + " whole=" + Math.ceil(whole)
+                   // Cut, a placeholder no longer says what goes in and a name cannot be read back
+                   // (デザイン規約 §グラフ行のダブルクリック).
+                   + " cut=" + (Math.ceil(whole) > Math.round(drawn))
+                   + " open=" + (sidebarPane.editKey === navNameBoxTimer.kind + ":" + navNameBoxTimer.ref)
+                   + " focused=" + view.rowFocused(at)
+                   + " shown=" + view.rowBoxShown(at)
+                   + " at=" + view.rowBoxAt(at)
+        }
         onTriggered: {
             const op = navNameBoxTimer
             // -1 for a row behind a closed folder or in a section not read yet.
@@ -1026,48 +1152,26 @@ Item {
                 })
                 return
             }
-            const key = op.kind + ":" + op.ref
             const list = navProbe.listOf(op.kind)
             if (op.at("opened")) {
-                // On the row and built: a row not laid out yet answers 0, like a row with no box. `focused=` is
-                // reported since a box that cannot be typed into looks the same in the picture.
-                if (!Awaited.all("nav_name_box_drawn", { "open": sidebarPane.editKey === key,
-                                                         "drawn": list.rowBoxWidth(row) > 0 }))
-                    return
-                if (op.away) {
-                    // Just out of the view from where the row stands, near enough that the view still holds its
-                    // delegate — otherwise what went is the row and not the box. A list too short to scroll the row
-                    // out is the fixture's shortfall, named here instead of waited out.
-                    if (!op.input("walked", () => list.scrollRowOut(row)))
-                        Awaited.note("nav_name_box_away waiting=room")
+                if (!op.away) {
+                    op.complete({ "name": "nav_name_box_drawn", "when": () => op.drawn(), "report": () => op.line() })
                     return
                 }
-            } else if (!Awaited.all("nav_name_box_gone", { "gone": !list.rowBoxShown(row) })) {
-                // Walked past: wait for the box to go, read off `shown` — a released delegate answers 0 for everything.
+                if (!Awaited.all("nav_name_box_drawn", op.drawn()))
+                    return
+                // Just out of the view from where the row stands, near enough that the view still holds its delegate
+                // — otherwise what went is the row and not the box. A list too short to scroll the row out is the
+                // fixture's shortfall, named here instead of waited out.
+                if (!op.input("walked", () => list.scrollRowOut(row)))
+                    op.note("nav_name_box_away waiting=room")
                 return
             }
-            op.complete(() => {
-                const at = op.section.rowOfName(op.ref)
-                const view = navProbe.listOf(op.kind)
-                const drawn = view.rowBoxWidth(at)
-                const whole = view.rowBoxWhole(at)
-                return "nav_name_box mode=" + op.mode
-                       + " ref=" + op.ref
-                       + " row=" + at
-                       + " pane=" + Math.round(sidebarPane.width)
-                       // The room the row holds, the drawn width, and what reading it whole takes: whether it
-                       // needed room outside the pane and got it.
-                       + " seat=" + Math.round(view.rowBoxSeat(at))
-                       + " box=" + Math.round(drawn)
-                       + " whole=" + Math.ceil(whole)
-                       // Cut, a placeholder no longer says what goes in and a name cannot be read back
-                       // (デザイン規約 §グラフ行のダブルクリック).
-                       + " cut=" + (Math.ceil(whole) > Math.round(drawn))
-                       + " open=" + (sidebarPane.editKey === op.kind + ":" + op.ref)
-                       + " focused=" + view.rowFocused(at)
-                       + " shown=" + view.rowBoxShown(at)
-                       + " at=" + view.rowBoxAt(at)
-            })
+            // Walked past: wait for the box to go, read off `shown` — a released delegate answers 0 for everything.
+            op.complete({
+                "name": "nav_name_box_gone",
+                "when": () => ({ "gone": !navProbe.listOf(op.kind).rowBoxShown(op.section.rowOfName(op.ref)) }),
+                "report": () => op.line() })
         }
     }
     // PGG_AUTO_ACT=rename-box-out: one way out of the name box per run. The claim is what the box and the gesture are
@@ -1122,13 +1226,14 @@ Item {
                 })
             } else {
                 // The beat after the way out, on the page it leaves.
-                if (!Awaited.all("box_out_left", { "page": PageSettled.settled(page) }))
-                    return
-                op.complete(() => "rename_box_out route=" + op.route
-                                  + " box=" + (graphPane.namingOid !== "")
-                                  + " armed=" + graphPane.view.renameWaiting
-                                  + " guarded=" + graphPane.view.clickGuarded
-                                  + " typed=" + graphPane.namingText)
+                op.complete({
+                    "name": "box_out_left",
+                    "when": () => ({ "page": PageSettled.settled(page) }),
+                    "report": () => "rename_box_out route=" + op.route
+                                    + " box=" + (graphPane.namingOid !== "")
+                                    + " armed=" + graphPane.view.renameWaiting
+                                    + " guarded=" + graphPane.view.clickGuarded
+                                    + " typed=" + graphPane.namingText })
             }
         }
     }

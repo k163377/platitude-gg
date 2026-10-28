@@ -116,7 +116,8 @@ Item {
                 if (op.how === "swap") {
                     const next = op.otherChipped(head)
                     if (next === null) {
-                        op.complete(() => "menu_list how=swap other=none")
+                        op.complete({ "name": "menu_list_none", "when": () => ({}),
+                                      "report": () => "menu_list how=swap other=none" })
                         return
                     }
                     // The hand onto the other row's chip, as that row reports it.
@@ -132,18 +133,16 @@ Item {
                 })
                 return
             }
-            if (!Awaited.all("menu_list_after", {
-                    "menu": commitMenu.opened,
-                    "beat": op.how !== "own" || !rowHost.listSettling
-                }))
-                return
-            op.complete(() => {
-                const at = op.headRow()
-                const now = at < 0 ? null : graphPane.view.itemAtIndex(at)
-                return "menu_list how=" + op.how + " menu=" + commitMenu.opened
-                       + " list=" + refList.opened + " raised=" + page.menuArea
-                       + " kept=" + (refList.opened && now !== null && rowHost.refListOid === now.oid_hex)
-            })
+            op.complete({
+                "name": "menu_list_after",
+                "when": () => ({ "menu": commitMenu.opened, "beat": op.how !== "own" || !rowHost.listSettling }),
+                "report": () => {
+                    const at = op.headRow()
+                    const now = at < 0 ? null : graphPane.view.itemAtIndex(at)
+                    return "menu_list how=" + op.how + " menu=" + commitMenu.opened
+                           + " list=" + refList.opened + " raised=" + page.menuArea
+                           + " kept=" + (refList.opened && now !== null && rowHost.refListOid === now.oid_hex)
+                } })
         }
     }
     // The row under a standing menu, asked for its card where the row's own ask goes in (`rowHoverRequested`). Asked
@@ -155,9 +154,9 @@ Item {
         property string oidHex: ""
         onTriggered: {
             const op = menuHoverTimer
-            if (!Awaited.all("menu_hover_ready", { "ready": commitMenu.opened }))
-                return
             if (op.at("start")) {
+                if (!Awaited.all("menu_hover_ready", { "ready": commitMenu.opened }))
+                    return
                 const row = graphPane.view.itemAtIndex(graphModel.rowOf(op.oidHex))
                 // Not laid out yet: asking now would wait for an answer to a question nobody put.
                 if (!Awaited.all("menu_hover_row", { "row": !!row }))
@@ -167,8 +166,9 @@ Item {
                 })
                 return
             }
-            op.complete(() => "menu_hover menu=" + commitMenu.opened + " card=" + rowCard.opened
-                              + " list=" + refList.opened)
+            op.complete({ "name": "menu_hover_ready", "when": () => ({ "ready": commitMenu.opened }),
+                          "report": () => "menu_hover menu=" + commitMenu.opened + " card=" + rowCard.opened
+                                          + " list=" + refList.opened })
         }
     }
 }

@@ -49,6 +49,25 @@ Item {
         return "tag=" + tag + " held=false says="
     }
 
+    /// The remote a push-default verb's argument names (`<remote>[:marked]`).
+    readonly property string remoteTarget: {
+        const arg = Harness.autoActArg
+        return arg.endsWith(":marked") ? arg.substring(0, arg.length - ":marked".length) : arg
+    }
+    /// The mark the push-default verbs wait for before the shot, kept as the dispatch read it (`markWanted`):
+    /// where no mark is asked to move, the one already there.
+    function markWanted() {
+        return driver.act.witnessed("markWanted")
+    }
+    /// The first push's lines as the run claims them: the surface as the press left it, kept in the press's turn
+    /// (`publish`), and for a run that answers the question, the question as it was answered (`answering`).
+    function publishLines() {
+        const lines = [driver.act.witnessed("publish")]
+        if (["publish-go", "publish-enter", "publish-new-go"].indexOf(Harness.autoAct) >= 0)
+            lines.push(publishAnswerTimer.witnessed("answering"))
+        return lines
+    }
+
     /// Runs `act` if it is one of this family's, and says whether it was.
     function run(act, arg) {
         if (act === "publish" || act === "publish-taken" || act === "publish-tip"
@@ -82,13 +101,15 @@ Item {
             else
                 publishSettleTimer.start()
             // `dialog=` / `name=`: the no-remote push opens the remote dialog by itself, and only this line can say so
-            // headless. Read in the turn of the press: none of these verbs completes in it, and a later reading meets
-            // the push state the question's answer moved on.
-            driver.act.say(() => "publish state=" + page.pushState
-                                 + " remote=" + publishFlow.publishRemote
-                                 + " branch=" + publishFlow.publishBranch
-                                 + " dialog=" + remoteDialog.visible
-                                 + " name=" + remoteDialog.wantedName)
+            // headless. Read in the turn of the press — none of these verbs completes in it, and a later reading meets
+            // the push state the question's answer moved on — and kept as the dispatch's witness, which whichever
+            // operation completes the run says (`publishLines`).
+            driver.act.witness("publish", "publish state=" + page.pushState
+                                          + " remote=" + publishFlow.publishRemote
+                                          + " branch=" + publishFlow.publishBranch
+                                          + " dialog=" + remoteDialog.visible
+                                          + " name=" + remoteDialog.wantedName)
+            driver.reportAtCompletion(() => acts.publishLines())
         } else if (act === "publish-upstream") {
             // A push with an upstream the far side does not have yet (デザイン規約 §ブランチが測られる相手を決める):
             // the question the toolbar's press raises must open on that name, or the answer just given is asked again.
@@ -107,12 +128,11 @@ Item {
             const marked = arg.endsWith(":marked")
             // The destination list names no remote, so it takes the one this repository sends to — the only name a
             // preset-agnostic run can be sure exists.
-            driver.remoteTarget = act === "publish-remotes-marked" ? repoTab.defaultRemote
-                                : marked ? arg.substring(0, arg.length - ":marked".length) : arg
-            driver.markWanted = marked || act !== "remote-menu" && act !== "remote-url"
-                                ? driver.remoteTarget : repoTab.markedOrigin
-            if (repoTab.markedOrigin !== driver.markWanted)
-                repoTab.markOrigin(driver.markWanted)
+            const target = act === "publish-remotes-marked" ? repoTab.defaultRemote : acts.remoteTarget
+            const wanted = driver.act.witness("markWanted", marked || act !== "remote-menu" && act !== "remote-url"
+                                                            ? target : repoTab.markedOrigin)
+            if (repoTab.markedOrigin !== wanted)
+                repoTab.markOrigin(wanted)
             if (act === "push-default")
                 pushDefaultTimer.start()
             else if (act === "remote-menu")
@@ -152,17 +172,14 @@ Item {
             page.toggleCommands()
             repoTab.fetch("pgg-no-such-remote")
         } else if (act === "fetch-fail") {
-            // The argument is how many fetches to fail, so one verb reaches the warning shape and the stopped one.
-            acts.fetchFailRuns = Math.max(1, Number(arg))
-            fetchEndTimer.order = []
+            // The argument is how many fetches to fail (`fetchFailRuns`), so one verb reaches the warning shape and
+            // the stopped one.
             AppBackend.setAutoFetchMinutes(0)
             AppBackend.setAutoFetchMinutes(5)
             fetchFailTimer.start()
         } else if (act === "fetch-hover") {
             // A hand on the button's three live shapes: the argument is how many fetches to fail first — none, one,
             // or enough to stop the timer. The hand goes on at the run's end.
-            acts.fetchFailRuns = Math.max(0, Number(arg))
-            fetchEndTimer.order = ["pointed"]
             if (acts.fetchFailRuns > 0) {
                 AppBackend.setAutoFetchMinutes(0)
                 AppBackend.setAutoFetchMinutes(5)
@@ -171,8 +188,6 @@ Item {
         } else if (act === "fetch-resume") {
             // Long enough a run to stop the timer, so the press has a stopped button to land on; the resume is pressed
             // at the run's end.
-            acts.fetchFailRuns = 3
-            fetchEndTimer.order = ["resumed"]
             AppBackend.setAutoFetchMinutes(0)
             AppBackend.setAutoFetchMinutes(5)
             fetchFailTimer.start()
@@ -186,17 +201,15 @@ Item {
     PageStage {
         id: pushDefaultTimer
         name: "push_default"
-        onTriggered: {
-            if (!Awaited.all("push_default_ready", {
-                "ready": !(repoTab.markedOrigin !== driver.markWanted || repoTab.busyCount > 0) }))
-                return
-            // The judged fields lead, and together: `must_say` reads one run of the line.
-            pushDefaultTimer.complete(() => "push_default local=" + repoTab.pushDefaultLocal
-                                             + " origin=" + repoTab.markedOrigin
-                                             + " marked=" + repoTab.pushDefault
-                                             + " target=" + repoTab.defaultRemote
-                                             + " remotes=" + repoTab.remoteCount)
-        }
+        // The judged fields lead, and together: `must_say` reads one run of the line.
+        onTriggered: pushDefaultTimer.complete({
+            "name": "push_default_ready",
+            "when": () => ({ "ready": !(repoTab.markedOrigin !== acts.markWanted() || repoTab.busyCount > 0) }),
+            "report": () => "push_default local=" + repoTab.pushDefaultLocal
+                            + " origin=" + repoTab.markedOrigin
+                            + " marked=" + repoTab.pushDefault
+                            + " target=" + repoTab.defaultRemote
+                            + " remotes=" + repoTab.remoteCount })
     }
     /// PGG_AUTO_ACT=publish-upstream. The barrier is the status read after the write (`branch.upstream`): only then
     /// does the button have the destination to open on. `tracked=` says the far side lacks it; `remote=` / `branch=`
@@ -220,13 +233,14 @@ Item {
                 return
             }
             // The bar all the way down, so the boxes are on screen (`AskBar.settled`).
-            if (!Awaited.all("publish_upstream_asked", { "bar": graphPane.askCard.settled }))
-                return
-            op.complete(() => "publish upstream=" + worktree.upstream
-                              + " tracked=" + worktree.upstreamTracked
-                              + " state=" + page.pushState
-                              + " remote=" + publishFlow.publishRemote
-                              + " branch=" + publishFlow.publishBranch)
+            op.complete({
+                "name": "publish_upstream_asked",
+                "when": () => ({ "bar": graphPane.askCard.settled }),
+                "report": () => "publish upstream=" + worktree.upstream
+                                + " tracked=" + worktree.upstreamTracked
+                                + " state=" + page.pushState
+                                + " remote=" + publishFlow.publishRemote
+                                + " branch=" + publishFlow.publishBranch })
         }
     }
     /// PGG_AUTO_ACT=push-target: the toolbar's destination and standing, off the bindings the button reads
@@ -235,18 +249,17 @@ Item {
     PageStage {
         id: pushTargetTimer
         name: "push_target"
-        onTriggered: {
-            if (!Awaited.all("push_target_ready", {
+        onTriggered: pushTargetTimer.complete({
+            "name": "push_target_ready",
+            "when": () => ({
                 "loaded": worktree.loaded,
                 "open": repoTab.state === "open",
-                "idle": repoTab.busyCount === 0 }))
-                return
-            pushTargetTimer.complete(() => "push_target label=" + page.pushTargetLabel
-                                            + " state=" + page.pushState
-                                            + " branch_mark=" + worktree.pushRemote
-                                            + " repo_mark=" + repoTab.pushDefault
-                                            + " tracks=" + worktree.upstream)
-        }
+                "idle": repoTab.busyCount === 0 }),
+            "report": () => "push_target label=" + page.pushTargetLabel
+                            + " state=" + page.pushState
+                            + " branch_mark=" + worktree.pushRemote
+                            + " repo_mark=" + repoTab.pushDefault
+                            + " tracks=" + worktree.upstream })
     }
     /// PGG_AUTO_ACT=push-hover: the tip on the band's push button, the one place the count a push sends (or an
     /// overwrite drops) is said. The opening's fetch is waited out first: the shared tooltip takes the words once as
@@ -270,14 +283,15 @@ Item {
                 })
                 return
             }
-            // The tip waits out `tipDelayMs` before it stands.
-            if (!Awaited.all("push_hover_tip", { "tip": page.pageBand.pushTipStanding }))
-                return
-            // The counts the tip says: the destination's own where the push goes elsewhere (`RepoPage.pushAhead`).
-            op.complete(() => "push_hover tip=" + page.pageBand.pushTipStanding
-                              + " mode=" + page.pageBand.pushMode
-                              + " ahead=" + page.pushAhead
-                              + " behind=" + page.pushBehind)
+            // The tip waits out `tipDelayMs` before it stands. The counts the tip says: the destination's own where the
+            // push goes elsewhere (`RepoPage.pushAhead`).
+            op.complete({
+                "name": "push_hover_tip",
+                "when": () => ({ "tip": page.pageBand.pushTipStanding }),
+                "report": () => "push_hover tip=" + page.pageBand.pushTipStanding
+                                + " mode=" + page.pageBand.pushMode
+                                + " ahead=" + page.pushAhead
+                                + " behind=" + page.pushBehind })
         }
     }
     /// PGG_AUTO_ACT=publish-remotes-marked: the first push's destination list with the mark in it. The mark's write is
@@ -290,7 +304,7 @@ Item {
         order: ["asked", "listed"]
         onTriggered: {
             const op = publishMarkedTimer
-            const ready = !(repoTab.markedOrigin !== driver.markWanted || repoTab.busyCount > 0)
+            const ready = !(repoTab.markedOrigin !== acts.markWanted() || repoTab.busyCount > 0)
             if (op.at("start")) {
                 if (!Awaited.all("publish_marked_ready", { "ready": ready }))
                     return
@@ -309,11 +323,13 @@ Item {
                 op.input("listed", () => publishFlow.openPublishRemotes())
                 return
             }
-            if (!Awaited.all("publish_marked_listed", { "ready": ready, "open": publishFlow.publishRemotesOpen() }))
-                return
-            op.complete(() => "publish_remotes open=" + publishFlow.publishRemotesOpen()
-                              + " marked=" + publishFlow.publishRemotesMarked()
-                              + " name=" + repoTab.pushDefault)
+            op.complete({
+                "name": "publish_marked_listed",
+                "when": () => ({ "ready": !(repoTab.markedOrigin !== acts.markWanted() || repoTab.busyCount > 0),
+                                 "open": publishFlow.publishRemotesOpen() }),
+                "report": () => "publish_remotes open=" + publishFlow.publishRemotesOpen()
+                                + " marked=" + publishFlow.publishRemotesMarked()
+                                + " name=" + repoTab.pushDefault })
         }
     }
     /// PGG_AUTO_ACT=remote-menu: the menu a remote's own row raises, left standing (overlay.png). `rows=`: two on a
@@ -323,21 +339,24 @@ Item {
         id: remoteMenuTimer
         name: "remote_menu"
         order: ["raised"]
+        function ready() {
+            return !(repoTab.markedOrigin !== acts.markWanted() || !driver.menusLive())
+        }
         onTriggered: {
             const op = remoteMenuTimer
-            const ready = !(repoTab.markedOrigin !== driver.markWanted || !driver.menusLive())
             if (op.at("start")) {
-                if (!Awaited.all("remote_menu_ready", { "ready": ready }))
+                if (!Awaited.all("remote_menu_ready", { "ready": op.ready() }))
                     return
-                op.input("raised", () => page.openRemoteMenu(driver.remoteTarget) && driver.remoteMenu.opened)
+                op.input("raised", () => page.openRemoteMenu(acts.remoteTarget) && driver.remoteMenu.opened)
                 return
             }
-            if (!Awaited.all("remote_menu_open", { "ready": ready, "open": driver.remoteMenu.opened }))
-                return
-            op.complete(() => "remote_menu open=" + driver.remoteMenu.opened
-                              + " rows=" + driver.remoteMenu.offeredRows
-                              + " remote=" + driver.remoteTarget
-                              + " marked=" + repoTab.pushDefault)
+            op.complete({
+                "name": "remote_menu_open",
+                "when": () => ({ "ready": op.ready(), "open": driver.remoteMenu.opened }),
+                "report": () => "remote_menu open=" + driver.remoteMenu.opened
+                                + " rows=" + driver.remoteMenu.offeredRows
+                                + " remote=" + acts.remoteTarget
+                                + " marked=" + repoTab.pushDefault })
         }
     }
     /// PGG_AUTO_ACT=remote-url: the form that holds a remote's URL, left standing (overlay.png) — the other way to the
@@ -347,24 +366,27 @@ Item {
         id: remoteUrlTimer
         name: "remote_url"
         order: ["opened"]
+        function ready() {
+            return !(repoTab.markedOrigin !== acts.markWanted() || repoTab.busyCount > 0)
+        }
         onTriggered: {
             const op = remoteUrlTimer
-            const ready = !(repoTab.markedOrigin !== driver.markWanted || repoTab.busyCount > 0)
             if (op.at("start")) {
-                if (!Awaited.all("remote_url_ready", { "ready": ready }))
+                if (!Awaited.all("remote_url_ready", { "ready": op.ready() }))
                     return
                 op.input("opened", () => {
-                    driver.publishFlow.startEditRemote(driver.remoteTarget)
+                    driver.publishFlow.startEditRemote(acts.remoteTarget)
                     return driver.remoteDialog.visible
                 })
                 return
             }
-            if (!Awaited.all("remote_url_open", { "ready": ready, "dialog": driver.remoteDialog.visible }))
-                return
-            op.complete(() => "remote_url dialog=" + driver.remoteDialog.visible
-                              + " box=" + driver.remoteDialog.marked
-                              + " remote=" + driver.remoteDialog.editing
-                              + " local=" + driver.remoteDialog.markLocal)
+            op.complete({
+                "name": "remote_url_open",
+                "when": () => ({ "ready": op.ready(), "dialog": driver.remoteDialog.visible }),
+                "report": () => "remote_url dialog=" + driver.remoteDialog.visible
+                                + " box=" + driver.remoteDialog.marked
+                                + " remote=" + driver.remoteDialog.editing
+                                + " local=" + driver.remoteDialog.markLocal })
         }
     }
     // The fetch has to land, and its answer reach the chips, before the stacked ones are worth unstacking.
@@ -375,10 +397,9 @@ Item {
         onTriggered: {
             const op = fetchedRefListTimer
             if (op.at("expanded")) {
-                // The card's line was said as it opened; the picture waits for the page under it.
-                if (!Awaited.all("fetched_ref_list_settled", { "page": PageSettled.settled(page) }))
-                    return
-                op.complete(() => [])
+                // The card's line was kept as it opened; the picture waits for the page under it.
+                op.complete({ "name": "fetched_ref_list_settled", "when": () => ({ "page": PageSettled.settled(page) }),
+                              "report": () => op.witnessed("card") })
                 return
             }
             // `<row>` or `<row>:<tag>` — the second reports that one tag's line.
@@ -389,12 +410,13 @@ Item {
                                                          "row": !!stacked }))
                 return
             // The card's lines are handed over as it opens (`RowHoverHost.openRefList`), so they are read here, in the
-            // turn it opened. The free words last: a claim is one substring.
+            // turn it opened, and kept (`card`). The free words last: a claim is one substring.
             op.input("expanded", () => {
                 graphPane.view.chipExpandRequested(
                     stacked.oid_hex, stacked.index, stacked.chipItem.records, stacked.chipItem)
-            }, () => "fetch_ref_list row=" + stacked.index + " "
-                     + (asked.length > 1 ? acts.tagWords(asked[1]) : acts.apartWords()))
+                op.witness("card", "fetch_ref_list row=" + stacked.index + " "
+                                   + (asked.length > 1 ? acts.tagWords(asked[1]) : acts.apartWords()))
+            })
         }
     }
     // The refusal must be on the button before the second go is sent, and the report is the only proof it got there —
@@ -422,75 +444,77 @@ Item {
             writeBarrier.start()
         }
     }
-    /// The run of failed fetches asked for.
-    property int fetchFailRuns: 0
-    /// Whether the word was at full before the hand went on — what a picture with a hand on the button cannot hold.
-    property bool fetchRestFull: false
-    /// The `writeSeq` this verb's last fetch was asked at, and the failures standing then. A fetch is admitted a drain
-    /// after it is asked, so between one finishing and the next being admitted `busyCount` is 0 and `writeSeq` has
-    /// moved — which reads like a run at rest, and `writeBarrier` completes there. So the wait is for the answer to
-    /// the ask.
-    property int fetchAskSeq: -1
-    property int fetchAskFails: -1
-    /// The stopped button, read as the press goes in: resuming takes it down, so it is kept here or lost.
-    property bool fetchStopped: false
+    /// The run of failed fetches asked for, off the argument: `fetch-fail` fails at least one, `fetch-hover` as many
+    /// as named, `fetch-resume` enough to stop the timer.
+    readonly property int fetchFailRuns: Harness.autoAct === "fetch-fail" ? Math.max(1, Number(Harness.autoActArg))
+                                       : Harness.autoAct === "fetch-hover" ? Math.max(0, Number(Harness.autoActArg))
+                                       : Harness.autoAct === "fetch-resume" ? 3 : 0
     /// What every beat of the run waits on: git not out (the opening's fetch shows in `autoFetchRunning`, the rest in
-    /// `busyCount`), and no ask still waiting for its answer.
-    function fetchQuiet() {
+    /// `busyCount`), and no ask still waiting for its answer. `askSeq` is the `writeSeq` the run's last fetch was
+    /// asked at, -1 for none: a fetch is admitted a drain after it is asked, so between one finishing and the next
+    /// being admitted `busyCount` is 0 and `writeSeq` has moved — which reads like a run at rest, and `writeBarrier`
+    /// completes there. So the wait is for the answer to the ask.
+    function fetchQuiet(askSeq) {
         return { "ready": !(repoTab.busyCount !== 0 || repoTab.autoFetchRunning),
-                 "answered": !(acts.fetchAskSeq >= 0 && repoTab.writeSeq <= acts.fetchAskSeq) }
+                 "answered": !(askSeq >= 0 && repoTab.writeSeq <= askSeq) }
     }
     /// A run of failed fetches. Asking for the next fetch and judging the run long enough are one owner, so the two
     /// cannot disagree; what is done at its end is `fetchEndTimer`'s, so a resume that clears the tab's count cannot
-    /// start a second run over the resumed button.
+    /// start a second run over the resumed button. Each generation's ask keeps the `writeSeq` it was asked at and the
+    /// failures standing then (`askSeq`, `askFails`), read by the same generation once its answer is in.
     PageStage {
         id: fetchFailTimer
         name: "fetch_fail_run"
         order: ["fetched"]
         onTriggered: {
             const op = fetchFailTimer
-            if (!Awaited.all("fetch_fail_ready", acts.fetchQuiet()))
+            const asked = op.at("fetched")
+            if (!Awaited.all("fetch_fail_ready", acts.fetchQuiet(asked ? op.witnessed("askSeq") : -1)))
                 return
             if (repoTab.fetchFailures >= acts.fetchFailRuns) {
                 op.stop()
                 fetchEndTimer.start()
                 return
             }
-            // The answer to this generation's fetch is in. The run asks the same fetch again on purpose, each ask a
-            // generation of its own.
-            if (op.at("fetched"))
-                op.again()
             // A clean fetch means the remote is reachable, and asking again cannot make it fail. Say so once and let
             // the watchdog end the run — completing would photograph a button that never failed
             // (verbs.md §ヘッドレスで色を確かめる時はデモリモートの URL を疑う).
-            if (acts.fetchAskFails >= 0 && repoTab.fetchFailures <= acts.fetchAskFails) {
+            if (asked && repoTab.fetchFailures <= op.witnessed("askFails")) {
                 op.say(() => "fetch_fail reachable=true fails=" + repoTab.fetchFailures)
                 op.stop()
                 return
             }
+            // The answer to this generation's fetch is in. The run asks the same fetch again on purpose, each ask a
+            // generation of its own.
+            if (asked)
+                op.again()
             op.input("fetched", () => {
-                acts.fetchAskFails = repoTab.fetchFailures
-                acts.fetchAskSeq = repoTab.writeSeq
+                op.witness("askFails", repoTab.fetchFailures)
+                op.witness("askSeq", repoTab.writeSeq)
                 repoTab.fetch("")
             })
         }
     }
     /// The run's end: the band's resume pressed (`fetch-resume`), a hand put on the button (`fetch-hover`) or nothing
-    /// (`fetch-fail`), then the button read.
+    /// (`fetch-fail`), then the button read. Its witnesses: the stopped button and the `writeSeq` the resume's fetch was
+    /// asked at, read as the press goes in (`stopped`, `askSeq`) — resuming takes the first down, so it is kept there
+    /// or lost; whether the word was at full before the hand went on (`restFull`) — what a picture with a hand on the
+    /// button cannot hold.
     PageStage {
         id: fetchEndTimer
         name: "fetch_fail_end"
+        order: Harness.autoAct === "fetch-hover" ? ["pointed"] : Harness.autoAct === "fetch-resume" ? ["resumed"] : []
         function line() {
             if (Harness.autoAct === "fetch-hover")
                 return "fetch_hover tip=" + page.pageBand.fetchTipStanding
                        + " word=" + page.pageBand.fetchWordFull
-                       + " rest=" + acts.fetchRestFull
+                       + " rest=" + fetchEndTimer.witnessed("restFull")
                        + " stopped=" + repoTab.autoFetchSuspended
                        + " fails=" + repoTab.fetchFailures
             // What the picture cannot hold: stopped at the press, and a fetch ran after it. The picture is the
             // warning shape, the same as `fetch-fail 1`.
             if (Harness.autoAct === "fetch-resume")
-                return "fetch_resume stopped=" + acts.fetchStopped
+                return "fetch_resume stopped=" + fetchEndTimer.witnessed("stopped")
                        + " fetched=" + (repoTab.fetchFailures > 0)
                        + " fails=" + repoTab.fetchFailures
                        + " suspended=" + repoTab.autoFetchSuspended
@@ -498,15 +522,19 @@ Item {
                    + " fails=" + repoTab.fetchFailures
                    + " wanted=" + acts.fetchFailRuns
         }
+        /// The run at rest past the resume's fetch where one was asked, and a hand's tip up where one was put on — a
+        /// button with nothing to say never gets its tip (`fetch-tip`'s side).
+        function quiet(resumed, pointed) {
+            const terms = acts.fetchQuiet(resumed ? fetchEndTimer.witnessed("askSeq") : -1)
+            if (pointed)
+                terms["tip"] = page.pageBand.fetchTipStanding
+            return terms
+        }
         onTriggered: {
             const op = fetchEndTimer
-            const terms = acts.fetchQuiet()
-            // A button with nothing to say never gets its tip — `fetch-tip`'s side.
-            if (op.at("pointed"))
-                terms["tip"] = page.pageBand.fetchTipStanding
-            if (!Awaited.all("fetch_fail_end", terms))
-                return
             if (op.at("start") && Harness.autoAct === "fetch-resume") {
+                if (!Awaited.all("fetch_fail_end", op.quiet(false, false)))
+                    return
                 // The band's own button: calling `resumeAutoFetch` directly would pass a build where the press stopped
                 // reaching it. It clears the run and fetches again, so later beats wait for that fetch too.
                 op.input("resumed", () => {
@@ -515,20 +543,25 @@ Item {
                     const askedAt = repoTab.writeSeq
                     if (!page.pageBand.fetchNow())
                         return false
-                    acts.fetchStopped = wasStopped
-                    acts.fetchAskSeq = askedAt
+                    op.witness("stopped", wasStopped)
+                    op.witness("askSeq", askedAt)
                     return true
                 })
                 return
             }
             if (op.at("start") && Harness.autoAct === "fetch-hover") {
+                if (!Awaited.all("fetch_fail_end", op.quiet(false, false)))
+                    return
                 op.input("pointed", () => {
-                    acts.fetchRestFull = page.pageBand.fetchWordFull
+                    op.witness("restFull", page.pageBand.fetchWordFull)
                     page.pageBand.fetchPointedAt = true
                 })
                 return
             }
-            op.complete(() => op.line())
+            op.complete({
+                "name": "fetch_fail_end",
+                "when": () => op.quiet(Harness.autoAct === "fetch-resume", Harness.autoAct === "fetch-hover"),
+                "report": () => op.line() })
         }
     }
 
@@ -537,16 +570,14 @@ Item {
     PageStage {
         id: publishSurfaceTimer
         name: "publish_surface"
-        onTriggered: {
-            if (!Awaited.all("publish_surface_ready", {
-                "ready": !(!remoteDialog.visible && !publishFlow.publishChecked) }))
-                return
-            // What the far side's answer made of the bar: the line under the question, the reader's only word of it.
-            publishSurfaceTimer.complete(() => publishFlow.publishChecked
-                                         ? "publish asked state=" + publishFlow.publishState
-                                           + " says=" + graphPane.askDetail
-                                         : "")
-        }
+        // What the far side's answer made of the bar: the line under the question, the reader's only word of it.
+        onTriggered: publishSurfaceTimer.complete({
+            "name": "publish_surface_ready",
+            "when": () => ({ "ready": !(!remoteDialog.visible && !publishFlow.publishChecked) }),
+            "report": () => driver.verbReport().concat([publishFlow.publishChecked
+                                                        ? "publish asked state=" + publishFlow.publishState
+                                                          + " says=" + graphPane.askDetail
+                                                        : ""]) })
     }
     /// `publish-remotes`: the popup, asked for each beat until it is up — the form is created asynchronously with the
     /// ask bar. Only once the question is dressed and the bar is all the way down: a list opened mid-slide is
@@ -555,18 +586,21 @@ Item {
         id: publishRemotesTimer
         name: "publish_remotes"
         order: ["listed"]
+        function ready() {
+            return !(!publishFlow.publishChecked || !graphPane.askCard.settled)
+        }
         onTriggered: {
             const op = publishRemotesTimer
-            const ready = !(!publishFlow.publishChecked || !graphPane.askCard.settled)
             if (op.at("start")) {
-                if (!Awaited.all("publish_remotes_ready", { "ready": ready }))
+                if (!Awaited.all("publish_remotes_ready", { "ready": op.ready() }))
                     return
                 op.input("listed", () => publishFlow.openPublishRemotes())
                 return
             }
-            if (!Awaited.all("publish_remotes_open", { "ready": ready, "open": publishFlow.publishRemotesOpen() }))
-                return
-            op.complete(() => "")
+            op.complete({
+                "name": "publish_remotes_open",
+                "when": () => ({ "ready": op.ready(), "open": publishFlow.publishRemotesOpen() }),
+                "report": () => driver.verbReport() })
         }
     }
     /// `publish-dismiss`: what the bar wears on the way back up, which no picture holds — the exit is over long before
@@ -583,29 +617,31 @@ Item {
                 if (!Awaited.all("publish_dismiss_ready", {
                     "ready": !(!publishFlow.publishChecked || !graphPane.askCard.settled) }))
                     return
+                // The bar as the press left it, read in the press's own turn and kept (`dismissed`).
                 op.input("dismissed", () => {
                     graphPane.askCard.dismiss()
-                }, () => "ask_dismissed shut=" + graphPane.askCard.shut
-                         + " words=" + (graphPane.askCard.label !== "")
-                         + " detail=" + (graphPane.askDetail !== "")
-                         + " code=" + graphPane.askCode
-                         + " neutral=" + graphPane.askNeutral)
+                    op.witness("dismissed", "ask_dismissed shut=" + graphPane.askCard.shut
+                                            + " words=" + (graphPane.askCard.label !== "")
+                                            + " detail=" + (graphPane.askDetail !== "")
+                                            + " code=" + graphPane.askCode
+                                            + " neutral=" + graphPane.askNeutral)
+                })
                 return
             }
-            if (!Awaited.all("publish_gone_ready", { "ready": graphPane.askCard.shut }))
-                return
-            op.complete(() => "")
+            op.complete({
+                "name": "publish_gone_ready",
+                "when": () => ({ "ready": graphPane.askCard.shut }),
+                "report": () => driver.verbReport().concat([op.witnessed("dismissed")]) })
         }
     }
     /// `publish-add` stops with the real dialog on screen; a check finishing behind it is unrelated.
     PageStage {
         id: publishDialogTimer
         name: "publish_dialog"
-        onTriggered: {
-            if (!Awaited.all("publish_dialog_ready", { "ready": remoteDialog.visible }))
-                return
-            publishDialogTimer.complete(() => "")
-        }
+        onTriggered: publishDialogTimer.complete({
+            "name": "publish_dialog_ready",
+            "when": () => ({ "ready": remoteDialog.visible }),
+            "report": () => driver.verbReport() })
     }
     /// `publish-new-go`: the dialog's own button, once visible and valid (an empty URL cannot be submitted).
     PageStage {
@@ -632,17 +668,16 @@ Item {
     PageStage {
         id: publishSettleTimer
         name: "publish_settle"
-        onTriggered: {
-            if (!Awaited.all("publish_settle_ready", { "ready": publishFlow.publishChecked }))
-                return
-            publishSettleTimer.complete(() => "publish settled far="
-                                              + publishFlow.publishState
-                                              + " code=" + graphPane.askCode
-                                              + " hold=" + graphPane.askHold
-                                              + " alert=" + graphPane.askAlert
-                                              + " lease=" + (publishFlow.publishLease !== "")
-                                              + " theirs=" + repoTab.remoteBranchTheirs)
-        }
+        onTriggered: publishSettleTimer.complete({
+            "name": "publish_settle_ready",
+            "when": () => ({ "ready": publishFlow.publishChecked }),
+            "report": () => driver.verbReport().concat(["publish settled far="
+                                                        + publishFlow.publishState
+                                                        + " code=" + graphPane.askCode
+                                                        + " hold=" + graphPane.askHold
+                                                        + " alert=" + graphPane.askAlert
+                                                        + " lease=" + (publishFlow.publishLease !== "")
+                                                        + " theirs=" + repoTab.remoteBranchTheirs]) })
     }
     /// PGG_AUTO_ACT=publish-tip: the question `publish-taken` stops at, with a hand on its pill — the tip is the only
     /// place that says what an overwrite would drop. The hand goes on once the bar has stopped moving: the tooltip
@@ -662,11 +697,12 @@ Item {
                 })
                 return
             }
-            if (!Awaited.all("publish_tip_standing", { "tip": graphPane.askCard.tipStanding }))
-                return
-            op.complete(() => "publish_tip tip=" + graphPane.askCard.tipStanding
-                              + " far=" + publishFlow.publishState
-                              + " theirs=" + repoTab.remoteBranchTheirs)
+            op.complete({
+                "name": "publish_tip_standing",
+                "when": () => ({ "tip": graphPane.askCard.tipStanding }),
+                "report": () => driver.verbReport().concat(["publish_tip tip=" + graphPane.askCard.tipStanding
+                                                            + " far=" + publishFlow.publishState
+                                                            + " theirs=" + repoTab.remoteBranchTheirs]) })
         }
     }
     /// The answer, once the remote has said what it has — the pill is dead until then. The write barrier completes
@@ -679,6 +715,11 @@ Item {
         /// is never answered this way — the key is not a gesture (`AskBar.answerFromForm`) — so such a run waits out
         /// its watchdog.
         property bool byKey: false
+        function answering() {
+            return "publish answering far=" + publishFlow.publishState
+                   + " unsure=" + publishFlow.publishUnsure
+                   + " answerable=" + graphPane.askAnswerable
+        }
         /// The gesture a person is given: a hold is not answered by a click. Each way in arms its own watch
         /// (`holdToEnd` / `pressWrite`); the hold's is at its end, ticks after this. Answers whether it went in.
         function answer() {
@@ -698,11 +739,10 @@ Item {
                     "ready": !(!publishFlow.publishChecked || !graphPane.askAnswerable) }))
                     return
                 // `far` is what the far side holds — not the other line's `state`, which is this end's push state.
-                // Read in the turn of the press, which takes the question down.
-                op.advance("read", () => "publish answering far="
-                                         + publishFlow.publishState
-                                         + " unsure=" + publishFlow.publishUnsure
-                                         + " answerable=" + graphPane.askAnswerable)
+                // Read in the turn of the press, which takes the question down, and kept (`answering`): the line the
+                // write barrier's completion says (`publishLines`).
+                op.advance("read", () => op.answering())
+                op.witness("answering", op.answering())
                 // The push is the write this run waits out — `publish-new-go` presses two. Said out loud: arming over
                 // a write still being waited out is a breach (`repo_tab::write_watch`).
                 driver.letWriteGo()

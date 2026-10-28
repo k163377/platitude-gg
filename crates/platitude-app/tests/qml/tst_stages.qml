@@ -36,7 +36,7 @@ Item {
         owed: () => root.owing
         onReadied: {
             root.readiedAt = Harness.said.length
-            Automation.Awaited.completed("stages", route.completing, route.owedAtRead)
+            Automation.Awaited.completed("stages", route.completing, route.owedAtRead, route.witnessesRead)
         }
     }
 
@@ -105,14 +105,13 @@ Item {
     Automation.PageStage {
         id: completer
         name: "completer"
-        onTriggered: {
-            if (!Automation.Awaited.all("completer_ready", { "ready": true }))
-                return
-            completer.complete(() => {
+        onTriggered: completer.complete({
+            "name": "completer_ready",
+            "when": () => ({ "ready": true }),
+            "report": () => {
                 root.reportReads = root.reportReads + 1
                 return "stages subject=" + root.subject
-            })
-        }
+            } })
     }
 
     TestCase {

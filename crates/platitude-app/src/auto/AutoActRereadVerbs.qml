@@ -29,6 +29,8 @@ Item {
             // back (`--preset basic`), `gone` the open row's own branch deleted (`--preset basic`) — here, which takes
             // the row off the list at the press, ahead of the read (デザイン規約 §消す操作は先に画面から消す).
             navTimer.how = arg === "" ? "above" : arg
+            // `above` scrolls the TAGS list part way down before the hand comes onto a row.
+            navTimer.order = (navTimer.how === "above" ? ["scrolled"] : []).concat(["pointed", "into_lines", "written"])
             navTimer.start()
             return true
         }
@@ -75,48 +77,44 @@ Item {
         name: "nav_reread"
         order: ["pointed", "into_lines", "written"]
         property string how: "above"
-        property string key: ""
-        /// The open row's full name, read off it as the hand came onto it.
-        property string rowName: ""
-        property real rowAt: 0
-        /// The open row's delegate as the hand found it, held on purpose: `kept=` asks whether this very delegate
-        /// still stands where it stood (`standsAt`).
-        property var row: null
+        // Witnessed as the hand came onto the open row: its delegate (`row`) — held on purpose: `kept=` asks whether
+        // this very delegate still stands where it stood (`standsAt`) — its full name (`rowName`) and key (`key`);
+        // and as the write went in, where that row stood (`rowAt`) and the reads the list's model had (`readsBefore`).
         readonly property string kind: navTimer.how === "above" ? "tag" : "branch"
         readonly property var list: acts.sidebar.autoSections.listOf(navTimer.kind)
         readonly property var model: navTimer.how === "above" ? acts.driver.tagsModel : acts.driver.branchesModel
-        /// How many reads the list's model has taken in (counted by the connection after this), and how many it had
-        /// as the write went in.
+        /// How many reads the list's model has taken in (counted by the connection after this).
         property int reads: 0
-        property int readsBefore: 0
         onTriggered: {
             const op = navTimer
             const list = op.list
-            if (op.at("start")) {
+            if (op.at("start") || op.at("scrolled")) {
                 const enough = op.how === "above" ? 30 : 0
                 if (!Awaited.all("nav_reread_rows", { "rows": list !== null && list.count > enough }))
                     return
                 // The TAGS list part way down, so a tag written in between its top and the open row is one the
-                // scroll can take back; BRANCHES as it opens.
-                if (op.how === "above") {
-                    list.contentY = list.originY + 20 * Theme.rowHeight
-                    list.forceLayout()
-                }
-                const at = op.how === "above" ? 24 : -1
-                const pointed = at >= 0 ? list.itemAtIndex(at) : acts.rowNamed(list, "feature/topic-a")
+                // scroll can take back — sent each beat until the row the hand comes onto is built; BRANCHES as it
+                // opens.
+                if (op.how === "above" && op.at("start") && !op.input("scrolled", () => {
+                        list.contentY = list.originY + 20 * Theme.rowHeight
+                        list.forceLayout()
+                        return list.itemAtIndex(24) !== null
+                    }))
+                    return
+                const pointed = op.how === "above" ? list.itemAtIndex(24) : acts.rowNamed(list, "feature/topic-a")
                 if (!Awaited.all("nav_reread_row", { "row": pointed !== null }))
                     return
                 op.input("pointed", () => {
-                    op.row = pointed
-                    op.rowName = pointed.fullName
-                    op.key = pointed.rowKey
+                    op.witness("row", pointed)
+                    op.witness("rowName", pointed.fullName)
+                    op.witness("key", pointed.rowKey)
                     acts.sidebar.hand.stir(acts.middleOf(pointed))
                 })
                 return
             }
             if (op.at("pointed")) {
-                const row = op.row
-                if (!Awaited.all("nav_reread_open", { "open": acts.sidebar.openKey === op.key,
+                const row = op.witnessed("row")
+                if (!Awaited.all("nav_reread_open", { "open": acts.sidebar.openKey === op.witnessed("key"),
                                                       "built": row.factsItem !== null }))
                     return
                 // Down into its lines, as a hand reads them — a tag nobody carries opens its name alone, and the hand
@@ -127,12 +125,12 @@ Item {
                                                                        row.factsItem.height / 2))
                 })
                 op.input("written", () => {
-                    op.rowAt = row.mapToItem(null, 0, 0).y
-                    op.readsBefore = op.reads
+                    op.witness("rowAt", row.mapToItem(null, 0, 0).y)
+                    op.witness("readsBefore", op.reads)
                     const head = acts.graphModel.headRowOid
                     if (op.how === "gone") {
                         driver.pressWrite("delete-branch", () => {
-                            acts.repoTab.deleteBranch(op.rowName, true)
+                            acts.repoTab.deleteBranch(op.witnessed("rowName"), true)
                             return true
                         })
                     } else if (op.how === "short") {
@@ -151,16 +149,17 @@ Item {
                 })
                 return
             }
-            if (!Awaited.all("nav_reread_read", { "settled": driver.wroteAndSettled(),
-                                                  "read": op.reads > op.readsBefore,
-                                                  "weighed": !acts.sidebar.rowKeep.busy,
-                                                  "page": PageSettled.settled(page) }))
-                return
-            op.complete(() => "nav_reread how=" + op.how
-                              + " open=" + (acts.sidebar.openKey === op.key)
-                              + " kept=" + acts.standsAt(op.row, op.rowAt)
-                              + " still=" + acts.sidebar.hand.stillHeld
-                              + " name=" + op.rowName)
+            op.complete({
+                "name": "nav_reread_read",
+                "when": () => ({ "settled": driver.wroteAndSettled(),
+                                 "read": op.reads > op.witnessed("readsBefore"),
+                                 "weighed": !acts.sidebar.rowKeep.busy,
+                                 "page": PageSettled.settled(page) }),
+                "report": () => "nav_reread how=" + op.how
+                                + " open=" + (acts.sidebar.openKey === op.witnessed("key"))
+                                + " kept=" + acts.standsAt(op.witnessed("row"), op.witnessed("rowAt"))
+                                + " still=" + acts.sidebar.hand.stillHeld
+                                + " name=" + op.witnessed("rowName") })
         }
     }
     Connections {
@@ -176,8 +175,8 @@ Item {
         name: "recover_reread"
         order: ["opened", "pointed", "made", "deleted"]
         property string how: "inside"
-        property point cardAt: Qt.point(0, 0)
-        property int atBefore: -1
+        // Witnessed as the tag is made: the entry the card stood for (`atBefore`) and where its content stood in the
+        // window (`cardAt`).
         readonly property var pane: acts.sidebar.autoRecover
         onTriggered: {
             const op = recoverTimer
@@ -202,9 +201,9 @@ Item {
                 if (!Awaited.all("recover_reread_card", { "card": pane.cardOpen }))
                     return
                 op.input("made", () => {
-                    op.atBefore = pane.cardAt
+                    op.witness("atBefore", pane.cardAt)
                     const card = pane.entryHoverCard
-                    op.cardAt = card.contentItem.mapToItem(null, 0, 0)
+                    op.witness("cardAt", card.contentItem.mapToItem(null, 0, 0))
                     if (op.how === "inside") {
                         // The hand inside the card, which the list no longer hears.
                         card.contentPointed = true
@@ -229,21 +228,23 @@ Item {
                 })
                 return
             }
-            if (!Awaited.all("recover_reread_read", { "settled": driver.wroteAndSettled(),
-                                                      "answered": acts.page.recoverAnswered,
-                                                      "moved": !pane.cardOpen || pane.cardAt !== op.atBefore,
-                                                      "weighed": !pane.rowKeep.busy,
-                                                      "page": PageSettled.settled(acts.page) }))
-                return
-            op.complete(() => {
-                const log = recoverTimer.pane
-                const at = log.entryHoverCard.contentItem.mapToItem(null, 0, 0)
-                return "recover_reread how=" + op.how
-                       + " card=" + log.cardOpen
-                       + " placed=" + (log.cardOpen && at.x === op.cardAt.x && at.y === op.cardAt.y)
-                       + " still=" + log.hand.stillHeld
-                       + " at=" + op.atBefore + "->" + log.cardAt
-            })
+            op.complete({
+                "name": "recover_reread_read",
+                "when": () => ({ "settled": driver.wroteAndSettled(),
+                                 "answered": acts.page.recoverAnswered,
+                                 "moved": !op.pane.cardOpen || op.pane.cardAt !== op.witnessed("atBefore"),
+                                 "weighed": !op.pane.rowKeep.busy,
+                                 "page": PageSettled.settled(acts.page) }),
+                "report": () => {
+                    const log = recoverTimer.pane
+                    const at = log.entryHoverCard.contentItem.mapToItem(null, 0, 0)
+                    const was = op.witnessed("cardAt")
+                    return "recover_reread how=" + op.how
+                           + " card=" + log.cardOpen
+                           + " placed=" + (log.cardOpen && at.x === was.x && at.y === was.y)
+                           + " still=" + log.hand.stillHeld
+                           + " at=" + op.witnessed("atBefore") + "->" + log.cardAt
+                } })
         }
     }
 
@@ -252,19 +253,23 @@ Item {
     PageStage {
         id: diffTimer
         name: "diff_reread"
-        order: ["opened", "pointed", "written"]
+        order: ["opened", "scrolled", "pointed", "written"]
         property string how: "above"
-        /// The delegate of the hand's line as the hand came onto it, held on purpose: `kept=` / `same=` ask whether
-        /// this very delegate still stands for that line where it stood.
-        property var row: null
-        property real rowAt: 0
-        property string said: ""
-        /// How many reads the diff's model has taken in (counted by the connection after this), and how many it had
-        /// as the file was saved over.
+        // Witnessed as the hand came onto its line: the line's delegate (`row`) — held on purpose: `kept=` / `same=`
+        // ask whether this very delegate still stands for that line where it stood — and its text (`said`); and as
+        // the file was saved over, where that row stood (`rowAt`) and the reads the diff's model had (`readsBefore`).
+        /// How many reads the diff's model has taken in (counted by the connection after this).
         property int reads: 0
-        property int readsBefore: 0
-        /// Why saving over the file failed, empty where it went through.
-        property string wrote: ""
+        /// The row of the reworded line 185 among those the view has built from row 84 on, or -1.
+        function lineRow() {
+            const view = acts.diffPane.view
+            for (let i = 84; i < Math.min(view.count, 120); i++) {
+                const line = view.itemAtIndex(i)
+                if (line !== null && line.kind === "add" && line.new_no === 185)
+                    return i
+            }
+            return -1
+        }
         /// `notes.txt` as `--preset manyhunks` leaves it, every sixteenth line reworded — and the edit the run
         /// saves over it: a line written in the hunk above the hand's (`above`), or the hand's own line put back
         /// (`gone`).
@@ -293,47 +298,52 @@ Item {
                 if (!Awaited.all("diff_reread_rows", { "rows": acts.diffPane.firstChangedLine(0) >= 0 }))
                     return
                 // The reworded line 185 (hunk 11, nine rows a hunk), with the hunk above line 150's a screen above it:
-                // a line written in there moves the hand's row down the view.
-                view.positionViewAtIndex(84, ListView.Beginning)
-                view.forceLayout()
-                let at = -1
-                for (let i = 84; i < Math.min(view.count, 120) && at < 0; i++) {
-                    const line = view.itemAtIndex(i)
-                    if (line !== null && line.kind === "add" && line.new_no === 185)
-                        at = i
-                }
+                // a line written in there moves the hand's row down the view. Sent each beat until that row is built.
+                if (!op.input("scrolled", () => {
+                        view.positionViewAtIndex(84, ListView.Beginning)
+                        view.forceLayout()
+                        return op.lineRow() >= 0
+                    }))
+                    return
+            }
+            if (op.at("scrolled")) {
+                const at = op.lineRow()
                 if (!Awaited.all("diff_reread_row", { "row": at >= 0 }))
                     return
                 op.input("pointed", () => {
                     const pointed = view.itemAtIndex(at)
-                    op.row = pointed
-                    op.said = pointed.text
+                    op.witness("row", pointed)
+                    op.witness("said", pointed.text)
                     acts.diffPane.hand.stir(acts.middleOf(pointed))
                 })
                 return
             }
             if (op.at("pointed")) {
+                const row = op.witnessed("row")
                 // The row the hand is on laid out and standing, before the write moves the rows under it.
-                if (!op.still("diff_reread_stood", op.row.mapToItem(null, 0, 0).y))
+                if (!op.still("diff_reread_stood", row.mapToItem(null, 0, 0).y))
                     return
+                // A failed save over the file is said with the stage.
                 op.input("written", () => {
-                    op.rowAt = op.row.mapToItem(null, 0, 0).y
-                    op.readsBefore = op.reads
-                    op.wrote = Harness.writeFile(acts.repoTab.repoPath + "/notes.txt", op.notes(op.how))
+                    op.witness("rowAt", row.mapToItem(null, 0, 0).y)
+                    op.witness("readsBefore", op.reads)
+                    const why = Harness.writeFile(acts.repoTab.repoPath + "/notes.txt", op.notes(op.how))
                     acts.repoTab.pollNow()
-                }, () => op.wrote === "" ? "" : "diff_reread write " + op.wrote)
+                    return why
+                }, why => why === "" ? "" : "diff_reread write " + why)
                 return
             }
-            if (!Awaited.all("diff_reread_read", { "read": op.reads > op.readsBefore,
-                                                   "weighed": !acts.diffPane.rowKeep.busy }))
-                return
-            op.complete(() => {
-                const row = op.row
-                return "diff_reread how=" + op.how
-                       + " kept=" + acts.standsAt(row, op.rowAt)
-                       + " same=" + (row !== null && row.pooled !== true && row.text === op.said)
-                       + " still=" + acts.diffPane.hand.stillHeld
-            })
+            op.complete({
+                "name": "diff_reread_read",
+                "when": () => ({ "read": op.reads > op.witnessed("readsBefore"),
+                                 "weighed": !acts.diffPane.rowKeep.busy }),
+                "report": () => {
+                    const row = op.witnessed("row")
+                    return "diff_reread how=" + op.how
+                           + " kept=" + acts.standsAt(row, op.witnessed("rowAt"))
+                           + " same=" + (row !== null && row.pooled !== true && row.text === op.witnessed("said"))
+                           + " still=" + acts.diffPane.hand.stillHeld
+                } })
         }
     }
     Connections {

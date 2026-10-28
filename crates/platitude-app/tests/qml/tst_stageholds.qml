@@ -21,12 +21,13 @@ Item {
         id: op
         name: "holds"
         onTriggered: {
-            if (!op.at("start") || !Automation.Awaited.all("holds_ready", { "ready": true }))
+            if (!op.at("start"))
                 return
-            op.complete(() => {
-                root.reportReads = root.reportReads + 1
-                return "holds read"
-            })
+            op.complete({ "name": "holds_ready", "when": () => ({ "ready": true }),
+                          "report": () => {
+                              root.reportReads = root.reportReads + 1
+                              return "holds read"
+                          } })
         }
     }
 

@@ -19,15 +19,19 @@
 //!   frames it counts for itself, and a count of its own beats held
 //!   against a number where no wait's answer selects the step
 //!   ([`qml`], [`beats`]).
-//! - `sampler`, `owner`, `report`, `completion`, `awaited`, `stage`: the
-//!   harness's stages move, and its runs complete and report, only
-//!   through its operations — a structure no marker lets go
-//!   ([`stages`]).
+//! - `sampler`, `owner`, `report`, `completion`, `awaited`: the harness's
+//!   stages move, and its runs complete and report, only through its
+//!   operations — a structure no marker lets go ([`stages`]).
+//! - `stage`, `input`, `stale`, `reach`: what an operation's code does,
+//!   read across every call it makes — state kept past the operation's
+//!   API, an input outside a press, a reading carrying a value read before
+//!   it, a reach declared outside the machinery ([`reach`]).
 //! - `unread`: a file whose lexical reading stopped short — a literal, a
 //!   comment or a template's `${…}` left open, a `/` that reads two ways
-//!   (`crate::lex::Unread`) — or a handler the beats proof cannot read as
-//!   a tree, named at the place: what stands past it was not read, and is
-//!   not passed as read.
+//!   (`crate::lex::Unread`) — a handler the beats proof cannot read as a
+//!   tree, or a call or write of an operation's code nothing answers for
+//!   ([`reach`]), named at the place: what stands past it was not read,
+//!   and is not passed as read.
 //!
 //! Of this runner's own crate it reads the tool bodies too, and names a
 //! `sleep` (in the code or in a PowerShell script the code writes) or a
@@ -51,6 +55,7 @@
 mod audit;
 mod beats;
 mod qml;
+mod reach;
 mod rust;
 mod source;
 mod stages;

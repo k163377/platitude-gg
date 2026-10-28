@@ -119,11 +119,12 @@ pub(super) fn judge(
                 .chain(out_lines.iter())
                 .any(|l| l.contains("another platitude-gg is using these settings")),
         must_say,
+        // Read off the run's claims: a line an operation said at a stage, or a fact it kept, is history.
         said: must_say.is_none_or(|wanted| {
             err_lines
                 .iter()
                 .chain(out_lines.iter())
-                .any(|l| l.contains(wanted))
+                .any(|l| l.contains(wanted) && !super::contract::is_history(l))
         }),
         contract: super::contract::breaches(
             &said,

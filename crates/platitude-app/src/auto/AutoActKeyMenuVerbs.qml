@@ -23,6 +23,8 @@ Item {
     readonly property var wipPane: driver.wipPane
     readonly property var diffPane: driver.diffPane
     readonly property var navProbe: driver.navProbe
+    /// The surfaces the press knows (`press`).
+    readonly property var surfaces: ["graph", "files", "diff", "nav"]
 
     /// Runs `act` if it is this family's, and says whether it was. `key-menu <surface>`: `graph` (the row under
     /// HEAD's), `graph:request` / `graph:pointer` (Qt's request instead of the key), `files:<path>` (an unstaged file's
@@ -70,7 +72,7 @@ Item {
             // The row's own click (`NavList.clickRow`), which brings the keyboard (`NavList.takeKeyboard`).
             return list.clickRow(index)
         }
-        Awaited.note("key_menu surface=" + surface + " unknown")
+        // An unknown surface presses nothing; the beat says so (`surfaces`).
         return true
     }
     function headRow() {
@@ -78,19 +80,20 @@ Item {
     }
     /// The diff opens first (`openDiff`), then a drag from the head of the first line past the first removed one, then
     /// the hand arrives on the text (`DiffPane.handArrived`, the wheel's and a press's door for the keyboard).
-    property int diffLastRow: -1
     function openDiff(path) {
         acts.page.showWip()
         acts.page.toggleDiff("unstaged", path, acts.unstagedModel.origOf(path))
     }
+    /// The drag's last row is kept as the press's witness (`lastRow`): the menu's foot is read off that row.
     function pressDiff(path) {
         // The rows built, too: the first removed line is looked for among them (`DiffPane.firstRemovedRow`).
         if (acts.diffPane.diffModel.loading || acts.diffPane.view.count < 3 || !acts.diffPane.view.itemAtIndex(2))
             return false
         // Past the first removed line where there is one, so the selection holds both sides; two rows otherwise.
         const removed = acts.diffPane.firstRemovedRow()
-        acts.diffLastRow = Math.min(acts.diffPane.view.count - 1, removed >= 0 ? removed + 1 : 2)
-        acts.diffPane.pickText(0, 1, 0, acts.diffLastRow, acts.driver.pastLineEnd)
+        const last = keyMenuTimer.witness("lastRow",
+                                          Math.min(acts.diffPane.view.count - 1, removed >= 0 ? removed + 1 : 2))
+        acts.diffPane.pickText(0, 1, 0, last, acts.driver.pastLineEnd)
         acts.diffPane.handArrived()
         return true
     }
@@ -111,7 +114,8 @@ Item {
             return { "landed": acts.graphPane.view.activeFocus
                                && acts.graphPane.view.currentIndex === acts.headRow() + 1 }
         if (surface === "files") {
-            const row = acts.wipPane.filesWalk.rowFor("unstaged", rest)
+            // The row the press clicked, found by the pane's own reading (`WipPane.rowIn`).
+            const row = acts.wipPane.rowIn("unstaged", rest)
             // The click also opened the file's diff (`RepoPage.toggleDiff`), a git subprocess away: what the run
             // photographs and records is the pane with its rows (`DiffPane.diffSettled`).
             return {
@@ -166,12 +170,12 @@ Item {
             foot = item ? item.mapToItem(null, 0, Theme.graphRowHeight) : null
         } else if (surface === "files") {
             menu = acts.driver.fileMenu
-            const row = acts.wipPane.filesWalk.rowFor("unstaged", rest)
+            const row = acts.wipPane.rowIn("unstaged", rest)
             foot = row ? row.mapToItem(null, 0, Theme.rowHeight) : null
         } else if (surface === "diff") {
             menu = acts.driver.diffRowMenu.menu
             // The drag ended on its last row, past the line's end: the foot of that row, wherever along it.
-            const item = acts.diffPane.view.itemAtIndex(acts.diffLastRow)
+            const item = acts.diffPane.view.itemAtIndex(keyMenuTimer.witnessed("lastRow"))
             foot = item ? item.mapToItem(null, 0, item.height) : null
         } else if (surface === "nav") {
             const list = acts.navList(rest)
@@ -207,6 +211,8 @@ Item {
                 return
             }
             if (!op.at("pressed")) {
+                if (acts.surfaces.indexOf(op.surface) < 0)
+                    op.note("key_menu surface=" + op.surface + " unknown")
                 // Pressed until what it lands on is there.
                 op.input("pressed", () => acts.press(op.surface, op.rest))
                 return
@@ -219,8 +225,10 @@ Item {
             const asked = op.input("asked", () => {
                 acts.ask(op.surface, op.rest)
             })
+            // The landing gates the ask, not the completion: the menu the ask raises can take the keyboard.
             if (asked)
-                op.complete(() => acts.menuLine(op.surface, op.rest))
+                op.complete({ "name": "key_menu_asked", "when": () => ({}),
+                              "report": () => acts.menuLine(op.surface, op.rest) })
         }
     }
 }

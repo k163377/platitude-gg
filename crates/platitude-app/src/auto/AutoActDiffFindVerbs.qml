@@ -30,17 +30,22 @@ Item {
         const named = head === "staged" || head === "unstaged" || head === "untracked" || head === "conflicts"
         const filePath = named ? arg.substring(cut + 1) : arg
         if (filePath === "") {
-            driver.act.complete(() => "diff_arg act=" + act + " named=false")
+            argRefused.start()
             return true
         }
         page.showWip()
         page.toggleDiff(named ? head : "unstaged", filePath, unstagedModel.origOf(filePath))
-        rowsTimer.act = act
-        settled.act = act
-        // The step is pressed once the first hit is drawn, and the run ends once the hit it steps to is.
-        settled.order = act === "diff-find-step" ? ["stepped"] : []
         rowsTimer.start()
         return true
+    }
+
+    /// A verb given no file says so and ends there: the line its row asks for is never said, and the run fails on it.
+    /// Its completion is its own — the verbs of this family defer theirs (`AutoActCompletion.defersCompletion`).
+    PageStage {
+        id: argRefused
+        name: "diff_find_arg"
+        onTriggered: argRefused.complete({ "when": () => ({}),
+                                           "report": () => "diff_arg act=" + Harness.autoAct + " named=false" })
     }
 
     /// Ctrl+F's door (`RepoPage.startFind`), then the line typed: assigning the text runs the same search a keystroke
@@ -89,32 +94,41 @@ Item {
         id: rowsTimer
         name: "diff_find_rows"
         order: ["performed"]
-        property string act: ""
-        /// What the hand picked before the box opened on it (`diff-find-seed`).
-        property string picked: ""
-        /// The box as it opened on the pick, read as it opens.
+        readonly property string act: Harness.autoAct
+        /// The box as it opened on the pick (`diff-find-seed`), read as it opens: against what the hand picked before
+        /// it opened (`picked`, witnessed by `perform`).
         function seedLine() {
             const bar = diffPane.findBar
+            const picked = rowsTimer.witnessed("picked")
             return "diff_find_seed open=" + bar.open + " query=" + bar.query
-                   + " seeded=" + (rowsTimer.picked !== "" && bar.query === rowsTimer.picked)
+                   + " seeded=" + (picked !== "" && bar.query === picked)
                    + " matches=" + bar.matches + " focused=" + bar.boxFocused
         }
         onTriggered: {
             const op = rowsTimer
-            if (!Awaited.all("diff_find_rows", { "rows": diffPane.firstChangedLine(0) >= 0 }))
-                return
-            op.input("performed", () => {
-                acts.perform(op.act)
-            }, op.act === "diff-find-seed" ? () => op.seedLine() : undefined)
-            const m = diffPane.diffModel
+            if (op.at("start")) {
+                if (!Awaited.all("diff_find_rows", { "rows": diffPane.firstChangedLine(0) >= 0 }))
+                    return
+                op.input("performed", () => {
+                    acts.perform(op.act)
+                    // Kept for the completion's line (`settled`).
+                    if (op.act === "diff-find-seed")
+                        op.witness("opened", op.seedLine())
+                })
+            }
             if (op.act === "diff-find-drop" || op.act === "diff-find-keep") {
-                op.complete(() => "diff_find_drop act=" + op.act + " open=" + diffPane.findBar.open
-                                  + " searching=" + m.findSearching + " matches=" + m.findCount)
+                op.complete({ "when": () => ({}),
+                              "report": () => "diff_find_drop act=" + op.act + " open=" + diffPane.findBar.open
+                                              + " searching=" + diffPane.diffModel.findSearching
+                                              + " matches=" + diffPane.diffModel.findCount })
                 return
             }
             if (op.act === "diff-find-close") {
-                op.complete(() => "diff_find_close open=" + diffPane.findBar.open + " searching=" + m.findSearching
-                                  + " matches=" + m.findCount + " rowsFocus=" + diffPane.view.activeFocus)
+                op.complete({ "when": () => ({}),
+                              "report": () => "diff_find_close open=" + diffPane.findBar.open
+                                              + " searching=" + diffPane.diffModel.findSearching
+                                              + " matches=" + diffPane.diffModel.findCount
+                                              + " rowsFocus=" + diffPane.view.activeFocus })
                 return
             }
             op.stop()
@@ -125,8 +139,8 @@ Item {
         }
     }
 
-    /// The verb's one thing, put in at the rows. What a step between two inputs reads is kept for the line that
-    /// says it.
+    /// The verb's one thing, put in at the rows, in `rowsTimer`'s press. What a step between two inputs reads is kept
+    /// as that press's witness for the line that says it.
     function perform(act) {
         const bar = diffPane.findBar
         const m = diffPane.diffModel
@@ -135,7 +149,7 @@ Item {
             // box opens on what was picked.
             const row = diffPane.firstRemovedRow() + 1
             diffPane.pickText(0, row, 5, row, 13)
-            rowsTimer.picked = m.selectionText()
+            rowsTimer.witness("picked", m.selectionText())
             page.startFind()
             return
         }
@@ -157,10 +171,11 @@ Item {
             // A pattern that cannot be read: refused — the frame wears `warning` and the tooltip the reason. The run
             // waits for the tip (`scene.png` shows where it stands, `app.png` cannot).
             bar.query = "("
-            tipTimer.line = "diff_find_options case=" + byCase + " word=" + byWord
-                            + " regex=" + byRegex + " bad=" + (m.findError !== "") + " badMatches=" + bar.matches
-                            + " error=" + m.findError + " refused=" + bar.refused
-            tipTimer.plain = plain
+            rowsTimer.witness("options", "diff_find_options case=" + byCase + " word=" + byWord
+                                         + " regex=" + byRegex + " bad=" + (m.findError !== "")
+                                         + " badMatches=" + bar.matches + " error=" + m.findError
+                                         + " refused=" + bar.refused)
+            rowsTimer.witness("plain", plain)
             return
         }
         if (act === "diff-find-long") {
@@ -193,17 +208,18 @@ Item {
         id: tipTimer
         name: "diff_find_tip"
         order: ["pressed_away"]
-        /// What the options said as they were tried, read between the presses (`perform`).
-        property string line: ""
-        property int plain: 0
         onTriggered: {
-            if (!Awaited.all("diff_find_tip_ready", { "ready": diffPane.findBar.tipShown }))
-                return
-            tipTimer.input("pressed_away", () => {
-                page.releasePressedAway(null)
-            })
-            tipTimer.complete(() => tipTimer.line + " tip=true kept=" + diffPane.findBar.open
-                                     + " plain=" + tipTimer.plain)
+            if (tipTimer.at("start")) {
+                if (!Awaited.all("diff_find_tip_ready", { "ready": diffPane.findBar.tipShown }))
+                    return
+                tipTimer.input("pressed_away", () => {
+                    page.releasePressedAway(null)
+                })
+            }
+            // What the options said as they were tried, read between the presses (`perform`).
+            tipTimer.complete({ "when": () => ({}),
+                                "report": () => rowsTimer.witnessed("options") + " tip=true kept="
+                                                + diffPane.findBar.open + " plain=" + rowsTimer.witnessed("plain") })
         }
     }
 
@@ -212,51 +228,54 @@ Item {
     PageStage {
         id: settled
         name: "diff_find_settled"
-        property string act: ""
-        /// Where the view stood before the step.
-        property real before: 0
-        onTriggered: {
-            const op = settled
-            if (!Awaited.all("diff_find_settled_ready", { "ready": acts.standingDrawn() }))
-                return
+        // The step is pressed once the first hit is drawn, and the run ends once the hit it steps to is.
+        order: settled.act === "diff-find-step" ? ["stepped"] : []
+        readonly property string act: Harness.autoAct
+        /// The line the verb completes on. `diff-find-seed` and `diff-find-step` say what was read as their input
+        /// landed (`witness`).
+        function line() {
             const bar = diffPane.findBar
             const m = diffPane.diffModel
-            const view = diffPane.view
+            if (settled.act === "diff-find-split") {
+                const worn = acts.columnsWorn()
+                return "diff_find_split split=" + m.split + " matches=" + m.findCount + " at=" + m.findAt
+                       + " right=" + worn.right + " left=" + worn.left
+            }
+            if (settled.act === "diff-find-seed")
+                return rowsTimer.witnessed("opened")
+            if (settled.act === "diff-find-step")
+                return settled.witnessed("stepped")
+            if (settled.act === "diff-find-long")
+                return "diff_find_long open=" + bar.open + " matches=" + m.findCount
+                       + " overflows=" + bar.boxOverflows + " scrolled=" + (bar.boxScrolled > 0)
+                       + " focused=" + bar.boxFocused + " sent=" + Math.round(bar.boxScrolled)
+            // `diff-find` / `diff-find-lines`: the plain answer, and how many rows the standing hit covers.
+            return (settled.act === "diff-find-lines" ? "diff_find_lines" : "diff_find")
+                   + " open=" + bar.open + " matches=" + m.findCount + " at=" + m.findAt
+                   + " lines=" + bar.lines + " spans=" + acts.rowsStoodOn()
+                   + " focused=" + bar.boxFocused + " refused=" + bar.refused
+                   + " query=" + bar.query.replace(/\n/g, "⏎")
+        }
+        onTriggered: {
+            const op = settled
             if (op.act === "diff-find-step" && op.at("start")) {
-                // Back from the first: round to the last, which stands off screen, so the view moves. Said as it
+                if (!Awaited.all("diff_find_settled_ready", { "ready": acts.standingDrawn() }))
+                    return
+                // Back from the first: round to the last, which stands off screen, so the view moves. Read as it
                 // lands; the run ends once the hit it stepped to is drawn.
                 op.input("stepped", () => {
-                    op.before = view.contentY
+                    const view = diffPane.view
+                    const m = diffPane.diffModel
+                    const before = view.contentY
                     diffPane.findPrevious()
-                }, () => "diff_find_step at=" + m.findAt + " of=" + m.findCount
-                         + " moved=" + (view.contentY !== op.before) + " wrapped=" + (m.findAt === m.findCount))
-                return
-            }
-            if (op.act === "diff-find-split") {
-                op.complete(() => {
-                    const worn = acts.columnsWorn()
-                    return "diff_find_split split=" + m.split + " matches=" + m.findCount + " at=" + m.findAt
-                           + " right=" + worn.right + " left=" + worn.left
+                    op.witness("stepped", "diff_find_step at=" + m.findAt + " of=" + m.findCount
+                                          + " moved=" + (view.contentY !== before)
+                                          + " wrapped=" + (m.findAt === m.findCount))
                 })
                 return
             }
-            // Their lines were said on the way here.
-            if (op.act === "diff-find-seed" || op.act === "diff-find-step") {
-                op.complete(() => [])
-                return
-            }
-            if (op.act === "diff-find-long") {
-                op.complete(() => "diff_find_long open=" + bar.open + " matches=" + m.findCount
-                                  + " overflows=" + bar.boxOverflows + " scrolled=" + (bar.boxScrolled > 0)
-                                  + " focused=" + bar.boxFocused + " sent=" + Math.round(bar.boxScrolled))
-                return
-            }
-            // `diff-find` / `diff-find-lines`: the plain answer, and how many rows the standing hit covers.
-            op.complete(() => (op.act === "diff-find-lines" ? "diff_find_lines" : "diff_find")
-                              + " open=" + bar.open + " matches=" + m.findCount + " at=" + m.findAt
-                              + " lines=" + bar.lines + " spans=" + acts.rowsStoodOn()
-                              + " focused=" + bar.boxFocused + " refused=" + bar.refused
-                              + " query=" + bar.query.replace(/\n/g, "⏎"))
+            op.complete({ "name": "diff_find_settled_ready", "when": () => ({ "ready": acts.standingDrawn() }),
+                          "report": () => op.line() })
         }
     }
 }

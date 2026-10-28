@@ -7,8 +7,8 @@ import platitude.ui
 /// The settings screen's half of the window's PGG_AUTO_ACT harness: the verbs that reach into `settingsDialog` and
 /// nothing else (no tab, page or band). The rest of the window's dialog verbs are `WindowDialogActs`.
 ///
-/// A verb that opens the screen itself asks for it on every beat it is not up (an idempotent ask, repeated until its
-/// effect shows): the screen is no stage of the verb's.
+/// A verb that opens the screen itself does so as its first stage, `opened` (`openOn`): an idempotent ask, pressed
+/// again each beat until the screen stands. One that needs it still up as it completes names it in its `when`.
 // `Item`, not `QtObject`: rules-refs/app-ui.md「ドライバの root は `Item`」.
 Item {
     id: acts
@@ -27,20 +27,28 @@ Item {
         value: Harness.autoAct === "avatar-row-lit" ? 0 : -1
     }
 
-    /// How many sends to the chapters' foot have been made: each names its own wait for a frame drawn after it.
-    property int footSends: 0
-    /// Whether the chapters stand at their foot in a frame drawn after the last send (`op`'s `drawnSince`); sends
-    /// them there until they do. The foot is read off the column's height, which can grow after a send: the opened
-    /// screen's first layout pass lays every chapter out again, and a send made before it leaves `AVATARS` below the
-    /// view.
-    function chaptersAtFoot(op) {
-        const sent = acts.footSends > 0
-        if (sent && !op.drawnSince("chapters_foot/" + acts.footSends))
-            return false
-        if (sent && acts.settingsDialog.autoAtChapterFoot())
+    /// Opens the screen on `category` where it is not up, as the press of a verb's `opened` stage. Answers whether it
+    /// stands; asked again on the next beat while it does not.
+    function openOn(category) {
+        if (!acts.settingsDialog.opened)
+            acts.settingsDialog.openAt(category)
+        return acts.settingsDialog.opened
+    }
+
+    /// Whether the chapters' column and where it stands scrolled to have stood across a swapped frame (`op`'s
+    /// `still`): the foot is read off the column's height, which can grow after a send — the opened screen's first
+    /// layout pass lays every chapter out again, and a send made before it leaves `AVATARS` below the view. Read in
+    /// the beat before each send to the foot (`sendChaptersToFoot`), so the foot is judged in a frame drawn after
+    /// the last send.
+    function chaptersStill(op) {
+        return op.still("chapters_foot", acts.settingsDialog.chaptersContent + "@" + acts.settingsDialog.chaptersAt)
+    }
+    /// The press of a verb's `foot` stage: whether the chapters stand at their foot, sending them there where they do
+    /// not — pressed again on a later beat, once the column has stood (`chaptersStill`).
+    function sendChaptersToFoot() {
+        if (acts.settingsDialog.autoAtChapterFoot())
             return true
         acts.settingsDialog.autoShowChapterFoot()
-        acts.footSends++
         return false
     }
 
@@ -94,7 +102,7 @@ Item {
     /// The box as each arrival leaves it: a diagnosis of the run, judged by the line its completion reads.
     function noteTool() {
         if (Harness.autoAct === "settings-tools" || Harness.autoAct === "settings-tools-loading")
-            Awaited.note(acts.toolLine())
+            toolsTimer.note(acts.toolLine())
     }
     function fitLine() {
         return "settings_fit reach="
@@ -111,30 +119,39 @@ Item {
         name: "settings_tools"
         running: Harness.autoAct === "settings-tools"
                  || Harness.autoAct === "settings-tools-loading"
+        /// Whether the box stands as the verb wants it: the loading edge seen with the list down, or the settled
+        /// choices down.
+        function ready() {
+            return Harness.autoAct === "settings-tools-loading"
+                ? (acts.toolLoadingSeen && acts.gitPane.toolListOpen)
+                : (acts.gitPane.toolsSettled && acts.gitPane.toolChoices.length > 0 && acts.gitPane.toolListOpen)
+        }
         onTriggered: {
-            if (!settingsDialog.opened) {
-                settingsDialog.pressToolOnOpen = true
-                settingsDialog.openAt("git")
+            if (toolsTimer.at("start")) {
+                toolsTimer.input("opened", () => {
+                    if (!settingsDialog.opened)
+                        settingsDialog.pressToolOnOpen = true
+                    return acts.openOn("git")
+                })
                 return
             }
             // A stock-take that named nothing ends both verbs: an empty list is a card with nothing to drop, which
             // closes itself (`AppCombo.hasList`), so neither `opened` nor the loading edge can follow.
             if (acts.toolsCameBack && acts.gitPane.toolChoices.length === 0) {
-                if (!Awaited.all("settings_tools_none", { "page": PageSettled.windowSettled(window) }))
-                    return
-                toolsTimer.complete(() => [acts.toolLine(),
-                                           "merge_editor_none this machine's stock-take named no merge editor, "
-                                           + "so the list has nothing to drop"])
+                toolsTimer.complete({
+                    "name": "settings_tools_none",
+                    "when": () => ({ "opened": settingsDialog.opened, "page": PageSettled.windowSettled(window) }),
+                    "report": () => [acts.toolLine(),
+                                     "merge_editor_none this machine's stock-take named no merge editor, "
+                                     + "so the list has nothing to drop"] })
                 return
             }
-            const ready = Harness.autoAct === "settings-tools-loading"
-                        ? (acts.toolLoadingSeen && acts.gitPane.toolListOpen)
-                        : (acts.gitPane.toolsSettled && acts.gitPane.toolChoices.length > 0
-                           && acts.gitPane.toolListOpen)
-            if (!Awaited.all("settings_tools_ready", { "ready": ready,
-                                                       "page": PageSettled.windowSettled(window) }))
-                return
-            toolsTimer.complete(() => acts.toolLine())
+            toolsTimer.complete({
+                "name": "settings_tools_ready",
+                "when": () => ({ "opened": settingsDialog.opened,
+                                 "ready": toolsTimer.ready(),
+                                 "page": PageSettled.windowSettled(window) }),
+                "report": () => acts.toolLine() })
         }
     }
 
@@ -144,16 +161,16 @@ Item {
     WindowStage {
         id: repoSettingsTimer
         name: "repo_settings"
-        /// The row of the strip chosen (the front one stays where no argument names another) and the list, where one
-        /// is wanted, pressed down.
-        order: ["chosen"]
+        /// The screen opened, then the row of the strip chosen (the front one stays where no argument names another)
+        /// and the list, where one is wanted, pressed down.
+        order: ["opened", "chosen"]
         running: Harness.autoAct === "settings-repo" || Harness.autoAct === "settings-repo-pick"
         onTriggered: {
-            if (!settingsDialog.opened) {
-                settingsDialog.openAt("git")
+            if (repoSettingsTimer.at("start")) {
+                repoSettingsTimer.input("opened", () => acts.openOn("git"))
                 return
             }
-            if (repoSettingsTimer.at("start")) {
+            if (repoSettingsTimer.at("opened")) {
                 // The strip's rows arrive with the window.
                 if (acts.repoPane.autoRepoRows === 0)
                     return
@@ -170,12 +187,13 @@ Item {
                     }))
                     return
             }
-            if (!Awaited.all("repo_settings_ready", {
-                "read": acts.repoPane.autoRepoReady,
-                "list": Harness.autoAct !== "settings-repo-pick" || acts.repoPane.autoRepoComboOpen,
-                "page": PageSettled.windowSettled(window) }))
-                return
-            repoSettingsTimer.complete(() => ["repo_config " + acts.repoPane.repoTally(), acts.fitLine()])
+            repoSettingsTimer.complete({
+                "name": "repo_settings_ready",
+                "when": () => ({ "opened": settingsDialog.opened,
+                                 "read": acts.repoPane.autoRepoReady,
+                                 "list": Harness.autoAct !== "settings-repo-pick" || acts.repoPane.autoRepoComboOpen,
+                                 "page": PageSettled.windowSettled(window) }),
+                "report": () => ["repo_config " + acts.repoPane.repoTally(), acts.fitLine()] })
         }
     }
 
@@ -190,15 +208,15 @@ Item {
     WindowStage {
         id: gitPathTimer
         name: "git_path"
-        /// The path put in (with no argument, nothing is), then the write the way out makes.
-        order: ["picked", "applied"]
+        /// The screen opened, the path put in (with no argument, nothing is), then the write the way out makes.
+        order: ["opened", "picked", "applied"]
         running: Harness.autoAct === "settings-git-path"
         onTriggered: {
-            if (!settingsDialog.opened) {
-                settingsDialog.openAt("app")
+            if (gitPathTimer.at("start")) {
+                gitPathTimer.input("opened", () => acts.openOn("app"))
                 return
             }
-            if (gitPathTimer.at("start")) {
+            if (gitPathTimer.at("opened")) {
                 // `in-use`: the git already running, the one path that does not offer a restart. `other`: the second
                 // git the run was staged with (`--other-git`), which does — on either OS, without naming a path. Each
                 // as the chooser answers it: a URL of the whole path (`Harness.fileUrl`).
@@ -213,14 +231,21 @@ Item {
                 return
             }
             // The screen asks as it opens, so an answer is coming either way; after a pick, this is the later ask's.
-            if (!Awaited.all("git_path_answered", {
-                "state": AppBackend.gitPathState !== "" && AppBackend.gitPathState !== "checking",
-                "page": PageSettled.settledUnder(window) }))
-                return
-            // The write the way out makes, with the screen still up for the picture: the file a seeded run started
-            // from is read after the run for the spelling it keeps (`verify::seed`).
-            gitPathTimer.input("applied", () => settingsDialog.applyFields())
-            gitPathTimer.complete(() => "git_path " + acts.appPane.gitPathTally())
+            if (gitPathTimer.at("picked")) {
+                if (!Awaited.all("git_path_answered", {
+                    "state": AppBackend.gitPathState !== "" && AppBackend.gitPathState !== "checking",
+                    "page": PageSettled.settledUnder(window) }))
+                    return
+                // The write the way out makes, with the screen still up for the picture: the file a seeded run
+                // started from is read after the run for the spelling it keeps (`verify::seed`).
+                if (!gitPathTimer.input("applied", () => settingsDialog.applyFields()))
+                    return
+            }
+            // The answer was waited for before the write; the page is the completion's hold's.
+            gitPathTimer.complete({
+                "name": "git_path_applied",
+                "when": () => ({ "opened": settingsDialog.opened }),
+                "report": () => "git_path " + acts.appPane.gitPathTally() })
         }
     }
 
@@ -230,24 +255,26 @@ Item {
     WindowStage {
         id: processesTimer
         name: "git_processes"
-        /// The box typed; the store's answer is the count it then holds.
-        order: ["typed"]
+        /// The screen opened and the box typed; the store's answer is the count it then holds.
+        order: ["opened", "typed"]
         running: Harness.autoAct === "settings-processes"
         onTriggered: {
-            if (!settingsDialog.opened) {
-                settingsDialog.openAt("app")
+            if (processesTimer.at("start")) {
+                processesTimer.input("opened", () => acts.openOn("app"))
                 return
             }
-            if (processesTimer.at("start")) {
+            if (processesTimer.at("opened")) {
                 processesTimer.input("typed", () => acts.appPane.autoTypeProcesses(Harness.autoActArg))
                 return
             }
             // Typed nothing: the store's default stands, and the read is of that.
-            if (!Awaited.all("git_processes_ready", {
-                "applied": Harness.autoActArg === "" || String(AppBackend.gitConcurrency) === Harness.autoActArg,
-                "page": PageSettled.windowSettled(window) }))
-                return
-            processesTimer.complete(() => "git_processes " + acts.appPane.processesTally())
+            processesTimer.complete({
+                "name": "git_processes_ready",
+                "when": () => ({ "opened": settingsDialog.opened,
+                                 "applied": Harness.autoActArg === ""
+                                            || String(AppBackend.gitConcurrency) === Harness.autoActArg,
+                                 "page": PageSettled.windowSettled(window) }),
+                "report": () => "git_processes " + acts.appPane.processesTally() })
         }
     }
 
@@ -259,15 +286,16 @@ Item {
     WindowStage {
         id: refreshTimer
         name: "settings_refresh"
-        /// The chapter worked; the store's answer is the tally standing still across a swapped frame.
-        order: ["typed"]
+        /// The screen opened and the chapter worked; the store's answer is the tally standing still across a swapped
+        /// frame.
+        order: ["opened", "typed"]
         running: Harness.autoAct === "settings-refresh"
         onTriggered: {
-            if (!settingsDialog.opened) {
-                settingsDialog.openAt("app")
+            if (refreshTimer.at("start")) {
+                refreshTimer.input("opened", () => acts.openOn("app"))
                 return
             }
-            if (refreshTimer.at("start")) {
+            if (refreshTimer.at("opened")) {
                 refreshTimer.input("typed", () => {
                     const parts = Harness.autoActArg.split(":")
                     acts.appPane.autoTypeRefresh(parts[0] || "", parts[1] || "", parts[2] || "", parts[3] || "",
@@ -275,11 +303,12 @@ Item {
                 })
                 return
             }
-            if (!Awaited.all("settings_refresh_ready", {
-                "store": refreshTimer.still("settings_refresh_tally", acts.appPane.refreshTally()),
-                "page": PageSettled.windowSettled(window) }))
+            if (!refreshTimer.still("settings_refresh_tally", acts.appPane.refreshTally()))
                 return
-            refreshTimer.complete(() => "settings_refresh " + acts.appPane.refreshTally())
+            refreshTimer.complete({
+                "name": "settings_refresh_ready",
+                "when": () => ({ "opened": settingsDialog.opened, "page": PageSettled.windowSettled(window) }),
+                "report": () => "settings_refresh " + acts.appPane.refreshTally() })
         }
     }
 
@@ -290,15 +319,15 @@ Item {
     WindowStage {
         id: refreshLeaveTimer
         name: "refresh_leave"
-        /// The pairs set off their defaults, then the way out taken.
-        order: ["typed", "left"]
+        /// The screen opened, the pairs set off their defaults, then the way out taken.
+        order: ["opened", "typed", "left"]
         running: Harness.autoAct === "settings-refresh-leave"
         onTriggered: {
             if (refreshLeaveTimer.at("start")) {
-                if (!Awaited.all("refresh_leave_open", { "open": settingsDialog.opened })) {
-                    settingsDialog.openAt("app")
-                    return
-                }
+                refreshLeaveTimer.input("opened", () => acts.openOn("app"))
+                return
+            }
+            if (refreshLeaveTimer.at("opened")) {
                 refreshLeaveTimer.input("typed", () => acts.appPane.autoTypeRefresh("7", "20", "auto", "9", "60"))
                 return
             }
@@ -317,11 +346,11 @@ Item {
                 return
             }
             // The fields are written as the close ends.
-            if (!Awaited.all("refresh_leave_ready", { "shut": !settingsDialog.visible,
-                                                      "page": PageSettled.windowSettled(window) }))
-                return
-            refreshLeaveTimer.complete(() => "settings_refresh_leave " + acts.appPane.refreshStore()
-                                              + " open=" + settingsDialog.opened)
+            refreshLeaveTimer.complete({
+                "name": "refresh_leave_ready",
+                "when": () => ({ "shut": !settingsDialog.visible, "page": PageSettled.windowSettled(window) }),
+                "report": () => "settings_refresh_leave " + acts.appPane.refreshStore()
+                                + " open=" + settingsDialog.opened })
         }
     }
 
@@ -331,34 +360,36 @@ Item {
     WindowStage {
         id: gitLeaveTimer
         name: "git_leave"
-        /// The path put in, then the way out taken.
-        order: ["picked", "left"]
+        /// The screen opened, the path put in, then the way out taken.
+        order: ["opened", "picked", "left"]
         running: Harness.autoAct === "settings-git-leave"
         onTriggered: {
-            if (!settingsDialog.opened) {
-                settingsDialog.openAt("app")
+            if (gitLeaveTimer.at("start")) {
+                gitLeaveTimer.input("opened", () => acts.openOn("app"))
                 return
             }
-            if (gitLeaveTimer.at("start")) {
+            if (gitLeaveTimer.at("opened")) {
                 gitLeaveTimer.input("picked", () => acts.appPane.autoPickGitPath(Harness.fileUrl(Harness.otherGit)))
                 return
             }
             // The offer arrives a subprocess after the pick.
-            if (!Awaited.all("git_leave_offered", { "offer": AppBackend.gitPathOffersRestart }))
-                return
             if (gitLeaveTimer.at("picked")) {
+                if (!Awaited.all("git_leave_offered", { "offer": AppBackend.gitPathOffersRestart }))
+                    return
                 gitLeaveTimer.input("left", () => settingsDialog.escapeOut())
                 return
             }
-            // The way out either asks about the path or has closed the screen.
-            if (!Awaited.all("git_leave_asked", { "asked": settingsDialog.askingGitPath || !settingsDialog.opened,
-                                                  "page": PageSettled.windowSettled(window) }))
-                return
-            gitLeaveTimer.complete(() => ["settings_git_leave offers=" + AppBackend.gitPathOffersRestart
-                                          + " armed=" + settingsDialog.askingGitPath
-                                          + " unsaved=" + settingsDialog.unsavedIdentities
-                                          + " open=" + settingsDialog.opened,
-                                          "git_path " + acts.appPane.gitPathTally()])
+            // The way out either asks about the path or has closed the screen — the offer still standing.
+            gitLeaveTimer.complete({
+                "name": "git_leave_asked",
+                "when": () => ({ "offer": AppBackend.gitPathOffersRestart,
+                                 "asked": settingsDialog.askingGitPath || !settingsDialog.opened,
+                                 "page": PageSettled.windowSettled(window) }),
+                "report": () => ["settings_git_leave offers=" + AppBackend.gitPathOffersRestart
+                                 + " armed=" + settingsDialog.askingGitPath
+                                 + " unsaved=" + settingsDialog.unsavedIdentities
+                                 + " open=" + settingsDialog.opened,
+                                 "git_path " + acts.appPane.gitPathTally()] })
         }
     }
 
@@ -371,17 +402,21 @@ Item {
     WindowStage {
         id: endingsTimer
         name: "settings_eol"
-        /// The row picked.
-        order: ["picked"]
+        /// The screen opened, the row picked, then the chapters sent to their foot once the write's read is held.
+        order: ["opened", "picked", "foot"]
         running: Harness.autoAct === "settings-eol"
         /// The argument as the model spells it: the row that writes nothing is empty there.
         readonly property string wanted: Harness.autoActArg === "inherited" ? "" : Harness.autoActArg
+        /// The read that follows the write holding the row picked.
+        function held() {
+            return acts.repoPane.autoEndingsReady && acts.repoPane.autoEndingHeld === endingsTimer.wanted
+        }
         onTriggered: {
-            if (!settingsDialog.opened) {
-                settingsDialog.openAt("git")
+            if (endingsTimer.at("start")) {
+                endingsTimer.input("opened", () => acts.openOn("git"))
                 return
             }
-            if (endingsTimer.at("start")) {
+            if (endingsTimer.at("opened")) {
                 if (acts.repoPane.autoRepoRows === 0 || !acts.repoPane.autoEndingsReady)
                     return
                 // The chooser's answer is the press's: a row it does not have yet is picked again.
@@ -389,12 +424,19 @@ Item {
                     return
             }
             // Last the foot, so the picture holds the chapter that was written into.
-            if (!Awaited.all("settings_eol_ready", {
-                "held": acts.repoPane.autoEndingsReady && acts.repoPane.autoEndingHeld === endingsTimer.wanted,
-                "foot": acts.chaptersAtFoot(endingsTimer),
-                "page": PageSettled.windowSettled(window) }))
-                return
-            endingsTimer.complete(() => "line_endings " + acts.repoPane.endingsTally())
+            if (endingsTimer.at("picked")) {
+                if (!Awaited.all("settings_eol_held", { "held": endingsTimer.held() }))
+                    return
+                if (!acts.chaptersStill(endingsTimer) || !endingsTimer.input("foot", () => acts.sendChaptersToFoot()))
+                    return
+            }
+            endingsTimer.complete({
+                "name": "settings_eol_ready",
+                "when": () => ({ "opened": settingsDialog.opened,
+                                 "held": endingsTimer.held(),
+                                 "foot": settingsDialog.autoAtChapterFoot(),
+                                 "page": PageSettled.windowSettled(window) }),
+                "report": () => "line_endings " + acts.repoPane.endingsTally() })
         }
     }
 
@@ -404,32 +446,33 @@ Item {
     WindowStage {
         id: categorySwitchTimer
         name: "settings_switch"
-        /// The rail's row pressed.
-        order: ["tapped"]
+        /// The screen opened, then the rail's row pressed.
+        order: ["opened", "tapped"]
         running: Harness.autoAct === "settings-switch"
-        /// The application category was standing as the row was pressed — the half the picture cannot hold.
-        property bool wasApp: false
         onTriggered: {
             if (categorySwitchTimer.at("start")) {
-                if (!settingsDialog.opened) {
-                    settingsDialog.openAt("app")
-                    return
-                }
+                categorySwitchTimer.input("opened", () => acts.openOn("app"))
+                return
+            }
+            if (categorySwitchTimer.at("opened")) {
                 if (!acts.appPane.autoAppShown)
                     return
-                // The rail's answer is the press's: a row it does not have yet is pressed again.
+                // The rail's answer is the press's: a row it does not have yet is pressed again. The application
+                // category was standing as the row was pressed — the half the picture cannot hold — kept once it took.
                 if (!categorySwitchTimer.input("tapped", () => {
-                        categorySwitchTimer.wasApp = acts.appPane.autoAppShown
-                        return settingsDialog.autoTapCategory("git")
+                        const wasApp = acts.appPane.autoAppShown
+                        if (!settingsDialog.autoTapCategory("git"))
+                            return false
+                        categorySwitchTimer.witness("wasApp", wasApp)
                     }))
                     return
             }
-            if (!Awaited.all("settings_switch_ready", { "git": acts.gitPane.visible,
-                                                        "page": PageSettled.windowSettled(window) }))
-                return
-            categorySwitchTimer.complete(() => "settings_switch was_app=" + categorySwitchTimer.wasApp
-                                                + " app=" + acts.appPane.autoAppShown
-                                                + " git=" + acts.gitPane.visible)
+            categorySwitchTimer.complete({
+                "name": "settings_switch_ready",
+                "when": () => ({ "git": acts.gitPane.visible, "page": PageSettled.windowSettled(window) }),
+                "report": () => "settings_switch was_app=" + categorySwitchTimer.witnessed("wasApp")
+                                + " app=" + acts.appPane.autoAppShown
+                                + " git=" + acts.gitPane.visible })
         }
     }
 
@@ -439,38 +482,37 @@ Item {
     WindowStage {
         id: escapeTimer
         name: "settings_escape"
-        /// The way out taken.
-        order: ["escaped"]
+        /// The screen opened, then the way out taken.
+        order: ["opened", "escaped"]
         running: Harness.autoAct === "settings-escape"
-        /// The screen was up as the way out was taken — the half the shot cannot hold.
-        property bool wasOpen: false
         onTriggered: {
             if (escapeTimer.at("start")) {
-                if (!settingsDialog.opened) {
-                    // The argument names the category: the git one's way out passes the chapters a Save guards.
-                    settingsDialog.openAt(Harness.autoActArg === "" ? "app" : Harness.autoActArg)
-                    return
-                }
+                // The argument names the category: the git one's way out passes the chapters a Save guards.
+                escapeTimer.input("opened", () => acts.openOn(Harness.autoActArg === "" ? "app" : Harness.autoActArg))
+                return
+            }
+            if (escapeTimer.at("opened")) {
                 // Unsaved is counted only after git has answered for the boxes, or the run photographs the read.
                 if (settingsDialog.category === "git" && !acts.repoPane.autoRepoReady)
                     return
+                // The screen was up as the way out was taken — the half the shot cannot hold.
                 escapeTimer.input("escaped", () => {
-                    escapeTimer.wasOpen = settingsDialog.opened
+                    escapeTimer.witness("wasOpen", settingsDialog.opened)
                     settingsDialog.escapeOut()
                 })
                 return
             }
-            if (!Awaited.all("settings_escape_ready", { "shut": !settingsDialog.opened,
-                                                        "page": PageSettled.windowSettled(window) }))
-                return
             // `global=` / `repo=` name which chapter thought it held an edit. `save=` is the global chapter's Save,
             // off the button: lit over untouched boxes, it would offer git its own answer.
-            escapeTimer.complete(() => "settings_escape unsaved=" + settingsDialog.unsavedIdentities
-                                        + " global=" + acts.gitPane.unsavedIsGlobal
-                                        + " repo=" + acts.gitPane.unsavedIsRepo
-                                        + " save=" + acts.gitPane.autoSaveOffered
-                                        + " was_open=" + escapeTimer.wasOpen
-                                        + " now_open=" + settingsDialog.opened)
+            escapeTimer.complete({
+                "name": "settings_escape_ready",
+                "when": () => ({ "shut": !settingsDialog.opened, "page": PageSettled.windowSettled(window) }),
+                "report": () => "settings_escape unsaved=" + settingsDialog.unsavedIdentities
+                                + " global=" + acts.gitPane.unsavedIsGlobal
+                                + " repo=" + acts.gitPane.unsavedIsRepo
+                                + " save=" + acts.gitPane.autoSaveOffered
+                                + " was_open=" + escapeTimer.witnessed("wasOpen")
+                                + " now_open=" + settingsDialog.opened })
         }
     }
 
@@ -480,15 +522,15 @@ Item {
     WindowStage {
         id: leaveTimer
         name: "settings_leave"
-        /// The edit made and the way out pressed.
-        order: ["left"]
+        /// The screen opened, then the edit made and the way out pressed.
+        order: ["opened", "left"]
         running: Harness.autoAct === "settings-leave"
         onTriggered: {
             if (leaveTimer.at("start")) {
-                if (!settingsDialog.opened) {
-                    settingsDialog.openAt("git")
-                    return
-                }
+                leaveTimer.input("opened", () => acts.openOn("git"))
+                return
+            }
+            if (leaveTimer.at("opened")) {
                 // Both chapters' reads land before a box is changed: a typed box stops following the read, so the
                 // address would stay empty and the Save dark.
                 if (AppBackend.identityState !== "ready" || !acts.repoPane.autoRepoReady)
@@ -504,14 +546,14 @@ Item {
                     }))
                     return
             }
-            if (!Awaited.all("settings_leave_asked", { "asked": settingsDialog.askingLeave,
-                                                       "page": PageSettled.windowSettled(window) }))
-                return
             // `save=`: the typing that stops the way out must also light the Save the reader is sent to.
-            leaveTimer.complete(() => "settings_leave unsaved=" + settingsDialog.unsavedIdentities
-                                       + " save=" + acts.gitPane.autoSaveOffered
-                                       + " asked=" + settingsDialog.askingLeave
-                                       + " open=" + settingsDialog.opened)
+            leaveTimer.complete({
+                "name": "settings_leave_asked",
+                "when": () => ({ "asked": settingsDialog.askingLeave, "page": PageSettled.windowSettled(window) }),
+                "report": () => "settings_leave unsaved=" + settingsDialog.unsavedIdentities
+                                + " save=" + acts.gitPane.autoSaveOffered
+                                + " asked=" + settingsDialog.askingLeave
+                                + " open=" + settingsDialog.opened })
         }
     }
 
@@ -526,28 +568,41 @@ Item {
         /// That category is showing: `SweepPad` steps over a hidden item, so the other would walk an empty column.
         readonly property bool shown: sweepTimer.cat === "git" ? acts.gitPane.visible
                                                                : acts.appPane.autoAppShown
+        /// What the sweep stands on, read now: the screen up on the category, its own git reads in, and the page.
+        function ready() {
+            return { "opened": settingsDialog.opened,
+                     "shown": sweepTimer.shown,
+                     "read": sweepTimer.cat === "git"
+                         ? (acts.repoPane.autoRepoReady && acts.repoPane.autoEndingsReady)
+                         : AppBackend.gitPathState !== "checking",
+                     "page": PageSettled.windowSettled(window) }
+        }
         onTriggered: {
-            if (!settingsDialog.opened) {
-                settingsDialog.openAt(sweepTimer.cat)
+            if (sweepTimer.at("start")) {
+                sweepTimer.input("opened", () => acts.openOn(sweepTimer.cat))
                 return
             }
             // git: the repository group's identity and line endings (the latter grows a line); app: the version probe.
-            if (!Awaited.all("settings_sweep_ready", {
-                "shown": sweepTimer.shown,
-                "read": sweepTimer.cat === "git"
-                    ? (acts.repoPane.autoRepoReady && acts.repoPane.autoEndingsReady)
-                    : AppBackend.gitPathState !== "checking",
-                "page": PageSettled.windowSettled(window) }))
-                return
             // `release=`: the hand that gives the keyboard back when a press lands where nothing takes it is standing
             // (no picture can say it; that a press reaches it is `tests/qml/tst_fieldrelease.qml`'s). `version=`: the
-            // app category's version chip has its grabbable field behind it (`CodeChip.grabbed`). The sweep is
-            // walked as the completion reads its line.
-            sweepTimer.complete(() => "settings_sweep "
-                + settingsDialog.autoChapterHand.sweepAir(7, "cat=" + sweepTimer.cat
-                                                             + " shown=" + sweepTimer.shown
-                                                             + " release=" + settingsDialog.caretHand.stands
-                                                             + " version=" + acts.appPane.autoVersionGrabbed))
+            // app category's version chip has its grabbable field behind it (`CodeChip.grabbed`). The sweep is a
+            // press, walked once the category has read, and its line, with the states read beside it, is its
+            // witness.
+            if (sweepTimer.at("opened")) {
+                if (!Awaited.all("settings_sweep_ready", sweepTimer.ready()))
+                    return
+                if (!sweepTimer.input("swept", () => {
+                        sweepTimer.witness("swept", settingsDialog.autoChapterHand.sweepAir(7, "cat=" + sweepTimer.cat
+                            + " shown=" + sweepTimer.shown
+                            + " release=" + settingsDialog.caretHand.stands
+                            + " version=" + acts.appPane.autoVersionGrabbed))
+                    }))
+                    return
+            }
+            sweepTimer.complete({
+                "name": "settings_sweep_swept",
+                "when": () => sweepTimer.ready(),
+                "report": () => "settings_sweep " + sweepTimer.witnessed("swept") })
         }
     }
 
@@ -557,20 +612,17 @@ Item {
     WindowStage {
         id: toolEnterTimer
         name: "tools_enter"
-        /// Enter with the list down, then the list shut and Enter again. The screen and the list are read before the
-        /// first alone: this run's presses can take the screen away, and a precondition read every beat would put it
-        /// back up.
-        order: ["under_list", "shut"]
+        /// The screen opened and the list down, then Enter with the list down, then the list shut and Enter again.
+        /// The screen and the list are read before the first Enter alone: this run's presses can take the screen
+        /// away, and a precondition read every beat would put it back up.
+        order: ["opened", "listed", "under_list", "shut"]
         running: Harness.autoAct === "settings-tools-enter"
-        /// Whether the screen still stood after the first Enter — read as the second goes in, a beat later, as the
-        /// wrong way out closes it where it stands (`SettingsDialog.escapeOut`).
-        property bool stood: false
         onTriggered: {
             if (toolEnterTimer.at("start")) {
-                if (!settingsDialog.opened) {
-                    settingsDialog.openAt("git")
-                    return
-                }
+                toolEnterTimer.input("opened", () => acts.openOn("git"))
+                return
+            }
+            if (toolEnterTimer.at("opened")) {
                 // A card with a loading ring is a list standing in front of the box, which alone decides whose Enter
                 // it is — so no rows are needed (`AppCombo.hasList`). Waiting for them would tie the run to
                 // `git mergetool --tool-help`, which can hit its timeout on a loaded machine.
@@ -578,26 +630,34 @@ Item {
                     return
                 // Asked again while it is shut, for the turn of the loop the field puts between the press and the
                 // list (`AppCombo.pressField`).
-                if (!acts.gitPane.toolListOpen)
-                    acts.gitPane.pressToolField()
+                toolEnterTimer.input("listed", () => {
+                    if (!acts.gitPane.toolListOpen)
+                        acts.gitPane.pressToolField()
+                    return acts.gitPane.toolListOpen
+                })
+                return
+            }
+            if (toolEnterTimer.at("listed")) {
                 if (!Awaited.all("tools_enter_ready", { "list": acts.gitPane.toolListOpen,
                                                         "page": PageSettled.windowSettled(window) }))
                     return
                 toolEnterTimer.input("under_list", () => acts.gitPane.autoEnterTool())
                 return
             }
+            // Whether the screen still stood after the first Enter — read as the second goes in, a beat later, as
+            // the wrong way out closes it where it stands (`SettingsDialog.escapeOut`).
             if (toolEnterTimer.at("under_list")) {
                 toolEnterTimer.input("shut", () => {
-                    toolEnterTimer.stood = settingsDialog.opened
+                    toolEnterTimer.witness("stood", settingsDialog.opened)
                     acts.gitPane.autoShutToolList()
                     acts.gitPane.autoEnterTool()
                 })
                 return
             }
-            if (!Awaited.all("tools_enter_left", { "shut": !settingsDialog.opened,
-                                                   "page": PageSettled.windowSettled(window) }))
-                return
-            toolEnterTimer.complete(() => "merge_editor_enter stood=" + toolEnterTimer.stood + " left=true")
+            toolEnterTimer.complete({
+                "name": "tools_enter_left",
+                "when": () => ({ "shut": !settingsDialog.opened, "page": PageSettled.windowSettled(window) }),
+                "report": () => "merge_editor_enter stood=" + toolEnterTimer.witnessed("stood") + " left=true" })
         }
     }
 
@@ -607,14 +667,18 @@ Item {
     WindowStage {
         id: avatarEnterTimer
         name: "avatar_enter"
-        /// A candidate's name put in the box (a spelled one may not be in this repository).
-        order: ["typed"]
+        /// A candidate's name put in the box (a spelled one may not be in this repository), then Enter.
+        order: ["typed", "entered"]
         after: ["page/act/dispatched"]
         running: Harness.autoAct === "avatar-enter"
+        /// What every stage moves on, read now: the screen the page opened, and the page under it.
+        function ready() {
+            return { "joined": avatarEnterTimer.joined(),
+                     "ready": settingsDialog.opened,
+                     "page": PageSettled.windowSettled(window) }
+        }
         onTriggered: {
-            if (!Awaited.all("avatar_enter_ready", { "joined": avatarEnterTimer.joined(),
-                                                     "ready": settingsDialog.opened,
-                                                     "page": PageSettled.windowSettled(window) }))
+            if (!Awaited.all("avatar_enter_ready", avatarEnterTimer.ready()))
                 return
             if (avatarEnterTimer.at("start")) {
                 if (acts.appPane.authorChoices.length === 0)
@@ -623,12 +687,23 @@ Item {
                 return
             }
             // Enter is asked again until the picker stands: it opens as the platform's window does.
-            if (!acts.appPane.autoAvatarPickerOpen) {
-                acts.appPane.autoEnterAvatarWho()
-                return
+            if (avatarEnterTimer.at("typed")) {
+                if (!avatarEnterTimer.input("entered", () => {
+                        if (!acts.appPane.autoAvatarPickerOpen)
+                            acts.appPane.autoEnterAvatarWho()
+                        return acts.appPane.autoAvatarPickerOpen
+                    }))
+                    return
             }
-            avatarEnterTimer.complete(() => "avatar_enter who=" + (acts.appPane.chosenEmail !== "")
-                                             + " picker=" + acts.appPane.autoAvatarPickerOpen)
+            avatarEnterTimer.complete({
+                "name": "avatar_enter_picked",
+                "when": () => {
+                    const ready = avatarEnterTimer.ready()
+                    return { "joined": ready.joined, "ready": ready.ready, "page": ready.page,
+                             "picker": acts.appPane.autoAvatarPickerOpen }
+                },
+                "report": () => "avatar_enter who=" + (acts.appPane.chosenEmail !== "")
+                                + " picker=" + acts.appPane.autoAvatarPickerOpen })
         }
     }
 
@@ -639,13 +714,17 @@ Item {
         id: avatarCardTimer
         name: "avatar_card"
         /// This verb's move made — the row lit, the list down, or the removal's hold run out — and its preconditions
-        /// not read again: the removal's answer is the row going away (the wait `middle-close` describes).
-        order: ["move_made"]
+        /// not read again: the removal's answer is the row going away (the wait `middle-close` describes). Then the
+        /// chapters sent to their foot, but for the candidate list.
+        order: Harness.autoAct === "avatar-combo" ? ["move_made"] : ["move_made", "foot"]
         after: ["page/act/dispatched"]
         running: Harness.autoAct === "avatar-settings" || Harness.autoAct === "avatar-row-lit"
                  || Harness.autoAct === "avatar-combo" || Harness.autoAct === "avatar-remove"
-        /// Rows before the hold, read only as the hold is pressed.
-        property int rowsBefore: -1
+        /// The removal's answer: the store letting the row go, below the rows counted before the hold.
+        function removed() {
+            return Harness.autoAct !== "avatar-remove"
+                || acts.appPane.autoAvatarRows < avatarCardTimer.witnessed("rowsBefore")
+        }
         onTriggered: {
             const op = avatarCardTimer
             const act = Harness.autoAct
@@ -665,32 +744,42 @@ Item {
                             const rows = acts.appPane.autoAvatarRows
                             if (!acts.appPane.autoAvatarHoldRemove(0))
                                 return false
-                            op.rowsBefore = rows
+                            op.witness("rowsBefore", rows)
+                        }))
+                        return
+                } else if (act === "avatar-combo") {
+                    // Asked again while shut: the field defers the list by a turn of the loop, and a list taken back
+                    // down under an unwinding grab needs a second ask (`AppCombo.pressField`).
+                    if (!op.input("move_made", () => {
+                            if (!acts.appPane.autoAvatarComboOpen)
+                                acts.appPane.autoAvatarOfferCombo()
+                            return acts.appPane.autoAvatarComboOpen
                         }))
                         return
                 } else {
-                    // Asked again while shut: the field defers the list by a turn of the loop, and a list taken back
-                    // down under an unwinding grab needs a second ask (`AppCombo.pressField`).
-                    if (act === "avatar-combo" && !acts.appPane.autoAvatarComboOpen) {
-                        acts.appPane.autoAvatarOfferCombo()
-                        return
-                    }
                     op.advance("move_made")
                 }
             }
             // The removal's answer arrives after the hold: the store letting the row go. Last the foot, so the
             // picture holds `AVATARS`, the category's foot, out of the resting view's reach — not for the candidate
             // list: its popup stays where the field stood, and scrolling would leave it off its box.
-            if (!Awaited.all("avatar_card_ready", {
-                "removed": act !== "avatar-remove" || acts.appPane.autoAvatarRows < op.rowsBefore,
-                "foot": act === "avatar-combo" || acts.chaptersAtFoot(op),
-                "page": PageSettled.windowSettled(window) }))
-                return
-            op.complete(() => "avatar_card rows=" + acts.appPane.autoAvatarRows
-                               + " painted=" + acts.appPane.autoAvatarRowPainted(0)
-                               + " lit=" + acts.appPane.autoAvatarRowLit(0)
-                               + " combo=" + acts.appPane.autoAvatarComboOpen
-                               + " removed=" + (op.rowsBefore > acts.appPane.autoAvatarRows))
+            if (act !== "avatar-combo" && op.at("move_made")) {
+                if (!Awaited.all("avatar_card_removed", { "removed": op.removed() }))
+                    return
+                if (!acts.chaptersStill(op) || !op.input("foot", () => acts.sendChaptersToFoot()))
+                    return
+            }
+            op.complete({
+                "name": "avatar_card_ready",
+                "when": () => ({ "removed": op.removed(),
+                                 "foot": Harness.autoAct === "avatar-combo" || settingsDialog.autoAtChapterFoot(),
+                                 "page": PageSettled.windowSettled(window) }),
+                "report": () => "avatar_card rows=" + acts.appPane.autoAvatarRows
+                                + " painted=" + acts.appPane.autoAvatarRowPainted(0)
+                                + " lit=" + acts.appPane.autoAvatarRowLit(0)
+                                + " combo=" + acts.appPane.autoAvatarComboOpen
+                                + " removed=" + (Harness.autoAct === "avatar-remove"
+                                                 && op.witnessed("rowsBefore") > acts.appPane.autoAvatarRows) })
         }
     }
 
@@ -700,14 +789,9 @@ Item {
     WindowStage {
         id: handTimer
         name: "settings_hand"
-        /// The hand pressed on the surface and left drifting.
-        order: ["pressed"]
+        /// The screen opened, then the hand pressed on the surface and left drifting.
+        order: ["opened", "pressed"]
         running: Harness.autoAct === "settings-hand"
-        property real fromAt: 0
-        property bool took: false
-        /// The hand's frame on the last beat: pressed once it has stood still for one, so the ring anchors in the
-        /// card that is there, not one still opening.
-        property string seatSize: ""
         readonly property bool tools: Harness.autoActArg === "tools"
         function hand() {
             return handTimer.tools ? acts.gitPane.toolListHand : settingsDialog.autoMiddleHand
@@ -716,16 +800,13 @@ Item {
         function scrolledTo() {
             return handTimer.tools ? acts.gitPane.toolListAt : settingsDialog.chaptersAt
         }
+        /// Whether the surface has gone more than a few pixels from where it stood as the hand went down.
+        function went() {
+            return Math.abs(handTimer.scrolledTo() - handTimer.witnessed("fromAt")) > 8
+        }
         /// What the surface still waits for, or "" once it holds more than room. The card's list is the hand's
         /// parent (`AppCombo`).
         function waitingOn() {
-            // Re-asked until the screen stands; told to bring the card down where it is the surface (as
-            // `settings-tools`).
-            if (!settingsDialog.opened) {
-                settingsDialog.pressToolOnOpen = handTimer.tools
-                settingsDialog.openAt("git")
-                return "the screen"
-            }
             if (!handTimer.tools)
                 return settingsDialog.chaptersContent > settingsDialog.chaptersView + 1 ? "" : "chapters past the view"
             if (!acts.gitPane.toolListOpen || !acts.gitPane.toolsSettled)
@@ -736,19 +817,30 @@ Item {
         onTriggered: {
             const hand = handTimer.hand()
             if (handTimer.at("start")) {
+                // Re-asked until the screen stands; told to bring the card down where it is the surface (as
+                // `settings-tools`).
+                handTimer.note("settings_hand surface=" + Harness.autoActArg + " waiting=the screen")
+                handTimer.input("opened", () => {
+                    if (!settingsDialog.opened)
+                        settingsDialog.pressToolOnOpen = handTimer.tools
+                    return acts.openOn("git")
+                })
+                return
+            }
+            if (handTimer.at("opened")) {
                 const wait = handTimer.waitingOn()
                 if (wait !== "") {
                     // What the surface is seen waiting for, said as it changes.
-                    Awaited.note("settings_hand surface=" + Harness.autoActArg + " waiting=" + wait)
+                    handTimer.note("settings_hand surface=" + Harness.autoActArg + " waiting=" + wait)
                     return
                 }
-                const size = hand.width + "x" + hand.height
-                if (size !== handTimer.seatSize) {
-                    handTimer.seatSize = size
+                // The hand's frame standing across a swapped frame, so the ring anchors in the card that is there,
+                // not one still opening.
+                if (!handTimer.still("seat", hand.width + "x" + hand.height))
                     return
-                }
+                // Where the surface stood, and whether the hand took the press, kept for the completion.
                 handTimer.input("pressed", () => {
-                    handTimer.fromAt = handTimer.scrolledTo()
+                    handTimer.witness("fromAt", handTimer.scrolledTo())
                     // The first point down the middle nothing claims: a box on the chapters keeps the middle press
                     // where the platform pastes with it (`MiddleAutoScroll.claimedAt`).
                     let point = Qt.point(hand.width / 2, hand.height / 2)
@@ -759,26 +851,27 @@ Item {
                             break
                         }
                     }
-                    handTimer.took = hand.press(point)
-                    if (handTimer.took)
+                    if (handTimer.witness("took", hand.press(point)))
                         hand.drift(Qt.point(point.x, point.y + Metrics.middleScrollDeadZone + 64))
-                }, () => "settings_hand surface=" + Harness.autoActArg + " pressed took=" + handTimer.took)
+                }, () => "settings_hand surface=" + Harness.autoActArg + " pressed took=" + handTimer.witnessed("took"))
                 return
             }
-            const went = Math.abs(handTimer.scrolledTo() - handTimer.fromAt) > 8
-            if (!Awaited.all("settings_hand_ready", { "went": !handTimer.took || (went && hand.ticks >= 2),
-                                                      "page": PageSettled.windowSettled(window) }))
-                return
-            handTimer.complete(() => {
-                const hand = handTimer.hand()
-                const went = Math.abs(handTimer.scrolledTo() - handTimer.fromAt) > 8
-                return "settings_hand surface=" + Harness.autoActArg
-                       + " answered=" + (handTimer.took && went && hand.scrolling)
-                       + " took=" + handTimer.took
-                       + " moved=" + went
-                       + " scrolling=" + hand.scrolling
-                       + " ticks=" + hand.ticks
-            })
+            handTimer.complete({
+                "name": "settings_hand_ready",
+                "when": () => ({ "went": !handTimer.witnessed("took")
+                                         || (handTimer.went() && handTimer.hand().ticks >= 2),
+                                 "page": PageSettled.windowSettled(window) }),
+                "report": () => {
+                    const hand = handTimer.hand()
+                    const went = handTimer.went()
+                    const took = handTimer.witnessed("took")
+                    return "settings_hand surface=" + Harness.autoActArg
+                           + " answered=" + (took && went && hand.scrolling)
+                           + " took=" + took
+                           + " moved=" + went
+                           + " scrolling=" + hand.scrolling
+                           + " ticks=" + hand.ticks
+                } })
         }
     }
 }

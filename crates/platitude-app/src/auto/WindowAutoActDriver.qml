@@ -69,7 +69,6 @@ Item {
         order: ["cleared"]
         after: ["page/act/dispatched"]
         running: Harness.autoAct === "commands-clear"
-        property bool was: false
         onTriggered: {
             if (commandsClearActTimer.at("start")) {
                 if (!Awaited.all("commands_clear_ready", {
@@ -79,18 +78,18 @@ Item {
                         "shown": window.curPage !== null && window.curPage.commandsShown }))
                     return
                 commandsClearActTimer.input("cleared", () => {
-                    commandsClearActTimer.was = driver.commandsWrongSeen
+                    commandsClearActTimer.witness("was", driver.commandsWrongSeen)
                     window.curPage.clearCommandLog()
                 })
                 return
             }
-            if (!Awaited.all("commands_clear_cleared", {
-                    "cleared": !window.curPage.commandsWrong && !window.curPage.commandsShown }))
-                return
-            commandsClearActTimer.complete(() => "commands_clear was=" + commandsClearActTimer.was
-                                                 + " wrong=" + window.curPage.commandsWrong
-                                                 + " open=" + window.curPage.commandsShown
-                                                 + " mark=" + window.curPage.commandsMarkColor)
+            commandsClearActTimer.complete({
+                "name": "commands_clear_cleared",
+                "when": () => ({ "cleared": !window.curPage.commandsWrong && !window.curPage.commandsShown }),
+                "report": () => "commands_clear was=" + commandsClearActTimer.witnessed("was")
+                                + " wrong=" + window.curPage.commandsWrong
+                                + " open=" + window.curPage.commandsShown
+                                + " mark=" + window.curPage.commandsMarkColor })
         }
     }
 
@@ -110,9 +109,6 @@ Item {
         order: ["fetched"]
         after: ["page/act/dispatched"]
         running: Harness.autoAct === "fetch-recover" || Harness.autoAct === "fetch-recover-held"
-        property bool was: false
-        property bool hadLine: false
-        property bool wasOpen: false
         onTriggered: {
             if (fetchRecoverActTimer.at("start")) {
                 if (!Awaited.all("fetch_recover_ready", {
@@ -123,26 +119,26 @@ Item {
                     return
                 // A run that ends at the ceiling after this stage was waiting for the recovery to take the news down.
                 fetchRecoverActTimer.input("fetched", () => {
-                    fetchRecoverActTimer.was = driver.commandsWrongSeen
-                    fetchRecoverActTimer.hadLine = driver.errorLineSeen
-                    fetchRecoverActTimer.wasOpen = window.curPage.commandsShown
+                    fetchRecoverActTimer.witness("was", driver.commandsWrongSeen)
+                    fetchRecoverActTimer.witness("hadLine", driver.errorLineSeen)
+                    fetchRecoverActTimer.witness("wasOpen", window.curPage.commandsShown)
                     window.curPage.pageTab.fetch("")
                 })
                 return
             }
-            if (!Awaited.all("fetch_recover_recovered", {
-                    "quiet": !(window.curPage.commandsWrong
-                               || window.curPage.pageTab.lastError !== ""
-                               || window.curPage.pageTab.busyCount !== 0
-                               || window.curPage.pageTab.fetchFailures !== 0) }))
-                return
-            fetchRecoverActTimer.complete(() => "fetch_recover was=" + fetchRecoverActTimer.was
-                                                + " hadline=" + fetchRecoverActTimer.hadLine
-                                                + " wasopen=" + fetchRecoverActTimer.wasOpen
-                                                + " wrong=" + window.curPage.commandsWrong
-                                                + " line=" + (window.curPage.pageTab.lastError !== "")
-                                                + " failures=" + window.curPage.pageTab.fetchFailures
-                                                + " open=" + window.curPage.commandsShown)
+            fetchRecoverActTimer.complete({
+                "name": "fetch_recover_recovered",
+                "when": () => ({ "quiet": !(window.curPage.commandsWrong
+                                            || window.curPage.pageTab.lastError !== ""
+                                            || window.curPage.pageTab.busyCount !== 0
+                                            || window.curPage.pageTab.fetchFailures !== 0) }),
+                "report": () => "fetch_recover was=" + fetchRecoverActTimer.witnessed("was")
+                                + " hadline=" + fetchRecoverActTimer.witnessed("hadLine")
+                                + " wasopen=" + fetchRecoverActTimer.witnessed("wasOpen")
+                                + " wrong=" + window.curPage.commandsWrong
+                                + " line=" + (window.curPage.pageTab.lastError !== "")
+                                + " failures=" + window.curPage.pageTab.fetchFailures
+                                + " open=" + window.curPage.commandsShown })
         }
     }
 

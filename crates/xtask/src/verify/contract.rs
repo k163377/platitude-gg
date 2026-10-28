@@ -98,16 +98,26 @@ fn saved_artifact(line: &str) -> Option<&'static str> {
 }
 
 /// The kinds of structured line, each named by the word before its `run=`.
-const KINDS: [&str; 8] = [
+const KINDS: [&str; 10] = [
     "begin",
     "stage",
     "stage_breach",
+    "witness",
+    "said",
     "complete",
     "pictured",
     "pictures",
     "picture",
     "census",
 ];
+
+/// Whether `line` is the run's history rather than a claim: a fact an
+/// operation kept (`witness`) or a line one said at a stage (`said`). A
+/// verb's claim is its completion's report; its row's must-say line is
+/// read off the claims only (`super::outcome`).
+pub(super) fn is_history(line: &str) -> bool {
+    matches!(kind_of(line), Some("witness" | "said"))
+}
 
 /// Which structured line `line` is: the word right before its first ` run=`
 /// (`INFO bench: stage run=…`), so a word the rest of the line carries —
@@ -171,6 +181,12 @@ pub(super) fn read(lines: &[String], run: &str) -> Said {
                 said.sequence.extend(found);
             }
             "stage" => stage(&mut said, line),
+            "witness" => {
+                let found = said.stages.witness(line, completed);
+                said.sequence.extend(found);
+            }
+            // A stage's own lines: history, held to nothing but the run they name.
+            "said" => {}
             "stage_breach" => said.sequence.push(format!(
                 "the harness refused a stage: {}",
                 line.split_once("stage_breach ")
@@ -555,6 +571,45 @@ INFO bench: pictured run=r1 artifact=overlay name=window holds=true gained=none 
     /// `WELL` with one of its lines moved to the front.
     fn moved_first(line: &str) -> String {
         format!("{line}\n{}", WELL.replace(&format!("{line}\n"), ""))
+    }
+
+    /// A stage's own lines and the facts kept are the run's history — read
+    /// as such, never as a claim — and a completion names each witness its
+    /// report read as it was kept.
+    #[test]
+    fn history_is_read_as_history_and_a_completion_names_the_witnesses_it_read() {
+        let run = WELL
+            .replace(
+                "INFO bench: stage run=r1 owner=page op=card_latch gen=1 from=start to=back seq=3\n",
+                "INFO bench: witness run=r1 owner=page op=card_latch gen=1 stage=start name=was\n\
+                 INFO bench: stage run=r1 owner=page op=card_latch gen=1 from=start to=back seq=3\n\
+                 INFO bench: said run=r1 owner=page op=card_latch gen=1 stage=back: card_latch was=true\n",
+            )
+            .replace(
+                "stages=4 page=settled\n",
+                "stages=4 page=settled witnesses=page/card_latch/1/start/was\n",
+            );
+        let said = read(&lines(&run), "r1");
+        assert!(said.sequence.is_empty(), "{:?}", said.sequence);
+        assert!(super::is_history(
+            "INFO bench: said run=r1 owner=page op=x gen=1 stage=a: card_latch was=true"
+        ));
+        assert!(super::is_history(
+            "INFO bench: witness run=r1 owner=page op=x gen=1 stage=a name=was"
+        ));
+        assert!(!super::is_history("INFO bench: card_latch was=true"));
+        let unkept = run.replace(
+            "witnesses=page/card_latch/1/start/was",
+            "witnesses=page/card_latch/1/back/was",
+        );
+        assert!(
+            read(&lines(&unkept), "r1")
+                .sequence
+                .iter()
+                .any(|b| b.contains("never kept")),
+            "{:?}",
+            read(&lines(&unkept), "r1").sequence
+        );
     }
 
     #[test]

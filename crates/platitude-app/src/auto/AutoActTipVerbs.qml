@@ -97,11 +97,12 @@ Item {
         id: signatureTimer
         name: "signature"
         onTriggered: {
-            if (!Awaited.all("signature_ready", { "ready": page.signatureIsForSelection }))
-                return
-            signatureTimer.complete(() => "signature kind=" + page.selectedSignatureKind
-                                           + " code=" + page.selectedSignatureCode
-                                           + " signer=" + page.selectedSignatureSigner)
+            signatureTimer.complete({
+                "name": "signature_ready",
+                "when": () => ({ "ready": page.signatureIsForSelection }),
+                "report": () => "signature kind=" + page.selectedSignatureKind
+                                + " code=" + page.selectedSignatureCode
+                                + " signer=" + page.selectedSignatureSigner })
         }
     }
     // signature-tip / stash-tip: pointed at only once the state has landed, reported once the tip is shown.
@@ -118,10 +119,11 @@ Item {
                 })
                 return
             }
-            if (!Awaited.all("signature_tip_report_ready", { "ready": detailsPane.signatureTipShown }))
-                return
-            signatureTipTimer.complete(() => "signature_tip code=" + page.selectedSignatureCode
-                                              + " tip=" + detailsPane.signatureTipShown)
+            signatureTipTimer.complete({
+                "name": "signature_tip_report_ready",
+                "when": () => ({ "ready": detailsPane.signatureTipShown }),
+                "report": () => "signature_tip code=" + page.selectedSignatureCode
+                                + " tip=" + detailsPane.signatureTipShown })
         }
     }
     PageStage {
@@ -137,10 +139,11 @@ Item {
                 })
                 return
             }
-            if (!Awaited.all("stash_tip_report_ready", { "ready": detailsPane.summaryTipShown }))
-                return
-            stashTipTimer.complete(() => "stash_tip blocked=" + (detailsPane.editBlocked !== "")
-                                          + " tip=" + detailsPane.summaryTipShown + " why=" + detailsPane.editBlocked)
+            stashTipTimer.complete({
+                "name": "stash_tip_report_ready",
+                "when": () => ({ "ready": detailsPane.summaryTipShown }),
+                "report": () => "stash_tip blocked=" + (detailsPane.editBlocked !== "")
+                                + " tip=" + detailsPane.summaryTipShown + " why=" + detailsPane.editBlocked })
         }
     }
     // path-tip: pointed at once the list has landed. The report reads the shared tooltip itself, the one thing that
@@ -195,19 +198,20 @@ Item {
                 })
                 return
             }
-            if (!Awaited.all("path_tip_report_ready", { "ready": Tips.box.visible }))
-                return
-            op.complete(() => {
-                const tip = Tips.box
-                return "path_tip pane="
-                       + (op.carried !== "" ? "carried"
-                          : op.wipSide ? "wip" : "details")
-                       + " tree=" + (op.carried !== "" ? page.wipUnstaged.treeView
-                                     : op.wipSide ? unstagedModel.treeView : detailsModel.treeView)
-                       + " tip=" + tip.visible
-                       + " aside=" + driver.tipAside(tip)
-                       + " text=" + tip.text
-            })
+            op.complete({
+                "name": "path_tip_report_ready",
+                "when": () => ({ "ready": Tips.box.visible }),
+                "report": () => {
+                    const tip = Tips.box
+                    return "path_tip pane="
+                           + (op.carried !== "" ? "carried"
+                              : op.wipSide ? "wip" : "details")
+                           + " tree=" + (op.carried !== "" ? page.wipUnstaged.treeView
+                                         : op.wipSide ? unstagedModel.treeView : detailsModel.treeView)
+                           + " tip=" + tip.visible
+                           + " aside=" + driver.tipAside(tip)
+                           + " text=" + tip.text
+                } })
         }
     }
     // A tooltip's words are a field (`CardText`): all selected and compared with the tip's text (scope: verbs.md
@@ -225,17 +229,22 @@ Item {
                     wipPane.pointedTipRow = 0
                 })
             }
-            if (!Awaited.all("tip_copy_shown", { "tip": Tips.box.visible }))
-                return
-            op.input("selected", () => {
-                Tips.box.contentItem.selectAll()
-            })
-            op.complete(() => {
-                const tip = Tips.box
-                return "tip_copy tip=" + tip.visible
-                       + " copied=" + (tip.contentItem.selected === tip.text)
-                       + " text=" + tip.text
-            })
+            if (op.at("pointed")) {
+                if (!Awaited.all("tip_copy_shown", { "tip": Tips.box.visible }))
+                    return
+                op.input("selected", () => {
+                    Tips.box.contentItem.selectAll()
+                })
+            }
+            op.complete({
+                "name": "tip_copy_shown",
+                "when": () => ({ "tip": Tips.box.visible }),
+                "report": () => {
+                    const tip = Tips.box
+                    return "tip_copy tip=" + tip.visible
+                           + " copied=" + (tip.contentItem.selected === tip.text)
+                           + " text=" + tip.text
+                } })
         }
     }
     // ...and the same words grabbed from the tip's padding (規約 §hover のツールチップ), sampled over the air only
@@ -245,8 +254,6 @@ Item {
         id: tipSweepTimer
         name: "tip_sweep"
         order: ["pointed", "swept"]
-        /// What the sweep answered, read as it went over the air.
-        property string answer: ""
         onTriggered: {
             const op = tipSweepTimer
             if (!Awaited.all("tip_sweep_ready", { "ready": !(unstagedModel.total === 0) }))
@@ -256,36 +263,43 @@ Item {
                     wipPane.pointedTipRow = 0
                 })
             }
-            if (!Awaited.all("tip_sweep_shown", { "tip": Tips.box.visible, "wide": Tips.box.width > 0 }))
-                return
-            op.input("swept", () => {
-                op.answer = Tips.box.background.pad.sweepAir(7)
-            })
-            op.complete(() => "tip_sweep " + op.answer)
+            if (op.at("pointed")) {
+                if (!Awaited.all("tip_sweep_shown", { "tip": Tips.box.visible, "wide": Tips.box.width > 0 }))
+                    return
+                // What the sweep answered, read as it went over the air.
+                op.input("swept", () => {
+                    op.witness("answer", Tips.box.background.pad.sweepAir(7))
+                })
+            }
+            op.complete({
+                "name": "tip_sweep_shown",
+                "when": () => ({ "tip": Tips.box.visible, "wide": Tips.box.width > 0 }),
+                "report": () => "tip_sweep " + op.witnessed("answer") })
         }
     }
     // Waits for the details. `cut=` leads, so must_say reads it as one run of words (verbs.md).
     PageStage {
         id: authorCardTimer
         name: "author_card"
+        readonly property bool opens: Harness.autoAct === "author-card-open"
         onTriggered: {
             const op = authorCardTimer
             if (!Awaited.all("author_card_ready", { "ready": driver.cardSettled }))
                 return
-            const opens = Harness.autoAct === "author-card-open"
-            if (opens && op.at("start")) {
+            if (op.opens && op.at("start")) {
                 op.input("shown", () => {
                     detailsPane.messageBlock.showAuthor(true)
                 })
             }
-            if (!Awaited.all("author_card_open", { "open": !opens || detailsPane.authorCards.authorCardOpen }))
-                return
-            op.complete(() => "author_card cut=" + detailsPane.messageBlock.nameClipped
-                              + " open=" + detailsPane.authorCards.authorCardOpen
-                              + " author=" + detailsPane.details.authorEmail
-                              + " committer=" + detailsPane.details.committerEmail
-                              + " other=" + detailsPane.details.committerDiffers
-                              + " later=" + detailsPane.details.commitTimeDiffers)
+            op.complete({
+                "name": "author_card_open",
+                "when": () => ({ "open": !op.opens || detailsPane.authorCards.authorCardOpen }),
+                "report": () => "author_card cut=" + detailsPane.messageBlock.nameClipped
+                                + " open=" + detailsPane.authorCards.authorCardOpen
+                                + " author=" + detailsPane.details.authorEmail
+                                + " committer=" + detailsPane.details.committerEmail
+                                + " other=" + detailsPane.details.committerDiffers
+                                + " later=" + detailsPane.details.commitTimeDiffers })
         }
     }
     // Waits for the details, which carry the credit line, and for the row to stop moving: a width asked for arrives a
@@ -293,6 +307,7 @@ Item {
     PageStage {
         id: coAuthorTimer
         name: "co_author"
+        readonly property bool opens: Harness.autoAct === "co-authors-open"
         onTriggered: {
             const op = coAuthorTimer
             if (!Awaited.all("co_author_ready", { "ready": !(!driver.cardSettled || detailsPane.width <= 0) }))
@@ -301,27 +316,27 @@ Item {
                 + "/" + detailsPane.messageBlock.matesFolded
             if (!op.still("co_author_geom", geom))
                 return
-            const opens = Harness.autoAct === "co-authors-open"
-            if (opens && op.at("start")) {
+            if (op.opens && op.at("start")) {
                 op.input("shown", () => {
                     detailsPane.messageBlock.showCoAuthors(true)
                 })
             }
-            if (!Awaited.all("co_author_open", { "open": !opens || detailsPane.authorCards.matesCardOpen }))
-                return
             // `open=` is the card's own visibility; the input that asked for it would go green with the binding cut.
             // `folded=` / `said=` are the credit as drawn: the name and the count of the rest, or folded, the face and
             // that same count (`-` for one, whose face stands alone).
-            op.complete(() => "co_authors count=" + detailsPane.messageBlock.coAuthorRecords.length
-                              + " cut=" + detailsPane.messageBlock.matesClipped
-                              + " first=" + detailsPane.messageBlock.coAuthorName(0)
-                              + " open=" + detailsPane.authorCards.matesCardOpen
-                              + " folded=" + detailsPane.messageBlock.matesFolded
-                              + " said=" + detailsPane.messageBlock.matesSaid
-                              // Unjudged: which step the date beside the credit came out at is the face's answer
-                              // (`whole` on one desk, `day` under a wider face at the same pane).
-                              + " date=" + detailsPane.messageBlock.valueRow.dateSaid
-                              + " pane=" + Math.round(detailsPane.width))
+            op.complete({
+                "name": "co_author_open",
+                "when": () => ({ "open": !op.opens || detailsPane.authorCards.matesCardOpen }),
+                "report": () => "co_authors count=" + detailsPane.messageBlock.coAuthorRecords.length
+                                + " cut=" + detailsPane.messageBlock.matesClipped
+                                + " first=" + detailsPane.messageBlock.coAuthorName(0)
+                                + " open=" + detailsPane.authorCards.matesCardOpen
+                                + " folded=" + detailsPane.messageBlock.matesFolded
+                                + " said=" + detailsPane.messageBlock.matesSaid
+                                // Unjudged: which step the date beside the credit came out at is the face's answer
+                                // (`whole` on one desk, `day` under a wider face at the same pane).
+                                + " date=" + detailsPane.messageBlock.valueRow.dateSaid
+                                + " pane=" + Math.round(detailsPane.width) })
         }
     }
 }

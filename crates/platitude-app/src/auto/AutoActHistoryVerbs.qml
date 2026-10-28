@@ -90,20 +90,14 @@ Item {
             acts.readCommit(wipeTo)
             page.openRowMenu(wipeTo)
             resetMenu.offer()
-            // `tagged=`: the row's tag is there exactly when there is something to lose, so it holds on a clean
-            // fixture and a dirty one alike. `note=` carries spaces, so it goes last.
-            const resetRow = () => "reset_row tagged="
-                                   + ((hardResetItem.note !== "") === (worktree.hardResetTakes > 0))
-                                   + " files=" + worktree.hardResetTakes
-                                   + " untracked=" + worktree.untrackedCount
-                                   + " note=" + hardResetItem.note
             if (act === "reset-hard") {
-                // Read before the hold runs out: the reset takes the files the row counts.
-                driver.act.say(resetRow)
+                // Read before the hold runs out: the reset takes the files the row counts. Said beside the landing.
+                driver.act.witness("resetRow", acts.resetRow())
+                driver.reportAtCompletion(() => driver.act.witnessed("resetRow"))
                 resetLandedTimer.begin(wipeTo, "hard")
                 hardResetItem.completeHold()
             } else {
-                driver.reportAtCompletion(resetRow)
+                driver.reportAtCompletion(() => acts.resetRow())
             }
         } else if (act === "menu-wait") {
             menuWaitTimer.mode = arg
@@ -147,8 +141,6 @@ Item {
             })
         } else if (act === "drop-commit" || act === "drop-commit-go" || act === "drop-stops"
                    || act === "drop-last-commit") {
-            // The bare menu ends on its row; the others press it and hand on.
-            dropTimer.order = act === "drop-commit" ? ["opened"] : ["opened", "pressed"]
             dropTimer.begin(act, driver.autoActOid(arg))
         } else if (act === "wip-landing-stopped") {
             // The stop's worktree landing, read in a pass that carries every other worktree's row and none of
@@ -229,12 +221,21 @@ Item {
         const oid = onTag ? tagsModel.oidOfName(name) : branchesModel.oidOfName(name)
         page.openRefMenu(onTag ? "tag" : "branch", name, name, oid)
         const starts = [refRowMenu.branchHereItem, refRowMenu.mergeItem, refRebaseItem, refRowMenu.tagHereItem]
-        const measured = "integrate_menu ref=" + name
-                         + " offered=" + refRebaseItem.offered
-                         + " pushed=" + (refRebaseItem.note !== "")
-                         + " greyed=" + starts.filter(item => item.offered && item.blocked).length
-                         + " says=" + refRebaseItem.blockedReason
-        driver.reportAtCompletion(() => measured)
+        driver.act.witness("integrate", "integrate_menu ref=" + name
+                                        + " offered=" + refRebaseItem.offered
+                                        + " pushed=" + (refRebaseItem.note !== "")
+                                        + " greyed=" + starts.filter(item => item.offered && item.blocked).length
+                                        + " says=" + refRebaseItem.blockedReason)
+        driver.reportAtCompletion(() => driver.act.witnessed("integrate"))
+    }
+
+    /// The `--hard` row of the reset card. `tagged=`: the row's tag is there exactly when there is something to lose,
+    /// so it holds on a clean fixture and a dirty one alike. `note=` carries spaces, so it goes last.
+    function resetRow() {
+        return "reset_row tagged=" + ((hardResetItem.note !== "") === (worktree.hardResetTakes > 0))
+               + " files=" + worktree.hardResetTakes
+               + " untracked=" + worktree.untrackedCount
+               + " note=" + hardResetItem.note
     }
 
     /// Which commit the reset verbs take the branch back to. With nothing given, the row under HEAD's: a reset to
@@ -255,14 +256,19 @@ Item {
     /// (`status`), and the graph's rows carrying it (`row`). The reads go on under a replay
     /// (`RepoSession::begin_poll`) and the first one stands the row up for the operation at whatever moment the pace
     /// gives it, so a picture of the rewrite, and the census walked after it, wait for that read rather than race it.
-    /// Asked for each beat until the status has the row (`RepoTab.pollNow`). With it the selected row's own read
+    /// Asked for each beat until the status has the row (`askReplayRow`). With it the selected row's own read
     /// (`details`) and the rows the lists show (`PageSettled.rowsBuilt`): a replay keeps the page's reads coming, so
     /// the picture is held to these, not to the page settling.
     function replayRow() {
-        if (!worktree.wipRowStands)
-            repoTab.pollNow()
         return { "status": worktree.wipRowStands, "row": graphModel.wipRow,
                  "details": page.pageDetailsSettled, "rows": PageSettled.rowsBuilt(page) }
+    }
+    /// The press that asks for that read (`RepoTab.pollNow`) while the status has no row for the replay; answers
+    /// whether it has one — pressed each beat until it does.
+    function askReplayRow() {
+        if (!worktree.wipRowStands)
+            repoTab.pollNow()
+        return worktree.wipRowStands
     }
 
     // The drop row is a count of presses or a click by whether anything else holds the branch tip, read once as the
@@ -278,6 +284,8 @@ Item {
         function begin(act, oid) {
             dropTimer.act = act
             dropTimer.oid = oid
+            // The bare menu ends on its row; the others press it and hand on.
+            dropTimer.order = act === "drop-commit" ? ["opened"] : ["opened", "pressed"]
             dropTimer.start()
         }
         function line() {
@@ -295,7 +303,7 @@ Item {
             // fired past it, whether the menu goes before the census walk is the scheduler's. So it goes here, and
             // completion waits until it is gone (`AutoActDriver.menuGoing`).
             commitMenu.dismiss()
-            driver.menuGoing = commitMenu
+            driver.menuLeaving(commitMenu)
             return driver.pressWrite("drop", () => {
                 page.dropCommit(commitMenuState.menuOid)
                 return true
@@ -315,7 +323,7 @@ Item {
                 }
                 if (op.act === "drop-commit") {
                     op.input("opened", open)
-                    op.complete(() => op.line())
+                    op.complete({ "name": "drop_row_opened", "when": () => ({}), "report": () => op.line() })
                     return
                 }
                 // Read as the menu opens, before the press takes it down.
@@ -353,22 +361,20 @@ Item {
         name: "menu_wait"
         /// `""`, `after`, `stash`, `stash-ref` or `replay`, as above.
         property string mode: ""
-        property string oid: ""
-        property int idleRows: -1
-        property string raisedOn: ""
+        // Witnessed by the press that puts the write in: `oid`, the row the menu is raised on; `idleRows`, the rows it
+        // offered with nothing running; for the stash forms `raisedOn`, the selector it went up on again.
         /// The level the menu opens as: a stash's graph row has its own, and the left menu is another.
         readonly property var level: menuWaitTimer.mode === "stash" ? acts.stashMenu
                                    : menuWaitTimer.mode === "stash-ref" ? refMenu : commitMenu
         /// The selector the stash's menu acts on.
         readonly property string selector: menuWaitTimer.mode === "stash-ref" ? refRowMenu.refId
                                                                               : commitMenuState.menuStashRef
-        /// The row's own right-click (`GraphRowDelegate.askMenu`), or the left menu's door. False while the row has no
-        /// delegate to answer.
-        function raise() {
+        /// The row's own right-click (`GraphRowDelegate.askMenu`) on `oid`'s row, or the left menu's door. False while
+        /// the row has no delegate to answer.
+        function raise(oid) {
             if (menuWaitTimer.mode === "stash-ref")
-                return page.openRefMenu("stash", stashesModel.nameAt(1), stashesModel.fullAt(1), menuWaitTimer.oid,
-                                        true)
-            const item = graphPane.view.itemAtIndex(graphModel.rowOf(menuWaitTimer.oid))
+                return page.openRefMenu("stash", stashesModel.nameAt(1), stashesModel.fullAt(1), oid, true)
+            const item = graphPane.view.itemAtIndex(graphModel.rowOf(oid))
             if (item === null)
                 return false
             item.askMenu()
@@ -396,12 +402,13 @@ Item {
         }
         function line(stage) {
             const level = menuWaitTimer.level
+            const stash = menuWaitTimer.mode === "stash" || menuWaitTimer.mode === "stash-ref"
+            const was = stash ? menuWaitTimer.witnessed("raisedOn") : ""
             return "menu_wait stage=" + stage
-                   + " same=" + (level.offeredRows === menuWaitTimer.idleRows)
+                   + " same=" + (level.offeredRows === menuWaitTimer.witnessed("idleRows"))
                    + " held=" + menuWaitTimer.held()
                    + " open=" + level.visible
-                   + (menuWaitTimer.raisedOn !== ""
-                      ? " was=" + menuWaitTimer.raisedOn + " selector=" + menuWaitTimer.selector : "")
+                   + (was !== "" ? " was=" + was + " selector=" + menuWaitTimer.selector : "")
                    + " rows=" + level.offeredRows + " busy=" + repoTab.busyCount
         }
         /// A write that landed before `what` left no moment to photograph, and says so rather than wait out the
@@ -409,28 +416,24 @@ Item {
         function missed(what) {
             return "menu_wait_missed the write landed before " + what
         }
-        /// The run's completion on `report`. Photographed during the write it presses: the page's reads are on their
-        /// way by design.
-        function completeOn(report) {
-            menuWaitTimer.complete(report, ["*"])
-        }
         /// The second stash's menu, counted and put down; then the first popped and the menu raised again in the same
         /// turn. False while the listing is not in.
         function popUnder() {
             if (stashesModel.fullAt(1) === "")
                 return false
-            menuWaitTimer.oid = stashesModel.oidOfName(stashesModel.nameAt(1))
-            if (!menuWaitTimer.raise())
+            const oid = stashesModel.oidOfName(stashesModel.nameAt(1))
+            if (!menuWaitTimer.raise(oid))
                 return false
-            menuWaitTimer.idleRows = menuWaitTimer.level.offeredRows
+            menuWaitTimer.witness("oid", oid)
+            menuWaitTimer.witness("idleRows", menuWaitTimer.level.offeredRows)
             menuWaitTimer.level.dismiss()
             const popped = stashesModel.fullAt(0)
             driver.pressWrite("stash-pop", () => {
                 page.popStash(popped)
                 return true
             })
-            menuWaitTimer.raise()
-            menuWaitTimer.raisedOn = menuWaitTimer.selector
+            menuWaitTimer.raise(oid)
+            menuWaitTimer.witness("raisedOn", menuWaitTimer.selector)
             return true
         }
         /// The row's menu counted with nothing running and put down, then the write pressed under it: `replay`'s
@@ -438,10 +441,11 @@ Item {
         function pressUnder() {
             // The row under HEAD's where there is one, as `commit-menu` takes; HEAD's own over a single commit.
             const below = graphModel.oidAt(graphModel.rowOf(worktree.headOid) + 1)
-            menuWaitTimer.oid = below !== "" ? below : worktree.headOid
-            if (!menuWaitTimer.raise())
+            const oid = below !== "" ? below : worktree.headOid
+            if (!menuWaitTimer.raise(oid))
                 return false
-            menuWaitTimer.idleRows = commitMenu.offeredRows
+            menuWaitTimer.witness("oid", oid)
+            menuWaitTimer.witness("idleRows", commitMenu.offeredRows)
             commitMenu.dismiss()
             if (menuWaitTimer.mode === "replay") {
                 return driver.pressWrite("rebase", () => {
@@ -470,50 +474,64 @@ Item {
                     op.input("pressed", () => op.pressUnder())
                 return
             }
-            // Read first at every stage under the write: a write that has landed ends the run on saying so.
+            // Read first at every stage under the write: a write that has landed ends the run on saying so. Each
+            // completion is photographed during the write it presses: the page's reads are on their way by design
+            // (`arriving`).
             const landed = driver.wroteAndSettled()
             if (op.at("pressed")) {
                 // The hook sleeps for seconds, so the commit is still out when the menu goes up. One that has landed
                 // already left no moment to raise it in. A replay's menu goes up once the rewrite shows mid-way — HEAD
                 // detached, `REBASING` counted — which is what a menu standing on the worktree as it is would lose its
                 // rows to (`RepoPage.treeAtAsk`).
-                if (!Awaited.all("menu_wait_out", landed ? { "landed": landed } : {
+                if (landed) {
+                    op.complete({ "name": "menu_wait_out", "when": () => ({ "landed": driver.wroteAndSettled() }),
+                                  "report": () => op.missed("the menu could go up under it"), "arriving": ["*"] })
+                    return
+                }
+                if (!Awaited.all("menu_wait_out", {
                     "out": repoTab.busyCount !== 0,
                     "down": !commitMenu.visible,
                     "rewriting": op.mode !== "replay" || worktree.opText !== "" }))
                     return
-                if (landed) {
-                    op.completeOn(() => op.missed("the menu could go up under it"))
-                    return
-                }
-                op.input("raised", () => op.raise())
+                op.input("raised", () => op.raise(op.witnessed("oid")))
                 return
             }
             if (op.mode === "") {
                 // The menu stands over the write still out; the reads the press invalidated (the selected commit's
                 // own, the lists' rows) land under the hook's sleep, and the picture is of them landed.
-                if (!Awaited.all("menu_wait_during", landed ? { "landed": landed } : {
-                    "menu": commitMenu.visible,
-                    "details": page.pageDetailsSettled,
-                    "rows": PageSettled.rowsBuilt(page) }))
+                if (landed) {
+                    op.complete({ "name": "menu_wait_during", "when": () => ({ "landed": driver.wroteAndSettled() }),
+                                  "report": () => op.missed("its reads could settle under the menu"),
+                                  "arriving": ["*"] })
                     return
-                op.completeOn(landed ? () => op.missed("its reads could settle under the menu")
-                                     : () => op.line("during"))
+                }
+                op.complete({
+                    "name": "menu_wait_during",
+                    "when": () => ({ "menu": commitMenu.visible, "details": page.pageDetailsSettled,
+                                     "rows": PageSettled.rowsBuilt(page) }),
+                    "report": () => op.line("during"), "arriving": ["*"] })
                 return
             }
             if (op.mode === "replay") {
                 // Raised before the row, not after: the rebuild that brings the row puts the commits replayed so far
                 // above the one the menu was counted on, and enough of them scroll it out of the view.
-                if (!Awaited.all("menu_wait_row", landed ? { "landed": landed } : acts.replayRow()))
+                if (landed) {
+                    op.complete({ "name": "menu_wait_row", "when": () => ({ "landed": driver.wroteAndSettled() }),
+                                  "report": () => op.missed("its worktree row stood"), "arriving": ["*"] })
                     return
-                op.completeOn(landed ? () => op.missed("its worktree row stood") : () => op.line("during"))
+                }
+                if (op.at("raised") && !op.input("row_asked", () => acts.askReplayRow()))
+                    return
+                op.complete({ "name": "menu_wait_row", "when": () => acts.replayRow(),
+                              "report": () => op.line("during"), "arriving": ["*"] })
                 return
             }
             // `after` and the stash forms: the menu's own word that it stood again. The write's settle reaches the tab
             // a drain before the models it was read into are through (`RepoTab::settling`).
-            if (!Awaited.all("menu_wait_up", { "written": landed, "stood": !op.level.waiting }))
-                return
-            op.completeOn(() => op.line("after"))
+            op.complete({
+                "name": "menu_wait_up",
+                "when": () => ({ "written": driver.wroteAndSettled(), "stood": !op.level.waiting }),
+                "report": () => op.line("after"), "arriving": ["*"] })
         }
     }
 
@@ -528,13 +546,22 @@ Item {
     PageStage {
         id: replayRunningTimer
         name: "replay_running"
+        /// The screen at the edge the face was held on (`edge`, witnessed in the press that holds it).
+        function line() {
+            // That a range is being counted at all, not which step: the step is whatever git had reached.
+            const counted = worktree.opStep > 0 && worktree.opStep <= worktree.opSteps
+                            && worktree.opSteps > 1
+            return "replay_running op=" + worktree.opText + " counted=" + counted
+                   + " ring=" + page.Window.window.waitRingShown
+                   + " held=" + page.replayRunning
+                   + " step=" + worktree.opStep + " steps=" + worktree.opSteps
+        }
         onTriggered: {
             const op = replayRunningTimer
             if (op.at("held")) {
                 // The face held; the picture waits for the page under it.
-                if (!Awaited.all("replay_running_settled", { "page": PageSettled.settled(page) }))
-                    return
-                op.complete(() => [])
+                op.complete({ "name": "replay_running_settled", "when": () => ({ "page": PageSettled.settled(page) }),
+                              "report": () => op.witnessed("edge") })
                 return
             }
             // Queued is not out: git writes nothing to count until it is actually replaying.
@@ -544,28 +571,24 @@ Item {
                     return
                 op.advance("counting")
             }
-            const ended = !repoTab.replaying
-            if (!Awaited.all("replay_running_row", ended ? { "ended": ended }
-                                                         : Object.assign({ "counting": counting }, acts.replayRow())))
-                return
-            if (ended) {
-                op.complete(() => "replay_running_missed the replay ended before its worktree row stood")
+            if (!repoTab.replaying) {
+                op.complete({ "name": "replay_running_row", "when": () => ({ "ended": !repoTab.replaying }),
+                              "report": () => "replay_running_missed the replay ended before its worktree row stood" })
                 return
             }
+            if (op.at("counting") && !op.input("row_asked", () => acts.askReplayRow()))
+                return
+            const row = acts.replayRow()
+            if (!Awaited.all("replay_running_row", { "counting": counting, "status": row.status, "row": row.row,
+                                                     "details": row.details, "rows": row.rows }))
+                return
             op.input("held", () => {
                 page.autoReplayHeld = true
                 // Hover cannot be injected (offscreen's hand sits at the window's corner), so the run places the hand
                 // the ring reads (`Main.holdWaitHand`): over the rewritten pane, clear of row text a ring would hide.
                 const seat = graphPane.mapToItem(null, graphPane.width / 6, graphPane.height / 3)
                 page.Window.window.holdWaitHand(seat.x, seat.y)
-            }, () => {
-                // That a range is being counted at all, not which step: the step is whatever git had reached.
-                const counted = worktree.opStep > 0 && worktree.opStep <= worktree.opSteps
-                                && worktree.opSteps > 1
-                return "replay_running op=" + worktree.opText + " counted=" + counted
-                       + " ring=" + page.Window.window.waitRingShown
-                       + " held=" + page.replayRunning
-                       + " step=" + worktree.opStep + " steps=" + worktree.opSteps
+                op.witness("edge", op.line())
             })
         }
     }
@@ -577,14 +600,10 @@ Item {
     PageStage {
         id: stoppedLandingTimer
         name: "wip_stop_landing"
-        /// `finishCount` when the pass was asked for: the landing is only offered passes that finish after it was
-        /// armed (`RepoPage.onStatsChanged` → `tryPendingWipSelect`), so an earlier reading answers nothing.
-        property int owedAt: -1
-        property bool owed: false
-        property bool early: false
-        property bool earlyWorktree: false
-        /// Whether the hold was up, as the harness call just made answered.
-        property bool held: false
+        // Witnessed by the presses: `held` / `heldThrough`, whether the hold was up, as each harness call answered;
+        // `owedAt`, `finishCount` when the pass was asked for — the landing is only offered passes that finish after
+        // it was armed (`RepoPage.onStatsChanged` → `tryPendingWipSelect`), so an earlier reading answers nothing;
+        // `owed` / `early` / `earlyWorktree`, the page as that pass left it.
         onTriggered: {
             const op = stoppedLandingTimer
             if (op.at("start")) {
@@ -598,42 +617,44 @@ Item {
                 // Ask for the pass: under the hold nothing else brings one (our row appearing normally does, and a
                 // stopped replay moves no branch). It lands with every other worktree's row and none of ours — the
                 // pass the landing has to turn down.
-                op.input("asked", () => {
-                    op.held = graphModel.walkAgainWhileHeld()
-                    op.owedAt = graphModel.finishCount
+                const asked = op.input("asked", () => {
+                    op.witness("held", graphModel.walkAgainWhileHeld())
+                    op.witness("owedAt", graphModel.finishCount)
                 })
-                if (!op.held)
-                    op.complete(() => "wip_stop_landing held=false")
+                if (asked && !op.witnessed("held"))
+                    op.complete({ "name": "wip_stop_landing_unheld", "when": () => ({}),
+                                  "report": () => "wip_stop_landing held=false" })
                 return
             }
             if (op.at("asked")) {
                 // Then that pass, led by a neighbour worktree's row (`GraphModel.carriedTop`); a pass without one on
                 // top cannot catch the misreading, so it is read past.
                 if (!Awaited.all("wip_stop_landing_pass", { "walked": !graphModel.loading,
-                                                            "after": graphModel.finishCount > op.owedAt,
+                                                            "after": graphModel.finishCount > op.witnessed("owedAt"),
                                                             "carried": !graphModel.wipRow && graphModel.carriedTop }))
                     return
-                op.input("let_through", () => {
-                    op.owed = page.pageLanding
-                    op.early = page.wipShown
-                    op.earlyWorktree = page.carriedPath !== ""
-                    op.held = graphModel.letTheWorktreeRowThrough()
+                const through = op.input("let_through", () => {
+                    op.witness("owed", page.pageLanding)
+                    op.witness("early", page.wipShown)
+                    op.witness("earlyWorktree", page.carriedPath !== "")
+                    op.witness("heldThrough", graphModel.letTheWorktreeRowThrough())
                 })
-                if (!op.held)
-                    op.complete(() => "wip_stop_landing held=false")
+                if (through && !op.witnessed("heldThrough"))
+                    op.complete({ "name": "wip_stop_landing_unheld", "when": () => ({}),
+                                  "report": () => "wip_stop_landing held=false" })
                 return
             }
-            if (!Awaited.all("wip_stop_landing_landed", { "row": graphModel.wipRow,
-                                                          "page": PageSettled.settled(page) }))
-                return
-            op.complete(() => "wip_stop_landing held=true otherTop=true owed=" + op.owed
-                              + " early=" + op.early
-                              + " earlyWorktree=" + op.earlyWorktree
-                              + " wip=" + page.wipShown
-                              + " worktree=" + (page.carriedPath !== "")
-                              + " op=" + worktree.opText
-                              // This landing moves the highlight without activating a row (`tryPendingWipSelect`).
-                              + " lit=" + graphPane.view.currentIndex)
+            op.complete({
+                "name": "wip_stop_landing_landed",
+                "when": () => ({ "row": graphModel.wipRow, "page": PageSettled.settled(page) }),
+                "report": () => "wip_stop_landing held=true otherTop=true owed=" + op.witnessed("owed")
+                                + " early=" + op.witnessed("early")
+                                + " earlyWorktree=" + op.witnessed("earlyWorktree")
+                                + " wip=" + page.wipShown
+                                + " worktree=" + (page.carriedPath !== "")
+                                + " op=" + worktree.opText
+                                // This landing moves the highlight without activating a row (`tryPendingWipSelect`).
+                                + " lit=" + graphPane.view.currentIndex })
         }
     }
 
@@ -664,8 +685,9 @@ Item {
                                                    "offered": refPullItem.offered }))
                 return
             op.input("pressed", () => {
-                // Read back as `moved=` / `head=`: a picture cannot say whether a graph was redrawn or never touched.
-                driver.headOidBefore = worktree.headOid
+                // Read back as `moved=` / `head=` (`headBefore`): a picture cannot say whether a graph was redrawn or
+                // never touched.
+                op.witness("headBefore", worktree.headOid)
                 if (op.verb === "pull-go")
                     tipLandedTimer.start()
                 driver.pressWrite(op.verb, () => {
@@ -674,7 +696,7 @@ Item {
                 })
                 // A hand's press takes the card down; this one must be told, and completion waits out its exit
                 // (`menuGoing` — the census walks what is visible).
-                driver.menuGoing = refMenu
+                driver.menuLeaving(refMenu)
                 refMenu.close()
             })
             op.stop()
@@ -696,16 +718,14 @@ Item {
             const tip = branchesModel.oidOfName(pullPressTimer.branch)
             return tip !== "" && tip === branchesModel.upstreamOidOf(pullPressTimer.branch)
         }
-        onTriggered: {
-            if (!Awaited.all("pull_branch_ready", {
-                "ready": !(repoTab.busyCount !== 0 || repoTab.writeSeq === driver.writeSeqBefore),
-                "level": pullBranchTimer.level() || repoTab.writeRefused }))
-                return
-            pullBranchTimer.complete(() => "pull_branch refused=" + repoTab.writeRefused
-                                            + " level=" + pullBranchTimer.level()
-                                            + " behind=" + branchesModel.behindOf(pullPressTimer.branch)
-                                            + " head=" + (worktree.headOid !== driver.headOidBefore))
-        }
+        onTriggered: pullBranchTimer.complete({
+            "name": "pull_branch_ready",
+            "when": () => ({ "ready": !(repoTab.busyCount !== 0 || repoTab.writeSeq === driver.writeSeqBefore),
+                             "level": pullBranchTimer.level() || repoTab.writeRefused }),
+            "report": () => "pull_branch refused=" + repoTab.writeRefused
+                            + " level=" + pullBranchTimer.level()
+                            + " behind=" + branchesModel.behindOf(pullPressTimer.branch)
+                            + " head=" + (worktree.headOid !== pullPressTimer.witnessed("headBefore")) })
     }
     /// `pull-ahead`: git brings nothing (`Already up to date.`) and nothing on screen changes, so the command panel is
     /// opened — its row is the only sign the press went anywhere.
@@ -713,11 +733,14 @@ Item {
         id: pullAheadTimer
         name: "pull_ahead"
         order: ["logged"]
+        /// The write answered and nothing out.
+        function ready() {
+            return !(repoTab.busyCount !== 0 || repoTab.writeSeq === driver.writeSeqBefore)
+        }
         onTriggered: {
             const op = pullAheadTimer
-            const ready = !(repoTab.busyCount !== 0 || repoTab.writeSeq === driver.writeSeqBefore)
             if (op.at("start")) {
-                if (!Awaited.all("pull_ahead_ready", { "ready": ready, "page": PageSettled.settled(page) }))
+                if (!Awaited.all("pull_ahead_ready", { "ready": op.ready(), "page": PageSettled.settled(page) }))
                     return
                 op.input("logged", () => {
                     if (!page.commandsShown)
@@ -725,14 +748,13 @@ Item {
                 })
                 return
             }
-            if (!Awaited.all("pull_ahead_logged", { "ready": ready,
-                                                    "page": PageSettled.settled(page),
-                                                    "log": page.commandsShown,
-                                                    "idle": !page.pageCommands.running }))
-                return
-            op.complete(() => "pull_ahead refused=" + repoTab.writeRefused
-                              + " log=" + page.commandsShown
-                              + " moved=" + (worktree.headOid !== driver.headOidBefore))
+            op.complete({
+                "name": "pull_ahead_logged",
+                "when": () => ({ "ready": op.ready(), "page": PageSettled.settled(page), "log": page.commandsShown,
+                                 "idle": !page.pageCommands.running }),
+                "report": () => "pull_ahead refused=" + repoTab.writeRefused
+                                + " log=" + page.commandsShown
+                                + " moved=" + (worktree.headOid !== pullPressTimer.witnessed("headBefore")) })
         }
     }
     PageStage {
@@ -742,23 +764,26 @@ Item {
         /// the counter too. Empty until then, and that is the arm: with the selection already at the tip (a merge from
         /// a ref row, a revert of HEAD) every other reading below holds before git has done anything.
         property string answeredOp: ""
-        onTriggered: {
+        /// `pendingHeadSelect`: right after the answer the refs are still old, so `selected === headOid` holds
+        /// vacuously until it resolves. `cardSettled`: until its round trip returns, the right pane still shows the
+        /// commit selected before the press — for a merge from a ref row, the old tip. `settling`: the refs publish
+        /// ahead of the status, the rebuilt graph and the sidebar, and a fast-forward lands on a row the graph
+        /// already has (the upstream's), so every other gate here opens while the WIP row still leashes the old tip
+        /// and the counts still say behind.
+        function ready() {
             const row = graphModel.rowOf(page.selectedOid)
-            // `pendingHeadSelect`: right after the answer the refs are still old, so `selected === headOid` holds
-            // vacuously until it resolves. `cardSettled`: until its round trip returns, the right pane still shows the
-            // commit selected before the press — for a merge from a ref row, the old tip. `settling`: the refs
-            // publish ahead of the status, the rebuilt graph and the sidebar, and a fast-forward lands on a row the
-            // graph already has (the upstream's), so every other gate here opens while the WIP row still leashes the
-            // old tip and the counts still say behind.
-            if (!Awaited.all("tip_landed_ready", {
+            return {
                 "answered": tipLandedTimer.answeredOp !== "",
                 "landed": !page.pendingHeadSelect,
                 "idle": repoTab.busyCount === 0 && !repoTab.settling,
                 "row": row >= 0 && graphPane.rowOnScreen(row),
                 "head": page.selectedOid === worktree.headOid,
-                "card": driver.cardSettled }))
-                return
-            tipLandedTimer.complete(() => {
+                "card": driver.cardSettled }
+        }
+        onTriggered: tipLandedTimer.complete({
+            "name": "tip_landed_ready",
+            "when": () => tipLandedTimer.ready(),
+            "report": () => {
                 const landed = graphModel.rowOf(page.selectedOid)
                 return "tip_landed follows="
                        + (page.selectedOid !== "" && page.selectedOid === worktree.headOid)
@@ -768,8 +793,7 @@ Item {
                        + " head=" + worktree.headOid.substring(0, 8)
                        + " selected=" + page.selectedOid.substring(0, 8)
                        + " row=" + landed
-            })
-        }
+            } })
     }
     /// Latches the answers `tipLandedTimer` and `resetLandedTimer` wait on, on the notify and out of every answer it
     /// carried: one drain notifies once for the whole queue (`RepoTab::write_answers`), and a later answer (a fetch,
@@ -816,39 +840,37 @@ Item {
             resetLandedTimer.mode = flag
             resetLandedTimer.start()
         }
-        onTriggered: {
-            // The write's own status, by the number its answer named (`WorktreeModel.statusSeq`): the refs read
-            // moves HEAD ahead of the status that follows (`session::write::run_write`), and `--hard` is judged on the
-            // tree.
-            // A status counted before the write cannot reach that number.
-            if (!Awaited.all("reset_landed_ready", {
+        // The write's own status, by the number its answer named (`WorktreeModel.statusSeq`): the refs read moves HEAD
+        // ahead of the status that follows (`session::write::run_write`), and `--hard` is judged on the tree. A status
+        // counted before the write cannot reach that number. No `moved=`: the wait is that claim, and a field read off
+        // the same condition could never be false. Beside it, what the dispatch handed (`reset-hard`'s row).
+        onTriggered: resetLandedTimer.complete({
+            "name": "reset_landed_ready",
+            "when": () => ({
                 "ready": !(repoTab.busyCount !== 0 || resetLandedTimer.armed === 0
                     || worktree.headOid !== resetLandedTimer.target || worktree.statusSeq < resetLandedTimer.armed),
                 "page": PageSettled.settled(page),
                 "row": graphModel.rowOf(resetLandedTimer.target) >= 0,
-                "card": driver.cardSettled }))
-                return
-            // No `moved=`: the wait above is that claim, and a field read off the same condition could never be false.
-            resetLandedTimer.complete(() => "reset_landed mode=" + resetLandedTimer.mode
-                                             + " files=" + worktree.hardResetTakes
-                                             + " untracked=" + worktree.untrackedCount
-                                             + " head=" + worktree.headOid.substring(0, 8)
-                                             + " row=" + graphModel.rowOf(resetLandedTimer.target)
-                                             + " rows=" + graphModel.rowTotal)
-        }
+                "card": driver.cardSettled }),
+            "report": () => ["reset_landed mode=" + resetLandedTimer.mode
+                             + " files=" + worktree.hardResetTakes
+                             + " untracked=" + worktree.untrackedCount
+                             + " head=" + worktree.headOid.substring(0, 8)
+                             + " row=" + graphModel.rowOf(resetLandedTimer.target)
+                             + " rows=" + graphModel.rowTotal].concat(driver.verbReport()) })
     }
     // Where a merge that stopped on conflicts left the reader: the worktree, its conflicted rows on screen, and
     // nothing calling it a failure.
     PageStage {
         id: mergeStoppedTimer
         name: "merge_stopped"
-        onTriggered: {
-            if (!Awaited.all("merge_stopped_ready", {
+        onTriggered: mergeStoppedTimer.complete({
+            "name": "merge_stopped_ready",
+            "when": () => ({
                 "idle": repoTab.busyCount === 0,
                 "wip": page.wipShown,
-                "conflicts": worktree.conflictCount > 0 }))
-                return
-            mergeStoppedTimer.complete(() => "merge_stopped wip=" + page.wipShown
+                "conflicts": worktree.conflictCount > 0 }),
+            "report": () => "merge_stopped wip=" + page.wipShown
                 + " conflicts=" + (worktree.conflictCount > 0)
                 + " error=" + (repoTab.lastError !== "")
                 + " log=" + page.commandsOpen
@@ -856,8 +878,7 @@ Item {
                 + " msg=" + (worktree.opSubject !== "" && wipPane.subjectText === worktree.opSubject)
                 + " cont=" + wipPane.offersOpExit("--continue")
                 + " op=" + worktree.opText
-                + " files=" + worktree.conflictCount)
-        }
+                + " files=" + worktree.conflictCount })
     }
     // `mergeStoppedTimer`'s twin for the operations that step (cherry-pick, revert, rebase, a stopped drop): the same
     // checks, plus the `--continue` row the merge does not have — for these it is a step onward
@@ -865,16 +886,15 @@ Item {
     PageStage {
         id: opStoppedTimer
         name: "op_stopped"
-        onTriggered: {
-            // The whole write barrier: the stash and worktree listings are reads of their own, landing apart from
-            // the status that says the stop, and only the write's settle says both are in
-            // (`session::write::settle_after`).
-            if (!Awaited.all("op_stopped_ready", {
+        // The whole write barrier: the stash and worktree listings are reads of their own, landing apart from the
+        // status that says the stop, and only the write's settle says both are in (`session::write::settle_after`).
+        onTriggered: opStoppedTimer.complete({
+            "name": "op_stopped_ready",
+            "when": () => ({
                 "written": driver.wroteAndSettled(),
                 "wip": page.wipShown,
-                "conflicts": worktree.conflictCount > 0 }))
-                return
-            opStoppedTimer.complete(() => "write_stopped wip=" + page.wipShown
+                "conflicts": worktree.conflictCount > 0 }),
+            "report": () => "write_stopped wip=" + page.wipShown
                 + " conflicts=" + (worktree.conflictCount > 0)
                 + " error=" + (repoTab.lastError !== "")
                 + " log=" + page.commandsOpen
@@ -886,16 +906,13 @@ Item {
                 // stash row say it (規約 §未コミット変更がある状態で履歴を書き換える).
                 + " stashes=" + stashesModel.total
                 + " op=" + worktree.opText
-                + " files=" + worktree.conflictCount)
-        }
+                + " files=" + worktree.conflictCount })
     }
     // The message has to arrive before it can be typed over; the boxes are read-only until then (`cardSettled`). The
     // inputs of each form go in in one beat.
     PageStage {
         id: rewordTimer
         name: "reword"
-        /// Whether the save row stood for the caret before the press away (`edit-message-away`), read there.
-        property bool stood: false
         onTriggered: {
             const op = rewordTimer
             if (!Awaited.all("reword_ready", { "ready": driver.cardSettled, "page": PageSettled.settled(page) }))
@@ -905,25 +922,28 @@ Item {
                 op.input("focused", () => {
                     detailsPane.focusDescription()
                 })
-                op.complete(() => "message_focus pane=details focused=" + detailsPane.descriptionFocused
-                                  + " color=" + detailsPane.descriptionColor)
+                op.complete({ "name": "reword_focused", "when": () => ({}),
+                              "report": () => "message_focus pane=details focused=" + detailsPane.descriptionFocused
+                                              + " color=" + detailsPane.descriptionColor })
                 return
             }
             // "edit-message-away" puts the caret in the same way, then presses on the pane's band through the window's
             // own watcher: the save row that stood for the caret comes down with it (デザイン規約 §コミットメッセージの
-            // 2 つの枠). `stood=` says the caret was in first; `page=` that the page itself holds the keyboard after.
+            // 2 つの枠). `stood=` says the caret was in first — whether the save row stood before the press away,
+            // witnessed there; `page=` that the page itself holds the keyboard after.
             if (Harness.autoAct === "edit-message-away") {
                 op.input("focused", () => {
                     detailsPane.focusDescription()
                 })
                 op.input("away", () => {
-                    op.stood = detailsPane.saveRowShown
+                    op.witness("stood", detailsPane.saveRowShown)
                     page.Window.window.caretHand.pressedAt(detailsPane.mapToItem(null, detailsPane.width / 2, 2))
                 })
-                op.complete(() => "message_away stood=" + op.stood
-                                  + " row=" + detailsPane.saveRowShown
-                                  + " caret=" + detailsPane.descriptionFocused
-                                  + " page=" + (page.Window.window.activeFocusItem === page))
+                op.complete({ "name": "reword_away", "when": () => ({}),
+                              "report": () => "message_away stood=" + op.witnessed("stood")
+                                              + " row=" + detailsPane.saveRowShown
+                                              + " caret=" + detailsPane.descriptionFocused
+                                              + " page=" + (page.Window.window.activeFocusItem === page) })
                 return
             }
             op.input("typed", () => {
@@ -952,7 +972,7 @@ Item {
                     page.activateRow(graphModel.oidAt(graphModel.rowOf(page.selectedOid) + 1))
                 })
             }
-            op.complete(() => "")
+            op.complete({ "name": "reword_typed", "when": () => ({}), "report": () => "" })
         }
     }
     // The save of HEAD's message over a stage that takes back all HEAD changed: git's answer about the amend is what
@@ -971,12 +991,12 @@ Item {
                     detailsPane.savePointedAt = true
                 })
             }
-            if (!Awaited.all("save_refused_tip", { "ready": detailsPane.saveRowShown,
-                                                   "tip": detailsPane.saveTip.shown }))
-                return
-            op.complete(() => "save_refused enabled=" + detailsPane.saveEnabled
-                              + " tip=" + detailsPane.saveTip.shown
-                              + " why=" + detailsPane.saveTip.words)
+            op.complete({
+                "name": "save_refused_tip",
+                "when": () => ({ "ready": detailsPane.saveRowShown, "tip": detailsPane.saveTip.shown }),
+                "report": () => "save_refused enabled=" + detailsPane.saveEnabled
+                                + " tip=" + detailsPane.saveTip.shown
+                                + " why=" + detailsPane.saveTip.words })
         }
     }
 }

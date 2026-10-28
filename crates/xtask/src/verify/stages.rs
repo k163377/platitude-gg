@@ -8,7 +8,8 @@
 //! generation, goes against the order the operation declared, skips one,
 //! moves from a stage it does not stand at, comes from a generation that
 //! is over, comes before a stage it joins, or comes after the completion
-//! (反映前テストの機械化 §検証時点).
+//! (反映前テストの機械化 §検証時点). A generation's witnesses (`witness`)
+//! are kept once each, and a completion names only witnesses kept.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -31,6 +32,9 @@ pub(super) struct Stages {
     /// `owner/op/stage`, the operation's instance mark (`#2`) dropped —
     /// what a join names.
     reached: BTreeSet<String>,
+    /// The witnesses kept, as `owner/op/gen/stage/name` — the words a
+    /// completion names the ones its report read by.
+    kept: BTreeSet<String>,
     /// How many stage lines were read.
     pub said: usize,
 }
@@ -130,10 +134,46 @@ impl Stages {
         out
     }
 
+    /// A `witness` line: a fact an operation's running generation kept
+    /// under a name, once, at a stage — before the completion.
+    pub(super) fn witness(&mut self, line: &str, completed: bool) -> Vec<String> {
+        let (Some((key, generation)), Some(stage), Some(name)) =
+            (place(line), field(line, "stage"), field(line, "name"))
+        else {
+            return vec![format!("a `witness` line that names no fact: {line}")];
+        };
+        let mut out = Vec::new();
+        if completed {
+            out.push(format!("{key} witnessed {name} after the completion"));
+        }
+        match self.chains.get(&key) {
+            None => out.push(format!("{key} witnessed {name} with no generation begun")),
+            Some(chain) if chain.generation != generation => out.push(format!(
+                "{key} witnessed {name} in generation {generation}, which is over: generation {} began",
+                chain.generation
+            )),
+            Some(_) => {}
+        }
+        let kept = format!("{key}/{generation}/{stage}/{name}");
+        let again = self.kept.iter().any(|k| {
+            k.starts_with(&format!("{key}/{generation}/")) && k.ends_with(&format!("/{name}"))
+        });
+        // The first stands.
+        if again {
+            out.push(format!(
+                "{key} witnessed {name} twice in generation {generation}"
+            ));
+        } else {
+            self.kept.insert(kept);
+        }
+        out
+    }
+
     /// The breaches of a completion from a generation of `owner/op`:
     /// it is the operation's current generation, and that generation's
     /// last move was the one to `complete` — the completion route reads a
-    /// report only after that transition.
+    /// report only after that transition — and every witness the report
+    /// read (`witnesses=`) was kept, where and when the completion says.
     pub(super) fn completion(&self, line: &str) -> Vec<String> {
         let Some((key, generation)) = place(line) else {
             return vec![format!("a completion that names no operation: {line}")];
@@ -145,6 +185,11 @@ impl Stages {
             return vec![format!("{key} completed with no generation begun")];
         };
         let mut out = Vec::new();
+        for read in list(line, "witnesses") {
+            if !self.kept.contains(&read) {
+                out.push(format!("{key} completed on a witness never kept: {read}"));
+            }
+        }
         if generation != chain.generation {
             out.push(format!(
                 "{key} completed from generation {generation}, which is over: generation {} began",
@@ -317,6 +362,54 @@ mod tests {
         assert_eq!(
             breaches(&early),
             ["window/clear moved to pressed before page/act/dispatched, which it joins"]
+        );
+    }
+
+    /// A witness is kept once per generation by a generation that is
+    /// running, and a completion names only witnesses that were kept — of
+    /// the generation and stage it says.
+    #[test]
+    fn a_witness_is_kept_once_and_a_completion_reads_only_kept_ones() {
+        let witness = |generation: u32, stage: &str, name: &str| {
+            format!(
+                "INFO bench: witness run=r1 owner=page op=x gen={generation} stage={stage} name={name}"
+            )
+        };
+        let mut stages = Stages::default();
+        stages.begin(&begin("page/x", 1, ""), false);
+        assert!(
+            stages
+                .witness(&witness(1, "start", "was"), false)
+                .is_empty()
+        );
+        assert_eq!(
+            stages.witness(&witness(1, "pressed", "was"), false),
+            ["page/x witnessed was twice in generation 1"]
+        );
+        stages.stage(&stage("page/x", 1, "start", "complete"), false);
+        let kept = "complete run=r1 verb=v owner=page op=x gen=1 stages=1 page=settled \
+                    witnesses=page/x/1/start/was";
+        assert!(
+            stages.completion(kept).is_empty(),
+            "{:?}",
+            stages.completion(kept)
+        );
+        let elsewhere = "complete run=r1 verb=v owner=page op=x gen=1 stages=1 page=settled \
+                         witnesses=page/x/1/pressed/was";
+        assert_eq!(
+            stages.completion(elsewhere),
+            ["page/x completed on a witness never kept: page/x/1/pressed/was"]
+        );
+        assert_eq!(
+            stages.witness(&witness(1, "complete", "late"), true),
+            ["page/x witnessed late after the completion"]
+        );
+        let mut over = Stages::default();
+        over.begin(&begin("page/x", 1, ""), false);
+        over.begin(&begin("page/x", 2, ""), false);
+        assert_eq!(
+            over.witness(&witness(1, "start", "was"), false),
+            ["page/x witnessed was in generation 1, which is over: generation 2 began"]
         );
     }
 

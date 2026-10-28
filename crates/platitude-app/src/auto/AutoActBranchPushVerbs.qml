@@ -26,11 +26,12 @@ Item {
     readonly property var writeBarrier: driver.barrierWrite
 
     /// The run's branch and entrance, off its argument.
-    property string branch: ""
-    property bool onChip: false
+    readonly property bool onChip: Harness.autoActArg.startsWith("chip:")
+    readonly property string branch: acts.onChip ? Harness.autoActArg.slice("chip:".length) : Harness.autoActArg
     /// What the run does once the menu stands: `menu` reads the row, `ask` presses a first push's row and stops at the
     /// question, `go` presses it through to git's answer — a question answered too.
-    property string after: ""
+    readonly property string after: Harness.autoAct === "push-branch-menu" ? "menu"
+                                    : Harness.autoAct === "push-branch-ask" ? "ask" : "go"
     /// The BRANCH card whose answers the push row stands on: the entrance's own.
     readonly property var card: acts.onChip ? driver.commitBranchCard : driver.refBranchCard
 
@@ -38,13 +39,6 @@ Item {
     function run(act, arg) {
         if (act !== "push-branch-menu" && act !== "push-branch-ask" && act !== "push-branch-go")
             return false
-        acts.onChip = arg.startsWith("chip:")
-        acts.branch = acts.onChip ? arg.slice("chip:".length) : arg
-        acts.after = act === "push-branch-menu" ? "menu" : act === "push-branch-ask" ? "ask" : "go"
-        // The menu verb ends on the row. The other two end on it too where the row is out, and press it where it is
-        // not — which only the row says.
-        rowTimer.order = acts.after === "menu" ? ["opened"] : []
-        askTimer.order = acts.after === "go" ? ["read", "answered"] : []
         rowTimer.start()
         return true
     }
@@ -64,8 +58,9 @@ Item {
     /// A hand's click takes the menu down; a row's `triggered()` called from here does not, so it is told, and
     /// completion waits out its exit (`menuGoing` — the census walks what is visible).
     function closeMenu() {
-        driver.menuGoing = acts.onChip ? commitMenu : refMenu
-        driver.menuGoing.close()
+        const menu = acts.onChip ? commitMenu : refMenu
+        driver.menuLeaving(menu)
+        menu.close()
     }
     /// The row as the menu stands. The free words last: a claim is one substring.
     function rowLine() {
@@ -107,6 +102,15 @@ Item {
     PageStage {
         id: rowTimer
         name: "push_branch_row"
+        // The menu verb ends on the row. The other two end on it too where the row is out, and press it where it is
+        // not — which only the row says.
+        order: acts.after === "menu" ? ["opened", "tipped"] : []
+        /// Whether the row's tip stands where a hand's would, for a row that wants one: what `rowTipStood` answers,
+        /// read without forcing anything.
+        function tipStands() {
+            const row = acts.pushRow()
+            return !row.blocked || (row.tip.shown && driver.tipAside(Tips.box))
+        }
         onTriggered: {
             const op = rowTimer
             if (op.at("start")) {
@@ -119,13 +123,17 @@ Item {
                 return
             }
             const row = acts.pushRow()
-            if (op.at("opened")) {
-                if (!Awaited.all("push_branch_row_ready", { "ready": driver.rowTipStood(row, row.blocked) }))
-                    return
+            // The tip forced up beside the row answers for itself: false until it stands there, and nothing moved.
+            if (op.at("opened") && !op.input("tipped", () => driver.rowTipStood(row, row.blocked)))
+                return
+            if (op.at("tipped")) {
                 if (acts.after === "menu" || !row.offered || row.blocked) {
-                    op.complete(() => acts.rowLine())
+                    op.complete({ "name": "push_branch_row_ready", "when": () => ({ "ready": op.tipStands() }),
+                                  "report": () => acts.rowLine() })
                     return
                 }
+                if (!Awaited.all("push_branch_row_ready", { "ready": op.tipStands() }))
+                    return
                 // Read before the press, which takes the menu down.
                 op.advance("read", () => acts.rowLine())
             }
@@ -145,6 +153,14 @@ Item {
     PageStage {
         id: askTimer
         name: "push_branch_ask"
+        order: acts.after === "go" ? ["read", "answered"] : []
+        /// The question standing to be answered: the remote has answered for the name, the bar all the way down.
+        function ready() {
+            return {
+                "checked": publishFlow.publishChecked,
+                "card": graphPane.askCard.settled,
+                "answerable": graphPane.askAnswerable }
+        }
         function line() {
             return "push_branch_ask local=" + publishFlow.publishLocal
                    + " head=" + worktree.branch
@@ -165,15 +181,13 @@ Item {
         onTriggered: {
             const op = askTimer
             if (op.at("start")) {
-                if (!Awaited.all("push_branch_ask_ready", {
-                    "checked": publishFlow.publishChecked,
-                    "card": graphPane.askCard.settled,
-                    "answerable": graphPane.askAnswerable }))
-                    return
                 if (acts.after === "ask") {
-                    op.complete(() => op.line())
+                    op.complete({ "name": "push_branch_ask_ready", "when": () => op.ready(),
+                                  "report": () => op.line() })
                     return
                 }
+                if (!Awaited.all("push_branch_ask_ready", op.ready()))
+                    return
                 // Read before the answer, which takes the question down.
                 op.advance("read", () => op.line())
             }
@@ -189,19 +203,18 @@ Item {
     PageStage {
         id: landedTimer
         name: "push_branch_landed"
-        onTriggered: {
-            const facts = branchesModel.branchPush(acts.branch, repoTab.defaultRemote)
-            if (!Awaited.all("push_branch_landed_ready", {
+        onTriggered: landedTimer.complete({
+            "name": "push_branch_landed_ready",
+            "when": () => ({
                 "ready": !(repoTab.busyCount !== 0 || repoTab.writeSeq === driver.writeSeqBefore),
-                "level": facts.state === "clean" || repoTab.writeRefused }))
-                return
-            landedTimer.complete(() => {
+                "level": branchesModel.branchPush(acts.branch, repoTab.defaultRemote).state === "clean"
+                         || repoTab.writeRefused }),
+            "report": () => {
                 const landed = branchesModel.branchPush(acts.branch, repoTab.defaultRemote)
                 return "push_branch_landed refused=" + repoTab.writeRefused
                        + " state=" + landed.state
                        + " head=" + worktree.branch
                        + " target=" + landed.target
-            })
-        }
+            } })
     }
 }

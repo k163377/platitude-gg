@@ -34,7 +34,6 @@ Item {
             page.showWip()
             fileRowsTimer.start()
         } else if (act === "open-fetches") {
-            acts.openFetchRows = Math.max(1, Number(arg))
             openFetchTimer.start()
         } else {
             return false
@@ -67,25 +66,24 @@ Item {
                                                                         () => wipPane.moveBucket(bucketAllTimer.from)))
                 return
             }
-            // Counts first: the headings are the list's, and trail the model's counts.
-            if (!Awaited.all("bucket_all_emptied", { "written": driver.wroteAndSettled(),
-                                                     "emptied": bucketAllTimer.left() === 0 }))
-                return
-            // Headings first and together: `must_say` matches one unbroken stretch of the line. `conflicts=` answers
-            // the other way — resolving the whole bucket takes its heading off (規約 §その他の操作).
-            bucketAllTimer.complete(() => "wip_heads from=" + bucketAllTimer.from
-                                           + " unstaged=" + wipPane.bucketHeaded("unstaged")
-                                           + " staged=" + wipPane.bucketHeaded("staged")
-                                           + " conflicts=" + wipPane.bucketHeaded("conflicts")
-                                           + " unstaged_count="
-                                           + (worktree.unstagedCount + worktree.untrackedCount)
-                                           + " staged_count=" + worktree.stagedCount
-                                           + " conflict_count=" + worktree.conflictCount)
+            // Counts first: the headings are the list's, and trail the model's counts. Headings first and together in
+            // the line: `must_say` matches one unbroken stretch of it. `conflicts=` answers the other way — resolving
+            // the whole bucket takes its heading off (規約 §その他の操作).
+            bucketAllTimer.complete({
+                "name": "bucket_all_emptied",
+                "when": () => ({ "written": driver.wroteAndSettled(), "emptied": bucketAllTimer.left() === 0 }),
+                "report": () => "wip_heads from=" + bucketAllTimer.from
+                                + " unstaged=" + wipPane.bucketHeaded("unstaged")
+                                + " staged=" + wipPane.bucketHeaded("staged")
+                                + " conflicts=" + wipPane.bucketHeaded("conflicts")
+                                + " unstaged_count=" + (worktree.unstagedCount + worktree.untrackedCount)
+                                + " staged_count=" + worktree.stagedCount
+                                + " conflict_count=" + worktree.conflictCount })
         }
     }
-    /// The file-row acts, run once the rows they name are walkable (`fileRowsTimer`). Each line is read where the
-    /// gesture stands as it is said here: a `-go` form's own press takes the chosen rows, and the menu's words with
-    /// them, before any completion reads the report.
+    /// The file-row acts, run once the rows they name are walkable — the press of `fileRowsTimer`'s dispatch. Each line
+    /// is read where the gesture stands as it is said here, and kept as that press's witness (`lines`): a `-go` form's
+    /// own press takes the chosen rows, and the menu's words with them, before any completion reads the report.
     function runFileRowAct(act, arg) {
         const lines = []
         if (act === "stage-many" || act === "stage-many-go") {
@@ -104,7 +102,7 @@ Item {
                     const row = wipPane.rowAt(0)
                     if (row)
                         row.stageClicked(head.bucket, head.fullName)
-                    driver.treeGoneRow = moved
+                    driver.awaitTreeGone(moved)
                 }
             }
         } else if (act === "discard-many" || act === "discard-many-go") {
@@ -121,7 +119,7 @@ Item {
             lines.push("discard_row " + fileDiscardItem.text)
             if (act.endsWith("-go")) {
                 fileDiscardItem.completeHold()
-                driver.treeGoneRow = dropped
+                driver.awaitTreeGone(dropped)
             }
         } else if (act === "file-menu" || act === "file-menu-untracked"
                    || act === "file-menu-staged" || act === "file-menu-conflict") {
@@ -144,7 +142,7 @@ Item {
             const taken = fileRowMenu.chosenConflicts().length
             fileRowMenu.takeSideNow(act === "take-side-ours" ? "ours" : "theirs")
             if (taken > 0)
-                driver.treeGoneRow = "conflicts:" + arg
+                driver.awaitTreeGone("conflicts:" + arg)
         } else if (act === "open-mergetool") {
             // With a tool configured this holds the write queue until it exits, so a demo tool that blocks leaves the
             // wait on screen.
@@ -158,7 +156,7 @@ Item {
             lines.push("merge_tool " + wipPane.worktree.mergeTool + " paths=" + handed)
             // Only where something was handed over — else the barrier reports a landing nothing here caused.
             if (handed > 0)
-                driver.treeGoneRow = "conflicts:" + arg
+                driver.awaitTreeGone("conflicts:" + arg)
         } else if (act === "discard-file" || act === "discard-file-go"
                    || act === "delete-file" || act === "delete-file-go"
                    || act === "discard-staged" || act === "discard-staged-go") {
@@ -170,14 +168,26 @@ Item {
             lines.push("discard_row " + fileDiscardItem.text)
             if (act.endsWith("-go")) {
                 fileDiscardItem.completeHold()
-                driver.treeGoneRow = bucket + ":" + arg
+                driver.awaitTreeGone(bucket + ":" + arg)
             }
         }
-        driver.reportAtCompletion(() => lines)
+        fileRowsTimer.witness("lines", lines)
+        driver.reportAtCompletion(() => fileRowsTimer.witnessed("lines"))
     }
-    // `rowAt` / `rowFor` read delegates, born a layout after the model has the rows: fired on arrival they answer
-    // nothing, and a "-go" has nothing to write. So the act waits for the row it names; a row that never lands
-    // leaves the run to the watchdog, which is the diagnosis.
+    /// The row `path` is on, in whichever bucket holds it, or null: `WipPane.rowFor`'s answer, asked bucket by bucket
+    /// (`WipPane.rowIn`) — `cargo xtask waits` follows `rowFor` itself as an input, which a beat does not make.
+    function rowNamed(path) {
+        const standing = wipPane.bucketPanes
+        for (let i = 0; i < standing.length; i++) {
+            const row = wipPane.rowIn(standing[i].section, path)
+            if (row !== null)
+                return row
+        }
+        return null
+    }
+    // `rowAt` / `rowNamed` read delegates, born a layout after the model has the rows: fired on arrival they answer
+    // nothing, and a "-go" has nothing to write. So the act waits for the row it names, and dispatches as this
+    // operation's input; a row that never lands leaves the run to the watchdog, which is the diagnosis.
     PageStage {
         id: fileRowsTimer
         name: "file_rows"
@@ -186,11 +196,12 @@ Item {
             const act = Harness.autoAct
             const many = (act === "stage-many" || act === "stage-many-go"
                           || act === "discard-many" || act === "discard-many-go")
-            if (!Awaited.all("file_rows_ready", { "row": wipPane.rowFor(Harness.autoActArg) !== null,
+            if (!Awaited.all("file_rows_ready", { "row": acts.rowNamed(Harness.autoActArg) !== null,
                                                   "head": !many || wipPane.rowAt(0) !== null }))
                 return
-            fileRowsTimer.advance("dispatched")
-            acts.runFileRowAct(act, Harness.autoActArg)
+            fileRowsTimer.input("dispatched", () => {
+                acts.runFileRowAct(act, Harness.autoActArg)
+            })
             driver.dispatchFinished(fileRowsTimer)
             // A verb that completed here stopped this already.
             fileRowsTimer.stop()
@@ -198,7 +209,8 @@ Item {
     }
     /// How many rows the graph holds once the opening's fetch has landed — under `--preset behind` only that fetch
     /// brings the last one in.
-    property int openFetchRows: 0
+    readonly property int openFetchRows:
+        Harness.autoAct === "open-fetches" ? Math.max(1, Number(Harness.autoActArg)) : 0
     PageStage {
         id: openFetchTimer
         name: "open_fetch"
@@ -212,16 +224,17 @@ Item {
             // `headBehind`: the refs are a feed of their own and land after the rows, and under `--preset behind`
             // only the fetch moves it off zero. The fetched row arrives chipless and takes the remote name a pass
             // later. Row zero is that row: the preset opens on a clean tree, so no worktree row stands above it.
-            if (!Awaited.all("open_fetch_ready", {
-                "ready": !(graphModel.rowTotal < acts.openFetchRows || repoTab.autoFetchRunning
-                    || branchesModel.headBehind < 1),
-                "chips": openFetchTimer.topChips().length > 0 }))
-                return
-            openFetchTimer.complete(() => "open_fetch fails=" + repoTab.fetchFailures
-                                           + " behind=" + branchesModel.headBehind
-                                           + " top=" + openFetchTimer.topChips()[0].name
-                                           + " rows=" + graphModel.rowTotal
-                                           + " wanted=" + acts.openFetchRows)
+            openFetchTimer.complete({
+                "name": "open_fetch_ready",
+                "when": () => ({
+                    "ready": !(graphModel.rowTotal < acts.openFetchRows || repoTab.autoFetchRunning
+                        || branchesModel.headBehind < 1),
+                    "chips": openFetchTimer.topChips().length > 0 }),
+                "report": () => "open_fetch fails=" + repoTab.fetchFailures
+                                + " behind=" + branchesModel.headBehind
+                                + " top=" + openFetchTimer.topChips()[0].name
+                                + " rows=" + graphModel.rowTotal
+                                + " wanted=" + acts.openFetchRows })
         }
     }
 }

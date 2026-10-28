@@ -27,7 +27,7 @@ Item {
         const named = head === "staged" || head === "unstaged" || head === "untracked" || head === "conflicts"
         const filePath = named ? arg.substring(cut + 1) : arg
         if (filePath === "") {
-            driver.act.complete(() => "diff_arg act=" + act + " named=false")
+            argRefused.start()
             return true
         }
         page.showWip()
@@ -40,45 +40,46 @@ Item {
         return true
     }
 
+    /// A verb given no file says so and ends there: the line its row asks for is never said, and the run fails on it.
+    /// Its completion is its own — the verbs of this family defer theirs (`AutoActCompletion.defersCompletion`).
+    PageStage {
+        id: argRefused
+        name: "split_arg"
+        onTriggered: argRefused.complete({ "when": () => ({}),
+                                           "report": () => "diff_arg act=" + Harness.autoAct + " named=false" })
+    }
+
     /// The rows in one column first, so the flip is the one a reader makes, not a model split from the start. Then the
     /// flip through `chosen(true)` — all a press on `DiffViewToggle` runs — and the wait for the new rows laid out with
     /// the first change read across.
+    ///
+    /// Witnessed on the way (`witness`): `genBefore`, the rows' generation as the flip went in — the split rows are a
+    /// later one; `paired`, the first row read across as the rows stood laid out. `split-tools`: what each side's marks
+    /// showed as each column's tools went up, and the lines they went up on. `split-copy`: what each column's copy came
+    /// away with, and whether the menu's removed-lines row had something to offer then.
     PageStage {
         id: splitTimer
         name: "diff_split"
-        /// The rows' generation before the flip, read at it: the split rows are a later one.
-        property int genBefore: 0
-        /// `split-tools`: what each side's marks showed as each column's tools went up, and the lines they went up on.
-        property var left: false
-        property var leftAlone: false
-        property var right: false
-        property var rightAlone: false
-        property var line: 0
-        property var pairLine: 0
-        /// `split-copy`: what each column's copy came away with, and whether the menu's removed-lines row had
-        /// something to offer then.
-        property string leftCopy: ""
-        property var leftRemoved: false
-        property string rightCopy: ""
-        property var rightRemoved: false
         onTriggered: {
             const op = splitTimer
             if (op.at("start")) {
                 if (!Awaited.all("diff_split_rows", { "rows": diffPane.firstChangedLine(0) >= 0 }))
                     return
                 op.input("flipped", () => {
-                    op.genBefore = diffPane.diffModel.rowsGen
+                    op.witness("genBefore", diffPane.diffModel.rowsGen)
                     diffPane.viewToggle.chosen(true)
                 })
                 return
             }
+            if (!op.at("flipped"))
+                return
             const m = diffPane.diffModel
-            const arrived = m.split && m.rowsGen !== op.genBefore && diffPane.view.count !== 0
+            const arrived = m.split && m.rowsGen !== op.witnessed("genBefore") && diffPane.view.count !== 0
             // Laid out, not only arrived: a row's two sides exist only once the view has built the delegate.
             const paired = arrived ? diffPane.firstPairedRow() : -1
             if (!Awaited.all("diff_split_paired", { "split": arrived, "paired": paired >= 0 }))
                 return
-            acts.act(op, paired)
+            acts.act(op, op.witness("paired", paired))
         }
     }
 
@@ -91,11 +92,12 @@ Item {
             op.input("reported", () => {
                 page.reportLayout()
             })
-            op.complete(() => {
-                const m = diffPane.diffModel
-                return "diff_split split=" + m.split + " saved=" + AppBackend.startDiffSplit()
-                       + " rows=" + diffPane.view.count + " paired=" + paired + " " + m.splitTally()
-            })
+            op.complete({
+                "when": () => ({}),
+                "report": () => "diff_split split=" + diffPane.diffModel.split
+                                + " saved=" + AppBackend.startDiffSplit()
+                                + " rows=" + diffPane.view.count + " paired=" + op.witnessed("paired")
+                                + " " + diffPane.diffModel.splitTally() })
             return
         }
         const row = diffPane.view.itemAtIndex(paired)
@@ -103,19 +105,22 @@ Item {
             // Each side read as its own tools go up: the second column's take the first's marks down.
             op.input("left_tools", () => {
                 diffPane.showLineTools(row.hunk, row.line)
-                op.line = row.line
-                op.left = row.markShown(0)
-                op.leftAlone = !row.markShown(1)
+                op.witness("line", row.line)
+                op.witness("left", row.markShown(0))
+                op.witness("leftAlone", !row.markShown(1))
             })
             op.input("right_tools", () => {
                 diffPane.showLineTools(row.hunk, row.pair_line)
-                op.pairLine = row.pair_line
-                op.right = row.markShown(1)
-                op.rightAlone = !row.markShown(0)
+                op.witness("pairLine", row.pair_line)
+                op.witness("right", row.markShown(1))
+                op.witness("rightAlone", !row.markShown(0))
             })
-            op.complete(() => "split_tools left=" + op.left + " right=" + op.right
-                              + " crossed=" + !(op.leftAlone && op.rightAlone)
-                              + " row=" + paired + " line=" + op.line + " pairLine=" + op.pairLine)
+            op.complete({
+                "when": () => ({}),
+                "report": () => "split_tools left=" + op.witnessed("left") + " right=" + op.witnessed("right")
+                                + " crossed=" + !(op.witnessed("leftAlone") && op.witnessed("rightAlone"))
+                                + " row=" + op.witnessed("paired") + " line=" + op.witnessed("line")
+                                + " pairLine=" + op.witnessed("pairLine") })
             return
         }
         // `split-copy`: the old column's copy already holds the removed line, so the menu's removed-lines row has
@@ -124,23 +129,26 @@ Item {
         op.input("left_copied", () => {
             diffPane.pickText(0, paired, 0, last, driver.pastLineEnd)
             diffPane.copySelection()
-            op.leftCopy = driver.clipboard.lastCopied
-            op.leftRemoved = diffPane.diffModel.selRemoved
+            op.witness("leftCopy", driver.clipboard.lastCopied)
+            op.witness("leftRemoved", diffPane.diffModel.selRemoved)
         })
         op.input("right_copied", () => {
             diffPane.pickText(1, paired, 0, last, driver.pastLineEnd)
             diffPane.copySelection()
-            op.rightCopy = driver.clipboard.lastCopied
-            op.rightRemoved = diffPane.diffModel.selRemoved
+            op.witness("rightCopy", driver.clipboard.lastCopied)
+            op.witness("rightRemoved", diffPane.diffModel.selRemoved)
         })
-        op.complete(() => {
-            const removed = diffPane.diffModel.removedText()
-            return "split_copy left=" + acts.lines(op.leftCopy) + " leftRemoved=" + op.leftRemoved
-                   + " right=" + acts.lines(op.rightCopy) + " rightRemoved=" + op.rightRemoved
-                   + " agree=" + (removed !== "" && op.leftCopy.indexOf(removed) === 0
-                                  && op.rightCopy.indexOf(removed) < 0)
-                   + " " + diffPane.pickTally()
-        })
+        op.complete({ "when": () => ({}), "report": () => acts.copyLine(op) })
+    }
+    /// What `split-copy`'s two copies came away with (`op`'s witnesses), against the removed text as it stands.
+    function copyLine(op) {
+        const removed = diffPane.diffModel.removedText()
+        const leftCopy = op.witnessed("leftCopy")
+        const rightCopy = op.witnessed("rightCopy")
+        return "split_copy left=" + acts.lines(leftCopy) + " leftRemoved=" + op.witnessed("leftRemoved")
+               + " right=" + acts.lines(rightCopy) + " rightRemoved=" + op.witnessed("rightRemoved")
+               + " agree=" + (removed !== "" && leftCopy.indexOf(removed) === 0 && rightCopy.indexOf(removed) < 0)
+               + " " + diffPane.pickTally()
     }
     function lines(text) {
         return text === "" ? 0 : text.split("\n").length

@@ -39,11 +39,11 @@ Item {
             // branch made meanwhile, the menu gone).
             listRereadTimer.on = head === "" ? "row" : head
             listRereadTimer.how = tail === "" ? "branch" : tail
-            listRereadTimer.namesBefore = -1
-            listRereadTimer.headBefore = ""
-            // Under a menu the branch is made before the list is out; otherwise the list is out first.
-            listRereadTimer.order = listRereadTimer.how === "pending" ? ["stirred", "branched", "menu_closed"]
-                                                                      : ["stirred", "listed", "written"]
+            // The stand-in is brought to the top first. Under a menu the branch is made before the list is out;
+            // otherwise the list is out first.
+            listRereadTimer.order = (listRereadTimer.on === "pin" ? ["pinned"] : [])
+                .concat(listRereadTimer.how === "pending" ? ["stirred", "branched", "menu_closed"]
+                                                          : ["stirred", "listed", "written"])
             listRereadTimer.start()
         } else if (act === "eol-change") {
             // `<unstaged|staged>` — the card on `src/flipped.kt` in that bucket, held by the hand inside it, and a line
@@ -52,8 +52,8 @@ Item {
             eolChangeTimer.bucket = head === "" ? "unstaged" : head
             // Staged, two strokes a line: the first line's before the card is held, the second's under it.
             eolChangeTimer.order = eolChangeTimer.bucket === "staged"
-                ? ["diff_opened", "first_del", "first_add", "held", "second_del", "second_add"]
-                : ["row", "held"]
+                ? ["diff_opened", "first_del", "first_add", "pointed", "held", "second_del", "second_add"]
+                : ["row", "pointed", "held"]
             eolChangeTimer.start()
         } else if (act === "wip-reread") {
             // `<same|above|inside|staged|gone|fixed>` — the pane's hand on a marked row of the worktree's lists with
@@ -61,7 +61,6 @@ Item {
             // `wipRereadTimer`.
             page.showWip()
             wipRereadTimer.how = head === "" ? "same" : head
-            wipRereadTimer.left = ""
             // `gone` hears the hand again where it stood; `above` moves it once the read is in.
             wipRereadTimer.order = wipRereadTimer.how === "gone" ? ["stirred", "written", "restirred"]
                                  : wipRereadTimer.how === "above" ? ["stirred", "written", "read", "moved"]
@@ -71,10 +70,10 @@ Item {
             // `files[:<stage>]` — a changed file's tip in the commit's list (`--preset long`), the hand still on its
             // row, and a folder above it shut so the rows slide under the hand; stages at `tipSlideTimer`.
             tipSlideTimer.stage = tail === "" ? "moved" : tail
-            tipSlideTimer.order = tipSlideTimer.stage === "shown" ? ["stood", "pointed"]
+            tipSlideTimer.order = tipSlideTimer.stage === "shown" ? ["stood", "pointed", "tipped"]
                                 : tipSlideTimer.stage === "slid" || tipSlideTimer.stage === "still"
-                                ? ["stood", "pointed", "folded"]
-                                : ["stood", "pointed", "folded", "moved"]
+                                ? ["stood", "pointed", "tipped", "folded"]
+                                : ["stood", "pointed", "tipped", "folded", "moved"]
             tipSlideTimer.start()
         } else {
             return false
@@ -95,8 +94,6 @@ Item {
         name: "list_reread"
         property string on: "row"
         property string how: "branch"
-        property int namesBefore: -1
-        property string headBefore: ""
         /// The chip the list is asked from, and where a hand on it stands.
         function anchor() {
             if (listRereadTimer.on === "pin")
@@ -118,26 +115,47 @@ Item {
                 return true
             })
         }
+        /// The run's line: `names=` counts the list's names past the ones it held before the branch (`namesBefore`),
+        /// `moved=` HEAD's row off the commit it stood on as the hand came (`headBefore`).
         function line(stage) {
-            return "list_reread on=" + listRereadTimer.on + " how=" + listRereadTimer.how + " stage=" + stage
+            const op = listRereadTimer
+            return "list_reread on=" + op.on + " how=" + op.how + " stage=" + stage
                    + " list=" + refList.opened
-                   + " names=" + (refList.opened ? refList.records.length - listRereadTimer.namesBefore : "-")
-                   + " moved=" + (graphModel.headRowOid !== listRereadTimer.headBefore)
+                   + " names=" + (refList.opened ? refList.records.length - op.witnessed("namesBefore") : "-")
+                   + " moved=" + (graphModel.headRowOid !== op.witnessed("headBefore"))
+        }
+        /// Landed — the commit on HEAD's row, or the branch on HEAD's chip — and the list as it ends: gone with the
+        /// row's commit that lost its names or left the graph, and with the stand-in standing for HEAD's new commit;
+        /// still out with a branch made on its commit, saying the names as they are now.
+        function landed() {
+            const op = listRereadTimer
+            const rewritten = op.how === "commit" || op.how === "amend"
+            return {
+                "landed": rewritten ? graphModel.headRowOid !== op.witnessed("headBefore")
+                                    : graphModel.headLabels.length > op.witnessed("namesBefore"),
+                "list": rewritten ? !refList.opened
+                                  : refList.opened && refList.records.length > op.witnessed("namesBefore"),
+                "page": PageSettled.settled(page)
+            }
         }
         onTriggered: {
             const op = listRereadTimer
             const pending = op.how === "pending"
-            if (op.at("start")) {
+            if (op.at("start") || op.at("pinned")) {
                 const read = !graphModel.loading && graphModel.finishCount > 0 && graphModel.headRow >= 0
                 // The stand-in rides the edge HEAD's row went out of: the view sent to the end puts it at the top,
                 // sent each beat until it stands.
-                if (read && op.on === "pin" && !graphPane.headPin.visible)
-                    graphPane.view.positionViewAtEnd()
+                if (read && op.on === "pin" && op.at("start"))
+                    op.input("pinned", () => {
+                        if (!graphPane.headPin.visible)
+                            graphPane.view.positionViewAtEnd()
+                        return graphPane.headPin.visible
+                    })
                 const item = read ? op.anchor() : null
                 if (!Awaited.all("list_reread_chip", { "read": read, "chip": item !== null }))
                     return
                 op.input("stirred", () => {
-                    op.headBefore = graphModel.headRowOid
+                    op.witness("headBefore", graphModel.headRowOid)
                     // A menu of the page's up first, on another row: the hand on the chip is an ask kept behind it.
                     if (pending)
                         page.openRowMenu(graphModel.oidAt(graphModel.rowTotal - 1))
@@ -151,32 +169,33 @@ Item {
                         return
                     // Asked each beat until it takes.
                     op.input("branched", () => {
-                        op.namesBefore = graphModel.headLabels.length
+                        op.witness("labelsBefore", graphModel.headLabels.length)
                         return op.pressBranch()
                     })
                     return
                 }
                 if (op.at("branched")) {
-                    const named = graphModel.headLabels.length > op.namesBefore
+                    const named = graphModel.headLabels.length > op.witnessed("labelsBefore")
                     if (!Awaited.all("list_reread_named", { "names": named }))
                         return
                     op.input("menu_closed", () => {
                         driver.commitMenu.close()
                         // The names the list opens with are counted from what the chip had before the branch.
-                        op.namesBefore = graphModel.headLabels.length - 1
+                        op.witness("namesBefore", graphModel.headLabels.length - 1)
                     })
                     return
                 }
-                if (!Awaited.all("list_reread_back", { "menu": !page.menuStanding, "list": refList.opened }))
-                    return
-                op.complete(() => op.line("after"))
+                op.complete({
+                    "name": "list_reread_back",
+                    "when": () => ({ "menu": !page.menuStanding, "list": refList.opened }),
+                    "report": () => op.line("after") })
                 return
             }
             if (op.at("stirred")) {
                 if (!Awaited.all("list_reread_list", { "list": refList.opened }))
                     return
                 op.input("listed", () => {
-                    op.namesBefore = refList.records.length
+                    op.witness("namesBefore", refList.records.length)
                     if (op.how !== "branch-chip") {
                         // Into the list: the chip let go, the card's own hold on (`AppCard.contentPointed`).
                         graphPane.hand.stir(Qt.point(-1, -1))
@@ -202,19 +221,7 @@ Item {
                                           : op.pressBranch())
                 return
             }
-            // Landed — the commit on HEAD's row, or the branch on HEAD's chip — and the list as it ends: gone with the
-            // row's commit that lost its names or left the graph, and with the stand-in standing for HEAD's new commit;
-            // still out with a branch made on its commit, saying the names as they are now.
-            const rewritten = op.how === "commit" || op.how === "amend"
-            if (!Awaited.all("list_reread_landed", {
-                    "landed": rewritten ? graphModel.headRowOid !== op.headBefore
-                                        : graphModel.headLabels.length > op.namesBefore,
-                    "list": rewritten ? !refList.opened
-                                      : refList.opened && refList.records.length > op.namesBefore,
-                    "page": PageSettled.settled(page)
-                }))
-                return
-            op.complete(() => op.line("after"))
+            op.complete({ "name": "list_reread_landed", "when": () => op.landed(), "report": () => op.line("after") })
         }
     }
 
@@ -229,7 +236,6 @@ Item {
         id: eolChangeTimer
         name: "eol_change"
         property string bucket: "unstaged"
-        property string before: ""
         readonly property string path: eolChangeTimer.bucket === "staged" ? "src/flipped.kt" : "src/mixed.kt"
         /// The first line of the hunk that is `kind` (`del` / `add`), or -1. The hunk lists every line taken out before
         /// every line put in, so the old line of the first ending and its new one are the first of each.
@@ -282,27 +288,31 @@ Item {
                 op.stroke("first_add", "add", "eol_change_first")
                 return
             }
-            if (op.at("row") || op.at("first_add")) {
+            if (op.at("row") || op.at("first_add") || op.at("pointed")) {
                 // The card held with the hand inside it — after the stage's write and the mark, where the file was
                 // staged — asked for on the row each beat until it is out.
                 const written = !staged || (driver.wroteAndSettled() && marked.eolMarked(op.path))
-                if (written)
-                    wipPane.pointEol(op.bucket + ":" + op.path)
+                if (written && !op.at("pointed"))
+                    op.input("pointed", () => {
+                        wipPane.pointEol(op.bucket + ":" + op.path)
+                        return wipPane.eolCardOpen
+                    })
                 if (!Awaited.all("eol_change_held", { "written": written, "held": written && wipPane.eolCardOpen }))
                     return
+                // The card's sentence as the hand goes in (`before`). A failed save over the file is said with the
+                // stage.
                 op.input("held", () => {
-                    op.before = wipPane.eolHoverCard.notice
+                    op.witness("before", wipPane.eolHoverCard.notice)
                     wipPane.eolHoverCard.contentPointed = true
                     if (staged)
-                        return
+                        return ""
                     // Saved over from outside: a second line lands with the other ending.
                     const why = Harness.writeFile(repoTab.repoPath + "/" + op.path,
                                                   "fun a() = 1\nfun b() = 2\r\nfun c() = 3\r\n"
                                                   + "fun d() = 4\nfun e() = 5\n")
-                    if (why !== "")
-                        Awaited.note("eol_change write " + why)
                     repoTab.pollNow()
-                })
+                    return why
+                }, why => why === "" ? "" : "eol_change write " + why)
                 return
             }
             if (staged && op.at("held")) {
@@ -319,22 +329,23 @@ Item {
                     "marked": marked.eolMarked(op.path)
                 }))
                 return
-            const now = wipPane.eolCardOpen ? wipPane.eolHoverCard.notice : ""
-            const said = !wipPane.eolCardOpen || now !== op.before
-            if (!Awaited.all("eol_change_said", { "new_or_gone": said }))
-                return
-            op.complete(() => {
-                const card = wipPane.eolCardOpen ? wipPane.eolHoverCard.notice : ""
-                return "eol_change bucket=" + op.bucket + " card=" + wipPane.eolCardOpen
-                       + " changed=" + (card !== op.before)
-                       + " stale=" + (wipPane.eolCardOpen && card === op.before)
-                       + " was=\"" + op.before + "\" now=\"" + card + "\""
-            })
+            op.complete({
+                "name": "eol_change_said",
+                "when": () => ({ "new_or_gone": !wipPane.eolCardOpen
+                                                || wipPane.eolHoverCard.notice !== op.witnessed("before") }),
+                "report": () => {
+                    const card = wipPane.eolCardOpen ? wipPane.eolHoverCard.notice : ""
+                    const before = op.witnessed("before")
+                    return "eol_change bucket=" + op.bucket + " card=" + wipPane.eolCardOpen
+                           + " changed=" + (card !== before)
+                           + " stale=" + (wipPane.eolCardOpen && card === before)
+                           + " was=\"" + before + "\" now=\"" + card + "\""
+                } })
         }
     }
 
-    /// The unstaged list's reads (`NavSectionModel.rowsArrived`), counted for `wip-reread`, which holds the count as
-    /// its write went in (`wipRereadTimer.readsBefore`).
+    /// The unstaged list's reads (`NavSectionModel.rowsArrived`), counted for `wip-reread`, which witnesses the count
+    /// as its write went in (`readsBefore`).
     property int unstagedReads: 0
     Connections {
         target: acts.wipPane.unstagedModel
@@ -364,14 +375,9 @@ Item {
         id: wipRereadTimer
         name: "wip_reread"
         property string how: "same"
-        /// The unstaged list's reads (`acts.unstagedReads`) as the write went in.
-        property int readsBefore: 0
-        property string before: ""
-        property real bucketYBefore: 0
-        /// Where the card stood before the write (`inside`).
-        property point cardBefore: Qt.point(0, 0)
-        /// Where the pane's hand stands on the row.
-        property point handAt: Qt.point(-1, -1)
+        // Witnessed on the way: where the pane's hand stands on the row (`handAt`), and as the write went in the
+        // card's sentence (`before`), the staged bucket's place (`bucketYBefore`), the unstaged list's reads
+        // (`readsBefore`, of `acts.unstagedReads`) and where the card stood (`cardBefore`, `inside`).
         readonly property string bucket: wipRereadTimer.how === "staged" ? "staged" : "unstaged"
         readonly property string path: wipRereadTimer.how === "staged" ? "src/twice.kt"
             : wipRereadTimer.how === "gone" ? "src/flipped.kt" : "src/mixed.kt"
@@ -397,26 +403,27 @@ Item {
             const pane = wipRereadTimer.paneOf(wipRereadTimer.bucket)
             return pane !== null ? pane.rowUnderHand() : null
         }
-        /// What the read left as `above` found it, before the hand moved (`read`).
-        property string left: ""
         /// What the read left, read once the pane has weighed it: the card, the hand's hold, the row under it.
         function read() {
-            const row = wipRereadTimer.under()
+            const op = wipRereadTimer
+            const row = op.under()
             const card = wipPane.eolHoverCard
+            const before = op.how === "inside" ? op.witnessed("cardBefore") : null
             return "card=" + wipPane.eolCardOpen + " still=" + wipPane.hand.stillHeld
                 + " lit=" + (row !== null && row.washLit)
-                + " changed=" + (wipPane.eolCardOpen && card.notice !== wipRereadTimer.before)
-                + (wipRereadTimer.how === "inside"
-                   ? " placed=" + (card.x === wipRereadTimer.cardBefore.x && card.y === wipRereadTimer.cardBefore.y)
-                   : "")
+                + " changed=" + (wipPane.eolCardOpen && card.notice !== op.witnessed("before"))
+                + (op.how === "inside" ? " placed=" + (card.x === before.x && card.y === before.y) : "")
         }
+        /// The run's line; `above` says what the read left as it found it before the hand moved (`left`, witnessed
+        /// with the move).
         function line() {
-            const row = wipRereadTimer.under()
-            const above = wipRereadTimer.how === "above"
-            return "wip_reread how=" + wipRereadTimer.how + " " + (above ? wipRereadTimer.left : wipRereadTimer.read())
+            const op = wipRereadTimer
+            const row = op.under()
+            const above = op.how === "above"
+            return "wip_reread how=" + op.how + " " + (above ? op.witnessed("left") : op.read())
                    + (above ? " moved_lit=" + (row !== null && row.washLit) + " after_card=" + wipPane.eolCardOpen : "")
                    + " under=" + (row !== null ? row.fullName : "")
-                   + " reads=" + (acts.unstagedReads - wipRereadTimer.readsBefore)
+                   + " reads=" + (acts.unstagedReads - op.witnessed("readsBefore"))
         }
         onTriggered: {
             const op = wipRereadTimer
@@ -426,18 +433,18 @@ Item {
                     return
                 // The pane's hand on the row, as it hears a hand (`HandWatch.stir`): the row's own ask brings the card.
                 op.input("stirred", () => {
-                    op.handAt = row.mapToItem(null, row.width / 2, row.height / 2)
-                    wipPane.hand.stir(op.handAt)
+                    wipPane.hand.stir(op.witness("handAt", row.mapToItem(null, row.width / 2, row.height / 2)))
                 })
                 return
             }
             if (op.at("stirred")) {
                 if (!Awaited.all("wip_reread_card", { "card": wipPane.eolCardOpen }))
                     return
+                // A failed save over the file is said with the stage.
                 op.input("written", () => {
-                    op.before = wipPane.eolHoverCard.notice
-                    op.bucketYBefore = op.paneOf("staged").y
-                    op.readsBefore = acts.unstagedReads
+                    op.witness("before", wipPane.eolHoverCard.notice)
+                    op.witness("bucketYBefore", op.paneOf("staged").y)
+                    op.witness("readsBefore", acts.unstagedReads)
                     if (op.how === "gone") {
                         // The hand inside the card, which the pane no longer hears; the file staged by the app's own
                         // write — its row leaves the list, and the rows under the card step up.
@@ -447,27 +454,26 @@ Item {
                             wipPane.moveStage("unstaged", op.path)
                             return true
                         })
-                        return
+                        return ""
                     }
                     if (op.how === "inside") {
                         // The hand inside the card, which the pane no longer hears; the rows move under the card.
-                        op.cardBefore = Qt.point(wipPane.eolHoverCard.x, wipPane.eolHoverCard.y)
+                        op.witness("cardBefore", Qt.point(wipPane.eolHoverCard.x, wipPane.eolHoverCard.y))
                         wipPane.eolHoverCard.contentPointed = true
                         wipPane.hand.stir(Qt.point(-1, -1))
                     }
                     // Saved over in place with a second line of the other ending, or a new file sorted above every row.
                     const why = Harness.writeFile(repoTab.repoPath + "/" + op.written, op.text)
-                    if (why !== "")
-                        Awaited.note("wip_reread write " + why)
                     repoTab.pollNow()
-                })
+                    return why
+                }, why => why === "" ? "" : "wip_reread write " + why)
                 return
             }
             if (op.at("written")) {
                 // The read in; read on the next beat, once the pane has weighed it (`WipPane.rowKeep`).
                 if (!Awaited.all("wip_reread_read", {
-                        "read": acts.unstagedReads > op.readsBefore && !wipPane.rowKeep.busy,
-                        "moved": op.how !== "staged" || op.paneOf("staged").y !== op.bucketYBefore,
+                        "read": acts.unstagedReads > op.witnessed("readsBefore") && !wipPane.rowKeep.busy,
+                        "moved": op.how !== "staged" || op.paneOf("staged").y !== op.witnessed("bucketYBefore"),
                         "gone": op.how !== "gone"
                                 || (driver.wroteAndSettled() && wipPane.rowIn("unstaged", op.path) === null
                                     && !wipPane.eolCardOpen),
@@ -480,7 +486,7 @@ Item {
                     // Qt's order: the hover handed to what is under the hand first, then taken from the card that went
                     // (`QQuickDeliveryAgentPrivate::deliverHoverEvent`).
                     op.input("restirred", () => {
-                        wipPane.hand.stir(op.handAt)
+                        wipPane.hand.stir(op.witnessed("handAt"))
                         wipPane.eolHoverCard.contentPointed = false
                     })
                     return
@@ -495,32 +501,34 @@ Item {
                 if (!Awaited.all("wip_reread_still", { "drawn": op.drawnSince("wip_reread_stirred"),
                                                        "page": PageSettled.settled(page) }))
                     return
-                op.complete(() => op.line())
+                op.complete({ "name": "wip_reread_still", "when": () => ({ "page": PageSettled.settled(page) }),
+                              "report": () => op.line() })
                 return
             }
             if (op.at("read")) {
                 // The row the read left under the hand asks for its tip or card after the rest: the forms that end
                 // here end on that decision; `above` reads first, then moves the hand (below).
-                if (!Awaited.all("wip_reread_landed", {
-                        "page": op.how === "above" || PageSettled.settled(page) }))
-                    return
                 if (op.how !== "above") {
-                    op.complete(() => op.line())
+                    op.complete({ "name": "wip_reread_landed", "when": () => ({ "page": PageSettled.settled(page) }),
+                                  "report": () => op.line() })
                     return
                 }
-                // The hand moved two pixels: the row the read brought under it is the row it is on now.
+                // The hand moved two pixels: the row the read brought under it is the row it is on now. What the read
+                // left is kept as the hand moves.
                 op.input("moved", () => {
-                    op.left = op.read()
-                    wipPane.hand.stir(Qt.point(op.handAt.x + 2, op.handAt.y))
+                    op.witness("left", op.read())
+                    const hand = op.witnessed("handAt")
+                    wipPane.hand.stir(Qt.point(hand.x + 2, hand.y))
                 })
                 return
             }
             // The two pixels were a tremor: the hold lifts (`HandWatch`), and the row under the hand asks for its own
             // card, which comes after the rest — the run ends on it, so the picture is of the state the tremor leaves
             // and not of the rest half spent.
-            if (!Awaited.all("wip_reread_moved", { "card": wipPane.eolCardOpen, "page": PageSettled.settled(page) }))
-                return
-            op.complete(() => op.line())
+            op.complete({
+                "name": "wip_reread_moved",
+                "when": () => ({ "card": wipPane.eolCardOpen, "page": PageSettled.settled(page) }),
+                "report": () => op.line() })
         }
     }
 
@@ -537,11 +545,6 @@ Item {
         id: tipSlideTimer
         name: "tip_slide"
         property string stage: "moved"
-        /// Where the pane's hand stands on the row.
-        property point handAt: Qt.point(-1, -1)
-        /// The folder struck and the row tipped below it.
-        property int folderAt: -1
-        property int rowAt: -1
         readonly property var pane: detailsPane
         readonly property var view: detailsPane.filesWalk.view
         function tipOut() {
@@ -551,19 +554,16 @@ Item {
             return "tip_slide on=files stage=" + stage + " tip=" + tipSlideTimer.tipOut()
                    + " still=" + tipSlideTimer.pane.hand.stillHeld
         }
-        /// The first folder with a file row two rows below it, and that row: shutting the folder slides the row.
+        /// The first folder with a file row two rows below it, whose shutting slides that row — its index, or -1.
         function pick() {
             const view = tipSlideTimer.view
             for (let i = 0; i + 2 < view.count; i++) {
                 const folder = view.itemAtIndex(i)
                 const below = view.itemAtIndex(i + 2)
-                if (folder && folder.isFolder && !folder.isFolded && below && !below.isFolder) {
-                    tipSlideTimer.folderAt = i
-                    tipSlideTimer.rowAt = i + 2
-                    return true
-                }
+                if (folder && folder.isFolder && !folder.isFolded && below && !below.isFolder)
+                    return i
             }
-            return false
+            return -1
         }
         onTriggered: {
             const op = tipSlideTimer
@@ -578,14 +578,17 @@ Item {
             }
             if (op.at("stood")) {
                 const stood = driver.cardSettled && !detailsModel.loading
-                if (!Awaited.all("tip_slide_rows", { "stood": stood, "row": stood && op.pick() }))
+                const folderAt = stood ? op.pick() : -1
+                if (!Awaited.all("tip_slide_rows", { "stood": stood, "row": folderAt >= 0 }))
                     return
-                // The pane's hand on the row, as it hears a hand (`HandWatch.stir`).
+                // The pane's hand on the row, as it hears a hand (`HandWatch.stir`); the folder struck and the row
+                // tipped below it are kept.
                 op.input("pointed", () => {
-                    const row = op.view.itemAtIndex(op.rowAt)
-                    op.handAt = row.mapToItem(null, row.width / 2, row.height / 2)
-                    pane.hand.stir(op.handAt)
-                    pane.pointedTipRow = op.rowAt
+                    op.witness("folderAt", folderAt)
+                    const rowAt = op.witness("rowAt", folderAt + 2)
+                    const row = op.view.itemAtIndex(rowAt)
+                    pane.hand.stir(row.mapToItem(null, row.width / 2, row.height / 2))
+                    pane.pointedTipRow = rowAt
                 })
                 return
             }
@@ -593,29 +596,35 @@ Item {
                 // The pane can still lay its rows out after the run stood on them — the list stepping down as the
                 // block over it grows — which is the rows moving under the hand the run put there
                 // (`HandWatch.rowsMoved`): that hand waits for a move of its own before the tip comes, so the run puts
-                // it on the row again, a pixel aside of where it stood, as a hand arriving does.
-                const held = pane.hand.stillHeld
-                if (held) {
-                    const row = op.view.itemAtIndex(op.rowAt)
-                    if (row) {
-                        const centre = row.mapToItem(null, row.width / 2, row.height / 2)
-                        op.handAt = Qt.point(centre.x + (op.handAt.x === centre.x ? 1 : 0), centre.y)
-                        pane.hand.stir(op.handAt)
-                    }
-                }
-                if (!Awaited.all("tip_slide_tip", { "tip": op.tipOut(), "free": !held }))
+                // it on the row again, a pixel aside of where it stands (`HandWatch.at`), as a hand arriving does —
+                // each beat until the tip is out over a hand that is free.
+                if (!op.input("tipped", () => {
+                        const held = pane.hand.stillHeld
+                        if (held) {
+                            const row = op.view.itemAtIndex(op.witnessed("rowAt"))
+                            if (row) {
+                                const centre = row.mapToItem(null, row.width / 2, row.height / 2)
+                                pane.hand.stir(Qt.point(centre.x + (pane.hand.at.x === centre.x ? 1 : 0), centre.y))
+                            }
+                        }
+                        return !held && op.tipOut()
+                    }))
                     return
+            }
+            if (op.at("tipped")) {
                 if (op.stage === "shown") {
-                    op.complete(() => op.line("shown"))
+                    op.complete({ "name": "tip_slide_tip",
+                                  "when": () => ({ "tip": op.tipOut(), "free": !op.pane.hand.stillHeld }),
+                                  "report": () => op.line("shown") })
                     return
                 }
                 op.input("folded", () => {
-                    const folder = op.view.itemAtIndex(op.folderAt)
+                    const folder = op.view.itemAtIndex(op.witnessed("folderAt"))
                     folder.folderToggled(folder.foldKey)
                 })
                 // Read in the turn of the fold where the page owes nothing.
                 if (op.stage === "slid")
-                    op.complete(() => op.line("slid"))
+                    op.complete({ "when": () => ({}), "report": () => op.line("slid") })
                 return
             }
             if (op.at("folded")) {
@@ -626,17 +635,18 @@ Item {
                                                        "page": PageSettled.settled(page) }))
                     return
                 if (op.stage === "still") {
-                    op.complete(() => op.line("still"))
+                    op.complete({ "name": "tip_slide_rested", "when": () => ({ "page": PageSettled.settled(page) }),
+                                  "report": () => op.line("still") })
                     return
                 }
+                // Two pixels from where the hand stands.
                 op.input("moved", () => {
-                    pane.hand.stir(Qt.point(op.handAt.x + 2, op.handAt.y))
+                    pane.hand.stir(Qt.point(pane.hand.at.x + 2, pane.hand.at.y))
                 })
                 return
             }
-            if (!Awaited.all("tip_slide_back", { "tip": op.tipOut() }))
-                return
-            op.complete(() => op.line("moved"))
+            op.complete({ "name": "tip_slide_back", "when": () => ({ "tip": op.tipOut() }),
+                          "report": () => op.line("moved") })
         }
     }
 }

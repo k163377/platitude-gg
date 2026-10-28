@@ -71,10 +71,9 @@ Item {
         readonly property bool sizes: badgesActTimer.widthArg === "floor"
                                       || (!isNaN(parseInt(badgesActTimer.widthArg))
                                           && parseInt(badgesActTimer.widthArg) > 0)
-        property int requestedWidth: -1
-        onTriggered: {
-            const op = badgesActTimer
-            acts.bandBeat()
+        /// What the band shows, read now. `armed`: the stage arming the graph waits for the graph whole and the page;
+        /// otherwise the badges the verb raises, the strip's tabs and the window at its width (`sized`).
+        function terms(armed) {
             const page = window.curPage
             // The page whole (`PageSettled`): the worktree row's tally comes with the rows agreeing with the status.
             const terms = {
@@ -85,18 +84,13 @@ Item {
                 "conflicts": topBar.conflictBadgeShown,
                 "identity": topBar.identityBadgeShown
             }
-            if (op.wantsAll && op.at("start")) {
+            if (armed) {
                 // Armed over a page that has settled, as `graph-stale` arms it (`staleActTimer` says why).
                 terms["graph"] = page !== null && !page.pageGraph.loading && page.pageGraph.finishCount > 0
                 terms["page"] = PageSettled.settled(page)
-                if (!Awaited.all("badges_arm", terms))
-                    return
-                op.input("armed", () => {
-                    page.pageGraph.failGraphPass("swapping")
-                })
-                return
+                return terms
             }
-            if (op.wantsAll) {
+            if (badgesActTimer.wantsAll) {
                 terms["stale"] = topBar.staleBadgeShown
                 terms["lfs"] = topBar.lfsBadgeShown
                 terms["oldGit"] = topBar.oldGitBadgeShown
@@ -106,10 +100,39 @@ Item {
             // every one — read off the strip's own count, since the pages come up in their own time.
             const wantedTabs = parseInt(Harness.autoActArg.split(":")[1])
             terms["tabs"] = isNaN(wantedTabs) || topBar.bandTabCount === wantedTabs
+            return terms
+        }
+        /// The window at the width the run asked for (`requestedWidth`, kept as it was asked), the band across it.
+        function sized() {
+            return !badgesActTimer.sizes
+                || (topBar.width === mainUi.width
+                    && (badgesActTimer.widthArg === "floor"
+                        ? window.width >= badgesActTimer.witnessed("requestedWidth")
+                        : Math.round(window.width) === badgesActTimer.witnessed("requestedWidth")))
+        }
+        /// …and the card open and laid out where one is wanted, and the page: what the completion stands on.
+        function landed() {
+            const terms = badgesActTimer.terms(false)
+            terms["sized"] = badgesActTimer.sized()
+            terms["card"] = !badgesActTimer.wantsCard || (topBar.stateCardOpen && topBar.stateCardLaidOut)
+            terms["page"] = PageSettled.windowSettled(window)
+            return terms
+        }
+        onTriggered: {
+            const op = badgesActTimer
+            const page = window.curPage
+            if (op.wantsAll && op.at("start")) {
+                if (!Awaited.all("badges_arm", op.terms(true)))
+                    return
+                op.input("armed", () => {
+                    page.pageGraph.failGraphPass("swapping")
+                })
+                return
+            }
             const arg = op.widthArg
             const pointed = !op.points || !(op.at("start") || op.at("armed"))
             if (!pointed || (op.sizes && !op.at("sized"))) {
-                if (!Awaited.all("badges_band", terms))
+                if (!Awaited.all("badges_band", op.terms(false)))
                     return
                 // The pointer, through the one property the real hover writes.
                 if (!pointed && !op.input("pointed", () => {
@@ -121,52 +144,35 @@ Item {
                 // Which shape a width brings on depends on the installed fonts, so the run names the width and the
                 // report says the shape. Allowed below the floor: the third shape sits below what a hand can drag to.
                 op.input("sized", () => {
-                    op.requestedWidth = arg === "floor" ? Math.ceil(window.floorWidth) : parseInt(arg)
-                    window.width = op.requestedWidth
+                    window.width = op.witness("requestedWidth",
+                                              arg === "floor" ? Math.ceil(window.floorWidth) : parseInt(arg))
                     if (arg === "floor")
                         window.height = Math.ceil(window.floorHeight)
                 })
                 return
             }
-            terms["sized"] = !op.sizes
-                || (topBar.width === mainUi.width
-                    && (arg === "floor" ? window.width >= op.requestedWidth
-                                        : Math.round(window.width) === op.requestedWidth))
-            const before = Object.keys(terms).every(term => terms[term])
             // The card open and laid out where one is wanted: a `ColumnLayout` settles on polish with no
             // `forceLayout()`, so a report written in the frame a row arrives reads the card from before it
-            // (`BandStateCard.laidOut`). The band's shape is read every beat (`bandLaidOutAfterFrames`).
-            terms["card"] = !op.wantsCard || (topBar.stateCardOpen && topBar.stateCardLaidOut)
-            terms["laid"] = before && acts.bandLaidOutAfterFrames(op)
-            terms["page"] = PageSettled.windowSettled(window)
+            // (`BandStateCard.laidOut`). The band's shape is read every beat (`acts.bandStood`).
+            const terms = op.landed()
+            const before = Object.keys(terms).every(term => term === "card" || term === "page" || terms[term])
+            terms["laid"] = acts.bandStood(op, before ? acts.badgesLine() : "") && before
             if (!Awaited.all("badges_ready", terms))
                 return
-            op.complete(() => acts.badgesLine())
+            op.complete({ "name": "badges_shaped", "when": () => op.landed(), "report": () => acts.badgesLine() })
         }
     }
     // The band's two rows (`TopBar`'s `bandRow` and its shadow `bandAsked`) lay out on polish, so in the beat the last
     // badge arrives, or the window reaches its width, the group still has the width the row gave it before — on macOS
-    // the identity badge's alone, read as a shadow that disagrees. Every report of the band's shape waits two swapped
-    // frames once what it waits for is there, as the left menu's does (`WindowFrameActs.menuReadAfterFrames`) — there
-    // the whole time: a beat that turned back before asking (a badge gone again, the card not laid out) starts the
-    // count over, or the report would go out in the very beat the shape came back.
-    /// Whether the beat before this one asked about the band's shape, and whether this one has.
-    property bool bandAskedBefore: false
-    property bool bandAskedNow: false
-    /// The run of asking beats the frames are counted over: a new one begins at an ask the beat before did not make.
-    property int bandRun: 0
-    /// Called at the top of each beat of a verb that reads the band's shape.
-    function bandBeat() {
-        acts.bandAskedBefore = acts.bandAskedNow
-        acts.bandAskedNow = false
-    }
-    /// Whether two frames have swapped since the band's shape was first asked about on this run of beats
-    /// (`StageTimer.drawnSince`, under `op`'s stage).
-    function bandLaidOutAfterFrames(op) {
-        if (!acts.bandAskedBefore && !acts.bandAskedNow)
-            acts.bandRun++
-        acts.bandAskedNow = true
-        return op.drawnSince("band_laid_out#" + acts.bandRun)
+    // the identity badge's alone, read as a shadow that disagrees. Every report of the band's shape waits for the
+    // shape to stand across a swapped frame once what it waits for is there, as the left menu's does
+    // (`WindowFrameActs.menuStood`) — asked the whole time: a beat that turned back (a badge gone again, the card not
+    // laid out) reads as another value and starts the wait over, or the report would go out in the very beat the
+    // shape came back.
+    /// Whether the band's shape — `line`, the report's reading of it, "" while what it waits for is not all there —
+    /// has stood across a swapped frame (`StageTimer.still`, under `op`'s stage). Asked every beat.
+    function bandStood(op, line) {
+        return op.still("band_laid", line)
     }
     /// Which rule painted the folded group's mark (デザイン規約 §ウィンドウの縁「色は最も重い状態が決める」), read off
     /// the band's own colour — recomputing the rule here would agree with itself whatever the band did.
@@ -227,8 +233,15 @@ Item {
     WindowStage {
         id: staleActTimer
         name: "graph_stale"
-        order: ["armed", "badge"]
+        /// The fault put in, the badge up, then the pointer on it until its card stands.
+        order: ["armed", "badge", "pointed"]
         running: Harness.autoAct === "graph-stale" || Harness.autoAct === "graph-stopped"
+        /// The settled page's graph out of date and its badge up, read now.
+        function badgeTerms() {
+            const settled = PageSettled.settledUnder(window)
+            const graph = settled ? window.curPage.pageGraph : null
+            return { "page": settled, "badge": graph !== null && topBar.staleBadgeShown && !graph.loading }
+        }
         onTriggered: {
             const op = staleActTimer
             const page = window.curPage
@@ -251,20 +264,28 @@ Item {
                 }, () => "graph_stale step=armed")
                 return
             }
-            const badge = graph !== null && topBar.staleBadgeShown && !graph.loading
             if (op.at("armed")) {
-                if (!Awaited.all("stale_act_badge", { "page": settled, "badge": badge }))
+                if (!Awaited.all("stale_act_badge", op.badgeTerms()))
                     return
                 op.advance("badge", () => "graph_stale step=badge")
-                // The card, opened the way `badges-hover` opens it (`staleLine` says why).
-                topBar.statePointedAt = true
-                return
             }
-            if (badge)
-                topBar.statePointedAt = true
-            if (!Awaited.all("stale_act_card", { "page": settled, "badge": badge, "card": topBar.stateCardOpen }))
-                return
-            op.complete(() => acts.staleLine())
+            // The card, opened the way `badges-hover` opens it (`staleLine` says why): the pointer put down again each
+            // beat the badge stands and the card is not up.
+            if (op.at("badge")) {
+                if (!op.badgeTerms().badge || !op.input("pointed", () => {
+                        topBar.statePointedAt = true
+                        return topBar.stateCardOpen
+                    }))
+                    return
+            }
+            op.complete({
+                "name": "stale_act_card",
+                "when": () => {
+                    const terms = op.badgeTerms()
+                    terms["card"] = topBar.stateCardOpen
+                    return terms
+                },
+                "report": () => acts.staleLine() })
         }
     }
     // PGG_AUTO_ACT=wip-landing: where the page lands when the pass it opened on carries every other worktree's row
@@ -281,10 +302,6 @@ Item {
         name: "wip_landing"
         order: ["let_through"]
         running: Harness.autoAct === "wip-landing"
-        property bool early: false
-        property bool earlyWorktree: false
-        /// Whether the hold answered the letting through (`GraphModel.letTheWorktreeRowThrough`).
-        property bool held: false
         onTriggered: {
             const op = wipLandingTimer
             const page = acts.window.curPage
@@ -299,29 +316,37 @@ Item {
                         "raced": page !== null && page.pageWorktree.loaded && page.pageWorktree.wipRowStands
                             && !graph.loading && graph.finishCount > 0 && !graph.wipRow && graph.carriedTop }))
                     return
+                // Where the page stood before the hold came down, and whether the hold answered the letting through
+                // (`GraphModel.letTheWorktreeRowThrough`), kept.
                 if (!op.input("let_through", () => {
-                        op.early = page.wipShown
-                        op.earlyWorktree = page.carriedPath !== ""
-                        op.held = graph.letTheWorktreeRowThrough()
+                        op.witness("early", page.wipShown)
+                        op.witness("earlyWorktree", page.carriedPath !== "")
+                        op.witness("held", graph.letTheWorktreeRowThrough())
                     }))
                     return
-                // `held=` is the hold answering for itself: otherwise a run could pass on the ordinary order.
-                if (!op.held)
-                    op.complete(() => "wip_landing held=false")
+            }
+            // `held=` is the hold answering for itself: otherwise a run could pass on the ordinary order.
+            if (!op.witnessed("held")) {
+                op.complete({ "name": "wip_landing_unheld", "when": () => ({}),
+                              "report": () => "wip_landing held=false" })
                 return
             }
-            if (!Awaited.all("wip_landing_landed", { "ready": page,
-                                                     "landed": graph !== null && graph.wipRow,
-                                                     "page": PageSettled.settled(page) }))
-                return
-            op.complete(() => {
-                const landed = acts.window.curPage
-                return "wip_landing held=true otherTop=true early=" + op.early
-                    + " earlyWorktree=" + op.earlyWorktree
-                    + " wip=" + landed.wipShown
-                    + " worktree=" + (landed.carriedPath !== "")
-                    + " row=" + landed.selectedRow
-            })
+            op.complete({
+                "name": "wip_landing_landed",
+                "when": () => {
+                    const page = acts.window.curPage
+                    return { "ready": page !== null,
+                             "landed": page !== null && page.pageGraph.wipRow,
+                             "page": PageSettled.settled(page) }
+                },
+                "report": () => {
+                    const landed = acts.window.curPage
+                    return "wip_landing held=true otherTop=true early=" + op.witnessed("early")
+                        + " earlyWorktree=" + op.witnessed("earlyWorktree")
+                        + " wip=" + landed.wipShown
+                        + " worktree=" + (landed.carriedPath !== "")
+                        + " row=" + landed.selectedRow
+                } })
         }
     }
 
@@ -358,49 +383,30 @@ Item {
                                       || (!isNaN(parseInt(oldGitActTimer.widthArg))
                                           && parseInt(oldGitActTimer.widthArg) > 0)
         readonly property bool points: Harness.autoAct === "old-git-card"
-        property int requestedWidth: -1
-        onTriggered: {
-            const op = oldGitActTimer
-            acts.bandBeat()
-            const arg = op.widthArg
+        /// What the band shows, read now: loaded and settled; `badged`: with the git answered, its badge up and the
+        /// window at the width the run asked for (`requestedWidth`, kept as it was asked); `carded`: and the card
+        /// where one is wanted.
+        function terms(badged, carded) {
             const terms = {
                 "band": topBar.bandTabsWidth > 0,
                 "page": PageSettled.settledUnder(window)
             }
-            if (op.sizes && op.at("start")) {
-                if (!Awaited.all("old_git_ready", terms))
-                    return
-                op.input("sized", () => {
-                    op.requestedWidth = arg === "floor" ? Math.ceil(window.floorWidth) : parseInt(arg)
-                    window.width = op.requestedWidth
-                    if (arg === "floor")
-                        window.height = Math.ceil(window.floorHeight)
-                })
-                return
-            }
+            if (!badged)
+                return terms
+            const arg = oldGitActTimer.widthArg
             terms["version"] = AppBackend.gitVersion !== ""
             terms["badge"] = topBar.oldGitBadgeShown
-            terms["sized"] = !op.sizes
+            terms["sized"] = !oldGitActTimer.sizes
                 || (topBar.width === mainUi.width
-                    && (arg === "floor" ? window.width >= op.requestedWidth
-                                        : Math.round(window.width) === op.requestedWidth))
-            // The pointer, through the one property the real hover writes, goes down on a tick of its own and the card
-            // is read on the next. A pointer down before the badge is answered again when the badge arrives and when
-            // the row places the group (`BandStateGroup.asking`).
-            if (op.points && !op.at("pointed")) {
-                if (!Awaited.all("old_git_ready", terms))
-                    return
-                op.input("pointed", () => {
-                    topBar.statePointedAt = true
-                })
-                return
-            }
-            terms["card"] = !op.points || topBar.stateCardOpen
-            terms["laid"] = Object.keys(terms).every(term => terms[term]) && acts.bandLaidOutAfterFrames(op)
-            if (!Awaited.all("old_git_ready", terms))
-                return
-            // `version=` says which git answered: a run whose shim never got onto PATH photographs an ordinary window.
-            op.complete(() => "old-git badge=" + topBar.oldGitBadgeShown
+                    && (arg === "floor" ? window.width >= oldGitActTimer.witnessed("requestedWidth")
+                                        : Math.round(window.width) === oldGitActTimer.witnessed("requestedWidth")))
+            if (carded)
+                terms["card"] = !oldGitActTimer.points || topBar.stateCardOpen
+            return terms
+        }
+        // `version=` says which git answered: a run whose shim never got onto PATH photographs an ordinary window.
+        function line() {
+            return "old-git badge=" + topBar.oldGitBadgeShown
                 + " card=" + topBar.stateCardOpen
                 + " rows=" + topBar.stateCardRows
                 + " words=" + topBar.stateWordsShown
@@ -414,7 +420,39 @@ Item {
                 + " cap=" + topBar.stateCapW
                 + " version=" + AppBackend.gitVersion
                 + " min=" + AppBackend.minimumGit
-                + " w=" + window.width)
+                + " w=" + window.width
+        }
+        onTriggered: {
+            const op = oldGitActTimer
+            const arg = op.widthArg
+            if (op.sizes && op.at("start")) {
+                if (!Awaited.all("old_git_ready", op.terms(false, false)))
+                    return
+                op.input("sized", () => {
+                    window.width = op.witness("requestedWidth",
+                                              arg === "floor" ? Math.ceil(window.floorWidth) : parseInt(arg))
+                    if (arg === "floor")
+                        window.height = Math.ceil(window.floorHeight)
+                })
+                return
+            }
+            // The pointer, through the one property the real hover writes, goes down on a tick of its own and the card
+            // is read on the next. A pointer down before the badge is answered again when the badge arrives and when
+            // the row places the group (`BandStateGroup.asking`).
+            if (op.points && !op.at("pointed")) {
+                if (!Awaited.all("old_git_ready", op.terms(true, false)))
+                    return
+                op.input("pointed", () => {
+                    topBar.statePointedAt = true
+                })
+                return
+            }
+            const terms = op.terms(true, true)
+            const before = Object.keys(terms).every(term => terms[term])
+            terms["laid"] = acts.bandStood(op, before ? op.line() : "") && before
+            if (!Awaited.all("old_git_ready", terms))
+                return
+            op.complete({ "name": "old_git_shaped", "when": () => op.terms(true, true), "report": () => op.line() })
         }
     }
 
@@ -430,51 +468,36 @@ Item {
         readonly property bool sizes: Harness.autoActArg === "floor"
                                       || (!isNaN(parseInt(Harness.autoActArg)) && parseInt(Harness.autoActArg) > 0)
         readonly property bool points: Harness.autoAct === "no-lfs-card"
-        property int requestedWidth: -1
-        onTriggered: {
-            const op = noLfsActTimer
-            acts.bandBeat()
+        /// What the band shows, read now: loaded with a page; `badged`: with the worktree read, its badge up and the
+        /// window at the width the run asked for (`requestedWidth`, kept as it was asked).
+        function terms(badged) {
             const page = window.curPage
             const arg = Harness.autoActArg
             const terms = {
                 "band": topBar.bandTabsWidth > 0,
                 "ready": page !== null
             }
-            if (op.sizes && op.at("start")) {
-                if (!Awaited.all("no_lfs_band", terms))
-                    return
-                op.input("sized", () => {
-                    op.requestedWidth = arg === "floor" ? Math.ceil(window.floorWidth) : parseInt(arg)
-                    window.width = op.requestedWidth
-                    if (arg === "floor")
-                        window.height = Math.ceil(window.floorHeight)
-                })
-                return
-            }
+            if (!badged)
+                return terms
             terms["loaded"] = page !== null && page.pageWorktree.loaded
             terms["badge"] = topBar.lfsBadgeShown
-            terms["sized"] = !op.sizes
+            terms["sized"] = !noLfsActTimer.sizes
                 || (topBar.width === mainUi.width
-                    && (arg === "floor" ? window.width >= op.requestedWidth
-                                        : Math.round(window.width) === op.requestedWidth))
-            // Down on a tick of its own and read on a later one, as `old-git-card`'s pointer is.
-            if (op.points && !op.at("pointed")) {
-                if (!Awaited.all("no_lfs_band", terms))
-                    return
-                op.input("pointed", () => {
-                    topBar.statePointedAt = true
-                })
-                return
-            }
-            const before = Object.keys(terms).every(term => terms[term])
-            terms["card"] = !op.points || (topBar.stateCardOpen && topBar.stateCardLaidOut)
-            terms["laid"] = before && acts.bandLaidOutAfterFrames(op)
+                    && (arg === "floor" ? window.width >= noLfsActTimer.witnessed("requestedWidth")
+                                        : Math.round(window.width) === noLfsActTimer.witnessed("requestedWidth")))
+            return terms
+        }
+        /// …and the card open and laid out where one is wanted, and the page: what the completion stands on.
+        function landed() {
+            const terms = noLfsActTimer.terms(true)
+            terms["card"] = !noLfsActTimer.points || (topBar.stateCardOpen && topBar.stateCardLaidOut)
             terms["page"] = PageSettled.windowSettled(window)
-            if (!Awaited.all("no_lfs_ready", terms))
-                return
-            // `count=` is the model's, which the card's sentence says: the picture cannot be read for a number. The
-            // judged fields run together, `rows=` last among them (a closed card stands no rows).
-            op.complete(() => "no-lfs badge=" + topBar.lfsBadgeShown
+            return terms
+        }
+        // `count=` is the model's, which the card's sentence says: the picture cannot be read for a number. The
+        // judged fields run together, `rows=` last among them (a closed card stands no rows).
+        function line() {
+            return "no-lfs badge=" + topBar.lfsBadgeShown
                 + " card=" + topBar.stateCardOpen
                 + " count=" + window.curPage.pageWorktree.lfsNeeded
                 + " words=" + topBar.stateWordsShown
@@ -484,7 +507,37 @@ Item {
                 + " deep=" + topBar.stateMarkDeep
                 + " rows=" + topBar.stateCardRows
                 + " cap=" + topBar.stateCapW
-                + " w=" + window.width)
+                + " w=" + window.width
+        }
+        onTriggered: {
+            const op = noLfsActTimer
+            const arg = Harness.autoActArg
+            if (op.sizes && op.at("start")) {
+                if (!Awaited.all("no_lfs_band", op.terms(false)))
+                    return
+                op.input("sized", () => {
+                    window.width = op.witness("requestedWidth",
+                                              arg === "floor" ? Math.ceil(window.floorWidth) : parseInt(arg))
+                    if (arg === "floor")
+                        window.height = Math.ceil(window.floorHeight)
+                })
+                return
+            }
+            // Down on a tick of its own and read on a later one, as `old-git-card`'s pointer is.
+            if (op.points && !op.at("pointed")) {
+                if (!Awaited.all("no_lfs_band", op.terms(true)))
+                    return
+                op.input("pointed", () => {
+                    topBar.statePointedAt = true
+                })
+                return
+            }
+            const terms = op.landed()
+            const before = Object.keys(terms).every(term => term === "card" || term === "page" || terms[term])
+            terms["laid"] = acts.bandStood(op, before ? op.line() : "") && before
+            if (!Awaited.all("no_lfs_ready", terms))
+                return
+            op.complete({ "name": "no_lfs_shaped", "when": () => op.landed(), "report": () => op.line() })
         }
     }
 }

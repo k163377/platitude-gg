@@ -27,7 +27,7 @@ Item {
     /// (`AutoActDriver` asks them in turn).
     function run(act, arg) {
         if (act === "details-failure") {
-            driver.completionDeferred = true
+            driver.deferCompletion()
             driver.detailsModel.request("ffffffffffffffffffffffffffffffffffffffff")
             detailsFailure.start()
         } else if (act === "details-select" || act === "details-select-away") {
@@ -142,7 +142,7 @@ Item {
                 // Carried past in the dispatch; the bar stays in hand, so the refusal still stands when the
                 // completion reads it.
                 page.dragDividerPast(arg)
-                driver.act.complete(() => acts.refusalLine(arg))
+                dividerHeldTimer.start()
             }
         } else {
             return false
@@ -159,15 +159,24 @@ Item {
                + " graphW=" + graphPane.graphColW
     }
 
+    /// The `divider-refuse` drags the dispatch carries past itself — every bound but a shut log's and the description
+    /// box's: the verb's completion is deferred (`AutoActCompletion.defersCompletion`), so it completes from here, on
+    /// the refusal as it stands.
+    PageStage {
+        id: dividerHeldTimer
+        name: "divider_held"
+        onTriggered: dividerHeldTimer.complete({ "when": () => ({}),
+                                                 "report": () => acts.refusalLine(Harness.autoActArg) })
+    }
+
     PageStage {
         id: detailsFailure
         name: "details_failure"
-        onTriggered: {
-            if (!Awaited.all("details_failure_ready", {
-                "ready": !(driver.detailsModel.loading || !driver.repoTab.lastError.startsWith("details: ")) }))
-                return
-            detailsFailure.complete(() => "details_failure loading=false error=true")
-        }
+        onTriggered: detailsFailure.complete({
+            "name": "details_failure_ready",
+            "when": () => ({ "ready": !(driver.detailsModel.loading
+                                        || !driver.repoTab.lastError.startsWith("details: ")) }),
+            "report": () => "details_failure loading=false error=true" })
     }
     /// The pane's values are fields the reader drags over (規約 §右のペインの字は掴める). A drag cannot be injected, so
     /// this picks the field out the way `Ctrl+A` does and reads back what it holds — a picture cannot answer this, as
@@ -180,11 +189,27 @@ Item {
         property string which: ""
         /// The value picked out first (`-away`), or empty.
         property string firstWhich: ""
+        /// The selection as it stands, against what the pane shows at that value.
+        function line() {
+            const op = detailsSelectTimer
+            const got = detailsPane.valueRow.selectedValue(op.which)
+            const want = detailsPane.valueRow.shownValue(op.which)
+            // A second selection must not leave the first lit. Both halves are said: a run that cleared everything
+            // would answer `dropped=true` on its own.
+            if (op.firstWhich !== "")
+                return "details_select_away dropped="
+                       + (detailsPane.valueRow.selectedValue(op.firstWhich) === "")
+                       + " held=" + (want !== "" && got === want)
+                       + " first=" + op.firstWhich
+                       + " then=" + op.which
+            // `match=` is the whole claim; `text=` rides along for the eye.
+            return "details_select match=" + (want !== "" && got === want) + " which=" + op.which + " text=" + got
+        }
         onTriggered: {
             const op = detailsSelectTimer
-            if (!Awaited.all("details_select_ready", { "ready": driver.cardSettled }))
-                return
             if (op.at("start")) {
+                if (!Awaited.all("details_select_ready", { "ready": driver.cardSettled }))
+                    return
                 op.input("asked", () => {
                     if (op.firstWhich !== "")
                         detailsPane.valueRow.selectValue(op.firstWhich)
@@ -192,20 +217,8 @@ Item {
                 })
                 return
             }
-            op.complete(() => {
-                const got = detailsPane.valueRow.selectedValue(op.which)
-                const want = detailsPane.valueRow.shownValue(op.which)
-                // A second selection must not leave the first lit. Both halves are said: a run that cleared
-                // everything would answer `dropped=true` on its own.
-                if (op.firstWhich !== "")
-                    return "details_select_away dropped="
-                           + (detailsPane.valueRow.selectedValue(op.firstWhich) === "")
-                           + " held=" + (want !== "" && got === want)
-                           + " first=" + op.firstWhich
-                           + " then=" + op.which
-                // `match=` is the whole claim; `text=` rides along for the eye.
-                return "details_select match=" + (want !== "" && got === want) + " which=" + op.which + " text=" + got
-            })
+            op.complete({ "name": "details_select_ready", "when": () => ({ "ready": driver.cardSettled }),
+                          "report": () => op.line() })
         }
     }
 
@@ -223,42 +236,49 @@ Item {
             return fieldMenuTimer.boxState === "readonly" ? detailsPane.messageBlock.summaryBox
                                                            : wipPane.commitBlock.messageSeat.summaryBox
         }
+        /// The box put in the state the argument names, and its menu asked for: the press.
+        function ask() {
+            const box = fieldMenuTimer.box()
+            // Something for Paste to offer: a run's clipboard starts empty.
+            driver.clipboard.copy("pasted words")
+            if (fieldMenuTimer.boxState === "typed") {
+                wipPane.setMessage("", "")
+                // Undoable, as typing is: `text` set outright leaves nothing to undo.
+                box.insert(0, "fix: typed into the box")
+            } else if (fieldMenuTimer.boxState === "selected") {
+                wipPane.setMessage("fix: a summary to cut a word from", "")
+                box.select(7, 14)
+            } else if (fieldMenuTimer.boxState === "readonly") {
+                box.select(0, box.text.indexOf(" ") > 0 ? box.text.indexOf(" ") : box.length)
+            } else {
+                wipPane.setMessage("", "")
+            }
+            // The keyboard's request (no right button behind it), which only the box holding the caret answers: at
+            // the caret, as Qt names a text box's every request, and the card stands under it (`FieldMenu.offerNow`).
+            box.forceActiveFocus()
+            const caret = box.cursorRectangle
+            box.ContextMenu.requested(Qt.point(caret.x + caret.width / 2, caret.y + caret.height / 2))
+        }
+        /// The menu as it stands over the box.
+        function line() {
+            const seat = acts.menuSeatOf(fieldMenuTimer.box())
+            const menu = seat !== null ? seat.item : null
+            return "field_menu box=" + fieldMenuTimer.boxState
+                   + " opened=" + (menu !== null && menu.opened)
+                   + " rows=" + (menu !== null ? menu.rowWords(false).join(",") : "")
+                   + " live=" + (menu !== null ? menu.rowWords(true).join(",") : "")
+        }
         onTriggered: {
             const op = fieldMenuTimer
             const older = op.boxState === "readonly"
-            if (!Awaited.all("field_menu_ready", { "ready": !(older ? !driver.cardSettled : !page.wipShown) }))
-                return
-            op.input("requested", () => {
-                const box = op.box()
-                // Something for Paste to offer: a run's clipboard starts empty.
-                driver.clipboard.copy("pasted words")
-                if (op.boxState === "typed") {
-                    wipPane.setMessage("", "")
-                    // Undoable, as typing is: `text` set outright leaves nothing to undo.
-                    box.insert(0, "fix: typed into the box")
-                } else if (op.boxState === "selected") {
-                    wipPane.setMessage("fix: a summary to cut a word from", "")
-                    box.select(7, 14)
-                } else if (older) {
-                    box.select(0, box.text.indexOf(" ") > 0 ? box.text.indexOf(" ") : box.length)
-                } else {
-                    wipPane.setMessage("", "")
-                }
-                // The keyboard's request (no right button behind it), which only the box holding the caret answers:
-                // at the caret, as Qt names a text box's every request, and the card stands under it
-                // (`FieldMenu.offerNow`).
-                box.forceActiveFocus()
-                const caret = box.cursorRectangle
-                box.ContextMenu.requested(Qt.point(caret.x + caret.width / 2, caret.y + caret.height / 2))
-            })
-            op.complete(() => {
-                const seat = acts.menuSeatOf(op.box())
-                const menu = seat !== null ? seat.item : null
-                return "field_menu box=" + op.boxState
-                       + " opened=" + (menu !== null && menu.opened)
-                       + " rows=" + (menu !== null ? menu.rowWords(false).join(",") : "")
-                       + " live=" + (menu !== null ? menu.rowWords(true).join(",") : "")
-            })
+            if (op.at("start")) {
+                if (!Awaited.all("field_menu_ready", { "ready": !(older ? !driver.cardSettled : !page.wipShown) }))
+                    return
+                op.input("requested", () => {
+                    op.ask()
+                })
+            }
+            op.complete({ "when": () => ({}), "report": () => op.line() })
         }
     }
     function menuSeatOf(box) {
@@ -273,15 +293,19 @@ Item {
     ///
     /// Both claims compare the screen against what the control says it offers, so a translation stays green and a
     /// tip that kept the old sentence goes red.
+    ///
+    /// Witnessed as the press lands: `was`, what the tip was carrying — empty in `-counting`; `offered`, whether the
+    /// tip up before the press carried the control's word.
     PageStage {
         id: hashTipTimer
         name: "hash_tip"
         /// Whether the press goes in ahead of the tip.
         property bool counting: false
-        /// What the tip was carrying when the press landed — empty in `-counting`.
-        property string was: ""
-        /// Whether the tip up before the press carried the control's word.
-        property bool offered: false
+        /// The plate's hash ready, and its tip up: the tip waits out its own rest, and an empty answer is "not up yet".
+        function up() {
+            const row = detailsPane.valueRow
+            return { "ready": !(!driver.cardSettled || !row.valueReady("hash")), "up": row.hashTipSaid() !== "" }
+        }
         onTriggered: {
             const op = hashTipTimer
             const row = detailsPane.valueRow
@@ -293,38 +317,45 @@ Item {
                     // Pressed on the beat the tip is asked for — a reader clicking before it arrives; this half
                     // claims only that nothing is up yet.
                     if (op.counting) {
-                        op.was = row.hashTipSaid()
+                        op.witness("was", row.hashTipSaid())
                         row.tapHash()
                     }
                 })
                 return
             }
-            // The tip waits out its own rest; an empty answer is "not up yet".
-            if (!Awaited.all("hash_tip_up", { "ready": !(!driver.cardSettled || !row.valueReady("hash")),
-                                              "up": row.hashTipSaid() !== "" }))
-                return
             if (op.counting) {
                 // The tip that follows must carry the control's current word — the attached property hands over the
                 // one it had when the pointer arrived unless the answer re-arms it.
-                op.complete(() => {
-                    const up = detailsPane.valueRow.hashTipSaid()
-                    return "hash_tip_counting counting=" + (op.was === "")
-                           + " said=" + (up === detailsPane.valueRow.hashTipWords())
-                           + " now=" + up
-                })
+                op.complete({
+                    "name": "hash_tip_up",
+                    "when": () => op.up(),
+                    "report": () => {
+                        const up = detailsPane.valueRow.hashTipSaid()
+                        return "hash_tip_counting counting=" + (op.witnessed("was") === "")
+                               + " said=" + (up === detailsPane.valueRow.hashTipWords())
+                               + " now=" + up
+                    } })
                 return
             }
-            op.input("tapped", () => {
-                op.was = row.hashTipSaid()
-                op.offered = op.was === row.hashTipWords()
-                row.tapHash()
-            })
-            op.complete(() => {
-                const plate = detailsPane.valueRow
-                const after = plate.hashTipSaid()
-                const said = after !== "" && after !== op.was && after === plate.hashTipWords()
-                return "hash_tip offered=" + op.offered + " said=" + said + " was=" + op.was + " now=" + after
-            })
+            if (op.at("asked")) {
+                if (!Awaited.all("hash_tip_up", op.up()))
+                    return
+                op.input("tapped", () => {
+                    const was = op.witness("was", row.hashTipSaid())
+                    op.witness("offered", was === row.hashTipWords())
+                    row.tapHash()
+                })
+            }
+            op.complete({
+                "when": () => ({}),
+                "report": () => {
+                    const plate = detailsPane.valueRow
+                    const was = op.witnessed("was")
+                    const after = plate.hashTipSaid()
+                    const said = after !== "" && after !== was && after === plate.hashTipWords()
+                    return "hash_tip offered=" + op.witnessed("offered") + " said=" + said + " was=" + was
+                           + " now=" + after
+                } })
         }
     }
 
@@ -333,14 +364,13 @@ Item {
     ///
     /// The drag goes first: after the tap has put the hash on the clipboard, a drag that also copied could not be
     /// told apart. A run enters the hand's own functions, so whether a press reaches the plate is `tst_hashplate`'s.
+    ///
+    /// Witnessed as the drag let go: `held`, whether it left the shown hash picked out; `quiet`, whether it left the
+    /// pad as it found it.
     PageStage {
         id: detailsHandTimer
         name: "details_hand"
         order: ["dragged", "tapped"]
-        /// Whether the drag left the shown hash picked out, read as it let go.
-        property bool held: false
-        /// Whether the drag left the pad as it found it, read as it let go.
-        property bool quiet: false
         onTriggered: {
             const op = detailsHandTimer
             // Both sides have to exist and the row has to have stopped moving — the same wait as `details-sweep`.
@@ -358,25 +388,28 @@ Item {
                 const shown = row.shownValue("hash")
                 // `quiet=` is the half `held=` does not give: a plate that copied on every press would leave the same
                 // selection standing.
-                op.held = shown !== "" && row.selectedValue("hash") === shown
-                op.quiet = driver.clipboard.lastCopied === before
+                op.witness("held", shown !== "" && row.selectedValue("hash") === shown)
+                op.witness("quiet", driver.clipboard.lastCopied === before)
             })
             op.input("tapped", () => {
                 row.tapHash()
             })
-            op.complete(() => {
-                const plate = detailsPane.valueRow
-                const want = plate.fullShown
-                // Read off the pad the copy goes through (`ClipboardHelper.lastCopied`); the clipboard will not say.
-                const acted = want !== "" && driver.clipboard.lastCopied === want
-                // And the drag's selection has let go: a kept wash reads as still dragged.
-                const letGo = plate.selectedValue("hash") === ""
-                // `hand=`: the run enters functions directly, so a hand taken out, disabled or shrunk would answer
-                // every one of them and never see a press.
-                return "details_hand acted=" + acted + " held=" + op.held + " quiet=" + op.quiet
-                       + " let=" + letGo
-                       + " hand=" + plate.hashHandStands() + " text=" + driver.clipboard.lastCopied
-            })
+            op.complete({
+                "when": () => ({}),
+                "report": () => {
+                    const plate = detailsPane.valueRow
+                    const want = plate.fullShown
+                    // Read off the pad the copy goes through (`ClipboardHelper.lastCopied`); the clipboard will not
+                    // say.
+                    const acted = want !== "" && driver.clipboard.lastCopied === want
+                    // And the drag's selection has let go: a kept wash reads as still dragged.
+                    const letGo = plate.selectedValue("hash") === ""
+                    // `hand=`: the run enters functions directly, so a hand taken out, disabled or shrunk would
+                    // answer every one of them and never see a press.
+                    return "details_hand acted=" + acted + " held=" + op.witnessed("held")
+                           + " quiet=" + op.witnessed("quiet") + " let=" + letGo
+                           + " hand=" + plate.hashHandStands() + " text=" + driver.clipboard.lastCopied
+                } })
         }
     }
 
@@ -391,10 +424,8 @@ Item {
         order: ["swept"]
         /// `author` / `date` / `mate` / `hash` / `parent`.
         property string which: ""
-        /// What the sweeps and the press after them found, read as each landed (`sweep`).
-        property var found: null
         /// Sweeps from every corner of the gap, then presses the value's own box, reading each as it lands: both clear
-        /// the board on their way in.
+        /// the board on their way in. What they found is witnessed (`found`).
         function sweep(which) {
             const valueRow = detailsPane.valueRow
             const want = valueRow.shownValue(which)
@@ -444,16 +475,21 @@ Item {
             if (!op.still("details_sweep_geom", detailsPane.valueRow.valueGeom(which)))
                 return
             op.input("swept", () => {
-                op.found = op.sweep(which)
+                op.witness("found", op.sweep(which))
             })
             // `took=` and `on=` diagnose a short `reach=`: the gesture was refused at its start, or landed on another
             // line.
-            op.complete(() => "details_sweep reach=" + op.found.reach + "/" + op.found.tries
-                               + " caret=" + op.found.caret
-                               + " grabs=" + op.found.grabs
-                               + " ours=" + op.found.ours
-                               + " which=" + op.which + " took=" + op.found.took
-                               + " on=" + op.found.on + " miss=[" + op.found.miss + "] text=" + op.found.got)
+            op.complete({
+                "when": () => ({}),
+                "report": () => {
+                    const found = op.witnessed("found")
+                    return "details_sweep reach=" + found.reach + "/" + found.tries
+                           + " caret=" + found.caret
+                           + " grabs=" + found.grabs
+                           + " ours=" + found.ours
+                           + " which=" + op.which + " took=" + found.took
+                           + " on=" + found.on + " miss=[" + found.miss + "] text=" + found.got
+                } })
         }
     }
 
@@ -494,15 +530,19 @@ Item {
                    + " line=" + Math.round(plate.parentLineWidth)
                    + " gap=" + Math.round(plate.parentLineLeft(row) - row.dateLineEnd())
         }
+        /// The row on the commit read: the card settled, the pane sized, the plate handed its parents.
+        function ready() {
+            const want = detailsPane.valueRow.plate.parents
+            return {
+                "card": driver.cardSettled,
+                "sized": detailsPane.width > 0,
+                "first": (want.length > 0 ? want[0] : "") === driver.detailsModel.parentHex }
+        }
         onTriggered: {
             const row = detailsPane.valueRow
             const plate = row.plate
-            const want = plate.parents
-            const first = driver.detailsModel.parentHex
-            if (!Awaited.all("details_parents_ready", {
-                "card": driver.cardSettled,
-                "sized": detailsPane.width > 0,
-                "first": (want.length > 0 ? want[0] : "") === first }))
+            // Ready before the geometry is watched: a row still on the commit before stands as still.
+            if (!Awaited.all("details_parents_ready", detailsParentsTimer.ready()))
                 return
             // Settled when it stands across a frame: the pane lays out more than once on its way to a commit, and a
             // width asked for arrives a frame after the row it resizes.
@@ -510,7 +550,8 @@ Item {
                 + Math.round(plate.parentLineWidth) + "/" + plate.parentsShown
             if (!detailsParentsTimer.still("details_parents_geom", geom))
                 return
-            detailsParentsTimer.complete(() => detailsParentsTimer.line())
+            detailsParentsTimer.complete({ "name": "details_parents_ready", "when": () => detailsParentsTimer.ready(),
+                                           "report": () => detailsParentsTimer.line() })
         }
     }
     /// The author row's two lines, each read as one (デザイン規約 §右のペインの親): the name and the commit's hash on one
@@ -522,38 +563,49 @@ Item {
     PageStage {
         id: detailsAlignTimer
         name: "details_align"
+        /// A word's baseline `v` less its line's first word's `ref`, to a tenth; `-` for a word not drawn.
+        function off(v, ref) {
+            return v < 0 ? "-" : (Math.round((v - ref) * 10) / 10).toString()
+        }
+        /// Whether a word stands on its line's baseline — a word not drawn stands anywhere.
+        function level(v, ref) {
+            return v < 0 || Math.abs(v - ref) < 0.5
+        }
         /// The line as the row draws it now.
         function line() {
+            const op = detailsAlignTimer
             const b = detailsPane.valueRow.baselines()
             const capitalsMiddle = b.date - WordFace.capitalMiddle(b.dateSize)
             const faceOff = b.face < 0 ? 0 : b.face - capitalsMiddle
-            const off = (v, ref) => v < 0 ? "-" : (Math.round((v - ref) * 10) / 10).toString()
-            const level = (v, ref) => v < 0 || Math.abs(v - ref) < 0.5
-            const line2 = level(b.mate, b.date) && level(b.mateCount, b.date) && level(b.parent, b.date)
-                && level(b.comma, b.date) && level(b.parentCount, b.date)
+            const line2 = op.level(b.mate, b.date) && op.level(b.mateCount, b.date) && op.level(b.parent, b.date)
+                && op.level(b.comma, b.date) && op.level(b.parentCount, b.date)
             // `apart=`: the date line's words end a step short of the parent line's arrow, however tight the row.
-            return "details_align line1=" + level(b.hash, b.name) + " line2=" + line2
+            return "details_align line1=" + op.level(b.hash, b.name) + " line2=" + line2
                    + " sizes=" + (b.mateCountSize === b.parentCountSize)
                    + " apart=" + (b.apart >= Theme.spaceXs)
                    // Whole pixels both: a line of an odd height has its middle on a half.
                    + " face=" + (Math.abs(faceOff) <= 0.5)
-                   + " hash=" + off(b.hash, b.name)
-                   + " mate=" + off(b.mate, b.date) + " mateCount=" + off(b.mateCount, b.date)
-                   + " parent=" + off(b.parent, b.date) + " comma=" + off(b.comma, b.date)
-                   + " parentCount=" + off(b.parentCount, b.date)
+                   + " hash=" + op.off(b.hash, b.name)
+                   + " mate=" + op.off(b.mate, b.date) + " mateCount=" + op.off(b.mateCount, b.date)
+                   + " parent=" + op.off(b.parent, b.date) + " comma=" + op.off(b.comma, b.date)
+                   + " parentCount=" + op.off(b.parentCount, b.date)
                    + " faceOff=" + (b.face < 0 ? "-" : (Math.round(faceOff * 100) / 100).toString())
                    + " gap=" + (isFinite(b.apart) ? Math.round(b.apart) : "-")
                    + " pane=" + Math.round(detailsPane.width)
         }
+        function ready() {
+            return { "ready": !(!driver.cardSettled || detailsPane.width <= 0) }
+        }
         onTriggered: {
             const row = detailsPane.valueRow
-            if (!Awaited.all("details_align_ready", { "ready": !(!driver.cardSettled || detailsPane.width <= 0) }))
+            if (!Awaited.all("details_align_ready", detailsAlignTimer.ready()))
                 return
             const b = row.baselines()
             const geom = Math.round(detailsPane.width) + "/" + b.name + "/" + b.hash + "/" + b.date + "/" + b.parent
             if (!detailsAlignTimer.still("details_align_geom", geom))
                 return
-            detailsAlignTimer.complete(() => detailsAlignTimer.line())
+            detailsAlignTimer.complete({ "name": "details_align_ready", "when": () => detailsAlignTimer.ready(),
+                                         "report": () => detailsAlignTimer.line() })
         }
     }
     /// The count's card (デザイン規約 §右のペインの親): hover cannot be injected, so the run writes the count's stand-in
@@ -562,25 +614,41 @@ Item {
     /// the card (`clear`), nothing else of the line standing beside it (`bare`), every parent on a row of its own and
     /// whole (`whole`, `rows`). `-go` presses a row and reads where the page went (`landed`) and that the card went
     /// with the press (`shut`).
+    ///
+    /// Witnessed as the card was asked for: `seatY`, the first hash's row of pixels, and `plateWidth`, the plate's
+    /// width, before the card came out; as the row was pressed: `want`, the parent the press names.
     PageStage {
         id: parentsCardTimer
         name: "parents_card"
         property bool going: false
-        /// The parent the press names, read as it goes in.
-        property string want: ""
-        /// The first hash's row of pixels and the plate's width before the card came out.
-        property real seatY: 0
-        property real plateWidth: 0
+        /// The card's row for parent `i` as its list has built it, or null: read off the list itself, without the
+        /// scroll `ParentListCard.rowAt` asks for to bring a row in — that is an input.
+        function rowBuilt(i) {
+            const kids = detailsPane.authorCards.parentCard.contentItem.children
+            for (let k = 0; k < kids.length; k++) {
+                if (typeof kids[k].itemAtIndex === "function")
+                    return kids[k].itemAtIndex(i)
+            }
+            return null
+        }
+        /// The card out, sized, its first row built and the line unrolled under it.
+        function open() {
+            const card = detailsPane.authorCards.parentCard
+            return { "opened": card.opened,
+                     "sized": card.width > 0,
+                     "row": parentsCardTimer.rowBuilt(0) !== null,
+                     "unrolled": detailsPane.valueRow.plate.unrolled }
+        }
         /// The card as it stands now.
         function openLine() {
             const plate = detailsPane.valueRow.plate
             const card = detailsPane.authorCards.parentCard
             const arrow = plate.arrowBox(null)
-            const field = card.rowAt(0).field
+            const field = parentsCardTimer.rowBuilt(0).field
             const hash = field.mapToItem(null, 0, 0)
             const line = plate.parentLineRect(null)
             const dx = hash.x + field.width - (line.x + line.width)
-            const dy = hash.y - parentsCardTimer.seatY
+            const dy = hash.y - parentsCardTimer.witnessed("seatY")
             const gap = card.contentItem.mapToItem(null, 0, 0).x - card.padding - (arrow.x + arrow.width)
             let bare = !plate.moreStands
             for (let i = 0; i < plate.parents.length; i++) {
@@ -590,7 +658,7 @@ Item {
             let rows = 0
             let whole = true
             for (let i = 0; i < plate.parents.length; i++) {
-                const r = card.rowAt(i)
+                const r = parentsCardTimer.rowBuilt(i)
                 if (!r)
                     continue
                 rows++
@@ -599,7 +667,7 @@ Item {
             return "parents_card open=" + card.opened
                    + " seat=" + (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5)
                    + " clear=" + (gap > -0.5) + " bare=" + bare + " whole=" + whole
-                   + " still=" + (Math.abs(plate.width - parentsCardTimer.plateWidth) < 0.5)
+                   + " still=" + (Math.abs(plate.width - parentsCardTimer.witnessed("plateWidth")) < 0.5)
                    + " rows=" + rows + " of=" + plate.parents.length
                    + " at=" + Math.round(dx) + "," + Math.round(dy) + " gap=" + Math.round(gap)
                    + " width=" + Math.round(card.width)
@@ -618,18 +686,15 @@ Item {
                 op.input("card_asked", () => {
                     // The first hash's row of pixels before the card comes out: the card's first hash has to stand
                     // on it.
-                    op.seatY = plate.linkAt(0).field.mapToItem(null, 0, 0).y
+                    op.witness("seatY", plate.linkAt(0).field.mapToItem(null, 0, 0).y)
                     // And the plate's width: the name beside it must not move as the card comes out.
-                    op.plateWidth = plate.width
+                    op.witness("plateWidth", plate.width)
                     row.showParents(true)
                 })
                 return
             }
             if (op.at("card_asked")) {
-                if (!Awaited.all("parents_card_open", { "opened": card.opened,
-                                                        "sized": card.width > 0,
-                                                        "row": !!card.rowAt(0),
-                                                        "unrolled": plate.unrolled }))
+                if (!Awaited.all("parents_card_open", op.open()))
                     return
                 // The line lays itself out again as the card comes out; read it once it stands across a frame.
                 const arrow = plate.arrowBox(null)
@@ -637,48 +702,54 @@ Item {
                 if (!op.still("parents_card_geom", opened))
                     return
                 if (!op.going) {
-                    op.complete(() => op.openLine())
+                    op.complete({ "name": "parents_card_open", "when": () => op.open(),
+                                  "report": () => op.openLine() })
                     return
                 }
                 op.input("row_pressed", () => {
-                    op.want = plate.parents[1]
+                    op.witness("want", plate.parents[1])
                     card.tapRow(1)
                 })
                 return
             }
             // The page answers the press with the parent's row, and the card went down with it.
-            if (!Awaited.all("parents_go_landed", { "landed": page.selectedOid === op.want,
-                                                    "card": driver.cardSettled }))
-                return
-            op.complete(() => "parents_go landed=" + (page.selectedOid === op.want)
-                              + " shut=" + !detailsPane.authorCards.parentCard.opened)
+            op.complete({
+                "name": "parents_go_landed",
+                "when": () => ({ "landed": page.selectedOid === op.witnessed("want"), "card": driver.cardSettled }),
+                "report": () => "parents_go landed=" + (page.selectedOid === op.witnessed("want"))
+                                + " shut=" + !detailsPane.authorCards.parentCard.opened })
         }
     }
     PageStage {
         id: detailsFitTimer
         name: "details_fit"
+        function ready() {
+            return { "card": driver.cardSettled, "sized": detailsPane.width > 0 && detailsPane.height > 0 }
+        }
         // `fits=` is `contentOverflow < 1`: a pane width the splitter left on a fraction can put a fraction in the
         // answer, and what this verb is about is tens of pixels.
+        function line() {
+            return "details_fit fills=" + detailsPane.valueRow.fillsBlock
+                   + " fits=" + (detailsPane.contentOverflow < 1)
+                   + " row=" + Math.round(detailsPane.valueRow.width)
+                   + "/" + Math.round(detailsPane.valueRow.parent.width)
+                   + " over=" + Math.round(detailsPane.contentOverflow)
+                   + " pane=" + Math.round(detailsPane.width)
+                   // `overH=` rides along unjudged, like `edge=` in `window_fill`: whether the pane needs a scroll of
+                   // its own depends on the window.
+                   + " overH=" + Math.round(detailsPane.contentOverHeight)
+                   + " paneH=" + Math.round(detailsPane.height)
+        }
         onTriggered: {
-            if (!Awaited.all("details_fit_ready", {
-                "card": driver.cardSettled,
-                "sized": detailsPane.width > 0 && detailsPane.height > 0 }))
+            if (!Awaited.all("details_fit_ready", detailsFitTimer.ready()))
                 return
             // The row has to have stopped moving: mid-layout the row and its block are both some other width, and
             // `fills` answers true about a frame nobody sees.
             const geom = detailsPane.valueRow.width + "x" + detailsPane.valueRow.parent.width
             if (!detailsFitTimer.still("details_fit_geom", geom))
                 return
-            detailsFitTimer.complete(() => "details_fit fills=" + detailsPane.valueRow.fillsBlock
-                                            + " fits=" + (detailsPane.contentOverflow < 1)
-                                            + " row=" + Math.round(detailsPane.valueRow.width)
-                                            + "/" + Math.round(detailsPane.valueRow.parent.width)
-                                            + " over=" + Math.round(detailsPane.contentOverflow)
-                                            + " pane=" + Math.round(detailsPane.width)
-                                            // `overH=` rides along unjudged, like `edge=` in `window_fill`: whether
-                                            // the pane needs a scroll of its own depends on the window.
-                                            + " overH=" + Math.round(detailsPane.contentOverHeight)
-                                            + " paneH=" + Math.round(detailsPane.height))
+            detailsFitTimer.complete({ "name": "details_fit_ready", "when": () => detailsFitTimer.ready(),
+                                       "report": () => detailsFitTimer.line() })
         }
     }
     PageStage {
@@ -686,23 +757,28 @@ Item {
         name: "corner"
         // `shown=` is the label's own visibility: reporting the room that decided it would go
         // green with the binding cut.
-        onTriggered: {
-            // The pane has to be done arriving: a details pane still reading its file list leaves its whole bottom
-            // bare, so the corner reads as standing whatever the commit holds (`DetailsPane.bottomRoomSettled`). The
-            // worktree's foot is the commit button's, whatever is above it.
-            if (!Awaited.all("corner_ready", {
+        //
+        // The pane has to be done arriving: a details pane still reading its file list leaves its whole bottom bare,
+        // so the corner reads as standing whatever the commit holds (`DetailsPane.bottomRoomSettled`). The worktree's
+        // foot is the commit button's, whatever is above it.
+        function ready() {
+            return {
                 "ready": !(gitCorner.parent === null || gitCorner.width <= 0),
-                "pane": !(!page.wipShown && (!driver.cardSettled || !detailsPane.bottomRoomSettled)) }))
+                "pane": !(!page.wipShown && (!driver.cardSettled || !detailsPane.bottomRoomSettled)) }
+        }
+        onTriggered: {
+            if (!Awaited.all("corner_ready", cornerTimer.ready()))
                 return
             // And it has to have stopped moving, as in `details-fit`. Both halves are needed: the settle alone can be
             // a list that has not arrived standing still.
             const said = gitCorner.visible + "/" + Math.round(gitCorner.roomLeft)
             if (!cornerTimer.still("corner_said", said))
                 return
-            cornerTimer.complete(() => "git_corner pane=" + (page.wipShown ? "wip" : "details")
-                                        + " shown=" + gitCorner.visible
-                                        + " room=" + Math.round(gitCorner.roomLeft)
-                                        + " needs=" + Math.round(gitCorner.roomNeeded))
+            cornerTimer.complete({ "name": "corner_ready", "when": () => cornerTimer.ready(),
+                                   "report": () => "git_corner pane=" + (page.wipShown ? "wip" : "details")
+                                                   + " shown=" + gitCorner.visible
+                                                   + " room=" + Math.round(gitCorner.roomLeft)
+                                                   + " needs=" + Math.round(gitCorner.roomNeeded) })
         }
     }
     // The message has to be in the box, and the box laid out with it, before there is a ceiling to pull on. The
@@ -726,6 +802,23 @@ Item {
         /// Which end the grip is carried past (`divider-refuse`), or empty for the ordinary pull. With the grip in
         /// hand the box answers (規約 §掴める境界は答える).
         property string refuse: ""
+        /// What the box did with the pull, read as it stands.
+        function line() {
+            const op = descGrowTimer
+            if (op.refuse !== "")
+                return "divider_refuse refuses=" + page.refusalShown
+                       + " line=" + op.pane.descGrips
+                       + " case=" + op.refuse
+                       + " box=" + Math.round(op.pane.descHeight)
+                       + " wants=" + Math.round(op.pane.descWants)
+            return "description_grow keeps=" + op.pane.descKeeps
+                   + " pane=" + op.paneName
+                   + " grip=" + op.pane.descGrips
+                   + " box=" + Math.round(op.pane.descHeight)
+                   + " wants=" + Math.round(op.pane.descWants)
+                   + " cap=" + Math.round(op.pane.descCap)
+                   + " rows=" + op.pane.descListRows
+        }
         onTriggered: {
             const op = descGrowTimer
             if (op.at("start")) {
@@ -744,25 +837,12 @@ Item {
                 })
                 return
             }
-            if (!Awaited.all("desc_grow_settle_ready", { "drawn": op.drawnSince("desc_grow"),
-                                                          "page": PageSettled.settled(page),
-                                                          "refused": op.refuse === "" || page.refusalShown }))
+            if (!Awaited.all("desc_grow_drawn", { "drawn": op.drawnSince("desc_grow") }))
                 return
-            if (op.refuse !== "") {
-                op.complete(() => "divider_refuse refuses=" + page.refusalShown
-                                  + " line=" + op.pane.descGrips
-                                  + " case=" + op.refuse
-                                  + " box=" + Math.round(op.pane.descHeight)
-                                  + " wants=" + Math.round(op.pane.descWants))
-                return
-            }
-            op.complete(() => "description_grow keeps=" + op.pane.descKeeps
-                              + " pane=" + op.paneName
-                              + " grip=" + op.pane.descGrips
-                              + " box=" + Math.round(op.pane.descHeight)
-                              + " wants=" + Math.round(op.pane.descWants)
-                              + " cap=" + Math.round(op.pane.descCap)
-                              + " rows=" + op.pane.descListRows)
+            op.complete({
+                "name": "desc_grow_settle_ready",
+                "when": () => ({ "page": PageSettled.settled(page), "refused": op.refuse === "" || page.refusalShown }),
+                "report": () => op.line() })
         }
     }
     PageStage {
@@ -770,12 +850,15 @@ Item {
         name: "split_refuse"
         order: ["dragged"]
         onTriggered: {
-            if (!Awaited.all("split_refuse_ready", { "open": page.commandsOpen, "shown": page.commandsShown }))
-                return
-            splitRefuseTimer.input("dragged", () => {
-                page.dragDividerPast(Harness.autoActArg)
-            })
-            splitRefuseTimer.complete(() => acts.refusalLine(Harness.autoActArg))
+            if (splitRefuseTimer.at("start")) {
+                if (!Awaited.all("split_refuse_ready", { "open": page.commandsOpen, "shown": page.commandsShown }))
+                    return
+                splitRefuseTimer.input("dragged", () => {
+                    page.dragDividerPast(Harness.autoActArg)
+                })
+            }
+            splitRefuseTimer.complete({ "when": () => ({}),
+                                        "report": () => acts.refusalLine(Harness.autoActArg) })
         }
     }
 }

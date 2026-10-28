@@ -14,9 +14,17 @@ import platitude
 ///   which ends the run — when it repeats a stage of its generation, goes against the order the operation declared,
 ///   comes from a generation that is over, comes outside its own operation's beat, or comes with the beat's latest
 ///   observation not holding: a stage moves on what the product answered, never on a count.
-/// - **Completion** (`StageTimer.complete`): the run's one ending. The report is handed over unread; the completion
-///   route (`CompletionRoute`) holds until the page owes nothing the verb did not declare arriving, then reads
-///   the report and walks the scene in the same turn, and says `complete run= …` for that state.
+/// - **Completion** (`StageTimer.complete`): the run's one ending, on evidence of three kinds kept apart. A fact
+///   observed before the input, in its press or after it is a witness (`witness`), kept with its operation,
+///   generation and stage and said so (`witness run= …`). A condition the verb needs at its completion (`when`) is
+///   read when the operation moves and again each time the completion's hold reads. The state the run claims is
+///   the report, read by the completion route (`CompletionRoute`) in the turn its reading holds — the verb's
+///   conditions, the page's reads but those declared arriving, the page's own holds — and checked against a
+///   second reading in that same turn; then the scene is walked, and `complete run= …` says the witnesses the
+///   report read beside the state it confirmed.
+///
+/// What a verb says at a stage (`advance` / `input` / `say`) is said as that stage's (`said run= …: <line>`): the
+/// run's history, never its claim — a claim is the completion's report.
 ///
 /// Independent operations — the page's and the window's — are not ordered against each other: each keeps its own
 /// chain, and an operation that needs another's stage first names it (`StageTimer.after`, read by `joined`).
@@ -45,8 +53,12 @@ QtObject {
     /// report (`finishFrom`). Set by the harness as it is built.
     property var route: null
     /// The page's own holds on a completion — its menu still on its way out (`AutoActDriver.completionHolds`) —
-    /// handed in by the page that claimed the run.
+    /// handed in by the page that claimed the run (`holdPage`).
     property var pageHolds: null
+    // reach(beat)
+    function holdPage(holds) {
+        awaited.pageHolds = holds
+    }
 
     /// Whether a list (`ListView`) has built the rows it shows. A model's rows are there the moment they land; their
     /// delegates come in the polish after (`QQuickItemView::refill`, which fills the viewport in one pass — the cache
@@ -54,6 +66,7 @@ QtObject {
     /// whole viewport, and a verb that reads rows (`itemAtIndex`) or completes on a list reads this first: read in
     /// the beat the rows landed, the list is empty of delegates and the picture is not. A list with no rows has
     /// nothing to build; one with no size shows nothing.
+    // reach(read)
     function built(view) {
         if (!view || view.count === undefined || view.count === 0)
             return true
@@ -68,12 +81,16 @@ QtObject {
     /// beats; and the latest observation's answer inside it — null before the beat observed anything.
     property var beating: null
     property var observed: null
-    /// Counts beats, so a report said in a beat is known to be this beat's.
-    property int beatSerial: 0
 
     /// Whether every term has come. `terms` maps a name to whether it is there; the missing names are said under
-    /// `name` when they change. An observation only: it moves no stage, however often it is read.
+    /// `name` when they change. An observation only: it moves no stage, however often it is read. `name` is a name —
+    /// a line of words under it would be a line the run says outside its report (`complete`).
+    // reach(beat)
     function all(name, terms) {
+        if (/[\s=]/.test(name) && awaited.beating !== null) {
+            awaited.breach(awaited.beating, "observed under a name that is no name: " + name)
+            return false
+        }
         const missing = []
         for (const term in terms) {
             if (!terms[term])
@@ -92,11 +109,21 @@ QtObject {
         awaited.since = PerfProbe.clockMs()
         Harness.report(line)
     }
+    /// A diagnostic of `op`'s, said as a line of its stage (`said`) when it changes (`StageTimer.note`).
+    function noteAt(op, line) {
+        if (awaited.broken)
+            return
+        const record = awaited.recordOf(op)
+        if (record.noted === line)
+            return
+        record.noted = line
+        awaited.say(record, [line])
+    }
 
     // ---- Stages ----
 
     /// Each operation's record, by `owner/name` (a second instance under one name — a second page's driver — is
-    /// `name#2`): `{ op, label, gen, live, stage, visited, marks, saidIn }`.
+    /// `name#2`): `{ op, label, gen, live, stage, visited, marks, witnesses }`.
     property var ops: ({})
     /// How many stage lines the run has said: the `seq=` of the next is one more.
     property int stageSeq: 0
@@ -119,7 +146,7 @@ QtObject {
         for (let n = 2; awaited.ops[label] !== undefined; n++)
             label = base + "#" + n
         const record = { "op": op, "label": label, "gen": 0, "live": false, "stage": "start", "visited": [],
-                         "marks": ({}), "saidIn": -1 }
+                         "marks": ({}), "witnesses": ({}), "noted": "" }
         awaited.ops[label] = record
         return record
     }
@@ -139,7 +166,8 @@ QtObject {
         record.stage = "start"
         record.visited = []
         record.marks = ({})
-        record.saidIn = -1
+        record.witnesses = ({})
+        record.noted = ""
         if (awaited.broken)
             return
         Harness.report("begin run=" + awaited.runId + " " + awaited.placeOf(record)
@@ -154,7 +182,6 @@ QtObject {
     }
     /// A beat of `op` starts (`StageTimer`'s own handler, before the instance's).
     function beat(op) {
-        awaited.beatSerial++
         awaited.beating = op
         awaited.observed = null
         Qt.callLater(awaited.betweenBeats)
@@ -248,12 +275,14 @@ QtObject {
     }
 
     /// The lines a report reads, or null when it could not be read (a breach). A report is a function, read when it
-    /// is called; it answers a line or a list of them.
+    /// is called; it answers a line or a list of them. The witnesses it reads are gathered into `readWitnesses`.
     function read(op, report) {
         if (typeof report !== "function") {
             awaited.breach(op, "handed a report already read")
             return null
         }
+        awaited.readWitnesses = []
+        awaited.reading = op
         try {
             const answer = report()
             if (answer === undefined || answer === null || answer === "")
@@ -262,13 +291,19 @@ QtObject {
         } catch (e) {
             awaited.breach(op, "a report that threw: " + e)
             return null
+        } finally {
+            awaited.reading = null
         }
     }
+    /// The words that place a line at its stage: `owner=… op=… gen=… stage=…`.
+    function stagePlaceOf(record) {
+        return awaited.placeOf(record) + " stage=" + (awaited.pressingOp === record.op ? awaited.pressingTo
+                                                                                       : record.stage)
+    }
+    /// Says `lines` as the history of `record`'s stage: `said run=… stage=…: <line>`.
     function say(record, lines) {
         for (const line of lines)
-            Harness.report(line)
-        if (lines.length > 0)
-            record.saidIn = awaited.beatSerial
+            Harness.report("said run=" + awaited.runId + " " + awaited.stagePlaceOf(record) + ": " + line)
     }
 
     /// Says a report of `op`'s stage as it stands, read now.
@@ -281,27 +316,90 @@ QtObject {
             awaited.say(record, lines)
     }
 
-    /// `op` completes: the transition to `complete`, then the route holds and reads `report`. `arriving` names the
-    /// page's reads this verb completes over on purpose (`PageSettled.missing`'s terms) — its subject is a page still
-    /// arriving — and only for this completion. A report said by a stage in the completing beat was read before the
-    /// hold: a breach.
-    function complete(op, report, arriving) {
+    // ---- Witnesses ----
+
+    /// The operation whose input is being pressed (`StageTimer.input`), and the stage it presses as: a witness kept
+    /// in the press is that stage's.
+    property var pressingOp: null
+    property string pressingTo: ""
+    function pressing(op, stage) {
+        awaited.pressingOp = op
+        awaited.pressingTo = stage
+    }
+    /// The operation whose report is being read, and the witnesses that report read, as
+    /// `<owner>/<op>/<gen>/<stage>/<name>` — the words of the `witness` line each was kept under.
+    property var reading: null
+    property var readWitnesses: []
+
+    /// Keeps `value` under `name` as a fact `op`'s generation observed now, at the stage it stands at (the press's
+    /// stage inside a press), and says so. A generation keeps a name once; one that is over keeps nothing.
+    function witness(op, name, value) {
+        if (awaited.broken)
+            return value
+        const record = awaited.recordOf(op)
+        if (!record.live) {
+            awaited.breach(op, "witnessed " + name + " in a generation that is over")
+            return value
+        }
+        if (record.witnesses[name] !== undefined) {
+            awaited.breach(op, "witnessed " + name + " twice in one generation")
+            return value
+        }
+        const stage = awaited.pressingOp === op ? awaited.pressingTo : record.stage
+        record.witnesses[name] = { "value": value, "stage": stage }
+        Harness.report("witness run=" + awaited.runId + " " + awaited.placeOf(record) + " stage=" + stage
+                       + " name=" + name)
+        return value
+    }
+    /// The value `op`'s running generation kept under `name`. A name never kept throws.
+    function witnessed(op, name) {
+        const record = awaited.recordOf(op)
+        const kept = record.witnesses[name]
+        if (kept === undefined)
+            throw new Error("no witness " + name + " in generation " + record.gen + " of " + record.label)
+        if (awaited.reading !== null) {
+            const read = record.label + "/" + record.gen + "/" + kept.stage + "/" + name
+            if (awaited.readWitnesses.indexOf(read) < 0)
+                awaited.readWitnesses = awaited.readWitnesses.concat([read])
+        }
+        return kept.value
+    }
+
+    // ---- Completion ----
+
+    /// `op` completes once `spec.when` holds (`StageTimer.complete`): read here as the beat's observation, then the
+    /// transition to `complete`, and the route holds — reading `when` again each time — until it reads `report`.
+    /// Answers whether it moved; a spec that is no spec is a breach.
+    function complete(op, spec) {
         if (awaited.broken)
             return false
         const record = awaited.recordOf(op)
-        if (typeof report !== "function") {
-            awaited.breach(op, "completed with a report already read")
+        if (spec === null || typeof spec !== "object" || typeof spec.when !== "function"
+                || typeof spec.report !== "function") {
+            awaited.breach(op, "completed without a `when` and a `report` to read at the completion")
             return false
         }
-        if (record.saidIn === awaited.beatSerial) {
-            awaited.breach(op, "said a report in the beat it completed in, before the completion's hold")
+        const lost = spec.lost === undefined ? "wait" : spec.lost
+        if (lost !== "wait" && lost !== "fail") {
+            awaited.breach(op, "completed with a `lost` of " + lost)
             return false
         }
+        const name = spec.name === undefined ? record.label.split("/")[1].split("#")[0] + "_done" : spec.name
+        let terms
+        try {
+            terms = spec.when()
+        } catch (e) {
+            awaited.breach(op, "a completion's `when` that threw: " + e)
+            return false
+        }
+        if (!awaited.all(name, terms))
+            return false
         if (!awaited.transition(op, "complete"))
             return false
         op.stop()
-        awaited.route.finishFrom({ "op": op, "record": record, "gen": record.gen, "report": report,
-                                   "arriving": arriving === undefined ? [] : arriving })
+        awaited.route.finishFrom({ "op": op, "record": record, "gen": record.gen, "name": name, "when": spec.when,
+                                   "report": spec.report, "lost": lost,
+                                   "arriving": spec.arriving === undefined ? [] : spec.arriving })
         return true
     }
 
@@ -318,6 +416,7 @@ QtObject {
 
     /// A breach of the stages: said once with where it happened, and the run ends — its pictures are taken, and the
     /// parent fails on the line (`verify::contract`).
+    // reach(beat, press)
     function breach(op, why) {
         if (awaited.broken)
             return
@@ -348,6 +447,7 @@ QtObject {
     /// claim is held for as long as the run has pictures to take.
     property var claims: ({})
 
+    // reach(beat, press; 1=read)
     function claim(name, holds, artifacts) {
         const bound = ({})
         for (const key in awaited.claims)
@@ -384,17 +484,20 @@ QtObject {
     }
 
     /// The completion, said by the route in the turn it read the report (`CompletionRoute`): the verb, the
-    /// operation and generation it came from, the stages said before it, and what the page still owed then
-    /// (`PageSettled.missing`) — `page=settled`, or `page=arriving:` with the names, which the parent holds to the
-    /// terms the completion declared (`expected=`). `from` is null for a run a breach ended.
-    function completed(verb, from, missing) {
+    /// operation and generation it came from, the stages said before it, what the page still owed at the reading
+    /// the report was read on (`PageSettled.missing`) — `page=settled`, or `page=arriving:` with the names, which
+    /// the parent holds to the terms the completion declared (`expected=`) — and the witnesses that report read
+    /// (`witnesses=<owner>/<op>/<gen>/<stage>/<name>,…`). `from` is null for a run a breach ended.
+    function completed(verb, from, missing, witnesses) {
         const owed = missing === undefined ? [] : missing
+        const read = witnesses === undefined ? [] : witnesses
         awaited.done = true
         awaited.arriving = from === null ? [] : from.arriving
         Harness.report("complete run=" + awaited.runId + " verb=" + verb
                        + " " + (from === null ? "owner=none op=none gen=0" : awaited.placeOf(from.record))
                        + " stages=" + awaited.stageSeq
                        + " page=" + (owed.length === 0 ? "settled" : "arriving:" + owed.join(","))
-                       + (awaited.arriving.length === 0 ? "" : " expected=" + awaited.arriving.join(",")))
+                       + (awaited.arriving.length === 0 ? "" : " expected=" + awaited.arriving.join(","))
+                       + (read.length === 0 ? "" : " witnesses=" + read.join(",")))
     }
 }

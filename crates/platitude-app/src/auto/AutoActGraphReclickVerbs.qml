@@ -47,9 +47,10 @@ Item {
             reclickGraphTimer.marks = act === "graph-reclick-mark"
             reclickGraphTimer.points = act === "graph-reclick-still"
             reclickGraphTimer.fits = false
-            // The rename says the box before it goes through to git.
+            // The rename keeps the box before it goes through to git; the rested hand leaves the chip before the end.
             reclickGraphTimer.order = act === "graph-rename" ? ["first_click", "second_click", "box", "submitted"]
-                                                             : ["first_click", "second_click"]
+                                    : act === "graph-reclick-still" ? ["first_click", "second_click", "hand_left"]
+                                    : ["first_click", "second_click"]
             // The submit is ticks away: armed now, the watch catches the ask whenever it comes
             // (`AutoActDriver.beginWrite`).
             if (act === "graph-rename")
@@ -75,7 +76,8 @@ Item {
             reclickGraphTimer.marks = false
             reclickGraphTimer.points = false
             reclickGraphTimer.fits = true
-            reclickGraphTimer.order = ["first_click", "second_click"]
+            reclickGraphTimer.order = reclickGraphTimer.puts ? ["first_click", "second_click", "typed"]
+                                                             : ["first_click", "second_click"]
             reclickGraphTimer.start()
         } else if (act === "graph-reclick-list" || act === "graph-reclick-across" || act === "ref-list-pick") {
             // At the card the chip unfolds into; the argument `<行>[:<カードの行>]` defaults to the card's first row.
@@ -125,10 +127,36 @@ Item {
         property bool fits: false
         property bool puts: false
         property string typed: ""
-        /// Whether the second click armed the rename, read at that click.
-        property bool armed: false
-        /// When the second click went in, for the report's `wait=` — a diagnosis, judged by nothing.
-        property real secondAt: 0
+        /// The box open where one was armed, and its row sent back into view, a beat after it opens
+        /// (`RepoPage.startRename`).
+        function boxStands() {
+            return {
+                "row": !!graphPane.view.itemAtIndex(reclickGraphTimer.row),
+                "box": !reclickGraphTimer.witnessed("armed") || graphPane.namingOid !== "",
+                "shown": !reclickGraphTimer.scrolls || graphPane.rowOnScreen(reclickGraphTimer.row)
+            }
+        }
+        /// The gesture's line. Witnessed at the second click: whether it armed the rename (`armed`), and when it went
+        /// in (`secondAt`), for `wait=` — a diagnosis, judged by nothing.
+        function line() {
+            return "graph_reclick row=" + reclickGraphTimer.row
+                + " armed=" + reclickGraphTimer.witnessed("armed")
+                + " box=" + (graphPane.namingOid !== "")
+                // Nothing hover opened or closed under the wait (`GraphList.renameWaiting`).
+                + " list=" + refList.opened
+                + " card=" + rowCard.opened
+                + " mode=" + graphPane.namingMode
+                + " kind=" + graphPane.namingKind
+                + " typed=" + graphPane.namingText
+                // The tree did not move — the gesture was not a double-click, which a picture cannot say.
+                + " branch=" + worktree.branch
+                // The scrolled run's whole claim.
+                + " shown=" + graphPane.rowOnScreen(reclickGraphTimer.row)
+                // Includes the sampler's beat and the completion's hold, so read as "about the window".
+                // waits(measured): printed beside the window it is read against, and judged by nothing
+                + " wait=" + (Date.now() - reclickGraphTimer.witnessed("secondAt"))
+                + " window=" + Application.styleHints.mouseDoubleClickInterval
+        }
         /// What a press at `x` along the row lands on, asked of the areas themselves: the lane strip over the list and
         /// the row's own area both hand it to the row (`GraphLanePan.pressLanded`); past them it is the box's, or
         /// nothing's.
@@ -141,6 +169,10 @@ Item {
                 return "row"
             return x >= item.nameBoxX && x < item.nameBoxX + item.nameBoxWidth ? "box" : "none"
         }
+        /// Two places within half a pixel.
+        function near(a, b) {
+            return Math.abs(a - b) < 0.5
+        }
         /// The box's seat and width (`graph-rename-fit`), read off the row as it stands when it is called.
         function fitLine() {
             const item = graphPane.view.itemAtIndex(reclickGraphTimer.row)
@@ -149,14 +181,15 @@ Item {
             const right = boxX + item.nameBoxWidth
             const chipRight = item.labelsW - Theme.spaceXs
             const reach = item.width - Theme.spaceXxl
-            const near = (a, b) => Math.abs(a - b) < 0.5
+            const atHead = reclickGraphTimer.near(boxX, Theme.spaceXs)
+            const atChip = reclickGraphTimer.near(right, chipRight)
             // Where the box stands (`GraphRowChips.nameSeat`): ending where the chip ended with its head inside the
             // column, the column's room exactly, its head at the column's and past the column, or stopped at the
             // reach.
-            const stands = near(boxX, Theme.spaceXs) && near(right, reach) ? "capped"
-                         : near(right, chipRight) && boxX > Theme.spaceXs + 0.5 ? "right"
-                         : near(right, chipRight) && near(boxX, Theme.spaceXs) ? "full"
-                         : near(boxX, Theme.spaceXs) && right > chipRight && right < reach ? "head" : "other"
+            const stands = atHead && reclickGraphTimer.near(right, reach) ? "capped"
+                         : atChip && boxX > Theme.spaceXs + 0.5 ? "right"
+                         : atChip && atHead ? "full"
+                         : atHead && right > chipRight && right < reach ? "head" : "other"
             // Three presses along the row, asked of what takes them: left of the box, on it — on its part under the
             // lane strip where the strip stands over it — and past it.
             const strip = graphPane.lanePan
@@ -165,7 +198,7 @@ Item {
             const onBox = underR - underL > 2 ? (underL + underR) / 2 : boxX + item.nameBoxWidth / 2
             const probes = [boxX / 2, onBox, (right + item.width) / 2]
             return "graph_rename_fit row=" + reclickGraphTimer.row
-                   + " armed=" + reclickGraphTimer.armed
+                   + " armed=" + reclickGraphTimer.witnessed("armed")
                    + " box=" + (graphPane.namingOid !== "")
                    + " mode=" + graphPane.namingMode
                    + " hits=" + probes.map(x => reclickGraphTimer.landsAt(item, x)).join("/")
@@ -208,10 +241,10 @@ Item {
                     return
                 reclickGraphTimer.input("second_click", () => {
                     // waits(measured): the origin of the `wait=` below, which the report prints and nothing here reads
-                    reclickGraphTimer.secondAt = Date.now()
+                    reclickGraphTimer.witness("secondAt", Date.now())
                     item.leftClick(Qt.NoModifier)
                     // Read where it is set: the wait is short and the box is what it turns into.
-                    reclickGraphTimer.armed = item.renameArmed
+                    reclickGraphTimer.witness("armed", item.renameArmed)
                     // Far enough that the clicked row is pooled, well outside the view's buffer.
                     if (reclickGraphTimer.scrolls)
                         graphPane.view.positionViewAtIndex(reclickGraphTimer.row + 200, ListView.Beginning)
@@ -219,62 +252,53 @@ Item {
                 // Ends inside the wait, in the turn the second click went in where the page owes nothing: `mark=` is
                 // the chip's (`RefChip.waiting`), which a picture a beat late frames as the box instead.
                 if (reclickGraphTimer.marks) {
-                    reclickGraphTimer.complete(() => {
+                    reclickGraphTimer.complete({ "name": "reclick_graph_mark", "when": () => ({}), "report": () => {
                         const row = graphPane.view.itemAtIndex(reclickGraphTimer.row)
                         return "graph_reclick_mark row=" + reclickGraphTimer.row
-                               + " armed=" + reclickGraphTimer.armed
+                               + " armed=" + reclickGraphTimer.witnessed("armed")
                                + " mark=" + (row !== null && row.chipWaiting)
                                + " box=" + (graphPane.namingOid !== "")
                                + " window=" + Application.styleHints.mouseDoubleClickInterval
-                    })
+                    } })
                 }
                 return
             }
-            // The box open where one was armed, and its row sent back into view, a beat after it opens
-            // (`RepoPage.startRename`).
-            if (!Awaited.all("reclick_graph_box", {
-                "row": !!item,
-                "box": !reclickGraphTimer.armed || graphPane.namingOid !== "",
-                "shown": !reclickGraphTimer.scrolls || graphPane.rowOnScreen(reclickGraphTimer.row) }))
-                return
             if (reclickGraphTimer.fits) {
-                if (reclickGraphTimer.puts) {
+                if (reclickGraphTimer.puts && reclickGraphTimer.at("second_click")) {
+                    if (!Awaited.all("reclick_graph_box", reclickGraphTimer.boxStands()))
+                        return
                     // In the way a recycled delegate puts it back (`GraphRowDelegate.takeNamingFocus`), so the box on
                     // screen holds what the run says.
-                    graphPane.view.namingText = reclickGraphTimer.typed
-                    item.takeNamingFocus()
+                    reclickGraphTimer.input("typed", () => {
+                        graphPane.view.namingText = reclickGraphTimer.typed
+                        item.takeNamingFocus()
+                    })
                 }
-                reclickGraphTimer.complete(() => reclickGraphTimer.fitLine())
+                reclickGraphTimer.complete({ "name": "reclick_graph_box", "when": () => reclickGraphTimer.boxStands(),
+                                             "report": () => reclickGraphTimer.fitLine() })
                 return
             }
             // The hand leaves the chip it rested on: the wait over, the row's card would come up on its rest after the
             // report, and whether the picture and the census caught it would be the machine's pace.
-            if (reclickGraphTimer.points)
-                item.pointerRowX = -1
-            const line = () => "graph_reclick row=" + reclickGraphTimer.row
-                + " armed=" + reclickGraphTimer.armed
-                + " box=" + (graphPane.namingOid !== "")
-                // Nothing hover opened or closed under the wait (`GraphList.renameWaiting`).
-                + " list=" + refList.opened
-                + " card=" + rowCard.opened
-                + " mode=" + graphPane.namingMode
-                + " kind=" + graphPane.namingKind
-                + " typed=" + graphPane.namingText
-                // The tree did not move — the gesture was not a double-click, which a picture cannot say.
-                + " branch=" + worktree.branch
-                // The scrolled run's whole claim.
-                + " shown=" + graphPane.rowOnScreen(reclickGraphTimer.row)
-                // Includes the sampler's beat and the completion's hold, so read as "about the window".
-                // waits(measured): printed beside the window it is read against, and judged by nothing
-                + " wait=" + (Date.now() - reclickGraphTimer.secondAt)
-                + " window=" + Application.styleHints.mouseDoubleClickInterval
+            if (reclickGraphTimer.points && reclickGraphTimer.at("second_click")) {
+                if (!Awaited.all("reclick_graph_box", reclickGraphTimer.boxStands()))
+                    return
+                reclickGraphTimer.input("hand_left", () => {
+                    item.pointerRowX = -1
+                })
+            }
             if (reclickGraphTimer.naming === "") {
-                reclickGraphTimer.complete(line)
+                reclickGraphTimer.complete({ "name": "reclick_graph_box", "when": () => reclickGraphTimer.boxStands(),
+                                             "report": () => reclickGraphTimer.line() })
                 return
             }
-            // The box as the gesture left it, said before the name goes through to git by the path the field's own
-            // Enter takes; the write barrier completes this one.
-            reclickGraphTimer.advance("box", line)
+            if (!Awaited.all("reclick_graph_box", reclickGraphTimer.boxStands()))
+                return
+            // The box as the gesture left it, kept before the name goes through to git by the path the field's own
+            // Enter takes; the write barrier completes this one, on that line.
+            reclickGraphTimer.advance("box")
+            reclickGraphTimer.witness("box", reclickGraphTimer.line())
+            driver.reportAtCompletion(() => reclickGraphTimer.witnessed("box"))
             reclickGraphTimer.input("submitted", () => {
                 graphPane.view.namingSubmitted(graphModel.oidAt(reclickGraphTimer.row),
                                                reclickGraphTimer.naming, graphPane.namingMode)
@@ -290,11 +314,12 @@ Item {
         name: "lane_click"
         order: ["squeezed", "first_strike", "second_strike"]
         property int row: 0
-        property bool armed: false
+        /// A click in the strip's own frame, over `item`'s row — the strip works out which row that is.
+        function strike(item) {
+            return graphPane.lanePan.clickAt(1, item.mapToItem(graphPane, 0, item.height / 2).y)
+        }
         onTriggered: {
             const item = graphPane.view.itemAtIndex(laneClickTimer.row)
-            // A point in the strip's own frame, over this row — the strip works out which row that is.
-            const strikes = () => graphPane.lanePan.clickAt(1, item.mapToItem(graphPane, 0, item.height / 2).y)
             if (laneClickTimer.at("start")) {
                 if (!Awaited.all("lane_click_row", { "row": !!item }))
                     return
@@ -303,26 +328,28 @@ Item {
             } else if (laneClickTimer.at("squeezed")) {
                 if (!Awaited.all("lane_click_first", { "strip": !!item && graphPane.lanePan.visible }))
                     return
-                laneClickTimer.input("first_strike", strikes)
+                laneClickTimer.input("first_strike", () => laneClickTimer.strike(item))
             } else if (laneClickTimer.at("first_strike")) {
                 // Inside the double-click window a second click would be half a double-click.
                 if (!Awaited.all("lane_click_second", { "window": !!item && !graphPane.view.clickGuarded }))
                     return
+                // `armed`: whether the second strike armed the rename, read at that strike.
                 laneClickTimer.input("second_strike", () => {
-                    if (!strikes())
+                    if (!laneClickTimer.strike(item))
                         return false
-                    laneClickTimer.armed = item.renameArmed
+                    laneClickTimer.witness("armed", item.renameArmed)
                     return true
                 })
             } else {
-                if (!Awaited.all("lane_click_box", { "box": !laneClickTimer.armed || graphPane.namingOid !== "" }))
-                    return
-                laneClickTimer.complete(() => "graph_reclick_lanes row=" + laneClickTimer.row
-                                              + " strip=" + graphPane.lanePan.visible
-                                              + " armed=" + laneClickTimer.armed
-                                              + " box=" + (graphPane.namingOid !== "")
-                                              + " typed=" + graphPane.namingText
-                                              + " branch=" + worktree.branch)
+                laneClickTimer.complete({
+                    "name": "lane_click_box",
+                    "when": () => ({ "box": !laneClickTimer.witnessed("armed") || graphPane.namingOid !== "" }),
+                    "report": () => "graph_reclick_lanes row=" + laneClickTimer.row
+                                    + " strip=" + graphPane.lanePan.visible
+                                    + " armed=" + laneClickTimer.witnessed("armed")
+                                    + " box=" + (graphPane.namingOid !== "")
+                                    + " typed=" + graphPane.namingText
+                                    + " branch=" + worktree.branch })
             }
         }
     }
@@ -336,9 +363,8 @@ Item {
         name: "reclick_elsewhere"
         order: ["first_click", "pane_press", "back_click", "step_down", "step_up", "stepped_click", "naming_click"]
         property int row: 0
-        property bool pane: false
-        property bool stepped: false
-        property bool armed: false
+        // Witnessed at each click back on the row, as the row reads it then: `pane` after the press on the pane,
+        // `stepped` after the steps, `armed` at the click that names.
         function press(item) {
             page.Window.window.caretHand.pressedAt(item.mapToItem(null, 2, item.height / 2))
             item.leftClick(Qt.NoModifier)
@@ -348,16 +374,17 @@ Item {
             if (op.at("naming_click")) {
                 // The box up, and the reads the steps set going in: the step back asks the row's details again and
                 // puts the row in place, and a report before they land is of a page still arriving (`PageSettled`).
-                if (!Awaited.all("elsewhere_named", { "box": !op.armed || graphPane.namingOid !== "",
-                                                      "page": PageSettled.settled(page) }))
-                    return
-                op.complete(() => "graph_reclick_elsewhere row=" + op.row
-                                  + " pane=" + op.pane
-                                  + " step=" + op.stepped
-                                  + " armed=" + op.armed
-                                  + " box=" + (graphPane.namingOid !== "")
-                                  + " typed=" + graphPane.namingText
-                                  + " branch=" + worktree.branch)
+                op.complete({
+                    "name": "elsewhere_named",
+                    "when": () => ({ "box": !op.witnessed("armed") || graphPane.namingOid !== "",
+                                     "page": PageSettled.settled(page) }),
+                    "report": () => "graph_reclick_elsewhere row=" + op.row
+                                    + " pane=" + op.witnessed("pane")
+                                    + " step=" + op.witnessed("stepped")
+                                    + " armed=" + op.witnessed("armed")
+                                    + " box=" + (graphPane.namingOid !== "")
+                                    + " typed=" + graphPane.namingText
+                                    + " branch=" + worktree.branch })
                 return
             }
             const item = graphPane.view.itemAtIndex(op.row)
@@ -376,7 +403,7 @@ Item {
                 // A beat after: the gesture settles an input once it is through (`ReclickGesture.settle`).
                 op.input("back_click", () => {
                     op.press(item)
-                    op.pane = item.renameArmed
+                    op.witness("pane", item.renameArmed)
                 })
             } else if (op.at("back_click")) {
                 op.input("step_down", () => graphPane.stepRow(1))
@@ -387,12 +414,12 @@ Item {
                 // the click and come between this click and the next.
                 op.input("stepped_click", () => {
                     op.press(item)
-                    op.stepped = item.renameArmed
+                    op.witness("stepped", item.renameArmed)
                 })
             } else {
                 op.input("naming_click", () => {
                     op.press(item)
-                    op.armed = item.renameArmed
+                    op.witness("armed", item.renameArmed)
                 })
             }
         }
@@ -407,7 +434,7 @@ Item {
         /// Whether the first click goes to the row and the second to the card its chip opens — what a reader does
         /// unawares, since the card comes up on the chip's own seat after a rest.
         property bool across: false
-        property bool armed: false
+        // `armed`: whether the click that names armed the rename, witnessed at that click.
         onTriggered: {
             const op = reclickListTimer
             if (op.at("start")) {
@@ -439,7 +466,7 @@ Item {
                     if (!refList.clickRow(op.card))
                         return false
                     if (op.across)
-                        op.armed = refList.rowArmed(op.card)
+                        op.witness("armed", refList.rowArmed(op.card))
                     return true
                 })
             } else if (op.at("first_click")) {
@@ -448,22 +475,23 @@ Item {
                 op.input("named", () => {
                     if (!refList.clickRow(op.card))
                         return false
-                    op.armed = refList.rowArmed(op.card)
+                    op.witness("armed", refList.rowArmed(op.card))
                     return true
                 })
             } else {
-                if (!Awaited.all("reclick_list_box", { "box": !op.armed || graphPane.namingOid !== "" }))
-                    return
-                op.complete(() => "graph_reclick_list row=" + op.row
-                                  + " card=" + op.card
-                                  + " armed=" + op.armed
-                                  + " box=" + (graphPane.namingOid !== "")
-                                  // The card came down for the box — it stood on the column the box opens in.
-                                  + " list=" + refList.opened
-                                  + " mode=" + graphPane.namingMode
-                                  + " kind=" + graphPane.namingKind
-                                  + " typed=" + graphPane.namingText
-                                  + " branch=" + worktree.branch)
+                op.complete({
+                    "name": "reclick_list_box",
+                    "when": () => ({ "box": !op.witnessed("armed") || graphPane.namingOid !== "" }),
+                    "report": () => "graph_reclick_list row=" + op.row
+                                    + " card=" + op.card
+                                    + " armed=" + op.witnessed("armed")
+                                    + " box=" + (graphPane.namingOid !== "")
+                                    // The card came down for the box — it stood on the column the box opens in.
+                                    + " list=" + refList.opened
+                                    + " mode=" + graphPane.namingMode
+                                    + " kind=" + graphPane.namingKind
+                                    + " typed=" + graphPane.namingText
+                                    + " branch=" + worktree.branch })
             }
         }
     }
@@ -480,23 +508,24 @@ Item {
         name: "ref_list_held"
         property int row: 0
         property int card: 0
-        /// Read before the press: after it this page reads that worktree, and would answer with itself.
-        property string wanted: ""
-        property bool held: false
         /// What the page asked to open on the press (`RepoPage.openRepositoryPathRequested`), latched.
         property string asked: ""
+        // Witnessed at the card: `held`, whether the row names a branch another worktree holds; and at the press,
+        // `wanted`, that worktree — read before the press: after it this page reads that worktree, and would answer
+        // with itself.
         function line(stood) {
+            const held = listHeldTimer.witnessed("held")
             return "ref_list_held stood=" + stood
                    + " list=" + refList.opened
-                   + " held=" + listHeldTimer.held
+                   + " held=" + held
                    + " row=" + listHeldTimer.row
                    + " card=" + listHeldTimer.card
                    + " asked=" + listHeldTimer.asked
-                   + " wanted=" + listHeldTimer.wanted
+                   + " wanted=" + (held ? listHeldTimer.witnessed("wanted") : "")
                    + " where=" + repoTab.repoPath
         }
         function stood() {
-            return repoTab.repoPath.toLowerCase() === listHeldTimer.wanted.toLowerCase()
+            return repoTab.repoPath.toLowerCase() === listHeldTimer.witnessed("wanted").toLowerCase()
         }
         onTriggered: {
             const op = listHeldTimer
@@ -512,22 +541,30 @@ Item {
                     return
                 // The card is up, so its records are this run's answer: a row that is no held branch never will be.
                 const rec = refList.records[op.card]
-                op.held = rec !== undefined && rec.kind === "branch" && rec.held
-                if (!op.held) {
-                    op.complete(() => op.line(false))
+                if (!(rec !== undefined && rec.kind === "branch" && rec.held)) {
+                    op.witness("held", false)
+                    op.complete({ "name": "ref_list_held_none", "when": () => ({}), "report": () => op.line(false) })
                     return
                 }
                 // The chip's mark rides the ref joins; the listing the page asks may land a tick apart.
-                op.wanted = sidebarPane.worktreesModel.worktreeHolding(rec.name)
-                if (!Awaited.all("ref_list_held_press", { "wanted": op.wanted !== "" }))
+                if (!Awaited.all("ref_list_held_press", {
+                        "wanted": sidebarPane.worktreesModel.worktreeHolding(rec.name) !== "" }))
                     return
-                op.input("pressed", () => refList.doubleClickRow(op.card))
+                op.input("pressed", () => {
+                    const wanted = sidebarPane.worktreesModel.worktreeHolding(rec.name)
+                    if (!refList.doubleClickRow(op.card))
+                        return false
+                    op.witness("held", true)
+                    op.witness("wanted", wanted)
+                    return true
+                })
             } else {
                 // The landing: turned away (the card up), or asked for nothing, or stood in the worktree it holds.
-                if (!Awaited.all("ref_list_held_landing", {
-                        "ended": refList.opened || op.asked === "" || (op.stood() && PageSettled.settled(page)) }))
-                    return
-                op.complete(() => op.line(op.stood()))
+                op.complete({
+                    "name": "ref_list_held_landing",
+                    "when": () => ({ "ended": refList.opened || op.asked === ""
+                                              || (op.stood() && PageSettled.settled(page)) }),
+                    "report": () => op.line(op.stood()) })
             }
         }
     }
