@@ -101,7 +101,7 @@ fn keys(sb: &Sandbox) -> BTreeMap<String, String> {
 /// steps that read it, and what it is to a run.
 type Boundary = (&'static str, String, &'static [&'static str], &'static str);
 
-fn boundaries() -> [Boundary; 11] {
+fn boundaries() -> [Boundary; 12] {
     [
         (
             TEST,
@@ -141,6 +141,14 @@ fn boundaries() -> [Boundary; 11] {
                 .into(),
             BOTH,
             "the runner's own code",
+        ),
+        (
+            "crates/xtask/src/main.rs",
+            "mod demo;\nmod linux;\nmod qmltest;\nmod qt;\nmod seats;\nmod verify;\n\
+             fn main() { qmltest::run(); }\n"
+                .into(),
+            BOTH,
+            "the binary's entry, which hands the run to the runner",
         ),
         (
             QT,

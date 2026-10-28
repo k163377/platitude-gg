@@ -270,6 +270,14 @@ fn deny_steps(g: &Graph, changed: &[String], everything: bool) -> Vec<Step> {
     vec![step("deny", Side::Host, false, xtask(&["deny"]), &inputs)]
 }
 
+/// The xtask binary's entry: what dispatches each command to its module,
+/// which no edge of the graph names (a `mod` declaration is none). Spelled
+/// in pieces for the reason [`record_of_a_wedge`]'s files are — and a
+/// crate root has no readers.
+fn xtask_main() -> String {
+    format!("{}/{}", "crates/xtask/src", "main.rs")
+}
+
 /// The module that starts a run in the container, spelled in pieces for
 /// the reason [`record_of_a_wedge`]'s files are.
 fn launcher() -> String {
@@ -280,9 +288,10 @@ fn launcher() -> String {
 /// each a set of the step's inputs.
 #[derive(Default)]
 struct QmlTestReads {
-    /// The runner as cargo builds and runs it: the static closure of its
-    /// entry as built (`Graph::built_inputs` of [`QMLTEST`], no read its
-    /// tests alone make) — the staging and what it stages from, Qt's
+    /// The runner as cargo builds and runs it: the binary's entry that hands
+    /// the run to it ([`xtask_main`]), and the static closure of its module
+    /// as built (`Graph::built_inputs` of [`QMLTEST`], no read its tests
+    /// alone make) — the staging and what it stages from, Qt's
     /// selection (the `PATH` that finds `qmltestrunner`, the offscreen
     /// fonts' variable) and the pin it holds the Qt to —, and what cargo
     /// builds it from ([`CARGO`]), whose `.cargo` `[env]` the run inherits.
@@ -309,6 +318,7 @@ struct QmlTestReads {
 
 fn qmltest_reads(g: &Graph, dir: &Path) -> QmlTestReads {
     let mut runner = g.built_inputs(&[QMLTEST.to_string()]);
+    runner.insert(xtask_main());
     runner.extend(cargo_inputs(&[]));
     let (ui, tests) = qml_dirs();
     let loaded = super::imports::loaded_from(dir, std::slice::from_ref(&tests));
@@ -555,10 +565,25 @@ fn records_steps(g: &Graph, reach: &Reach, sorted: &Sorted, read: &Reading<'_>) 
             &linux_inputs,
         ));
     }
+    // Each line it runs is held to its row's promise and its judgment, as the verb's own run is: in the key as text.
+    let contract = crate::verify::records_lines()
+        .map(|line| {
+            format!(
+                "{line}: promises={}\n{}",
+                read.lines
+                    .declared(line)
+                    .map(|names| names.into_iter().collect::<Vec<_>>().join(" "))
+                    .unwrap_or_default(),
+                crate::verify::judgment_of(line)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
     for check in &mut checks {
         // It drives verify-ui: the same release build as the verbs.
         check.builds_app = true;
         check.release = true;
+        check.contract.clone_from(&contract);
     }
     checks
 }
@@ -1002,7 +1027,8 @@ mod tests {
         let reads = super::qmltest_reads(&g, &root);
         let (ui, tests) = super::qml_dirs();
         let qt = format!("{}/{}", "crates/xtask/src", "qt.rs");
-        let runner = [super::QMLTEST, qt.as_str(), crate::qt::PIN];
+        let main = super::xtask_main();
+        let runner = [super::QMLTEST, main.as_str(), qt.as_str(), crate::qt::PIN];
         for named in runner.iter().chain(&super::CARGO) {
             assert!(reads.runner.contains(*named), "{named}: {:?}", reads.runner);
         }

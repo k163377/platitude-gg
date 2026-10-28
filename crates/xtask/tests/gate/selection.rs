@@ -129,6 +129,37 @@ fn a_qml_change_owes_every_registered_line_and_no_rust_test() {
     );
 }
 
+/// The lines records-check runs are held to their rows' promises as a
+/// verb's own run is: a promise moved on one of them moves its key.
+#[test]
+fn a_promise_moved_on_a_line_records_check_runs_moves_its_key() {
+    let sb = Sandbox::new("records-promise");
+    let key = |sb: &Sandbox| {
+        sb.gate_ok(&sb.seat, &["--dry-run"])
+            .lines()
+            .find_map(|line| {
+                line.split_once("] records-check  key ")
+                    .map(|(_, key)| key.trim().to_string())
+            })
+    };
+    sb.write_pane(&sb.seat, 1);
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-lines.txt",
+        "*\tStashPane\nstash --preset basic\t-\npush\t-\n",
+    );
+    sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
+    let before = key(&sb);
+    assert!(before.is_some(), "records-check is owed by the pane");
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-lines.txt",
+        "*\tStashPane\nstash --preset basic\t-\npush\tMain\n",
+    );
+    sb.commit_all(&sb.seat, "chore: push promises the main window too", &[]);
+    assert_ne!(key(&sb), before);
+}
+
 /// A popup stands only when a line opens it, so a change to it is shown
 /// by the line that names it alone; the selection still runs every
 /// registered line, and says what a selection by what the lines show

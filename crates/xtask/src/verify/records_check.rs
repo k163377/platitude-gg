@@ -51,6 +51,12 @@ const CASES: &[Case] = &[
     },
 ];
 
+/// The registered lines the check runs, each held to its row's promise and
+/// its judgment as a verb's run is (`gate::plan::steps::records_steps`).
+pub(crate) fn lines() -> impl Iterator<Item = &'static str> {
+    CASES.iter().map(|case| case.line)
+}
+
 /// The release's line (`WindowHarness.letRecordsThrough`).
 const RELEASED: &str = "fault_records released=";
 /// The completion's line (`Awaited.completed`).

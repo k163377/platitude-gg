@@ -51,10 +51,12 @@ const APP_MODULE: &str = "platitude";
 /// The stub's one type, named so a test reaching for it reads as the
 /// mistake it is.
 const APP_STUB_TYPE: &str = "NotTheApplication.qml";
-/// Stand-ins for the module's singletons that the row delegates read as
-/// they are built (`GitFacts`): one file per singleton, staged into the
-/// module so a real `GraphRowDelegate` can stand in a test. Argument-only
-/// facts, whose rules Rust tests; nothing of the models.
+/// Stand-ins for the module's singletons, one file each, staged into the
+/// module: what the row delegates read as they are built (`GitFacts` —
+/// argument-only facts, whose rules Rust tests), and what the harness's
+/// machinery reads (`Harness` — the run's name, and the lines it says,
+/// kept for a test to read back; `PerfProbe` — a clock). Nothing of the
+/// models.
 const STUBS: &str = "crates/platitude-app/tests/qml/stubs";
 
 /// How long one `qmltestrunner`, one file or all of them, may write

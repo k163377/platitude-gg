@@ -194,8 +194,9 @@ const CARGO: [&str; 5] = [
     ".cargo",
     VENDOR,
 ];
-/// The QML test runner's entry, whose closure as built is what a run of
-/// it is (`steps::qmltest_reads`).
+/// The QML test runner's module, whose closure as built is what a run of
+/// it is (`steps::qmltest_reads`), with the binary's entry that hands the
+/// run to it (`steps::xtask_main`).
 const QMLTEST: &str = "crates/xtask/src/qmltest.rs";
 /// The markdown this tree reads as rules (`crate::docs`).
 const DOCS: [&str; 4] = [
