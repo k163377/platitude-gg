@@ -100,6 +100,12 @@ Item {
     /// …and where the push would stay in this repository (`stays-here` — measured against another branch here and
     /// marked to no remote, or marked to `.`): that alone, every other field empty.
     readonly property var pushingHere: ({ "state": "stays-here", "target": "", "lease": "", "upstream": "" })
+    /// git turns the plain delete of `name` down, handed to the card as the carrying menu hands it: cleared as the
+    /// delete is asked, then the name (`RepoTab.branchDeleteRefused`), so each refusal is an edge of its own.
+    function refuse(name) {
+        branchCard.refusedDelete = ""
+        branchCard.refusedDelete = name
+    }
 
     TestCase {
         name: "BranchCard"
@@ -378,14 +384,20 @@ Item {
         }
 
         /// git's refusal lands while the menu stands: the row turns into the held `-D` under the hand
-        /// (デザイン規約 §左メニューの所作), and the pair follows.
+        /// (デザイン規約 §左メニューの所作), and the pair follows. Only a refusal of this card's branch.
         function test_a_refusal_turns_the_row_into_the_held_force_delete() {
             root.standOn({})
             compare(deleteRow.code, "branch --delete")
             compare(deleteRow.note, "")
             compare(bothDeleteRow.note, "")
 
-            branchCard.forceDeleteBranch = "feature/topic-a"
+            root.refuse("feature/topic-b")
+            compare(branchCard.forceDeleteBranch, "", "another branch's refusal is not this card's")
+            compare(deleteRow.holdPresses, Metrics.holdPressesPlain)
+            compare(deleteRow.code, "branch --delete")
+
+            root.refuse("feature/topic-a")
+            compare(branchCard.forceDeleteBranch, "feature/topic-a", "the card holds the refusal")
             compare(deleteRow.holdPresses, Metrics.holdPressesWarned, "the plain two are no longer enough")
             // Commits nothing else reaches, but the discard record brings them back with the name
             // (デザイン規約 §回数押し の色の表): the warning, not the danger.
@@ -448,9 +460,9 @@ Item {
             bothDeleteRow.held()
             compare(root.asked, "delete-both feature/topic-a origin/feature/topic-a false def456")
 
-            // Once the local half is `-D`, the pair runs the forced form.
+            // Once git has turned the local half down, the pair runs the forced form.
             root.standOn({})
-            branchCard.forceDeleteBranch = "feature/topic-a"
+            root.refuse("feature/topic-a")
             bothDeleteRow.held()
             compare(root.asked, "delete-both feature/topic-a origin/feature/topic-a true def456")
 

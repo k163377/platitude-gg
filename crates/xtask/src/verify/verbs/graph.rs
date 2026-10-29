@@ -131,14 +131,15 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "menu_wait stage=during same=true held=all open=true",
     },
     // The delete that menu offers on its first level, run to git's answer.
-    // The row stays up for a refusal (the plain delete's `onHeld` in
+    // The menu stays up for a refusal (the plain delete's `onHeld` in
     // `BranchDeleteRow`), so what is judged is the menu going once none
-    // came; `code=` tells a landing (still `branch --delete`) from a
-    // refusal (turned `branch -D`).
+    // came — `was=true` that it stood at the press; `code=` tells a
+    // landing (still `branch --delete`) from a refusal (turned
+    // `branch -D`).
     Verb {
         name: "delete-branch-chip",
         when: &[],
-        plain: "chip_delete branch=base row=-1 code=branch --delete menu=false",
+        plain: "chip_delete branch=base row=-1 code=branch --delete was=true menu=false",
     },
     // The card a chip unfolds into must cover the chip. It sits at the
     // chip's near edge with rows measured to their names, so a chip with

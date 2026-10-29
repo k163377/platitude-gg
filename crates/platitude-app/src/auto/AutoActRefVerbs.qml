@@ -57,11 +57,10 @@ Item {
     /// Runs `act` if it is one of this family's, and says whether it was.
     function run(act, arg) {
         if (act === "delete-branch" || act === "delete-branch-go" || act === "delete-branch-refused") {
-            // The plain one is finished by the write barrier `dispatchFinished` puts up, armed by the press; `-go` and
-            // `-refused` own their completion (`AutoActCompletion.defersCompletion`) and go on off the press.
+            // All three own their completion (`AutoActCompletion.defersCompletion`) and go on off the press.
             driver.beginWrite(act)
             deleteRowTimer.afterPress = act === "delete-branch-go" ? "hold"
-                                      : act === "delete-branch-refused" ? "refused" : ""
+                                      : act === "delete-branch-refused" ? "refused" : "menu"
             deleteRowTimer.start()
         } else if (act === "delete-gone") {
             // The row and its chip leave at the press, git asked behind them (デザイン規約 §消す操作は先に画面から消す).
@@ -252,9 +251,10 @@ Item {
         return true
     }
     /// Whether the delete went out, said either way — the page's own answer (`RepoPage.deleteRowAsked`); latching on a
-    /// press the page dropped would wait on a write nobody made. On false the run completes and this line fails it
-    /// (`verify/verbs/nav.rs`). Read at the press: `busy=` is the moment after it; `offered=` / `blocked=` say whether
-    /// a reader had the press at all.
+    /// press the page dropped would wait on a write nobody made. On false the run completes, which fails on this line
+    /// where it is the claim, and elsewhere on the line after git's answer never coming (`verify/verbs/nav.rs`,
+    /// `graph.rs`). Read at the press: `busy=` is the moment after it; `offered=` / `blocked=` say whether a reader had
+    /// the press at all.
     function deleteRowLine(row) {
         return "delete_row asked=" + page.deleteRowAsked
                + " busy=" + repoTab.busyCount
@@ -269,10 +269,10 @@ Item {
         name: "delete_row"
         order: ["pressed"]
         /// After the press: `hold` runs the held `-D` git's refusal leaves, `refused` reads the row it turned into,
-        /// and "" is the plain delete, which the write barrier finishes.
-        property string afterPress: ""
+        /// and `menu` reads the menu once git has answered the plain delete.
+        property string afterPress: "menu"
         // The `delete_row` line, read at the press, is its witness (`said`): the run's claim, said by whichever
-        // operation completes it.
+        // operation completes it. `open` is whether the menu stood as the delete was pressed.
         onTriggered: {
             const op = deleteRowTimer
             // The precondition is read here and nowhere else (app-ui.md §UI 自動化).
@@ -282,6 +282,7 @@ Item {
                     const arg = Harness.autoActArg
                     const oid = branchesModel.oidOfName(arg)
                     page.openRefMenu("branch", arg, arg, oid)
+                    op.witness("open", refMenu.visible)
                     page.deleteRow("branch", arg, arg, oid)
                     op.witness("said", acts.deleteRowLine(refDeleteItem))
                     if (page.deleteRowAsked)
@@ -294,16 +295,42 @@ Item {
                               "report": () => op.witnessed("said") })
                 return
             }
-            driver.reportAtCompletion(() => deleteRowTimer.witnessed("said"))
+            // `-go` completes on the write barrier behind the `-D` it presses, so its claim — the row as that press
+            // found it (`forceDeleteTimer`'s `row`) — rides on the line handed here.
+            driver.reportAtCompletion(() => op.afterPress === "hold"
+                                             ? [deleteRowTimer.witnessed("said"), forceDeleteTimer.witnessed("row")]
+                                             : deleteRowTimer.witnessed("said"))
             op.stop()
             if (op.afterPress === "hold")
                 forceDeleteTimer.start()
             else if (op.afterPress === "refused")
                 refusedRowTimer.start()
+            else if (op.afterPress === "menu")
+                plainDeleteTimer.start()
         }
+    }
+    // The plain delete, judged on the menu: the menu stays up for a refusal (`BranchDeleteRow`'s plain delete,
+    // `onHeld`), so a delete git takes has to take it down — through the answer `RefRowMenu` binds on its card
+    // (`RefBranchMenu.landedDelete`), the graph row's being `chipDeleteTimer`'s. A closed menu frames like one nobody
+    // opened, so `was=` says it stood at the press. `code=` tells a landing from a refusal, which leaves the row
+    // wearing `branch -D`.
+    PageStage {
+        id: plainDeleteTimer
+        name: "plain_delete"
+        onTriggered: plainDeleteTimer.complete({
+            "name": "plain_delete_landed",
+            "when": () => ({ "written": driver.wroteAndSettled() }),
+            "report": () => driver.verbReport().concat(["ref_delete branch=" + Harness.autoActArg
+                                                        + " row=" + branchesModel.rowOfName(Harness.autoActArg)
+                                                        + " code=" + refDeleteItem.code
+                                                        + " was=" + deleteRowTimer.witnessed("open")
+                                                        + " menu=" + refMenu.opened]) })
     }
     // git's refusal has to come back before the row it turns into `-D` (the warning's three presses) can be pressed
     // through — or photographed. The plain delete is pressed too, so a count is no sign of the refusal; this one is.
+    // `forced=` is the refusal as the card took it (`RefBranchMenu.forceDeleteBranch`, off the `refusedDelete`
+    // `RefRowMenu` binds on it): the row wears `-D` from the early check either way, so nothing else tells a refusal
+    // that reached the card from one the left menu dropped.
     // The menu went up before that delete, so the write greys none of its rows (`AppMenu.waiting`); a row out of
     // reach still takes no press (`AppMenuItem.completeHold`), and the sampler presses again on its next beat.
     PageStage {
@@ -322,9 +349,11 @@ Item {
                 op.advance("refused")
             }
             // The row as it stood when pressed, read before the press — its handler runs inside it (`holdToEnd`) —
-            // and answered by the press that went in, as the stage's line.
+            // and answered by the press that went in, as the stage's line and the run's claim (`row`).
             if (!op.input("pressed", () => {
-                    const said = "ref_menu delete=" + refDeleteItem.text + " note=" + refDeleteItem.note
+                    const said = op.witness("row", "ref_menu forced="
+                                                   + (refBranchCard.forceDeleteBranch === Harness.autoActArg)
+                                                   + " delete=" + refDeleteItem.text + " note=" + refDeleteItem.note)
                     return driver.holdToEnd(refDeleteItem) ? said : false
                 }, (said) => said))
                 return
@@ -707,14 +736,15 @@ Item {
                 } })
         }
     }
-    // The delete asked from the graph row. The subject is the menu going: the row stays up for a refusal
-    // (`BranchDeleteRow`'s plain delete, `onHeld`), so a delete git takes has to take the menu down — and a closed menu
-    // frames like one nobody opened. `code=` tells a landing from a refusal, which leaves the row wearing `branch -D`.
+    // The delete asked from the graph row. The subject is the menu going: the menu stays up for a refusal
+    // (`BranchDeleteRow`'s plain delete, `onHeld`), so a delete git takes has to take it down — and a closed menu
+    // frames like one nobody opened, so `was=` says it stood at the press. `code=` tells a landing from a refusal,
+    // which leaves the row wearing `branch -D`.
     PageStage {
         id: chipDeleteTimer
         name: "chip_delete"
         order: ["pressed"]
-        // The `delete_row` line, read at the press, is its witness (`said`).
+        // The `delete_row` line, read at the press, is its witness (`said`); `open` is whether the menu stood then.
         onTriggered: {
             const op = chipDeleteTimer
             if (op.at("start")) {
@@ -725,6 +755,7 @@ Item {
                 if (!op.input("pressed", () => {
                         const arg = Harness.autoActArg
                         page.openRowMenu(branchesModel.oidOfName(arg), { "kind": "branch", "name": arg })
+                        op.witness("open", commitMenu.visible)
                         // The row's own presses: the plain delete's two, which keep the menu up (`BranchDeleteRow`'s
                         // `onHeld`).
                         commitDeleteItem.completeHold()
@@ -748,6 +779,7 @@ Item {
                 "report": () => "chip_delete branch=" + Harness.autoActArg
                                 + " row=" + branchesModel.rowOfName(Harness.autoActArg)
                                 + " code=" + commitDeleteItem.code
+                                + " was=" + op.witnessed("open")
                                 + " menu=" + commitMenu.opened })
         }
     }

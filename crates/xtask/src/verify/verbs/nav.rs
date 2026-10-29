@@ -235,20 +235,37 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "delete_early asked=true from=git merged=no code=branch -D presses=3 \
                 note=not merged",
     },
-    // The three deletes of the left row's menu, each judged first on the
-    // press having left the page: the page drops a delete asked while a
-    // write runs (`RepoPage.deleteRow`), and the run would then wait on a
-    // write nobody made, silent until the watchdog. It is the one claim the
-    // three share; what each does after the press is its own.
+    // The three deletes of the left row's menu. Each press has to leave the
+    // page: the page drops a delete asked while a write runs
+    // (`RepoPage.deleteRow`), and the run would then wait on a write nobody
+    // made, silent until the watchdog — `delete_row asked=true`, said at the
+    // press. A line said after git's answer holds it too: a press that never
+    // left ends the run before that line comes.
+    //
+    // A merged branch's plain delete, judged on the menu going once git
+    // took it: the menu stays up for a refusal, so only the answer
+    // `RefRowMenu` binds on its card (`RefBranchMenu.landedDelete`) takes
+    // it down — the graph row's is `delete-branch-chip`'s. `was=true` says
+    // it stood at the press, which a closed menu cannot tell from one
+    // nobody opened. `code=` tells a landing from a refusal (turned
+    // `branch -D`).
     Verb {
         name: "delete-branch",
-        when: &[],
+        when: &[(
+            Arg::Is("base"),
+            "ref_delete branch=base row=-1 code=branch --delete was=true menu=false",
+        )],
         plain: "delete_row asked=true",
     },
+    // git's refusal as the card took it (`forced=`, its `forceDeleteBranch`)
+    // before the `-D` it leaves is pressed through: `feature/topic-a` wears
+    // `-D` from the early check, so nothing else tells a refusal that
+    // reached the card from one the `refusedDelete` `RefRowMenu` binds on
+    // it dropped.
     Verb {
         name: "delete-branch-go",
         when: &[],
-        plain: "delete_row asked=true",
+        plain: "ref_menu forced=true",
     },
     Verb {
         name: "delete-branch-refused",

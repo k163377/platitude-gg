@@ -155,7 +155,9 @@ QtObject {
                 "worktree-rename-box", "worktree-rename",
                 "nav-add-remote", "push-default", "push-target", "push-hover", "remote-menu", "remote-url",
                 "publish-remotes-marked", "tags-eye",
-                "delete-branch-refused", "delete-branch-chip", "remote-refused", "chip-menu", "chip-menu-current",
+                "remote-refused", "chip-menu", "chip-menu-current",
+                // The menu read once git has answered the delete: the write barrier would end the run on the answer.
+                "delete-branch", "delete-branch-refused", "delete-branch-chip",
                 // The card has to be up before the row it came for can be read; the second waits for the line under
                 // the pointer as well.
                 "pull-menu", "pull-blocked",
