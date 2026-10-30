@@ -6,6 +6,72 @@
 
 use super::tests::{driver, found, in_report, indented, rules, verbs};
 
+#[test]
+fn lexical_bindings_and_all_writes_keep_the_state_they_can_change() {
+    let members = "    property var ticks: []\n    property int n: 3\n    function replace(x) { x = acts.ticks; x.push(true) }\n    function fallback(x) { x = x || acts.ticks; x.push(true) }";
+    for form in [
+        "const a = acts.ticks; { const a = []; a.push(false) } a.push(true)",
+        "const a = acts.ticks; [0].forEach(a => a); a.push(true)",
+        "{ const acts = []; acts.push(false) } acts.ticks.push(true)",
+        "acts.replace([])",
+        "acts.fallback(null)",
+        "acts.n %= 2",
+        "acts.n |= 2",
+        "acts.n **= 2",
+        "acts.n <<= 2",
+        "const kept = [acts.ticks]; kept[0][0] = false",
+    ] {
+        for body in [indented(form, "            "), in_report(form, "\"x\"")] {
+            let findings = found(&driver(""), &verbs(members, &body));
+            assert!(!findings.is_empty(), "state change passed: {form}");
+        }
+    }
+    let own = found(
+        &driver(""),
+        &verbs(
+            members,
+            &indented(
+                "const a = []; { const a = []; a.push(false) } a.push(true)",
+                "            ",
+            ),
+        ),
+    );
+    assert!(own.is_empty(), "local scopes are safe: {own:?}");
+}
+
+#[test]
+fn wrapping_or_returning_a_value_does_not_transfer_its_ownership() {
+    for form in [
+        "const box = []; op.input(\"chosen\", () => { const wrapped = {b: box}; wrapped.b.push(true) })",
+        "const box = []; op.input(\"chosen\", () => { acts.id(box).push(true) })",
+        "const mine = []; const either = pane.chosen ? mine : pane.things; either.push(acts.ticks); mine[0].push(true)",
+    ] {
+        let got = found(
+            &driver(""),
+            &verbs(
+                "    property var ticks: []\n    function id(x) { return x }",
+                &indented(form, "            "),
+            ),
+        );
+        assert!(!got.is_empty(), "ownership was lost: {form}");
+    }
+}
+
+#[test]
+fn recursive_helpers_do_not_cache_an_unfinished_answer_as_plain() {
+    let members = "    property var ticks: []\n    function left() { return pane.chosen ? acts.right() : acts.ticks }\n    function right() { return acts.left() }";
+    for form in [
+        "const first = acts.left(); acts.right().push(true)",
+        "const first = acts.right(); acts.left().push(true)",
+    ] {
+        let got = found(
+            &driver(""),
+            &verbs(members, &indented(form, "            ")),
+        );
+        assert!(!got.is_empty(), "an unfinished origin passed: {form}");
+    }
+}
+
 /// `this` stands for what it is bound to where it is spelled: in a
 /// `function` a call calls back, the `this` that call hands it (`thisArg`) —
 /// through an arrow inside it too, whose `this` is its maker's; in a QML
@@ -330,7 +396,7 @@ fn the_forms_qt_runs_are_judged_by_what_they_change() {
     let count = |prefix: &str| judged.iter().filter(|(_, p, _)| *p == prefix).count();
     assert_eq!(
         (count("staged_") + count("unread_"), count("own_")),
-        (43, 14),
+        (49, 15),
         "the forms tst_reachforms counts"
     );
     let members = "    property var ticks: []";

@@ -50,6 +50,7 @@ mod product;
 mod program;
 mod rules;
 mod scan;
+mod scope;
 #[cfg(test)]
 mod tests;
 

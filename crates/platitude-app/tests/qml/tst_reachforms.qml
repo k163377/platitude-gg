@@ -24,6 +24,44 @@ TestCase {
         [0].forEach(function() { this.push(true) }, acts.ticks)
     }
 
+    function staged_aBlockDoesNotHideTheOuterObject() {
+        { const acts = []; acts.push(false) }
+        acts.ticks.push(true)
+    }
+
+    function staged_anArrowDoesNotHideTheOuterObject() {
+        [0].forEach(acts => acts)
+        acts.ticks.push(true)
+    }
+
+    function staged_aNestedIndexedWrite() {
+        const kept = [acts.ticks]
+        kept[0][0] = true
+    }
+
+    function staged_anAssignmentWithAlternative() {
+        let list = null
+        list = list || acts.ticks
+        list.push(true)
+    }
+
+    function staged_aCompoundIndexedWrite() {
+        acts.ticks[0] |= 1
+    }
+
+    function staged_aReassignedCallbackParameter() {
+        [[]].forEach(list => {
+            list = acts.ticks
+            list.push(true)
+        })
+    }
+
+    function own_independentBlockBindings() {
+        const list = []
+        { const list = []; list.push(false) }
+        list.push(true)
+    }
+
     function staged_thisArgOverLines() {
         [0].forEach(function(value) {
             this.push(value)
@@ -337,8 +375,8 @@ TestCase {
     }
 
     function test_every_form_is_a_row() {
-        compare(named(["staged_", "unread_"]).length, 43)
-        compare(named(["own_"]).length, 14)
+        compare(named(["staged_", "unread_"]).length, 49)
+        compare(named(["own_"]).length, 15)
     }
 
     Item {

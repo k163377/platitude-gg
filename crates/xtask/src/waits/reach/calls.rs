@@ -35,7 +35,7 @@ impl Program {
         let in_product = self.codes[code].doc >= self.harness;
         let callee = match path.receiver() {
             None => match &path.head {
-                Head::Name(name) => self.head(code, name),
+                Head::Name(name) => self.head(code, name, path.at),
                 Head::Value => Value::Unknown,
             },
             Some(receiver) => {
@@ -155,7 +155,7 @@ impl Program {
             // A local of the code's own given a function spelled in it: read where it is spelled.
             Value::Local
                 if path.members.is_empty()
-                    && matches!(&path.head, Head::Name(name) if self.local_function(code, name)) =>
+                    && matches!(&path.head, Head::Name(name) if self.local_function(code, name, path.at)) =>
             {
                 (None, Vec::new())
             }
@@ -260,7 +260,7 @@ impl Program {
         if !product::GLOBALS.contains(&object.as_str()) {
             return None;
         }
-        (self.head(code, object) == Value::Global(object.clone())).then(|| object.clone())
+        (self.head(code, object, path.at) == Value::Global(object.clone())).then(|| object.clone())
     }
 
     /// How the call `path` calls back a function it is handed, by its
@@ -395,34 +395,29 @@ impl Program {
         let name = self.docs[self.codes[code].doc].tokens[arg.start]
             .text
             .clone();
-        self.local_function(code, &name)
+        self.local_function(code, &name, arg.start)
     }
 
     /// Whether every binding of `name` in `code` is a local given a function
     /// spelled in the code, and never given anything else: what calling it
     /// does is that function's body, read where it stands.
-    pub(super) fn local_function(&mut self, code: usize, name: &str) -> bool {
+    pub(super) fn local_function(&mut self, code: usize, name: &str, at: usize) -> bool {
         let (d, u, range) = {
             let c = &self.codes[code];
             (c.doc, c.unit, c.range.clone())
         };
         let facts = self.facts_of(d, u).within(&range);
-        let mut bindings = facts
-            .locals
-            .iter()
-            .filter(|local| local.name == name)
-            .peekable();
-        bindings.peek().is_some()
-            && bindings.all(|local| {
-                !local.param
-                    && local.init.as_ref().is_some_and(|init| {
-                        function_body(&self.docs[d].tokens[init.clone()]).is_some()
-                    })
-            })
-            && !facts
-                .writes
-                .iter()
-                .any(|write| write.path.head == Head::Name(name.to_string()))
+        let binding = facts.local(name, at);
+        binding.is_some_and(|local| {
+            !local.param
+                && local
+                    .init
+                    .as_ref()
+                    .is_some_and(|init| function_body(&self.docs[d].tokens[init.clone()]).is_some())
+        }) && !facts.writes.iter().any(|write| {
+            write.path.head == Head::Name(name.to_string())
+                && facts.local(name, write.path.at).map(|l| l.at) == binding.map(|l| l.at)
+        })
     }
 }
 

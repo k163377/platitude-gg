@@ -7,6 +7,7 @@
 use std::ops::Range;
 
 use super::parse::{Bound, expression_end, is_name, pattern_names};
+use super::scope::{lexical_scope, parameter_scope};
 use crate::lex::{Token, matching_close};
 
 /// Where a path starts: a name, or the value of an expression before it
@@ -85,9 +86,12 @@ pub(super) struct Write {
     pub line: usize,
 }
 
+#[derive(Clone)]
 pub(super) struct Local {
     pub name: String,
     pub at: usize,
+    /// Where this declaration binds the name, including its defaults.
+    pub scope: Range<usize>,
     /// Its initial value's tokens, where it is given one.
     pub init: Option<Range<usize>>,
     /// A parameter — of a function or arrow spelled in the stretch, or a
@@ -122,6 +126,14 @@ pub(super) struct Facts {
 }
 
 impl Facts {
+    /// The innermost declaration visible at this use, not any declaration
+    /// elsewhere in the enclosing function with the same spelling.
+    pub fn local(&self, name: &str, at: usize) -> Option<&Local> {
+        self.locals
+            .iter()
+            .filter(|l| l.name == name && l.scope.contains(&at))
+            .min_by_key(|l| l.scope.len())
+    }
     /// Takes in what another stretch read, as these facts' own.
     pub fn absorb(&mut self, other: Facts) {
         self.locals.extend(other.locals);
@@ -158,6 +170,7 @@ impl Facts {
                 .map(|l| Local {
                     name: l.name.clone(),
                     at: l.at,
+                    scope: l.scope.clone(),
                     init: l.init.clone(),
                     param: l.param,
                     depth: l.depth,
@@ -246,6 +259,10 @@ const MUTATORS: [&str; 10] = [
 
 const COMPARISONS: [&str; 8] = ["===", "!==", "==", "!=", "<=", ">=", "<", ">"];
 
+fn assignment(text: &str) -> bool {
+    text == "=" || (text.ends_with('=') && !COMPARISONS.contains(&text))
+}
+
 fn is_count(text: &str) -> bool {
     text.chars().all(|c| c.is_ascii_digit()) && text.chars().any(|c| c != '0')
 }
@@ -296,6 +313,7 @@ fn declares(tokens: &[Token], k: usize, end: usize, out: &mut Facts) -> Option<u
     let local = |name: String, at: usize| Local {
         name,
         at,
+        scope: lexical_scope(tokens, at, false),
         init: None,
         param: true,
         depth: Some(0),
@@ -304,6 +322,7 @@ fn declares(tokens: &[Token], k: usize, end: usize, out: &mut Facts) -> Option<u
     let param = |bound: Bound| Local {
         name: bound.name,
         at: bound.at,
+        scope: parameter_scope(tokens, k, end),
         init: None,
         param: true,
         depth: bound.depth,
@@ -368,7 +387,10 @@ fn declares(tokens: &[Token], k: usize, end: usize, out: &mut Facts) -> Option<u
         return Some(close + 2);
     }
     if is_name(text) && tokens.get(k + 1).is_some_and(|t| t.text == "=>") && before != Some(".") {
-        out.locals.push(local(text.to_string(), k));
+        out.locals.push(Local {
+            scope: parameter_scope(tokens, k, end),
+            ..local(text.to_string(), k)
+        });
         return Some(k + 2);
     }
     // An object literal's key.
@@ -388,6 +410,28 @@ fn declares(tokens: &[Token], k: usize, end: usize, out: &mut Facts) -> Option<u
 fn path_at(tokens: &[Token], k: usize, end: usize, out: &mut Facts) -> Option<(Path, usize)> {
     let text = tokens[k].text.as_str();
     let before = k.checked_sub(1).map(|b| tokens[b].text.as_str());
+    // The indexed receiver is the value immediately before this bracket.
+    if text == "["
+        && matches!(before, Some("]" | ")"))
+        && let Some(close) = matching_close(tokens, k, "[", "]")
+        && tokens
+            .get(close + 1)
+            .is_some_and(|t| assignment(&t.text) || matches!(t.text.as_str(), "++" | "--"))
+    {
+        out.writes.push(Write {
+            path: Path {
+                head: Head::Value,
+                members: Vec::new(),
+                at: k,
+            },
+            kind: if tokens[close + 1].text == "=" {
+                WriteKind::Put(close + 2..expression_end(tokens, close + 2, end))
+            } else {
+                WriteKind::Mutate
+            },
+            line: tokens[k].line,
+        });
+    }
     // `this` heads a path as a name does: what it stands for is read where it is spelled (`Program::this_origin`).
     if is_name(text) && before != Some(".") && (!KEYWORDS.contains(&text) || text == "this") {
         return Some(read_path(tokens, k, Head::Name(text.to_string()), end));
@@ -486,8 +530,16 @@ fn after_path(
             out.writes.push(written(kind));
             last + 2
         }
-        Some("+=" | "-=" | "*=" | "/=") => {
+        Some(
+            "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "**=" | "<<=" | ">>=" | ">>>=",
+        ) => {
             out.writes.push(written(WriteKind::Step));
+            last + 2
+        }
+        Some("&&=" | "||=" | "??=") => {
+            out.writes.push(written(WriteKind::Value(
+                last + 2..expression_end(tokens, last + 2, end),
+            )));
             last + 2
         }
         Some("++" | "--") if tokens[last + 1].line == line => {
@@ -499,7 +551,7 @@ fn after_path(
             if let Some(close) = matching_close(tokens, last + 1, "[", "]")
                 && tokens
                     .get(close + 1)
-                    .is_some_and(|t| matches!(t.text.as_str(), "=" | "+=" | "-=" | "++" | "--"))
+                    .is_some_and(|t| assignment(&t.text) || matches!(t.text.as_str(), "++" | "--"))
             {
                 let kind = if tokens[close + 1].text == "=" {
                     WriteKind::Put(close + 2..expression_end(tokens, close + 2, end))
@@ -620,6 +672,7 @@ fn declaration(tokens: &[Token], at: usize, end: usize, out: &mut Facts) -> usiz
             out.locals.push(Local {
                 name: bound.name,
                 at: bound.at,
+                scope: lexical_scope(tokens, at - 1, tokens[at - 1].text == "var"),
                 init: init.clone(),
                 param: false,
                 depth: bound.depth.filter(|_| !walked),

@@ -49,17 +49,14 @@ pub(super) fn judge(program: &mut Program) -> Vec<Finding> {
     // an operation is read as the operation's own code, and what a callee puts inside its caller's array reaches the
     // caller a reading later. A reading that never stands still is not passed as safe.
     let mut passes = 0;
+    let mut unsettled = false;
     let (beats, declared_reads) = loop {
         let read = read_roots(program);
         if !program.learned() {
             break read;
         }
         if passes == PASSES {
-            found.insert((0, 1, "unread"));
-            what.insert(
-                (0, 1, "unread"),
-                format!("what the calls hand on and the containers hold did not stand still in {PASSES} readings"),
-            );
+            unsettled = true;
             break read;
         }
         program.again();
@@ -102,7 +99,7 @@ pub(super) fn judge(program: &mut Program) -> Vec<Finding> {
             }
         }
     }
-    found
+    let mut findings: Vec<Finding> = found
         .into_iter()
         .map(|(d, line, rule)| {
             let source = program.docs[d]
@@ -120,7 +117,17 @@ pub(super) fn judge(program: &mut Program) -> Vec<Finding> {
                 },
             }
         })
-        .collect()
+        .collect();
+    if unsettled {
+        // A whole-program limit has no source line: naming the first document blames unrelated machinery.
+        findings.push(Finding {
+            file: "<reach analysis>".into(),
+            line: 0,
+            rule: "unread",
+            excerpt: format!("what the calls hand on and the containers hold did not stand still in {PASSES} readings"),
+        });
+    }
+    findings
 }
 
 /// Reads every code an operation's beat reaches, and every declared

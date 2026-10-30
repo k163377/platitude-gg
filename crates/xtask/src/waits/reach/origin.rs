@@ -59,6 +59,14 @@ pub(super) enum Origin {
 const HELD: usize = usize::MAX;
 
 impl Origin {
+    /// Transfer only what the giving context owns. A borrowed container
+    /// keeps its owner through a wrapper or an identity function.
+    fn handed_from(self, owner: usize, holder: usize) -> Origin {
+        match self {
+            made @ Origin::Fresh { maker, .. } if maker == owner => made.handed_to(holder),
+            other => other,
+        }
+    }
     /// The container made at `site` in `maker`.
     fn made(maker: usize, site: Site) -> Origin {
         Origin::Fresh {
@@ -91,6 +99,10 @@ impl Origin {
                 }
             }
             (Origin::Fresh { .. }, Origin::Fresh { .. }) => Origin::Unknown,
+            (Origin::Fresh { .. }, Origin::Product | Origin::Object(Value::Product(_)))
+            | (Origin::Product | Origin::Object(Value::Product(_)), Origin::Fresh { .. }) => {
+                Origin::Unknown
+            }
             (Origin::Fresh { .. }, o) | (o, Origin::Fresh { .. }) => o,
             // Either of two things of the product's is the product's.
             (
@@ -137,21 +149,20 @@ impl Program {
     /// next reading to find (`contents`). Nothing is put inside what is not
     /// the code's: the change itself is judged where it is spelled.
     pub(super) fn store(&mut self, container: &Origin, value: Origin) {
-        let Origin::Fresh { sites, .. } = container else {
+        let Origin::Fresh { maker, sites } = container else {
             return;
         };
-        let value = value.handed_to(HELD);
         for site in sites {
-            self.store_at(*site, value.clone());
+            self.store_at(*maker, *site, value.clone());
         }
     }
 
-    fn store_at(&mut self, site: Site, value: Origin) {
+    fn store_at(&mut self, maker: usize, site: Site, value: Origin) {
         let joined = self
             .contents_collected
             .remove(&site)
             .unwrap_or(Origin::Unset)
-            .join(value.handed_to(HELD));
+            .join(value.handed_from(maker, HELD));
         self.contents_collected.insert(site, joined);
     }
 
@@ -220,7 +231,7 @@ impl Program {
                 for site in sites {
                     held = held.join(self.contents.get(site).cloned().unwrap_or(Origin::Unset));
                 }
-                held.handed_to(*maker)
+                held.handed_from(HELD, *maker)
             }
             Origin::Shared(..) => origin.clone(),
             // A harness object read by an index: a member nothing names.
@@ -269,7 +280,7 @@ impl Program {
             "[" if matching_close(t, 0, "[", "]") == Some(t.len() - 1) => {
                 for (from, to) in split_top(&t[1..t.len() - 1], &[","]) {
                     let element = self.element_origin(code, base + 1 + from..base + 1 + to);
-                    self.store_at(site, element);
+                    self.store_at(code, site, element);
                 }
                 self.made_at(site, Made::Array);
                 return Origin::made(code, site);
@@ -283,7 +294,7 @@ impl Program {
                         .map_or(0, |c| c + 1);
                     let at = base + 1 + from + value_at;
                     let value = self.element_origin(code, at..base + 1 + to);
-                    self.store_at(site, value);
+                    self.store_at(code, site, value);
                 }
                 self.made_at(site, Made::Object);
                 return Origin::made(code, site);
@@ -406,7 +417,7 @@ impl Program {
     pub(super) fn path_origin(&mut self, code: usize, path: &Path) -> Origin {
         let mut origin = match &path.head {
             Head::Name(name) if name == "this" => self.this_origin(code, path.at),
-            Head::Name(name) => self.name_origin(code, name),
+            Head::Name(name) => self.name_origin(code, name, path.at),
             Head::Value => self.value_head_origin(code, path.at),
         };
         for name in &path.members {
@@ -417,49 +428,25 @@ impl Program {
 
     /// A name's value: a local's or parameter's of `code` or of a code it
     /// was carved from, or what the file's scope names.
-    fn name_origin(&mut self, code: usize, name: &str) -> Origin {
+    fn name_origin(&mut self, code: usize, name: &str, at: usize) -> Origin {
         let mut current = Some(code);
         while let Some(c) = current {
             let (d, u, range, parent) = {
                 let c = &self.codes[c];
                 (c.doc, c.unit, c.range.clone(), c.parent)
             };
-            if parent.is_none()
-                && let Some((i, bound)) = self.docs[d].units[u]
-                    .bound
-                    .iter()
-                    .find(|(_, bound)| bound.name == name)
-                    .cloned()
+            if self.facts_of(d, u).within(&range).local(name, at).is_some()
+                || (parent.is_none()
+                    && self.docs[d].units[u]
+                        .bound
+                        .iter()
+                        .any(|(_, b)| b.name == name))
             {
-                let Some(depth) = bound.depth else {
-                    return Origin::Unknown;
-                };
-                // Handed nothing yet in this reading: the bottom, so that a function handing its own parameter on
-                // reaches what its callers hand it. Handed nothing at all, a change through it is not followed.
-                let handed = self
-                    .origin_bindings
-                    .get(&(d, u, i))
-                    .cloned()
-                    .unwrap_or(Origin::Unset);
-                let mut origin = self.inside_times(handed, depth);
-                for (default, inside) in bound.defaults {
-                    let given = self.origin_of(c, default);
-                    origin = origin.join(self.inside_times(given, inside));
-                }
-                return origin;
-            }
-            if self
-                .facts_of(d, u)
-                .within(&range)
-                .locals
-                .iter()
-                .any(|l| l.name == name)
-            {
-                return self.local_origin(c, name);
+                return self.local_origin(c, name, at);
             }
             current = parent;
         }
-        match self.head(code, name) {
+        match self.head(code, name, at) {
             Value::Object(d, o) => Origin::Object(Value::Object(d, o)),
             Value::Prop(d, o, p) => self.prop_origin(d, o, &p),
             Value::Product(Some(ty)) if ty.chars().next().is_some_and(char::is_uppercase) => {
@@ -654,7 +641,10 @@ impl Program {
                 if self.declared.contains_key(&(fd, fu)) {
                     return Origin::Unknown;
                 }
-                self.return_origin(fd, fu).handed_to(code)
+                {
+                    let callee = self.code_of(fd, fu);
+                    self.return_origin(fd, fu).handed_from(callee, code)
+                }
             }
             Value::Global(g) if builtins::PLAIN_FUNCTIONS.contains(&g.as_str()) => Origin::Plain,
             Value::Global(g) if builtins::NEW_FUNCTIONS.contains(&g.as_str()) => {
@@ -706,29 +696,29 @@ impl Program {
         match answers {
             GlobalAnswers::Plain => Origin::Plain,
             GlobalAnswers::NewPlain => {
-                self.store_at(site, Origin::Plain);
+                self.store_at(code, site, Origin::Plain);
                 Origin::made(code, site)
             }
             GlobalAnswers::NewInsideOfFirst => {
                 let first = first(self);
                 let held = self.inside_of(&first);
-                self.store_at(site, held);
+                self.store_at(code, site, held);
                 Origin::made(code, site)
             }
             GlobalAnswers::NewOfArguments => {
                 for arg in args {
                     let element = self.element_origin(code, arg.clone());
-                    self.store_at(site, element);
+                    self.store_at(code, site, element);
                 }
                 Origin::made(code, site)
             }
             GlobalAnswers::NewOfCallback(at) => {
                 let answered = self.callback_answers(code, args[at].clone());
-                self.store_at(site, answered);
+                self.store_at(code, site, answered);
                 Origin::made(code, site)
             }
             GlobalAnswers::NewDeep => {
-                self.store_at(site, Origin::made(HELD, site));
+                self.store_at(code, site, Origin::made(HELD, site));
                 Origin::made(code, site)
             }
             GlobalAnswers::First => first(self),
@@ -763,35 +753,35 @@ impl Program {
         match answers {
             Answers::Plain => Origin::Plain,
             Answers::NewPlain => {
-                self.store_at(site, Origin::Plain);
+                self.store_at(code, site, Origin::Plain);
                 Origin::made(code, site)
             }
             Answers::NewInside => {
                 let held = self.inside_of(&receiver);
-                self.store_at(site, held);
+                self.store_at(code, site, held);
                 Origin::made(code, site)
             }
             Answers::NewJoined => {
                 let held = self.inside_of(&receiver);
-                self.store_at(site, held);
+                self.store_at(code, site, held);
                 for arg in args {
                     let element = self.element_origin(code, arg);
                     let inside = self.inside_of(&element);
-                    self.store_at(site, element);
-                    self.store_at(site, inside);
+                    self.store_at(code, site, element);
+                    self.store_at(code, site, inside);
                 }
                 Origin::made(code, site)
             }
             Answers::NewOfCallback(at) => {
                 let answered = self.callback_answers(code, args[at].clone());
-                self.store_at(site, answered);
+                self.store_at(code, site, answered);
                 Origin::made(code, site)
             }
             Answers::NewOfCallbackFlat(at) => {
                 let answered = self.callback_answers(code, args[at].clone());
                 let flattened = self.inside_of(&answered);
-                self.store_at(site, answered);
-                self.store_at(site, flattened);
+                self.store_at(code, site, answered);
+                self.store_at(code, site, flattened);
                 Origin::made(code, site)
             }
             Answers::Inside => self.inside_of(&receiver),
@@ -830,28 +820,59 @@ impl Program {
             return Origin::Plain;
         }
         match self.named_callback(code, arg) {
-            Some((fd, fu)) => self.return_origin(fd, fu).handed_to(code),
+            Some((fd, fu)) => {
+                let callee = self.code_of(fd, fu);
+                self.return_origin(fd, fu).handed_from(callee, code)
+            }
             None => Origin::Unknown,
         }
     }
 
     /// Where a local of `code` came from: its value and every value given
     /// it after. What is put inside it is its containers' (`contents`).
-    fn local_origin(&mut self, code: usize, name: &str) -> Origin {
-        let key = (code, name.to_string());
-        if let Some(known) = self.local_origins.get(&key) {
-            return known.clone();
-        }
-        // Asked again while being read (`x = x.concat(…)`): nothing yet.
-        self.local_origins.insert(key.clone(), Origin::Unset);
+    fn local_origin(&mut self, code: usize, name: &str, at: usize) -> Origin {
         let (d, u, range) = {
             let c = &self.codes[code];
             (c.doc, c.unit, c.range.clone())
         };
         let facts = self.facts_of(d, u).within(&range);
+        let local = facts.local(name, at).cloned();
+        let parameter = self.docs[d].units[u]
+            .bound
+            .iter()
+            .find(|(_, b)| b.name == name)
+            .cloned()
+            .filter(|_| local.is_none() && self.codes[code].parent.is_none());
+        let declaration = local
+            .as_ref()
+            .map(|l| l.at)
+            .or_else(|| parameter.as_ref().map(|(_, b)| b.at))
+            .unwrap_or(at);
+        let key = (code, declaration);
+        if let Some(known) = self.local_origins.get(&key) {
+            return known.clone();
+        }
+        // Asked again while being read (`x = x.concat(…)`): nothing yet.
+        self.local_origins.insert(key, Origin::Unset);
         let mut origin = Origin::Unset;
         let mut given = false;
-        for local in facts.locals.iter().filter(|l| l.name == name) {
+        if let Some((i, bound)) = parameter {
+            let handed = self
+                .origin_bindings
+                .get(&(d, u, i))
+                .cloned()
+                .unwrap_or(Origin::Unset);
+            origin = match bound.depth {
+                Some(depth) => self.inside_times(handed, depth),
+                None => Origin::Unknown,
+            };
+            for (default, depth) in bound.defaults {
+                let value = self.origin_of(code, default);
+                origin = origin.join(self.inside_times(value, depth));
+            }
+            given = true;
+        }
+        for local in local.iter() {
             let Some(depth) = local.depth else {
                 origin = origin.join(Origin::Unknown);
                 given = true;
@@ -876,6 +897,9 @@ impl Program {
         }
         for write in &facts.writes {
             if write.path.head != Head::Name(name.to_string()) || !write.path.members.is_empty() {
+                continue;
+            }
+            if facts.local(name, write.path.at).map(|l| l.at) != local.as_ref().map(|l| l.at) {
                 continue;
             }
             match &write.kind {

@@ -32,17 +32,23 @@ impl Program {
         let facts = self.facts_of(d, u).within(&range);
         let mut names = Vec::new();
         for local in &facts.locals {
-            if local.init.as_ref() == Some(function) && self.local_function(code, &local.name) {
-                names.push(local.name.clone());
+            if local.init.as_ref() == Some(function)
+                && self.local_function(code, &local.name, local.at)
+            {
+                names.push(local.at);
             }
         }
         let tokens = &self.docs[d].tokens;
         let is_handed = |arg: &Range<usize>| {
-            arg == function || arg.len() == 1 && names.contains(&tokens[arg.start].text)
+            arg == function
+                || arg.len() == 1
+                    && facts
+                        .local(&tokens[arg.start].text, arg.start)
+                        .is_some_and(|l| names.contains(&l.at))
         };
         let handing: Vec<(Call, usize, usize)> = facts
             .calls
-            .into_iter()
+            .iter()
             .filter_map(|call| {
                 let (index, arg) = call
                     .args
@@ -50,7 +56,15 @@ impl Program {
                     .enumerate()
                     .find(|(_, arg)| is_handed(arg))?;
                 let at = arg.start;
-                Some((call, index, at))
+                Some((
+                    Call {
+                        path: call.path.clone(),
+                        args: call.args.clone(),
+                        line: call.line,
+                    },
+                    index,
+                    at,
+                ))
             })
             .collect();
         let mut handed = Vec::new();
@@ -64,7 +78,7 @@ impl Program {
             handed.push((call, how));
         }
         let elsewhere = facts.paths.iter().any(|(path, _)| {
-            matches!(&path.head, Head::Name(name) if names.contains(name))
+            matches!(&path.head, Head::Name(name) if facts.local(name, path.at).is_some_and(|l| names.contains(&l.at)))
                 && !handed_at.contains(&path.at)
         });
         (!handed.is_empty() && !elsewhere).then_some(handed)

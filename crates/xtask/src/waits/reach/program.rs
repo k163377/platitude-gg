@@ -115,7 +115,7 @@ pub(super) struct Program {
     origin_collected: HashMap<(usize, usize, usize), Origin>,
     /// Each local's and each function's return's origin, once read in this
     /// reading (`super::origin`).
-    pub(super) local_origins: HashMap<(usize, String), Origin>,
+    pub(super) local_origins: HashMap<(usize, usize), Origin>,
     pub(super) return_origins: HashMap<(usize, usize), Origin>,
     pub(super) prop_origins: HashMap<(usize, usize, String), Origin>,
     /// What each container holds, by the site that made it, as the reading
@@ -250,6 +250,10 @@ impl Program {
         self.origin_bindings = std::mem::take(&mut self.origin_collected);
         self.contents = std::mem::take(&mut self.contents_collected);
         self.members = std::mem::take(&mut self.members_collected);
+        // Every pass adds possible puts and member assignments; a later
+        // inability to resolve a call must not erase what was already seen.
+        self.contents_collected.clone_from(&self.contents);
+        self.members_collected.clone_from(&self.members);
         self.language_props.clear();
         self.local_origins.clear();
         self.return_origins.clear();
@@ -572,7 +576,7 @@ impl Program {
     }
 
     /// What the head of a path stands for in `code`.
-    pub(super) fn head(&mut self, code: usize, name: &str) -> Value {
+    pub(super) fn head(&mut self, code: usize, name: &str, at: usize) -> Value {
         let mut current = Some(code);
         let mut own = true;
         while let Some(c) = current {
@@ -580,6 +584,14 @@ impl Program {
                 let c = &self.codes[c];
                 (c.doc, c.unit, c.range.clone(), c.parent)
             };
+            let facts = self.facts_of(d, u).within(&range);
+            let local = facts.local(name, at).cloned();
+            let reassigned = facts.writes.iter().any(|w| {
+                w.path.head == Head::Name(name.to_string())
+                    && w.path.members.is_empty()
+                    && matches!(w.kind, WriteKind::Value(_) | WriteKind::Constant)
+                    && facts.local(name, w.path.at).map(|l| l.at) == local.as_ref().map(|l| l.at)
+            });
             let unit = &self.docs[d].units[u];
             let is_param =
                 parent.is_none() && unit.bound.iter().any(|(_, bound)| bound.name == name);
@@ -589,6 +601,7 @@ impl Program {
                 .is_none()
                 .then(|| unit.params.iter().position(|p| p == name))
                 .flatten()
+                .filter(|_| local.is_none() && !reassigned)
                 .filter(|_| {
                     unit.bound
                         .iter()
@@ -601,16 +614,11 @@ impl Program {
                     Value::Captured(name.to_string(), Some(Box::new(bound)))
                 };
             }
-            let local = self
-                .facts_of(d, u)
-                .within(&range)
-                .locals
-                .into_iter()
-                .find(|l| l.name == name);
             if is_param || local.is_some() {
                 // A local that names an object — the harness's or the product's — stands for it: what is read
                 // through it is read when it is read. One holding a value holds what was read before.
                 let alias = local
+                    .filter(|_| !reassigned)
                     .and_then(|l| l.init)
                     .and_then(|init| {
                         let o = self.docs[d].units[u].object;
@@ -635,7 +643,7 @@ impl Program {
     /// What a path stands for, member by member.
     pub(super) fn resolve(&mut self, code: usize, path: &Path) -> Value {
         let mut value = match &path.head {
-            Head::Name(name) => self.head(code, name),
+            Head::Name(name) => self.head(code, name, path.at),
             Head::Value => Value::Unknown,
         };
         for name in &path.members {
@@ -736,7 +744,7 @@ impl Program {
                     continue;
                 }
                 if let Head::Name(name) = &path.head
-                    && let Value::Captured(_, None) = self.head(code, name)
+                    && let Value::Captured(_, None) = self.head(code, name, path.at)
                 {
                     effects.push((Effect::Captured(name.clone()), *line));
                 }
@@ -926,10 +934,10 @@ impl Program {
             let Head::Name(name) = &path.head else {
                 return Some(Effect::Unread(path.spelled()));
             };
-            if self.is_local(code, name) {
+            if self.is_local(code, name, path.at) {
                 return None;
             }
-            return match self.head(code, name) {
+            return match self.head(code, name, path.at) {
                 Value::Captured(..) => Some(Effect::Smuggle(name.clone())),
                 // Of the product's: an input.
                 Value::Prop(d, ..) | Value::Object(d, _) if d >= self.harness => {
@@ -1013,7 +1021,7 @@ impl Program {
         }
     }
 
-    fn is_local(&mut self, code: usize, name: &str) -> bool {
+    fn is_local(&mut self, code: usize, name: &str, at: usize) -> bool {
         let (d, u, range, parent) = {
             let c = &self.codes[code];
             (c.doc, c.unit, c.range.clone(), c.parent)
@@ -1023,12 +1031,7 @@ impl Program {
                 .bound
                 .iter()
                 .any(|(_, bound)| bound.name == name))
-            || self
-                .facts_of(d, u)
-                .within(&range)
-                .locals
-                .iter()
-                .any(|l| l.name == name)
+            || self.facts_of(d, u).within(&range).local(name, at).is_some()
     }
 }
 
