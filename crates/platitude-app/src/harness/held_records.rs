@@ -1,50 +1,41 @@
-//! The command log's records the harness holds back
-//! (`PGG_FAULT_HOLD_RECORDS`): from the first row a reader asked for,
-//! everything the log's feed brings stays off the log until the run lets
-//! it through. A write's answer then reaches the tab ahead of its commands
-//! reaching the log — an order no contract of the two feeds
-//! (`hub::Feeds`) rules out, made the run's own
-//! (`xtask::verify::records_check`). A build without the harness lets
-//! everything through.
+//! Fault injection for one command log's feed (`PGG_FAULT_HOLD_RECORDS`).
+//! Its model owns the withheld records and the release, so another tab cannot drain them or end its hold.
+//! From the first requested command onward, records stay in feed order until that model releases them.
 
 use crate::hub::CommandMsg;
 
-#[cfg(feature = "automation")]
-mod hold {
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::{Mutex, MutexGuard};
+#[derive(Default)]
+pub(crate) struct HeldRecords {
+    #[cfg(any(feature = "automation", test))]
+    messages: Vec<CommandMsg>,
+    #[cfg(any(feature = "automation", test))]
+    lowered: bool,
+}
 
-    use crate::hub::CommandMsg;
-
-    /// Lowered once, by the run; raised from the knob until then.
-    static LOWERED: AtomicBool = AtomicBool::new(false);
-    /// What the hold took off the feed, in the feed's order.
-    static HELD: Mutex<Vec<CommandMsg>> = Mutex::new(Vec::new());
-
-    fn held() -> MutexGuard<'static, Vec<CommandMsg>> {
-        match HELD.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        }
+impl HeldRecords {
+    pub(crate) fn through(&mut self, messages: Vec<CommandMsg>) -> Vec<CommandMsg> {
+        #[cfg(any(feature = "automation", test))]
+        return self.take(messages, crate::harness::knobs().fault_hold_records);
+        #[cfg(not(any(feature = "automation", test)))]
+        messages
     }
 
-    fn standing() -> bool {
-        crate::harness::knobs().fault_hold_records && !LOWERED.load(Ordering::SeqCst)
+    /// Releases this feed only. The model drains it immediately after this call.
+    pub(crate) fn release(&mut self) -> i32 {
+        #[cfg(any(feature = "automation", test))]
+        return self.lower(crate::harness::knobs().fault_hold_records);
+        #[cfg(not(any(feature = "automation", test)))]
+        -1
     }
 
-    pub(super) fn through(mut messages: Vec<CommandMsg>) -> Vec<CommandMsg> {
-        let mut held = held();
-        if !standing() {
-            if held.is_empty() {
-                return messages;
-            }
-            let mut out = std::mem::take(&mut *held);
+    #[cfg(any(feature = "automation", test))]
+    fn take(&mut self, mut messages: Vec<CommandMsg>, enabled: bool) -> Vec<CommandMsg> {
+        if !enabled || self.lowered {
+            let mut out = std::mem::take(&mut self.messages);
             out.append(&mut messages);
             return out;
         }
-        // Rows nobody asked for (the opening's reads) are not the write's;
-        // once one asked for is held, everything behind it is.
-        let from = if held.is_empty() {
+        let from = if self.messages.is_empty() {
             messages
                 .iter()
                 .position(|msg| matches!(msg, CommandMsg::Started { asked: true, .. }))
@@ -52,40 +43,65 @@ mod hold {
             Some(0)
         };
         if let Some(at) = from {
-            held.extend(messages.drain(at..));
+            self.messages.extend(messages.drain(at..));
         }
         messages
     }
 
-    pub(super) fn let_through() -> i32 {
-        if !crate::harness::knobs().fault_hold_records || LOWERED.swap(true, Ordering::SeqCst) {
+    #[cfg(any(feature = "automation", test))]
+    fn lower(&mut self, enabled: bool) -> i32 {
+        if !enabled || self.lowered {
             return -1;
         }
-        i32::try_from(held().len()).unwrap_or(i32::MAX)
+        self.lowered = true;
+        i32::try_from(self.messages.len()).unwrap_or(i32::MAX)
     }
 }
 
-/// What the log applies of what its feed brought: all of it, but where
-/// the hold stands.
-#[cfg(feature = "automation")]
-pub(crate) fn records_through(messages: Vec<CommandMsg>) -> Vec<CommandMsg> {
-    hold::through(messages)
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[cfg(not(feature = "automation"))]
-pub(crate) fn records_through(messages: Vec<CommandMsg>) -> Vec<CommandMsg> {
-    messages
-}
+    fn write(operation: u64) -> Vec<CommandMsg> {
+        vec![
+            CommandMsg::Started {
+                run: 1,
+                id: 1,
+                display: "git commit".into(),
+                full: "git commit".into(),
+                at_ms: 0,
+                asked: true,
+                operation,
+            },
+            CommandMsg::Settled { operation },
+        ]
+    }
 
-/// Lowers the hold for good, answering how many messages it held — the
-/// log drains them next — or -1 where none stood
-/// (`CommandsModel.letRecordsThrough`).
-#[cfg(feature = "automation")]
-pub(crate) fn let_records_through() -> i32 {
-    hold::let_through()
-}
-
-#[cfg(not(feature = "automation"))]
-pub(crate) fn let_records_through() -> i32 {
-    -1
+    #[test]
+    fn a_second_tab_cannot_take_the_first_tabs_records_or_release_its_hold() {
+        let mut a = HeldRecords::default();
+        let mut b = HeldRecords::default();
+        assert!(a.take(write(11), true).is_empty());
+        assert!(b.take(write(22), true).is_empty());
+        assert_eq!(b.lower(true), 2);
+        let b_records = b.take(Vec::new(), true);
+        assert!(matches!(
+            b_records.as_slice(),
+            [
+                CommandMsg::Started { operation: 22, .. },
+                CommandMsg::Settled { operation: 22 }
+            ]
+        ));
+        assert!(a.take(Vec::new(), true).is_empty());
+        assert_eq!(a.lower(true), 2);
+        let a_records = a.take(Vec::new(), true);
+        assert!(matches!(
+            a_records.as_slice(),
+            [
+                CommandMsg::Started { operation: 11, .. },
+                CommandMsg::Settled { operation: 11 }
+            ]
+        ));
+        assert_eq!(a.lower(true), -1);
+    }
 }

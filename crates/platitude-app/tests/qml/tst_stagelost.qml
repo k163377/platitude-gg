@@ -66,7 +66,7 @@ Item {
             compare(root.presses, 1)
             root.ok = true
             tryVerify(() => rig.route.read)
-            compare(Harness.said.filter(line => line.startsWith("lost ok=")), ["lost ok=true"])
+            compare(Stages.reports(Harness.said).filter(line => line.startsWith("lost ok=")), ["lost ok=true"])
             compare(root.presses, 1)
             compare(Stages.breaches(Harness.said), [])
         }

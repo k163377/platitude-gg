@@ -20,5 +20,10 @@ Item {
         onReadied: Automation.Awaited.completed("stages", route.completing, route.owedAtRead, route.witnessesRead)
     }
 
+    Binding {
+        target: Automation.Awaited
+        property: "window"
+        value: rig.Window.window
+    }
     Component.onCompleted: Automation.Awaited.route = route
 }

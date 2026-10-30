@@ -47,13 +47,15 @@ Item {
         when: windowShown
 
         function test_a_list_with_rows_and_no_size_holds_the_completion_for_a_polish_pass() {
+            Automation.Awaited.window = null
             op.start()
             tryVerify(() => op.at("complete"))
             const from = root.beats
             tryVerify(() => root.beats >= from + 6)
             compare(root.reportReads, 0)
             verify(!rig.route.read)
-            verify(Harness.said.some(line => line === "completion waiting=sized:CommandsPane/AppListView"),
+            verify(Harness.said.some(line => line.startsWith("completion waiting=")
+                                    && line.includes("sized:CommandsPane/AppListView")),
                    Harness.said.join("\n"))
             // Frames said swapped are no polish pass.
             Automation.Awaited.frames = Automation.Awaited.frames + 3

@@ -73,6 +73,10 @@ Item {
         Harness.noteMemory("perf-done")
         Harness.report("perf_done open=" + (driver.page !== null))
     }
+    /// The calibration's measured boundary, retained where it happened rather than moved to the completion's read.
+    function measurement(line) {
+        Harness.report(PerfProbe.verifying ? "measurement run=" + Awaited.runId + " text=" + line : line)
+    }
     // A verify run's completion of `perf` (`PerfProbe.verifying`): the measurement's own end (`finished`) is the one
     // stage this verb reaches, and the completion's hold reads the page out after it.
     WindowStage {
@@ -147,7 +151,7 @@ Item {
             id: settleAfter
             interval: fontWalk.settleMs
             onTriggered: {
-                Harness.report("perf_font_walk_settled clock_ms=" + PerfProbe.clockMs())
+                driver.measurement("perf_font_walk_settled clock_ms=" + PerfProbe.clockMs())
                 driver.walked = true
                 driver.finish()
             }

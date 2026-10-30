@@ -128,6 +128,7 @@ pub struct CommandsModel {
     /// yet), which `SelectionEnds::bytes_on` cuts where a row is read.
     sel_ends: Option<SelectionEnds>,
     feed: Option<Arc<Feed<CommandMsg>>>,
+    held: crate::harness::HeldRecords,
     tab_id: i32,
     /// The writes whose every command this log has taken in, oldest first
     /// (`CommandMsg::Settled`): what a write's records being in reads off,
@@ -214,6 +215,7 @@ impl CommandsModel {
 
     #[qslot]
     fn attach(&mut self, tab_id: i32) {
+        self.held = crate::harness::HeldRecords::default();
         self.tab_id = tab_id;
         let invoker = self.get_qml_method_invoker();
         self.feed = crate::hub::attach_feed(tab_id, |f| &f.commands, invoker);
@@ -332,7 +334,7 @@ impl CommandsModel {
     /// many messages that was, or -1 where no hold stood.
     #[qslot]
     fn let_records_through(&mut self) -> i32 {
-        let held = crate::harness::let_records_through();
+        let held = self.held.release();
         if held >= 0 {
             self.drain();
         }
@@ -366,7 +368,8 @@ impl CommandsModel {
         let Some(feed) = self.feed.clone() else {
             return;
         };
-        if self.take_in(crate::harness::records_through(feed.drain())) {
+        let messages = self.held.through(feed.drain());
+        if self.take_in(messages) {
             self.changed();
         }
         if crate::harness::memprobe::enabled() {

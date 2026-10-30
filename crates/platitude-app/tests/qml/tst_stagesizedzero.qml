@@ -117,7 +117,8 @@ Item {
             tryVerify(() => route.read)
             compare(root.heightAtRead, 0)
             verify(seat.item.list.width > 0, "laid out: it has its width")
-            verify(Harness.said.some(line => line.startsWith("completion waiting=sized:")), Harness.said.join("\n"))
+            verify(Harness.said.some(line => line.startsWith("completion waiting=") && line.includes("sized:")),
+                   Harness.said.join("\n"))
             compare(root.reportReads, 1)
             compare(Stages.breaches(Harness.said), [])
         }

@@ -16,6 +16,11 @@ function kind(line) {
     return at < 0 ? "" : line.substring(0, at).split(" ").pop()
 }
 
+/// Completion reports alone: notes and stage history cannot satisfy a report's assertion.
+function reports(said) {
+    return said.filter(line => kind(line) === "report").map(line => line.split(" text=").slice(1).join(" text="))
+}
+
 /// The stages generation `gen` of `owner/op` moved to, in order.
 function chain(said, owner, op, gen) {
     return said.filter(line => kind(line) === "stage" && field(line, "owner") === owner && field(line, "op") === op

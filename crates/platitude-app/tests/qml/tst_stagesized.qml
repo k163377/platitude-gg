@@ -148,7 +148,8 @@ Item {
             tryVerify(() => root.beats >= from + 6)
             verify(!route.read)
             compare(root.reportReads, 0)
-            verify(Harness.said.some(line => line.startsWith("completion waiting=sized:")), Harness.said.join("\n"))
+            verify(Harness.said.some(line => line.startsWith("completion waiting=") && line.includes("sized:")),
+                   Harness.said.join("\n"))
             // Frame notices said after the change — a frame that began before it, its swap arriving late — are no pass.
             stage.frameSwapped()
             Automation.Awaited.frames = Automation.Awaited.frames + 3

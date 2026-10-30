@@ -84,7 +84,7 @@ Item {
     }
 
     function note(point) {
-        Harness.report(point + " elapsed_ms=" + (PerfProbe.clockMs() - driver.actionStart)
+        driver.measurement(point + " elapsed_ms=" + (PerfProbe.clockMs() - driver.actionStart)
                        + " case=" + driver.caseName + " operation=" + driver.operation
                        + " oid=" + driver.wantedOid + " rows_gen=" + diffModel.rowsGen
                        + " fingerprint=" + diffModel.fingerprint)
@@ -221,11 +221,16 @@ Item {
 
     function finish() {
         driver.enter("finished")
-        Harness.report("perf_complete selection=" + PerfProbe.selection + " details=" + driver.sawDetails
+        driver.measurement("perf_complete selection=" + PerfProbe.selection + " details=" + driver.sawDetails
                           + " diff=" + driver.sawDiff + " graph=" + driver.graphVisible
                           + " scrolled=" + Harness.autoScroll + " rows=" + graphModel.rowTotal)
-        Harness.report("perf_operations count=" + (driver.operation + 1))
+        driver.measurement("perf_operations count=" + (driver.operation + 1))
         page.perfFinished()
+    }
+
+    /// Measurements retain their observation point; verification attributes them to this run without rereading them.
+    function measurement(line) {
+        Harness.report(PerfProbe.verifying ? "measurement run=" + Awaited.runId + " text=" + line : line)
     }
 
     function beginScroll() {
@@ -310,7 +315,7 @@ Item {
                 driver.fail("diff-scroll-ended-without-visible-row")
                 return
             }
-            Harness.report("perf_diff_scroll_frame visible=true case=" + driver.caseName
+            driver.measurement("perf_diff_scroll_frame visible=true case=" + driver.caseName
                            + " operation=" + driver.operation + " row=" + row)
             driver.afterInteraction()
         } else if (driver.stage === "scroll-frame") {

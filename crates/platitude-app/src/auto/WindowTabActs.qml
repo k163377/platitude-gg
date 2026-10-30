@@ -209,7 +209,7 @@ Item {
                 }
                 // Waited on the strip's own word that it scrolls: which width crowds it cannot be assumed.
                 if (!topBar.bandTabScrolls) {
-                    // Still uncrowded once the floor has laid out (the band's numbers standing across a frame): this
+                    // Still uncrowded once the floor has laid out (the band's numbers standing across a polish pass): this
                     // staging cannot carry it. Said with the band's numbers to choose the tab count against.
                     const band = "tab_edge crowded=false tabs=" + pageRepeater.count
                                  + " content=" + Math.round(topBar.bandTabContent)

@@ -172,7 +172,13 @@ Item {
             }
         }
         fileRowsTimer.witness("lines", lines)
-        driver.reportAtCompletion(() => fileRowsTimer.witnessed("lines"))
+        driver.reportAtCompletion(() => fileRowsTimer.witnessed("lines").concat(
+            Harness.autoAct.startsWith("file-menu") ? [acts.menuLine()] : []))
+    }
+    /// The file menu's frozen offer, read with the completion's current state.
+    function menuLine() {
+        return "file_menu bucket=" + fileRowMenu.bucket + " rows=" + fileMenu.offeredRows
+               + " stash=" + fileRowMenu.stashItem.offered + " stashWhy=" + fileRowMenu.stashItem.blockedReason
     }
     /// The row `path` is on, in whichever bucket holds it, or null: `WipPane.rowFor`'s answer, asked bucket by bucket
     /// (`WipPane.rowIn`) — `cargo xtask waits` follows `rowFor` itself as an input, which a beat does not make.

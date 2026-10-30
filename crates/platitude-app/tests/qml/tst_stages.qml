@@ -246,7 +246,7 @@ Item {
 
         /// The completion is asked while the page still owes a read: its report is not read, nothing is completed, and
         /// the state moves on meanwhile. Once the read is in, the report is read once — of the state then — and the run
-        /// completes in that turn on a settled page.
+        /// completes after the ready layout has been polished.
         function test_9_a_completion_reads_its_report_only_once_the_reads_are_in() {
             root.owing = ["details"]
             root.subject = "before"
@@ -262,7 +262,7 @@ Item {
             root.owing = []
             tryVerify(() => route.read)
             compare(root.reportReads, 1)
-            compare(Harness.said[root.readiedAt - 1], "stages subject=after")
+            compare(Stages.reports(Harness.said.slice(0, root.readiedAt)), ["stages subject=after"])
             const completed = Harness.said.filter(line => line.startsWith("complete run="))
             compare(completed.length, 1)
             compare(Stages.field(completed[0], "op"), "completer")

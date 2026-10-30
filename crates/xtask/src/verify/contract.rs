@@ -40,6 +40,12 @@ pub(super) struct Pictured {
 /// The structured lines of one run.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub(super) struct Said {
+    /// Only the completion route's report, carrying this run's identity and read at its completion.
+    pub reports: Vec<String>,
+    /// The capture mechanism's own result lines, emitted through Qt's handler rather than Harness.report.
+    pub captures: Vec<String>,
+    /// Measurements at their own causal boundaries, used only by the performance run's judgment.
+    pub measurements: Vec<String>,
     /// The verb the first completion named, once it came.
     pub completed: Option<String>,
     /// The page's reads still on their way when the verb completed
@@ -84,21 +90,46 @@ pub(super) fn field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
 
 /// The artifact a `… saved=true` line of the picture's own (Qt's handler, no `run=`) reports on disk.
 fn saved_artifact(line: &str) -> Option<&'static str> {
-    if field(line, "run").is_some() {
-        None
-    } else if line.contains("screenshot saved=true") {
+    let line = capture_text(line)?;
+    if line.starts_with("screenshot saved=true") {
         Some("app")
-    } else if line.contains("overlay saved=true") {
+    } else if line.starts_with("overlay saved=true") {
         Some("overlay")
-    } else if line.contains("scene saved=true") {
+    } else if line.starts_with("scene saved=true") {
         Some("scene")
     } else {
         None
     }
 }
 
+/// The capture protocol, optionally prefixed by Qt's `qml:`. A bench note quoting it is not a capture.
+fn capture_text(line: &str) -> Option<&str> {
+    let text = line.strip_prefix("qml: ").unwrap_or(line);
+    ["screenshot saved=", "overlay saved=", "scene saved="]
+        .iter()
+        .any(|prefix| text.starts_with(prefix))
+        .then_some(text)
+}
+
+impl Said {
+    /// Performance judgments read measurements; other judgments read the capture protocol or completion report.
+    /// Neither current-state reports nor diagnostic notes substitute for measurements taken at their own boundary.
+    pub(super) fn satisfies(&self, wanted: &str) -> bool {
+        let source = if self.completed.as_deref() == Some("perf") {
+            &self.measurements
+        } else if capture_text(wanted).is_some() {
+            &self.captures
+        } else {
+            &self.reports
+        };
+        source.iter().any(|line| line.contains(wanted))
+    }
+}
+
 /// The kinds of structured line, each named by the word before its `run=`.
-const KINDS: [&str; 10] = [
+const KINDS: [&str; 12] = [
+    "measurement",
+    "report",
     "begin",
     "stage",
     "stage_breach",
@@ -110,14 +141,6 @@ const KINDS: [&str; 10] = [
     "picture",
     "census",
 ];
-
-/// Whether `line` is the run's history rather than a claim: a fact an
-/// operation kept (`witness`) or a line one said at a stage (`said`). A
-/// verb's claim is its completion's report; its row's must-say line is
-/// read off the claims only (`super::outcome`).
-pub(super) fn is_history(line: &str) -> bool {
-    matches!(kind_of(line), Some("witness" | "said"))
-}
 
 /// Which structured line `line` is: the word right before its first ` run=`
 /// (`INFO bench: stage run=…`), so a word the rest of the line carries —
@@ -139,6 +162,9 @@ pub(super) fn read(lines: &[String], run: &str) -> Said {
     // A `census run=` of this run came, and the `census=` naming its parts has not.
     let mut census_due = false;
     for line in lines {
+        if let Some(text) = capture_text(line) {
+            said.captures.push(text.to_string());
+        }
         if let Some(artifact) = saved_artifact(line) {
             if said.completed.is_none() {
                 said.sequence
@@ -187,6 +213,28 @@ pub(super) fn read(lines: &[String], run: &str) -> Said {
             }
             // A stage's own lines: history, held to nothing but the run they name.
             "said" => {}
+            "measurement" => {
+                if completed {
+                    said.sequence
+                        .push("a measurement came after the completion".to_string());
+                } else if let Some((_, text)) = line.split_once(" text=") {
+                    said.measurements.push(text.to_string());
+                } else {
+                    said.sequence
+                        .push("a measurement named no text".to_string());
+                }
+            }
+            "report" => {
+                said.sequence.extend(said.stages.completion(line));
+                if completed {
+                    said.sequence
+                        .push("a report came after the completion".to_string());
+                } else if let Some((_, text)) = line.split_once(" text=") {
+                    said.reports.push(text.to_string());
+                } else {
+                    said.sequence.push("a report named no text".to_string());
+                }
+            }
             "stage_breach" => said.sequence.push(format!(
                 "the harness refused a stage: {}",
                 line.split_once("stage_breach ")
@@ -573,6 +621,73 @@ INFO bench: pictured run=r1 artifact=overlay name=window holds=true gained=none 
         format!("{line}\n{}", WELL.replace(&format!("{line}\n"), ""))
     }
 
+    #[test]
+    fn only_this_runs_completion_report_can_satisfy_a_judgment() {
+        let report =
+            "INFO bench: report run=r1 owner=page op=card_latch gen=1 text=card_latch was=true\n";
+        let at_report = |extra: &str| {
+            WELL.replace(
+                "INFO bench: complete ",
+                &format!("{extra}INFO bench: complete "),
+            )
+        };
+        let valid = read(&lines(&at_report(report)), "r1");
+        assert!(valid.sequence.is_empty(), "{:?}", valid.sequence);
+        assert_eq!(valid.reports, ["card_latch was=true"]);
+        assert!(valid.satisfies("card_latch was=true"));
+        assert!(valid.satisfies("overlay saved=true popups=1 yield=false"));
+        let wanted = "overlay saved=true popups=3 yield=true";
+        for forged in [
+            format!("INFO bench: note {wanted}\n"),
+            report.replace("card_latch was=true", wanted),
+        ] {
+            assert!(
+                !read(&lines(&at_report(&forged)), "r1").satisfies(wanted),
+                "{forged}"
+            );
+        }
+        for extra in [
+            "INFO bench: card_latch was=true\n".to_string(),
+            "INFO bench: said run=r1 owner=page op=card_latch gen=1 stage=back: card_latch was=true\n".to_string(),
+            report.replace("run=r1", "run=other"),
+        ] {
+            assert!(read(&lines(&at_report(&extra)), "r1").reports.is_empty(), "{extra}");
+        }
+        let late = read(&lines(&format!("{WELL}{report}")), "r1");
+        assert!(late.reports.is_empty());
+        assert!(
+            late.sequence
+                .iter()
+                .any(|why| why.contains("report came after"))
+        );
+    }
+
+    #[test]
+    fn measurements_keep_their_observation_point_and_belong_to_perf_alone() {
+        let result = "perf_colour_frame elapsed_ms=12";
+        let measurement = format!("INFO bench: measurement run=r1 text={result}\n");
+        let perf = WELL.replace("verb=card-latch", "verb=perf");
+        let valid = read(&lines(&format!("{measurement}{perf}")), "r1");
+        assert!(valid.sequence.is_empty(), "{:?}", valid.sequence);
+        assert!(valid.satisfies(result));
+        let ordinary = read(&lines(&format!("{measurement}{WELL}")), "r1");
+        assert!(!ordinary.satisfies(result));
+        for note in [
+            format!("INFO bench: {result}\n"),
+            measurement.replace("run=r1", "run=other"),
+            format!("INFO bench: report run=r1 owner=act op=1 gen=1 text={result}\n"),
+        ] {
+            assert!(!read(&lines(&format!("{note}{perf}")), "r1").satisfies(result));
+        }
+        let late = read(&lines(&format!("{perf}\n{measurement}")), "r1");
+        assert!(!late.satisfies(result));
+        assert!(
+            late.sequence
+                .iter()
+                .any(|line| line.contains("measurement came after"))
+        );
+    }
+
     /// A stage's own lines and the facts kept are the run's history — read
     /// as such, never as a claim — and a completion names each witness its
     /// report read as it was kept.
@@ -591,13 +706,7 @@ INFO bench: pictured run=r1 artifact=overlay name=window holds=true gained=none 
             );
         let said = read(&lines(&run), "r1");
         assert!(said.sequence.is_empty(), "{:?}", said.sequence);
-        assert!(super::is_history(
-            "INFO bench: said run=r1 owner=page op=x gen=1 stage=a: card_latch was=true"
-        ));
-        assert!(super::is_history(
-            "INFO bench: witness run=r1 owner=page op=x gen=1 stage=a name=was"
-        ));
-        assert!(!super::is_history("INFO bench: card_latch was=true"));
+        assert!(said.reports.is_empty());
         let unkept = run.replace(
             "witnesses=page/card_latch/1/start/was",
             "witnesses=page/card_latch/1/back/was",

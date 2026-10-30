@@ -45,7 +45,7 @@ Item {
         // A strip that fits has no edge for the stand-in to ride; which width crowds it cannot be assumed, so
         // wait on the strip's own word.
         if (!acts.topBar.bandTabScrolls) {
-            // Still uncrowded once the floor has laid out (the band's numbers standing across a frame): nothing left
+            // Still uncrowded once the floor has laid out (the band's numbers standing across a polish pass): nothing left
             // to wait for, so say the band's numbers to choose the tab count against.
             const band = verb + " crowded=false tabs=" + acts.pageRepeater.count
                          + " content=" + Math.round(acts.topBar.bandTabContent)

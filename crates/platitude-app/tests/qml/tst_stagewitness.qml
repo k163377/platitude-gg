@@ -49,7 +49,7 @@ Item {
             root.subject = "after"
             rig.owing = []
             tryVerify(() => rig.route.read)
-            compare(Harness.said.filter(line => line.startsWith("witness was=")),
+            compare(Stages.reports(Harness.said).filter(line => line.startsWith("witness was=")),
                     ["witness was=before took=pressed now=after"])
             const kept = Harness.said.filter(line => Stages.kind(line) === "witness")
             compare(kept.map(line => Stages.field(line, "stage") + ":" + Stages.field(line, "name")),

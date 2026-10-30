@@ -544,7 +544,7 @@ Item {
             // Ready before the geometry is watched: a row still on the commit before stands as still.
             if (!Awaited.all("details_parents_ready", detailsParentsTimer.ready()))
                 return
-            // Settled when it stands across a frame: the pane lays out more than once on its way to a commit, and a
+            // Settled when it stands across a polish pass: the pane lays out more than once on its way to a commit, and a
             // width asked for arrives a frame after the row it resizes.
             const geom = Math.round(detailsPane.width) + "/" + Math.round(row.parentRoom) + "/"
                 + Math.round(plate.parentLineWidth) + "/" + plate.parentsShown

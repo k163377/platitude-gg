@@ -45,7 +45,7 @@ Item {
             root.subject = "after"
             rig.owing = []
             tryVerify(() => rig.route.read)
-            compare(Harness.said.filter(line => line.startsWith("moves subject=")), ["moves subject=after"])
+            compare(Stages.reports(Harness.said).filter(line => line.startsWith("moves subject=")), ["moves subject=after"])
             compare(Stages.breaches(Harness.said), [])
         }
     }

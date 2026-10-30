@@ -13,8 +13,9 @@ import platitude.ui
 /// the hold goes on. A report that stands is said, and `readied` goes out in that turn — the walk and the
 /// completion's line that follow are of the state the report read, with the witnesses it read named
 /// (`witnessesRead`). A verb condition that falls during the hold is waited for again, or ends the run as a breach
-/// where the verb said so (`lost: "fail"`); its input is never pressed again. Checked at once, so a completion with
-/// nothing to wait for completes in the turn it was asked.
+/// where the verb said so (`lost: "fail"`); its input is never pressed again. The conditions must stand through a
+/// polish begun after they became ready, even when the first reading holds: an input can change an already sized
+/// layout without starting a page read, before its placement is updated.
 ///
 /// A list the page shows with rows and no size (`unsized`) holds the completion for a polish pass of the window that
 /// began after the reading (`Awaited.polishes`): no size is the layout's answer or a polish not run yet — a log raised
@@ -33,6 +34,8 @@ Item {
     /// The lists with rows and no size the hold first read, and how many polish passes the window had made then:
     /// `{ key, polish }`, null while there are none.
     property var sizing: null
+    /// -1 until its conditions hold; otherwise the polish mark taken once they all hold.
+    property int readyLayout: -1
     /// The completion asked for, and whether its report has been read and said: the one way to the completion's walk.
     property var completing: null
     property bool asked: false
@@ -98,12 +101,27 @@ Item {
         }
         for (const name in holds)
             terms[name] = Boolean(holds[name])
+        route.markReady(terms)
         const unsized = route.unsized()
         const sized = route.sizing !== null && route.sizing.key === unsized.join(",")
             && Awaited.layoutPassedSince(route.sizing.polish)
         for (const name of unsized)
             terms["sized:" + name] = sized
         return { "when": when, "owed": owed, "unsized": unsized, "terms": terms }
+    }
+    /// Data and page holds can change a layout with a positive size. Require the pass after those conditions hold,
+    /// restarting the mark if they fall again; passes while a read was still pending cannot settle its result.
+    function markReady(terms) {
+        if (!Object.keys(terms).every(key => terms[key])) {
+            route.readyLayout = -1
+            return
+        }
+        if (route.readyLayout === -1)
+            route.readyLayout = Awaited.layoutMark()
+        const passed = Awaited.layoutPassedSince(route.readyLayout)
+        terms["laid-out:completion"] = passed
+        if (!passed)
+            Awaited.askLayout()
     }
     /// Marks the lists with rows and no size where the hold first reads them, and asks for the pass it waits on — a
     /// still scene renders none unasked.
@@ -169,7 +187,7 @@ Item {
         route.owedAtRead = first.owed
         route.witnessesRead = witnesses
         for (const line of lines)
-            Harness.report(line)
+            Harness.report("report run=" + Awaited.runId + " " + Awaited.placeOf(from.record) + " text=" + line)
         route.read = true
         route.readied()
     }

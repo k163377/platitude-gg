@@ -168,6 +168,11 @@ Item {
         return name + " holdsRemoved=" + (removed !== "" && text.indexOf(removed) >= 0)
                + " lines=" + (text === "" ? 0 : text.split("\n").length)
     }
+    /// The offered menu as it stands at completion, not the diagnostic emitted by its opening signal.
+    function menuLine() {
+        return "diff_menu open=" + diffRowMenu.showing + " rows=" + diffRowMenu.menu.offeredRows
+               + " copy=" + diffRowMenu.canCopy + " removed=" + diffRowMenu.removed
+    }
     /// Which line endings the pane decided on: the picture cannot say which kind.
     function endingsLine() {
         const d = diffPane.diffModel
@@ -309,10 +314,11 @@ Item {
                     op.witness("picked", acts.pickDiffText(act))
                 })
                 op.complete({
-                    "when": () => ({}),
+                    "when": () => ({ "menu": Harness.autoAct !== "diff-menu" || diffRowMenu.showing }),
                     "report": () => [op.rowLine(), op.witnessed("picked")].concat(
                         Harness.autoAct === "diff-copy" ? [acts.copyLine("diff_copy")]
-                        : Harness.autoAct === "diff-copy-removed" ? [acts.copyLine("diff_copy_removed")] : []) })
+                        : Harness.autoAct === "diff-copy-removed" ? [acts.copyLine("diff_copy_removed")]
+                        : Harness.autoAct === "diff-menu" ? [acts.menuLine()] : []) })
                 return
             }
             // `discard-hunk`: the rows it would take are the whole of it.
@@ -431,7 +437,7 @@ Item {
             return { "ready": !(diffPane.view.count <= 0 || !diffPane.textHand.barOut) }
         }
         onTriggered: {
-            // Settle: the rows' height read until it stands across a frame (the view lays them out a frame after they
+            // Settle: the rows' height read until it stands across a polish pass (the view lays them out a polish pass after they
             // arrive), and the bar out.
             if (diffBarTimer.at("start")) {
                 if (!Awaited.all("diff_bar_ready", diffBarTimer.ready()))
@@ -460,7 +466,7 @@ Item {
         order: ["dragged"]
         onTriggered: {
             const op = diffBlankTimer
-            // Settle: the rows' height read until it stands across a frame, as `diffBarTimer` does.
+            // Settle: the rows' height read until it stands across a polish pass, as `diffBarTimer` does.
             if (!Awaited.all("diff_blank_ready", { "ready": !(diffPane.view.count <= 0) }))
                 return
             const geom = Math.round(diffPane.view.contentHeight) + "," + diffPane.view.count
@@ -857,7 +863,7 @@ Item {
     PageStage {
         id: codeGrowTimer
         name: "code_grow"
-        /// Whether the row jumped to is built and the widths have stood across a frame since the jump.
+        /// Whether the row jumped to is built and the widths have stood across a polish pass since the jump.
         function arrived(atRow) {
             return !!diffPane.view.itemAtIndex(atRow) && codeGrowTimer.still("reach", driver.diffReach())
         }
@@ -1119,7 +1125,7 @@ Item {
         order: ["swept"]
         onTriggered: {
             const op = diffSweepTimer
-            // Settle: the view lays the rows out a frame after they arrive, and ground about to become a row is
+            // Settle: the view lays the rows out a polish pass after they arrive, and ground about to become a row is
             // neither.
             const hand = diffPane.textHand
             if (!Awaited.all("diff_sweep_ready", { "ready": !(diffPane.view.count <= 0) }))

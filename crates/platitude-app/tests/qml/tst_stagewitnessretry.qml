@@ -52,7 +52,7 @@ Item {
             tryVerify(() => rig.route.read)
             compare(root.tries, 2)
             compare(Stages.breaches(Harness.said), [])
-            compare(Harness.said.filter(line => line.startsWith("retry tried=")), ["retry tried=2"])
+            compare(Stages.reports(Harness.said).filter(line => line.startsWith("retry tried=")), ["retry tried=2"])
             const kept = Harness.said.filter(line => Stages.kind(line) === "witness")
             compare(kept.map(line => Stages.field(line, "stage") + ":" + Stages.field(line, "name")),
                     ["pressed:tried"])
