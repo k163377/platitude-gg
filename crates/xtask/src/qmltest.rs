@@ -41,6 +41,8 @@ pub(crate) static COMMANDS: &[&command::Command] = &[&QMLTEST];
 const TESTS: &str = "crates/platitude-app/tests/qml";
 const UI: &str = "crates/platitude-app/src/ui";
 const WORK: &str = "target/qmltest";
+/// Bind-mounted at the same workspace-relative path in every Linux runner, including its staging directories.
+pub(crate) const LINUX_WORK: &str = "target/qmltest/linux";
 const MODULE: &str = "platitude/ui";
 /// The app's Rust-backed module, which several `ui` components import
 /// whether or not they reach into it (`AppCombo`). Only the running app
@@ -59,14 +61,7 @@ const APP_STUB_TYPE: &str = "NotTheApplication.qml";
 /// models.
 const STUBS: &str = "crates/platitude-app/tests/qml/stubs";
 
-/// How long one `qmltestrunner`, one file or all of them, may write
-/// nothing. QtTest bounds `tryCompare`, but not `when: windowShown` on a
-/// window that never comes up, and such a file goes quiet. One number for
-/// both roads: it waits forever on either, and costs this twice —
-/// together, then alone, which is the run that names it. Silence rather
-/// than length, because the run of them all grows with every file; the
-/// log is flushed line by line (`QAbstractTestLogger::outputString`), so a
-/// run getting on renews it.
+/// Silence is a failure bound, never a success condition. Activity in a file's log renews it.
 const QUIET: Duration = Duration::from_secs(120);
 
 /// The whole of one run: the backstop for one that keeps writing and never
@@ -77,18 +72,14 @@ const WHOLE: Duration = Duration::from_secs(15 * 60);
 
 /// Where a run that was not green leaves its staging directory, one per
 /// run, named `<second it started>-<pid>` so that the names sort by age.
-const FAILED: &str = "target/qmltest/failed";
-/// How many of those stand: the newest. The one-process log of a red run
-/// carries every later file's compile errors, so it is the large part,
-/// and a few runs are what a person compares.
+const FAILED: &str = "failed";
+/// The newest failed runs retained separately for whole-suite and selected-file invocations.
 const KEPT: usize = 5;
 /// A staging directory with no run behind it — what a run killed before
 /// its end leaves — is taken once it is this old: no run stands this long.
 const LITTER_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 /// What a kept directory says about its run ([`manifest`]).
 const MANIFEST: &str = "manifest.txt";
-/// The one-process run's log, inside the staging directory.
-const TOGETHER_LOG: &str = "all.txt";
 
 /// The variables a Qt run reads that a manifest lists when inherited:
 /// name prefixes, compared in upper case. Every variable set on the
@@ -152,21 +143,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
         exe: &exe,
     };
     let mut runs = Vec::new();
-    // Named files run apart, each answering for itself — the road for one file while it is being written. The
-    // gate names none.
-    let verdict = if args.is_empty() {
-        match all_at_once(&setup, &tests, &mut runs) {
-            Ok(()) => {
-                println!("qmltest: PASS ({} file(s), one process)", tests.len());
-                Ok(())
-            }
-            Err(together) => one_at_a_time(&setup, &tests, &together, &mut runs),
-        }
-    } else {
-        tests
-            .iter()
-            .try_for_each(|test| run_one(&setup, test, &mut runs))
-    };
+    // Each file owns a process: engines do not own Qt's type registration or plugin globals.
+    let verdict = run_each(&tests, |test| run_one(&setup, test, &mut runs));
     let verdict = match verdict {
         Ok(()) => {
             let _ = std::fs::remove_dir_all(root.join(&work));
@@ -183,16 +161,6 @@ pub fn run(args: &[String]) -> Result<(), String> {
     };
     sweep(&root);
     verdict
-}
-
-/// Every file in one process — the ordinary road. A process is the price
-/// (the test bodies cost next to nothing) on a step in the gate's serial
-/// chain, so one process is what makes a new file here nearly free.
-fn all_at_once(setup: &Setup, tests: &[String], runs: &mut Vec<Ran>) -> Result<(), String> {
-    let text = runner(setup, TESTS, TOGETHER_LOG, runs)?;
-    // A run that stopped part-way leaves the rest unmentioned, which a
-    // count of failures reads as a pass ([`unfinished_in`]).
-    short_of(setup.root, tests, &text)
 }
 
 /// The cases the log does not answer for, as the words a red run comes
@@ -212,63 +180,31 @@ fn short_of(root: &Path, tests: &[String], text: &str) -> Result<(), String> {
     ))
 }
 
-/// One process per file, after a red together: one process cannot say
-/// which file failed.
-fn one_at_a_time(
-    setup: &Setup,
+/// Visit every selected file exactly once, including those after a failure. No retry replaces a red.
+fn run_each(
     tests: &[String],
-    together: &str,
-    runs: &mut Vec<Ran>,
+    mut run: impl FnMut(&str) -> Result<(), String>,
 ) -> Result<(), String> {
-    println!("qmltest: the one-process run was not green — running the files apart to say which");
     let mut failures = Vec::new();
     for test in tests {
-        if let Err(why) = run_one(setup, test, runs) {
-            println!("qmltest: FAIL {test}");
-            println!("{why}");
-            failures.push(test.clone());
+        if let Err(why) = run(test) {
+            println!("qmltest: FAIL {test}\n{why}");
+            failures.push(format!("{test}: {why}"));
         }
     }
-    // The log on disk, not `together`: a killed run's words are the kill.
-    let log =
-        std::fs::read_to_string(setup.root.join(setup.work).join(TOGETHER_LOG)).unwrap_or_default();
-    verdict(together, &failures, &outcomes(setup.root, tests, &log))
-}
-
-/// What the two roads come to. The first run's red is the verdict either
-/// way — the second is a diagnosis, not an appeal: a file that fails apart
-/// is named, and files that pass apart but fail together are not
-/// independent of each other, which is a red of its own. That is all the
-/// two roads establish: where the one-process run first broke
-/// ([`first_break`] over `together_files`), not why.
-fn verdict(
-    together: &str,
-    apart: &[String],
-    together_files: &[(String, Came)],
-) -> Result<(), String> {
-    if !apart.is_empty() {
-        return Err(format!("qmltest failed: {}", apart.join(" / ")));
+    if failures.is_empty() {
+        println!(
+            "qmltest: PASS ({} file(s), separate processes)",
+            tests.len()
+        );
+        Ok(())
+    } else {
+        Err(format!(
+            "qmltest: {} file(s) failed:\n{}",
+            failures.len(),
+            failures.join("\n")
+        ))
     }
-    let place = match first_break(together_files) {
-        Some((Some(before), first, Came::Red(why))) => {
-            format!("{before} finished green, then {first} was the first to fail: {why}")
-        }
-        Some((None, first, Came::Red(why))) => {
-            format!("{first}, the first file, failed: {why}")
-        }
-        Some((Some(before), first, _)) => {
-            format!("{before} finished green, and the log names nothing from {first} on")
-        }
-        Some((None, _, _)) | None => "the log names no file at all".to_string(),
-    };
-    Err(format!(
-        "every file passes in a process of its own and they do not pass together in one. In the \
-         one-process run, {place}. That is what this establishes; the cause it does not \
-         determine. The candidates it cannot tell apart: state a file leaves in the process for \
-         the files after it; Qt's process-wide type registration and plugin bookkeeping, which \
-         the engine each file gets shares with every other; a resource shared with whatever \
-         else was running. The run of them together said: {together}"
-    ))
 }
 
 /// What a log says of one file.
@@ -280,7 +216,7 @@ enum Came {
     Red(String),
     /// The log never names it.
     Unmentioned,
-    /// It had no run of its own: an earlier named file failed first.
+    /// No process was started for this file.
     NotRun,
 }
 
@@ -369,14 +305,6 @@ fn spoken_for(line: &str) -> Option<(&str, &str)> {
     rest.split_once("::")
 }
 
-/// The first file that did not come out green, the file just before it
-/// (green, then, if there is one), and what the log says of it.
-fn first_break(files: &[(String, Came)]) -> Option<(Option<&str>, &str, &Came)> {
-    let at = files.iter().position(|(_, came)| *came != Came::Green)?;
-    let before = at.checked_sub(1).map(|b| files[b].0.as_str());
-    Some((before, files[at].0.as_str(), &files[at].1))
-}
-
 /// The cases of `test` the log does not hold finished, named. Every
 /// `TestCase` a file declares is owed (a file may declare several), and
 /// finished means its `cleanupTestCase` is logged: QtTest logs one pass or
@@ -434,7 +362,15 @@ fn case_names(file: &Path) -> Vec<String> {
 /// shared directory has each rebuilding the tree the other resolves
 /// through — a component "unavailable" for the length of one copy.
 fn work_rel() -> String {
-    format!("{WORK}/{}", std::process::id())
+    format!("{}/{}", work_base(), std::process::id())
+}
+
+fn work_base() -> &'static str {
+    if std::env::var_os(crate::linux::environment::IN_CONTAINER).is_some() {
+        LINUX_WORK
+    } else {
+        WORK
+    }
 }
 
 /// The name a kept run stands under in [`FAILED`]: the second it started,
@@ -577,14 +513,19 @@ fn runner_on(path: &OsStr) -> PathBuf {
 /// What every runner gets on top of what it inherits: the composed PATH
 /// and the offscreen fonts. The manifest reads it back off a command
 /// built here too.
-fn given(cmd: &mut Command, path: &OsString) {
-    cmd.env("PATH", path);
+fn given(cmd: &mut Command, setup: &Setup) {
+    cmd.env("PATH", setup.path);
+    // Compiled QML belongs to this staging tree, and is removed or retained with its evidence.
+    cmd.env(
+        "QML_DISK_CACHE_PATH",
+        setup.root.join(setup.work).join("cache"),
+    );
     // The fonts the app's pictures are drawn in: a test that sets a mark
     // against letters reads the face the shots show.
     crate::qt::offscreen_fonts(cmd);
 }
 
-/// One `qmltestrunner` over `input` (a file, or the directory of them all)
+/// One `qmltestrunner` over one test file
 /// under [`QUIET`] and [`WHOLE`], writing `log` in the staging directory and
 /// answering with it. The verdict is the exit code *and* the `FAIL!` lines:
 /// a logger that could not be written leaves a green exit with nothing
@@ -603,7 +544,7 @@ fn runner(setup: &Setup, input: &str, log: &str, runs: &mut Vec<Ran>) -> Result<
         .args(["-o", &format!("{at},txt")])
         .current_dir(setup.root)
         .stdin(Stdio::null());
-    given(&mut cmd, setup.path);
+    given(&mut cmd, setup);
     let mut ran = Ran {
         input: input.to_string(),
         log: log.to_string(),
@@ -651,7 +592,7 @@ fn runner(setup: &Setup, input: &str, log: &str, runs: &mut Vec<Ran>) -> Result<
     Err(if text.is_empty() {
         format!("qmltestrunner wrote no log and exited {status} (log: {at})")
     } else {
-        text
+        format!("qmltestrunner exited {status} (log: {at})\n{text}")
     })
 }
 
@@ -660,12 +601,12 @@ fn runner(setup: &Setup, input: &str, log: &str, runs: &mut Vec<Ran>) -> Result<
 fn with_evidence(
     setup: &Setup,
     tests: &[String],
-    together: bool,
+    whole_suite: bool,
     runs: &[Ran],
     name: &str,
     why: String,
 ) -> String {
-    match keep(setup, tests, together, runs, name) {
+    match keep(setup, tests, whole_suite, runs, name) {
         Ok(dir) => {
             let shown = dir
                 .strip_prefix(setup.root)
@@ -690,15 +631,19 @@ fn with_evidence(
 fn keep(
     setup: &Setup,
     tests: &[String],
-    together: bool,
+    whole_suite: bool,
     runs: &[Ran],
     name: &str,
 ) -> Result<PathBuf, String> {
     let work = setup.root.join(setup.work);
-    let said = manifest(&gather(setup, tests, together, runs, name));
+    let said = manifest(&gather(setup, tests, runs, name));
     std::fs::write(work.join(MANIFEST), said)
         .map_err(|e| format!("{}: {e}", work.join(MANIFEST).display()))?;
-    let failed = setup.root.join(FAILED);
+    let failed = setup
+        .root
+        .join(work_base())
+        .join(FAILED)
+        .join(if whole_suite { "suite" } else { "selected" });
     std::fs::create_dir_all(&failed).map_err(|e| format!("{}: {e}", failed.display()))?;
     let dir = failed.join(name);
     Ok(match std::fs::rename(&work, &dir) {
@@ -730,30 +675,23 @@ struct Manifest {
     runs: Vec<String>,
 }
 
-fn gather(setup: &Setup, tests: &[String], together: bool, runs: &[Ran], run: &str) -> Manifest {
+fn gather(setup: &Setup, tests: &[String], runs: &[Ran], run: &str) -> Manifest {
     let work = setup.root.join(setup.work);
     let logs: Vec<String> = runs
         .iter()
         .map(|ran| std::fs::read_to_string(work.join(&ran.log)).unwrap_or_default())
         .collect();
-    let files = if together {
-        let all = runs
-            .iter()
-            .position(|ran| ran.log == TOGETHER_LOG)
-            .map_or("", |at| logs[at].as_str());
-        outcomes(setup.root, tests, all)
-    } else {
-        tests
-            .iter()
-            .enumerate()
-            .flat_map(|(at, test)| match logs.get(at) {
-                Some(text) => outcomes(setup.root, std::slice::from_ref(test), text),
+    let files = tests
+        .iter()
+        .flat_map(
+            |test| match runs.iter().position(|ran| ran.input == *test) {
+                Some(at) => outcomes(setup.root, std::slice::from_ref(test), &logs[at]),
                 None => vec![(test.clone(), Came::NotRun)],
-            })
-            .collect()
-    };
+            },
+        )
+        .collect();
     let mut probe = Command::new(setup.exe);
-    given(&mut probe, setup.path);
+    given(&mut probe, setup);
     let set = probe
         .get_envs()
         .map(|(name, value)| {
@@ -909,18 +847,20 @@ fn reported_paths(text: &str) -> Option<(Vec<String>, Vec<String>)> {
 /// directory no run finished with once it is [`LITTER_AGE`] old. Silent: a
 /// directory that will not go is the next sweep's.
 fn sweep(root: &Path) {
-    let failed = root.join(FAILED);
-    if let Ok(entries) = std::fs::read_dir(&failed) {
-        let names = entries
-            .flatten()
-            .filter(|entry| entry.path().is_dir())
-            .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .collect();
-        for old in beyond_the_newest(names, KEPT) {
-            let _ = std::fs::remove_dir_all(failed.join(old));
+    for group in ["suite", "selected", "together"] {
+        let failed = root.join(work_base()).join(FAILED).join(group);
+        if let Ok(entries) = std::fs::read_dir(&failed) {
+            let names = entries
+                .flatten()
+                .filter(|entry| entry.path().is_dir())
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .collect();
+            for old in beyond_the_newest(names, KEPT) {
+                let _ = std::fs::remove_dir_all(failed.join(old));
+            }
         }
     }
-    let work = root.join(WORK);
+    let work = root.join(work_base());
     let now = SystemTime::now();
     if let Ok(entries) = std::fs::read_dir(&work) {
         let aged: Vec<(String, Option<Duration>)> = entries

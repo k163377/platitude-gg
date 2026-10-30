@@ -137,6 +137,7 @@ pub(super) fn start_container(root: &Path, name: &str, gate: u32, tag: &str) -> 
         .arg("--env")
         .arg(format!("{}=1", super::IN_CONTAINER));
     super::given_commit(&mut cmd, root);
+    super::qmltest_mount(&mut cmd, root)?;
     cmd.arg(tag)
         .args(engine::INIT)
         .args(["sh", "-c", IDLE_SCRIPT, "pgg-gate"])

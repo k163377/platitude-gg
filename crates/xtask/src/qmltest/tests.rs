@@ -1,9 +1,9 @@
 //! `qmltest`'s own tests, in a file of their own (structure.md §分割).
 
 use super::{
-    Came, FAILED, KEPT, LITTER_AGE, MANIFEST, Manifest, Ran, Setup, TESTS, TOGETHER_LOG,
-    beyond_the_newest, case_names, environment, first_break, keep, litter, manifest, outcomes,
-    reported_paths, short_of, sweep, tests_in, unfinished_in, verdict,
+    Came, FAILED, KEPT, LITTER_AGE, MANIFEST, Manifest, Ran, Setup, TESTS, beyond_the_newest,
+    case_names, environment, keep, litter, manifest, outcomes, reported_paths, run_each, short_of,
+    sweep, tests_in, unfinished_in, work_base,
 };
 use crate::yard::Yard;
 use std::ffi::OsString;
@@ -21,7 +21,7 @@ fn a_red_run_is_kept_with_its_manifest_and_only_the_newest_stand() {
     std::fs::create_dir_all(staged.join("import").join("platitude")).expect("a staged tree");
     let log = "Config: Using QtTest library 6.12.0\n\
                FAIL!  : qmltestrunner::tst_x::compile() Cannot install element 'X'\n";
-    std::fs::write(staged.join(TOGETHER_LOG), log).expect("the runner's log");
+    std::fs::write(staged.join("tst_x.txt"), log).expect("the runner's log");
     let import = staged.join("import");
     let path = OsString::new();
     let setup = Setup {
@@ -32,23 +32,24 @@ fn a_red_run_is_kept_with_its_manifest_and_only_the_newest_stand() {
         exe: Path::new("qmltestrunner"),
     };
     let runs = [Ran {
-        input: TESTS.to_string(),
-        log: TOGETHER_LOG.to_string(),
+        input: format!("{TESTS}/tst_x.qml"),
+        log: "tst_x.txt".to_string(),
         ended: "exit code: 1".to_string(),
     }];
     let tests = [format!("{TESTS}/tst_x.qml")];
     let dir = keep(&setup, &tests, true, &runs, "1793102832-4242").expect("kept");
-    assert_eq!(dir, root.join(FAILED).join("1793102832-4242"));
+    let group = root.join(work_base()).join(FAILED).join("suite");
+    assert_eq!(dir, group.join("1793102832-4242"));
     assert!(!staged.exists(), "moved, not copied");
     assert_eq!(
-        std::fs::read_to_string(dir.join(TOGETHER_LOG)).expect("the log"),
+        std::fs::read_to_string(dir.join("tst_x.txt")).expect("the log"),
         log
     );
     assert!(dir.join("import").join("platitude").is_dir(), "the tree");
     let said = std::fs::read_to_string(dir.join(MANIFEST)).expect("the manifest");
     for part in [
         "qt (log)   Config: Using QtTest library 6.12.0",
-        &format!("{TESTS} -> {TOGETHER_LOG}: exit code: 1"),
+        &format!("{TESTS}/tst_x.qml -> tst_x.txt: exit code: 1"),
         &format!("{TESTS}/tst_x.qml  red    FAIL!  : qmltestrunner::tst_x::compile()"),
         "(not on the PATH below; started by name)",
     ] {
@@ -56,11 +57,17 @@ fn a_red_run_is_kept_with_its_manifest_and_only_the_newest_stand() {
     }
 
     for older in 0..KEPT {
-        std::fs::create_dir_all(root.join(FAILED).join(format!("17931028{older:02}-1")))
+        std::fs::create_dir_all(group.join(format!("17931028{older:02}-1")))
             .expect("an older kept run");
     }
+    let selected = root.join(work_base()).join(FAILED).join("selected");
+    for newer in 0..KEPT + 2 {
+        std::fs::create_dir_all(selected.join(format!("17932028{newer:02}-1")))
+            .expect("a newer selected run");
+    }
     sweep(&root);
-    let mut left: Vec<String> = std::fs::read_dir(root.join(FAILED))
+    assert_eq!(std::fs::read_dir(selected).unwrap().count(), KEPT);
+    let mut left: Vec<String> = std::fs::read_dir(group)
         .expect("the kept runs")
         .flatten()
         .map(|entry| entry.file_name().to_string_lossy().into_owned())
@@ -71,66 +78,23 @@ fn a_red_run_is_kept_with_its_manifest_and_only_the_newest_stand() {
     assert!(left.contains(&"1793102832-4242".to_string()), "{left:?}");
 }
 
-/// The second run only names which file; where it names none, the red
-/// carries where the first run broke, says the cause is open, and
-/// keeps the first run's own words so a reader has them.
 #[test]
-fn a_red_together_stays_red_when_every_file_is_green_apart() {
-    let together = "FAIL!  : qmltestrunner::Ink::test_a_mark_is_owed_once()";
-    let files = vec![
-        ("tests/qml/tst_hashplate.qml".to_string(), Came::Green),
-        (
-            "tests/qml/tst_ink.qml".to_string(),
-            Came::Red(together.to_string()),
-        ),
-        ("tests/qml/tst_tagcard.qml".to_string(), Came::Green),
-    ];
-    let why = verdict(together, &[], &files).expect_err("green apart is not a pass");
-    assert!(why.contains("do not pass together"), "{why}");
-    assert!(
-        why.contains(&format!(
-            "tests/qml/tst_hashplate.qml finished green, then tests/qml/tst_ink.qml was the \
-             first to fail: {together}"
-        )),
-        "the first broken boundary is named: {why}"
-    );
-    assert!(
-        why.contains("the cause it does not determine"),
-        "the cause stays open: {why}"
-    );
-    assert!(
-        why.ends_with(&format!("The run of them together said: {together}")),
-        "the first run's words are kept: {why}"
-    );
-
-    let named = verdict(together, &["tests/qml/tst_ink.qml".to_string()], &files)
-        .expect_err("a file of its own");
-    assert!(named.contains("tst_ink.qml"), "{named}");
-}
-
-/// The boundary is where the log stops being green, whatever comes
-/// after; a first file that broke has no green before it.
-#[test]
-fn the_first_break_is_the_first_file_not_green_and_the_one_before_it() {
-    let red = Came::Red("FAIL!  : x".to_string());
-    let files = vec![
-        ("a".to_string(), Came::Green),
-        ("b".to_string(), Came::Green),
-        ("c".to_string(), red.clone()),
-        ("d".to_string(), Came::Green),
-    ];
-    assert_eq!(first_break(&files), Some((Some("b"), "c", &red)));
-    let first = vec![("a".to_string(), red.clone())];
-    assert_eq!(first_break(&first), Some((None, "a", &red)));
-    let short = vec![
-        ("a".to_string(), Came::Green),
-        ("b".to_string(), Came::Unmentioned),
-    ];
-    assert_eq!(
-        first_break(&short),
-        Some((Some("a"), "b", &Came::Unmentioned))
-    );
-    assert_eq!(first_break(&files[..2]), None);
+fn every_file_runs_once_and_all_failures_remain_red() {
+    let tests: Vec<String> = ["a", "b", "c"].map(String::from).into();
+    let mut visited = Vec::new();
+    let why = run_each(&tests, |test| {
+        visited.push(test.to_string());
+        if test == "b" {
+            Ok(())
+        } else {
+            Err(format!("failure of {test}"))
+        }
+    })
+    .unwrap_err();
+    assert_eq!(visited, tests);
+    assert!(why.contains("a: failure of a"), "{why}");
+    assert!(why.contains("c: failure of c"), "{why}");
+    assert!(run_each(&tests, |_| Ok(())).is_ok());
 }
 
 /// A log as the one-process run writes it: two files finish, the third

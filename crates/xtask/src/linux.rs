@@ -1106,6 +1106,8 @@ fn in_container(
         .arg(format!("{IN_CONTAINER}=1"));
     given_commit(&mut cmd, root);
 
+    qmltest_mount(&mut cmd, root)?;
+
     let mut inside = command.to_vec();
     // Kept in scope past the run below: the directory behind `/out` is
     // this run's for as long as this value lives.
@@ -1276,6 +1278,16 @@ fn here(root: &Path, command: &[String]) -> Result<(), String> {
         Some(code) => format!("the command exited {code}"),
         None => "the command was killed".into(),
     })
+}
+
+/// QtTest's failed logs and staged imports must survive the container and be readable at the reported host path.
+fn qmltest_mount(cmd: &mut Command, root: &Path) -> Result<(), String> {
+    let rel = crate::qmltest::LINUX_WORK;
+    let dir = root.join(rel);
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    cmd.arg("--volume")
+        .arg(format!("{}:{WORK}/{rel}", mount_path(&dir)));
+    Ok(())
 }
 
 /// A host path as the engine wants it in --volume: forward slashes, drive
