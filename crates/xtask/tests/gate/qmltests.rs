@@ -26,7 +26,7 @@ fn with_the_qml_runner(name: &str) -> (Sandbox, String) {
     let files: &[(&str, &str)] = &[
         (
             "crates/xtask/src/main.rs",
-            "mod demo;\nmod linux;\nmod qmltest;\nmod qt;\nmod seats;\nmod verify;\nfn main() {}\n",
+            "mod demo;\nmod entry;\nmod startup;\nmod linux;\nmod qmltest;\nmod qt;\nmod seats;\nmod verify;\nfn main() {}\n",
         ),
         (
             "crates/xtask/src/qmltest.rs",
@@ -34,6 +34,11 @@ fn with_the_qml_runner(name: &str) -> (Sandbox, String) {
              const UI: &str = \"crates/platitude-app/src/ui\";\n\
              pub fn run() { let _ = (TESTS, UI); }\n",
         ),
+        (
+            "crates/xtask/src/entry.rs",
+            "pub fn run() { crate::startup::prepare(); }\n",
+        ),
+        ("crates/xtask/src/startup.rs", "pub fn prepare() {}\n"),
         (QT, &qt("C:\\\\Windows\\\\Fonts", "")),
         ("crates/xtask/src/seats.rs", "pub fn seat() {}\n"),
         (
@@ -144,7 +149,7 @@ fn boundaries() -> [Boundary; 12] {
         ),
         (
             "crates/xtask/src/main.rs",
-            "mod demo;\nmod linux;\nmod qmltest;\nmod qt;\nmod seats;\nmod verify;\n\
+            "mod demo;\nmod entry;\nmod startup;\nmod linux;\nmod qmltest;\nmod qt;\nmod seats;\nmod verify;\n\
              fn main() { qmltest::run(); }\n"
                 .into(),
             BOTH,
@@ -330,6 +335,64 @@ fn what_a_qml_test_run_does_not_read_keeps_its_green() {
     sb.ran().holds(BOTH);
 }
 
+#[test]
+fn inherited_qt_changes_invalidate_the_host_green_and_then_cache_again() {
+    let (sb, _) = with_the_qml_runner("qmltest-host-environment");
+    for variable in ["QT_BIN", "QT_SCALE_FACTOR"] {
+        let changed = [(variable, "2")];
+        let (ok, text) = sb.gate(&sb.seat, &[], &changed);
+        assert!(ok, "{text}");
+        sb.ran().holds(&[HOST]);
+        assert!(text.contains("[linux] cached qmltest-linux"), "{text}");
+        let (ok, text) = sb.gate(&sb.seat, &[], &changed);
+        assert!(ok, "{text}");
+        sb.ran().lacks(BOTH);
+        sb.gate_ok(&sb.seat, &[]);
+        sb.ran().lacks(BOTH);
+    }
+}
+
+#[test]
+fn an_implicitly_imported_sibling_moves_both_keys_and_selects_both_runs() {
+    let (sb, _) = with_the_qml_runner("qmltest-sibling");
+    let plain = "crates/platitude-app/shared/Plain.qml";
+    let neighbour = "crates/platitude-app/shared/Neighbour.qml";
+    sb.write(
+        &sb.seat,
+        TEST,
+        &census("function test_it() { Qt.createComponent('../../shared/Plain.qml') }\n"),
+    );
+    sb.write(&sb.seat, plain, "import QtQuick\nNeighbour {}\n");
+    sb.write(
+        &sb.seat,
+        neighbour,
+        "import QtQuick\nItem { property int answer: 41 }\n",
+    );
+    sb.commit_all(&sb.seat, "test: an implicit sibling", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    let before = keys(&sb);
+    let base = sb.head(&sb.seat);
+    sb.write(
+        &sb.seat,
+        neighbour,
+        "import QtQuick\nItem { property int answer: 42 }\n",
+    );
+    sb.commit_all(&sb.seat, "test: the sibling changes", &[]);
+    let after = keys(&sb);
+    for id in BOTH {
+        assert_ne!(before.get(*id), after.get(*id), "{id}");
+    }
+    let plan = sb.gate_ok(&sb.seat, &["--main", &base, "--dry-run"]);
+    assert!(
+        plan.contains("] qmltest  key ") && plan.contains("] qmltest-linux  key "),
+        "{plan}"
+    );
+    sb.gate_ok(&sb.seat, &[]);
+    sb.ran().holds(BOTH);
+    sb.gate_ok(&sb.seat, &[]);
+    sb.ran().lacks(BOTH);
+}
+
 /// A component a test loads, however the load is written — a value joined,
 /// chosen, resolved, a template; a property bound, assigned inside
 /// parentheses or by a computed key — and however its path is spelled as a
@@ -452,4 +515,33 @@ fn a_load_nothing_works_out_runs_the_qml_tests_on_every_gate() {
     );
     sb.gate_ok(&sb.seat, &[]);
     sb.ran().holds(BOTH);
+}
+
+#[test]
+fn shared_startup_dependencies_and_nested_module_files_move_the_green() {
+    let (sb, _) = with_the_qml_runner("qmltest-startup-nested");
+    for (path, text) in [
+        (
+            "crates/xtask/src/startup.rs",
+            "pub fn prepare() { let _ = 42; }\n",
+        ),
+        (
+            "crates/platitude-app/tests/qml/nested/qmldir",
+            "Card 1.0 ../../../../../shared/Card.qml\n",
+        ),
+        ("shared/Card.qml", "import QtQuick\nItem { width: 42 }\n"),
+    ] {
+        sb.write(&sb.seat, path, text);
+        sb.commit_all(&sb.seat, "test: change a transitive input", &[]);
+        sb.gate_ok(&sb.seat, &[]);
+        let ran = sb.ran();
+        for step in BOTH {
+            assert!(ran.contains(*step), "{path}: {ran:?}");
+        }
+        sb.gate_ok(&sb.seat, &[]);
+        let ran = sb.ran();
+        for step in BOTH {
+            assert!(!ran.contains(*step), "cached {path}: {ran:?}");
+        }
+    }
 }

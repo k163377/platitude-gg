@@ -477,10 +477,18 @@ fn owed(
     let at = std::time::Instant::now();
     let ids = tree_ids(here, head)?;
     spent.ids = at.elapsed();
+    let mut environment = super::environment::Environment::new();
     Ok(steps
         .into_iter()
         .filter(|step| !(ask.host_only && step.side == Side::Linux))
-        .map(|step| {
+        .map(|mut step| {
+            let mut runtime = String::new();
+            if !step.always && step.unkeyed.is_none() {
+                match environment.identity(&step) {
+                    Ok(identity) => runtime = identity,
+                    Err(why) => step.unkeyed = Some(why),
+                }
+            }
             let (key, cached) = if step.always || step.unkeyed.is_some() {
                 (String::new(), false)
             } else {
@@ -495,7 +503,7 @@ fn owed(
                         Keyed::RustCode => &ids.rust,
                     }
                 };
-                let key = cache_key(ids, &step);
+                let key = cache_key(ids, &step, &runtime);
                 let cached = !ask.fresh && store.step_green(&key);
                 (key, cached)
             };
@@ -797,12 +805,14 @@ fn uncovered(composition: &Composition, promised: &BTreeSet<String>, reach: &Rea
 /// each input in the tree under test (`ids`, from [`tree_ids`]; a path
 /// the tree does not hold is `absent`). FNV-1a, a fingerprint and not a
 /// security claim.
-fn cache_key(ids: &BTreeMap<String, String>, step: &Step) -> String {
+fn cache_key(ids: &BTreeMap<String, String>, step: &Step, runtime: &str) -> String {
     let mut text = step.id.clone();
     text.push('\0');
     text.push_str(&step.command.join("\0"));
     text.push('\n');
     text.push_str(&step.contract);
+    text.push('\n');
+    text.push_str(runtime);
     text.push('\n');
     for input in &step.inputs {
         let path = input.trim_end_matches('/');

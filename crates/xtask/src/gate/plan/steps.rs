@@ -193,8 +193,9 @@ pub(super) fn select(
     // release alone, and the checks, each a handful of runs of their own,
     // reuse it beside the rest (`sides::verbs`).
     steps.extend(wedge_steps(reach, read.everything));
-    steps.extend(shot_steps(g, reach, &sorted, read.everything));
-    steps.extend(records_steps(g, reach, &sorted, read));
+    let promises_moved = changed.iter().any(|f| f == super::super::lines::FILE);
+    steps.extend(shot_steps(g, reach, &sorted, read, promises_moved));
+    steps.extend(records_steps(g, reach, &sorted, read, promises_moved));
     (steps, counted)
 }
 
@@ -289,11 +290,11 @@ fn launcher() -> String {
 #[derive(Default)]
 struct QmlTestReads {
     /// The runner as cargo builds and runs it: the binary's entry that hands
-    /// the run to it ([`xtask_main`]), and the static closure of its module
+    /// the run to it ([`xtask_main`]), and the static closures of shared startup (`entry`) and the runner
     /// as built (`Graph::built_inputs` of [`QMLTEST`], no read its tests
     /// alone make) — the staging and what it stages from, Qt's
     /// selection (the `PATH` that finds `qmltestrunner`, the offscreen
-    /// fonts' variable) and the pin it holds the Qt to —, and what cargo
+    /// fonts' variable) and the Qt pin —, and what cargo
     /// builds it from ([`CARGO`]), whose `.cargo` `[env]` the run inherits.
     runner: BTreeSet<String>,
     /// Across the `qmltestrunner` process: what the runner stages and hands
@@ -317,7 +318,8 @@ struct QmlTestReads {
 }
 
 fn qmltest_reads(g: &Graph, dir: &Path) -> QmlTestReads {
-    let mut runner = g.built_inputs(&[QMLTEST.to_string()]);
+    let entry = format!("{}/{}", "crates/xtask/src", "entry.rs");
+    let mut runner = g.built_inputs(&[QMLTEST.to_string(), entry]);
     runner.insert(xtask_main());
     runner.extend(cargo_inputs(&[]));
     let (ui, tests) = qml_dirs();
@@ -507,9 +509,20 @@ fn shot_inputs(g: &Graph) -> Vec<String> {
 /// owed by. Host only: the pictures come off the disk the same way on
 /// both sides, and every verb's run on the container already proves that
 /// side carries a file out.
-fn shot_steps(g: &Graph, reach: &Reach, sorted: &Sorted, everything: bool) -> Vec<Step> {
+fn shot_steps(
+    g: &Graph,
+    reach: &Reach,
+    sorted: &Sorted,
+    read: &Reading<'_>,
+    promises_moved: bool,
+) -> Vec<Step> {
     let own = reach.get(&shot_check()) == Some(&Carried::Whole);
-    if !everything && !own && !harness_moved(reach) && !qml_moved(sorted, reach) {
+    if !read.everything
+        && !promises_moved
+        && !own
+        && !harness_moved(reach)
+        && !qml_moved(sorted, reach)
+    {
         return Vec::new();
     }
     let mut shot = step(
@@ -522,6 +535,7 @@ fn shot_steps(g: &Graph, reach: &Reach, sorted: &Sorted, everything: bool) -> Ve
     // It drives verify-ui: the same release build as the verbs.
     shot.builds_app = true;
     shot.release = true;
+    shot.contract = promised_contract(crate::verify::shot_lines(), read);
     vec![shot]
 }
 
@@ -538,9 +552,20 @@ fn records_check() -> String {
 /// the whole tier's, as the verbs' lines there are (`Tiers::on_linux`):
 /// the order an event loop drains two feeds in is the platform's, and
 /// before a merge the host's answers for it.
-fn records_steps(g: &Graph, reach: &Reach, sorted: &Sorted, read: &Reading<'_>) -> Vec<Step> {
+fn records_steps(
+    g: &Graph,
+    reach: &Reach,
+    sorted: &Sorted,
+    read: &Reading<'_>,
+    promises_moved: bool,
+) -> Vec<Step> {
     let own = reach.get(&records_check()) == Some(&Carried::Whole);
-    if !read.everything && !own && !harness_moved(reach) && !qml_moved(sorted, reach) {
+    if !read.everything
+        && !promises_moved
+        && !own
+        && !harness_moved(reach)
+        && !qml_moved(sorted, reach)
+    {
         return Vec::new();
     }
     let mut inputs: BTreeSet<String> = g.inputs(&[records_check()]).into_iter().collect();
@@ -566,7 +591,19 @@ fn records_steps(g: &Graph, reach: &Reach, sorted: &Sorted, read: &Reading<'_>) 
         ));
     }
     // Each line it runs is held to its row's promise and its judgment, as the verb's own run is: in the key as text.
-    let contract = crate::verify::records_lines()
+    let contract = promised_contract(crate::verify::records_lines(), read);
+    for check in &mut checks {
+        // It drives verify-ui: the same release build as the verbs.
+        check.builds_app = true;
+        check.release = true;
+        check.contract.clone_from(&contract);
+    }
+    checks
+}
+
+/// The rows a multi-run check actually executes, with their judgment.
+fn promised_contract(lines: impl Iterator<Item = &'static str>, read: &Reading<'_>) -> String {
+    lines
         .map(|line| {
             format!(
                 "{line}: promises={}\n{}",
@@ -578,14 +615,7 @@ fn records_steps(g: &Graph, reach: &Reach, sorted: &Sorted, read: &Reading<'_>) 
             )
         })
         .collect::<Vec<_>>()
-        .join("\n");
-    for check in &mut checks {
-        // It drives verify-ui: the same release build as the verbs.
-        check.builds_app = true;
-        check.release = true;
-        check.contract.clone_from(&contract);
-    }
-    checks
+        .join("\n")
 }
 
 /// clippy for every crate the reach enters as code, on both sides: the
@@ -1028,7 +1058,16 @@ mod tests {
         let (ui, tests) = super::qml_dirs();
         let qt = format!("{}/{}", "crates/xtask/src", "qt.rs");
         let main = super::xtask_main();
-        let runner = [super::QMLTEST, main.as_str(), qt.as_str(), crate::qt::PIN];
+        let entry = format!("{}/{}", "crates/xtask/src", "entry.rs");
+        let startup = format!("{}/{}", "crates/xtask/src/verify", "git_shim.rs");
+        let runner = [
+            super::QMLTEST,
+            main.as_str(),
+            entry.as_str(),
+            startup.as_str(),
+            qt.as_str(),
+            crate::qt::PIN,
+        ];
         for named in runner.iter().chain(&super::CARGO) {
             assert!(reads.runner.contains(*named), "{named}: {:?}", reads.runner);
         }

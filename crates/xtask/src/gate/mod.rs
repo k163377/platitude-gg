@@ -14,6 +14,7 @@
 //! `--keep-going`, which `--whole` implies.
 
 mod deps;
+mod environment;
 mod evidence;
 mod execute;
 mod graph;

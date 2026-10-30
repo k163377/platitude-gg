@@ -160,6 +160,35 @@ fn a_promise_moved_on_a_line_records_check_runs_moves_its_key() {
     assert_ne!(key(&sb), before);
 }
 
+#[test]
+fn a_promise_moved_on_the_shot_line_moves_its_key_and_selects_it() {
+    let sb = Sandbox::new("shot-promise");
+    sb.write_pane(&sb.seat, 1);
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-lines.txt",
+        "*\tStashPane\nstash --preset basic\t-\ncommit-menu\t-\n",
+    );
+    let base = sb.commit_all(&sb.seat, "test: shot promises", &[]);
+    let key = |plan: &str| {
+        plan.lines().find_map(|line| {
+            line.split_once("] shot-check  key ")
+                .map(|(_, key)| key.trim().to_string())
+        })
+    };
+    let before = key(&sb.gate_ok(&sb.seat, &["--dry-run"]));
+    assert!(before.is_some());
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-lines.txt",
+        "*\tStashPane\nstash --preset basic\t-\ncommit-menu\tMain\n",
+    );
+    sb.commit_all(&sb.seat, "test: changed shot promise", &[]);
+    let after = key(&sb.gate_ok(&sb.seat, &["--dry-run", "--main", &base]));
+    assert!(after.is_some(), "the changed contract selects its check");
+    assert_ne!(before, after);
+}
+
 /// A popup stands only when a line opens it, so a change to it is shown
 /// by the line that names it alone; the selection still runs every
 /// registered line, and says what a selection by what the lines show

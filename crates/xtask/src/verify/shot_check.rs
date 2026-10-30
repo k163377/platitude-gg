@@ -20,6 +20,11 @@ use std::time::Instant;
 /// the mirror of the content — is taken as well as the window's.
 const VERB: &str = "commit-menu";
 
+/// The line every injected picture is judged against.
+pub(crate) fn lines() -> impl Iterator<Item = &'static str> {
+    std::iter::once(VERB)
+}
+
 /// The mark's colour, as `WindowHarness.faultMark` draws it: a hue the
 /// theme has nowhere.
 const MARK: [u8; 3] = [0xff, 0x00, 0xff];

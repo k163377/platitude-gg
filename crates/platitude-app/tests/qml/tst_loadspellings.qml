@@ -70,6 +70,8 @@ Item {
         function test_each_spelling_reads_its_file(data) {
             compare(data.loader.status, Loader.Ready)
             compare(data.loader.item.objectName, data.file)
+            if (data.file === "Plain")
+                compare(data.loader.item.neighbourAnswer, 42)
         }
     }
 }

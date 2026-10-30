@@ -31,8 +31,7 @@ pub(crate) use options::{canonical_line, suite_words};
 pub(crate) use ownership::{ResourceClaim, claim_dir, claim_resource, keep, sweep_yesterdays_runs};
 pub(crate) use records_check::{lines as records_lines, run as records_check};
 pub use run::run;
-pub use shim::git_shim;
-pub(crate) use shot_check::run as shot_check;
+pub(crate) use shot_check::{lines as shot_lines, run as shot_check};
 pub(crate) use verbs::judgment_of;
 
 use crate::command::{self, Permission, Where};

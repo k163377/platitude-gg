@@ -173,15 +173,6 @@ whole	ops-stand-worktrees --preset worktrees	ops-stand-worktrees zzz	picture: Ju
 whole	ops-stand-worktrees zzz --preset panel	ops-stand-worktrees zzz	picture: worktrees= is unvalued, so both filter runs judge the same; this one only pictures two linked worktrees surviving the filter.
 whole	pane-bar --preset long	pane-bar-away --preset long	other: The judged ink is its own completion wait (line 409) and -away's run walks through this exact state on the same path. Only the lit picture is extra
 whole	path-tip carried:topic-tree --preset carried	carried-stand topic --preset carried ; path-tip carried:topic --preset carried	other: Its judged text= is the folder row's pathText, already judged before a merge as carried-stand's folderPath=src; the tip rising in this pane is judged by the flat run.
-whole	perf colour --preset perf-sequence	-	perf: Perf driver display contract on a perf preset; its consumer is cargo xtask perf, not a merge gate.
-whole	perf details --preset perf	-	perf: Perf driver display contract.
-whole	perf diff-scroll --preset perf-sequence	-	perf: Perf driver display contract.
-whole	perf font-walk --preset perf	-	perf: Calibration-run contract of cargo xtask perf.
-whole	perf none --preset perf	-	perf: Perf driver display contract.
-whole	perf scroll-none --preset perf	-	perf: Perf driver display contract (the scroll with nothing selected).
-whole	perf diff --preset perf	-	perf: Perf driver display contract (the diff measured on its own).
-whole	perf scroll --preset perf	-	perf: Perf driver display contract (resolves to the table's plain row; no Is("scroll") row).
-whole	perf sequence --preset perf-sequence	-	perf: Perf driver display contract (two OIDs twice, next op after the final colouring).
 whole	preview art/photo.png --preset pictures	preview-staged art/icon.png --preset pictures ; diff-step untracked.txt --preset dirty	git: Same generic cells and count as icon.png; only the bucket/git state differs, which core and encode units hold.
 whole	preview-staged art/old.png --preset pictures	preview-staged art/icon.png --preset pictures	git: Same judgement on the same staged path; only the git state differs, which core tests.
 whole	publish --preset unpublished	publish-go --preset unpublished	picture: The judged line is the dispatch report all publish verbs print; publish-go's judgement implies it on the same path. Unique only as the picture of the standing 'free' question.

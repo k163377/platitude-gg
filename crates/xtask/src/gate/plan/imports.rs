@@ -56,7 +56,7 @@ struct Named {
 }
 
 /// The properties a QML type loads a file from.
-const LOADED_FROM: [&str; 1] = ["source"];
+const LOADED_FROM: [&str; 3] = ["source", "fragmentShader", "vertexShader"];
 
 /// The functions that load what their first argument names, and the one
 /// that makes a component out of text, whose imports nothing here reads.
@@ -69,13 +69,27 @@ const FROM_TEXT: &str = "createQmlObject";
 /// in it —, a file as itself. Nothing under `from`, which is read already.
 pub(super) fn loaded_from(dir: &Path, from: &[String]) -> Loaded {
     let mut loaded = Loaded::default();
-    let mut queue: Vec<String> = from.iter().flat_map(|f| sources(dir, f)).collect();
+    let mut queue = Vec::new();
+    for path in from {
+        enqueue(dir, path, &mut queue, &mut loaded);
+    }
     let mut read = BTreeSet::new();
     while let Some(file) = queue.pop() {
         if !read.insert(file.clone()) {
             continue;
         }
         let base = Path::new(&file).parent().unwrap_or(Path::new(""));
+        // A QML file implicitly imports its own directory. Key the
+        // directory too: a new sibling type or qmldir can change resolution.
+        if file.ends_with(".qml") {
+            let directory = base.to_string_lossy().replace('\\', "/");
+            if !directory.is_empty()
+                && !from.iter().any(|f| under(&directory, f))
+                && loaded.paths.insert(directory.clone())
+            {
+                enqueue(dir, &directory, &mut queue, &mut loaded);
+            }
+        }
         let named = match std::fs::read_to_string(dir.join(&file)) {
             Ok(text) if file.ends_with("qmldir") => qmldir_files(&text),
             Ok(text) => loads(&text),
@@ -88,22 +102,19 @@ pub(super) fn loaded_from(dir: &Path, from: &[String]) -> Loaded {
                 continue;
             }
         };
-        for Named { path, load } in named {
+        for Named { path, .. } in named {
             let target = match file_of(dir, base, &path) {
                 Ok(target) => target,
-                Err(why) if load => {
+                Err(why) => {
                     unbounded(&mut loaded, &file, why);
                     continue;
                 }
-                Err(_) => continue,
             };
             if loaded.paths.contains(&target) || from.iter().any(|f| under(&target, f)) {
                 continue;
             }
             // Kept as named where the tree does not hold it: its appearing moves the key.
-            if dir.join(&target).exists() {
-                queue.extend(sources(dir, &target));
-            }
+            enqueue(dir, &target, &mut queue, &mut loaded);
             loaded.paths.insert(target);
         }
     }
@@ -121,24 +132,50 @@ fn unbounded(loaded: &mut Loaded, file: &str, why: String) {
 /// JS file under the directory and its `qmldir` (deeper than an import
 /// reads, which costs an input too many at most). None where the tree holds
 /// nothing at `path`: a path is keyed as absent by whoever names it.
-fn sources(dir: &Path, path: &str) -> Vec<String> {
-    let full = dir.join(path);
-    if !full.exists() {
-        return Vec::new();
+fn enqueue(dir: &Path, path: &str, queue: &mut Vec<String>, loaded: &mut Loaded) {
+    match sources(dir, path) {
+        Ok(files) => queue.extend(files),
+        Err(why) => unbounded(loaded, path, why),
     }
-    if !full.is_dir() {
-        return vec![path.to_string()];
+}
+
+/// Walk every source and qmldir, including nested module definitions. An unreadable tree is not an empty tree.
+fn sources(dir: &Path, path: &str) -> Result<Vec<String>, String> {
+    let full = dir.join(path);
+    let metadata = match std::fs::symlink_metadata(&full) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(format!("cannot inspect {}: {error}", full.display())),
+    };
+    if metadata.file_type().is_symlink() {
+        return Err(format!("a symbolic link is not a source closure: {path}"));
+    }
+    if !metadata.is_dir() {
+        return if path.ends_with("qmldir")
+            || [".qml", ".js", ".mjs"]
+                .iter()
+                .any(|end| path.ends_with(end))
+        {
+            Ok(vec![path.to_string()])
+        } else {
+            Ok(Vec::new())
+        };
     }
     let mut found = Vec::new();
-    for extension in ["qml", "js", "mjs"] {
-        // A directory that cannot be listed loads nothing this can name.
-        let _ = crate::gate::graph::collect(dir, &full, extension, &mut found);
+    let entries = std::fs::read_dir(&full)
+        .map_err(|error| format!("cannot list {}: {error}", full.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| format!("cannot list {}: {error}", full.display()))?;
+        let name = entry
+            .file_name()
+            .into_string()
+            .map_err(|_| format!("a source name is not UTF-8 under {}", full.display()))?;
+        found.extend(sources(
+            dir,
+            &format!("{}/{name}", path.trim_end_matches('/')),
+        )?);
     }
-    let qmldir = format!("{}/qmldir", path.trim_end_matches('/'));
-    if dir.join(&qmldir).is_file() {
-        found.push(qmldir);
-    }
-    found
+    Ok(found)
 }
 
 /// What a load is handed.
@@ -160,6 +197,15 @@ fn loads(text: &str) -> Result<Vec<Named>, String> {
         return Err("a text read short".to_string());
     }
     let tokens = tokens(text, Lang::Qml);
+    // XHR can read arbitrary URLs assembled at runtime. No file closure
+    // is claimed for such a test; do not confuse it with an absent load.
+    if tokens
+        .windows(2)
+        .any(|t| t[0].text == "new" && t[1].text == "XMLHttpRequest")
+    {
+        return Err("an XMLHttpRequest can read a URL not named here".into());
+    }
+    let stacks = object_ids(&tokens, "StackView");
     let mut out: Vec<Named> = Vec::new();
     let mut take = |path: String, load: bool| {
         if let Some(had) = out.iter_mut().find(|named| named.path == path) {
@@ -171,7 +217,7 @@ fn loads(text: &str) -> Result<Vec<Named>, String> {
     // Past a load's value, its strings read as its value, not again as names of their own.
     let mut past = 0;
     for k in 0..tokens.len() {
-        let given = match load_at(&tokens, k)? {
+        let given = match load_at(&tokens, k, &stacks)? {
             Some(Given::Value(range)) => range,
             Some(Given::Unread(how)) => {
                 return Err(format!(
@@ -183,10 +229,10 @@ fn loads(text: &str) -> Result<Vec<Named>, String> {
                 // A string naming a file of QML or JS, which a load may read by any route.
                 if k >= past
                     && let Some(value) = string_value(&tokens[k].text)
-                    && [".qml", ".js", ".mjs"]
+                    && [".qml", ".js", ".mjs", ".qsb"]
                         .iter()
                         .any(|end| value.ends_with(end))
-                    && let Ok(Some(path)) = url_path(&value)
+                    && let Some(path) = url_path(&value)?
                 {
                     take(path, false);
                 }
@@ -208,7 +254,7 @@ fn loads(text: &str) -> Result<Vec<Named>, String> {
 
 /// The load at `k`, where one is: an import, a call of a loading function,
 /// a write to a property a type loads from.
-fn load_at(tokens: &[Token], k: usize) -> Result<Option<Given>, String> {
+fn load_at(tokens: &[Token], k: usize, stacks: &[String]) -> Result<Option<Given>, String> {
     let text = tokens[k].text.as_str();
     let next = tokens.get(k + 1).map(|t| t.text.as_str());
     // An import names its path by a string; a module's name is no path.
@@ -222,6 +268,14 @@ fn load_at(tokens: &[Token], k: usize) -> Result<Option<Given>, String> {
         return Ok(None);
     };
     let called = tokens.get(after).is_some_and(|t| t.text == "(");
+    if called
+        && matches!(name.as_str(), "push" | "replace")
+        && k >= 2
+        && tokens[k - 1].text == "."
+        && stacks.contains(&tokens[k - 2].text)
+    {
+        return Ok(Some(Given::Value(argument(tokens, after)?)));
+    }
     if called && LOADING.contains(&name.as_str()) {
         return Ok(Some(Given::Value(argument(tokens, after)?)));
     }
@@ -229,9 +283,42 @@ fn load_at(tokens: &[Token], k: usize) -> Result<Option<Given>, String> {
         return Err("a component made from text, whose imports nothing reads".to_string());
     }
     if LOADED_FROM.contains(&name.as_str()) {
+        if name == "source" && not_a_load(tokens, k) {
+            return Ok(None);
+        }
         return Ok(written(tokens, k, after));
     }
     Ok(None)
+}
+
+/// IDs whose declared Qt type supplies a URL-taking stack operation.
+fn object_ids(tokens: &[Token], ty: &str) -> Vec<String> {
+    let mut ids = Vec::new();
+    for k in 0..tokens.len().saturating_sub(1) {
+        if tokens[k].text != ty || tokens[k + 1].text != "{" {
+            continue;
+        }
+        let Some(close) = matching_close(tokens, k + 1, "{", "}") else {
+            continue;
+        };
+        for j in k + 2..close.saturating_sub(2) {
+            if tokens[j].text == "id"
+                && tokens[j + 1].text == ":"
+                && innermost_open(tokens, j) == Some(k + 1)
+            {
+                ids.push(tokens[j + 2].text.clone());
+            }
+        }
+    }
+    ids
+}
+
+/// An attached Drag source is an object, and declaring a property does
+/// not itself read its URL. A consumer of that property is read separately.
+fn not_a_load(tokens: &[Token], k: usize) -> bool {
+    (k >= 2 && tokens[k - 2].text == "property")
+        || (k >= 2 && tokens[k - 2].text == "Drag" && tokens[k - 1].text == ".")
+        || innermost_open(tokens, k).is_some_and(|open| open > 0 && tokens[open - 1].text == "Drag")
 }
 
 /// The property a token at `k` names, and the index past it: a name, a
@@ -642,6 +729,82 @@ mod tests {
     use super::{Named, loaded_from, loads, qmldir_files};
     use std::path::Path;
 
+    #[test]
+    fn nested_module_definitions_and_failed_walks_cannot_drop_inputs() {
+        let root = crate::yard::Yard::new("qml-nested-modules");
+        std::fs::create_dir_all(root.join("tests/sub")).unwrap();
+        std::fs::create_dir_all(root.join("shared")).unwrap();
+        std::fs::write(
+            root.join("tests/sub/qmldir"),
+            "Card 1.0 ../../shared/Card.qml\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("shared/Card.qml"), "import QtQuick\nItem {}\n").unwrap();
+        let loaded = loaded_from(&root, &["tests".into()]);
+        assert!(loaded.unbounded.is_none(), "{loaded:?}");
+        assert!(loaded.paths.contains("shared/Card.qml"), "{loaded:?}");
+
+        // A platform-independent metadata error: an invalid path must not be mistaken for an absent file.
+        let failed = loaded_from(&root, &["tests/\0".into()]);
+        assert!(
+            failed.unbounded.is_some(),
+            "a failed walk cannot keep a cache key: {failed:?}"
+        );
+    }
+
+    #[test]
+    fn implicit_siblings_and_their_module_are_inputs() {
+        let root = crate::yard::Yard::new("qml-neighbours");
+        for (path, text) in [
+            (
+                "tests/tst_a.qml",
+                "import QtQuick\nLoader { source: '../cards/Card.qml' }",
+            ),
+            ("cards/Card.qml", "import QtQuick\nNeighbour {}"),
+            ("cards/Neighbour.qml", "import QtQuick\nItem {}"),
+            ("cards/qmldir", "Neighbour 1.0 Neighbour.qml"),
+        ] {
+            let file = root.join(path);
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(file, text).unwrap();
+        }
+        let got = loaded_from(&root, &["tests".into()]);
+        assert!(got.unbounded.is_none(), "{got:?}");
+        assert!(
+            got.paths
+                .iter()
+                .any(|p| super::under("cards/Neighbour.qml", p)),
+            "{got:?}"
+        );
+        assert!(
+            got.paths.iter().any(|p| super::under("cards/qmldir", p)),
+            "{got:?}"
+        );
+    }
+
+    #[test]
+    fn a_property_name_alone_is_not_a_file_load() {
+        for text in [
+            "Item { id: item; Drag.source: item }",
+            "Item { id: item; Drag { source: item } }",
+            "Item { property url source: item.url }",
+        ] {
+            assert_eq!(named(text), Ok(Vec::new()), "{text}");
+        }
+    }
+
+    #[test]
+    fn files_and_unresolved_file_readers_are_not_silently_dropped() {
+        assert!(loads("const component = '../../outside/Card.qml'").is_ok());
+        assert!(loads("const component = 'file:///outside/Card.qml'").is_err());
+        assert_eq!(
+            named("ShaderEffect { fragmentShader: 'paint.frag.qsb' }"),
+            Ok(vec!["paint.frag.qsb".into()])
+        );
+        assert!(loads("const request = new XMLHttpRequest()").is_err());
+        assert!(loads("StackView { id: stack }\nfunction f(url) { stack.push(url) }").is_err());
+    }
+
     /// The paths a text's loads name, or why they cannot be named.
     fn named(text: &str) -> Result<Vec<String>, String> {
         loads(text).map(|named| {
@@ -869,8 +1032,10 @@ mod tests {
         let loaded = loaded_from(&root, &["app/tests/qml".to_string()]);
         let expected: Vec<&str> = vec![
             "app/src/auto",
+            "app/src/cards",
             "app/src/cards/Card View.qml",
             "app/src/lib",
+            "app/src/seat",
             "app/src/seat/Seat.qml",
             "app/src/shared/ink.js",
             "app/tests/gone",

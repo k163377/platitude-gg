@@ -5,7 +5,6 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-pub use super::git_shim::git_shim;
 pub(super) use super::git_shim::{
     OTHER_GIT, SHIM_NO_LFS, SHIM_REAL, SHIM_SLOW, SHIM_VERSION, Slow,
 };
