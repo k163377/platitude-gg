@@ -7,6 +7,7 @@ mod child;
 mod contract;
 mod coverage;
 mod faults;
+pub(crate) mod git_shim;
 mod look;
 mod observed;
 mod options;
