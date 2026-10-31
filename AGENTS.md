@@ -49,9 +49,11 @@ Desktop を完全終了して通常のアイコンから起動する。プロジ
 Desktop の `Settings > Hooks`(CLI は `/hooks`)で確認する。
 有効化と実験は [Codex ハーネス](internal-docs/codex/ハーネス.md) を参照する。
 信頼済みの活動フックが動いていない場合は、作業開始時に `cargo xtask` の
-<!--call:awake.codex.work-->`awake codex work` を実行し、1 時間の活動 TTL が切れる前に更新する
+<!--call:awake.codex.work-->`awake codex work` を sandbox 外(`require_escalated`)で実行し、
+自分の活動記録と holder の `holding` を確認する。1 時間の活動 TTL が切れる前に更新する
 (長時間の検査中も同じ)。ユーザーへ応答を渡す前・ターン終了前に `cargo xtask` の
-<!--call:awake.codex.idle-->`awake codex idle` を実行する。
+<!--call:awake.codex.idle-->`awake codex idle` も同じ実行権限で実行する。
+祖先プロセスが見えないエラーや実行拒否は保持成功ではない。復旧できなければ未保持を報告する。
 スリープ制御を待機状態へ戻しても席は返さない。有効化のために `CLAUDE_PID` や `CLAUDECODE` を設定しない。
 ネイティブフックは `PermissionRequest` の通知だけでは人待ちと判定しない。
 ログの補助が使えない、または要求を対応付けられない場合は、ネイティブフックの活動判定を保ち、

@@ -266,6 +266,31 @@ System ログのスリープ(Kernel-Power 42 / Power-Troubleshooter 1)33 回を�
   ワークスペースにある間の PreToolUse / PostToolUse。ターン終了 307 回の Stop hook に失敗は無く、
   所要は中央 217 ms・90% 点 537 ms・最大 2,444 ms
 
+## Codex の未保持と sandbox (2026-10-31)
+
+対象: Desktop 26.1027.3384.0、holder r27、Windows。時刻は JST。
+「censusの揺れを構造から修正」(`01a1719e-6393-7581-86a6-c71b20dd7c7d`) のローカル記録には、
+10/29 21:48 と 10/30 09:40 に Codex 祖先の検出失敗の報告がある。
+10/30 14:37:29〜18:25:54 のターン内、14:51:50 に Kernel-Power 42 の `System Idle` を確認した。
+この一致は作業ターン中のスリープの証拠であり、スリープ直前の holder 内部判定の直接観測ではない。
+
+- 導入済み Codex の `hooks/list` を primary checkout に対して読むと、プロジェクトの全10 hook は
+  `enabled=true, trustStatus=untrusted`。読み込みエラーは無い。未信頼 hook は実行されない。
+- 同じチャット・席・実行ファイルで、sandbox 内の `awake codex work` は祖先を検出できず exit 1、
+  `require_escalated` で sandbox 外から実行すると exit 0。実祖先は `pwsh.exe → codex.exe → ChatGPT.exe`。
+  `awake` では当該チャットの新しい working 記録と holder の `holding` を確認した。
+- holder が無い状態と、中断後に古い活動のため `released` の状態の双方で、`work` により保持が戻った。
+  破損 claim の診断は無く、共有 `.awake` の削除や他チャットの席の解除はしていない。
+- Desktop の debug ログは未観測、ユーザー環境の `CODEX_MAX_LOG_LEVEL` も未設定だった。
+  `awake codex setup` は成功した。通常起動後のログ補助の確認は別途必要で、未信頼 hook の代替にはならない。
+- ユーザーが hook を信頼した後、手動 `work` 無しの通常のツール実行で、当該チャットの活動時刻と
+  `CodexShell` の呼び出し ID が更新された。`awake` も `1 call(s) open` と `holding` を示した。
+  信頼設定後の native hook の実稼働を確認済み。
+
+復旧手順は [Codex ハーネス](../../internal-docs/codex/ハーネス.md#診断と手動-fallback)。
+`holding` の観測は実スリープを用いた保持・解除実験の代替ではない。
+`powercfg /requests` は管理者権限不足で読めず、OS 側の要求一覧は未確認。
+
 ## 判定の履歴
 
 holder(revision 5 以降)の判定は `.awake/history` に残る。全 revision の holder が同じ 1 本へ、判定か、

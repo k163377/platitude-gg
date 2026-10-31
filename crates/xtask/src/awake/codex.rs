@@ -58,7 +58,11 @@ pub(crate) fn record(
         session,
         cwd,
         agent,
-        owner::codex_pid().ok_or("no Codex process in this command's ancestry")?,
+        owner::codex_pid().ok_or(
+            "no Codex process is visible in this command's ancestry; Windows sandbox isolation \
+             can hide it. Run awake codex work/idle from this Codex chat outside the sandbox \
+             (require_escalated), then check cargo xtask awake. Do not substitute another PID",
+        )?,
         marks,
     )
 }
