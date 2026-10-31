@@ -10,7 +10,7 @@ pub(crate) mod age;
 mod claim;
 pub(crate) mod commands;
 pub(crate) mod entry;
-mod management;
+mod handout;
 mod offer;
 mod pictures;
 pub(crate) mod start;
@@ -34,6 +34,6 @@ pub(crate) use worktrees::{
 #[cfg(test)]
 pub(crate) use survey::SeatState;
 
-pub(crate) use management::{carrying, conversation_seat, how_claims_move, take, treeless};
+pub(crate) use handout::{carrying, conversation_seat, how_claims_move, take, treeless};
 pub(crate) use pictures::may_picture;
 pub(crate) use worktrees::{commits_in, dirty_lines, has_a_directory};

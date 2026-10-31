@@ -1,12 +1,12 @@
 //! The roster measured and read (`cargo xtask seats`, the greeting's
 //! survey): what each letter's tree holds now, one line per seat, and
 //! what each letter is refusing on when the roster has nothing left to
-//! give. Moving claims stays in `seats`.
+//! give. Moving claims stays in `claim` and `handout`.
 
 use std::time::{Duration, SystemTime};
 
 use super::format_age;
-use super::management::rooted;
+use super::handout::rooted;
 
 use super::{
     SEATS, SeatEntry, WorktreeBlock, commands, commits_in, dirty_lines, has_a_directory,
