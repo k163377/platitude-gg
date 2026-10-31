@@ -115,6 +115,27 @@ fn reach_of(g: &super::Graph, file: &str) -> super::Reach {
     g.reach(&[file.to_string()])
 }
 
+#[test]
+fn independent_exports_do_not_carry_each_others_changes() {
+    let tree = laid_out("independent", "a", false);
+    tree.write(FACADE, "pub(crate) mod a;\npub(crate) mod b;\npub(crate) mod leaf;\npub(crate) use a::answer;\npub(crate) use b::other;\n");
+    tree.write(B, "pub(crate) fn other() -> u32 {\n    2\n}\n");
+    tree.write(
+        CONSUMER,
+        "pub fn run() -> u32 { crate::facade::answer() }\n",
+    );
+    tree.write(INLINE, "pub fn run() -> u32 { crate::facade::other() }\n");
+    let g = build(tree.root()).expect("independent exports");
+    assert!(g.unresolved.is_empty(), "{:?}", g.unresolved);
+    for (definition, reader, unrelated) in [(A, CONSUMER, INLINE), (B, INLINE, CONSUMER)] {
+        let reach = reach_of(&g, definition);
+        assert_eq!(reach.get(reader), Some(&Carried::Whole), "{reach:?}");
+        assert!(!reach.contains_key(unrelated), "{reach:?}");
+        assert_eq!(reach_of(&g, FACADE).get(reader), Some(&Carried::Whole));
+        assert!(!g.inputs(&[unrelated.to_string()]).contains(definition));
+    }
+}
+
 /// The binding alone repointed, the named definition changed, and the
 /// key that has to move for either: the reader is owed each way, and by
 /// nothing the binding does not name.
@@ -125,12 +146,12 @@ fn a_reader_through_a_binding_is_owed_by_the_binding_and_by_what_it_names() {
     assert!(g.unresolved.is_empty(), "{:?}", g.unresolved);
     assert_eq!(
         reach_of(&g, FACADE).get(CONSUMER),
-        Some(&Carried::Whole),
+        Some(&Carried::AsData),
         "the binding moved"
     );
     assert_eq!(
         reach_of(&g, A).get(CONSUMER),
-        Some(&Carried::Whole),
+        Some(&Carried::AsData),
         "the definition moved"
     );
     assert!(
@@ -221,10 +242,10 @@ fn a_crate_roots_binding_owes_its_readers_and_makes_it_no_hub() {
     let g = build(tree.root()).expect("the graph of the probe tree");
     assert!(g.unresolved.is_empty(), "{:?}", g.unresolved);
     let root = core("src/lib.rs");
-    assert_eq!(reach_of(&g, &root).get(&uses), Some(&Carried::Whole));
+    assert_eq!(reach_of(&g, &root).get(&uses), Some(&Carried::AsData));
     assert_eq!(
         reach_of(&g, &core("src/x.rs")).get(&uses),
-        Some(&Carried::Whole)
+        Some(&Carried::AsData)
     );
     let read: Vec<String> = complaints(&g)
         .into_iter()

@@ -470,6 +470,43 @@ fn a_file_read_as_it_stands_hands_the_harness_data_alone() {
     }
 }
 
+#[test]
+fn agent_control_changes_do_not_change_the_app_driver() {
+    let g = build(&crate::tree::workspace_root()).expect("the graph of this tree");
+    let src = format!("crates/{}/src", "xtask");
+    let drivers = ["verify", "demo"].map(|part| format!("{src}/{part}/"));
+    for relative in [
+        "awake.rs",
+        "awake/codex.rs",
+        "awake/holder.rs",
+        "awake/codex/log.rs",
+        "hook/awake.rs",
+        "hook/codex.rs",
+        "hook/language.rs",
+    ] {
+        let changed = format!("{src}/{relative}");
+        let reach = g.reach(std::slice::from_ref(&changed));
+        let leaked: Vec<_> = reach
+            .iter()
+            .filter(|(file, carried)| {
+                **carried == Carried::Whole && drivers.iter().any(|dir| file.starts_with(dir))
+            })
+            .map(|(file, _)| (file, g.why(std::slice::from_ref(&changed), file)))
+            .collect();
+        assert!(
+            leaked.is_empty(),
+            "{changed} changes the app driver: {:?}",
+            leaked.first()
+        );
+        assert!(
+            reach
+                .iter()
+                .any(|(file, _)| { g.modules.get(file).is_some_and(|module| module.has_tests) }),
+            "the control's tests are still owed: {changed}"
+        );
+    }
+}
+
 /// The predicates on the target system, as `std::env::consts::OS`
 /// names it; any other says nothing of the system.
 #[test]

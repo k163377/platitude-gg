@@ -7,6 +7,9 @@ mod pins;
 mod steps;
 mod urls;
 
+#[cfg(test)]
+mod controls;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 

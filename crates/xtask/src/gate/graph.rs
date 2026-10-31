@@ -101,12 +101,14 @@ pub(crate) struct Graph {
 /// `verify` / `demo`, the wedge through its record) is owed only by a
 /// file handed `Whole`, and so is clippy, which
 /// reads code alone; the tests of a file handed data are owed either way
-/// — a test of it may read the data.
+/// — a test of it may read the data. A dependency named only under
+/// `#[cfg(test)]` is likewise handed as data: it owes the tests but does
+/// not change the reader's running code.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Carried {
     /// A product file, as a tool that does not build it reads it.
     AsProductFile,
-    /// A file read as it stands, and the code that reads that code.
+    /// A file read as it stands or only by tests, and its readers.
     AsData,
     /// The change itself, or code built from it.
     Whole,
@@ -313,6 +315,12 @@ impl Graph {
                 continue;
             };
             for reader in readers {
+                // A binding-only edge owes the facade's own text, not
+                // changes to its other exports. The resolved definition
+                // already has a direct edge to this reader.
+                if self.bound_only(reader, &file) && !changed.contains(&file) {
+                    continue;
+                }
                 if os.is_some_and(|os| {
                     !self.compiled_on(&file, os) && !self.takes_as_data(reader, &file)
                 }) {
@@ -339,17 +347,16 @@ impl Graph {
         }
         let carried = if as_data(file, reader) {
             Carried::AsProductFile
-        } else if self.takes_as_data(reader, file) {
+        } else if self.takes_as_data(reader, file)
+            || self
+                .test_only
+                .get(reader)
+                .is_some_and(|files| files.contains(file))
+        {
             carried.min(Carried::AsData)
         } else {
             carried
         };
-        // A `pub use` passes code, not data: the reader is owed the binding's
-        // own change and nothing the binding's file reads elsewhere
-        // (`Resolved`).
-        if carried != Carried::Whole && self.bound_only(reader, file) {
-            return None;
-        }
         (carried != Carried::AsProductFile || !self.sandboxed(reader)).then_some(carried)
     }
 

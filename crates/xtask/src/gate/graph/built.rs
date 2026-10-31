@@ -178,6 +178,17 @@ mod tests {
         ] {
             assert!(tested.contains(&file), "{file}: {tested:?}");
         }
+        let reach = g.reach(&[format!("{src}/tested.rs")]);
+        assert_eq!(
+            reach.get(&run[0]),
+            Some(&super::super::Carried::AsData),
+            "a test-only dependency owes the tests, not the running code: {reach:?}"
+        );
+        assert_eq!(
+            g.reach(&[format!("{src}/shared.rs")]).get(&run[0]),
+            Some(&super::super::Carried::Whole),
+            "a runtime dependency still changes the running code"
+        );
     }
 
     /// The code a build reads, as the build reads it: the items under the
