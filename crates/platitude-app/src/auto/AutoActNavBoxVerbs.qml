@@ -723,8 +723,8 @@ Item {
         /// Whether the hand moves on once the row is open (`afterOpen`).
         readonly property bool moves: navTipTimer.opens && navTipTimer.then !== ""
         // Witnessed: `lit`, whether the control row was open as the hand left it; at the foot, `row`, the section's
-        // last row, and `restY`, where the list stood when the hand arrived — the run's own note, held against what
-        // closing gives back rather than the list's (`NavList.openRestY`); and as the hand moves on, `rested`, the
+        // last row, and `restY`, where the list stood still before the hand arrived — the run's own note, held against
+        // what closing gives back rather than the list's (`NavList.openRestY`); and as the hand moves on, `rested`, the
         // name rested on, and for `bar`, `shut` (`NavProbe.afterOpen`).
         function begin(arg) {
             const parts = ("" + arg).split(":")
@@ -876,19 +876,27 @@ Item {
                 op.input("folded", () => navProbe.clickRow("branch", op.fold))
                 return
             }
-            // The list to its end, once, before the hand rests; a beat is given back so it stands still under the
-            // pointer.
+            // The list to its end, once, before the hand rests.
             if (op.foot && op.at("lit")) {
                 // BRANCHES may still be empty — the control's WORKTREES is a read of its own — and its last row would
-                // be -1, which is also "the pointer is on no row".
+                // be -1, which is also "the pointer is on no row". And the control row shut: WORKTREES giving its room
+                // back makes BRANCHES taller, which pulls the list's end up under a scroll taken before.
                 const list = navProbe.listOf("branch")
-                if (!Awaited.all("nav_tip_foot", { "rows": !!list && list.count > 0 }))
+                if (!Awaited.all("nav_tip_foot", { "rows": !!list && list.count > 0, "shut": !navProbe.rowFactsOpen }))
                     return
                 op.input("footed", () => {
                     navProbe.scrollBranchesToEnd()
                     op.witness("row", list.count - 1)
-                    op.witness("restY", navProbe.listContentY("branch"))
                 })
+                return
+            }
+            // Where the list stands, noted once the scroll has stood across a polish pass: the shut row's room and the
+            // rows the scroll built are laid out only there, and an end that moves after the note reads as a give-back
+            // that missed.
+            if (op.foot && op.at("footed") && !op.kept("restY")) {
+                const at = navProbe.listContentY("branch")
+                if (Awaited.all("nav_tip_footed", { "still": op.still("nav_tip_foot_y", at) }))
+                    op.witness("restY", at)
                 return
             }
             // The rest, re-applied every beat until it lands — and not once the hand has moved on: re-applying would
