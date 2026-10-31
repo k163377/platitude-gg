@@ -347,6 +347,7 @@ Rectangle {
         Label {
             width: parent.width
             text: pane.curPage !== null ? pane.curPage.recoverError : ""
+            textFormat: Text.PlainText
             font.pixelSize: Theme.fontSm
             color: Theme.textSecondary
             wrapMode: Text.Wrap

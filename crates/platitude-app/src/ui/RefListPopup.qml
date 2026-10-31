@@ -333,6 +333,7 @@ AppCard {
                     y: refList.chipInset + Theme.borderWidth
                        + Math.round((Theme.fontChipLine - whose.height) / 2)
                     text: rowChip.recWhere
+                    textFormat: Text.PlainText
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontSm
                     // A third at most: the name it qualifies comes first.

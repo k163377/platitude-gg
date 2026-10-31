@@ -125,6 +125,7 @@ Item {
         elide: !chip.cutToWidth && chip.cap <= 0 ? Text.ElideNone
              : chip.cutAt === "end" ? Text.ElideRight : Text.ElideMiddle
         text: chip.word
+        textFormat: Text.PlainText
         color: chip.tint
         font.family: Theme.monoFamily
         // A mono space is wider than the air at the ground's ends, so a command and its flag would read as two words

@@ -187,12 +187,14 @@ Item {
                 id: placeholderInk
                 visible: false
                 text: nameField.placeholderText
+                textFormat: Text.PlainText
                 font: nameField.font
             }
             Label {
                 id: openedInk
                 visible: false
                 text: chipColumn.namingMode === "rename" ? chipColumn.namingOpenedWith : ""
+                textFormat: Text.PlainText
                 font: nameField.font
             }
         }

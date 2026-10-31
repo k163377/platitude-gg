@@ -270,6 +270,7 @@ Rectangle {
             id: nameLabel
             y: chip.inkY(nameLabel, nameInk)
             text: chip.recName
+            textFormat: Text.PlainText
             color: chip.nameColor
             font.pixelSize: Theme.fontChip
             font.weight: chip.recHead ? Theme.fontWeightStrong : Font.Normal
@@ -344,6 +345,7 @@ Rectangle {
             id: mateText
             y: chip.inkY(mateText, countInk)
             text: chip.mate ? chip.mate.text : ""
+            textFormat: Text.PlainText
             color: chip.mate ? chip.mate.tone : Theme.textSecondary
             font.pixelSize: Theme.fontSm
             font.underline: chip.mateAimed

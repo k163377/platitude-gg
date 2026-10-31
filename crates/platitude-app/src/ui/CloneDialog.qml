@@ -172,6 +172,7 @@ AppDialog {
             color: Theme.danger
             font.pixelSize: Theme.fontSm
             text: cloneDialog.refusal
+            textFormat: Text.PlainText
         }
 
         DialogActions {

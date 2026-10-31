@@ -582,6 +582,7 @@ MenuItem {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 text: menuItem.code
+                textFormat: Text.PlainText
                 font.family: Theme.monoFamily
                 // A mono space would split `push --delete` into two words on one ground (デザイン規約 §git 用語のコード表記).
                 font.wordSpacing: -Theme.spaceXs
@@ -871,6 +872,7 @@ MenuItem {
             // The row's own step, for the same reason the chip's is on the chip.
             Layout.leftMargin: Theme.spaceSm
             text: menuItem.note
+            textFormat: Text.PlainText
             verticalAlignment: Text.AlignVCenter
             rightPadding: menuItem.subMenu && menuItem.arrow ? menuItem.arrow.width + Theme.spaceXs : 0
             color: menuItem.noteColor

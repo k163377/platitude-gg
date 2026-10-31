@@ -242,6 +242,7 @@ Rectangle {
         y: line.height + Theme.spaceXs
         width: row.width - program.x - Theme.spaceMd
         text: row.output
+        textFormat: Text.PlainText
         wrapMode: Text.Wrap
         color: Theme.textSecondary
         font.family: Theme.monoFamily

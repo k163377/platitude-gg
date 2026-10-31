@@ -157,6 +157,7 @@ Item {
         id: widest
         visible: false
         text: btnLabel.widestText
+        textFormat: Text.PlainText
         font.family: btnLabel.widestCode ? Theme.monoFamily : Theme.uiFamily
         font.wordSpacing: btnLabel.widestCode ? -Theme.spaceXs : 0
         font.pixelSize: btnLabel.fontSize
@@ -166,6 +167,7 @@ Item {
         id: wanted
         visible: false
         text: btnLabel.text
+        textFormat: Text.PlainText
         font.family: btnLabel.code ? Theme.monoFamily : Theme.uiFamily
         // The drawn weight, or the want is measured in a face the word is not set in
         // (rules-refs/app-ui.md「測る側の隠し Label にも付ける」).
@@ -266,6 +268,7 @@ Item {
             width: Math.min(implicitWidth, btnLabel.midCap)
             elide: Text.ElideRight
             text: btnLabel.text
+            textFormat: Text.PlainText
             color: btnLabel.tint
             font.family: Theme.uiFamily
             font.pixelSize: btnLabel.fontSize
@@ -275,6 +278,7 @@ Item {
             id: noteWord
             visible: btnLabel.phraseNote !== ""
             text: btnLabel.phraseNote
+            textFormat: Text.PlainText
             color: btnLabel.phraseNoteTint
             font.family: Theme.uiFamily
             font.pixelSize: Theme.fontSm
@@ -344,6 +348,7 @@ Item {
         // Not the cell's width, which comes from this (a loop).
         width: Math.min(implicitWidth, btnLabel.wordCeiling)
         text: btnLabel.head
+        textFormat: Text.PlainText
         color: btnLabel.tint
         font.family: btnLabel.code ? Theme.monoFamily : Theme.uiFamily
         font.weight: btnLabel.wordWeight
@@ -381,6 +386,7 @@ Item {
         }
         Label {
             text: btnLabel.flagRest
+            textFormat: Text.PlainText
             color: btnLabel.tint
             font.family: Theme.monoFamily
             font.pixelSize: btnLabel.fontSize

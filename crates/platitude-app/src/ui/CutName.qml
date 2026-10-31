@@ -189,6 +189,7 @@ Item {
         anchors.fill: parent
         verticalAlignment: Text.AlignVCenter
         text: cut.headText
+        textFormat: Text.PlainText
         color: cut.color
         font.family: cut.mono ? Theme.monoFamily : Theme.uiFamily
         font.pixelSize: cut.pixelSize
@@ -204,6 +205,7 @@ Item {
         verticalAlignment: Text.AlignVCenter
         visible: cut.inked && cut.tailText !== ""
         text: cut.tailText
+        textFormat: Text.PlainText
         color: cut.color
         font: headLabel.font
     }
