@@ -24,6 +24,7 @@ claudeはこの資料を無視して
 - 検査の実行前と作業の完了報告前に `.claude/skills/gate/SKILL.md` を読み、確認の段と gate の時機に従う。
 - レビューだけの依頼や Claude 向けの修正指示書には、`.agents/skills/platitude-claude-review/SKILL.md` を使う。
   実装中や land 前のレビューでは、共有の `.claude/skills/review-points/SKILL.md` を直接使う。
+- `/land` では `.agents/skills/platitude-land/SKILL.md` を読み、共有 land 手順のレビューを実施してから反映する。
 - エージェント規約・スキル・ハーネス文書の編集には、`.agents/skills/platitude-policy-edit/SKILL.md` を使う。
   Codex 向けスキルは `.agents/skills`、Claude 向けスキルは `.claude/skills` で分けて管理する。
   共有規約は既存の正本を参照する。
