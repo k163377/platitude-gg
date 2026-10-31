@@ -378,11 +378,11 @@ mod tests {
     fn an_anonymous_session_cannot_start_a_claim() {
         for session in ["", "   "] {
             let anonymous = me(session, None);
-            let error = crate::seats::assign("not-a-repository", &anonymous)
+            let error = crate::seats::management::assign("not-a-repository", &anonymous)
                 .err()
                 .expect("no identity must fail before probing git");
             assert!(error.contains("session identity"), "{error}");
-            let error = crate::seats::release("not-a-repository", &anonymous, None)
+            let error = crate::seats::management::release("not-a-repository", &anonymous, None)
                 .expect_err("an anonymous release must fail before probing git");
             assert!(error.contains("session identity"), "{error}");
             assert!(matches!(

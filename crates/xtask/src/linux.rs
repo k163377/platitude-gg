@@ -842,7 +842,7 @@ struct Alive {
 
 /// The names of the trees a `git worktree list --porcelain` listing
 /// holds. Pure, so a test can hold the naming.
-fn checkout_names(trees: &[crate::seats::WorktreeBlock]) -> BTreeSet<String> {
+fn checkout_names(trees: &[crate::seats::worktrees::WorktreeBlock]) -> BTreeSet<String> {
     trees
         .iter()
         .map(|tree| checkout_name(Path::new(&tree.path)))
@@ -874,11 +874,11 @@ fn tags_named_by_all<'a>(trees: &[&'a Path]) -> (BTreeSet<String>, Vec<(&'a Path
 
 fn alive(root: &Path) -> Result<Alive, String> {
     let listing = crate::subprocess::git_query(
-        &crate::seats::slashed(root),
+        &crate::seats::worktrees::slashed(root),
         &["worktree", "list", "--porcelain"],
     )
     .ok_or("git worktree list failed — is git on PATH and this a repository?")?;
-    let trees = crate::seats::worktree_blocks(&listing);
+    let trees = crate::seats::worktrees::worktree_blocks(&listing);
     if trees.is_empty() {
         return Err("git worktree list named no tree at all".into());
     }

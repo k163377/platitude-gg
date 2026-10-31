@@ -1,34 +1,11 @@
-//! The worktree seat roster: the survey (`cargo xtask seats`) the
-//! session-start greeting shares, and the letters it hands out. Whose a
-//! seat is, and the three ways a claim moves, is `claim`'s to say.
-//!
-//! This module is the one place a seat is measured, so the command and
-//! the greeting cannot drift apart. The greeting's snapshot goes stale;
-//! the command is the live answer.
+//! Seat assignment, release, and takeover.
 
-mod claim;
-pub(crate) mod commands;
-pub(crate) mod entry;
-mod offer;
-pub(crate) mod start;
-mod survey;
-mod transcripts;
-
-pub(crate) use claim::{
-    Held, Identity, Standing, is_a_seat_claim, lock_reason, standing, take_seat, unlock_seat, whose,
+use super::worktrees::{WORKTREES, commits_in, dirty_lines, has_a_directory, seat_entries_of};
+use super::{
+    Held, Identity, SEATS, SeatEntry, Standing, WorktreeBlock, claim, commands, entry,
+    is_a_seat_claim, lock_reason, offer, primary_checkout, same_tree, seat_in_repository, slashed,
+    standing, survey, take_seat, transcripts, unlock_seat, whose, worktree_root,
 };
-pub(crate) use commands::COMMANDS;
-pub(crate) use survey::{Seat, format_age, run, survey};
-// Built only by the greeting's tests: everything else reads what the
-// survey measured.
-#[cfg(test)]
-pub(crate) use survey::SeatState;
-
-/// The reusable worktree seats: a topical worktree pays a cold target/
-/// build and keeps the gigabytes, so sessions rotate through these six.
-pub(crate) const SEATS: [&str; 6] = ["a", "b", "c", "d", "e", "f"];
-
-const WORKTREES: &str = "/.claude/worktrees/";
 
 /// How a seat claim moves, for every refusal that meets one — read by a
 /// session that can do nothing about it but tell the user.
@@ -137,7 +114,7 @@ pub fn take(args: &[String]) -> Result<(), String> {
 /// the session stands (`assign`) — not the tree this binary was built in
 /// (`tree::workspace_root`), which differs once `cargo xtask` runs from
 /// outside a seat.
-fn rooted(args: &[String]) -> Result<(String, &[String]), String> {
+pub(super) fn rooted(args: &[String]) -> Result<(String, &[String]), String> {
     match args.split_first() {
         Some((flag, rest)) if flag == "--dir" => {
             let (path, rest) = rest.split_first().ok_or("--dir needs a path")?;
@@ -158,7 +135,7 @@ fn rooted(args: &[String]) -> Result<(String, &[String]), String> {
 /// it to nobody else, and asking from that tree takes it back
 /// (`claim_where_it_stands`). The letter is needed only when the session
 /// holds more than one and stands in neither.
-fn release(root: &str, me: &Identity, letter: Option<&str>) -> Result<(), String> {
+pub(super) fn release(root: &str, me: &Identity, letter: Option<&str>) -> Result<(), String> {
     me.require_session()?;
     let (primary, trees) = primary_checkout(root)?;
     let entries = seat_entries_of(trees);
@@ -262,13 +239,6 @@ fn takeover(root: &str, me: &Identity, letter: &str) -> Result<(), String> {
     };
     println!("{}", taken.report(me));
     Ok(())
-}
-
-/// Whether a listed tree is on disk. git still lists (as prunable) a tree
-/// whose directory is gone, and such a letter is treeless for every
-/// purpose here.
-pub(crate) fn has_a_directory(path: &str) -> bool {
-    std::path::Path::new(path).is_dir()
 }
 
 /// What a session holding a treeless letter is told in place of a path
@@ -758,346 +728,8 @@ fn create_seat(
     })
 }
 
-/// Uncommitted changes in `dir`, untracked files included. --no-optional-
-/// locks because a plain status opportunistically rewrites the index it
-/// refreshed, and the survey reports index mtimes.
-pub(crate) fn dirty_lines(dir: &str) -> Option<usize> {
-    crate::subprocess::git_query(dir, &["--no-optional-locks", "status", "--porcelain"])
-        .map(|status| status.lines().filter(|line| !line.is_empty()).count())
-}
-
-/// Whether a run may go on the board from a roster seat: only from one
-/// this session holds. A picture claims nothing — after a landing hands
-/// the seat back (`land::release_claim`), a picture of the landed work
-/// would hold the letter for a session whose work is done, and the roster
-/// could hand it to nobody (CLAUDE.md §Git 運用). A run with no session
-/// behind it (CI's, a person's own shell) holds no claim and goes through.
-pub(crate) fn may_picture(seat: &str) -> Result<(), String> {
-    let Ok(cwd) = std::env::current_dir() else {
-        return Ok(());
-    };
-    let Some(root) = worktree_root(&slashed(&cwd)) else {
-        return Ok(());
-    };
-    let me = Identity::current(None);
-    // Read from the tree: this run stands in it.
-    let standing = standing(lock_reason(&root), &me, Held::BySession);
-    picture_verdict(seat, &me, standing)
-}
-
-/// [`may_picture`]'s rule, apart from the git that read the claim.
-fn picture_verdict(seat: &str, me: &Identity, standing: Standing) -> Result<(), String> {
-    if me.session.trim().is_empty() {
-        return Ok(());
-    }
-    match standing {
-        Standing::Ours => Ok(()),
-        Standing::Free => Err(format!(
-            "seat {seat} carries no claim of this session's — its work landed or was handed \
-             back, and the letter is the roster's to hand out. A picture claims nothing: \
-             pictures the user has to approve go up before the landing, which waits for the \
-             approval, and none of the landed work's goes up again after it (CLAUDE.md §Git \
-             運用). New work in this tree, or a picture the user asks for now, is claimed by \
-             its first edit or by `{}`.",
-            commands::TAKE.line()
-        )),
-        Standing::Foreign(reason) | Standing::Stale(reason) => Err(format!(
-            "seat {seat} is {} — a picture taken here would go up under somebody else's work.",
-            whose(&reason)
-        )),
-    }
-}
-
-/// How many commits `git rev-list --count` sees in `range`, run in `dir`.
-pub(crate) fn commits_in(dir: &str, range: &str) -> Option<u32> {
-    crate::subprocess::git_query(dir, &["rev-list", "--count", range])
-        .and_then(|count| count.parse().ok())
-}
-
-/// One roster seat as `git worktree list --porcelain` shows it: the
-/// listing's own block, and the roster letter its path names.
-#[derive(Debug, PartialEq)]
-pub(crate) struct SeatEntry {
-    pub seat: &'static str,
-    pub tree: WorktreeBlock,
-}
-
-/// One tree of `git worktree list --porcelain`, as the listing gives it.
-///
-/// Nothing is filtered and the order is the listing's, because the first
-/// entry is the primary checkout and `land` turns on that.
-#[derive(Debug, PartialEq)]
-pub(crate) struct WorktreeBlock {
-    /// The worktree's path, slashes forward, for `git -C`.
-    pub path: String,
-    /// Branch name, empty when HEAD is detached.
-    pub branch: String,
-    pub locked: bool,
-    /// The lock's reason, empty when unlocked or given none.
-    pub reason: String,
-}
-
-/// Every tree the listing shows, in listing order.
-pub(crate) fn worktree_blocks(listing: &str) -> Vec<WorktreeBlock> {
-    let mut blocks = Vec::new();
-    for block in listing.split("\n\n") {
-        let mut path = None;
-        let mut branch = String::new();
-        let mut locked = false;
-        let mut reason = String::new();
-        for line in block.lines() {
-            if let Some(rest) = line.strip_prefix("worktree ") {
-                path = Some(rest.replace('\\', "/"));
-            } else if let Some(rest) = line.strip_prefix("branch refs/heads/") {
-                branch = rest.to_string();
-            } else if let Some(rest) = line.strip_prefix("locked") {
-                locked = true;
-                reason = rest.trim().to_string();
-            }
-        }
-        if let Some(path) = path {
-            blocks.push(WorktreeBlock {
-                path,
-                branch,
-                locked,
-                reason,
-            });
-        }
-    }
-    blocks
-}
-
-/// Every roster seat the listing shows, in listing order.
-pub(crate) fn seat_entries(listing: &str) -> Vec<SeatEntry> {
-    seat_entries_of(worktree_blocks(listing))
-}
-
-fn seat_entries_of(trees: Vec<WorktreeBlock>) -> Vec<SeatEntry> {
-    trees
-        .into_iter()
-        .filter_map(|block| {
-            let seat = roster_letter(&block.path)?;
-            Some(SeatEntry { seat, tree: block })
-        })
-        .collect()
-}
-
-/// The roster letter `path` points into, if it is a seat's tree at all —
-/// the letters being the directory names under the worktree directory,
-/// and a path inside a seat being that seat's as much as its root is.
-pub(crate) fn roster_letter(path: &str) -> Option<&'static str> {
-    let root = worktree_root(path)?;
-    let name = root.rsplit('/').next()?;
-    SEATS.iter().find(|seat| **seat == name).copied()
-}
-
-/// Where a repository keeps its seats. A repository with no such
-/// directory has no roster, whatever its branches are called.
-pub(crate) fn roster_dir(primary: &str) -> String {
-    format!("{}{WORKTREES}", primary.trim_end_matches('/'))
-}
-
-/// `roster_letter`, with the repository whose roster that letter belongs
-/// to — for a reader that has to tell this checkout's seats from the same
-/// layout somewhere else (hook/git.rs).
-pub(crate) fn seat_in_repository(path: &str) -> Option<(String, &'static str)> {
-    let letter = roster_letter(path)?;
-    let root = worktree_root(path)?;
-    let repository = root.strip_suffix(&format!("{WORKTREES}{letter}"))?;
-    Some((repository.to_string(), letter))
-}
-
-/// The worktree `cwd` sits in: the path down to the directory named under
-/// .claude/worktrees/, and None for the primary checkout.
-pub(crate) fn worktree_root(cwd: &str) -> Option<String> {
-    let cwd = cwd.replace('\\', "/");
-    let at = cwd.find(WORKTREES)? + WORKTREES.len();
-    if at >= cwd.len() {
-        return None;
-    }
-    let end = cwd[at..].find('/').map_or(cwd.len(), |slash| at + slash);
-    Some(cwd[..end].to_string())
-}
-
-/// The measurement rig: the one tree under the roster's directory that is
-/// no seat (`perf::rig`; internal-docs/性能.md「計測は計測台(rig)で撃つ」).
-/// The entry and write hooks refuse it (hook/seat.rs).
-pub(crate) const RIG: &str = "rig";
-
-/// Where the rig stands, written against the primary checkout the way
-/// every seat path is.
-pub(crate) fn rig_path(primary: &str) -> String {
-    format!("{}{WORKTREES}{RIG}", primary.trim_end_matches('/'))
-}
-
-/// Whether `path` is the rig's tree or something inside it.
-pub(crate) fn in_rig(path: &str) -> bool {
-    worktree_root(path).is_some_and(|root| root.rsplit('/').next() == Some(RIG))
-}
-
-/// Whether two paths name one tree, asked of the filesystem: git writes
-/// forward slashes and the long name, while a process holds the spelling
-/// it was started with — an 8.3 short name, a junction, either case. An
-/// unresolvable path falls back to its text, separators levelled and, on
-/// Windows, case.
-pub(crate) fn same_tree(left: &str, right: &str) -> bool {
-    if let (Ok(left), Ok(right)) = (std::fs::canonicalize(left), std::fs::canonicalize(right)) {
-        return left == right;
-    }
-    let trim = |path: &str| path.replace('\\', "/").trim_end_matches('/').to_string();
-    let (left, right) = (trim(left), trim(right));
-    if cfg!(windows) {
-        left.eq_ignore_ascii_case(&right)
-    } else {
-        left == right
-    }
-}
-
-/// A path as the listing spells it: slashes forward, for `git -C` and
-/// for comparing against what git said.
-pub(crate) fn slashed(path: &std::path::Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
-}
-
-/// The primary checkout — the listing's first entry, where seats are
-/// created and the tree every seat path is written against — and the
-/// listing it came from.
-pub(crate) fn primary_checkout(cwd: &str) -> Result<(String, Vec<WorktreeBlock>), String> {
-    let listing = crate::subprocess::git_query(cwd, &["worktree", "list", "--porcelain"])
-        .ok_or("git worktree list failed — is git on PATH and this a repository?")?;
-    let trees = worktree_blocks(&listing);
-    let primary = trees
-        .first()
-        .ok_or("git worktree list named no tree at all")?
-        .path
-        .clone();
-    Ok((primary, trees))
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{SeatEntry, WorktreeBlock, roster_letter, seat_entries};
-
-    #[test]
-    fn knows_a_seat_path_from_the_rest() {
-        assert_eq!(
-            roster_letter("C:\\x\\platitude-gg\\.claude\\worktrees\\a"),
-            Some("a")
-        );
-        assert_eq!(
-            roster_letter("C:/x/platitude-gg/.claude/worktrees/b/crates"),
-            Some("b")
-        );
-        assert_eq!(
-            roster_letter("C:/x/platitude-gg/.claude/worktrees/tooltip"),
-            None
-        );
-        // The rig sits beside the seats and is none of them.
-        assert_eq!(
-            roster_letter("C:/x/platitude-gg/.claude/worktrees/rig"),
-            None
-        );
-        assert_eq!(roster_letter("C:/x/platitude-gg"), None);
-        // A relative spelling reads as no seat, which is why a tool's path
-        // goes through `named_tree` first.
-        assert_eq!(roster_letter(".claude/worktrees/e"), None);
-    }
-
-    /// A name that merely starts with the rig's is not it.
-    #[test]
-    fn knows_the_rig_from_the_seats() {
-        assert!(super::in_rig("C:/x/platitude-gg/.claude/worktrees/rig"));
-        assert!(super::in_rig(
-            "C:\\x\\platitude-gg\\.claude\\worktrees\\rig\\crates\\xtask"
-        ));
-        assert!(!super::in_rig(
-            "C:/x/platitude-gg/.claude/worktrees/rigging"
-        ));
-        assert!(!super::in_rig("C:/x/platitude-gg/.claude/worktrees/a"));
-        assert!(!super::in_rig("C:/x/platitude-gg"));
-        assert_eq!(
-            super::rig_path("C:/x/platitude-gg/"),
-            "C:/x/platitude-gg/.claude/worktrees/rig"
-        );
-        assert!(!super::SEATS.contains(&super::RIG));
-        let listing = format!(
-            "worktree C:/x/platitude-gg\nHEAD 1111\nbranch refs/heads/main\n\n\
-             worktree {}\nHEAD 2222\ndetached\n",
-            super::rig_path("C:/x/platitude-gg")
-        );
-        assert!(seat_entries(&listing).is_empty());
-    }
-
-    #[test]
-    fn one_tree_spelled_two_ways_is_one_tree() {
-        assert!(super::same_tree("C:/x/rig/", "C:\\x\\rig"));
-        assert_eq!(super::same_tree("C:/x/RIG", "C:/x/rig"), cfg!(windows));
-        assert!(!super::same_tree("C:/x/rig", "C:/x/rigging"));
-        assert_eq!(super::slashed(std::path::Path::new("C:\\x\\y")), "C:/x/y");
-    }
-
-    #[test]
-    fn reads_seats_out_of_a_worktree_listing() {
-        let listing = "worktree C:/x/platitude-gg\nHEAD 1111\nbranch refs/heads/main\n\n\
-                       worktree C:/x/platitude-gg/.claude/worktrees/a\nHEAD 2222\nbranch refs/heads/worktree-a\n\n\
-                       worktree C:/x/platitude-gg/.claude/worktrees/tooltip\nHEAD 3333\nbranch refs/heads/worktree-tooltip\n\n\
-                       worktree C:/x/platitude-gg/.claude/worktrees/b\nHEAD 4444\nbranch refs/heads/worktree-b\nlocked claude session b (pid 1)\n";
-        let seats = seat_entries(listing);
-        assert_eq!(
-            seats,
-            vec![
-                SeatEntry {
-                    seat: "a",
-                    tree: WorktreeBlock {
-                        path: "C:/x/platitude-gg/.claude/worktrees/a".to_string(),
-                        branch: "worktree-a".to_string(),
-                        locked: false,
-                        reason: String::new(),
-                    },
-                },
-                SeatEntry {
-                    seat: "b",
-                    tree: WorktreeBlock {
-                        path: "C:/x/platitude-gg/.claude/worktrees/b".to_string(),
-                        branch: "worktree-b".to_string(),
-                        locked: true,
-                        reason: "claude session b (pid 1)".to_string(),
-                    },
-                },
-            ]
-        );
-    }
-
-    /// A landing hands the seat back; a picture taken after it is refused
-    /// rather than taking the letter back for a session whose work is done.
-    #[test]
-    fn a_picture_goes_up_only_from_a_seat_this_session_holds() {
-        use super::{Identity, Standing, picture_verdict};
-        let me = Identity {
-            session: "mine".to_string(),
-            pid: None,
-            host: None,
-        };
-        assert!(picture_verdict("a", &me, Standing::Ours).is_ok());
-        let after_landing =
-            picture_verdict("a", &me, Standing::Free).expect_err("an unclaimed seat");
-        assert!(
-            after_landing.contains("claims nothing") && after_landing.contains("cargo xtask seat"),
-            "{after_landing}"
-        );
-        let theirs = picture_verdict("b", &me, Standing::Foreign("claude-seat theirs".into()))
-            .expect_err("somebody else's seat");
-        assert!(theirs.contains("held by session theirs"), "{theirs}");
-        // CI's runs and a person's own shell carry no session, and hold no
-        // claim to keep.
-        let nobody = Identity {
-            session: String::new(),
-            pid: None,
-            host: None,
-        };
-        assert!(picture_verdict("a", &nobody, Standing::Free).is_ok());
-    }
-
     /// The spelling a refusal tells is the catalogue's.
     #[test]
     fn a_claim_moves_only_the_three_ways_the_refusal_names() {

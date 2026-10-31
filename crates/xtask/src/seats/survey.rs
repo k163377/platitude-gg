@@ -5,8 +5,11 @@
 
 use std::time::{Duration, SystemTime};
 
+use super::format_age;
+use super::management::rooted;
+
 use super::{
-    SEATS, SeatEntry, WorktreeBlock, commands, commits_in, dirty_lines, has_a_directory, rooted,
+    SEATS, SeatEntry, WorktreeBlock, commands, commits_in, dirty_lines, has_a_directory,
     seat_entries, whose,
 };
 
@@ -311,23 +314,9 @@ fn seat_row(seat: &Seat) -> ([String; 6], String) {
     )
 }
 
-/// The shortest round figure that still ranks seats.
-pub(crate) fn format_age(age: Option<Duration>) -> String {
-    let Some(age) = age else {
-        return "?".to_string();
-    };
-    let seconds = age.as_secs();
-    match seconds {
-        0..60 => format!("{seconds}s"),
-        60..3600 => format!("{}m", seconds / 60),
-        3600..86400 => format!("{}h", seconds / 3600),
-        _ => format!("{}d", seconds / 86400),
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{Seat, SeatState, format_age, one_letter_refusing, render};
+    use super::{Seat, SeatState, one_letter_refusing, render};
     use std::time::Duration;
 
     fn seat(name: &'static str, state: SeatState) -> Seat {
@@ -359,15 +348,6 @@ mod tests {
             ahead: Some(ahead),
             ..super::without_a_tree(None, name, Some(ahead))
         }
-    }
-
-    #[test]
-    fn rounds_ages_to_the_rank_that_orders_seats() {
-        assert_eq!(format_age(None), "?");
-        assert_eq!(format_age(Some(Duration::from_secs(59))), "59s");
-        assert_eq!(format_age(Some(Duration::from_secs(60))), "1m");
-        assert_eq!(format_age(Some(Duration::from_secs(3 * 3600))), "3h");
-        assert_eq!(format_age(Some(Duration::from_secs(9 * 86400))), "9d");
     }
 
     #[test]
