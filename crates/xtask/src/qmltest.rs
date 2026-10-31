@@ -41,8 +41,12 @@ pub(crate) static COMMANDS: &[&command::Command] = &[&QMLTEST];
 const TESTS: &str = "crates/platitude-app/tests/qml";
 const UI: &str = "crates/platitude-app/src/ui";
 const WORK: &str = "target/qmltest";
-/// Bind-mounted at the same workspace-relative path in every Linux runner, including its staging directories.
-pub(crate) const LINUX_WORK: &str = "target/qmltest/linux";
+/// The Linux side's failed runs, bind-mounted to the host at the same
+/// relative path (`linux::qmltest_mount`) so their evidence is read where
+/// the failure names it. The staging itself stays in the container's own
+/// `target`: a copy of `ui/` and the QML cache written across the mount
+/// would stretch every run.
+pub(crate) const LINUX_EVIDENCE: &str = "target/qmltest/linux";
 const MODULE: &str = "platitude/ui";
 /// The app's Rust-backed module, which several `ui` components import
 /// whether or not they reach into it (`AppCombo`). Only the running app
@@ -362,12 +366,14 @@ fn case_names(file: &Path) -> Vec<String> {
 /// shared directory has each rebuilding the tree the other resolves
 /// through — a component "unavailable" for the length of one copy.
 fn work_rel() -> String {
-    format!("{}/{}", work_base(), std::process::id())
+    format!("{WORK}/{}", std::process::id())
 }
 
-fn work_base() -> &'static str {
+/// Where a red run's staging is kept, under [`FAILED`]: the side's evidence
+/// directory, which on the Linux side is the host's ([`LINUX_EVIDENCE`]).
+fn failed_root() -> &'static str {
     if std::env::var_os(crate::linux::environment::IN_CONTAINER).is_some() {
-        LINUX_WORK
+        LINUX_EVIDENCE
     } else {
         WORK
     }
@@ -641,18 +647,39 @@ fn keep(
         .map_err(|e| format!("{}: {e}", work.join(MANIFEST).display()))?;
     let failed = setup
         .root
-        .join(work_base())
+        .join(failed_root())
         .join(FAILED)
         .join(if whole_suite { "suite" } else { "selected" });
     std::fs::create_dir_all(&failed).map_err(|e| format!("{}: {e}", failed.display()))?;
     let dir = failed.join(name);
-    Ok(match std::fs::rename(&work, &dir) {
-        Ok(()) => dir,
-        Err(e) => {
-            println!("qmltest: the evidence stays where it ran, not under {FAILED}: {e}");
-            work
+    if std::fs::rename(&work, &dir).is_ok() {
+        return Ok(dir);
+    }
+    // Across a mount (the container's evidence directory is the host's): copied, then taken down.
+    Ok(
+        match copy_tree(&work, &dir).and_then(|()| std::fs::remove_dir_all(&work)) {
+            Ok(()) => dir,
+            Err(e) => {
+                println!("qmltest: the evidence stays where it ran, not under {FAILED}: {e}");
+                work
+            }
+        },
+    )
+}
+
+/// `from`'s files and directories under `to`, which may stand on another mount than `from`.
+fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)? {
+        let entry = entry?;
+        let target = to.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_tree(&entry.path(), &target)?;
+        } else {
+            std::fs::copy(entry.path(), target)?;
         }
-    })
+    }
+    Ok(())
 }
 
 /// What a red run's manifest says, gathered ([`gather`]) apart from how
@@ -849,8 +876,8 @@ fn reported_paths(text: &str) -> Option<(Vec<String>, Vec<String>)> {
 /// own newest: `together` (what a run of every file in one runner left;
 /// no run writes it now) is never counted with `suite`.
 fn sweep(root: &Path) {
-    for group in ["suite", "selected", "together"] {
-        let failed = root.join(work_base()).join(FAILED).join(group);
+    for group in ["suite", "selected"] {
+        let failed = root.join(failed_root()).join(FAILED).join(group);
         if let Ok(entries) = std::fs::read_dir(&failed) {
             let names = entries
                 .flatten()
@@ -862,7 +889,7 @@ fn sweep(root: &Path) {
             }
         }
     }
-    let work = root.join(work_base());
+    let work = root.join(WORK);
     let now = SystemTime::now();
     if let Ok(entries) = std::fs::read_dir(&work) {
         let aged: Vec<(String, Option<Duration>)> = entries

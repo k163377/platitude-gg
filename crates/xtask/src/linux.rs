@@ -1289,9 +1289,9 @@ fn here(root: &Path, command: &[String]) -> Result<(), String> {
     })
 }
 
-/// QtTest's failed logs and staged imports must survive the container and be readable at the reported host path.
+/// The Linux side's failed QML test runs, read on the host at the path the failure names (`qmltest::LINUX_EVIDENCE`).
 fn qmltest_mount(cmd: &mut Command, root: &Path) -> Result<(), String> {
-    let rel = crate::qmltest::LINUX_WORK;
+    let rel = crate::qmltest::LINUX_EVIDENCE;
     let dir = root.join(rel);
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     cmd.arg("--volume")

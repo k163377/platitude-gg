@@ -2,8 +2,8 @@
 
 use super::{
     Came, FAILED, KEPT, LITTER_AGE, MANIFEST, Manifest, Ran, Setup, TESTS, beyond_the_newest,
-    case_names, environment, keep, litter, manifest, outcomes, reported_paths, run_each, short_of,
-    sweep, tests_in, unfinished_in, work_base,
+    case_names, environment, failed_root, keep, litter, manifest, outcomes, reported_paths,
+    run_each, short_of, sweep, tests_in, unfinished_in,
 };
 use crate::yard::Yard;
 use std::ffi::OsString;
@@ -38,7 +38,7 @@ fn a_red_run_is_kept_with_its_manifest_and_only_the_newest_stand() {
     }];
     let tests = [format!("{TESTS}/tst_x.qml")];
     let dir = keep(&setup, &tests, true, &runs, "1793102832-4242").expect("kept");
-    let group = root.join(work_base()).join(FAILED).join("suite");
+    let group = root.join(failed_root()).join(FAILED).join("suite");
     assert_eq!(dir, group.join("1793102832-4242"));
     assert!(!staged.exists(), "moved, not copied");
     assert_eq!(
@@ -60,7 +60,7 @@ fn a_red_run_is_kept_with_its_manifest_and_only_the_newest_stand() {
         std::fs::create_dir_all(group.join(format!("17931028{older:02}-1")))
             .expect("an older kept run");
     }
-    let selected = root.join(work_base()).join(FAILED).join("selected");
+    let selected = root.join(failed_root()).join(FAILED).join("selected");
     for newer in 0..KEPT + 2 {
         std::fs::create_dir_all(selected.join(format!("17932028{newer:02}-1")))
             .expect("a newer selected run");
@@ -97,7 +97,7 @@ fn every_file_runs_once_and_all_failures_remain_red() {
     assert!(run_each(&tests, |_| Ok(())).is_ok());
 }
 
-/// A log as the one-process run writes it: two files finish, the third
+/// A log as one runner over several files writes it: two files finish, the third
 /// does not compile, and the fourth is never reached.
 #[test]
 fn a_log_says_each_file_in_the_order_it_names_them() {
