@@ -19,6 +19,8 @@ mod eol_setting_integration;
 mod exec;
 mod exec_input;
 mod identity_integration;
+mod input_costs;
+mod input_ways;
 mod integrate_integration;
 mod lfs_integration;
 mod logparse;

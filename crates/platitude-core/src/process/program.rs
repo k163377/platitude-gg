@@ -15,10 +15,10 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-/// The program [`super::GitExecutor::new`] spawns, as a full path — for
-/// display only: [`default_program`]'s bare name resolved against the same
-/// directories in the same order. The file can change before the next
-/// spawn; that costs a wrong path on screen, nothing else. Falls back to
+/// The program [`super::GitExecutor::new`] spawns, as a full path:
+/// [`default_program`]'s bare name resolved against the same directories in
+/// the same order, as they stand now. The file can change before the next
+/// spawn; on screen that costs a wrong path, nothing else. Falls back to
 /// the bare name when the search finds nothing.
 pub fn default_program_path() -> OsString {
     let named = default_program();
