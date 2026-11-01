@@ -7,15 +7,14 @@
 //! away), the shared refs and a new worktree; never another worktree's
 //! files (§4).
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use tokio_util::sync::CancellationToken;
 
 use super::Restore;
 use crate::error::GitError;
 use crate::oid::Oid;
-use crate::process::{GitCommand, GitExecutor};
-use crate::scratch::ScratchFile;
+use crate::process::{GitCommand, GitExecutor, Input};
 
 /// How a part came back.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -188,18 +187,9 @@ async fn put_back(
     {
         work.extend(patch_of(executor, cwd, &["--root"], &[&untracked], cancel).await?);
     }
-    let git_dir = absolute_git_dir(executor, cwd, cancel).await?;
-    let held = |bytes: &[u8]| -> Result<Option<ScratchFile>, GitError> {
-        if bytes.is_empty() {
-            return Ok(None);
-        }
-        ScratchFile::create(&git_dir, "restore-patch", bytes)
-            .map(Some)
-            .map_err(|error| GitError::Rejected {
-                message: format!("could not hold the changes to put back: {error}"),
-            })
-    };
-    let (index, work) = (held(&index)?, held(&work)?);
+    // Held once: the check and the apply after it are handed the same bytes.
+    let held = |bytes: Vec<u8>| (!bytes.is_empty()).then(|| Input::from(bytes));
+    let (index, work) = (held(index), held(work));
     // `git apply` checks a file it creates against what stands at its own
     // path alone; where a file stands in place of one of its folders, Git
     // for Windows answers 0 having written nothing there.
@@ -207,21 +197,12 @@ async fn put_back(
         return Ok(None);
     }
     if let Some(work) = &work
-        && !applied(executor, cwd, work.path(), &["--check"], cancel).await?
+        && !applied(executor, cwd, work, &["--check"], cancel).await?
     {
         return Ok(None);
     }
     let staged = match &index {
-        Some(index) => {
-            applied(
-                executor,
-                cwd,
-                index.path(),
-                &["--check", "--cached"],
-                cancel,
-            )
-            .await?
-        }
+        Some(index) => applied(executor, cwd, index, &["--check", "--cached"], cancel).await?,
         None => true,
     };
     if !staged && !work_holds_the_staged(executor, cwd, &hex, cancel).await? {
@@ -229,23 +210,16 @@ async fn put_back(
     }
     if staged
         && let Some(index) = &index
-        && !applied(executor, cwd, index.path(), &["--cached"], cancel).await?
+        && !applied(executor, cwd, index, &["--cached"], cancel).await?
     {
         return Ok(None);
     }
     if let Some(work) = &work
-        && !applied(executor, cwd, work.path(), &[], cancel).await?
+        && !applied(executor, cwd, work, &[], cancel).await?
     {
         // What changed under the check: the staged half goes back out.
         if staged && let Some(index) = &index {
-            applied(
-                executor,
-                cwd,
-                index.path(),
-                &["--cached", "--reverse"],
-                cancel,
-            )
-            .await?;
+            applied(executor, cwd, index, &["--cached", "--reverse"], cancel).await?;
         }
         return Ok(None);
     }
@@ -392,14 +366,14 @@ async fn patch_of(
     Ok(executor.run(cmd, cancel).await?.stdout)
 }
 
-/// `git apply <options> <patch>` in the worktree: whether it went on.
-/// Line endings are taken as they come, whatever `core.safecrlf` says, and
-/// whitespace as it is, whatever `apply.whitespace` says — a restore puts
-/// back what was there.
+/// `git apply <options> -` in the worktree, `patch` on stdin: whether it
+/// went on. Line endings are taken as they come, whatever `core.safecrlf`
+/// says, and whitespace as it is, whatever `apply.whitespace` says — a
+/// restore puts back what was there.
 async fn applied(
     executor: &GitExecutor,
     cwd: &Path,
-    patch: &Path,
+    patch: &Input,
     options: &[&str],
     cancel: &CancellationToken,
 ) -> Result<bool, GitError> {
@@ -407,22 +381,10 @@ async fn applied(
         .cwd(cwd)
         .args(["-c", "core.safecrlf=false", "apply", "--whitespace=nowarn"])
         .args(options)
-        .arg(patch)
+        .arg("-")
+        .input(patch.clone())
         .answers_by_code(1);
     Ok(executor.run_unchecked(cmd, cancel).await?.code == 0)
-}
-
-/// The worktree's own git directory, in full: where the patches wait.
-async fn absolute_git_dir(
-    executor: &GitExecutor,
-    cwd: &Path,
-    cancel: &CancellationToken,
-) -> Result<PathBuf, GitError> {
-    let cmd = GitCommand::new()
-        .cwd(cwd)
-        .args(["rev-parse", "--absolute-git-dir"]);
-    let out = executor.run(cmd, cancel).await?;
-    Ok(PathBuf::from(out.stdout_utf8().trim()))
 }
 
 async fn subject_of(

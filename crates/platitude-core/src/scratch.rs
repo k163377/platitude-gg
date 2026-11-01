@@ -1,8 +1,11 @@
-//! Short-lived files handed to git by path (patches, commit messages).
+//! Short-lived files handed to git by path, where git takes no stdin for
+//! them: the plan the rebase's sequence editor is pointed at
+//! (`sequencer`), and a temporary index git writes itself
+//! (`GIT_INDEX_FILE`). A message or a patch goes in on stdin instead
+//! (`process::Input`).
 //!
 //! They live under `<git_dir>/platitude/` (same filesystem, owner-private,
-//! recognisable if left behind) and go by path because the process layer
-//! keeps stdin closed.
+//! recognisable if left behind).
 
 use std::fs::File;
 use std::io::Write;

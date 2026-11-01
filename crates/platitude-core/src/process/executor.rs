@@ -355,13 +355,14 @@ impl GitExecutor {
     }
 
     /// Runs to completion; the caller inspects the exit code itself. Shared
-    /// on a background handle ([`GitExecutor::background`]).
+    /// on a background handle ([`GitExecutor::background`]) — unless it
+    /// carries input, which the share's key does not hold.
     pub async fn run_unchecked(
         &self,
         cmd: GitCommand,
         cancel: &CancellationToken,
     ) -> Result<GitOutput, GitError> {
-        if self.priority == Priority::Background {
+        if self.priority == Priority::Background && cmd.input.is_none() {
             return self.run_shared(&cmd, cancel).await;
         }
         self.run_buffered(&cmd, cancel, None).await
@@ -481,8 +482,12 @@ impl GitExecutor {
         for (k, v) in &cmd.env {
             command.env(k, v);
         }
+        let stdin = match cmd.input {
+            Some(_) => Stdio::piped(),
+            None => Stdio::null(),
+        };
         command
-            .stdin(Stdio::null())
+            .stdin(stdin)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
@@ -564,7 +569,7 @@ impl GitExecutor {
                 .attempt(cmd, &row, cancel, out, lead.take(), prior.take())
                 .await?;
             let again = first.is_none()
-                && matches!(&attempt.outcome, ChildOutcome::Finished { code, stderr }
+                && matches!(&attempt.outcome, ChildOutcome::Finished { code, stderr, .. }
                 if super::config_unread::again(
                     &cmd.args,
                     *code,
@@ -756,7 +761,34 @@ impl GitExecutor {
             spawned,
         } = clocks;
         match outcome {
-            ChildOutcome::Finished { code, stderr } => {
+            ChildOutcome::Finished {
+                code,
+                stderr,
+                unfed,
+            } => {
+                // git closed its end with its input still being sent. A yes
+                // then is no answer to what was asked; a no is git's answer,
+                // and the pipe it broke on its way out says nothing more.
+                if let Some(unfed) = unfed {
+                    if code == 0 {
+                        let source = std::io::Error::new(
+                            unfed.kind(),
+                            format!("git ended without taking all of its input: {unfed}"),
+                        );
+                        tracing::warn!(command = %described, error = %source, "git answered over input it did not take");
+                        report(
+                            CommandEnd::Failed,
+                            waited,
+                            started.elapsed(),
+                            &source.to_string(),
+                        );
+                        return Err(GitError::Io {
+                            command: described,
+                            source,
+                        });
+                    }
+                    tracing::debug!(command = %described, code, "git ended before taking all of its input");
+                }
                 tracing::debug!(
                     command = %described,
                     code,
@@ -833,9 +865,10 @@ async fn run_keeping(
     on_stdout: &mut (dyn FnMut(&[u8]) + Send),
 ) -> (std::io::Result<ChildOutcome>, Vec<u8>) {
     let mut kept = Vec::new();
+    let input = cmd.input.as_ref();
     if !cmd.logs_stdout {
         return (
-            run_child(child, family, budget, cancel, on_stdout).await,
+            run_child(child, family, input, budget, cancel, on_stdout).await,
             kept,
         );
     }
@@ -843,7 +876,7 @@ async fn run_keeping(
         kept.extend_from_slice(chunk);
         on_stdout(chunk);
     };
-    let outcome = run_child(child, family, budget, cancel, &mut both).await;
+    let outcome = run_child(child, family, input, budget, cancel, &mut both).await;
     (outcome, kept)
 }
 

@@ -61,6 +61,7 @@ async fn timeout_kills_the_child() {
     let outcome = run_child(
         &mut child,
         &mut family,
+        None,
         Some(Duration::from_millis(300)),
         &cancel,
         &mut |_| {},
@@ -77,7 +78,7 @@ async fn cancellation_kills_the_child() {
     let cancel = CancellationToken::new();
     let cancel_clone = cancel.clone();
     let mut ready = false;
-    let outcome = run_child(&mut child, &mut family, None, &cancel, &mut |_| {
+    let outcome = run_child(&mut child, &mut family, None, None, &cancel, &mut |_| {
         ready = true;
         cancel_clone.cancel();
     })
@@ -85,6 +86,267 @@ async fn cancellation_kills_the_child() {
     .unwrap();
     assert!(ready, "the child announced that it had started");
     assert!(matches!(outcome, ChildOutcome::Cancelled));
+}
+
+/// What a [`part_reader`] does once it has read the first of its input.
+#[derive(Clone, Copy)]
+enum Then {
+    /// Reads nothing more until it is ended: a send of more than a pipe
+    /// holds stays under way.
+    Hold,
+    /// Reads the rest, and on its end leaves `eof` in its folder.
+    Drain,
+}
+
+/// Reads the first of its stdin, leaves `got` in its folder and says `got`
+/// on stdout, then does what `then` says.
+fn part_reader(then: Then) -> Command {
+    #[cfg(windows)]
+    {
+        let first = "$in = [Console]::OpenStandardInput(); $b = New-Object byte[] 4096; \
+                     [void]$in.Read($b, 0, 4096); New-Item got -ItemType File | Out-Null; \
+                     [Console]::Out.WriteLine('got'); [Console]::Out.Flush()";
+        let rest = match then {
+            Then::Hold => "Start-Sleep -Seconds 600",
+            Then::Drain => {
+                "while ($in.Read($b, 0, 4096) -gt 0) {}; New-Item eof -ItemType File | Out-Null"
+            }
+        };
+        let mut command = Command::new("powershell");
+        command.args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            &format!("{first}; {rest}"),
+        ]);
+        command
+    }
+    #[cfg(not(windows))]
+    {
+        let first = "head -c 1 > /dev/null; : > got; printf 'got\\n'";
+        let rest = match then {
+            Then::Hold => "exec sleep 600",
+            Then::Drain => "cat > /dev/null; : > eof",
+        };
+        let mut command = Command::new("sh");
+        command.args(["-c", &format!("{first}; {rest}")]);
+        command
+    }
+}
+
+/// A [`part_reader`] spawned the way a run is, in `dir`.
+fn spawned_reader(
+    then: Then,
+    dir: &std::path::Path,
+) -> (tokio::process::Child, super::super::family::Family) {
+    let mut command = prepare(part_reader(then));
+    command.stdin(Stdio::piped()).current_dir(dir);
+    super::super::family::spawn(&mut command, true, None).unwrap()
+}
+
+/// Whether stdin was open each time a stopped run ended its child
+/// (`child::ending`).
+fn watch_the_end() -> Arc<Mutex<Vec<bool>>> {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let record = Arc::clone(&seen);
+    super::super::child::mock_ending(mry::Any)
+        .returns_with(move |open| record.lock().unwrap().push(open));
+    seen
+}
+
+/// Past what a pipe holds, and past the 2 MiB Windows hands one write
+/// thread (tokio `io::blocking`): the send's writes return only once the
+/// child has read well past its first block.
+const PAST_THE_HANDOFF: usize = 3 * 1024 * 1024;
+
+/// A send that fails once part of the input has reached the child — the
+/// writes are through, so the child has read past its first block and left
+/// `got`; the flush fails — ends the child with its stdin still open, and
+/// the send's failure is the run's answer. Open at the end, the child
+/// cannot have read an end (the only writer is this side's), so it cannot
+/// have taken what came before for the whole of its input.
+#[tokio::test]
+#[mry::lock(crate::process::child::finish, crate::process::child::ending)]
+async fn a_send_failing_past_part_of_the_input_ends_the_child_with_stdin_open() {
+    super::super::child::mock_finish()
+        .returns_with(|| Err(std::io::Error::other("the pipe gave out")));
+    let seen = watch_the_end();
+    let dir = crate::temp::dir();
+    let (mut child, mut family) = spawned_reader(Then::Drain, dir.path());
+    let input = super::super::command::Input::from(vec![b'x'; PAST_THE_HANDOFF]);
+    let outcome = crate::wait::bounded(
+        "the run after a failed send",
+        run_child(
+            &mut child,
+            &mut family,
+            Some(&input),
+            None,
+            &CancellationToken::new(),
+            &mut |_| {},
+        ),
+    )
+    .await;
+    match outcome {
+        Err(failed) => assert_eq!(failed.to_string(), "the pipe gave out"),
+        Ok(_) => panic!("the child answered by itself: it read an end"),
+    }
+    assert!(
+        dir.path().join("got").exists(),
+        "part of the input reached the child"
+    );
+    assert_eq!(
+        *seen.lock().unwrap(),
+        [true],
+        "stdin open as the child was ended"
+    );
+    assert!(!dir.path().join("eof").exists(), "the child read no end");
+}
+
+/// A cancel once part of the input has reached the child (it says `got`,
+/// and holds with the rest of the send under way) ends it with its stdin
+/// still open.
+#[tokio::test]
+#[mry::lock(crate::process::child::ending)]
+async fn a_cancel_past_part_of_the_input_ends_the_child_with_stdin_open() {
+    let seen = watch_the_end();
+    let dir = crate::temp::dir();
+    let (mut child, mut family) = spawned_reader(Then::Hold, dir.path());
+    let input = super::super::command::Input::from(vec![b'x'; PAST_THE_HANDOFF]);
+    let cancel = CancellationToken::new();
+    let stop = cancel.clone();
+    let outcome = crate::wait::bounded(
+        "the cancelled run",
+        run_child(
+            &mut child,
+            &mut family,
+            Some(&input),
+            None,
+            &cancel,
+            &mut |chunk| {
+                if chunk.windows(3).any(|w| w == b"got") {
+                    stop.cancel();
+                }
+            },
+        ),
+    )
+    .await
+    .unwrap();
+    assert!(matches!(outcome, ChildOutcome::Cancelled));
+    assert!(
+        dir.path().join("got").exists(),
+        "part of the input reached the child"
+    );
+    assert_eq!(
+        *seen.lock().unwrap(),
+        [true],
+        "stdin open as the child was ended"
+    );
+}
+
+/// The deadline passing once part of the input has reached the child ends
+/// it with its stdin still open. The clock is paused and moved by hand
+/// only after the child said `got`; a blocking task held for the run keeps
+/// the paused clock from moving by itself (tokio's test-util inhibits its
+/// auto-advance while one runs). The hold lets go by itself after the
+/// suite's budget, so a child that never speaks ends the run at its
+/// deadline and the test fails by name.
+#[tokio::test(start_paused = true)]
+#[mry::lock(crate::process::child::ending)]
+async fn a_deadline_past_part_of_the_input_ends_the_child_with_stdin_open() {
+    let (release, held) = std::sync::mpsc::channel::<()>();
+    let holder =
+        tokio::task::spawn_blocking(move || held.recv_timeout(crate::wait::OVERALL_BUDGET).is_ok());
+    let seen = watch_the_end();
+    let dir = crate::temp::dir();
+    let (mut child, mut family) = spawned_reader(Then::Hold, dir.path());
+    let input = super::super::command::Input::from(vec![b'x'; PAST_THE_HANDOFF]);
+    let budget = Duration::from_secs(60);
+    let (said, heard) = tokio::sync::oneshot::channel();
+    let mut said = Some(said);
+    let mut on_stdout = |chunk: &[u8]| {
+        if chunk.windows(3).any(|w| w == b"got")
+            && let Some(said) = said.take()
+        {
+            said.send(()).unwrap();
+        }
+    };
+    let cancel = CancellationToken::new();
+    let run = run_child(
+        &mut child,
+        &mut family,
+        Some(&input),
+        Some(budget),
+        &cancel,
+        &mut on_stdout,
+    );
+    tokio::pin!(run);
+    tokio::select! {
+        biased;
+        got = heard => got.unwrap(),
+        _ = &mut run => panic!("the run ended before the child read part of its input"),
+    }
+    tokio::time::advance(budget).await;
+    let outcome = run.await.unwrap();
+    release.send(()).unwrap();
+    assert!(holder.await.unwrap(), "the clock's hold let go when told");
+    assert!(matches!(outcome, ChildOutcome::TimedOut));
+    assert!(
+        dir.path().join("got").exists(),
+        "part of the input reached the child"
+    );
+    assert_eq!(
+        *seen.lock().unwrap(),
+        [true],
+        "stdin open as the child was ended"
+    );
+}
+
+/// The width a pipe is asked to take is the width the kernel gives it.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_pipe_takes_the_width_it_is_asked_for() {
+    use std::os::fd::AsFd;
+    let (_reader, writer) = std::io::pipe().unwrap();
+    let given =
+        super::super::child::linux::set_pipe_size(writer.as_fd(), super::super::child::PIPE_WIDTH)
+            .unwrap();
+    assert_eq!(given, super::super::child::PIPE_WIDTH);
+}
+
+/// An input past the pipe's width has git's stdin asked to widen to it; an
+/// input no larger keeps the pipe it was made with. The asks are counted
+/// over the real call; what the kernel gives for one is the test above's.
+#[cfg(target_os = "linux")]
+#[tokio::test]
+#[mry::lock(crate::process::child::linux::set_pipe_size)]
+async fn an_input_past_the_width_widens_the_stdin_and_one_within_it_does_not() {
+    use super::super::child::linux::mock_set_pipe_size;
+    mock_set_pipe_size(mry::Any).calls_real_impl();
+    let width = super::super::child::PIPE_WIDTH;
+    for (size, asked_so_far) in [(width + 1, 1), (width, 1)] {
+        let dir = crate::temp::dir();
+        let (mut child, mut family) = spawned_reader(Then::Drain, dir.path());
+        let input = super::super::command::Input::from(vec![b'x'; size]);
+        let outcome = crate::wait::bounded(
+            "the run",
+            run_child(
+                &mut child,
+                &mut family,
+                Some(&input),
+                None,
+                &CancellationToken::new(),
+                &mut |_| {},
+            ),
+        )
+        .await
+        .unwrap();
+        assert!(
+            matches!(outcome, ChildOutcome::Finished { code: 0, .. }),
+            "{size}"
+        );
+        mock_set_pipe_size(mry::Any).assert_called(asked_so_far);
+    }
+    mock_set_pipe_size(width).assert_called(1);
 }
 
 #[test]

@@ -62,7 +62,9 @@ use crate::process::{GitCommand, GitExecutor};
 /// Subcommands and their emitted options / formats:
 /// - `--version`.
 /// - `add`: `--all`, `--intent-to-add`, `--force`, `--sparse` (2.34).
-/// - `apply`: `--cached`, `--reverse`, `--check`, `--whitespace=nowarn`.
+/// - `apply`: `--cached`, `--reverse`, `--check`, `--whitespace=nowarn`,
+///   `-` as the patch (standard input; `stage_integration` and
+///   `discards_integration` run it on the minimum binary).
 /// - `branch`: `-d`, `-D`, `-m`, `-M`, `--set-upstream-to=`,
 ///   `--end-of-options`.
 /// - `cat-file`: `-s`, `blob`, `commit`; `check-attr`: `-z`, names, `--`.
@@ -73,7 +75,9 @@ use crate::process::{GitCommand, GitExecutor};
 ///   `--skip`, `--quit`; `--no-edit` follows gitcli's negation rule.
 /// - `clean`: `-f`, `-d`; `clone`: `[--] <repository> <directory>`.
 /// - `commit`: `--amend`, `--allow-empty`, `--reset-author`, `--no-edit`,
-///   `--cleanup=whitespace`, `--file`; `commit-tree`: `-p`, `-m`.
+///   `--cleanup=whitespace`, `--file` (`--file=-` reads standard input;
+///   the `pre-commit` hook runs before it is read, and hooks get no stdin —
+///   v2.43.0 `builtin/commit.c` / `hook.c`); `commit-tree`: `-p`, `-m`.
 /// - `config`: `--get`, `--get-regexp`, `-z`, `--global`, `--local`,
 ///   `--show-scope` (2.26), `--unset`, `--unset-all`, `--type=bool` (2.18), and
 ///   `<key> <value>` writes. `checkout.defaultRemote` (2.19),

@@ -13,7 +13,9 @@ mod slots;
 mod trace;
 mod trace_sink;
 
-pub use command::{CommandEnd, CommandObserver, GitCommand, GitOutput, Kept, literal_pathspec};
+pub use command::{
+    CommandEnd, CommandObserver, GitCommand, GitOutput, Input, Kept, literal_pathspec,
+};
 pub use executor::{DEFAULT_TIMEOUT, GitExecutor};
 pub use live::{Live, UntoldEnds};
 pub use meter::Meter;

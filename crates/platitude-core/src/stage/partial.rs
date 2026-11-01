@@ -12,7 +12,6 @@ use crate::patch::{self, HunkSelect, PatchSide};
 use crate::process::{GitCommand, GitExecutor, literal_pathspec};
 use crate::repo::RepoInfo;
 use crate::report::ReportKind;
-use crate::scratch::ScratchFile;
 
 use super::endings;
 use super::refusal::{
@@ -137,13 +136,6 @@ async fn apply_prepared(
         return Err(stale(taking(side)));
     };
 
-    let scratch = ScratchFile::create(&repo.git_dir, "stage.patch", &built).map_err(|source| {
-        GitError::Io {
-            command: "git apply --cached".to_string(),
-            source,
-        }
-    })?;
-
     let mut cmd = GitCommand::new()
         .cwd(workdir)
         // `--whitespace=nowarn` pins behavior against `apply.whitespace`:
@@ -152,7 +144,7 @@ async fn apply_prepared(
     if side == PatchSide::Reverse {
         cmd = cmd.arg("--reverse");
     }
-    cmd = cmd.arg(scratch.path());
+    cmd = cmd.arg("-").input(built);
     apply_built(executor, workdir, target, &raw, cmd, taking(side), cancel).await
 }
 
@@ -241,21 +233,14 @@ pub async fn discard_partial(
         return Err(stale(ReportKind::StaleDiscard));
     };
 
-    let scratch =
-        ScratchFile::create(&repo.git_dir, "discard.patch", &built).map_err(|source| {
-            GitError::Io {
-                command: "git apply --reverse".to_string(),
-                source,
-            }
-        })?;
     let mut cmd = GitCommand::new().cwd(workdir);
     if let Some(setting) = endings::kept(executor, workdir, path, &built, cancel).await? {
         cmd = cmd.args(["-c", setting]);
     }
     let cmd = cmd
         // Pinned against `apply.whitespace`, as when staging.
-        .args(["apply", "--whitespace=nowarn", "--reverse"])
-        .arg(scratch.path());
+        .args(["apply", "--whitespace=nowarn", "--reverse", "-"])
+        .input(built);
     let kind = ReportKind::StaleDiscard;
     apply_built(executor, workdir, target, &raw, cmd, kind, cancel).await
 }

@@ -17,6 +17,7 @@ mod edge_strings;
 mod eol_integration;
 mod eol_setting_integration;
 mod exec;
+mod exec_input;
 mod identity_integration;
 mod integrate_integration;
 mod lfs_integration;

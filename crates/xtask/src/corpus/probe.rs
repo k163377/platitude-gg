@@ -9,7 +9,8 @@
 //! - The existence probe (`preview::blob_is_there`), against a resident
 //!   `--batch-check`.
 //!
-//! The product keeps stdin closed (`scratch`); the resident process is a
+//! The product hands stdin only to a command that reads one finite input
+//! and closes it after (`process::Input`); the resident process is a
 //! design the record decides on.
 
 use std::io::{BufRead, BufReader, Read, Write};

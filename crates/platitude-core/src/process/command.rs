@@ -3,6 +3,7 @@
 
 use std::ffi::OsString;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use super::slots::Pace;
@@ -125,6 +126,36 @@ pub(super) enum TimeBudget {
     Never,
 }
 
+/// What a command reads on stdin ([`GitCommand::input`]): the caller's
+/// buffer taken as it is, which a clone hands on rather than copies. Never
+/// printed — `Debug` says its size alone.
+#[derive(Clone)]
+pub struct Input(Arc<Vec<u8>>);
+
+impl Input {
+    pub(super) fn bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl From<Vec<u8>> for Input {
+    fn from(bytes: Vec<u8>) -> Self {
+        Self(Arc::new(bytes))
+    }
+}
+
+impl From<String> for Input {
+    fn from(text: String) -> Self {
+        Self::from(text.into_bytes())
+    }
+}
+
+impl std::fmt::Debug for Input {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Input({} bytes)", self.0.len())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct GitCommand {
     pub(super) args: Vec<OsString>,
@@ -132,6 +163,8 @@ pub struct GitCommand {
     pub(super) timeout: TimeBudget,
     /// Applied after the fixed environment (`FIXED_ENV`), so it overrides.
     pub(super) env: Vec<(OsString, OsString)>,
+    /// What git reads on stdin ([`Self::input`]); without it, a closed one.
+    pub(super) input: Option<Input>,
     /// The non-zero exit code this command answers by, where it has one.
     pub(super) answer_code: Option<i32>,
     /// What git says when that code is no answer after all
@@ -155,6 +188,7 @@ impl GitCommand {
             cwd: None,
             timeout: TimeBudget::Stock,
             env: Vec::new(),
+            input: None,
             answer_code: None,
             not_an_answer: None,
             not_an_answer_when: None,
@@ -238,6 +272,22 @@ impl GitCommand {
 
     pub fn env(mut self, key: impl Into<OsString>, value: impl Into<OsString>) -> Self {
         self.env.push((key.into(), value.into()));
+        self
+    }
+
+    /// Hands git `input` on stdin — for a command that names stdin as what
+    /// it reads (`commit --file=-`, `apply -`) — and closes it after, so git
+    /// reads its end. Every other command gets a closed stdin: nothing here
+    /// answers a prompt.
+    ///
+    /// Sent while git's output is read, so neither waits on the other. A
+    /// git that closes its end while the send is still under way answers as
+    /// it ended where that is a no, and is a failure where it is a yes
+    /// ([`super::GitExecutor`]'s `ended`) — an input small enough to sit in
+    /// the pipe whole is sent whether git reads it or not. A send that fails
+    /// ends the run with git never reading an end.
+    pub fn input(mut self, input: impl Into<Input>) -> Self {
+        self.input = Some(input.into());
         self
     }
 

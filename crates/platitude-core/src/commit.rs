@@ -1,7 +1,7 @@
 //! Creating and amending commits.
 //!
-//! Messages travel in a scratch file (`--file`): Windows bounds argument
-//! length. `--cleanup=whitespace` is pinned so a repository's
+//! Messages travel on stdin (`--file=-`), not in `-m`: Windows bounds
+//! argument length. `--cleanup=whitespace` is pinned so a repository's
 //! `commit.cleanup` cannot rewrite what the editor showed (a typed `#` line
 //! stays).
 //!
@@ -15,7 +15,6 @@ use crate::error::GitError;
 use crate::oid::Oid;
 use crate::process::{GitCommand, GitExecutor};
 use crate::repo::RepoInfo;
-use crate::scratch::ScratchFile;
 
 /// Knobs of one commit invocation.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -92,8 +91,6 @@ pub async fn commit(
         cmd = cmd.arg("--reset-author");
     }
 
-    // Held until the command finishes; dropping it removes the file.
-    let _scratch;
     if message.trim().is_empty() {
         if !options.amend {
             return Err(GitError::UnexpectedOutput {
@@ -103,16 +100,9 @@ pub async fn commit(
         }
         cmd = cmd.arg("--no-edit");
     } else {
-        let scratch =
-            ScratchFile::create(&repo.git_dir, "COMMIT_MSG", normalized(message).as_bytes())
-                .map_err(|source| GitError::Io {
-                    command: "git commit".to_string(),
-                    source,
-                })?;
         cmd = cmd
-            .args(["--cleanup=whitespace", "--file"])
-            .arg(scratch.path());
-        _scratch = scratch;
+            .args(["--cleanup=whitespace", "--file=-"])
+            .input(normalized(message));
     }
 
     let command = cmd.describe();
