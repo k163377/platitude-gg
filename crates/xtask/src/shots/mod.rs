@@ -17,14 +17,14 @@ mod board;
 mod cli;
 mod crop;
 mod page;
-mod run;
 mod sweep;
+mod taken;
 mod window;
 
 pub(crate) use board::{put_up_since, record, record_dir, shown, written_label};
 pub(crate) use cli::run;
-pub(crate) use run::{Run, Shot};
 pub(crate) use sweep::{seat_freed, seat_reused};
+pub(crate) use taken::{Run, Shot};
 
 use crate::command::{self, Permission, Where};
 
