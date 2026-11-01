@@ -296,7 +296,11 @@ fn listed_by_tasklist(ok: bool, stdout: &str, stderr: &str, pid: u32) -> Behind 
         .map_or(Behind::Nobody, Behind::Named)
 }
 
-/// The same, asking `ps` for the state and the command name.
+/// The same, asking `ps` for the state and the command name — one `-o`
+/// per field: POSIX reads all of an argument after its `=` as the
+/// heading, so `stat=,comm=` is one column on a `ps` that holds to it
+/// (FreeBSD's). The name is the rest of the line: macOS answers with the
+/// program's path, which may hold spaces.
 ///
 /// **A zombie is nobody**: it holds nothing, and in the container PID 1
 /// is cargo, which reaps nothing it did not start — read as alive, it
@@ -304,7 +308,7 @@ fn listed_by_tasklist(ok: bool, stdout: &str, stderr: &str, pid: u32) -> Behind 
 #[cfg(not(windows))]
 fn behind(pid: u32) -> Behind {
     let Ok(out) = std::process::Command::new("ps")
-        .args(["-o", "stat=,comm=", "-p", &pid.to_string()])
+        .args(["-o", "stat=", "-o", "comm=", "-p", &pid.to_string()])
         .output()
     else {
         return Behind::Unanswerable;
@@ -315,9 +319,9 @@ fn behind(pid: u32) -> Behind {
     if !out.status.success() || answer.is_empty() {
         return Behind::Nobody;
     }
-    let mut fields = answer.split_whitespace();
-    let state = fields.next().unwrap_or_default();
-    let name = fields.next().unwrap_or_default();
+    let (state, name) = answer
+        .split_once(char::is_whitespace)
+        .map_or((answer, ""), |(state, name)| (state, name.trim()));
     if state.starts_with('Z') || name.is_empty() {
         return Behind::Nobody;
     }
@@ -369,10 +373,24 @@ pub(crate) fn image_still_at(pid: u32, recorded: &str) -> bool {
 }
 
 /// Whether two spellings name one program. The tolerance is a path, case
-/// and the executable suffix ([`stem`]) — never a guess at what any
-/// particular program is called.
+/// and the executable suffix ([`stem`]), and on a system whose probe cuts
+/// names at a length this does not know, the cut ([`cut_from`]) — never a
+/// guess at what any particular program is called.
 fn same_image(image: &str, recorded: &str) -> bool {
-    !recorded.is_empty() && stem(image).eq_ignore_ascii_case(stem(recorded))
+    let (image, recorded) = (stem(image), stem(recorded));
+    !recorded.is_empty()
+        && (image.eq_ignore_ascii_case(recorded)
+            || (matches!(SPELLED, Spelled::CutUnknown) && cut_from(image, recorded)))
+}
+
+/// Whether `image` is `recorded` cut short: its start, and no shorter than
+/// the shortest cut a probe is known to make ([`LINUX_COMM`]).
+fn cut_from(image: &str, recorded: &str) -> bool {
+    image.len() >= LINUX_COMM
+        && recorded.len() > image.len()
+        && recorded
+            .get(..image.len())
+            .is_some_and(|start| start.eq_ignore_ascii_case(image))
 }
 
 /// Whether an image name is this runner's, however it is spelled: cargo's
@@ -401,25 +419,43 @@ fn stem(image: &str) -> &str {
     }
 }
 
+/// How the probe on this system ([`behind`]) spells a program's name.
+enum Spelled {
+    /// Whole: Windows and macOS.
+    Whole,
+    /// Its first so many bytes.
+    Cut(usize),
+    /// Cut at a length this does not know (FreeBSD's `MAXCOMLEN` is
+    /// nineteen bytes), so a name recorded whole is matched by its start.
+    CutUnknown,
+}
+
+/// The bytes Linux keeps of a name: `TASK_COMM_LEN` less its terminator.
+/// No system known to cut keeps fewer.
+const LINUX_COMM: usize = 15;
+
+const SPELLED: Spelled = if cfg!(target_os = "linux") {
+    Spelled::Cut(LINUX_COMM)
+} else if cfg!(any(windows, target_os = "macos")) {
+    Spelled::Whole
+} else {
+    Spelled::CutUnknown
+};
+
 /// A program a caller spelled itself, written in the vocabulary a probe
 /// on this machine answers in — for a claim that has to record a name
 /// without paying a process to ask.
 ///
-/// **Linux keeps only the first fifteen characters of a program's name**
-/// (`TASK_COMM_LEN` less its terminator): recorded whole, a runner copy
-/// `xtask-runner-12345` never matches the `xtask-runner-1` that `ps`
-/// answers, and reads as a stranger's on every step. Windows and macOS do
-/// not truncate.
+/// **Where the probe cuts a name, it is recorded cut** ([`Spelled`]):
+/// recorded whole, a runner copy `xtask-runner-12345` never matches the
+/// `xtask-runner-1` that `ps` answers on Linux, and reads as a stranger's
+/// on every step.
 pub(crate) fn as_probed(program: &str) -> String {
     let stem = stem(program);
-    if !cfg!(target_os = "linux") {
+    let Spelled::Cut(keep) = SPELLED else {
         return stem.to_string();
-    }
-    const COMM: usize = 15;
-    stem.char_indices()
-        .nth(COMM)
-        .map_or(stem, |(at, _)| &stem[..at])
-        .to_string()
+    };
+    stem[..stem.floor_char_boundary(keep)].to_string()
 }
 
 /// A pid no process on this machine can carry — for the tests that need a
@@ -434,8 +470,8 @@ pub(crate) const NO_SUCH_PID: u32 = 0x7FFF_FFFD;
 #[cfg(test)]
 mod tests {
     use super::{
-        NO_SUCH_PID, image_of, image_still_at, is_task_runner, process_exists, same_image,
-        task_runner_exists,
+        NO_SUCH_PID, SPELLED, Spelled, cut_from, image_of, image_still_at, is_task_runner,
+        process_exists, same_image, task_runner_exists,
     };
 
     #[test]
@@ -531,6 +567,34 @@ mod tests {
         ] {
             assert!(!same_image(image, recorded), "{image} vs {recorded}");
         }
+    }
+
+    /// A probe that cuts at a length unknown here answers the start of
+    /// the name; a short name that merely starts the same is another
+    /// program.
+    #[test]
+    fn a_name_cut_short_is_known_by_its_start() {
+        for (image, recorded) in [
+            ("xtask-runner-12", "xtask-runner-12345"),
+            ("xtask-559934b92141a", "xtask-559934b92141a568"),
+            ("XTASK-RUNNER-12", "xtask-runner-12345"),
+        ] {
+            assert!(cut_from(image, recorded), "{image} vs {recorded}");
+        }
+        for (image, recorded) in [
+            ("xtask-runner-1", "xtask-runner-12345"),
+            ("claude", "claude-code"),
+            ("xtask-runner-12345", "xtask-runner-12345"),
+            ("xtask-runner-99", "xtask-runner-12345"),
+        ] {
+            assert!(!cut_from(image, recorded), "{image} vs {recorded}");
+        }
+        // Only where the probe's cut is not known: where it is, a name
+        // answered short of the record is another program's.
+        assert_eq!(
+            same_image("xtask-runner-12", "xtask-runner-12345"),
+            matches!(SPELLED, Spelled::CutUnknown)
+        );
     }
 
     /// A live number is not by itself an answer: the runner reads as the
