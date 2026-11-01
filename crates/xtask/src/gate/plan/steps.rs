@@ -686,6 +686,15 @@ fn unit_steps(g: &Graph, sorted: &Sorted) -> Vec<Step> {
 
 /// Each integration binary's modules in the reach, on both sides where
 /// the package is.
+///
+/// One unit per binary, though `test it (all)` is the gate's longest unit
+/// and so what a landing may wait out (`record`): about half of it is
+/// compiling the one binary, which a split by module leaves in its first
+/// unit, so the bound drops only to the next longest unit (`test xtask
+/// (all) linux`); and the unit does not end the host side, so the gate
+/// would not shrink. A split would first have to prove by machine that the
+/// tests run, their cwd, environment, artifacts and exit code are the same
+/// (the numbers: ci/baseline/gate-load-windows-x64.md §割り込みを妨げる単位).
 fn it_steps(g: &Graph, sorted: &Sorted) -> Vec<Step> {
     let mut steps = Vec::new();
     for ((package, binary), (filters, files)) in &sorted.integration {
@@ -814,6 +823,14 @@ fn binary_steps(
     let binary_moved = qml_moved
         || sorted.rust_in.contains_key("platitude-app")
         || sorted.rust_in.contains_key("platitude-core");
+    // The steps that build and run the app (`shipped`, the verbs, `bare`)
+    // read the two product crates whole, their `tests/` included. Not
+    // narrowed to what the build reads: that a directory may be dropped
+    // is a proof of absence, a source scan can say no more than "not
+    // found", and a miss answers with a reused green. The cost: a test
+    // added on a branch with a product change runs those steps once more.
+    // Dropping it takes a guarantee (the build naming what it read), not
+    // a scan.
     let binary_inputs = cargo_inputs(&[&app(), &core()]);
     if qml_moved {
         steps.push(step(
@@ -921,8 +938,10 @@ fn binary_steps(
 /// The selected lines this gate owes (`tiers`): the whole gate owes every
 /// line but a twin; a gate before a merge leaves the whole lines out,
 /// except one that is the only witness of a component the change reaches
-/// — the only line whose run shows it (`lines::Shown`;
-/// 反映前テストの機械化.md「唯一の証人の例外」).
+/// — the only line whose row promises it (`Lines::declared`;
+/// 反映前テストの機械化.md「唯一の証人の例外」). Not by the static
+/// composition (`gate::shown`): that feeds only the `by what they show:`
+/// count and `verbs --shown / --why`.
 fn owed_lines(
     read: &Reading<'_>,
     reached: &BTreeSet<String>,

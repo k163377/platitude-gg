@@ -86,7 +86,10 @@ impl RepoSession {
     /// remote list and `core.autocrlf` — when that file has been written
     /// since. `git remote add` in a terminal and the settings screen's
     /// line-ending write (`models::line_endings` spawns against a path)
-    /// move no ref and land no write, so nothing else would notice.
+    /// move no ref and land no write, so nothing else would notice — and a
+    /// repository just told to convert would go on warning about the files
+    /// it converts (pinned in `session_integration::query` by
+    /// `the_line_ending_setting_written_beside_the_session_reaches_the_notices`).
     ///
     /// A stat per poll tick, not the process the cache saves. It watches
     /// the repository's own config (`--git-path config`, the common one
@@ -145,6 +148,12 @@ impl RepoSession {
     /// the current state anyway); the re-read caches the new mark, so the
     /// next tick finds them equal. The refs pass hashes the mark into
     /// `join_key`, so the snapshot goes out fresh though no ref moved.
+    ///
+    /// A detached HEAD's tick reads no marks (its push is `Closed`), so a
+    /// mark moved meanwhile shows only on the next write that drops the
+    /// remotes (a fetch or a name's delete does not) or ref move. Pinned in
+    /// `session_integration::query` by
+    /// `a_global_mark_moved_in_a_terminal_reaches_the_snapshot`.
     pub(super) fn note_push_default(self: &Arc<Self>, seen: &Option<remote::PushDefault>) {
         let held = self.remotes.peek(|remotes| remotes.push_default.clone());
         if held.is_some_and(|held| held != *seen) {

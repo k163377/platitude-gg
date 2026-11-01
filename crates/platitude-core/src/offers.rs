@@ -8,6 +8,16 @@
 //! still running is no input: a menu opened under one keeps these rows
 //! and greys them until it ends (`AppMenu.runningWhy`), so its shape does
 //! not depend on when it was opened.
+//!
+//! **These are the rules, and the app holds no copy.** It asks by value
+//! through `GitFacts` (`refMenuOffers` / `commitMenuOffers`, frozen into
+//! the menus' `can*` as `RefRowMenu.offerOn` / `CommitMenuState.openRowMenu`
+//! open; `switchAction` for `RepoPage.switchToRef`), and what follows from
+//! the standing state arrives as `WorktreeModel` properties derived at
+//! drain (`movesBlocked` / `leaveUndoes` / `leaveCode` / `opSkipFree`).
+//! QML keeps only the lookups that feed them (`worktreeHolding` /
+//! `localNameFor` / `upstreamOf` / `oidOfName`), the `qsTr` wording and
+//! each row's kind condition.
 
 mod message;
 mod moves;
@@ -103,7 +113,7 @@ pub struct RefMenuOffers {
     pub switch_asks: bool,
     /// A new branch on this row's commit — any ref but a stash, the
     /// current branch and a detached HEAD included
-    /// (デザイン規約 §グラフ行の右クリック).
+    /// (デザイン規約 §ブランチ・コミットへの移動).
     pub branch_here: bool,
     /// merge / rebase with this row as the far side: needs a current
     /// branch to move, and a row that is not it.
@@ -292,7 +302,14 @@ pub struct CommitMenuOffers {
     /// meant).
     pub edit_history: bool,
     /// reset — the branch taken back to this commit. Asks the same of the
-    /// repository as [`Self::integrate`].
+    /// repository as [`Self::integrate`]: a branch (a detached HEAD has
+    /// none to move), a commit row (a stash is no branch's history), and a
+    /// commit other than HEAD's (nothing would move). False takes the card
+    /// and the title row that opens it away together. Under a standing
+    /// operation the card stays, greyed ([`Self::standing`]): mid-merge
+    /// `--soft` refuses and `--mixed` / `--hard` drop `MERGE_HEAD` silently,
+    /// abandoning the merge; the way out is the exit card's `--continue` /
+    /// `--abort`.
     pub move_branch: bool,
     /// A new branch on this commit, standing on it — detached too (the way
     /// back out, デザイン規約 §ブランチ・コミットへの移動), and on HEAD's
@@ -471,6 +488,9 @@ pub fn worktree_rename(main: bool, locked: bool, gone: bool) -> WorktreeRename {
 
 /// What a new worktree can be made to stand on, from the row a menu
 /// was opened on: the two rows that make one (デザイン規約 §worktree を作る).
+/// Both give it a branch — no row makes a detached worktree: a branch row
+/// takes its branch, a commit or tag row a new one, a remote row a local
+/// one of the same name set to follow it, as `switch` does there.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct WorktreeOffers {
     /// `Create worktree here…` — a new branch on this row's commit, out in

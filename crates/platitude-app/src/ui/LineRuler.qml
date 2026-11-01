@@ -6,8 +6,13 @@ import platitude.ui
 // monospaced; a combining mark is a character with no advance). The owning pane sets `textFormat` and
 // `font.pixelSize` to what its rows are drawn in, and nothing here unescapes: places are counted in the text the
 // format says the string stands for. Every function puts its line on first, so nobody binds to it and one ruler
-// serves a pane, answering cold (`tests/qml/tst_diffhit.qml`, `tst_commandshit.qml`;
-// rules-refs/app-ui.md「diff の当たり判定と 2 つの帯は、その行のレイアウトそのものに訊く」).
+// serves a pane, answering cold (`tests/qml/tst_diffhit.qml`, `tst_commandshit.qml`, expectations built another way).
+//
+// **The one road from a point to a place and from a run to a wash** — a `Text` has only `contentWidth` / `advance` /
+// `linkAt`. The caller hands the row's weight too (`DiffRowDelegate.codeBold`): a bold face that advances differently
+// would put the washes and the presses out together. Rust answers bytes ↔ places only
+// (`encode::markup::spelled_ranges` / `source_byte`, UTF-16 units; `DiffModel.sourceByteAt`) — no pixel reaches the
+// model. Headless: `diff-blank`.
 TextEdit {
     id: ruler
 
@@ -34,9 +39,10 @@ TextEdit {
     /// empty for nothing (`encode::markup::spelled_ranges` / `plain_ranges`).
     ///
     /// On a line that can read both ways (`twoWay`) places stop being in order, so a run's two ends say nothing about
-    /// what lies between them; such a line is walked place by place and touching pieces merged, so every place the run
-    /// names is inside a piece. **Known limit**: a run beginning or ending inside an opposite-direction run is covered
-    /// generously — Qt answers only one of a direction boundary's two carets.
+    /// what lies between them (both can name the same x, and the wash comes out zero wide); such a line is walked place
+    /// by place and touching pieces merged, so every place the run names is inside a piece. **Known limit**: a run
+    /// beginning or ending inside an opposite-direction run is covered generously — Qt answers only one of a direction
+    /// boundary's two carets.
     function rectsOf(line, bold, runs) {
         if (!runs || runs.length === 0)
             return []
@@ -55,8 +61,9 @@ TextEdit {
         }
         return out
     }
-    /// Where one place is drawn. Only a place the line has — past the end, Qt answers a rectangle at nowhere and a
-    /// warning (hence the check in `rectsOf`).
+    /// Where one place is drawn. Only a place the line has — past the end, Qt answers a rectangle at nowhere and, per
+    /// place, `QTextCursor::setPosition: Position 'N' out of range` (hence the check in `rectsOf`, pinned by
+    /// `tst_diffhit.qml`'s `test_a_run_the_line_has_no_places_for_washes_nothing`).
     function xOf(at) { return ruler.positionToRectangle(at).x }
     function spanned(a, b) { return { x: Math.min(a, b), w: Math.abs(b - a) } }
     /// One run, place by place, with touching pieces merged.

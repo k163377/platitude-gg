@@ -64,6 +64,11 @@ impl Edit {
 ///
 /// Refuses a range containing a merge, which a plain interactive rebase
 /// would flatten (`--rebase-merges` is not offered here).
+///
+/// `oid` is the commit's object name: it is looked for among the range's
+/// rows (`decide_edit`), so a symbolic name such as `HEAD` is never found
+/// and comes back refused as off the branch. Callers (the single drop
+/// included) hand the hex.
 pub async fn plan_edit(
     executor: &GitExecutor,
     workdir: &Path,
@@ -151,9 +156,13 @@ pub(crate) enum Base {
     /// `--root`. Also the answer when `bottom` itself does not exist (the
     /// caller reached past the first commit; its own scan says so better).
     Root,
-    /// Something under it that this clone never fetched: it cannot be
-    /// named and `--root` would be wrong, so it must never read as
-    /// [`Base::Root`].
+    /// Something under it that this clone never fetched (a shallow
+    /// clone's `--depth` edge): it cannot be named and `--root` would be
+    /// wrong — the replay would rewrite the edge as the first commit and
+    /// cut the branch off from the history it never fetched — so it must
+    /// never read as [`Base::Root`]. The plan's door (`unfetched-base`) and
+    /// the single squash / drop of `plan_edit`
+    /// (`report::rewrite_unfetched_base`) both refuse it.
     Unfetched,
 }
 

@@ -222,7 +222,9 @@ impl Hub {
         self.state.tabs = tabs;
     }
 
-    /// Writes the state out if it has moved since the last write.
+    /// Writes the state out if it has moved since the last write. Compared
+    /// with the last write, not a dirty flag: the window reports on a timer,
+    /// and every report would raise the flag.
     pub fn flush_state(&mut self) {
         if self.state == self.saved_state {
             return;

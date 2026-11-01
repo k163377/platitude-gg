@@ -4,7 +4,7 @@ import QtQuick
 
 // The middle-click gesture under way in this window, if any (`MiddleAutoScroll`). One at a time: a press on a second
 // surface is the reader moving on. And one door for Escape: the key reaches the page, never the surface being sent,
-// so the page asks here (`RepoPage.escapePressed`).
+// so the page asks here first (`RepoPage.escapePressed`; `SettingsDialog`'s Cancel shortcut likewise).
 QtObject {
     /// The hand whose gesture is running, or null; the hands write it as they start and stop.
     property Item running: null

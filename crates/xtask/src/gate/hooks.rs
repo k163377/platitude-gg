@@ -15,7 +15,14 @@
 //! (`pgg-gate/hooks/`), where no seat's edit, reset or removal reaches it.
 //! Beside it, `tree` names the checkout whose task runner answers, so the
 //! verdict never depends on the tree the git command ran in (a seat
-//! mid-edit, say).
+//! mid-edit, say), and a seat whose task runner is broken does not stop
+//! main. The script is copied from the primary checkout's `.githooks`, else
+//! from this tree's; a `core.hooksPath` someone else set is left, and is an
+//! error (`install`).
+//!
+//! While main is checked out, git's own guard answers `fetch . x:main` and
+//! `branch -f main` before this hook does; `update-ref` is a bare write,
+//! and this hook is its only guard.
 
 use std::path::{Path, PathBuf};
 
@@ -171,7 +178,8 @@ pub(crate) fn install(dir: &Path) -> Result<String, String> {
 }
 
 /// Makes the file executable where the bit exists — git silently ignores
-/// a hook it cannot execute.
+/// a hook it cannot execute. The checked-in script is `100755` in the
+/// index, which a copy written as plain text does not carry.
 fn write_executable(path: &Path, text: &str) -> Result<(), String> {
     std::fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))?;
     #[cfg(unix)]

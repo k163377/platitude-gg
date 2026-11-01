@@ -119,7 +119,7 @@ Item {
             tryVerify(() => !level.visible)
         }
 
-        /// A branch's three delete forms are a fixed table whose rows stay and grey (デザイン規約 §メニュー).
+        /// A branch's three delete forms are a fixed table whose rows stay and grey (`RefBranchMenu`).
         function test_why_each_row_of_a_branchs_table_is_out_data() {
             return [
                 {
@@ -210,7 +210,7 @@ Item {
             verify(branchCard.upstreamItem.offered, "the branch the tree is on writes settings like any other")
         }
 
-        /// Taking the upstream off (デザイン規約 §ブランチが測られる相手を決める): seated by core's word, in words that pair
+        /// Taking the upstream off (`RefBranchMenu`'s unset row): seated by core's word, in words that pair
         /// with `Set upstream…`, naming what goes, the plain delete's two presses in the plain ink.
         function test_the_unset_row_names_the_upstream_it_takes_off() {
             root.standOn({})
@@ -384,7 +384,7 @@ Item {
         }
 
         /// git's refusal lands while the menu stands: the row turns into the held `-D` under the hand
-        /// (デザイン規約 §左メニューの所作), and the pair follows. Only a refusal of this card's branch.
+        /// (`BranchDeleteRow.onHeld`), and the pair follows. Only a refusal of this card's branch.
         function test_a_refusal_turns_the_row_into_the_held_force_delete() {
             root.standOn({})
             compare(deleteRow.code, "branch --delete")

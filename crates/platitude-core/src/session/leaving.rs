@@ -1,13 +1,27 @@
 //! What a delete takes off the graph before git has answered for it
 //! (デザイン規約 §消す操作は先に画面から消す): the commits only the names
 //! leaving hold, gone the moment the delete is accepted and back the
-//! moment it is refused.
+//! moment it is refused (user decision — ask before changing). Which
+//! rows go is decided off the graph on screen alone.
+//!
+//! A merged branch's plain `-d` takes no commit row: git deletes without
+//! refusing only a branch its upstream or HEAD reaches, and the graph
+//! draws both. Nor does a worktree with a branch out: the branch keeps
+//! its rows standing.
 //!
 //! Laid out again off the walk's record of the rows on screen ([`Walked`]),
 //! as a pass's own rows are (`relay::Laying`) — no git, no wait. While a
 //! delete is out, every pass that lands is laid the same way
 //! (`RepoSession::run_swap_pass`), so a walk begun before git answered
 //! cannot bring the rows back.
+//!
+//! The walk behind a landed delete mostly finds the same picture and
+//! swaps nothing. It redraws where a full window fills the room from
+//! below (`footer_without`), where a deleted remote branch changes a
+//! row's "on the remote" mark, and where commits of the same second come
+//! out of a walk in another order — only ever into the right picture.
+//! Pinned by `leaving_tests` and `session_integration::delete_stand_in`, which holds git at
+//! `reference-transaction` / `pre-receive` barriers to see the order.
 
 use std::collections::HashSet;
 

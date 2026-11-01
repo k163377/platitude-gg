@@ -9,8 +9,8 @@ import platitude.ui
 /// which verify-ui holds against the line's registered row (`xtask::verify::observed`; the table itself,
 /// `crates/xtask/verb-lines.txt`, is written by people) — and the two walks held against each other are the one
 /// claim every run makes of every picture: the parts standing in it are the parts the verb completed on
-/// (反映前テストの機械化 §観測 / §検証時点; the walk's rules are the `WindowCensus` line of rules-refs/app-ui.md).
-/// Not `went=`: another verb's line uses it, and `must_say` matches by substring.
+/// (反映前テストの機械化 §観測 / §検証時点; how a run uses it is the `WindowCensus` line of rules-refs/app-ui.md, and
+/// how it walks is the comments below). Not `went=`: another verb's line uses it, and `must_say` matches by substring.
 ///
 /// Popups stand under the window's overlay, a child of the root item, so one walk from the root sees them too.
 Item {
@@ -39,6 +39,8 @@ Item {
     /// The objects this walk visited, by their address-bearing string; `true` once visited as shown.
     property var visited: ({})
 
+    /// The part's name off `<File>_QMLTYPE_n`. A name that is no file — an inline component's bare name, a C++ type's
+    /// class name — is dropped by the parent (`Composition::is_component`).
     function note(object) {
         const text = String(object)
         const mark = text.indexOf("_QMLTYPE_")
@@ -125,8 +127,10 @@ Item {
             return
         const key = String(object)
         // A list keeps pooled delegates alive, and hidden panes can receive their rows after the pane went away.
-        // Their existence depends on arrival order; count only the delegates the visible list still owns.
-        // Popups can stand outside a hidden declaring branch, and an offered submenu stands as its parent's row.
+        // Their existence depends on arrival order; count only the delegates the visible list still owns. A fixed frame
+        // and its helpers still count while hidden: the census keeps the declared composition, and narrows to what is
+        // on screen only the rows, which asynchronous building and pooling move. Popups can stand outside a hidden
+        // declaring branch, and an offered submenu stands as its parent's row.
         if (object.opened !== undefined)
             shown = object.visible === true || offered === true
         else if (!census.inList(object))

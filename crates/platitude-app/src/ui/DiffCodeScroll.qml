@@ -25,7 +25,8 @@ Item {
     /// the typed property null, and says so.
     readonly property bool paneHovered: codeScroll.paneHand !== null && codeScroll.paneHand.hovered
     /// The file on screen: a different one starts at its left edge, the same one read again keeps its place, as the
-    /// vertical place is kept (`DiffScrollPlace`).
+    /// vertical place is kept (`DiffScrollPlace`) — back at the left edge after every partial stage, staging a long
+    /// line's middle bit by bit could not be done.
     required property string file
 
     /// How far the code has been sent. The reach is handed in (`codeWidth`, from `DiffReach`); the clamp is this
@@ -34,8 +35,10 @@ Item {
     readonly property real maxOffset: Math.max(0, codeScroll.codeWidth - codeScroll.roomWidth)
     readonly property bool canPan: codeScroll.maxOffset > 0
 
-    /// The strip below the rows the bar stands on, given back when there is nowhere to send (デザイン規約 §diff を横へ送る).
-    /// Read off the bar: no token says how tall it is.
+    /// The strip below the rows the bar stands on, given back when there is nowhere to send (デザイン規約 §diff を横へ送る;
+    /// user decision — ask before changing): while sending, the line being read is that very line, so the bar may not
+    /// lie over it; the strip stays open as long as there is somewhere to send. Read off the bar: no token says how
+    /// tall it is.
     readonly property real barRoom: codeScroll.canPan ? bar.height : 0
 
     /// Sends the code `dx` further, clamped — the wheel and the hand come through here.
@@ -61,7 +64,9 @@ Item {
         width: codeScroll.view.width
         height: codeScroll.view.height
 
-        // Middle-click autoscroll, both ways, sideways anywhere in the pane (デザイン規約 §diff を横へ送る).
+        // Middle-click autoscroll, both ways, sideways anywhere in the pane (デザイン規約 §diff を横へ送る): unlike the
+        // graph (sideways only from a press over the lanes), the diff is one text column throughout, with no border to
+        // divide by. Where there is nowhere to send, the cursor (`SizeVerCursor`) says so first.
         MiddleAutoScroll {
             id: hand
             anchors.fill: parent
@@ -75,7 +80,10 @@ Item {
             }
         }
         // `AlwaysOn`: Fusion shows an unattached bar's handle only under the pointer, and here the pane decides when it
-        // is out. It stands in the `barRoom` strip below the rows (rules-refs/app-ui.md「diff は横へ送る・溝は動かない」).
+        // is out. It stands in the `barRoom` strip below the rows (`DiffPane`'s `Layout.bottomMargin`), hence
+        // `anchors.top: parent.bottom`: the strip and the bar read the one number apart, and `anchors.bottom` would
+        // leave the strip empty and put the bar back over the last row (デザイン規約 §diff を横へ送る). Only the
+        // `x` of the line inside each row's clipped cell moves (`DiffLineCell`), never the list's `contentX`.
         AutoScrollBar {
             id: bar
             inArea: codeScroll.paneHovered

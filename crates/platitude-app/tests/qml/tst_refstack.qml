@@ -112,7 +112,7 @@ Item {
             compare(stack.sheets, ["local"])
         }
 
-        // Another worktree on this commit is one colour, with a branch out or not (デザイン規約 §ref の種別).
+        // Another worktree on this commit is one colour, with a branch out or not (`RefChip.kindKeyOf`).
         function test_a_worktree_with_no_branch_reads_as_the_branch_a_worktree_holds() {
             stack.records = [root.worktree]
             compare(stack.sheets, [])
@@ -122,7 +122,7 @@ Item {
             compare(stack.sheets, ["worktree", "local"], "the two are one colour, so one sheet")
         }
 
-        // The front card's own colour is the one a fan may repeat (デザイン規約 §重ね表示). Read with the front card's
+        // The front card's own colour is the one a fan may repeat (`RefChipStack.sheets`). Read with the front card's
         // key: a single `worktree` sheet is also what one worktree plus one other colour comes to.
         function test_two_worktrees_on_one_commit_put_a_green_sheet_behind_a_green_card() {
             stack.records = [root.held, root.worktree]
@@ -148,7 +148,7 @@ Item {
             verify(!stack.chipItem.hasTree)
         }
 
-        // The padlock is the worktree's, on either shape a worktree takes (デザイン規約 §ref の種別). The colour does not
+        // The padlock is the worktree's, on either shape a worktree takes (`RefChip.hasLock`). The colour does not
         // move with it: a locked worktree is still a worktree.
         function test_the_padlock_stands_on_a_locked_worktree_and_nowhere_else() {
             stack.records = [root.held]
@@ -212,7 +212,7 @@ Item {
         }
 
         // The drop is the steepest whole step the sheet count fits in the row, capped at the step out
-        // (デザイン規約 §重ね表示). The rule is held, not the numbers, so a token that moves the row or the chip does not
+        // (`RefChipStack.drop`). The rule is held, not the numbers, so a token that moves the row or the chip does not
         // move the test.
         function test_the_count_decides_how_far_the_fan_falls() {
             const rows = depths()
@@ -245,7 +245,7 @@ Item {
     }
 
     // What the front card's count costs the name. The fan says which colours, the count how many names
-    // (デザイン規約 §重ね表示) — separate channels.
+    // (`RefChipStack`) — separate channels.
     TestCase {
         name: "RefChipCount"
         when: windowShown
@@ -304,7 +304,7 @@ Item {
         }
 
         // The badge is this ref's own state and the count is the others behind it, so the badge stands with the name
-        // (デザイン規約 §重ね表示). Nothing else holds this: swapped, every sum in the card stays the same.
+        // (`RefChip`'s contents row). Nothing else holds this: swapped, every sum in the card stays the same.
         function test_the_badge_stands_with_the_name_and_the_count_behind_them() {
             stack.records = [root.dressed].concat(tags(41))
             const chip = stack.chipItem
@@ -378,9 +378,8 @@ Item {
         }
     }
 
-    // A chip whose name reads something says so inside its frame
-    // (デザイン規約 §グラフ行のダブルクリック「カードの行は、その名前が読んでいる相手を同じ枠の中で言う」). No picture can answer
-    // these: a line box and a two-pixel seat are not readable off a screenshot.
+    // A chip whose name reads something says so inside its frame (`RefChip.mate`). No picture can answer these: a line
+    // box and a two-pixel seat are not readable off a screenshot.
     TestCase {
         id: refChipReading
         name: "RefChipReading"
@@ -402,7 +401,7 @@ Item {
         }
 
         // The graph's own chips read nothing and stay one line: a graph row has no room for a second
-        // (デザイン規約 §グラフ行のダブルクリック).
+        // (`RefChip.mate`).
         function test_a_chip_that_reads_nothing_is_one_line() {
             readingChip.records = [root.current]
             compare(readingChip.height, Theme.fontChipLine + 2 * Theme.borderWidth)

@@ -275,7 +275,8 @@ fn clipped(line: &str) -> String {
 /// How full the machine was, in the budget every gate on it draws on
 /// (`crate::budget`). Also read under the app's own watchdog
 /// (`super::outcome`), where it tells a verb that is wrong from one that
-/// was starved.
+/// was starved — with the same verb fired once alone. The two reds are
+/// exclusive, so the line comes with one of them only.
 pub(super) fn lanes_line() -> String {
     let Some(ledger) = ledger_dir() else {
         return "lanes: not read (no repository here to find them beside)".to_string();

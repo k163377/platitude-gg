@@ -202,7 +202,7 @@ async fn restore(lines: usize, rounds: usize, op: &str) {
     repo.git(&["add", "--", "f.txt"]);
     let work_tree = repo.git(&["write-tree"]);
     repo.git(&["reset", "-q", "--hard", &base]);
-    // A copy as a discard leaves one (破棄記録仕様.md §2): the working tree's
+    // A copy as a discard leaves one (`discards::copy`): the working tree's
     // tree over the base, and an index that held nothing staged.
     let base_tree = repo.git(&["rev-parse", "HEAD^{tree}"]);
     let index = repo.git(&["commit-tree", "-p", &base, "-m", "index", &base_tree]);

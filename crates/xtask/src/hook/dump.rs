@@ -1,5 +1,13 @@
 //! The dump guard: a read whose output is the whole file, which every
 //! call after it reads again.
+//!
+//! It refuses only a whole-file print (`cat` / `type` / `Get-Content` /
+//! `gc`) of a file over `LIMIT`, and has no line-count limit. A range read
+//! (`sed -n 'a,bp'`, `head -n`, `Get-Content -TotalCount` ...) is never
+//! refused, however many bytes it prints (user decision — ask before
+//! changing): rules/app-ui.md has sessions read only the § they touch of
+//! デザイン規約, many § run past 8KB, and refusing by bytes printed would
+//! push that read into fragments or Grep.
 
 use super::payload::{deny, string_field};
 use super::shell::{pipe_pieces, program_at, program_name, shell_segments};

@@ -89,7 +89,7 @@ ColumnLayout {
         return true
     }
     /// Automation: the line-ending chapter in one reading. `scope` is always local — `core.autocrlf` is written only
-    /// into the picked repository (規約 §設定の画面).
+    /// into the picked repository (`LineEndingField`).
     function endingsTally() {
         return "scope=local state=" + repoEndings.state
              + " were=" + pane.endingsWere
@@ -137,7 +137,9 @@ ColumnLayout {
         }
     }
 
-    // Help text, not `warning` like the group above: warning on both would say nothing on either (規約 §設定の画面).
+    // Help text, not `warning` like the group above (user decision — ask before changing): warning on both would say
+    // nothing on either, and the danger is the side rewriting the whole computer. It says two things: it writes the
+    // chosen repository's own config, and it stands over the values above.
     HelpText {
         text: qsTr("Saved in the chosen repository's own git configuration. What is set here stands over the values above, for that repository only.")
     }
@@ -154,7 +156,10 @@ ColumnLayout {
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spaceSm
-            // Picking only: this screen writes only to repositories already open (デザイン規約 §選ぶ欄と打つ欄).
+            // Which repository comes first, ahead of the chapters, and wears a field caption: it is what the settings
+            // below are about. It starts on the repository the reader is in (`landOnFront`), offers only the
+            // repositories standing in the tab strip, under the tabs' own names. Picking only: this screen writes only
+            // to repositories already open (デザイン規約 §選ぶ欄と打つ欄).
             AppCombo {
                 id: chooser
                 Layout.fillWidth: true
@@ -187,19 +192,20 @@ ColumnLayout {
             note: qsTr("Written as user.name and user.email in that repository. An empty box is not written at all.")
             // The touch comes from `edited`, not a text change: a reload changes the text too (picking another
             // repository empties the boxes first, `RepoConfigModel::read_repo`), and would stop them following git —
-            // leaving empty boxes that ask for the identity to be taken out.
+            // leaving empty boxes that ask for the identity to be taken out (`settings-repo <index>`'s `matches=`).
             onEdited: pane.touched = true
             onSubmitted: pane.submitIdentity()
         }
-        // What an empty box falls back to lives in files this screen does not show, so it is said here
-        // (規約 §設定の画面).
+        // Who a commit there would carry now, under the boxes: what an empty box falls back to lives in files this
+        // screen does not show, so the empty box cannot say it.
         HelpText {
             visible: repoConfig.effectiveName !== "" && repoConfig.effectiveEmail !== ""
             text: qsTr("A commit made there now would be attributed to %1 <%2>.")
                   .arg(repoConfig.effectiveName).arg(repoConfig.effectiveEmail)
         }
         // Its own Save, as in the global group. No `filled`: empty is an answer here, and requiring both boxes would
-        // refuse taking an override back out.
+        // refuse taking an override back out. Gated on the read having landed instead (`unsaved`): before it, empty
+        // boxes look the same as "no override".
         DialogActions {
             id: identityActions
             acceptKind: "check"

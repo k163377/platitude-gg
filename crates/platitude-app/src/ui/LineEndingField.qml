@@ -4,9 +4,15 @@ import platitude
 import platitude.ui
 
 // The `core.autocrlf` chooser of the settings screen's `REPOSITORY OVERRIDE` — the only place this app writes it
-// (デザイン規約 §設定の画面): the chooser, the lines around it and git's words on a failed write. The values are git's
-// spelling; the words are sentences about what happens (CLAUDE.md 絶対制約), with `LF` / `CRLF` as plain text
-// (デザイン規約 §改行コードの警告).
+// (user decision — ask before changing): the app has no operation that rewrites the user's machine itself (no
+// `--global`); a reader going to change their own repository is another matter. `core.eol` and `.gitattributes` are
+// not written either, and the line-ending warning has no door here (`platitude_core::eol`). The chooser, the lines
+// around it and git's words on a failed write. The values are git's spelling; the words are sentences about what
+// happens (CLAUDE.md 絶対制約), with `LF` / `CRLF` as plain text — a chip carries no all-capitals (デザイン規約
+// §改行コードの警告). One key, so a picking box (no sunken ground) that writes on the pick and is read back
+// (`LineEndingsModel`), with no Save.
+// Headless: `settings-eol <true|input|false|inherited>`; the run sends the chapters to their foot
+// (`SettingsDialog.autoShowChapterFoot`) — at rest the picture would hold the group above.
 ColumnLayout {
     id: field
 
@@ -36,7 +42,9 @@ ColumnLayout {
         return field.values.indexOf(value)
     }
 
-    /// Values and their words at matching indexes. The first row writes nothing, so it is named for what it gets you.
+    /// Values and their words at matching indexes: four answers, worded by what happens (user decision — ask before
+    /// changing). git takes three; the first row writes nothing, so it is named for what it gets you — `Inherited`, the
+    /// identity boxes' placeholder word (`SettingsRepoPane`).
     readonly property var values: ["", "true", "input", "false"]
     readonly property var words: [
         qsTr("Inherited"),
@@ -64,12 +72,12 @@ ColumnLayout {
     Layout.fillWidth: true
     spacing: Theme.spaceLg
 
-    // What the setting is goes over the chooser, what it amounts to now goes under (デザイン規約 §設定の画面).
+    // What the setting is goes over the chooser, what it amounts to now goes under (`SettingsSection`).
     HelpText {
         visible: text !== ""
         text: field.note
     }
-    // No caption: the chapter heading names it (デザイン規約 §設定の画面「章の見出しが欄の名前を兼ねる」).
+    // No caption: the chapter heading names it (`LabeledField`).
     RowLayout {
         Layout.fillWidth: true
         spacing: Theme.spaceSm

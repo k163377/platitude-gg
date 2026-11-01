@@ -135,7 +135,11 @@ jobs:
             ${{ runner.temp }}/shots/*/*.txt
           retention-days: 30
       # As in ci.yml: before the cache saves, so the entry holds no target/tmp
-      # — here the demo repositories the replay left.
+      # — here the demo repositories the replay left. The cache's cleanup
+      # (rust-cache's cleanTargetDir, in a run that saves) takes every folder
+      # named `tests` under target/ for a profile and empties it but for
+      # tests/target and tests/trybuild: a demo repository with a tests/
+      # folder (`long`) would be saved half emptied.
       - name: Drop the throwaway trees before the cache saves
         if: ${{ always() }}
         run: rm -rf target/tmp

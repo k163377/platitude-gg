@@ -66,8 +66,8 @@ async fn checkout_of_a_remote_branch_creates_a_tracking_branch() {
 }
 
 /// Moving a branch says nothing about what it reads, so the move must not
-/// re-point it — without `--no-track` it silently would (rules-refs/core.md
-/// 「`switch --force-create` は start が remote-tracking だと upstream を書き換える」).
+/// re-point it — without `--no-track` it silently would
+/// (`branch::CheckoutTarget::ForceCreate`).
 #[tokio::test]
 async fn moving_a_branch_onto_a_remote_ref_leaves_its_upstream_alone() {
     let mut origin = TestRepo::init();
@@ -150,9 +150,8 @@ async fn the_upstream_is_named_by_the_one_spelling_that_reads_one_way() {
 }
 
 /// A name with no tracking ref here is recorded all the same — git's own
-/// command refuses it, so the two keys are written directly (デザイン規約
-/// §ブランチが測られる相手を決める; rules-refs/core.md
-/// 「upstream の書き込みは 2 通りで、分かれ目は追跡 ref が手元に在るか」).
+/// command refuses it, so the two keys are written directly
+/// (`UpstreamFlow.targetIsThere`; `branch::set_upstream`).
 ///
 /// End to end, because the halves prove nothing apart: the keys, `[gone]`
 /// until the far side exists, the push planned off them, and the counts

@@ -1,5 +1,9 @@
 //! The interactive-rebase screen's preview, and the stop whose reason
 //! only git's own markers can tell.
+//!
+//! The preview's three refusals are here, not in units of
+//! `rebase_plan::preview`: each is one comparison against one reading of
+//! git, so the reading is what they claim.
 
 use crate::support::TestRepo;
 use crate::support::exec::env;

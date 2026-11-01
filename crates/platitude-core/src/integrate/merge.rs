@@ -23,10 +23,16 @@ pub struct MergeOptions {
 
 /// `git merge <rev>`.
 ///
-/// Exit 1 is both a conflict and a name git cannot merge
-/// (rules-refs/core.md「`git merge` の終了コードは 1 が両義」), so a merge
-/// left standing is the stop and any other non-zero exit is the failure it
-/// looks like.
+/// One revision only: no octopus merge (three parents or more) — nobody
+/// has asked for one.
+///
+/// Exit 1 is both a conflict and a name git cannot merge (measured on
+/// 2.55: a conflict 1, a name it cannot merge 1, a refused `--ff-only`
+/// 128, work it would write over 2), so the code alone cannot tell an
+/// answer from a failure. After exit 1 a merge left standing is the stop —
+/// `Landing::Stopped`, which is no failure (`SessionEvent::WriteStopped`:
+/// no error band, the log not raised) — and any other non-zero exit is the
+/// failure it looks like. Held by `integrate_integration::merge`.
 pub async fn merge(
     executor: &GitExecutor,
     workdir: &Path,
@@ -88,9 +94,14 @@ pub fn refused_over_work(error: &GitError) -> bool {
 /// comment lines taken out. Empty where there is nothing to read.
 ///
 /// `git merge --continue` and a plain `git commit` record the identical
-/// commit from this file (rules-refs/core.md「止まった merge を `git commit`
-/// で終わらせたもの」), so the commit box can show it before it is written
-/// (デザイン規約 §進行中の操作から出る). Comment lines go because
+/// commit from this file (measured on 2.55: tree, both parents, message,
+/// and the hooks that run — `pre-commit`, `prepare-commit-msg`,
+/// `commit-msg`, `post-commit`; `post-merge` and `pre-merge-commit` run
+/// under neither), and a resolution identical to HEAD still records (an
+/// empty merge commit). So the screen finishes a stopped merge with the
+/// commit button alone, and the box can show this before it is written
+/// (デザイン規約 §進行中の操作から出る). Held by `integrate_integration::merge`.
+/// Comment lines go because
 /// `commit::commit` uses `--cleanup=whitespace`, which keeps them; a moved
 /// `core.commentChar` leaves them in the box, where they can be deleted.
 /// `git_dir` is the worktree's own (`RepoInfo::git_dir`).
@@ -117,8 +128,10 @@ async fn stopped_on_a_conflict(
     cancel: &CancellationToken,
 ) -> bool {
     // The code is read as well as the marker: a merge asked for while one
-    // is already standing exits 128 with `MERGE_HEAD` there, and the marker
-    // alone would call that a stop and swallow git's reason.
+    // is already standing exits 128 with `MERGE_HEAD` there (measured on
+    // 2.55: `unresolved conflict` while unresolved, `You have not concluded
+    // your merge` once resolved), and the marker alone would call that a
+    // stop and swallow git's reason.
     if !matches!(error, GitError::Failed { code: 1, .. }) {
         return false;
     }

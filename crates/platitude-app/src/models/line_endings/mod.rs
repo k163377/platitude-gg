@@ -1,8 +1,10 @@
 //! What one repository's own git configuration says about line endings.
 //!
 //! That file and no other: the settings screen writes `core.autocrlf` into
-//! the picked repository only (規約 §設定の画面), so this model asks git
-//! `--local` about a worktree.
+//! the picked repository only (`LineEndingField.qml`), so this model asks git
+//! `--local` about a worktree. Do not write `--global`, `core.eol` or
+//! `.gitattributes` (user decision — ask before changing): rewriting the
+//! reader's machine itself is outside this application.
 //!
 //! Off the sessions, as `repo_config` is: only the tab in front has one
 //! (`RepoPageStack`) and the screen offers every repository in the strip,

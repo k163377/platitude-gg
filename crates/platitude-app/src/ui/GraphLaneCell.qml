@@ -4,6 +4,9 @@ import QtQuick
 import platitude.ui
 
 // Lanes viewport of one commit-graph row: one canvas, slid sideways as the graph column scrolls.
+//
+// A pixel matrix of this cell cannot be taken off `--preset conflict`: the worktree row's arrival splits the picture
+// into two (the graph walks a beat behind the status, so the picture with the row and the one without are both right).
 Item {
     id: laneCell
 
@@ -23,7 +26,8 @@ Item {
     /// The search passed this row over: its lanes, its marks and its face all go down.
     required property bool dimmed
     /// The discard log's entry would bring this row back: its mark is ringed dashed, as the uncommitted row's is — in the
-    /// graph a dashed ring is "not in the history yet" (破棄記録仕様.md).
+    /// graph a dashed ring is "not in the history yet" (`platitude_core::discards`). User decision — ask before
+    /// changing.
     property bool provisional: false
     /// What lies under the ink at the column's edge, washes folded in — where it all sinks (`LaneDissolve`).
     required property color ground
@@ -63,6 +67,9 @@ Item {
         return laneCell.xOffset > 0 ? laneCell.fullWidth : Math.min(laneCell.fullWidth, box)
     }
 
+    /// Reads the face again: on `avatarUrl` moving and on reuse (called from the delegate root, `GraphRowDelegate`'s
+    /// `ListView.onReused`, the attached `ListView` living only there). An assigned picture is a change git does not
+    /// know, so no refresh brings it.
     function loadFace() {
         if (laneCell.avatarUrl !== "")
             ink.loadImage(laneCell.avatarUrl)
@@ -71,9 +78,13 @@ Item {
     Component.onCompleted: laneCell.loadFace()
 
     // The ink's clipper, `spaceSm` past the column to where the message tick stands, the whole strip the dissolve covers
-    // (規約 §グラフ列は最も広い所のレーンまで). Lanes and faces reach it alike: the edge is the dissolve's, laid over the
-    // canvas, so nothing inside the paint depends on where the column ends. One canvas, not two — each is an image plus
-    // a texture on every row (rules-refs/app-ui.md「1 行 1 Canvas」).
+    // (`LaneDissolve`). Lanes and faces reach it alike: the edge is the dissolve's, laid over the
+    // canvas, so nothing inside the paint depends on where the column ends: a `ctx.clip()` reading `xOffset` stays at
+    // the old place while the canvas slides undrawn, and cuts only the lanes short (`tst_laneedge`). One canvas, not
+    // two — each is an image plus a texture on every row, and the order never changes (lanes, the row's mark, faces).
+    // The badge's punch-out (`destination-out`) is one stroke on the faces' side that takes lanes and face alike.
+    // Not `Shape` (rejected): it has no punch, and a disc in the ground colour standing in for one breaks on the chosen
+    // row's highlight. Redrawing the lanes as shapes means redesigning the marks without the punch first.
     Item {
         width: parent.width + Theme.spaceSm
         height: parent.height
@@ -149,8 +160,9 @@ Item {
                 // ---- the lanes and their marks ----
                 ctx.save()
                 ctx.lineWidth = Metrics.laneStroke
-                // Lanes dim per row (規約 §コミットを探す). Set on every paint: a reused cell's context carries the
-                // last row's alpha.
+                // Lanes dim per row (`GraphRowDelegate.dimmed`). Set on every paint: the 2D context lives across paints
+                // and a reused cell walks rows, so it carries the last row's alpha (nets: `tst_lanedim`,
+                // `find-scroll`).
                 ctx.globalAlpha = laneCell.dimmed ? Metrics.dimFade : 1
                 const laneCount = Theme.graphLane.length
                 const cx = function (l) { return Metrics.laneInset + l * Metrics.laneW + Metrics.laneW / 2 }
@@ -188,8 +200,9 @@ Item {
                     ctx.restore()
                     return
                 }
-                // Stash rows: NavIcon "stash" on its 16-grid, no ring, centred on the node (its middle is 8.5 of the
-                // grid); the footprint is cleared first so the dashed leash comes out from under the box.
+                // Stash rows: NavIcon "stash" (the STASHES section's box) on its 16-grid, centred on the node (its
+                // middle is 8.5 of the grid). No ring: a dashed ring round it doubles the leash's dash and reads badly.
+                // The footprint is cleared first so the dashed leash comes out from under the box.
                 if (laneCell.stashRef !== "") {
                     const s = Metrics.nodeIcon / 16
                     const gx = nodeX - 8 * s
@@ -215,7 +228,8 @@ Item {
                 // Saved like the lanes' half, so this row's alpha and composite do not carry over.
                 ctx.save()
                 // The author's face; on a shared commit it steps up-left by a border and the first co-author badges the
-                // lower right (規約 §co-author の表示).
+                // lower right in `iconSm` (規約 §co-author の表示). Only the first: the faces fanned out sideways covered
+                // the subject column.
                 const shared = laneCell.mateFace !== 0
                 const ax = shared ? laneCell.nodeMidX - Theme.borderWidth : laneCell.nodeMidX
                 const ay = shared ? midY - Theme.borderWidth : midY

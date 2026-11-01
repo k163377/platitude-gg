@@ -61,7 +61,8 @@ MenuItem {
     readonly property string refRoom1: menuItem.refMark === "" || menuItem.refSentence.indexOf("%1") < 0 ? ""
                                        : menuItem.seatRoom
     /// The seat in the row's words: as many of the row's own spaces as hold the widest mark (`MarkSeat`). The size is
-    /// the row's own, not read back off the ruler's font: on Linux that read loops the binding on every row.
+    /// the row's own, not read back off the ruler's font (`refSpace.font.pixelSize`): on Linux that read loops the
+    /// binding on every row — `Binding loop detected for property "seatRoom"` in the qmltest, none on Windows.
     readonly property string seatRoom: MarkSeat.room(refSpace.advanceWidth, menuItem.font.pixelSize)
     /// A room's width as the row lays it out — one width whatever the mark, so a card's names start on one x, a name
     /// ending a row too (`codeNameSeat`). The mark stands in its middle, so a card's marks share one upright axis.
@@ -75,12 +76,16 @@ MenuItem {
     readonly property string refRoom2: menuItem.refMark2 === "" || menuItem.refSentence.indexOf("%2") < 0 ? ""
                                        : menuItem.seatRoom
     readonly property int refMarkRoom2: menuItem.refRoom2.length
+    // The plain sentence, whatever the label draws (`refWords`): the tooltip and the screen reader read this.
     text: menuItem.refSentence === "" ? ""
         : menuItem.refSentence.indexOf("%2") < 0 ? menuItem.refSentence.arg(menuItem.refName)
         : menuItem.refSentence.arg(menuItem.refName).arg(menuItem.refName2)
     /// The mark a row wears, and its colour. On a row that opens a card it is the `NavIcon` kind of what the card acts
-    /// on (デザイン規約 §メニュー の入れ子), and the row becomes a heading: the sidebar's section band in a menu, its
-    /// word out of the chip column. A row with `headed: false` wears a mark about itself instead.
+    /// on (デザイン規約 §メニュー の入れ子), and the row becomes a heading: the sidebar's section heading brought into
+    /// a menu — spelled as the sidebar's headings (capitals; §タイポグラフィ「帯の見出し」), the kind colour on the mark
+    /// alone (§ref の種別「種別色が塗るのは枠とアイコン」), the mark the head of the words (§アイコンの席 ①: `markHead`
+    /// times the words' scale, on the capitals' middle, an `iconMd` box). Its word stands out of the chip column: the
+    /// title row is the card's name. A row with `headed: false` wears a mark about itself instead.
     property string markKind: ""
     property color markTint: Theme.textSecondary
     readonly property bool heads: menuItem.markKind !== ""
@@ -156,12 +161,13 @@ MenuItem {
     property bool growsForText: true
     /// The row is one name (a repository, a worktree) — its words, or its code name (`codeName`): it bids at most the
     /// name ceiling (`Theme.nameMaxChars`) in the face it is drawn in and gives way in the middle, as a name in a
-    /// sentence does (`refCuts`).
+    /// sentence does (`refCuts`). Not `labelColW`: a card of names alone would shrink to 152px.
     property bool textNames: false
 
     /// Why this row cannot be chosen right now — and, by being non-empty, that it cannot. Greyed like a disabled row
-    /// (§無効) but still hoverable, since the line is the point (デザイン規約 §メニュー の削除の表). Presses and holds
-    /// do nothing.
+    /// (§無効) but still hoverable, since the line is the point (デザイン規約 §メニュー の削除の表) — not `enabled: false`:
+    /// a disabled `Control` takes no hover, so it could not show the reason's tooltip. Presses, holds and keys do
+    /// nothing. Frozen as the menu opens, like `offered`. Headless: `delete-blocked-tip`.
     property string blockedReason: ""
     /// Whether pressing this row starts git — itself, or through the box or bar it opens — which is what the menu's
     /// held doors and a command already running hold back (`AppMenu.rowsHeldWhy`). A row that only reads what is on
@@ -187,7 +193,8 @@ MenuItem {
     /// The mark that folder wears: the house for the repository's own worktree, else the tree.
     property string reasonMarkKind: "tree"
     /// The names in the row's own reason seated by the caller, where there are several or a ref's, as the tip's field
-    /// takes them (`Words.listMarks`, `TipAsk.marksNow`). Wins over `reasonMarkWord`.
+    /// takes them (`Words.listMarks`, `TipAsk.marksNow`). Wins over `reasonMarkWord`. Pictured by the overlay of
+    /// `delete-blocked-tip feature/topic-a --preset worktrees`.
     property var reasonMarks: []
     /// The word the tooltip stands the worktree's mark against (`TipAsk.markWordNow`, デザイン規約 §ref の種別
     /// 「ツールチップだけは字の中」): the folder in a turned-down row's reason. A row's own names, the folder among them,
@@ -248,11 +255,15 @@ MenuItem {
     /// What a confirmed row wears — word, chip, mark and fill. `warning`: what the row throws away is brought back from
     /// the discard record. **A row that cannot be brought back names `danger` itself**, and a plain delete
     /// `textPrimary` (デザイン規約 §回数押し の色の表) — so a new row never takes the stronger warning by leaving this out.
+    /// The default is no reason to change what a row shows: each row's colour follows the table (user decision — ask
+    /// before changing).
     property color holdTone: Theme.warning
     /// [`closeMenu`] asked under the floor: the menu goes when it has passed.
     property bool closesAfterFloor: false
     /// Pressed through: the handler runs the row now, at the last press, while what the presses were for still holds.
     /// The menu stays for the floor — the handler closes it with [`closeMenu`], never the menu's own `dismiss()`.
+    /// A plain row's click emits `triggered` alone and the card closes, so its work goes on `onTriggered`; automation
+    /// presses such a row through its own `triggered()` (`TopBar.pickBranchRow` / `pickWorktreeRow` / `pickRepoRow`).
     signal held()
     /// Closes the menu this row is in, every level of it (Qt's `dismiss()`): at once, or — under a row just pressed
     /// through — once its floor has passed, so the full fill is seen (デザイン規約 §回数押し). A menu closed some other
@@ -268,7 +279,10 @@ MenuItem {
         menuItem.menu.dismiss()
     }
     /// Automation: every press at once without a hand behind them — on a row a hand could press. Answers whether
-    /// they went in, so a run that met the row out of reach waits rather than counting presses nothing landed.
+    /// they went in, so a run that met the row out of reach waits rather than counting presses nothing landed. A row
+    /// of a card opened under a write is still grey in the beat the run's `wroteAndSettled()` turns true: `settling`
+    /// comes down at the next drain (`AppMenu.waiting`). A refused press has armed the write's watch again, so the
+    /// retry must not read the earlier write's passage afresh — latch it (`AutoActRefVerbs`' `forceDeleteTimer`).
     function completeHold() {
         if (!menuItem.present || menuItem.greyed)
             return false
@@ -290,8 +304,11 @@ MenuItem {
 
     /// Where a heading's mark box stands: its ink then starts where the other rows start their words (the row's
     /// padding), so the card's left edge reads as one column (デザイン規約 §メニュー) — or, where the menu has a hold /
-    /// `!` seat, the box is centred on that seat as the `!` is: the seat is the box's width (`AppMenu.holdIndent`), so
-    /// the widest heading mark, the cloud, stands inside the row's wash (`tst_menuedge.qml`).
+    /// `!` seat, the box is centred on that seat as the `!` is (both stand at a row's head, so one column; the words
+    /// then start on the other rows' x): the seat is the box's width (`AppMenu.holdIndent`), so
+    /// the widest heading mark, the cloud, stands inside the row's wash (`tst_menuedge.qml`, which counts ink outside
+    /// the row by pixel and waits for a Canvas mark's `inked` before taking it). A seat narrower than the box puts the
+    /// cloud outside the row.
     readonly property real markX: menuItem.holdIndent > 0
                                   ? (menuItem.holdIndent - Theme.iconMd) / 2
                                   : menuItem.padding - Math.round((Theme.iconMd - rowMark.inkAcross) / 2)
@@ -320,9 +337,10 @@ MenuItem {
                    + menuItem.besideWords
     /// Everything the row bids beside its words. The words' room is the row less this (`refRoom`) — read off the
     /// bids, never off the words' own label: that one's width answers its text, which the room cuts, and the loop
-    /// closes wherever the layout answers in the same pass. The chip and the code name are bid in whole pixels, as
-    /// the layout hands them out: the row's `RowLayout` rounds each of those up, and a sum rounded once comes up the
-    /// fractions short — the code name, laid out last, elides (a Linux font's `worktree remove` + folder).
+    /// closes wherever the layout answers in the same pass (a conflict row's menu). The chip and the code name are bid
+    /// in whole pixels, as the layout hands them out: the row's `RowLayout` rounds each of those up, and a sum rounded
+    /// once comes up the fractions short — the code name, laid out last, elides (a Linux font's `worktree remove` +
+    /// folder).
     readonly property real besideWords: (codeChip.visible ? Math.ceil(codeChip.implicitWidth) + Theme.spaceSm : 0)
                    // The code name is data: it bids at most `labelColW` and elides past it (デザイン規約 §メニュー) —
                    // the name ceiling where it is the row's one name.
@@ -430,7 +448,8 @@ MenuItem {
     }
     /// Those words as rich-text markup, in one label so the line measures and hovers like any row's: the words in the
     /// row's face, each name as code behind its mark's room (`Words.codeMarkup`, `Words.inked`). Rich text, as a name's
-    /// face is not one styled text can set — it cannot elide, so the names give way first (`refCuts`). Every piece is
+    /// face is not one styled text can set — its `<font>` takes `color` and `size` only (Qt's `qquickstyledtext.cpp`) —
+    /// and rich text cannot elide, so the names give way first (`refCuts`). Every piece is
     /// escaped: the name is the repository's (a branch called `<b>`), and spaces go as `&nbsp;` because rich text folds
     /// a run of them (`encode::markup`).
     readonly property string refWords: {
@@ -447,7 +466,7 @@ MenuItem {
     }
     /// Where each name begins in the label, its room before it: the words and rooms ahead of it in the row's face, a
     /// name ahead of it in the code face — as the markup lays them (`refHead` / `refBetween`, `refShown1Code` /
-    /// `refShown2Code`).
+    /// `refShown2Code`). A name ahead measured in the row's face would set the second mark over that mono name.
     readonly property real refLead1: menuItem.leadOf(1)
     readonly property real refLead2: menuItem.leadOf(2)
     function leadOf(key) {
@@ -530,8 +549,9 @@ MenuItem {
         kind: menuItem.heads ? menuItem.markKind : "branch"
         tint: menuItem.markTint
     }
-    // A mark about the row, in the left menu's seat and drawn the way that seat draws it (`NameCell`), centred on the
-    // seat.
+    // A mark about the row (`headed: false`), in the left menu's seat and drawn the way that seat draws it
+    // (`NameCell`), centred on the seat in an `iconSm` box, at the row words' scale on their capitals' middle
+    // (`set: "lead"`, 規約 §アイコンの席 の ①). A heading's mark is `rowMark`, not this one.
     NavIcon {
         id: seatMark
         x: menuItem.seatX - (Theme.iconSm - Theme.iconXs) / 2
@@ -565,6 +585,7 @@ MenuItem {
                 return col !== undefined ? Math.max(col, own) : own
             }
             implicitHeight: codeLabel.implicitHeight
+            // On the word's own width in every row: the column's spare stays bare.
             CodeGround {
                 anchors.left: codeLabel.left
                 anchors.right: codeLabel.right
@@ -610,8 +631,10 @@ MenuItem {
             // Clear of the card's arrow (`arrow`) at the right edge (the note, when there is one, sits last instead).
             rightPadding: !noteLabel.visible && menuItem.subMenu && menuItem.arrow
                           ? menuItem.arrow.width + Theme.spaceXs : 0
-            // A heading takes the sidebar section band's weight, not its ink: a row that opens a card to its right is
-            // never drawn darker than the rows beside it (デザイン規約 §メニュー の入れ子).
+            // A heading takes the sidebar section band's weight, not its ink: a row that opens a card to its right —
+            // title row or folder row — is never drawn darker than the rows beside it, in the same `textPrimary`
+            // (user decision — ask before changing). The left menu's own folded headings and folder rows (∨) stay
+            // `textSecondary`.
             font.weight: menuItem.titled ? Theme.fontWeightStrong : menuItem.font.weight
             color: menuItem.wordColor
             /// The markup ahead of the names in the row's face (`leadOf`): the words and room before the first, and the
@@ -798,15 +821,17 @@ MenuItem {
             }
         }
         // The run's spare width, at its end: a row with room past the name's ceiling hands none of it out in front of
-        // the name.
+        // the name. Without it the RowLayout hands part of that room out before the name, which moves 2px right
+        // (`tst_codenames`).
         Item {
             visible: menuItem.codesName
             Layout.fillWidth: true
         }
         // `sideName`, pushed to the right end by the words — or the code name's spare width — taking the rest, a
         // column's step off them: at a word's step the two read as one run. A branch, so as code behind the branch mark
-        // (デザイン規約 §ref の種別「文の中の名前」), a step down with the column (`Words.nameInk`); held under the
-        // name ceiling and cut in the middle past it (`sideCut`). Built on a row that has one.
+        // (デザイン規約 §ref の種別「文の中の名前」), a step down with the column (`Words.nameInk`, `textSecondary` —
+        // user decision; the left menu's own WORKTREES column stays words); held under the name ceiling and cut in the
+        // middle past it (`sideCut`). Built on a row that has one.
         Loader {
             id: sideSeat
             active: menuItem.sideName !== ""
@@ -880,11 +905,15 @@ MenuItem {
         }
     }
 
-    // A row that opens a card ends in `>`: `chevron` as drawn, the mark `AppCombo` turns down for its list, on the
-    // left menu's row grid (デザイン規約 §メニュー の入れ子). Its ink ends where the right-set words of other rows end
-    // (a note, a track): on the right padding. The item is the mark's ink and nothing more, so the words of such a row
-    // stop a word's step short of the ink, as a heading's start one past its mark's (デザイン規約 §余白「印が自分で
-    // 持っている余白は、隣の詰めに数える」) — where that row is a card's widest, the card's width is measured off it.
+    // A row that opens a card ends in `>` (user decision — ask before changing): `chevron` as drawn, never a filled
+    // triangle — the mark the left menu's fold and `AppCombo` turn down, with the same meaning, "opening shows what is
+    // inside" (規約 §QML 実装ルール「1 つの印は 1 つの意味しか持たない」). A mark standing apart from words
+    // (§アイコンの席 ④): `iconSm`, `textSecondary` (`textMuted` when greyed), centred on the row. Its ink ends where the
+    // right-set words of other rows end (a note, a track): on the right padding (user decision). The item is the mark's
+    // ink and nothing more, so the words of such a row stop a word's step short of the ink (user decision), as a
+    // heading's start one past its mark's (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」) — where
+    // that row is a card's widest, the card's width is measured off it, and its two sides mirror (edge → mark → words /
+    // words → `>` → edge).
     // The mark is built only on the rows that wear it (rules-refs の「行のデリゲートが見せない部品は消す」): a card builds a
     // row per branch.
     arrow: Item {
@@ -918,8 +947,8 @@ MenuItem {
             dimmed: holdDrive.dimmed
             bleed: menuItem.menu !== null ? menuItem.menu.leftPadding - Theme.borderWidth : 0
         }
-        // Under the hand, a heading is underlined in its mark's colour across the row: what is about to open
-        // (デザイン規約 §メニュー の入れ子). Headings only — a mark about the row names no card.
+        // Under the hand, a heading is underlined in its mark's colour across the row, at its foot: the wash says
+        // where the hand is, the line what is about to open. Headings only — a mark about the row names no card.
         Rectangle {
             anchors.left: parent.left
             anchors.right: parent.right
@@ -950,7 +979,7 @@ MenuItem {
             holdDrive.settle()
         }
     }
-    // The hand left the row part way through its presses: back to zero (デザイン規約 §回数押し).
+    // The hand left the row part way through its presses: back to zero (`HoldDriver.leave`).
     onHoveredChanged: if (!menuItem.hovered) holdDrive.leave()
     // Takes the press before the MenuItem can emit `triggered`, which would run the row and close the menu on the
     // first press. It accepts no hover, so the row still highlights like any other.

@@ -72,8 +72,8 @@ pub struct DiffLineItem {
     /// on every row the plain `Copy` does not take — what is washed is
     /// what is copied (デザイン規約 §diff の中身をコピーする).
     sel: Optional<Washed>,
-    /// The `pair_*` roles: the new side of a split row (デザイン規約
-    /// §diff を 2 列で読む). `pair_kind` is `ctx` / `add`, or `""` where the
+    /// The `pair_*` roles: the new side of a split row
+    /// (`encode::pair_rows`). `pair_kind` is `ctx` / `add`, or `""` where the
     /// right has nothing (a removed line nothing replaced, a row that is
     /// not a line). Empty throughout as one column.
     pair_kind: String,
@@ -104,6 +104,8 @@ impl platitude_core::mem::Footprint for DiffLineItem {
 /// What the reader's selection covers on one side of a row: the line
 /// end to end (`whole`, and `runs` says nothing), or the runs of places
 /// a drag cut through (the shape `emph` has, laid by the same ruler).
+/// `whole` exists so a select-all over thousands of rows counts no row's
+/// places.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Washed {
     pub whole: bool,
@@ -192,8 +194,7 @@ pub struct DiffModel {
     /// How many commits this reading stacked, a band each (デザイン規約
     /// §複数のコミットを選ぶ); 0 for a diff of one thing.
     commit_bands: i32,
-    /// Whether the rows are laid out side by side (デザイン規約
-    /// §diff を 2 列で読む).
+    /// Whether the rows are laid out side by side (`encode::pair_rows`).
     split: bool,
     title: String,
     is_binary: bool,

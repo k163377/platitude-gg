@@ -7,7 +7,8 @@ import platitude.ui
 
 // One bucket of the worktree as a list of its own: the heading pinned on top and the files scrolling under it,
 // in whatever share of the pane the bucket was given. The heading stands when the bucket is empty and does not
-// scroll (デザイン規約 §バケツごとの一覧と、ペインの分け方).
+// scroll (デザイン規約 §バケツごとの一覧と、ペインの分け方). One model per bucket (`NavSectionModel.attachWorktree`; what any
+// instance answers: `models::nav::attach`). Headless `stage-all` / `unstage-all` / `wip-step`.
 ColumnLayout {
     id: bucketPane
 
@@ -97,7 +98,7 @@ ColumnLayout {
         // The pane's bar, not the style's (`AppListView`).
         verticalBar: PaneScrollBar {}
         // Qt's own key navigation moves `currentIndex` and tells nobody; the arrows are answered by the pane's walk,
-        // which crosses from this bucket's list into the next one's (規約 §diff のファイル一覧).
+        // which crosses from this bucket's list into the next one's (`FileRowWalk`).
         keyNavigationEnabled: false
         Keys.onUpPressed: event => event.accepted = bucketPane.pane.filesWalk.stepFile(-1, event.isAutoRepeat)
         Keys.onDownPressed: event => event.accepted = bucketPane.pane.filesWalk.stepFile(1, event.isAutoRepeat)
@@ -127,7 +128,10 @@ ColumnLayout {
             // (`WipPane.rowKeep.telling`): a row the read rewrote asks in the middle of the model's notification, and
             // the seat asks the model back (`eolMarked`, the card's `pointEol`) — a call into a model while it notifies
             // takes its borrow twice. Those asks run in the order made, ahead of the read's weighing
-            // (`RowKeep.arrived`).
+            // (`RowKeep.arrived`: `Qt.callLater` asked again for one function moves it to the queue's end —
+            // `QQmlDelayedCallQueue::addUniquelyAndExecuteLater`). Only while the model tells, not until the weighing:
+            // an ask the hand made meanwhile would then run after the weighing and overwrite, stale, the ask that
+            // followed it.
             onEolPointed: (path, on) => {
                 const pane = bucketPane.pane
                 const section = bucketPane.section
@@ -138,7 +142,7 @@ ColumnLayout {
                     ask()
             }
             onFileClicked: (bucket, path, origPath, modifiers) => {
-                // Any click puts the keyboard here; only a plain one moves the diff (規約 §diff のファイル一覧).
+                // Any click puts the keyboard here; only a plain one moves the diff (`FileRowWalk`).
                 bucketList.forceActiveFocus()
                 if (bucketPane.pane.applyClick(bucket, path, modifiers))
                     bucketPane.pane.fileActivated(bucket, path, origPath)

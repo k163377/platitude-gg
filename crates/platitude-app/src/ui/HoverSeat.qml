@@ -79,13 +79,15 @@ QtObject {
         return seat.blockedBy !== "" && !(seat.exempt !== null && target !== null && seat.exempt(target) === true)
     }
     /// Nothing the hand does opens or closes anything while this holds; the asks are kept and answered when it lifts
-    /// (デザイン規約 §グラフ行のダブルクリック「その間、hover は今の姿のまま」). What goes for a reason of its own
+    /// (the rename gesture's wait, `ReclickGesture.armed`, `RowHoverHost`). What goes for a reason of its own
     /// still goes: a blocker, a held bar, a target retired or displaced, the card closing by itself, the owner's
     /// `takeDown`.
     property bool frozen: false
     /// A scroll bar is held outside the card (`Hand.heldBar`): the targets are sliding from under a hand Qt no longer
     /// hears (デザイン規約 §hover のツールチップ「スクロールバーを掴んだら、hover で開いたものは閉じる」). The card's own bar
-    /// is the hand reading the card. `ignoresBar` is for what hover did not open (a typed refusal's tip).
+    /// is the hand reading the card. `ignoresBar` is for what hover did not open (a typed refusal's tip). A wait being
+    /// counted goes too, its ask with it. Let go, only targets whose hover Qt changed ask again: a row under a hand
+    /// that stayed still does not put its tip out again.
     property bool ignoresBar: false
     readonly property bool barHeld: Hand.heldBar !== null && !seat.ignoresBar && !seat.holdsBar(Hand.heldBar)
     /// …and for an ask made while the bar is held: a function of the target, true where it may come out all the same.
@@ -133,6 +135,11 @@ QtObject {
 
     /// The hand is on `target`'s trigger area: on the one already out, it is held; on another, the one out goes and
     /// this one waits its rest (`immediate` opens it now — what unfolds, 規約「展開は即時に開く」).
+    ///
+    /// Back on the one out (the hand from its card to its row), the card stays as it is — `settle`, no `openAsked`:
+    /// the beat (`hoverKeepMs`) is shorter than the rest (`tipDelayMs`), so asked again it would fall and come back,
+    /// at the row's new `pointerX`, a jump sideways. Only while it is out; once closed, it opens as any ask does.
+    /// Headless: `row-card-return` (`moved=` is a guard).
     function point(target, immediate) {
         const now = immediate === true
         if (seat.frozen || seat.latchedKey === target.key
@@ -175,7 +182,8 @@ QtObject {
     }
     /// A press on `target`'s trigger area: a new ask whatever the latch says — the hover cannot bring a dismissed
     /// card back under a still hand, a press can — and it opens at once. Only an owner that gives its target a press
-    /// calls it; a target with none comes back by the hand leaving it alone.
+    /// calls it (the folded band's `…`, the folded rail's cells); a target with none comes back by the hand leaving it
+    /// alone (a chip's list, the author cards).
     function press(target) {
         if (seat.latchedKey === target.key)
             seat.latchedKey = ""
@@ -398,8 +406,11 @@ QtObject {
         if (seat.shown || seat.waiting)
             seat.drop(seat.target, "bar")
     }
-    /// A tip one of the card's rows put out is standing (`Tips.shownIn`): the hand reading it is off the card
-    /// (rules-refs/app-ui.md「hover で保つカードは、自分の行が出したツールチップの間も保つ」).
+    /// A tip one of the card's rows put out is standing (`Tips.shownIn`): the card stays up for it. The tip is a popup,
+    /// so the hand reading it is wholly off the card (`pointerInside` false); a card holding on `pointerInside` alone
+    /// folds under the hand, and its row's tip goes with it. Asked by walking the asking target up to the card's
+    /// `contentItem` — nothing is wired down from the window. Menus and modals a press raises are not held this way:
+    /// hover does not close them.
     readonly property bool tipHeld: seat.card !== null && Tips.shownIn(seat.card.contentItem)
     onTipHeldChanged: seat.hold("tip", seat.tipHeld)
     /// The hand inside the card (`AppCard.pointerInside`), for a card that reports it. The hand is told too

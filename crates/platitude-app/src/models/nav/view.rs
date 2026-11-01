@@ -99,8 +99,8 @@ impl NavSectionModel {
     /// Finds the current entry among the rows on show and settles its
     /// stand-in (`HeadPinRow`): its row, the folded row holding it, and
     /// the column and name it takes — the closed folder's column, named
-    /// from that folder down; the whole name under a filter (デザイン規約
-    /// §左メニューの所作 の張り付き行の表).
+    /// from that folder down; the whole name under a filter (why: the
+    /// header of `HeadPinRow.qml`).
     fn place_head(&mut self) {
         let head = (0..self.shown_rows()).find(|at| {
             self.row_at(*at).is_some_and(|row| {
@@ -452,6 +452,14 @@ impl NavSectionModel {
     /// rows moved. Polls republish unchanged data, and a reset rebuilds
     /// every delegate and scrolls the list back, so each section compares
     /// its own entries.
+    ///
+    /// The comparison is the entries' whole `PartialEq`: a value a row
+    /// draws (the ahead / behind counts) that is left out of it moves
+    /// nothing here, and the row keeps its old picture after a fetch.
+    /// Compared as they arrive, before any row is built — rows built to be
+    /// compared would be allocated only to be dropped. The new source is
+    /// kept even when nothing moved: holding the old `Arc` would keep two
+    /// snapshots of the same content alive.
     pub(super) fn take(&mut self, arrived: Source) -> bool {
         let moved = match (&self.all, &arrived) {
             (Source::Locals(held), Source::Locals(fresh)) => held.locals != fresh.locals,

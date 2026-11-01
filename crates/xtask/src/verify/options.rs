@@ -7,10 +7,23 @@ use std::path::PathBuf;
 /// deadline thread looks past it, and the parent reaps behind them both
 /// (`super::child`).
 ///
-/// A backstop, high enough that load cannot reach it and held under
-/// `tests/it/support/wait::OVERALL_BUDGET` because a red here is paid in
-/// wall clock (internal-docs/反映前テストの機械化.md §動詞の天井). Lower it
-/// with `--watchdog-ms` only to diagnose the wait itself.
+/// A backstop for detecting failure (.claude/rules/core.md
+/// §非同期・並行テスト), high enough that load cannot reach it, as core's
+/// `tests/it/support/wait::OVERALL_BUDGET` is: a 120 s ceiling breaks
+/// under load — a verb that passes alone runs past it while another
+/// session's gate shares the machine. Held under core's all the same,
+/// because a red here is paid in wall clock, and an all-red `--keep-going`
+/// run stacks one ceiling per verb (`gate::sides::verbs` runs one alone
+/// until a green comes back). What a person pays is one ceiling, to the
+/// first red (the gate prints each red as its verb ends); a green run pays
+/// nothing (the `Timer` never fires). The overrun's mechanism is
+/// unreproduced, so the height is not set as a multiple of the stretch
+/// measured: that would set it against a mechanism nobody measured.
+///
+/// Rejected: firing a watchdog red again and calling it red only when
+/// both are — a red from the clock thinned by the clock, against waiting
+/// by cause. How the two reds read is `super::outcome::loop_was_turning`.
+/// Lower it with `--watchdog-ms` only to diagnose the wait itself.
 const WATCHDOG_MS: u64 = 600_000;
 
 pub(super) struct Options {
@@ -56,7 +69,9 @@ pub(super) struct Options {
     /// Hold every configuration save the app makes until the station
     /// this names (`PGG_FAULT_HOLD_SAVE`), so a close can land on one
     /// provably out and the exit can be read joining it. Set unasked for
-    /// the verb whose subject that is (`super::child`).
+    /// the verb whose subject that is (`super::child`); any other verb
+    /// may carry it. A station past the join (`exiting`) never lets the
+    /// save go, so that run stands until the ceiling.
     pub(super) fault_hold_save: String,
     /// Have one picture's readings of the page say a read is on its way
     /// (`PGG_FAULT_OWED_AT_SHOT=<artifact>-<when>`), so the picture taken

@@ -1,5 +1,15 @@
 //! Explicitly authorized, unattended hardware experiment. Never part of a
 //! normal gate: it temporarily changes AC sleep and allows real S3 sleep.
+//! Run it only when the user allows an unattended test, with
+//! `PGG_AWAKE_PHYSICAL_LOG` set to an absolute path for the report:
+//! `cargo test -p xtask --bin xtask a_desktop_wait_allows_physical_sleep -- --ignored --nocapture`.
+//! The Claude process and the permission log are fixtures; the holder's OS
+//! requests, the display notifications and the S3 sleep are real, so it
+//! proves nothing of a real Claude dialog's sequence. It sets AC sleep to
+//! 180 s and restores it in `finally`, leaving DC and display-off alone;
+//! it forces no sleep, sends no mouse or key input and grants nothing
+//! itself. An 8-minute wake timer brings the machine back, and the timer
+//! and the notification registrations are disposed of at the end.
 
 use super::{FakeClaude, claim_file, marked, scratch};
 

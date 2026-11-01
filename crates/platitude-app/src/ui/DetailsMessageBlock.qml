@@ -6,7 +6,9 @@ import QtQuick.Layouts
 import platitude.ui
 
 // Everything between the two bands, scrolling when the pane is too short: past a file list at zero nothing else
-// gives, and the rest would run out of the pane's bottom (規約 §窓の床). The root is that surface
+// gives, and the rest would run out of the pane's bottom (規約 §窓の床). The bands stay put — the pane's heading and
+// `CHANGES` (a list whose heading has scrolled away no longer says what it lists) — and the list keeps two rows
+// (`DetailsPane.blockRoom`), as `WipCommitBlock` does for the worktree pane. The root is that surface
 // (rules-refs/structure.md).
 Flickable {
     id: block
@@ -170,7 +172,8 @@ Flickable {
                 onOpenAuthorRequested: at => block.openAuthorRequested(at)
                 onSettleAuthorRequested: block.settleAuthorRequested()
             }
-            // The same pair the commit editor writes in (デザイン規約 §コミットメッセージの 2 つの枠).
+            // The same pair the commit editor writes in (`MessageEditor`): typing lands on HEAD's own commit only
+            // (`offers::message_edit`).
             MessageEditor {
                 id: msgEditor
                 Layout.fillWidth: true
@@ -183,7 +186,7 @@ Flickable {
                 blockHeight: blockCol.implicitHeight
                 onWheelPastEnd: pixels => block.rollBlock(pixels)
                 // Escape drops the draft and puts the resting text back (the commit's own message, or the reword a
-                // plan holds for it), unasked (デザイン規約 §コミットメッセージの 2 つの枠).
+                // plan holds for it), unasked (`DetailsPane.syncMessage`).
                 onEscaped: block.escaped()
             }
             // Only once something is actually changed (`MessageActionsRow`).

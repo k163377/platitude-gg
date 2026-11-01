@@ -1,8 +1,13 @@
-//! Writing Platitude GG's own record (破棄記録仕様.md §2), read back by
-//! `records`: one line on [`RECORD_REF`]'s reflog per operation, under the
-//! identity `Platitude GG` and never the user's (§2).
+//! Writing Platitude GG's own record, read back by `records`: one line on
+//! [`RECORD_REF`]'s reflog per operation, under the identity `Platitude GG`
+//! and never the user's (`RECORDER`). Only what git keeps no line for: a
+//! move off a tip (reset, `Move here`, a rewrite, amend, a pull) is git's
+//! own line in the branch's reflog and is not written here — but for the
+//! branches one rebase moved together (`record_moves`) and the work a
+//! `reset --hard` threw away, whose `Moved:` (ref, old, new) names git's
+//! lines so the list joins them into one entry.
 //!
-//! - **A copy** of uncommitted work (§2.1): written by `copy`, with the
+//! - **A copy** of uncommitted work: written by `copy`, with the
 //!   commits, the line and the temporary indexes from here — the user's
 //!   hooks, fsmonitor, split index and `safecrlf` kept out of them.
 //! - **A note** of what any other operation took, made after it took it: a
@@ -10,9 +15,25 @@
 //!   trailers say what to put back. A note `restored` says a part of a
 //!   record was brought back.
 //!
-//! A ref written to the value it already holds writes no reflog line (§5),
-//! so every line's value is a new commit — one of its own, by its
-//! `Nonce:` ([`nonce`]).
+//! The `Operation:` words are a copy's `discard`, `hunk`, `lines`,
+//! `untracked`, `reset --hard`, and a note's `delete branch`,
+//! `delete remote branch`, `force push`, `delete tag`, `delete remote tag`,
+//! `force push tag`, `remove worktree`, `stash drop`, `stash pop`,
+//! `rebase`, `restored`; each `record_*` below names its trailers.
+//!
+//! A ref written to the value it already holds writes no reflog line, so
+//! every line's value is a new commit — one of its own, by its `Nonce:`
+//! ([`nonce`]).
+//!
+//! Kept as git keeps reflogs, with no size limit of its own; the record
+//! keeps nothing from gc, and a restore of what gc took is git's refusal. A
+//! note's first parent (what was taken) is reached while its line stands,
+//! but an annotated tag's object, a `Remote-tip:` and the old tips of a
+//! second and later `Moved:` are reached by nothing: the next gc may take
+//! them. Lines expire by `gc.reflogExpireUnreachable` (30 days by default),
+//! never `gc.reflogExpire`: no line's value is a parent of the next, so every
+//! line — the newest too, its old value being the line before's — counts as
+//! unreachable from the ref's tip.
 
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -26,7 +47,10 @@ use crate::process::{GitCommand, GitExecutor};
 use crate::remote::RemoteBranch;
 use crate::scratch::ScratchFile;
 
-/// Who writes the record (§2): the name on every commit and line.
+/// Who writes the record: the name, with an empty email, on every copy,
+/// note and record line (`GIT_AUTHOR_*` / `GIT_COMMITTER_*`), dated when
+/// recorded. Never the user's: the record is not their writing, and their
+/// identity settings (none set, `user.useConfigOnly`) must not stop it.
 const RECORDER: &str = "Platitude GG";
 
 /// How many paths one `ls-files` / `update-index` / `add` takes on its
@@ -41,7 +65,7 @@ pub struct RemoteTip {
     pub tip: Oid,
 }
 
-/// A branch as it stood before it went (§2): its tip, and what it was
+/// A branch as it stood before it went: its tip, and what it was
 /// measured against (`branch.<name>.remote` / `.merge`), which the delete
 /// takes with the branch.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -399,7 +423,7 @@ pub async fn record_stash(
 }
 
 /// Notes the branches one rebase moved together (`--update-refs`), each
-/// with its old and new tip, so the list tells them as one (§2).
+/// with its old and new tip, so the list tells them as one.
 pub async fn record_moves(
     executor: &GitExecutor,
     workdir: &Path,
@@ -456,7 +480,7 @@ pub async fn record_restored(
     .await
 }
 
-/// Which worktree a git directory is (§2.1 `Worktree:`): the main one
+/// Which worktree a git directory is (`Worktree:`): the main one
 /// ([`super::MAIN_WORKTREE`]), or a linked worktree's name under
 /// `$GIT_DIR/worktrees/` — what still names it after its folder moved
 /// (gitrepository-layout(5)), where `Worktree-path:` says where it was.
@@ -511,7 +535,7 @@ async fn note(
 /// commit is its tree, parents, message, identity and date to the second:
 /// the same discard made again in the second it was restored would be the
 /// line the restore's note names, and the list would take it for restored
-/// too (§3).
+/// too (`entries`). Net: a test that pins the date (`support::exec::dated`).
 pub(super) fn nonce() -> String {
     static MADE: AtomicU64 = AtomicU64::new(0);
     let now = std::time::SystemTime::now()
@@ -523,7 +547,7 @@ pub(super) fn nonce() -> String {
 
 /// The record's next line: `value`, said as `summary` — out of reach of
 /// the user's `reference-transaction` hook, which may refuse any ref's
-/// update (§2.1).
+/// update (`unhooked`).
 pub(super) async fn append(
     executor: &GitExecutor,
     workdir: &Path,
@@ -543,8 +567,9 @@ pub(super) async fn append(
     executor.run(cmd, cancel).await.map(drop)
 }
 
-/// A commit of `tree` on `parents`, by the recorder. `commit-tree` signs
-/// only when told to (§2.1).
+/// A commit of `tree` on `parents`, by the recorder. Never signed:
+/// `commit-tree` signs only with `-S` and does not read `commit.gpgSign`
+/// (`builtin/commit-tree.c`, at the minimum version's tag and on master).
 pub(super) async fn commit(
     executor: &GitExecutor,
     workdir: &Path,
@@ -590,7 +615,11 @@ pub(super) async fn empty_tree(
 }
 
 /// A command that runs none of the user's hooks: they are looked for in a
-/// folder that is never there (§2.1).
+/// folder that is never there. That keeps out `reference-transaction`, run
+/// on every ref update and able to refuse it, and `post-index-change`, run
+/// on every index write, a temporary one's too; the commit hooks run for
+/// `git commit` alone, never for `commit-tree`. Measured to hold on Git for
+/// Windows too.
 fn unhooked(workdir: &Path, git_dir: &Path) -> GitCommand {
     let no_hooks = git_dir.join("platitude").join("no-hooks");
     GitCommand::new()
@@ -600,8 +629,11 @@ fn unhooked(workdir: &Path, git_dir: &Path) -> GitCommand {
 }
 
 /// A command for a temporary index, with the user's settings that would
-/// act on it kept out (§2.1): no hooks, no fsmonitor, no split index, and
-/// line endings taken as they are. No checksum is written over it either:
+/// act on it kept out: no hooks, no fsmonitor (its hook nor its daemon), no
+/// split index (no `sharedindex` left in the git directory), and line
+/// endings taken as they are — under `core.safecrlf=true` taking a file of
+/// mixed endings dies, so such a file is copied, and comes back, with its
+/// endings made one. No checksum is written over it either:
 /// hashing the whole of it is a good part of each write, and the file is
 /// read again only by the commands made here.
 pub(super) fn isolated(workdir: &Path, git_dir: &Path, index: &Path) -> GitCommand {
@@ -619,6 +651,8 @@ pub(super) fn isolated(workdir: &Path, git_dir: &Path, index: &Path) -> GitComma
         .env("GIT_INDEX_FILE", index)
 }
 
+/// The identity of `RECORDER`. Test the empty email from Rust: PowerShell's
+/// `$env:X=''` unsets the variable instead.
 fn as_recorder(cmd: GitCommand) -> GitCommand {
     cmd.env("GIT_AUTHOR_NAME", RECORDER)
         .env("GIT_AUTHOR_EMAIL", "")

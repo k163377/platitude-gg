@@ -56,7 +56,7 @@ Rectangle {
     readonly property bool partial: diffPane.partsPossible && diffPane.diffModel.wholeWhy === ""
 
     // ---- one column or two ----------------------------------------
-    /// Side by side (old left, new right) rather than one column (デザイン規約 §diff を 2 列で読む). The model's: it
+    /// Side by side (old left, new right) rather than one column (`DiffRowDelegate`). The model's: it
     /// lays the rows out, and the band's toggle asks the page to write it (`splitChosen`).
     readonly property bool split: diffPane.diffModel.split
     /// How wide the left column is; the right starts a hairline after it. The hairline is the row's, so the two
@@ -107,7 +107,7 @@ Rectangle {
         diffPane.stageSelectionRequested(hunk, line)
     }
 
-    // ---- the find bar (デザイン規約 §diff の中を探す) --------------------------------------------------------------
+    // ---- the find bar (`DiffFindBar`) ---------------------------------------------------------------------------
     /// Automation: the strip itself.
     readonly property alias findBar: findBar
     /// Ctrl+F while the diff is up (`RepoPage.startFind`): the strip comes up with the caret in it, the lines under
@@ -146,7 +146,8 @@ Rectangle {
     // them already (`DiffModel::refind`); this end stands on the first hit without moving the view. The view has no
     // rows yet to say which is its first (`firstVisibleRow` answers 0), and its own scroll restore is still to land.
     // **A property, not a `Connections` on the model**: the model's every property notifies on its one `changed`,
-    // so a handler there runs on every search and, asking the model, calls itself without end (rules-refs/app-ui.md).
+    // so a handler there runs on every search and, asking the model, calls itself without end (`RangeError: Maximum
+    // call stack`; rules-refs/app-ui.md「モデルの値の変化は property で受ける」).
     readonly property int rowsGen: diffPane.diffModel.rowsGen
     onRowsGenChanged: {
         // The rows laid out again are rows moved under the hand (`diffHand`) — but for the file read again, whose rows
@@ -163,8 +164,11 @@ Rectangle {
             findBar.dropAway()
     }
     /// Where the pointer is. **The pane works out which row it is over, not the rows** — a rebuilt row is not hovered
-    /// until the mouse moves again (rules-refs の `settlePointedRow` の行). **On the pane**: laid over the rows, a
-    /// `HoverHandler` takes their hover away.
+    /// until the mouse moves again (rules-refs/app-ui.md「行を作り直すと、新しい item は次のマウス移動まで hover
+    /// しない」), and every write rebuilds the rows under the hand: asked of the row, the next `+` would not come out
+    /// after one line is staged until the mouse is wiggled — no run of presses. Asked on three triggers: this
+    /// handler's point, the list's `contentY`, and `pointedRowTimer` once replaced rows are laid out. **On the pane**:
+    /// laid over the rows, a `HoverHandler` takes their hover away.
     HoverHandler {
         id: panePointer
         onPointChanged: diffPane.settlePointedRow()
@@ -176,7 +180,7 @@ Rectangle {
                 diffPane.showLineTools(-1, -1)
         }
     }
-    // Every press in this pane: the hand is here now, so the arrows are (規約 §diff を上下に送る). A `PointHandler`
+    // Every press in this pane: the hand is here now, so the arrows are (`DiffRowWalk.handArrived`). A `PointHandler`
     // takes only passive grabs, so the buttons, the bars and the rows' marks underneath keep working.
     //
     // **On a sheet in front of everything** (rules-refs の「画面全体の入力観測」の行): on the pane itself it hears no
@@ -195,8 +199,9 @@ Rectangle {
         }
     }
     /// Automation: whether that sheet is still in front of everything this pane draws — a run cannot inject a press
-    /// (verify-ui). **Strictly above; a tie reads false** (one more declaration would put it behind). `childAt` cannot
-    /// answer this: it walks the children in declaration order and ignores `z`.
+    /// (verify-ui; `diff-select` reports it as `door=`). **Strictly above; a tie reads false** (one more declaration
+    /// would put it behind). `childAt` cannot answer this: it walks the children in declaration order and ignores `z`,
+    /// so it names the last-declared sibling at a point the topmost one covers.
     function doorOnTop() {
         const kids = diffPane.children
         for (let i = 0; i < kids.length; i++) {
@@ -440,7 +445,8 @@ Rectangle {
         const m = diffPane.diffModel
         // `embedded` never becomes rows: git will not open a nested repository, so the pane shows a line about it
         // (`DiffFileNotices`); nor does a read of headers alone, nor a conflict with one side left (git prints no
-        // patch, and the pane says what each side did).
+        // patch, and the pane says what each side did). Each one left out here is a verb opening such a diff that waits
+        // to its watchdog.
         return !m.loading && (diffList.count > 0 || m.isBinary || m.previewKind !== "" || m.embedded
                               || fileNotices.headersOnly || m.unmerged)
     }
@@ -565,7 +571,8 @@ Rectangle {
             onYChanged: if (!rowKeep.busy) diffHand.rowsMoved()
             // An image with no text rows hands its space to the preview (SVG edits keep both).
             visible: diffPane.diffModel.previewKind !== "image" || count > 0
-            /// How far down the view can go, and the one clamp every hand that sends it shares (デザイン規約 §diff を上下に送る).
+            /// How far down the view can go, and the one clamp every hand that sends it shares (`DiffRowWalk`).
+            /// One expression: a second would drift apart once only one was fixed. It overrides `AppListView.clampY`.
             readonly property real maxY: Math.max(0, contentHeight - height)
             function clampY(y) {
                 return Math.max(0, Math.min(y, diffList.maxY))
@@ -598,7 +605,7 @@ Rectangle {
                 property: "stepGlide"
                 value: wheelGlide
             }
-            // The arrows are answered below (規約 §diff を上下に送る): Qt's own key navigation would scroll to a
+            // The arrows are answered below (`DiffRowWalk`): Qt's own key navigation would scroll to a
             // `currentIndex` nothing here follows.
             keyNavigationEnabled: false
             // The one key this pane answers that is not a step; `StandardKey`, so the platform's copy is what matches.
@@ -612,15 +619,17 @@ Rectangle {
             // The menu key; Windows' Shift+F10 comes through the window (`Main.keyMenuAsked`).
             Keys.onMenuPressed: event => event.accepted = diffPane.menuFromKeys()
             // Mouse wheels send `Metrics.wheelRows` rows per notch, as every other surface does; touchpads keep
-            // Flickable's own panning.
+            // Flickable's own panning. Flickable's own wheel is a pseudo-flick, duller than every other surface. No
+            // wheel can be injected, so headless says this only as a regression (`diff-file` / `keep-place` still
+            // pass).
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse
                 onWheel: event => {
-                    // Sending the rows is the hand arriving here without a press to say so (規約 §diff を上下に送る).
+                    // Sending the rows is the hand arriving here without a press to say so (`DiffRowWalk.handArrived`).
                     diffPane.handArrived()
                     diffList.cancelFlick()
-                    // A sideways component (tilt wheel, touchpad) is answered wherever the pointer is (デザイン規約
-                    // §グラフを横へ送る, same rule).
+                    // A sideways component (tilt wheel, touchpad) is answered wherever the pointer is (the graph's
+                    // rule, `GraphColumnMetrics.graphX`).
                     if (event.angleDelta.x !== 0)
                         codeScroll.shift(-event.angleDelta.x / 2)
                     diffList.sendRows((event.angleDelta.y / 120) * Metrics.wheelRows * Theme.rowHeight)
@@ -682,8 +691,9 @@ Rectangle {
         file: diffPane.diffModel.title
         // The reach, plus the pane's own gap past the longest line's last character.
         codeWidth: reachTally.width > 0 ? reachTally.width + Theme.spaceSm : 0
-        // Side by side the room is a column's, not the row's: one offset sends both, and the narrower right one runs
-        // out first.
+        // Side by side the room is a column's, not the row's: one offset sends both — a pair is read across at the same
+        // columns, and sent apart the pairs break — so the reach is the wider of the two and the narrower right one
+        // runs out first.
         roomWidth: Math.max(0, (diffPane.split ? diffList.width - diffPane.halfW - Theme.borderWidth : diffList.width)
                                - metrics.gutterW)
     }

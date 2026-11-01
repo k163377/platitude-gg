@@ -4,6 +4,12 @@
 //! blob written out of `git cat-file` ([`PreviewFiles`]). A side that
 //! cannot be read is absent, which is also what "added" and "deleted"
 //! look like.
+//!
+//! Sides reach the UI as `file:` URLs, never base64 (user decision — ask
+//! before changing): as a string, one 16MB image alone weighs about 43MB
+//! and a picture past the limit cannot show at all; a written blob file
+//! has no limit. An opened picture costs its decoded pixels, and closing
+//! the pane gives all of it back.
 
 use std::collections::BTreeSet;
 use std::io::Write as _;
@@ -115,7 +121,10 @@ pub fn remove_run_dir() {
 /// ([`Self::release`]), the session closing removes the directory
 /// ([`Self::remove_all`]). Only settled reads are swept, whatever their
 /// number, so a slow read landing after a fast one still hands the pane
-/// files that are there.
+/// files that are there. Pinned by `preview_integration` and, in
+/// `session_integration::query`,
+/// `a_pictures_file_goes_with_the_pane_and_its_directory_with_the_session`,
+/// which fails at once on a picture side landed by size alone.
 pub struct PreviewFiles {
     dir: PathBuf,
     /// The reads whose files are on disk and no longer being written.
@@ -130,7 +139,8 @@ pub struct PreviewFiles {
 /// An empty directory is not an abandoned one: a session that has not
 /// previewed yet has written nothing, and removing the directory then
 /// fails its next write (`create_dir_all` makes parent and child in two
-/// steps; a removal between them is `NotFound`, landing the side by size
+/// steps; a removal between them is `NotFound` — on Windows also the
+/// pending delete's `ERROR_ACCESS_DENIED` — landing the side by size
 /// alone). The lock keeps a session being made from racing the exit that
 /// read the count as zero.
 static SESSIONS: Mutex<usize> = Mutex::new(0);
@@ -323,7 +333,9 @@ pub const SOURCE_BYTE_CAP: u64 = 4 * 1024 * 1024;
 ///
 /// Only a side that is not there sends the read to the other one: a side
 /// over the cap is the one the rows show, and the other side's text would
-/// colour them against a file they are not.
+/// colour them against a file they are not. Pinned by
+/// `preview_integration::a_blob_over_the_cap_is_not_read_to_its_end` and
+/// `a_working_file_over_the_cap_reads_no_other_side`.
 pub async fn source_text(
     executor: &GitExecutor,
     workdir: &Path,
@@ -487,7 +499,10 @@ fn side_sources(workdir: &Path, target: &DiffTarget) -> (SideSource, SideSource)
 /// HEAD, `:0:` for a staged deletion), and `cat-file` says so with exit
 /// 128 — a failure, since a vanished repository exits 128 too.
 /// `rev-parse --verify -q` says no with exit 1, an answer
-/// (rules/core.md「終了コードで答える問い合わせは」).
+/// (rules/core.md「終了コードで答える問い合わせは」; measured on 2.55 for
+/// all three). Not `cat-file --batch-check`, which says "missing" with exit
+/// 0 but reads its specs from stdin: the process layer hands input only to
+/// writes, and closes a read's stdin at once (`process::child`).
 ///
 /// A read that never ran and a spec that resolved to nothing are the same
 /// answer here: no content to show.

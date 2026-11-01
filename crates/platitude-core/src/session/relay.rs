@@ -10,7 +10,12 @@
 //! Off the rows alone: the lanes need only each row's id and parents
 //! (`LogRow::parents`) and whether it is a stash (`stash_ref`), so
 //! laying out again costs a pass over the window and no git
-//! (`GraphBuilder::push_ids`).
+//! (`GraphBuilder::push_ids`). A synthetic row coming or going moves no
+//! lane or colour of the history below (`graph::leash_tests` pins it by
+//! equality), so laying out again moves only the synthetic rows and the
+//! rows their leash crosses. Not dropped at paint time instead: the rows
+//! below own that column's segments, and edges would be left leading
+//! nowhere.
 
 use super::rows::CarriedRows;
 use super::*;
@@ -35,8 +40,7 @@ impl RepoSession {
     /// committed long before that worktree's `status` reading does, and
     /// drawn from the older reading the row would stand on a commit the
     /// worktree has left. The pass does not wait for that read — this
-    /// window's graph would be paced by another worktree
-    /// (デザイン規約 §未コミット行が名乗るもの).
+    /// window's graph would be paced by another worktree.
     pub(super) fn standing_rows(self: &Arc<Self>) -> Standing {
         Standing {
             pending: self.pending_commit(),

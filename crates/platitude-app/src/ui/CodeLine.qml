@@ -154,6 +154,8 @@ Item {
                     y: baseRef.baselineOffset - chip.baselineOffset
                     width: piece.room
                     cutToWidth: true
+                    // A remote-tracking name keeps its head, the remote (規約 §寸法「upstream 名(remote-tracking 名)だけは
+                    // 末尾で切る」), told by the piece's mark kind.
                     cutAt: line.cutAt === "middle" && piece.modelData.kind !== "remote" ? "middle" : "end"
                     word: piece.modelData.code ? piece.modelData.text : ""
                     mark: piece.modelData.kind

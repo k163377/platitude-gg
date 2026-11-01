@@ -5,7 +5,16 @@ import platitude
 import platitude.ui
 
 // The find card over the graph and what a query does to the view. Rows are marked in Rust (`GraphModel.setFind`,
-// matching rules in `platitude-core::find`); this end moves the viewport and reads the count back.
+// matching rules in `platitude-core::find`); this end moves the viewport and reads the count back. The rules both find
+// bars share (where a search starts, Enter / Shift+Enter, the count, the press away) are 規約 §コミットを探す; what
+// a miss dims is `GraphRowDelegate.dimmed`.
+//
+// Floats at the graph's top-right, over the rows, which keep their seats (規約 §可否・警告の出し場所); a question bar
+// goes first — two cards down from one edge leave neither readable, and the question is what is being waited on.
+// `✕` / Escape take the dimming away; the selection stays where the last match put it.
+//
+// Only the commits drawn now are searched (the loaded window); past it nothing is found, and the note under the card
+// says so (`unansweredNote`).
 FindBar {
     id: find
 
@@ -20,15 +29,18 @@ FindBar {
 
     /// A query is standing, matched or not — what lets rows dim, so a query with no answers dims them all.
     readonly property bool findOn: find.open && find.graphModel.searching
-    /// The newest row matched, so the graph steps out from under the card (規約 §コミットを探す). A WIP row never
-    /// matches.
+    /// The newest row matched, so the graph steps out from under the card by its height. Covering a row is normally
+    /// fine, unless that row is what is being looked for. Back the moment it stops matching, so the eye never learns
+    /// the gap as a fixed place. A WIP row never
+    /// matches (`find::Query::matches`), so `firstMatched` is the whole question. Headless: `clears=`, and
+    /// `find_settled shift=` on the second line only (the first is read before the animation and is always 0).
     readonly property bool findClears: find.open && find.graphModel.firstMatched
     /// The note's press, waiting for the step it asked for: the graph's finish count when it was asked, `-1` while
     /// nothing is out. Any walk that settles after it answers it — the one asked for, or a pass that overtook it
     /// (`GraphModel` lowers `growing` at either).
     property int furtherFrom: -1
 
-    /// Brings the card up; refused while a question is standing (規約 §コミットを探す).
+    /// Brings the card up; refused while a question is standing (the header says why).
     function startFind() {
         if (find.asking)
             return
@@ -85,14 +97,21 @@ FindBar {
     unanswered: find.open && find.graphModel.searching && find.graphModel.matchCount === 0
                 && !find.graphModel.loading
     // Older commits are not loaded: the note's press loads the next step as the graph's tail does, then searches again
-    // (規約 §コミットを探す).
+    // and goes to the hit (user decision — ask before changing). Never loaded by itself: a load walks the whole window
+    // again, not a cost to pay per keystroke. The words are `Words.findNone*`.
     unansweredNote: find.graphModel.truncated
                     ? Words.findNoneWithMore(find.graphModel.windowStep)
                     : Words.findNone
     unansweredAction: find.graphModel.truncated && !find.graphModel.growing
                       ? Words.findLoadFurther(find.graphModel.windowStep) : ""
     onNoteActed: find.loadFurther()
-    // Hex under the floor finds no commit by its hash, and nothing on screen would say why (規約 §コミットを探す).
+    // Hex under the floor finds no commit by its hash, and nothing on screen says where the floor is: `731` could be a
+    // missing commit or an id not read yet. A fact about ids, never an order: "at least N characters" as other
+    // products say it (GitLab's `Enter at least three characters to search`), not `Type …`, which would order about
+    // someone looking for a hex-looking word. The number comes from core (`find::MIN_OID_PREFIX`); written into the
+    // words it would drift from the floor. Gone with any non-hex character (a space too) and at the floor, where the
+    // line matches as an id. Up for hex-looking words too (`add`, `be`, digits; user decision — ask before changing):
+    // the machine cannot tell them from an id's head, and a fact about ids misleads nobody — whatever the hit count.
     hint: find.graphModel.shortOfAnOid ? qsTr("Hashes need at least %1 characters").arg(GitFacts.oidFloor()) : ""
     // A new line drops a press's wait: the landing would search for a line nobody pressed for.
     onQueryChanged: {

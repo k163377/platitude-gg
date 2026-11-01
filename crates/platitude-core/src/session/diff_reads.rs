@@ -9,7 +9,8 @@ use super::*;
 /// A read takes the next number and cancels the read it passes, git and
 /// all: a walk down a file list leaves no diff, ruling or source read
 /// running for the rows it passed. Number and token change under one lock,
-/// so of two racing asks the larger number is the one left running.
+/// so of two racing asks the larger number is the one left running
+/// (`session_integration::diff_reads::a_click_stops_the_git_of_the_read_it_passes`).
 #[derive(Default)]
 pub(super) struct DiffEpoch(Mutex<Newest>);
 
@@ -28,7 +29,9 @@ impl DiffEpoch {
 
     /// [`Self::claim`], only where no read was asked for since `seen`: a
     /// re-read that finds the file moved must not pass a click made while
-    /// it read — the click's read is the newer ask.
+    /// it read — the click's read is the newer ask. A plain claim lets the
+    /// tick overtake the click's read, and the pane stays on `loading`.
+    /// Nets: `session_integration::diff_reads`.
     pub(super) fn claim_after(
         &self,
         seen: u64,

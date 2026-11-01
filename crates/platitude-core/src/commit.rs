@@ -5,7 +5,9 @@
 //! `commit.cleanup` cannot rewrite what the editor showed (a typed `#` line
 //! stays).
 //!
-//! Hooks always run: `--no-verify` is never passed.
+//! Hooks always run: `--no-verify` is never passed. They do not inherit the
+//! message's stdin (git starts them with `no_stdin`), and `pre-commit` runs
+//! before git reads the message (v2.43.0 commit.c / hook.c).
 
 use std::path::Path;
 
@@ -61,10 +63,15 @@ pub fn split_message(message: &str) -> (String, String) {
 /// where it means "keep the existing message" (`--no-edit`).
 ///
 /// An amend of a commit that is itself empty (an `--allow-empty` marker)
-/// goes with `--allow-empty`: git refuses to amend one into an empty
-/// commit otherwise, words for a terminal and all, and its own `reword`
-/// passes the same. An amend that would empty a commit with changes is
-/// the screen's to refuse before the press ([`amend_would_empty`]).
+/// goes with `--allow-empty`: git refuses an amend whose tree is HEAD^'s
+/// otherwise (`You asked to amend … would make it empty`, the whole status
+/// on stdout, exit 1), and its own `reword` passes the same — so a
+/// message-only amend of an empty HEAD goes through, from the WIP box, the
+/// details pane and a plan's reword alike. An amend that would empty a
+/// commit with changes is the screen's to refuse before the press
+/// ([`amend_would_empty`]). Held by `an_empty_commits_message_is_amended_on_its_own`,
+/// `an_amend_empties_only_a_commit_whose_changes_are_staged_back` and
+/// `rewording_an_empty_older_commit_replaces_its_message`.
 ///
 /// Nothing is read back: a second command asking where HEAD landed could
 /// fail on its own and report a made commit as failed. The refresh after
@@ -117,6 +124,14 @@ pub async fn commit(
 /// (デザイン規約 §答えの要らない報せ): refusals this end could answer are
 /// taken away before the button can be pressed, so a non-zero exit is
 /// something outside saying no ([`refused_by`]).
+///
+/// Gated before the press: the identity, an empty message, an empty
+/// selection, an amend that would leave nothing, an amend during a merge,
+/// unmerged paths. The three named refusals are everyday (gitの扱い.md
+/// §異常時の扱いの基準): hooks from husky, lefthook or pre-commit, a signing
+/// key or agent for verified commits, an IDE's git behind the scenes holding
+/// a lock. The rest (an index that cannot be written: the disk) is out of
+/// scope and keeps the plain kind.
 fn refused(command: String, out: &crate::process::GitOutput) -> GitError {
     crate::report::reported(
         crate::report::WriteReport::local(refused_by(out)),
@@ -134,7 +149,9 @@ pub(crate) const COMMIT_HOOKS: [&str; 3] = ["pre-commit", "prepare-commit-msg", 
 /// none can be had, the ssh-keygen there cannot sign, the key or the
 /// signature could not pass through the temporary file), or — for an ssh
 /// signature, whose program's failure git passes on as that program's words
-/// alone (`sign_buffer_ssh`) — the program ended non-zero in its trace.
+/// alone (`sign_buffer_ssh`) — the program (`-Y sign`) ended non-zero in its
+/// trace. git's own `failed to write commit object` is no evidence: it says
+/// the same when the object cannot be written.
 pub(crate) fn signing_failed(said: &str, trace: &crate::process::Trace) -> bool {
     crate::relied_messages::SIGNING_FAILED.found_in(said) || trace.ssh_signer_failed()
 }
@@ -146,7 +163,9 @@ pub(crate) fn signing_failed(said: &str, trace: &crate::process::Trace) -> bool 
 /// is taken before the hooks run, the signing and the ref's lock after them
 /// all. Then a signing failure in git's own words (or an ssh signer's end,
 /// [`signing_failed`]) and a lock git named. The rest is git's words to
-/// explain.
+/// explain (`git turned it down`). The warning and `hint:` 2.55's
+/// `core.commentChar=auto` puts ahead every time change none of it. Net:
+/// the four `refused_commit` tests of `commit_integration`.
 fn refused_by(out: &crate::process::GitOutput) -> crate::report::ReportKind {
     use crate::report::ReportKind;
     let said = out.stderr_utf8();
@@ -242,9 +261,15 @@ async fn head_is_empty(
 /// Whether amending HEAD now would leave it changing nothing: what is
 /// staged takes back everything HEAD changed, so the index's tree is
 /// HEAD's first parent's. git refuses that amend, so the screen refuses
-/// it first. A message-only amend of an empty HEAD is not this one
-/// ([`commit`] lets it through). A root commit answers false: emptying
-/// one means taking every file out of the index.
+/// it first: the app's `RepoTab.amendEmpties` lowers both the commit
+/// button and the details pane's save (rewording HEAD is a `commit
+/// --amend` too, and takes what is staged with it). When to ask again is
+/// core's (`RepoSession::watch_amend`). A message-only amend of an empty
+/// HEAD is not this one ([`commit`] lets it through). A root commit
+/// answers false: emptying one means taking every file out of the index.
+/// Compared as trees, modes included, so a mode is a change: an amend of
+/// a HEAD that changed only a mode, or one staging only a mode, goes
+/// through.
 pub async fn amend_would_empty(
     executor: &GitExecutor,
     workdir: &Path,

@@ -29,6 +29,12 @@
 // It also has to stay the first ICON resource: Explorer takes the first
 // one in the resource directory as the file's icon, and named resources
 // sort before numbered ones.
+//
+// The icon's PNGs (icon-<size>.png beside this file; the .ico holds them as
+// PNGs) are rasterised from platitude.svg and platitude-16.svg by hand. In a
+// headless browser, 128px and up cannot be passed to --window-size as they
+// are: the window is clamped to the browser's narrowest and only part of the
+// drawing comes out. Draw on a wide viewport and crop the top-left corner.
 IDI_ICON1 ICON "platitude.ico"
 
 // The display name. Without a version resource the shell has no name to

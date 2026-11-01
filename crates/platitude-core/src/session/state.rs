@@ -241,8 +241,10 @@ pub(super) struct Shared {
     pub(super) publish_marks: PublishMarks,
     /// The graph the consumer is on, which `builder`, `applied` and
     /// `sent_rows` speak in. Not `log_gen`: that is bumped before a pass
-    /// takes this lock and by passes that send nothing, while everything
-    /// here still belongs to the walk that was shown.
+    /// takes this lock and by passes that send nothing (a skipped swap),
+    /// while everything here still belongs to the walk that was shown.
+    /// Copied from `log_gen`, every later chip diff would name a graph the
+    /// consumer is not on, and be dropped.
     pub(super) generation: u64,
     /// Label chips per commit id, derived from the last refs snapshot.
     pub(super) label_map: LabelIndex,
@@ -268,8 +270,8 @@ pub(super) struct Shared {
 impl Shared {
     /// Whether the consumer already shows `rows` under `footer` — rows and
     /// footer both: rows alone would call a widened window the same
-    /// picture and leave the truncation notice standing
-    /// (rules-refs/core.md「swap を省く判定は行とフッタの両方」).
+    /// picture and leave the truncation notice standing — a rebuild that
+    /// overtook the stream would keep saying the history is cut.
     pub(super) fn shows(&self, rows: &[LogRow], footer: Footer) -> bool {
         self.sent_footer == Some(footer)
             && self.sent_rows.len() == rows.len()

@@ -62,11 +62,16 @@ AppListView {
     /// Where this list's rows begin in that layer.
     readonly property real boxRowsX: (navList.parent ? navList.parent.x : 0) + navList.x
     readonly property real boxRowsTop: (navList.parent ? navList.parent.y : 0) + navList.y
-    /// Where a row's ink begins and how far each fold steps it in, so names begin in the band's mark column
-    /// (デザイン規約 §余白 の左メニューの行の項): the band's seat is `iconSm`, a row's `iconXs`. The stand-in reads these too.
+    /// Where a row's ink begins and how far each fold steps it in, so names begin in the column the section heading
+    /// sets its mark in: the band's seat is `iconSm`, a row's `iconXs` (6 in all). The stand-in reads these too.
+    /// One row shape for every list that folds (user decision — ask before changing): a commit's CHANGES, the WIP
+    /// buckets and another worktree's list take the same head, step, seat (`NameCell.seatSize`) and right edge
+    /// (`navBarGutter`, `NavItemDelegate`), so a file's name starts in a branch's column and folds by the same step.
     readonly property int rowInset: Theme.spaceXs + Theme.iconSm - Theme.iconXs
-    /// A fold steps in to its chevron's middle: the chevron stands centred on the row's seat (`NameCell`), its box
-    /// hanging out of the seat by a pixel either side, so the mark box one depth down starts under that middle.
+    /// A fold steps in to its chevron's middle (user decision): the chevron stands centred on the row's seat
+    /// (`NameCell`), its box hanging out of the seat by a pixel either side, so the mark box one depth down — the outer
+    /// edge of the air the mark keeps inside it — starts under that middle. The chevron's two sizes (a heading's is
+    /// `markHead` times) follow this place; they never move it.
     readonly property int nestStep: Theme.iconSm / 2
 
     signal refActivated(string oidHex)
@@ -80,10 +85,16 @@ AppListView {
         return navList.kindHint + ":" + (full !== "" ? full : name)
     }
 
-    // ---- the keyboard (デザイン規約 §左メニューの所作) ----------------
-    // A click on a row brings the keyboard here, where it answers the menu key on the row clicked last
-    // (`SidebarRowGestures.activeKey`). Nothing here walks the rows, so the arrows go nowhere: Qt's own key navigation
-    // would move `currentIndex` and tell nobody.
+    // ---- the keyboard ------------------------------------------------
+    // A click on a row brings the keyboard here (user decision — ask before changing) — a folder row and a press on an
+    // open row's lines included — where it answers the menu key / Shift+F10 on the row clicked last
+    // (`SidebarRowGestures.activeKey`, the `bgSelected` row) with that row's own right-click menu, never the menu a
+    // line naming a remote would give. Nothing here walks the rows, so the arrows go nowhere — to walk the graph, press
+    // the graph (規約 §矢印で履歴を辿る「キーボードの居場所は手が決める」): Qt's own key navigation would move
+    // `currentIndex` and tell nobody. **The sticky stand-in takes no keyboard** (`HeadPinRow`): it is a way to a place
+    // only, with no menu, and a press does not light it. A right-click takes none either: the keyboard goes back where
+    // it was when the menu closes. The folded rail's opened list works the same, but closing it takes the row clicked
+    // last with it, and the keyboard goes back to where it was before the list opened.
     keyNavigationEnabled: false
     function takeKeyboard() {
         if (navList.gestures !== null)
@@ -146,7 +157,12 @@ AppListView {
     /// One notch, sent — the left menu's lists glide as the graph does. **Not Flickable's own wheel**: at Qt's default
     /// deceleration it moves by a timeline that a row closing under it cuts short (the content shrinks,
     /// `setContentHeight` → `fixupY` rounds the place mid-way and resets the timeline), and closing is what a row the
-    /// wheel takes from under the hand does (`NavItemDelegate.stillPointed`).
+    /// wheel takes from under the hand does (`NavItemDelegate.stillPointed`). Measured in a real window on Windows: the
+    /// notch was cut to about 30px; `tst_wheelunderopenrow.qml` holds it to its whole way.
+    ///
+    /// **Not re-aimed when the content shrinks**: an aim past the end is put back in range by the resting list's own
+    /// `fixupPosition` as it lays its rows (before the paint), so it stops at the end anyway; while shrinking,
+    /// `contentHeight` and `originY` move separately, and an aim taken at that passing end stops short (measured).
     function sendRows(pixels) {
         wheelGlide.sendTo(navList.clampY(wheelGlide.at - pixels))
     }
@@ -191,13 +207,17 @@ AppListView {
         return row === null ? -1 : row.index
     }
     /// Where the list stood when the row opened, and where the opening last put it: a row at the foot scrolls the list
-    /// to show its lines, and closing gives that back (デザイン規約 §左メニューの所作).
+    /// to show its lines — its top scrolls away rather than its lines hiding under the panel's foot — and closing gives
+    /// back what the opening sent; a row opened without sending moves nothing back. The room it grew by is asked for on
+    /// top of the rows (`openRoom`): a section is as tall as its rows, and without it the open row slides, name and
+    /// all, under the sticky stand-in.
     property real openRestY: 0
     property real openShownY: 0
     /// The opening owns the scroll. **Moved a pixel or more by anything else — a wheel, the middle button's drift, a
     /// row brought into view for a menu — the list is the reader's**: nothing is shown again or given back, or closing
-    /// would undo where they sent it. Less than a pixel is the view rounding the place the opening wrote as it lays its
-    /// rows (`QQuickFlickablePrivate::fixup`; a row's lines need not be whole pixels tall).
+    /// would undo where they sent it (where the reader sent it is theirs). Less than a pixel is the
+    /// view rounding the place the opening wrote as it lays its rows (`QQuickFlickablePrivate::fixup`; a row's lines
+    /// need not be whole pixels tall), and does not count.
     property bool openHeld: false
     // The reader moving this list (a notch's glide or the bar's step, `moving`, or the middle button's drift) is the
     // rows moving under the hand (`HandWatch.rowsMoved`): what the row under it had out goes, and nothing opens until
@@ -212,7 +232,8 @@ AppListView {
     }
     // The section's rows changed (`NavSectionModel.changed` — a read, or the reader's filter, fold or delete, which takes
     // the name off the list at the press): the open row is weighed again (`SidebarRowGestures.rowsRebuilt`) — a turn
-    // later, as the model is still telling its news, which the weighing asks it (`rowOfName`).
+    // later, as the model is still telling its news, which the weighing asks it (`rowOfName`): asked inside the
+    // notify, the model would be borrowed twice.
     Connections {
         // A test's stand-in model brings no read.
         target: navList.sectionModel && navList.sectionModel.rowsArrived !== undefined ? navList.sectionModel : null
@@ -484,7 +505,10 @@ AppListView {
     Layout.fillWidth: true
     Layout.fillHeight: expanded
     // The rows plus what they do not count: the open row's growth and the stand-in's seat (without them the lines
-    // push the row up under the sticky stand-in), the top margin, and a hairline (thicker reads as a blank row).
+    // push the row up under the sticky stand-in), the top margin, and a hairline of ground that closes the section
+    // (`spaceXs` or more reads as a blank row of the section). An open section with no rows keeps the hairline too —
+    // then it is the section's whole share, and it stays empty: the stand-in takes no seat there (user decision — ask
+    // before changing; `NavSections`).
     Layout.maximumHeight: !expanded ? 0
                           : stretch ? Number.POSITIVE_INFINITY
                           : count * Theme.rowHeight + navList.openRoom

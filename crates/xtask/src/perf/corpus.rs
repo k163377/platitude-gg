@@ -1,8 +1,11 @@
 //! What the benchmark repository *is*, as one token that changes whenever
-//! the measurement would: taken over the whole ref listing, not `HEAD`
-//! (internal-docs/性能.md「ベンチマークリポジトリは `HEAD` では固定できない」),
-//! and printed beside the parts that made it so a mismatch says what
-//! moved.
+//! the measurement would: the blob id of the whole `show-ref` listing, not
+//! `HEAD`, and printed beside the parts that made it so a mismatch says
+//! what moved. `HEAD` cannot pin it: the default `--selection first` opens
+//! the newest of `HEAD --branches --remotes --tags`, a remote-tracking
+//! row, which a `git fetch` moves without touching a local branch. The
+//! token is checked either side of the runs, and a retake of a record
+//! passes the record's token to `--corpus`.
 
 use std::io::Write;
 use std::path::Path;

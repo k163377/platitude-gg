@@ -24,11 +24,15 @@ import platitude.ui
 /// other term, so without it a run reads settled before and after the move (`AutoActCompletion.owesStatus`). What
 /// this holds is a verb's completion (`complete … page=`, `CompletionRoute`), never the moment a picture is taken.
 ///
-/// A move the view is owed is the page still arriving (rules-refs/app-ui.md「`PageSettled` は表示の置き直しも待つ」).
+/// A move the view is owed is the page still arriving (`placing` = `GraphRowWalk.placing`, where the rule for a new
+/// delay that writes the view's `contentY` stands). The default landing (`RepoPage.trySelectDefault`) centres the row
+/// a beat after picking it: a page that answered settled on its reads alone would have that centring pull the view
+/// back after the run moved it.
 ///
 /// So is a hover decision on its way (`hover:<key>`): a seat resting before it opens a card, a list or a tooltip
 /// under the hand, or beating before it takes one down (`Hovers.deciding`). What stands at the completion would not
-/// stand a moment later, and the picture's walk would name it (`WindowCensus.reportAt`).
+/// stand a moment later, and the picture's walk would name it (`WindowCensus.reportAt`): a run completed under the
+/// rest has its picture and its completion apart (`pictured … holds=false gained=ToolTip`).
 ///
 /// So are the rows of a list on screen that the view has not built yet (`Awaited.built`): the model landed, the
 /// delegates come a polish later, and a run that completes between the two photographs rows its completion never
@@ -42,7 +46,14 @@ import platitude.ui
 /// (`CommandsModel.recorded`).
 ///
 /// A tab still at the picker, or one whose path was refused, is done: nothing is coming, and answering no would hold
-/// the run until the watchdog.
+/// the run until the watchdog. So the tab's state `""` (before its feed is attached; then `"loading"`, `"open"`, or
+/// `"error"` for a refused open) answers settled too: a window's verb that completes without waiting for the page and
+/// ends before the feed is attached has the census walk a page with no rows, and an `"error"` census is the picture of
+/// a refused open — a verb that writes settings is not overlapped with the open (on Windows the open's reads can fail
+/// to read the configuration; the product asks once more, and the identity verbs submit only once this answers
+/// settled, `WindowIdentityActs`). Nor is another worktree's HEAD row waited for: it lands later, with the walk the
+/// worktrees' listing asks for. A verb whose answer is a row's absence waits for that row itself (`nav-jump`'s
+/// `worktree`) or reads again by its commit (`row-card`).
 QtObject {
     id: pageSettled
 
@@ -79,6 +90,11 @@ QtObject {
         if (!pageSettled.recorded(page))
             owed.push("records")
         if (!graph.failed && !graph.stale) {
+            // The session's own reads, asked of core (`GraphModel.readingsSettled` → `harness::settlement`): a swap
+            // pass raises no `loading`, and another worktree's row lands without moving this page's `wipRow`, so no
+            // other term sees them. A query, so its end raises no property edge: the waits sample it each beat, and the
+            // frame checks ask it again directly. Covered by `tst_census.qml` and
+            // `session_integration::{carried,paced,settlement}`.
             if (!graph.readingsSettled())
                 owed.push("readings")
             if (page.pageLanding)

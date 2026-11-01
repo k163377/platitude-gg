@@ -88,6 +88,11 @@ pub enum PlanAnswer {
 /// Serial spawns are what the interaction budget goes on (internal-docs/性能.md
 /// §予算): the merge answer rides the range read's `%P`, and the onto
 /// row, its branch name and the published count run side by side.
+///
+/// No cap on the rows (user decision — ask before changing): a `--root`
+/// plan makes every commit of the history a `PlanRow`. The performance
+/// budget is the baseline's (the screen as it opens); what a whole-history
+/// plan the reader opened costs on top is accepted.
 pub async fn preview(
     executor: &GitExecutor,
     workdir: &Path,

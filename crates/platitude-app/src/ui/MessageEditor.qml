@@ -3,11 +3,25 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The commit message pair: a summary box over a dimmer description box, one block of one height
-// (デザイン規約 §コミットメッセージの 2 つの枠). The commit editor and the details pane both use it, so they cannot drift.
+// The commit message pair: a summary box over a dimmer description box, one block of one height. The commit editor and
+// the details pane both use it, so the four boxes keep one rule and cannot drift. The summary is `textPrimary`; the
+// description `textSecondary` at rest and `textPrimary` only while written in (`DescriptionBox`) — the step is the
+// message's own hierarchy.
 //
-// The pair's height is one number the layout splits: the description fills what the summary leaves, so the total is
-// exact whatever the line height rounds to.
+// **One block of one height**: at rest one summary line over five description lines (`Theme.messageMaxHeight`), and
+// that total does not move with either text — a summary that wraps to two or three lines takes them from the
+// description, so the CHANGES band, the file list and the commit button beside the pair never jump with the commit
+// chosen. The description gives way down to two lines (`descFloor`); past that the block itself grows, until the
+// summary's own cap (`messageMaxHeight`) stops it. The pair's height is one number the layout splits: the description
+// fills what the summary leaves (`fillHeight`). Two heights computed apart and meant to add up would break the sum
+// quietly on a line height's fraction, a layout's rounding or a clamp.
+//
+// A new message always opens from its first line: a text that overflows leaves the caret at its end and the box scrolls
+// there, so it would start mid-text with nobody having moved it. Held at the top until the reader moves it — a wheel,
+// a caret in the box, the grip (`setMessage`, `DescriptionBox.pinnedTop`).
+//
+// The `Co-authored-by:` lines stay inside the description: the box is the amend's editor, and taken out of it the box
+// and the saved message would disagree, with no way left to remove or fix a co-author.
 //
 // What stands around the pair is the pane's and comes in as numbers (`listHeight` / `blockRoom` / `blockHeight`).
 // The readouts go back out under the panes' names — automation reads the panes, and the panes forward.
@@ -27,15 +41,19 @@ ColumnLayout {
     property string standingBody: ""
 
     // ---- the mark a reader arrives at -------------------------------
-    /// A reader was sent here from the graph row's hover card (デザイン規約 §hover のツールチップ); the frames say so
-    /// until their next press. Only the pane that is sent to sets it.
+    /// A reader was sent here from the graph row's hover card (デザイン規約 §hover のツールチップ「送った先は名乗る」); the
+    /// frames say so until their next press. Only the pane that is sent to sets it. Only the frames' colour changes, to
+    /// `accent`, on both boxes at once so the message stands as one target; the ground stays — lifted, it would be a
+    /// second selection-blue in the right pane (user decisions — ask before changing). Down at the next press outside a
+    /// card or menu (a hand still reading one is not done) and at Escape, once nothing above it stands
+    /// (`RepoPage.escapePressed`).
     property bool attention: false
     function callAttention() { editor.attention = true }
     function dropAttention() { editor.attention = false }
 
     // ---- what the pane says about its own geometry ------------------
     /// The pane's file list height — the one thing under the block that gives. What it has past two rows is all this
-    /// pair may borrow (デザイン規約 §コミットメッセージの 2 つの枠).
+    /// pair may borrow (`DescriptionBox`'s grip): under two rows it stops being a list.
     property real listHeight: 0
     /// How much of the pane the block holding this pair may take — the pane's to say; the two panes differ.
     property real blockRoom: 0
@@ -50,7 +68,7 @@ ColumnLayout {
     /// What the description box paints (the output side).
     readonly property color descriptionColor: descBox.textColor
     readonly property bool descriptionFocused: descBox.focused
-    /// A caret is in either box — when the pane keeps the row that saves on screen (規約 §コミットメッセージの 2 つの枠).
+    /// A caret is in either box — when the pane keeps the row that saves on screen (`MessageActionsRow`).
     readonly property bool anyFocused: summaryArea.caretHeld || descBox.focused
 
     // -- the message pair is one block of one height --
@@ -143,7 +161,8 @@ ColumnLayout {
         descBox.text = description
     }
     /// Escape in one of the boxes: the caret goes, so the row that saves comes down. The text is the owner's to keep
-    /// or drop — the details pane drops its draft, the commit editor keeps it (デザイン規約 §コミットメッセージの 2 つの枠).
+    /// or drop — the details pane drops its draft (`DetailsPane.syncMessage`), the commit editor keeps it
+    /// (`WipCommitBlock`).
     signal escaped()
     function leaveBoxes() {
         summaryArea.focus = false

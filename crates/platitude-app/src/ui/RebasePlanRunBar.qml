@@ -3,7 +3,14 @@ import QtQuick.Controls.Fusion
 import platitude.ui
 
 // The plan's one door onto the repository, in the commit button's seat (the exit card takes it if the run stops
-// part-way — §進行中の操作から出る). The hold follows the drop table (§履歴を合流させる「見るのは先端」).
+// part-way — §進行中の操作から出る: compose, run and stop follow in one seat). Three faces: plain — `accent` frame,
+// `rebase -i` + the count, a click; pushed commits in the range — `warning` frame and the yellow note
+// `%n already pushed` (the count says the fact), the words staying white since the frame and the note carry the
+// warning, still a click: the remote is not broken until a push, and force push holds that gate; a drop with nothing
+// else holding the tip — `warning` frame, yellow words, the ring, a hold, generalising the single drop's (the rewritten
+// tip comes back from the branch's reflog, 規約 §回数押し の色の表). The hold follows the drop table
+// (§履歴を合流させる「見るのは先端」). Pressable only on a plan that asks for something — a run always does something
+// (`dirty`: not all `pick` in the original order, and a `reword` with no message counts as `pick`).
 Item {
     id: bar
 

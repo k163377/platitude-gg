@@ -19,6 +19,8 @@
 use std::collections::BTreeMap;
 
 /// Where a unit stands in the one queue every seat on the machine shares.
+/// The three ranks and their order are a user decision — ask before
+/// changing.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub(crate) enum Rank {
     /// A landing's unit: `land` moves main, and the seats' gates rebase
@@ -28,7 +30,8 @@ pub(crate) enum Rank {
     /// waiting at the screen, which no test is. Only the build and the
     /// start are counted; the window holds none of the machine.
     Launch,
-    /// Everything else — a seat's own gate, whatever its flags.
+    /// Everything else — a seat's own gate, whatever its flags, and a verb
+    /// shot headless, which is a test.
     Normal,
 }
 

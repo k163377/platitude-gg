@@ -108,6 +108,8 @@ pub(crate) fn shipped_exe(
         println!("building (release, no features — the shipped set)…");
         let _busy = crate::still::busy(root, "cargo build --profile shipped")?;
         let mut cargo = std::process::Command::new("cargo");
+        // The whole workspace, no `-p`: `package` carries `pgg-todo-editor`,
+        // a bin of platitude-core, from the same directory.
         cargo
             .args(["build", "--locked", "--profile", SHIPPED_PROFILE])
             .current_dir(root)

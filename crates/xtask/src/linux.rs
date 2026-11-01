@@ -830,6 +830,12 @@ fn image_tags(listing: &str) -> String {
 ///
 /// Every tree `git worktree list` shows, read when used: the set changes
 /// while the machine runs, so no roster of seats is written down.
+///
+/// A tree the listing does not show is dead to this. While a seat's tree
+/// is missing and only its letter's branch is left (the vanishing trees
+/// of P3-確認事項 §開発環境(Linux コンテナ)), that seat's volumes are
+/// taken as orphans: once `seat takeover` has grown the tree back, the
+/// next `linux` makes them again, its target starting from empty.
 struct Alive {
     /// [`checkout_name`] of every tree.
     names: BTreeSet<String>,
@@ -899,7 +905,7 @@ fn alive(root: &Path) -> Result<Alive, String> {
 /// The volumes on this machine that no checkout names any more (pure, as
 /// [`stale_images`] is). A name is the directory's last segment only
 /// ([`checkout_name`]): a same-named clone elsewhere would see these
-/// volumes as orphans (P3-確認事項).
+/// volumes as orphans.
 fn orphan_volumes<'a>(listed: &'a str, names: &BTreeSet<String>) -> Vec<&'a str> {
     listed
         .lines()
@@ -1169,6 +1175,9 @@ const READ_TO_RESOLVE: [&str; 4] = [
 /// step, the very thing the copy exists to stop. The guard names the
 /// copy's one failure — not prepared — where `sh` would say `not found`.
 /// The line the command was is printed either way.
+///
+/// The wrapping `sh` is the container's PID 1: looking at the processes
+/// in there, the command being run is its child.
 fn watched_from_inside(inside: &[String], copy: Option<&str>) -> Vec<String> {
     // The line as the container was handed it, on either road: what a red
     // step leaves for a reader who was not standing there.
@@ -1304,6 +1313,15 @@ pub(super) fn volume(root: &Path, kind: &str) -> String {
 
 /// The checkout's own name, as the engine may spell it: the volumes and the
 /// gate's container are named after it (`container::container_of`).
+///
+/// The text of the last segment and nothing else, so two traps stand: a
+/// same-named clone elsewhere on the machine sees this checkout's volumes
+/// as orphans (`orphan_volumes`), and one tree reached by another spelling
+/// (an 8.3 short name, other letter case — why `seats::worktrees::same_tree`
+/// exists) makes a second name. Neither is met today: the side that makes
+/// the volumes (`tree::workspace_root`, the build's `CARGO_MANIFEST_DIR`)
+/// and `git worktree list` both give the long spelling, and a seat's
+/// letter is one character, which nothing shortens.
 pub(super) fn checkout_name(root: &Path) -> String {
     // The last segment after either separator: the path is a Windows one
     // when the host is, and off Windows (where the tests also run) a

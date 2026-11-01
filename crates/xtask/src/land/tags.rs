@@ -110,7 +110,9 @@ fn create(here: &str, name: &str, message: &str, at: &str) -> Result<(), String>
 /// Both or neither (`--atomic`), to main's remote. Never waits on a
 /// prompt, and gives up on a transfer that stalls (git sets no speed
 /// floor of its own): the landing still holds the landings' queue, and a
-/// push that wants a password or a network is the user's to finish.
+/// push that wants a password or a network is the user's to finish. A
+/// main not pushed yet is no obstacle: the commits a tag names go up with
+/// it.
 fn push(here: &str, pair: &[String; 2]) {
     let refs: Vec<String> = pair
         .iter()

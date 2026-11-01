@@ -219,7 +219,7 @@ Item {
         }
 
         /// Presses are counted as they land, and kept between them: rapid ones are not folded into one
-        /// (デザイン規約 §回数押し).
+        /// (`HoldDriver`).
         function test_presses_count_at_once_and_hold_between() {
             click()
             verify(drive.gesturing, "a press counted holds the latch with the hand up")

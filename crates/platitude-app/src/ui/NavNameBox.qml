@@ -5,6 +5,10 @@ import platitude.ui
 // The box a sidebar row's name goes into — new branch, new tag, new branch in a worktree of its own or rename, told
 // apart by the mode (`SidebarRowGestures`). Drawn outside the list so it can grow past the pane over the graph, head
 // held where the name's was: a box too narrow for its text says nothing (デザイン規約 §グラフ行のダブルクリック「箱のプレースホルダは全文」).
+//
+// In the name's own place — a change of what is shown is enough here (規約 §可否・警告の出し場所). It opens with all of it
+// selected; Enter commits, Escape and a click elsewhere cancel, dropping what was typed without asking: all that is
+// lost is a few seconds of retyping.
 SlimField {
     id: box
 
@@ -107,8 +111,11 @@ SlimField {
     }
     /// That tip answers what is typed, not a hand: it stands until the typing changes it (`TipAsk.typed`) — a hand
     /// walking elsewhere, another target's hover and a held scroll bar leave it standing (in the folded rail's peek the
-    /// box stays open while the peek's own bar is used to look through the names). Asks `visible`, not focus: the
-    /// reparent's keyboard hand-off lands inside this binding and Qt drops it as a loop.
+    /// box stays open while the peek's own bar is used to look through the names). Asks `visible`, not focus: carried
+    /// from its seat into the layer (`parent`), the box gives the keyboard up and takes it back, and that hand-off
+    /// lands inside this binding's own write — Qt reads it as `Binding loop detected` and drops the update, so on
+    /// `activeFocus` whether the tip rises hangs on somebody asking next. Only a carried box has this (the graph's
+    /// `GraphRowChips.nameField` stays put and asks `activeFocus`); the box on screen is the one typed into.
     readonly property bool tipTyped: box.refused && box.visible && box.refusedWhy !== ""
 
     /// Where the box came out (PGG_AUTO_ACT=nav-branch-box / nav-rename-box): a clipped or scrolled-away box is

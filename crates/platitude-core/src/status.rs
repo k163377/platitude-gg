@@ -168,7 +168,9 @@ impl Counts {
 /// it changed on, and [`Kinds::folded`] for another worktree's pane, which
 /// cannot move that index and lists one row per path. The kinds are the
 /// file rows' letters (`models::nav` builds a row per side; `ChangeIcon`
-/// reads the letter).
+/// reads the letter). Files, not lines: a `+N -M` count would cost one
+/// more `git diff --numstat HEAD` per read. Counted per row, not per
+/// path, or the row's numbers and the list's length disagree.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Kinds {
     pub added: usize,
@@ -187,6 +189,8 @@ impl Kinds {
                 // One row whatever the stage letters say: the pane lists
                 // conflicts in their own bucket.
                 StatusItem::Unmerged { .. } => kinds.conflicted += 1,
+                // Nothing of it is in the index: the whole file is to be
+                // added.
                 StatusItem::Untracked { .. } => kinds.added += 1,
                 StatusItem::Tracked {
                     staged, unstaged, ..
@@ -375,8 +379,14 @@ pub async fn load(
 ) -> Result<WorktreeStatus, GitError> {
     // `-uall` pins the untracked listing against user config and lists a
     // new directory's files; `-unormal` would give one `dir/` entry with no
-    // per-file diff to stage from. A nested repository still stays one
-    // `dir/` entry (rules-refs/core.md「`status` の答えの中で末尾が `/` の path」).
+    // per-file diff to stage from. A repository inside the working tree
+    // still stays one `vendor/nest/` entry: a path ending in `/` here is a
+    // directory git did not open, the one place a reader cutting on `/`
+    // meets an empty last segment, so it is drawn as one row for the
+    // directory itself (the app's `models::pathtree` keeps the `/` in the
+    // name). Its diff is empty: `diff --no-index -- /dev/null <dir>` makes
+    // no patch (exit 1 and words on stderr, which `answers_by_code(1)`
+    // takes — `details::file_diff_raw`). Held by `status_integration`.
     load_listing(executor, workdir, "-uall", cancel).await
 }
 

@@ -3,7 +3,7 @@ import QtTest
 import platitude.ui
 
 // How the tab strip hands its run out, and what a tab drawn under the answer does with it
-// (デザイン規約 §ウィンドウの縁 の譲る順). Which widths go in is the font's and the model's (`PGG_AUTO_ACT=tab-widths`);
+// (the order: `TabShare`'s header). Which widths go in is the font's and the model's (`PGG_AUTO_ACT=tab-widths`);
 // here every case costs a function call instead of a window and a repository per tab.
 Item {
     id: root
@@ -108,7 +108,7 @@ Item {
             compare(one.wantNames, 64 + 4 + root.padL + root.roomFull)
         }
 
-        /// The mark's room goes first, all of it, and every tab pays the same (規約 §ウィンドウの縁).
+        /// The mark's room goes first, all of it, and every tab pays the same (`TabShare`'s order, step 1).
         function test_the_marks_stand_down_before_a_single_name_is_cut() {
             const ample = sixAt(731)
             compare(ample.markRoom, root.roomFull, "the last run at which the mark keeps all of its room")
@@ -272,8 +272,10 @@ Item {
         }
 
         /// Writing the name moves the column it is cut against, from inside the pass deciding the cut
-        /// (rules-refs/app-ui.md「`CutName` の箱は定規へ書いた後で読む」). Coming to the front is the same move: the
-        /// front tab's name is set heavier.
+        /// (`CutName.relayout`, which reads its box after writing its rulers). Coming to the front is the same move:
+        /// the front tab's name is set heavier — but not one this can pin by weight: the offscreen fallback font
+        /// gives no advance for weight, and the case passes either way. The trigger here is a name shorter than the
+        /// cap rewritten to a longer one.
         function test_a_name_is_cut_against_the_column_it_ends_up_in_not_the_one_it_replaced() {
             tab.titleCap = 400
             tab.title = "ui"
@@ -309,7 +311,7 @@ Item {
         // ---- the worktree a tab is standing in ----------------------------------
         //
         // The cap goes to the name first; the worktree's run takes what is left and goes whole before a letter of the
-        // name is cut (デザイン規約 §ウィンドウの縁 の譲る順 2 段目).
+        // name is cut (`TabShare`'s order, step 2).
 
         function test_the_cap_is_spent_on_the_name_first_and_the_worktree_takes_what_is_left() {
             split(200, 100, 40, "room for both, so both are whole")

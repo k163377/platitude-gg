@@ -8,10 +8,18 @@ import platitude.ui
 // ページへのリンク). One card at every entrance: the graph row's menu, the menu on a choice of two commits, the diff's
 // own text, the left menu's ref and remote rows, and a commit's changed files. Each link leads with one remote — the
 // window's own where it has the thing, else the first by name (`GitFacts.linkLead`) — and the other remotes that have
-// it wait behind OTHER REMOTES.
+// it wait behind OTHER REMOTES (rows by thing, then by remote name), a row per remote with the remote named at the
+// sentence's end. The cards keep the carrying menu's hold seat, as every card does (`AppMenu.outerIndent`).
+//
+// **A row only on a remote that has the thing** (user decision — ask before changing): a row GitHub answers with 404
+// leads nowhere (デザイン規約 §メニュー「対象が存在しない」行は消す). A thing no remote has takes its row away, and with
+// none at all the card does not stand. The answer is at hand as the menu opens (`GitHubLinks`).
 //
 // It reads no model: the carrying menu works out which remotes have what (`GitHubLinks`) and hands the answer to
 // `standOn` as the menu opens, so the rows are fixed before the card shows (デザイン規約 §メニュー).
+//
+// Headless: `github-card` / `github-choice` / `diff-github` / `github-ref` / `github-remote` / `github-file`, on
+// `--preset github` (the remotes' URLs are GitHub's; git reaches the bare repository beside it through `insteadOf`).
 AppMenu {
     id: githubMenu
 
@@ -60,8 +68,11 @@ AppMenu {
 
     /// What a row says it puts on the clipboard, the thing's name in `%1` and the remote in `%2` — both as code, each
     /// behind its mark (`AppMenuItem.refName` / `refName2`): "Copy link to 1c57829b on origin". The name says what it
-    /// is by its own dress — a commit's id, a ref's mark, a remote's cloud — so the kind takes no word, but for a
-    /// pair, for lines and for a file, which a commit's id alone does not say.
+    /// is by its own dress — a commit's id, a ref's mark, a remote's cloud — so the kind takes no word (user decision —
+    /// ask before changing), but for a pair, for lines and for a file, which a commit's id alone does not say. One
+    /// English sentence, not the remote set bare after the name. The name is said again because the clipboard shows
+    /// nothing: which commit's or which name's page it is must be read off the row — a commit by its 8-character id,
+    /// a pair as git's range (older first), a branch by its name on that remote, a tag by its name.
     function sentenceFor(kind, lines) {
         switch (kind) {
         //: "Copy link to 1c57829b on ☁origin" — a commit, a branch or a tag, then the remote.

@@ -156,7 +156,9 @@ const MANY_TAGS: usize = 2000;
 
 /// `basic`, buried in tags: the only preset where a folded rail's section
 /// outgrows the pane — with a handful of tags the peek is content-sized
-/// and every placement rule looks alike (デザイン規約 §左メニューを畳む).
+/// and every placement rule looks alike (`SectionPeekPopup.qml`).
+/// Written by one `update-ref --stdin` process: a `git tag` per tag is
+/// 2000 process spawns, minutes on Windows.
 pub(super) fn manytags(repo: &mut DemoRepo) -> Result<(), String> {
     basic(repo)?;
     let head = repo.git(&["rev-parse", "HEAD"])?;

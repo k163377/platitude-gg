@@ -7,6 +7,9 @@ import platitude.ui
 // The right-click on a worktree file row. Every row acts on the pane's chosen files (the click chose the row if
 // nothing else was).
 //
+// Do not add a row that deletes a tracked file from disk (other tools offer `delete file`): a deletion is a new change,
+// made by deleting the file and staging that.
+//
 // An `Item` because a menu measures the window through the item it was declared under (`AppMenu.ownerItem`).
 Item {
     id: fileRowMenu
@@ -30,7 +33,8 @@ Item {
     property string bucket: ""
     property string path: ""
     /// Whether git could stash at all — **a question about the tree**: one unmerged path anywhere and git refuses the
-    /// whole command, named paths or not, and an unborn repository has nowhere to put one (`BandStashButton`,
+    /// whole command, named paths or not (read off the row's bucket, the row would stand on every file during a
+    /// conflict and spend a write on the refusal), and an unborn repository has nowhere to put one (`BandStashButton`,
     /// `platitude_core::stash::standing`). Both of those grey the row in the toolbar's words; `clean` takes it away,
     /// a file row having nothing to set aside.
     property string stashStanding: ""
@@ -88,8 +92,10 @@ Item {
     signal offered(string bucket)
 
     /// What the chosen rows' discard would cost, asked of Rust (`RepoTab.planDiscard` / `discardRows`,
-    /// 規約 §その他の操作). Keyed `<bucket>:<path>`: a file changed on both sides has a row in each bucket. The keys stay
-    /// on the plan so the words and the write read off the same choice.
+    /// 規約 §その他の操作). Keyed `<bucket>:<path>`: a file changed on both sides has a row in each bucket, and which one
+    /// was chosen lives only in the choice. The sorting — bucket to command, a rename's other half, conflict rows left
+    /// out, the count — is Rust's; the menu only hands the keys on. The keys stay on the plan so the words and the
+    /// write read off the same choice.
     function planDiscard() {
         const rows = fileRowMenu.wipPane.chosenRows()
         const keys = []
@@ -195,6 +201,16 @@ Item {
             offered: fileRowMenu.bucket === "conflicts"
             onTriggered: fileRowMenu.takeSideNow("theirs")
         }
+        // The third way to settle this conflict, above the divider with the two. Unset, the same sentence with the slot
+        // empty: `…` keeps its "pressing asks" sense (§回数押し), the angle brackets say what goes there, and the words
+        // match the label pressed through to (`Merge editor`). `Edit`, not `Open`: the two above say what becomes of
+        // the file, `Open` would make the window the subject. The tool's name plain, not a chip — `stash` here wears
+        // a chip as a command, and a config value in the same dress would split the mark's sense (§git 用語のコード表記).
+        // Bright while unset too: `textMuted` says "cannot press", and unset is when a press is wanted (§無効).
+        // Changing the tool is the settings' job, not a row's: a menu shows nothing until opened, and a rarely used
+        // row costs every reader (§メニュー). The day a second thing to set wants a row here, make a row-end side
+        // action and move this into it too. No `Mark resolved` row: a tool's resolution is staged by git itself, and
+        // an editor's by the row's `+` — the bucket's `Mark all resolved` is a separate matter.
         AppMenuItem {
             text: fileRowMenu.worktree.mergeTool !== ""
                   ? qsTr("Edit in %1").arg(fileRowMenu.worktree.mergeTool)
@@ -223,9 +239,16 @@ Item {
                 fileRowMenu.repoTab.stashPaths(fileRowMenu.wipPane.stashName)
             }
         }
-        // Held (デザイン規約 §回数押し). On a file changed on both sides the unstaged row keeps what is staged, the staged
-        // row takes the lot. `warning`: what goes comes back from the discard record's copy — `danger` where it would
-        // not (before the first commit, a file the copy cannot take; デザイン規約 §回数押し の色の表).
+        // Held (デザイン規約 §回数押し) — the consent is the row's own presses; its words and tag say what goes. **One
+        // discard row on every row but a conflicted one, in the same words**: the reader always means "undo what
+        // happened to this file", and an untracked file's change is its existence, so it going is the right undo. Only
+        // the tag at the row's end changes (`discardNote`): unstaged none — the disk side only, what is staged stays;
+        // untracked `the file goes`; staged `both sides` — both back to HEAD, an added file deleted, a rename back
+        // to its old name. On a file changed on both sides the two rows are the split: the unstaged row keeps what is
+        // staged, the staged row takes the lot; the row says which file. Several chosen, the tag counts (`3 files`) the
+        // files the write touches — not a folder row, which no row here acts on. Not on a conflicted row: git refuses
+        // to restore an unmerged path. `warning`: what goes comes back from the discard record's copy — `danger`
+        // where it would not (before the first commit, a file the copy cannot take; デザイン規約 §回数押し の色の表).
         AppMenuItem {
             id: fileDiscardItem
             text: fileRowMenu.discardWords(fileRowMenu.plan)

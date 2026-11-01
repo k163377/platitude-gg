@@ -5,6 +5,17 @@
 //! of them in the common directory): a caller holding the git directory
 //! `repo::open` resolved reads them under it ([`detect_at`]), one holding
 //! only a working tree asks `rev-parse --git-path` ([`detect`]).
+//!
+//! A status read reads a stopped operation with no process at all:
+//! `detect_at`, `integrate::rebase_standing`, `integrate::stopped_message`,
+//! `merge_heads` and the rebase side of `conflict::sides` all read files
+//! under `RepoInfo::git_dir`, which for a linked worktree equals
+//! `--git-path` for every marker (the common directory holds objects,
+//! refs, packed-refs, config, hooks, info, logs, worktrees and the like).
+//! A caller holding only a working tree — inside a write, or
+//! `discards::restore` on another worktree — asks [`detect`]. Held by
+//! `session_integration::standing_reads` (no process; separate stops in
+//! the main and a linked worktree).
 
 use std::path::Path;
 
@@ -63,7 +74,8 @@ pub async fn sequence_pending(
 /// `None` when the file offered nothing to read (gone, unreadable, no
 /// parseable id) — not an empty list, which would say "the merge is over"
 /// and make one failed read rebuild the graph twice. A caller that cannot
-/// tell keeps what it had. What the sides are *called* is
+/// tell keeps what it had (`session::refresh_op`'s `merge_moved`;
+/// `integrate_integration::merge`). What the sides are *called* is
 /// [`crate::conflict::sides`].
 #[must_use]
 pub fn merge_heads(git_dir: &Path) -> Option<Vec<crate::oid::Oid>> {

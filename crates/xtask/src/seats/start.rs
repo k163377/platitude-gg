@@ -4,6 +4,11 @@
 //! the reference-transaction hook writes no maker down; the session is
 //! written down as its maker here instead (`gate::hooks::Made::StartedIn`),
 //! for its landing to take the tree and the branch away (`land::leftovers`).
+//!
+//! The app's own handling, read in its code: archiving a session removes
+//! its tree and keeps the branch for a resume; a resume re-creates a
+//! missing tree from that branch, or on a new branch when the branch is
+//! gone too — and the resumed session's start writes that tree down again.
 
 use std::path::{Path, PathBuf};
 

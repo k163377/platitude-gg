@@ -249,7 +249,8 @@ pub enum RemoteTagRefreshOutcome {
     /// owed: no local operation moves what a remote carries under
     /// `refs/tags/` (a push is branches only), and both askers (an
     /// opening, installing the interval) ask the same question of the same
-    /// remotes — the read in flight is the answer.
+    /// remotes — the read in flight is the answer. Whatever both missed
+    /// comes with the next auto fetch tick: the poll reads no remote tags.
     ///
     /// Said once that read has let the slot go, so the caller knows its
     /// answer is published and its next ask is not turned away by the
@@ -383,10 +384,16 @@ impl RepoSession {
 
     /// The answer `task` is owed, which may be another ask's: where a
     /// newer ask took the pass over, that ask says whether the repository
-    /// reached the screen. Taking the handover as the answer lets a write
-    /// report itself settled while its graph is still being walked, or
-    /// landed where the replacement then failed
-    /// (`session_integration::operations` pins both).
+    /// reached the screen (user decision — ask before changing). Taking the
+    /// handover as the answer lets a write report itself settled while its
+    /// graph is still being walked, or landed where the replacement then
+    /// failed (`session_integration::operations` pins both). Answering
+    /// `Cancelled` as "did not land" would report a healthy takeover (a
+    /// Reload) as a failure.
+    ///
+    /// The price: a write's settling stretches by somebody else's walk.
+    /// Its `WriteFinished` has gone out already, so the screen answers as
+    /// fast; what waits is the queue's next request.
     ///
     /// Ends at the ask nobody took over, or when the session closes
     /// ([`GraphPasses::landed_after`]).

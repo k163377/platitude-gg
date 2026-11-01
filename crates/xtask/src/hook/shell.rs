@@ -2,6 +2,10 @@
 //! run order, and the program at the head of each. Text only — where a
 //! reader cannot tell what a piece invokes it says so, and each guard's
 //! own rule decides what that means.
+//!
+//! The one place a line is cut (`cut`, through `shell_segments` /
+//! `pipe_pieces`): a guard never splits on `|` itself — a cut inside
+//! quotes hands it a grep pattern as a program to refuse.
 
 /// The programs a command is run through, stepped over with their flags so
 /// `env X=1 cargo build` and `cmd /c cargo build` read as cargo.

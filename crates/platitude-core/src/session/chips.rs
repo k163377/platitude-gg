@@ -35,7 +35,9 @@ impl RepoSession {
     /// announces its graph under, so a diff can neither be invalidated
     /// between the two nor arrive ahead of its rows. The generation covers
     /// a superseded pass that installs late, whose row numbers point at
-    /// other commits in the consumer's graph.
+    /// other commits in the consumer's graph. Both guards are needed: a chip
+    /// pinned to the wrong commit stays there, since `applied` then says it
+    /// was sent.
     pub(super) fn apply_refs(&self, label_map: LabelIndex) {
         let tags = self.tags_shown();
         let Some(mut shared) = self.store_shared() else {

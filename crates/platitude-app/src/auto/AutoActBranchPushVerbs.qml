@@ -148,8 +148,8 @@ Item {
         }
     }
     // The first push's question the row raised, once the remote has answered for the name and the bar is all the way
-    // down. `local=` is the branch it is about — the row's, not the worktree's (デザイン規約 §はじめてリモートへ送る
-    // 「対象は呼んだ所が決め」) — which only this line can tell from a picture of the same name.
+    // down. `local=` is the branch it is about — the row's, not the worktree's (`PublishFlow.publishLocal`) — which
+    // only this line can tell from a picture of the same name.
     PageStage {
         id: askTimer
         name: "push_branch_ask"

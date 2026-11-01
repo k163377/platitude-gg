@@ -3,7 +3,8 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude.ui
 
-// One draggable boundary between two of the graph's columns. The pane owns the widths — this only reports.
+// One draggable boundary between two of the graph's columns. The pane owns the widths — this only reports. A
+// `MouseArea` even on a column with one width: without it nothing states the cursor there.
 MouseArea {
     id: divider
 
@@ -22,8 +23,8 @@ MouseArea {
     height: parent.height
     z: 2
     hoverEnabled: true
-    // The splitter cursor in both states; a column that will not move says so with the badge
-    // (規約 §グラフ列は最も広い所のレーンまで).
+    // The splitter cursor in both states; a column that will not move says so with the badge (`RefusalBadge`,
+    // `GraphColumnMetrics.graphColWFixed`).
     cursorShape: Qt.SplitHCursor
     preventStealing: true
     onContainsMouseChanged: {

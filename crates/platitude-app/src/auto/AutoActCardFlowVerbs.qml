@@ -66,7 +66,9 @@ Item {
     // `back` completes once the page has stopped arriving too: a rebuild landing after the card came back slides the
     // rows under the hand and takes the card down for another rest (`RowHoverHost`, `HoverSeat.displace`), so a
     // picture taken then is of the card gone — the state the run never claimed. The claim is read again at the
-    // picture (`Awaited.claim`).
+    // picture (`Awaited.claim`): each picture says `pictured run= artifact= name=card_latch holds=`, and the claims
+    // table owes it at the app picture (`verify::verbs` `CLAIMS`) — `holds=false` fails the run. `back:row-late` is
+    // a diagnostic form, not registered in `verb-lines.txt`. The menu's picture is scene.png.
     PageStage {
         id: cardLatchTimer
         name: "card_latch"
@@ -186,8 +188,9 @@ Item {
     // in place under it — this run commits what the preset staged, so HEAD's row is of the new commit
     // (`GraphList.rowRewritten` → `RowHoverHost.rowGone`). The card's commit is still in the graph, a row down, and the
     // reread is no reader's doing: the card the hand is in stays, the view putting itself back over that row as far as
-    // it can (デザイン規約 §hover のツールチップ「外乱では閉じない」). Its state is final in the turn the reread lands.
-    // `inside` stops with the card out, before the commit.
+    // it can (`GraphRowWalk.shiftRows` / `RowHoverHost.reseat`; デザイン規約 §hover のツールチップ「外乱では閉じない」).
+    // Its state is final in the turn the reread lands. `inside` stops with the card out, before the commit. Runs on
+    // `--preset dirty` (something staged to commit, the worktree row kept at the top).
     PageStage {
         id: cardRewriteTimer
         name: "card_rewrite"

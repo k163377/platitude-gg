@@ -77,6 +77,10 @@ async fn a_branch_aside_is_fast_forwarded_to_what_its_upstream_holds() {
 /// No `+` on the refspec: a branch with commits its upstream lacks is never
 /// set back to the upstream's tip. git turns the fetch down instead, which
 /// is why the row is greyed before the press (`offers::pull_row`).
+///
+/// The one flag no argv unit pins: `fast_forward` reads the branch keys
+/// (`push_marks`) before it builds the fetch, so `refusing::git()` never
+/// reaches the refspec. This stays pre-merge, not in `periodic`.
 #[tokio::test]
 async fn a_branch_aside_with_commits_of_its_own_keeps_them() {
     let (bare, mut work) = origin_and_clone();

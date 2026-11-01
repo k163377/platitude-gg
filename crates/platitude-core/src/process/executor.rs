@@ -37,7 +37,12 @@ mod tests;
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Configuration arguments prepended to every invocation.
+///
+/// Every pin is a form checked at the minimum git (`version.rs`); the
+/// index of all pins is gitの扱い.md §発行前の釘付け.
 const FIXED_ARGS: [&str; 13] = [
+    // A user's colour and path quoting would put escape codes and
+    // `"…"`-quoted paths into the records the parsers read.
     "-c",
     "color.ui=false",
     "-c",
@@ -47,18 +52,27 @@ const FIXED_ARGS: [&str; 13] = [
     "-c",
     "log.showSignature=false",
     // Every message read here is parsed as UTF-8, and every message
-    // written here is UTF-8 bytes: a reader's terminal encoding would
-    // re-encode what `log` prints, and a reader's commit encoding would
-    // stamp the commits made here with an `encoding` header the bytes do
-    // not match.
+    // written here is UTF-8 bytes: a reader's terminal encoding (Shift_JIS,
+    // say) would re-encode what `log` prints, and a reader's commit
+    // encoding would stamp the commits made here with an `encoding` header
+    // the bytes do not match (user decision — ask before changing).
     "-c",
     "i18n.logOutputEncoding=utf-8",
     "-c",
     "i18n.commitEncoding=utf-8",
     // A working-tree `git diff` refreshes the index under `.git/index.lock`
-    // unless this says not to (`--no-optional-locks` does not reach
-    // diff), and a poll's diff on that lock kills a concurrent commit.
-    // No answer changes (rules-refs/core.md の `diff.autoRefreshIndex` の行).
+    // unless this says not to: neither `--no-optional-locks` nor
+    // `GIT_OPTIONAL_LOCKS=0` reaches diff (measured on 2.55). A write dies
+    // on that lock without waiting, so a poll's diff outside the queue kills
+    // a concurrent commit (`fatal: Unable to create ... index.lock: File
+    // exists`). No answer changes: a file whose stat alone moved reads as
+    // unchanged to a patch, `--name-only` and `--quiet` alike. The price is
+    // that nobody refreshes the index's stat cache, so a tree whose stats all
+    // moved with the content the same (copied from outside git) is hashed
+    // again on every read. A slow pre-commit hook holds no lock — git gives
+    // it back before running the hook — so `--preset slowhook` covers only
+    // "the write is in flight". Held by
+    // `tests/it/exec.rs::a_working_tree_read_leaves_the_index_untouched`.
     "-c",
     "diff.autoRefreshIndex=false",
     "--no-optional-locks",
@@ -76,6 +90,11 @@ const FIXED_ARGS: [&str; 13] = [
 /// internal pathspecs too, and `git stash push -u` then reports success
 /// while leaving untracked files behind. Paths are wrapped with
 /// [`super::literal_pathspec`] instead.
+///
+/// Under `GIT_OPTIONAL_LOCKS=0` the index is never written back, so
+/// `core.fsmonitor` and `core.untrackedCache` never update their token or
+/// cache and speed nothing up: not adopted for `status`
+/// (ci/baseline/git-slots-windows-x64.md §`status` の高速化機構).
 const FIXED_ENV: [(&str, &str); 4] = [
     ("LC_ALL", "C"),
     ("GIT_TERMINAL_PROMPT", "0"),
@@ -496,7 +515,9 @@ impl GitExecutor {
 
     /// One command, from the ask to the reap. The observer hears of it at
     /// the ask, not the spawn: a row is owed from the moment the reader
-    /// pressed, queue or no queue.
+    /// pressed, queue or no queue. Keep the telling ahead of the slot's
+    /// `acquire`; `CommandStarted` therefore says asked, not queued, and a
+    /// test that needs the queue waits on `Slots::settled`.
     ///
     /// `lead` is told of the spawn as it happens — the instant an identical
     /// ask stops being able to share this run.

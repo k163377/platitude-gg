@@ -76,10 +76,21 @@ impl NavSectionModel {
 
     /// The REMOTES under a filter: a row per remote with a match, open by
     /// default under the tree's own fold key (`folder_expanded`), its
-    /// branches flat under it (デザイン規約 §左メニューの所作
-    /// 「絞り込み中も REMOTES は remote ごとの行を残す」). A remote is a place,
-    /// not a folder of names: no name cut takes its row out. A ref with no
-    /// slash stands flat, ahead of the groups.
+    /// branches flat under it by branch name (`feature/topic-a`) — user
+    /// decision, ask before changing. A remote is a place, not a folder of
+    /// names, and its row carries the remote's menu and the push mark: no
+    /// name cut takes its row out. Open by default here (folded in the
+    /// tree) since a filter does not hide what it found; folding works as in
+    /// the tree, and the state carries over to it. The match is on the whole
+    /// name, so `origin/feat` finds too. A ref with no slash stands flat,
+    /// ahead of the groups.
+    ///
+    /// The remote's row is `Arranged::Made` with `full` = the remote's
+    /// name, so `NavItemDelegate.isRemoteRow`, the push mark and the
+    /// remote's menu answer as in the tree; `tree_named` stays true for
+    /// remotes either way (a leaf's `Role::Full` is the whole name a menu
+    /// names), and `shown()` counts the remote rows. Picture `nav-filter
+    /// feat`, model `view_tests`.
     pub(super) fn build_remote_groups(&self, needle: &str) -> Vec<Arranged> {
         let Source::Remotes(snapshot) = &self.all else {
             return Vec::new();

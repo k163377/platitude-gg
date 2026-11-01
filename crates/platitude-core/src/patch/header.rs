@@ -11,7 +11,16 @@
 //! names, so the executable bit would ride along with any hunk of its file
 //! — staged with it, unstaged with it, or discarded from the working tree
 //! with it. Without the pair, `apply` keeps the mode the file has where it
-//! lands, and the change stays on its side until the whole file moves.
+//! lands, and the change stays on its side until the whole file moves
+//! (user decision — ask before changing; デザイン規約 §mode の変更). With
+//! the pair, unstaging one hunk takes back a staged `+x`, which an OS
+//! without the executable bit cannot set again (git 2.55, apply.c). The
+//! same split as `git add -p`, which asks about the mode apart from the
+//! lines; GitKraken, GitHub Desktop, VS Code and lazygit leave the mode
+//! out of a part too (git-gui carries it).
+//!
+//! Measured on git 2.55; pinned by `stage_integration::partial`, whose mode
+//! tests bite on Linux only (Windows ignores chmod, so they stay green).
 
 use std::borrow::Cow;
 

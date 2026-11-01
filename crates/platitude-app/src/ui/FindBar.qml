@@ -6,6 +6,7 @@ import QtQuick.Layouts
 import platitude.ui
 
 // Ctrl+F over the graph: a card that hangs from the top-right corner of the list, over it (デザイン規約 §コミットを探す).
+// Headless: `find` / `find-next` / `find-prev`; the note under the card: `find-hint` / `find-hint-key`.
 Rectangle {
     id: findBar
 
@@ -36,7 +37,8 @@ Rectangle {
                                                         : findBar.unanswered ? findBar.unansweredNote : ""
     /// The words of the note a press acts on: `unansweredAction` while that note is the one up, never on a `hint`.
     readonly property string noteAction: findBar.hint === "" && findBar.unanswered ? findBar.unansweredAction : ""
-    /// The typing stopped a tooltip's wait ago — since the last keystroke, or since the card came up.
+    /// The typing stopped a tooltip's wait ago — since the last keystroke, or since the card came up. Comes on a line
+    /// with no note too, so the note verbs (`find-hint` / `find-hint-key`) wait on this, not on the note.
     readonly property bool typingStopped: typingPause.over
     /// The note is up: the typing stopped, on a line that has one.
     readonly property bool noteShown: findBar.open && findBar.typingStopped && findBar.note !== ""
@@ -70,14 +72,17 @@ Rectangle {
         findBar.open = false
         typingPause.halt()
     }
-    /// The note's acting words, pressed: the caret stays in the box — the note is no field of its own, and the keys
-    /// that step through matches (Enter, Shift+Enter) belong to the box.
+    /// The note's acting words, pressed: the caret goes back to the box before `noteActed` — the note is a `CardText`,
+    /// a `TextEdit` that takes the focus on a press, and the keys that step through matches (Enter, Shift+Enter)
+    /// belong to the box.
     function actOnNote() {
         field.forceActiveFocus()
         findBar.noteActed()
     }
     /// Whether a press at `scenePos` (scene coordinates) landed on this card, `✕` and count included. `null` — a
-    /// headless press with no place — is never on it.
+    /// headless press with no place — is never on it. Why the press-away road carries the place: a press on the card's
+    /// own `✕` is a press on the card, and without it the `✕` would take the card down by that road, `dismiss()` would
+    /// find it shut, and the keyboard would be nobody's.
     function holds(scenePos) {
         if (!scenePos)
             return false
@@ -140,7 +145,8 @@ Rectangle {
                 event.accepted = true
             }
         }
-        // Emptied by its text, never hidden: a Layout skips an invisible item and its spacing with it.
+        // Emptied by its text, never hidden: a Layout skips an invisible item and its spacing with it, and the row
+        // would no longer add up to `fixedWidth`.
         Label {
             id: count
             text: findBar.searching ? qsTr("%1 / %2").arg(findBar.atMatch).arg(findBar.matches) : ""

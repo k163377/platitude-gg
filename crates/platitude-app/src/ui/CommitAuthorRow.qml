@@ -5,7 +5,7 @@ import platitude.ui
 
 // The details pane's author row: avatar + name/date on the left, own hash over the parents' on the right.
 //
-// Hovering the name or the co-author credit opens a card (デザイン規約 §author の hover / §co-author の表示). The cards
+// Hovering the name or the co-author credit opens a card (`AuthorCard`, `CoAuthorCard`). The cards
 // belong to the pane, which keeps them put while this block scrolls; this row only raises the anchor point.
 // An `Item` around the layout: the sweep hand lies under everything and a layout would give it a place in the line
 // (`SweepRoom`, 規約 §右のペインの字は掴める).
@@ -31,15 +31,19 @@ Item {
     /// The pane's width; the credit line takes half of it.
     property real paneWidth: 0
     /// A stash entry: its parents past the first are the index and untracked commits git files it with, which the graph
-    /// sifts out (`rows::sift_batch`), so the line names only the base it was made on.
+    /// sifts out (`rows::sift_batch`), so the line names only the base it was made on: a link to the others would lead
+    /// to nothing on screen.
     property bool stashed: false
     /// The cards' own hover, fed back so the stretch that opened a card and the card itself read as one.
     property bool mateCardInside: false
     property bool authorCardInside: false
 
     // ---- co-authors -------------------------------------------------
-    // `Co-authored-by` trailers (`encode::mates_of`), shown as a credit line under the author
-    // (デザイン規約 §co-author の表示).
+    // `Co-authored-by` trailers (`encode::mates_of`), shown as a credit on the date's line under the author
+    // (`CoAuthorLine`). Not on the name's line: `<author> + <co-author>` there would claim two authors, which git does
+    // not have. Not a line of its own: in this repository nearly every commit would carry a standing extra row.
+    // Headless: the pair `co-authors` / `co-authors-open` (`--preset co-authors`),
+    // reported off the card's own `opened` (`DetailsAuthorCards.matesCardOpen`).
     readonly property var coAuthorRecords: coBlock.records
     /// Whether the pointer is on the underlined stretch. The real hover and the automation hook write this same one, so
     /// a run cannot go green with the hover unwired.
@@ -48,7 +52,7 @@ Item {
     readonly property bool matesLit: authorRow.matesPointed || authorRow.mateCardInside
 
     // ---- the parents' card -----------------------------------------
-    // Every parent over the parent line, opened from its count (デザイン規約 §右のペインの親).
+    // Every parent over the parent line, opened from its count (`ParentListCard`; the line is `HashPlate`'s).
     /// Whether the pointer is on the count — the same pair of writers as `matesPointed`.
     property bool parentsPointed: false
     /// The card is out, and the line stands as one parent's would under it (`HashPlate.unrolled`).
@@ -124,19 +128,28 @@ Item {
             return hashPlate.parentSelected()
         return ""
     }
-    /// The width the parent line may take: what neither line's words need, each line keeping a slack of its own
-    /// (デザイン規約 §右のペインの親). Both, since the plate is one column as wide as its widest row. Read off the lines'
-    /// natural widths, which the plate's width does not move.
+    /// The width the parent line may take: what neither line's words need, each line keeping a `spaceXs` slack of its
+    /// own (a row's slack is a way into its values, 規約 §右のペインの字は掴める「行の余白は必ず残す」). Both lines, since
+    /// the plate is one column as wide as its widest row: a wider parent line narrows the name's line too. Read off the
+    /// lines' natural widths, which the plate's width does not move. The date's words thus stand clear of the line by
+    /// the date line's step, the row's step and the slack (12px), and by the two steps (8px) where the line sits at
+    /// its floor and crowds the date line.
     readonly property real parentRoom: rowContent.width - avatarBadge.width - 2 * rowContent.spacing
         - Math.max(nameLine.implicitWidth, authorRow.dateNeed) - Theme.spaceXs
     /// The date line's words at their own widths, with the step before its slack — counted here rather than read off
     /// the line, whose date is held to what the line is handed (`detailsDate`), which the plate's width moves.
     readonly property real dateNeed: detailsDate.implicitWidth + dateLine.spacing
         + (coBlock.visible ? Math.ceil(coBlock.implicitWidth) + dateLine.spacing : 0)
-    /// Who gives way on the date line when it is short (デザイン規約 §co-author の表示): the credit's name is cut, then
-    /// folded to its face and count, and only then does the date give up its time. Measured top down — the row less
-    /// the face and the plate — not off the line, whose items are laid out to these: a floor read off the width it
-    /// holds up would hold it up for good.
+    /// Who gives way on the date line when it is short (user decision — ask before changing): the credit's name is
+    /// cut, then folded to its face and count, and only then does the date give up its time — whole, leaving the day
+    /// and the cut mark (`2026-10-04…`): a time cut through its figures (`2026-10-04 1…`) reads as another time, and a
+    /// cut by pixels halves a glyph. While the time is given up the credit stays folded (what the time gave is not the
+    /// name's), and the field keeps the whole stamp (`Ctrl+A` takes the time too). The folded credit is the floor:
+    /// under it the face and count run into the parent line (13 parents × 12 co-authors at the least width: 14px).
+    /// Where this starts depends on the face: at the right pane's least width, with two or more parents and a credit,
+    /// Yu Gothic UI and Noto Sans JP keep the time and the wider Hiragino Sans (macOS) gives it up. Measured top down —
+    /// the row less the face and the plate — not off the line, whose items are laid out to these: a floor read off the
+    /// width it holds up would hold it up for good.
     readonly property real textRoom: Math.max(0, rowContent.width - avatarBadge.width - 2 * rowContent.spacing
         - hashPlate.implicitWidth)
     /// What the line can spare the date, the credit at its floor.
@@ -165,10 +178,18 @@ Item {
         return coBlock.visible ? coBlock.mapToItem(item, coBlock.stretchWidth, 0).x
                                : detailsDate.mapToItem(item, detailsDate.width, 0).x
     }
-    // ---- one baseline per line (デザイン規約 §右のペインの親) ----
-    // The two columns stand side by side, each centred on its own content, and words of two faces (the name's, the
-    // hashes' mono) sit at different heights in boxes of one height. The left column is the reference: the plate moves
-    // its rows onto the name's baseline and the date's (`HashPlate.firstBase` / `secondBase`).
+    // ---- one baseline per line (user decision — ask before changing) ----
+    // The name and the commit's hash on the first; the date, the credit and the parent line (hashes, `, `, `+N`) on
+    // the second, whatever face each word is in. The credit's `+N` and the parents' are one size (`fontSm`) on one
+    // height. The two columns stand side by side, each centred on its own content, and words of two faces (the
+    // name's, the hashes' mono) sit at different heights in boxes of one height. The left column is the reference: the
+    // plate moves its rows onto the name's baseline and the date's (`HashPlate.firstBase` / `secondBase`), by
+    // `transform: Translate`: a layout margin would change the plate's height, the row would centre it again and the
+    // reference would move with it (a loop). The date line's words meet by `Qt.AlignBaseline` (`LineText` and
+    // `CoAuthorLine` name their `baselineOffset`). The misfit to undo differs by OS (one parent: Windows sets the
+    // parent hash 4px above the date, Linux 0), so one OS's picture cannot judge it. Headless `details-align` (`line1=`
+    // / `line2=` / `sizes=` / `apart=` = the date line's words stand at least `spaceXs` clear of the parent line's
+    // `←`).
     /// How far down this row an item stands as laid out. Transforms are left out: they are what this feeds.
     function laidY(item) {
         let y = 0
@@ -362,7 +383,9 @@ Item {
         // The face's own gap from the pane's edge; any wider reads as the name pushed off the face (デザイン規約 §余白).
         spacing: Theme.spaceXs
 
-        // No signature mark on the face: here it hangs off the name (デザイン規約 §署名の表示).
+        // No signature mark on the face: here it hangs off the name (user decision — ask before changing). A signature
+        // is about the person, and the name is what names them; with the name on screen the face uses one corner only
+        // (the pen's).
         AvatarButton {
             id: avatarBadge
             face: authorRow.details.avatar
@@ -376,8 +399,12 @@ Item {
         ColumnLayout {
             spacing: 0
             Layout.fillWidth: true
-            // Name, the signature mark on its shoulder, and — only for a broken signature — a word, so the error is
-            // found without hovering (デザイン規約 §署名の表示).
+            // Name, the signature mark on its shoulder, and — only for a broken signature — a word right of the mark
+            // (no frame, `fontSm`): an error read only on hover does not work as one. On the name's line, not the
+            // date's: the date line is the co-authors', and a third thing there fights the date and the credit for the
+            // left column until the credit is cut; the name line holds one word and has room. Kept against the name:
+            // loose, the name takes all the slack and the mark and word drift over to the hash, nobody's. A long name
+            // shrinks and the mark and word stay.
             RowLayout {
                 id: nameLine
                 Layout.fillWidth: true
@@ -395,7 +422,9 @@ Item {
                     color: Theme.textPrimary
                     pixelSize: Theme.fontMd
                     weight: Theme.fontWeightStrong
-                    // The "hover opens more" underline, as on the credit line (規約 §co-author の表示).
+                    // The "hover opens more" underline, the credit line's vocabulary (規約 §co-author の表示):
+                    // `borderStrong` at rest, the name's own colour under the pointer. The only ink an ordinary row
+                    // gains is this 1px.
                     BandRule {
                         visible: authorLabel.text !== ""
                         color: authorRow.authorLit ? Theme.textPrimary : Theme.borderStrong
@@ -406,9 +435,11 @@ Item {
                         onHoveredChanged: authorRow.showAuthor(authorHover.hovered)
                     }
                 }
-                // On the name's shoulder like every `!` on a word's right (デザイン規約 §アイコンの席 の右肩): top-aligned,
-                // pulled half a gap in, both distances measured to the ink, which differs per mark
-                // (rules-refs/app-ui.md「署名の印は名前の右肩」).
+                // On the name's shoulder like every `!` on a word's right (デザイン規約 §アイコンの席 の右肩; the
+                // `iconSm` box), set straight into the name's line: pulled half a gap in by negative margins, both
+                // distances measured to the ink, which differs per mark (`SignatureMark.inkAir*`). Top-aligned and
+                // left there — a shoulder mark and the signature line up on the box's top, and pulled down they float
+                // off the name (a `!` left of a word is another seat, on the capitals' middle).
                 SignatureMark {
                     id: sigMark
                     kind: authorRow.signatureKind
@@ -439,7 +470,8 @@ Item {
             RowLayout {
                 id: dateLine
                 Layout.fillWidth: true
-                // The date's minutes stand from the credit's face as the face from its name.
+                // The date's minutes stand from the credit's face as the face from its name (user decision — ask before
+                // changing).
                 spacing: Theme.spaceXs
                 LineText {
                     id: detailsDate
@@ -449,12 +481,14 @@ Item {
                     // The credit beside it sits on the same baseline, its face and count in another box.
                     Layout.alignment: Qt.AlignBaseline
                     // Held at its room both ways (`dateRoom`), so the credit's name gives way — cut, then folded —
-                    // before the date does.
+                    // before the date does: a crowded Qt layout shrinks every item between its minimum and preferred
+                    // widths by one ratio, so a date left loose would lose characters before the credit folds.
+                    // Pinned by `tst_authorrowroom.qml`.
                     Layout.preferredWidth: authorRow.dateRoom
                     Layout.minimumWidth: authorRow.dateRoom
                     Layout.maximumWidth: authorRow.dateRoom
                 }
-                // The first co-author's face and name, then `+N` (デザイン規約 §co-author の表示).
+                // The first co-author's face and name, then `+N` (`CoAuthorLine`).
                 CoAuthorLine {
                     id: coBlock
                     records: authorRow.details.coAuthors

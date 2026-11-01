@@ -32,7 +32,9 @@ Item {
     /// Where the button would send this branch: the branch's own mark, then the repository's, then the upstream
     /// (デザイン規約 §リモートを書き留める). **The order is core's** (`platitude_core::remote::push_target`), the same the send
     /// reads — never re-derive it here, or the label and the send part ways. Whether the upstream is a branch here is
-    /// the status's word (`WorktreeModel.upstreamHere`), never read off its name.
+    /// the status's word (`WorktreeModel.upstreamHere`), never read off its name. The branch's own mark rides with the
+    /// status (`WorktreeModel.pushRemote`). Headless: `push-target` — the label is in a tooltip, which no picture can
+    /// judge: read it plain and on `--preset forkmark` / `--preset forkdiverged`.
     readonly property string pushTargetLabel:
         GitFacts.pushTarget(publishFlow.worktree.branch, publishFlow.worktree.upstream,
                             publishFlow.worktree.upstreamHere,
@@ -66,8 +68,15 @@ Item {
                                 publishFlow.repoTab.remoteNames, publishFlow.worktree.pushTracking,
                                 publishFlow.worktree.pushAhead, publishFlow.worktree.pushBehind)
     /// A mark sends the push to another remote than the upstream's — a branch here being on none: the counts that
-    /// speak for it are then the destination's own, never the upstream's (デザイン規約 §リモートへ送る). Core's rule, the
-    /// one `pushState` weighs.
+    /// speak for it are then the destination's own, never the upstream's (デザイン規約 §リモートへ送る; user decision —
+    /// ask before changing): git refuses a non-fast-forward against the destination's ref, so read against the
+    /// upstream a plain `push` would stand over a diverged destination and dead-end. Core's rule, the one `pushState`
+    /// weighs. The status tick reads the destination's counts only in this case (`remote::push_track`). The tip's
+    /// counts and the overwrite's lease (`pushAhead` / `pushBehind` / `pushMeasured`) are picked by this same flag:
+    /// one of them reading the upstream would say the diverged counts and lease on origin's tip, refused as
+    /// `stale info`. `elsewhere` is only for a destination with no tracking ref here (a fetch refspec outside
+    /// `refs/remotes/`, or a `remote.<name>.push` that renames). Headless: `push-target` / `push-hover` / `force-push`
+    /// on `--preset forkdiverged`, and `push-target forkmark --preset forkmark` for no tracking ref.
     readonly property bool pushElsewhere:
         GitFacts.pushGoesElsewhere(publishFlow.worktree.upstream, publishFlow.worktree.upstreamHere,
                                    publishFlow.worktree.pushRemote,
@@ -100,8 +109,10 @@ Item {
                                          && publishFlow.pushDoorsOpen
     /// What git said to the last refused push of each branch, by branch — a refusal is about that branch's standing, so
     /// whichever door sent it (the toolbar, the branch's row) it is that branch's, until a push of it lands or the
-    /// branch is gone (`forgetUnlisted`) (デザイン規約 §リモートへ送る). A `Map`, so no branch name is taken for
-    /// something an object already has, and replaced whole: a binding does not see a key change.
+    /// branch is gone (`forgetUnlisted`) (デザイン規約 §リモートへ送る). Most refusals (`fetch first`) are about that
+    /// branch and its far side and say nothing of the next branch; a push that lands must not keep saying the last one
+    /// failed. Standing on the branch makes it the toolbar's `!` (`BandPushButton.failed`). A `Map`, so no branch name
+    /// is taken for something an object already has, and replaced whole: a binding does not see a key change.
     property var pushFails: new Map()
     readonly property bool pushFailed: publishFlow.pushFails.has(publishFlow.worktree.branch)
     readonly property string pushFailReason:
@@ -110,7 +121,7 @@ Item {
     /// (`RepoTab.pushAnswer` / `pushAnswerBranch`) — nothing here holds it across the round trip.
     function pushNow() {
         if (publishFlow.pushState === "publish") {
-            // A gone branch here names no remote, whatever its name reads like (デザイン規約 §はじめてリモートへ送る).
+            // A gone branch here names no remote, whatever its name reads like (`startPublishAsk`).
             publishFlow.startPublishAsk(publishFlow.worktree.branch,
                                         publishFlow.worktree.upstreamHere ? "" : publishFlow.worktree.upstream, "")
             return
@@ -130,7 +141,7 @@ Item {
     }
     /// A branch's push has come back — the toolbar's or a branch row's —, found by its id (`RepoTab.pushAnswer`, -1
     /// when this notify carries none; the page calls this once per notify). Reads that answer's own words
-    /// (rules-refs/app-ui.md「ツールバーの push の答えは id で受け取る」).
+    /// (`writeAnswerFailed(at)` / `writeAnswerError(at)`; why by id: `ops::PushOut`).
     function noteWriteAnswer() {
         const at = publishFlow.repoTab.pushAnswer
         if (at < 0)
@@ -157,11 +168,16 @@ Item {
     }
 
     // ---- the first push: where does this branch go? -----------------
-    // (デザイン規約 §はじめてリモートへ送る). Raised by the push button and a branch row's push, in the bar every
-    // question shares.
+    // A branch with no upstream has its destination written nowhere. Sending it to the default remote under the same
+    // name is a guess, and a wrong guess has no way back — so the press asks. Raised by the push button and a branch
+    // row's `push` to… (the menu's first level), in the bar every question shares (デザイン規約 §立っている質問は
+    // 1 か所で聞く): a question that stood somewhere else depending on who raised it would not read.
+    // The word pressed is the word that answers: the bar is raised by `push` and its pill is `push` (code spelling).
     property bool publishAsking: false
     /// The branch the question is about: the one the door that raised it names — the toolbar's is the worktree's, a
-    /// row's is its own (§はじめてリモートへ送る「対象は呼んだ所が決め」).
+    /// row's (left-menu row, graph chip) is its own, and the question marks that row's commit; the heading names that
+    /// branch (user decision — ask before changing). A question opened on a row that named another branch would be
+    /// answered for the branch nobody asked about. The same-name check weighs this branch's history too.
     property string publishLocal: ""
     /// The remote the answer picks.
     property string publishRemote: ""
@@ -213,21 +229,34 @@ Item {
                      : false
     }
     /// …and what a push under this name would meet (`platitude_core::remote::RemoteBranchState`); empty until the
-    /// answer for exactly this name is in.
+    /// answer for exactly this name is in. "Exists" alone decides nothing: git fast-forwards a name this history
+    /// contains and refuses one it does not, and the two lose different things, so they wear different forms. A name
+    /// that exists is still let through: adding to an existing branch is legitimate (the same branch from another
+    /// machine, riding someone else's); the remote-branch replace refuses taken names only because it says outright
+    /// that it makes a new one. `fast-forward` keeps the plain form — nothing is lost, and the surprise ("you moved
+    /// somebody's branch") is the line's to say.
     readonly property string publishState:
         publishFlow.publishChecked ? publishFlow.repoTab.remoteBranchState : ""
-    /// The far side cannot be read. Still a click — a plain push can only fast-forward, so nothing there can be lost —
-    /// but the bar wears the alert (デザイン規約 §リモートへ送る).
+    /// The far side cannot be read (`unreachable`: bad URL, credentials, offline; `unknown`: its commit is not here).
+    /// Unknown stays unknown — reading a failed ask as "free" would assume git refuses what it does not. Still a click,
+    /// word and gesture unchanged — a plain push can only fast-forward, so the one thing to say is "not confirmed": the
+    /// bar wears the alert, the frame and the `!` the toolbar's refusal memory wears, same size and placement
+    /// (デザイン規約 §リモートへ送る). No overwrite form here: there is no tip to lease against, and a bare lease reads the
+    /// tracking ref, which a background fetch moves — the push lets git answer, and the force form comes once a fetch
+    /// has made the tip readable. The failed read leaves the log closed: the bar already says it.
     readonly property bool publishUnsure:
         publishFlow.publishState === "unknown" || publishFlow.publishState === "unreachable"
-    /// The name holds commits this history lacks: only an overwrite can land, so the pill becomes a held `push -f`
-    /// (デザイン規約 §リモートへ送る).
+    /// The name holds commits this history lacks: only an overwrite can land, so the pill becomes a held `push -f` —
+    /// the toolbar's force form, so one pill never carries two meanings (デザイン規約 §リモートへ送る). The commits lost
+    /// are in the tip (`tipOf`).
     readonly property bool publishRefused: publishFlow.publishState === "refused"
-    /// The far tip the question showed, which an overwrite leases against (§相手の履歴を置き換える).
+    /// The far tip the question showed (from `ls-remote`), which an overwrite leases against: a remote that moved
+    /// since is refused as `stale info` (§相手の履歴を置き換える).
     readonly property string publishLease:
         publishFlow.publishRefused ? publishFlow.repoTab.remoteBranchTip : ""
 
-    /// Asked once the typing settles: the check is a network round trip.
+    /// Asked once the typing settles: the check is a network round trip, and of the remote itself (not the tracking
+    /// ref) — the answer has to be today's.
     Timer {
         id: publishCheckTimer
         interval: 350
@@ -241,11 +270,18 @@ Item {
         publishCheckTimer.restart()
     }
 
-    // Bindings, because the question changes while it stands. **`RestoreNone`**: `publishAsking` drops while the bar
-    // is still retracting on screen, and a restore would flash its frame `warning`; `GraphPane.startAsking` rewrites
-    // all of these for the next question anyway.
-    // Shut while a write is out, as the toolbar's button is (`pushDoorsOpen`): a question raised from a branch's row
-    // can stand while the toolbar sends another.
+    // Bindings, because the question changes while it stands. **`RestoreNone`**: `publishAsking` drops at the press
+    // that walks away (it must — standing, the check timer keeps going out to the remote) while the bar is still
+    // retracting on screen, and a restore would put that bar back to its plain values: the heading and the line gone,
+    // `neutral` dropped, the frame jumping from the accent to `warning`. `GraphPane.startAsking` rewrites all of these
+    // for the next question anyway. Headless: `publish-dismiss` — the retracting bar is in no picture, so its must_say
+    // is the whole check.
+    // Shut until the remote has answered for this name (the word drops, the frame stays — §無効), then words, colour
+    // and gesture change at once. Shut while a write is out too, as the toolbar's button is (`pushDoorsOpen`): a
+    // question raised from a branch's row can stand while the toolbar sends another, and only one send is ever out.
+    // Dressing: an information question wears the accent (`askNeutral`); the word is `textPrimary` in every form and
+    // only the held `push -f` takes colour — the toolbar's `push` is white in every clickable state, so a press with
+    // one question in between has no reason to change its dress (§立っている質問は 1 か所で聞く).
     Binding {
         target: publishFlow.graphPane
         property: "askAnswerable"
@@ -349,11 +385,17 @@ Item {
 
     /// Asks where `branch` goes, opening on `upstream` — the remote branch it is configured for, fetched or not; "" for
     /// none, or for a branch here, which names no remote — and marking the row `oidHex` ("" for none: the toolbar's is
-    /// the worktree's own).
+    /// the worktree's own). The toolbar hands `worktree.upstream`, a branch row `branchPush`'s `upstream` (the
+    /// configured name, here or not). `pushState === "publish"` is both "no upstream" and "no tracking ref"; the
+    /// second has its destination written already, and the question opens on it (user decision — ask before
+    /// changing): opening on the default remote and the branch's own name would ask again for the answer just given,
+    /// and throw it away. Right after `UpstreamFlow` took a name not here, this opens on it. Otherwise the field
+    /// defaults to the branch's own name. Net: `publish-upstream`.
     function startPublishAsk(branch, upstream, oidHex) {
-        // Open on the upstream where there is one, even with no tracking ref (デザイン規約 §ブランチが測られる相手を決める)
-        // — but only on a remote still configured: `remoteOfRef` cuts a lost name at the first slash, and the chooser
-        // cannot pick back a row it does not hold.
+        // Open on the upstream where there is one, even with no tracking ref — but only on a remote still configured:
+        // `remoteOfRef` cuts a lost name at the first slash, and the chooser cannot pick back a row it does not hold.
+        // A gone branch here (`remote = .`) names no remote either and falls back to the guess: a plain `git push`
+        // refuses that shape too, so the row's `to…` says "not in one go; decide where it goes again".
         const on = upstream !== ""
                  ? GitFacts.remoteOfRef(upstream, publishFlow.repoTab.remoteNames) : ""
         const tracked = on !== "" && publishFlow.publishRemotes.indexOf(on) >= 0
@@ -368,11 +410,17 @@ Item {
             oidHex, qsTr("%1 where?"), publishFlow.answerPublish, publishForm, "push", branch,
             branch === publishFlow.worktree.branch ? Theme.textLink : Theme.textPrimary)
         // After the bar is up: raising it resets what the bindings above own, and an unchanged binding does not push
-        // back.
+        // back — an assignment under a live `Binding` wins and kills that binding's hold for good (turning `when` back
+        // restores nothing), so armed first, `askAnswerable` / `askHold` / `askNeutral` would stand dead.
         publishFlow.publishAsking = true
         publishFlow.refreshPublishCheck()
-        // No remote: the chooser holds only its last row, so its dialog opens straight away
-        // (デザイン規約 §はじめてリモートへ送る).
+        // No remote: the chooser holds only its last row — a bar alone would ask where with nothing to pick — so its
+        // dialog opens straight away, after the bar is up (the reason above). One path with pressing the last row:
+        // the question stands behind as usual (heading, name box), because writing a remote down is not a push and
+        // which branch goes under what name is still unanswered; Add returns to it with that remote picked, and
+        // Cancel / Escape returns to a bar with an empty destination whose last row opens the dialog again.
+        // Headless: `publish` / `publish-taken` / `publish-remotes` / `publish-add` / `publish-go` / `publish-enter` /
+        // `publish-new-go`; no remote: `--preset noremote`.
         if (publishFlow.publishRemotes.length === 0)
             publishFlow.choosePublishRemote(publishFlow.publishRemotes.length)
     }

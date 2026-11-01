@@ -3,8 +3,13 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude.ui
 
-// The lane column's own presses: a left drag pans the lanes sideways, and a press that did not travel is handed to the
-// row under it (rules-refs/app-ui.md「レーン列は行の一部で」). Only up while the lanes overflow their column.
+// The lane column's own presses: a left drag pans the lanes sideways, and a press that did not travel is handed
+// whole to the row under it — `pressLanded` → `row.leftClick(modifiers)`, `onDoubleClicked` →
+// `row.doubleClick(modifiers)`, every decision the row's (`GraphRowDelegate`). Only up while the lanes overflow their
+// column (`graphXMax > 0` — nearly always on a real repository); headless `graph-reclick-lanes` squeezes the column to
+// its floor to raise it. The lanes are the row's: only the chip column has a target of its own, and the column
+// between the two boundaries is where a reader aims most when the graph is wide — a dead strip there reads as
+// "sometimes it does not work".
 MouseArea {
     id: pan
 
@@ -21,7 +26,7 @@ MouseArea {
     acceptedButtons: Qt.LeftButton
     // A row's name box reaches into the lane column once it outgrows its own, and a press on it is the box's — handed
     // to the row, it would close the box over what is being typed. A mask is the whole of the hit test, so it says the
-    // strip's own rectangle too.
+    // strip's own rectangle too. Headless: `graph-rename-fit`'s `:/0:` run reads it in `hits=`.
     containmentMask: QtObject {
         function contains(point: point): bool {
             if (point.x < 0 || point.y < 0 || point.x > pan.width || point.y > pan.height)
@@ -86,7 +91,8 @@ MouseArea {
     }
     /// What a press on this strip means, entered by the handler and by `clickAt`. Answers whether it landed on a row.
     /// The modifiers must travel: dropped, Ctrl / Shift become a plain press, which collapses the choice to one commit
-    /// (`RepoPage.pickRow`, デザイン規約 §複数のコミットを選ぶ).
+    /// (`RepoPage.pickRow`, デザイン規約 §複数のコミットを選ぶ). Dropped, both OSes still go green — what says it is
+    /// `chosen_drop`'s `kept=`.
     function pressLanded(at, modifiers) {
         const row = pan.rowAt(at)
         if (!row)
@@ -95,6 +101,8 @@ MouseArea {
         return true
     }
     /// A press under the last row, handed to the footer, which decides what it means (`GraphTailFooter.loadMore`).
+    /// While the lanes overflow this strip covers the middle column, so without the hand-off the cut has a column that
+    /// does nothing when pressed.
     function tailPressed(at) {
         const tail = pan.view.footerItem
         if (tail === null)

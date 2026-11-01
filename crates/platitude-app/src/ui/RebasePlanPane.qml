@@ -10,6 +10,17 @@ import platitude.ui
 // The page holds down what could move the history meanwhile; what it cannot hold (another session, a terminal) is
 // answered by the model dropping the plan when the tip moves (`RebasePlanModel.noteHead`) and by core re-pinning the
 // tip at run time.
+//
+// Modeless: it takes the graph's seat only, and the details pane on the right stays live. **It takes the seat at the
+// press** (user decision — ask before changing): a screen that does not move a pixel through the read reads as a
+// press that never arrived. Until the rows come it shows three things only — the band's `Rebasing…`, `Discard`, and
+// the centred `iconLg` ring; the `onto` row comes with the rows, since a row with no face, words or id looks like a
+// broken commit. The clicked commit is the oldest one included and its parent is drawn as the last row: products
+// split on whether "from here" includes the clicked commit, so the base is put on screen to settle it.
+//
+// Headless (all `--preset plan`, `AutoActPlanVerbs`): `rebase-plan` / `rebase-plan-run` / `rebase-edit-stop`; a
+// reorder, `plan-fold-carry`; the right pane's boxes handed over, `plan-reword-verb` / `plan-reword-out` /
+// `plan-reword-ask`.
 Rectangle {
     id: planPane
 
@@ -100,9 +111,12 @@ Rectangle {
                     //: The way out of the plan being composed. What it throws away is the draft on screen.
                     text: qsTr("Discard")
                     // A plain word, not `--abort`: nothing has run, and git would refuse that command here
-                    // (デザイン規約 §git 用語のコード表記「着せるのはコマンドだけ」).
-                    // The dressing reads `armedPresses`, not `discards`: the right pane's boxes can empty under a hand
-                    // already holding (規約 §回数押し).
+                    // (デザイン規約 §git 用語のコード表記「着せるのはコマンドだけ」). One word, naming what goes (user
+                    // decision — ask before changing): the plan holds the graph's seat with no box of its own to close.
+                    // Two states: plain (`borderDefault` frame, `textPrimary` word, a click) while nothing composed
+                    // would be lost; `warning` frame and word and a hold once there is. The dressing reads
+                    // `armedPresses`, not `discards`: the right pane's boxes can empty under a hand already holding
+                    // (規約 §回数押し).
                     frameColor: cancelButton.armedPresses > 0 ? Theme.warning : Theme.borderDefault
                     tone: cancelButton.armedPresses > 0 ? Theme.warning : Theme.textPrimary
                     holdPresses: planPane.discards ? Metrics.holdPressesWarned : 0
@@ -196,7 +210,9 @@ Rectangle {
                     anchors.leftMargin: Theme.spaceMd
                     anchors.rightMargin: Theme.spaceXs
                     spacing: Theme.spaceSm
-                    // The base's name is in the header; this row is the commit, dressed like the others.
+                    // The base's name is in the header; this row is the commit, dressed like the others — the same
+                    // three columns, the verb's exactly `verbColW` wide: `+ iconMd` would set its face and all after it
+                    // right of the rows'.
                     Label {
                         Layout.preferredWidth: planList.verbColW
                         text: qsTr("onto")

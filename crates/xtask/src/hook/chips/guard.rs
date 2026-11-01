@@ -514,6 +514,10 @@ mod tests {
         assert_ne!(resolution(false, false), resolution(true, false));
     }
 
+    // The paths stay spelled whole although the test reads none of them: the
+    // gate's graph takes them for edges into core (`graph::literal_paths`),
+    // and a reach is narrowed by moving code into leaves, never by hiding a
+    // path.
     #[test]
     fn picks_paths_out_of_a_chip_and_leaves_prose_alone() {
         let found = targets(

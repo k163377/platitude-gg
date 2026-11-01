@@ -65,7 +65,12 @@ Rectangle {
             color: Theme.textMuted
         }
         Item { Layout.fillWidth: true }
-        // The tool's wait, in the whole-bucket button's seat (規約 §conflict を外部ツールへ渡す).
+        // The tool's wait, in the whole-bucket button's seat (規約 §conflict を外部ツールへ渡す): `Waiting for <tool>` and
+        // the ring, nothing else. Read-only, no stop: only `git mergetool` could be stopped, and the editor it started
+        // would live on, left for nobody to clean up. Not a button, so
+        // nothing is disabled: `textSecondary` as the caption beside it, not the disabled grey, and outside the
+        // heading's `danger` — a wait is not a failure. No mark seat, so the ring comes after the words
+        // (規約 §進行中・回数押しの定数「ボタンでない席でも言葉は残る」).
         Label {
             id: waitWord
             visible: bucketHeader.waitingForTool
@@ -109,7 +114,9 @@ Rectangle {
                 if (bucketHeader.section === "staged")
                     bucketHeader.repoTab.unstageAll()
                 else if (bucketHeader.section === "conflicts")
-                    // This band names this bucket alone; `stageAll()` would reach the unstaged one beside it.
+                    // This band names this bucket alone; `stageAll()` would reach the unstaged one beside it. Core
+                    // gathers the paths (`RepoSession::stage_conflicted`): the delegates answer only for the rows
+                    // built. Headless `resolve-all`.
                     bucketHeader.repoTab.stageConflicted()
                 else
                     bucketHeader.repoTab.stageAll()

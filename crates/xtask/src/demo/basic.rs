@@ -421,7 +421,7 @@ pub(super) fn rewrite_merge(repo: &mut DemoRepo) -> Result<(), String> {
 const OCTOPUS_ARMS: [&str; 7] = ["api", "cli", "docs", "i18n", "perf", "store", "ui"];
 
 /// A merge of two under a merge of eight, HEAD on the latter: what the
-/// details pane's parent line is drawn for (デザイン規約 §右のペインの親).
+/// details pane's parent line is drawn for (`HashPlate.qml`).
 /// Each arm writes a file of its own, so git's octopus strategy takes
 /// them all in one commit.
 pub(super) fn octopus(repo: &mut DemoRepo) -> Result<(), String> {

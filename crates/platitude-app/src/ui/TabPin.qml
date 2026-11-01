@@ -5,8 +5,10 @@ import QtQuick.Controls.Fusion
 import platitude.ui
 
 // The tab in front always stands in the strip: while its row is scrolled off the run, this stand-in rides the edge the
-// row went out of, and steps aside once the row is whole on screen (デザイン規約 §タブの所作). The same shape as
-// `HeadPinRow` and `GraphHeadPin`.
+// row went out of, and steps aside once the row is whole on screen (user decision — ask before changing). The same
+// shape as `HeadPinRow` and `GraphHeadPin` (規約 §タブの所作「今居るタブは…縁に残る」). **It is that tab itself**: the
+// ground, the underline, the name in `fontWeightStrong` and the `✕` of the tab in front, at that tab's drawn width
+// (`seatWidth`).
 //
 // Declare it beside the list, not in it: a Flickable's declared children travel with the scroll.
 Rectangle {
@@ -28,7 +30,9 @@ Rectangle {
     required property real runX
     required property real runWidth
     required property real runOffset
-    /// Whether a tab is being carried: no stand-in then (デザイン規約 §タブの所作「掴んでいる間は本物だけ」).
+    /// Whether a tab is being carried: no stand-in then — only the real tab. The carried tab (always the one in front)
+    /// is drawn held at the run's edge (`TabCarry.carryTab`), so the reader sees it wherever its row is, and its row's
+    /// `x` no longer says whether it is seen.
     property bool carrying: false
     property real stripHeight: 0
 
@@ -36,7 +40,8 @@ Rectangle {
     /// tip (verify-ui スキル §hover の絵の撮り方).
     property bool pointed: false
 
-    /// Pressed: the strip travels to the row this stands for (デザイン規約 §タブの所作).
+    /// Pressed: the strip travels to the row this stands for (`TabRun.showTab`). It is already the tab in front, so
+    /// there is nowhere to move to: the press means "show me its real seat".
     signal activated()
 
     /// The tab in front's own place and width, never re-measured: a pixel off, and the stand-in is a tab the strip does
@@ -48,7 +53,8 @@ Rectangle {
     readonly property bool rideRight: tabPin.seatX + tabPin.seatWidth > tabPin.runOffset + tabPin.runWidth
     readonly property bool frontWhole: tabPin.frontTab !== null && !tabPin.rideLeft && !tabPin.rideRight
     /// What is left of the run on the side this faces, and how far the dark holds over it: `fadeW`
-    /// (`TabMetrics.fadeChars`), held inside the run as `x` is.
+    /// (`TabMetrics.fadeChars`), held inside the run as `x` is — the dissolve clips nothing, and left at `fadeW` it
+    /// would lie over the ☰ / `+`.
     readonly property real dissolveRoom: tabPin.rideLeft
         ? tabPin.runX + tabPin.runWidth - (tabPin.x + tabPin.width)
         : tabPin.x - tabPin.runX
@@ -89,8 +95,11 @@ Rectangle {
     // than the run, a layout already gone wrong.
     x: tabPin.rideLeft ? tabPin.runX
                        : Math.max(tabPin.runX, tabPin.runX + tabPin.runWidth - tabPin.width)
-    // Dressed as the tab it stands for, and opaque: the strip runs underneath. No rule on its edge
-    // (デザイン規約 §タブの所作「縦の境は地が言う」); what the strip does past that edge is `pinDissolve`.
+    // Dressed as the tab it stands for, and opaque: the strip runs underneath. **No rule on its edge — the ground says
+    // it**: the tab in front already names itself by ground and underline, and a line on the edge would be the
+    // strongest line in the band for as long as the band is scrolled. `HeadPinRow` draws one only because its ground is
+    // the rows' own; here a painted tab stands against transparent ones. What the strip does past that edge is
+    // `pinDissolve`.
     color: tabPin.frontTab ? tabPin.frontTab.groundColor : Theme.bgSelected
     // The worktree's full path, as the tab says it (デザイン規約 §hover のツールチップ).
     readonly property TipAsk pathTip: TipAsk {
@@ -102,8 +111,9 @@ Rectangle {
         id: pinHover
         onHoveredChanged: tabPin.pointed = pinHover.hovered
     }
-    // Left travels to the row; middle closes the tab, as anywhere on a tab. The `✕` takes only the left button, so a
-    // middle press on it falls through to here.
+    // Left travels to the row; middle closes the tab, as anywhere on a tab — the stand-in names that tab, and closing
+    // is about what the reader sees. The `✕` takes only the left button, so a middle press on it falls through to here.
+    // **No carry from here**: a tab is reordered from its real seat — press this first to get there.
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton
@@ -114,15 +124,22 @@ Rectangle {
                 tabPin.activated()
         }
     }
-    // The run-facing edge: the tabs travelling under it sink into the window's floor over `dissolveW`
-    // (デザイン規約 §タブの所作「隠すのは暗さ」). Drawn outside the tab's box — inside, the floor would be a hole in the
-    // tab — which also leaves press and hover to the tab underneath.
+    // The run-facing edge: the tabs going behind it darken and vanish (user decision — ask before changing). A ground
+    // difference says only which is on top; a ground ending in a step cuts the tab running underneath down its height,
+    // so what goes behind is hidden. **Hidden by darkness**: the window's floor (`bgBase`) in full at the edge,
+    // thinning back to the band — both grounds the window already has (規約 §背景). **The blue stops at the tab's edge**
+    // (user decision; no step and no gradient of it past there): the target is the whole tab, and its ground is what
+    // says where that target ends — blue past the edge and the edge cannot be read; the tab's edge stays a step. Only
+    // the run-facing edge dissolves: the other is the list's own cut, with no tab beyond it. Drawn outside the tab's
+    // box — inside, the floor would be a hole in the tab, and the underline ends at the tab's width — which also leaves
+    // press and hover to the tab underneath: what is there is a tab of the strip's, which is what the hand wants.
     Rectangle {
         id: pinDissolve
         x: tabPin.rideLeft ? tabPin.width : -tabPin.dissolveW
         width: tabPin.dissolveW
         anchors.top: parent.top
         anchors.bottom: parent.bottom
+        // A `Rectangle` gradient draws sideways on the software backend too (unlike a `ShaderEffect`).
         gradient: Gradient {
             orientation: Gradient.Horizontal
             GradientStop { position: 0; color: tabPin.rideLeft ? tabPin.deepGround : tabPin.deepGone }
@@ -171,7 +188,7 @@ Rectangle {
         height: 2 * Theme.borderWidth
         color: tabPin.frontTab ? tabPin.frontTab.ruleColor : Theme.accent
     }
-    // The tab in front always shows its mark (デザイン規約 §タブの所作).
+    // The tab in front always shows its mark (`TabItemDelegate.closeMark`).
     CloseToolButton {
         id: pinMark
         anchors.right: parent.right

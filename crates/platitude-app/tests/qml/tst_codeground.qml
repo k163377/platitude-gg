@@ -21,7 +21,10 @@ Control {
     /// A name reaching the code face's extremes on each OS: `f` and `/` the tallest, `y`, `g` and `j` the deepest.
     readonly property string name: "fly/jog"
     /// How far the ink stands clear of the ground's top and foot at least, in pixels: an edge row the ink covers half
-    /// of or more reads as ink on the edge.
+    /// of or more reads as ink on the edge. Half a pixel of slack because offscreen hinting draws the mono letters at a
+    /// name's size taller than their outline (Noto Sans Mono CJK JP 12px: letters and `/` outlined at 12.4px come out
+    /// 12.9px; at 14px the whole glyph stands about 0.5px higher) — the ground itself is placed off the outline
+    /// (`WordFace.codeInk`), never off a picture.
     readonly property real clear: 0.5
 
     Column {

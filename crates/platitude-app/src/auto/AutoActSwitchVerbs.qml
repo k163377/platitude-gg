@@ -30,6 +30,8 @@ Item {
     /// Runs `act` if it is this family's and says whether it was; each verb belongs to one family (`AutoActDriver`).
     function run(act, arg) {
         if (act === "switch") {
+            // Over a stopped operation or a tree with conflicts nothing is written, and the run waits out the
+            // watchdog: those two trees are `switch-stopped` / `switch-conflicted`'s.
             page.switchTo("branch", arg, arg)
         } else if (act === "move-ask") {
             // The question a move raises landing on a remote branch whose local one holds commits of its own
@@ -46,7 +48,8 @@ Item {
             askOverNoticeTimer.start()
         } else if (act === "ask-sweep") {
             // The `move-ask` question, swept: while the bar stands over the list it is the only place its branch,
-            // remote or folder is written (規約 §右のペインの字は掴める).
+            // remote or folder is written (規約 §右のペインの字は掴める). Needs `--preset diverged`, where the question
+            // rises as it does for `move-ask`.
             page.switchToRef("remote", arg === "" ? "origin/main" : arg)
             askSweepTimer.start()
         } else if (act === "switch-lands") {
@@ -64,7 +67,9 @@ Item {
             // A branch another worktree holds: the press stands the tab in that worktree and raises nothing
             // (`offers::SwitchAction::OpenHolder`). The worktree is read before the press — after it this page is
             // that worktree and would answer with itself. Entered by `switchToRef`: the claim is that this road ends
-            // in no bar.
+            // in no bar. Needs `--preset worktrees`: on a tree where no worktree holds the branch it simply moves. No
+            // `-go` — nothing moves; the row's words (`Open <mark><worktree>`) are `switch-mark`'s
+            // (`<branch>:plain --preset worktrees`).
             switchHeldTimer.wanted = sidebarPane.worktreesModel.worktreeHolding(arg)
             page.switchToRef("branch", arg)
             switchHeldTimer.start()
@@ -72,7 +77,14 @@ Item {
                    || act === "switch-conflicted" || act === "switch-conflicted-go") {
             // The question a move raises when something is in its way (an operation standing, or an unmerged index),
             // and with "-go" the gesture that answers it; only the bar differs. Entered by `switchToRef`, where a
-            // hand arrives. The argument is `<branch>[:<stashes>]`, as for `switch-lands`.
+            // hand arrives — a build that gates only `switchTo` fails here. The argument is `<branch>[:<stashes>]`, as
+            // for `switch-lands`, and required. Read as a pair, the bar's two shapes: `feature/clash:1 --preset
+            // cherry-pick-conflict` (`--quit` and a stash: warning, a click, chip `stash`, landing with one stash) and
+            // `main --preset rebase-conflict` (`--abort`: danger, a hold, chip `rebase --abort`). On a preset with no
+            // operation standing the switch just moves. `switch-conflicted[-go]` is the third shape:
+            // `feature/clash[:1] --preset cherry-pick-quit`, no operation, the index unmerged. The bar's line says
+            // only that it came down; whether the operation went and the move followed is the landing's line, and
+            // `log=false` (no error raised) is only in the lines.
             switchStoppedTimer.go = act.endsWith("-go")
             // "-go" says the bar as it stopped, then answers it.
             switchStoppedTimer.order = switchStoppedTimer.go ? ["stopped", "answered"] : []
@@ -83,7 +95,8 @@ Item {
         } else if (act === "switch-remote-twice") {
             // The same chip pressed twice: ungated, the second `switch --create` is refused (the branch exists).
             // Both presses go out in one turn — `busyCount` only rises once the queue starts the write, so a tick
-            // between them would be turned away by the busy gate and prove nothing.
+            // between them would be turned away by the busy gate and prove nothing. The argument is a remote branch
+            // with no local one (`origin/feature/remote-only` on `basic`).
             switchTwiceTimer.branch = repoTab.localNameFor(arg)
             switchTwiceTimer.writesBefore = repoTab.writeSeq
             page.switchToRef("remote", arg)
@@ -98,7 +111,7 @@ Item {
             const want = arg.split(":")
             const goes = act.endsWith("-go")
             // "-go" with no answer named takes `add`: `replace` would delete the remote's HEAD branch, which git
-            // refuses (verbs.md `rename-local-upstream`). "-tip" points at the pill instead; only `replace` has a tip.
+            // refuses (that write is `replace-remote-go`'s). "-tip" points at the pill; only `replace` has a tip.
             const points = act.endsWith("-tip")
             localUpstreamAskTimer.pick = points ? "replace" : want.length > 1 ? want[1] : (goes ? "add" : "")
             localUpstreamAskTimer.answers = goes
@@ -140,8 +153,12 @@ Item {
             unsetUpstreamTimer.goes = act === "unset-upstream-go"
             unsetUpstreamTimer.start()
         } else if (act === "switch-mark") {
-            // The mark the `switch` row wears when its press would raise a question. Argument `<branch>:asks|plain`;
-            // the report judges it — a 16px mark in a full window is not for the picture (verify-ui「目視は等倍以上で」).
+            // The mark the `switch` row wears when its press would raise a question. Argument `<branch>:asks|plain`
+            // (required: it names the side expected); the report judges it — a 16px mark in a full window is not for
+            // the picture (verify-ui「目視は等倍以上で」). `asks` needs an operation standing: `feature/clash:asks
+            // --preset cherry-pick-conflict` (a branch held by a worktree wears no mark, so not `worktrees`);
+            // `plain` is `feature/topic-a:plain --preset basic`, and on `--preset worktrees` the third look — the row
+            // says `Open <mark><worktree>`, `indent=false`.
             const want = arg.split(":")
             switchMarkTimer.want = want.length > 1 ? want[1] : ""
             // The sidebar's menu; the graph's `switch` row belongs to the commit menu (`chip-menu`).
@@ -477,11 +494,23 @@ Item {
     }
     /// `set-upstream…` (`UpstreamFlow`): the form loads as the bar opens, so nothing is answered before
     /// `AskBar.settled`.
+    ///
+    /// The forms. Bare `set-upstream <branch>` is the question as it opens; its claim (`there=true`) needs a branch
+    /// whose counterpart is here (`feature/topic-a`) — `feature/new-thing` opens on the default remote and its own
+    /// name, `there=false`. `:missing` types a name not here, answerable all the same: only the line changes, frame and
+    /// pill stay plain. `-list` drops the box's list (what it holds is overlay.png's); the remote the question opens on
+    /// needs fetched branches, or `open=true` never comes and the run waits out its watchdog. `-go` answers once
+    /// answerable (`set-upstream-go 'feature/new-thing:carried' --preset unpublished`); `-enter` gives the same answer
+    /// with Enter in the box (デザイン規約 §立っている質問は 1 か所で聞く). A bare trailing `:` empties the box: on a
+    /// branch with an upstream (`feature/mine: --preset others-behind`) the question turns into `Unset`, which `-go`
+    /// holds through its two presses (the picture: the row's ↑ and cloud gone); on one without (`scratch` / `scratch:`)
+    /// it stays the `Set` question, unpressable once emptied — read the pair.
     PageStage {
         id: upstreamAskTimer
         name: "upstream_ask"
         property bool answers: false
-        /// Answers with Enter in the name box instead of the pill (`UpstreamFlow.enterBranch`).
+        /// Answers with Enter in the name box instead of the pill (`UpstreamFlow.enterBranch` raises the box's
+        /// `accepted`; that a real Enter raises it is `tst_appcombo`'s), so the write barrier is the whole claim.
         property bool byKey: false
         /// Drops the name box's list first, through the press's own door (`UpstreamFlow.openBranches`) — no
         /// injected click reaches a popup offscreen.
@@ -490,9 +519,10 @@ Item {
         property bool types: false
         property string wantName: ""
         // `there=` is whether the answered name exists here — it drives the bar's line, not the pill (a name not here
-        // is an answer: デザイン規約 §ブランチが測られる相手を決める). `unsetting=` / `pill=`: an emptied name turns the
-        // question into taking the upstream off, the pill read off the bar itself. `rows=` / `open=`: an empty list and
-        // an unplumbed one frame alike. `says=`: the bar's line, read off the bar too — last, being words.
+        // is an answer: `UpstreamFlow.targetIsThere`). `unsetting=` / `pill=`: an emptied name turns the
+        // question into taking the upstream off, the pill read off the bar itself; `presses=` its count (0 = a click).
+        // `rows=` (the chosen remote's branches held here) / `open=`: an empty list and an unplumbed one frame alike.
+        // `says=`: the bar's line, read off the bar too — last, being words.
         function line() {
             return "upstream branch=" + upstreamFlow.branch
                    + " remote=" + upstreamFlow.remote
@@ -576,7 +606,8 @@ Item {
         }
     }
     /// `unset-upstream[-go]`: the card goes up once nothing is out (a card raised under a write greys its rows), the
-    /// row is read off it, and `-go` presses it through to the listing the write's refresh publishes.
+    /// row is read off it, and `-go` presses it through to the listing the write's refresh publishes. A gone upstream
+    /// (`[gone]`, `release-1.2 --preset gone`) is taken off the same way; the picture is the row's warning cloud gone.
     PageStage {
         id: unsetUpstreamTimer
         name: "unset_upstream"

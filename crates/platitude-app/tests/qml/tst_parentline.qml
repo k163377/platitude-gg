@@ -3,7 +3,7 @@ import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
-// How the parent line fits the room its row leaves it (デザイン規約 §右のペインの親): every parent cut evenly from
+// How the parent line fits the room its row leaves it (`HashPlate.parentFit`): every parent cut evenly from
 // whole down to three digits and the mark, then the tail given to `+N`, and two standing whatever the room. The room
 // is set by hand here; where it comes from is the row's (`details-parents`).
 //

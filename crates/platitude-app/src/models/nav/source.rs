@@ -84,7 +84,7 @@ impl Source {
 
     /// The branches `remote` carries here, by the name half alone
     /// (`main`, `feature/x`), in name order — what the upstream question
-    /// offers (デザイン規約 §ブランチが測られる相手を決める).
+    /// offers (`UpstreamForm.qml`).
     ///
     /// The cut is by configured name, not by the first slash: the `my/`
     /// prefix run also holds remote `my/fork`'s `my/fork/main`
@@ -448,7 +448,9 @@ pub(super) fn pr_key(short: &str) -> &str {
     short.split_once('/').map_or(short, |(_, rest)| rest)
 }
 
-/// The letters git reports for one file row.
+/// The letters git reports for one file row. A mode-only change keeps
+/// git's `M` like any other change, not a mark of its own (GitKraken,
+/// git-gui and Fork do not tell them apart either; only SmartGit does).
 pub(super) fn letters_of(item: &platitude_core::status::StatusItem, bucket: Bucket) -> String {
     use platitude_core::status::StatusItem;
     match (item, bucket) {

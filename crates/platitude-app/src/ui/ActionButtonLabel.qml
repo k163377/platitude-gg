@@ -21,14 +21,16 @@ Item {
     property string widestText: ""
     property bool widestCode: false
     /// The button is down to its mark (`ActionButton.folded`). The cell keeps its height: folding gives up the width
-    /// alone (規約 §操作パネル「畳んで変わるのは幅だけ」).
+    /// alone (`ActionButton.foldedDepth`).
     property bool folded: false
     readonly property int wordCeiling: 240
     /// The whole wording's width, off a hidden label with typed dashes — what a band-laid button folds against
-    /// (`ActionButton.foldWidth`): a word there is drawn whole or not at all (規約 §操作パネル).
+    /// (`ActionButton.foldWidth`): a word there is drawn whole or not at all (`ActionButton.folded`). Not off what is
+    /// drawn: the head and the drawn flag change width with the fold, and reading them back is a ring.
     readonly property real wantWidth: btnLabel.phrased ? phraseRow.implicitWidth
         : Math.min(wanted.implicitWidth, btnLabel.wordCeiling)
-    /// What the chip is drawn round and the `!` stands past: the ink.
+    /// What the chip is drawn round and the `!` stands past: the ink. Not the shared box, which would leave a tail
+    /// with no word in it.
     readonly property real inkWidth: btnLabel.headRun + btnLabel.flagRoom
     readonly property real headRun: headText.width
     /// The button's own `fg`.
@@ -46,12 +48,13 @@ Item {
     readonly property real alertWordTop: ground.y
     property int fontSize: Theme.fontMd
 
-    // The widest wording's ink and nothing else; the air to the frame is `ActionButton.slack`'s
-    // (rules-refs/app-ui.md「`box` は最長のインク幅そのもの」). Measured from the font even where the flag is drawn, so
-    // it stays put whatever rule the flag uses.
+    // The widest wording's ink and nothing else; the air to the frame is `ActionButton.slack`'s. A trailing gap added
+    // here turns a 1px win between wordings into a 5px difference in width, and the pair grows silently when the font
+    // changes. Measured from the font even where the flag is drawn, so it stays put whatever rule the flag uses.
     readonly property real box: widest.implicitWidth
     /// A command's flag, set apart so its dashes can be drawn: a mono dash fills its cell, leaving the mark no room
-    /// past the widest wording (デザイン規約 §git 用語のコード表記).
+    /// past the widest wording (デザイン規約 §git 用語のコード表記). Drawn as `Rectangle`s — another dash glyph frees
+    /// not a pixel; not a wider box to open the room either, which would widen the pair for every state.
     readonly property int flagAt: btnLabel.code ? btnLabel.text.indexOf(" -") : -1
     readonly property bool splitFlag: btnLabel.flagAt > 0
     /// Gap and drawn rules included, off the flag's own row.
@@ -64,7 +67,9 @@ Item {
         ? btnLabel.text.substring(btnLabel.flagAt + 1).length - btnLabel.flagRest.length : 0
 
     /// A phrase: a command chip, words, and a second chip in its own colour — the commit button's (デザイン規約
-    /// §git 用語のコード表記). Empty takes the single-wording path.
+    /// §git 用語のコード表記). Empty takes the single-wording path. Not `code`, which is for a label that is the
+    /// command whole; a phrase puts words between. Outside the toolbar's shared box (`widestText`): a phrased button
+    /// has nobody to share a width with.
     property string phraseHead: ""
     /// The phrase's one number, apart so the words can give way without it.
     property string phraseCount: ""
@@ -102,7 +107,14 @@ Item {
     /// The width this cell was given, not the phrase's own: a request for the full width is a floor the pane cannot go
     /// under, and the column would grow with the branch name (`details-fit`). No ring: nothing here feeds it back.
     readonly property real phraseRoom: btnLabel.phrased ? btnLabel.width : 0
-    // What gives, and in what order: デザイン規約 §git 用語のコード表記「狭い時に譲る順」.
+    // What gives when the phrase is short of room, in this order (user decision — ask before changing): `+N`, then the
+    // app's words, then the ref. `+N` first: the one part whose loss leaves where the commit lands unchanged. The count
+    // stands apart on the fixed side — the phrase's one number, almost free to keep — as do the command's chip, `by`,
+    // the face and the signature mark (each its own fixed length) and the note (`%n already pushed`: a count and set
+    // words, nothing to grow). The ref is cut in the middle, since branch names differ at the tail (`feature/…-a` /
+    // `feature/…-b`). A remote-tracking name is to be cut at the end, keeping its remote — no phrase shows one today,
+    // and the phrase's chips keep `CodeChip.cutAt`'s default (`middle`), so a phrase that adds one sets it. Nothing
+    // is cut before the phrase has taken the frame's whole width.
     /// The parts that never give, each with its following gap — per part, since a `Row` charges a gap only for a
     /// visible child.
     readonly property real phraseFixed:
@@ -117,7 +129,9 @@ Item {
     readonly property real tailCap:
         btnLabel.phraseRoom <= 0 ? 0 : Math.max(Theme.buttonMinWidth,
                                                 btnLabel.phraseFree - btnLabel.midCap - btnLabel.mateRoom)
-    /// The floor for anything that gives: a cut leaves a `…` behind (デザイン規約 §git 用語のコード表記).
+    /// The floor for anything that gives: a cut leaves a `…` behind (user decision — ask before changing). A part gone
+    /// in silence reaches the reader as a sentence that never said it; words and `+N` alike keep one mark's width
+    /// (`by <face> …` says there are more names).
     readonly property real cutMark: ellipsis.implicitWidth
     readonly property real midCap:
         btnLabel.phraseRoom <= 0 || btnLabel.text === "" ? 0
@@ -152,7 +166,9 @@ Item {
     Layout.preferredWidth: btnLabel.phrased ? 0 : btnLabel.implicitWidth
     Layout.alignment: Qt.AlignVCenter
 
-    // Measured only. A Label, not TextMetrics, which reports a few pixels tighter than the visible Label.
+    // Measured only. A Label, not TextMetrics, which reports a few pixels tighter than the visible Label. A hidden
+    // ruler wears every font setting the drawn word wears — the chip's `wordSpacing`, the weight — or the box comes out
+    // wider than the word.
     Label {
         id: widest
         visible: false
@@ -169,8 +185,7 @@ Item {
         text: btnLabel.text
         textFormat: Text.PlainText
         font.family: btnLabel.code ? Theme.monoFamily : Theme.uiFamily
-        // The drawn weight, or the want is measured in a face the word is not set in
-        // (rules-refs/app-ui.md「測る側の隠し Label にも付ける」).
+        // The drawn weight, or the want is measured in a face the word is not set in (as `widest` above).
         font.weight: btnLabel.wordWeight
         font.wordSpacing: btnLabel.code ? -Theme.spaceXs : 0
         font.pixelSize: btnLabel.fontSize
@@ -230,7 +245,8 @@ Item {
             }
         }
         // A phrase's `!` stands at its left end as the button's icon: inside, it would split the sentence, and the
-        // right end is the face's corner, where the signature mark stands (デザイン規約 §git 用語のコード表記「`!` の席」).
+        // right end is the face's corner, where the signature mark stands (デザイン規約 §git 用語のコード表記「`!` の席」);
+        // on the right end's shoulder it would sit by the signature tick and read as one mark, `✓!` (user decision).
         // It heads the words (デザイン規約 §アイコンの席 の文頭記号), on the plain words' line.
         NavIcon {
             id: phraseAlert
@@ -305,8 +321,8 @@ Item {
             font.pixelSize: btnLabel.fontSize
             anchors.verticalCenter: parent.verticalCenter
         }
-        // No address, so nothing here is pressable: the phrase is the one target
-        // (rules-refs/app-ui.md「ボタンの中の的は 1 つ」). `iconLg`, the graph's node step beside a `fontMd` subject.
+        // No address, so nothing here is pressable — no pen, no tooltip, only the signature mark: a button holds one
+        // target, the phrase. `iconLg`, the graph's node step beside a `fontMd` subject.
         AvatarButton {
             id: phraseAvatar
             visible: btnLabel.phraseFace >= 0
@@ -315,8 +331,10 @@ Item {
             signatureKind: btnLabel.phraseSignature
             signatureTip: btnLabel.phraseSignatureTip
             signaturePointedAt: btnLabel.phraseSignaturePointedAt
+            // A small face drops its badge a step too, so the badge keeps its share of the face (`AvatarButton`).
             badgeInk: Theme.iconXs
-            // Clear of the round face's corner, a pixel short of the frame beside it (§署名の表示).
+            // Clear of the round face's corner, its ink's top right a pixel short of the frame beside it: how far out
+            // it may stand is the neighbour's to say (`AvatarButton.badgeTopOut`).
             badgeTopOut: Theme.spaceXs - Theme.borderWidth
             badgeRightOut: Theme.spaceXs - Theme.borderWidth
             width: Theme.iconLg
@@ -352,7 +370,7 @@ Item {
         color: btnLabel.tint
         font.family: btnLabel.code ? Theme.monoFamily : Theme.uiFamily
         font.weight: btnLabel.wordWeight
-        // デザイン規約 §git 用語のコード表記「チップの中の語間は詰める」.
+        // A chip's words close up by a gap (`CodeGround`): a mono space would stand the flag off as a second word.
         font.wordSpacing: btnLabel.code ? -Theme.spaceXs : 0
         font.pixelSize: btnLabel.fontSize
         elide: Text.ElideRight
@@ -401,7 +419,7 @@ Item {
         x: -Theme.spaceXs / 2
         width: btnLabel.inkWidth + Theme.spaceXs
         // Off the word's step, not the mono line box, which differs per OS (@14px: Cascadia Mono 16, Noto Sans Mono
-        // CJK JP 21; rules-refs/app-ui.md「チップの地の高さは語の段から採る」).
+        // CJK JP 21; `CodeGround`).
         size: btnLabel.fontSize
         // The word's baseline, not the cell's middle: a word moved onto a baseline (`headText`) would leave its ground
         // behind.
@@ -410,6 +428,8 @@ Item {
     }
     // The failure mark, on the right shoulder of the word it is about: past the word's end, its ink half a gap over the
     // word's ground — pulled back wherever that would reach the frame (デザイン規約 §git 用語のコード表記「`!` の席」).
+    // In a shared box (`TopBar.widestAction`) only the shorter words get slack: the word that set the box has no room
+    // for the `!` and would stand it against the frame.
     NavIcon {
         id: alertMark
         // Folded, the seat wears it instead (`ActionButtonSeat.cornerAlert`); a phrase, at its left end (`phraseAlert`).

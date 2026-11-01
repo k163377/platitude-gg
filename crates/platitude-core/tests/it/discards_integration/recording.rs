@@ -1,4 +1,4 @@
-//! Platitude GG's own record (破棄記録仕様.md §2), written by the recorders
+//! Platitude GG's own record (`discards::record`), written by the recorders
 //! and read back as entries: the copy of thrown-away work in the shape of a
 //! stash, and the notes of everything git keeps no line for.
 
@@ -154,7 +154,7 @@ async fn a_copy_from_the_main_worktree_names_it_read_from_a_linked_one() {
     );
 }
 
-/// Nothing is written before the first commit (§2.1), nor for paths that
+/// Nothing is written before the first commit, nor for paths that
 /// hold nothing HEAD does not.
 #[tokio::test]
 async fn nothing_is_copied_unborn_or_when_nothing_differs() {
@@ -179,7 +179,7 @@ async fn nothing_is_copied_unborn_or_when_nothing_differs() {
 
 /// The user's settings neither stop a copy nor sign it: no identity at all
 /// under `user.useConfigOnly`, a `reference-transaction` hook refusing every
-/// ref, and `core.safecrlf` refusing a file of mixed line endings (§2.1).
+/// ref, and `core.safecrlf` refusing a file of mixed line endings.
 #[tokio::test]
 async fn the_users_settings_do_not_stop_a_copy() {
     let mut repo = TestRepo::init();
@@ -203,7 +203,7 @@ async fn the_users_settings_do_not_stop_a_copy() {
 }
 
 /// A file git will not take — its required filter has no driver here — is
-/// left out and named; the rest is copied (§2.1).
+/// left out and named; the rest is copied.
 #[tokio::test]
 async fn a_file_git_will_not_take_is_named_and_the_rest_copied() {
     let mut repo = TestRepo::init();
@@ -230,7 +230,7 @@ async fn a_file_git_will_not_take_is_named_and_the_rest_copied() {
 }
 
 /// Work none of which git will take still goes on the record: a copy of
-/// nothing, the paths named (§2.1) — the record says what went.
+/// nothing, the paths named — the record says what went.
 #[tokio::test]
 async fn work_git_takes_none_of_is_still_on_the_record() {
     let mut repo = TestRepo::init();
@@ -443,7 +443,7 @@ async fn an_upstream_whose_remote_holds_a_space_comes_back_as_it_was() {
 }
 
 /// A remote branch deleted, or pushed over, comes back as a branch here
-/// under the remote's name of it, with no upstream (§4).
+/// under the remote's name of it, with no upstream.
 #[tokio::test]
 async fn a_remote_branch_deleted_or_pushed_over_comes_back_as_a_branch_here() {
     let mut repo = TestRepo::init();

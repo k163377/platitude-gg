@@ -8,8 +8,10 @@ import platitude.ui
 // (`RepoSession::close`) and says so here. A dialog, because the subject is the window itself
 // (デザイン規約 §可否・警告の出し場所).
 //
-// **A loading mode, not a question**: no button, no Escape, and modal — a press that queued another write would move
-// the moment this waits for (rules-refs/app-ui.md「アプリ終了の close ゲートは 1 本」).
+// **A loading mode, not a question** (user decision — ask before changing): no button, no Escape, and modal — a press
+// that queued another write would move the moment this waits for (the gate is `WindowQuitGate`). The quit cannot be
+// taken back. The dim is only the dimmer Qt brings with the modal: laying a second one would invent a new colour.
+// The face is a ring, a heading and one line (デザイン規約 §進行中・回数押しの定数「ボタンでない席でも言葉は残る」).
 AppDialog {
     id: quitWaitDialog
 
@@ -30,8 +32,9 @@ AppDialog {
     /// mid-look would take the window down.
     property bool selfCloses: true
 
-    // Overrides `AppDialog`'s `CloseOnEscape`. Nothing else needs a guard: a modal popup already seals the window's
-    // `Shortcut`s (F5, Ctrl+F, the bars' Escape), so guarding them in `Main` would be dead code.
+    // Overrides `AppDialog`'s `CloseOnEscape` explicitly. Nothing else needs a guard: a modal popup already seals the
+    // pointer and the window's `Shortcut`s (Qt 6.10.3; F5 and Ctrl+F in `Main`, the Escape of `AskBar` / `NoticeBar`),
+    // so dropping them by hand would be dead code.
     closePolicy: Popup.NoAutoClose
 
     contentItem: ColumnLayout {

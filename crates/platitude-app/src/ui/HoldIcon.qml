@@ -2,8 +2,10 @@ import QtQuick
 import platitude.ui
 
 // The mark every confirmed control wears (デザイン規約 §回数押し), on NavIcon's 16px grid: a disc split into one sector
-// per press by gaps of one width from the centre out, the sectors still to press at `dimFade`. Pressing sweeps the
-// disc in clockwise from 12 o'clock, across the gaps it reaches — the last press makes it whole.
+// per press by gaps of one width from the centre out (two halves for a white delete, a Y for three), the sectors still
+// to press at `dimFade`. Pressing sweeps the disc in clockwise from 12 o'clock, `holdStepMs` a sector, across to the
+// middle of the gaps it reaches — the last press makes it whole (user decision — ask before changing). It stands ahead
+// of the words and is the one thing saying the control is pressed through; the words name only the operation.
 // Its own component because it repaints every frame of a step, where NavIcon repaints only when what it draws changes.
 InkCanvas {
     id: holdIcon
@@ -17,6 +19,10 @@ InkCanvas {
     /// can (`AppMenuItem.holdInk`).
     property color tint: Theme.textPrimary
     /// The control cannot be pressed: the mark keeps its hue a step down (デザイン規約 §暗く落とした段), under grey words.
+    /// Not left in its own hue: the unlit sectors are drawn at `dimFade`, so a pressable mark at rest is about as
+    /// bright as the `*Dim` step and the two would not part. Not the whole mark at `dimFade` either: that drops the
+    /// contrast to the ground from 2.04:1 to 1.28:1 and nearly all the saturation, so the hue no longer says what kind
+    /// of loss the row is; `*Dim` drops it to 1.37:1 and keeps the hue (user decision — ask before changing).
     property bool off: false
     /// The tint, but a white delete's plain ink is its words' alone — the mark carries the warning, as the fill does
     /// (デザイン規約 §回数押しの色).

@@ -49,7 +49,8 @@ const PALETTE: [(&str, u32); 19] = [
     ("punctuation.definition.comment", COMMENT),
     ("keyword", KEYWORD),
     ("storage", KEYWORD),
-    // Operators and punctuation stay plain (デザイン規約 §シンタックスハイライト).
+    // Operators and punctuation stay plain: with `=` and `.` in the keyword
+    // colour a line reads as a row of lamps.
     ("keyword.operator", PLAIN),
     ("punctuation", PLAIN),
     ("entity.name.type", TYPE),
@@ -97,8 +98,11 @@ pub(super) fn assets() -> &'static Assets {
     })
 }
 
-/// The app's palette as a syntect theme; published themes are rejected
-/// (デザイン規約 §シンタックスハイライト).
+/// The app's palette as a syntect theme; published themes are rejected:
+/// each paints ordinary text a step darker than `textPrimary` (base16-ocean,
+/// Catppuccin Mocha, Dracula, Monokai Extended alike), so the code reads as
+/// an accessory of the UI (user decision — ask before changing). So syntect
+/// goes without its `default-themes` feature.
 fn palette() -> Theme {
     // Opaque: the palette is foreground only.
     let color = |rgb: u32| {

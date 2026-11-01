@@ -21,7 +21,12 @@ use crate::process::{GitCommand, GitExecutor, literal_pathspec};
 /// Author and committer are the mailmap spellings, matching the graph log
 /// (`parse::log`) so a row's avatar survives the click. The trailers are
 /// raw (git applies no mailmap to them). `key=` matches case-insensitively;
-/// values are joined with U+001F (rules-refs/app-ui.md「co-author は詳細ペインの日付行」).
+/// values are joined with U+001F, which leaves the NUL records whole and
+/// stands in no name or address.
+///
+/// git finds the trailers (`%(trailers:...)`): the trailer rules are git's,
+/// and a copy of them here would also pick up a `Co-authored-by:` line in
+/// the body (デザイン規約 §co-author の表示).
 const DETAILS_FORMAT_ARG: &str = "--format=%H%x00%P%x00%aN%x00%aE%x00%at%x00%cN%x00%cE%x00%ct%x00\
      %(trailers:key=Co-authored-by,valueonly,unfold,separator=%x1F)%x00%B";
 const DETAILS_FIELDS: usize = 10;
@@ -75,7 +80,8 @@ pub struct CommitDetails {
 
 /// Loads commit metadata and its changed-file list in one `show` — on
 /// Windows the process start dominates this call
-/// (ci/baseline/code-costs-windows-x64.md).
+/// (ci/baseline/code-costs-windows-x64.md). Not a `diff-tree <p1> <c>`
+/// for the list either: that is slower than `show <c>` on its own.
 pub async fn commit_details(
     executor: &GitExecutor,
     workdir: &Path,
@@ -110,7 +116,8 @@ pub async fn commit_details(
 /// Splits the combined output into the `--format` record and the
 /// `--name-status` bytes behind it, counting [`DETAILS_FIELDS`] NULs — a
 /// message may hold a line like `M\tsrc/main.rs`, which a scan would take
-/// for a file. One newline separates the two.
+/// for a file. One newline separates the two, and an empty commit prints
+/// not even that.
 fn split_record(bytes: &[u8]) -> Option<(&[u8], &[u8])> {
     let mut end = 0;
     for _ in 0..DETAILS_FIELDS {
@@ -332,8 +339,10 @@ pub async fn file_diff_with_fingerprint(
 /// Fingerprint of a raw diff, for drift detection. Stable only within one
 /// run (`DefaultHasher` promises nothing across std releases): persisting
 /// it or comparing across processes needs a stronger digest. Not shared
-/// with the crate's other staleness hashes
-/// (rules-refs/core.md「staleness のハッシュは問いごとに持つ」).
+/// with the crate's other staleness hashes (`highlight::patch::source_hash`
+/// looks alike): this one goes to the pane in hex and comes back with a
+/// hunk selection, and a wrong "unchanged" lets a partial write through
+/// onto bytes that moved (`stage::verify_fingerprint`).
 pub fn fingerprint(raw: &[u8]) -> u64 {
     use std::hash::{DefaultHasher, Hash, Hasher};
     let mut hasher = DefaultHasher::new();
@@ -355,7 +364,9 @@ fn for_paths(cmd: GitCommand, path: &str, orig_path: Option<&str>) -> GitCommand
 ///
 /// Partial staging rebuilds patches from these bytes ([`crate::patch`]), so
 /// both must run the exact same command: hunk and line indices only mean
-/// something against the bytes they came from.
+/// something against the bytes they came from. So the shown diff cannot
+/// hide CR noise with `--ignore-cr-at-eol` either: that patch does not
+/// apply (`patch does not apply`).
 ///
 /// The staging tests mock this (`mock_file_diff_raw`) to hold a read while
 /// the file moves before git's apply; mry copies what a mock matches on, so

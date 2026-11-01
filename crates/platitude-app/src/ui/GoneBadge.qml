@@ -2,8 +2,10 @@ import QtQuick
 import platitude.ui
 
 // A branch's remote badge, which on git's `[gone]` keeps its shape and takes the state instead of disappearing — a
-// dropped badge reads as a branch that never tracked anything (デザイン規約 §ref の種別). Shared by the row and the
-// current branch's stand-in, so the `!`'s corner and size are one decision.
+// dropped badge reads as a branch that never tracked anything (デザイン規約 §ref の種別 / §グラフ行のダブルクリック の
+// `[gone]`, user decision). Shared by the row and the current branch's stand-in, so the `!`'s corner and size are one
+// decision. It is for an upstream the other side took away (merged and deleted): a spent local branch is not
+// forgotten. Deleting the remote branch from here takes the upstream off with it, so that never raises this.
 Item {
     id: badge
 
@@ -25,8 +27,9 @@ Item {
 
     NavIcon {
         id: badgeMark
-        // Its own size, never the layout's: a canvas born sizeless is never asked to paint once a layout sizes it, and
-        // a shot waiting on it runs to the ceiling.
+        // Its own size, never the layout's (no `anchors.fill: parent`): a canvas born sizeless is never asked to paint
+        // once a layout sizes it, its `Ink.owed` debt stands for good, and a shot waiting on it runs to the ceiling —
+        // red only on the run's `shot state … ink=1` line.
         width: badge.seat
         height: Theme.iconSm
         set: "name"

@@ -188,7 +188,7 @@ Item {
             exitRow.enabled = true
         }
         // A button's mark wears its fill's colour whatever its words wear: the hunk heading's `Discard hunk` under the
-        // pointer, and grey words at rest beside a red mark (the avatar's `Remove` — §アバターを与える). Off, it keeps
+        // pointer, and grey words at rest beside a red mark (the avatar's `Remove` — `AvatarAssignRow`). Off, it keeps
         // that hue a step down; the words grey either way.
         function test_button_data() {
             return [

@@ -12,7 +12,8 @@ QtObject {
     id: layout
 
     /// The page whose fold and log (`sidebarCollapsed` / `commandsOpen`) are restored from here; the floor is built on
-    /// both.
+    /// both. Those two are all this writes on the page, and only in the restore (`applySavedLayout`), so it crosses
+    /// none of the page's invariants — the condition for moving page writes out of `RepoPage` at all.
     required property Item page
 
     required property SidebarPane sidebarPane
@@ -63,14 +64,16 @@ QtObject {
     // The window is held to these (`Main.floorWidth` / `floorHeight`; 規約 §窓の床): past an item's minimum `SplitView`
     // lays the rest out beyond its edge, where nothing scrolls. The numbers are §レイアウト初期値's.
     /// Wide enough for the whole of the corner's line (`GitVersionCorner.floorWidth`): a build named by a long tree
-    /// name would otherwise run out past the pane's left edge.
+    /// name would otherwise run out past the pane's left edge. A seat letter's build fits 300; only a build from a
+    /// long-named tree lifts it.
     readonly property real rightMinWidth: Math.max(300, Math.ceil(layout.gitCorner.floorWidth))
     readonly property int panesMinHeight: 200
     /// The three panes' floor: their own, and at least the left menu whole — the log dragged up as far as it goes
     /// stops at the menu's last cell, never over it.
     readonly property real panesFloorHeight: Math.max(layout.panesMinHeight, layout.sidebarPane.floorHeight)
     /// The log's band and one record with a line of output under it (`CommandRowDelegate.height`), and the list's
-    /// `bottomMargin`.
+    /// `bottomMargin`: where a record's two lines can be read (user decision). The same floor with the log down —
+    /// the foot that stands in for it is shorter.
     readonly property int commandsMinHeight:
         Theme.headerHeight + Theme.rowHeight + Theme.fontSmLine + 2 * Theme.spaceXs + Theme.spaceXs
     /// Whether the worktree pane scrolls past its bottom — its blocks keep their heights (`window-floor wip`).
@@ -115,7 +118,10 @@ QtObject {
     }
 
     /// Hands the layout over to be remembered. Pulled on a timer: a drag moves a width every frame, and what is worth
-    /// writing is where it settled.
+    /// writing is where it settled. The saved layout is also how tabs hand it over: the leaving tab's page writes here
+    /// and the coming one reads `applySavedLayout` (`RepoPageStack.onLeavingTab`), so a field taken out of
+    /// `LayoutState` loses both the next launch and the carry between tabs (headless `tab-carry`: `folded=` / `log=`).
+    /// A value held for the run only goes on a plain field of `AppBackend` (`commands_shown`, the log up or down).
     function reportLayout() {
         AppBackend.saveLayoutSizes(
             // Folded, the width is the rail's; keep the one it goes back to.

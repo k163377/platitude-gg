@@ -4,7 +4,7 @@
 use super::*;
 
 /// What came back about a folder asked for, before it is a tab. Every road
-/// in waits for one (デザイン規約 §タブの所作「判定は 1 か所に置く」).
+/// in waits for one (`strip::landing_for` answers it).
 #[derive(Debug)]
 pub enum OpenMsg {
     /// The worktree the folder is in, and its repository
@@ -24,7 +24,7 @@ pub enum OpenMsg {
 }
 
 /// What became of a clone, for the dialog that asked — there is no tab
-/// yet (デザイン規約 §リポジトリを取り寄せる).
+/// yet (`CloneDialog.qml`).
 #[derive(Debug)]
 pub enum CloneMsg {
     /// The folder that was named — git was told to put it there.

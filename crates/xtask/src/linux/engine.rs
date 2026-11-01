@@ -29,6 +29,11 @@
 //! Nothing here ends the engine's VM or its session, which every
 //! checkout on the machine shares, and nothing is put twice: the CLI
 //! ending says nothing about what the engine had already taken on.
+//!
+//! What stays without a ceiling is the long work itself — the image's
+//! `build` and what runs in a container: inside a gate the step's ceiling
+//! bounds it, a command run on its own is stopped by hand — and the
+//! engine calls of the `footprint` instrument.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};

@@ -22,10 +22,21 @@ Rectangle {
     /// The plan's freeze: while a rebase is being composed the only way into a write is the run button, so the list and
     /// the rail wear the disabled step whole (規約 §無効; デザイン規約 §フル interactive rebase). The `>_` band at the
     /// foot stays pressable — it answers "what is git doing" — so dimming the pane whole would paint it as disabled.
+    /// `dimFade` goes on without `layer.enabled`, safe only here: Qt Quick's `opacity` applies node by node, not to the
+    /// subtree as one sheet, so two overlapping items show through each other. Only `RepoPage.planShown` raises this,
+    /// and the same property's `onPlanShownChanged` always folds to the rail (`foldForPlan(true)`), so what is drawn
+    /// frozen is `NavRail`, whose cells never overlap. The one item over a row in the list is the pinned row
+    /// (`HeadPinRow`), and its `NavSections` is `visible: !collapsed` — not drawn while frozen. **Freezing and folding
+    /// apart breaks this.**
     property bool frozen: false
     /// The doors alone are held while a write replays behind the screen (`RepoPage.doorsHeldWhy`): a switch (the row's
     /// double-click), the name box, the REMOTES `+`, and the menus' write rows. The pane keeps its ink — everything
     /// else goes on working, so `textMuted` over the rows would lie (規約 §無効); what cannot be pressed greys itself.
+    /// Held at `SidebarRowGestures.startEdit` / `activateRow`, `NavHeader.addHeld` / `NavRail.addHeld` and
+    /// `askAddRemote`, `AppMenu.heldReason`; the graph's doors read the same line (`RepoPage.switchToRef` /
+    /// `rowDoubleClicked`, `CommitRowMenu.heldReason`). Which operations replay is core's word
+    /// (`OperationKind::replays_history` → `RepoTab.replaying`), git's vocabulary kept there. Only a plan folds the
+    /// pane (`frozen`): a plain rebase holds the doors alone — a write over in a moment must not make the column jump.
     property bool doorsHeld: false
     /// The page whose command log the foot row opens (`CommandsToggle`); null while no tab is open. The row goes while
     /// the log is up, whose header band takes its place (`CommandsPane`).
@@ -265,7 +276,7 @@ Rectangle {
     readonly property alias commandsMarkColor: commandsSeat.markColor
     readonly property real commandsRoom: commandsSeat.visible ? commandsSeat.height : 0
 
-    // ---- the discard log's seat, stacked on the git commands' (破棄記録仕様.md) ----
+    // ---- the discard log's seat, stacked on the git commands' (`platitude_core::discards`) ----
     RecoverToggle {
         id: recoverSeat
         anchors.left: parent.left
@@ -382,7 +393,8 @@ Rectangle {
     readonly property var peekSection: peek
 
     // Opens under a standing menu too — the hand is on the rail, and a menu raised elsewhere does not hold what it opens
-    // (デザイン規約 §左メニューを畳む).
+    // (user decision — ask before changing; `SectionPeekPopup`). Only the menu's standing up closes it
+    // (`onMenuAreaChanged`). Headless: `menu-peek`, against `nav-peek`.
     function openPeek(kind, top) {
         peek.openAt(kind, top)
     }

@@ -7,6 +7,13 @@ pub(super) const TABLE: &[Verb] = &[
     // In a history that fits, a viewport that followed frames like one
     // that never moved. `op=` names the write: `follows=` / `onscreen=`
     // both hold of a selection already at the tip.
+    //
+    // `merge-branch` / `cherry-pick` take `origin/main` on
+    // `--preset diverged`, where the landing is a real commit, not a
+    // fast-forward; `basic`'s dirty tree fails `git cherry-pick` (`your
+    // local changes would be overwritten`). A merge with nothing to bring
+    // lands at the tip all the same (`merge-branch v0.1 --preset basic`,
+    // `Already up to date`, `follows=true`).
     Verb {
         name: "revert-commit",
         when: &[],
@@ -115,7 +122,10 @@ pub(super) const TABLE: &[Verb] = &[
     // window's to say: the conditions are read by `integrate_integration`,
     // the kind by `repo_tab::drain_report_tests`, the sentence by
     // `tst_reportdress.qml` — so the cheapest history stands for them, a
-    // branch of one commit.
+    // branch of one commit. `said=` is the row menu's shared heading; the
+    // reason is the second line, left to the picture. The other three
+    // reasons (across a merge, off the branch, an unfetched base) have no
+    // run: one more reason is a line in each of those three places.
     Verb {
         name: "fold-first-commit",
         when: &[],

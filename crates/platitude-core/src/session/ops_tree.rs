@@ -81,7 +81,7 @@ impl RepoSession {
     /// Discards a chosen set of rows as one queued write; a staged rename
     /// takes its source along, read from status inside the write
     /// ([`stage::with_old_names`]). What goes is copied first and put on
-    /// the discard record once it went (破棄記録仕様.md §2.1).
+    /// the discard record once it went (`discards::copy`).
     pub fn discard_chosen(
         self: &Arc<Self>,
         choices: Vec<(String, stage::DiscardSide)>,
@@ -172,6 +172,18 @@ impl RepoSession {
     /// asked first: the refusal proved the repository untouched, and every
     /// outcome of the long way is one the stash can undo.
     ///
+    /// Three landings, each plain git's screen: put back clean (the entry
+    /// goes); the put-back conflicts (marked files, and the entry stays —
+    /// git's rule, which the screen already says: STASHES counts one more
+    /// and the log carries git's `The stash entry is kept in case you need
+    /// it again.`, so nothing more is said); untracked files left behind
+    /// (the tracked part carried, the rest still in the stash, git's words
+    /// in the log). Through a stash rather than `switch --merge`: the
+    /// staged/unstaged split survives (`--index`), and a conflict leaves the
+    /// entry as the way back. Whoever wants the work left behind stashes
+    /// first (the toolbar's `stash`): a choice on the move would make every
+    /// move a question.
+    ///
     /// A move off a detached HEAD's own commits, or one that takes a branch
     /// off its commits (`ForceCreate`), is told to the discard log.
     pub fn checkout(self: &Arc<Self>, target: CheckoutTarget) -> Option<OperationId> {
@@ -206,7 +218,7 @@ impl RepoSession {
             move |exec, repo, cancel| async move {
                 leave_operation(&exec, &repo, &cancel).await?;
                 // Read after the operation is put down: what it had made so
-                // far is no part of the log (§1).
+                // far is no part of the log (`discards`).
                 let moved = moved_by(&exec, &repo, &target, &cancel).await?;
                 let before = s.moving_off(&exec, &repo, &moved, &cancel).await?;
                 move_carrying(&exec, &repo, &target, &cancel).await?;
@@ -237,7 +249,12 @@ impl RepoSession {
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 // The branch's own ref: a tag of the same name would answer
-                // first for the bare name.
+                // first for the bare name (gitrevisions looks in
+                // `refs/tags/` before `refs/heads/`). This one count decides
+                // both whether to ask (zero moves) and the `lost` the
+                // question shows (pinned beside a same-named tag by
+                // `carry_move::a_move_that_has_to_ask_counts_what_the_branch_loses`,
+                // and by `a_move_that_takes_nothing_off_the_branch_lands_on_it`).
                 let own = format!("refs/heads/{local}");
                 let lost =
                     commit::count_beyond(&exec, &repo.workdir, &own, &start, &cancel).await?;
@@ -264,7 +281,7 @@ impl RepoSession {
     /// working tree as far as `mode` says. `ResetMode::Hard` destroys
     /// uncommitted work, so the UI asks before sending that one — and what
     /// it destroys is copied first and put on the discard record with the
-    /// move (破棄記録仕様.md §2).
+    /// move (`discard_record::copy_for_reset`).
     pub fn reset(self: &Arc<Self>, rev: String, mode: branch::ResetMode) -> Option<OperationId> {
         let s = Arc::clone(self);
         self.write(
@@ -314,7 +331,7 @@ impl RepoSession {
     /// the branch it had out left where it is. `name` is the worktree as the
     /// screen names it, for a refusal's heading
     /// ([`crate::worktrees::remove`]). Where it was and what it had out go
-    /// on the discard record (破棄記録仕様.md §2) — also when the removal
+    /// on the discard record (`discards::record`) — also when the removal
     /// failed past git's point of no return: a folder it could not delete
     /// (one a program has open on Windows) fails it after git has taken the
     /// worktree's own HEAD and reflog. A worktree on no commit yet takes

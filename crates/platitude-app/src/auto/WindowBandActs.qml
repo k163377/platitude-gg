@@ -81,6 +81,8 @@ Item {
     }
 
     // PGG_AUTO_ACT=fetch-busy: the same latch on fetch. The page's driver fires the fetch; this waits for the latch.
+    // Only the unturned frame's wait can be pictured here: the ring turns in the seat and the word stays `textMuted`.
+    // The yellow frame's wait is `force-push-hold`'s.
     WindowStage {
         id: fetchBusyTimer
         name: "fetch_busy"
@@ -94,7 +96,8 @@ Item {
 
     // PGG_AUTO_ACT=fetch-tip on|off: the fetch button's tip with and without a remote (`off` = `--preset noremote`).
     // The dim side waits for a landed, idle repository rather than the button, so a band read before the remotes
-    // arrived cannot pass for either.
+    // arrived cannot pass for either. `on` runs on the default preset; the pair's pictures differ in REMOTES' count
+    // (0 / 3) and the button's brightness.
     WindowStage {
         id: fetchTipTimer
         name: "fetch_tip"
@@ -118,6 +121,8 @@ Item {
 
     // PGG_AUTO_ACT=stash-state ready|clean|conflicts|unborn: waits for the Stash button to say the argument — its
     // reading lands over several drains, and read early it is `unborn` everywhere (デザイン規約 §変更を退避する).
+    // Four runs, read as a set: `ready` on the default (dirty) preset, `clean` on a clean tree (`--preset tags`),
+    // `conflicts` on `--preset conflict-kinds`, `unborn` on `--preset empty` — `unborn` even where that tree is dirty.
     WindowStage {
         id: stashStateTimer
         name: "stash_state"
@@ -138,7 +143,14 @@ Item {
     }
 
     // PGG_AUTO_ACT=band: numbers, because the headless platform draws no window buttons — a band that lost its grab
-    // run or pushed its buttons off the end looks fine in the picture.
+    // run or pushed its buttons off the end looks fine in the picture. A window verb that still reports only once every
+    // page read has landed (`PageSettled.windowSettled`), so the graph in the picture is loaded.
+    //
+    // `seamRun=` is the second grab run, the seam before the window buttons: on Windows one band `spacing` (4), 0 with
+    // `merged=false` — whether either can be grabbed is not drawn (規約 §ウィンドウの縁). `tabsW=` NaN or 0 is the
+    // tab strip gone whole: a term of its width broke (an id shadowing a property of the same name gives NaN). With
+    // `--system-title-bar` the band is not the title bar — the mac / Linux layout on this machine, right at
+    // `merged=false grabRun=0`.
     WindowStage {
         id: bandActTimer
         name: "band"
@@ -268,6 +280,12 @@ Item {
     // turned is read, since under the hand that pressed it the name looks the same whether or not the card keeps it
     // lit.
     //
+    // `ops-stand-repos` needs two tabs (`--preset panel --preset stashes`, the later in front). `ops-stand-worktrees`
+    // runs on `panel` (a locked worktree and an unlocked one, their heads aligned), `worktrees` (every state) or
+    // `basic` (the main worktree alone: one disabled row, `worktrees=1` — with no row the tier never opens and the
+    // line reads `tier=stand`). The branch doors run on `panel`; `folder=` is the open card's path, which a cropped
+    // picture cannot tell from its parent folder's card.
+    //
     // The card asked for (`opened`), then the tier inside it (`tier`) or the branch card's folder (`folder`).
     WindowStage {
         id: opsDoorTimer
@@ -355,6 +373,9 @@ Item {
     // a reopened card frames like one never closed, and who owns the grab run is not drawn. `yield=true` is the frame
     // handed back to the scene (`WindowChrome.frameYielded`); `strip=` is where the run stands for when it is not,
     // `none` with no merged title bar. The second press lands only on a card observed standing, as a hand's would.
+    // On Linux the band is no title bar (`merged=false`), so `strip=` is always `none` and the pair checks only the
+    // toggle's wiring and `yield=`. The `closePolicy` half is not a verb's: a press cannot be injected, so it is
+    // measured in a throwaway qmltestrunner scene (verify-ui windows.md).
     WindowStage {
         id: appMenuActTimer
         name: "app_menu"
@@ -437,7 +458,8 @@ Item {
     // (デザイン規約 §hover のツールチップ「送った先は名乗る」). The failures raised the panel (デザイン規約 §git が言った
     // ことを読む場所), and a press that finds it up proves half the verb, so it is shut first (`shut`); then the
     // stand-in pointer put on the button, once the failures are over, until its tip stands (`pointed`); then the link
-    // pressed (`pressed`).
+    // pressed (`pressed`). A click on the words themselves cannot be injected, so the verb covers what follows it —
+    // the window's hand-off and the page's answer; whether the anchor is drawn is `fetch-hover 3`'s picture.
     WindowStage {
         id: tipLinkTimer
         name: "fetch_tip_link"
@@ -502,7 +524,8 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=band-actions*: the panel's four buttons giving their words up as the window narrows (規約 §操作パネル).
+    // PGG_AUTO_ACT=band-actions*: the panel's four buttons giving their words up as the window narrows (`TopBar`'s
+    // header).
     // The run asks for a *shape* and the panel's own arithmetic names its width — which pixel is which shape depends on
     // the installed fonts.
     WindowStage {
@@ -597,7 +620,9 @@ Item {
                 Awaited.claim("band_actions", () => acts.bandActionsKey() === op.witnessed("shape")
                               && acts.fetchSettled(window.curPage.pageTab))
             }
-            // Which button the mark is on: `alert=` is the pair or-ed (`TopBar.actionAlertShown`).
+            // Which button the mark is on: `alert=` is the pair or-ed (`TopBar.actionAlertShown`), so
+            // `band-actions-stopped` says fetch's side on a line of its own — `suspended=` the timer stopped, `turned=`
+            // the folded mark in its `warning` frame (`TopBar.fetchFrameTurned`), `alert=` the corner's `!`.
             op.complete({
                 "name": "band_actions_shaped",
                 "when": () => {

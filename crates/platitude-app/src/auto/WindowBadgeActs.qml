@@ -6,7 +6,8 @@ import platitude.ui
 
 /// The state badges' half of the band's PGG_AUTO_ACT harness: the three the band raises at once (and all six), the one
 /// a graph that stopped reading raises, the one an old git raises, and the one files for a missing Git LFS raise.
-/// Split from `WindowBandActs` for length alone; each verb stands itself up on its own `running:` (rules-refs/structure.md「窓側の自動化は動詞が自分で `running:` に立つ」).
+/// Split from `WindowBandActs` for length alone; each verb stands itself up on its own `running:`
+/// (`WindowAutoActDriver`).
 // An `Item` only because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
@@ -26,8 +27,16 @@ Item {
     }
 
     // PGG_AUTO_ACT=badges: all three of the band's state badges at once — the widest the band asks for, which only the
-    // floor keeps from pushing `>_` off the end (デザイン規約 §ウィンドウの縁). The argument is `<width>[:<tabs>]`: the
+    // floor keeps from pushing `>_` off the end (`BandStateGroup`'s header). The argument is `<width>[:<tabs>]`: the
     // window width (or `floor`), and how many tabs the run built the strip out of (`verify::repos::band_tab_count`).
+    // The added tabs come off `tab-widths`' name ladder, and the preset goes to the last one, the tab in front. It has
+    // to hold a stopped operation and conflicts at once (`conflict`, a stopped merge, or `cherry-pick-conflict`):
+    // `conflict-staged` is resolved, so its conflicts badge never stands and the run sits silent to the watchdog. The
+    // identity question is skipped and left standing behind the band. The registry runs four shapes: no argument
+    // (1440, one tab: a band with room), `1400:6` (six tabs with room left for the words, judged as no argument),
+    // `1000:6` (the tabs eat the band, `narrowed=true`) and `floor:16` (the folded mark). A width does not name a
+    // shape: the strip and the group share the band's shortfall, so the tabs' count and name lengths move the border
+    // (and so does the OS) — the shape is read off the report line. The hover verbs' card is overlay.png's (a Popup).
     // `badges-all` / `badges-all-hover`: every one of the six — the run's git is old and has no Git LFS
     // (`verify-ui` stages both by the verb's name), and the graph is made stale here the way `graph-stale` makes it.
     // The group's card is raised only by a hand on the marks or `badges-hover`'s stand-in: a card up in a run that
@@ -142,7 +151,8 @@ Item {
                 if (!op.sizes)
                     return
                 // Which shape a width brings on depends on the installed fonts, so the run names the width and the
-                // report says the shape. Allowed below the floor: the third shape sits below what a hand can drag to.
+                // report says the shape. Not clamped to the floor: the third shape sits below what a hand can drag to,
+                // where `fits=false` is right.
                 op.input("sized", () => {
                     window.width = op.witness("requestedWidth",
                                               arg === "floor" ? Math.ceil(window.floorWidth) : parseInt(arg))
@@ -174,7 +184,7 @@ Item {
     function bandStood(op, line) {
         return op.still("band_laid", line)
     }
-    /// Which rule painted the folded group's mark (デザイン規約 §ウィンドウの縁「色は最も重い状態が決める」), read off
+    /// Which rule painted the folded group's mark (`BandStateGroup.tint`: the heaviest state's colour), read off
     /// the band's own colour — recomputing the rule here would agree with itself whatever the band did.
     readonly property string stateTint: Qt.colorEqual(topBar.stateMarkColor, Theme.danger) ? "danger" : "warning"
     /// `fits=` leads, and the three badges are judged with it: a run where one never stood photographs an uncrowded
@@ -206,6 +216,9 @@ Item {
             + " deep=" + topBar.stateMarkDeep
             + " cap=" + topBar.stateCapW
             + " groupW=" + topBar.stateGroupW
+            // Where `cap=` gives the words up (`BandStateMetrics.minW`, a floor counted in characters, so it differs by
+            // OS). Not the window's floor: a window at its floor folds the group to its mark (`windowAtFloor`), and
+            // `bandW=` counts that.
             + " badgeMin=" + topBar.stateBadgeMinW
             // The strip shares the band's shortfall, so a cap read without the tab count cannot be repeated.
             + " tabs=" + topBar.bandTabCount
@@ -216,6 +229,8 @@ Item {
             // Each row's sentence on its badge's words' baseline (`BandStateCard.wordsOffLevel`), to the half pixel its
             // whole-pixel seat may round by, with how far off the worst one stood.
             + " level=" + (wordsOff <= 0.5)
+            // Read only where `card=true`: a Popup settles its size the first time it is asked for, so a card never
+            // opened reads either `16x16` (its padding) or its full size.
             + " cardSize=" + topBar.stateCardSize
             + " levelOff=" + wordsOff.toFixed(2)
             // The band's own floor beside the window's, which alone would not say whether this row set it.
@@ -229,7 +244,11 @@ Item {
 
     // PGG_AUTO_ACT=graph-stale / graph-stopped: the badge that says what is drawn is not this repository's history, and
     // the card line that says which way. `graph-stale` fails the off-screen rebuild (a whole graph goes out of date);
-    // `graph-stopped` fails the stream (the column empties). Both go in at the walk (`GraphModel.failGraphPass`).
+    // `graph-stopped` fails the stream (the column empties). Both go in at the walk (`GraphModel.failGraphPass`): no
+    // git fails on a demo repository, so the fault (`harness::fail_graph_pass`, `PassHooks::fault`) makes the
+    // ordinary reporting arm say it. No argument, and any preset will do. Under `graph-stopped` the card's line turns
+    // to git's words (`words=`). The card is overlay.png's. `graph-stopped`'s app.png is told from an opening by the
+    // ring: the column is empty with the ring still, where one just opened has it turning.
     WindowStage {
         id: staleActTimer
         name: "graph_stale"
@@ -245,9 +264,12 @@ Item {
         onTriggered: {
             const op = staleActTimer
             const page = window.curPage
-            // Over a settled page (`PageSettled`): a status landing after the arm asks for a swap rebuild that undoes
-            // either fault, and the census then walks the other state
-            // (rules-refs/app-ui.md「`STALE GRAPH` の動確は `graph-stale` / `graph-stopped`」).
+            // Over a settled page (`PageSettled`, the census's own rule — a copy drops the term for the rebuild the
+            // status asked for): the fault stands over time but never across kinds of pass, hitting only the
+            // `PassStep` it names. Just after opening, the log walk comes before the first status; the status that
+            // follows flips the worktree row and asks for a swap rebuild. The stream's fault misses it, so
+            // `graph-stopped`'s emptied column fills again; the swap's fault drops it, so `graph-stale` freezes on a
+            // pass with no worktree row. Either way the picture stays right and only the census moves.
             const settled = PageSettled.settledUnder(window)
             const graph = settled ? page.pageGraph : null
             if (op.at("start")) {
@@ -257,8 +279,8 @@ Item {
                         "page": settled,
                         "whole": graph !== null && !graph.loading && graph.finishCount > 0 && graph.rowTotal > 0 }))
                     return
-                // Asked once; the harness keeps it up, since what undoes it is invisible from here
-                // (`harness::fail_graph_pass`).
+                // Asked once, never on the beat (each ask takes the pass before it); the harness keeps it up, since
+                // what undoes it is invisible from here (`harness::fail_graph_pass`).
                 op.input("armed", () => {
                     graph.failGraphPass(Harness.autoAct === "graph-stale" ? "swapping" : "streaming")
                 }, () => "graph_stale step=armed")
@@ -296,7 +318,9 @@ Item {
     // with the status), so a page verb would wait out its watchdog (`AutoActDriver`'s baseline).
     //
     // Every worktree's row wears the same all-zero id, so a reader that took row 0 for ours stands the page on a
-    // worktree nobody asked for — `early=` / `earlyWorktree=`, read before the hold comes down.
+    // worktree nobody asked for — `early=` / `earlyWorktree=`, read before the hold comes down. Read after the chance
+    // to misread, or a misreading passes. The preset is what puts that worktree on top: in `carried`, `here` stands on
+    // this window's commit. Under another preset `otherTop` never holds and the run waits silently to the watchdog.
     WindowStage {
         id: wipLandingTimer
         name: "wip_landing"
@@ -368,7 +392,7 @@ Item {
 
     // PGG_AUTO_ACT=old-git / old-git-card / old-git-fold: the run is handed a git that answers `--version` with an
     // older number (`verify-ui --old-git`). The window sized (`sized`, a width or `floor` in the argument), then the
-    // pointer down (`pointed`, `-card`).
+    // pointer down (`pointed`, `-card`). `-card`'s card is overlay.png's.
     WindowStage {
         id: oldGitActTimer
         name: "old_git"
@@ -459,7 +483,8 @@ Item {
     // PGG_AUTO_ACT=no-lfs / no-lfs-card: the run's git answers `git lfs` as a git without Git LFS does
     // (`verify-ui --no-lfs`, staged by the verb's name), over a preset with files for LFS pending (`--preset lfs`).
     // The argument is a width, or `floor` for the folded mark, as `old-git`'s is. The window sized (`sized`), then
-    // the pointer down (`pointed`, `-card`), as `old-git` does.
+    // the pointer down (`pointed`, `-card`), as `old-git` does. `-card`'s card is overlay.png's; scene.png shows it on
+    // its badge.
     WindowStage {
         id: noLfsActTimer
         name: "no_lfs"

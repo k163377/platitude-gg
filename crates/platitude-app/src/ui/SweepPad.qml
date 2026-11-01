@@ -10,6 +10,11 @@ import platitude.ui
 // rows, links and badges keep theirs. Unlike `SweepRoom`, the nearest field wins outright: a card stacks its lines,
 // and demanding a value's columns would kill the padding band (規約 §右のペインの字は掴める). A plain `MouseArea`
 // (rules-refs/app-ui.md「手の実装は素の `MouseArea`」).
+//
+// Where it goes on a scrolling surface: inside a `Flickable`, the pad lies inside the view (`SettingsDialog`'s
+// chapters) — laid outside, it gets no press at all, the view swallowing whatever its children did not take; the
+// hand's `preventStealing` keeps a drag from turning into a flick half-way. Over a `ListView` it is the other way
+// round, the pad above the view, since `reuseItems` rebuilds the rows.
 Item {
     id: pad
 
@@ -109,7 +114,7 @@ Item {
 
     /// Automation: the card's air, sampled — a grid over the pad minus the points on a field, which leaves exactly the
     /// places a real press could reach this hand. A run pressing on the words would go green with this hand taken out
-    /// (verbs.md の `details-sweep`「余白経由が要」).
+    /// (as `details-sweep`'s, `AutoActDetailsVerbs.detailsSweepTimer`).
     function airPoints(steps) {
         const out = []
         for (let i = 0; i < steps; i++) {
@@ -142,7 +147,8 @@ Item {
     /// Automation: every point of this pad's air swept in turn, as the one line every surface with this hand reports.
     /// `all=`, since how much air there is depends on the words and the machine; `reach=` beside it, since a reach that
     /// works from one point only is what a single point hides; `miss=` is the first start that came away with nothing,
-    /// not the last try. `extra` goes ahead of the numbers so a `must_say` naming it reads as one run of words.
+    /// not the last try. `extra` goes ahead of the numbers so a `must_say` naming it reads as one run of words
+    /// (`card_sweep … hand=true open=true`). A new surface's verb calls this and writes no line of its own.
     function sweepAir(steps, extra) {
         const air = pad.airPoints(steps)
         let reach = 0

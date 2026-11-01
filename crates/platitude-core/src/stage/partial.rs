@@ -33,7 +33,9 @@ use super::whole::unstage_paths;
 /// Its fingerprint is checked *before* the mark: marking first would change
 /// which command the diff even is. The diff read after the mark, which the
 /// patch is built from, has to hold the same hunks as the one checked — a
-/// file moved in between would have the selection counted in other lines.
+/// file moved in between would have the selection counted in other lines,
+/// and git would stage those with exit 0 (a `post-index-change` hook makes
+/// the move: `an_untracked_file_that_moves_under_the_mark_is_refused_as_stale`).
 pub async fn apply_partial(
     executor: &GitExecutor,
     repo: &RepoInfo,
@@ -139,7 +141,12 @@ async fn apply_prepared(
     let mut cmd = GitCommand::new()
         .cwd(workdir)
         // `--whitespace=nowarn` pins behavior against `apply.whitespace`:
-        // the patch lands byte-for-byte.
+        // the patch lands byte-for-byte. `core.safecrlf=true` is passed by
+        // as git's own `add -p` passes it (git 2.55: `add` dies with
+        // `fatal: LF would be replaced by CRLF`, `add -p` stages, 0):
+        // `apply --cached` converts nothing, and neither `hash-object`
+        // without `-w` nor `add -n` checks. The index gets `add -p`'s
+        // bytes, so no check is added here.
         .args(["apply", "--cached", "--whitespace=nowarn"]);
     if side == PatchSide::Reverse {
         cmd = cmd.arg("--reverse");
@@ -155,7 +162,13 @@ async fn apply_prepared(
 /// check and it is `kind`'s refusal. Another git holding the index (128 —
 /// only `--cached` takes its lock) is the lock's report for the same verb
 /// ([`locked_kind`]). A diff that reads the same was turned down for a
-/// reason of git's own, and git's words are the answer.
+/// reason of git's own, and git's words are the answer: exit 1 alone is no
+/// proof of a move — a hunk with no context lines misses mid-file with
+/// nothing moved.
+///
+/// Pinned by `stage_integration::refusals`: the three moves mock
+/// `details::file_diff_raw`, the first read before the move and the rest
+/// after it.
 async fn apply_built(
     executor: &GitExecutor,
     workdir: &Path,
@@ -247,6 +260,9 @@ pub async fn discard_partial(
 
 /// Number of hunks in the diff a target currently produces (the range the
 /// UI may address with [`HunkSelect`]).
+///
+/// Not bridged to the app, and not to be: the app counts hunks off its
+/// diff row model.
 pub async fn hunk_count(
     executor: &GitExecutor,
     workdir: &Path,

@@ -17,7 +17,9 @@ use crate::subprocess::run_captured;
 
 /// The helper the app starts for an interactive rebase, from beside its own
 /// binary (platitude-core's `sequencer::run::HELPER_NAME`). Built with the
-/// app, as a bin of the core crate.
+/// app, as a bin of the core crate — which a build of `-p platitude-app`
+/// does not make: whatever assembles a distribution builds the whole
+/// workspace (`app_build::shipped_exe` names no package).
 const HELPER: &str = "pgg-todo-editor";
 
 /// Where the bundle's own binaries find their frameworks.

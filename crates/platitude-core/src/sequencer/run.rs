@@ -86,7 +86,9 @@ pub async fn rebase_interactive(
         return Ok(RebaseOutcome::Done);
     }
     // All drops is fine onto an upstream; under `--root` git would leave the
-    // branch on its made-up placeholder (empty tree, no message).
+    // branch on its made-up placeholder (empty tree, no message). Widening
+    // the range by one instead takes in the merge below it, which
+    // `plan_edit` refuses.
     if options.root && steps.iter().all(|s| s.action == TodoAction::Drop) {
         return Err(report::drop_all_commits());
     }
@@ -202,7 +204,9 @@ fn not_a_stop(said: &str, trace: &Trace) -> bool {
 /// Which refusal a replay that ended non-zero was, for one stopped over a
 /// commit turned down rather than to be settled: a plan is one press, so it
 /// is put back and reported (デザイン規約 §答えの要らない報せ), where a
-/// conflict or an `edit` stop is the reader's to carry on. Only what git
+/// conflict, an `edit` stop or a pick left empty is the reader's to carry
+/// on (a refusal left on the band would have no words of its own on
+/// screen). Only what git
 /// said or recorded names it. A commit hook that ended non-zero first — on
 /// a pick, in git's words; on a reword's `exec` or a squash's last commit,
 /// a `git commit` of its own, whose no git adds no words to

@@ -306,8 +306,7 @@ network_timeout_secs = 9
         );
     }
 
-    /// One mistyped key costs only itself (rules-refs/core.md「読みは
-    /// `toml::Table` からキーごとに取る」).
+    /// One mistyped key costs only itself (the `settings` module doc).
     #[test]
     fn a_negative_interval_falls_back_to_the_default() {
         let text = "[defaults]\nauto_fetch_minutes = -5\n";

@@ -113,8 +113,7 @@ pub struct ChosenRow {
     pub avatar_url: String,
     pub mates: Mates,
     /// The lane to the row listed above and to the one below — "", "solid"
-    /// or "dashed" (`GraphModel::chosen_lanes`, デザイン規約
-    /// §複数のコミットを選ぶ).
+    /// or "dashed" (`GraphModel::chosen_lanes`).
     pub lane_above: String,
     pub lane_below: String,
 }

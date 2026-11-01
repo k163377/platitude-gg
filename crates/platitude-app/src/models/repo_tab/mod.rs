@@ -62,7 +62,9 @@ mod write_watch;
 use write_watch::WriteWatch;
 
 /// Failed fetches in a row before the timer is stopped — more than one,
-/// so a brief offline blip does not stop it.
+/// so a brief offline blip does not stop it. Stopped at all so a machine
+/// whose network does not come back stops reaching out every interval;
+/// only the fetch button's `Resume` starts it again.
 const FETCH_FAILURES_BEFORE_STOP: i32 = 3;
 
 pub struct RepoTab {
@@ -72,7 +74,8 @@ pub struct RepoTab {
     repo_path: String,
     /// Where the picker opens, as a URL: the folder holding the
     /// repository's own worktree (`Hub::home_worktree`), not a linked
-    /// worktree's — repositories sit side by side.
+    /// worktree's — repositories sit side by side (user decision — ask
+    /// before changing).
     picker_folder_url: String,
     /// Why the repository would not open, in git's words. Read only on
     /// the `other` kind — the heading names the other two.
@@ -198,10 +201,24 @@ pub struct RepoTab {
     ///
     /// Two quick selections leave two reads racing; the stale one landing
     /// would take the one seat and the pane's own answer would never show.
-    /// Dropped here (デザイン規約 §署名の表示「答えはその選択限り」).
+    /// Dropped here: an answer is the selection's that asked for it, and
+    /// coming back to a row asks again — one gpg / ssh-keygen run, which
+    /// the details never wait for; the mark starts absent, so it lands
+    /// late without a flicker.
+    /// Let through, the picture left is "no answer yet", which reads as
+    /// unsigned, and nothing asks again, so it stays. Core drops the same
+    /// question first (`session::latest::Latest` cancels the read before:
+    /// signature, remote branch, an out-of-window HEAD's published), so
+    /// this match is the second wall.
     ///
     /// A plain member: QML matches the answer against its own selection
-    /// (`RepoPage.signatureIsForSelection`).
+    /// (`RepoPage.signatureIsForSelection`). That match is no wall — it
+    /// sees a mismatch but cannot bring a dropped answer back.
+    ///
+    /// One seat, one asker: a seat read straight off drops stale answers
+    /// here; where several ask, each holds its own answer instead (HEAD's
+    /// published on the record with its oid, `WorktreeModel.headPublished`;
+    /// a plan's count on the plan, `pushedCount`).
     signature_wanted: String,
     /// Author identity; `identityReady` false means git cannot commit yet
     /// and the UI should ask for a name and address.
@@ -279,25 +296,35 @@ pub struct RepoTab {
     /// The most recently finished write: git's message (empty on success)
     /// and a counter QML compares to spot a new one — the bridge carries
     /// only parameterless signals. Shown raw; what an answer means is the
-    /// group below.
+    /// group below. The one raw mouth QML still reads (the push flow's
+    /// words); everything else QML reads is classified, and the page's
+    /// `absorbWriteResult` keeps only the UI's sequencing.
     last_write_error: String,
     /// git stopped part-way through the write in flight. Raised by the
     /// message before that write's answer, which takes it as its own
     /// (`WriteAnswer::stopped`).
     last_write_stopped: bool,
+    /// Every write answer this tab heard — the timer's and an opening's
+    /// fetches as well as its own — so no run waits on it: one landing
+    /// between a press and git taking the write, with `busy_count` at 0,
+    /// passes for it and the picture is of the page before the write
+    /// (`write_watch` matches by id). Kept to number the answers
+    /// (`WriteAnswer::seq`) for a reader holding no id.
     write_seq: i32,
     /// Every change to what the discard log lists (`TabMsg::DiscardsChanged`):
     /// a write that left something only the log reaches, a line on Platitude
-    /// GG's own record, a restore. The page reads the open log again on each
-    /// (破棄記録仕様.md).
+    /// GG's own record, a restore — and the answer of a write that takes a
+    /// name a restore would go under (`drain::names_taken`). The page reads
+    /// the open log again on each.
     discard_seq: i32,
     /// The same, less the restores: what took something away, which the
-    /// page's seat blinks for.
+    /// page's seat blinks for. Told by the event alone (an empty
+    /// `restored`), never by the write's kind here.
     taken_seq: i32,
     /// Restores that brought something back, and how the last one's work
     /// came back — `"whole"`, `"unstaged"` (its staged half did not go back
     /// staged) or `"stash"` (it would have conflicted, and waits as a stash
-    /// entry); the least whole of its parts (破棄記録仕様.md §4).
+    /// entry); the least whole of its parts (`discards::restore`).
     restore_seq: i32,
     restore_how: String,
     /// This tree's paced reads that have ended (`TabMsg::PacedRead`): the
@@ -322,6 +349,9 @@ pub struct RepoTab {
     /// The shown diff is to be read again: a landed stage / unstage /
     /// discard / commit / stash moved it, and a refused stage / unstage /
     /// discard may have been refused because the rows on screen drifted.
+    /// Removing untracked files alone answers as op `discard` too (there
+    /// is no `clean` op), so it reads the open diff once more and settles
+    /// the same: a widening on purpose.
     write_stale_diff: bool,
     /// HEAD moved (a checkout or a reset landed), so the worktree
     /// under an open diff was rewritten.
@@ -345,9 +375,16 @@ pub struct RepoTab {
     /// (`drain::absorb`), so a run's answer and the fetch behind it reach
     /// QML as one `changed`: read off the group, the run's answer and its
     /// stop are lost to the fetch. What waits for one answer looks here.
+    /// The report is the answer's own (`writeAnswerReportKind` and its
+    /// three siblings): two refusals in one drain would leave the group
+    /// only the later. `writeAnswerIndex(id)` finds one by id (-1 for
+    /// none); ids come only from `ask_session`, and reach QML only for
+    /// `popStash`. The bridge gets one slot per field, added with its
+    /// `TabMsg` once something reads it.
     ///
     /// Emptied at the top of every drain, or a notify raised elsewhere
-    /// would have the list read a second time.
+    /// would have the list read a second time (the `seq` turns away an
+    /// answer already counted).
     write_answers: Vec<WriteAnswer>,
     /// The commit the editor sent, waiting for the answer that empties
     /// its boxes — by the id the press wrote down

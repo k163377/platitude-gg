@@ -21,8 +21,10 @@ Item {
     property int askedWidth: 0
     property int askedHeight: 0
 
-    /// Lifts a windowed window standing under its floor (maximised and minimised are the platform's to size). The
-    /// lifted size goes into `asked*` too, or the growth would read as frame slop and shrink every later save.
+    /// Lifts a windowed window standing under its floor (maximised and minimised are the platform's to size): a floor
+    /// that rises grows the window — unfolding the left list on a window at its floor is the case, and fold → shrink →
+    /// unfold holds only through this — and a saved shape under the floor is lifted at launch. The lifted size goes
+    /// into `asked*` too, or the growth would read as frame slop and shrink every later save.
     function holdFloor() {
         if (shape.window.visibility !== Window.Windowed)
             return
@@ -37,7 +39,9 @@ Item {
     }
 
     /// Keep the configured size whatever the screen holds ([`insideScreen`]) — for headless runs, whose offscreen
-    /// screen is 800x800. False unless written from outside.
+    /// screen is 800x800. False unless written from outside: `WindowHarness` sets it off `Harness.automated`, so only
+    /// a window a person looks at is pulled in. Not told apart by the settings file: verify-ui always passes
+    /// `PGG_CONFIG_DIR`, and told apart wrongly every screenshot comes out 800 wide.
     property bool keepSavedSize: false
 
     /// A remembered length, kept inside one screen's width or height — not `Screen.desktopAvailableWidth`, which
@@ -48,7 +52,14 @@ Item {
 
     /// The screen the saved top-left corner falls on, or `null` for an unsaved position or a screen no longer here.
     /// The saved place decides the screen: `Screen` is wherever the platform just put the window (on Windows, the
-    /// pointer's screen), and measuring against it sizes and pulls the window to the wrong monitor.
+    /// pointer's screen), and measuring against it sizes and pulls the window to the wrong monitor. What crosses to the
+    /// platform is the screen's device name (`AppBackend.fitWindowToScreen`), never a coordinate: Qt's coordinates are
+    /// Qt's own and part from Windows' across two screens at different scales. An empty name (first run, the saved
+    /// screen gone) fits the window to its own nearest monitor.
+    ///
+    /// The entries of `Qt.application.screens` are `QQuickScreenInfo` (`qquickscreen_p.h`): `name`, `width`, `height`,
+    /// `devicePixelRatio`, `virtualX`, `virtualY`. A property not in that list reads `undefined` without an error, so
+    /// a coordinate looked up under another name falls through to "no screen" silently.
     ///
     /// Takes the list so `tst_windowshape` can hold it against a desktop this machine does not have.
     function screenHolding(x, y, screens) {
@@ -104,10 +115,15 @@ Item {
         }
     }
 
-    /// Everything the next launch should come back to (rules-refs/core.md — settings.toml / state.toml).
+    /// Everything the next launch should come back to (core `settings` module — settings.toml / state.toml). The one
+    /// place that reports it, on `stateTimer` and not per change: a drag moves the window every frame. `Main` keeps
+    /// only a same-named one-line forward (the harness calls it there). Whether to write is Rust's, comparing with
+    /// the last write (`Hub::flush_state`). The last report goes out from both `Main.onClosing` and `Hub::shutdown`:
+    /// `Qt.quit()` emits no `onClosing`.
     function reportState() {
         // Minimised, a window reports neither its windowed nor its maximised shape (Windows): saving it would write
-        // a size wider than the screen and clear the maximised flag.
+        // a size wider than the screen and clear the maximised flag. The timer runs on while it is down, and that
+        // shape filed as windowed puts the next launch past the screen's edge. Headless: `state minimize`.
         if (shape.window.visibility !== Window.Minimized)
             AppBackend.saveWindow(shape.window.x, shape.window.y,
                                   shape.window.width - shape.widthSlop,

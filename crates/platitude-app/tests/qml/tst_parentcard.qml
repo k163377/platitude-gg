@@ -2,7 +2,7 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// The parents' card under a real pointer (デザイン規約 §右のペインの親): a press let go where it landed goes to that row's
+// The parents' card under a real pointer (`ParentListCard`): a press let go where it landed goes to that row's
 // parent and takes the card down, one that travels selects the hash and goes nowhere, and a row under the hand wears
 // the wash. The headless verbs enter the hands' own functions, so whether Qt hands the press to them is asked here.
 Item {
@@ -85,7 +85,7 @@ Item {
         }
 
         // One hash wide, on the seat the line keeps for it: every hash whole, and no more air than a row's
-        // (デザイン規約 §右のペインの親). The card and the line build the seat apart, so the two are held together here.
+        // (`ParentListCard`). The card and the line build the seat apart, so the two are held together here.
         function test_e_the_card_is_one_hash_wide_on_the_line_s_seat() {
             compare(card.hashInset, seatPlate.unrollInset, "the card's air is the air the line keeps")
             compare(card.hashWidth, seatPlate.hashWidth(seatPlate.wholeDigits), "a whole hash, priced as the line's")

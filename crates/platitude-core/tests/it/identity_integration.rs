@@ -73,7 +73,10 @@ fn config_path(path: &Path) -> String {
 /// An identity is two `git config` calls, each taking the file lock, so
 /// the second can fail alone — and then `is_complete()` says yes while the
 /// address is the one being replaced. A multi-valued `user.email` refuses
-/// a plain set every time, which makes it the shape to test against.
+/// a plain set every time (`cannot overwrite multiple values`, exit 5)
+/// while `user.name` beside it lands, which makes it the shape to test
+/// against. A `.git/config.lock` laid first takes neither half (the test
+/// below); the read-back needs no lock.
 #[tokio::test]
 async fn a_write_that_only_half_lands_says_which_half() {
     let mut repo = TestRepo::init();

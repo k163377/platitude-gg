@@ -1,6 +1,26 @@
 //! The marks: where a plain `git push` goes when configuration decides
 //! it, and which remote this repository calls origin — reading them,
 //! setting the repository's, and clearing it.
+//!
+//! How git treats `remote.pushDefault` (measured on git 2.55): a push
+//! resolves `branch.<n>.pushRemote`, then `remote.pushDefault`, then
+//! `branch.<n>.remote` (`super::plan_push`), so with the mark set a branch
+//! tracking `origin/main` sends its same-named refspec to the marked
+//! remote. A name that is no remote is taken for a URL (`'nope' does not
+//! appear to be a git repository`). An empty local value does not cancel
+//! a global one — the push fails with `No configured push destination.` —
+//! so git has no way to drop the mark for one repository. `git remote
+//! rename` / `remove` carry the local `pushDefault` / `pushRemote` along
+//! but only warn about the global ones and leave them. `@{push}` /
+//! `%(push:short)` cannot be relied on: under the default
+//! `push.default=simple` a triangular setup answers `cannot resolve
+//! 'simple' push to a single destination` or nothing (they answer under
+//! `push.default=current`), so the application resolves the destination
+//! itself.
+//!
+//! `--get-regexp` hands the keys back lower-cased (`remote.pushdefault`),
+//! which is what the parsers here match; the remotes listing's
+//! `^remote\..*\.(url|pushurl)$` never takes the mark for a remote.
 
 use std::path::Path;
 
@@ -42,6 +62,17 @@ impl PushDefault {
 /// name carried by several from (`checkout.defaultRemote`). Read as two
 /// because `git remote rename` / `remove` update only
 /// `remote.pushDefault`, so a remote can hold one without the other.
+///
+/// Both keys, written together (user decision — ask before changing).
+/// Without `checkout.defaultRemote`, `git switch topic` with `topic` on
+/// two remotes fails `fatal: 'topic' matched multiple (2) remote tracking
+/// branches` (exit 128); with it, it answers `set up to track
+/// 'fork/topic'`. Only a remote both keys name is marked (the app's
+/// `RepoTab.markedOrigin`). The badge, the default destination and the
+/// status tick follow `remote.pushDefault` alone, which every tick reads;
+/// a `checkout.defaultRemote` rewritten in the global config shows at the
+/// next write or ref move. Pinned by `push_default_integration::periodic`
+/// (stage 3).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct OriginMarks {
     /// The push's, with the level that set it.
@@ -63,7 +94,9 @@ pub struct BranchPushRemote {
 /// [`OriginMarks`], and every branch's own push mark, in branch name order
 /// — what a menu on a branch the worktree is not on weighs where its push
 /// goes by (`session::RefsSnapshot::branch_push`). The branch the worktree
-/// is on is read fresh on every status tick instead ([`push_marks`]).
+/// is on is read fresh on every status tick instead ([`push_marks`]), and
+/// the snapshot holds neither its marks nor its counts; a send reads its
+/// branch's keys again by name.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct KeptMarks {
     pub origin: OriginMarks,
@@ -177,10 +210,11 @@ fn each_scoped_record(bytes: &[u8], mut each: impl FnMut(&str, &str, Option<&str
 /// the fetch refspecs that name the tracking ref of that.
 ///
 /// The one reader of one branch's keys, shared by [`super::plan_push`] and
-/// the status tick: a second spelling lets the label name a remote the
-/// push never goes to (rules-refs/core.md「push の印の読みは
-/// `remote::push_marks` 1 本だけ」). Every branch's own mark at once is
-/// [`kept_marks`]'s.
+/// the status tick: a second spelling, in another layer, lets a fork
+/// workflow's label name a remote the push never goes to. The destination
+/// is likewise resolved once, by the pure `super::push_target` in
+/// `plan_push`'s order. Every branch's own mark at once is
+/// [`kept_marks`]'s. Net: `push_default_integration`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PushMarks {
     /// The branch's own mark, which beats every other (order:

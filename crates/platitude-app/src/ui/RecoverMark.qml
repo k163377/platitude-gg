@@ -3,12 +3,16 @@ import QtQuick.Controls.Fusion
 import platitude.ui
 
 // The discard log's mark for an entry or a part (`RecoverEntries`): what kind of thing it took, in its section's
-// tint, and where (P3-確認事項 §破棄記録と復元):
+// tint, and where (user decision — ask before changing):
 // - here alone: the kind's mark
-// - a remote's alone: for a tag, the tag a step down with the cloud on its shoulder (`ShoulderBadge`) — a remote's
-//   branch is the cloud itself, REMOTES' mark
+// - a remote's alone: for a tag, the tag a step down with the cloud on its shoulder (`ShoulderBadge`) — the cloud
+//   alone would not say tag, and the pair below means something else; a remote's branch is the cloud itself, REMOTES'
+//   mark
 // - here and on a remote at once: the kind over the cloud across a slash — two things taken, two marks — a fraction
-//   like `ActionButtonSeat`'s in `iconXs` halves, wider than one mark by `pairSpread`
+//   like `ActionButtonSeat`'s in `iconXs` halves, wider than one mark by `pairSpread`: the one mark whose seat is
+//   wider than `MarkSeat`'s one width (a special design)
+//
+// The band's lines are one part each, so they never pair: of them, only a remote's tag wears the shoulder cloud.
 Item {
     id: mark
 

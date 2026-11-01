@@ -1,7 +1,7 @@
 import QtQuick
 import platitude.ui
 
-// What the discard log's rows say (破棄記録仕様.md §3): one operation that took something away, as the model reads it —
+// What the discard log's rows say: one operation that took something away, as the model reads it —
 // `{key, kind, name, remote, worktree, worktreePath, at, lost, parts, byPart}`, each part `{restore, name, with, look,
 // tip, remote, lost, files, notCopied, worktreePath}` (`DiscardModel.rows`). The rows draw `{key, mark, tint, badged,
 // paired, title, titleMarks, listTitle, listMarks, at, worktree, worktreeMark, parts, byPart}`, each part `{mark, tint,
@@ -9,7 +9,16 @@ import platitude.ui
 // `RecoverMark`) — the words are said here, where they can be translated.
 //
 // The verbs are the ones other tools bring things back with: GitHub's `Restore branch`, the Windows Recycle Bin's
-// `Restore all items` (`RecoverBand`).
+// `Restore all items` (`RecoverBand`). The times, what each part took and what its restore makes of it, and the
+// marks' tints are user decisions too — ask before changing.
+//
+// No word says what kind a thing is — the mark in front of its name does (user decision — ask before changing;
+// デザイン規約 §ref の種別「ref の名前の印」): `as %1, tracking %2`, `Deleted %1 here and on %2`, `Removed %1`,
+// `Force-pushed %1 to %2`, never `as branch …`, which says it twice. What has no name keeps git's words
+// (`Discarded 2 files`, `Left a detached HEAD`). A left menu row opens on the kind's mark and says the verb and the
+// thing's own name — a stash by its message (`Dropped On main: experiment`; the card's sentence keeps
+// `Dropped a stash`) — its names code too, with no mark of their own (user decision: bare, a name sinks into the
+// sentence).
 QtObject {
     id: shown
 
@@ -240,7 +249,7 @@ QtObject {
             return part.lost === 0 ? qsTr("No commits of its own") : shown.commits(part.lost)
         }
     }
-    /// What the restore makes of it (破棄記録仕様.md §4) — a branch at the old tip under its own name where that is
+    /// What the restore makes of it — a branch at the old tip under its own name where that is
     /// free and with the suffix where it is not, the tag on its own object, the worktree where it was, the stash
     /// back in the list, the work back in the worktree it was thrown out of.
     function restoredAs(part) {

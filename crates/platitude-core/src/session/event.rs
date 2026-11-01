@@ -202,7 +202,7 @@ pub enum SessionEvent {
         lfs_needed: usize,
         /// Of those, the paths a discard could not copy — the filter is
         /// required, so `git add` refuses them ([`crate::lfs::required`],
-        /// 破棄記録仕様.md §2.1): their discard is not brought back. Empty
+        /// `discards::copy`): their discard is not brought back. Empty
         /// wherever the filter is not required. Shared like `eol_marks`.
         not_copied: Arc<Vec<String>>,
         /// Why a standing rebase stopped: the tree alone cannot tell an
@@ -219,9 +219,12 @@ pub enum SessionEvent {
     /// Its own event because it is asked several times a second and costs
     /// no process (files under the git directory), where the status
     /// snapshot costs a whole-tree `git status`
-    /// (`ci/baseline/poll-cost-windows-x64.md`). The state rides with the
-    /// count: a short rebase is over before the poll tick that would have
-    /// raised the badge.
+    /// (`ci/baseline/poll-cost-windows-x64.md`) — which is why it can run
+    /// on `Metrics.opProgressMs` (the badge's `n/m` rides this tick: user
+    /// decision — ask before changing). The state rides with the count:
+    /// a short rebase is over before the poll tick that would have raised
+    /// the badge, and a count without it would arrive where no badge
+    /// stands (`opText` is what draws the band).
     OpProgress {
         op_state: OpState,
         progress: Option<conflict::Progress>,
@@ -344,7 +347,9 @@ pub enum SessionEvent {
     WorktreesLoaded {
         worktrees: Vec<crate::worktrees::WorktreeEntry>,
         /// When this listing looked, as [`Self::StashesLoaded`]: a removed
-        /// worktree's row waits on a listing that saw the removal.
+        /// worktree's row waits on a listing that saw the removal. Without
+        /// the stamp a listing read before the write cannot be told from one
+        /// after it, and draws the removed row back right after the answer.
         looked: u64,
     },
     DetailsLoaded {
@@ -430,8 +435,8 @@ pub enum SessionEvent {
         tip: Option<Oid>,
     },
     /// What the discard log lists changed under a write: Platitude GG's own
-    /// record gained a line (破棄記録仕様.md §2), or a restore brought parts
-    /// back (§4). `restored` is how each part came back, in order; empty
+    /// record gained a line (`discards::record`), or a restore brought parts
+    /// back (`discards::restore`). `restored` is how each part came back, in order; empty
     /// for a write's record.
     DiscardsChanged {
         restored: Vec<crate::discards::Restored>,
@@ -517,6 +522,10 @@ pub enum SessionEvent {
         /// Whether the reader asked for it. A row nobody asked for raises
         /// no panel and reddens no mark
         /// (デザイン規約 §git が言ったことを読む場所).
+        ///
+        /// Decided by the handle the command ran on (`process::Kept`, plugged
+        /// in through `GitExecutor::observed`) and carried on the row, so a
+        /// panel that opens always holds the command that opened it.
         asked: bool,
         /// The write this command ran under (its acceptance id), so a
         /// compound write reads as one operation. `None` for a read; a

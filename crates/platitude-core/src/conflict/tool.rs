@@ -25,7 +25,10 @@ const MERGETOOL_ARGS: [&str; 2] = ["-c", "mergetool.writeToTemp=true"];
 ///
 /// Runs until the person is done; cancelling the session stops it. The
 /// tool must not need a console (no terminal tools such as vimdiff); a
-/// windowed tool or a script that writes `$MERGED` both work.
+/// windowed tool or a script that writes `$MERGED` both work. git does not
+/// trust a user-defined `cmd` tool's exit code: it compares the file's
+/// mtime with the backup's, so a tool closed without saving is a failure
+/// and the conflict markers come back.
 pub async fn mergetool(
     executor: &GitExecutor,
     workdir: &Path,
@@ -51,6 +54,10 @@ pub async fn mergetool(
 /// `--tool` too: `--no-prompt` does not cover git's guessing path, which
 /// asks on the closed stdin. Paced by the person in the tool
 /// (`process::Pace`).
+///
+/// A function of its own so its test reads the line with `describe()`:
+/// `mergetool` asks git for the tool first, so `refusing::git()` never
+/// reaches the launch.
 fn mergetool_command(workdir: &Path, tool: &str, paths: &[String]) -> GitCommand {
     GitCommand::new()
         .cwd(workdir)
@@ -97,12 +104,19 @@ static INSTALLED: tokio::sync::OnceCell<Vec<String>> = tokio::sync::OnceCell::co
 /// Seconds on Windows (ci/baseline/code-costs-windows-x64.md): keep it off
 /// the write queue, with nothing waiting on it.
 ///
-/// Terminal tools are dropped (there is no console), by git's own prose
-/// marker; if that wording changes this returns nothing, which falls back
-/// to the caller's text field. `emerge` is lost too; typing it still works.
+/// Terminal tools are dropped (there is no console) — `--gui` does not
+/// narrow `--tool-help` — by git's own prose marker; if that wording
+/// changes this returns nothing, which falls back to the caller's text
+/// field. `emerge` is lost too; typing it still works. Dropping too many
+/// is the side to err on, since a dropped name can still be typed.
 ///
-/// The pre-merge tests mock this (`mock_available_tools`); mry copies what
-/// a mock matches on, so the borrowed arguments are skipped.
+/// The pre-merge tests mock this (`mock_available_tools`, under
+/// `#[mry::lock(conflict::available_tools)]`): the real read is a machine
+/// inventory, seconds on its own and silent past `QUIET_BUDGET` under load.
+/// The tests that read the real one are `periodic`
+/// (`session_integration::merge_tools::periodic`,
+/// `integrate_integration::mergetool::periodic`). mry copies what a mock
+/// matches on, so the borrowed arguments are skipped.
 #[mry::mry(skip_args(GitExecutor, Path, CancellationToken))]
 pub async fn available_tools(
     executor: &GitExecutor,
@@ -201,6 +215,10 @@ pub async fn set_merge_tool(
         let cmd = GitCommand::new()
             .cwd(workdir)
             // Exit 5 is "nothing was set" — the same outcome as clearing.
+            // Marked as 1, it would be a failed row, and closing the
+            // settings card would throw the command panel up. A multi-valued
+            // key also exits 5 and stays, so "gone" is not certain; the
+            // refresh right after shows the real value.
             .answers_by_code(5)
             .args(["config", "--global", "--unset", "merge.guitool"]);
         let out = executor.run_unchecked(cmd, cancel).await?;

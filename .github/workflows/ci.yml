@@ -42,6 +42,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
     steps:
+      # An anchor: the deny job reuses this step (*checkout) — GitHub expands
+      # an anchor across jobs.
       - &checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -136,7 +138,8 @@ jobs:
     steps:
       - *checkout
       # `check` with no argument runs all four; advisories pull the RustSec DB
-      # from github.com.
+      # from github.com. No toolchain step: the action's container installs
+      # what rust-toolchain.toml names.
       - name: cargo-deny (advisories / bans / licenses / sources)
         uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:

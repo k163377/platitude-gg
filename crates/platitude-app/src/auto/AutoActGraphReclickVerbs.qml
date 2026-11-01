@@ -40,6 +40,10 @@ Item {
                    || act === "graph-reclick-scrolled" || act === "graph-reclick-mark"
                    || act === "graph-reclick-still") {
             // The argument is `<行>[:<付ける名前>]` (row 0 by default); `graph-rename` carries the gesture to git.
+            // Rows by kind: `--preset tags` row 0 is `main` (`kind=branch`); `--preset basic` row 4 is `origin/main`
+            // (`kind=remote`, the box holding `main` alone) and row 5 `feature/topic-a`. `-scrolled` runs on
+            // `--preset deep`, whose history has 200 rows to scroll away. `-mark`'s mark is one `bgHover` layer: read
+            // it cut out NEAREST at 3× or more, or on the board at a whole multiple — a full view loses it.
             const renameCut = arg.indexOf(":")
             reclickGraphTimer.row = Number(renameCut < 0 ? (arg === "" ? "0" : arg) : arg.substring(0, renameCut))
             reclickGraphTimer.naming = renameCut < 0 ? "" : arg.substring(renameCut + 1)
@@ -60,7 +64,8 @@ Item {
             // The same gesture, stopped at the box with words in it: `<行>[:<列幅>[/<レーン列幅>][:<打つ文>]]`, a
             // column left at its width where its part is empty — the lanes squeezed below what they need raise the
             // strip over them (`GraphLanePan`). Without the last part the box holds the name it opened with; with it
-            // empty, the box is rubbed out.
+            // empty, the box is rubbed out (`0::`, the placeholder its floor). To show a box growing as it is typed
+            // into, run the same row once per text, each the one before with more after it.
             const fitParts = arg.split(":")
             reclickGraphTimer.row = fitParts[0] === "" ? 0 : Number(fitParts[0])
             if (fitParts.length > 1 && fitParts[1] !== "") {
@@ -81,6 +86,9 @@ Item {
             reclickGraphTimer.start()
         } else if (act === "graph-reclick-list" || act === "graph-reclick-across" || act === "ref-list-pick") {
             // At the card the chip unfolds into; the argument `<行>[:<カードの行>]` defaults to the card's first row.
+            // `--preset basic`'s `5:0` (`feature/topic-a`) for `-across` and `ref-list-pick`: the pick needs a row
+            // with somewhere to go — on `--preset tags` row 0's card rows all go nowhere, so nothing moves and the run
+            // sits to the watchdog.
             const listParts = arg.split(":")
             reclickListTimer.row = listParts[0] === "" ? 0 : Number(listParts[0])
             reclickListTimer.card = listParts.length > 1 ? Number(listParts[1]) : 0
@@ -95,7 +103,9 @@ Item {
             reclickListTimer.start()
         } else if (act === "ref-list-held") {
             // The double-click on a card row naming a branch another worktree has out: the tab goes and stands in
-            // that worktree, as the graph row's own double-click does. Argument `<行>:<カードの行>`.
+            // that worktree, as the graph row's own double-click does. Argument `<行>:<カードの行>` and
+            // `--preset worktrees`, both required: `1:0` is `feature/topic-a`, held by `topic`; `1:1` is the folder of
+            // a worktree with no branch, a row that goes nowhere (a folder is no ref — `GraphRowDelegate.nameChip`).
             const heldParts = arg.split(":")
             listHeldTimer.row = Number(heldParts[0])
             listHeldTimer.card = heldParts.length > 1 ? Number(heldParts[1]) : 0
@@ -355,9 +365,11 @@ Item {
     }
     // PGG_AUTO_ACT=graph-reclick-elsewhere: the two clicks with something between them, twice — a press on the details
     // pane (`pane=`), then a step down the history and back up (`step=`) — each time the click back is a first one;
-    // the next one names (`armed=` / `box=`; デザイン規約 §左メニューの所作「間を空けた 2 回目」). Every press goes in as
+    // the next one names (`armed=` / `box=`; `ReclickGesture`'s header). Every press goes in as
     // a hand's does, the window's watcher first (`FocusRelease.pressedAt`), and the steps where the arrows enter
-    // (`GraphPane.stepRow`).
+    // (`GraphPane.stepRow`). `pane=false` alone passes a dead gesture too, so it is read with `armed=` / `box=`. A
+    // press inside a card never reaches the window's watcher: that road is `tests/qml/tst_reclickaway.qml`'s (the
+    // card's face hears it).
     PageStage {
         id: elsewhereClickTimer
         name: "reclick_elsewhere"

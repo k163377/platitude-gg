@@ -6,8 +6,9 @@ import QtQuick
 /// Topmost, and a `PointHandler` (rules-refs/app-ui.md「画面全体の入力観測は最前面オーバーレイ + `PointHandler`」): lower
 /// down it misses presses a row's MouseArea takes, and a TapHandler would swallow the press.
 ///
-/// A modal dialog needs one of its own, on its face behind everything drawn — the window's cannot reach the overlay
-/// (rules-refs/app-ui.md「モーダルには窓の `FocusRelease` が届かない」, `tests/qml/tst_fieldrelease.qml`).
+/// A modal dialog needs one of its own, on its face behind everything drawn — the window's stands under the overlay a
+/// modal is drawn in and cannot reach it (`AppDialog`). Net: `tests/qml/tst_fieldrelease.qml` (a row's `TapHandler`
+/// and bare air are the only targets that do not drop the caret).
 Item {
     id: watcher
 
@@ -46,8 +47,11 @@ Item {
     }
     /// The keyboard from `box` to `to`. A focus scope handed the focus passes it straight back down to the child that
     /// last held it — the page is one, and so is a list or a scroll view between — so while `to` stands above the box,
-    /// every link up to it lets go first, or the caret comes back to the box it was walked away from
-    /// (`tests/qml/tst_pagerelease.qml`).
+    /// every link up to it lets go first, or the caret comes back to the box it was walked away from and no box on the
+    /// page lets go of it on a press elsewhere (amend's save row, `MessageActionsRow.editing`, would never go down).
+    /// Every link, not the box alone: a `ListView` / `ScrollView` between is a scope too, and the key left there eats
+    /// the arrows. `tests/qml/tst_pagerelease.qml` holds the three ways a box stands; headless `edit-message-away`
+    /// (`page=true`).
     function letGo(box, to) {
         const links = []
         for (let link = box; link !== null; link = link.parent) {

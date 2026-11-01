@@ -15,7 +15,11 @@ pub(crate) fn pr_set() -> &'static std::collections::HashSet<String> {
 }
 
 /// One chip: what the frame says (the kind), what the name says (where
-/// the ref is), and the marks around it.
+/// the ref is), and the marks around it. A record QML reads by field
+/// name: a field added here goes into both halves of the `Record` impl
+/// (`to_map` and `from_map`, which the round-trip test pins together),
+/// the QML that reads it, and `tst_refstack.qml`'s `chip()`, which spells
+/// every field.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Chip {
     pub kind: LabelKind,
@@ -44,7 +48,11 @@ pub struct Chip {
 }
 
 /// The chips of one row in core's order (HEAD first, tags last); the
-/// row's one card shows the first.
+/// row's one card shows the first. A branch before a tag: the chip column
+/// answers where the row can go, and only a branch is somewhere to go —
+/// a tag on the same commit is a sheet behind it, read in the card.
+/// Branches and tags share the one column: split, each name would get
+/// half the width and neither would read.
 pub type Chips = Listed<Chip>;
 
 /// The word a chip's kind goes out under. A kind added here is a word to
@@ -74,6 +82,11 @@ pub fn kind_from_word(word: &str) -> Option<LabelKind> {
 /// same word for a branch, a remote branch and a tag, and `""` for the
 /// two markers (the detached HEAD, a worktree with no branch out),
 /// which name no ref.
+///
+/// The worktree's `""` is what keeps a folder chip from being a door for
+/// the double-click (its menu and its rename go by `named_kind_word`):
+/// answering `worktree` here makes it one, so settle what that gesture
+/// does first.
 pub fn ref_kind_word(word: &str) -> &'static str {
     match kind_from_word(word) {
         Some(LabelKind::LocalBranch) => "branch",
@@ -112,7 +125,10 @@ pub fn chip_key(kind: &str, name: &str) -> String {
 }
 
 /// Labels → chips. `pr` names the branches wearing the PR badge
-/// ([`pr_set`]); only a local branch wears it.
+/// ([`pr_set`]); only a local branch wears it. Handed in, not read here:
+/// the caller reads `pr_set()` once at its boundary, so encode's unit
+/// tests never read the process environment. The nav models' readers
+/// (`nav/field.rs`, `nav/drain.rs`) are that boundary and read it direct.
 pub fn chips_of(labels: &[RefLabel], pr: &std::collections::HashSet<String>) -> Chips {
     Listed::new(
         labels
@@ -142,6 +158,10 @@ const HELD_KEY: &str = "held";
 /// deleting their refs — one per kind at most, empty halves left out — and,
 /// for a worktree going, its chip (`worktree`, by the folder's name) or the
 /// mark it puts on the branch it has out (`held`, by the branch's).
+///
+/// Known gap: a chip knows its folder's name only, so another worktree on
+/// no branch whose folder has the same name, on another commit, hides too
+/// while the delete is out. The rows and core's holders go by path.
 pub fn gone_keys(branch: &str, remote: &str, tag: &str, worktree: &str, held: &str) -> Vec<String> {
     [
         ("branch", branch),

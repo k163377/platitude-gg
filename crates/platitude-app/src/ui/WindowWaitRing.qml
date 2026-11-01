@@ -4,7 +4,12 @@ import QtQuick
 import platitude.ui
 
 // The ring beside the pointer while a write that replays history is out (`OperationKind::replays_history`), over
-// every pane.
+// every pane (デザイン規約 §進行中・回数押しの定数). One, on a bare sheet inside `mainUi`; the condition is the page's
+// `replayRunning` (`replaying` plus the automation's latch). Headless: `replay-running` (`--preset replay`).
+//
+// Why at the pointer: the wait is long, and the reader is looking at the pointer — the band's badge and the buttons
+// gone unpressable are out of view. And the OS cursor is in no screenshot, so only a mark the app draws leaves this
+// state in the PNGs of both OSes. Placed as `RefusalBadge` (`WaitRing`); the OS cursor is left as it is.
 //
 // The sheet has no handler of its own (rules-refs/app-ui.md「窓全体のポインタ位置は `HandWatch`」).
 Item {

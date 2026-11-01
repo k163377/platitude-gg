@@ -3,7 +3,17 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-// One assigned avatar in the settings list — picture, name, address, held Remove (デザイン規約 §アバターを与える).
+// One assigned avatar in the settings list — picture, name, address, held Remove (`SettingsAppPane`'s AVATARS).
+//
+// `Remove` is held (規約 §回数押し): the write is immediate, with no Save or Cancel to take it back. Its words and frame
+// go red only on the row under the hand: at rest `textSecondary` words in a `borderSubtle` frame, under the hand
+// `danger` words in a `dangerDim` frame, the fill `danger` while held. Changing a setting is ordinary work, so no
+// standing state colour (規約 §状態); the frame says "this is an action" all the time, so the greyed words never read as
+// a fourth column of data. Not `dangerDim` words at rest: `*Dim` is never a text colour (規約 §暗く落とした段). **The
+// press mark stays `danger` at rest** (user decision — ask before changing; the exception in 規約 §回数押しの色): the mark
+// is the one place that says what pressing through loses, and grey it would make a removal nothing undoes look like
+// any button. The column is always laid out, so a pointer crossing rows never moves where the address is cut; the
+// frame makes the row taller, accepted for a list of a few rows in the settings screen.
 RowLayout {
     id: avatarRow
 
@@ -68,7 +78,8 @@ RowLayout {
         ground: Theme.bgElevated
     }
     // Held, its word and frame red only under the hand, framed at rest, and always laid out; the press mark wears the
-    // fill's red at rest too (デザイン規約 §アバターを与える).
+    // fill's red at rest too (see the header). `danger`, not `warning`: the picture lies outside the
+    // repository, and no discard record brings it back (user decision — ask before changing).
     ActionButton {
         id: unsetButton
         text: qsTr("Remove")

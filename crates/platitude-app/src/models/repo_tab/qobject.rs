@@ -659,7 +659,8 @@ impl RepoTab {
     /// What one other worktree is holding, file by file — the pane's read,
     /// asked when a worktree's row is selected and when the window comes
     /// back. It stands the pane on that worktree: each read of the worktree
-    /// hands the pane its list from there on.
+    /// hands the pane its list from there on. Asked at the selection, not
+    /// left to the pace: the pane cannot wait for that worktree's turn.
     #[qslot]
     fn read_carried_status(&mut self, path: String, name: String) {
         self.with_session(|s| s.read_carried_status(path, name));
@@ -1076,7 +1077,10 @@ impl RepoTab {
     /// press, with the chip and the branch mark it wears on the graph and the
     /// branches list. `name` is the row's own word for it, for a refusal's
     /// heading and the chip of one on no branch; `branch` the branch it has
-    /// out, empty for none.
+    /// out, empty for none. No page waits for it by name: a refusal
+    /// (`worktree-kept` / `worktree-half`) lands in the report branch of
+    /// `RepoPage.absorbLeftoverAnswer`, so the bar says it and the log does
+    /// not come up.
     #[qslot]
     fn remove_worktree(&mut self, path: String, name: String, branch: String) {
         self.worktree_remove(path, name, branch);
@@ -1436,7 +1440,11 @@ impl RepoTab {
         self.write_identity(name, email, global)
     }
 
-    /// Shows/hides tags in the graph walk (restarts the stream).
+    /// Shows/hides tags in the graph walk (restarts the stream). Hidden
+    /// means every tag off the graph: the rows only a tag reaches and the
+    /// chips of tags on rows a branch reaches too — a chip left standing
+    /// reads as the switch not working. The sidebar's TAGS list stays, or
+    /// the way back would go with it.
     #[qslot]
     fn set_tags_shown(&mut self, shown: bool) {
         self.write_tags_shown(shown)

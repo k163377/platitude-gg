@@ -69,7 +69,9 @@ QtObject {
     readonly property int fontSmLine: 16
     readonly property int fontMd: 14
     readonly property int fontMdLine: 20
-    // Off the ramp on purpose: the size editors set source at (IntelliJ's default, JetBrains Mono 13).
+    // Off the ramp on purpose: the size editors set source at (IntelliJ's default, JetBrains Mono 13). Not `fontLg`
+    // (user decision — ask before changing): 16 stands 3px over the 12–14 UI round it, and Japanese text set full-width
+    // at that size reads heavy.
     readonly property int fontCode: 13
     // Off the ramp, for the graph row's ref chip only (デザイン規約 §タイポグラフィ): `fontSm` reads as meta, and
     // `fontMd` stands level with the subject.
@@ -82,9 +84,11 @@ QtObject {
     // The one loosening in the app (デザイン規約 §タイポグラフィ). Sub-pixel on purpose: past about this the letters read
     // as a different face rather than the same word set wider.
     readonly property real tracking: 0.5
-    // The one weight past Normal (デザイン規約 §タイポグラフィ). Bold on Ubuntu: Noto Sans CJK JP's Medium comes only
-    // with fonts-noto-cjk-extra, so DemiBold draws Medium on one machine and Bold on the next — and Yu Gothic UI's
-    // Semibold carries its Bold's outlines, so Bold is the weight Windows shows.
+    // The one weight past Normal (デザイン規約 §タイポグラフィ; user decision — ask before changing). Bold on Ubuntu:
+    // Noto Sans CJK JP's Medium comes only with fonts-noto-cjk-extra, so DemiBold draws Medium on one machine and Bold
+    // on the next (only Regular and Bold are on both) — and Yu Gothic UI's Semibold carries its Bold's outlines, so
+    // Bold is the weight Windows shows. Ink at 14px against Regular, one Qt: Windows' Semibold ×1.36, Ubuntu's Bold
+    // ×1.38, Medium ×1.19.
     readonly property int fontWeightStrong: Qt.platform.os === "linux" ? Font.Bold : Font.DemiBold
     // Families each OS ships that also carry Japanese (デザイン規約 §タイポグラフィ).
     readonly property var fontFamilyUi: ["Yu Gothic UI", "Hiragino Sans", "Noto Sans CJK JP", "Noto Sans JP",
@@ -132,26 +136,44 @@ QtObject {
 
     // ---- colors: ref kinds ----
     // A separate axis from the state colours: a kind, not a state (デザイン規約 §ref の種別).
+    // Tailwind fuchsia 500. Under all three CVD types (Machado 2009 severity 1.0) it stays CIEDE2000 13.4 from the
+    // nearest colour beside it in the chip column (`accent`, type 2), over the 8.8 floor (§暗く落とした段); 5.83:1 on
+    // `bgSurface`. A lane comes nearer (8.6, lane 6 `#0072B2`, type 1), but a lane is a thin line in another column,
+    // told apart by place and shape as well (§コミットグラフのレーン色).
     readonly property color refTag: "#D946EF"
 
     // ---- colors: which worktree the reader is standing in ----
     // The WORKTREES green a step up the ramp: Tailwind green 500 over `success`'s 600 (デザイン規約 §ref の種別).
     // CIEDE2000 9.6 from `success`, no narrower than 9.5 under any CVD type (Machado 2009 severity 1.0): over the 8.8
-    // floor (§暗く落とした段).
+    // floor (§暗く落とした段). One step, not two (user decision — ask before changing): green 400 is too bright.
+    // Two colours come under the floor — `danger` (7.7, type 2) and `diffAddedFg` (6.8), the conflict mark and the
+    // added file's — and neither appears in a WORKTREES row: never set this in one list with them.
     readonly property color textHereTree: "#22C55E"
     // The tab in front's ground while it stands in a linked worktree: green 950's hue and saturation at 5.5% lightness
     // (the ramp's darkest step is 10%), since at matched luminance the green reads louder than `bgSelected`
-    // (デザイン規約 §ref の種別).
+    // (デザイン規約 §ref の種別; user decision — ask before changing). Down there the ground no longer says "in front"
+    // by lightness — 1.01:1 against the strip's `bgElevated`, only the hue stands out — so the bottom line and the
+    // `fontWeightStrong` name say it (`TabItemDelegate`).
     readonly property color bgHereTree: "#03190C"
 
     // ---- colors: git / diff ----
+    // The line grounds wear their `+` / `−` mark's hue (OKLCH 152° / 22°) at chroma .05 both — not the most that
+    // lightness allows: more, and the diff is the one loud thing in the UI. Lightness is the one axis tied to contrast:
+    // L 28 added / L 24 removed lifts the rows off the ground and keeps the comment colour (`#94A3B8`) readable on
+    // them; the 900 steps drop it to 3.6 / 3.9, lost under the syntax colours, and a darker L 22 gives up the lift
+    // (user decision — ask before changing). Opaque: nothing but `DiffPane`'s `bgSurface` is ever under a row, so a
+    // see-through ground blends with a constant and lets no syntax colour through.
+    // The `*EmphBg` pair keeps the hue (OKLCH L36 C.08 152° / L33 C.09 22°): the lightness step off the row's ground
+    // says what changed, and the comment colour on it stays at 4.1 / 5.0.
+    // Under type 2 colour blindness added and removed merge: which number column holds a line's number tells them
+    // apart (`DiffRowDelegate`).
     readonly property color diffAddedFg: "#4ADE80"
     readonly property color diffAddedBg: "#14301D"
     readonly property color diffAddedEmphBg: "#144927"
     readonly property color diffRemovedFg: "#F87171"
     readonly property color diffRemovedBg: "#351515"
     readonly property color diffRemovedEmphBg: "#5B1E1F"
-    // The find bar's hits in the rows (デザイン規約 §diff の中を探す): `accent` at a quarter under every hit, so the
+    // The find bar's hits in the rows (`DiffFindBar`): `accent` at a quarter under every hit, so the
     // row's own ground (added green, removed red, plain) and its ink read through; the hit the bar stands on wears
     // `accentDim` at seven tenths — the same hue a step darker and denser, not another colour (§暗く落とした段).
     readonly property color diffFindBg: "#403B82F6"
@@ -178,7 +200,7 @@ QtObject {
     readonly property int headerHeight: 32
     // The collapsed rail's width and the band's end cells' — one number for both edges of the window.
     readonly property int railWidth: 36
-    // Also the collapsed rail's cell height (デザイン規約 §左メニューを畳む).
+    // Also the collapsed rail's cell height (`NavRail.cellHeight`).
     readonly property int toolbarHeight: 40
     // 操作パネル: the branch on two lines (name, then upstream) — two `fontMd` lines (36) with `spaceSm` over and under.
     readonly property int opsBarHeight: 52
@@ -197,7 +219,7 @@ QtObject {
     readonly property int messageMaxHeight: 108
     // The most of a name said in a part that grows with its words, in `n`s of the name's own face, as a tab's floor is
     // (デザイン規約 §寸法「名前の天井」): git puts no ceiling on a name either. A part with a width ceiling of its own
-    // keeps that one instead.
+    // keeps that one instead. Real branch names past 64: kotlin 3.6%, vscode 0.4%.
     readonly property int nameMaxChars: 64
 
     // ================================================================
@@ -209,6 +231,7 @@ QtObject {
     // 起動ゲート (デザイン規約 §レイアウト初期値): not `textWidth` — its longest line is a mono path, scanned rather than
     // read. Two thirds of the initial window.
     readonly property int gateWidth: 960
-    // 設定画面: the category rail (デザイン規約 §レイアウト初期値 — not the sidebar's 260).
+    // 設定画面: the category rail (デザイン規約 §レイアウト初期値 — not the sidebar's 260). The longest label likely to
+    // come (`Keyboard shortcuts`-sized) is in the 120s px; with the row's inner 8 on both sides, 160.
     readonly property int settingsRailWidth: 160
 }

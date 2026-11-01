@@ -7,7 +7,15 @@ import platitude.ui
 // Which remote branch a local one is measured against, from the row that asks to git's write (デザイン規約
 // §ブランチが測られる相手を決める), asked in the one question bar (§立っている質問は 1 か所で聞く).
 //
+// Asked, never guessed: the one setting decides the ahead / behind counts, the base `branch --delete` calls merged
+// against, and where an unmarked push goes. The same-named remote branch is only a candidate — in a fork setup the
+// right one is another remote's other name. An information question, so the accent; the pill is the word `Set`.
+//
 // Sized to the page: nothing is drawn here, and the bar belongs to the graph.
+//
+// Headless: `set-upstream` / `set-upstream-list` / `set-upstream-go` / `set-upstream-enter` (`enterBranch`), and
+// `publish-upstream` for what a push does after; emptying the name is `set-upstream <branch>:` /
+// `set-upstream-go <branch>:` (the trailing `:`), taking it off from the card `unset-upstream` / `unset-upstream-go`.
 Item {
     id: upstreamFlow
 
@@ -28,7 +36,10 @@ Item {
     property string remote: ""
     property string branchName: ""
     /// Whether that pair names a remote-tracking branch held here. Not a refusal (a name not here is one the next
-    /// push makes) — it only picks the bar's line.
+    /// push makes; user decision — ask before changing): the pill answers on `filled` alone, and this only picks the
+    /// bar's line. No warning either: nothing is lost. Until that first push the branch reads as git's `[gone]` (user
+    /// decision — ask before changing): git does not tell "no tracking ref yet" from a far side that was deleted, so
+    /// the cloud badge wears warning + `!` (`GoneBadge`) and the first push clears it.
     property bool targetIsThere: false
     /// Whether the branch has an upstream to take off — a remote reading, a branch here, or a gone one — which an
     /// emptied name asks to do.
@@ -37,8 +48,10 @@ Item {
     /// §ref の種別).
     property string headBranch: ""
     /// The name box emptied on a branch with an upstream: the question turns into taking it off — its heading and
-    /// pill change, and the line goes (デザイン規約 §ブランチが測られる相手を決める). The remote is only picked, so the
-    /// name is the half that can be emptied.
+    /// pill change, and the line goes (the word `upstream` says what taking it off changes); typing again turns it
+    /// back. One of the two ways off, beside the card's `Unset upstream` row (user decision — ask before changing);
+    /// both say the one word `Unset`. The remote is only picked, so the name is the half that can be emptied. A
+    /// branch with no upstream stays on `Enter the upstream.` — there is nothing to take off.
     readonly property bool unsetting: upstreamFlow.unsettable && upstreamFlow.branchName === ""
     /// The heading with the branch's seat left in it, so the branch wears its own colour and mark there
     /// (`AskBar.labelSentence`).
@@ -47,6 +60,8 @@ Item {
         ? qsTr("Unset the upstream of %1?")
         //: %1 is a branch name. Asks which remote branch it is measured against.
         : qsTr("Upstream of %1?")
+    /// `heading` / `pill` are the one source of the words the bar opens with (`askRequested`) and of the words it
+    /// turns to while it stands (the `askLabel` / `askAccept` bindings below).
     readonly property string heading: upstreamFlow.sentence.arg(upstreamFlow.branch)
     readonly property string pill: upstreamFlow.unsetting
         //: The pill that answers the question above: takes the upstream off.
@@ -72,7 +87,9 @@ Item {
     anchors.fill: parent
 
     /// Opens the question on this branch, at `counterpart` — the remote branch it already tracks, or empty.
-    /// `unsettable`: it has an upstream an emptied name takes off.
+    /// `unsettable`: it has an upstream an emptied name takes off. Only a configured upstream counts as "already
+    /// tracks"; with none the question opens on the default remote and the branch's own name — the box may read the
+    /// same spelling, but as the default's guess.
     function startAsk(branch, oidHex, counterpart, unsettable) {
         upstreamFlow.branch = branch
         upstreamFlow.unsettable = unsettable
@@ -125,8 +142,9 @@ Item {
         when: upstreamFlow.asking
         restoreMode: Binding.RestoreNone
     }
-    // Taking it off is the plain delete's two presses, as the card's row is (デザイン規約 §回数押しの色); a held pill is
-    // answered by the pill alone, so Enter in the emptied box does nothing (`AskBar.answerFromForm`).
+    // Taking it off is the plain delete's two presses, as the card's row is (user decision — ask before changing;
+    // デザイン規約 §回数押しの色): one pointer goes and `Set upstream…` puts it back. A held pill is answered by the pill
+    // alone, so Enter in the emptied box does nothing (`AskBar.answerFromForm`).
     Binding {
         target: upstreamFlow.graphPane
         property: "askHold"
@@ -177,9 +195,9 @@ Item {
         when: upstreamFlow.asking
         restoreMode: Binding.RestoreNone
     }
-    // Asking for a name is the accent; taking the upstream off asks for nothing, so it is the plain delete's dress
-    // instead — the heading in the plain ink, the warning on the rule, the frame and the pill's mark
-    // (デザイン規約 §ブランチが測られる相手を決める, §回数押しの色).
+    // Asking for a name is the accent; taking the upstream off neither adds anything nor asks a name, so it is the
+    // plain delete's dress instead (user decision — ask before changing) — the heading in the plain ink, the warning
+    // on the rule, the frame, the pill's mark and fill (デザイン規約 §回数押しの色).
     Binding {
         target: upstreamFlow.graphPane
         property: "askNeutral"

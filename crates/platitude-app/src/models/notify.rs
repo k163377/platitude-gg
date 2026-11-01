@@ -2,7 +2,8 @@
 //!
 //! qtbridge has no batch insert, no ranged `dataChanged` and no move, so
 //! all three are spelled out through the proxy API the way
-//! `QListModelBase::push` does it — hence the `unsafe`.
+//! `QListModelBase::push` does it — hence the `unsafe`, the only one under
+//! `models/` besides the row deletion in `graph/stream.rs`.
 //!
 //! The proxy is only ever reached through a shared reference: while a
 //! notification runs, Qt re-enters it through its own pointer (`rowCount`,

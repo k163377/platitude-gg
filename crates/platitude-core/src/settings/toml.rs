@@ -77,7 +77,7 @@ pub(super) fn write_atomically(path: &Path, text: &str) -> Result<(), StoreError
 
     // If this fails (on Windows something else may hold the file open),
     // the old file stays intact — losing the newest layout beats losing
-    // the file.
+    // the file. The next flush tries again.
     if let Err(error) = std::fs::rename(&tmp, path) {
         remove_leftover(&tmp);
         return Err(failed(error));
@@ -101,6 +101,9 @@ pub(super) fn flag(table: &Table, key: &str, fallback: bool) -> bool {
 
 /// An integer that has to make sense. Out-of-range is treated exactly like
 /// the wrong type: a saved pane width of zero is as unusable as `"wide"`.
+/// Not for a value whose ceiling is only a product decision: past it, the
+/// ceiling is meant, and it is clamped at one place
+/// (`session::auto_fetch_minutes`).
 pub(super) fn int_in(
     table: &Table,
     key: &str,
@@ -175,6 +178,7 @@ pub(super) fn initial_commits(table: &Table, key: &str) -> Option<Option<u32>> {
 
 /// A written-down path, trimmed. An empty string is an answer ("whatever
 /// `PATH` resolves") and survives the read; only a non-string falls back.
+/// Dropped, an emptied settings box would come back on the next save.
 pub(super) fn text(table: &Table, key: &str) -> Option<String> {
     table
         .get(key)

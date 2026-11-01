@@ -682,7 +682,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
 /// Each holder's name as it stands, when its build's hooks last ran, the
 /// last line it wrote in the history, and its last reading of the desktop
-/// app's log.
+/// app's log. A holder whose build stamps no `hooks-r<n>` (revision 3 and
+/// older) never steps down: once no session runs that build, removing its
+/// name `holder-r<n>` ends it at its next reading, letting go.
 fn show_holders(dir: &Path) {
     let mut holders: Vec<(String, String)> = std::fs::read_dir(dir)
         .into_iter()

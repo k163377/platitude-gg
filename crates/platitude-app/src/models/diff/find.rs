@@ -1,5 +1,5 @@
-//! The find bar's search over the rows on screen (デザイン規約 §diff の中を探す):
-//! what the typed lines hit, the hit the bar stands on, and the marks each
+//! The find bar's search over the rows on screen (`DiffFindBar`): what the
+//! typed lines hit, the hit the bar stands on, and the marks each
 //! row draws for them. The matching is core's (`platitude_core::textfind`);
 //! this end maps a hit's lines onto rows and columns and spells its bytes
 //! the way the row draws them (as the selection's wash does, `selection`).
@@ -42,8 +42,8 @@ impl DiffModel {
                 }
             }
             // A pattern that cannot be read is refused: no line stands,
-            // the bar's frame says so and its tooltip says why (デザイン規約
-            // §diff の中を探す).
+            // the bar's frame says so and its tooltip says why
+            // (`DiffFindBar`).
             Err(error) => self.find_error = error.to_string(),
         }
         self.find_count = i32::try_from(self.find_hits.len()).unwrap_or(i32::MAX);

@@ -34,7 +34,9 @@ Item {
         } else if (act === "avatar-rest" || act === "avatar-hover"
                    || act === "avatar-assign" || act === "avatar-badge"
                    || act === "avatar-tip") {
-            // The first ordinary commit — row 0 is WIP.
+            // The first ordinary commit — row 0 is WIP. `avatar-rest` is the identicon; `-hover` the pen badge
+            // (`DetailsPane.avatarPointedAt`); `-badge` the badge pressed, opening the settings card with that author
+            // in the box and the focus on `Choose avatar…`.
             page.activateRow(graphModel.oidAt(1))
             if (act === "avatar-assign") {
                 detailsPane.avatarPointedAt = true
@@ -54,6 +56,12 @@ Item {
                    || act === "avatar-enter") {
             // The store starts empty each run, so the argument is filed first. The card and its completion are the
             // window's (`WindowAutoActDriver`).
+            //
+            // The argument (here and `avatar-assign`'s) is the picture's path, made a `file:` URL whole by the
+            // product's own conversion (`Harness.fileUrl` = `urlpath::file_url`) and handed to `assignAvatar` as the
+            // file picker's answer is. A path given by hand is one OS's (the container sees only `/work` and `/out`;
+            // Git Bash rewrites `/work/…` into a Windows path — spell it `//work/…`), so such a run is no registered
+            // line; xtask makes the picture when the argument is left out (`verify::repos`).
             page.activateRow(graphModel.oidAt(1))
             if (arg !== "")
                 avatarSeedTimer.start()
@@ -68,8 +76,18 @@ Item {
                 graphPane.findNext()
             else if (act === "find-prev")
                 graphPane.findPrevious()
-            // `width` / `cap`: the card may grow, but stops at a subject's first character. Read with the card
-            // settled, by the completion `findSettled` makes.
+            // `width` / `cap`: the card may grow, but stops at a subject's first character — `cap` is the distance
+            // to it, `width` must stay `spaceXs + spaceLg` inside it (`GraphPane`'s `maxWidth`). Read with the card
+            // settled, by the completion `findSettled` makes. The width moves only for a long query (~70 characters);
+            // a long one that matches needs long subjects — `demo-repo basic --at <path>`, two such commits, `--repo`.
+            // `-prev` wraps: from the first match it answers the last; `-next` on a single match comes back to its
+            // row (-1 fails). `clears=` (whether the graph steps down) and `find_settled shift=` (how far) are read
+            // as a pair: `signed --preset co-authors` steps (`clears=true`, `shift=32`); `readme` on the same preset
+            // and `feat --preset basic` do not. A query matching nothing dims every row and counts `0 / 0`, the frame
+            // in no state colour, the card as wide as with matches. `150 --preset deep` dims HEAD's stand-in;
+            // `find-prev 102 --preset deep` is the cut window's fade starting from a last row that missed (the
+            // footer's line starts at that row's dimness). No spaces in the argument: a registered line is replayed
+            // word by word.
             driver.reportAtCompletion(() => "find open=" + graphPane.findCard.open
                                              + " query=" + graphPane.findCard.query
                                              + " matches=" + graphPane.findCard.matches
@@ -135,7 +153,9 @@ Item {
             }
         } else if (act === "commands-fail" || act === "commands-clear" || act === "commands-fail-shut"
                    || act === "commands-escape") {
-            // A real refusal in git's own words, which raises the panel by itself.
+            // A real refusal in git's own words, which raises the panel by itself. `commands-fail-shut fold` folds the
+            // left menu first: the folded seat's red is pictured that way (each of the `>_`'s seats shows its error
+            // mode only through this verb).
             if (act === "commands-fail-shut" && arg === "fold")
                 page.foldByHand(true)
             repoTab.checkoutBranch("pgg-no-such-branch", false)
@@ -265,7 +285,10 @@ Item {
     // PGG_AUTO_ACT=find-scroll: the scroll waits for the grab callback of the frame that drew the search
     // (rules/app-ui.md §UI 自動化). `grabbed=` says it did — otherwise the scroll lands in the same turn as the query
     // and the run is `find` again. Two screens: a jump builds the incoming rows before letting go of the outgoing
-    // ones, so drawn delegates are handed on only on the second.
+    // ones, so drawn delegates are handed on only on the second. Registered as `5 --preset deep`. The picture is read
+    // at the lanes: dim on rows that missed, bright only where they pass a match (`GraphRowDelegate.dimmed`), and no
+    // lane showing through a dimmed face — a lane lit on a miss, or dim on a match, is Canvas state leaking across
+    // paints.
     //
     // Witnessed on the way: `grabbed`, whether the grab could be asked; `drawn`, kept by its callback when the frame
     // that drew the search is drawn — it answers in a later turn, past the press, while the generation still runs;
@@ -311,7 +334,10 @@ Item {
     // PGG_AUTO_ACT=find-hint / find-hint-key: waits on the card's own word that the typing stopped (`typingStopped`),
     // which a line with no note reaches all the same. `-key` then presses the held-back character and is shot on the
     // next frame — the one that keystroke took the note down in (規約 §コミットを探す). Its line is read in the turn of
-    // the keystroke, as it went in (`witness`): once the typing stops again, the note comes back.
+    // the keystroke, as it went in (`witness`): once the typing stops again, the note comes back. `note=` is
+    // `FindBar.note`: the id's note first, else the no-results sentence, in the same one-line seat. Picture-only
+    // arguments: `feat` (seven matches; the card's width) and `add` (three matches beside the note — a word that
+    // reads as hex).
     PageStage {
         id: findHinted
         name: "find_hinted"
@@ -446,7 +472,7 @@ Item {
                                                          + " mark=" + page.commandsMarkColor })
         }
     }
-    // PGG_AUTO_ACT=commands-escape: Esc on the panel a refusal raised (デザイン規約 §git が言ったことを読む場所),
+    // PGG_AUTO_ACT=commands-escape: Esc on the panel a refusal raised (its fourth way out, `RepoPage.escapePressed`),
     // entered at `escapePressed` where `Keys.onEscapePressed` enters. **`took=` is the claim**: a key that fell
     // through to nobody would frame exactly like this — witnessed as the key went in.
     PageStage {
@@ -474,11 +500,14 @@ Item {
         }
     }
     // PGG_AUTO_ACT=commands-select / commands-copy: a drag from the head of the first row to the end of the last —
-    // all three columns and more than one row — then, for `-copy`, Ctrl+C. **`perRow=` is the claim**: one clipboard
+    // all three columns and more than one row — then, for `-copy`, Ctrl+C. The picture after the press is the one
+    // before it, so the report line is the whole judgment. **`perRow=` is the claim**: one clipboard
     // line per row. Tab-led lines are not counted: they are git's words under a failure, and which commands fail is
     // not the run's (a container reading the tree's real worktree gets `not a git repository`). One of the rows is a
     // command whose argument spans lines — a stash message of two paragraphs — and it copies as one line like any
-    // other; that it is drawn as one is the picture's to show.
+    // other; that it is drawn as one is the picture's to show. `commands-select` stops with the wash standing: its
+    // picture's point is the wash filling the gaps between the columns too, and `rows=` / `washed=` (rows built, rows
+    // wearing the wash) are diagnosis. Neither needs `--allow-write-failure`.
     //
     // Behind the write barrier, which holds the first write asked after it: the two writes that fill the log are
     // still queued when this starts. The stash is pressed once their rows are in and nothing runs — the queue serves
@@ -533,9 +562,11 @@ Item {
         }
     }
     // PGG_AUTO_ACT=commands-sweep: the same drag, started on the ground under the last row
-    // (規約 §git が言ったことを読む場所). Nine starts, each judged over a cleared selection: a reach that works from one
+    // (`CommandsTextSelect`). Nine starts, each judged over a cleared selection: a reach that works from one
     // spot hides at the middle, and one read at the end would report only the last try. `reach` / `tries`: how many of
-    // the starts reached a row, and of how many, counted at the sweep.
+    // the starts reached a row, and of how many, counted at the sweep. Set up as `commands-select` without the stash;
+    // the drag runs from the ground up to the first row. Taking out `onRows`' two-step clamp (`CommandsTextSelect`)
+    // drops it to `reach=0/9`.
     PageStage {
         id: commandsSweepTimer
         name: "commands_sweep"

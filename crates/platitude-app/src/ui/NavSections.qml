@@ -24,7 +24,9 @@ ColumnLayout {
     required property HandWatch paneHand
     /// Automation (PGG_AUTO_ACT=nav-open): what the open row says under itself, asked of the rows — they are what a
     /// run has to find wired up. One key names the open row (`SidebarRowGestures.openKey`), so these ask each list in
-    /// turn; **the stand-in first** — while it is on screen its own row is not (`HeadPinRow`).
+    /// turn; **the stand-in first** — while it is on screen its own row is not (`HeadPinRow`). **A list that opens rows
+    /// goes here and into `openGeom`**: one key names the open row, so a list left out still draws its open row but
+    /// drops it from every report line.
     readonly property var openable: [headPin, branchList, remoteList, worktreeList, tagList]
     function openWords() {
         for (const list of sections.openable) {
@@ -71,6 +73,8 @@ ColumnLayout {
     /// A section's header band took a click; the pane flips the flag.
     signal sectionToggled(string kind)
     signal foldRequested(bool collapse)
+    /// A row's single click, to the commit it names (`NavItemDelegate.ordinaryClick`). **Each section's list is wired
+    /// to it below by hand**: a section added without its `onRefActivated` answers a click with nothing.
     signal refActivated(string oidHex)
     signal refMenuRequested(string kind, string name, string full, string oidHex, string aim)
     signal remoteMenuRequested(string name)
@@ -119,9 +123,11 @@ ColumnLayout {
         return branchList.contentY
     }
 
-    // Sections take what their rows want and the ground the rest (デザイン規約 §QML 実装ルール). Both ends must name a
-    // pull — Qt reads an unset one as zero and hands it nothing — and at this ratio the ground gets nothing while any
-    // section has rows it cannot show.
+    // Sections stack from the top, each no taller than its rows, and the ground under the last takes the rest: a closed
+    // section is its header alone, so a section above holding the spare height would push that one header down to the
+    // pane's foot. Short of height, the sections that cannot show all their rows split it evenly, and one with fewer
+    // rows stays whole. Both ends must name a pull — Qt reads an unset one as zero and hands it nothing — and at this
+    // ratio the ground gets nothing while any section has rows it cannot show.
     readonly property int sectionPull: 10000
     readonly property int groundPull: 1
     /// The filter band and the five section bands — what the column holds whatever the rows (`SidebarPane.floorHeight`).
@@ -168,7 +174,7 @@ ColumnLayout {
         // With no row to ride above, the stand-in takes a row of its own: under the folder that closed over the
         // branch (`pinSeatRow`), else at the head of the list — and the list asks for that much more height, or the
         // row pushed down could not be read. **Not in an empty section**: its 1px of ground is an instruction
-        // (デザイン規約 §QML 実装ルール のセクションの地).
+        // (user decision — `NavList`'s `Layout.maximumHeight`).
         topMargin: headPin.seated && !headPin.seatedUnder && branchList.count > 0 ? Theme.rowHeight : 0
         pinSeatRow: headPin.seatedUnder ? headPin.underRow : -1
         Layout.verticalStretchFactor: sections.sectionPull
@@ -312,7 +318,9 @@ ColumnLayout {
         onRefMenuRequested: (kind, name, full, oidHex, aim) => sections.refMenuRequested(kind, name, full, oidHex, aim)
     }
 
-    // Takes the height the sections have no rows for (`groundPull`).
+    // Takes the height the sections have no rows for (`groundPull`). Needed: height nobody can take turns into gaps
+    // between the sections. Every section stays capped at its rows, overflowing or not — one uncapped, and an empty
+    // TAGS holds a third of the panel; only the rail's peek stretches (`NavList.stretch`). Headless: `nav-close`.
     Item {
         id: ground
         Layout.fillWidth: true

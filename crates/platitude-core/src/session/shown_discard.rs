@@ -1,4 +1,4 @@
-//! The discard log's picked entry on the graph (破棄記録仕様.md): the walk
+//! The discard log's picked entry on the graph (`discards`): the walk
 //! takes the entry's tips as more starting points, and the commits only
 //! those tips reach come out provisional — drawn for the entry, not
 //! because the repository holds them ([`LogRow::provisional`]).
@@ -20,7 +20,7 @@ pub struct ShownDiscard {
     /// dropped stash, the commit a name stood on.
     pub tips: Vec<Oid>,
     pub lost: HashSet<Oid>,
-    /// The tips that are stash-shaped (破棄記録仕様.md §2.1): sifted as a
+    /// The tips that are stash-shaped (`discards::copy`): sifted as a
     /// stash is, keeping only the commit the work stood on, so their index
     /// and untracked parents draw no rows.
     pub stashlike: HashSet<Oid>,

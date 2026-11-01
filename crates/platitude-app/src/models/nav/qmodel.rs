@@ -2,8 +2,8 @@ use super::*;
 
 // A flat list answered by value: `data()` computes the field, where
 // `QListModel::get` would lend a stored `NavItem` and force every row to
-// exist (rules-refs/app-ui.md「サイドバーの行は射影する」). Rows hang off
-// the root; `QAbstractItemModel` is the base that lets a row be answered.
+// exist. Rows hang off the root; `QAbstractItemModel` is the base that
+// lets a row be answered.
 impl QAbstractItemModel for NavSectionModel {
     fn index(&self, row: i32, column: i32, parent: &QModelIndex) -> QModelIndex {
         let out_of_list = parent.is_valid()

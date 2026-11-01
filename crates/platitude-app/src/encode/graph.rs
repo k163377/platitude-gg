@@ -91,6 +91,8 @@ fn fnv1a(text: &str) -> u32 {
 }
 
 /// Deterministic identicon code for an author (a GitHub-style 5x5 pattern).
+/// The one place a face is worked out — graph rows, the author, the
+/// co-authors alike; QML only draws the code.
 ///
 /// Layout: bits 0..15 = left 3 columns of a 5x5 grid (row-major, mirrored
 /// to the right by the renderer), bits 15..18 = palette index (0..8).
@@ -110,7 +112,12 @@ pub fn avatar_code(author: &str) -> i32 {
 /// The two always come out apart: the graph's answer is kept where it has
 /// one, a side without takes a stable colour off its name, and on a clash
 /// theirs moves on by one (`conflict::sides()` has already decided which
-/// is ours).
+/// is ours). A side can lack one because the graph is a window
+/// (`--max-count`) and a branch outside it has no colour; two can clash
+/// because the palette cycles. Ours is the one kept: it is the side
+/// already in place. Off the name rather than at random: the same
+/// conflict opened again must not change colour. A side with no name
+/// still gets one — the band says which of the two, the legend names it.
 pub fn conflict_side_colors(ours: (i32, &str), theirs: (i32, &str)) -> (i32, i32) {
     let size = i32::try_from(platitude_core::graph::GRAPH_PALETTE_SIZE).unwrap_or(8);
     let borrowed_or_named = |(color, name): (i32, &str)| -> i32 {

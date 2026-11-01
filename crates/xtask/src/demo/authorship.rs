@@ -5,8 +5,13 @@ use super::repo::DemoRepo;
 use super::signing::{config_path, keygen};
 
 /// Every combination of "how many people the message credits" and
-/// "is it signed", newest first: one co-author signed, three signed,
-/// three unsigned, one unsigned, and a commit crediting nobody.
+/// "is it signed", newest first: row 0 one co-author, signed `G`; row 1
+/// one, its signature no longer matching what it signed (`B`); row 2 one,
+/// signed by a key nobody vouched for (`U`); row 3 one, `G`, under a
+/// 25-character author name (the name gives way, the mark stays); row 4
+/// three, `G`, with no body; row 5 three, unsigned; row 6 one, unsigned;
+/// row 7 a commit crediting nobody. The one preset holding all three
+/// signature states with co-authors (`signed` credits nobody).
 ///
 /// Both spellings (`Co-Authored-By` / `Co-authored-by`) on purpose: git's
 /// `key=` matches either, and so must the reader.

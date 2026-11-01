@@ -7,9 +7,15 @@ import platitude.ui
 
 // The commit's own hash over its parents', rows aligned right. Each hash is a control and a value: a press that lets go
 // where it landed is the control's (copy the hash / go to that parent), one that travels drags over the digits
-// (デザイン規約 §右のペインの字は掴める). A `TextEdit` takes the press wherever it is drawn, so the words take none
-// (`grabbable: false`) and a hand over each face hands drags down to them (rules-refs/app-ui.md「右パネルの値は掴める字」).
-// The parents share one line, cut to the room the row leaves it (デザイン規約 §右のペインの親).
+// (デザイン規約 §右のペインの字は掴める). A `TextEdit` takes the press wherever it is drawn — `selectByMouse: false`
+// does not let it fall through to the control above — so the words take none (`grabbable: false`) and a hand over each
+// face (`RowHand`) hands drags down to them; without the hand, a click on the digits never reaches the control
+// (`tst_hashplate`). Both values are also swept from the row's gaps (`SweepRoom`,
+// rules-refs/app-ui.md「右パネルの値は掴める字」). Headless: `hash-tip` / `hash-tip-counting` (the copy tip),
+// `details-hand`, `details-sweep`.
+// The parents share one line under the own hash, cut to the room the row leaves it (`CommitAuthorRow.parentRoom`):
+// `←`, then each parent's short hash in git's order (`fontSm` mono, `textLink`), `, ` between them (user decision —
+// ask before changing). One hash is one target, its tip `Go to parent commit`.
 ColumnLayout {
     id: plate
 
@@ -19,7 +25,7 @@ ColumnLayout {
     property var parents: []
     /// How wide the parent line may stand (`CommitAuthorRow.parentRoom`).
     property real parentRoom: 0
-    /// How loud the hash is: full in the details pane, under the message in a list (デザイン規約 §複数のコミットを選ぶ).
+    /// How loud the hash is: full in the details pane, under the message in a list (`ChosenCommitRow`).
     property color shaColor: Theme.textPrimary
     /// And how big: a list takes a step down, since mono at the words' size reads louder than they do.
     property real shaSize: Theme.fontMd
@@ -27,7 +33,7 @@ ColumnLayout {
     signal copyRequested(string text)
     signal parentClicked(string oidHex)
 
-    // ---- how the parent line fits its room (デザイン規約 §右のペインの親) ----
+    // ---- how the parent line fits its room ----
     /// The digits a parent shows whole, and the fewest it is cut to before the tail of the line gives way.
     readonly property int wholeDigits: 8
     readonly property int cutDigits: 3
@@ -62,8 +68,10 @@ ColumnLayout {
     /// The line's head before the first hash: the `←`, drawn in its place (デザイン規約 §アイコンの席 の字の代替) —
     /// its cell, and no step of the row's beside it.
     readonly property real leadWidth: parentBack.wordCell
-    /// One parent's digits: whole, or `digits` of them and the mark, which `LineText` lays over the next one. Every
-    /// piece is priced at the whole pixel the layout hands it, which is the one above.
+    /// One parent's digits: whole, or `digits` of them and the mark, which `LineText` lays over the next one — its
+    /// ground covers that digit whole even where the cut width is fractional (checked by eye at 8x). Every piece is
+    /// priced at the whole pixel the layout hands it, which is the one above: summed as fractions, each piece overruns
+    /// the room by under a pixel. `tst_parentline.qml`'s `laidOut()` holds laid-out width = this estimate.
     function hashWidth(digits) {
         return Math.ceil(digits >= plate.wholeDigits ? plate.wholeDigits * plate.digitInk.advanceWidth
                                                      : digits * plate.digitInk.advanceWidth + plate.cutInk.advanceWidth)
@@ -95,18 +103,23 @@ ColumnLayout {
     readonly property real lineShift: plate.secondBase < 0 ? 0
         : plate.secondBase - plate.laidY(lineRef) - lineRef.baselineOffset
 
-    // ---- while the count's card is out (デザイン規約 §右のペインの親) ----
+    // ---- while the count's card is out (user decision — ask before changing) ----
     /// The card is out: the line stands as one parent's would — the arrow, then the room the card's first row fills,
-    /// the card's frame and row air included, so the arrow stays clear of it.
+    /// the card's frame and row air included, so the arrow stays clear of it. The other links and `+N` step out of the
+    /// line meanwhile: nothing peeks out past the card.
     property bool unrolled: false
-    /// The card's frame and row air left of its hashes (`ParentListCard.hashInset`), from the same two tokens.
+    /// The card's frame and row air left of its hashes (`ParentListCard.hashInset`), from the same two tokens, built
+    /// apart on each side (`tst_parentcard` holds them equal).
     readonly property real unrollInset: Theme.borderWidth + Theme.spaceXs
     /// The arrow's box in `item`'s coordinates: a mark and no target, outside the card (automation reads its edge).
     function arrowBox(item) {
         const at = arrowSeat.mapToItem(item, 0, 0)
         return Qt.rect(at.x, at.y, arrowSeat.width, arrowSeat.height)
     }
-    /// Every parent, cut evenly from whole down to `cutDigits`; past that the tail goes to `+N`. Two always stand.
+    /// Every parent, cut evenly from whole down to `cutDigits`; past that the tail goes to `+N`. Two always stand. Each
+    /// step is a user decision (ask before changing). Evenly, since links cut to different lengths read as two kinds of
+    /// parent. Two, so an ordinary merge names both parents even at the right panel's floor: two hashes of `cutDigits`
+    /// and the mark, and an octopus's `+N`. A single parent is never cut: eight digits are narrower than the own hash.
     readonly property var parentFit: {
         const count = plate.parents.length
         if (count < 2)
@@ -307,9 +320,11 @@ ColumnLayout {
         topPadding: 0
         bottomPadding: 0
         readonly property bool lit: hovered || visualFocus
-        /// The hash was just copied, and the tip's one word says so (規約 §hover のツールチップ「結論を先頭に、1 行で書く」).
+        /// The hash was just copied, and the tip's one word says so (規約 §hover のツールチップ「結論を先頭に、1 行で書く」):
+        /// `Copied!` in place of `Copy full hash` — this target has no other place to answer (user decision).
         property bool copied: false
-        // Arriving clears it as well as leaving: a keyboard copy leaves it standing with no pointer near.
+        // Back to the offer once the pointer is done with the plate. Arriving clears it as well as leaving: a keyboard
+        // copy leaves it standing with no pointer near.
         onHoveredChanged: hashCopy.copied = false
         /// Automation: raise the tooltip with no pointer behind it (verify-ui §hover の絵の撮り方).
         property bool tipForced: false
@@ -350,6 +365,8 @@ ColumnLayout {
                 Layout.alignment: Qt.AlignVCenter
             }
             // Seated to the mark's ink, not its 16px box, so the air beside it is not spent twice (デザイン規約 §余白).
+            // The `iconMd` mark, not one sized to the hash's letters (a special design, user decision — ask before
+            // changing); only its colour follows the rule for a mark among words (below).
             Item {
                 Layout.preferredWidth: copyMark.inkWidth
                 Layout.preferredHeight: Theme.iconMd
@@ -358,8 +375,8 @@ ColumnLayout {
                     id: copyMark
                     anchors.centerIn: parent
                     kind: "copyicon"
-                    // Beside white words the mark keeps its own quieter ink; beside grey ones it takes theirs
-                    // (デザイン規約 §アイコンの席).
+                    // Beside white words the mark keeps its own quieter ink; beside grey ones (a multi-selection
+                    // row's `textMuted` hash) it takes theirs (デザイン規約 §アイコンの席).
                     tint: hashCopy.lit ? Theme.textPrimary
                           : Qt.colorEqual(plate.shaColor, Theme.textPrimary) ? Theme.textSecondary : plate.shaColor
                 }
@@ -405,9 +422,12 @@ ColumnLayout {
                                                - plate.hashWidth(plate.wholeDigits))
             Layout.preferredHeight: 1
         }
-        // Drawn rather than `←` (デザイン規約 §寸法「印は描いて出す」), and set inline: its cell is its seat
-        // (`leadWidth`). A mark, not a target: each hash is its own way to its parent, and the arrow stays outside the
-        // card the count opens (デザイン規約 §右のペインの親).
+        // Drawn rather than `←` (デザイン規約 §寸法「印は描いて出す」 — the glyph runs its tail long on Ubuntu alone), and
+        // set inline: its cell is its seat (`leadWidth`). A mark, not a target: each hash is its own way to its parent
+        // — the underline and the press are each link's own (`linkFace`), never the arrow's (`tst_parentline`'s
+        // `test_h`) — and the arrow stays outside the card the count opens: the card's frame stands from the arrow
+        // seat's right edge, only the seat's own air between them. Inline, a mark and outside the card: user decisions
+        // (ask before changing).
         // The `←` ahead of the hashes, drawn in its place (デザイン規約 §アイコンの席 の字の代替): the capitals' scale,
         // on the face's own `+`'s middle; its box is the line's (`lineRef`).
         Item {
@@ -502,7 +522,8 @@ ColumnLayout {
             }
         }
         // The parents the room could not hold, counted as the credit line counts its names (デザイン規約
-        // §co-author の表示). Resting on it opens them all (`ParentListCard`).
+        // §co-author の表示). Resting on it opens them all (`ParentListCard`). A step ahead of it, not a comma
+        // (`a, b, c +5`): the count is not one of the links.
         Label {
             id: moreLabel
             visible: !plate.unrolled && plate.parentsLeft > 0

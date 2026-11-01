@@ -1,9 +1,17 @@
 # A snapshot of the app for a Mac, by hand: the whole test of the commit,
 # and beside it the bundle `cargo xtask package` makes, kept as this run's
-# artifact. Not a release (P5-確認事項 §3.5): no notices of the bundled
-# licences travel with it and no Apple identity signs it, so what the run
+# artifact. Not a release: no notices of the bundled licences travel with
+# it yet (P5-確認事項 §3) and no Apple identity signs it, so what the run
 # keeps is a DMG only the password opens — whoever can read a run of this
-# public repository can take its files.
+# public repository can take its files, and a plain binary there would be
+# handing the app out (user decision — ask before changing). That an
+# encrypted file is not a distribution is a reading, not a guarantee; giving
+# someone the password hands them the app.
+# The password is the repository secret SNAPSHOT_DMG_PASSWORD, which the
+# user sets; without it package stops before it builds.
+# To open one: take the .dmg from the run's artifacts, open it with the
+# password, put `Platitude GG.app` in Applications. It is signed ad hoc, so
+# its first start is allowed under Privacy & Security ("Open Anyway").
 name: Snapshot build (macOS, not a release)
 run-name: Snapshot · ${{ github.ref_name }}
 

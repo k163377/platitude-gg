@@ -66,6 +66,13 @@ const MAIN: &str = "main";
 /// side session's report is refused unless contact is open or it comes
 /// from a session sent a message on the user's ask. Answers whether it
 /// refused — the refusal is then the hook's whole answer.
+///
+/// A report let in while contact is open counts off no answer: one that
+/// arrives just after a message, about something else, would use up the
+/// answer and stop the real one coming later. So an answer that arrives
+/// while open leaves one later report of that session to come in. Only a
+/// prompt that is the report alone can be refused: a report riding on the
+/// user's message cannot be taken out (a hook does not rewrite a prompt).
 pub(super) fn prompt_submit(input: &str, prompt: &str) -> bool {
     if let Some(words) = permit::the_users_words(prompt) {
         record(input, asks_for_contact(words));

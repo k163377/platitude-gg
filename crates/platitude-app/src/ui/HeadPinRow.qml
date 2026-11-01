@@ -8,8 +8,28 @@ import platitude.ui
 
 // The current branch's sticky stand-in: while its row is scrolled off it rides the edge the row went out of, and it
 // steps aside once the row is on screen. A branch a filter or a folded folder hides has no row, so the stand-in takes a
-// seat of its own (`seated`, rules-refs/app-ui.md「サイドバーの張り付き行は」). None for a detached HEAD
-// (デザイン規約 §左メニューの所作).
+// seat of its own (`seated`; user decision — ask before changing): with no row to stand in for, laid over the edge it
+// would hide whichever row is there whole — a section is only as tall as its rows, so a filter left with one row would
+// show none. It takes a row's height, the rows moving down by it, where its row would have been: under the folder that
+// closed over it (`seatedUnder` — a row's height of ground at that folder row's foot, `NavItemDelegate.pinSeat` ←
+// `NavList.pinSeatRow`, so it scrolls with the list), else at the head of the list (`topMargin`, `NavSections`). The
+// list asks for that row on top of its rows (`NavList`'s `Layout.maximumHeight`), or the last row pushed down is cut.
+// **The seat is not a row**: the row's two grounds, its `MouseArea` and its `HoverHandler` stop `pinSeat` short, or
+// a hand on the stand-in lights the folder above. Checked by the report's `sat=` (this `y` against the geometry of
+// the row holding the seat). **No seat in an empty open section**: its 1px of ground is a user decision, so the
+// stand-in stays `seated` with no seat and is drawn cut by that 1px (not a hairline: `accentMuted` + `bgHover`) —
+// given a row there, a filter that matched nothing would answer in the shape of one match.
+//
+// Seated under a fold, it stands in the closed folder's column and names the branch from that folder down
+// (`api/fix-auth`); under a filter, at the list's head by its full name; as a row, at the row's depth by its last part
+// (`models::nav::view` の `place_head`). **Indent and name say only what is off screen**: the folders above the closed
+// one are still rows, and naming them again says them twice; the closed folder itself leads the name, since the last
+// part alone reads as a name beside that folder. The same at any depth. Scrolled past, the seat rides the edge again.
+//
+// None for a detached HEAD (`visible` reads `headName`, empty when detached): there is no branch to stand in for, and
+// where HEAD is the graph's chip and the commit button's `to HEAD` already say. Only `head_name` is read — a row's
+// `IsHead` is a name match against it too — so whichever of the report and the snapshot lands first, the same row
+// lights.
 //
 // Whoever uses this adopts it onto the list itself (`parent:`): a Flickable's declared children scroll with its
 // content (rules-refs/app-ui.md「Flickable(ListView 含む)に宣言した子は contentItem に養子入りする」).
@@ -38,7 +58,8 @@ Rectangle {
                                    ? (headPin.underRow + 1) * Theme.rowHeight + headPin.roomAbove
                                    : headPin.branchesModel.headRow * Theme.rowHeight
     /// The upstream is gone, read off the model since a stand-in has no row (`models::nav::drain` の
-    /// `settle_head_marks`).
+    /// `settle_head_marks`). No preset puts the stand-in on a gone upstream; `models::nav::drain_tests`'
+    /// `the_stand_in_carries_the_upstream_that_is_not_here` holds it.
     readonly property bool goneUpstream: headPin.branchesModel.headUpstreamGone !== ""
     /// The branch is there but its row is not (a filter or a folded folder). Asks for a seat, which a list with no rows
     /// refuses (its 1px shows). Read off the model alone: the list's height answers to this, and a list with a top
@@ -103,7 +124,9 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         height: Theme.rowHeight
-        // Nested as its row is (`headDepth`: `main` at 0, a branch with a `/` one step in); 0 while seated.
+        // Nested as its row is (`headDepth`: `main` at 0, a branch with a `/` one step in) — a fixed step would start
+        // a name with no `/` in a column no row has. Seated under a fold, the closed folder's depth (and the name from
+        // that folder down, `headShownName`); under a filter, 0 and the whole name.
         anchors.leftMargin: headPin.rowInset + headPin.branchesModel.headDepth * headPin.nestStep
         // The rows' own bar gutter, so the badges line up with theirs.
         anchors.rightMargin: Theme.navBarGutter
@@ -139,8 +162,10 @@ Rectangle {
                 }
             }
         }
-        // The row's own listing pair (`drain::settle_head_marks`), not the status read's, which is zeroed right after a
-        // switch (rules-refs/app-ui.md「行と同じ listing から」).
+        // The row's own listing pair (`drain::settle_head_marks`), not the status read's: that one is held at 0 while
+        // `countsSettled` is false — from a branch moving to the next status — so right after a switch, the very moment
+        // this row stands, the counts alone would vanish. `countsSettled`'s contract stays with `WorktreeModel`'s three
+        // and `PublishFlow`, which reads the flag.
         HeadTrack {
             visible: headPin.branchesModel.headAhead > 0 || headPin.branchesModel.headBehind > 0
             ahead: headPin.branchesModel.headAhead
@@ -298,7 +323,7 @@ Rectangle {
         color: Theme.borderSubtle
     }
     /// A press that starts to move goes for the words: the facts open now, not after the rest, and the drag carries
-    /// into the name (rules-refs/app-ui.md「待たずに掴む道は行の側の 4 ハンドラ」).
+    /// into the name — the row's own handlers (`NavItemDelegate.linePressed`), but for the release.
     function linePressed(x, y) {
         headRowMouse.pressFrom = Qt.point(x, y)
         headRowMouse.handedOn = false

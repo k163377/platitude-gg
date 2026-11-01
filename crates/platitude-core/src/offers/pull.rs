@@ -1,6 +1,29 @@
 //! The `pull` row of a ref's menu: whether it is there, what it runs, and
 //! why it is greyed (デザイン規約 §取り込んで合流させる).
 //!
+//! A row on a branch's menus and never a toolbar button (user decision —
+//! ask before changing): the toolbar's fixed targets speak for the whole
+//! repository, while a pull moves one branch, whose row is the target.
+//! The row stands only where it can name the one local branch that moves
+//! (user decision — ask before changing): the tree's branch on either end
+//! of the comparison the screen already shows as ↑↓, another local branch
+//! on its own row. Not on another remote branch's row (user decision —
+//! ask before changing): `git pull` moves the branch it runs on, so there
+//! it would move one the row does not name — bringing that remote branch
+//! into the current one is merge / rebase. Not on the upstream row of
+//! another local branch either, for the same reason, nor on tags and
+//! stashes.
+//!
+//! Greyed rather than gone wherever git would turn the press down: a row
+//! goes only where its target does not exist (デザイン規約 §メニュー). How a
+//! diverged tree's two lines are joined is a choice, and this product does
+//! not make it by default for the reader — the row is greyed and its tip
+//! says where to choose (`Words.pullDiverged`: the remote branch row's
+//! `rebase <current> onto it`, or `merge`); the same reason pins the pull
+//! to `--ff-only` (`remote::pull`). Every judgement here is by counts
+//! alone, as of the last fetch: a far side that moved since leaves the row
+//! live, git refuses the press, and the log comes up.
+//!
 //! Apart from [`super::ref_menu`] because it reads what no other row
 //! reads: the tree's own comparison with its upstream, and the row's own
 //! branch's.
@@ -23,17 +46,29 @@ pub enum PullRuns {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PullOut {
     /// An operation stands in this worktree: nothing is pulled until it is
-    /// finished or put down.
+    /// finished or put down (user decision — ask before changing). Every
+    /// row the tree offers greys, saying `Finish the stopped operation
+    /// first` as the merge / rebase rows do. Over a diverged tree the
+    /// operation is what is said.
     Standing,
     /// The tree's branch and its upstream have both moved: merging and
     /// rebasing are the reader's to choose between, and git's settings do
-    /// not get to choose for them.
+    /// not get to choose for them (user decision — ask before changing).
+    /// Told by `WorktreeModel.pullBlocked`: ahead and behind both non-zero.
     Diverged,
     /// The row's branch has commits its upstream lacks, so no fast-forward
-    /// reaches it; only a pull from the branch itself can take them in.
+    /// reaches it — git would answer `[rejected] (non-fast-forward)` — and
+    /// a press must not move a branch somewhere unexpected (user decision —
+    /// ask before changing). Only a pull from the branch itself can take
+    /// them in: switch to it and use its row (a diverged one there says
+    /// where next). Its tip says what cannot happen, then why, naming the
+    /// upstream (user decision — ask before changing; `Words.pullOwnCommits`).
+    /// Told by `NavSectionModel.aheadOf` being non-zero.
     OwnCommits,
     /// Another worktree has the row's branch out, and git will not fetch
-    /// into a branch checked out anywhere.
+    /// into a branch checked out anywhere. Where to go is the `Open` row
+    /// above it, naming that worktree: the pull is done in its tab. Said
+    /// before the other two — nothing done here lifts it.
     Held,
 }
 
@@ -82,6 +117,11 @@ impl PullOffer {
 ///   a stopped rebase or bisect leaves the tree detached, so its branches
 ///   all stand aside then. Nowhere without an upstream — git has no far
 ///   side to go to.
+///
+/// Without an upstream git turns the plain pull down (`no tracking
+/// information`). The fast-forward aside needs an upstream on a remote:
+/// `row_upstream` is the remote reading only (`BranchItem.upstream`), so a
+/// branch tracking one here (`branch.<n>.remote = .`) has no row.
 #[expect(clippy::too_many_arguments)]
 pub fn pull_row(
     kind: RefKind,

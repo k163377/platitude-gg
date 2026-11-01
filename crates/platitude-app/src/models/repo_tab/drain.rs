@@ -67,8 +67,8 @@ impl RepoTab {
                     message,
                 } => {
                     // A linked worktree that would not open is stood back in
-                    // the repository's own one, silently (デザイン規約
-                    // §タブの所作「立てない所へは立たない」); only a refusal
+                    // the repository's own one, silently
+                    // (`TabsModel::stand_home`); only a refusal
                     // with nowhere left to fall reaches the screen. The
                     // doors stay held (`RepoTab::stood`): let go of here,
                     // they would open for a turn on no worktree before the
@@ -128,7 +128,10 @@ impl RepoTab {
                     checkout_default,
                 } => {
                     // The marked remote is where pushes go; unmarked,
-                    // `origin`, else the first remote. A mark naming a
+                    // `origin`, else the first remote. `origin` is the
+                    // name of a role, held by the marked remote (user
+                    // decision — ask before changing): the name is looked
+                    // up only where nothing is marked. A mark naming a
                     // missing remote is ignored — git would take that
                     // name for a URL.
                     let marked = names.iter().find(|r| **r == push_default);
@@ -249,6 +252,11 @@ impl RepoTab {
                 // The last of the three boundaries: everything the write
                 // invalidated has been read again and published. An unasked
                 // fetch settles too, under an id nothing here started.
+                // Published in the models too, not only sent: each feed push
+                // posts its model's drain queued, and Qt delivers posted
+                // events of one priority in posting order (qthread.cpp,
+                // `QPostEventList::addEvent` appends), so the models' drains
+                // run before this one. Drawn is not promised (`AutoShotDriver`).
                 TabMsg::WriteSettled { id, .. } => {
                     self.write_watch.settled(id);
                     self.settled.push_back(id);
@@ -260,6 +268,12 @@ impl RepoTab {
                         if self.unsettled.is_empty()
                             && let Some(feed) = &self.feed
                         {
+                            // On this tab's own feed: the drains of the other
+                            // models' re-reads were posted before this settle,
+                            // so a menu standing again behind it reads them.
+                            // Not `Qt.callLater`: it shares one engine-wide
+                            // tick and rides one posted earlier, so it orders
+                            // nothing.
                             feed.push(TabMsg::ReadsDrained);
                         }
                     }
@@ -371,7 +385,9 @@ impl RepoTab {
         self.delete_answered(id, !landed, reads_from);
         // Stopped part-way answers with the worktree: there is no
         // commit at the tip to go to (`last_write_stopped`, raised by
-        // the message before this one).
+        // the message before this one). `FastForward` (the pull of a
+        // branch aside) is not here: the selection and the view stay —
+        // what moved is not the branch the tree is on; its chip moves.
         let at_tip = landed
             && !self.last_write_stopped
             && matches!(
@@ -632,7 +648,7 @@ fn remote_why_word(why: RemoteWhy) -> &'static str {
 }
 
 /// Whether a write of this kind can take a name a discard log's restore
-/// would go under (破棄記録仕様.md §4) — a worktree made takes its
+/// would go under (decided as the list is read, `discards::Restore`) — a worktree made takes its
 /// folder and the branch it makes — or hold a lost commit again.
 fn names_taken(kind: OperationKind) -> bool {
     matches!(

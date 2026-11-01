@@ -62,7 +62,9 @@ Item {
             // One run covers the three refusal shapes: they share this road and differ only in the heading, which
             // `tst_reportdress.qml` reads; the shapes are pinned by `integrate_integration/plan.rs` and
             // `rebase_plan::drain_tests`. The row has to be named (`row:0`): the commit no branch of `one-commit`
-            // sees is not under the tip.
+            // sees is not under the tip, and opened from the tip the plan simply opens. No `--allow-write-failure`:
+            // the preview refuses, and nothing enters the write's road. The `rewrite-merge` / `shallow` presets stay
+            // for shooting the other two shapes by hand.
             const refusedOid = arg !== "" ? driver.autoActOid(arg)
                              : graphModel.oidAt(graphModel.rowOf(worktree.headOid) + 1)
             page.openRowMenu(refusedOid)
@@ -72,7 +74,7 @@ Item {
             driver.noticeSaysPlan()
             driver.barrierNotice.start()
         } else if (act === "plan-amend-kept") {
-            // A half-written amend, then a plan opened from HEAD's own row (`planAmendTimer`).
+            // A half-written amend, then a plan opened from HEAD's own row (`planAmendTimer`). `--preset plan`.
             const tip = worktree.headOid
             page.jumpToRef(tip)
             planAmendTimer.tip = tip
@@ -98,7 +100,9 @@ Item {
         }
     }
     // Completed off the page's own answer. The line carries what an empty pane cannot: whether a read is out, was
-    // refused, or was never asked.
+    // refused, or was never asked. The picture: the band with the one word `Rebasing` and `Discard`, an `iconLg` ring
+    // in the middle of the rows' area, no onto row. The face is latched whole, so the run bar and the freeze are not
+    // in it.
     PageStage {
         id: planLoadingTimer
         name: "plan_loading"
@@ -129,7 +133,8 @@ Item {
             if (op.act === "rebase-plan") {
                 // One of each look: a fold and a drop. `selected=` is the model's own (`RebasePlanModel::take`): the
                 // row highlight reads `page.selectedOid`, which `activateRow` below sets, so a model that opened with
-                // nothing selected photographs the same.
+                // nothing selected photographs the same. The picture holds the whole plan mode at once: the sidebar
+                // frozen, push / stash dimmed, the run button at the right pane's foot and the amber `already pushed`.
                 op.input("dressed", () => {
                     plan.setAction(1, "squash")
                     plan.setAction(2, "drop")
@@ -143,7 +148,7 @@ Item {
                 } })
             } else if (op.act === "rebase-plan-run") {
                 // The barrier is the old head's row going and the new one standing, not the dropped row — origin
-                // still reaches it (rules-refs/app-ui.md「プラン実行の write barrier」).
+                // still reaches it, so its old column stays on the graph (規約 §履歴を合流させる).
                 op.input("ran", () => {
                     plan.setAction(plan.stepCount - 1, "drop")
                     planRanTimer.begin(worktree.headOid)
@@ -157,7 +162,7 @@ Item {
                 op.stop()
                 planHeldTimer.start()
             } else if (op.act === "plan-escape" || op.act === "plan-escape-held") {
-                // Escape against `Discard` (デザイン規約 §フル interactive rebase「`Discard` は 2 状態」): with nothing
+                // Escape against `Discard`'s two states (`RebasePlanPane`, `discards`): with nothing
                 // composed it is the press; with a verb set it would need a hold, so `held=true` (the plan still
                 // standing) is the claim. Entered at `escapePressed`, the one line `Keys.onEscapePressed` calls.
                 op.input("escaped", () => {
@@ -216,7 +221,9 @@ Item {
     // and the status the write asked for in (`statusFrom`, the report number its answer named — a status read while
     // the rebase was out stands the worktree row up for the operation, and a picture taken on the answer alone is of
     // that row, which the status after the write takes away). `wip=` is the row at the picture, so the claim is
-    // read, not inferred from what stood around it.
+    // read, not inferred from what stood around it (`Awaited.claim`, re-said at each picture as `verify::verbs::CLAIMS`
+    // asks). To make that order and check it: `--slow-git status:1500:quiet` (statuses under the rebase at their own
+    // pace, the one after it late).
     PageStage {
         id: planRanTimer
         name: "rebase_plan_ran"
@@ -282,9 +289,10 @@ Item {
         }
     }
     // The asked-for stop, on a clean tree: the report carries what the picture cannot — git's edit marker, the skip's
-    // cost and the exit card's rows (デザイン規約 §進行中の操作から出る / P3-確認事項「クリーン停止の WIP 行は語が場面に合っていない」).
-    // `-out` continues it: a clean stop moves no file row, so nothing on that side announces the way out
-    // (`RepoPage.leaveWipWhenDone`).
+    // cost and the exit card's rows (デザイン規約 §進行中の操作から出る; the uncommitted row's words, `GraphRowDelegate`).
+    // The picture: the WIP row, the exit card's head row (the `edit` chip and `Stopped at <sha8> — amend it above`,
+    // wrapped whole) and `--skip` back to a count of presses. `-out` continues it: a clean stop moves no file row, so
+    // nothing on that side announces the way out (`RepoPage.leaveWipWhenDone`).
     //
     // Also waited out: the WORKTREES listing read after the write, and the walk behind it. The listing is a read of
     // its own, landing apart from the status that raises the edit marker (`session::write::settle_after`), so a shot
@@ -347,8 +355,11 @@ Item {
 
     // The right pane's boxes under a plan: a `reword` row types into the amend's two boxes, so every way the plan lets
     // go has to hand them back — and none moves the commit on screen, the pane's only own refill cue
-    // (`DetailsPane.syncMessage`). `-verb` walks the row's verb out of `reword` and back; `-out` / `-ask` cancel the
-    // plan with the typing unsaved, and `-ask` types again for the question the closed plan was refusing to ask.
+    // (`DetailsPane.syncMessage`). A discarded plan's text left in the plain amend's boxes is a history rewrite one
+    // press away. `-verb` walks the row's verb out of `reword` and back; `-out` / `-ask` cancel the plan with the
+    // typing unsaved, and `-ask` types again for the question the closed plan was refusing to ask. `published=false`
+    // is right on `--preset plan`, whose tip origin lacks; for the amber label, pass a repository whose tip is
+    // published (`--repo`).
     PageStage {
         id: planRewordTimer
         name: "plan_reword"

@@ -4,7 +4,24 @@ import QtQuick.Layouts
 import platitude.ui
 
 // The description box, wherever a commit message is written or read, and the one box whose corner grip pulls it
-// taller (デザイン規約 §コミットメッセージの 2 つの枠). The pane owns the bound (`room` / `owed`).
+// taller. Its rest height is the pair's split (`MessageEditor`); the two description boxes (details pane, commit
+// editor) can be pulled down from there by hand — a body longer than its rest is everyday, a summary that long an
+// accident, so only this box grows. The pane owns the bound (`room` / `owed`): the pull stops where everything beside
+// the box stays in view and the file list keeps two rows (under that it stops being a list). What shares the block
+// with the box (the committer row and the CHANGES band in the details pane, the check rows and the commit button in
+// the commit editor) never gives, so that one bound guards them all. The box also stops at its own text: a box taller
+// than its words stands as an empty frame under the next, shorter commit. A pane that shrinks under a pull — the
+// window, the log coming up, the save row appearing — takes back what the hand added first (`owed`), or the column
+// runs out of the pane and the author row or the commit button lands on the window's foot.
+//
+// The grip stands only where pulling moves something (the text runs past the box, or a pull stands): a target only
+// where pressing works. Its mark is two slashes in the corner (`grip`), `borderStrong` at rest and `textSecondary`
+// under the pointer; the cursor is the vertical sizing one, promising the direction only. A pull and the reading depth
+// belong to the message they were made on: another commit, or an amend loading HEAD's words, puts the box back to that
+// message's rest height and its first line (`resetForNewMessage`).
+//
+// Headless: `details-grow` / `details-grow-squeeze` / `wip-grow` / `wip-grow-squeeze`. A run reads a beat after the
+// pull: inside the same handler the list still answers the height it had before it gave way.
 Rectangle {
     id: box
 
@@ -16,7 +33,8 @@ Rectangle {
     property alias text: area.text
     property alias readOnly: area.readOnly
     property alias placeholderText: area.placeholderText
-    /// The colour the text is painted in — the side the smoke hooks report (rules-refs/app-ui.md).
+    /// The colour the text is painted in — the side the smoke hooks report (`descriptionColor`): `focused` alone reads
+    /// lit even where the colour's binding is broken. Headless: `edit-message-focus` against `wip-message(-focus)`.
     readonly property color textColor: area.color
     /// Being written in: the caret is here, or this box's own menu stands over it (`FieldMenuSeat.holding`).
     readonly property bool focused: area.activeFocus || menuSeat.holding
@@ -29,7 +47,8 @@ Rectangle {
     /// What the pane allots this box at rest, before any pull.
     property real restHeight: Theme.messageMaxHeight
     /// How much taller than that the hand has pulled it; the pane adds it to the block it lays out. A plain property:
-    /// `setBoxHeight` assigns to it, which would end a binding for good.
+    /// `setBoxHeight` assigns to it, which would end a binding for good — and the give-back (`onOwedChanged`) calls it
+    /// with no drag, so a bound `extra` would be cut there and every message after would keep that height.
     property real extra: 0
     /// What the text would take if nothing held it in.
     readonly property real wants: area.implicitHeight + Theme.spaceSm
@@ -62,8 +81,8 @@ Rectangle {
     function grow(dy) {
         box.pullTo(box.height + dy)
     }
-    /// Put the pull and the reading position back — called wherever the pane swaps in a different message (デザイン規約
-    /// §コミットメッセージの 2 つの枠). The caret goes first: assigning `text` leaves it at the end and the `TextArea`
+    /// Put the pull and the reading position back — called wherever the pane swaps in a different message (see the
+    /// header). The caret goes first: assigning `text` leaves it at the end and the `TextArea`
     /// scrolls to it after layout, so setting `contentY` alone does not hold.
     function resetForNewMessage() {
         box.extra = 0
@@ -110,9 +129,10 @@ Rectangle {
     /// stranded.
     readonly property bool gripRefused: box.gripDragging && box.askedPast
     /// How far into the text's inset the bar stops while the grip is offered: at the mark's highest ink, so the down
-    /// arrow stands wholly above the grip, never down in the mark's square beside its slant, and keeps from it the air
-    /// its end holds below it anywhere (デザイン規約 §スクロールバーの矢印). Rounded up: an end reaching into the mark
-    /// would bring the arrow down onto it.
+    /// arrow stands wholly above the grip, never down in the mark's square beside its slant (user decision — it reads
+    /// as buried there), and keeps from it the air its end holds below it anywhere (`AutoScrollBar.arrowSpan`).
+    /// Chromium yields the whole corner square and leaves its arrow floating above the grip; this stops closer (user
+    /// decision). Rounded up: an end reaching into the mark would bring the arrow down onto it.
     readonly property int gripYield: Math.ceil(textView.y + textView.height - (grip.y + gripMark.y + gripMark.inkTop))
     /// Automation: a pull carried past one of the two ends (`PGG_AUTO_ACT=divider-refuse`, cases `desc-max` /
     /// `desc-min`).
@@ -128,7 +148,9 @@ Rectangle {
     // The badge is the page's (`RepoPage`): a refused hand is outside this box, and a badge parented here is
     // composited under the author card and the file list.
     /// A wheel this box had nothing left to do with, in pixels. Whoever put the box on a scrolling surface moves that
-    /// surface by it — the box covers most of it, which could otherwise not be reached by wheel.
+    /// surface by it — the box covers most of it, which could otherwise not be reached by wheel. Handed on by hand,
+    /// not by `event.accepted = false` for Qt to pass along: a wheel cannot be injected, so no headless run could prove
+    /// that road.
     signal wheelPastEnd(real pixels)
     /// Escape with the caret in here; whoever owns the text decides what it means (`MessageEditor`).
     signal escaped()
@@ -171,13 +193,15 @@ Rectangle {
     function dropCaret() {
         area.focus = false
     }
-    // Given back at once, before the pane's column runs under its edge.
+    // Given back at once, before the pane's column runs under its edge. By assignment: a binding would ring with the
+    // layout.
     onOwedChanged: {
         if (box.owed > 0)
             box.setBoxHeight(box.height - box.owed)
     }
-    // A viewport that grows without scrolling leaves TextEdit drawing only the old height; nudging `contentY` and
-    // putting it back makes it draw again (rules-refs/app-ui.md).
+    // A viewport that grows without scrolling leaves TextEdit drawing only the old height (it rebuilds its nodes only
+    // when it moves): the text stops short inside the opened box. Nudging `contentY` and putting it back makes it draw
+    // again. No number catches this: judge the grow verbs' PNGs by eye.
     onHeightChanged: Qt.callLater(box.repaint)
     function repaint() {
         const flick = textView.contentItem
@@ -186,7 +210,7 @@ Rectangle {
         flick.contentY = was
     }
 
-    // Takes whatever the summary left of the pane's fixed-height block (デザイン規約 §コミットメッセージの 2 つの枠).
+    // Takes whatever the summary left of the pane's fixed-height block (`MessageEditor`).
     Layout.fillWidth: true
     Layout.fillHeight: true
     Layout.minimumHeight: 0
@@ -204,7 +228,8 @@ Rectangle {
     ScrollView {
         id: textView
         anchors.fill: parent
-        // All four sides, the bar's included — no gutter; the words run under the thumb (デザイン規約 §余白).
+        // All four sides, the bar's included — no gutter: a floating bar, the words run under the thumb and stop inside
+        // the frame's line, `spaceXs` off it (user decision — ask before changing; デザイン規約 §余白).
         anchors.margins: Theme.spaceXs
         // Upright only; the sideways bar is refused by policy — `AsNeeded` takes presses at the foot, `null` logs a
         // `TypeError` (rules-refs/app-ui.md「`ScrollView` の要らない側のバー」, `tst_messageband`).
@@ -220,7 +245,9 @@ Rectangle {
             height: textView.availableHeight - (box.grips ? box.gripYield : 0)
             lengthAlong: textBar.height
             stepGlide: glide
-            // Taking the bar is the reader taking the box over, as the wheel is.
+            // Taking the bar — thumb, arrow or track (`held`) — is the reader taking the box over, as the wheel is;
+            // left out, a thumb drag is pulled back to the top (`tst_scrollarrow`'s
+            // `test_dragging_the_thumb_takes_a_pinned_box_over`; `MessageEditor.unpinSummary` alike).
             onHeldChanged: if (textBar.held) box.unpin()
         }
         // Reached once it exists. Not `interactive`: the flickable would answer the wheel as well as the handler and
@@ -237,7 +264,11 @@ Rectangle {
                 box.escaped()
                 event.accepted = true
             }
-            // Lit only while being written; a read-only caret is for selecting (デザイン規約 §コミットメッセージの 2 つの枠).
+            // Lit only while being written: `textSecondary` is the step for "not what to read now" (規約 §テキスト), and
+            // the letters being typed would look faint, a disabled box, as they land. A read-only caret is for
+            // selecting (nothing typed goes in), so it stays dim.
+            // The one formula for it. `readOnly` is part of it: a read-only `TextArea` takes the caret too, and off
+            // `activeFocus` alone a box that takes no keys (`offers::message_edit`) would wear "writable".
             color: !area.readOnly && box.focused ? Theme.textPrimary : Theme.textSecondary
             background: null
             padding: 0
@@ -259,7 +290,9 @@ Rectangle {
     }
     // Declared after the ScrollView, or the bar's end takes the corner. The mark hangs off the square's lower-right, on
     // the text's own inset. While the bar stands, the down arrow's end reaches into the square (`gripYield`): the part
-    // of the square the bar covers is the bar's, the rest the grip's.
+    // of the square the bar covers is the bar's, the rest the grip's. Not the whole square: the ▼'s lower half would be
+    // the grip's. Not split along the mark's slant: the square's left and the triangle above the slant would fall to
+    // the text.
     MouseArea {
         id: grip
         visible: box.grips
@@ -268,7 +301,9 @@ Rectangle {
         width: Theme.iconMd
         height: Theme.iconMd
         // A mask is the whole of the hit test: Qt asks it instead of the item's own rectangle, so it says the square
-        // itself — a point outside it answered true takes presses from anywhere in the window.
+        // itself — a point outside it answered true takes presses from anywhere in the window, another list's arrows,
+        // thumb and track included (the last press of `tst_scrollarrow`'s
+        // `test_the_down_arrow_stands_over_the_grip_and_shares_its_square`).
         containmentMask: QtObject {
             function contains(point: point): bool {
                 if (point.x < 0 || point.y < 0 || point.x > grip.width || point.y > grip.height)

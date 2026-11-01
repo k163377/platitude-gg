@@ -5,7 +5,8 @@ import platitude.ui
 // own (デザイン規約 §寸法 の右肩の印): half the parent, never under `iconBadgeMin`; its centre a `spaceXs` in from the
 // parent's right edge and its top a `spaceXs` over the parent's top — the folded rail's TAGS eye, which is the rule
 // at 24 (`NavRail`). No ground under it: the parent's mark keeps its own ink, the badge sitting mostly in the air of
-// its box.
+// its box. Worn by the rail's TAGS eye and `+` (`NavRail`) and the discard log's cloud (`RecoverMark`). Not the
+// warning `!` (`ActionButtonSeat.cornerAlert`, `[gone]`): that one is a step smaller, by a rule of its own.
 NavIcon {
     width: Math.max(Theme.iconBadgeMin, parent.width / 2)
     height: width

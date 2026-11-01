@@ -1,4 +1,4 @@
-//! Bringing a part back (破棄記録仕様.md §4): each as git's own write for the
+//! Bringing a part back (`discards::restore`): each as git's own write for the
 //! thing, and thrown-away work put back as what went and nothing else — the
 //! copy's difference from what the discard left — the first way it goes on.
 

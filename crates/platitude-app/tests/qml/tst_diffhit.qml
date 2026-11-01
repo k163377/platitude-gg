@@ -11,7 +11,8 @@ import platitude.ui
 // any rule.
 //
 // `cargo xtask qmltest` runs offscreen, which advances every full-width glyph alike, so only the agreement is judged
-// here; real advances need `qmltestrunner` without `-platform offscreen` (rules-refs/app-ui.md).
+// here; green offscreen proves nothing for a real platform, whose advances need `qmltestrunner -import <staged>`
+// without `-platform offscreen`.
 Item {
     id: root
     width: 600

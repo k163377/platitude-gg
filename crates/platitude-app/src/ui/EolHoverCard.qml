@@ -32,7 +32,8 @@ AppCard {
         HoverHandler {
             id: contentHover
         }
-        // The path first, and wrapped — the row already cut it down (規約 §hover のツールチップ). The commit button's
+        // The path first, and wrapped — the row already cut it down (規約 §hover のツールチップ), and as a tree the row
+        // shows the last part of the name only, so which file it is cannot be read off the row. The commit button's
         // card has no one file to name and leaves this out.
         CardText {
             visible: eolCard.path !== ""

@@ -1,4 +1,4 @@
-//! The discard log (破棄記録仕様.md): its seat, the list, an entry on the
+//! The discard log (`platitude_core::discards`): its seat, the list, an entry on the
 //! graph under the band, the card a rest opens, and what the band's
 //! `Restore` leaves.
 

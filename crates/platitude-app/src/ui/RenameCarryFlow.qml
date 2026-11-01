@@ -6,6 +6,13 @@ import platitude.ui
 
 // What happens on the remote after a name is changed here — a question, since which the reader wanted is not the
 // repository's to know (デザイン規約 §手元の改名の後のリモート). Draws nothing: the bar belongs to the graph.
+// Branches and tags take one road; only how the two names are spelled differs (`oldSide` / `newSide`). No grey
+// line under the heading (user decision — ask before changing): the three answers say it themselves, words once in
+// the bar (デザイン規約 §答えの要らない報せ「言葉はバーに 1 度だけ」); `askDetail` stays empty and `AskBar` folds
+// it. Asked only after a branch with an upstream, or a tag the remote holds under the same name on the same commit,
+// was renamed (`RepoPage.carryBranchRenameOver` / `armRenameTagRemote`). Raised once the rename has landed
+// (`RepoPage`, on `writeBranchOp` / `writeTagOp`), from what was read before it. Headless: `rename-local-upstream*` /
+// `rename-tag-remote*`.
 Item {
     id: carryFlow
 
@@ -29,8 +36,8 @@ Item {
     /// The commit the old name was shown on over there, which `Replace` leases its delete to
     /// (`remote::replace_remote_branch` / `replace_remote_tag`).
     property string shown: ""
-    /// Which answer is picked. The question opens on the one that takes nothing away, so the pill is live from the
-    /// first frame (デザイン規約 §手元の改名の後のリモート).
+    /// Which answer is picked. The question opens on "create and keep", the side that can be taken back (user
+    /// decision — ask before changing), so the pill is live from the first frame.
     property int choice: carryFlow.keepsBoth
 
     /// The name the remote carries now, and the one it would carry. A branch's live under `<remote>/`; a tag's have
@@ -40,8 +47,12 @@ Item {
     readonly property string newSide:
         carryFlow.kind === "branch" ? carryFlow.remote + "/" + carryFlow.to : carryFlow.to
 
-    /// The three answers, in the words they are picked by. The first names the delete first but runs it last
-    /// (`remote::replace_remote_branch`; デザイン規約 §手元の改名の後のリモート「行は削除を先に言い、走るのは push が先」).
+    /// The three answers, in the words they are picked by — never "rename" (user decision — ask before changing): the
+    /// far side sees a create and a delete, and what hung off the old name (pull request, protection rule, release)
+    /// does not follow, so the rows say those two words. The first names the delete first but runs it last (user
+    /// decision — ask before changing; `remote::replace_remote_branch`): the reader consents to the half that cannot
+    /// be taken back, so it leads the row, while the running order follows the damage of a stop half way — push
+    /// first leaves one name too many, delete first a name lost. The hold's tip says the running order (`tipOf`).
     readonly property var choices: carryFlow.kind === ""
         ? []
         : [
@@ -61,8 +72,8 @@ Item {
     readonly property int replacesIt: 0
     readonly property int keepsBoth: 1
     readonly property int leavesAlone: 2
-    /// The answer that cannot be taken back: a name goes from the remote, and whatever hung off it stays behind
-    /// (デザイン規約 §回数押し).
+    /// The answer that takes a name from the remote: whatever hung off it stays behind, and only the old tip comes
+    /// back, from the discard record (デザイン規約 §回数押しの色).
     readonly property bool takesAway: carryFlow.choice === carryFlow.replacesIt
     /// …and the one that writes nothing at all.
     readonly property bool leavesIt: carryFlow.choice === carryFlow.leavesAlone
@@ -100,8 +111,8 @@ Item {
         carryFlow.choice = index
     }
 
-    /// The picked answer's own word for the pill; at `Replace` the gesture becomes a hold
-    /// (デザイン規約 §手元の改名の後のリモート).
+    /// The picked answer's own word for the pill — no one word stands for all three (user decision — ask before
+    /// changing); where the word moves the gesture moves with it: at `Replace` it becomes a hold.
     function pillWord() {
         if (carryFlow.takesAway)
             //: The pill answering a standing question: the old name goes off the remote and the new one goes up.
@@ -130,7 +141,9 @@ Item {
 
     // Bindings, since the bar changes with the pick while it stands. `RestoreNone`: letting go happens at the press
     // that walks away, with the bar still on screen (`PublishFlow`). The heading stays plain ink
-    // (`AskBar.plainWords`).
+    // (`AskBar.plainWords`; user decision — ask before changing), the one question that does: every other question's
+    // colour is fixed as it opens, so its heading says the cost (デザイン規約 §状態), but here the answer in the box
+    // moves the frame and the pill, and a heading moving with them would say it a third time.
     Binding {
         target: carryFlow.graphPane
         property: "askPlainWords"
@@ -152,7 +165,8 @@ Item {
         when: carryFlow.asking
         restoreMode: Binding.RestoreNone
     }
-    // The warning is for taking away, not for reaching the remote (デザイン規約 §手元の改名の後のリモート).
+    // The warning is for taking away, not for reaching the remote (user decision — ask before changing): `Replace`
+    // is warning + hold, `Create` and `Leave` the information colour + click.
     Binding {
         target: carryFlow.graphPane
         property: "askNeutral"

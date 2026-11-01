@@ -1,6 +1,12 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+// The app's style is Fusion by this import's order alone: nothing names a style (no `QQuickStyle`, no
+// `QT_QUICK_CONTROLS_STYLE`, no `qtquickcontrols2.conf`). Imported before anything imports `QtQuick.Controls` bare, it
+// is Qt's compile-time pick (qquickstyleplugin.cpp; the import trace says `QtQuick.Controls.Fusion imported before
+// QtQuick.Controls; using compile-time style selection`), and the bare imports — `SplitHandleBar`, the dialogs Qt
+// draws itself — read Fusion too. Do not let a bare `QtQuick.Controls` be processed first: on a Mac that asks for the
+// default macOS style, which the bundle does not carry (`package::contents`, `OTHER_STYLE`).
 import QtQuick.Controls.Fusion
 import QtQuick.Dialogs
 import QtQuick.Window
@@ -13,11 +19,20 @@ ApplicationWindow {
     height: 900
     visible: true
     /// Whether the tab row is the window's title bar: fixed at creation, and named by platform — hints are read then,
-    /// and a window that came up without a way to close it cannot be taken back
-    /// (デザイン規約 §ウィンドウの縁「兼ねるかはプラットフォームを名指しで決める」).
+    /// so "try it and see whether it took" is not open, and a window that came up without a way to close it cannot be
+    /// taken back. Elsewhere the platform's title bar stands over the chrome's two rows (`TopBar`). The other shape
+    /// comes up on this machine with `verify-ui --system-title-bar`, the one headless door: the variable set by hand
+    /// never reaches the run — `app_env::clear_automation` drops the parent shell's `PGG_*` from every run xtask
+    /// starts.
     readonly property bool captionMerged: Qt.platform.os === "windows" && !AppBackend.systemTitleBar
 
-    // Frameless: an expanded client area still leaves a real non-client frame (past the screen when maximised, a
+    // Frameless — window = client area = what is drawn, so maximised it is exactly the work area and not a pixel of the
+    // app lands off screen (a framed window's frame runs 8px past every side when maximised, over the next monitor).
+    // So the correct inset for it is none, from the start — and QML could not work one out:
+    // `Screen.desktopAvailableWidth` spans the virtual desktop, `Screen.width` turns negative with a vertical taskbar,
+    // and `root.width` leaves the frame out (`WindowShape.widthSlop`). Headless: `window-fill` (`fills=true`; no
+    // picture shows it).
+    // An expanded client area still leaves a real non-client frame (past the screen when maximised, a
     // white pixel no DWM attribute moves). The resize edges and grab run stay with the subclass
     // (`winframe::take_frame_hit_test`) — Qt's own custom chrome synthesises input from a poll and loses track of it.
     // `keepWindowGestures` puts back the system's minimise/maximise/menu style bits, and `clamp_maximized` pins a
@@ -26,12 +41,16 @@ ApplicationWindow {
     title: Words.appName
     color: Theme.bgBase
 
-    /// Whether this app draws the window's edge: a frameless window has no frame for the platform to draw one on, and
-    /// a maximised one's edge is the screen's (デザイン規約 §ウィンドウの縁).
+    /// Whether this app draws the window's edge (`windowEdge`, 1px `borderDefault` inside the client area): a frameless
+    /// window has no frame for the platform to draw one on, and no shadow — the edge does the shadow's work. Maximised,
+    /// only the bottom side stays (`WindowBody`): elsewhere the window's edge is the screen's, and a line there parts
+    /// nothing and spends a row of the work area.
     readonly property bool edgeDrawn: root.captionMerged && root.visibility !== Window.Maximized
     /// How far the body stands in from the left and right edges, so the edge runs beside the band's end cells (☰ / ✕)
-    /// rather than over their outer column. Sideways only: the band's top row stays under the top edge
-    /// (規約 §ウィンドウの縁「縁は中身を食わない — 左右だけ」).
+    /// rather than over their outer column (user decision — ask before changing): over it, the wash's outer column is
+    /// the edge's colour, the ✕'s red alone comes out a pixel narrower than minimise and maximise beside it, and the
+    /// marks sit half a pixel off the middle of what shows. Sideways only: the band's top row stays under the top
+    /// edge. None while maximised (no edge). The window's width floor takes in these two columns (`floorWidth`).
     readonly property int edgeInset: root.edgeDrawn ? Theme.borderWidth : 0
     // The grab runs are reported in scene coordinates, which the inset moves without moving them inside the band.
     onEdgeInsetChanged: chrome.reportCaptionStrip()
@@ -40,8 +59,9 @@ ApplicationWindow {
     // Past the minimums, `SplitView` and the layouts lay items out over their own edge (デザイン規約 §窓の床).
     // `minimumWidth` only covers a dragged edge and a rising floor — `QWindow::resize` hands a size straight to the
     // platform without reading the hints — so every size this application sets goes through `holdFloor`. Measured in
-    // `WindowBody`; named here, where the harness and `WindowShape` read them. The width's floors take in the edge's
-    // two columns (`edgeInset`).
+    // `WindowBody`; named here, where the harness (`platitude.auto`) and `WindowShape` read them as `window.<name>` —
+    // handing them the new owner instead is not open, the harness has one door (`seats`). The width's floors take in
+    // the edge's two columns (`edgeInset`).
     readonly property alias floorPage: body.floorPage
     readonly property real floorWidth: body.floorWidth + 2 * root.edgeInset
     readonly property real openFloorWidth: body.openFloorWidth + 2 * root.edgeInset
@@ -73,14 +93,18 @@ ApplicationWindow {
 
     // A color written here without a group lands in all three groups — and, being a binding, settles after the
     // groups' own bindings and overwrites them. So a role either never changes and is written once, or is written
-    // out in every group.
+    // out in every group. Kept in this file though it is the largest block left: rules-refs/app-ui.md names this block
+    // as where that trap is shown.
     palette {
         window: Theme.bgBase
         base: Theme.bgBase
         button: Theme.bgElevated
         placeholderText: Theme.textMuted
-        // The two roles Fusion paints a scroll bar's thumb with; everywhere else the style reaches for `mid` (Popup and
-        // Dialog borders, the SplitView handle) this app draws its own background (デザイン規約 §スクロールバー).
+        // The two roles Fusion paints a scroll bar's thumb with (`pressed ? dark : mid`); everywhere else the style
+        // reaches for them (Popup and Dialog borders, the SplitView handle — replaced by `SplitHandleBar`) this app
+        // draws its own background (デザイン規約 §スクロールバー). So the thumb's inks live here, in these two roles. A
+        // ground colour in `dark` would paint the held thumb in the groove's ink: it vanishes in the hand, and only
+        // over rows whose ground does not change (it reads as "a sideways bar vanishes when grabbed").
         mid: Theme.scrollBarThumb
         dark: Theme.scrollBarThumbHeld // Fusion: a scroll bar's held handle
         light: Theme.borderDefault
@@ -102,7 +126,8 @@ ApplicationWindow {
             highlight: Theme.accent
             highlightedText: Theme.textOnAccent
         }
-        // A highlighted button's accent face (Commit, Save) drops too, or it still reads as the thing to press.
+        // `highlight` / `highlightedText` are also every field's and text area's selection colours, in every group.
+        // No button is filled (`highlighted`), so this group's two are the only ones that reach nothing.
         disabled {
             windowText: Theme.textMuted
             text: Theme.textMuted
@@ -126,7 +151,7 @@ ApplicationWindow {
             // A press in another window is one this one never hears (`Hand.acted`).
             Hand.acted()
             // Whatever took the window away — that press, the keyboard, another program — the menus go with it, as a
-            // platform menu does.
+            // platform menu does. Qt does not: 6.12's `QQuickPopup` / `QQuickOverlay` / `QQuickMenu` ignore it.
             OutsidePress.closeAll()
         } else if (root.everAway) {
             root.focusEpoch++
@@ -231,8 +256,8 @@ ApplicationWindow {
     }
 
     // A different git was chosen: this window closes, and `main` starts the successor once the settings files are let
-    // go of (規約 §設定の画面). Read here because `root.close()` is the one road out — the close gate that waits a
-    // running write out stands on it.
+    // go of (`SettingsAppPane`'s `Restart to apply`). Read here because `root.close()` is the one road out — the close
+    // gate that waits a running write out stands on it.
     Connections {
         target: AppBackend
         function onRestartWantedChanged() {
@@ -241,7 +266,8 @@ ApplicationWindow {
         }
     }
 
-    // The RepoPage of the active tab — the only tab that has one (`RepoPageStack`).
+    // The RepoPage of the active tab — the only tab that has one (`RepoPageStack`). Held by `WindowBody`, named here
+    // for the floors' reason: the harness reads `window.curPage`.
     readonly property alias curPage: body.curPage
 
     FolderDialog {
@@ -262,7 +288,9 @@ ApplicationWindow {
     }
 
     // Every way in goes through here so the picker opens beside the open repository — left to itself the dialog
-    // reopens inside the folder it last accepted. `nearUrl` overrides: a retry opens beside the refused folder.
+    // reopens inside the folder it last accepted, the repository itself, where there is nothing to open. Set once per
+    // press: the dialog writes `currentFolder` itself as the reader walks. `nearUrl` overrides: a retry opens beside
+    // the refused folder. Headless: `open-picker` / `open-picker worktree` (`--preset nested-worktree`).
     function openRepositoryPicker(nearUrl) {
         const near = (nearUrl !== undefined && nearUrl !== "")
                    ? nearUrl
@@ -350,7 +378,8 @@ ApplicationWindow {
         // First: what it seeds (the window's opening shape, the strip's first tabs) is read further down.
         const acts = harness.ask()
         chrome.decorateWindow()
-        // A window that is only here to say another process has the files does none of the rest.
+        // A window that is only here to say another process has the files does none of the rest: its store is empty
+        // (`main`'s `claim_store`), and the saved shape is the real window's to wear.
         if (!AppBackend.alreadyRunning) {
             AppBackend.initialize()
             windowShape.applySavedWindow()
@@ -363,7 +392,8 @@ ApplicationWindow {
     }
 
     // No git to ask, or another process already has the files. The shot driver and the harness reach for the id by
-    // name (`AutoShotDriver.gate`).
+    // name (`AutoShotDriver.gate`): a sibling of the body, so the shot takes whichever stands — else a run that ended
+    // at the gate pictures the app that never came up. Headless: `solo` (`blocked=true`).
     StartupGate {
         id: gate
         anchors.fill: parent
@@ -377,7 +407,7 @@ ApplicationWindow {
         onSettingsAtGitRequested: dialogSeat.openSettingsAt("git")
     }
 
-    // The window's edge (規約 §ウィンドウの縁), windowed only; its bottom side coincides with the floor line at the end
+    // The window's edge (`edgeDrawn` says why), windowed only; its bottom side coincides with the floor line at the end
     // of `WindowBody`'s column, which alone stays when maximised.
     Rectangle {
         id: windowEdge
@@ -395,7 +425,8 @@ ApplicationWindow {
         id: body
         // ApplicationWindow keeps its content item inside the window's safe area; a negative top margin reaches back
         // over that inset, and the content item does not clip. Not reparenting onto the window's root item: content
-        // outside the content item never wakes the render loop, so every change waits for the next input.
+        // outside the content item never wakes the render loop, so every change waits for the next input (it reads as
+        // a tab's first click not taking).
         anchors.fill: parent
         anchors.topMargin: -root.contentItem.y
         anchors.leftMargin: root.edgeInset

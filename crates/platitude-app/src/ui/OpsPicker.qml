@@ -3,9 +3,16 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// A name in the ops panel and the door to its card (デザイン規約 §操作パネル): the chevron (turned like `NameCell`'s),
-// an optional kind mark, the name cut in the middle (`CutName`), and the upstream under it where there is one. How
-// loudly the name is said is the caller's; what a press opens is `TopBar`'s — nothing here is bound to a repository.
+// A name in the ops panel and the door to its card (the panel's layout: `TopBar`'s header): the chevron (turned like
+// `NameCell`'s), an optional kind mark, the name cut in the middle (`CutName`), and the upstream under it where there
+// is one — a step down (`fontMd` under `fontLg`): the same step would read as two names of one weight. How loudly the
+// name is said is the caller's; what a press opens is `TopBar`'s — nothing here is bound to a repository. The two
+// lines are one box, as wide as the longer line (user decision): summed side by side, an upstream's worth of air is
+// left after the name. The arithmetic is pinned by `tests/qml/tst_opspicker.qml`.
+//
+// **The marks are デザイン規約 §アイコンの席 の ⑥** — the panel's own placement, an exception for the design's sake (①
+// ② ③ ⑦ do not apply): drawn as the left menu draws them, sized by step (`kindSize`, the cloud `noteSeat`), each
+// standing on its own line's middle (`kindSlot`).
 HoverToolButton {
     id: picker
 
@@ -18,7 +25,8 @@ HoverToolButton {
     /// The name's ink — a detached HEAD takes the state's colour, as its chip does (規約 §ref の種別).
     property color tone: Theme.textPrimary
     /// Whether the card this opens is standing: turns the chevron down (`NameCell.folded`, inverted) and keeps the
-    /// name lit.
+    /// name lit (user decision, `TopBar`'s header). The turn moves nothing: the steps are measured off the chevron at
+    /// rest (`markAir`).
     property bool opened: false
     /// The name's kind as a `NavIcon` kind, drawn between the chevron and the name a step under the chevron's size.
     /// Empty draws none.
@@ -27,7 +35,7 @@ HoverToolButton {
     /// The kind mark's ink — the left panel's for the same kind (規約 §ref の種別).
     property color kindTint: Theme.textSecondary
     /// The upstream's ink — `warning` where it has gone from the remote, as the left panel does
-    /// (§左メニューの所作「消えていれば段ごと `warning`」).
+    /// (`NavFacts.readingLine`).
     property color noteTone: Theme.textMuted
     /// The upstream's step. Fixed rather than following `pixelSize`: raising the name must not raise the upstream.
     property int noteSize: Theme.fontMd
@@ -38,8 +46,9 @@ HoverToolButton {
     /// draws it (デザイン規約 §タブの所作). Empty draws none.
     property string trail: ""
     /// How many pixels narrower than whole the row asks this picker to be (the order between pickers is the row's —
-    /// 規約 §操作パネル の譲る順). Taken off the longer line only: cutting the shorter one frees nothing. Runs are cut,
-    /// never dropped.
+    /// `TopBar`'s header). Taken off the longer line only: cutting the shorter one frees nothing — so the upstream
+    /// alone gives while it is the longer, then both lines come down to one width; the counts never give. Runs are
+    /// cut, never dropped.
     property real given: 0
     /// Each run whole, held under the name ceiling (`Theme.nameMaxChars`): the panel grows with its names and has no
     /// width ceiling of its own.
@@ -57,8 +66,7 @@ HoverToolButton {
     readonly property real noteSlack: picker.note === "" ? 0 : picker.noteWhole - picker.noteFloor
     /// The width the lines are cut to: the longer line less what was asked, never under the wider floor.
     readonly property real textRoom: picker.textWhole - Math.min(Math.max(0, picker.given), picker.slack)
-    /// …and what that takes off each run: the first line gives the worktree's run before the name
-    /// (規約 §操作パネル の譲る順).
+    /// …and what that takes off each run: the first line gives the worktree's run before the name (`TopBar`'s order).
     readonly property real lineOneShort: Math.max(0, picker.lineOneWhole - picker.textRoom)
     readonly property real trailGiven: Math.min(picker.lineOneShort, picker.trailSlack)
     readonly property real nameGiven: Math.min(picker.lineOneShort - picker.trailGiven, picker.nameSlack)
@@ -74,7 +82,7 @@ HoverToolButton {
     property real markStep: picker.gap
     /// The step from the kind mark's ink to the name; the mark's own air counts towards it (デザイン規約 §余白「印が
     /// 自分で持っている余白は、隣の詰めに数える」). Zero sets the mark as a letter of the name: its own air is the whole
-    /// step.
+    /// step (the letters' 3px; the branch's `spaceXs` leaves 5px between the inks).
     property real kindStep: 0
     /// The chevron's size — the larger of the two marks, since it is what a hand goes for.
     property int markSize: Theme.iconMd
@@ -92,11 +100,15 @@ HoverToolButton {
 
     readonly property real bareBox:
         picker.leftPadding + picker.rightPadding + picker.markSeat + picker.markGap
-    /// The column the kind mark stands in at the head of each line, and the step after it.
+    /// The column the kind mark stands in at the head of each line, and the step after it — on the upstream's line too,
+    /// so the two lines' words start on one x. **Counted in both lines' sums**: left out, nothing is cut — the words
+    /// run past the box and the line spills under its neighbour (`tst_opspicker.qml`: a line's content ≤ `textRoom`).
     readonly property real kindColumn: picker.kind === "" ? 0 : picker.markColumn + picker.kindGap
     readonly property real trailWidth:
         picker.trail === "" ? 0 : trailRun.fixedWidth + picker.trailWhole
-    /// Counts beside the name, and what they cost. The step is a word's, not a letter's (規約 §操作パネル).
+    /// Counts beside the name, and what they cost. They end the longer line: past an upstream longer than the name,
+    /// their right end meets the upstream's. The step is a word's (`spaceSm`), not a letter's: at `spaceXs`, `main↑2`
+    /// reads as one word (user decision).
     readonly property bool tracked: picker.ahead > 0 || picker.behind > 0
     property int trackGap: Theme.spaceSm
     readonly property real trackRun: picker.tracked ? picker.trackGap + Math.ceil(trackSeat.implicitWidth) : 0
@@ -115,14 +127,17 @@ HoverToolButton {
     /// The width asked of the row before anything gives way. **Must not read `given`** — the row decides from this,
     /// and a figure that counted the answer closes the loop.
     readonly property real wholeWidth: picker.bareBox + picker.textWhole
-    /// …and the narrowest: every name at both ends, three characters each side of `…`
-    /// (規約 §レイアウト初期値「両端に 3 文字ずつ」).
+    /// …and the narrowest: every name at both ends, three characters each side of `…` (`TabMetrics.titleMinChars`).
     readonly property real foldWidth: picker.bareBox + Math.max(picker.lineOneFloor, picker.lineTwoFloor)
     /// What lies between the two — the most this picker can give.
     readonly property real slack: picker.wholeWidth - picker.foldWidth
     /// The second line's mark, at its words' step (規約 §寸法「語の中に組む印は、その語の段に従う」).
     readonly property int noteSeat: Theme.iconSm
     /// The one column both lines' marks stand in, as wide as the wider mark, so the words after them start on one x.
+    /// **Both marks centred in it** (user decision): marks stacked in a column are read by its axis. At today's steps
+    /// (branch `iconMd`, cloud `iconSm`) the inks are near in width (11.85px and 10.8px), so centred they differ by
+    /// half a pixel at each end, where aligning one end leaves a pixel at the other; the choice tells once a step
+    /// changes.
     readonly property int markColumn: Math.max(picker.kindSize, picker.noteSeat)
     /// The air the chevron keeps inside its square on each side, **measured at rest** — measured turned, the steps
     /// would change as the card opens and the names would move under the hand. From the middle out: the ink is centred
@@ -141,8 +156,9 @@ HoverToolButton {
     readonly property bool nameCut: nameCell.cutting
     readonly property bool noteCut: noteCell.cutting
     readonly property real foldTurn: mark.rotation
-    /// Automation: where the counts came out — `after` the name at `trackGap`, at the `end` of a longer second line,
-    /// `off` both, or `none`. Read off the laid-out items, not the arithmetic.
+    /// Automation: where the counts came out — `after` the name at `trackGap`, at the `end` of a longer second line
+    /// (pushed there by a `fillWidth` filler), `off` both, or `none`. Read off the laid-out items, not the arithmetic
+    /// (`ops-panel`'s must_say).
     readonly property string trackPlace: {
         if (!picker.tracked)
             return "none"
@@ -155,10 +171,10 @@ HoverToolButton {
 
     // The paddings are the theme's step, not the style's: this holds a word rather than a framed box (デザイン規約 §余白).
     /// What this chevron is short of the air the row's first one keeps in its ☰-wide seat — handed in by the row, so
-    /// both chevrons stand with the same air (規約 §操作パネル).
+    /// both chevrons stand with the same air (a second door with less reads as the lesser one).
     property real markLeadIn: 0
     /// The air after the last ink. The row decides: a picker another follows keeps `gap`; the last one keeps its
-    /// `leadAir`, so its wash is even either side (規約 §操作パネル).
+    /// `leadAir`, so its wash is even either side — not running on past the words, nor cut short.
     property real endAir: picker.gap
     leftPadding: Math.max(0, Math.ceil(picker.gap - picker.markAir)) + picker.markLeadIn
     rightPadding: Math.ceil(picker.endAir)
@@ -214,7 +230,7 @@ HoverToolButton {
         font: noteRuler.font
         text: capRuler.text
     }
-    // The same reading a tab's floor is taken from (規約 §レイアウト初期値).
+    // The same reading a tab's floor is taken from (`TabMetrics.titleMinChars`).
     TextMetrics {
         id: floorRuler
         font: nameRuler.font
@@ -271,8 +287,9 @@ HoverToolButton {
 
                 Item {
                     id: kindSlot
-                    // On the line's middle: the operation panel's own placement (デザイン規約 §アイコンの席 の ⑥ /
-                    // §操作パネル).
+                    // On the line's middle: the operation panel's own placement (デザイン規約 §アイコンの席 の ⑥, this
+                    // file's header), outside the rule that draws a mark as a letter — so no height is derived from the
+                    // face's `capitalHeight` / `ascent`. The upstream's cloud stands the same way on its line.
                     Layout.alignment: Qt.AlignVCenter
                     Layout.preferredWidth: picker.markColumn
                     Layout.preferredHeight: picker.kindSize
@@ -293,7 +310,7 @@ HoverToolButton {
                     id: nameCell
                     Layout.leftMargin: picker.kind === "" ? 0 : picker.kindGap
                     // Exactly what it was left, never filling: a filling cell would take its neighbour's turn
-                    // (規約 §操作パネル の譲る順).
+                    // (`given`).
                     Layout.preferredWidth: picker.nameWhole - picker.nameGiven
                     Layout.preferredHeight: nameRuler.height
                     text: picker.shown
@@ -304,7 +321,9 @@ HoverToolButton {
                          : Theme.textMuted
                 }
                 // The worktree's run (`trail`): the tab's own run (`TabTreeMark`) — a step before the mark, the
-                // mark a sign on the folder's name (デザイン規約 §アイコンの席 の修飾), cut to what it is left.
+                // mark a sign on the folder's name (デザイン規約 §アイコンの席 の修飾, the tree is ③, not ⑥), cut to
+                // what it is left. Its width is priced off that part's `fixedWidth`: a run built here would miss every
+                // fix to the mark beside the letters (menu rows' `trail` is the same part).
                 TabTreeMark {
                     id: trailRun
                     Layout.preferredWidth: picker.trailWidth - picker.trailGiven
@@ -315,7 +334,7 @@ HoverToolButton {
                     gap: picker.gap
                 }
                 // The counts end the longer line: `trackGap` at least, grown by what the second line has over the
-                // first (規約 §操作パネル).
+                // first (`trackGap`).
                 Item {
                     visible: picker.tracked
                     Layout.fillWidth: true

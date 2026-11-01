@@ -38,8 +38,12 @@ QtObject {
     readonly property real signSide: (face.plusInk.advanceWidth / 1000 - face.plus.width) / 2
     /// The code face large, in the two weights a name is set in, for where a glyph's ink ends and starts (`groundEnd`,
     /// `nameAir`): a glyph's box comes back rounded out to whole pixels where the face is FreeType's (offscreen, and
-    /// Linux — `QFontEngineFT::boundingBox`), up to a pixel past the ink at a name's size; here the rounding is a
-    /// thousandth.
+    /// Linux — `QFontEngineFT::boundingBox` takes FLOOR / CEIL: a `t` inked over 0.48..7.22 answers 0..8), up to a
+    /// pixel past the ink at a name's size; here the rounding is a thousandth. A real Windows window's DirectWrite
+    /// answers the design box. Offscreen also draws a ground's ends rounded out to whole pixels
+    /// (`QSGSoftwareInternalRectangleNode::setRect`, `toAlignedRect`) where a real window antialiases the fraction, so
+    /// a verify-ui / qmltest picture shows up to a pixel more air at either end: tests read a ground's ends off the
+    /// item's geometry and the ink off the picture (`tst_codenames.drawnInkEnd`).
     readonly property FontMetrics codeLarge: FontMetrics {
         font.family: Theme.monoFamily
         font.pixelSize: 1000
@@ -75,12 +79,19 @@ QtObject {
 
     /// Where a code ground starts in front of a word or a name with no mark (デザイン規約 §git 用語のコード表記): half a
     /// gap before its first glyph's `head` — the air it keeps after the last glyph too (`groundEnd`). A name behind its
-    /// mark starts its ground at the head of the mark's seat instead: the seat holds the mark's air. Not rounded: a
-    /// ground drawn to a whole pixel moves each end by up to half a pixel, a different amount name by name.
+    /// mark starts its ground at the head of the mark's seat instead, with no overhang (user decision — ask before
+    /// changing): the seat is one letter of the run and holds the mark's air, and ground air laid over it widens the
+    /// chip's left inside, the more the thinner the mark. Measured from the seat, not the mark's ink, so a chip's outer
+    /// edge lines up whatever mark it carries — row heads row by row, a column's chips down the column: the mark stands
+    /// midway between the seat's head and the name's first ink, so ground-to-mark equals mark-to-name; from the ink,
+    /// each mark's leftover seat would move the start. Not rounded: a ground drawn to a whole pixel moves each end by
+    /// up to half a pixel, a different amount name by name.
     function groundStart(head) {
         return head - Theme.spaceXs / 2
     }
-    /// …and where it ends: half a gap past the ink of the name's last glyph. `advanceEnd` is where the name's
+    /// …and where it ends: half a gap past the ink of the name's last glyph (user decision) — from the advance it would
+    /// change with every last letter; from the ink it never passes half a gap beyond the advance, as a command's chip,
+    /// and never reaches the next word. `advanceEnd` is where the name's
     /// advance ends, laid out in `code`, the code face at the drawn size; the glyph's ink is the outline's, read off
     /// the face large (`codeLarge`). Its font is read here so a binding calling this follows it (rules/app-ui.md
     /// 「メソッドはバインディングが依存を取らない」).
@@ -146,7 +157,8 @@ QtObject {
     }
     /// How far above the baseline the middle of the capitals as the face draws them (`capitalsAt`) stands, at `size`:
     /// where a hold mark and a ring heading the words centre, as the marks among the words do (デザイン規約
-    /// §アイコンの席「顔と回数押しの印」).
+    /// §アイコンの席「顔と回数押しの印」). Not `capitalMiddle`: a mark drawn to the rounded-up height but centred on the
+    /// measured middle stands up to half a pixel off the name marks in the same column.
     function drawnCapitalMiddle(size) {
         return face.capitalsAt(size) / 2
     }

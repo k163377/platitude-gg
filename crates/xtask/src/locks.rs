@@ -1,6 +1,18 @@
 //! The operating system's lock on a file, let go of by unlocking it and
 //! closing it after — hold every one in a [`Locked`]
 //! (.claude/rules-refs/core.md「lock は unlock で離す」).
+//!
+//! A `flock` belongs to the open file description, and a fork copies every
+//! one: a lock let go of by closing alone stays held by whatever child a
+//! neighbouring thread forked meanwhile, until its `execve`. Windows has no
+//! such window. Unlocked, the next answer needs one read: what is left to
+//! wait out is a sweeper removing the name under its lock, microseconds
+//! (ceiling `still::SWEEP`, spacing `wait::TRY_AGAIN`). Nets (Linux only):
+//! `a_lock_frees_the_tree_when_unlocked_and_not_when_merely_closed` and
+//! `a_lock_let_go_of_is_free_though_a_forked_child_holds_the_description`.
+//! A test that builds the closed-only form on purpose puts that half last:
+//! first, it leaves the lock file to a neighbour's forked child, and the
+//! test's second `try_lock` on it meets `WouldBlock`.
 
 use std::fs::File;
 use std::path::Path;

@@ -13,7 +13,9 @@
 //! at once, not at the next paced read.
 //!
 //! Keyed by where the worktree is ([`same_path_key`] of git's spelling),
-//! which no two repositories share.
+//! which no two repositories share. An 8.3 short name is another key: a
+//! test passes `rev-parse --show-toplevel`'s spelling; the product only
+//! ever passes the listing's.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};

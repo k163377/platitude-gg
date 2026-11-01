@@ -314,7 +314,7 @@ impl RepoSession {
     /// Continues / aborts / skips whatever operation is in progress. A
     /// rebase moving branches together moves them as it finishes, so the
     /// continue or skip that finishes it puts them on the discard record as
-    /// one (破棄記録仕様.md §2); an abort or a quit moves none.
+    /// one (`RepoSession::record_rebase_group`); an abort or a quit moves none.
     pub fn resolve_current(
         self: &Arc<Self>,
         continuation: integrate::Continuation,

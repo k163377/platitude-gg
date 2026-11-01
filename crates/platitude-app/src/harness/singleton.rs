@@ -140,7 +140,10 @@ impl Harness {
 
     /// A file the run was handed, as the chooser it stands in for answers:
     /// a `file:` URL, made by the product's own conversion
-    /// (`urlpath::file_url`) from the whole path.
+    /// (`urlpath::file_url`) from the whole path. Never a name encoded by
+    /// hand onto its folder's URL: on Linux a name holding `\` comes out as
+    /// another path. The `avatar-*` runs' image names take this road every
+    /// time.
     #[qslot]
     fn file_url(&self, path: String) -> String {
         crate::urlpath::file_url(std::path::Path::new(&path))

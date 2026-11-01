@@ -41,8 +41,10 @@ Item {
         return true
     }
     // Empties one whole bucket from its own heading and reads back which headings the list keeps
-    // (デザイン規約 §その他の操作). Read off the list's own children: a band bound to nothing would still be counted
-    // by the condition that asks for it.
+    // (the bucket rules at `WipPane`'s shares). Read off the list's own children (`WipBucketPane.headed`): a band
+    // bound to nothing would still be counted by the condition that asks for it. The picture alone cannot judge it.
+    // `stage-all` / `unstage-all` run on `--preset dirty`; `resolve-all` on `--preset conflict-kinds`, where one
+    // `git add` settles every kind, the two with only one side left included.
     PageStage {
         id: bucketAllTimer
         name: "bucket_all"
@@ -68,7 +70,7 @@ Item {
             }
             // Counts first: the headings are the list's, and trail the model's counts. Headings first and together in
             // the line: `must_say` matches one unbroken stretch of it. `conflicts=` answers the other way — resolving
-            // the whole bucket takes its heading off (規約 §その他の操作).
+            // the whole bucket takes its heading off (`WipPane`).
             bucketAllTimer.complete({
                 "name": "bucket_all_emptied",
                 "when": () => ({ "written": driver.wroteAndSettled(), "emptied": bucketAllTimer.left() === 0 }),
@@ -86,6 +88,12 @@ Item {
     /// own press takes the chosen rows, and the menu's words with them, before any completion reads the report.
     function runFileRowAct(act, arg) {
         const lines = []
+        // `stage-many` / `discard-many` and their `-go`: the list's first row (`rowAt(0)`, a folder row as readily as
+        // a file's) and the argument's row chosen with Ctrl. The argument is required — without it no row comes and
+        // the run is silent until the watchdog (`c.txt` on `--preset dirty`). Run them over a tree whose first row is
+        // a file: `--preset basic` starts with the `docs` folder, and git refuses
+        // `git add -- ':(literal)unstaged:docs'`. One file named alone is `discard-file-go <path>`'s.
+        // `stage-many` leaves the pointer on the first row's `+` (the mate's mark shows too); `-go` presses it.
         if (act === "stage-many" || act === "stage-many-go") {
             const head = wipPane.rowAt(0)
             if (head)
@@ -134,6 +142,10 @@ Item {
                 lines.push("discard_row " + fileDiscardItem.text)
             }
         } else if (act === "take-side-ours" || act === "take-side-theirs") {
+            // Needs a preset with conflicts (`--preset conflict-kinds`): the default `basic` has none, and the named
+            // row never comes (watchdog). Pictured once the tree has settled (`tree_settled`). The two differ on
+            // `conflict-kinds`' `both.txt`: ours equals HEAD, so `-ours` leaves the row in no bucket, `-theirs` puts
+            // it in STAGED (`landed=staged`).
             wipPane.chooseOnly("conflicts", arg)
             page.openFileMenu("conflicts", arg)
             fileMenu.close()
@@ -150,7 +162,12 @@ Item {
             page.openFileMenu("conflicts", arg)
             fileMenu.close()
             // `paths=` says whether anything was handed over: a file already resolved (a fixture a previous run
-            // consumed) chooses nothing, and `openInMergeTool` then queues no write.
+            // consumed) chooses nothing, and `openInMergeTool` then queues no write. The seeded tool trusts its exit
+            // code (`verify::repos::seed_merge_tool`), so a run consumes its fixture — the row goes from conflicts to
+            // staged, `<path>.orig` left untracked — and the same `--repo` run twice is a no-op the second time. The
+            // line reads three ways: `<tool> paths=1` handed over; `<tool> paths=0` a consumed fixture (no write,
+            // watchdog); an empty tool with `paths=1` none configured (the row is `Edit in <merge editor>…` and
+            // launches nothing). Needs `--preset conflict-kinds` (the default `basic` has no conflict).
             const handed = fileRowMenu.chosenConflicts().length
             fileRowMenu.openInMergeTool()
             lines.push("merge_tool " + wipPane.worktree.mergeTool + " paths=" + handed)

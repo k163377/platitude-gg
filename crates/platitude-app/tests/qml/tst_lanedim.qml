@@ -2,8 +2,8 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// What a row the search passed over dims (デザイン規約 §コミットを探す), read off the canvas: its lanes and node go down to
-// `dimFade` (the node without the lanes under it showing through), a matched row's are at full strength — on every
+// What a row the search passed over dims (`GraphRowDelegate.dimmed`), read off the canvas: its lanes and node go down
+// to `dimFade` (the node without the lanes under it showing through), a matched row's are at full strength — on every
 // paint. The 2D context outlives a paint and the list hands a cell from row to row, so only the canvas's own pixels
 // answer: a screenshot is one paint, and the leak is between two.
 Item {

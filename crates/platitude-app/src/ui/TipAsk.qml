@@ -37,12 +37,19 @@ QtObject {
     /// The box stands beside the target, level with the hand, rather than over its words (`NavRowFacts`).
     property bool beside: false
     /// The target is a row among rows, naming the side its box stands on first (`"left"` / `"right"`); empty for any
-    /// other target (規約 §hover のツールチップ「行の的は、行の横に立つ」).
+    /// other target (規約 §hover のツールチップ「行の的は、行の横に立つ」). Named by `FileRowDelegate`,
+    /// `NavItemDelegate`, `HeadPinRow`, `AppMenuItem`, `DiffStageMark` and `DiffLineCell`'s end mark; not by
+    /// `CommandRowDelegate`, whose whole text folds to many times a row's height. The seat is measured with the box's
+    /// drawn `width`, not its implicit one (`TipSeat.rowSeatX`). Pinned twice: the four seat shapes by
+    /// `tst_tipseat.qml`'s row seats, the window's wiring by `aside=` of `path-tip` / `nav-tip` / `delete-blocked-tip`
+    /// (`AutoActDriver.tipAside`).
     property string rowSide: ""
     /// A word in `words` that is a place to go, and its href (`HoverToolButton.tipPlace`).
     property string place: ""
     property string href: ""
-    /// The word the tree mark stands in front of, and which mark (規約 §ref の種別「ツールチップだけは字の中」).
+    /// The word the tree mark stands in front of, and which mark (規約 §ref の種別「ツールチップだけは字の中」), found at
+    /// the sentence's edge by `Words.tipNameSeat`. The sentence is never split round a mark: translation, selection
+    /// and copy would all break at the seam. Marks and `place` may share one sentence (`CardText.namedMarkup`).
     property string markWord: ""
     property string markKind: "tree"
     /// The names the box says, each behind its mark — `[at, kind, tint, length]` as `CardText.marks` takes them —
@@ -71,7 +78,9 @@ QtObject {
     property string keyNow: ""
     /// The seat answering this target's window, found at the first ask.
     property var seat: null
-    /// The box stands on this target.
+    /// The box stands on this target — the seat's own answer, which names the target, so every `*TipShown` built on
+    /// it (`SignatureMark.tipShown`, `NavItemDelegate.tipShown`) is a claim about that target. The box's own
+    /// `visible` (`Tips.box`) says only that somebody's tip is up.
     readonly property bool shown: ask.seat !== null && ask.seat.shownNow && ask.seat.current === ask
 
     /// The ask is taken back for the target's own reason: the box goes now and is not put back.

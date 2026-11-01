@@ -20,7 +20,7 @@ pub use rename::rename;
 
 /// `--format=` for `stash list`: selector, commit, committer time,
 /// subject, parents, and the `Stands-on:` trailer a discard's copy put in
-/// the stash carries (破棄記録仕様.md §2.1). `-z` NUL-terminates records
+/// the stash carries (`discards::copy`). `-z` NUL-terminates records
 /// (stash list forwards options to `git log`).
 pub const STASH_FORMAT_ARG: &str =
     "--format=%gd%x00%H%x00%ct%x00%gs%x00%P%x00%(trailers:key=Stands-on,valueonly,separator=%x20)";
@@ -41,13 +41,19 @@ pub struct StashEntry {
     pub stands: Option<crate::discards::Stands>,
 }
 
-/// What the worktree lets a stash do. Every refusal is git's own
-/// (デザイン規約 §退避できるかどうかを、押す前に出す).
+/// What the worktree lets a stash do. Every refusal is git's own, shown
+/// before the press (the words: `BandStashButton`, `FileRowMenu`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StashStanding {
-    /// No commit yet ("You do not have the initial commit yet").
+    /// No commit yet ("You do not have the initial commit yet"): git
+    /// refuses however dirty the tree is.
     Unborn,
-    /// A file is unmerged ("needs merge").
+    /// A file is unmerged ("needs merge"). git then turns every push down
+    /// whole, one naming only paths in no conflict included (`error: could
+    /// not write index` / `<path>: needs merge`, exit 1, nothing set aside —
+    /// measured on 2.51), so a conflict anywhere in the tree is the answer
+    /// for a stash of chosen paths too. Told by unmerged paths, not by an
+    /// operation standing: settled, a stash goes through mid-operation.
     Conflicts,
     /// Nothing uncommitted to set aside.
     Clean,
@@ -69,6 +75,9 @@ impl StashStanding {
 
 /// The standing, off a status already in hand (no git runs).
 /// `head_missing`: no commit yet (`WorktreeStatus::branch_oid` is `None`).
+/// The one place a stash's availability is decided: the band's
+/// `BandStashButton.mode` and a file row's `FileRowMenu.stashStanding`
+/// both read it.
 pub fn standing(head_missing: bool, counts: &crate::status::Counts) -> StashStanding {
     if head_missing {
         return StashStanding::Unborn;
@@ -141,6 +150,12 @@ pub async fn load(
     })
 }
 
+/// The forms of `stash push`. The app's presses all run `-u` and pass no
+/// options from QML (`RepoTab::stash_push`); `keep_index` (`--keep-index`)
+/// and `staged_only` (`--staged`) live here only, netted by
+/// `stash_integration`. `--staged` with a file changed in both the index
+/// and the tree makes the entry and then fails to take it out of the
+/// tree, so a UI offering it needs a way to turn that case down first.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PushOptions {
     pub include_untracked: bool,
@@ -210,6 +225,15 @@ pub async fn push(
 /// 2.55, a no-op (from 2.56 git turns down with 128 and keeps 1 for a
 /// conflict), so the caller weighs any non-zero end against the working
 /// tree, and the write it belongs to says whether it failed.
+///
+/// No caller reads the value, only zero or not, so where a write lands does
+/// not move with the version (git `786fc39046`): `session::ops_stash`'s pop
+/// and apply, `stash_round::pop_back_split_first` and `carried_apply` weigh
+/// a non-zero end against the unmerged paths, `build`'s `stash::pop(…)?`
+/// fails as it is, `stash_round::pop_back_after_failure` only logs it. Only
+/// the command log's row moves: up to 2.55 a refusal is an answer's row
+/// (`carried_apply` alone fails it on the refusal's words,
+/// `except_when_it_says`), from 2.56 a failed one.
 pub async fn pop(
     executor: &GitExecutor,
     workdir: &Path,

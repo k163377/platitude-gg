@@ -70,10 +70,14 @@ pub const ALWAYS: [&str; 7] = [
 /// holds its image open for writing (`ETXTBSY`).
 ///
 /// A neighbour test forking mid-copy holds a published runner's write
-/// description until its child's `execve`
-/// (rules-refs/core.md「同じ罠は xtask のテストにも出る」). Every attempt
-/// is the real run; the retries run under the suite's budget, and an
-/// image still busy at the end reaches the caller as a failure.
+/// description until its child's `execve`: `tests/gate/landing.rs` puts the
+/// runner into the seat's build slot with `fs::copy`, and
+/// `land_steps_out_of_the_build_slot_the_gate_builds_into` went red by turns
+/// on `Text file busy`. Every exec of such a runner comes through here
+/// (`Sandbox::gate` / `land_from`). Every attempt is the real run; the
+/// retries run under the suite's budget, and an image still busy at the end
+/// reaches the caller as a failure. Net (Linux only):
+/// `a_runner_held_open_for_writing_is_run_once_the_handle_goes`.
 pub fn output_past_a_busy_image(
     command: &mut Command,
     on_busy: impl FnOnce(),

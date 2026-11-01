@@ -2,7 +2,7 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// What a press count answers, and when (デザイン規約 §回数押し): the answer is decided and sent at the last press, while
+// What a press count answers, and when (`HoldDriver`): the answer is decided and sent at the last press, while
 // the presses' latches still hold; only going off the screen waits out the floor. Each case is something that can land
 // inside those `holdFloorMs` — git's unmerged answer, the menu aimed at another branch, git's answer to the delete
 // itself — and must not change what was pressed for.

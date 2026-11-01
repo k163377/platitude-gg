@@ -4,7 +4,8 @@ import platitude.ui
 
 // The band's shared button box, measured: the four wordings that cover all seven states, each drawn invisibly as a
 // button draws it; the band hands the widest to all three (`TopBar.widestAction`). `stash` never wins but is measured,
-// so a re-wording cannot leave the box short. Labels, not `TextMetrics`, which reads a few pixels tighter.
+// so a re-wording cannot leave the box short. Labels, not `TextMetrics`, which reads a few pixels tighter — and with
+// code and plain wordings mixed, the ruler alone can change which one wins.
 Item {
     id: bandWidest
 

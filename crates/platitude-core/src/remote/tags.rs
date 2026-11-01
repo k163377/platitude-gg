@@ -170,7 +170,11 @@ async fn held_against_here(
 /// See [`lease_on`] for why the lease is not `expect` itself.
 ///
 /// The name must stay qualified as `refs/tags/<name>`: a bare name that is
-/// also a branch over there is refused and neither is deleted.
+/// also a branch over there is refused (`error: dst refspec … matches more
+/// than one`, 2.55) and neither is deleted. Qualified and unleased, a name
+/// the remote lacks would pass (`warning: deleting a non-existent ref`,
+/// exit 0, where a bare one fails `remote ref does not exist`): the lease
+/// is what refuses it (minimum version and the development machine).
 /// A far-side refusal is read as in [`push_tag`], hence `--porcelain`.
 pub async fn delete_remote_tag(
     executor: &GitExecutor,

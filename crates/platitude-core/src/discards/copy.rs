@@ -1,14 +1,28 @@
-//! Copies of uncommitted work a write throws away (破棄記録仕様.md §2.1):
-//! what the paths held before the write, kept over what the write left
-//! there. The copy is a stash whose base is the state the write left — the
-//! index and the working tree right after — so its difference from its
-//! base is what went and nothing else: a hunk thrown out of a file whose
-//! other hunks stayed comes back alone, beside them or without them.
+//! Copies of uncommitted work a write throws away: what the paths held
+//! before the write, kept over what the write left there. The copy is a
+//! stash whose base is the state the write left — the index and the working
+//! tree right after — so its difference from its base is what went and
+//! nothing else: a hunk thrown out of a file whose other hunks stayed comes
+//! back alone, beside them or without them. Only what was thrown away comes
+//! back, never a hunk nobody asked for (user decision — ask before
+//! changing); the restore applies this difference as a patch
+//! (`discards::restore`).
 //!
 //! Read in temporary indexes begun from a copy of the worktree's own
-//! index file — its bytes, where `read-tree` would write every entry anew
-//! (ci/baseline/code-costs-windows-x64.md) — so neither `refs/stash`, the
-//! index nor the working tree is touched.
+//! index file — its bytes, where `read-tree` would write every entry anew,
+//! two orders of magnitude heavier (ci/baseline/code-costs-windows-x64.md,
+//! `discards::copy`) — so neither `refs/stash`, the index nor the working
+//! tree is touched: a copy shows in no graph walk (HEAD, the branches, the
+//! remotes, the tags and the stash list's commits), no ref list and no
+//! stash list. It costs 7 to 10 git processes over the write, those reading
+//! or writing an index in proportion to its size; no status read for it
+//! walks the untracked files (`-uno`), and a staged row's discard reads its
+//! one status (a rename's old name) for the copy and the write alike.
+//!
+//! A file git cannot take — a required filter's driver missing (Git LFS not
+//! installed), a `working-tree-encoding` it cannot convert — is not copied
+//! and the write still throws it away: `Not-copied:` names it, and no
+//! restore brings it back. Nothing is recorded while HEAD has no commit.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -24,7 +38,7 @@ use crate::oid::Oid;
 use crate::process::{GitCommand, GitExecutor, literal_pathspec};
 use crate::scratch::ScratchFile;
 
-/// What a copy is a copy of (§2.1 `Operation:`).
+/// What a copy is a copy of (`Operation:`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CopyOperation {
     /// Whole files, staged or not, and untracked ones with them.
@@ -74,7 +88,7 @@ pub struct CopyOf<'a> {
     pub touches_index: bool,
     /// For `reset --hard`: the move it goes with — the ref (`main`, or
     /// `HEAD` while detached) and its old and new tips — so the list tells
-    /// the two as one (§2).
+    /// the two as one (`entries`).
     pub moved: Option<(&'a str, Oid, Oid)>,
 }
 
@@ -110,7 +124,7 @@ enum Before {
     Part { work: Oid, index: IndexCopy },
 }
 
-/// The two sides of a copy's state (§2.1): the index's tree, and the
+/// The two sides of a copy's state: the index's tree, and the
 /// working tree's — the index with the tracked paths as the working tree
 /// holds them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,7 +134,7 @@ struct Sides {
 }
 
 /// Whether a discard of `paths` goes on the record whole, decided before it
-/// is offered: nothing is recorded while HEAD has no commit (§2.1), and a
+/// is offered: nothing is recorded while HEAD has no commit, and a
 /// path git cannot take is left out of the copy ([`copy_work`]). The paths
 /// it cannot take that can be known beforehand are the ones a status names
 /// `not_copied` (a required LFS filter where LFS cannot run,
@@ -137,9 +151,9 @@ pub fn recorded_whole(unborn: bool, not_copied: &[String], paths: &[String]) -> 
     !paths.iter().any(|path| refused.contains(path.as_str()))
 }
 
-/// Reads what `of`'s paths hold before the write throws it away (§2.1), to
+/// Reads what `of`'s paths hold before the write throws it away, to
 /// go on the record against what the write leaves ([`record_copy`]). `None`
-/// while HEAD has no commit (§2.1) and for no paths at all. A path git
+/// while HEAD has no commit and for no paths at all. A path git
 /// cannot take (a required filter missing, an encoding it cannot convert)
 /// is left as the index has it and named under `Not-copied:`; whether it
 /// could is read off the exit code alone.
@@ -220,8 +234,12 @@ pub struct WorkStash {
 /// Reads `workdir`'s work over `tracked` and `untracked` (as a status
 /// lists them) into a [`WorkStash`], touching neither the worktree, its
 /// index nor `refs/stash`: read as a whole-file discard reads its paths, in
-/// a temporary index begun from a copy of the worktree's own (§2.1).
+/// a temporary index begun from a copy of the worktree's own.
 /// `None` while HEAD has no commit.
+///
+/// Not `git stash create`: it has no `-u`, so it takes no untracked file.
+/// Nor a `stash push` over there: that empties the other working tree for
+/// a moment.
 pub async fn stash_of_work(
     executor: &GitExecutor,
     workdir: &Path,
@@ -316,16 +334,25 @@ pub async fn put_untracked(
 /// what the paths held before, over what the write left — the index and
 /// the working tree as the write leaves them where it landed, read as they
 /// are now where it failed part-way. Nothing goes on where the write left
-/// it all as it was. Whether a line went on.
+/// it all as it was (a write refused, paths no different from HEAD); a
+/// write that took only paths it could not copy still goes on, its
+/// `Not-copied:` alone. Whether a line went on.
 ///
-/// The copy is stash-shaped (§2.1), as `git stash` reads one: its tree the
+/// The copy is stash-shaped, as `git stash` reads one: its tree the
 /// working tree's side before, its first parent the base — what the write
 /// left in the working tree — its second the index's side over the same
 /// base, its third the untracked files that went. The base is HEAD itself
-/// where it holds what HEAD does, else a commit made on HEAD for it, which
-/// `Stands-on:` names so the graph draws the copy on HEAD. A `reset
-/// --hard`'s copy stands on the commit it moved off: what it took is all
-/// the work over that commit.
+/// where it holds what HEAD does, else a commit made on HEAD for it
+/// (`left by: <summary>`), which `Stands-on:` names so the graph draws the
+/// copy on HEAD, the base no row. A `reset --hard`'s copy stands on the
+/// commit it moved off: what it took is all the work over that commit.
+///
+/// The index side stands on the base, not on HEAD, because
+/// `git stash apply --index` applies it as its parent-to-it difference (and
+/// not at all where its tree is the first parent's): a stash entry made of
+/// the copy (`restore`'s last way) then also puts back only what went from
+/// the index. Which paths were staged, unstaged or untracked shows in the
+/// trees, so the message does not say it.
 pub async fn record_copy(
     executor: &GitExecutor,
     workdir: &Path,
@@ -586,7 +613,7 @@ async fn untracked_tree(
     Ok((tree != empty).then_some(tree))
 }
 
-/// A temporary index (§2.1), dropped with the handle.
+/// A temporary index, dropped with the handle.
 #[derive(Debug)]
 struct IndexCopy {
     file: ScratchFile,
@@ -602,7 +629,9 @@ impl IndexCopy {
     /// same size, and git looks into such a file rather than trust its stat
     /// ("racy git"). A copy dated when it was made would trust it, and
     /// copy the file as the index has it. Read before the bytes, so a
-    /// newer index under it only makes more entries looked into.
+    /// newer index under it only makes more entries looked into. The date
+    /// is set by hand: `std::fs::copy` keeps it on Windows but not on Linux,
+    /// where alone the miss shows.
     async fn now(
         executor: &GitExecutor,
         of: &CopyOf<'_>,
@@ -734,7 +763,9 @@ impl IndexCopy {
             executor.run(cmd, cancel).await?;
         }
         // `--sparse`: in a sparse checkout `add` refuses a path outside its
-        // definition, which a temporary index has no reason to.
+        // definition (exit 1), which a temporary index has no reason to. The
+        // byte copy carries the skip-worktree bits too; git drops a file's
+        // bit when it reads the file on disk.
         let add = |paths: &[&String]| {
             isolated(of.workdir, of.git_dir, index)
                 .args(["add", "--sparse", "--all", "--force", "--"])

@@ -2,7 +2,7 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// The discard log as it stands over the left menu (`RecoverPane`, 破棄記録仕様.md): nothing the hand does over it
+// The discard log as it stands over the left menu (`RecoverPane`): nothing the hand does over it
 // reaches the menu underneath, its `✕` is the band's whole right end, a ring says the reflogs are being read, an empty
 // answer says so, and a rest on an entry opens its card.
 Item {
@@ -83,7 +83,8 @@ Item {
         }
         function init() {
             page.recoverEntries = []
-            // The list laid out empty before the case writes its own rows.
+            // The list laid out empty before the case writes its own rows: emptied and filled again with no layout
+            // between, the last case's delegates can stay standing.
             tryVerify(() => pane.entryList.count === 0 && standingRows() === "", undefined, "the list emptied")
             // A hand the last case left held (a read moved the rows under it while it read a card) lets go with a move
             // of its own, over the pane — its first place heard there is where the hold is measured from

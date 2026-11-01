@@ -36,7 +36,8 @@ Item {
     function run(act, arg) {
         if (act === "nav-rename-far") {
             // A box on a row the list had scrolled away from: the list has to bring it back (デザイン規約 §左メニューの所作).
-            // On the folded rail's section: the one list a run can scroll and read back through one handle.
+            // On the folded rail's section: the one list a run can scroll and read back through one handle. The TAGS of
+            // `--preset manytags`: a section with more rows than the list shows.
             page.foldByHand(true)
             farTimer.start()
         } else if (act === "nav-rename-drop") {
@@ -55,11 +56,20 @@ Item {
         } else if (act === "nav-tip" || act === "nav-open") {
             // `<section>:<row>`, or `head` for the current branch's sticky stand-in. `nav-open` reads the lines a row
             // opens under itself (`NavRowFacts`) instead of the shared tooltip (`navTipTimer.opens`).
+            //
+            // `nav-open`: the lines are part of the row, not a popup, so app.png holds them and no scene.png is made.
+            // A folder row (a folder is no ref) and a remote's own row (`remote:0`) open nothing — they are
+            // `nav-tip`'s — so `nav-open` aimed there waits out the watchdog. On a WORKTREES row the path's tip comes
+            // up as well and is in the picture (`tip=true text=<path>`; the claim stays on `says=`); its padlocks and
+            // `!` are app.png's, and the sidebar's 180 floor for the width is set up as for `nav-tip`.
             navTipTimer.begin(arg)
         } else if (act === "nav-open-foot") {
             // The same rest on the last row of an overflowing section scrolled to its end, with nowhere to open into:
             // the list has to move (`NavList.revealOpenRow`). `away` then leaves, and the list gives back what it took;
-            // `bar` takes the list's bar instead, which closes the row and gives it back the same way.
+            // `bar` takes the list's bar instead, which closes the row and gives it back the same way (デザイン規約
+            // §hover のツールチップ「スクロールバーを掴んだら、hover で開いたものは閉じる」). Run on `--preset stack`,
+            // the one preset whose BRANCHES has more rows than it shows (30 branches): elsewhere the list has nowhere
+            // to scroll and the fields read nothing.
             navTipTimer.begin("branch")
         } else if (act === "nav-drag-open") {
             // A press on a closed row's line that starts to move: the lines come out at once and the drag carries on
@@ -87,10 +97,15 @@ Item {
             // The open row, then the hand's next move: `away` leaves it, `edit` opens the name box on that row, `menu`
             // opens a menu elsewhere, `filter` types a filter that takes the row out, `rightclick-name` raises the
             // row's menu on its own line, and `rightclick` / `sweep` / `tap` act on the open lines themselves.
+            // `rightclick` / `rightclick-name` are read once the menu stands and the layout is still, with no hand:
+            // that the row stays open after the menu takes the hand is beyond a hand-less run (the real pointer's
+            // `tst_openrowholdshand`). `sweep` takes the first line's words, not the name — the name sits in the row's
+            // seat, which `nav-drag-open` takes.
             navTipTimer.begin("branch:2")
         } else if (act === "nav-follow" || act === "nav-follow-lit") {
             // `<section>:<row>[:<filter>]`: the open row's first line that goes somewhere, pressed (the graph goes
-            // there and the panel stays — デザイン規約 §左メニューの所作), or with `-lit` rested on.
+            // there and the panel stays — デザイン規約 §左メニューの所作「段の名前は、その名前が立つコミットへの道」),
+            // or with `-lit` rested on. The argument is required: a row that never opens waits out the ceiling.
             followTimer.begin(arg, act === "nav-follow-lit")
         } else if (act === "nav-open-tag") {
             // A TAGS row opening on the remotes carrying its name. Named, not numbered: tags sort newest-first with
@@ -114,7 +129,9 @@ Item {
             // A rename git turns down for a reason the box cannot see coming — another git holding the ref's lock
             // (`--preset reflock`, `held`) — sent through the box's Enter, behind its refusal gate as a hand's is: the
             // box stays open holding the name, and the bar says who turned it down (デザイン規約 §答えの要らない報せ).
-            // A name the box itself refuses is not sent, and the run says nothing.
+            // A name the box itself refuses is not sent, and the run says nothing. Not by making the same name first
+            // through the product: the page takes that write's landing for the rename's and closes the box (both are
+            // `OperationKind::Branch`, and the rename's answer is not awaited by id).
             sidebarPane.beginRename("branch", worktree.branch, arg)
             if (!sidebarPane.editRefused)
                 sidebarPane.submitEdit(arg)
@@ -128,7 +145,9 @@ Item {
                    || act === "replace-remote-go" || act === "replace-remote-tip") {
             // Named outright (`origin/billing:billing-v2`) because the remote's rows are behind a fold. "-box" leaves
             // the box standing, the plain act stops at the question, "-go" holds the pill to the end, "-tip" stops at
-            // the question with a hand on the pill.
+            // the question with a hand on the pill. "-go" cannot take the branch the far side stands on: on
+            // `origin/main` git answers `refusing to delete the current branch` and the run fails on `write-failures 1`
+            // — aim at another row (`origin/feature/topic-a`).
             const parts = arg.split(":")
             const ref = parts[0]
             const was = GitFacts.branchOfRef(ref, repoTab.remoteNames)
@@ -162,6 +181,9 @@ Item {
             navNameBoxTimer.begin(act === "nav-rename-box" ? "rename"
                                 : act === "nav-tag-box" ? "tag" : "branch", arg)
         } else if (act === "name-branch") {
+            // The argument is the name, and the run needs `--preset deep`: it names the top row, which on a preset
+            // with a worktree row (`basic`) git refuses with `unable to read tree`. With no name nothing is written and
+            // the run is silent until the watchdog.
             graphPane.view.namingSubmitted(graphModel.oidAt(0), arg, "branch")
         } else if (act === "rename-box-out") {
             // On the first row, which every preset with a chip on it can answer.
@@ -202,7 +224,11 @@ Item {
     // `editKey` is only the ask: the box is built by a `Loader` in a row not yet laid out, so `box=` reads the box as
     // drawn and holding the keyboard (`NavList.rowBoxShown` / `rowFocused`). `refused=` alone passes a box refusing in
     // silence, and Qt can drop the tooltip the box's binding raises (`NavNameBox`) as a binding loop without a word,
-    // so `tip=` is taken through the box (`NavList.rowTipShown` = the box's own `TipAsk.shown`).
+    // so `tip=` is taken through the box (`NavList.rowTipShown` = the box's own `TipAsk.shown`). `text=` is read off
+    // the window's box (`Tips.box.text`, bound to the target's `TipAsk.words`) — the sentence that reached the reader,
+    // not `editRefusedWhy` inside the model. The picture holds the red frame alone — the reason is the tooltip's, and a
+    // box refusing in silence wears the same frame — so the line is the judgement; a box refusing in silence never
+    // raises the tip this waits on, and the run goes quiet until the watchdog.
     PageStage {
         id: tagNameBoxTimer
         name: "tag_name_box"
@@ -313,7 +339,8 @@ Item {
             if (!Awaited.all("replace_ask_ready", { "ready": graphPane.askCard.settled }))
                 return
             if (replaceAskTimer.points && replaceAskTimer.at("start")) {
-                // `pill=` is the word the hand is on, `words=` whether the bar has a tip to open at all.
+                // `pill=` is the word the hand is on, `words=` whether the bar has a tip to open at all. A run that
+                // ends on the ceiling with this as its last line stopped at the tip.
                 replaceAskTimer.input("pointed", () => {
                     graphPane.askCard.pointedAt = true
                 }, () => "replace_ask step=pointed pill=" + graphPane.askCard.accept
@@ -460,7 +487,9 @@ Item {
             writeBarrier.start()
         }
     }
-    // No rest first: the gesture skips it, and a run that rested on the row would be reading the other path.
+    // No rest first: the gesture skips it (`tipDelayMs`), and a run that rested on the row would be reading the other
+    // path. What the drag takes is the full name in the row's own seat (`NameCell`), not the lines' `SweepPad`; the
+    // default `branch:2` is `main`, a name the row does not cut — a name that fits is taken as well.
     PageStage {
         id: dragOpenTimer
         name: "nav_drag_open"
@@ -507,8 +536,10 @@ Item {
                 } })
         }
     }
-    // PGG_AUTO_ACT=nav-open-tip: the worktree's path the open row keeps for the hand that opened it. The picture
-    // shows the words; `says=` is the same path read off the row, so a tip drawn from anywhere else fails to match.
+    // PGG_AUTO_ACT=nav-open-tip: the worktree's path the open row keeps for the hand that opened it — the whole path,
+    // which the lines never carry (デザイン規約 §左メニューの所作). Run on `--preset worktrees` (row 3 by default). The
+    // picture shows the words (overlay.png / scene.png); `says=` is the same path read off the row, so a tip drawn from
+    // anywhere else fails to match. A rest on the lines themselves is the real pointer's (`tst_factstipsteal.qml`).
     PageStage {
         id: openTipTimer
         name: "nav_open_tip"
@@ -576,6 +607,11 @@ Item {
     //
     // No `order`: a row whose lines go nowhere completes where it opened, one with a line that goes somewhere after
     // aiming at it — which of the two is the repository's to say.
+    //
+    // A line on the row's own commit is part of the row and is not pressed (`NavFacts.joined`), so the line taken is
+    // the next that goes somewhere. On `--preset tracked-elsewhere`: `remote:1:topic-a` goes to the local branch (it
+    // and the worktree holding it share one band), `branch:1` skips the worktree's line to the upstream, and
+    // `worktree:1` skips the branch's line to the upstream.
     PageStage {
         id: followTimer
         name: "nav_follow"
@@ -698,6 +734,21 @@ Item {
     // PGG_AUTO_ACT=nav-tip / nav-open / nav-open-then / nav-open-foot. Every run first opens a control row — the first
     // WORKTREES row, the one section every repository has — so an empty overlay still says the pointer arrived
     // somewhere. The hand leaves it on the beat it opened, before its supplement could show, so it raises nothing.
+    //
+    // `nav-tip <section>:<row>[:<filter>]` (`branch` / `remote` / `stash` / `tag`) reads a row that answers with the
+    // shared tooltip: stash leaves, every section's fold parents (a folder row's tip is its full path), and REMOTES'
+    // own remote row (`remote:0`, the one row whose tip is a sentence about its role). Leaves of BRANCHES / REMOTES /
+    // WORKTREES, the pinned current branch and tag leaves open under themselves instead (`nav-open` / `nav-open-tag`;
+    // a worktree's states, locked or folder gone, are pictured there) and answer `wants=false tip=false`, so the
+    // registered lines come from rows that do not open. Those claim `lit=true wants=true tip=true` and
+    // `open=false aside=true` (`aside=`: the tip stands beside the target row, over neither neighbour). `lit=` says
+    // only that the injected pointer arrived; a run claiming `tip=true` is what says the shared instance is alive. The
+    // row wears its hover wash too, so the picture shows where the pointer was; the tip is overlay.png's. `branch:0
+    // --preset basic` (`feature`) is the design picture. `branch:2 --preset nested` pins `text=team/backend`: a
+    // top-level folder spells its path and its shown name alike, so a tip built from the shown name instead of the fold
+    // key passes there. Widths are checked at the sidebar's floor — `sidebar_width = 180` in the `state.toml` of
+    // `--config-dir` (core takes anything under 180 as out of range and falls back to 260). The folded rail's peek
+    // (`nav-peek worktree`) shows the same worktree marks; read the two together.
     PageStage {
         id: navTipTimer
         name: "nav_tip"
@@ -712,10 +763,17 @@ Item {
                                        ? Harness.autoActArg : ""
         /// A filter the current branch does not answer to, putting the stand-in on screen with no row anywhere
         /// (`HeadPinRow.seated`). The presets this argument runs on never overflow a section, so the half where the
-        /// list scrolled out from under the row is `nav-pin-edge`'s.
+        /// list scrolled out from under the row is `nav-pin-edge`'s. The stand-in then sits at the list's head.
+        /// `head:topic --preset basic` keeps `feature/topic-a` in the list, so the stand-in has its seat; a filter no
+        /// row answers to closes the section and cuts the stand-in to the 1px left.
         property string hide: ""
         /// The other way in: the BRANCHES folder row to click shut over the current branch's row
-        /// (`NavProbe.clickRow`); -1 for none.
+        /// (`NavProbe.clickRow`); -1 for none. The only side that shows where the seat is: the stand-in sits right
+        /// under the folder shut (`head::1 --preset nested`: row 1 is `team`, over HEAD's `team/backend/api/fix-auth`;
+        /// the same preset's `head:main` is the filter side, the tree flattened and the seat at the list's head). A
+        /// fold that does not close over the current branch (`team/web`) leaves its row in the list, no stand-in
+        /// comes, and the run waits out the ceiling — that case is `view_tests`'
+        /// `the_stand_in_follows_whichever_fold_closed_over_it`.
         property int fold: -1
         /// Whether the row rested on is the last of its section, the list taken to its end first
         /// (PGG_AUTO_ACT=nav-open-foot). Scrolled once — not re-applied under a hand that has arrived.
@@ -731,7 +789,8 @@ Item {
             navTipTimer.head = parts[0] === "head"
             navTipTimer.kind = navTipTimer.head || parts[0] === "" ? "branch" : parts[0]
             // The filter takes the stand-in's own row out of the list, or brings a leaf under a folded folder into it
-            // (a filtered row stands under its full name — `SidebarFilterRow`).
+            // (a filtered row stands under its full name — `SidebarFilterRow`). REMOTES keeps the remote's own row
+            // (`origin`) as row 0 under a filter too, so its leaves count from 1.
             navTipTimer.hide = navTipTimer.head ? (parts.length > 1 ? parts[1] : "")
                              : (parts.length > 2 ? parts[2] : "")
             // `head:<filter>:<row>` — the folder to shut over the current branch; the filter is then usually empty.
@@ -845,7 +904,9 @@ Item {
                 // Off its rows (`AutoActDriver.tipAside`); after the fold and the facts, which read as one run each.
                 + " aside=" + driver.tipAside(tip)
                 + " text=" + (tip.visible ? tip.text : "")
-                // After a text that may carry anything, so the judged four above stay one substring.
+                // After a text that may carry anything, so the judged four above stay one substring. `seat=` is never
+                // judged: the reader's witness that the lines sit under the row's line (`lines=` at `line=`'s y is
+                // lines drawn over the name); its `view=` / `room=` say whether the section grew or the list scrolled.
                 + (navTipTimer.opens ? " seat=" + sidebarPane.rowFactsGeom() : "")
                 + (navTipTimer.opens ? " says=" + navProbe.rowFactsWords() : "")
                 + (navTipTimer.head ? " pin=" + navProbe.headPinLit : "")
@@ -937,7 +998,8 @@ Item {
     //
     // The readings must be in first: nothing local records a remote's `refs/tags/` (`remote::tags::list_tags`), so a
     // row rested on before `ls-remote` answered looks like nobody else's tag. Waits on the answer itself, as
-    // `AutoActRefVerbs.tagMenuTimer` does.
+    // `AutoActRefVerbs.tagMenuTimer` does. Run on `--preset tagremotes`, the one preset with three remotes
+    // (`--preset tags` has origin alone, so a row opens on one line whatever it carries).
     PageStage {
         id: navOpenTagTimer
         name: "nav_open_tag"
@@ -950,7 +1012,9 @@ Item {
         /// on purpose: searching for the one with a supplement would ask the answer where to find itself. Lines are in
         /// name order, so which it is is the preset's (`--preset tagremotes`: `fork`) — / `name` = the row's own name,
         /// which keeps why the copy here wears the warning / empty = nowhere. On a place with nothing to add the run
-        /// hits the ceiling.
+        /// hits the ceiling. The name wears `warning` where the copy here stands on another commit than the reference
+        /// remote's (read with `here_apart=true`). A run's tip stands at the head of the lines (`TipSeat.seatY`), so
+        /// `:tip` and `:name` frame in the same seat — the argument and the line say which rest it was.
         property string rest: ""
         /// PGG_AUTO_ACT=tag-line-menu: the line the menu is asked for on, -1 for a run that only opens the row.
         property int menuLine: -1
@@ -1065,7 +1129,16 @@ Item {
         }
     }
     // PGG_AUTO_ACT=nav-branch-box / nav-rename-box / nav-tag-box: how wide the box comes out on a row of that depth in
-    // a pane of that width — one question, so one timer for all of them.
+    // a pane of that width — one question, so one timer for all of them. The field's modes (`NavNameBox`) are read as a
+    // pair: `Branch name` for a new branch, the rename (emptied, it shows its kind's placeholder). A width under the
+    // floor (180) is taken at the floor by the splitter; none keeps the width it opened at (260 by default). `whole=`
+    // is the wider of the full placeholder and the name the box opened with — latched at the open, so typing does not
+    // move it. A box drawn outside the pane has two ways to vanish that a box inside its row has not (cut by a layer,
+    // its row scrolled away), hence `shown=` beside `open=` / `focused=`; `:away` takes the second, on a section that
+    // overflows (TAGS of `--preset manytags`). On `basic`, `branch:main` / `branch:feature/topic-a` /
+    // `remote:origin/feature/topic-a` keep a `Branch name` box in its seat even at the floor (seat 118 / 146 / 140,
+    // whole 95 with the default font); the rename side's wall, outside the pane at every width, is `--preset
+    // worktrees`' `release/2026-08-candidate-with-a-very-long-name`.
     PageStage {
         id: navNameBoxTimer
         name: "nav_name_box"
@@ -1183,12 +1256,15 @@ Item {
         }
     }
     // PGG_AUTO_ACT=rename-box-out: one way out of the name box per run. The claim is what the box and the gesture are
-    // left holding: a wait still running is how a box comes back by itself, so `armed=false` says it will not.
+    // left holding: a wait still running is how a box comes back by itself, so `armed=false` says it will not — the
+    // picture cannot tell.
     PageStage {
         id: boxOutTimer
         name: "box_out"
         order: ["first_click", "second_click", "out"]
-        /// Which way out this run takes: `same-row` / `other-row` / `escape` / `away` / `typed-away`.
+        /// Which way out this run takes: `same-row` / `other-row` (a click there only closes the box) / `escape` /
+        /// `away` (an untouched box goes with a press elsewhere) / `typed-away` (a box holding a half-typed name
+        /// stays — the one way out that leaves it).
         property string route: ""
         onTriggered: {
             const op = boxOutTimer

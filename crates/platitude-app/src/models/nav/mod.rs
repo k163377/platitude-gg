@@ -311,6 +311,8 @@ pub struct NavSectionModel {
     /// since the refs read may already have moved HEAD. Finds the
     /// highlighted row (`Role::IsHead`) and names the sticky stand-in.
     head_name: String,
+    /// That branch's tip — empty while HEAD is detached. Where HEAD
+    /// itself is, branch or not, is `WorktreeModel.headOid`'s answer.
     head_oid: String,
     /// What that branch's own row wears, read off the snapshot by name
     /// once both are in hand (`drain::settle_head_marks`).
@@ -356,8 +358,9 @@ pub struct NavSectionModel {
     looked: u64,
     /// File sections only: tree vs flat-path display. The page's
     /// restore (`PageLayout.applySavedLayout` → `set_tree_view`) is the
-    /// sole writer — rules-refs/app-ui.md「保存フラグの復元は 1 書き手」;
-    /// the derive-`Default` false is never on screen.
+    /// sole writer: an `attach_*` that set it would overwrite the restore,
+    /// and that value would be written back into the saved layout. The
+    /// derive-`Default` false is never on screen.
     tree_view: bool,
     /// The row the pointer is on and its notice, in the pieces its
     /// sentence needs — kept once here, since one row wears it at a time.

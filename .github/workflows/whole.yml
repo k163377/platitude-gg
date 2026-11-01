@@ -18,7 +18,8 @@ on:
     paths-ignore: ["**.md"]
   # What the push check leaves out, and what moves with no commit — the
   # runners' images, the advisories: Friday 19:00 JST, the hour Dependabot
-  # runs here (dependabot.yml) and in jackson-module-kogera. GitHub may
+  # runs here (dependabot.yml) and in jackson-module-kogera — every weekly
+  # job keeps that hour (user decision — ask before changing). GitHub may
   # start a run set on the hour late, or drop it under load, and turns a
   # public repository's schedule off after 60 days with no activity in it;
   # it is turned back on from the Actions page.

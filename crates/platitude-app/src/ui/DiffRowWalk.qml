@@ -3,16 +3,24 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude.ui
 
-// Where the diff's reading position stands, and whether the arrows are this pane's to answer (規約 §diff を上下に送る).
-// The one place the view's `contentY` and the keyboard are written from; its visibility is the pane's.
+// Where the diff's reading position stands, and whether the arrows are this pane's to answer (the arrows' shared rules:
+// 規約 §矢印で履歴を辿る). The one place the view's `contentY` and the keyboard are written from; its visibility is the
+// pane's.
+//
+// Up / Down move the view, one row a press: nothing here follows a selection, so a lit row would bring nothing along.
+// The unit is the wheel's row — a notch sends `Metrics.wheelRows`, a press one — so the same surface is not sent in two
+// kinds of step by two hands (規約 §グラフ・インタラクション定数). Stops at the ends.
 Item {
     id: walk
 
     required property var view
 
-    /// The hand has arrived in this pane — the wheel, or a press in the rows — and the keyboard comes with it
-    /// (デザイン規約 §diff を上下に送る). Automation comes in by the same door. Only to a list on screen: Qt keeps active
-    /// focus on an invisible item and the keys go on arriving there.
+    /// The hand has arrived in this pane — the wheel, or a press in the rows — and the keyboard comes with it (user
+    /// decision — ask before changing). The press that opened the diff landed in the file list, so that hand is still
+    /// the list's, and until it arrives here Up / Down are the list's to answer (`FileRowWalk`). Automation comes in by
+    /// the same door. Only to a list on screen — an image-only
+    /// preview draws no rows and hides it: Qt keeps active focus on an invisible item and the keys go on arriving
+    /// there, so something not on screen would hold the keys.
     function handArrived() {
         if (walk.view.visible)
             walk.view.forceActiveFocus()

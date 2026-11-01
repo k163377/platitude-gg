@@ -5,14 +5,16 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The band over the graph while an entry of the discard log is on it (破棄記録仕様.md): what the operation was and when,
+// The band over the graph while an entry of the discard log is on it: what the operation was and when,
 // what each of its parts would bring back and as what, the press that brings it back, and the way out of the showing
 // — the left panel only names the entry. The rebase plan's head is the model: a mode, named over its rows and
 // underlined in the accent (`RebasePlanPane`).
 //
 // The presses say what the Windows Recycle Bin says for the same act: `Restore` for one thing, `Restore all` for every
 // part of an entry whose parts each come back alone too. The branches one rebase moved come back together, under the
-// one `Restore` (`byPart`).
+// one `Restore` (`byPart`); a single commit of theirs is a cherry-pick from the rows shown on the graph.
+//
+// The band, its lines and its presses are user decisions — ask before changing.
 Rectangle {
     id: band
 
@@ -21,7 +23,7 @@ Rectangle {
     /// The moment in full, then how long ago (`RecoverPane.whenWords`).
     property string when: ""
     /// Per part, whether what it would bring back is on the graph: a part whose tip the graph has not walked to cannot
-    /// come back until it is (破棄記録仕様.md §4). Empty while the walk that would tell is still out: nothing is
+    /// come back until it is (`RepoPage.recoverReach`). Empty while the walk that would tell is still out: nothing is
     /// pressed, and nothing is said to be out of reach.
     property var reach: []
     /// The graph can walk further than it has, `step` commits at a press (`GraphTailFooter`).
@@ -151,7 +153,7 @@ Rectangle {
                 }
             }
             // Not yet on the graph: the press waits, and the way there is offered in the words the graph's own end
-            // offers it with (破棄記録仕様.md §4, `GraphTailFooter`).
+            // offers it with (`GraphTailFooter`).
             RowLayout {
                 visible: band.outOfReach
                 spacing: Theme.spaceSm

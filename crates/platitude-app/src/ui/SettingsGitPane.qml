@@ -4,7 +4,13 @@ import platitude
 import platitude.ui
 
 // The settings screen's `Git` category: what this app writes into git's own configuration, in two groups by how far a
-// value reaches — `GLOBAL`, and `REPOSITORY OVERRIDE` standing over it (規約 §設定の画面).
+// value reaches — `GLOBAL`, and `REPOSITORY OVERRIDE` standing over it (規約 §設定の画面). One category, not two: both
+// are git's settings and differ only in reach (user decision — ask before changing). A chapter may stand in both
+// groups (`IDENTITY`) or in one: `MERGE EDITOR` is global only, `LINE ENDINGS` repository only (`LineEndingField`).
+//
+// The group names follow other git GUIs (the four looked at all say "global", and give the narrow side as "this
+// repository overrides global"). The narrow one names the relation itself, `REPOSITORY OVERRIDE`: `local` does not say
+// local to what. The pair is lopsided on purpose — the second stands on the first.
 ColumnLayout {
     id: pane
 
@@ -15,7 +21,9 @@ ColumnLayout {
     /// This category is on screen and the screen is open — what the slow candidate read waits for.
     property bool showing: false
     /// The screen is open, whichever category is showing — what the boxes follow git by. git can answer while the
-    /// other category is up, and a box that stopped following would be written back stale on close (`applyTool`).
+    /// other category is up (in a conflicted tree the status read writes `mergeTool` unasked), and a box that stopped
+    /// following would be written back stale on close (`applyTool`) — an empty one taking `merge.guitool` out of the
+    /// global file.
     property bool screenOpen: false
 
     /// Enter in the tool box; the screen owns the way out.
@@ -54,7 +62,8 @@ ColumnLayout {
     }
 
     /// Asks git what it would launch and what it could. The candidate read (`--tool-help`) is slow
-    /// (規約 §conflict を外部ツールへ渡す), so only the showing category asks.
+    /// (規約 §conflict を外部ツールへ渡す), so only the showing category asks: who opened `Application` did not ask
+    /// for candidates.
     function askTools() {
         if (!pane.curPage)
             return
@@ -67,7 +76,8 @@ ColumnLayout {
     /// [`toolsSettled`] again.
     signal toolsAsked()
 
-    // Written only when it differs: an empty field unsets the key, which fails when it was never set.
+    // Written only when it differs: an empty field unsets the key, which fails when it was never set. Headless:
+    // `settings-tools`.
     function applyTool() {
         if (pane.curPage && toolField.wanted !== pane.mergeTool)
             pane.curPage.pageTab.setMergeTool(toolField.wanted)
@@ -119,7 +129,7 @@ ColumnLayout {
 
     // ---- what the way out has to stop for -------------------------------
     /// How many identity chapters hold an edit git has not been given — the only thing leaving can lose
-    /// (規約 §設定の画面).
+    /// (`SettingsDialog.escapeOut`).
     readonly property int unsavedIdentities: (identityFields.dirty ? 1 : 0) + (repoPane.unsaved ? 1 : 0)
     /// Automation: which group holds the unsaved edit (both is possible).
     readonly property bool unsavedIsGlobal: identityFields.dirty
@@ -149,7 +159,10 @@ ColumnLayout {
     SettingsGroup {
         caption: qsTr("GLOBAL")
 
-        // In `warning`: both chapters write `--global`, reaching every repository on the computer (規約 §設定の画面).
+        // In `warning`, the one warning-coloured sentence of `Git` (user decision — ask before changing): both chapters
+        // write `--global`, reaching every repository on the computer, beyond this window. The repository group's line
+        // stays help text — warning on both would warn on neither. It says three things (user decision): it writes the
+        // global file, it replaces what is there, and every repository on this computer reads the same value.
         CardText {
             Layout.fillWidth: true
             color: Theme.warning
@@ -165,8 +178,10 @@ ColumnLayout {
                 note: qsTr("Written as user.name and user.email.")
                 onSubmitted: pane.submitIdentity()
             }
-            // Its own Save, since git cannot take both keys in one go. Lit by an edit and, unlike the repository
-            // chapter's, by both boxes being filled — the global pair has nothing to fall back to (規約 §設定の画面).
+            // Its own Save, the screen's one exception to writing on a finished edit: git cannot take both keys in one
+            // go (`identity::set_identity`). It stands in the chapter — at the screen's foot it would read "save this
+            // screen", a lie about every other chapter. Lit by an edit (`IdentityFields.dirty`) and, unlike the
+            // repository chapter's, by both boxes being filled — the global pair has nothing to fall back to.
             DialogActions {
                 id: identityActions
                 acceptKind: "check"
@@ -176,6 +191,11 @@ ColumnLayout {
             }
         }
 
+        // Global only: which editor opens is a property of the desk, not of a repository (`conflict::set_merge_tool`).
+        // The heading names the box, so no caption (`LabeledField`). That the setting is git's is said by the category
+        // it stands in; naming `merge.guitool` at the end of the help is an index for whoever comes looking from git's
+        // side. Any tool keeping the merge tool's contract (`$LOCAL` / `$REMOTE` / `$BASE` in, `$MERGED` written) is
+        // taken; running without a console (`CREATE_NO_WINDOW`) is the one constraint, and the words name only that.
         SettingsSection {
             caption: qsTr("MERGE EDITOR")
             HelpText {
@@ -188,11 +208,15 @@ ColumnLayout {
                     id: toolField
                     Layout.fillWidth: true
                     placeholder: qsTr("none")
+                    // A read settled on no tool at all (`AppCombo.hasList` false) cannot be photographed on a desk:
+                    // `--tool-help` always names one, so that picture takes a throwaway patch emptying
+                    // `conflict::available_tools`.
                     loading: pane.holdToolLoading || (pane.curPage && pane.curPage.pageTab.mergeToolsLoading)
                     model: pane.toolChoices
                     onWantedChanged: pane.toolTouched = true
                     // A picked row is a finished answer; free text waits for Enter or the close. `submitted`, not
-                    // `accepted`: Qt raises `accepted` under the open list too, and would shut the screen mid-choice.
+                    // `accepted`: Qt raises `accepted` under the open list too, and would shut the screen mid-choice
+                    // (`settings-tools-enter`).
                     onActivated: pane.applyTool()
                     onSubmitted: pane.accepted()
                 }

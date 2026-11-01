@@ -3,8 +3,23 @@ import QtQuick.Controls.Fusion
 import platitude.ui
 
 // The seat that opens the git commands this tab ran, at the foot of the left menu. One control in three seats — a
-// section band, the folded rail's end block, the head of the log panel's band — dressed by `captioned` / `ruled` /
-// `markSize` (デザイン規約 §git が言ったことを読む場所).
+// section band (`SidebarPane` open, `OpenFailedScreen`), the folded rail's end block (`SidebarPane` folded), the head
+// of the log panel's band (captioned with `ruled: false`, first in `CommandsPane`'s `RowLayout`, its `(N)` inside the
+// seat) — dressed by `captioned` / `ruled` / `markSize` (デザイン規約 §git が言ったことを読む場所).
+//
+// The foot of the page's left menu, not the window's bottom edge: the log is a tab's, so its way in sits on the tab's
+// side. The seat wears whatever the pane is wearing (user decision — ask before changing). Open, a section's band —
+// `rowHeight`, the heading's mark (`iconMd` box) and `GIT COMMANDS` in the heading's type — except that the mark's box
+// keeps to the left edge (`spaceXs`): the fold arrow's column belongs to rows with a section to open (user decision).
+// Folded, the fold block's own box and step (`railWidth` × `headerHeight`, the mark `iconLg` in the middle, no count),
+// so the rail's two ends match (user decision); a cell's `iconXl` is something else — the cell's content, not a mark
+// on a band. One ground for every seat, the bands' `bgElevated` (it is read beside the section bands and the fold
+// block), the hover one wash over it; no frame and no corners — a `borderSubtle` hairline above, as under the fold
+// block, is the edge with the list.
+//
+// Hand-built `Rectangle` + `MouseArea`, not `HoverToolButton`: that base has no seat for a mark in four colours
+// (wrong / running / open / plain), and a replaced `contentItem` still keeps `ActionButton`'s press-and-release dress.
+// Moving it onto the base means opening a four-value port there first.
 Rectangle {
     id: toggle
 
@@ -33,7 +48,8 @@ Rectangle {
     /// (`PGG_AUTO_ACT=commands-clear`).
     readonly property alias markColor: commandsMark.tint
 
-    /// Where the mark stands and the name begins: a section's row without the fold arrow's column.
+    /// Where the mark stands and the name begins: a section's row without the fold arrow's column. Written as the sum
+    /// of the steps, never a copied number — that would drift silently when the pane's inner size moves.
     readonly property real markX: Theme.spaceXs
     readonly property real captionX: toggle.markX + Theme.iconMd + Theme.spaceXs
 
@@ -78,7 +94,8 @@ Rectangle {
               : toggle.open ? Theme.textPrimary
               : Theme.textMuted
     }
-    // Goes red with the mark (デザイン規約 §git が言ったことを読む場所).
+    // Goes red with the mark: the mark's colour is all the seat says of the last command, and one red mark in a row of
+    // plain words does not read as a failure.
     Label {
         id: commandsName
         visible: toggle.captioned

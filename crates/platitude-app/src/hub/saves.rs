@@ -8,7 +8,8 @@
 //! could close with `git config` half way through its pair. So the hub
 //! holds them (`Hub::spawn_save`), the quit gate counts them
 //! (`Hub::writes_settled`) and the shutdown joins them (`Hub::shutdown`),
-//! as a session's local write is.
+//! as a session's local write is. The quit road is netted headless by
+//! `quit-save-held`.
 //!
 //! Holding is all this does: slots are the executor's
 //! (`platitude_core::process::Slots`), and the answer travels on the feed

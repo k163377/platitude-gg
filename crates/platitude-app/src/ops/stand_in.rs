@@ -17,7 +17,10 @@ pub enum Row {
     /// with it; no list draws it alone.
     WorktreeChip,
     /// The branch a worktree going has out, which the graph's chip and the
-    /// branches list mark as another worktree's. Rides on [`Row::Worktree`].
+    /// branches list mark as another worktree's (the chip's green frame and
+    /// lock, the BRANCHES row's tree mark); the branch itself stays. A
+    /// worktree's marks go with it (user decision — ask before changing).
+    /// Rides on [`Row::Worktree`].
     WorktreeBranch,
 }
 
@@ -179,8 +182,14 @@ const CARRIED: u64 = u64::MAX;
 /// and a failed remote half (a refused lease among them) answers with the
 /// same one error as a refused local half — so a landed local delete is
 /// put back too, until the refs read takes it away again. Telling them
-/// apart needs a result per half from core (rules-refs/app-ui.md). A
+/// apart needs a result per half from core, not taken for a rare road
+/// (why local first: `RepoSession::delete_branch_everywhere`). A
 /// tag's pair runs the remote half first, so there the put-back is right.
+///
+/// Matching the id is enough: the write queue is serial through its
+/// refresh (`run_write` waits for the stash and worktree listings to be
+/// published before `WriteSettled` and the next request), so no later
+/// write answers in between.
 #[derive(Debug, Default)]
 pub struct StandIn {
     rows: Rows,

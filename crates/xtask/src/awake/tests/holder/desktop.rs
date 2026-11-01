@@ -1,5 +1,10 @@
 //! Desktop log fixtures preserve the observed 2026-09-29 grammar; IDs are
 //! anonymized. Tests own their log files and never read the user's logs.
+//! Run alone with `cargo test -p xtask --bin xtask awake::tests::holder::desktop`.
+//! The last test takes the ordinary path — `apply`, WMI, the shipped
+//! holder, the Windows API — with only the log and the Claude process as
+//! fixtures. Every other awake test runs with the supplement off
+//! (`desktop-log.off` in its scratch directory).
 
 use super::{FakeClaude, claim_file, marked, scratch};
 

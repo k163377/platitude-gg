@@ -2,12 +2,17 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// Drawn from tokens: Fusion's indicator is `palette.base` framed darker still, and vanishes on this theme
-// (rules-refs/app-ui.md「チェックボックスは `AppCheckBox` の 1 か所」). The frame is the fields' `borderDefault`
-// (デザイン規約 §色); disabled maps §無効's palette table (`highlight` → `accentMuted`, `highlightedText` → `textMuted`).
+// The one check box (デザイン規約 §QML 実装ルール). Drawn from tokens: Fusion's indicator is `palette.base` — the
+// pane behind it — framed darker still, so on this theme the box vanishes (unchecked reads as a blank before the
+// words, checked as a mark floating in the air). Unchecked wears an input field's own frame (`bgBase` face,
+// `borderDefault` 1px, `borderFocus` for focus) so it reads as something to press; checked is an `accent` face with
+// the `check` mark in `textOnAccent`; under the pointer the frame goes `borderStrong`. Disabled moves §無効's palette
+// table onto the face (`highlight` → `accentMuted` face, `highlightedText` → `textMuted` mark).
+// Headless: `amend-author` / `remote-url origin:marked` / `commands`.
 CheckBox {
     id: appCheck
     font.pixelSize: Theme.fontMd
+    // Users keep this default; only the band's `Background reads` (`CommandsPane`) drops to `iconLg`.
     implicitHeight: Theme.controlHeight
     // The box's seat: whatever holds the box keeps its step on the left, and the same step comes before the words —
     // the style's own 6 on the left would stack on it (デザイン規約 §アイコンの席「④ の席」— the box's seat is

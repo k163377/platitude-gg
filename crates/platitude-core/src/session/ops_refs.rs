@@ -35,7 +35,7 @@ impl RepoSession {
     /// graph at once (`session::leaving`); a plain delete takes none with
     /// it — git refuses one whose tip is not merged into its upstream or
     /// HEAD, and the graph draws both. The branch as it stood, upstream and
-    /// all, goes on the discard record (破棄記録仕様.md §2).
+    /// all, goes on the discard record (`discards::record`).
     pub fn delete_branch(self: &Arc<Self>, name: String, force: bool) -> Option<OperationId> {
         let status = self.measures_head(Some(&name), None);
         let names = [LeavingRef::Branch(&name)];
@@ -114,11 +114,16 @@ impl RepoSession {
     /// from the start. The reference point is git's own rule, read off the
     /// snapshot (`BranchItem::upstream_oid`: the upstream where the listing
     /// resolves it, HEAD otherwise); reachability is `merge-base`'s. A
-    /// read, so it skips the queue.
+    /// read, so it skips the queue. The app copies that one rule of git's,
+    /// upstream first; the verdict is git's. Asked for the one branch the
+    /// menu opened on, so the cost does not grow with the refs
+    /// (internal-docs/性能.md §設計規則). Unanswered in time, or unreadable,
+    /// the row stays plain and a refusal at the press still turns it.
     ///
     /// **Every ask is answered**, a failed read included
     /// ([`SessionEvent::BranchDeleteChecked::merged`]), so a harness
-    /// waiting for the echo sees a run whose reads fell over.
+    /// waiting for the echo sees a run whose reads fell over. That failure
+    /// is not logged: it is an open question, and the press asks git.
     pub fn check_branch_delete(self: &Arc<Self>, branch: String) {
         let Some(workdir) = self.workdir() else {
             self.sink.event(SessionEvent::BranchDeleteChecked {
@@ -223,7 +228,7 @@ impl RepoSession {
     /// Deletes a tag. What it marked may have nothing else reaching it, so
     /// the UI asks first — and those commits leave the graph at once
     /// (`session::leaving`). The object it named goes on the discard record
-    /// (破棄記録仕様.md §2).
+    /// (`discards::record`).
     pub fn delete_tag(self: &Arc<Self>, name: String) -> Option<OperationId> {
         let target = name.clone();
         let s = Arc::clone(self);

@@ -58,7 +58,9 @@ Item {
     }
 
     // What remains after a middle-click. The two tabs are a precondition of the press only: read again after it, the
-    // verb's own answer (one tab fewer) becomes a wait nothing can end.
+    // verb's own answer (one tab fewer) becomes a wait nothing can end. The tabs come from `--preset` (or `--repo`)
+    // given twice, e.g. `--preset basic --preset stashes`. The argument is the tab's index, default the first; a tab
+    // closed left of the active one moves `active=` one to the left, which is right.
     WindowStage {
         id: middleCloseTimer
         name: "middle_close"
@@ -106,7 +108,10 @@ Item {
     }
 
     // The strip's order after a tab was carried across it, read off the items (the drag settles against where the
-    // tabs actually sit). The tabs it needs are a precondition of the carry, read in that stage alone.
+    // tabs actually sit). The tabs it needs are a precondition of the carry, read in that stage alone. `active=` is
+    // right when it equals `to`. Run both ways (`3:1` left, `0:3` right): one judgement, but the edge-against-centre
+    // comparisons are written per direction. Only with `tab-hold` does it mean anything — alone, its picture cannot
+    // tell a carry from a tab that only jumped seats.
     WindowStage {
         id: tabDragTimer
         name: "tab_drag"
@@ -154,7 +159,9 @@ Item {
     }
 
     // A tab drawn off its row while the hand is still on it. A settled strip frames the same whether the tab was drawn
-    // under the hand or only jumped, so the transform's offset is reported.
+    // under the hand or only jumped, so the transform's offset is reported — the tab's own (`shift=`), not the one
+    // asked for, which stays green with the binding cut. An empty page in the picture is right: tab 0 is an `empty`
+    // repository with no history.
     WindowStage {
         id: tabHoldTimer
         name: "tab_hold"
@@ -247,7 +254,8 @@ Item {
     }
 
     // Another worktree's uncommitted row, double-clicked, stands this tab in that worktree (デザイン規約 §タブの所作).
-    // Window-level because the landing is the strip's answer: the page stays.
+    // Window-level because the landing is the strip's answer: the page stays. `--preset carried` is required: it is the
+    // only preset whose graph draws another worktree's row.
     WindowStage {
         id: carriedOpenTimer
         name: "carried_open"
@@ -388,7 +396,8 @@ Item {
     }
 
     // A worktree made from a menu stands this tab in it (デザイン規約 §worktree を作る): the page presses
-    // (`AutoActWorktreeVerbs`) and the landing is read here, the page being stood elsewhere by it. The tab is taken as
+    // (`AutoActWorktreeVerbs`) and the landing is read here, the page being stood elsewhere by it — the move folds the
+    // page's watch over its writes (`restand::forget_the_worktree`). The tab is taken as
     // it first settles — the page's press comes several beats after its dispatch, and the move behind it takes git's
     // answer and two more processes.
     WindowStage {
@@ -470,7 +479,7 @@ Item {
     }
 
     // …and away and back: unsent words are filed under the worktree they were written in
-    // (デザイン規約 §タブの所作「未コミットのコミットメッセージは立ち位置ごとに憶える」). `kept=` (one page
+    // (`Hub`'s `Tab::drafts`). `kept=` (one page
     // throughout) is what makes `back=` a put-back rather than never taken away. `waits=` is what the page still
     // waits on in the worktree arrived at, of the renames left asking in the one left (`RepoPage.leaveWorktree`):
     // their answers were that session's and do not come, so a wait left standing takes the next session's answer
@@ -662,7 +671,8 @@ Item {
     }
 
     // The hover over a tab standing in a linked worktree says that worktree's path, not the repository's
-    // (デザイン規約 §hover のツールチップ).
+    // (デザイン規約 §hover のツールチップ). The argument is the WORKTREES row, as `worktree-stand`'s; the tip is in
+    // overlay.png.
     WindowStage {
         id: worktreeTipTimer
         name: "worktree_tip"
@@ -720,6 +730,8 @@ Item {
     // The worktree-name run on a tab stays with it, and coming back stands the reader in that worktree again
     // (デザイン規約 §タブの所作). The argument picks the landing: `away` (the tab not in front) or `back` (default).
     // At `away` the tab left behind has no page (`Hub::release_tab`), so the strip's row answers (`TabProbe.tabTrees`).
+    // The picture at `away`: the worktree's name still on the tab not in front, its green gone; back, both return and
+    // the tab stands where it was left. `says=` is every tab's name, for checking the picture by eye.
     //
     // Two repositories, the linked worktrees in front: `--preset basic --preset worktrees`.
     WindowStage {
@@ -751,7 +763,7 @@ Item {
                    + " front=" + (tabsModel.currentIndex === seat)
                    + " stood=" + acts.standsIn(page, worktreeKeptTimer.witnessed("wanted"))
                    // `kept=` is off the model, which names the worktree even after the strip gave the run up for
-                   // room; 0 here is that (デザイン規約 §ウィンドウの縁 の譲る順).
+                   // room; 0 here is that (`TabShare`'s order, step 2).
                    + " wide=" + tabProbe.tabTreeWidths()
                    + " says=" + tabProbe.tabTrees()
                    + " wanted=" + worktreeKeptTimer.witnessed("wanted")
@@ -819,7 +831,14 @@ Item {
         }
     }
 
-    // Reopening an existing path selects the tab it already has.
+    // Reopening an existing path selects the tab it already has. Read as a pair: with no argument on
+    // `--preset basic --preset stashes`, the move (`active=1` at start, `tabs=2 active=0` after); with git's spelling
+    // as the argument, the same folder under another spelling — `--repo` handed the 8.3 short form
+    // (`C:\Users\WRONGW~1\…`) and the argument `git worktree list`'s (`C:/Users/<name>/…`), answered `tabs=1`. Only
+    // the second is the subject: a plain string comparison passes the first. The WORKTREES row's door is
+    // `nav-dbl worktree:<git's spelling>`, judged by a single `opened repository tab` log line; a restore holding the
+    // same path twice is `state --restore` over a `--config-dir` whose `state.toml` lists it twice in `[tabs] paths`
+    // (`restored tab dropped: already open` per drop, `state tabs= active=` for what is left).
     WindowStage {
         id: openAgainTimer
         name: "open_again"
@@ -872,7 +891,9 @@ Item {
     // What a tab switch carries and what it drops, in three landings: mark the front tab, read the other, come back.
     // Each landing waits for a whole page — a page still opening answers like an emptied one. Waited on
     // `currentTabId`, not the row (rows renumber). The page is a different object at each landing (built and taken
-    // down with its tab), so nothing but the words may be held across one.
+    // down with its tab), so nothing but the words may be held across one. The picture reads best over a dirty tree
+    // (`--preset basic --preset rebase-conflict`): the tab comes back onto the worktree's row, and the reread brings
+    // the `REBASING` band back with it.
     WindowStage {
         id: tabCarryTimer
         name: "tab_carry"
@@ -940,8 +961,19 @@ Item {
     }
 
     // PGG_AUTO_ACT=tab-widths: numbers, since a strip that narrowed the wrong tabs frames like one that got it right.
-    // `room=` says which give-up the strip is living on (the mark's room first, the names after). `crushed=` is what
-    // the widths cannot say — a name drawn away to the mark alone (`TabProbe.tabNamesCrushed`).
+    // `room=` says which give-up the strip is living on (the mark's room first, the names after). `ease=` is the width
+    // the easing stops at (`TabMetrics.titleEaseChars` letters). `crushed=` is what the widths cannot say — a name
+    // drawn away to the mark alone (`TabProbe.tabNamesCrushed`).
+    //
+    // Reading the line: `widths=` is the body, read by its shape — the short names keep theirs, the ones giving way
+    // share one width, `content` ≤ `view`. A short tab is not its name's width: below `ease=` a name is given half the
+    // difference as air. `max=` is the ceiling (`TabShare.ceiling`); `max=` above `cap=` means the band has nothing
+    // left over, the two equal that the names reached the ceiling with room to spare. `room=` falls from
+    // `markRoomFull` to `markRoomMin` before `cap=` moves (`TabShare`'s order), and as it falls the name runs under the
+    // mark, so a tab showing its `✕` fades out at its end. The count where narrowing starts, and the floor, differ
+    // per OS, so numbers are read per OS. The arithmetic is `tests/qml/tst_tabwidths.qml`'s — conditions are added
+    // there, not by more counts here; this verb holds only that a real font's widths reach real tabs and that this OS
+    // reached the state. A bare count is a diagnostic for choosing the two strips again, never registered.
     WindowStage {
         id: tabWidthActTimer
         name: "tab_width_act"
@@ -974,6 +1006,8 @@ Item {
     }
 
     // PGG_AUTO_ACT=tab-mark <index>: the tab the hand is on — one of the others, or the picture says nothing new.
+    // `marks=` is each `✕`'s own opacity: 1 only on the tab in front and the tab under the hand. The mark's hover half
+    // is checked by no other verb.
     WindowStage {
         id: tabMarkActTimer
         name: "tab_mark_act"
@@ -1030,7 +1064,9 @@ Item {
                 return
             }
             // `unique=`: no two tabs read alike. `native=`: a backslash in a name or its hover is Windows' own
-            // spelling leaking through (規約 §パスの区切り).
+            // spelling leaking through (規約 §パスの区切り). `titles=` is for checking by eye
+            // (`foo/repo,bar/repo,1/deep/repo,2/deep/repo,solo`); `said=` comes last, the one value a path can put a
+            // space in. The tip is in overlay.png.
             op.complete({
                 "name": "tab_name_tip",
                 "when": () => ({ "tip": Tips.box.visible }),

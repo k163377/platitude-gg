@@ -3,7 +3,7 @@ import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
-// A name is asked by two clicks on one target in a row (デザイン規約 §左メニューの所作「間を空けた 2 回目」): anything
+// A name is asked by two clicks on one target in a row (`ReclickGesture`'s header): anything
 // between them — a press on the window or on a card standing over it, the history landing on another commit — makes
 // the next click a first one (`ReclickGesture.broken`). The window hears a press before the row it lands on answers,
 // a card's face after its content does, and the window never hears a press inside a card — Qt's delivery order, so

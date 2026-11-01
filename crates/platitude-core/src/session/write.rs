@@ -66,11 +66,14 @@ impl RepoSession {
 
     /// [`Self::write`] for one that also puts work into other worktrees —
     /// those whose git directories are `into` (a restore of work
-    /// thrown away there, 破棄記録仕様.md §4). It takes its turn in each of
-    /// their orders as well as its own, from the same instant: what was
-    /// accepted there before it — a commit, a reset, a rebase — runs first,
-    /// and nothing accepted there after it runs under it. The sessions open
-    /// on those worktrees read them again once it lands.
+    /// thrown away there, `RepoSession::restore_discard`). It takes its turn
+    /// in each of their orders as well as its own, from the same instant: what
+    /// was accepted there before it — a commit, a reset, a rebase — runs
+    /// first, and nothing accepted there after it runs under it. A plain
+    /// `git commit` there runs its `pre-commit` hook with the index unlocked
+    /// and reads the index again after it, so work put in meanwhile would go
+    /// into that commit (`work_brought_back_into_another_worktree_waits_for_its_commit`).
+    /// The sessions open on those worktrees read them again once it lands.
     pub(super) fn write_into<F, Fut>(
         self: &Arc<Self>,
         kind: OperationKind,
@@ -463,7 +466,9 @@ impl RepoSession {
 
         // Every read that decides the walk comes before it — the tree, the
         // refs and the listings each can move a row — so one walk answers
-        // for the write, over the repository as the write left it.
+        // for the write, over the repository as the write left it. A listing
+        // read after the walk would make two: one with the old holders (a
+        // removed worktree still in them), one on the listing's news.
         //
         // An index-only write reads the tree alone: the refs are where they
         // were, and theirs is the longest read (`AfterWrite::Tree`).
@@ -523,7 +528,9 @@ impl RepoSession {
         // A fetch that left the refs where they were has nothing new to
         // walk — unless the graph is behind: a read beside the fetch may
         // have seen its refs move first, and walks them itself (waited for,
-        // so the write settles behind it), or a walk failed earlier.
+        // so the write settles behind it), or a walk failed earlier and
+        // `STALE GRAPH` stands
+        // (`a_fetch_that_brings_nothing_down_walks_a_graph_left_behind`).
         if after == AfterWrite::Refs && !walk {
             self.wait_for_graph_passes().await;
             walk = self.graph_stale.load(Ordering::SeqCst);

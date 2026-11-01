@@ -28,7 +28,9 @@ impl TabsModel {
     ///
     /// Only the same folder is answered without git: a folder deeper in a
     /// tree or a linked worktree looks like nothing in the strip until git has
-    /// placed it.
+    /// placed it. Every road in comes through here and waits — the picker, a
+    /// WORKTREES row, another worktree's pill, `PGG_AUTO_OPEN` — and the
+    /// queue (`asking`) is all that keeps `PGG_AUTO_OPEN=a;b;c` in its order.
     pub(super) fn ask(&mut self, path: String, picked: bool) {
         // Trimmed and spelled once here, so the tab keeps the string it was
         // compared by and the hover reads (デザイン規約 §パスの区切り).
@@ -141,13 +143,15 @@ impl TabsModel {
     /// page (`RepoPageStack`): the worktrees share every commit and ref, so
     /// the graph stands while the session under it is swapped
     /// (`Hub::restand_tab`). The title stays; only `TabItem::worktree_name`
-    /// moves.
+    /// moves. Headless: `worktree-stand` / `carried-open`, whose `kept=`
+    /// says the page was not built again.
     pub(super) fn switch_worktree(&mut self, at: usize, worktree: String) {
         self.stand_at(at, worktree, false);
     }
 
     /// Stands the tab holding `tab_id` again, in `worktree`: the worktree it
-    /// stood in, its folder renamed, or the same folder after a rename git
+    /// stood in, its folder renamed (the tab follows the new folder — user
+    /// decision, ask before changing), or the same folder after a rename git
     /// refused, on a session of its own either way — the one it had stood
     /// down for the move (`RepoSession::move_worktree`). The same worktree
     /// both ways, so what was typed there goes with it (`Hub::carry_draft`):
@@ -199,8 +203,14 @@ impl TabsModel {
     }
 
     /// Stands the tab holding `tab_id` back in the repository's own
-    /// worktree, because the linked one would not open
-    /// (デザイン規約 §タブの所作「立てない所へは立たない」).
+    /// worktree, because the linked one would not open — gone, or no longer
+    /// a repository (user decision — ask before changing). A tab names the
+    /// repository, and one worktree gone is not the repository gone; only
+    /// when that one will not open either does the tab show its failure
+    /// screen (デザイン規約 §可否・警告の出し場所). One screen only: asked
+    /// before the refusal is shown (`RepoTab` drain), so no failure flashes
+    /// for a frame before the stand. Restored tabs fall back the same way
+    /// (`TabsModel::restore_tabs`).
     ///
     /// Not through [`landing_for`] or git: the tab and its home worktree are
     /// already known. Silent for a tab already home — there is nowhere
@@ -220,15 +230,16 @@ impl TabsModel {
     }
 
     /// Moves the strip to the tab at `position` and asks the band to
-    /// bring that seat into view (デザイン規約 §タブの所作
-    /// 「移った先が答え」).
+    /// bring that seat into view: the move is the answer, so it must be
+    /// seen (デザイン規約 §タブの所作「必ず何かが起きる」).
     pub(super) fn show(&mut self, position: usize) {
         self.set_current_index(position as i32);
         self.front_tab_asked();
     }
 
     /// Names every tab against the strip it now stands in
-    /// ([`tab_name::names_for`]).
+    /// ([`tab_name::names_for`]), wherever the set of names changes:
+    /// opening, restoring, closing.
     ///
     /// Not called on a move: order does not settle a name, and a
     /// `dataChanged` on the carried row is one the hand did not ask for.
@@ -306,7 +317,9 @@ impl TabsModel {
     }
 
     /// Lists the strip for the readers that want it whole (`open_repos`),
-    /// from [`report`] so every act lands here.
+    /// from [`report`] so every act lands here: an opening, a close, a name
+    /// settling and a carry along the strip all pass through it, and only
+    /// it (`settle_titles` is not on the carry's road).
     ///
     /// The name is the tab's; the path is the worktree the tab stands in, in
     /// the row's own spelling — what the reader hands back on picking a
@@ -344,13 +357,20 @@ pub(super) enum Landing {
 }
 
 /// Where a folder that opens lands: the one place that answers "is this
-/// repository already open?" (デザイン規約 §タブの所作 「判定は 1 か所に
-/// 置く」), for every road in and for restored tabs.
+/// repository already open?" (デザイン規約 §タブの所作「同じリポジトリの
+/// タブは 1 枚」), for every road in — the folder picker, a WORKTREES row,
+/// the startup arguments — and for restored tabs.
+///
+/// The question goes to git (`Hub::place_repo`): which worktree a folder
+/// is in, and whose that worktree is, cannot be read off the path's
+/// spelling. A folder inside a worktree is that worktree (`repo/crates`
+/// is `repo`). The two processes are paid first and the tab moves on the
+/// answer: a tab opened and then folded flashes for a frame or two.
 ///
 /// `worktree` and `repo` are git's [`platitude_core::repo::Place`], compared
 /// by `repo::open_key`. The worktree is looked for first: switching a tab
 /// into the worktree it already stands in would re-read the repository for
-/// nothing.
+/// nothing. Headless: `open-again`.
 pub(super) fn landing_for(items: &[TabItem], worktree: &str, repo: &str) -> Landing {
     let key = platitude_core::repo::open_key;
     let standing = key(worktree);

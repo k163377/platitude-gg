@@ -225,7 +225,8 @@ Item {
     /// own tick moves a count too.
     property int statusOwedFrom: 0
     /// Arms on the answer at `index` of the notify being drained — the run's own, where it knows which that is
-    /// (`RepoTab.commitAnswer`). -1 leaves the arming to the connection below.
+    /// (`RepoTab.commitAnswer`). -1 leaves the arming to the connection below. Not the first answer: `commit` presses
+    /// a stage and a commit, and the stage's answer comes first, its gate met by a status without the commit in it.
     function owedStatusAt(index) {
         driver.statusOwed = true
         driver.statusOwedFrom = index < 0 ? 0 : repoTab.writeAnswerHeadSeq(index)
@@ -394,9 +395,10 @@ Item {
     /// **The one way a verb makes a write.** `what` names the press for the lines a failure and a watchdog leave;
     /// `press` is the product's own input path and answers whether the input went in. Answers the same.
     /// Arm and press are one call so no verb arms after its own press
-    /// (rules-refs/app-ui.md「書き込みを頼む口は動詞側に 1 つだけ」). Only for a write that leaves by the tab's door
-    /// (`RepoTab::ask_session`): the plan's run leaves by its own with no id to hold, and pressed through here would
-    /// leave the watch pressed for good (`AutoActPlanVerbs`).
+    /// (rules-refs/app-ui.md「書き込みを頼む口は動詞側に 1 つだけ」): armed after it, the watch waits for the next
+    /// ask, the verb's own is already gone, and the run goes silent to the watchdog. Only for a write that leaves by
+    /// the tab's door (`RepoTab::ask_session`): the plan's run leaves by its own with no id to hold, and pressed
+    /// through here would leave the watch pressed for good (`AutoActPlanVerbs`).
     // reach(press; 1=press)
     function pressWrite(what, press) {
         if (!driver.beginWrite(what))
@@ -446,8 +448,9 @@ Item {
                                             + " id=" + repoTab.watchedWriteId())
     }
 
-    /// **The contract broke: the run ends here**, said once with the verb's name on it. The parent fails on that line
-    /// (rules-refs/app-ui.md「違反は取り消せない」).
+    /// **The contract broke: the run ends here**, said once with the verb's name on it. Final: past it nothing arms
+    /// or completes (`WriteWatch::arm` / `through`), and the parent fails on that line whatever else the run says
+    /// (`verify::outcome`'s `contract_broken`, which `--allow-write-failure` does not excuse).
     // reach(beat, press)
     function sayBroken(breach) {
         if (driver.saidBroken)
@@ -585,7 +588,7 @@ Item {
     readonly property alias barrierWrite: writeBarrier
     /// The bar a write that did not happen comes down in, waited on until fully down (`NoticeBar.settled`): a picture
     /// taken on the answer catches the words written and the height still nothing. One barrier for every kind of
-    /// report (`Words.writeReported`) — each run claims the same things (verify-ui verbs.md「報せバーの 10 本」).
+    /// report (`Words.writeReported`) — each run claims the same things, read off one line (`noticeLine`).
     PageStage {
         id: noticeBarrier
         name: "notice_barrier"
@@ -603,7 +606,10 @@ Item {
     }
     readonly property alias barrierNotice: noticeBarrier
     /// What a standing report says, for a run to be judged on: `log=` / `wrong=` that no error was raised beside the
-    /// bar, which no picture can say (デザイン規約 §答えの要らない報せ); `plan=` only where asked (`saysPlan`).
+    /// bar, which no picture can say (デザイン規約 §答えの要らない報せ); `plan=` only where asked (`saysPlan`). Read
+    /// the same for every notice verb: `said=` is the heading built from core's classification; `says=` the second
+    /// line, the app's own sentence — never git's, a hook's or the far side's raw words; `place=GIT COMMANDS` the word
+    /// of it that can be pressed; `clears=` the middle pane standing under the bar.
     function noticeLine(withPlan) {
         return "write_notice open=" + page.noticeCard.open
                + " clears=" + page.noticeClears
@@ -791,7 +797,10 @@ Item {
     // Which verbs write, defer their completion or are owed a status: three lists, read only from `prepareCompletion`.
     readonly property AutoActCompletion completion: AutoActCompletion { id: completion }
 
-    /// The verbs, grouped by what they act on.
+    /// The verbs, grouped by what they act on. A family takes `driver` alone (`required property var driver`) and reads
+    /// the driver's names back under the same names (`readonly property var page: driver.page`). A barrier held here by
+    /// id is published under another name and read back under its own (`barrierWrite` → `writeBarrier`): an alias
+    /// cannot take the name of an id.
     AutoActWipVerbs { id: wipVerbs; driver: driver }
     AutoActFileRowVerbs { id: fileRowVerbs; driver: driver }
     /// One for the two nav families, so a peek one of them opened is the peek the other reads.
@@ -838,7 +847,11 @@ Item {
         const act = Harness.autoAct
         const arg = Harness.autoActArg
         if (act === "perf") return false // WindowPerfDriver owns this verb's causal completion.
-        // First family to know the verb runs it; each verb is named by exactly one.
+        // First family to know the verb runs it; each verb is named by exactly one — a verb named twice would give
+        // this order a meaning, which the split into families breaks. Every family built above is asked here, and
+        // only here (one road to a verb). A family left out comes back, for a verb on the completion ledger, as
+        // `auto_act ran=<verb>` below and the watchdog's silence a ceiling later — which reads as proof the verb ran.
+        // After adding a family, check by machine that this chain asks it.
         const known =
             wipVerbs.run(act, arg)
             || fileRowVerbs.run(act, arg)

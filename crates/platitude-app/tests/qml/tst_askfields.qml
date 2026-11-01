@@ -2,7 +2,7 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// How the question bar's `<destination>/<name>` shares one row — the rules are デザイン規約 §レイアウト初期値
+// How the question bar's `<destination>/<name>` shares one row — the rules are `PublishForm.qml`'s `askRow`
 // (`askFieldMinW`), and only a laid-out row can answer them.
 Item {
     id: root

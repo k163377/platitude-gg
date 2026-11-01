@@ -17,6 +17,8 @@ InkCanvas {
     /// words, which stands against the words down (`shiftY`). A box centred on a line puts the ink on that line's
     /// middle, at every size and every line weight, with nothing for the caller to add.
     /// `tst_iconink.qml` holds each list to the pixels drawn — the tag's and the house's in both shapes (`grown`).
+    /// A kind with no list counts as ink to the box's edges (`inkAt`): a menu heading's mark measured that way pays its
+    /// air twice (`AppMenuItem.markX`), so every heading kind needs one.
     readonly property var reaches: icon.reachesOf(icon.kind)
     /// Whether the drawing is moved to stand its ink in the middle of the box. Only the resize corner is not.
     readonly property bool centred: icon.kind !== "grip"
@@ -52,7 +54,10 @@ InkCanvas {
     property real wordBase: icon.height
     /// For a mark seated in front of a name: the air the name's first glyph holds ahead of its ink
     /// (`WordFace.nameAir`). The mark stands in the middle between the box's head and the name's ink, not its advance —
-    /// measured to the advance, the letter's air lands on the name's side alone and the mark reads as standing off it.
+    /// measured to the advance, the letter's air lands on the name's side alone and the mark reads as standing off it
+    /// (in a mono face an `m` keeps about 0.05 em, an `i` or `l`, centred in its advance, the most). So the mark moves
+    /// with the first letter by up to a pixel, and in a column of names the marks' axes may not line up — the names'
+    /// heads do.
     property real nameAir: 0
     /// Quarter turns, clockwise, of a set mark's drawing — not `rotation`, which would turn its place against the
     /// words with it.
@@ -92,7 +97,9 @@ InkCanvas {
     /// over them for a heading), and `middle`, where the marks' middles stand from the baseline — the capitals' middle
     /// for a mark among the words, the face's own `+`'s for a sign (`sign`). `null` for a mark not set — and what the
     /// bindings reading it ask, not `set`: when `set` turns, a binding can hear of it before this one has, and would
-    /// read a `target` still `null`.
+    /// read a `target` still `null` — a `TypeError` on the first mark built only, in neither picture nor value.
+    /// `tst_setmark`'s `failOnWarning` in `init()` catches the order where `unit` reads first; the one where only
+    /// `shiftY` does is made by no test.
     readonly property var target: {
         if (icon.set === "")
             return null
@@ -150,7 +157,9 @@ InkCanvas {
     /// `rotation` not).
     readonly property real inkAcross: (icon.inkBox[2] - icon.inkBox[0]) * icon.unit
     readonly property real inkDown: (icon.inkBox[3] - icon.inkBox[1]) * (icon.set === "" ? icon.height / 16 : icon.unit)
-    /// The span along the item's own axes: a quarter turn (`rotation`) swaps the two.
+    /// The span along the item's own axes: a quarter turn (`rotation`) swaps the two — an `arrow` stood up is as wide
+    /// as its head, not its shaft. A caller that needs the width before the turn (a chevron at rest,
+    /// `OpsPicker.markAir`) reads `inkAcross`.
     readonly property real inkWidth: icon.rotation % 180 === 0 ? icon.inkAcross : icon.inkDown
     readonly property real inkHeight: icon.rotation % 180 === 0 ? icon.inkDown : icon.inkAcross
     /// The ink's right edge and top edge in the item's pixels, before any `rotation`: `width - inkRight` is the air the
@@ -166,7 +175,8 @@ InkCanvas {
                                      : Math.round(icon.set === "sign" ? icon.inkAcross + 2 * icon.wordAir
                                                                       : icon.inkAcross)
 
-    /// Each kind's `reaches`, drawn the way this mark is (`grown`).
+    /// Each kind's `reaches`, drawn the way this mark is (`grown`). **A kind added to the drawing needs its list here
+    /// too**: one with none counts as filling its box (`inkAt`) and is never moved to its middle.
     function reachesOf(kind) {
         switch (kind) {
         case "branch": return [[3.2, 3.5, 1], [13.55, 5, 1], [5, 1.7, 1], [5, 14.3, 1]]
@@ -306,10 +316,12 @@ InkCanvas {
                 ctx.stroke()
             }
         } else if (icon.kind === "remote") {
-            // Three lobes off a flat base, as wide as its siblings (smaller reads as shrunk beside a name). The
-            // middle lobe rises alone — three of a size read as bumps — and the ends stay well below it: the line
-            // does not shrink, so at `iconSm` a shallower valley fills with ink. The angles are where the circles
-            // cross; an arc stopped short is joined by a straight line that dents the outline.
+            // Three lobes off a flat base, as wide as its siblings (smaller reads as shrunk beside a name): every mark
+            // takes about as much of the grid, the cloud's points standing 1.2x out from the grid's centre (user
+            // decision — ask before changing). The middle lobe rises alone — three of a size read as bumps — and the
+            // ends stay well below it: the line does not shrink, so at `iconSm` a shallower valley fills with ink. The
+            // angles are where the circles cross; an arc stopped short is joined by a straight line that dents the
+            // outline.
             ctx.lineJoin = "round"
             ctx.beginPath()
             ctx.arc(4.6 * s, 10 * s, 2.9 * s, Math.PI * 0.5, Math.PI * 1.445)
@@ -505,8 +517,16 @@ InkCanvas {
             ctx.fill()
             ctx.restore()
         } else if (icon.kind === "home") {
-            // Filled, and proportioned off octicons / Feather (デザイン規約 §左メニューの所作「家の印だけは塗りで描く」).
-            // The apex keeps the miter join: rounded, the slopes close into a dome.
+            // **Filled, the doorway cut out** (user decision — ask before changing), the one filled mark of the set, as
+            // octicons' `home-16`: a house is read by its doorway as much as by its roof — both references (octicons
+            // `home-16`, Feather `home`) have one — and at the letters' scale a doorway cannot be drawn in strokes.
+            // **Proportioned off the references**: neither is wider than tall, and a wide house reads as squashed.
+            // 11 × 11.4 with a 37% roof; beside words (`grown`) 1.12× about the centre, 12.32 × 12.76 (user decision:
+            // in a bold-14 chip it gives the mark the cloud's air either side; the tag grows the same). A mark drawn
+            // in a box — a folded rail's cell, the discard record's pair — stays 11 × 11.4 (user decision: the growth
+            // matches air inside a letter's seat, and a box has none; the 1.12× diamond would hit the eye on the rail's
+            // TAGS cell). The exception is this kind alone: filling another mark needs the same measuring and a
+            // decision. The apex keeps the miter join: rounded, the slopes close into a dome.
             const h = icon.grown
                       ? [1.84, 6.32, 1.62, 14.16, 14.38, 6.77, 9.23, 9.46] : [2.5, 6.5, 2.3, 13.5, 13.7, 6.9, 9.1, 9.3]
             ctx.beginPath()
@@ -631,8 +651,8 @@ InkCanvas {
             ctx.lineTo(10.5 * s, 10.5 * s)
             ctx.stroke()
         } else if (icon.kind === "app-window") {
-            // This program (settings' `Application`, 規約 §設定の画面): landscape and banded, unlike maximize's bare
-            // square.
+            // This program (settings' `Application`, `SettingsDialog.categories`): landscape and banded, unlike
+            // maximize's bare square.
             ctx.strokeRect(2.5 * s, 3.5 * s, 11 * s, 9 * s)
             // Cut square: a round cap would poke out past the frame's stroke.
             ctx.lineCap = "butt"
@@ -641,7 +661,7 @@ InkCanvas {
             ctx.lineTo(13.5 * s, 6.5 * s)
             ctx.stroke()
         } else if (icon.kind === "unified" || icon.kind === "split") {
-            // The diff view toggle's pair (規約 §diff を 2 列で読む): a frame with one rule, across for one column and
+            // The diff view toggle's pair (`DiffViewToggle`): a frame with one rule, across for one column and
             // down for two. Ten wide like `hier` / `list`, since toggles are measured by ink (§余白). The rule sits in
             // the middle to tell `unified` from `app-window`, and is cut square as that band is.
             ctx.strokeRect(3 * s, 4 * s, 10 * s, 8 * s)
@@ -675,7 +695,7 @@ InkCanvas {
                 ctx.stroke()
             }
         } else if (icon.kind === "no") {
-            // The refusal badge worn beside the platform's own cursor (規約 §グラフ列は最も広い所のレーンまで).
+            // The refusal badge worn beside the platform's own cursor (`RefusalBadge`).
             ctx.beginPath()
             ctx.arc(8 * s, 8 * s, 5.5 * s, 0, 2 * Math.PI)
             ctx.moveTo(4.11 * s, 4.11 * s)
@@ -683,7 +703,7 @@ InkCanvas {
             ctx.stroke()
         } else if (icon.kind === "no-entry") {
             // `no`'s ring with a flat bar standing free inside it — the road sign for "this ends here", in the
-            // proportions of GitHub's octicon `no-entry` (規約 §行末の改行が無いこと). **The bar's ink stops a stroke
+            // proportions of GitHub's octicon `no-entry` (`DiffLineCell`'s mark). **The bar's ink stops a stroke
             // short of the ring's inner edge**: run out to the ring like `no`'s slash, its round ends land on the
             // ring's outer edge and the bar reads as poking through it.
             ctx.beginPath()

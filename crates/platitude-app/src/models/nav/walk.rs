@@ -1,5 +1,5 @@
 //! The walk the arrow keys take over the file rows: a step, and where a
-//! walk crossing in from another bucket lands (デザイン規約 §diff のファイル一覧).
+//! walk crossing in from another bucket lands (the rules: `FileRowWalk.qml`).
 
 use super::*;
 
@@ -33,8 +33,7 @@ impl NavSectionModel {
 
     /// The file row on screen at `at` as `<bucket>:<path>`; empty for a
     /// folder row and past the end. The pane asks here, not its delegates,
-    /// which exist only for the viewport
-    /// (rules-refs/app-ui.md「WIP の選択は模型が解く」).
+    /// which exist only for the viewport (see `WipPane.chosenRows`).
     pub(super) fn file_key(&self, at: usize) -> String {
         self.row_at(at)
             .filter(|row| !self.field(*row, Role::Folder).flag())

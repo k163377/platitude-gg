@@ -36,7 +36,7 @@ Item {
         }
 
         /// Qt lays every screen out in one space whatever its scale, so nothing is multiplied; what crosses to the
-        /// platform is the name (rules-refs/app-ui.md「保存した窓の位置は、保存した位置の画面へ戻す」, P3-確認事項).
+        /// platform is the name (`WindowShape.screenHolding`, P3-確認事項).
         function test_a_screen_at_another_scale_is_found_by_its_place_all_the_same() {
             compare(shape.screenHolding(2160, 66, root.desktop).name, "\\\\.\\DISPLAY2")
             compare(shape.screenHolding(-1200, -1000, root.desktop).name, "\\\\.\\DISPLAY3")

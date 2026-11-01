@@ -17,7 +17,7 @@
 //! read (parameters, arrows, loop variables, patterns, a word one scope
 //! declares twice) passes; what the landing does with it is checked
 //! against a real window by `wip-landing` / `wip-landing-stopped`
-//! (verify-ui スキル verbs.md「作業ツリー行への 2 つの着地」).
+//! (`WindowBadgeActs.qml`, `AutoActHistoryVerbs.qml`).
 
 use std::collections::BTreeMap;
 use std::path::Path;

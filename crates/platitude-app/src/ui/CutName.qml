@@ -4,12 +4,16 @@ import platitude.ui
 
 // A name in a column narrower than itself, cut so the column keeps both of its edges
 // (規約 §寸法「列に並ぶ名前の省略は、余りを切れ目へ入れる」). `Text.ElideMiddle` alone draws what fits from the left, so the
-// unused width piles up at the right edge, differently on every row; and it can stop up to two characters short, as
-// it gives one back to each end at a time. So the cut is filled out here a character at a time, and the leftover
-// (under one character) goes into the cut, beside the mark.
+// unused width piles up at the right edge, differently on every row — the column's edge frays, and the hex tails that
+// tell generated branch names apart stop lining up; and it can stop up to two characters short, as it gives one back
+// to each end at a time. So the cut is filled out here a character at a time, the column used to its edge, and the
+// leftover (under one character) goes into the cut, half either side of the mark: there it reads as "something is
+// missing", never as a space inside a word, and neither edge moves.
 //
 // A sentence (`cutAt: "end"`, a commit's subject) keeps only its head, filled the same way, with the mark pinned to
-// the column's right edge (規約 §寸法「文の省略は末尾で、印は列の右辺に貼る」).
+// the column's right edge (規約 §寸法「文の省略は末尾で、印は列の右辺に貼る」): a sentence has no telling tail to keep,
+// and a mark set right after the text lands where the elide stopped — a character short on some rows — so the `…`
+// would stand at a different x on every row. The leftover goes in front of the mark.
 //
 // The name in full stays the row's hover (規約 §hover のツールチップ).
 Item {
@@ -52,9 +56,13 @@ Item {
         // Both rulers take the face here too: a run from the label's `fontChanged` comes before a binding on that font
         // has answered, and would cut for the face the label has just left (a menu's family arrives after its rows).
         probe.font = headLabel.font
-        // Read after that write: a caller sizing the box off `implicitWidth` (`TabItemDelegate`) re-enters this
-        // function from those two lines, and a width read earlier would lay a cut for a column that is gone back over
-        // the nested answer (rules-refs/app-ui.md「`CutName` の箱は定規へ書いた後で読む」).
+        // Read after that write: a caller sizing the box off `implicitWidth` (a tab is as wide as its name:
+        // `TabItemDelegate.width` → `titleEase` → this item's margin) re-enters this function from those two lines,
+        // and a width read earlier would lay a cut for a column that is gone back over the nested answer. `TabPin`
+        // runs the same arithmetic and comes out right — "one name, one width, crushed in one place only" is this
+        // defect's shape. It shows in no width and no picture: `crushed=` / `kept=` of `tab-widths` / `tab-pin` /
+        // `tab-pin-go` say it (`TabProbe.tabNamesCrushed`, `nameKept`). Pinned without a window by `tst_tabwidths.qml`
+        // (`test_a_name_is_cut_against_the_column_it_ends_up_in_not_the_one_it_replaced`).
         const box = cut.width
         // No name or no column yet (a delegate is built before layout): the anchored labels would otherwise draw the
         // whole name over the row's neighbours.
@@ -82,8 +90,9 @@ Item {
         const room = box - cut.inkOf("…")
         let headInk = cut.inkOf(whole.substring(0, head))
         let tailInk = cut.inkOf(whole.substring(whole.length - tail))
-        // …which can run past the column (a middle cut of a small face, by a few pixels): the tail would then be drawn
-        // over the mark. Taken back a character at a time from the longer half until it fits.
+        // …which can run past the column (a middle cut of a small face, by a few pixels — `fontSm`, the WORKTREES rows'
+        // branch column, `NavRowBody.branchSeat`): the tail would then be drawn over the mark. Taken back a character
+        // at a time from the longer half until it fits; `tst_cutname.qml` walks the width a pixel at a time.
         while (headInk + tailInk > room && head + tail > 0) {
             if (head >= tail) {
                 head -= cut.stepBack(whole, head)
@@ -95,6 +104,9 @@ Item {
         }
         // Fill the column, the tail first: a generated name is told apart by its end
         // (規約 §git 用語のコード表記「ref の省略は中央」). A cut at the end grows only the head.
+        // A character at a time, not a binary search (built, measured, no difference): the elide's answer starts within
+        // two characters of the fit, so this goes round two or three times. Propose a search again only with a new
+        // measurement; what cutting costs is measuring the whole name (`measure`, and `probe`'s elide), not this loop.
         for (;;) {
             let grew = false
             const back = toEnd ? 0 : cut.stepBack(whole, whole.length - tail)
@@ -181,8 +193,11 @@ Item {
         elide: cut.cutAt === "end" ? Text.ElideRight : Text.ElideMiddle
     }
 
-    // The three pieces, centred vertically: callers pass boxes taller than the line
-    // (rules-refs/app-ui.md「`CutName` は渡された箱の縦中央に置く」).
+    // The three pieces, centred vertically (`Text.AlignVCenter`): a `Label` draws at the top of its box, and callers
+    // pass boxes taller than the line on purpose — `CarriedPane`'s name seat, `DiffPaneHeader`, `CloneDialog`'s framed
+    // field — where the name alone would float up off the heading beside it and off a tree mark set by it. Checked by
+    // `carried-stand topic --preset carried`, `carried-read <name> --preset carried`, `clone-dialog` (a modal box:
+    // overlay.png).
     Label {
         id: headLabel
         visible: cut.inked

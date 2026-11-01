@@ -77,7 +77,8 @@ Item {
         }
     }
     /// Whether this machine's stock-take of merge editors went out and came back. Latched off the flag's edges: it
-    /// reads false on both sides of the read, and an empty list is an answer ("none") only after it.
+    /// reads false on both sides of the read, and an empty list is an answer ("none") only after it — `toolsSettled`
+    /// alone fires before the first wave.
     property bool toolsWentOut: false
     property bool toolsCameBack: false
     function noteToolsFlight() {
@@ -114,6 +115,10 @@ Item {
 
     // PGG_AUTO_ACT=settings-tools / settings-tools-loading: two separately latched outputs, the real loading edge and
     // the settled choices. Opened on the git category by the menu entry's door, told to bring the list down with it.
+    // The first wave is xtask's own row (`verify::repos::seed_merge_tool`); the second is this machine's stock-take
+    // (`--tool-help`, seconds), so the rows differ by OS and the PNG is read on each (the container lists the seeded
+    // one alone, `choices=1`). A stock-take that names nothing ends on `merge_editor_none`: must_say's `open=true` goes
+    // missing, red in seconds rather than at the watchdog.
     WindowStage {
         id: toolsTimer
         name: "settings_tools"
@@ -158,6 +163,14 @@ Item {
     // PGG_AUTO_ACT=settings-repo / settings-repo-pick: the git category's `REPOSITORY OVERRIDE` group, with the
     // chooser's list down for `-pick`. The argument picks a strip row other than the front one, through the same call
     // a pick from the list makes (verify-ui implement.md §壊れない動詞の実装と反復).
+    //
+    // Two tabs (`--preset basic --preset stashes`): with one, "the open repository is chosen" and "only one can be
+    // chosen" are the same picture. `rows=0` is the band never reaching the chooser (the "no repository open" line
+    // stands instead). `matches=` is the boxes agreeing with git's answer: an empty box here means "take the override
+    // out", so boxes left over from another repository frame as an ordinary form while offering to delete this one's
+    // identity — neither half is in a photograph. The `GLOBAL` group's `save=` is `settings-escape` /
+    // `settings-leave`'s. Every demo repository is called `repo`, so the list's names are `tab_name::names_for`'s
+    // with a parent folder added; the list is overlay.png's.
     WindowStage {
         id: repoSettingsTimer
         name: "repo_settings"
@@ -198,7 +211,22 @@ Item {
     }
 
     // PGG_AUTO_ACT=settings-git-path: the application category's `GIT EXECUTABLE` chapter, with the git at the path
-    // having answered. The argument is the path to put in the box, or none for the resting (empty) box.
+    // having answered. The argument is the path to put in the box, or none for the resting (empty) box. A path goes in
+    // whole: one with no root makes an empty URL, which is the empty box. The keywords keep each OS's paths out of the
+    // argument: `in-use`, `other` (below), and `stored-missing` — a stored git this machine lacks, a state the app
+    // cannot make, so the seed is the whole run (`verify::seed`) and nothing reaches this page's argument. That screen
+    // shows the stored path in `/` (it is seeded in the OS's separators), says `Nothing to run at that path.` in red,
+    // and `inUse=` names the `PATH` git it fell back to. `other` raises `Restart to apply` (a hold, `warning`; `danger`
+    // under `--other-git 2.30.0`) with the warning line, and disables the other chapters and the rail's `Git` row.
+    //
+    // The placeholder's characters are judged by `named=` / `native=` alone: a Windows window under a Japanese locale
+    // draws `\` with the `¥` glyph, headless draws `\`. No row claims a version (the container runs the minimum, a desk
+    // the newest); a picture of an old git brings one in (`--old-git 2.30.0` for the resting box,
+    // `other --other-git 2.30.0` for the red offer).
+    //
+    // A path with nothing at its end is spelled without `git` in it: the seat's hook reads `git` in a cargo line as a
+    // git command and denies it (`"C:/tools/portable-2.50/no-such.exe"` on Windows, which the container reads as a
+    // rootless path = the empty box; for the container, `/tools/portable-2.50/no-such` with `MSYS_NO_PATHCONV=1` set).
     //
     // The picture cannot judge this: the sentence under the box arrives a subprocess after the box, so a shot at the
     // pick would frame `Asking for the version…` and read green. The answer itself is waited on and reported.
@@ -394,8 +422,10 @@ Item {
     }
 
     // PGG_AUTO_ACT=settings-eol <true|input|false|inherited>: the `REPOSITORY OVERRIDE` group's line-ending chapter,
-    // picked (`inherited` writes nothing). `core.autocrlf` is written only into the picked repository (規約 §設定の画面),
-    // the only file a run may write anyway.
+    // picked (`inherited` writes nothing). `core.autocrlf` is written only into the picked repository
+    // (`LineEndingField`), the only file a run may write anyway. The argument is required: none picks the same row as
+    // `inherited` and frames alike, with nothing in the run's output saying which was asked. One tab is enough.
+    // `were=` (what the repository held before) is the half the picture cannot hold.
     //
     // Waited on: the read that fills the chooser, then the read that follows the write — the write's own `busy` falls
     // before that read lands, so stopping at it photographs the replaced value.
@@ -503,7 +533,8 @@ Item {
                 return
             }
             // `global=` / `repo=` name which chapter thought it held an edit. `save=` is the global chapter's Save,
-            // off the button: lit over untouched boxes, it would offer git its own answer.
+            // off the button: lit over untouched boxes, it would offer git its own answer (its pair is
+            // `settings-leave`'s `save=true`).
             escapeTimer.complete({
                 "name": "settings_escape_ready",
                 "when": () => ({ "shut": !settingsDialog.opened, "page": PageSettled.windowSettled(window) }),
@@ -546,7 +577,10 @@ Item {
                     }))
                     return
             }
-            // `save=`: the typing that stops the way out must also light the Save the reader is sent to.
+            // `save=`: the typing that stops the way out must also light the Save the reader is sent to (its pair is
+            // `settings-escape`'s `save=false`). `unsaved=1` is the one box typed: a box that turned edited on git's
+            // late answer makes it 2, and the run is then asking about what nobody touched. `asked=` is
+            // `SettingsDialog.askingLeave`, which arms `SettingsHeader`'s `✕`.
             leaveTimer.complete({
                 "name": "settings_leave_asked",
                 "when": () => ({ "asked": settingsDialog.askingLeave, "page": PageSettled.windowSettled(window) }),
@@ -559,7 +593,8 @@ Item {
 
     // PGG_AUTO_ACT=settings-sweep [app|git]: this screen's words, taken from the air around them
     // (規約 §右のペインの字は掴める); one category per run, as only one is on screen. Waited on the category's own git
-    // reads, not the screen opening: sampled before them, the column is about to grow lines.
+    // reads, not the screen opening: sampled before them, the column is about to grow lines. The hand lies inside the
+    // chapters' `Flickable` (rules-refs/app-ui.md), so this run also says where `SweepPad` sits.
     WindowStage {
         id: sweepTimer
         name: "settings_sweep"
@@ -585,9 +620,9 @@ Item {
             // git: the repository group's identity and line endings (the latter grows a line); app: the version probe.
             // `release=`: the hand that gives the keyboard back when a press lands where nothing takes it is standing
             // (no picture can say it; that a press reaches it is `tests/qml/tst_fieldrelease.qml`'s). `version=`: the
-            // app category's version chip has its grabbable field behind it (`CodeChip.grabbed`). The sweep is a
-            // press, walked once the category has read, and its line, with the states read beside it, is its
-            // witness.
+            // app category's version chip has its grabbable field behind it (`CodeChip.grabbed`) — a chip frames the
+            // same either way. The sweep is a press, walked once the category has read, and its line, with the states
+            // read beside it, is its witness.
             if (sweepTimer.at("opened")) {
                 if (!Awaited.all("settings_sweep_ready", sweepTimer.ready()))
                     return
@@ -661,7 +696,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=avatar-enter: Enter in the candidate box opens the file picker (デザイン規約 §アバターを与える).
+    // PGG_AUTO_ACT=avatar-enter: Enter in the candidate box opens the file picker (`SettingsAppPane`'s `avatarWho`).
     // The picker is the platform's window and in neither PNG, so the report line is the whole verdict. The screen is
     // the page's dispatch's to open (`AutoActFindVerbs`), so the typing joins it.
     WindowStage {
@@ -709,7 +744,16 @@ Item {
 
     // The avatar card's four verbs: the page opens them, this finishes each on its own output — the filed row and its
     // picture, that row's `lit`, the candidate list's `opened`, and the row gone after the hold. The screen is the
-    // page's dispatch's to open (`AutoActFindVerbs`), so the move joins it.
+    // page's dispatch's to open (`AutoActFindVerbs`), so the move joins it. `AVATARS` is the category's last chapter,
+    // out of the 1440x900 window's reach from where the screen opens: a run that did not send the chapters to their
+    // foot would pass on a picture without the list.
+    //
+    // One line for all four: `painted=` is the first row's face drawn on its canvas, `removed=` the hold taking the row
+    // out of the store. `avatar-row-lit` rests on the first row's `Remove` (the red side; `avatar-settings` is the same
+    // list without it); `avatar-remove` pictures the list after the row went. All four pictures are overlay.png's.
+    // `-row-lit` / `-remove` need a filed picture — with none there is no row to wait on and the run sits to the
+    // watchdog — and `avatar-settings` needs one to show a face. The round-trip read (no argument: the store read as it
+    // stands) cannot be run from `verify-ui`, which makes and passes a picture whenever the argument is left out.
     WindowStage {
         id: avatarCardTimer
         name: "avatar_card"
@@ -785,7 +829,10 @@ Item {
 
     // PGG_AUTO_ACT=settings-hand <chapters|tools>: the middle button's hand on the chapters or the merge editor's card,
     // pressed and left drifting for the shot (the page's `middle-hand` on this screen); waited for is the surface
-    // having gone. `tools` wants `--preset mergetools`: most machines name fewer editors than the card's eight rows.
+    // having gone. `tools` wants `--preset mergetools`: most machines name fewer editors than the card's eight rows,
+    // and a card that does not overflow stands no hand — the run waits to the ceiling on
+    // `waiting=more candidates than room`. Read as `middle-hand`'s line is; the picture is scene.png, the screen being
+    // an overlay.
     WindowStage {
         id: handTimer
         name: "settings_hand"

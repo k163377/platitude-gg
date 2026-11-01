@@ -1,4 +1,4 @@
-//! What typed lines match in the text of a diff (デザイン規約 §diff の中を探す).
+//! What typed lines match in the text of a diff (the app's `DiffFindBar`).
 //!
 //! A diff is two files read through one patch: the new side is its
 //! context and added lines in order, the old side its context and removed
@@ -8,9 +8,10 @@
 //! that lies on context lines alone is reported once, from the new side.
 //!
 //! Every option is one regular expression: the typed lines escaped or
-//! taken as a pattern, case folded or not, and a whole word judged at the
-//! hit's two ends (a hit that starts or ends on a word character must not
-//! continue one). Nothing here knows rows or columns: a hit is spans of
+//! taken as a pattern, case folded (Unicode) or not, and a whole word
+//! judged at the hit's two ends (a hit that starts or ends on a word
+//! character must not continue one), so `clone(` matches in `clone(x)`, as
+//! Zed rules. Nothing here knows rows or columns: a hit is spans of
 //! bytes on lines named by the caller's ids.
 
 use std::ops::Range;

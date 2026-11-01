@@ -13,12 +13,16 @@ Item {
     /// Whether the rows carry a per-line mark — the seat between the two
     /// numbers is that mark's, and a step of air where there is none.
     required property bool partial
-    /// Whether the rows are read as two columns (デザイン規約 §diff を 2 列で読む); one column unless told otherwise.
+    /// Whether the rows are read as two columns (`DiffRowDelegate`); one column unless told otherwise.
     property bool split: false
 
-    /// How wide a line number is: the widest one this diff carries (デザイン規約 §レイアウト初期値). Measured with a
-    /// never-drawn Label: `TextMetrics` reports a few pixels tighter than the Label the number is set in. Whole
-    /// pixels — the columns and the code are laid out from this one number.
+    /// How wide a line number is: the widest one this diff carries, in the mono `fontSm` (デザイン規約 §レイアウト初期値).
+    /// Numbers are right-aligned, so a fixed-width column piles the digits a line lacks up on the number's left and one
+    /// row shows several gaps; cut to the numbers, edge to old number and new number to code are both `spaceXs` (user
+    /// decision — ask before changing). **Counted per diff**: per row the column wobbles down the page, and held to
+    /// the widest of every diff a short file carries five digits of air. Measured with a never-drawn Label:
+    /// `TextMetrics` reports a few pixels tighter than the Label the number is set in. Whole pixels — the columns and
+    /// the code are laid out from this one number.
     readonly property int numberW: Math.ceil(numberMeasure.implicitWidth)
     Label {
         id: numberMeasure
@@ -29,7 +33,14 @@ Item {
     }
 
     /// The mark's seat between the two numbers, and the gutter it sits in — per column: as two columns each holds
-    /// one number and the seat after it (デザイン規約 §diff を 2 列で読む).
+    /// one number and the seat after it — one column's gutter less one number, so the code stands the same step from
+    /// its number (`spaceXs` while the seat is closed). The `+` / `−` mark's seat stands between the two
+    /// numbers (user decision — ask before changing: over a number, the number goes unreadable while the mark is
+    /// out), `iconMd` and a `borderWidth` each side — a seat of its own, owned by neither number; at `spaceXs` the new
+    /// number looks strayed from its column (デザイン規約 §diff の中のステージ). It is held open on every row of a diff that
+    /// can be split: a context row has no mark, and a seat only where one stands walks the numbers sideways under the
+    /// pointer. A diff with no tools to split (a commit, a new file) closes it to `spaceXs` — a seat nobody stands in
+    /// is a groove.
     readonly property int seatW: metrics.partial ? Theme.iconMd + 2 * Theme.borderWidth : Theme.spaceXs
     readonly property int gutterW: metrics.split
                                    ? Theme.spaceXs + metrics.numberW + metrics.seatW

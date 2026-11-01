@@ -6,7 +6,14 @@ import platitude.ui
 
 // The right-click on the diff's own text (デザイン規約 §diff の中身をコピーする). Both rows act on the selection, settled
 // before this is asked for (`DiffTextSelect.askMenu`): `Copy` takes the washed new side, `Copy removed lines` the old
-// side's whole lines.
+// side's whole lines — they have no wash, so nothing on screen points at part of one. Each row only where it has
+// something to take.
+//
+// `Copy` is one word: the selection shows what it takes (デザイン規約 §メニュー「行が自分で示しているものは行に任せる」);
+// `Copy path` / `Copy full hash` name their object because their rows point at nothing. `removed`, not `deleted`
+// (GitKraken's): in this app delete is the word of the operations that take things away. The count is the noun's
+// number, as `Copy path` / `Copy paths`. The GITHUB card under them stands on a commit's file only. Ctrl+C is the
+// same `Copy` (`DiffPane`'s key handler).
 //
 // An `Item` because a menu measures the window through the item it was declared under (`AppMenu.ownerItem`).
 Item {

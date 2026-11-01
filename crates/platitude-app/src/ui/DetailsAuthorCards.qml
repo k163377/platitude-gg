@@ -8,6 +8,12 @@ import platitude.ui
 /// the row's anchor is mapped on the way in.
 ///
 /// A `QtObject`, not an `Item`: the pane is a `ColumnLayout`, where any item is a row (rules-refs/app-ui.md).
+///
+/// The three take one path: the row's pointed flag → `open…Requested` / `settle…Requested` → the owner's seat's
+/// `point` / `unpoint`. None has a press way in: a card dismissed under the hand comes back only by the hand walking
+/// onto its line again (`HoverSeat` latch; `tst_authorcards`). A page menu takes them down (`blockedBy`). Headless:
+/// `author-swap`, `menu-block author`, `details-parents-card` / `details-parents-go`; the real pointer is
+/// `tst_parentcard.qml`.
 QtObject {
     id: cards
 
@@ -66,7 +72,8 @@ QtObject {
     }
     /// **One of the three is out at a time**, and the one opening is that one: the hand has gone from the line the
     /// others hang off to another, so they go now, not after their beat (デザイン規約 §hover のツールチップ「1 つの
-    /// ポインタが開けるものは 1 つ」). Each keeps its own beat for the hand walking into itself.
+    /// ポインタが開けるものは 1 つ」). Each keeps its own beat for the hand walking into itself. Done here because the
+    /// seats are separate: left to their beats, the next card opens while the one before still stands.
     function giveWay(opening) {
         for (const seat of [mateKeep, parentKeep, authorKeep]) {
             if (seat !== opening && (seat.shown || seat.waiting))
@@ -74,8 +81,7 @@ QtObject {
         }
     }
     /// Opens every parent on the seat a single parent's hash has — the line's right end (`line`, in the row's
-    /// coordinates), which the line keeps while it stands as one parent's (`HashPlate.unrolled`; デザイン規約
-    /// §右のペインの親).
+    /// coordinates), which the line keeps while it stands as one parent's (`HashPlate.unrolled`, `ParentListCard`).
     function openParentCard(line) {
         const row = cards.block.valueRow
         if (row.plate.parents.length < 2) {
@@ -125,7 +131,8 @@ QtObject {
         authorCard.open()
     }
     /// How far a card may reach on either side — the window's room, not the pane's, which is too narrow for an
-    /// ordinary forge address (規約 §hover のツールチップ).
+    /// ordinary forge address (規約 §hover のツールチップ). Measured as a card opens: `mapToItem` is a call, so a
+    /// binding over it would not follow the divider moving.
     function takeRoom() {
         // `spaceXxl` short of the window on the far side, like every floating card (`AppMenu.roomForRows` /
         // `RefListPopup.chipRoom`), and the pane's own inset on the near side.
@@ -133,8 +140,9 @@ QtObject {
         cards.rightStop = cards.host.width - 2 * Theme.spaceXs
     }
     /// Where a card of that width sits: at the anchor, backed out of the pane when the row cannot hold it — the seat
-    /// gives way, not the address. Read by a binding: a popup's final width comes a frame after its rows
-    /// (rules-refs/app-ui.md).
+    /// gives way, not the address. Read by each card's `x` binding: a popup is not at its final width in the frame
+    /// it is handed its rows, so a seat assigned as it opens is decided on a width one frame old
+    /// (rules-refs/app-ui.md「出す前に採寸する」).
     function seatX(anchorX, cardWidth) {
         return Math.max(cards.leftStop, Math.min(anchorX, cards.rightStop - cardWidth))
     }

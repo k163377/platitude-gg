@@ -19,9 +19,12 @@ ScrollBar {
     /// Whether the idle step is drawn as less opacity. `PaneScrollBar` clears it: its opaque slab names a colour.
     property bool dimsItself: true
 
-    /// The arrows at the two ends of an upright bar (デザイン規約 §スクロールバーの矢印): one thumb across (Chromium's
-    /// Fluent bar, measured), each end the arrow's ink and above and below it the air the thumb keeps from the bar's
-    /// free side (`leftPadding`) — a thin, faint bar holds its arrows close. A sideways bar has none. `PaneScrollBar`
+    /// The arrows at the two ends of an upright bar (デザイン規約 §スクロールバーの矢印): Chromium's Fluent bar, shape
+    /// and motion, every number measured off Chrome 154 and Chrome 152 (Claude Desktop) drawing their 15-wide bar. One
+    /// thumb across; each end is the arrow's ink and above and below it the air the thumb keeps from the bar's free
+    /// side (`leftPadding`, 2) — user decision, ask before changing: Chromium keeps 5–6 of air in an 18 end, which on
+    /// this thin, faint bar sets the arrow apart from it. The floating bar's arrow is 6 wide in a 9 end; the bar is not
+    /// thickened for it (user decision). A sideways bar has none (it is asked of up and down only). `PaneScrollBar`
     /// hands in its own span.
     property real arrowSpan: bar.orientation === Qt.Vertical ? bar.availableWidth : 0
     readonly property int arrowLength: bar.arrowSpan > 0
@@ -37,12 +40,16 @@ ScrollBar {
     /// bar that ends short of its view names its own (`DescriptionBox`).
     property real lengthAlong: bar.view ? bar.view.height : 0
     /// A bar shorter than its two ends squeezes each to half its length, the arrows with them, and has no thumb once
-    /// nothing is left between them (Chromium's Fluent bar, measured on boxes 10–140px tall: the arrows never go).
+    /// nothing is left between them (Chromium's Fluent bar, measured on boxes 10–140px tall: the arrows never go). At
+    /// 1440×900 no bar squeezes: only the left menu's lists and a WIP bucket with the window at its floor, and the
+    /// graph or the diff under a stack of bands.
     readonly property int arrowEnd: Math.min(bar.arrowLength, Math.floor(bar.lengthAlong / 2))
     readonly property bool hasTrack: bar.arrowLength === 0 || bar.lengthAlong - 2 * bar.arrowEnd >= 1
 
     topPadding: bar.arrowLength > 0 ? bar.arrowEnd : 2
     bottomPadding: bar.arrowLength > 0 ? bar.arrowEnd : 2
+    // The thumb stands only where there is a track, held by a binding with no `when`: one with a `when` fails to put
+    // the value back as it lets go, and leaves a list whose ends went away with no thumb.
     Binding {
         target: bar.contentItem
         property: "visible"
@@ -81,7 +88,7 @@ ScrollBar {
         return Math.max(top, Math.min(y, Math.max(top, v.originY + v.contentHeight + v.bottomMargin - v.height)))
     }
     /// A press on an arrow, `dir` -1 up and 1 down: one step, glided, and the pause before a run. The handlers below
-    /// and a run both come in here (verify-ui implement.md).
+    /// and a run (`bar-arrow`) both come in here (verify-ui implement.md). Held by `tests/qml/tst_scrollarrow.qml`.
     function pressArrow(dir) {
         bar.arrowHeld = dir
         bar.arrowRunning = false
@@ -106,6 +113,8 @@ ScrollBar {
         bar.runAt = Date.now()
         bar.arrowRunning = true
     }
+    // One even speed, whatever the view's height: an arrow does not accelerate (neither Chromium's nor Qt Widgets'
+    // does — acceleration belongs to a number's up/down buttons). Sending a long list far is the track's work.
     function runTick() {
         const now = Date.now()
         const share = (now - bar.runAt) / 1000
@@ -116,7 +125,9 @@ ScrollBar {
             bar.view.contentY = bar.limitY(bar.view.contentY + bar.arrowHeld * Metrics.arrowRepeatSpeed * share)
     }
 
-    /// The thumb's two ends in the bar's coordinates, as drawn (`visual…` carries the style's minimum size).
+    /// The thumb's two ends in the bar's coordinates, as drawn (`visual…` carries the style's minimum size). Worked
+    /// out, not read off `contentItem.y`: this answers right after `contentY` is written, the item only after the
+    /// layout.
     function thumbTop() {
         return bar.topPadding + bar.visualPosition * bar.availableHeight
     }
@@ -128,7 +139,8 @@ ScrollBar {
         return bar.trackHeld > 0 ? bar.thumbBottom() >= bar.trackAt : bar.thumbTop() <= bar.trackAt
     }
     /// A press on the track at `y`: one page, glided, towards the press, and the pause before a run — or nothing, if
-    /// the press is on the thumb, whose own drag answers it (the handler hands it on). Chromium's Fluent bar, measured.
+    /// the press is on the thumb, whose own drag answers it (the handler hands it on). Chromium's Fluent bar, measured
+    /// (user decision — ask before changing). A run comes in here too (`bar-track`); held by `tst_scrollarrow`.
     function pressTrack(y) {
         if (y >= bar.thumbTop() && y <= bar.thumbBottom())
             return false
@@ -262,7 +274,9 @@ ScrollBar {
 
     /// Whether the reader is inside the range this bar sends, from a handler on the view — an ancestor of the rows, so
     /// it leaves them their hover (rules-refs/app-ui.md「行に重ねる面の `HoverHandler` は祖先が持つ」). The two sideways
-    /// bars have no view and are handed their pane's answer; a headless run writes this property too.
+    /// bars have no view and are handed their pane's answer; a headless run writes this property too, hover being
+    /// beyond injection (`GraphPane.restPointer`, `MessageEditor.holdDescriptionBar`, `AutoActPaneVerbs`'
+    /// `paneBarTimer`).
     ///
     /// Read through a guard: a pointer handler's `parent` is its QObject parent, so with no view the handler is left
     /// to the JS heap and collected, and the binding would read a destroyed object.
@@ -273,13 +287,17 @@ ScrollBar {
     }
     /// The handler that hears the hand over the range: the view's own. The two sideways bars are handed their pane's.
     property HoverHandler rangeHover: bar.view ? viewHover : null
-    /// Whether the bar is under the hand, ready to be taken: it lights while it is, arrows and all (デザイン規約
-    /// §QML 実装ルール のバーの明るさ). Measured where the range's handler heard the hand, not by a handler on the bar:
-    /// one there takes the hover, over the bar's width, from the view's own handler (`inArea`) and the row underneath.
+    /// Whether the bar is under the hand, ready to be taken: it lights while it is, arrows and all — the whole bar,
+    /// never just the arrow under the hand (user decision; デザイン規約 §QML 実装ルール のバーの明るさ). A hand
+    /// crossing the bar on its way to the next pane lifts it for that moment and lets it down again: accepted (user
+    /// decision — in use, lighting on arrival is worth more). Measured where the range's handler heard the hand, not
+    /// by a handler on the bar: one there takes the hover, over the bar's width, from the view's own handler (`inArea`)
+    /// and the row underneath.
     readonly property bool underHand: !Hand.away && bar.visible && bar.rangeHover !== null && bar.rangeHover.hovered
         && bar.contains(bar.mapFromItem(bar.rangeHover.parent, bar.rangeHover.point.position))
 
-    /// Whether the bar is in the hand: the thumb, an arrow, or the track.
+    /// Whether the bar is in the hand: the thumb, an arrow, or the track. Read this, not `pressed`, which is the
+    /// thumb's alone — the arrows' and the track's own areas take their presses, so the `ScrollBar` never hears them.
     readonly property bool held: bar.pressed || bar.arrowHeld !== 0 || bar.trackHeld !== 0
     /// Whether the reader is here: pointing into the range, or holding the bar (a drag may take the pointer
     /// anywhere). Not `activeFocus` — a list keeps it for the rest of the session after one click.
@@ -314,7 +332,8 @@ ScrollBar {
             bar.releaseTrack()
         }
     }
-    /// Says the view has just been sent (wired below for a flickable; `GraphLaneBar` / `DiffCodeScroll` call it).
+    /// Says the view has just been sent (wired below for a flickable; `GraphLaneBar` / `DiffCodeScroll` call it from
+    /// `onPositionChanged`: tied to no view, their `active` never rises).
     /// Only while somebody is here: a load growing the graph and `shiftRows` move the view too, and would leave it lit.
     function moved() {
         if (bar.attended)
@@ -339,11 +358,24 @@ ScrollBar {
     z: 1
     policy: view && view.contentHeight + view.topMargin + view.bottomMargin > view.height + 1
             ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
-    /// Drawn exactly while it has somewhere to go: the style's fade-out (450ms + 200ms) left a full-height bar over a
-    /// box that fits. Its `active && size < 1` term stays out — the policy above is the whole answer.
+    /// Drawn exactly while it has somewhere to go, every bar (user decision): the style's fade-out (450ms + 200ms) left
+    /// a full-height bar over a box that fits. Its `active && size < 1` term stays out — the policy above is the whole
+    /// answer. "Nowhere to go" is not "not in use": an idle bar is still drawn, only dimmer (below), so a run judges
+    /// the paint — `opacity` here, `PaneScrollBar.slabColor` on a pinned bar — never `visible`. Hidden, it also gives
+    /// back its room in `AppListView.barRoom`, which only `GraphHeadPin`'s press area reads, never the ink.
     visible: policy === ScrollBar.AlwaysOn
 
     /// The idle share and the timing: 規約 §スクロールバー / §QML 実装ルール のバーの明るさ.
+    ///
+    /// Idle is dimmed, never hidden (user decision): a hidden bar takes away what says where the reader is, and no
+    /// wait before hiding is right — short, it goes mid-read; long, hiding it buys nothing. Qt's own styles hide an
+    /// unused bar after a wait (Basic / Fusion 450ms + 200ms, Material 2450ms + 250ms, Universal / Imagine 3000ms +
+    /// 250ms), the native Qt Windows style never does, Qt's styles keep a bar that cannot be taken as a thin
+    /// indicator, and Windows 11 hides by default (`DynamicScrollbars` unset = 1) but offers an "always show" switch.
+    /// This window keeps the bar, and only dims it.
+    ///
+    /// Idle, the whole bar at 3/10: the ground is all but black (`#020617`), so the thumb's three steps land within
+    /// about 40 levels of each other, and 3/4 or 3/5 does not read as dimmer.
     ///
     /// `gone` stands first and the transitions name their ends: a sideways bar hidden part way down would otherwise
     /// come back mid-fall and finish it in view. On screen, the fall from full ink is animated, and so is the rise

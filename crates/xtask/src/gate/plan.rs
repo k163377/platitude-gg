@@ -190,6 +190,10 @@ const VENDOR: &str = "vendor";
 /// lock and the toolchain, cargo's own configuration (`.cargo/` — its
 /// `[env]` reaches every C and C++ compile a build script runs), and the
 /// patched-in crates.
+///
+/// No source edge shows them, so they are in the selection
+/// (`moves_everything`) and in every cargo step's key alike: selected
+/// alone, a step would meet the previous run's green and run nothing.
 const CARGO: [&str; 5] = [
     "Cargo.toml",
     "Cargo.lock",

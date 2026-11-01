@@ -4,7 +4,7 @@ import QtTest
 import platitude.ui
 
 // The name a chip draws under itself in the card it unfolds into (`RefChip.mate`), and where a press on it goes
-// (デザイン規約 §グラフ行のダブルクリック): to the place it names, never to the row the chip stands in, whose own
+// (`RefChip.mateGoes`): to the place it names, never to the row the chip stands in, whose own
 // handler answers at the press (`RefListPopup`) — Qt's delivery order, so measured with a real pointer.
 // Also the gesture's two ways of being told about a click made elsewhere (`ReclickGesture.land` / `hush`).
 Item {

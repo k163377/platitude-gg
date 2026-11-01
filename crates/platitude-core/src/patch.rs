@@ -8,6 +8,11 @@
 //!
 //! This file is the scan; writing a hunk out again is [`render`], and the
 //! file's header fitted to what the hunks left is [`header`].
+//!
+//! A selection of only an addition after a file's unterminated last line
+//! (no trailing newline) has no form as a unified diff. Do not work round
+//! it by adding the lines it rests on to the selection: putting lines the
+//! reader did not choose into the index unasked does more harm.
 
 mod header;
 mod render;

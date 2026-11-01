@@ -10,9 +10,9 @@ MenuSeparator {
     property Menu inMenu: null
 
     // Drawn only with an offered row on each side, since groups can empty out (デザイン規約 §メニュー). Above is anywhere
-    // above, below is this divider's own group, so a run over an empty stretch draws once
-    // (rules-refs/app-ui.md「上はどこかに行、下は自分の群に行」). Reads `present`, not visibility: a closed menu's rows
-    // are released, and this must hold before it opens.
+    // above, below is this divider's own group, so a run over an empty stretch draws once: asked of "the group just
+    // above" instead, a group emptied out between two takes both its lines with it. Reads `present`, not visibility:
+    // a closed menu's rows are released, and this must hold before it opens.
     readonly property bool dividing: {
         if (!divider.inMenu)
             return false

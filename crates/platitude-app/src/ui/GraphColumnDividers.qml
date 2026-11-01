@@ -44,7 +44,9 @@ Item {
     readonly property alias labelX: labelDivider.x
     readonly property alias graphDividerX: graphDivider.x
     readonly property bool labelLineWanted: dividers.labelPointed || labelDivider.pressed
-    /// No line on a column with one width — the cursor speaks instead (規約 §グラフ列は最も広い所のレーンまで).
+    /// No line on a column with one width — the badge by the cursor speaks instead
+    /// (`GraphColumnMetrics.graphColWFixed`): no line to grab and an answer where the hand still reaches are a pair; no
+    /// answer at all reads as broken.
     readonly property bool graphLineWanted: !dividers.columns.graphColWFixed
         && (dividers.dividerPointed || graphDivider.pressed)
     /// Either line — what a row wearing a highlight ground builds its own copy of the lines on (`GraphRowDelegate`).

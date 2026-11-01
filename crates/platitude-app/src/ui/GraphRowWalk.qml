@@ -24,8 +24,12 @@ Item {
     /// both come here. `held` = the key was already down (`KeyEvent.isAutoRepeat`), which only changes when the row
     /// is read (`noteStep`).
     ///
-    /// Refused while the pane is off screen, a question stands, or a name box is open — a single-line box does not
-    /// consume Up / Down, so they reach the list through the delegate.
+    /// Refused while the pane is off screen (verbs call this directly, past the keys), a question stands (it moves only
+    /// once answered, 規約 §可否・警告の出し場所), or a name box is open (a half-typed name is not left behind) — a
+    /// single-line box does not consume Up / Down (Left / Right it does), so they reach the list
+    /// through the delegate. `namingOid` is asked by name: focus cannot tell, the list being a focus scope whose
+    /// `activeFocus` stays true while a child holds it. Not refused for a message being written in the details pane:
+    /// an arrow is a click, and leaving goes without asking about the draft (`DetailsPane.syncMessage`).
     function stepRow(delta, held) {
         if (!walk.visible || walk.asking
                 || walk.view.namingOid !== "" || walk.view.count === 0)
@@ -131,7 +135,9 @@ Item {
     /// Automation: a settle stands between the last step and its reading. The hold verb waits for it to expire, as an
     /// OS's first-repeat delay would, before sending the repeats.
     readonly property alias settling: stepTimer.running
-    /// A centering or a row brought into view is still owed to the view (the timers below); `PageSettled` waits on it.
+    /// A centering or a row brought into view is still owed to the view (the timers below, `Metrics.anchorDelayMs`);
+    /// `PageSettled` waits on it (`placing`). A reread's own send is placed in the turn it lands and owes nothing.
+    /// A new delay that writes the view's `contentY` joins this property, or a run completes before the view moves.
     readonly property bool placing: anchorTimer.running || showTimer.running
     Timer {
         id: stepTimer
@@ -185,7 +191,10 @@ Item {
     /// stand-in stands at the top edge then over the row the hand is over — the hand's row comes down just as far as
     /// clears its band (`GraphHeadPin.topBand`), the view giving back the rows the band would cover and going back up
     /// for the rest: a few commits on the branch move the rows down as they came
-    /// (デザイン規約 §hover のツールチップ「外乱では閉じない」).
+    /// (デザイン規約 §hover のツールチップ「外乱では閉じない」). Never into the band under the stand-in (user decision —
+    /// ask before changing; `GraphHeadPin`): as many commits as the band holds (three) come in with
+    /// nothing taken back and the rows lowered by as many — the card opens under its row, so the lowered row still
+    /// reads at the card's edge; more, and the hand's row stops just under the band, the rest hidden above.
     /// A hand's row the band covered before the reread stays where it is (`handUnderBand`).
     function keptRows(rows, from) {
         const pin = walk.standIn
@@ -243,7 +252,10 @@ Item {
         function onShiftsChanged() { walk.noteHand() }
     }
     /// Brings `row` into view once its pass has settled, unless already on screen (as `goToMatch` does) — a beat later,
-    /// weighed against where the view stands once the rows are laid out.
+    /// weighed against where the view stands once the rows are laid out. Asked after `activateRow`. A reread's
+    /// `shiftRows` does not wait for it: it runs in the turn that rewrote the rows (`stats_changed` closes the drain
+    /// that wrote them → `RepoPage.onStatsChanged`), so "on screen" is weighed after that shift and no frame shows
+    /// another commit.
     function showRowSoon(row) {
         showTimer.showRow = row
         showTimer.restart()

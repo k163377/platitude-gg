@@ -861,7 +861,11 @@ pub(super) fn script(dir: &Path, reserved: u32) -> String {
 /// the copies `cargo run` makes of its own among them — so a holder the
 /// hook started would keep the hook running for as long as it held. The
 /// PowerShell that asks WMI takes those copies too, and ends within the
-/// hook.
+/// hook. Not a plain spawn with the three standard handles left out:
+/// `cargo run`'s copies are other handles and still go. WMI's child
+/// inherits neither the handles nor the hook's job. Pinned by
+/// `awake::tests::holder::a_holder_lets_the_pipes_of_its_hook_close`, which
+/// stands a middle process in for cargo.
 ///
 /// The script is handed over in a file of its own under `dir`, named by
 /// its content — the command lines have no room for it — which the holder

@@ -5,8 +5,10 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The worktree's changes by kind, on the graph's uncommitted row. Conflicts first; the rest in the file list's
-// order.
+// The worktree's changes by kind, on the graph's uncommitted row, in the marks of the WIP pane's file rows: that list
+// is what the reader opens next, so the row and the list speak one vocabulary. Conflicts first — what is stopped shows
+// first —, the rest in the file list's order. Counts of files, read from status (`status::Kinds`). Each count wears
+// its mark's kind colour (デザイン規約 §git / diff 専用). Headless: `wip-tally`.
 RowLayout {
     id: tallies
 
@@ -18,7 +20,8 @@ RowLayout {
     required property int copied
 
     // One kind of change and its count, marked with the rows' ChangeIcon; an empty kind takes no seat (デザイン規約
-    // §無効).
+    // §無効). The mark is drawn at the count's scale (`size` = the count's pixel size; no step of the icon scale).
+    // Not glyphs (`+2` / `~2` / `→1`): the JP UI font does not give the symbols equal widths.
     component Tally: RowLayout {
         id: tally
         required property string code
@@ -49,6 +52,8 @@ RowLayout {
         }
     }
 
+    // Kinds `spaceSm` apart, a mark and its count with no step: the near gap against the far one is what makes each
+    // mark and count read as one lump.
     spacing: Theme.spaceSm
     Tally {
         code: "UU"

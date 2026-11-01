@@ -5,9 +5,11 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The band's state badges, opened out (デザイン規約 §ウィンドウの縁): one row per badge, in its own shape, beside
-// it the one thing it had no room for. A card, not a tooltip: a tooltip holds one string in one colour, and these
-// badges mean their colour. The sentences are `CardText`, to be taken away.
+// The band's state badges, opened out (`BandStateGroup`): one row per badge, in its own shape — the badge's frame and
+// fill as in the band — beside it the one thing its label had no room for (規約 §hover のツールチップ): the operation's
+// way out, the conflicts' count, which of two reasons the identity stands for, the `NO LFS` count, and `OLD GIT`'s
+// two versions. A card, not a tooltip: a tooltip holds one string in one colour, and these badges mean their colour.
+// The sentences are `CardText`, to be taken away.
 //
 // Owned by the group, not a badge or the mark: a popup parented to something that can be laid out away goes with it.
 AppCard {
@@ -38,10 +40,10 @@ AppCard {
     /// What was said about the walk that gave up, where anybody said anything (`GraphModel.error`).
     property string staleWhy: ""
 
-    /// The box the band's badges are cut to: the card draws them in the same one (規約 §ウィンドウの縁「バッジの箱」).
+    /// The box the band's badges are cut to: the card draws them in the same one (`BandStateMetrics`).
     required property BandStateMetrics box
 
-    /// The identity row is pressable (デザイン規約 §ウィンドウの縁「押せる行は identity だけ」).
+    /// The identity row is pressable — the one badge that is also a way somewhere (`StateBadge.pressable`).
     signal identityRequested()
 
     /// One width for the badge column, so the sentences start on one line.
@@ -53,7 +55,7 @@ AppCard {
                                                stateCard.oldGitShown ? oldGitBadge.implicitWidth : 0)
 
     /// Automation: which rows are standing, in band order, read off the rows themselves. Standing precedes drawn —
-    /// wait for `laidOut` first (`badges-hover` の `rows=`).
+    /// wait for `laidOut` first (`rows=` in `WindowBadgeActs.badgesLine`).
     function rowsLaidOut() {
         let out = []
         if (opRow.visible)
@@ -71,7 +73,8 @@ AppCard {
         return out.join(",")
     }
 
-    /// Automation: what the card came out to (`badges-hover` の `card=`). A `ColumnLayout` has no `forceLayout()`, so
+    /// Automation: what the card came out to (`cardSize=` in `WindowBadgeActs.badgesLine`). A `ColumnLayout` has no
+    /// `forceLayout()`, so
     /// this is measured after the fact, not before opening
     /// (rules-refs/app-ui.md「hover で開くものは出す前に採寸する」) — which holds here because the card opens under the
     /// mark with the hand still on it.
@@ -81,7 +84,8 @@ AppCard {
     /// pixels. Not by the row's `Qt.AlignBaseline`: a layout leaves a baseline-placed item unrounded, and the badge box
     /// is deeper than the sentence's line, so the sentence would stand on a half pixel (rules-refs/app-ui.md「その組は
     /// 自分だけの `RowLayout` に入れる」). Centred instead, it stands off the words by the badge box's cut — round the
-    /// capitals, not round a line — and by half the leading a field files under its line.
+    /// capitals, not round a line — and by half the leading a field files under its line: 1px on the Windows desk,
+    /// 2–3px on a Mac (`badges-hover`'s `level=`).
     function sentenceTop(line) {
         return Math.max(0, Math.round(stateCard.box.wordBase - line.baselineOffset))
     }
@@ -283,7 +287,7 @@ AppCard {
                 }
             }
             // Which of the two reasons it stands for — a half-landed save leaves an identity that *is* set
-            // (デザイン規約 §ウィンドウの縁).
+            // (`BandStateGroup.identityBadgeShown`).
             CardText {
                 id: identityLine
                 text: stateCard.identityUnsaved
@@ -296,8 +300,11 @@ AppCard {
             }
         }
 
-        // The graph and the repository disagree; this line says which way, and only the stopped walk quotes git
-        // (デザイン規約 §ウィンドウの縁「カードの行が 2 つの状態を言い分ける」).
+        // The graph and the repository disagree; this line says which way (`BandStateGroup.staleBadgeShown`), and only
+        // the stopped walk quotes git — a rebuild that failed is on the error line and in the command log already
+        // (`OpFailed`). The words are short and plain (user
+        // decision — ask before changing): not `This is the history as it was, not as it is now`, which does not say
+        // what happened.
         RowLayout {
             id: staleRow
             visible: stateCard.staleShown
@@ -366,7 +373,10 @@ AppCard {
             CardText {
                 id: lfsLine
                 // A sentence for each count, as the conflicts row's; "uncommitted" is the files pane's own word for
-                // the list they are counted from. That LFS is missing is the badge's to say, not this line's.
+                // the list they are counted from (`UNCOMMITTED CHANGES`): it says these are the files about to be
+                // committed — without it the line reads as "this repository puts 1 file in LFS". Only LFS files count,
+                // so it may differ from the pane's count. That LFS is missing is the badge's to say, not this line's
+                // (user decision — said twice, it becomes the card's longest line).
                 text: stateCard.lfsNeeded === 1
                       ? qsTr("%n uncommitted file needs Git LFS", "", stateCard.lfsNeeded)
                       : qsTr("%n uncommitted files need Git LFS", "", stateCard.lfsNeeded)
@@ -377,7 +387,8 @@ AppCard {
             }
         }
 
-        // The git on this machine is older than this app is built for: the two versions.
+        // The git on this machine is older than this app is built for: the two versions — the two facts and nothing
+        // more, no way out either: replacing git is work outside this window.
         RowLayout {
             id: oldGitRow
             visible: stateCard.oldGitShown

@@ -31,7 +31,8 @@ Item {
 
     /// The row stood in for while git deletes it, per list — read off what the window actually draws without
     /// (`ops::StandIn`), so the line says a row left the screen. A delete touches at most one per list, so each row is
-    /// named once.
+    /// named once. State the tab keeps, read off its edges here, not an edge the page raises: a run that pressed and
+    /// made nothing go says no `gone_shown`, and does not pass.
     readonly property string goneBranch: reports.repoTab.goneBranch
     readonly property string goneRemote: reports.repoTab.goneRemote
     readonly property string goneTag: reports.repoTab.goneTag

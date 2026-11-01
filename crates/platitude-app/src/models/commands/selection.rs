@@ -1,14 +1,25 @@
 //! The reader's own selection of the log's text: where it runs, what each
-//! row draws of it, and what it hands the clipboard
-//! (デザイン規約 §git が言ったことを読む場所).
+//! row draws of it, and what it hands the clipboard — through a drag and
+//! Ctrl+C alone, as in a terminal (`CommandsPane.qml`).
 //!
 //! A row is one line: its columns joined by tabs
 //! (`12:03:17\tgit switch -- 3.2\t29 ms`), so a paste keeps the columns.
+//! Tabs part the columns, spaces part the words (after `git`, between
+//! `exit 128` and the time), so a paste into something that reads tabs
+//! comes out as the three columns the reader read. The clock is made by
+//! the model, so the clock on screen and the one copied cannot differ.
 //! The panel draws each column at a place of its own, so a byte is found
 //! per column: the pane lays the column ([`CommandsModel::column`]) on the
 //! row's ruler (`LineRuler`) and brings back a place, and
 //! `encode::markup::plain_byte` / `plain_ranges` turn places into bytes and
-//! back. Nothing here measures a font.
+//! back. Nothing here measures a font, and no pixel is ever handed in.
+//! The hit test and the wash ask the column's own layout, so they cannot
+//! disagree; the wash is one rectangle per column run, so a
+//! bidirectional column collapses into one (a known limit of the form).
+//! Pinned by `tests/qml/tst_commandshit.qml`, whose expectations come by
+//! another path (`TextInput` and the drawn `Label` agreeing with the
+//! ruler); offscreen it judges only that agreement — real advances need
+//! `qmltestrunner` without `-platform offscreen`.
 //!
 //! - One tab stands for the whole gap between two columns, so a wash that
 //!   covers it covers the gap.
@@ -275,7 +286,10 @@ impl CommandsModel {
 
     /// The selected text, cut at its two ends. A failed line taken whole
     /// brings git's words under it, each indented by a tab so it pastes
-    /// under the command column.
+    /// under the command column; no part of them comes alone, since the
+    /// block wraps on screen and nothing there can point into it. Only
+    /// what the rows draw is copied: no `exit 0`, no stderr of a command
+    /// that went through, and a row still running has no third column.
     pub(super) fn copied(&self) -> String {
         let Some(ends) = self.sel_ends else {
             return String::new();

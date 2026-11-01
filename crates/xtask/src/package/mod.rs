@@ -1,5 +1,5 @@
-//! `cargo xtask package` — a snapshot of the app as a macOS bundle
-//! (P5-確認事項 §8): the shipped build and its helper in `Platitude GG.app`,
+//! `cargo xtask package` — a snapshot of the app as a macOS bundle (the
+//! only form it makes): the shipped build and its helper in `Platitude GG.app`,
 //! of the Qt they were built against only what [`contents`] names, signed ad
 //! hoc, started once offscreen from the bundle alone, and zipped — or put in
 //! a DMG only a password opens, the form a run of the public repository

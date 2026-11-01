@@ -10,11 +10,13 @@
 case "$1" in prepared | committed) ;; *) exit 0 ;; esac
 # Beside the installed copy, one file per branch naming the session whose
 # git created it (crates/xtask/src/gate/hooks.rs `maker`). git also runs
-# this for refs it only moves between its own files — `pack-refs` reads as
-# a creation in packed-refs and a deletion of the loose file — so a branch
-# is created only when it was not there before the transaction, and goes
-# only when it is not there after. A creation by a git with no session id
-# (the user's own, the app's) leaves the branch nobody's.
+# this for refs it only moves between its own files — `pack-refs`, which
+# automatic maintenance runs too, reads as a creation in packed-refs and a
+# deletion of the loose file (measured) — so a branch is created only when
+# it was not there before the transaction, and goes only when it is not
+# there after. A creation by a git with no session id (the user's own, the
+# app's) leaves the branch nobody's. Kept whatever the `CLAUDECODE` mark
+# below says.
 made="$(dirname "$0")/../made"
 id="${CLAUDE_CODE_SESSION_ID:-$CODEX_THREAD_ID}"
 case "$id" in *[!A-Za-z0-9_-]*) id="" ;; esac

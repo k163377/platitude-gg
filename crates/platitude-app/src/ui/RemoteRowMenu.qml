@@ -4,6 +4,11 @@ import platitude.ui
 // What a remote itself offers, from its REMOTES row (デザイン規約 §左メニューの所作) — configuration, so a menu of
 // its own. No chips: the mark row runs `git config`, a word only the command log spells
 // (デザイン規約 §git 用語のコード表記).
+//
+// The origin mark (デザイン規約 §リモートを書き留める) has two doors with one sentence and one slot: this menu's row
+// and `RemoteDialog`'s box, both `RepoTab.markOrigin` (`remote.pushDefault` and `checkout.defaultRemote` together; an
+// empty name clears both). The row's badge reads `pushDefault`, its hover the same `markedOrigin` as the row here and
+// the box (`NavItemDelegate.pushesHere` / `holdsOrigin`). Headless: `push-default` / `remote-menu` / `remote-url`.
 Item {
     id: remoteRowMenu
 

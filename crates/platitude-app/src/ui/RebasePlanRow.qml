@@ -5,6 +5,12 @@ import platitude.ui
 
 // One row of the interactive-rebase plan: its verb, its commit, and the reorder under the hand. Verbs and moves go to
 // the plan model through the view's functions; the picked commit rides up to the page (rules/app-ui.md「配線」).
+//
+// Newest first, as the graph. Verb chip (the todo's six verbs in code dress), face, subject, id: the three columns
+// line up across the rows and with `onto`'s (user decision — ask before changing). The whole row is the drag's grip:
+// no token sizes a grip dot, so a grip mark comes back only together with a token approved for it. Only the verb chip
+// says a row folds; a `drop` keeps its row, struck through, so the reader can change their mind. The verb menu opens
+// from the chip and from the row's right-click.
 Item {
     id: planRow
 
@@ -38,8 +44,9 @@ Item {
     }
 
     // The graph's lane through the faces, down to `onto`: as the history stands, each step is the parent of the one
-    // above it, so the lane is solid whatever verb a step wears (デザイン規約 §フル interactive rebase). Under the face,
-    // as the graph's is under its node.
+    // above it, so the lane is solid whatever verb a step wears — drawn as the list of §複数のコミットを選ぶ draws it
+    // (user decision — ask before changing; `laneStroke`, `textSecondary`). Under the face, as the graph's is under its
+    // node.
     Rectangle {
         id: laneLine
         /// The newest step's lane starts at its face; at the root the oldest one's ends there.
@@ -117,6 +124,8 @@ Item {
             CodeChip {
                 word: planRow.action
                 size: Theme.fontChip
+                // The tint tells the verbs apart — a kind colour, not a warning, so `drop`'s red and `edit`'s yellow
+                // stand outside the hold-press colours (デザイン規約 §回数押しの色; user decision — ask before changing).
                 tint: planRow.action === "drop" ? Theme.danger
                       : planRow.action === "edit" ? Theme.warning
                       : planRow.action === "pick" ? Theme.textSecondary

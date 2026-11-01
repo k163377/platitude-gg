@@ -1,11 +1,21 @@
-//! Bringing back one part of what an entry took away (破棄記録仕様.md §4).
-//! Each is git's own write for the thing: a branch, a tag, a worktree,
-//! a stash entry — and the copy of thrown-away work, put back the first way
-//! that takes it whole.
+//! Bringing back one part of what an entry took away. Each is git's own
+//! write for the thing: a branch, a tag, a worktree, a stash entry — and the
+//! copy of thrown-away work, put back the first way that takes it whole.
 //!
 //! What is written is the operated worktree (where the work was thrown
 //! away), the shared refs and a new worktree; never another worktree's
-//! files (§4).
+//! files — someone else may be at work there. A restore only adds: no ref
+//! that stands moves, and sending a branch back (a push) is no part of it.
+//!
+//! A branch deleted here comes back on its recorded tip with its recorded
+//! upstream; one a move left behind, at the old tip (suffixed where the
+//! branch still stands); a remote's branch deleted or pushed over, as a
+//! branch here under the remote's name, with no upstream; a tag, here or a
+//! remote's, on its recorded object (an annotated tag as itself; an object
+//! this repository lacks is git's refusal); a stash entry, back in the list
+//! with its message (`stash store`); a removed worktree, at its place on its
+//! branch, detached at its HEAD where it had none or the branch is gone; a
+//! detached HEAD's commits, as a branch at the tip left.
 
 use std::path::Path;
 
@@ -26,12 +36,12 @@ pub enum Restored {
     /// back as it was, and the working tree's side held all it did.
     Unstaged,
     /// The work could not go into the worktree whole without a
-    /// conflict, so it waits as a stash entry instead (§4: on the commit it
+    /// conflict, so it waits as a stash entry instead (on the commit it
     /// stood on, dated now).
     AsStash,
 }
 
-/// Brings back `part`. A refusal is git's, as the write's error (§4: a
+/// Brings back `part`. A refusal is git's, as the write's error (a
 /// branch another worktree has out, a commit gc took …).
 pub async fn restore(
     executor: &GitExecutor,
@@ -84,7 +94,7 @@ pub async fn restore(
             Ok(Restored::Whole)
         }
         Restore::Changes { copy, path, .. } => {
-            // Into the worktree the work was thrown out of, and no other (§4);
+            // Into the worktree the work was thrown out of, and no other;
             // gone, it has nowhere to go.
             if worktree_at(executor, path, cancel).await?.is_none() {
                 return Err(GitError::Rejected {
@@ -129,17 +139,23 @@ pub(crate) async fn worktree_at(
     Ok(topped.then(|| git_dir.trim_end().to_string()))
 }
 
-/// Puts the copy back into the worktree at `worktree_path` (§4): its
+/// Puts the copy back into the worktree at `worktree_path`: its
 /// differences from what the discard left — the index's, the working
 /// tree's and the untracked files — applied where they go on over what is
 /// there now, the staged half as it was staged; the working tree's alone
 /// where the staged half no longer goes on but the working tree's side
 /// holds all it did ([`work_holds_the_staged`]); else a stash entry holding
-/// the same differences. Nothing goes in over an operation standing in the
-/// worktree: its staged half would go into what that commits.
+/// the same differences. Only what went comes back: what stayed in a file,
+/// or was added there since, stays beside it. Nothing goes in over an
+/// operation standing in the worktree: its staged half would go into what
+/// that commits.
 ///
-/// `git apply` writes all of a patch or none of it, so a refusal leaves the
-/// index and the working tree as they were.
+/// Patches, not `git stash apply`: that writes nothing where it would write
+/// over a file holding uncommitted changes, and on a conflict leaves the
+/// conflict half-written. A patch goes on with three lines of context, so a
+/// hunk whose surrounding lines changed since the discard falls to the stash
+/// entry. `git apply` writes all of a patch or none of it, so a refusal
+/// leaves the index and the working tree as they were.
 async fn changes(
     executor: &GitExecutor,
     worktree_path: &Path,
@@ -152,6 +168,10 @@ async fn changes(
     if quiet && let Some(restored) = put_back(executor, worktree_path, copy, cancel).await? {
         return Ok(restored);
     }
+    // The entry keeps the copy's first line as its message (`discard 2 paths
+    // on main`; user decision): what comes back keeps its own name, renamed
+    // only where it would clash, and stash messages never clash — a dropped
+    // or popped stash comes back under its own message too.
     let message = subject_of(executor, worktree_path, copy, cancel).await?;
     let entry = redated(executor, worktree_path, copy, cancel).await?;
     store(executor, worktree_path, &entry, &message, cancel).await?;
@@ -192,7 +212,8 @@ async fn put_back(
     let (index, work) = (held(index), held(work));
     // `git apply` checks a file it creates against what stands at its own
     // path alone; where a file stands in place of one of its folders, Git
-    // for Windows answers 0 having written nothing there.
+    // for Windows answers 0 having written nothing there (`--check` passes
+    // too).
     if !created_lie_free(executor, cwd, &hex, &untracked, cancel).await? {
         return Ok(None);
     }
@@ -341,7 +362,10 @@ pub(crate) fn lies_free(root: &Path, path: &str) -> bool {
 
 /// A patch of what `diff-tree` says between `revs` (or a root commit's tree
 /// whole, `--root` among `options`), binary files included, applying as
-/// `git apply` takes it; empty where nothing differs.
+/// `git apply` takes it; empty where nothing differs. The options go before
+/// `--end-of-options`: after it, git reads `--root` as a revision (`bad
+/// revision '--root'`). One commit alone opens the patch with its commit id
+/// line, which `git apply` skips.
 async fn patch_of(
     executor: &GitExecutor,
     cwd: &Path,
@@ -409,7 +433,7 @@ async fn subject_of(
 /// The copy again — the same tree, parents and message, so the same
 /// differences over what the discard left — dated now, so the stash list
 /// puts it where it was made. Made by Platitude GG as the copy was, so no
-/// identity of the user's is asked for (破棄記録仕様.md §2).
+/// identity of the user's is asked for (`record`'s recorder).
 async fn redated(
     executor: &GitExecutor,
     cwd: &Path,

@@ -22,6 +22,18 @@ pub enum CheckoutTarget {
     /// An existing local branch, moved to `start` before landing on it.
     /// Commits only that branch had are left unreferenced (the UI asks
     /// first). One command, so git does both or neither.
+    ///
+    /// Always with `--no-track`: `branch.autoSetupMerge` (on by default)
+    /// reaches an existing branch too, so a remote-tracking `start` swaps
+    /// `branch.<local>.remote` / `.merge` for its own (measured on 2.55:
+    /// `checkout -B` alike; `reset --hard`, `branch -f` and a local `start`
+    /// leave them). The reflog says only `branch: Reset to <start>`, so the
+    /// lost upstream shows in neither the log nor the screen; that string is
+    /// what finds such a move afterwards — a plain `reset --hard` writes
+    /// `reset: moving to <start>` and keeps the upstream, and HEAD's own
+    /// reflog cannot tell (`checkout: moving from A to B` from another
+    /// branch, `from B to B` on the same one). Held by
+    /// `upstream_integration::moving_a_branch_onto_a_remote_ref_leaves_its_upstream_alone`.
     ForceCreate { local: String, start: String },
 }
 
@@ -92,7 +104,7 @@ pub async fn checkout(
         }
         // `--no-track` is load-bearing: without it a remote-tracking start
         // silently overwrites the existing branch's upstream
-        // (rules-refs/core.md, the `switch --force-create` line).
+        // (`CheckoutTarget::ForceCreate`).
         CheckoutTarget::ForceCreate { local, start } => {
             cmd.args(["--no-track", "--force-create", local, start])
         }
@@ -248,11 +260,22 @@ pub(crate) async fn has_branch(
 /// Records which remote branch a local one is measured against
 /// (`branch.<name>.remote` / `.merge`).
 ///
-/// `branch --set-upstream-to` when the remote-tracking ref is here; git
-/// refuses a name it has no ref for, so otherwise the pair is written with
-/// `config`, `.remote` first (rules-refs/core.md「upstream の書き込みは 2 通りで」;
-/// デザイン規約 §ブランチが測られる相手を決める). A branch here as the
-/// upstream (remote `.`) has no remote-tracking ref and goes the second way.
+/// `branch --set-upstream-to` when the remote-tracking ref is here
+/// (`ref_is_here`); git refuses a name it has no ref for (`fatal: the
+/// requested upstream branch … does not exist`, exit 128), so otherwise the
+/// pair is written with `config` (the UI takes such a name: `UpstreamFlow.qml`),
+/// `.remote` first: a `.merge` alone is read against the default remote, a
+/// `.remote` alone is no upstream. A branch here as the upstream (remote
+/// `.`) has no remote-tracking ref and goes the second way.
+///
+/// git can reach that state itself (2.55): `status --porcelain=v2` gives
+/// `branch.upstream` with no `branch.ab` (`upstream_tracked` false) and
+/// `%(upstream:track)` gives `[gone]`. `plan_current_push` then builds
+/// `<local>:refs/heads/<branch>` as recorded and makes it, and the counts
+/// start once the tracking ref comes. A bare `git push` would not
+/// (`push.default=simple` refuses a different name with `fatal: The upstream
+/// branch … does not match`); the app always sends an explicit refspec. Net:
+/// `upstream_integration::an_upstream_the_next_push_has_to_make_is_recorded_all_the_same`.
 ///
 /// The flag takes the full refname: the `origin/main` shorthand is
 /// ambiguous, and refused, when a local branch has that name.

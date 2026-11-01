@@ -4,7 +4,9 @@ import QtQuick.Layouts
 import platitude.ui
 
 // The settings screen's top band: the title, laid on the chapters' centred block, and the exit, hung off the band's
-// right edge (規約 §設定の画面). A plain `Item`, because a RowLayout could only place the two in one run.
+// right edge (`SettingsDialog.blockWidth`). A plain `Item`, because a RowLayout could only place the two in one run.
+// The `✕`'s corner hit is pinned by `tst_settingsheader`. Its marks are `Canvas`es, which can miss the overlay mirror's
+// grab: check them in `scene.png`, not `overlay.png`.
 Item {
     id: head
 
@@ -36,7 +38,7 @@ Item {
         spacing: Theme.spaceSm
 
         // Each half's mark heads its words: a step over their capitals, its box their line so the two share a baseline
-        // (デザイン規約 §アイコンの席 の文頭記号の見出し).
+        // (デザイン規約 §アイコンの席 の文頭記号の見出し). A new mark is added as a `NavIcon` kind, as `gear` is.
         NavIcon {
             Layout.preferredWidth: Theme.iconLg
             Layout.preferredHeight: titleWord.implicitHeight
@@ -81,16 +83,22 @@ Item {
         }
         Item { Layout.fillWidth: true }
     }
-    // The `✕` alone; Escape is said in its tooltip (規約 §設定の画面).
+    // The one way out, the `✕` alone (user decision — ask before changing): a picture of the key everybody presses
+    // would sit in the corner like furniture every time the screen is read. The key is said in its tooltip, in one
+    // line (規約 §hover のツールチップ「ラベルに入らなかった 1 点」).
     CloseToolButton {
         id: closeMark
         // Flush with the band's right edge, all of its air inside the seat (規約 §当たり判定).
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
-        // Seat and mark sizes: 規約 §設定の画面 (`iconSm` would read as an afterthought beside the title).
+        // A `toolbarHeight` square seat, no smaller than a window button's `railWidth` × `toolbarHeight` hit. The mark
+        // is the window buttons' `iconMd`: "a step under what it closes" is the rows' and tabs' `✕`; this one closes a
+        // whole screen beside a `fontXl` title, where `iconSm` reads as an afterthought.
         seat: Theme.toolbarHeight
         markSize: Theme.iconMd
-        // Warning ink while something is unsaved, yet always pressable; armed changes shape too (規約 §設定の画面).
+        // Warning ink while something is unsaved, yet always pressable — a dead `✕` says there is no way out without
+        // saying why. Armed changes shape too (`CloseToolButton.armed`): colour alone is one signal, and a press that
+        // did nothing needs a second.
         tone: head.armed || !head.unsaved ? Theme.textPrimary : Theme.warning
         armed: head.armed
         Accessible.name: qsTr("Close the settings")

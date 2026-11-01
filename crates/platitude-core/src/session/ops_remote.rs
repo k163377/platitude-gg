@@ -83,7 +83,7 @@ impl RepoSession {
     /// Sends `spec`, caught up with where the remote has moved
     /// ([`Self::catch_up_after`]). A forced push that replaced the remote's
     /// tip, rather than adding to it, puts the tip it replaced on the
-    /// discard record (破棄記録仕様.md §2) — read before the push: the lease's
+    /// discard record (`discards::record`) — read before the push: the lease's
     /// commit, else the remote-tracking ref.
     async fn push_recorded(
         self: &Arc<Self>,
@@ -397,7 +397,8 @@ impl RepoSession {
     /// **A failure here is no answer of the write's**: the delete went, so
     /// the write answers as done — no report, and the row it took stays
     /// gone. The refused command stands in the command log as any asked
-    /// command does (デザイン規約 §リモートブランチを消す).
+    /// command does. The row's words stay `push --delete`; what was
+    /// untracked is the command log's to say.
     ///
     /// The refs listing behind the write reads the upstreams again, and
     /// the status `measures_head` asks for reads HEAD's; the config
@@ -424,16 +425,23 @@ impl RepoSession {
     /// and it has to: `push --delete` takes the remote-tracking ref with
     /// it, and a plain `branch --delete` merged only into that upstream is
     /// then refused as not merged, leaving the remote gone and the branch
-    /// here. A refused lease stops the pair half-way instead, with the
-    /// branch gone here and its commit reachable from the remote-tracking
-    /// ref — the catch-up fetch moves that ref on to where the remote went.
+    /// here (minimum version and the development machine). A refused lease
+    /// stops the pair half-way instead, with the branch gone here and its
+    /// commit reachable from the remote-tracking ref — the catch-up fetch
+    /// moves that ref on to where the remote went, and where it was force
+    /// pushed the reflog still holds it — and the write answers with the
+    /// refused half. No `push --dry-run` goes ahead of the local half to
+    /// avoid that stop (user decision — ask before changing).
     ///
     /// A kind of its own ([`OperationKind::DeleteBranchEverywhere`]): it
     /// answers as a branch write, but the far end paces its second half.
     ///
     /// Plain or forced, both names leave the graph at once, and the commits
     /// only they held with them (`session::leaving`): what a plain delete
-    /// was merged into may be the remote branch going too.
+    /// was merged into may be the remote branch going too. Stopped
+    /// half-way, the graph takes it as a refusal and puts everything back;
+    /// the walk behind takes away again the commits only the branch here
+    /// held — the known gap the sidebar's `StandIn` has too.
     pub fn delete_branch_everywhere(
         self: &Arc<Self>,
         branch: String,
@@ -495,7 +503,8 @@ impl RepoSession {
     /// answer to a rename here that takes nothing away over there
     /// (デザイン規約 §手元の改名の後のリモート).
     ///
-    /// **The setting goes down first.** `push --set-upstream` records the
+    /// **The setting goes down first** (user decision — ask before
+    /// changing). `push --set-upstream` records the
     /// pair only once the push landed, so a refused push would leave the
     /// branch measured against the name it was renamed away from; written
     /// first, the toolbar's `push` is the retry ([`branch::set_upstream`]

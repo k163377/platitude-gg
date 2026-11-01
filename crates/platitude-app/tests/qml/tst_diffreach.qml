@@ -4,7 +4,7 @@ import QtTest
 import platitude.ui
 
 // How far a diff reaches sideways: what the picked lines measure at, and what the rows on screen make of that
-// (rules-refs/app-ui.md「diff は横へ送る・溝は動かない」).
+// (`DiffReach.qml`'s three rules).
 //
 // Only a laid-out Label can answer the first half: the model counts columns, and wide-glyph fallbacks are not
 // monospaced. Each case is held against a `PlainText` Label carrying the characters the markup stands for — a ruler

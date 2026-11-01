@@ -4,8 +4,10 @@ import platitude.ui
 /// The hand over one surface — a pane's rows, the window — read where Qt's hover cannot say it: where it is, and
 /// whether it was the hand that moved or the rows under it (デザイン規約 §左メニューの所作「手が動いていない所へ来た行は
 /// 開かない」). The rows light and open off this, never off their own hover: Qt hands hover to whatever arrives under a
-/// still pointer, and tells the ancestor's handler the point again when the layout moves
-/// (`tests/qml/tst_hoverunderstillhand.qml`), so a move is the place changing, not the telling.
+/// still pointer, and tells the ancestor's handler the point again when the layout moves (in Qt 6.12 on a frame after
+/// the move is drawn; `tests/qml/tst_hoverunderstillhand.qml`), so a move is the place changing, not the telling —
+/// counting the telling makes the rows blink. Not weighed in the events either: a distance slack drops both the leave
+/// and the enter under a hand crossing rows in small steps, and several rows stay lit.
 ///
 /// A passive `HoverHandler` on the surface itself, which sees the hand over every child and loses it under a popup
 /// (rules-refs/app-ui.md「ペイン全体の hover を測る handler はペイン自身に置く」). A surface outside it that belongs to the
@@ -50,7 +52,10 @@ HoverHandler {
     /// the hand unheard under them is not a hand that moved. Gone from the surface with nothing over it, or out from
     /// under one to elsewhere, the hand did move. As Qt's tooltips wake on the mouse's own moves alone
     /// (`QApplication::notify`): a scroll, a search or the keyboard's walk under a still pointer opens nothing over
-    /// what the reader is looking at (デザイン規約 §左メニューの所作「手が動いたかの見切り」).
+    /// what the reader is looking at (デザイン規約 §左メニューの所作「手が動いたかの見切り」). Opened anyway, a card
+    /// nobody asked for comes out placed at a row that has not finished moving: on the graph, `graph-head-list click`
+    /// reads `held=` (unheld, it goes red on `opened=true`), and `tst_graphhover.qml` takes a search's and a wheel's
+    /// landing with a real pointer, and the order `rowsMoved` tells things in.
     property bool stillHeld: false
     /// Where the hand was when the rows moved; (-1, -1) while it was in a card then — the first place heard is the
     /// place (a card's line pressed sends the rows moving, and the card going brings the hand back over them).
@@ -76,6 +81,10 @@ HoverHandler {
     /// the rows read the hand again** (`shifts`): the row now under it asks after that, and its ask is the one kept —
     /// told the other way round, the seat would keep the ask of the row that slid away over the new one.
     /// `disturbed`: the move came of no reader's doing, and what the hand is inside stays (`disturbed`).
+    /// The surfaces that say it: the right pane's file list; another worktree's list (scroll, count, `y`, reread); the
+    /// diff (scroll, the sideways `codeScroll.offset`, the rows laid out again `rowsGen`, count, `y` — a search's
+    /// off-screen hit too); the command log (scroll, a row above growing). A new surface whose rows move under a still
+    /// hand says it too, or a tip stays out over a row that slid away. Fixed by `tst_tipmoves.qml` and `tip-slide`.
     function rowsMoved(disturbed) {
         const over = watch.present
         if (over) {

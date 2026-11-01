@@ -3,7 +3,12 @@ import platitude.ui
 
 /// The hand over a row's face: the press is the control's until it travels past `drag.threshold`, then a drag over
 /// the words, anchored where it landed. A plain `MouseArea` (rules-refs/app-ui.md「手の実装は素の」);
-/// `preventStealing` keeps the pane's Flickable from taking the drag part-way.
+/// `preventStealing` keeps the pane's Flickable from taking the drag part-way. Laid over the face's whole area,
+/// exactly.
+///
+/// The face under it never sees the press, so it writes its `down` from this hand
+/// (`down: pressed || (hand.containsPress && !hand.dragging)`): it sinks with the press and comes back up once the
+/// press turns into a drag. Its `onClicked` stays as the keyboard's way in (`Space`).
 MouseArea {
     id: hand
 

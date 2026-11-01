@@ -88,7 +88,7 @@ Item {
             return null
         }
 
-        /// A folder's row says its name (rules-refs/app-ui.md「`AppMenu` の delegate が作る題名行」).
+        /// A folder's row says its name (the title row `AppMenu.delegate` makes).
         function test_a_folder_is_a_row_that_says_its_name_and_opens_its_card() {
             verify(card.offerFrom(), "the card has rows to offer")
             tryCompare(card, "opened", true)

@@ -3,7 +3,10 @@ import platitude.ui
 
 // What a boundary answers a drag it cannot honour with: the platform's cursor left untouched, and this badge in the
 // corner the cursor leaves empty — at the hand, not the clamped line (規約 §掴める境界は答える). Every draggable
-// boundary draws it from here, so the corner and the line weight are one decision.
+// boundary draws it from here (all seven, a drag past a bound included — headless `divider-refuse`), so the corner and
+// the line weight are one decision. Not a whole cursor of our own (`Qt.BlankCursor` plus a drawn arrow): drawn arrows
+// match neither the platform's line weight nor its rim, and the boundary would read as another tool than its
+// neighbours. Not `QCursor(QPixmap)`: it needs C++.
 NavIcon {
     id: badge
 
@@ -11,7 +14,8 @@ NavIcon {
     property point at: Qt.point(0, 0)
 
     /// Whether to draw. Set and read this, not `visible`: read from another file `visible` comes back stale, while a
-    /// plain property of the component's own carries the answer out intact.
+    /// plain property of the component's own carries the answer out intact. An alias carrying it out of another file
+    /// points at `shown` too: one on `visible` reports false over a picture that shows the badge.
     property bool shown: false
     visible: badge.shown
 

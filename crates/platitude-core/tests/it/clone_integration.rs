@@ -63,7 +63,7 @@ mod periodic {
     use super::*;
 
     /// The destination is git's to judge; its refusal is what the dialog
-    /// shows (デザイン規約 §リポジトリを取り寄せる).
+    /// shows (the app's `CloneDialog.qml`).
     #[tokio::test]
     #[ignore = "git's own refusal of a taken destination: not worth the pre-merge run"]
     async fn a_destination_that_is_taken_comes_back_as_gits_own_refusal() {

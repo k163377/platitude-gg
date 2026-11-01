@@ -29,12 +29,16 @@ Item {
     /// The tab the open ask is for (`TabsModel::current_tab_id` at the ask). The ask stays open while that tab is in
     /// front and is answered again whenever what it was measured against moves: the view settles extent and widths
     /// after the item reports itself, and a one-shot answer is left off the run. It closes on the reader's hand on the
-    /// strip (`takeRun`), a tab closed, the front moving, or — once answered — the next press anywhere (`pressLanded`).
+    /// strip (`takeRun`), automation's (`sendRunAway`), a tab closed (counted, since neither the `✕` nor a middle click
+    /// goes through `takeRun`), the front moving (a latch left open would take the next tab to come forward and move
+    /// the strip for it), or — once answered — the next press anywhere (`pressLanded`).
     property int frontAskId: -1
     /// The open ask has answered once, so the next press ends it (`pressLanded`).
     property bool frontAskAnswered: false
-    /// Whether the strip has held a tab in front since it was last empty
-    /// (デザイン規約 §タブの所作「前に出ているタブを 1 枚も持っていなかった帯は、その席で始まる」). Not `frontTab` at the ask:
+    /// Whether the strip has held a tab in front since it was last empty. A strip that has not starts at the asked
+    /// tab's seat instead of travelling there (`TabRun.landOn`): a motion reads only against a place the reader saw,
+    /// and the head of a strip just built is where the machine put it — at startup (restored tabs, arguments) and
+    /// on opening one after every tab was closed. Not `frontTab` at the ask:
     /// across a move it can be null on both sides — the old tab lets go before the ask, the new one reports a layout
     /// later.
     property bool stood: false
@@ -80,13 +84,18 @@ Item {
     /// (rules-refs/app-ui.md「枚数ではなく状態を名乗らせ」).
     readonly property bool tabNamesCut: tabStrip.tabTitleCap < tabStrip.tabTitleMaxW
     readonly property bool tabMarksFolded: tabStrip.tabMarkRoom <= tabMetrics.markRoomMin
-    /// What the strip would take with nothing cut (`settleTitleCap`), and its floor: two tabs (規約 §ウィンドウの縁).
+    /// What the strip would take with nothing cut (`settleTitleCap`), and its floor.
     property real tabsWantWidth: 0
+    /// **Two tabs**, each at its tightest (`TabShare`'s order: the mark's room at its minimum, the name at its floor):
+    /// a window left with one tab has lost what tabs are for. The window never stands on this — the page's floor is
+    /// wider (規約 §窓の床) — so what it decides is the shortfall's share: the row shrinks each cell by its room above
+    /// its floor, so a higher floor keeps the tabs and the state badges give their words up first
+    /// (`BandStateGroup`).
     readonly property int tabStripFloorW:
         menuButton.width + plusButton.width + tabs.grabRun
         + 2 * (tabMetrics.tabPadL + tabMetrics.markRoomMin + tabStrip.tabTitleMinW)
     /// Where the names' baseline stands, in the strip's y: words on the band's row stand on it with them
-    /// (`BandStateGroup.lineBaseline`; 規約 §ウィンドウの縁「バッジの箱」). Read off `titleLine`, laid out as a name is.
+    /// (`BandStateGroup.lineBaseline`; `BandStateMetrics`' badge box). Read off `titleLine`, laid out as a name is.
     readonly property real titleBaseline: titleLine.y + titleLine.baselineOffset
 
     signal openRepositoryRequested()
@@ -110,7 +119,8 @@ Item {
     }
 
     /// Left moves to the tab (a carry may follow, `takeTab`); middle closes it (デザイン規約 §タブの所作). Real presses
-    /// and automation both come through here.
+    /// and automation both come through here. **The middle click closes with no question**, as a plain click on the
+    /// `✕` does: closing loses nothing in the repository, and opening it again is one step past the `+`.
     function pressTab(index, id, button) {
         if (button === Qt.MiddleButton) {
             tabStrip.tabsModel.closeTab(id)
@@ -136,7 +146,8 @@ Item {
         return true
     }
 
-    /// Automation (`tab-hold`): the tab at `index` taken up and carried half its width, not set down.
+    /// Automation (`tab-hold`): the tab at `index` taken up and carried half its width, not set down. `tab-drag` alone
+    /// is not enough: a broken transform still lands the order, and a tab that only jumps seats frames the same.
     function holdTabAt(index) {
         const tab = tabs.itemAtIndex(index)
         if (!tab)
@@ -183,8 +194,9 @@ Item {
         return tabRun.showTab(tabStrip.frontTab)
     }
 
-    /// An outside ask to show the tab in front (デザイン規約 §タブの所作): travelled to if the strip has stood before,
-    /// else started at (`stood`). The model has moved its front before asking, so its front is the tab asked for.
+    /// An outside ask to show the tab in front (`TabsModel.frontTabAsked` — which roads ask, and why): travelled to as
+    /// a press on the stand-in is, if the strip has stood before, else started at (`stood`). The model has moved its
+    /// front before asking, so its front is the tab asked for.
     function askFrontTab() {
         tabStrip.frontAskTravels = tabStrip.stood
         tabStrip.frontAskId = tabStrip.tabsModel.currentTabId
@@ -222,17 +234,22 @@ Item {
     }
 
     /// The reader's hand on the strip (a press, the wheel, a carry): it outranks a travel in flight and an open ask
-    /// alike (デザイン規約 §タブの所作「帯自身の所作は頼みの外」).
+    /// alike. **The strip's own gestures are never an ask**: each is the hand that put the strip where it is, and
+    /// moving the strip on top of it undoes that hand. A press on a tab leaves the strip where it stands too — bringing
+    /// that tab whole would move the target under the hand that pressed it.
     function takeRun() {
         tabRun.halt()
         tabStrip.closeFrontAsk()
     }
 
-    /// A press landed anywhere in the window (`FocusRelease.pressedAnywhere`): an answered ask ends with the reader's
-    /// next act, or the strip would move on its own under them. An unanswered one goes on — its tab is still coming in.
+    /// A press landed anywhere in the window (`FocusRelease.pressedAnywhere` → `Main.pressLandedAnywhere`): an answered
+    /// ask ends with the reader's next act, or a later width change (the window's, the band's badges) moves the strip
+    /// on its own under a reader who has moved on (`tab-open-moved-on`). An unanswered one goes on — its tab is still
+    /// coming in.
     ///
-    /// A press, not hover: Qt re-delivers hover whenever the scene moves under a still pointer, so hover is no act of
-    /// the reader's.
+    /// A press, not hover: Qt re-delivers hover whenever the scene moves under a still pointer, so hover crossing the
+    /// strip's edge is no act of the reader's, and closing on it would drop an ask still being answered. Hover cannot
+    /// be injected, so no verb nets that.
     function pressLanded() {
         if (tabStrip.frontAskAnswered)
             tabStrip.closeFrontAsk()
@@ -344,8 +361,11 @@ Item {
     }
 
     /// The names at natural width, hidden: the strip's own labels are the ones being capped, so they cannot be what
-    /// the cap is measured from. Same font and weight as drawn, and including a linked worktree's run (`TabTreeMark`) —
-    /// it is part of what the tab would draw whole.
+    /// the cap is measured from (cap → width → cap, which the engine reads as a binding loop). Same font and weight as
+    /// drawn — the front tab's `fontWeightStrong` too, or the cap comes out a few pixels loose — and including a linked
+    /// worktree's run (`TabTreeMark`) — it is part of what the tab would draw whole. Each name must come to the number
+    /// the tab reads off its `CutName.implicitWidth` (`TabItemDelegate.nameNatW`), or the strip's estimate and the
+    /// tabs' real widths part.
     Repeater {
         id: titleMeasure
         model: tabStrip.tabsModel
@@ -394,7 +414,11 @@ Item {
         id: tabs
         x: menuButton.width
         height: tabStrip.height
-        /// Band kept clear of the tabs to take hold of the window by (デザイン規約 §ウィンドウの縁).
+        /// Band kept clear of the tabs to take hold of the window by: the app owns the band's grip — drag moves, a
+        /// double-click maximises, a right-click opens the system window menu (`winframe` answers HTCAPTION over it).
+        /// **Always kept**: an empty run that growing tabs swallow is no place anyone thinks to grab. Sized to other
+        /// products' least — the run Chrome always keeps between its `+` and the window buttons (52px at 100%) is
+        /// what reads as grabbable (user decision — ask before changing).
         readonly property real grabRun: tabStrip.captionMerged ? Theme.railWidth + Theme.spaceMd : 0
         /// The run the tabs share out; the width below and the cap both read this one expression.
         //
@@ -414,8 +438,10 @@ Item {
         // Every delegate stays alive: automation walks the items (`tabPaths` / `middleClickTab`), and a released one
         // answers null. Tabs are few, so this is free.
         cacheBuffer: 65536
-        // A tab closed, by any road, ends the ask and its travel (デザイン規約 §タブの所作「閉じた後の帯はその場に留まる」);
-        // an empty strip has stood nowhere again.
+        // A tab closed, by any road, ends the ask and its travel, and the strip stays where it is: the hand is still on
+        // the mark — closing is fired over and over, and a strip sliding after each close takes the next `✕` from under
+        // it. The answer then is the stand-in (`TabPin`): the neighbour come forward, named again at the same edge. An
+        // empty strip has stood nowhere again.
         onCountChanged: {
             if (tabs.count < tabStrip.tabsCounted)
                 tabStrip.takeRun()
@@ -490,7 +516,7 @@ Item {
         id: tabRun
         view: tabs
     }
-    // Every road into a repository asks through one signal (デザイン規約 §タブの所作「判定は 1 か所に置く」). Not
+    // Every road into a repository asks through one signal (`TabsModel.frontTabAsked`, after `strip::landing_for`). Not
     // `currentIndex`: the strip's own press and carry move that too, and those leave the band where the reader put it.
     Connections {
         target: tabStrip.tabsModel
@@ -498,12 +524,19 @@ Item {
             tabStrip.askFrontTab()
         }
     }
-    // Opening one more, drawn (デザイン規約 §タブの所作「揃える相手は隣の `✕`」): its ink is read off `markSeat` so it
-    // cannot come out a step apart from the tabs' `✕`. Only the hit area runs the band's depth; the wash keeps its
-    // `iconXl` box.
+    // Opening one more, drawn: its ink is read off `markSeat` so it cannot come out a step apart from the tabs' `✕`.
+    // A mark standing alone on the band takes its step from the band's height (規約 §寸法), but this one belongs to the
+    // run of tabs — it rides at the run's end — so the one it lines up with is the `✕` beside it. Only the hit area
+    // runs the band's depth (`iconXl` wide), so a hand coming down off the tabs lands on it at any height — but on a
+    // Windows window not maximised, whose top 8px are the system's resize edge and never reach the scene (every cell of
+    // the band, ☰ included). The wash keeps its `iconXl` box (§当たり判定), wider than the `✕`'s because this mark
+    // stands bare on the band while the `✕` sits inside a tab that is its own wash. Drawn in `NavIcon` though every
+    // font has a `+`: its shape and stroke would be whatever family the OS resolved (規約 §寸法「印は描いて出す」).
     //
     // Ink and wash are set as padding and inset: a `Control` re-lays its `contentItem` and `background` from those, so
-    // a size written on either is lost on the next layout.
+    // a size written on either is lost on the next layout; `anchors.verticalCenter` would leave the seat the mark's
+    // size. A drawn mark, not a glyph: Fusion pads a glyph, and the button comes out a pixel wider. The vertical hit is
+    // in no picture and not in `tab-widths`; a throwaway qmltestrunner scene measures it.
     HoverToolButton {
         id: plusButton
         x: tabs.x + tabs.width

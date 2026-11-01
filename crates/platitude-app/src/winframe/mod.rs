@@ -3,7 +3,8 @@
 //! geometry of a frameless window, and the non-client hit test the
 //! merged chrome answers itself. The one place the app speaks Win32
 //! directly, over signatures it declares itself; nothing here runs on
-//! the other platforms.
+//! the other platforms. The windows are found by `EnumThreadWindows`:
+//! QML has no door to a window's handle.
 //!
 //! Not the icon: the exe's resource hands it to the window from its
 //! creation (`assets/platitude.rc`).

@@ -10,6 +10,15 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "details_failure loading=false error=true",
     },
+    // The perf driver's display contract, judged on its own lines and the
+    // picture; the timings are `cargo xtask perf`'s (the cases it measures
+    // are listed as 性能.md §ケース says). `--preset perf` is `deep` with a
+    // changed file on top: `deep`'s empty commits fail the diff request.
+    // `--preset perf-sequence` adds two revisions of a coloured Kotlin
+    // file for `colour` / `diff-scroll` / `sequence` (two commits, twice).
+    // `font-walk` is the calibration run's shape: offscreen the FreeType
+    // database holds no fonts, so what the walk costs is read off
+    // `cargo xtask perf`'s `font walk` line, never off a verify run.
     Verb {
         name: "perf",
         when: &[
@@ -77,7 +86,12 @@ pub(super) const TABLE: &[Verb] = &[
     // through the click meant to close it.
     // Under a stopped merge (`--preset others-merging`) the row the menu
     // stands on — `feature/clash`'s — keeps its eight history rows greyed
-    // with the operation's reason, read off core's word (`standing=`).
+    // with the operation's reason, read off core's word (`standing=`):
+    // `Create branch here…`, cherry-pick, revert, squash, drop,
+    // `rebase --interactive`, merge and rebase. The reset card's title
+    // stays live; its three rows grey inside it (`reset-menu` on the same
+    // preset). Which rows grey is held by `tests/qml/tst_commitrowmenu.qml`
+    // and `offers::commit_menu`'s unit tests; these two runs are pictures.
     Verb {
         name: "commit-menu",
         when: &[(
@@ -317,7 +331,7 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "card_rewrite stage=rewritten card=true moved=true",
     },
     // The hand walks into that card and back to its row, and the card
-    // stays (rules-refs/app-ui.md「カードが既に出ている行へ手が戻ったら」).
+    // stays (`HoverSeat.point`).
     // `held=` is the claim: the hold is back in the same turn as the
     // return, the only way it beats `hoverKeepMs`. `moved=` is a guard for
     // a seat worked out from something a run can move: today the seat
@@ -397,8 +411,9 @@ pub(super) const TABLE: &[Verb] = &[
     // and the tree's branch (the drawing is `tst_commitrowmenu.qml`, the
     // answer `offers::ref_menu`). The two lines are the two aims — a name
     // the tree is not on, and the one it is; neither stands for the
-    // other. A run naming no branch aims at an empty name, which the graph
-    // never draws.
+    // other — one alone passes a press that always hands the same name.
+    // A run naming no branch aims at an empty name, which the graph never
+    // draws, and shows nothing `chip-menu feature/topic-a` does not.
     Verb {
         name: "chip-menu",
         when: &[],
@@ -468,7 +483,7 @@ pub(super) const TABLE: &[Verb] = &[
     // carrying the work of a commit not chosen.
     // On `modes` the three chosen commits all touch `hook.sh`, two of them
     // its mode alone or beside a line: each band says its own mode change
-    // (デザイン規約 §mode の変更). The bands run oldest first, so the first
+    // (the app's `DiffLineCell`). The bands run oldest first, so the first
     // is the one that made it executable.
     Verb {
         name: "graph-choose-diff",
@@ -688,7 +703,7 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The lanes' sideways bar: out while the hand is in the pane, gone
     // when it leaves, at full ink only once the lanes have been sent
-    // (デザイン規約 §グラフを横へ送る /「バーの明るさ」). `overflow=` beside
+    // (`GraphLaneBar.qml`). `overflow=` beside
     // them tells lanes that already fit (bar rightly absent, nothing
     // proven) from the half where it went away.
     Verb {

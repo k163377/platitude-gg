@@ -7,12 +7,12 @@ import platitude.ui
 // and its two seats (`RowHoverHost`), the chip's list and the commit's card. The real delegates, in a stand-in for the
 // list and the pane.
 //
-// What a hand that walked to a row opens, and what a hand the rows moved under does not (デザイン規約 §グラフ行の
-// ダブルクリック「グラフが動いて手の下へ来た行は点くが、手が動くまで何も開かない」, §左メニューの所作「手が動いていない所へ来た
-// 行は開かない」): the search sending the view to a match (`GraphFind.goToMatch`), a wheel notch, the arrows — every
-// move of the rows hands Qt's hover to whatever arrives under the still pointer (`tst_hoverunderstillhand.qml`), and
-// the row must not take that for a hand that walked to it. And what holds the list over a hand it is drawn over, what
-// a menu does to a card, what a second surface showing the same commit is, and what a leave from elsewhere is not.
+// What a hand that walked to a row opens, and what a hand the rows moved under does not (デザイン規約 §左メニューの所作
+// 「手が動いていない所へ来た行は開かない」, which the graph's rows keep too — `GraphList.hand`): the search sending the
+// view to a match (`GraphFind.goToMatch`), a wheel notch, the arrows — every move of the rows hands Qt's hover to
+// whatever arrives under the still pointer (`tst_hoverunderstillhand.qml`), and the row must not take that for a hand
+// that walked to it. And what holds the list over a hand it is drawn over, what a menu does to a card, what a second
+// surface showing the same commit is, and what a leave from elsewhere is not.
 Item {
     id: root
     width: 600
@@ -213,7 +213,9 @@ Item {
             onChipCollapseRequested: (oidHex, anchor) => host.unpointChip(oidHex, anchor)
             // A right-click raises the row's menu on the graph (`RepoPage.openRowMenu`), over the hand: `offer` raises
             // it at the platform's cursor (`QQuickMenu::popup` reads `QCursor::pos`), which a test's pointer does not
-            // move, so the hand's place is handed in as the place `offer` takes (`KeyMenu.at`).
+            // move, so the hand's place is handed in as the place `offer` takes (`KeyMenu.at`). A menu standing away
+            // from the hand takes nothing off the surface, and a test of what the menu hides passes without hiding
+            // anything.
             onRowMenuRequested: (oidHex, chip) => {
                 root.menuKey = oidHex
                 root.menuArea = "graph"
@@ -759,7 +761,7 @@ Item {
             verify(!host.listPopup.visible, "the menu gone, the list stays down under the hand on the chip")
         }
 
-        /// HEAD's stand-in's list (デザイン規約 §グラフの中で HEAD を見失わない「外乱では閉じない」): the view putting
+        /// HEAD's stand-in's list (`RowHoverHost.rowGone`, デザイン規約 §hover のツールチップ「外乱では閉じない」): the view putting
         /// itself back over its rows after a reread (`GraphList.keepingRows`) moved nothing, and the list stays; the
         /// reader's own move of the rows takes it down, as a row's.
         function test_the_stand_ins_list_stays_through_a_reread_and_goes_with_the_readers_move() {
@@ -775,7 +777,7 @@ Item {
             pane.headPin.standsFor = ""
         }
         /// …but standing for another commit — one made on the branch elsewhere — its chip is another chip, and what the
-        /// list said is gone: the list goes, the hand inside it or not (デザイン規約 §グラフの中で HEAD を見失わない).
+        /// list said is gone: the list goes, the hand inside it or not (`RowHoverHost.rowGone`).
         function test_the_stand_ins_list_goes_as_it_stands_for_another_commit() {
             standInListOut()
             handIntoList()

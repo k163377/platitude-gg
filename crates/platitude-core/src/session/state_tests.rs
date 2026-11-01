@@ -2,7 +2,7 @@
 //! (structure.md §分割).
 
 // Both globs: `Arc` / `AtomicU64` / `Ordering` come off the session's
-// prelude, as in `state` (rules-refs/structure.md §分割の各論).
+// prelude, as in `state` (the `use` block of `session/mod.rs`).
 use super::state::*;
 use super::*;
 

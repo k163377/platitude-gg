@@ -3,9 +3,13 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude.ui
 
-// The hand that carries a tab: which tab is in it, where it has got to, and what the strip's order does about that
-// (デザイン規約 §タブの所作). The strip owns the tabs and says what a press means; this owns the gesture between the
-// taking up and the setting down. An `Item` only so the drift `Timer` has somewhere to stand; it draws nothing.
+// The hand that carries a tab: which tab is in it, where it has got to, and what the strip's order does about that.
+// The strip owns the tabs and says what a press means; this owns the gesture between the taking up and the setting
+// down. An `Item` only so the drift `Timer` has somewhere to stand; it draws nothing.
+//
+// **Within the strip only**: shaken up or down, the row stays one row. A tab holds the way into a repository and no
+// more — more windows are not this strip's business. **The ends stop quietly**: tabs are not among the edges that
+// answer a pull (規約 §掴める境界は答える), since being first or last is said by the seat itself.
 Item {
     id: carry
 
@@ -20,7 +24,7 @@ Item {
     property real heldGrabX: 0
     property real heldX: 0
     /// Where the hand last reported in the scene, and how far past the run it is asking — the distance the strip
-    /// travels at (デザイン規約 §タブの所作).
+    /// travels at (`driftRun`).
     property real heldSceneX: 0
     property real heldPush: 0
 
@@ -36,7 +40,8 @@ Item {
 
     /// The hand, moved to `sceneX` with a tab in it — scene coordinates, since the tab moves with the hand. A tab is
     /// put no further than the run on screen; past either end it stays at the edge and the strip travels under it
-    /// (`driftRun`).
+    /// (`driftRun`). That is the only road to a seat out of view: setting the tab down, wheeling, and taking it up
+    /// again splits one gesture into three.
     function carryTab(index, sceneX) {
         const tab = carry.view.itemAtIndex(index)
         if (!tab)
@@ -77,7 +82,8 @@ Item {
     }
 
     /// The one place a carried tab is put: where it is drawn, and which neighbours it has passed. The hand (`carryTab`)
-    /// and the smoke hooks (the strip's) both come through here, so neither can reach an order the other cannot.
+    /// and the smoke hooks (the strip's) both come through here, so neither can reach an order the other cannot. The
+    /// hooks that name a place (`dragTabTo` / `holdTabAt`) never ride the drift (`driftRun`).
     function carryTo(index, left) {
         const tab = carry.view.itemAtIndex(index)
         if (!tab)
@@ -94,6 +100,8 @@ Item {
                 break
             at = next
             // The order changed: the next comparison has to read the places the view has just given the tabs.
+            // `forceLayout()` right after a model move shows the new seats synchronously (measured in a throwaway
+            // qmltestrunner scene).
             carry.view.forceLayout()
         }
         return at
@@ -101,7 +109,10 @@ Item {
 
     /// One neighbour, passed or not: the carried tab's leading edge against the neighbour's middle. Middle against
     /// middle fails for tabs of different widths — a wide tab held at the strip's end never reaches a narrow last tab's
-    /// middle.
+    /// middle; taking half of the neighbour wins the seat, one rule both ways. Reads the neighbour's `x` as it stands,
+    /// so seats swap on the spot: a `displaced` transition would have it compared at a sliding midway place, and the
+    /// reverse condition would hold right after the swap. Nothing is lost by not sliding: the tab in hand is under the
+    /// hand, so which side the neighbour went is read off it either way.
     function stepOrder(at) {
         const tab = carry.view.itemAtIndex(at)
         if (!tab)
@@ -126,7 +137,7 @@ Item {
     }
 
     // The strip travels while a tab is held past the end of the run: one frame a tick, on the app's other autoscroll
-    // curve (`Metrics.handSent`, デザイン規約 §グラフを横へ送る), dead zone included — the first pixels past the edge
+    // curve (`Metrics.handSent`, `MiddleAutoScroll`), dead zone included — the first pixels past the edge
     // are a hand steadying a tab on the last place.
     Timer {
         id: run

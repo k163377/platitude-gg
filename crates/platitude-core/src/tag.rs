@@ -3,7 +3,8 @@
 //! git has no tag rename. [`rename`] never rewrites the object, so an
 //! annotated or signed tag keeps its message, tagger and signature; the
 //! name recorded *inside* it stays the old one (re-creating the tag would
-//! lose the rest).
+//! lose the rest). Done without a question: what it points at stays, and
+//! only the old name goes.
 
 use std::path::Path;
 
@@ -68,7 +69,9 @@ pub async fn rename(
 }
 
 /// Puts a lightweight tag `name` on `commit` (anything git resolves;
-/// empty means HEAD). No `--force`, for [`rename`]'s reason.
+/// empty means HEAD). No `--force`, for [`rename`]'s reason. Lightweight
+/// only: an annotated (`-a`) or signed (`-s`) tag needs a message box,
+/// which the one name field cannot hold.
 pub async fn create(
     executor: &GitExecutor,
     workdir: &Path,
@@ -110,6 +113,11 @@ pub fn is_valid_name(name: &str) -> bool {
 /// The rules of `git check-ref-format` for `refs/heads/<name>` (the same
 /// for tags), as a pure function because an input box asks on every
 /// keystroke. `tests/it/rename_integration.rs` holds it to real git.
+///
+/// The format alone: no name box asks it, since it lets a leading `-` and
+/// `HEAD` through. A box picks its rule by the kind of ref it names — a tag
+/// box `is_valid_name`, a branch box (a new or renamed branch, a remote
+/// branch, a new worktree) `branch::is_valid_name`.
 pub fn ref_format_ok(name: &str) -> bool {
     if name.is_empty() {
         return false;

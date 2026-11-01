@@ -60,7 +60,7 @@ pub struct DetailsModel {
     /// The first parent, which a commit's diff is read against.
     parent_hex: String,
     /// Every parent in git's order, the first included: what the parent
-    /// line draws (デザイン規約 §右のペインの親).
+    /// line draws (`HashPlate.qml`).
     parent_hexes: Vec<String>,
     author_name: String,
     author_email: String,
@@ -97,6 +97,14 @@ pub struct DetailsModel {
     compare_to: String,
     loading: bool,
     requested: String,
+    /// The request number an answer must carry to be shown. Never matched
+    /// by commit id alone: after A → B → A the first A's answer would pass.
+    /// The feed keeps the newest by number, not by arrival
+    /// (`Feed::push_latest`) — kept by arrival, B answering before A loses
+    /// B. Numbered process-wide, since a feed outlives its session
+    /// (`session::details_read`), and older reads are cancelled. A failure
+    /// carries its number too; only one matching this request reaches the
+    /// error surface.
     requested_generation: Option<u64>,
     requested_at: Option<Instant>,
     feed: Option<Arc<Feed<DetailsMsg>>>,

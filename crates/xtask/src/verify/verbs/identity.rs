@@ -56,6 +56,8 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "identity_tip unsaved=true badge=true tip=true",
     },
+    // `code=E` is the verdict no key can check, which only
+    // `--preset errsig` holds: the verb fails on any other preset.
     Verb {
         name: "signature-tip",
         when: &[],
@@ -248,8 +250,8 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The git category's two groups, the tallest this screen gets. The
     // pair (with `settings-repo-pick`) splits the claim, since a row is
-    // one substring. With no argument this one takes the reach
-    // (rules-refs/app-ui.md「`contentHeight` は `implicitHeight` を読む」).
+    // one substring. With no argument this one takes the reach (the
+    // chapters' `contentHeight` reads `implicitHeight`, `SettingsDialog.qml`).
     // With an argument it switches to another repository, and the boxes
     // must follow — else the screen offers to write the wrong thing into
     // the one now named above it.
@@ -272,7 +274,7 @@ pub(super) const TABLE: &[Verb] = &[
     // The same group's line-ending chapter, picked. `were=` is what the
     // repository held before — `false`, as every demo repository is built
     // (`demo::repo`). `scope=local` is the only level: the screen writes
-    // `core.autocrlf` into the picked repository alone (規約 §設定の画面).
+    // `core.autocrlf` into the picked repository alone (`LineEndingField.qml`).
     Verb {
         name: "settings-eol",
         when: &[
@@ -307,7 +309,7 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: " details=true ",
     },
-    // Enter in that box opens the file picker (デザイン規約 §アバターを与える),
+    // Enter in that box opens the file picker (the app's `SettingsAppPane`),
     // the platform's own window and in neither PNG (as `open-picker`).
     // `who=` is the guard the button beside the box wears: a picker opened
     // over nobody files its answer against an empty address.

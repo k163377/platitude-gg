@@ -48,8 +48,9 @@ pub fn only(rev: &str) -> String {
     format!("{rev}^!")
 }
 
-/// One walked row (`session::LogRow`): parents as the walk sifted them,
-/// and the walk's published mark.
+/// One walked row (`session::LogRow`): parents as the walk sifted them
+/// (a stash keeps its first parent only, the WIP row has none — the leash
+/// drawn to it is no parent), and the walk's published mark.
 #[derive(Debug, Clone, Copy)]
 pub struct WalkedRow<'a> {
     pub oid: Oid,
@@ -69,7 +70,13 @@ pub struct WalkedRow<'a> {
 /// **The window is the answer** (as for `session::published`): a `head` on
 /// no row puts nothing in the range (`false`); an `onto` on no row leaves
 /// all of `head`'s reach in it — the right answer for a base older than
-/// the window.
+/// the window. So it agrees with `state_of`'s two processes only inside
+/// the window. Asked by the app's `GraphModel.rebaseRewritesPublished`.
+///
+/// Do not reach past the window for an exact answer: the two ends err in
+/// opposite directions. What leaves the window is an old name, and a
+/// rebase onto it errs toward showing the note; the note is dropped only
+/// for a `head` past the window, which the graph does not draw either.
 pub fn range_rewrites_published<'a>(
     rows: impl IntoIterator<Item = WalkedRow<'a>>,
     head: Oid,

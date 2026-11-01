@@ -8,7 +8,18 @@ import platitude.ui
 // words where the far side has it all: nothing to send (§メニュー「「今できない」行は無効で残す」).
 //
 // On the first level beside `pull`, standing on the BRANCH card's frozen answers (`RefBranchMenu.state`): both
-// entrances carry the row and the card it reads, so the two cannot disagree.
+// entrances carry the row and the card it reads, so the two cannot disagree. The branch the worktree is on gets no row
+// (`RefsSnapshot::branch_push` answers nothing for it): its push's one door is the toolbar
+// (規約 §メニュー「そこにしか入口が無いもの」). Nor does a remote branch's row: it is a reading of what is over there, with
+// nothing to send. The forms are read off the branch's own counts and marks — against its upstream, or against the
+// tracking ref of where a mark sends it (`remote::standing`). The destination is named as the remote branch
+// (`origin/feature/x`); `…` says the question comes first.
+//
+// The press is answered by the toolbar's owner (`RepoTab.pushAnswer` → `PublishFlow.pushFails`), not by a ref row's
+// (`refPushAnswer`): a refusal is about the branch, whichever door sent it, and with one owner only one push is out at
+// a time (`PublishFlow.pushDoorsOpen`). A first push asks through `RepoPage.startPublishAskFor`: the question names
+// this branch, marks its row, and checks the far name against its history. The table: `tst_branchcard`; headless
+// `push-branch-menu` / `-ask` / `-go` (`[chip:]<branch>`, `--preset others-behind`).
 AppMenuItem {
     id: pushRow
 
@@ -22,7 +33,8 @@ AppMenuItem {
     /// Why the row is out where the push would stay in this repository — the toolbar's words for the same standing
     /// (`BandPushButton`).
     readonly property string blockedStaysHere: qsTr("Cannot push — its upstream is not supported")
-    /// …and where the far side already has every commit: the toolbar's words for `clean`.
+    /// …and where the far side already has every commit: the toolbar's words for `clean` (user decision — ask before
+    /// changing).
     //: %1 is where the push goes, e.g. origin/feature/login.
     readonly property string blockedClean: qsTr("Nothing to push — %1 is up to date").arg(pushRow.facts.pushTarget)
 

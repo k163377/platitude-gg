@@ -1,6 +1,7 @@
 //! The stash rename git does not have: `commit-tree`, `stash store`, then
 //! drop the old entry. The order decides which step is safe to have run
-//! alone if the next one fails.
+//! alone if the next one fails. Done without a question, as a tag's is:
+//! the work stays, only the old label goes.
 
 use super::*;
 

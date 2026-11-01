@@ -104,7 +104,8 @@ pub(super) fn start_container(root: &Path, name: &str, gate: u32, tag: &str) -> 
         .arg("--label")
         .arg(format!("{RUN_LABEL}={name}"));
     // The marks, on the container as on every exec into it
-    // (`super::carried`).
+    // (`super::carried`): no moment where the environment an exec
+    // inherits carries none.
     super::marked(&mut cmd);
     cmd.arg("--volume")
         .arg(format!("{}:{}", super::mount_path(root), super::WORK))

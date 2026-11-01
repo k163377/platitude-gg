@@ -30,7 +30,7 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "commands_copy perRow=true",
     },
     // The same drag started on the ground under the last row
-    // (規約 §git が言ったことを読む場所). `reach=9/9`: from every corner —
+    // (`CommandsTextSelect.qml`). `reach=9/9`: from every corner —
     // pressing one point passes a hand that answers only there (as
     // `details-sweep`). `ground=true`: a log that fills its panel
     // leaves no ground, and `reach=0/9` off it says nothing.
@@ -47,8 +47,8 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "commands_shut wrong=true open=false",
     },
-    // The same panel taken down by Escape (デザイン規約
-    // §git が言ったことを読む場所). `took=true` is the page claiming the
+    // The same panel taken down by Escape, its fourth way out
+    // (`RepoPage.escapePressed`). `took=true` is the page claiming the
     // key; `open=false` alone passes an Escape that fell through.
     // `wrong=true`: the panel goes, the record does not.
     Verb {

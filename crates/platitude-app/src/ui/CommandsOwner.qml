@@ -3,6 +3,14 @@ import QtQuick
 // Who the standing command log belongs to (デザイン規約 §git が言ったことを読む場所): the reader's, except a panel a
 // failed fetch raised, which a recovering fetch takes back down. The rule lives here because it turns on the order
 // failures and presses arrive in, which the page cannot be asked; `tests/qml/tst_commandsowner.qml` walks the orders.
+// The page only wires it (`absorbFetchRecovery`, every drain). Headless: the pair `fetch-recover` /
+// `fetch-recover-held`.
+//
+// The take-down is a user decision (ask before changing): a laptop loses the network in everyday use, and "stays until
+// read" would leave an old failure standing, panel and all, after the network came back. Only the panel and the
+// header's line go down; the rows stay until the reader's `Clear`. News from before the fetch's never counts: it went
+// up into a panel the reader has since put away, and what says it now is the corner's red mark — so "error, closed,
+// fetch failed, recovered" ends with the panel down (user decision).
 QtObject {
     id: owner
 

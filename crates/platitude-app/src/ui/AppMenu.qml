@@ -19,12 +19,13 @@ Menu {
     property string titleRefMark: ""
     title: appMenu.titleSentence !== "" ? appMenu.titleSentence.arg(appMenu.titleRef) : ""
 
-    /// The title row's mark instead of a chip, for a submenu of one ref kind: its `NavIcon` kind and colour
-    /// (デザイン規約 §メニュー の入れ子).
+    /// The title row's mark instead of a chip, for a submenu of one ref kind: its `NavIcon` kind and colour (how the
+    /// title row wears it: `AppMenuItem.markKind`).
     property string titleKind: ""
     property color titleTint: Theme.textSecondary
 
-    /// The rows keep the left menu's mark seat, so every name starts on one x (`AppMenuItem.seated`, §操作パネル).
+    /// The rows keep the left menu's mark seat, so every name starts on one x (`AppMenuItem.seated`; the operation
+    /// panel's cards, `TopBar` / `OpsBranchMenu`).
     property bool keepsSeat: false
     /// A row on offer wears a mark: the seat is held open only then, or it reads as a stray margin.
     readonly property bool seatWorn: {
@@ -41,7 +42,7 @@ Menu {
     /// (`OpsBranchMenu`'s folders).
     property bool promises: false
     /// Title rows start their words on one x, the heading-mark seat held open on those without one (`TopBar`'s
-    /// REPOSITORY and WORKTREE, デザイン規約 §操作パネル).
+    /// REPOSITORY and WORKTREE — only WORKTREE wears a mark; user decision).
     property bool alignsHeadings: false
     readonly property real headingSeat: {
         if (!appMenu.alignsHeadings)
@@ -71,7 +72,12 @@ Menu {
     /// a row says while it waits for it. Live, but **what greys the rows is whether one was out as this menu opened**
     /// (`waiting`): a menu opened under one keeps the rows it has with nothing out, so its shape does not depend on
     /// when it was opened (デザイン規約 §メニュー). One opened before it greys nothing — a row of its own may have
-    /// started it and still stand for git's answer (`BranchDeleteRow`'s plain delete).
+    /// started it and still stand for git's answer (`BranchDeleteRow`'s plain delete): greyed live, that row would grey
+    /// before the answer and blank its hold (`AppMenuItem.onBlockedChanged`). A replay's `heldReason`, by contrast, is
+    /// bundled live. Nets: `tst_commitrowmenu` / `tst_menuwait` /
+    /// `drain_tests::a_write_settles_after_its_answer_not_at_it`; headless `menu-wait` / `menu-wait after`
+    /// (`--preset slowhook`), `menu-wait stash` / `stash-ref` (`--preset stashes`), `menu-wait replay`
+    /// (`--preset replay`).
     property string runningWhy: ""
     /// Opened while `runningWhy` stood, and it has not ended since.
     property bool waiting: false
@@ -92,7 +98,9 @@ Menu {
 
     /// Before the opener stands the rows on a newer reading with the menu up: the rows on show stay and no other comes
     /// (`AppMenuItem.shapeHeld`), so no row moves under the hand. A row that stops applying greys where it is; one that
-    /// starts applying waits for the menu to be raised again. Holding a held shape again changes nothing.
+    /// starts applying waits for the menu to be raised again. Holding a held shape again changes nothing. What is kept
+    /// is the rows' seats down the card: the words' x still moves as a hold mark or a `!` comes or goes (`holdIndent`)
+    /// — the right press count wins.
     function holdShape() {
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
@@ -145,7 +153,7 @@ Menu {
     }
 
     /// Automation (hover cannot be injected): lights the row carrying `sub` and opens it through `sub.offer()`. Says
-    /// whether it opened.
+    /// whether it opened (PGG_AUTO_ACT=branch-card / tag-card).
     function openSub(sub) {
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
@@ -159,8 +167,8 @@ Menu {
         // Fusion's list clips for its scroll alone, and a row's hold fill reaches past its side out to the card's
         // frame (`HoldFill.bleed`). So the list clips only while it scrolls.
         appMenu.contentItem.clip = Qt.binding(() => appMenu.contentItem.interactive)
-        // Hands every divider its menu: a MenuSeparator has no `menu` of its own
-        // (rules-refs/app-ui.md「区切りは `AppMenuSeparator` が自分で決める」).
+        // Hands every divider its menu: a MenuSeparator has no `menu` of its own, and each divider decides from
+        // the rows whether it draws (`AppMenuSeparator.inMenu`).
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
             if (row && row.inMenu !== undefined)
@@ -216,8 +224,9 @@ Menu {
     // (デザイン規約 §回数押し); 0 otherwise. Extra left padding, not a layout seat, which would also pay the layout's gap.
     // The seat (`iconMd`) the hold mark and the `!` stand in: it stands at the row's edge, and the row's own padding is
     // the step from it to the words. As wide as a heading's mark box, so a heading's mark — the tag drawn 1.12x
-    // included — stands inside it (デザイン規約 §回数押し). **A card under a menu keeping the seat keeps it too**
-    // (`outerIndent`) — the levels of one menu start their words alike, a heading's mark in the seat.
+    // included — stands inside it (user decision — ask before changing). The mark keeps to the card's edge and the
+    // words pay one seat of indent. **A card under a menu keeping the seat keeps it too** (`outerIndent`; user decision
+    // — ask before changing) — the levels of one menu start their words alike, a heading's mark in the seat.
     readonly property real holdIndent: {
         if (appMenu.outerIndent > 0)
             return Theme.iconMd
@@ -235,6 +244,10 @@ Menu {
     // Fusion sizes a menu by its background (a flat 200), never its rows; here the widest row decides. Rounded up, or
     // that row is handed a fraction short and elides
     // (rules-refs/app-ui.md「子の入札から自分の幅を決める入れ物は `Math.ceil` で受ける」).
+    // Left as is: on Linux a menu can come out a few px narrow and elide its longest row (Windows fits under the same
+    // conditions) — the rounding up may have closed it, unconfirmed on Linux (P3-確認事項). Suspected otherwise: font
+    // metrics arriving late, the rows measured in the default font first. The elision and the truncated tooltip keep
+    // it readable; a fix would settle the width one tick after `onAboutToShow`.
     readonly property int widestRow: {
         let widest = 0
         for (let i = 0; i < appMenu.count; i++) {
@@ -259,7 +272,8 @@ Menu {
     delegate: AppMenuItem {
         // Bound: Qt hands the row the title once mid-build, before the row's own `text` binding overwrites it, so a
         // card added with its title already set (`OpsBranchMenu`) would draw an empty row
-        // (`tests/qml/tst_opsbranchmenu.qml`).
+        // (`tests/qml/tst_opsbranchmenu.qml`). A card declared in a file passes unbound: its title arrives after the
+        // row.
         text: subMenu !== null ? subMenu.title : ""
         code: subMenu && subMenu.titleCode !== undefined ? subMenu.titleCode : ""
         // The title's name, drawn in its ref colour.
@@ -270,8 +284,9 @@ Menu {
         markTint: subMenu && subMenu.titleTint !== undefined ? subMenu.titleTint : Theme.textSecondary
         // A submenu with nothing to offer, by `applies` or by coming out empty, takes its title row with it.
         offered: !subMenu || (subMenu.applies !== false && (subMenu.offeredRows > 0 || subMenu.promises === true))
-        // The card keeps this menu's hold seat (`outerIndent`). Bound once Qt hands the row its card, which it does
-        // after the row is built.
+        // The card keeps this menu's hold seat (`outerIndent`, デザイン規約 §回数押し). Bound once Qt hands the row its
+        // card, which it does after the row is built. One way, a level to the level below it, so the binding never
+        // loops.
         onSubMenuChanged: {
             if (subMenu !== null && subMenu.outerIndent !== undefined)
                 subMenu.outerIndent = Qt.binding(() => appMenu.holdIndent)

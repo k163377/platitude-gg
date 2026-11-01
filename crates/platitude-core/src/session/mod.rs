@@ -13,6 +13,9 @@
 //! session on the same index. The queue is the session's; the *order* it
 //! serves in belongs to the worktree (`session::write_order`).
 
+// This `use` block is the shared prelude of the sibling files: each child
+// reads it through `use super::*`, so an import this file does not use
+// itself still cannot be dropped.
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -174,7 +177,9 @@ pub const AUTO_FETCH_DEFAULT_MINUTES: u32 = 1;
 /// The interval that will actually run for a number a person asked for:
 /// zero is off, and past the ceiling the ceiling is meant. The one place
 /// it is applied — the settings screen and a hand-edited `settings.toml`
-/// both come through here (rules-refs/core.md「上限の適用点を 1 つ持ち」).
+/// both come through here. Clamped, not refused as unusable: falling back
+/// to the one-minute default would answer a `120` with a fetch 120 times
+/// as often as asked.
 #[must_use]
 pub fn auto_fetch_minutes(minutes: u32) -> u32 {
     minutes.min(AUTO_FETCH_MAX_MINUTES)
@@ -182,6 +187,11 @@ pub fn auto_fetch_minutes(minutes: u32) -> u32 {
 
 /// Default cap on the graph window; bounds memory and stream time on 100k+
 /// commit repositories.
+///
+/// Kept at this size although what a graph took for the rows it has shown
+/// is not given back (it tops out at the rows seen, not the distance
+/// scrolled): a reader who wants less lowers it in the settings, under
+/// `COMMIT GRAPH`.
 pub const DEFAULT_LOG_LIMIT: u32 = 2000;
 
 /// Fewest commits a graph can be told to open with. The step a press adds
@@ -195,8 +205,9 @@ pub const MIN_LOG_LIMIT: u32 = 500;
 ///
 /// No ceiling: the walk is nearly flat in the count (mostly fixed frontier
 /// setup; ci/baseline/code-costs-windows-x64.md §git のプロセス代), so a
-/// number typed on purpose is affordable. No window at all is `None` and
-/// does not come through here.
+/// number typed on purpose is affordable. Budgets are measured at the
+/// default: a larger window is a number the person typed. No window at all
+/// is `None` and does not come through here.
 #[must_use]
 pub const fn log_limit(limit: u32) -> u32 {
     if limit < MIN_LOG_LIMIT {
@@ -208,7 +219,8 @@ pub const fn log_limit(limit: u32) -> u32 {
 
 /// What one press of the graph's tail adds, for a window that opened at
 /// `initial` commits: a quarter of it, so the step follows the setting
-/// (`settings::Defaults::initial_commits`).
+/// (`settings::Defaults::initial_commits`). A grown window keeps this
+/// step: it is worked out from the opening size only.
 #[must_use]
 pub const fn log_window_step(initial: u32) -> u32 {
     if initial < 4 { 1 } else { initial / 4 }
@@ -286,7 +298,7 @@ pub enum AfterWrite {
     ///
     /// `status` where the name was what HEAD is measured against
     /// ([`RepoSession::measures_head`]): the status's `# branch.ab` and the
-    /// push counts read that ref.
+    /// push counts read that ref (`session_integration::delete_reads`).
     Name { status: bool },
     /// Working tree / index / stash only.
     Snapshots,

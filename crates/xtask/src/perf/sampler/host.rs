@@ -11,6 +11,11 @@ use super::{Limits, percent};
 
 /// Waits between runs, while nothing is timed, until the machine is
 /// unlocked and quiet enough to measure on, or says why it gave up.
+///
+/// A `--software` run waits on the unlock too, although it needs no
+/// display, and so never starts on a locked session. Do not lift the
+/// unlock for it to see whether a software bench runs while locked: that
+/// is a road round the judgement (P3-確認事項 §性能 keeps the question).
 pub(in crate::perf) fn wait_for_quiet(
     limits: &Limits,
     ceiling: std::time::Duration,
@@ -61,9 +66,12 @@ pub(in crate::perf) fn wait_for_quiet(
 /// the display too: nothing is composited to a dark display, so the
 /// scroll bench's animation stands still as under a lock.
 ///
-/// `ES_DISPLAY_REQUIRED` alone does not wake a screen already dark, so this
-/// injects a zero-pixel mouse move, which moves no cursor
-/// (internal-docs/性能.md「画面は invocation の間ずっと起こしておく」).
+/// The whole invocation, not each run: the build and the waits between
+/// runs are idle long enough to darken the screen, and `ES_DISPLAY_REQUIRED`
+/// alone does not wake a screen already dark — every run after the first
+/// would start dark. Waking takes input, so this injects a zero-pixel mouse
+/// move, which moves no cursor; the price is that `Sample::away_ms` stops
+/// saying whether a person was here.
 ///
 /// A software run needs no display, so its helper injects nothing and asks
 /// only `ES_SYSTEM_REQUIRED`, leaving the screen to whoever drives it.

@@ -52,7 +52,8 @@ Item {
     // under it's, as `menu-hover` raises it. Each stage waits for the one before to land; the list goes, or stays out,
     // in the same turn as the ask, so the answer is read once the menu is up — for `own`, once the beat the hand's
     // leaving started has run out. `swap` raises the menu on the list and puts the hand on another row's chip: the
-    // list is the menu's and is not handed over (`kept=`).
+    // list is the menu's and is not handed over (`kept=`: still HEAD's — `HoverSeat` hands no held target over); with
+    // no chipped row below HEAD's it ends on `other=none`, which fails the run.
     PageStage {
         id: menuListTimer
         name: "menu_list"

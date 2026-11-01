@@ -6,11 +6,33 @@ import platitude
 import platitude.ui
 
 /// HEAD's row, standing in at the edge it scrolled out of until the row itself is back on screen; a press goes to that
-/// row (デザイン規約 §グラフの中で HEAD を見失わない). Drawn as that commit's own row — its chip, its own lanes and node
+/// row. Drawn as that commit's own row — its chip, its own lanes and node
 /// (`GraphLaneCell`), its subject — then dissolving into the ground, so no hard edge cuts the row underneath.
+///
+/// The current branch's row is always in the graph (user decision — ask before changing): the left menu does the same
+/// for the same branch (`HeadPinRow`, 規約 §左メニューの所作), so the middle answers alike. It steps aside the moment
+/// the real row is back — never two of the same branch on screen — and stands only while HEAD is inside the loaded
+/// window (`wanted`). Its graph is the row's own (`headGeometry`, user decision): lanes borrowed from the rows flowing
+/// under it would join the commit to lines it is not on; only the lanes leaving the row reach into the dissolve, which
+/// is how the graph says "not drawn here" (規約 §省略の表し方). Not a dotted lane, nor a solid one with one `≈`, nor `≈`
+/// on every lane: each says twice what the fading lane already says.
+///
+/// A press lands as a row press (view and selection move; from out of sight into the middle, 規約 §矢印で履歴を辿る).
+/// The card of its chip closes there and then — the stand-in steps aside once the row is on screen, leaving the card
+/// nowhere to stand — and the second click of the same double-click is let pass (`GraphPane.hushRowClicks`): another
+/// row now sits where the stand-in was. A row arriving in that seat lights but opens nothing until the hand moves
+/// (規約 §左メニューの所作「手が動いていない所へ来た行は開かない」). The chip's list is not closed by disturbances and
+/// goes once the stand-in stands for another commit (user decisions — `RowHoverHost.rowGone`).
 ///
 /// Adopted by the pane, not the list: inside the list, the lane column's press strip (`GraphLanePan`) would answer for
 /// the row underneath.
+///
+/// **The one surface with no gestures** — no spaced second click, no double-click: a name box opened on a stand-in
+/// renames a row the reader cannot see (規約 §左メニューの所作). Its hover is a row's (the chip column unfolds, the
+/// rest is the commit's), and a press on its card's rows is its own press (`RefListPopup.standInPressed` →
+/// `GraphPane.pinPressed`, the same door as `activated`, modifiers and all): through the card's rule
+/// (`noteRowClick` → `activateRow`) a row nobody can see would be picked and the view would not move. Headless
+/// `graph-head-list` / `graph-head-list click`.
 Rectangle {
     id: pin
 
@@ -131,7 +153,8 @@ Rectangle {
     /// What the chip says, every field of every name — as a row's (`GraphRowDelegate.chipSays`).
     readonly property string chipSays: JSON.stringify(pin.records)
     readonly property color laneColor: Theme.graphLane[pin.graphModel.headColor % Theme.graphLane.length]
-    /// The search passed HEAD's row over, as `GraphRowDelegate.dimmed`. Read off the model: the row is off screen
+    /// The search passed HEAD's row over, as `GraphRowDelegate.dimmed`: the stand-in is that row, so its brightness
+    /// must not change as the scroll carries the row to the edge. Read off the model: the row is off screen
     /// whenever this is up.
     readonly property bool dimmed: pin.view.findOn && !pin.graphModel.headMatched
     /// The row's box as its grounds add up (`GraphRowDelegate.laneGround`), read off the two as drawn: what its ink
@@ -142,20 +165,28 @@ Rectangle {
     // ---- the three bands --------------------------------------------------------------------------------------------
     //
     // The row, where the graph goes out, and where the rows come back — plus, at the top edge only, the list's sliver
-    // above the row. Each flips with the edge this rides.
+    // above the row. Each flips with the edge this rides. Two stages past the row (user decision — ask before
+    // changing): the row's lanes dissolve into a ground still whole (`hold`, the sudden dark), then the ground
+    // withdraws and the rows under it come back (`fadeRoom`); with the row, 2.5 rows — dark early, gradient long.
 
     /// How far past the row the ground stays whole: the graph has to be gone before the rows come back, or the two
-    /// overlap and neither reads. The lanes dissolve in it, so it cannot go to zero.
+    /// overlap and neither reads — a half-strength row is what would be left under the stand-in. The lanes dissolve in
+    /// it, so it cannot go to zero: without it the sudden dark becomes a step. A quarter, to put the fade as high as it
+    /// goes: at half a row the commit right under the stand-in sits head to foot inside the gradient, a wiped-out row.
     readonly property real hold: Theme.graphRowHeight / 4
     /// How long the rows take coming back. Hold and fade together stay a row and a half — shortening the whole
-    /// steepens the gradient — and the fade keeps at least a row, or it cuts the commit it lands on.
+    /// steepens the gradient and the fade turns abrupt; what the hold gave up goes here — and the fade keeps at least a
+    /// row, or it cuts the commit it lands on straight across, message and face.
     readonly property real fadeRoom: Theme.graphRowHeight * 5 / 4
     /// The list's sliver above its first row (`GraphList.topMargin`), kept at the top edge so the stand-in's foot meets
-    /// the bands either side as the row's does. None at the bottom edge.
+    /// the bands either side as the row's does (user decision — ask before changing): without it the row jumps up by
+    /// the sliver the moment the list scrolls. The row's grounds reach over it (`pinPicked`). None at the bottom edge:
+    /// the room there is the run-out that says history is cut, with no band to meet.
     readonly property real topRoom: pin.rowAbove ? pin.view.topMargin : 0
     readonly property real rowY: pin.rowAbove ? pin.topRoom : pin.hold + pin.fadeRoom
     readonly property real rowMidY: pin.rowY + Theme.graphRowHeight / 2
-    /// A hairline past the node's edge: the row's own cell is cut here and the going-out takes over.
+    /// A hairline past the node's edge: the row's own cell is cut here and the going-out takes over (user decision):
+    /// from the row's bottom edge, the darkening would start late by the row's empty lower half.
     readonly property real nodeOutY: pin.rowMidY
         + (pin.rowAbove ? 1 : -1) * (Metrics.nodeIcon / 2 + Theme.borderWidth)
     readonly property real groundRoom: pin.topRoom + Theme.graphRowHeight + pin.hold
@@ -173,11 +204,14 @@ Rectangle {
     y: pin.view.y + (pin.rowAbove ? 0 : pin.view.height - pin.height)
     color: "transparent"
 
-    // The graph's own ground: opaque so the rows under it do not show through, and no lighter — the emphasis is the
-    // colour of the words. Whole through the sliver, the row and the hold, then fading.
+    // The graph's own ground: opaque so the rows under it do not show through, and no lighter (user decision — ask
+    // before changing) — a lighter band is emphasis standing as long as the branch is off screen, the strongest thing
+    // in the graph; the emphasis is the colour of the words. Whole through the sliver, the row and the hold, then
+    // fading — started at the row, the strip the list keeps empty at rest would show the rows flowing under it.
     //
-    // Parented into the list (rules-refs/app-ui.md「張り付き行の地はリストの中・それ以外はペインの上」): full width, under
-    // the bar (`AutoScrollBar` takes `z: 1`). Everything else stays out here.
+    // Parented into the list: full width, over the rows and under the bar (`AutoScrollBar` takes `z: 1`). Out on the
+    // pane, a ground stopped short of the bar would show the tail of the rows flowing underneath in that strip.
+    // Everything else stays out here (the header says why).
     Item {
         id: band
         parent: pin.view
@@ -202,7 +236,9 @@ Rectangle {
             }
         }
         // A row's two grounds, in its order with selection winning (`GraphRowDelegate`), over the row and its sliver
-        // (as `GraphRowDelegate.topBleed`).
+        // (as `GraphRowDelegate.topBleed`). Worn as the row wears them (user decision — ask before changing): the
+        // picked commit is the one mark the reader set, so it stays as the scroll carries the row to the edge, and a
+        // picked stand-in, as a picked row, does not light under the pointer.
         Rectangle {
             id: pinPicked
             y: pin.rowY - pin.topRoom
@@ -222,7 +258,8 @@ Rectangle {
             visible: (pin.pointerX >= 0 || pin.listOnThisChip) && !pin.selected
         }
         // The column boundaries' lines over the row's two grounds only, as over a row's (`GraphDividerLines`); the rest
-        // of the band cuts them, as it cuts the rows under it (デザイン規約 §グラフ列は最も広い所のレーンまで).
+        // of the band — the opaque strip and the dissolve — cuts them, as it cuts the rows under it (user decision —
+        // ask before changing).
         GraphDividerLines {
             id: pinLines
             y: pinPicked.y
@@ -367,17 +404,20 @@ Rectangle {
         x: pin.labelWidth + pin.graphColWidth + Theme.spaceSm + 2 * Theme.borderWidth + Theme.spaceXs
         y: pin.rowMidY - height / 2
         // The box a row gives its message, to the pane's inset (デザイン規約 §余白), so it cuts at the same character.
+        // Not stopped at the bar's box (`barRoom`, 10): one commit's words would cut a word apart on the row and here.
         width: pin.width - subject.x - Theme.spaceXs
         opacity: pin.dimmed ? Metrics.dimFade : 1
         cutAt: "end"
         text: pin.graphModel.headSubject
         pixelSize: Theme.fontMd
         // The whole emphasis: the current branch's blue, as on HEAD's own row (`GraphRowDelegate.isHead`). A detached
-        // HEAD takes it too — the chip says what differs (規約 §状態).
+        // HEAD takes it too — blue answers "this is the commit you are on", branch or none, and the chip says what
+        // differs (`HEAD` in `warning`, 規約 §状態); a message in `warning` would read as a fault in the commit.
         color: Theme.textLink
     }
 
-    // No rule along the edge: the graph has no horizontal lines, and one here would be the loudest thing on the pane.
+    // No rule along the edge (user decision — ask before changing): the graph has no horizontal lines, and one here
+    // would be the loudest thing on the pane for as long as the branch is off screen.
 
     // A left press goes to the row. The right button is taken and dropped, or it falls through to the row underneath;
     // the middle is left alone so the pane's autoscroll starts from here too.

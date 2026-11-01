@@ -41,7 +41,10 @@ impl platitude_core::mem::Footprint for Candidate {
     }
 }
 
-/// Columns a tab stands for (デザイン規約 §シンタックスハイライト).
+/// Columns a tab stands for: a tab is spelled as the spaces up to the
+/// next stop, the stops counted in drawn columns (`step_of`). Spelled,
+/// not left to the row: this Qt's `Label` has no `tabStopDistance`, and
+/// setting it fails the whole QML load.
 pub(super) const TAB_WIDTH: usize = 4;
 
 /// How many lines the pane is handed; each costs a text layout when a
@@ -50,7 +53,8 @@ const MOST_CANDIDATES: usize = 8;
 
 /// The lines worth measuring before the rows that hold them are laid out,
 /// one [`Candidate`] each; empty where there is nothing to send
-/// (デザイン規約 §diff を横へ送る, rules-refs/app-ui.md「diff は横へ送る・溝は動かない」).
+/// (デザイン規約 §diff を横へ送る; the rules the reach keeps are
+/// `DiffReach.qml`'s).
 ///
 /// **Lines, because a column is not a width**: the fallback a Latin-only
 /// mono family hands a wide glyph to is not monospaced, and a combining
@@ -116,7 +120,22 @@ fn columns_of(text: &str) -> usize {
 /// The one rule every walk of a line steps by ([`columns_of`],
 /// `markup::push_escaped`, `markup::spelled_ranges`): a tab spelled by one
 /// rule and counted by another puts every place after it out by the
-/// difference.
+/// difference — a local tab rule moves only the washes, silently, with
+/// the tests still green. A wide glyph counts two toward a tab stop too
+/// (one wide glyph and a tab are spelled with two `&nbsp;`). Asking
+/// whether a glyph is wide is `is_wide`'s, not a step of two: a tab steps
+/// two as well.
+///
+/// A known limit, kept while stops are counted in columns: a mono family
+/// with no wide glyphs leaves them to a fallback that advances each its
+/// own way, short of two columns, so tab stops after a wide glyph do not
+/// line up to the pixel from line to line. Washes and presses are placed
+/// by the row's own layout (`LineRuler`), not by columns. Only the washes
+/// are corrected (user decision — ask before changing): a mono CJK family
+/// is not taken (on Windows only MS Gothic advances exactly two columns;
+/// bundling Noto Sans Mono CJK JP needs a design-asset approval), and
+/// neither is doing nothing. Only a family whose wide glyphs advance
+/// exactly two columns would end the limit.
 pub(super) fn step_of(ch: char, col: usize) -> usize {
     if ch == '\t' {
         TAB_WIDTH - (col % TAB_WIDTH)

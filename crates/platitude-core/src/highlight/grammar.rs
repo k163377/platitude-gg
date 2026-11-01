@@ -88,6 +88,11 @@ fn configured(
 /// C's) and colour almost nothing alone. The specific language goes
 /// first: where two patterns claim one node, tree-sitter keeps the
 /// earlier.
+///
+/// Five ship so: qmljs, typescript, tsx, cpp and objc. Only objc says so
+/// (`; inherits:`), so a search of the queries does not find the rest;
+/// what tells is a sample painting something besides `PLAIN` — a language
+/// added takes a `SAMPLES` line (`every_grammar_colours_a_sample_of_its_language`).
 fn layered(queries: &[&str]) -> String {
     queries.join("\n")
 }

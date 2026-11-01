@@ -11,9 +11,13 @@ import platitude.ui
 //     ContextMenu.menu: null
 //     ContextMenu.onRequested: <seat>.offer()
 //     Keys.onMenuPressed: event => event.accepted = <seat>.offer()
-// Qt opens a menu it is handed by itself, with no say from `offer()`, and a box that leaves the binding unwritten keeps
-// the style's, built on the first right-click (`tst_fieldmenu`). The request's position is left alone: a text box's is
-// always its caret (`FieldMenu.offerNow`).
+// Qt opens a menu it is handed by itself, with no say from `offer()` (an empty card where no row is offered); with
+// `null` and `requested` wired it opens nothing and takes the event (`QQuickContextMenu::event`). `menu` is a deferred
+// property: a box that leaves it unwritten keeps the style's, built on the first right-click (`tst_fieldmenu`), and
+// only the declared `null` overrides it — an assigned `= null` does nothing (the menu not built yet is null already,
+// so `setMenu(null)` returns on the equal value and the deferral stands). A box that does not take the menu key lets it
+// climb (from a name box, to the graph's list, whose menu opens). The request's position is left alone: a text box's
+// is always its caret (`FieldMenu.offerNow`).
 Item {
     id: seat
 
@@ -28,7 +32,8 @@ Item {
     /// A right button is going down or coming up on the box: a request Qt raises meanwhile is that right-click's,
     /// synthesized inside the press (Linux) or the release (Windows)
     /// (`QQuickWindowPrivate::maybeSynthesizeContextMenuEvent`). Every other request is the keyboard's — xcb's menu key
-    /// raises one at the pointer, which may well be resting on the box, so the hand over the box tells nothing.
+    /// raises one at the pointer, which may well be resting on the box, so the hand over the box tells nothing. The
+    /// premise is held by `tst_fieldmenu`'s `test_a_right_clicks_request_comes_inside_its_button`.
     readonly property bool rightPressing: rightHand.active || seat.rightReleasing
     property bool rightReleasing: false
 

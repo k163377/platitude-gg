@@ -24,7 +24,7 @@ impl RepoConfigModel {
     // tried, which keeps the two marks below off a screen only read.
     qproperty!("writeUnsaved", Member = write_unsaved, Notify = changed);
     // Which half git now reports as what was asked for — the pair is not
-    // atomic (rules-refs/core.md「identity の 2 連書きは原子化できない」).
+    // atomic (`platitude_core::identity::set_identity`).
     qproperty!(
         "writeNameSaved",
         Member = write_name_saved,

@@ -220,7 +220,7 @@ fn a_branch_out_in_another_worktree_keeps_switch_and_asks_nothing() {
 #[test]
 fn a_branch_out_in_another_worktree_asks_nothing_while_an_operation_stands() {
     // The press opens that worktree and leaves the stopped operation alone
-    // (デザイン規約 §進行中の操作から出る「`!` は着ない」).
+    // and wears no `!` (`SwitchAction::OpenHolder`).
     for (op, conflicts) in [("CHERRY-PICKING", 0), ("REBASE 1/3", 2), ("", 1)] {
         for (kind, full) in [(RefKind::Branch, "feat"), (RefKind::Remote, "origin/feat")] {
             let asks = |held: &str| {

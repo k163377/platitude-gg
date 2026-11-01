@@ -32,7 +32,8 @@ pub struct NavItem {
     /// The rename source cut the way the row cuts names
     /// (`encode::rename_source`). A made row never carries one; the field
     /// exists so the derive spells this role's name for the test in
-    /// `role.rs`.
+    /// `role.rs`. Only for drawing: `orig_path` stays whole beside it, and
+    /// the cut name handed to a write would name another file.
     pub(super) orig_name: String,
     pub(super) is_head: bool,
     pub(super) has_remote: bool,
@@ -72,7 +73,10 @@ pub const FOLDED: &str = "FOLDED";
 /// change letter share.
 ///
 /// Locked wins over prunable when git reports both: the lock is what
-/// somebody chose, so it is the one a reader can act on.
+/// somebody chose, so it is the one a reader can act on. Its words (the
+/// lock's reason, git's for a prune) ride `orig_path`. A reader asks
+/// `kindHint === "worktree"` first: a shared slot is guarded by the kind
+/// alone.
 pub const LOCKED: &str = "LOCKED";
 /// `git worktree prune` would drop this entry — the folder it names is
 /// gone from where git's administrative file says it is.

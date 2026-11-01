@@ -20,6 +20,8 @@ mod toml;
 #[cfg(test)]
 mod testkit;
 
+// `self::`: the child `toml` shares the extern crate's name, and a bare
+// `toml::` here is ambiguous with the extern prelude (E0659).
 pub use self::toml::repo_key;
 pub use lock::{Claim, Lock};
 pub use place::{Build, Env, Platform};

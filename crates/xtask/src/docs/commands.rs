@@ -7,8 +7,9 @@ use std::path::{Path, PathBuf};
 use crate::command::{Command, Permission};
 
 /// The markdown this reads — wider than the torn-block count's
-/// (`super::ROOTS`). What is left out and why: rules-refs/structure.md
-/// 「どのファイルを読むか」.
+/// (`super::ROOTS`). Left out: `ci/baseline`, the record of runs that
+/// happened, and the shell under `ci` / `packaging`, which builds its
+/// lines from variables.
 const ROOTS: [&str; 5] = [
     "internal-docs",
     ".claude/rules",
@@ -548,9 +549,11 @@ fn dispatched(text: &str, catalogue: &[&'static Command], path: &str) -> Vec<Str
     out
 }
 
-/// The runner's own sources (why these: rules-refs/structure.md
-/// 「どのファイルを読むか」). The cut for test code is the first
-/// `#[cfg(test)]`, which is where this tree puts them.
+/// The runner's own sources, without comment lines, test code and
+/// `crates/xtask/tests/`: a comment cannot be generated from `.line()`, and
+/// a test's lines are the very input the judge is held to. The cut for
+/// test code is the first `#[cfg(test)]`, which is where this tree puts
+/// them.
 fn sources(root: &Path, catalogue: &[&'static Command], held: &mut Held) -> Result<(), String> {
     let mut files = Vec::new();
     super::under(&root.join("crates/xtask/src"), "rs", &mut files)?;

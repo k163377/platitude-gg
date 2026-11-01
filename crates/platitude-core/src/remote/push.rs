@@ -38,7 +38,8 @@ pub struct PushSpec {
     pub target: RemoteBranch,
     /// What is sent, as git is to read it: a branch here goes by its full
     /// name (`refs/heads/<branch>` — beside a tag of the same name the
-    /// bare one is ambiguous, which git refuses), and a remote-tracking
+    /// bare one is ambiguous, which git refuses: `src refspec <name>
+    /// matches more than one`, exit 1), and a remote-tracking
     /// ref by its own (`remote::replace_remote_branch`). Sent as written.
     pub local: String,
     /// Record the pushed branch as upstream (`--set-upstream`).
@@ -76,8 +77,8 @@ pub async fn plan_current_push(
 /// a branch measured against a branch here (`branch.<name>.remote = .`)
 /// and marked to no remote, and a mark naming `.` itself — each with words
 /// of its own, saying which key to look at. A mark on a remote sends a
-/// branch measured against one here to that remote, its upstream left as
-/// it was.
+/// branch measured against one here to that remote under its own name,
+/// its upstream left as it was (user decision — ask before changing).
 ///
 /// The upstream is read from configuration: `origin/main` cannot be split
 /// reliably (remote names and branch names may both hold slashes).
@@ -257,6 +258,9 @@ pub async fn push(
 /// refspec [`plan_push`] sends there. The default `simple` names
 /// no destination that is not the upstream (`@{push}`: `cannot resolve
 /// 'simple' push to a single destination`).
+///
+/// The pattern `refs/heads/<branch>` matches whole segments:
+/// `refs/heads/ma` does not answer for `main`.
 pub async fn push_track(
     executor: &GitExecutor,
     workdir: &Path,

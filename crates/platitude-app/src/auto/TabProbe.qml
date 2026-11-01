@@ -3,7 +3,9 @@ pragma ComponentBehavior: Bound
 import QtQuick
 
 // What a headless run asks of the strip: what the tabs came out as, and the pointer a run does not have. Every answer
-// is read off the items the view actually built, so a binding that came apart answers with what is on screen.
+// is read off the items the view actually built, so a binding that came apart answers with what is on screen. The
+// strip's one automation reader (`TabStrip.tabsView`): a new reading of the strip goes here. Its verbs: `tab-widths`,
+// `tab-mark`, `tab-name` (and the carries, `tab-drag` / `tab-hold` / `tab-edge`).
 QtObject {
     id: probe
 

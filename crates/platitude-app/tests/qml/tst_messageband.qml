@@ -3,7 +3,7 @@ import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
-// The two message boxes are surfaces a click drops a caret on (デザイン規約 §コミットメッセージの 2 つの枠), and the
+// The two message boxes are surfaces a click drops a caret on (`MessageEditor`, `offers::message_edit`), and the
 // box is the whole of what the frame encloses. Two unseen strips can take the press — the inset the view is held off
 // the frame by (`SweepBand` stands in it) and the sideways bar the style hands every `ScrollView` — both questions of
 // how Qt hands a press to an item tree (規約 §右のペインの字は掴める).

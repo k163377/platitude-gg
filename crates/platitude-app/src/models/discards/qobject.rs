@@ -23,7 +23,7 @@ impl DiscardModel {
     }
 
     /// Reads the repository at `path`, each reflog to `limit` lines from the
-    /// newest (the graph's window, 破棄記録仕様.md §3); 0 reads them whole,
+    /// newest (the graph's window, `discards::read_repo`); 0 reads them whole,
     /// for a history the window holds entirely.
     #[qslot]
     fn look(&mut self, path: String, limit: i32) {
@@ -56,7 +56,7 @@ impl DiscardModel {
     }
 
     /// Each part's tip, full hex, in the parts' order — what has to be on
-    /// the graph before the part can come back (破棄記録仕様.md §4).
+    /// the graph before the part can come back (`RepoPage.recoverReach`).
     #[qslot]
     fn part_tips_at(&self, index: i32) -> Vec<String> {
         self.entry(index)

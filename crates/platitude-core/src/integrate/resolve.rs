@@ -115,7 +115,8 @@ pub async fn resolve(
         .cwd(workdir)
         .args([op.command(), continuation.flag()]);
     // `--no-edit` for cherry-pick / revert only: `merge --continue` and
-    // `rebase --continue` reject it (they rely on `GIT_EDITOR=true`).
+    // `rebase --continue` take no argument at all, that one included (they
+    // rely on `GIT_EDITOR=true`).
     if continuation == Continuation::Continue
         && matches!(op, InProgress::CherryPick | InProgress::Revert)
     {

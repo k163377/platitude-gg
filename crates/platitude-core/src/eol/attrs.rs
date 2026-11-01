@@ -23,6 +23,11 @@ pub enum Ruling {
 }
 
 /// How many paths one `check-attr` is asked about at a time.
+///
+/// A count, not a length: two hundred deep paths can pass Windows' 32767
+/// character command line, and that `check-attr` then fails to start.
+/// `lfs::filtered` cuts by bytes (`ATTR_BYTES`); the same cut is the open
+/// fix here (P3-確認事項 §core).
 const ATTR_BATCH: usize = 200;
 
 /// What git's settings say about one path.

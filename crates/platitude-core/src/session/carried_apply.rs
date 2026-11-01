@@ -4,9 +4,22 @@
 //! git's own apply, which this end never imitates. That worktree is only
 //! read.
 //!
+//! The landing is what is decided, not the means (user decision — ask
+//! before changing): applied cleanly, the files join this tree's
+//! uncommitted work, what was staged there unstaged here except files newly
+//! added, which stay added, and untracked files untracked; a different HEAD
+//! still applies, three-way. Where both changed the same lines the file
+//! lands conflicted, which is no failure. Where this tree's own work is in
+//! the way (a file changed here that they change, an untracked file where
+//! they add one), nothing is written. Nothing is written there either and
+//! no STASHES entry is made: that worktree still holding its work is what
+//! the entry `stash apply` keeps would be, so trying again is a discard
+//! here and another press.
+//!
 //! What git turns down, and what this end finds in the way before git
 //! runs, is a report for the notice bar (`report::carried_refused` /
-//! `withheld_about`), not a failure for the command log to raise.
+//! `withheld_about`), not a failure for the command log to raise — the
+//! command log does not open (user decision — ask before changing).
 
 use super::stash_round::conflicts_now;
 use super::*;
@@ -33,11 +46,31 @@ impl RepoSession {
 
 /// The write: refused before git where the work cannot be read whole or a
 /// file here stands where one of its untracked files goes — git applies the
-/// tracked changes before it finds that, and leaves them (rules-refs/core.md
-/// の `stash apply` の項) — then `git stash apply` of the rest, whose
-/// conflicts are a landing as an apply's are ([`RepoSession::stash_apply`]),
-/// and the untracked files only once that has landed: git's own apply puts
-/// them in after turning the rest down too.
+/// tracked changes before it finds that, and leaves them (`could not restore
+/// untracked files from stash`, measured on 2.55;
+/// `git_leaves_the_tracked_half_applied`) — then `git stash apply` of the
+/// rest, whose conflicts are a landing as an apply's are
+/// ([`RepoSession::stash_apply`]), and the untracked files only once that
+/// has landed: git's own apply puts them in after turning the rest down too
+/// (`do_apply_stash` jumps to `restore_untracked` when its merge fails).
+/// So a refusal over work here in the way, or over an untracked file where
+/// an added one goes, writes no tracked change (exit 1 up to 2.55, as a
+/// conflicted landing, told apart by `conflicts_now`) yet would write the
+/// untracked files. Only the failures before the merge return without them:
+/// the index refresh (an unmerged index, or another git's lock, which
+/// 2.43.0 and 2.43.1 report with exit 1 and no words) and a merge standing
+/// here. A change that overlaps only what is staged here goes through as a
+/// three-way merge and leaves the index as it is.
+///
+/// Three rare, hand-made shapes are left as git's own apply leaves them
+/// (user decision — ask before changing). Where a file added or changed
+/// there stands as a folder in that working tree and is missing here, the
+/// tracked part makes the file and `checkout-index` (128) then has nowhere
+/// to put the untracked file under the folder; and from a case-sensitive
+/// filesystem to a case-insensitive one. Both leave the tracked part
+/// applied, with git's words as the failure. Where a tracked `d/f` was
+/// removed there for an untracked file `d`, the folder `d/` here is refused
+/// before git, which would empty it in the merge and go through.
 async fn apply_work(
     exec: &GitExecutor,
     repo: &RepoInfo,
@@ -66,7 +99,7 @@ async fn apply_work(
                 return Err(unread(format!("'{path}' is unmerged in '{there}'")));
             }
             // A repository of its own inside the tree: a stash leaves it
-            // where it is, as a discard does (破棄記録仕様.md §2.1).
+            // where it is, as a discard does (`discard_record::copy_of_choices`).
             status::StatusItem::Untracked { path } if path.ends_with('/') => {}
             status::StatusItem::Untracked { path } => untracked.push(path.clone()),
         }

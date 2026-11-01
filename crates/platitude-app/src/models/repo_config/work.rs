@@ -286,7 +286,9 @@ impl RepoConfigModel {
                 } => {
                     // The read out now is from before the save, and can
                     // answer later in this very drain, before the re-read
-                    // is numbered — retired here so it is refused.
+                    // is numbered — retired here so it is refused: taken,
+                    // its stale `ReadFailed` would replace the save's error
+                    // (netted in `work_tests.rs`).
                     self.retire_read();
                     self.save_pending = None;
                     self.write_busy = false;

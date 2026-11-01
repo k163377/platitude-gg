@@ -32,6 +32,8 @@ QtObject {
         probe.rail.enterAt(kind, probe.rail.topOf(kind))
     }
     /// PGG_AUTO_ACT=nav-peek-away / nav-peek-shut: walk the pointer off the cell that opened it, and click that cell.
+    /// Through the cell's own answers, so the leave's beat (`hoverKeepMs`) runs as for a hand: a hook that called the
+    /// seat's `settle()` itself would pass with the hover wiring cut, and a `Qt.callLater` is no stand-in for the beat.
     function peekAway(kind) {
         probe.rail.leaveAt(kind)
     }
@@ -86,7 +88,7 @@ QtObject {
               ? probe.rail.autoCells.itemAt(0).autoCount.font : Qt.application.font
     }
     /// PGG_AUTO_ACT=nav-fold: whether every count on the rail has its ink under its mark's box, centred in the room down
-    /// to half a step over the cell's foot (デザイン規約 §左メニューを畳む), with the span the counts' ink takes in their
+    /// to half a step over the cell's foot (`NavRail.countInkTop`), with the span the counts' ink takes in their
     /// cells. Read off each laid-out label and the ink of what it says — not the digits the rail seats them by — since
     /// where a line's ink falls is the face's answer. Centred: the room over the ink and the room under it part by no
     /// more than the odd pixel the room gives above, and half a pixel for the label's whole-pixel place.

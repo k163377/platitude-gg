@@ -9,8 +9,26 @@ import platitude.ui
 // sidebar's rows, the graph's rows and a chip's unstacked names, so there is one answer to "how long is a
 // double-click".
 //
+// **Two clicks there in a row** is a user decision (ask before changing). What comes between: a press anywhere else —
+// the window, a right-click, a modified click building the graph's choice, a card, a menu, a dialog, a tooltip —, a
+// press that made no click (a drag over the name, a release off the row), the history moving to another commit
+// (arrows, find, a menu), another application. A box springing up from "the row clicked last" plus one more click
+// would meet a hand that went away and came back with no warning. The only clock is the system's double-click
+// interval, a floor: a second click inside it is half of a double-click, and the double-click spends both clicks.
+// The second click still does what a click does (the row's jump, again); the box comes up over that, and one opened
+// unmeant goes with Escape or a click elsewhere. The surface marks the target last clicked (`bgSelected`,
+// `NavItemDelegate`'s `chosenBox`), which nothing in between moves: without it the second click has nothing to aim at.
+//
 // **One of these per surface, never per row**: the graph pools its delegates, so a wait held by a row either dies
 // with it or comes back on a recycled row naming another commit.
+//
+// Decided per turn of the event loop, never by counting (how often and in what order `Hand.acted` rings differs per
+// way in): a UI frozen long enough for two presses to be dealt in one turn lets a target's `take` cover a press
+// elsewhere (known limit). The arrows' landing is read late (`GraphRowWalk.noteStep`), so it may come after the next
+// click — the gesture starts over from that click. Automation's `leftClick` rings no `Hand`, so the verbs fire the
+// window's watcher (`caretHand.pressedAt`) first; the window left cannot be shot headless (no activate). Pinned by
+// `tests/qml/tst_reclickaway.qml` (the real `AppCard` / `FocusRelease`) and the verbs `graph-reclick-elsewhere`
+// (presses, arrows) / `nav-reclick-elsewhere` (rows that answer at the release).
 QtObject {
     id: gesture
 
@@ -22,8 +40,8 @@ QtObject {
     property string armedKey: ""
     property var armedNames: null
     /// Something came between the last click and now (`settle`): the next click is a first one wherever it lands, the
-    /// target last clicked included (デザイン規約 §左メニューの所作「間を空けた 2 回目」). `activeKey` stays — the
-    /// sidebar marks the row last clicked with it, and that mark does not move.
+    /// target last clicked included (what counts as between: the header). `activeKey` stays — the sidebar marks the
+    /// row last clicked with it, and that mark does not move.
     property bool broken: false
     /// The input under way (`Hand.acted`) and whether a target here took it (`take`). Read once it is through
     /// (`settle`): the window hears a press before the target answers it, a card after.
@@ -89,7 +107,10 @@ QtObject {
     }
     /// The input under way is a target's here. `click` and `land` take their own; **a target that answers at the
     /// release takes its press at the press and hears its release** (`NavItemDelegate.takePress` / `endPress`) — by
-    /// its click the press is long settled, and a press that makes no click is something between two clicks.
+    /// its click the press is long settled, and a press that makes no click is something between two clicks. Without
+    /// the `take` the rename never opens again (`nav-reclick`, which calls `leftClick` directly, stays green); without
+    /// the `hear` a press that made no click — a drag over the name, a release off the row, a pick-up — comes between
+    /// nothing.
     function take() {
         gesture.taken = true
         Qt.callLater(gesture.settle)

@@ -217,8 +217,8 @@ async fn a_rebase_onto_that_stops_leaves_the_work_in_the_stash() {
 }
 
 /// The replay goes through and the restore collides: markers in the files
-/// and the entry kept, as a move lands
-/// (デザイン規約 §未コミット変更がある状態での移動). Nothing failed.
+/// and the entry kept, as a move lands (`RepoSession::checkout`). Nothing
+/// failed.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_restore_that_collides_lands_in_the_files_and_keeps_the_entry() {
     install_todo_editor();
@@ -263,7 +263,7 @@ async fn a_restore_that_collides_lands_in_the_files_and_keeps_the_entry() {
 
 /// The replay stops part-way and the restore is held back: a pop onto an
 /// index with unmerged paths does nothing yet reports a collision
-/// (rules-refs/core.md「`stash pop` の非ゼロを conflict と読めるのは」).
+/// (`RepoSession::stash_pop`).
 /// The work waits in the stash until the operation is over.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_replay_that_stops_part_way_leaves_the_work_in_the_stash() {

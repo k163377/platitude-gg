@@ -46,6 +46,8 @@ ToolButton {
         }
     }
     // A toggle, paired with the close policy below (rules-refs/app-ui.md「`ToolButton` + `Menu` の押し直し」).
+    // `open()`, not `offer()`: the rows are fixed, so the menu is never empty, and `offer()`'s bare `popup()` opens
+    // at the pointer, losing `y` below (the right-click menus keep `offer()`).
     onClicked: appMenu.opened ? appMenu.close() : appMenu.open()
     AppMenu {
         id: appMenu
@@ -69,7 +71,8 @@ ToolButton {
             onTriggered: menuButton.curPage.pageTab.refreshAll()
         }
         AppMenuSeparator {}
-        // One row for the one screen: a row per category reads as a duplicate.
+        // One row for the one screen: a row per category reads as a duplicate, and the menu starts telling the
+        // screen's contents. It opens `Application` (`SettingsDialog.openAt`).
         AppMenuItem {
             text: qsTr("Settings…")
             onTriggered: menuButton.settingsRequested()

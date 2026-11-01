@@ -15,7 +15,9 @@ Popup {
     /// The pointer is over the padding band or the content. Two handlers, because the background and the content are
     /// siblings (rules-refs/app-ui.md「`background` と `contentItem` は兄弟」).
     readonly property bool pointerInside: cardFace.pointed || card.contentPointed
-    /// The ground, for a card that is a piece of something else (`SectionPeekPopup`; see `AppCardFace`).
+    /// The ground, for a card that is a piece of something else (`SectionPeekPopup`; see `AppCardFace`). Ground and
+    /// corners are set here, never by a `background` of a card's own: that takes away `cardFace`, which
+    /// `pointerInside` reads.
     property alias faceColor: cardFace.color
     /// The corners, for a card that opens flush against what it comes out of.
     property alias faceRadius: cardFace.radius
@@ -31,6 +33,8 @@ Popup {
     // `Shortcut` out while a popup other than a tooltip stands with `CloseOnEscape`, yet the popup hears Escape only
     // from the keyboard it holds — declared always, a card the hand opened would keep Ctrl+F, F5 and the bars' Escape
     // from the window and still stay up on Escape (rules-refs/app-ui.md「hover のカードは窓の `Shortcut` を塞がない」).
+    // With the keyboard in it the card is topmost: it takes Escape first and holds Ctrl+F meanwhile, as a menu does.
+    // Derived cards never write `closePolicy` (`cargo xtask structure`'s popups check).
     closePolicy: (card.activeFocus ? Popup.CloseOnEscape : Popup.NoAutoClose)
                  | (card.closesOnPressOutside ? Popup.CloseOnPressOutside : Popup.NoAutoClose)
     background: AppCardFace {

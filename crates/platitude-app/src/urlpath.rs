@@ -9,7 +9,10 @@ use cxx_qt_lib::{QString, QUrl};
 
 /// The local path a `file:` URL names: a dialog's answer, or a URL this
 /// side made. Anything that names no local file is empty — none of the
-/// slots that take one is handed a bare path.
+/// slots that take one is handed a bare path, a relative one, a broken `%`
+/// or bytes that are not UTF-8. A dialog's answer is QML's
+/// `selectedFile.toString()`, which leaves `#` / `?` / `%` as `%23` /
+/// `%3F` / `%25`.
 pub fn file_url_to_path(url: &str) -> PathBuf {
     QUrl::from(url)
         .to_local_file()
@@ -17,7 +20,8 @@ pub fn file_url_to_path(url: &str) -> PathBuf {
 }
 
 /// The folder the picker opens at for a repository at `path`: the one it
-/// sits in, or the repository itself when it is a root.
+/// sits in, or the repository itself when it is a root — never empty,
+/// which would open wherever the dialog was last left.
 pub fn picker_folder_url(path: &Path) -> String {
     path_to_file_url(path.parent().unwrap_or(path))
 }
@@ -40,6 +44,28 @@ pub fn path_leaf(path: &str) -> &str {
 ///
 /// Folds only on Windows: elsewhere a backslash is a letter of the name.
 /// The `\\?\` / `\\.\` prefixes are left alone, as `repo_key` leaves them.
+///
+/// Called where a path comes in, not where it is shown: folded near the
+/// screen, one path would be spelled differently in each place it shows.
+/// The roads a native spelling can come in by: the tab strip
+/// (`TabsModel` — a folder asked for, a restored tab, which would
+/// otherwise lean on the file holding `repo_key`'s `/`, and the refused
+/// folder's row), the settings directory the OS names
+/// (`main::claim_store` → `heldElsewhere`), and the settings screen's two
+/// git path values (`app_backend::start` — `git_path`, a file a person
+/// may have written, and `git_path_in_use`, the git being run). Readers
+/// keep `Path::components()`, which takes both separators on Windows; a
+/// name is joined with `/` in one place (`tab_name::name_at`).
+///
+/// Only the screen's value is folded, never the file's spelling: the git
+/// path box writes back a value that moved only
+/// (`AppBackend::apply_git_path`; `Hub::set_git_path` compares raw values
+/// and cannot stand in for it), or the way out of the screen would turn
+/// a hand-written `\` into `/`. Headless: `tab-name`'s `native=false`
+/// (name and hover) and `settings-git-path`'s `named=true native=false`
+/// (value and placeholder); `stored-missing` seeds a native-spelled value
+/// and xtask reads the file after the run
+/// (`verify::seed::stored_path_kept`).
 pub fn shown_path(path: &str) -> String {
     #[cfg(windows)]
     if !path.starts_with(r"\\?\") && !path.starts_with(r"\\.\") {
@@ -48,8 +74,10 @@ pub fn shown_path(path: &str) -> String {
     path.to_string()
 }
 
-/// Encoded, so a query the caller appends (`?read=`) stays one. Empty for
-/// a path with no root: a dialog cannot be opened at one.
+/// Encoded, so a query the caller appends (`?read=`) stays one — not
+/// `toString()`, which leaves spaces and CJK unencoded, and the `?read=`
+/// after them reads as part of the name. Empty for a path with no root: a
+/// dialog cannot be opened at one.
 fn path_to_file_url(path: &Path) -> String {
     if !path.has_root() {
         return String::new();

@@ -1,7 +1,14 @@
 //! What a tab is called: as much of its path as it takes to tell it
-//! apart from the other tabs in the strip (デザイン規約 §タブの所作).
+//! apart from the other tabs in the strip.
 //! A rule over the whole strip, so it lives away from the model that
 //! applies it.
+//!
+//! The repository's folder name, grown only while a namesake is open at
+//! the same time: `foo/repo` and `bar/repo` both name their parent, and
+//! `1/foo/repo` and `2/foo/repo` grow to where they part. Only the
+//! clashing group grows, and it shrinks back when one of them closes. A
+//! name says which tab in this strip; a parent on a tab nobody is
+//! mistaken for answers a question nobody asked.
 
 use std::collections::HashMap;
 use std::path::{Component, Path};

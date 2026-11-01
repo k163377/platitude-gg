@@ -388,10 +388,16 @@ pub(super) const TABLE: &[Verb] = &[
     // stands on the row moves the width at which the group narrows.
     //
     // The claim stops before the fit: the widths showing the last shape
-    // are below the floor a hand can drag the window to. The folded mark is
-    // reached through the floor instead — it folds the group whatever the
-    // share-out says — here in red, and in yellow by `old-git-fold`. The
-    // floor itself is `window-floor`'s question.
+    // are below the floor a hand can drag the window to, and a width aimed
+    // at it lands on one OS only. The folded mark is reached through the
+    // floor instead — it folds the group whatever the share-out says —
+    // here in red, and in yellow by `old-git-fold`. The floor itself is
+    // `window-floor`'s question.
+    //
+    // The stages are `tst_bandshare.qml`'s table, and their reaching the
+    // real group is `tst_bandgroup.qml`'s: with the group's `badgeMinW`
+    // wiring pinned at 0, `tst_bandshare.qml`, these runs and
+    // `old-git-fold` all stay green.
     //
     // `floor`: `fitted=true` is the group cut to its mark's cell — a folded
     // group that kept its words' width stands empty band beside the mark,
@@ -432,7 +438,8 @@ pub(super) const TABLE: &[Verb] = &[
     //
     // One stopped operation stands for all of them: the rows are the same
     // three and only the op row's word differs, which is the model's
-    // (`worktree::tests::every_operation_that_can_stand_here_…`).
+    // (`worktree::tests::every_operation_that_can_stand_here_…`). Which
+    // shape the band took is not judged here; that is `badges`' question.
     Verb {
         name: "badges-hover",
         when: &[],

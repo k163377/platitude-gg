@@ -19,13 +19,16 @@ use std::path::{Path, PathBuf};
 pub const DIR_NAME: &str = "avatars";
 
 /// Extensions the file dialog filters on — the dialog's only; the format
-/// is decided by the content (`picture`).
+/// is decided by the content (`picture`). The dialog's words name these
+/// formats (the app's `SettingsAppPane`), so the two change together.
 pub const EXTENSIONS: [&str; 3] = ["png", "jpg", "jpeg"];
 
 /// Largest file read. It bounds the reading while a person waits, not the
 /// decoded size (`picture::MAX_PIXELS` does).
 pub const MAX_BYTES: u64 = 10 * 1024 * 1024;
 
+/// Says `avatar`, the screen's one word for the feature (デザイン規約
+/// §アバターを与える), so the log and the screen share a vocabulary.
 #[derive(Debug, thiserror::Error)]
 pub enum AvatarError {
     #[error("the file is larger than {}MB", MAX_BYTES / (1024 * 1024))]
@@ -49,8 +52,12 @@ pub enum AvatarError {
     NoStore,
 }
 
-/// A refusal as the screen is written from it; the `#[error]` sentences
-/// above are the log's only (rules-refs/app-ui.md「アバターの拒否は種別 + 数で渡す」).
+/// A refusal as the screen is written from it: a kind and its numbers,
+/// the sentences being the screen's (`Words.avatarFailure`, through
+/// `AppBackend.avatarErrorKind` / `avatarErrorFacts` / `avatarErrorSaid`).
+/// The `#[error]` sentences above are the log's only. `read` / `write` are
+/// the other way round: the operating system's words, under a frame the
+/// screen writes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AvatarRefusal {
     pub kind: &'static str,

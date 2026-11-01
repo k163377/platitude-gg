@@ -1,11 +1,22 @@
 import QtQuick
 import platitude.ui
 
-// The quiet a tab's name goes into under its mark (デザイン規約 §タブの所作): the tab's ground painted over the name
-// in a disc on the mark, whole inside the wash and fading out over `rampW`.
+// The quiet a tab's name goes into under its mark: the tab's ground painted over the name in a disc on the mark, whole
+// inside the wash and fading out over `rampW`.
 //
-// Painted over, not masked: offscreen renders in software, where `ShaderEffect` / `MultiEffect` draw nothing
-// (rules-refs/app-ui.md「`✕` の下に入った名前の消し方」). A `Canvas` draws a radial gradient in every backend.
+// A crowded strip gives up the room kept for the mark first (`TabShare`'s order), so names run on under the `✕`. **They
+// run on rather than being cut short of it**: the `✕` stands only on the tab in front and the one under the hand, so a
+// cut would shrink the name the moment the mark comes out. A name cut in the middle goes under the same way — cut or
+// not, it must not re-lay as the mark appears. **A gradient, not a step** (規約 §省略の表し方): a step says the name ended
+// there. **A disc, not a square**: the same circle as the mark's wash (§当たり判定) — squared off, the letters come back
+// along a vertical line and leave an empty band against the wash's curve. Only while the mark shows: a tab with no mark
+// reads its name to its far edge.
+//
+// Painted over, not masked: offscreen renders in software, where `ShaderEffect` draws nothing — and `MultiEffect`,
+// built on it, likewise, with no warning. A mask would take the name out of every headless picture, and out of a real
+// window on a machine with no GPU. A `Canvas` draws a radial gradient in every backend. The ground is "the colour under
+// that tab now": the band's (`TabStrip.bandColor`, handed down by `TopBar` — a tab has no ground of its own, so the
+// token is named there once) tinted with the hover wash, or the front tab's own (`TabItemDelegate.groundColor`).
 InkCanvas {
     id: fade
 

@@ -9,11 +9,18 @@ import platitude.ui
 /// * **The hand can get to them** — it opens beside the hand and flush against the target: a gap is a band the
 ///   pointer crosses while touching neither.
 /// * **It waits** — a target asks and the rest counts; the hand walking into the box is a hold, not a leave; a
-///   neighbour's ask takes the box down and counts its own rest (「隣の的へは箱を下ろしてから移る」).
+///   neighbour's ask takes the box down and counts its own rest (「隣の的へは箱を下ろしてから移る」). A cut name's whole
+///   text waits too, though it unfolds what the cut hid (user decision — ask before changing: the band's state card
+///   is the one at that line that opens at once, `BandStateGroup.asking`).
 ///
 /// The box is a `ToolTip` of this seat's own, not Qt's attached one, so nothing here is inferred from the popup going
 /// down: the seat knows why. A `ToolTip` all the same, since Qt lets a tooltip alone stand without blocking the
-/// window's shortcuts (rules-refs/app-ui.md「hover のカードは窓の `Shortcut` を塞がない」).
+/// window's shortcuts (rules-refs/app-ui.md「hover のカードは窓の `Shortcut` を塞がない」). Qt's attached `ToolTip` is
+/// not used anywhere: nothing would set its `policy` or `delay`. Ground and words are the seat's own (`background` /
+/// `contentItem`), so no target re-dresses them. Fixed by `tst_tipseat.qml`.
+///
+/// **The machine passes green either way**: `path-tip` / `tip-copy` / `tip-sweep` read the box's own API
+/// (`Tips.box` / `Tips.current`), so whether it was drawn is told only by looking at the overlay.png.
 ///
 /// An Item: the box is a child, and a QtObject has nowhere to put one.
 Item {
@@ -30,13 +37,18 @@ Item {
     readonly property var current: machine.target
     readonly property bool shownNow: machine.shown
     /// The beat after a leave is still counting (automation reads it), and the machine's word for where it stands.
+    /// The box stays out through the beat: a test waiting for it to be down asks `!box.visible && !seat.settling`
+    /// (a box left beside a list stands over the next part and takes the next case's hand — `tst_bargrab.qml`).
     readonly property bool settling: machine.leaving
     readonly property string machineState: machine.state
     /// A place word in the box was pressed; `Main` hands the href to the page that owns it.
     signal linkAsked(string href)
 
     /// Hover stand-in for runs with no pointer: where the hand is on the target, as a share of its width (0 = left
-    /// edge, 1 = right). Negative — the ordinary case — means no stand-in.
+    /// edge, 1 = right). Negative — the ordinary case — means no stand-in. Read for the seat alone (`readAnchor`);
+    /// what holds the box is the same seat in a run too — offscreen hands the window-wide `HoverHandler` a hand at the
+    /// origin, so `hovered` cannot tell. A pointer's walk cannot be injected: it is verified by throwaway
+    /// qmltestrunner scenes.
     property real handAcross: -1
 
     /// The pointer is on the box's ground or its words — two handlers, since background and content are siblings
@@ -56,7 +68,8 @@ Item {
 
     // ---- what the targets ask ----------------------------------------------------------------------------------
     /// A target's ask rose. A refusal of what is typed standing — out or waiting — turns a hover's ask away: one box,
-    /// left with the refusal until the typing changes it.
+    /// left with the refusal until the typing changes it. The refusal itself waits the rest as any tip does
+    /// (`point(a, false)`). Fixed by `tst_tipseat.qml` (the typed cases) and `tst_bargrab.qml`'s `test_f`.
     function ask(a) {
         if (machine.target !== null && machine.target !== a && machine.target.typed)
             return
@@ -113,8 +126,10 @@ Item {
     property point readAt: Qt.point(0, 0)
     /// The box parked off a row a read pushed past its view's cache (`Tips.dropIn`) says what it said, held by the
     /// seat's own ask (`heldAsk`): the view goes on to use the row's delegate for another row, or lets it go, and the
-    /// box stays with the hand all the same. The ask moves with the rows' hand, so their moves still reach the box
-    /// (`slid`).
+    /// box stays with the hand all the same. Qt hands out the oldest pooled delegate, not the one that was this row's
+    /// (`QQmlReusableDelegateModelItemsPool::takeItem`), and a view that moves or resizes destroys its pool
+    /// (`QQuickListView::geometryChange` → `drainReusableItemsPool(0)`). The ask moves with the rows' hand, so their
+    /// moves still reach the box (`slid`).
     function detach() {
         const ask = machine.target
         seat.park()
@@ -199,7 +214,7 @@ Item {
     /// gets its words, and assigned, a box above its target would come out one box too low
     /// (rules-refs/app-ui.md「出す前に採寸する」). Again: where the target stands is a call (`targetAt`) they do not
     /// follow, so a target moved while its box was down, under a hand back on the column it rested on, would come
-    /// out where the target stood when they last ran.
+    /// out where the target stood when they last ran (`tst_tipseat.qml`, the moved target).
     function seatBox() {
         box.x = Qt.binding(seat.seatX)
         box.y = Qt.binding(seat.seatY)
@@ -264,8 +279,11 @@ Item {
         if (at === null || ask === null)
             return 0
         const p = seat.targetAt()
-        // Beside it: level with the hand, not the target's top — the asker may sit a row above the target, and a
-        // straight sideways move must reach the box (rules-refs/app-ui.md「的の脇に立つ箱」). Runs keep the top.
+        // Beside it: level with the hand (`HandWatch.at`, frozen as it opens), not the target's top — the asker is not
+        // always the target: an open row of the left panel asks from its own name's line, and the box hugs the lines
+        // under it (`NavRowFacts`). Seated at the target's top, the box stands a row below the hand, and a straight
+        // sideways move misses both target and box. Runs keep the top: their stand-in holds only a share of the width
+        // (`handAcross`), so a headless picture does not show the hand's seat (`tst_tipseat.qml`'s beside cases do).
         if (ask.beside) {
             const last = seat.host.height - box.implicitHeight - Theme.spaceXs
             const want = seat.anchorDown ? seat.anchorY - box.implicitHeight / 2 : p.y
@@ -281,8 +299,9 @@ Item {
         const below = seat.host.height - (p.y + at.height)
         return box.implicitHeight <= above || above >= below ? -box.implicitHeight : at.height
     }
-    /// Reads the hand's seat off for a box coming out now, and again a turn later, before anything is drawn
-    /// (rules-refs/app-ui.md「`TipSeat` の席は 2 度読む」).
+    /// Reads the hand's seat off for a box coming out now, and again a turn later, before anything is drawn: the
+    /// target's hover and the window's `HandWatch` are separate items in one delivery, in no set order, so read once
+    /// the first box can find no hand yet and land on the target's middle.
     function freeze() {
         seat.readAnchor()
         seat.seatBox()
@@ -326,7 +345,12 @@ Item {
         margins: -1
         // The style's policy reads a press on the box — a selection starting — as a press outside the target.
         closePolicy: Popup.CloseOnEscape
+        // Bound to the target's words, not copied: a change while the rest counts or while the box is out reaches the
+        // box, so a click before the tip comes out and a click on a tip already out both show the answer now
+        // (`HashPlate`'s `Copied!`, a reason that arrives late).
         text: machine.target !== null ? machine.target.words : ""
+        // The same card as `EolHoverCard` / `CommitHoverCard` (`RefListPopup` alone takes `radiusSm` and no padding of
+        // its own), and flat as they are: no card in the app casts a shadow.
         background: Rectangle {
             /// The sweep hand, named so a run can reach it at `box.background.pad`.
             property alias pad: tipPad

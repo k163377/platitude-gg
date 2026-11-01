@@ -1,5 +1,5 @@
 //! The changed-file list of a commit: the tree it is shaped into and the
-//! walk the arrow keys take over it (規約 §diff のファイル一覧).
+//! walk the arrow keys take over it (`FileRowWalk.qml`).
 
 use super::{DetailsModel, FileItem};
 use crate::encode::Landing;

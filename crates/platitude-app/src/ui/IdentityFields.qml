@@ -4,9 +4,9 @@ import platitude
 import platitude.ui
 
 // The identity form (user.name / user.email): the two boxes, their marks, the line over them and git's words on a
-// failed write. One form for the gate and both settings chapters
-// (rules-refs/app-ui.md「identity の欄は `IdentityFields` に 1 本」); what the pair is read from and written to is the
-// caller's, and every default is the global pair (`AppBackend`).
+// failed write. One form for the gate (`IdentityDialog`) and both settings chapters; what the pair is read from and
+// written to is the caller's, and so are the save (`saveIdentity`) and whether to close once it lands — only the gate
+// closes. Every default is the global pair (`AppBackend`).
 ColumnLayout {
     id: fields
 
@@ -19,8 +19,12 @@ ColumnLayout {
     readonly property bool differs: nameField.text.trim() !== fields.heldName
                                     || emailField.text.trim() !== fields.heldEmail
     /// Somebody typed and it differs from git: the settings screen's one unsaved edit (`SettingsDialog.escapeOut`) and
-    /// what both Saves are lit by. `touched` is asked first — git answers late, answers again, and empties the boxes
-    /// on the way to another repository, none of which is an edit (rules-refs/app-ui.md の `IdentityFields.dirty` の行).
+    /// what both Saves are lit by (`GLOBAL`: `filled && dirty`; `REPOSITORY OVERRIDE`: `state === "ready" && dirty`).
+    /// `touched` is asked first — git answers late, answers again, and empties the boxes on the way to another
+    /// repository, none of which is an edit — so a resting screen never stands on the comparison: `differs` is not
+    /// even evaluated while the boxes hold git's answer. Compared alone, `filled && differs` can light in a real window
+    /// over boxes holding git's own answer while headless stays dark (it rides on the bindings' evaluation order).
+    /// Checked by `settings-escape` (`save=false`) and `settings-leave` (`save=true`).
     readonly property bool dirty: fields.touched && fields.differs
 
     /// What `load()` fills the boxes from: what git holds now, wherever the caller reads it.
@@ -43,7 +47,7 @@ ColumnLayout {
                                  ? qsTr("git still reports a different identity. A setting in the repository this window was started in can sit over this one.")
                                  : ""
 
-    /// The line over the boxes (デザイン規約 §設定の画面「説明はその章の前、今の値はその欄の後」). The default, for the
+    /// The line over the boxes (what a thing is goes first — `SettingsSection`). The default, for the
     /// gate, says how far the write reaches; the settings screen's warning says that, so there it only names the keys.
     property string note: qsTr("Saved for every repository on this computer (user.name and user.email).")
 
@@ -57,11 +61,13 @@ ColumnLayout {
     /// Somebody typed since the last `load()` (see `dirty`).
     property bool touched: false
     // Through `Connections`: an `onEdited` in this body would be replaced by the caller's (`SettingsRepoPane` writes
-    // one).
+    // one), and die silently.
     Connections {
         target: fields
         function onEdited() { fields.touched = true }
     }
+    // Untouched boxes follow git's late answers: without this, an answer arriving after the screen opened would read
+    // as an edit, and the way out would stay shut for good.
     onHeldNameChanged: if (!fields.touched) fields.load()
     onHeldEmailChanged: if (!fields.touched) fields.load()
 
@@ -71,6 +77,7 @@ ColumnLayout {
         emailField.text = fields.heldEmail
         fields.touched = false
     }
+    /// The gate's caret (`IdentityDialog` alone): the settings screen opens with none (`SettingsDialog.onOpened`).
     function focusName() {
         nameField.forceActiveFocus()
     }

@@ -234,7 +234,8 @@ impl RepoSession {
                     .read_standing_op((&workdir, &git_dir), &status, &op_state, &cancel)
                     .await;
                 // Named only where there is a conflict to open, or the
-                // settings field asked (once per opening).
+                // settings field asked (once per opening): on every poll
+                // it would cost two spawns.
                 let asked = self.merge_tool_wanted.swap(false, Ordering::SeqCst);
                 let merge_tool = if asked || status.conflicted().next().is_some() {
                     let read = conflict::configured_tool(&self.executor, &workdir, &cancel)

@@ -123,7 +123,10 @@ pub(crate) fn unreached_rows(lines: &[Typed]) -> Vec<String> {
 
 /// One verb's line, and the arguments that want a different one.
 /// `plain` is required so every argument gets a line: `None` from
-/// `must_say` is the one failure that passes.
+/// `must_say` is the one failure that passes. The key is the verb's
+/// spelling: a verb renamed in the harness and not here drops to `None`,
+/// and its run passes on the picture alone — rename the row with it
+/// (`every_verb_is_one_the_drivers_dispatch` catches the row left behind).
 pub(super) struct Verb {
     pub(super) name: &'static str,
     /// The arguments with a line of their own, narrowest first.
@@ -250,8 +253,8 @@ mod tests {
     }
 
     /// A rename on the QML side leaves a row nothing reaches: `must_say`
-    /// goes quiet and the run is judged on the picture alone
-    /// (rules-refs/app-ui.md「xtask verify/verbs.rs」). Only this direction
+    /// goes quiet and the run is judged on the picture alone (see
+    /// `Verb`). Only this direction
     /// can be asked — most verbs are judged on their picture and have no
     /// row.
     #[test]

@@ -1,5 +1,12 @@
 //! The Write and Edit guards: where a write may land, and the notes an
 //! edit gets after (seat re-claim, QML registration and fonts, doc shape).
+//!
+//! Not guarded, on purpose: an Edit that quotes more `old_string` than it
+//! needs. One deny costs an order of magnitude more than a tighter quote
+//! saves, and a non-blocking note or an always-loaded rule line loses too,
+//! since what it adds rides on every call. Do not propose it again without
+//! a new measurement. Nor an edit that rewrites what the same session
+//! wrote: nothing known before the write tells such a rethink apart.
 
 use super::payload::string_field;
 use super::seat;
@@ -27,6 +34,10 @@ pub(super) fn pre_write(input: &str) -> Result<(), String> {
 
 /// A new .rs directly under crates/platitude-core/tests/, which would be a
 /// second test binary.
+///
+/// The path stays spelled whole although nothing here reads that tree: the
+/// gate's graph takes the string for an edge (`graph::literal_paths`), and a
+/// reach is narrowed by moving code into leaves, never by hiding a path.
 fn second_test_binary(path: &str) -> Option<String> {
     let rest = path.split("crates/platitude-core/tests/").nth(1)?;
     (rest.ends_with(".rs") && !rest.contains('/')).then(|| {

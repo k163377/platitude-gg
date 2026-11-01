@@ -12,10 +12,20 @@ ActionButton {
     /// The waiting visual, held up by the band past the push that raised it (`TopBar.holdPushBusy`).
     property bool busyLatched: false
     readonly property string mode: pushButton.curPage !== null ? pushButton.curPage.pushState : "closed"
-    /// The last push of this branch was refused.
+    /// The last push of this branch was refused (remembered per branch: `PublishFlow.pushFails`). Over any standing,
+    /// a `warning` frame and a `!` past the word: the frame too, since nothing happens until someone presses again.
+    /// The word stays — a refused push is still one click, and `push -f`'s warning colour would borrow the hold's look
+    /// with it (規約 §回数押し「警告の色は枠と印が持つ」). git's words end the tip. Two stages only: unlike fetch's
+    /// `Resume`, nothing pushes by itself, so nothing stopped and there is no new move to offer.
     readonly property bool failed: pushButton.curPage !== null && pushButton.curPage.pushFailed
-    /// The standings where an overwrite is the only send there is (デザイン規約 §リモートへ送る). `elsewhere` stays
-    /// plain: nothing here tracks the branch over there, so no commit is on screen for the lease to pin to.
+    /// The standings where an overwrite is the only send there is (デザイン規約 §リモートへ送る). There the button takes
+    /// the hold and a click does nothing: a plain push cannot land in either, so one button never carries two
+    /// meanings, and the hold is the confirmation (no dialog — the lease guards it, §相手の履歴を置き換える). `elsewhere`
+    /// stays plain: nothing here tracks the branch over there, so no commit is on screen for the lease to pin to.
+    /// `behind` takes the overwrite shape too: the only send that reaches from there rewinds the far side, a plain
+    /// push being answered "nothing to send". What it costs is the far side's `behind` commits, said in the same
+    /// sentence as `diverged` (`sentenceTo`). Out of reach, the way back from a history sent and then regretted would
+    /// leave the screen.
     readonly property bool forceShape: pushButton.mode === "diverged" || pushButton.mode === "behind"
     /// The shape as the press under way was given it, settled when the button goes down (デザイン規約 §回数押し): `mode`
     /// moves between presses with the fetch behind every press. Everything the shape decides reads this
@@ -27,7 +37,9 @@ ActionButton {
     kind: "push"
     busy: pushButton.busyLatched
           || (pushButton.curPage !== null && pushButton.curPage.pageTab.busyOp === "push")
-    // No counts: the label would change width with them (デザイン規約 §リモートへ送る).
+    // The command in every state; a first push is not called `Publish` (規約 §リモートへ送る). No counts: the label would
+    // change width with them and move the panel's row — they are on the sidebar's `↑N ↓M` and in the tip. Every state
+    // is the shared box's width (`TopBar.widestAction`).
     text: pushButton.shownForce ? "push -f" : "push"
     code: true
     // Only the overwrite colours its word (デザイン規約 §回数押し「警告の色は枠と印が持つ」).
@@ -38,7 +50,9 @@ ActionButton {
     frameColor: pushButton.warned ? Theme.warning : Theme.borderStrong
     // The canvas inside the frame, like the two beside it (`BandFetchButton`).
     faceColor: Theme.bgSurface
-    // The `!` tells "did not land" apart from the diverged shape, which wears the same frame.
+    // The `!` tells "did not land" apart from the diverged shape, which wears the same frame — so a diverged branch
+    // whose push was refused wears both. It says only that: why, when the far side's own rules said no, comes down on
+    // the notice bar and stays in the log (規約 §答えの要らない報せ).
     alert: pushButton.failed
     alertTone: Theme.warning
     holdPresses: pushButton.forceShape ? Metrics.holdPressesWarned : 0
@@ -60,7 +74,7 @@ ActionButton {
         if (pushButton.curPage.planShown)
             return qsTr("A rebase plan is being composed — it rewrites the very commits a push would send")
         const what = pushButton.sentenceTo(pushButton.curPage.pushTargetLabel)
-        // What git said, under what the button would do next (デザイン規約 §リモートへ送る).
+        // What git said, under what the button would do next (`failed`).
         const why = pushButton.curPage.pushFailReason
         if (pushButton.failed && why !== "")
             return what + "\n\n" + why
@@ -81,10 +95,11 @@ ActionButton {
                      ? qsTr("No commits yet — git has no branch to send")
                    : pushButton.mode === "publish"
                      ? qsTr("This branch has not been sent anywhere yet — asks where it goes")
-                   // The push would stay in this repository, which is no send (デザイン規約 §リモートへ送る).
+                   // The push would stay in this repository, which is no send (`remote::PushStanding::StaysHere`).
                    : pushButton.mode === "stays-here"
                      ? qsTr("Cannot push — its upstream is not supported")
-                   // No count: nothing here tracks the branch over there (デザイン規約 §リモートへ送る).
+                   // No count: nothing here tracks the branch over there, so the press stays plain and the tip
+                   // names the destination only (`remote::PushStanding::Elsewhere`).
                    : pushButton.mode === "elsewhere"
                      ? qsTr("Push to %1").arg(to)
                    : pushButton.mode === "ready"
@@ -92,7 +107,8 @@ ActionButton {
                                     : qsTr("Push %n commits to %1", "", ahead)).arg(to)
                    : pushButton.mode === "clean"
                      ? qsTr("Nothing to push — %1 is up to date").arg(to)
-                   // One sentence for both overwrite standings (デザイン規約 §リモートへ送る).
+                   // One sentence for both overwrite standings (`forceShape`). A count says when it is from, in a short
+                   // bracket (`as of the last fetch`; 規約 §hover のツールチップ).
                    : pushButton.forceShape
                      ? (behind === 1
                         ? qsTr("%1 to overwrite %2, dropping %n commit it has (as of the last fetch)", "", behind)

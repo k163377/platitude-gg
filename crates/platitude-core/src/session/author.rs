@@ -92,7 +92,10 @@ impl RepoSession {
     /// commit open where its message is edited. While it is, what an amend
     /// would make of the index is asked now and again whenever a status
     /// shows the index or HEAD moved ([`Self::amend_status`]): another git
-    /// can change what is staged without changing how many files are.
+    /// can change what is staged without changing how many files are (a
+    /// different hunk of the same file), so the index is keyed by
+    /// `staged_print` — each staged entry's mode and blob hash — not by a
+    /// count. Held by `session_integration::amend_watch`.
     pub fn watch_amend(self: &Arc<Self>, on: bool) {
         *relock(&self.amend_watch) = AmendWatch { on, asked: None };
         if on {

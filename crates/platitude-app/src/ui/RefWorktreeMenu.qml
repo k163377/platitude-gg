@@ -2,11 +2,24 @@ import QtQuick
 import platitude
 import platitude.ui
 
-// Everything a worktree answers for, behind the worktree's mark: making one (デザイン規約 §worktree を作る) and taking
-// it away (デザイン規約 §左メニューの所作 の削除の表). One card, carried like `RefBranchMenu` by both menus — the sidebar's
+// Everything a worktree answers for, behind the worktree's mark: making one (デザイン規約 §worktree を作る — the two
+// making rows live in this nested card, a user decision: ask before changing) and taking it away (デザイン規約
+// §左メニューの所作 の削除の表). One card, carried like `RefBranchMenu` by both menus — the sidebar's
 // ref menu and the graph row's — and set above the TAG card (デザイン規約 §メニュー の入れ子). Like the TAG card it stands
 // on every row with a commit: `Create worktree here…` is a row about the commit, so the card is there with that one row
-// where the row names nothing else.
+// where the row names nothing else (and while a new worktree has somewhere to go).
+//
+// Making and removing share this card though the tab moves to a worktree it makes, and the card is nested, not on the
+// first level: `worktree remove` is used less often than a branch delete (user decision — ask before changing). A
+// divider parts making from removing. The two making rows repeat the first level's `Create branch here…` → `switch`
+// pair in a new worktree: make one and go, then go to one that is there. `worktree add` joins for a
+// branch the row names (`offers::worktree_rows`); `worktree remove` when the target names a worktree (a WORKTREES row,
+// the folder chip of a worktree with no branch, a branch another worktree holds — then the holder's worktree), never
+// the repository's own worktree, which git never removes.
+//
+// Its doors — the WORKTREES rows, a commit row with a folder chip, the rows and chips of a branch another worktree
+// holds — all reach this one card through `RefRowMenu` and `CommitRowMenu`. A new door carries this card too: rows
+// written per door would come to disagree.
 //
 // It reads no model and runs no write: the carrying menu hands it what it read — the worktree the row names
 // (`NavSectionModel.worktreeFacts`) and where a new one would go (`NavSectionModel.newWorktreeFor`) — and runs the
@@ -111,7 +124,7 @@ AppMenu {
     }
     // Names the folder it makes, as `worktree remove` names the one it takes (デザイン規約 §ref の種別「名前の印」);
     // greyed with the reason where the branch is out already — git keeps it to one worktree — or something is in the
-    // way there, warned of before the press.
+    // way there, warned of before the press (user decision — ask before changing).
     AppMenuItem {
         id: refWorktreeAddItem
         code: "worktree add"
@@ -144,8 +157,10 @@ AppMenu {
         codeName: state.name
         growsForText: false
         offered: state.canRemove
-        // Greyed, not gone: the reader asked why it cannot go, and this is where it says (デザイン規約 §メニュー
-        // 「「今できない」行は無効で残す」).
+        // Greyed, not gone, while locked and while this tab stands in it (user decision — ask before changing): it is
+        // the card's one row about that worktree, the only place to say why it cannot go (デザイン規約 §メニュー
+        // 「「今できない」行は無効で残す」; a write running greys the whole menu instead). The repository's own worktree
+        // is "nothing to act on": git never removes it, so core offers no row and the card stands on the add row.
         blockedReason: state.out === "locked"
                        ? (state.lockReason === "" ? qsTr("This worktree is locked")
                                                   : qsTr("Locked — %1").arg(state.lockReason))

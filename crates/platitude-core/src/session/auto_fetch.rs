@@ -170,10 +170,17 @@ impl RepoSession {
         self.install_auto_fetch(wanted);
     }
 
-    /// Fetches once, as soon as the repository is open.
+    /// Fetches once, as soon as the repository is open: what someone
+    /// opening a tab looks at first is what the remote holds now. The
+    /// fetch button's ring turns for it as for any other fetch.
     ///
-    /// Permitted only while the auto-fetch interval is on; the app asks
+    /// Permitted only while the auto-fetch interval is on: whoever stopped
+    /// the timer said "do not go to the network unasked", and opening a tab
+    /// is no exception. The app asks
     /// right after handing the session its settings, so it is already set.
+    /// Once a session (`OpenFetch::Spent`), and only on opening: setting
+    /// the interval queues nothing on the write queue
+    /// (`remote_tags_integration`).
     ///
     /// Either end can arrive first — this call or the opening — so
     /// whichever arrives second fires it and the other gets
@@ -181,7 +188,8 @@ impl RepoSession {
     /// fetch to a slow `git rev-parse`.
     ///
     /// Its own op name keeps it out of the command log, so a tab opened
-    /// offline does not open the panel (デザイン規約 §リモートから取り込む).
+    /// offline does not open the panel; its failure still counts on the
+    /// fetch button (デザイン規約 §リモートから取り込む).
     pub fn fetch_on_open(self: &Arc<Self>) -> OpenFetch {
         let open = self.workdir().is_some();
         let mut state = self.lock_open_fetch();

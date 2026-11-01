@@ -6,8 +6,16 @@ import platitude.ui
 
 // What a row of the left panel opens under itself: one fact to a line, behind its mark (デザイン規約 §左メニューの所作).
 // This part draws what it is handed — which lines a section opens is one table for every section (`NavFacts`).
-// It is the row growing, not a card over it: the rows below move down, and the name stays whole in the row's own
-// place (`NameCell.whole`).
+// It is the row growing, not a card over it (user decision — ask before changing; not back to a popup): the rows below
+// move down, and the name stays whole in the row's own place (`NameCell.whole`). One row is open at a time, keyed by
+// the panel (`OpenRowSeat`), after the tooltip's rest (`Metrics.tipDelayMs`) — the supplement's wait, not none: what
+// comes out is what the row could not write, and a hand crossing a column of small targets passes over every one.
+// A row with nothing to add still opens: its name, whole, is there to be taken away. The open row's wash covers its
+// lines too — they are part of the row, one band.
+//
+// Headless: `nav-open` (what each section opens is pinned by `tests/qml/tst_navfacts.qml`), `nav-open-foot`,
+// `nav-peek-open`, `nav-open-held`, `nav-open-then`, `nav-drag-open`; the lines' presses `nav-follow` /
+// `nav-follow-lit`; the supplement `nav-open-tip` / `nav-open-tag`.
 //
 // **The press is taken here and split in two**: a drag takes the words away, and a press that never moved is a click.
 // A `TextEdit` under a `MouseArea` declared after it never sees a press, so one hand answers for the whole of this and
@@ -23,12 +31,14 @@ Item {
     /// note, to, withAbove}` — `to` is where a press on it takes the graph, null where it goes nowhere of its own
     /// (`NavFacts.place`), and `withAbove` says it shares the band of the line above (`NavFacts.joined`).
     property var lines: []
-    /// WORKTREES only: the worktree's path — said as the supplement, not as a line (デザイン規約 §左メニューの所作).
-    /// Empty on every other kind of row.
+    /// WORKTREES only: the worktree's path — said as the supplement, not as a line: a reader opening the row asks what
+    /// the worktree is, and where it sits on disk is the next question. The folder name is what rows are told apart
+    /// by, so the hover never puts the path in the name's place. Empty on every other kind of row.
     property string path: ""
     /// The hand is on the row's own line (`NavItemDelegate.handOn`) — the other road to the same supplement: hovering
     /// the worktree's name asks for its path too. One box for both, so the hand crosses between them without it going
-    /// down.
+    /// down: the ask stays these lines' own (the open row's own tip says nothing, `NavItemDelegate.hoverText`), so the
+    /// seat hands nothing over (`"handover"`).
     property bool rowPointed: false
     /// TAGS only: why the row's own name wears the warning (`NavFacts.answers`), said while the hand rests on that
     /// line alone (`nameRested`) — not on these lines, which keep notes of their own. Empty where it wears none.
@@ -241,7 +251,8 @@ Item {
         facts.row.rowDoubled(button)
     }
 
-    /// No height where no line is drawn, so the rows under it do not move.
+    /// No height where no line is drawn, so the rows under it do not move. The air is the name box's (`spaceXs`), the
+    /// value the box a row's name opens into already uses.
     implicitHeight: lines.implicitHeight > 0 ? lines.implicitHeight + Theme.spaceXs : 0
 
     // The supplement: a line's note (why it wears a warning), the row's own name's (the same, on TAGS), or the block's
@@ -251,10 +262,12 @@ Item {
         facts.noted !== "" ? facts.noted
         : (facts.nameRested || facts.nameTipPointed) && facts.nameNote !== "" ? facts.nameNote
         : (factsHover.hovered || facts.rowPointed) && facts.path !== "" ? facts.path : ""
-    /// The words the box is wearing — **the last thing asked for, not what is asked now**: the box follows its
-    /// target's words while it stands, and the beat a leave starts would show it empty (rules-refs/app-ui.md の
-    /// `NavRowFacts.said` の行). Written from the handler, which runs ahead of the ask's binding on the same property,
-    /// so the box never opens on the previous rest's words.
+    /// The words the box is wearing — **the last thing asked for, not what is asked now** (only `asked` follows the
+    /// ask): the box follows its target's words while it stands, so bound to `says`, the ask falling the moment the
+    /// hand steps toward the box would empty them, and the beat that keeps the box up would hold a bare frame.
+    /// Reproduced by `tests/qml/tst_factstipsteal.qml`; the window's net is `nav-open-tip`'s `same=` (a standing box
+    /// does not say what it holds, so `tip=true` alone passes an empty one). Written from the handler, which runs
+    /// ahead of the ask's binding on the same property, so the box never opens on the previous rest's words.
     property string said: ""
     onSaysChanged: if (facts.says !== "") facts.said = facts.says
     /// The remotes a tag's note names (`NavFacts.apartNote` — `Words.differsFrom`), each behind the cloud
@@ -330,6 +343,8 @@ Item {
     }
     // The rest over these lines. **A handler, not the area below**: passive, so the sweeping area keeps answering the
     // same pointer (rules-refs/app-ui.md「行の hover は `HoverHandler`」). A run comes in at the row's own stand-in.
+    // **On the block itself, an ancestor of the words**: a reader laid under the words as their sibling goes dark over
+    // them, since `CardText`'s `TextEdit` takes the hover there (`tst_factsfollow`).
     HoverHandler {
         id: factsHover
     }
@@ -340,7 +355,7 @@ Item {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         preventStealing: true
-        // A line that goes somewhere is pressed, not swept.
+        // A line that goes somewhere is pressed, not swept. Turned on this area: the cursor of the area on top wins.
         cursorShape: facts.aimRow >= 0 ? Qt.PointingHandCursor : Qt.IBeamCursor
         // Each handler is one line into the item's own (verify-ui implement.md「注入はハンドラ本体そのものへ入れる」).
         onPressed: mouse => facts.handPressed(mouse.button, Qt.point(mouse.x, mouse.y))

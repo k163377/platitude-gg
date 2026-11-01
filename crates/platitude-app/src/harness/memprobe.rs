@@ -199,7 +199,9 @@ pub fn enabled() -> bool {
 
 /// What each model last reported, keyed by kind and tab; sorted, so two
 /// reports of the same shape line up. A value, so a test can file into a
-/// registry of its own; the process's is [`REGISTRY`].
+/// registry of its own; the process's is [`REGISTRY`], reached through the
+/// free functions. A test filing into the process's would cross with the
+/// notes and forgets of the tests running beside it.
 pub struct Registry(Mutex<BTreeMap<(String, i32), (usize, usize)>>);
 
 impl Registry {
@@ -270,7 +272,10 @@ pub fn model_parts() -> Vec<(String, usize, usize)> {
 // ---------------------------------------------------------------------------
 
 /// One report line for where the run has got to. Called on the Qt main
-/// thread, where the sessions live (`Harness::note_memory`).
+/// thread, where the sessions live (`Harness::note_memory`): the one place
+/// both halves can be read at once, the hub being thread-local and the
+/// models owned by QML. The models file theirs at the end of each drain
+/// (`note`).
 pub(crate) fn note_now(label: &str) {
     if !enabled() {
         return;

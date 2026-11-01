@@ -181,7 +181,7 @@ pub(super) fn worktrees(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["worktree", "add", "../topic", "feature/topic-a"])?;
     // A second, branchless worktree where the first stands: two green records
     // on one row, the one shape that repeats the front card's colour
-    // (デザイン規約 §重ね表示「先頭のカードとその 1 つ後ろが同色の時だけ」).
+    // (`RefChipStack.sheets`).
     // Named to sort after `topic`, so the rows the verbs address by number
     // stay put.
     repo.git(&[

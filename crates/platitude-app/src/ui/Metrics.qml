@@ -38,7 +38,7 @@ QtObject {
     readonly property int holdBackMs: 150
     // The one opacity anything is dimmed to — the 45% the `*Dim` colours are (デザイン規約 §暗く落とした段).
     readonly property real dimFade: 0.45
-    // How much of a round wash's radius is its rim, over which the paint falls to `dimFade` (デザイン規約 §当たり判定).
+    // How much of a round wash's radius is its rim, over which the paint falls to `dimFade` (`CloseToolButton`).
     // Less and the disc has an edge again, more and it stops being a disc.
     readonly property real washRimShare: 0.25
     // One delay everywhere a tooltip opens, so one gesture is answered the same wherever it is made.
@@ -110,7 +110,7 @@ QtObject {
     readonly property int stateFlushMs: 2000
 
     /// How far a hand pointing `away` pixels past what it can reach sends the thing under it in `ms` milliseconds
-    /// (デザイン規約 §グラフを横へ送る / §タブの所作). Signed like `away`, zero inside the dead zone. The one curve for
+    /// (デザイン規約 §中クリックの自動スクロール / §タブの所作). Signed like `away`, zero inside the dead zone. The one curve for
     /// both the middle-click autoscroll and a tab carried past the band's edge.
     function handSent(away, ms) {
         const off = Math.abs(away)

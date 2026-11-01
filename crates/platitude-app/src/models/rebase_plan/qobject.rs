@@ -44,8 +44,14 @@ impl RebasePlanModel {
     /// on another branch's row) or `unfetched-base` (the range bottoms
     /// out on a commit this clone never fetched). The spellings are the
     /// row menu's (`ReportKind` → `drain`), so one `Words.rewriteRefusedWhy`
-    /// writes the sentence for both doors
-    /// (rules-refs/app-ui.md「Rust に文言を置かない」).
+    /// writes the second line for both doors
+    /// (rules-refs/app-ui.md「Rust に文言を置かない」); only the heading
+    /// (`Words.planRefused` / `Words.writeReported`) and the line's colour
+    /// differ. Four layers of nets: the shapes on real git
+    /// (`integrate_integration/plan.rs`), the screen's names and "the plan
+    /// does not open" (`rebase_plan::drain_tests`), both doors calling it by
+    /// one name (`repo_tab::drain_report_tests`), the headings and the line
+    /// (`tst_reportdress.qml`). Headless: only `plan-off-branch row:0`.
     #[qsignal]
     pub(super) fn refused_plan(&mut self, kind: String);
 
@@ -252,8 +258,11 @@ impl RebasePlanModel {
     ///
     /// Not per move: the drag reports every row it crosses, so a `squash`
     /// carried past the oldest row and back would come out `pick` under the
-    /// hand. The rule is about where a fold lands (デザイン規約 §フル
-    /// interactive rebase「並べ替えで最古に落ちた fold は `pick` へ戻る」).
+    /// hand, and with the order restored the plan would fall back to not
+    /// `dirty` and close the run button. The rule is about where a fold
+    /// lands: one reordered down to the oldest row has nothing under it to
+    /// fold into and goes back to `pick`. Outside a drag (`set_action`, a
+    /// `move_step` out of the bracket) it holds at once.
     #[qslot]
     fn end_move(&mut self) {
         if !self.dragging {
@@ -274,7 +283,8 @@ impl RebasePlanModel {
     #[qslot]
     fn run_plan(&mut self) {
         // A drag whose release never came (its delegate taken away) leaves
-        // the fold rule unheld, and git stops broken on an orphan fold.
+        // the fold rule unheld, and git stops broken on an orphan fold
+        // (`cannot 'squash' without a previous commit`).
         self.end_move();
         if self.locked || !self.active || !self.dirty {
             return;
@@ -338,7 +348,9 @@ impl RebasePlanModel {
 
     /// The branch tip as the status now reads it, fed in by the page on
     /// every report. A tip other than `expect_head` puts the plan away
-    /// (core checks again at run time).
+    /// (core checks again at run time), told on the notice bar
+    /// (`The branch tip moved`): a draft over a history that moved does
+    /// more harm chased than composed again.
     ///
     /// Two strikes: a status read that began before a tip move can land
     /// after the open carrying the older oid. Reads are single-flight, so
@@ -367,6 +379,10 @@ impl RebasePlanModel {
     ///
     /// One strike: a report naming an operation was taken while one stood,
     /// so there is no stale reading to wait out.
+    ///
+    /// Doubles core's own refusal (`RepoSession::rebase_interactive`) on
+    /// purpose: the screen's part is to offer only a button that can be
+    /// pressed, so the plan falls closed while an operation stands.
     #[qslot]
     fn note_op(&mut self, op_text: String) {
         if !self.active || op_text.is_empty() {

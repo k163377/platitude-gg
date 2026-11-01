@@ -39,7 +39,7 @@ Item {
     /// Whether the word is a field a reader can drag over (規約 §右のペインの字は掴める). Off by default, and it has
     /// to be: a chip stands inside buttons as their `contentItem` (`ActionButtonLabel` / `StashActionsBand`), and a
     /// field takes the press wherever it is drawn, so the button under it could not be pressed
-    /// (`tests/qml/tst_hashplate.qml`). On only where the chip is the value (規約 §設定の画面).
+    /// (`tests/qml/tst_hashplate.qml`). On only where the chip is the value (`SettingsAppPane`'s git version).
     property bool grabbable: false
     /// The chip is a button's word (`CodeGround.buttonWord`).
     property bool buttonWord: false

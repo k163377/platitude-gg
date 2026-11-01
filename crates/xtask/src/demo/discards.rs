@@ -1,4 +1,4 @@
-//! The presets the discard log is drawn from (破棄記録仕様.md §3): one of
+//! The presets the discard log is drawn from (`platitude_core::discards`): one of
 //! every move git's own reflogs keep that takes commits off a tip, and one
 //! of every line Platitude GG's own record holds — written here in the
 //! record's own shape (§2), since xtask runs none of the application.
@@ -22,6 +22,16 @@ const RECORD_REF: &str = "refs/pgg/discards";
 /// entries took down the graph, and last a worktree removed, a stash
 /// dropped and one popped, and the copies: untracked files deleted, and
 /// files discarded.
+///
+/// The list numbers them newest first, the numbers `recover-open` picks
+/// by: 0 the two discarded files, 1 the untracked files deleted, 2 the
+/// pop, 3 the drop, 4 the worktree removed, 5 the tag pushed over, 6 the
+/// tag deleted on the remote, 7 the tag deleted here, 8 the force push, 9
+/// the reset before it, 10 the remote's branch deleted, 11 the branch
+/// deleted here and on origin (two parts), 12 the `--update-refs` rebase
+/// (two parts), 13 the detached HEAD left behind, 14 the branch set back
+/// by hand, 15 the amend, 16 the reset that took a copy (two parts), 17
+/// the rebase, 18 the tag deleted here and on origin.
 ///
 /// Each entry is dated where the list writes its time a different way
 /// (`RecoverEntries.ago`): minutes, hours, yesterday, days, the date.
@@ -77,7 +87,7 @@ impl Clock {
 
 /// `deep_parked` with its parked branch deleted on the record: the entry's
 /// tip lies past the graph's window, so it cannot come back until the graph
-/// walks that far (破棄記録仕様.md §4).
+/// walks that far (`RepoPage.recoverReach`).
 pub(super) fn discards_deep(repo: &mut DemoRepo) -> Result<(), String> {
     deep_parked(repo)?;
     let tip = repo.git(&["rev-parse", DEEP_PARKED_BRANCH])?;

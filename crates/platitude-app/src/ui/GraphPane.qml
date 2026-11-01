@@ -183,9 +183,10 @@ Rectangle {
     }
     function stopNaming() {
         graphArea.namingWaiting = false
-        // **A box coming down spends the gesture that opened it**: the press away from a box lands before its click,
-        // and a click that found no box would count as a second one and reopen it (rules-refs/app-ui.md
-        // 「箱が立っている間の押下は press の側で先に効く」).
+        // **A box coming down spends the gesture that opened it**: the press away from a box lands before its click
+        // (`FocusRelease`'s `PointHandler` → `pressedAway` → `dropEmptyBoxes`), so the row's click comes after the
+        // box is gone — asking there whether a box stands is too late — and a click that found no box would count as a
+        // second one and reopen it. `GraphList.noteClick` still asks, for a box a half-typed name keeps.
         if (graphList.namingOid !== "")
             graphList.forgetClicks()
         graphList.namingOid = ""
@@ -222,7 +223,8 @@ Rectangle {
 
     // ---- a press that landed somewhere else -------------------------
     /// The find card and a row's name box go with a press that landed elsewhere (`RepoPage.releasePressedAway`,
-    /// `scenePos` = where it landed) while empty; typing in one keeps it.
+    /// `scenePos` = where it landed) while empty; typing in one keeps it (規約 §コミットを探す). "Elsewhere" is each
+    /// box's own question (`FindBar.holds`). Headless: `find-drop` / `name-box-drop`.
     function dropEmptyBoxes(scenePos) {
         findBar.dropIfEmpty(scenePos)
         // "Empty" is "nothing put in it": no text for a box that makes a name, the name it opened holding for a rename.
@@ -286,7 +288,7 @@ Rectangle {
     /// That hold is the plain delete's two presses (`AskBar.plainHold`); put down as each question is dressed.
     property alias askPlainHold: askBar.plainHold
     /// The word on the pill. **It may move while the question stands, and the gesture moves with it**
-    /// (デザイン規約 §はじめてリモートへ送る: `push` becomes `push -f`, the click a hold). A publish question leaves it
+    /// (`PublishFlow.publishRefused`: `push` becomes `push -f`, the click a hold). A publish question leaves it
     /// empty for `askCode`; one answered from a chooser writes the picked answer's word here (`RenameCarryFlow`).
     property alias askAccept: askBar.accept
     /// The command the pill answers with, and whether the far side could be read at all — both move under a publish
@@ -420,9 +422,13 @@ Rectangle {
         graphModel: graphArea.graphModel
         view: graphList
         asking: askBar.open
-        // Reaches left to `spaceXs` past where a subject starts (規約 §コミットを探す) — measured from the columns, so
-        // the cap follows the dividers when they are dragged.
+        // Grows with the query and stops `spaceXs` (about half a character) past where a subject starts — measured
+        // from the columns, so the cap follows the dividers when they are dragged. A query long enough to read back is
+        // worth the width, and the rows under it are covered from their end: with its head showing, a row still says
+        // which commit it is. Too narrow a window for the card's minimum: the minimum wins (`FindBar.implicitWidth`) —
+        // a tool that cannot be used is worse.
         maxWidth: graphArea.width - graphArea.subjectTextX - Theme.spaceXs - anchors.rightMargin
+        // Closing hands the arrows back to the graph (規約 §矢印で履歴を辿る「閉じる所作がグラフへ返している」).
         onDismissed: {
             findBar.runFind()
             graphList.takeKeyboard()
@@ -436,7 +442,8 @@ Rectangle {
         anchors.bottom: parent.bottom
         anchors.top: askBar.bottom
         // When the newest commit is itself a match, the graph steps down by the card's height so the search does not
-        // cover it, and back once the top row stops matching (規約 §コミットを探す).
+        // cover it, and back once the top row stops matching (`GraphFind.findClears`), at the pace the question bar
+        // pushes the list down.
         anchors.topMargin: findBar.findClears ? findBar.height : 0
         Behavior on anchors.topMargin {
             NumberAnimation { duration: 200 }
@@ -453,7 +460,9 @@ Rectangle {
         hand: paneHand
         shield: headPin
         // The arrows are answered here, where the history is walked (規約 §矢印で履歴を辿る). `isAutoRepeat` is the only
-        // thing that tells a run apart from a press (`GraphRowWalk.noteStep`).
+        // thing that tells a run apart from a press (`GraphRowWalk.noteStep`). Attached, so they stay at this use site:
+        // inside `GraphList` they would need the walk handed in, and the walk already reads the list (`walk.view`). On
+        // the list, not the pane: the find card is the list's sibling, and arrows typed there never reach the pane.
         Keys.onUpPressed: event => {
             graphArea.keyReached()
             event.accepted = graphArea.stepRow(-1, event.isAutoRepeat)
@@ -533,6 +542,8 @@ Rectangle {
         // **Over the rows**: at the default z the anchor mark goes behind the history and shows only past the last
         // row. At the lane strip's z and below the dividers, as the stand-in is.
         z: 1
+        // Sideways too only when pressed in the lane column; vertical from anywhere. The subject column is prose read
+        // top to bottom, and there a hand's slight sideways wobble would slide the lanes out from under the reader.
         panFrom: graphArea.labelW
         panTo: graphArea.labelW + graphArea.graphColW
         canPan: graphArea.graphXMax > 0

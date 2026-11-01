@@ -11,6 +11,13 @@ import QtQuick.Controls.Fusion
 // Not the hover cards (`AppCard`, all kept by `HoverSeat`): the hand leaving closes them, and written in they
 // would hand the edges to the scene under a row that reaches them — the row stays hovered, the card stays up, and the
 // edge never resizes.
+//
+// **A new popup base that a press outside closes writes itself in with the same three lines** as `AppMenu`'s
+// (`inOutsidePress`, its change handler, `Component.onDestruction`); without them it stays up through presses on the
+// band's runs, the edges and other windows. Out of reach either way: a press on a title bar the platform draws
+// (`captionMerged` false) reaches neither the scene nor the window's activation. Pinned by
+// `tests/qml/tst_outsidepress.qml` (writing in, `closeAll`); headless, the overlay report's `yield=` (`commit-menu`'s
+// must_say and the door verbs') and `app-menu` / `app-menu-reclick`.
 QtObject {
     id: outsidePress
 
@@ -41,7 +48,10 @@ QtObject {
     }
     /// Whether one stands in `item`'s window — what a hover there is behind (デザイン規約 §メニュー「メニューが立って
     /// いる間、その裏の hover は引っ込む」), for what hangs off the window rather than a page (the tooltip, the band's
-    /// card; a page's own cards read its menus' door, `RepoPage.menuDoor`). Reads `standing`, so a binding follows.
+    /// card; a page's own cards read its menus' door, `RepoPage.menuDoor`). Never mix the two sources in one seat: a
+    /// seat with an exception for its own list (the chip's list, the peek, the open row) reading both one after the
+    /// other goes down under its own menu in the beat before the exception stands. Reads `standing`, so a binding
+    /// follows.
     function standsOver(item) {
         const window = outsidePress.windowOf(item)
         return outsidePress.standing.some(popup => outsidePress.windowOf(popup.parent) === window)

@@ -113,8 +113,14 @@ const SHARING_VIOLATION: i32 = 32;
 /// sharing violation.
 ///
 /// After a run of the copied reader, its next open for writing has been
-/// refused so by a holder the suite does not name
-/// (rules-refs/core.md「Windows は走らせた直後の複製への書きの open を稀に拒む」).
+/// refused so (32, `ErrorKind::Uncategorized`) — the append after the run
+/// and the write open of `a_copied_reader_reuses_the_graph_despite_its_new_timestamp`,
+/// only under the whole suite (gate, `cargo test -p xtask`), never
+/// reproduced alone. The holder is not identified: the suite's opens share
+/// writing (std's default) and the sandbox paths are its own, so it is
+/// something outside. A running image refuses a `write` open only, never an
+/// `append`: a 32 on an append is another handle, not the image. Every
+/// open of such a copy for writing comes through here.
 /// Every attempt is the real open; the retries run under the suite's
 /// budget, and a file still held at the end reaches the caller as a
 /// failure. POSIX has no share modes, so elsewhere the first answer is
@@ -638,7 +644,7 @@ fn a_daily_run_keeps_a_both_sides_stamp_it_finds() {
 /// directories whole, test targets included — which is what catches a
 /// file the product opens by a path no source scan can follow (here
 /// spelled across two files). Pins the absence of a narrower key
-/// (反映前テストの機械化.md「テスト専用の配下を指紋から落とす案は採らない」).
+/// (why: `plan::steps::binary_steps`, at `binary_inputs`).
 #[test]
 fn a_file_the_product_opens_is_owed_though_no_scan_could_find_it() {
     let sb = Sandbox::new("path-across-two-files");

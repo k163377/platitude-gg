@@ -11,7 +11,9 @@ Item {
     property point at: Qt.point(0, 0)
     property bool refuses: false
 
-    /// Whichever boundary is refusing, or null — the page decides, since only it can see all four of them.
+    /// Whichever boundary is refusing, or null — the page decides, since only it can see all four of them. A source
+    /// raises only whether it refuses and where the hand is, in scene coordinates; the mapping is here alone
+    /// (`pointFor`).
     required property var refusalSource
 
     /// What is drawn — the one badge's own `shown` (`RefusalBadge`, on why not its `visible`).

@@ -9,7 +9,9 @@ import platitude.ui
 /// (`diff-github`), on the left menu's ref rows (`github-ref`) and REMOTES rows (`github-remote`), and on a commit's
 /// changed file (`github-file`). Each stops with the card standing — and, given `others`, the card behind OTHER
 /// REMOTES — and says which remote leads each link and which wait behind (`github_card leads= others=`): a row missing
-/// for a remote that has the thing, and one standing for a remote that has not, draw alike.
+/// for a remote that has the thing, and one standing for a remote that has not, draw alike. Shot on `--preset github`:
+/// `origin` / `upstream` carry GitHub URLs and `url.<bare>.insteadOf` sends git alone to the bare beside them, so
+/// nothing goes on the network. Headless, the cards stand at the window's top-left.
 // An `Item` only because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts

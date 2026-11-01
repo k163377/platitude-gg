@@ -13,7 +13,9 @@ impl RepoSession {
 
     /// The refs pass for a caller whose place in the flight is already
     /// taken (`ReadFlight::stamp`) — the way the fenced read asks again
-    /// from inside its own pass.
+    /// from inside its own pass. The place is taken there, in the pass being
+    /// thrown away: taken in the spawned task, it would come after a later
+    /// read's pass and send a third listing out.
     pub(super) fn read_refs_from(self: &Arc<Self>, stamp: Stamp) {
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
@@ -313,7 +315,14 @@ impl RepoSession {
     /// each stash as a row, both ask here, so one pass answers whichever of
     /// them asked before it began, and a walk handed the listing's answer
     /// reads nothing while that answer still stands
-    /// ([`Self::stashes_standing`]).
+    /// ([`Self::stashes_standing`]). The opening lists none of its own: its
+    /// first pass's read is the listing (`refresh_opening`). A listing that
+    /// moved (`StashRead::moved`) is a reason to walk, behind a focus and a
+    /// write alike — `refs::load` does not read `refs/stash`, so a stash
+    /// pushed or dropped outside moves no ref, HEAD or tree
+    /// (`session_integration::refresh_reads`:
+    /// `a_stash_dropped_outside_is_walked_off_when_the_window_comes_back`,
+    /// `coming_back_to_nothing_new_walks_nothing`).
     pub(super) async fn read_stashes(self: &Arc<Self>) -> StashRead {
         let Some(workdir) = self.workdir() else {
             return StashRead::default();
@@ -356,7 +365,8 @@ impl RepoSession {
     /// published since. Held past either, it would hand a walk a stash that
     /// is gone — the walk names each stash's commit on its command line, so
     /// a dropped one is drawn back while its object lasts — and that walk,
-    /// asked last, would replace the one that drew the drop.
+    /// asked last, would replace the one that drew the drop
+    /// (`a_focus_does_not_walk_a_stash_list_a_newer_one_replaced`).
     pub(super) fn stashes_standing(&self, read: StashRead) -> Option<Arc<Vec<StashEntry>>> {
         let list = read.list?;
         let newest = relock(&self.stash_listings).newest();

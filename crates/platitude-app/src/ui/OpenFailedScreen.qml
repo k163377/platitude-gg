@@ -3,8 +3,14 @@ import QtQuick.Controls.Fusion
 import platitude.ui
 
 // A tab whose repository would not open, said where the panes would be. The picker's failures go to
-// `OpenFailedDialog`; everything else — a restored tab, a worktree row, PGG_AUTO_OPEN — comes here. Why two components:
-// rules-refs/app-ui.md「失敗の画面(`OpenFailedScreen`)と `OpenFailedDialog` は別部品」.
+// `OpenFailedDialog`; everything else — a restored tab, a worktree row, PGG_AUTO_OPEN — comes here. Two components, not
+// one with two faces: the seats differ (デザイン規約 §可否・警告の出し場所), and so do the type, the alignment and the
+// ways out; they share only the words (`Words.openFailure` / `openFailureNext`) and the width (規約 §レイアウト初期値).
+//
+// The panes' seat, inside `RepoPage`'s vertical `SplitView`: covering the whole page would leave the command log inside
+// the cover, out of `>_`'s reach. The seat takes the left menu with it, so the `>_` seat is this screen's own
+// (`commandsPage`). The log opens by hand only — opened on its own, a background read alone would stand an empty panel
+// up. Headless: `open-fail-tab` / `open-fail-tab-bare` / `open-fail-tab-log`.
 Item {
     id: screen
 
@@ -27,7 +33,7 @@ Item {
     signal closeRequested()
 
     // Drags the words from the air around them (規約 §右のペインの字は掴める). Under the column, so the `Close tab`
-    // button keeps its presses.
+    // button keeps its presses. Headless: `open-fail-sweep`.
     SweepPad {
         id: failedHand
         anchors.fill: failedColumn

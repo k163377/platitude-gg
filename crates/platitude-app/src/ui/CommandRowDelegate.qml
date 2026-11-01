@@ -5,7 +5,7 @@ import QtQuick.Controls.Fusion
 import platitude.ui
 
 // One git invocation in the command log: the clock, the command, and how it went, with git's own words under a
-// failure. The three are tab-separated columns of one line (デザイン規約 §git が言ったことを読む場所); `git` and its
+// failure. The three are tab-separated columns of one line (`models/commands/selection.rs`); `git` and its
 // arguments are one column, drawn in two colours a character apart.
 Rectangle {
     id: row
@@ -32,6 +32,9 @@ Rectangle {
     required property var ruler
 
     readonly property bool failed: row.status === "failed"
+    /// git's words under the row: a failure's only. Do not show a success's for its line-ending warnings — under
+    /// `core.autocrlf=true` git warns on read commands too, run after run, and the log turns to noise. Whether a
+    /// success's words ever show is for a use other than line endings to decide.
     readonly property bool showsOutput: row.failed && row.output !== ""
 
     // ---- where this row's columns are drawn ---------------------------------------------------------------------
@@ -224,7 +227,7 @@ Rectangle {
                 font.pixelSize: Theme.fontSm
             }
             Label {
-                // Exit 0 is not written, only the time it took.
+                // Exit 0 is not written, only the time it took: a code that is always 0 says nothing.
                 text: row.status === "running" ? qsTr("running…") : row.duration
                 textFormat: Text.PlainText
                 color: row.status === "running" ? Theme.accent : Theme.textMuted

@@ -4,8 +4,14 @@
 //! reads the file back through the line-ending conversion and writes every
 //! line out again, so the settings decide how each one ends — lines the
 //! discard is not about included (`core.autocrlf=true` turns an LF file
-//! CRLF; `input` turns a CRLF file LF). A file that ends its lines one way
+//! CRLF; `input` turns a CRLF file LF). git's own `restore -p` does the
+//! same (`convert_to_working_tree`). A file that ends its lines one way
 //! is written back that way wherever a setting can say so.
+//!
+//! The read side is the same under either setting: LF has nothing to
+//! convert, and a CRLF patch whose lines carry CR is read as it is
+//! (`crlf_in_old`; convert.c, git 2.43 and 2.55). Pinned by
+//! `stage_integration::line_endings`.
 
 use std::path::Path;
 
@@ -29,7 +35,10 @@ use crate::process::{GitCommand, GitExecutor, literal_pathspec};
 ///   says neither, and is left to git.
 ///
 /// A file with both endings has no setting that keeps it where git converts
-/// it, and a `.gitattributes` `eol` has the last word over any.
+/// it, and a `.gitattributes` `eol` has the last word over any. Left so (user
+/// decision — ask before changing): git rewrites the untouched lines to one
+/// ending there, which neither a diff nor a commit shows, since git compares
+/// with endings normalised, and the case is rare.
 pub(super) async fn kept(
     executor: &GitExecutor,
     workdir: &Path,

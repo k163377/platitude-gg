@@ -67,8 +67,10 @@ Item {
             ctx.stroke()
         }
     }
-    // Pictures are cut by the canvas clip, not painted corners or a shader mask
-    // (rules-refs/app-ui.md「顔は `IdentIcon` の 1 つが両方描き」).
+    // Pictures are cut by the canvas `arc` clip (デザイン規約 §アバターを与える), not a shader mask or painted corners. A
+    // `MultiEffect` mask draws nothing offscreen (on screen it shows, but every shot comes out empty). Corners painted
+    // in the ground colour fail too: lane curves pass behind the node, and opaque paint outside the circle eats them.
+    // `Canvas.loadImage` works offscreen, but needs all three: `loadImage` → `onImageLoaded` → `requestPaint`.
     Connections {
         target: ident
         function onCodeChanged() { pattern.requestPaint() }

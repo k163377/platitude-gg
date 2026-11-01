@@ -91,6 +91,12 @@ pub(super) const TABLE: &[Verb] = &[
     // merge's parents (`--preset octopus-mates`) — the face for the first
     // and the count unchanged, or the face alone for one; no name cut to a
     // sliver.
+    //
+    // The name folds when not even its first three letters and `…` fit,
+    // and whether that happens is the OS's font: two parents beside one
+    // co-author (`14:min`) fold on Windows and keep four letters on Linux.
+    // So only `0:min` / `8:min`, which fold on both, are named here; that
+    // no name is left a sliver or a bare underline is read on the picture.
     Verb {
         name: "co-authors",
         when: &[
@@ -227,9 +233,10 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "hash_tip offered=true said=true",
     },
-    // The order that breaks: the press lands before the tip arrives. The
-    // attached tooltip takes its words when `visible` rises, so a tip
-    // still counting comes up with the offer unless the answer re-arms it.
+    // The order that breaks: the press lands before the tip arrives. A
+    // box that takes its words when `visible` rises comes up with the
+    // offer; the window's box carries the target's `TipAsk.words` through
+    // a binding (`TipSeat`'s `text`), and this run catches it if it stops.
     // `counting=`: nothing was up when the press went in.
     Verb {
         name: "hash-tip-counting",
@@ -428,7 +435,9 @@ pub(super) const TABLE: &[Verb] = &[
     // The box ticked and sent, judged after the page is back: the amend
     // answers before the rebuild starts, so a run stopped at the write
     // photographs the replaced commit under the old author. Both names,
-    // because a plain amend already moves the committer.
+    // because a plain amend already moves the committer. No SHA is judged:
+    // `was=` / `head=` / `shown=` differ every run, and whether `shown=` is
+    // the new tip differs by repository.
     Verb {
         name: "amend-reset-author",
         when: &[],

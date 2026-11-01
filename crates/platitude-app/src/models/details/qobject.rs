@@ -224,8 +224,8 @@ impl DetailsModel {
         self.committer_avatar = crate::encode::avatar_code(&details.committer_name);
         self.committer_avatar_url =
             Hub::with(|hub| hub.avatar_url(&details.committer_email)).unwrap_or_default();
-        // The address tells two people apart (デザイン規約 §アバターを与える);
-        // it arrives already mailmapped.
+        // The address tells two people apart (as it keys a face,
+        // `platitude_core::avatar`); it arrives already mailmapped.
         self.committer_differs = !details
             .committer_email
             .eq_ignore_ascii_case(&details.author_email);
@@ -272,8 +272,8 @@ impl DetailsModel {
 
     /// The changed file `way` steps from `path` among the rows shown
     /// (`encode::Landing`), over folder rows and not into closed ones.
-    /// Nothing past either end, or for a path not shown (デザイン規約
-    /// §diff のファイル一覧). Only the sign of `way` is read.
+    /// Nothing past either end, or for a path not shown
+    /// (`FileRowWalk.qml`). Only the sign of `way` is read.
     ///
     /// The bucket is always empty here (a commit's files sit in no
     /// bucket); it is in the record so one walk reads both file lists.

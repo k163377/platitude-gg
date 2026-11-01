@@ -59,7 +59,8 @@ Item {
             driver.barrierNotice.start()
         } else if (act === "stale-part") {
             // A stale part: the diff marks' own press with a fingerprint the bytes cannot match, answered by a report
-            // (デザイン規約 §答えの要らない報せ). The argument is `<バケツ>:<パス>`.
+            // (デザイン規約 §答えの要らない報せ). The argument is `<バケツ>:<パス>`. No git runs, yet the refused write is
+            // logged as a failed write, so the run needs `--allow-write-failure`.
             const cut = arg.indexOf(":")
             stalePartTimer.bucket = arg.substring(0, cut)
             stalePartTimer.path = arg.substring(cut + 1)
@@ -77,19 +78,25 @@ Item {
             driver.barrierNotice.start()
         } else if (act === "amend") {
             // The message is supplied, so skip the prefill request that would otherwise land on top of it.
+            // `--preset marker`: HEAD is an `--allow-empty` marker commit, the one tree where a message-only amend has
+            // to land with `--allow-empty` too.
             wipPane.setAmendChecked(true)
             page.amending = true
             wipPane.setMessage(arg, "")
             acts.claimLanding()
             page.commitNow()
         } else if (act === "amend-reset-author") {
-            // The authorship offer needs HEAD read first, so amend is toggled and the timer waits.
+            // The authorship offer needs HEAD read first, so amend is toggled and the timer waits. The argument is
+            // `amend`'s (empty = `--no-edit`). Only `--preset authorship` pictures the take-over — the one preset whose
+            // HEAD author differs from the identity: `head_author differs=true name=Yuki Tanaka`, then
+            // `author=Demo User`. On `basic`, `shown=` naming the commit from before the amend is right (one row more).
             wipPane.setAmendChecked(true)
             page.amendToggled(true)
             resetAuthorTimer.start()
         } else if (act === "stash" || act === "stash-lands") {
             // Through the band's button with the WIP pane left alone — the button does not need it
-            // (デザイン規約 §変更を退避する). `stash-lands` opens it: where the reader stands is its subject. The
+            // (デザイン規約 §変更を退避する). `stash-lands` opens it: where the reader stands is its subject, shot on
+            // `--preset conflict-staged` — a stopped merge, the one shape whose commit box git filled. The
             // worktree row going is the rebuild's edge (`graphGoneOid`). `named` leaves a summary in the commit
             // box to name the entry; the words are the driver's, as the argument cannot carry spaces.
             if (arg === "named") {
@@ -112,7 +119,8 @@ Item {
             page.amendToggled(true)
             amendAuthorTimer.start()
         } else if (act === "stash-menu" || act === "delete-stash-row") {
-            // The row menu on the first stash's row; the argument "go" holds the delete row down.
+            // The row menu on the first stash's row, left standing; the argument "go" (`delete-stash-row` only) holds
+            // the delete row down through its presses.
             const menuOid = stashesModel.oidOfName(stashesModel.nameAt(0))
             page.openRowMenu(menuOid)
             // Read as the menu opens: under `go` the drop takes the entry, and the menu with it, before the completion.
@@ -132,13 +140,17 @@ Item {
                 // A pop's row leaves the graph, the rebuild's edge; an apply keeps the plain write barrier.
                 driver.awaitGraphGone(stashOid)
                 // Through the page, the menu's road, which reads the entry's name before it goes (`popStash`);
-                // `back=` checks the box at the barrier.
+                // `back=` checks the box at the barrier — no picture answers it. Fired with the box empty: a
+                // sentence already in it is kept over the name. Every stash of `--preset stashes` / `basic` is named,
+                // so `back=true` is right there. `--preset stashes` is the subject: the row leaving is the top one,
+                // so whether it hands the top mark on shows in the picture.
                 driver.expectPopBack(GitFacts.stashLabel(stashesModel.nameAt(0)))
                 page.popStash(commitMenuState.menuStashRef)
             }
         } else if (act === "wip-embedded") {
             // An embedded repository's row, whose pane answers with a sentence (core `details::embedded`). The
-            // argument is its `<path>/`, trailing slash included.
+            // argument is its `<path>/`, trailing slash included — without it no row matches and the run goes to the
+            // watchdog. `--preset embedded`: `vendor/nest/` holds a commit, `vendor/fresh/` none yet.
             page.showWip()
             embeddedTimer.path = arg === "" ? "vendor/nest/" : arg
             embeddedTimer.start()
@@ -162,6 +174,9 @@ Item {
             carriedMenuTimer.start()
         } else if (act === "wip-tally") {
             // The kinds must add up to `rows` (`status::Kinds` counts rows); a drift means two statuses were read.
+            // No must-say: the numbers are in the picture. No preset has all four kinds at once — build one with
+            // `demo-repo basic --at <path>`, then `git rm` / `git mv` / `git add`, and pass it with `--repo`; the
+            // conflicted side is `--preset conflict`.
             page.showWip()
             driver.reportAtCompletion(() => "wip_tally added=" + graphPane.view.wipAdded
                                             + " modified=" + graphPane.view.wipModified
@@ -199,7 +214,10 @@ Item {
                                             + " color=" + wipPane.descriptionColor)
         } else if (act === "merge-commit") {
             // Emptied first: the claim is that an empty box still records the merge's own message
-            // (デザイン規約 §進行中の操作から出る).
+            // (デザイン規約 §進行中の操作から出る). `kept=`: the recorded subject is the `MERGE_MSG` the box held.
+            // Needs `--preset conflict-staged`, one of the two presets whose commit button is live; the other,
+            // `conflict-ours`, writes the merge from the same button with `status` empty — shoot "the list is empty but
+            // the button presses" there.
             page.showWip()
             wipPane.clearMessage()
             mergeCommitTimer.wanted = worktree.opSubject
@@ -213,7 +231,11 @@ Item {
         } else if (act === "op-exit" || act === "op-exit-go") {
             // "-go" runs the named row to its end (`OpExitRow.completeHold`). The argument is the bare word, as the
             // option parser turns away a positional starting with `--` (`verify::options`). Required: without it
-            // nothing matches and the line says `op_exit_held false`.
+            // nothing matches and the line says `op_exit_held false` — no press went in, so the write boundary is
+            // waited on until the watchdog. The preset is the stop that offers the row: `continue` on
+            // `rebase-staged`, `skip` on `rebase-empty`, `quit` / `abort` on `rebase-conflict`. `op-exit` itself
+            // shows every stop on `rebase-conflict` / `rebase-staged` / `rebase-empty` / `cherry-pick-conflict` /
+            // `conflict`; an `edit` stop keeping the boxes is `rebase-edit-stop`'s `box= button=`.
             page.showWip()
             if (act === "op-exit-go") {
                 driver.act.witness("held", wipPane.completeOpExit("--" + arg))
@@ -231,7 +253,8 @@ Item {
             driver.reportAtCompletion(() => "op_exit_held " + driver.act.witnessed("held"))
             driver.awaitOpExitLanding()
         } else if (act === "eol-commit") {
-            // The shot is the state before anyone decides.
+            // The shot is the state before anyone decides: the frame, the `!` and the card, nothing committed
+            // (`--preset eol`, a warning on the index).
             page.showWip()
             repoTab.stageAll()
             // `amend` photographs the button's other wording.
@@ -662,6 +685,11 @@ Item {
                                 + " conflicts=" + worktree.conflictCount })
         }
     }
+    // The lanes the uncommitted row leashes, in the delegate's own draw tokens — one lane and two barely differ in a
+    // picture. Waits for that row to lead the graph (`graphTopKind`): `finishCount` moving alone can still have a
+    // commit on top. A tree with no merge standing gives `O0.0`. `--preset conflict-ours` is the other real case:
+    // `status` is empty, yet the row stands with the same two lanes — `O0.0` there, or no row, is a clean tree
+    // dropping the row.
     PageStage {
         id: wipLanesTimer
         name: "wip_lanes"
@@ -670,7 +698,9 @@ Item {
             "when": () => ({ "ready": !(driver.graphTopKind() !== "wip") }),
             "report": () => "wip_lanes geometry=" + graphModel.geometryAt(0) + " lanes=" + graphModel.maxLanes })
     }
-    // Waits for HEAD's author; until it arrives the offer to take it over is not in the picture.
+    // Waits for HEAD's author; until it arrives the offer to take it over is not in the picture. Waited so, this is the
+    // one picture with a ticked box (amend) and an unticked one (the author's) side by side. `differs=true` wants a
+    // HEAD authored by someone other than the identity (`--preset authorship`).
     PageStage {
         id: amendAuthorTimer
         name: "amend_author"
@@ -703,7 +733,8 @@ Item {
         }
     }
     // Completed a turn after the notify that carried the edge. The run ends either way: a commit that landed with no
-    // notify raising busy had no `during` to stop at, and says so on a line outside what the verb is judged on.
+    // notify raising busy had no `during` to stop at, and says so (`wip_half_missed`) on a line outside what the verb
+    // is judged on — the run still fails, its must-say line never said, without waiting for the watchdog.
     PageStage {
         id: halfDuringTimer
         name: "half_during"
@@ -849,7 +880,9 @@ Item {
                                 + " why=" + Tips.box.text })
         }
     }
-    // The tick's tip comes out on the shared delay, so the setting being on is not yet the tip being up.
+    // The tick's tip comes out on the shared delay, so the setting being on is not yet the tip being up. `tip=` is the
+    // window's box standing on the tick (`TipAsk.shown`), pictured in overlay.png. Only a tree that signs shows the
+    // tick: `--preset signed`.
     PageStage {
         id: commitFaceTimer
         name: "commit_face"

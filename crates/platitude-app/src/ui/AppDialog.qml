@@ -38,7 +38,7 @@ Dialog {
 
         // On the face, under everything the dialog draws: a press nothing else took hands the keyboard back, so a
         // selection goes with the next gesture (規約 §右のペインの字は掴める「選択は窓に 1 つだけ」). The window's own
-        // cannot reach a modal (rules-refs/app-ui.md「モーダルには窓の `FocusRelease` が届かない」).
+        // cannot reach a modal, which stands in the overlay (`FocusRelease`).
         FocusRelease {
             id: caretHand
             window: Window.window

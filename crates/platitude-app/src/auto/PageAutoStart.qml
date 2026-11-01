@@ -7,6 +7,9 @@ import platitude.ui
 /// What a run can be told to do to a page as it opens, without a verb: show the worktree (`PGG_AUTO_WIP=1`), or
 /// pick the newest commit and open its first changed file (`PGG_AUTO_SELECT=1`). Both go through the page's own
 /// `showWip` / `activateRow` / `toggleDiff`.
+///
+/// Not on the verb side (`AutoActDriver`): its `Loader` is active only when a verb was given, and these flags stand
+/// without one; and the select's run would part from its readiness (`selected`) into another file.
 Item {
     id: start
 

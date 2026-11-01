@@ -34,7 +34,12 @@ Item {
             page.activateRow(graphModel.oidAt(Number(arg)))
             signatureTipTimer.start()
         } else if (act === "stash-tip") {
-            // Why the box refuses the caret — the row decides which refusal. `older` is the row under HEAD's.
+            // Why the box refuses the caret — the row decides which refusal (`offers::message_edit`): a stash's says
+            // rename it in the left list, an older commit's that only the tip can be rewritten (`--preset stashes`:
+            // rows 0–2 are stashes). `older` is the row under HEAD's — not a number, which bets on the preset's order:
+            // one that lands on HEAD leaves the box writable, so no refusal comes and the run is silent to the
+            // watchdog. Pair `older` with a preset without stashes (`--preset co-authors`); a stash there shows the
+            // other refusal. `why=` is the sentence itself.
             page.activateRow(graphModel.oidAt(
                 arg === "older" ? graphModel.rowOf(worktree.headOid) + 1 : Number(arg)))
             stashTipTimer.start()
@@ -78,7 +83,7 @@ Item {
             authorCardTimer.start()
         } else if (act === "co-authors" || act === "co-authors-open") {
             // Same pairing as author-card. `<row>[:<width>]`, as `details-parents`: `min` is the pane's floor, where
-            // the credit folds (規約 §co-author の表示).
+            // the credit folds (`CoAuthorLine.folded`).
             const widthAt = ("" + arg).indexOf(":")
             page.activateRow(graphModel.oidAt(Number(widthAt > 0 ? arg.substring(0, widthAt) : arg)))
             if (widthAt > 0) {
@@ -92,7 +97,9 @@ Item {
         }
         return true
     }
-    // Waits for gpg / ssh-keygen's verdict, which decides the mark.
+    // Waits for gpg / ssh-keygen's verdict, which decides the mark. The argument is a commit's row, and the wait is
+    // `signatureIsForSelection`: a row with no mark to judge never satisfies it, so that run goes silently to the
+    // watchdog. Row 0 of `--preset signed` is the worktree's — `signature 1 --preset signed` is the newest commit.
     PageStage {
         id: signatureTimer
         name: "signature"
@@ -106,6 +113,9 @@ Item {
         }
     }
     // signature-tip / stash-tip: pointed at only once the state has landed, reported once the tip is shown.
+    // signature-tip's argument is a commit's row; its judged `E` stands only on `--preset errsig`'s row 0, and only
+    // with a gpg binary to ask — without one the same commit reads `N` (Windows has Git's own, the Linux image installs
+    // one). `tip=` is the window's box standing for that mark (`TipAsk.shown`).
     PageStage {
         id: signatureTipTimer
         name: "signature_tip"
@@ -147,7 +157,12 @@ Item {
         }
     }
     // path-tip: pointed at once the list has landed. The report reads the shared tooltip itself, the one thing that
-    // also says its words.
+    // also says its words. The tip says the whole path at any length, and its hover has no condition: a run with no tip
+    // standing is a cut wiring. `--preset longpaths` is for a picture where the row really is elided — one such path in
+    // both the worktree (row 0) and a commit (row 1: `path-tip 1` for the details pane). `aside=` (judged) is the box
+    // standing outside the row's target, beside it, clear of the rows above and below (規約 §hover のツールチップ
+    // 「行の的は、行の横に立つ」) — row 0 has no row above, so the seat is pictured at `wip@2 --preset dirty`, a row with
+    // neighbours on both sides.
     PageStage {
         id: pathTipTimer
         name: "path_tip"
@@ -214,8 +229,11 @@ Item {
                 } })
         }
     }
-    // A tooltip's words are a field (`CardText`): all selected and compared with the tip's text (scope: verbs.md
-    // `tip-copy`). Asked of the contentItem as-is — a tip back on the style's `Text` has no `selectAll` and dies.
+    // A tooltip's words are a field (`CardText`): all selected and compared with the tip's text. Asked of the
+    // contentItem as-is — a tip back on the style's `Text` has no `selectAll` and dies. No picture answers it (a `Text`
+    // frames identically). Scope: the clipboard is the platform's and outside it; the hand's walk from the row into the
+    // tip cannot be injected and is held by a throwaway qmltestrunner scene (rules-refs/app-ui.md). `--preset
+    // longpaths` gives the longest words.
     PageStage {
         id: tipCopyTimer
         name: "tip_copy"
@@ -248,8 +266,9 @@ Item {
         }
     }
     // ...and the same words grabbed from the tip's padding (規約 §hover のツールチップ), sampled over the air only
-    // (`SweepPad.airPoints` — verbs.md `tip-sweep`). Reached off the tip's own parts as `tip-copy` is: a ground that
-    // lost its pad dies here.
+    // (`SweepPad.airPoints`): the tip's middle is on the words, where the field takes the press itself, so a start
+    // there passes with the pad gone. Reached off the tip's own parts as `tip-copy` is: a ground that lost its pad
+    // dies here.
     PageStage {
         id: tipSweepTimer
         name: "tip_sweep"
@@ -277,7 +296,12 @@ Item {
                 "report": () => "tip_sweep " + op.witnessed("answer") })
         }
     }
-    // Waits for the details. `cut=` leads, so must_say reads it as one run of words (verbs.md).
+    // Waits for the details. `cut=` leads, so must_say reads it as one run of words (`verify::verbs::must_say`). A cut
+    // that breaks goes green on one OS only, so this run is worth both. `open=` is the card's own visibility.
+    // `--preset authorship`, from row 0: another hand three days later (`other=true later=true`); another hand at the
+    // same moment, a forge's squash whose bot address is too wide for the pane's rest, so its card drops into the
+    // window's room (規約 §hover のツールチップ) (`other=true later=false`); the same hand two days later, an amend or a
+    // rebase (`other=false later=true`); rows 3 and 4 ordinary.
     PageStage {
         id: authorCardTimer
         name: "author_card"
@@ -334,7 +358,9 @@ Item {
                                 + " folded=" + detailsPane.messageBlock.matesFolded
                                 + " said=" + detailsPane.messageBlock.matesSaid
                                 // Unjudged: which step the date beside the credit came out at is the face's answer
-                                // (`whole` on one desk, `day` under a wider face at the same pane).
+                                // — `whole` (to the minute), `day` (the time given up whole for the date and `…`),
+                                // `cut` (below that). At the floor Windows / Linux say `whole`, the wider mac face
+                                // `day`.
                                 + " date=" + detailsPane.messageBlock.valueRow.dateSaid
                                 + " pane=" + Math.round(detailsPane.width) })
         }

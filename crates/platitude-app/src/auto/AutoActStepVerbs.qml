@@ -29,9 +29,16 @@ Item {
         if (act === "graph-step" || act === "graph-step-edge"
             || act === "graph-step-far" || act === "graph-step-named"
             || act === "graph-step-dirty" || act === "graph-step-diff") {
-            // `-edge` walks off the bottom. `-far` sets off from the row its argument names: the row it steps onto is
+            // The plain walk's argument is a signed step count. `--preset basic` has 14 rows, which a default window
+            // holds (`landing=in`); 14 steps or more stop at the end with `refused>0`, which is right — the `must_say`
+            // wants `refused=0`, so keep the count inside the history.
+            //
+            // `-edge` walks 10 rows off the bottom (`landing=edge`); `-far` sends the view to the end first, then
+            // steps once (`landing=center`). Both ride the 320x240 seed (`verify::seed`) and frame alike. `-far` sets
+            // off from the row its argument names (`graph-step-far 10 --preset spread`): the row it steps onto is
             // centred only where half a view lies above it, which near the tip it never does on a window standing on
-            // its floor.
+            // its floor (`adrift`); under `basic` a view sent to its end still shows the tip, so the shape cannot be
+            // made at all.
             page.activateRow(act === "graph-step-far" && arg !== "" ? graphModel.oidAt(Number(arg))
                              : worktree.branchOid !== "" ? worktree.branchOid : graphModel.oidAt(0))
             graphStepTimer.named = act === "graph-step-named"
@@ -82,13 +89,17 @@ Item {
             changesFoldTimer.order = changesFoldTimer.reopen ? ["shut", "reopened"] : ["shut"]
             changesFoldTimer.start()
         } else if (act === "diff-step" || act === "diff-step-edge") {
-            // Moves the view (規約 §diff を上下に送る). Needs the 320x240 seed: no demo diff outgrows a default window,
+            // Moves the view (`DiffRowWalk`). Needs the 320x240 seed: no demo diff outgrows a default window,
             // and in the seed — lifted to the floor the folded rail holds — rows lie below the fold, so the plain walk
-            // is one row.
+            // is one row. The argument is the path: `--preset dirty`'s `untracked.txt` (16 rows) is the only diff long
+            // enough, and even in the seed it has five rows of travel — more steps on the plain walk reach the bottom
+            // and lose `atEnd=false`. `-edge` asks for 20, past the bottom, and stops there (no wrap). The top's stop
+            // is the same `clampY` expression and has no verb. The picture is the weakest witness; the line is the
+            // verdict.
             page.showWip()
             page.toggleDiff("untracked", arg, "")
             // The hand walks in by the wheel's door: the diff does not take the keyboard by appearing
-            // (規約 §diff のファイル一覧), so without this the arrows are still the file list's.
+            // (`DiffRowWalk.handArrived`), so without this the arrows are still the file list's.
             diffPane.handArrived()
             diffStepTimer.steps = act === "diff-step-edge" ? 20 : 1
             diffStepTimer.start()
@@ -115,13 +126,15 @@ Item {
         /// the same expression).
         property bool named: false
         /// A half-written message, which refuses nothing: the arrows walk off it and the draft goes, as with a click
-        /// (デザイン規約 §コミットメッセージの 2 つの枠). Here so a hold on a draft cannot come back unnoticed.
+        /// (`DetailsPane.syncMessage`). Here so a hold on a draft cannot come back unnoticed.
         property bool dirty: false
         /// The view sent away from the selection before the step, so the row stepped onto has no reading position to
         /// preserve.
         property bool away: false
         /// A diff opened over the graph from CHANGES (a file the selected commit touched): the graph, swapped off
-        /// screen, has to let the keyboard go or the arrows walk the selection behind the diff.
+        /// screen, has to let the keyboard go or the arrows walk the selection behind the diff. It must be a path with
+        /// lines (`basic`'s HEAD touches `docs/guide.md`): an image or a binary has no rows, so `graph_step_diff`
+        /// never clears and the run waits out the watchdog.
         property string diffPath: ""
         /// The selection reached the lit row, the card caught up with it, and the settle behind the last step landed
         /// it (`GraphRowWalk.settling`) — the diff it brings is asked for then, and `page` waits for that read and its
@@ -274,15 +287,20 @@ Item {
         target: driver.graphPane
         function onRowActivated(oidHex) { acts.holdReads++ }
     }
-    // The file list's arrows: the light and the diff move together, one file per press (規約 §diff のファイル一覧).
+    // The file list's arrows: the light and the diff move together, one file per press (`FileRowWalk`).
     // The click goes in at the row itself — its handler hands the list the keyboard, so calling past it leaves
     // `focused=` proving nothing — and the step at `stepFile`, where `Keys.onDownPressed` enters. The diff opens
     // without taking the keyboard, so an arrow still belongs to the list.
     //
     // The light runs at the key's rate and the diff catches up after the settle (`keyStepSettleMs`), so a walk that
-    // moved the light but never the diff must be told apart from one that did (規約 §diff のファイル一覧). `-shut`'s
+    // moved the light but never the diff must be told apart from one that did (`FileRowWalk.noteStep`). `-shut`'s
     // `lit=` is the claim, read off the rectangles (`litPath`) so a light only ever in the model says false;
-    // `open=false` makes the answer that list's own.
+    // `open=false` makes the answer that list's own. `focused=true` is the list keeping the keyboard as the diff
+    // opens; `diff-step`'s `focused=true` is the other half, the hand having reached the diff.
+    //
+    // The landings: under `--preset long` HEAD's eighty files walk `src/core/part_00.rs` to `part_01.rs`, and `-edge`
+    // stops on the last, `tests/part_15.rs`; under `--preset dirty` `wip-step` goes `unstaged:b.txt` to
+    // `unstaged:c.txt`.
     PageStage {
         id: fileStepTimer
         name: "file_step"
@@ -296,7 +314,7 @@ Item {
         property string bucket: ""
         property string path: ""
         /// `-shut`: a second click on the same row shuts the diff (`RepoPage.toggleDiff`) and the run stops there,
-        /// both lists lighting nothing — the two verbs are read as a pair (デザイン規約 §diff のファイル一覧).
+        /// both lists lighting nothing — the two verbs are read as a pair (`FileRowDelegate`, `FileRowWalk`).
         property bool shut: false
         /// The click, through the row itself (twice for `-shut`); false while the row is not there.
         function strike() {

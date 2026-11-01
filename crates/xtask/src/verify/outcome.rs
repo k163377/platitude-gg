@@ -18,7 +18,9 @@ pub(super) struct Outcome {
     pub(super) allow_write_failure: bool,
     /// Whether the run said its write barrier's contract broke
     /// (`AutoActDriver.sayBroken`): a red `--allow-write-failure` does not
-    /// reach (rules-refs/app-ui.md「違反は取り消せない」).
+    /// reach. That flag excuses git turning a write down; this is the run's
+    /// own contract broken (what it waits on is no longer the write it
+    /// pressed for), final in the app too (`repo_tab::write_watch`).
     pub(super) contract_broken: bool,
     /// Whether the app was refused the settings it was handed, for a verb
     /// that did not stage that itself ([`super::child`]). A run's config

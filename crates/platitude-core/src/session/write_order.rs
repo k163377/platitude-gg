@@ -18,6 +18,15 @@
 //!
 //! Nothing here holds a session: the members are weak, so a session the
 //! tab strip released is not kept alive by being on an order.
+//!
+//! git's own index lock does not stand in for this order: a plain commit
+//! holds no lock on the index while its hooks run and reads the index
+//! again after them, so a write outside the order lands in that commit.
+//! Pinned by `session_integration::write_order` (witnesses: the repository
+//! and `heap_report()`) and the unit tests below; a write into another
+//! worktree by
+//! `discard_record::work_brought_back_into_another_worktree_waits_for_its_commit`,
+//! whose commit a pre-commit hook holds across the restore's acceptance.
 
 use std::collections::VecDeque;
 

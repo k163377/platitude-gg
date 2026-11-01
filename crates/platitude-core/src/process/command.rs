@@ -11,8 +11,9 @@ use super::trace::Trace;
 use crate::operation::OperationId;
 
 /// Wraps a path so git reads it back as that exact path (a file really
-/// named `:(glob)x` has to round-trip). Only for arguments git parses as
-/// pathspecs: `git diff --no-index` takes filenames, which go in bare.
+/// named `:(glob)x` has to round-trip, and a `*` or `?` in a name would
+/// read as a glob). Only for arguments git parses as pathspecs: `git diff
+/// --no-index` takes filenames, which go in bare.
 pub fn literal_pathspec(path: &str) -> String {
     format!(":(literal){path}")
 }
@@ -22,10 +23,11 @@ pub fn literal_pathspec(path: &str) -> String {
 ///
 /// The result carries no control character: the command log draws a
 /// command as one row and copies it as one line, its columns cut by tabs
-/// (デザイン規約 §git が言ったことを読む場所). An argument holding one — a
+/// (the app's `models/commands/selection.rs`). An argument holding one — a
 /// `-m` message of several paragraphs, a tab — is spelled in `$'…'` with
 /// the character escaped (POSIX.1-2024 dollar-single-quotes, which bash and
-/// zsh read); `'…'` would carry it raw.
+/// zsh read); `'…'` would carry it raw, its row running over the next and
+/// its copy split one command over several lines.
 pub(super) fn shell_quote(arg: &str) -> std::borrow::Cow<'_, str> {
     let plain = !arg.is_empty()
         && arg.bytes().all(|b| {
@@ -237,7 +239,10 @@ impl GitCommand {
     /// for a command whose answer is half on stdout (a push's ref lines,
     /// its `pre-push` hook's words, which come before git's own `failed to
     /// push` on stderr). The rest keep stdout out: a read's is the data, and
-    /// kept it would hold the whole of it.
+    /// kept it would hold the whole of it. A commit needs none of it: git
+    /// sends a commit hook's stdout to its own stderr (hook.c
+    /// `stdout_to_stderr = 1`, 2.43), and only `pre-push` leaves the hook's
+    /// stdout on git's — where a wrapped linter writes what it found.
     pub fn logs_stdout(mut self) -> Self {
         self.logs_stdout = true;
         self
@@ -246,6 +251,19 @@ impl GitCommand {
     /// Keeps git's trace of the programs it ran — every hook with how it
     /// ended, every other program with its arguments ([`GitOutput::trace`],
     /// [`Trace`]) — for a write whose refusal git's words do not name.
+    ///
+    /// A cost on every traced git, on Windows above all: git counts every
+    /// process there for its `cmd_ancestry` event (`CreateToolhelp32Snapshot`,
+    /// compat/win32/trace2_win32_process_info.c), whichever target the events
+    /// go to, and no setting or variable turns that off (the cost:
+    /// gitの扱い.md §日常性能への代金). Kept (user decision — ask before
+    /// changing): git has no free way to name a hook's no. Reading a
+    /// commit's exit 1 as one would rest on the gates (an empty
+    /// message and the rest) and could not name a failed ssh signing program;
+    /// GitHub Desktop, GitKraken and Sublime Merge name nothing and show the
+    /// hook's raw output beside a `--no-verify` "commit anyway". Weighed again,
+    /// the commit's trace is the one to drop: a `pre-push` no is an exit 1
+    /// with no ref line, which nothing else tells from a remote not reached.
     pub fn traced(mut self) -> Self {
         self.traced = true;
         self

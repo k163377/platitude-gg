@@ -20,8 +20,9 @@ const OLD_GIT_VERBS: [&str; 5] = [
     "badges-all",
     "badges-all-hover",
 ];
-/// Likewise a git without Git LFS: a desk's Git for Windows carries it,
-/// and the band's `NO LFS` stands only where git cannot run it.
+/// Likewise a git without Git LFS: a desk's Git for Windows carries it
+/// (the container's git has none of its own), and the band's `NO LFS`
+/// stands only where git cannot run it.
 const NO_LFS_VERBS: [&str; 4] = ["no-lfs", "no-lfs-card", "badges-all", "badges-all-hover"];
 
 /// Which gits a run is staged with.
@@ -246,9 +247,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let exe = app_exe(&root, &path, BuildEnv::default(), opts.build, &[])?;
     let build = at.elapsed();
 
-    // Inside a container this claim guards nothing
-    // (rules-refs/app-ui.md「コンテナの run が持つのはその裏のホストのディレクトリ」);
-    // the host side claims the mount (`keepsakes::bridge`).
+    // Inside a container this claim guards nothing: it lands in the
+    // container's own `/tmp`, and the host side claims the mount
+    // (`keepsakes::bridge`).
     let shot_dir = match &opts.shot_dir {
         Some(dir) => {
             std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;

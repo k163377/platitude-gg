@@ -452,7 +452,7 @@ Item {
             compare(bar.detail, "It is locked: " + root.longReason + ".", "with the whole of it still in the field")
         }
 
-        /// `OK` keeps the middle of the bar (デザイン規約 §答えの要らない報せ). Asked on a bar the words made taller
+        /// `OK` keeps the middle of the bar (`NoticeBar`). Asked on a bar the words made taller
         /// than the pill: on one line, every rule about the pill's place answers the same.
         function test_the_pill_keeps_the_middle_however_many_lines_the_words_take() {
             dress("worktree-locked", "", "topic", "on a stick")

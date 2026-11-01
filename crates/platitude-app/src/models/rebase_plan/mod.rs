@@ -82,9 +82,9 @@ pub struct RebasePlanModel {
     pub(super) onto_email: String,
     pub(super) onto_avatar: i32,
     pub(super) onto_avatar_url: String,
-    /// A local branch standing on the base, named in place of the id
-    /// (デザイン規約 §フル interactive rebase「onto の名はブランチ優先」).
-    /// Empty when none.
+    /// A local branch standing on the base, named in place of the id in
+    /// the plan's head (`RebasePlanPane`; the id is the fallback, and the
+    /// base row's id column stands either way). Empty when none.
     pub(super) onto_ref: String,
     /// The branch tip the plan was composed against (= the newest row).
     /// The run pins it, and a tip that moves under the open plan closes
@@ -96,7 +96,9 @@ pub struct RebasePlanModel {
     pub(super) publish_range: String,
     /// How many of the plan's rows a remote already has (the run bar's
     /// warning). Counted as the plan opens (`PlanPreview::published`) and
-    /// again when the refs move (`PlanMsg::Published`).
+    /// again when the refs move (`PlanMsg::Published`). The plan holds
+    /// it itself, on a read of its own (`check_plan_published`), so no
+    /// other question can take its seat.
     pub(super) pushed_count: i32,
     /// [`Self::is_dirty`] as a property, settled by every mutation — the
     /// run button binds to it, and bindings follow properties only
@@ -110,6 +112,10 @@ pub struct RebasePlanModel {
     /// The row the page's selection sits on (-1 = none), and its verb —
     /// what the right pane's boxes read to know a reword is on screen.
     /// Held here so a reorder remaps it with the rows.
+    ///
+    /// The selection is held twice: here and as the page's `selectedOid`.
+    /// Kept so: it does no visible harm, and owning it by this model's oid
+    /// alone needs a separate bridge to the graph's selection.
     pub(super) selected_row: i32,
     pub(super) selected_action: String,
     /// That row's commit, so the page can refuse to route typing while

@@ -2,8 +2,9 @@
 //! Info.plist, the name its archive goes by, and what `otool` and dyld say
 //! about it. Nothing here runs a tool, so all of it is checked on any desk.
 
-/// The identifier the release will carry (P5-確認事項 §8): reverse DNS
-/// under the repository's owner, there being no domain of the project's.
+/// The identifier the release will carry: reverse DNS under the
+/// repository's owner, there being no domain of the project's (user
+/// decision — ask before changing).
 const RELEASE_ID: &str = "io.github.k163377.platitude-gg";
 
 /// The bundle's directory: the name the Finder shows (`CFBundleName` in

@@ -8,8 +8,20 @@ import platitude.ui
 // Right pane, another worktree's uncommitted work: whose it is and what it is holding. Built on the commit pane,
 // not the WIP pane — it can only be read (デザイン規約 §別の worktree を読む).
 //
+// A display mode of its own (user decision — ask before changing): a pane full of greyed rows would explain what
+// nobody can do here, and the reader needs a page to read. What the reader can do is what the commit pane offers
+// (read), so the shape is that pane's: `WORKTREE` + dash + mark + name where it says `COMMIT`; no face, author,
+// date, hash or parents; no summary / description box (a worktree has no message); `UNCOMMITTED CHANGES (n)` with
+// tree / flat where it says `CHANGES (n)`; the same flat file list. **Two bands and the list under them, nothing
+// else** (user decision — ask before changing): the top band says whose, the lower one what; anything added is
+// either still unsettled (the door) or already said by the name (branch, path).
+//
 // One list, one row per path (`models::nav::Bucket::Whole`): the staged / unstaged split is that worktree's index,
 // which nothing here moves.
+//
+// The third right pane, standing while `RepoPage.wipWritable` is false. Its rows are `FileRowDelegate`s handed this
+// model's spelling (below). Headless `carried-read <worktree name> --preset carried`, `carried-stand <worktree name>`,
+// `path-tip carried:<worktree name>[-tree]`.
 ColumnLayout {
     id: carriedPane
 

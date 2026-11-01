@@ -20,7 +20,9 @@ Item {
     /// The whole path — what a diff is asked for by, what the hover says, what the walk finds a row by. **Its own
     /// property**, as `NameCell.folded` is: a commit's changed files spell it `path` (`models::details::FileItem`,
     /// the answer below), a worktree's `full` (`models::nav::Role`), so that pane says so. A role the model does
-    /// not answer reads back `undefined` silently — every row then holds the same empty string and lights together.
+    /// not answer reads back `undefined` silently — every row then holds the same empty string: all of them light
+    /// while nothing is read, and none while a file is. A folder row handed its fold key here would say `whole:src`
+    /// wherever it names itself.
     property string pathText: model.path ?? ""
     /// Which side of the index this row's bytes are on, empty for a commit's changed files. Half of what addresses
     /// the file (`Bucket::routing_of`): the page opens the diff by the pair.
@@ -60,7 +62,8 @@ Item {
     signal menuRequested(string path, string origPath, string change)
 
     /// A press on this row — a folder folds, a file is read. The handler below and a headless run both enter here
-    /// (verify-ui §壊れない動詞の実装と反復).
+    /// (verify-ui §壊れない動詞の実装と反復): a run that handed the model's answer past the row would go green with the
+    /// row reading nothing.
     function press() {
         if (fileRow.isFolder)
             fileRow.folderToggled(fileRow.foldKey)
@@ -85,7 +88,10 @@ Item {
     }
     ListView.onReused: fileRow.pooled = false
 
-    // The row whose diff is on screen (デザイン規約 §diff のファイル一覧), under the hover wash, which is an overlay colour.
+    // The row whose diff is on screen, under the hover wash, which is an overlay colour. Lit (user decision — ask
+    // before changing): with the middle pane on a file's diff and no mark in the list, nothing in the window but the
+    // reader's memory says which file is being read. Files only (a folder has no diff), and out when the diff closes —
+    // the light means "being read", the same in both lists (`FileRowWalk`).
     Rectangle {
         id: selectedBox
         anchors.fill: parent
@@ -101,12 +107,12 @@ Item {
     NameCell {
         id: nameCell
         anchors.fill: parent
-        // Where every list's rows begin and how far a fold steps them in (`NavList.rowInset` / `nestStep`,
-        // デザイン規約 §余白): a file's name stands where a branch's does.
+        // Where every list's rows begin and how far a fold steps them in (`NavList.rowInset` / `nestStep`, where the
+        // shape is decided): a file's name stands where a branch's does.
         anchors.leftMargin: Theme.spaceXs + Theme.iconSm - Theme.iconXs
                             + (fileRow.model.depth ?? 0) * Theme.iconSm / 2
         // The pane's scroll bar gutter — anything short stands an elided name's last glyph under the bar
-        // (デザイン規約 §余白).
+        // (the sidebar row's right edge, `NavItemDelegate`).
         anchors.rightMargin: Theme.navBarGutter
         folder: fileRow.isFolder
         folded: fileRow.isFolded
@@ -130,7 +136,11 @@ Item {
     }
     readonly property TipAsk rowTip: TipAsk {
         target: fileRow
-        // Hover always says the path (デザイン規約 §hover のツールチップ). Behind a standing menu the window's seat holds
+        // Hover always says the path (デザイン規約 §hover のツールチップ), on every row — CHANGES and a commit's files,
+        // folder rows their own path. Even where the shown name is the path (paths view): the test that would tell
+        // (name equals path, label not elided) is not readable off the screen, and one row would tip or not by path
+        // length and pane width. Not the menus' rule, where a row's elision only stands in for a missing reason
+        // (§メニュー). Behind a standing menu the window's seat holds
         // the box down (`TipSeat`'s machine, `HoverSeat.blockedBy`, §メニュー), not this ask: an ask that fell for the
         // menu reads as the hand leaving the row, and the box would come back under the still hand the moment the menu
         // went.

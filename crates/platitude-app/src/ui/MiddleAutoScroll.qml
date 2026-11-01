@@ -7,12 +7,33 @@ import platitude.ui
 // means — which list moves, and how far — is the surface's (`drifted`). Every surface that scrolls has one
 // (デザイン規約 §中クリックの自動スクロール).
 //
-// It stands over what the surface draws and steps aside for two things (`claimedAt`). Waiting under the surface it
-// would never hear the press: Qt's text controls take every middle button (on Linux a read-only `TextEdit` too).
+// A surface with nowhere to send starts nothing: a ring and arrows over a list that fits, with nothing moving, looks
+// broken (`AppListView` seats its hand only while the bar is up). Not on the tab strip, whose middle click closes a tab
+// (規約 §タブの所作): an overflowing strip is all tabs, with no place left for the drift.
 //
-// The gesture starts at the press and ends two ways, as a browser's does (Chromium `autoscroll_controller.cc`): let
-// go without travelling and the drift stays latched; held while travelling, it ends when the hand lets go. Answered
-// at the release instead, nothing happens while the button is down.
+// It stands over what the surface draws and steps aside for two things (`claimedAt`); rows, buttons, checks,
+// selectable text and scroll bars are the drift's. Waiting under the surface it
+// would never hear the press: Qt's text controls take every middle button (on Linux a read-only `TextEdit` too).
+// Controls' `TextField` / `TextArea` call `setAcceptedMouseButtons(Qt::AllButtons)` (`qquicktextarea.cpp`) and take
+// focus on a middle press; a plain `TextEdit` takes `Left | Middle` wherever there is a selection clipboard. The
+// paste on release itself happens only for `TextEditable && supportsSelection()` (`qquicktextcontrol.cpp`) — hence
+// `readOnly === false` in `claimedAt`.
+//
+// Placement: `AppListView` holds one; a pane that lays another hand over its rows (graph, diff, log) turns that one
+// off (`AppListView.ownsHand`) and declares its own after the hand it overlays; a bare `Flickable` (the right pane's
+// two blocks, the settings chapters) and a combo card's `ListView` seat one of their own; a text frame
+// (`DescriptionBox`, `MessageEditor`'s summary) seats one over the words, standing only while they overflow, and does
+// not hand the drift on to the block it sits in (unlike the wheel's `wheelPastEnd`): the ring is one point on the
+// screen, and a block moving under it would carry frame and ring away from the finger. While a gesture runs, the list's
+// bar goes dark: the latch takes hover, so the `Flickable`'s `HoverHandler` (`inArea`) drops. Pinned by
+// `tests/qml/tst_middlehand.qml` (the paste side runs in the Linux container); verbs `middle-hand <surface>` /
+// `settings-hand <chapters|tools>`, `middle-scroll` for the graph's sideways pan (`GraphPane.startAutoScroll`).
+//
+// The gesture starts at the press and ends two ways, as a browser's does (Chromium `autoscroll_controller.cc`) — the
+// form people already send pages with daily, so nothing to depart from: let go without travelling and the drift stays
+// latched; held while travelling, it ends when the hand lets go — else a press-drag-release hand is left holding the
+// drift it just made. Answered at the release instead, nothing happens while the button is down and the release point
+// becomes the anchor.
 Item {
     id: autoScroll
 
@@ -30,8 +51,8 @@ Item {
     /// Where the gesture started and where the pointer is now, in this frame — copies, not the events' points.
     property point anchorPosition: Qt.point(0, 0)
     property point currentPosition: Qt.point(0, 0)
-    /// Whether this gesture pans too — decided where the press landed and kept for the whole gesture
-    /// (デザイン規約 §グラフを横へ送る).
+    /// Whether this gesture pans too — decided by the one point the press landed on and kept for the whole gesture,
+    /// wherever the pointer goes after (the graph's reason: `GraphPane`'s hand). The cursor says which (below).
     property bool panning: false
     /// Whether the hand left the dead zone with the button still down — what tells the two exits apart (`letGo`).
     property bool travelled: false

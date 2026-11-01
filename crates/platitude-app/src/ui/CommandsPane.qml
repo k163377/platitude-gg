@@ -8,6 +8,15 @@ import platitude.ui
 // The git commands this tab ran, oldest first. Hidden until asked for; raised on its own when something the user asked
 // for fails. Its band is the left menu's last row carried across the window (デザイン規約 §git が言ったことを読む場所).
 // Nothing survives the tab: the model keeps the last few hundred rows.
+//
+// The band opens with that very row — the same mark, step and column (`CommandsToggle`) — and the panel's own tools
+// follow: the count, the error line, `Background reads`, `Clear`, the closing mark. The count keeps the sections'
+// `spaceXs`: set further off, it reads as another kind of thing than `BRANCHES (2)` (user decision — ask before
+// changing). Nothing of the left menu's width stands at the panel's left: once the band lines up with that row, a
+// `railWidth` stub is an empty column with nothing left to line up with (user decision — ask before changing).
+//
+// Copying is a drag and Ctrl+C, nothing else — the gestures of a terminal (user decision — ask before changing; the
+// hand is `CommandsTextSelect`, what is copied `models/commands/selection.rs`).
 Rectangle {
     id: pane
 
@@ -64,8 +73,9 @@ Rectangle {
         list.positionViewAtEnd()
     }
 
-    /// `Clear` empties the rows and the header line both — the mark is red for either — and takes the panel down
-    /// (デザイン規約 §git が言ったことを読む場所).
+    /// `Clear` empties the rows and the header line both — the mark is red for either — and takes the panel down: the
+    /// press that empties it says "read", and left up it would be a `Nothing yet` board pushing the graph up. `>_`
+    /// opens it again. To drop the header line alone, click the line itself (the rows stay).
     function clearPanel() {
         pane.commandsModel.clear()
         pane.errorCleared()
@@ -113,8 +123,8 @@ Rectangle {
         return "worn=" + (seen > 0 && worn === seen) + " rows=" + seen + " washed=" + worn
     }
 
-    // The attention frame, drawn since this panel has none; its top edge lies over the split's line
-    // (デザイン規約 §hover のツールチップ「送った先は名乗る」).
+    // The attention frame, drawn since this panel has none; its top edge lies over the split's line — drawn inside,
+    // it would stand as a second line under it (デザイン規約 §hover のツールチップ「送った先は名乗る」).
     Rectangle {
         anchors.fill: parent
         anchors.topMargin: -Theme.splitterWidth

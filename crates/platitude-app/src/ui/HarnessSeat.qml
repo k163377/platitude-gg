@@ -7,6 +7,12 @@ import QtQuick
 ///
 /// [`seats`] is handed to the part once, as it is built; a value that changes (the tab in front) is written by the
 /// host onto [`driver`] with a `Binding`.
+///
+/// The only kind of seat: the window's (`Main.qml` → `WindowHarness`, holding `WindowAutoActDriver` / `AutoShotDriver`
+/// / `WindowShotMirrors` / `WindowPerfDriver`) and each page's (`RepoPage.qml` → `PageHarness`, holding
+/// `AutoActDriver` / `PagePerfDriver` / `PageAutoStart`). Something more a part acts on is added to its host's `seats`
+/// — a page's menus whole, the rows picked out inside `PageHarness`. Only the window's seat stands behind everything
+/// (`z: -10000`), since the shot stand-ins must; no other harness part draws.
 Item {
     id: seat
 

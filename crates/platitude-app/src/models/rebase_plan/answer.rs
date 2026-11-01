@@ -1,5 +1,5 @@
 //! The answer a confirmed button's last press takes from the plan, given
-//! once the press's floor has passed (デザイン規約 §回数押し): what runs is
+//! once the press's floor has passed (`HoldDriver.qml`): what runs is
 //! fixed at the press, the plan takes no edit until it is given, and a plan
 //! put away meanwhile takes the answer with it for good.
 

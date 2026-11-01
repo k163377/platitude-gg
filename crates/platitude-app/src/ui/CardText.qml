@@ -38,8 +38,8 @@ Item {
     /// The whole field underlined in its own colour (`NavFactLine.goes`). The font's rule, not a drawn line: the field
     /// wraps, and a line at the foot of the box would underline the last line alone.
     property bool underline: false
-    /// Spelled in git's own family (規約 §git 用語のコード表記). A bool, since a family handed in by a caller would skip
-    /// the per-OS fallback Theme resolves (規約 §QML 実装ルール).
+    /// Spelled in git's own family (規約 §git 用語のコード表記) — the gate's path to the git executable. A bool, since a
+    /// family handed in by a caller would skip the per-OS fallback Theme resolves (規約 §QML 実装ルール).
     property bool mono: false
     /// Centred where a screen's whole content is the sentence (`NoticeLine`); left wherever a card stacks lines.
     property int horizontalAlignment: Text.AlignLeft
@@ -58,10 +58,16 @@ Item {
     /// The field opens a room at each — the seat's no-break spaces (`seatRoom`, `roomedText`) — and draws the mark
     /// in its middle, so no line ends between a mark and its name. A copy leaves the rooms out (デザイン規約
     /// §アイコンの席「コピー」).
+    /// Made by `Words.marksOf` / `listMarks` / `reportMarks` / `reportWhyMarks`, seated by the sentence. A caller that
+    /// moves the seats (`RecoverBand`, `RecoverEntries.listMarksOf`, `AppMenuItem.tipMarks`) carries the colour and
+    /// the length along: without the length the name is not set as code, without the colour it loses where the
+    /// reader is.
     property var marks: []
     /// Names past the name ceiling (`Theme.nameMaxChars`) cut in the middle — a remote's at its end (デザイン規約 §寸法
     /// 「upstream 名だけは末尾で切る」) — and the whole line given back by a hand on a cut name — a heading's
-    /// (デザイン規約 §寸法「名前の天井」). Off, every name is drawn whole and wraps.
+    /// (デザイン規約 §寸法「名前の天井」). Off, every name is drawn whole and wraps. Set on headings only (the notice,
+    /// the question, the remote dialog, the discard log's band and card): a second line and the tooltip are never
+    /// cut. A copy takes the line as drawn, cut names included (`tst_cardcopy`).
     property bool holdsNames: false
     /// The line as drawn, before the rooms: `text` with each name the marks give a length for cut where
     /// `holdsNames` cuts it, the marks moved onto it, and which of them were cut — `{ text, marks, cuts }`.
@@ -91,7 +97,9 @@ Item {
         })
         return { text: line + cardText.text.substring(from), marks: moved, cuts: cuts }
     }
-    /// The seat in this line: as many of the field's own spaces — its font and weight — as hold the widest mark.
+    /// The seat in this line: as many of the field's own spaces — its font and weight — as hold the widest mark. The
+    /// size is the field's own `pixelSize`, never read back off the ruler's font (that read loops the binding on
+    /// Linux — `AppMenuItem.seatRoom`).
     readonly property string seatRoom: MarkSeat.room(markSpace.advanceWidth, cardText.pixelSize)
     /// Each mark's room: the seat, whatever the kind; none for a name with no mark.
     readonly property var markRoomTexts: cardText.held.marks.map(mark => mark[1] === "" ? "" : cardText.seatRoom)
@@ -353,7 +361,8 @@ Item {
         return rect.y + face.ascent
     }
     /// The first line's, so a row can stand the sentence on another item's baseline (`Qt.AlignBaseline`), as
-    /// `LineText`'s.
+    /// `LineText`'s. A row that leaves it on its default vertical centring stands the sentence half its leading
+    /// above the words beside it (the leading is filed under each line; 2–3px on macOS).
     baselineOffset: field.y + field.baselineOffset
     clip: cardText.clipped
     /// The whole line, where a name was cut (`holdsNames`): the ask for the window's tooltip, whose names behind their
@@ -418,7 +427,7 @@ Item {
         selectByMouse: true
         selectByKeyboard: true
         // No `persistentSelection`: one selection in the window, held by the field with the caret
-        // (rules-refs/app-ui.md「`persistentSelection` を使わない」).
+        // (規約 §右のペインの字は掴める「選択は窓に 1 つだけ」).
         selectionColor: Theme.accent
         selectedTextColor: Theme.textOnAccent
         // The card's padding is the card's.

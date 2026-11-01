@@ -25,7 +25,8 @@ NavIcon {
     visible: ring.spinning
 
     // On the render thread, so it keeps turning while the GUI thread drains models. Held still under `Motion.stilled`
-    // so runs of the same verb photograph the same PNG — here, so no caller can forget it.
+    // so runs of the same verb photograph the same PNG — here, so no caller can forget it. Inside, refer by id: the
+    // animator's `parent` is not the ring, so `parent.…` reads `undefined` (a warning, and no turn).
     RotationAnimator on rotation {
         running: ring.spinning && !Motion.stilled
         loops: Animation.Infinite

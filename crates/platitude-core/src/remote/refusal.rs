@@ -3,6 +3,33 @@
 //!
 //! Kept apart from [`super::push`] because the tag commands read it too
 //! ([`super::tags`]) and none of it looks at a [`super::PushSpec`].
+//!
+//! Read off `--porcelain`'s stdout: the failure message (stderr first)
+//! says only `failed to push some refs`, so a refusal left a plain
+//! failure shows no reason.
+//!
+//! Where what a push meets lands, by gitの扱い.md §異常時の扱いの基準.
+//! Everyday, each a report of its own: this end outdated or its lease left
+//! behind, a tag the remote holds on another commit, and a hook's no on
+//! either side. Over there a forge's rules all come as a hook that
+//! declined (GitHub's protected branches, required signatures and 100 MB
+//! file limit; GitLab's push rules and protected branches); here it is a
+//! `pre-push` from husky, lefthook or git-lfs, whose no covers an LFS
+//! server out of reach. Rare but one string each, so named too:
+//! `receive.denyNonFastForwards` (a `git init --shared` bare), the `deny*`
+//! refusals of a remote with a working tree pushed to directly (GitHub's
+//! own no to deleting the default branch is worded its own way and reads
+//! as `RemoteWhy::Other`), a size limit (GitHub's 2 GiB a push, GitLab's),
+//! a shallow clone, the ref's lock there. Every refusal the far side made
+//! is a report, named or not: that it said no is certain, and a reason not
+//! told apart is `RemoteWhy::Other`'s sentence. Left to the log with git's
+//! words (user decision — ask before changing): this end's rare refusals
+//! `needs force` and `remote does not support deleting refs`, a remote
+//! failure (the ref lines under the failed row say which — why a push's
+//! failed row carries stdout too, `GitCommand::logs_stdout`), a signed push
+//! (`refused`), and every failure to reach the remote, whose header line
+//! is the screen's sentence only for a credential, an SSH key or a host key
+//! (`super::unreached`).
 
 use crate::error::GitError;
 use crate::relied_messages::{self, Words};
@@ -120,7 +147,9 @@ fn outdated(
 /// the log answers. A signed push (`push.gpgSign`) git could not sign, or
 /// that the far side takes none of, is the plain failure: the setting is
 /// rare and the forges take no signed push, so nothing names it
-/// (gitの扱い.md §類型).
+/// (gitの扱い.md §分類しない物). It dies on `fatal:` before any ref line (128 over
+/// file and ssh; over HTTP the helper's child send-pack dies), so it falls
+/// to the log as a failure with no ref line. Net: `tests/it/push_refusals.rs`.
 fn refused(command: String, out: &crate::process::GitOutput, sent: &Sent<'_>) -> GitError {
     let porcelain = out.stdout_utf8();
     let stderr = out.stderr_utf8();
@@ -138,8 +167,11 @@ fn refused(command: String, out: &crate::process::GitOutput, sent: &Sent<'_>) ->
         }
         // git runs the hook before it signs or talks to the remote, and
         // stops at its non-zero end with nothing of its own but `failed to
-        // push some refs` (transport.c): its trace has the end. Whatever
-        // the hook printed is the hook's.
+        // push some refs` (transport.c; 2.43 and 2.55 alike): its trace has
+        // the end, under `pre-push` for a hook file and for a 2.54+ hook
+        // from config alike. Whatever the hook printed is the hook's. Never
+        // guess from the hook being there: a failure after it passed (HTTP's
+        // `RPC failed`) is an exit 1 with no ref line too.
         None if out.trace.hook_failed(&["pre-push"]) => match sent.deleting {
             true => ReportKind::PrePushDelete,
             false => ReportKind::PrePush,

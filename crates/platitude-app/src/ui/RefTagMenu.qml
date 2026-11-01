@@ -5,9 +5,16 @@ import platitude.ui
 // (デザイン規約 §メニュー の入れ子). One card, two entrances like `RefBranchMenu`: the graph row's menu and the
 // sidebar's ref menu both carry it and freeze it with `standOn`.
 //
+// Nested, not on the first level: sending and deleting a tag are rare (user decision — ask before changing).
+// `Create tag here…` lives here while `Create branch here…` stands on the first level (user decision): a branch is a
+// place the reader moves on from, a tag a mark left behind. On every row but a stash's, `Create tag here…` alone where
+// the row names no tag; the push and delete rows join only when the target is a tag, a divider between push and the
+// deletes.
+//
 // It reads no model and runs no write: the carrying menu asks core (`RefRowMenu.tagFacts` /
 // `CommitMenuState.tagFacts`) and runs the requests. Decided here is only what the rows do with the answer — which
 // has a seat, which greys, which push form is drawn — so `tests/qml/tst_tagcard.qml` drives the real card on values.
+// The two `tagFacts` stay two: shared at the third (rules/structure.md §共通化).
 AppMenu {
     id: tagMenu
 
@@ -115,7 +122,9 @@ AppMenu {
     // A stash is nobody's history: no tag to make on it.
     applies: state.kind !== "stash"
 
-    // Offered on the same answer as `Create branch here…` (デザイン規約 §タグを作る・送る).
+    // Offered on the same answer as `Create branch here…`, the same words at both entrances (§メニュー). Words and a
+    // `…`, no chip: the press opens a box, and what git is finally spawned with depends on what is typed into it
+    // (§git 用語のコード表記). Lightweight tags only (`tag::create`).
     AppMenuItem {
         id: refTagHereItem
         text: qsTr("Create tag here…")
@@ -123,8 +132,15 @@ AppMenu {
         blockedReason: tagMenu.makeWhy
         onTriggered: tagMenu.tagHereRequested(state.refOid)
     }
-    // Two forms, fixed as the menu opens: a name the remote has on another commit is the held, leased `push --force`
-    // (デザイン規約 §タグを作る・送る).
+    // Two forms, fixed as the menu opens (§メニュー): a name the remote has on another commit is the held, leased
+    // `push --force` (the flag long, as every menu row's), leased to the oid on screen (§相手の履歴を置き換える).
+    // Weighed off the last `ls-remote --tags` reading; with no reading the plain `push` — a remote holding it on the
+    // same commit only answers that there is nothing to send — and git's refusal stands. The plain push is an ordinary
+    // row, plain ink and one click: it adds a name and takes nothing; the hold and the warning are the lease's alone.
+    // Where it goes is where this repository pushes (`remote.pushDefault` → `origin` → the first remote; no remote,
+    // no row), except a remote the reader named — the open TAGS row's carrier line, a chip drawing one remote's
+    // reading — which takes it (`RefsSnapshot::tag_menu`). Only tags and local branches have a send row: a branch's
+    // strength comes from its own counts (`BranchPushRow`), and a remote branch row is a reading with nothing to send.
     AppMenuItem {
         id: refPushTagItem
         // Off the running press's length, so the chip cannot change under a hand already on the row
@@ -147,8 +163,11 @@ AppMenu {
         }
     }
     AppMenuSeparator {}
-    // The tag's three deletes, assembled from the sides its name stands on: git does not refuse deleting a name the
-    // remote lacks (デザイン規約 §タグを作る・送る).
+    // The tag's three deletes (rows and words: §左メニューの所作 の削除の表), assembled from the sides its name stands
+    // on (`offers::TagSides`): tags have no namespace, so the copy here and a remote's share one bare name and one
+    // left-menu row, and the row alone cannot say which delete has a target. git does not refuse deleting a name the
+    // remote lacks (`remote::delete_remote_tag`), so whether a row stands is ours to decide: a remote row only with a
+    // reading — one shown on a guess would report "did nothing" as a success.
     AppMenuItem {
         id: refTagDeleteItem
         code: "tag --delete"
@@ -179,7 +198,15 @@ AppMenu {
         codeName: state.reach !== "" ? "" : state.refId
         growsForText: false
         // A reading held back keeps its seat and greys; a side that does not exist is gone
-        // (デザイン規約 §左メニューの所作 の削除の表).
+        // (デザイン規約 §左メニューの所作 の削除の表). This card is assembled from offered rows, so `offered` must be
+        // `can… || heldBack` here and on `Delete both`: off `can…` alone a drifted row loses its seat and nothing on
+        // the menu reads the state. The branch's delete table is fixed (`BranchDeleteRow`), so its `offered` stays
+        // plain — fixed because the current branch's menu would otherwise come up empty; a tag's card always has a
+        // live row.
+        // Held back is "not now", both ways (user decision — ask before changing): `drift`, for the reason the branch's
+        // remote rows grey (`BranchRemoteDeleteRow`) — a tag's reading has no namespace, so it goes from the menu that
+        // names that remote; `unnamed` (the remote pushes go to lacks the name, several others carry it): that it is
+        // over there can be said, but which remote to send to is not decided until a step names one.
         offered: state.kind === "tag" && (state.canDeleteRemoteTag || state.heldBack !== "")
         blockedReason: state.canDeleteRemoteTag ? "" : state.heldWhy
         reasonMarks: state.canDeleteRemoteTag ? [] : state.heldMarks

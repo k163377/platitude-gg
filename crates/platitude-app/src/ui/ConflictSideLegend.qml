@@ -6,7 +6,8 @@ import QtQuick.Layouts
 import platitude.ui
 
 // Which branch each of the two conflict colours is. The names swap during a rebase and the model has already sorted
-// that out (デザイン規約 §conflict の ours / theirs), so this shows whatever it is handed.
+// that out (デザイン規約 §conflict の ours / theirs), so this shows whatever it is handed. The pane's first line, and
+// the only place a colour meets its name: the rows' bands say which of two, never whose.
 RowLayout {
     id: legend
 

@@ -3,7 +3,7 @@ import QtTest
 import platitude.ui
 
 // The credit line on the details pane's date row when the row cannot give the first name even three characters and
-// the mark (規約 §co-author の表示): the name goes, the face stands for the first and the count stays as it was —
+// the mark (`CoAuthorLine`): the name goes, the face stands for the first and the count stays as it was —
 // "◯ +2". Folding must not change what the line asks of its holder, or the width it is handed and the fold chase each
 // other.
 Item {

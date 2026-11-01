@@ -9,6 +9,12 @@ use std::path::Path;
 /// internal-docs/反映前テストの機械化.md §実測). Also what the machine's
 /// whole budget is computed from (`budget::demand`), so every process
 /// names the same pool.
+///
+/// The budget is not what leaves the machine idle: the lever on a gate
+/// alone is `--jobs`, and doubling it does not shorten one — more at once
+/// contends for the disk, the container engine and WSL, and the machine
+/// does less. Raise the third only on a machine measured to hold its CPU
+/// with 32 at once (the CPU figure is a diagnosis; the wall clock decides).
 pub(crate) fn default_jobs() -> usize {
     let cpus = std::thread::available_parallelism().map_or(1, |n| n.get());
     (cpus / 3).clamp(1, 8)

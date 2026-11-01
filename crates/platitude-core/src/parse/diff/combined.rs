@@ -51,6 +51,8 @@ pub(super) fn read_combined_line(
     } else {
         DiffLineKind::Context
     };
+    // The left number is ours (the first parent), the right the working
+    // tree's: a line only theirs has leaves the left empty.
     let old_no = first.then(|| parent_no[0]);
     let at = (!removed).then_some(*new_no);
     for (i, c) in markers.chars().enumerate() {
@@ -76,6 +78,13 @@ pub(super) fn read_combined_line(
 /// and markers too short to say (a single-parent diff has none).
 ///
 /// Reads the columns the way [`read_combined_line`] does.
+///
+/// The column read flips with the line's kind: on a kept line the side is
+/// the column that is not `+`, on a removed line the column that is `-`.
+/// Both readings are needed: while the markers stand, both sides' lines are
+/// in the worktree and the `+` reading alone would do, but resolving turns
+/// both into removed lines, and without that reading every band goes the
+/// moment the file is resolved.
 pub fn side_of_markers(markers: &str) -> &'static str {
     let bytes = markers.as_bytes();
     let (Some(&ours), Some(&theirs)) = (bytes.first(), bytes.get(1)) else {

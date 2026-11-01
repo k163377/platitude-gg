@@ -6,9 +6,11 @@ import platitude.ui
 
 // A commit's parents one to a row, opened by the parent line's count. The line meanwhile stands as a single parent's
 // would (`HashPlate.unrolled`): the arrow, then the seat of one hash, and this card on that seat — its first row where
-// that hash would be, the rest stacked under it, the arrow left outside (デザイン規約 §右のペインの親). One hash wide:
-// every hash whole, and no more air than a row's. A popup, owned by the pane (`DetailsAuthorCards`): declared in the
-// block it would be clipped by it.
+// that hash would be, the rest stacked under it, the arrow left outside. One hash wide: every hash whole (the line cut
+// them for its room, not the card's), and no more air than a row's and the frame. The shape, the seat and the width
+// are user decisions (ask before changing). A popup, owned by the pane (`DetailsAuthorCards`): declared in the block
+// it would be clipped by it. Another commit landing closes it (`DetailsAuthorCards.follow`): the rows are that
+// commit's parents.
 AppCard {
     id: parentCard
 
@@ -123,7 +125,8 @@ AppCard {
                     width: hashText.width
                     y: hashText.y + hashText.height - height
                 }
-                // The whole row is the target, as a chip card's row is; last, so it lies over the words.
+                // The whole row is the target, as a chip card's row is; last, so it lies over the words. No tooltip:
+                // no hover is raised over a hover.
                 RowHand {
                     id: rowHand
                     field: hashText

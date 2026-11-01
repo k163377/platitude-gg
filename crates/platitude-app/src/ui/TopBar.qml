@@ -6,6 +6,37 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
+// The window's chrome: two rows of fixed height — the tab band (`toolbarHeight`) and the operation panel
+// (`opsBarHeight`) — with no `splitterWidth` band between them (the panel's own hairline edges aside): that band
+// parts a toolbar from the panes, and the panel has a ground of its own (`bgRaised`), so a band in that ink would
+// only make the panel 4px deeper.
+//
+// **The band** is the window's title bar where `captionMerged` (`Main.captionMerged`). Its two ends are built alike:
+// the ☰ and the window's three are `railWidth` cells the band's whole height (`WindowButton`). In order: tab strip →
+// state badges (`BandStateGroup`) → window buttons, **no upright line between them** (user decision — ask before
+// changing): the strip keeps its grab run behind the tabs, so a line would stand before empty band in most windows
+// and part nothing. Pressable boxes stand the band's `spacing` (`spaceXs`) apart; a window button keeps its own air
+// inside its cell. **An empty run that takes no press is the window's grip** — the run past the tabs
+// (`TabStrip`'s `grabRun`) and the seam before the window's buttons (`seamRun`; user decision); a new gap in the
+// band follows the same rule. The hit test is answered here (`winframe`), so the grip is too: left to Qt, every point
+// nothing takes would answer HTCAPTION and every gap between pressable boxes would grab. So a new empty run in the
+// band is a decision whether to report it, in `seamRun`'s shape. **The right end is flush with the window's edge**
+// (user decision): the ✕ reaches it as the ☰ does on the left — a frameless window's client area is the drawn window,
+// so a margin would be a gap right of the ✕. Only the panel's find stands in (`findRightMargin`).
+//
+// **The panel** says where the window stands and opens the roads from there: the names on the left, the actions on
+// the right. The band names the repository only, so the worktree and the branch are this row's. Each name is a door
+// (`OpsPicker`): a press drops its card right under the name — not at the pointer, so one name always opens in one
+// place — and while the card stands the name stays lit and its chevron points down (user decision): the hand moves
+// into the card, and a name letting go of its light leaves the card hanging from nothing. No upright line between the
+// names or before the actions: each name is headed by its chevron. The cards are filed and worded as the left menu's
+// sections, and their rows go down the left menu's roads (`switchToRef`, `openRepositoryPathRequested`), so the two
+// never answer differently; they list everything whatever the left menu folds or filters to — a card is a road, not
+// the list being read (`nav::card`). Each card is as wide as its rows (user decision; `widthFloor`).
+//
+// Narrowing, the panel gives way in one order: the find's word → the three actions' words → the four buttons' width
+// → the worktree's name → the repository's → the upstream → the branch's (`findFolded` / `actionsFolded` /
+// `opsRepoCut` / `OpsPicker.given`).
 Rectangle {
     id: topBar
 
@@ -193,13 +224,22 @@ Rectangle {
 
     /// The narrowest this chrome can be laid out at — one of the two numbers the window's floor is the larger of
     /// (`Main.floorWidth`). **The larger of its two rows**: the band's read off its layout minimum, the panel's off its
-    /// parts at their floors, so a control added to either is counted without anybody remembering to.
+    /// parts at their floors, so a control added to either is counted without anybody remembering to. The band's
+    /// counts the state group folded to its `…` (its `Layout.minimumWidth`), so any number of states raises it by one
+    /// mark; the tab strip at two tabs (`TabStrip.tabStripFloorW`). Never what the cells ask for: a floor at the
+    /// asked widths would keep the window from narrowing.
+    ///
+    /// `bandRow.Layout.minimumWidth` is a sum the layout writes in its own pass: in the beat a child's `foldedWidth`
+    /// moves it still holds the pass before's (a `RowLayout` has no `forceLayout()`). A run that reports this floor
+    /// reads it a stage after its wait (`WindowFrameActs`' `window-floor`) — read in the same beat it comes out one
+    /// mark short, only on a machine whose status is slow, and never in a picture.
     readonly property real floorWidth:
         Math.max(bandRow.Layout.minimumWidth + bandRow.anchors.rightMargin,
                  topBar.picksFloor + Theme.spaceLg + topBar.actionsFoldedWidth
                  + topBar.opsRightAir)
     /// What the three actions and the find come to once every one is a mark in an end cell — the panel's half of the
-    /// floor above (規約 §窓の床 のパネルの床).
+    /// floor above. Folded, never with their words: whether the words stay is the panel's width's to decide, so a floor
+    /// priced with them would be a loop.
     readonly property real actionsFoldedWidth:
         topBar.actionCells * Theme.railWidth
         + (actionSeat.children.length - 1) * actionSeat.spacing
@@ -289,28 +329,36 @@ Rectangle {
     readonly property alias tabsView: tabStrip.tabsView
 
     /// The word the panel's buttons are all measured for: one box for the set keeps any of them from shifting the
-    /// others, and which wording is widest depends on the installed fonts. Settled once: as a binding, reading four
+    /// others, and which wording is widest depends on the installed fonts. Fetch and push change their words on their
+    /// own (`fetch` ⇄ `Resume`, `push` ⇄ `push -f`), so apart, one's change would push the other sideways; `stash`
+    /// never changes, yet shares the box too — out of it, `fetch` and `stash`, the same five monospace cells, would
+    /// be targets of two sizes. Measured on the longest wording of every state of the three (`BandWidest`); how a
+    /// shorter word sits in it is `ActionButton.headAir`'s. Settled once: as a binding, reading four
     /// text metrics to feed the buttons' widths is a loop to the engine.
     property string widestAction: ""
     property bool widestActionCode: false
 
     // ---- how the three give way as the panel runs short ----------------
     /// The narrowest cell that still holds a word, for the **set**: the widest of the three wordings said now, whole —
-    /// the moment one of them no longer fits, all three give their words up at once (規約 §操作パネル;
-    /// `ActionButton.foldWidth`).
+    /// the moment one of them no longer fits, all three give their words up at once (`ActionButton.folded`;
+    /// `ActionButton.foldWidth` — a longer wording said now, `push -f` / `Resume`, folds the set sooner).
     readonly property real actionFold: Math.max(fetchButton.foldWidth,
                                                 pushButton.foldWidth,
                                                 stashButton.foldWidth)
-    /// The cells that share one width: the three and the find, **folded or not** (規約 §操作パネル).
+    /// The cells that share one width: the three and the find, **folded or not** — the four stay equal at every step,
+    /// and giving the words up changes what is in a cell, not its width at once. Headless: `band-actions*`' `even=` /
+    /// `find=`.
     readonly property int actionCells: actionSeat.children.length + 1
     /// What the panel holds around the four cells before any width goes to a wording: the names **at their whole
-    /// width** (the buttons' words go before a letter of a name does — 規約 §操作パネル の譲る順), the step between
+    /// width** (the buttons' words go before a letter of a name does — the header's order), the step between
     /// the two halves, the air at the right end (`opsRightAir`), and the seat's own spacing.
     readonly property real actionsBox:
         topBar.picksWant + Theme.spaceLg + topBar.opsRightAir
         + (actionSeat.children.length - 1) * actionSeat.spacing
     /// The widest a button may be drawn at the panel's width now; a cell short of its wording gives the word up
-    /// (`ActionButton.folded`).
+    /// (`ActionButton.folded`). **The panel's width alone** — never the band's leftover or the window's floor: the
+    /// leftover answers how many tabs there are and how long their names, and how far the buttons can shrink is
+    /// another question.
     readonly property real actionCap:
         Math.max(Theme.railWidth,
                  Math.min(fetchButton.naturalWidth,
@@ -376,8 +424,11 @@ Rectangle {
     readonly property bool tabMarksFolded: tabStrip.tabMarksFolded
 
     /// What the panel says this window is standing in: **the tab in front's own names** (`TabsModel.currentRepoName`),
-    /// which the tab has the moment the window moves — a name taken from the page arrives after its repository does
-    /// (規約 §操作パネル).
+    /// which the tab has the moment the window moves — a name taken from the page waits on git's reading, and until
+    /// the listing lands it reads the repository's own worktree as another one and the tree mark stands. The folder
+    /// name of the repository's own worktree — not the band's title, which adds the parent folder where two open
+    /// repositories share a name: the panel names one, with no namesake beside it. Headless: `ops-repo-pick`'s
+    /// `named=`.
     readonly property string repoName: topBar.tabsModel.currentRepoName
     /// The folder of the worktree this tab is standing in (規約 §別の worktree を読む). **Empty in the repository's
     /// own worktree**, as the tab above is (規約 §タブの所作): the left panel names that worktree by its branch, which
@@ -405,9 +456,13 @@ Rectangle {
     readonly property string opsNames: topBar.repoName + "/" + topBar.worktreeName + "/" + topBar.branchName
     readonly property bool opsNameCut: repoPick.nameCut || branchPick.nameCut
     /// How deep the four frames at the panel's right end are, their words given up or not: the branch's two lines
-    /// whatever it writes (`OpsPicker.pairHeight`; 規約 §操作パネル), and never under what a button stacks
-    /// (`ActionButton.stackDepth`) — a face with short lines (Hiragino Sans, 30px for the pair) sets the two lines
-    /// shallower than the word over the mark, and the word then stands on the frame's top line.
+    /// whatever it writes (`OpsPicker.pairHeight`), and never under what a button stacks (`ActionButton.stackDepth`,
+    /// word line + mark seat — that floor is a user decision). Not the height of what the branch writes now: with no
+    /// upstream, or while loading, that is one line, and a stacked button's word stands over its frame and its mark
+    /// under it. Not `pairHeight` alone either — a face with short lines (Hiragino Sans, 30px for the pair against
+    /// 40px of content) sets the two lines shallower than the word over the mark (Windows 44, Ubuntu 43 stay above
+    /// the floor). Headless: `boxed=` (`actionsBoxed`) on `ops-panel` (`--preset worktrees`, a branch with no
+    /// upstream) and `band-actions*` (the three in the `fonts` tier — the mac shots every push runs).
     readonly property real actionDepth: Math.max(branchPick.pairHeight, fetchButton.stackDepth)
     /// Automation: whether every button at the panel's right end is as deep as what it draws (`actionDepth` says
     /// why) — a short one reads in a picture as a style of its own.
@@ -417,7 +472,7 @@ Rectangle {
     /// like any other box, and only its neighbours' say it shrank.
     readonly property bool actionsDeep: [fetchButton, pushButton, stashButton, findButton].every(
         button => !button.visible || Math.abs(button.height - 2 * button.frameInset - topBar.actionDepth) < 0.5)
-    /// …and whether the four are one width, the find's word given up or not (規約 §操作パネル).
+    /// …and whether the four are one width, the find's word given up or not (`actionCells`).
     readonly property bool actionsEven: [pushButton, stashButton, findButton].every(
         button => Math.abs(button.width - fetchButton.width) < 0.5)
     /// …and whether the line between the three and the find stands clear of both frames and ends where the frame on
@@ -434,11 +489,11 @@ Rectangle {
     /// row can afford is decided from this, so a sum that already held the answer would close the ring.
     readonly property real picksWant:
         repoPick.wholeWidth + branchPick.wholeWidth + opsRow.spacing
-    /// **The order the names give way in** (規約 §操作パネル の譲る順): the repository's picker, then the branch's
+    /// **The order the names give way in** (the header's order): the repository's picker, then the branch's
     /// (`OpsPicker.given`) — the tab above says the repository again, and every write in this row acts on the branch.
     readonly property real opsRoom: opsRow.width
     /// How much more the names want than the row has — cut from each name in turn towards its floor, never by
-    /// dropping one.
+    /// dropping one: a run dropped takes what it was saying with it.
     readonly property real opsOver: Math.max(0, topBar.picksWant - topBar.opsRoom)
     /// The narrowest the names are ever laid out at — every word at its own floor.
     readonly property real picksFloor:
@@ -454,7 +509,7 @@ Rectangle {
     readonly property real findRightMargin: topBar.captionMerged ? Theme.spaceXs : Theme.spaceMd
     /// …and with the find in it, at the width the four share.
     readonly property real opsRightMargin: topBar.actionCap + topBar.opsRightAir
-    /// The panel gives up its words in 規約 §操作パネル の譲る順 — **the buttons' before any name's, because a button
+    /// The panel gives up its words in the header's order — **the buttons' before any name's, because a button
     /// that has given its word up is still read by its mark**, and a name has nothing to fall back to. The find's goes
     /// first, the moment the four are short of their whole width; its cell keeps the width the three have.
     readonly property bool findFolded: topBar.actionCap < fetchButton.naturalWidth
@@ -472,7 +527,7 @@ Rectangle {
         anchors.top: parent.top
         height: Theme.toolbarHeight
         // Flush where the band is the title bar, as the ☰ is on the left: the frameless window's client area is what
-        // is drawn, so the ✕'s wash runs into the window's corner (規約 §ウィンドウの縁).
+        // is drawn, so the ✕'s wash runs into the window's corner (user decision, header).
         anchors.rightMargin: topBar.captionMerged ? 0 : Theme.spaceMd
         spacing: Theme.spaceXs
         TabStrip {
@@ -486,11 +541,12 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.minimumWidth: tabStrip.tabStripFloorW
-            // Asks for its names whole, as the group asks for its words: short of both, the row takes the shortfall
-            // from the two at once, each by its room above its floor — Qt reads no stretch below what the items ask
-            // for, so no order between them can be set here (規約 §ウィンドウの縁「タブと群は同時に譲る」). The group's
-            // fold is its own (`BandStateGroup.folded`); room past both is the strip's, since the group asks for its
-            // ceiling.
+            // **The strip and the state group give way at once.** Asks for its names whole, as the group asks for its
+            // words: one asking in its narrowed shape would leave the other to give everything. Short of both, the row
+            // takes the shortfall from the two at once, each by its room above its floor (the one with more room gives
+            // a little more, even in proportion) — Qt reads no stretch below what the items ask for, so no order
+            // between them can be set here (user decision — ask before changing). The group's fold is its own
+            // (`BandStateGroup.folded`); room past both is the strip's, since the group asks for its ceiling.
             onOpenRepositoryRequested: topBar.openRepositoryRequested()
             onCloneRepositoryRequested: topBar.cloneRepositoryRequested()
             onSettingsRequested: topBar.settingsRequested()
@@ -520,12 +576,13 @@ Rectangle {
             // The band's depth for the target and the card's seat under it; the boxes keep their own
             // (`BandStateGroup.foldedDepth`).
             Layout.fillHeight: true
-            // **Folded, the mark's cell and not a pixel more** (規約 §ウィンドウの縁「畳んだ群が帯から取るのは印の箱だけ」).
+            // **Folded, the mark's cell and not a pixel more**: folded with the words' width kept, the band before the
+            // mark stands empty and the grab run behind the tabs looks swollen.
             Layout.maximumWidth: stateGroup.folded ? stateGroup.foldedWidth : stateGroup.naturalWidth
             Layout.minimumWidth: stateGroup.foldedWidth
             onIdentityEditRequested: topBar.identityEditRequested()
         }
-        // The window's own three, drawn here (規約 §ウィンドウの縁「窓ボタンはアプリが描く」).
+        // The window's own three, drawn here (`WindowButton` says why).
         WindowButton {
             id: minimizeButton
             visible: topBar.captionMerged
@@ -555,6 +612,12 @@ Rectangle {
     // (`stateGroup.room` / `tabRunAvail`): the row above lays a folded group out at its mark alone, so a group folded
     // for want of room would never find the room to unfold into there. Unfolded, the two rows agree cell for cell.
     // Plain items, measured and nothing else.
+    //
+    // **A `Layout.*` added to a cell of the row above is added here too** — left out, the fold's edge moves. Each
+    // stand-in mirrors what its cell asks for, its `implicitWidth`: an item that holds a plain `width` comes out 0 wide
+    // here and the group overflows its cell, so the band's cells name their size by `implicitWidth` (`WindowButton`).
+    // Headless: `badges`' `shadow=` (`bandShadowAgrees`), and `badges floor:16` / `old-git-fold`'s `fitted=`
+    // (`BandStateGroup.markFitted`); the wiring is `tst_bandgroup.qml`'s case that parts `room` from the width.
     RowLayout {
         id: bandAsked
         anchors.left: bandRow.left
@@ -590,9 +653,11 @@ Rectangle {
         }
     }
 
-    // The band's own step before the window's buttons, with nothing drawn in it. The hit test answers HTCAPTION for it
-    // as for the run past the last tab (`TabStrip.grabArea`), so a press here is the platform's own gesture (規約
-    // §ウィンドウの縁「何も受けない空きは窓の掴み所」).
+    // The band's own step before the window's buttons, with nothing drawn in it — the band draws no upright line
+    // (header): this run is what parts them, the grab run's second (user decision). The hit test answers HTCAPTION for
+    // it as for the run past the last tab (`TabStrip.grabArea`), so a press here is the platform's own gesture — an
+    // empty run that takes no press is the window's grip. Nothing is drawn in it, so only numbers show it: `band`'s
+    // `seamRun=`. On a real Windows window: a double-click on the seam maximises, a drag moves the window.
     //
     // Outside the row: a child of a `RowLayout` is laid out, and this only measures where one of the row's items came
     // to rest. `bandRow` fills the band, so its children's coordinates are this item's.
@@ -659,7 +724,9 @@ Rectangle {
                 //
                 // No kind beside it, where the branch has one: the window's own subject is not a kind of anything.
                 markSeat: Theme.railWidth
-                // **The worktree is this name's own second run**, not a seat of its own (規約 §操作パネル).
+                // **The worktree is this name's own second run**, not a seat of its own: a seat would go with the
+                // worktree's name whenever the tab stands in the repository's own worktree, and the door to the other
+                // worktrees with it.
                 trail: topBar.worktreeName
                 given: topBar.opsRepoCut
                 opened: standMenu.opened
@@ -677,7 +744,11 @@ Rectangle {
                 behind: topBar.curPage === null ? 0 : topBar.curPage.pageWorktree.behind
                 given: topBar.opsBranchCut
                 opened: branchMenu.opened
-                // `Loading…` while the page in front is still reading (規約 §操作パネル, `Hub::release_tab`).
+                // `Loading…` while the page in front is still reading its HEAD (a tab come to the front reads git
+                // again, `Hub::release_tab`): `No branch` meanwhile would say something untrue about the repository
+                // (user decision). Both in the nameless `textMuted`. `No branch` with no page to read (no tab, a
+                // repository that would not open) or a HEAD status names no branch for. The in-between is pictured
+                // only by `ops-repo-pick`'s `pressed.png` (the frame after the press): the landing picture is past it.
                 blank: topBar.curPage !== null && !topBar.curPage.openFailed
                        && !topBar.curPage.pageWorktree.headKnown
                        ? qsTr("Loading…") : qsTr("No branch")
@@ -685,11 +756,13 @@ Rectangle {
                 // takes the state's colour on mark and word alike.
                 kind: "branch"
                 kindTint: topBar.detachedHead ? Theme.warning : Theme.accent
-                // **`iconMd`, the panel's own step** (デザイン規約 §アイコンの席 の ⑥ / §操作パネル).
+                // **`iconMd`, the panel's own step** (デザイン規約 §アイコンの席 の ⑥; `OpsPicker` says how it stands):
+                // a step and a half down closes the branch's two rings into a blob.
                 kindSize: Theme.iconMd
-                // **A mark standing in the row, not a letter of the name** (規約 §操作パネル): the row's step, the
-                // mark's own air counting towards it. At zero the gap is a letter's, and the mark reads as the name's
-                // first character.
+                // **A mark standing in the row, not a letter of the name** (user decision — ask before changing): the
+                // row's step, the mark's own air counting towards it (5px between the inks of `main`'s mark and name).
+                // Not ⑦'s letter gap (the face's side bearing and one stem): that gap cannot be told from the letter
+                // spacing, and the mark reads as the name's first character. The upstream's cloud keeps the same step.
                 kindStep: Theme.spaceXs
                 tone: topBar.detachedHead ? Theme.warning : Theme.textPrimary
                 // No `markSeat`: only the repository's mark stands in a column (the ☰'s), so a seat wider than this
@@ -701,10 +774,9 @@ Rectangle {
                 // …and the same air in front of it: the first seat is a column and this one the mark's own size, so
                 // without this the second chevron stands closer to what precedes it.
                 markLeadIn: Math.max(0, repoPick.markAir - branchPick.markAir - repoPick.rightPadding)
-                // …and the same air after it, to the ink of what it opens (規約 §操作パネル).
+                // …and the same air after it, to the ink of what it opens — less would read as the lesser door.
                 markStep: repoPick.markAir + repoPick.markGap
-                // **The last of the names keeps the air it opens with past its words** (`OpsPicker.endAir`,
-                // 規約 §操作パネル).
+                // **The last of the names keeps the air it opens with past its words** (`OpsPicker.endAir`).
                 endAir: branchPick.leadAir
                 Layout.fillHeight: true
                 Layout.preferredWidth: branchPick.drawnWidth
@@ -717,10 +789,11 @@ Rectangle {
         // each folding its choices under it (規約 §メニュー).
         AppMenu {
             id: standMenu
-            // **Dropped from the name it opens**, like the ☰'s card (`AppMenuButton`; 規約 §操作パネル).
+            // **Dropped from the name it opens**, like the ☰'s card (`AppMenuButton`; header).
             //
             // **Hung off the name itself**, so "outside" is measured from it: under the default policy a press on the
-            // name shuts the card and the click that follows opens it again — a name that never closes its card.
+            // name shuts the card and the click that follows opens it again — a name that never closes its card
+            // (pinned by `tests/qml/tst_opspicker.qml`).
             parent: repoPick
             x: 0
             y: repoPick.height
@@ -728,15 +801,17 @@ Rectangle {
             // No row here is held, so none needs the floor a hold does: each card fits its rows (`AppMenu.widthFloor`).
             widthFloor: 0
             // Only one heading wears a mark (the WORKTREES section's): the other holds its step, so the two words begin
-            // on one x (`AppMenu.alignsHeadings`).
+            // on one x (`AppMenu.alignsHeadings`; user decision).
             alignsHeadings: true
-            // **The word git uses**, singular like `RefBranchMenu`'s `BRANCH` and `RefTagMenu`'s `TAG` (規約 §操作パネル).
+            // **The word git uses**, singular like `RefBranchMenu`'s `BRANCH` and `RefTagMenu`'s `TAG`: it names the
+            // one about to be chosen.
             AppMenu {
                 id: repoSub
                 title: qsTr("REPOSITORY")
                 widthFloor: 0
-                // **The repositories this window already has open**, less the one it is standing in (規約 §操作パネル).
-                // The row moves the window to that tab where it stands, so a tab in a linked worktree says so here too.
+                // **The repositories this window already has open**, less the one it is standing in — no history of
+                // past ones. The row moves the window to that tab where it stands, so a tab in a linked worktree says
+                // so here too. Their names stay words, not code (unlike the WORKTREE card's).
                 Instantiator {
                     model: topBar.tabsModel
                     delegate: AppMenuItem {
@@ -754,8 +829,8 @@ Rectangle {
                     onObjectRemoved: (at, object) => repoSub.removeItem(object)
                 }
             }
-            // **The mark is on the title row and nowhere else** (規約 §操作パネル), in the WORKTREES section's `success`
-            // (`NavSections`).
+            // **The mark is on the title row and nowhere else**, as on the left menu's section, in the WORKTREES
+            // section's `success` (`NavSections`).
             AppMenu {
                 id: worktreeSub
                 /// The worktrees the card was built from as the stand card last opened (`pressRepoName`).
@@ -769,10 +844,17 @@ Rectangle {
                 widthFloor: 0
                 // **Every worktree the left menu's WORKTREES section lists, whatever it is filtering to**
                 // (`NavSectionModel.worktreeCard`), less the one this tab stands in, down that section's road
-                // (`openRepositoryPathRequested`).
+                // (`openRepositoryPathRequested`). Copied into `rows` at the press (`pressRepoName`), **never the
+                // section's model handed to the Instantiator**: that model's rows are what the left menu shows
+                // (`qmodel.rs` `row_count`, after the filter), so a filter would empty the card too — and the feed has
+                // one receiver per section (`attach.rs`), so a second model cannot be attached to escape it.
                 //
-                // **Never left empty** (規約 §操作パネル): the repository's own worktree, where it is the only one, stays
-                // on as a row a reader cannot choose.
+                // **Never left empty** (user decision — ask before changing): a heading that comes and goes with the
+                // number of worktrees reads as a door this repository does not have. The repository's own worktree,
+                // where it is the only one, stays on as a row a reader cannot choose, dressed as ever (house, branch
+                // name; hover `You are in this worktree`) — less the tab's own, the card has no row, and
+                // `AppMenu.delegate` drops a card with `offeredRows === 0` title row and all. `blockedReason` greys
+                // it and the row's `rowPress` swallows the press. Headless: `ops-stand-worktrees`.
                 Instantiator {
                     model: worktreeSub.rows
                     delegate: AppMenuItem {
@@ -790,7 +872,8 @@ Rectangle {
                         readonly property bool homeWorktree: worktreeRow.change === "MAIN"
                         // **Named the way the left menu names it** (`NavRowBody.name`): the repository's own worktree
                         // by the branch it has out — its folder is already the tab's name — every other by its folder.
-                        // As code with no mark of its own: the card's title wears the tree (デザイン規約 §操作パネル).
+                        // As code with no mark of its own (user decision): the card's title wears the tree. Ground and
+                        // face as a name in a sentence (デザイン規約 §ref の種別), cut in the middle past the ceiling.
                         codeName: worktreeRow.homeWorktree && worktreeRow.branch !== "" ? worktreeRow.branch
                                                                                         : worktreeRow.modelData.name
                         textNames: true
@@ -815,8 +898,7 @@ Rectangle {
         }
 
         // The branches, less the one the window stands on — **the left menu's BRANCHES section, filed its way**
-        // (`OpsBranchMenu`), down its road (`RepoPage.switchToRef`; 規約 §操作パネル). Hung off the name as the stand
-        // card is.
+        // (`OpsBranchMenu`), down its road (`RepoPage.switchToRef`; header). Hung off the name as the stand card is.
         OpsBranchMenu {
             id: branchMenu
             page: topBar.curPage
@@ -828,6 +910,12 @@ Rectangle {
         }
 
         // ---- the three actions -----------------------------------------
+        // Fetch, push, stash, in that order (stash right of push: user decision — ask before changing). **These three
+        // only**: the fixed targets speak for the repository as a whole; `pull` moves one branch, so it is a row on
+        // that branch's menus, never a button here (`offers::pull`). **The word over its mark** (`stacked`) — the
+        // panel is two lines deep, and one line here
+        // floats in it. **Framed in every state** (`borderStrong`, `bgSurface` inside): this is the one row of the
+        // window that is pressed, and a word with no frame reads as a label; a warning takes the frame's colour.
         Row {
             id: actionSeat
             anchors.top: parent.top
@@ -852,8 +940,8 @@ Rectangle {
                 // that decided to.
                 width: topBar.actionCap
                 // **Two lines deep whatever the branch writes** (`actionDepth`): held to one line, a button's word and
-                // mark stand past its frame (規約 §操作パネル). Folded, the cell takes the panel's height and the frame
-                // keeps that depth: the fold gives up the word, not the depth.
+                // mark stand past its frame. Folded, the cell takes the panel's height and the frame keeps that depth:
+                // the fold gives up the word, not the depth (`ActionButton.frameInset`).
                 height: fetchButton.folded ? opsBand.height : topBar.actionDepth
                 foldedDepth: topBar.actionDepth
             }
@@ -887,8 +975,13 @@ Rectangle {
         }
 
         // ---- the line between the three and the find ----------------------
-        // Where the set ends (規約 §操作パネル). Its step is paid for in `opsRightMargin`, folded or not; **as tall as
-        // the frames, not the cells** (`frameInset`).
+        // Where the set ends — **the panel's one upright line** (user decision — ask before changing): no git command
+        // stands behind the find, and the three are a set it is not part of. The band's no-line rule (header) covers
+        // only the band, not this row. Centred in the `spaceMd` step between the two frames, touching neither (a pixel
+        // touching reads as that frame's edge). **As tall as the frames, not the cells** (`frameInset`): top and bottom
+        // on the frames' lines — shorter reads as a symbol floating between them; a folded cell is the panel's whole
+        // height, and the frames keep their depth folded, so the line does not change either. Its step is paid for in
+        // `opsRightMargin` at every window width, folded or not. Headless: `ops-panel`'s `rule=` (`findRuled`).
         Rectangle {
             id: findRule
             x: Math.round((actionSeat.x + actionSeat.width + findButton.x - width) / 2)
@@ -918,7 +1011,7 @@ Rectangle {
             // ends theirs does (`ActionButton.slack`).
             widestText: topBar.widestAction
             widestCode: topBar.widestActionCode
-            // **The first word the panel gives up** (規約 §操作パネル の譲る順); the cell keeps **the three's width**
+            // **The first word the panel gives up** (the header's order); the cell keeps **the three's width**
             // either way, so the four stand as one set of cells.
             foldRequested: topBar.findFolded
             laidByBand: true

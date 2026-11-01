@@ -10,6 +10,10 @@
     the tile, but dropping them entirely turns the trunk into a bare bar
     and the icon stops looking like the big one.
 
+    The master's 3/64 frame falls under one device pixel below 21px and
+    its stroke thins to 1.25px at 16px, so this cut draws a 1px frame and
+    thickens the stroke to 1.8/16.
+
     The trunk is drawn last so it passes over the branch where they meet:
     at this size the other order breaks the trunk into two pieces.
 

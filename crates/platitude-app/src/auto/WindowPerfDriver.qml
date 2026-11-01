@@ -112,7 +112,7 @@ Item {
     }
 
     /// The font database's population, paid at a moment the memory sampler can see (`PGG_PERF_FONT_WALK=1`, the
-    /// calibration run of `cargo xtask perf`; rules-refs/app-ui.md「perf の判定行は net で読む」). The walk is the
+    /// calibration run of `cargo xtask perf`; internal-docs/性能.md「perf の判定行は net で読む」). The walk is the
     /// product's own — the glyph question a gitmoji subject asks — only the moment is chosen: before `perf_done`,
     /// idle either side, so the parent's sampler weighs it between the first mark and the last.
     Item {

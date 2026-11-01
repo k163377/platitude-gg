@@ -13,6 +13,13 @@ use crate::oid::Oid;
 use crate::process::{GitCommand, GitExecutor};
 
 /// `--format=` for `for-each-ref`; keep in sync with [`parse_refs`].
+///
+/// Ahead / behind ride the listing (`%(upstream:track)`, read by
+/// `parse_track`): no process of their own. What they cost scales with the
+/// branches that have an upstream and stand apart from it — git does not
+/// walk an upstream on the same commit, so a level branch and a ref with
+/// no upstream (tags, remote-tracking) pay nothing — and the commit-graph
+/// keeps a deep divergence cheap.
 pub const REFS_FORMAT_ARG: &str = "--format=%(refname)%00%(objecttype)%00%(objectname)%00%(*objectname)%00%(upstream)%00%(HEAD)%00%(creatordate:unix)%00%(upstream:track)";
 
 const REFS_FIELDS: usize = 8;
@@ -150,10 +157,17 @@ fn parse_line(line: &[u8]) -> Result<Option<RefEntry>, RefsParseError> {
     }))
 }
 
-/// Reads `%(upstream:track)` (and `%(push:track)`, the same words); git
-/// omits a zero leg. Parsing the words is safe only because
-/// `for-each-ref` is plumbing and never localizes them
-/// (rules-refs/core.md「ahead / behind は listing に同乗する」).
+/// Reads `%(upstream:track)` (and `%(push:track)`, the same words):
+/// `[ahead 2]`, `[behind 1]`, `[ahead 1, behind 1]`, `[gone]`, or empty
+/// when level; git omits a zero leg (2.55). Parsing the words is safe only because
+/// `for-each-ref` is plumbing and never localizes them: ref-filter's
+/// `ref_msg` stays untranslated unless a porcelain calls
+/// `setup_ref_filter_porcelain_msg()`, so the same shape out of
+/// `git branch -vv` cannot be parsed.
+///
+/// `[gone]` and level both read 0/0: telling them apart is `upstream`'s and
+/// `RemoteBranches::has_counterpart`'s
+/// (`refs_integration::a_branch_counts_how_far_it_stands_from_its_upstream`).
 pub(crate) fn parse_track(field: &[u8]) -> (u32, u32) {
     let Some(inside) = field
         .strip_prefix(b"[")
@@ -193,8 +207,12 @@ impl<'a> RemoteBranches<'a> {
     }
 
     /// The remote branch a local one speaks for, wherever the two stand:
-    /// its configured upstream only. A same-named remote branch is a
-    /// different branch, as git reads it (デザイン規約 §グラフ行のダブルクリック).
+    /// its configured upstream only (user decision — ask before changing).
+    /// A same-named remote branch is a different branch, as git reads it
+    /// (デザイン規約 §グラフ行のダブルクリック): git reads only
+    /// `branch.<name>.merge`, which `refs_integration` holds by asking real
+    /// git for `%(upstream)`. No index by branch name either: built, it
+    /// would walk every remote branch on every read of the refs.
     pub fn spoken_for(&self, local: &RefEntry) -> Option<&'a RefEntry> {
         let up = local.upstream.as_deref()?;
         self.by_refname.get(up).copied()
@@ -207,8 +225,14 @@ impl<'a> RemoteBranches<'a> {
     }
 
     /// The remote this branch speaks for when both stand on the same
-    /// commit (デザイン規約 §グラフ行のダブルクリック). One answer for the
-    /// chip's fold and the graph's cloud, so the two cannot disagree.
+    /// commit (デザイン規約 §グラフ行のダブルクリック). Folded because
+    /// `origin/main` beside `main` says again what the cloud said; never
+    /// when the two stand apart, so no split hides. One answer for the
+    /// chip's fold and the graph's cloud, so the two cannot disagree. The
+    /// graph wears the cloud only where the two agree (user decision — ask
+    /// before changing); the sidebar asks `spoken_for`, whether
+    /// there is a counterpart at all. Which remote's reading it is, only the
+    /// hover card says.
     pub fn folded_counterpart(&self, local: &RefEntry) -> Option<&'a RefEntry> {
         self.spoken_for(local)
             .filter(|remote| remote.commit_oid() == local.commit_oid())

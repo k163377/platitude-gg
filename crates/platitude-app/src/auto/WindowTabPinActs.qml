@@ -204,7 +204,7 @@ Item {
 
     // PGG_AUTO_ACT=tab-open-moved-on: the same arrival, then a press anywhere (`Main.pressLandedAnywhere`, the
     // handler's own body), then the run narrowing under the new tab. The press ends the ask, so the strip stays put
-    // and the stand-in comes up for the cut tab (デザイン規約 §タブの所作「帯自身の所作は頼みの外」). Narrowed by
+    // and the stand-in comes up for the cut tab (`TabStrip.takeRun` / `pressLanded`). Narrowed by
     // widening the window off its floor and giving the width back, so the run ends as the staging's own.
     WindowStage {
         id: tabMovedOnTimer

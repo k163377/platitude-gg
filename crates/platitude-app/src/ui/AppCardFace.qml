@@ -38,9 +38,10 @@ Rectangle {
         acceptedButtons: Qt.AllButtons
         onActiveChanged: if (active) Hand.acted()
     }
-    /// The selection hand, named so a run can reach it (`<card>.background.pad`).
+    /// The selection hand, named so a run can reach it (`<card>.background.pad`): an id inside a card's `background`
+    /// component cannot be seen from outside it (`TipSeat`'s box names its own the same way).
     property alias pad: sweepHand
-    // In the ground, so only a press nothing else took reaches it.
+    // In the ground, so only a press nothing else took reaches it: a background is drawn under the contentItem.
     SweepPad {
         id: sweepHand
         anchors.fill: parent

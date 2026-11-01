@@ -1,4 +1,8 @@
 //! `git pull`, and the pull of a branch the worktree is not on.
+//!
+//! One git command each, never a fetch and a merge put together here: an
+//! assembled pull would be a second implementation, answering the same
+//! repository differently from the user's terminal.
 
 use std::path::Path;
 use std::time::Duration;
@@ -13,12 +17,21 @@ use crate::process::{GitCommand, GitExecutor};
 ///
 /// Where it pulls from is git's config (`branch.<name>.merge`); how to
 /// reconcile is not asked, since the row is offered only where the branch
-/// is behind (デザイン規約 §取り込んで合流させる). `--no-rebase` matters
+/// is behind (デザイン規約 §取り込んで合流させる), so `pull.rebase`,
+/// `pull.ff` and `branch.<name>.rebase` are never read (Git for Windows
+/// puts `pull.rebase false` in its system gitconfig). `--no-rebase` matters
 /// even then: with `pull.rebase` set, git runs the rebase path's clean-tree
 /// check first and turns a fast-forward down over any unstaged change
-/// (`cannot pull with rebase: You have unstaged changes`, 2.55). A branch
-/// that diverged since the last read is refused whole (`Not possible to
-/// fast-forward`, 128) and nothing is left standing.
+/// (`cannot pull with rebase: You have unstaged changes`, 128, 2.55). A
+/// branch that diverged since the last read is refused whole (`Not possible
+/// to fast-forward`, 128 — the row is off where it diverged, so only a stale
+/// read gets here). Nothing is ever left standing: neither a merge nor a
+/// rebase runs, so a pull has no way out of its own to offer. The pinned
+/// form is a user decision — ask before changing. A branch only ahead
+/// answers `Already up to date.` with exit 0: nothing on screen changes but
+/// a quiet line in the log. A fast-forward moves the selection and the
+/// view to the new tip, as a merge's landing does (`RepoTab`'s drain).
+/// Held by `pull_integration`'s `a_pull_*` / `a_diverged_pull_*`.
 ///
 /// Every non-zero exit is a failure the log raises itself over (no
 /// `answers_by_code`): 1 is a fetch that did not reach the remote, a branch
@@ -46,12 +59,18 @@ pub async fn pull(
 /// <merge>:refs/heads/<branch>`, the far side's branch fetched straight
 /// into it.
 ///
-/// No `+`: git moves the branch only onto a commit that descends from it
-/// and turns anything else down (`[rejected] (non-fast-forward)`). Nothing
-/// is checked out to merge or rebase into, so a fast-forward is the whole
-/// of a pull here (デザイン規約 §取り込んで合流させる). The remote-tracking
-/// ref comes along under the remote's own refspec, as a pull's fetch
-/// brings it.
+/// No `+`: that is the guarantee no commit is thrown away. git moves the
+/// branch only onto a commit that descends from it and turns anything else
+/// down (measured on 2.55: behind, it fast-forwards and the remote-tracking
+/// ref moves with it; level, exit 0 with nothing said; with commits of its
+/// own, `! [rejected] … (non-fast-forward)`, exit 1, the branch untouched;
+/// checked out by another worktree, `fatal: refusing to fetch into branch
+/// '…' checked out at '…'`, exit 128). Nothing is checked out to merge or
+/// rebase into, so a fast-forward is the whole of a pull here (デザイン規約
+/// §取り込んで合流させる). The remote-tracking ref comes along under the
+/// remote's own refspec, as a pull's fetch brings it. What is weighed
+/// before the press (commits of its own, the worktree holding it) is
+/// `offers::pull_row`'s. Held by `pull_integration`'s `a_branch_aside_*`.
 ///
 /// Where the branch tracks is read at the moment of asking, by the one
 /// reader of the branch keys ([`super::push_marks`]); a branch tracking

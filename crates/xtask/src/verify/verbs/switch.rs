@@ -174,6 +174,13 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "switch_stopped_landed branch=feature/clash op= conflicts=0 stashes=1 wanted=1 log=false",
     },
+    // The same landing, from an unmerged index instead of an operation:
+    // not a character apart from `switch-stopped-go`'s, so the proof is
+    // the pair's. `switch-conflicted` (no `-go`) claims the empty `op=` as
+    // the bar stands, and a run on the wrong preset fails there. `--preset
+    // cherry-pick-quit` is the one shape with no operation standing (the
+    // reader's own `--quit` left the index); `conflict-staged` cannot
+    // stand for it.
     Verb {
         name: "switch-conflicted-go",
         when: &[],

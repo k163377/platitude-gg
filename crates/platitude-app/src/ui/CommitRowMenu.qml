@@ -4,7 +4,8 @@ import QtQuick
 import platitude.ui
 
 // The right-click on a graph row: one menu for a commit, another for a stash, a third for another worktree's
-// uncommitted row (デザイン規約 §グラフ行の右クリック) — this worktree's own uncommitted row has none. The first level
+// uncommitted row (デザイン規約 §グラフ行の右クリック) — this worktree's own uncommitted row has none (user decision —
+// ask before changing). The first level
 // holds the rows used often — on the row's commit, and on the name the chip draws (or the name pressed in the chip's
 // stacked list): its pull, push and delete table —; the cards under them hold what is used rarely.
 //
@@ -29,7 +30,9 @@ Item {
     property string targetKind: ""
     property string targetName: ""
     /// What merge / rebase are handed: the name where the row draws one — a merge by name says so in the commit it
-    /// writes, and one by id does not. A worktree's path is no ref, so the commit.
+    /// writes, and one by id writes `Merge commit '<hash>'` after `main` was pressed. A worktree's path is no ref, so
+    /// the commit. Whether they are offered is the commit's place, not the name (`offers::commit_menu`): a chip naming
+    /// another branch on HEAD's own commit gets no merge that would do nothing.
     readonly property string integrateRef:
         rowMenu.targetName !== "" && rowMenu.targetKind !== "worktree" ? rowMenu.targetName : rowMenu.oid
     /// The branch every one of these rows makes its sentence about (規約 §履歴を合流させる).
@@ -146,8 +149,8 @@ Item {
     /// rows stand on (`CommitMenuState.standAgain`).
     signal waitEnded()
 
-    /// Either menu is on screen — what the page reads to hide hover behind it. Read this, not `visible`, which comes
-    /// back stale from another file (rules-refs/app-ui.md「メニューが立っている間、裏の hover は伏せる」).
+    /// Either menu is on screen — what the page reads to hide hover behind it (`RepoPage.menuStanding`). Read this, not
+    /// `visible`, which comes back stale from another file (`RefusalBadge`).
     readonly property bool showing: commitMenu.visible || stashMenu.visible || carriedMenu.visible
                                     || choiceMenu.visible
     /// Whether the one standing is the third, on another worktree's uncommitted row (`CommitMenuState.standAgain`).
@@ -220,7 +223,9 @@ Item {
         commitMenu.offer()
     }
     /// The GITHUB card's half, before `offerCommit`: the links on the row's commit and its name
-    /// (`GitHubLinks.ofRef`). Only as the menu opens — the links do not change with a command it waits for.
+    /// (`GitHubLinks.ofRef`). Only as the menu opens — the links do not change with a command it waits for — and so
+    /// kept out of `standCards`: rows handed again after the wait would be built anew by the card's `Instantiator`,
+    /// which `holdShape` cannot hold.
     function standGithub(links) {
         githubCommitMenu.standOn(links)
     }
@@ -248,6 +253,9 @@ Item {
         (stashMenu.visible ? stashMenu : carriedMenu.visible ? carriedMenu : commitMenu).dismiss()
     }
 
+    // A stash row's right-click opens this one instead of the commit menu: the two that bring it back and its delete,
+    // nothing else — a stash is on no branch's history, so no commit row applies. Code chips without `stash`: the menu
+    // hangs off a stash row, where the word says the same on every row and picks none (デザイン規約 §git 用語のコード表記).
     AppMenu {
         id: stashMenu
         heldReason: rowMenu.heldReason
@@ -264,7 +272,9 @@ Item {
             onTriggered: rowMenu.popStashRequested(rowMenu.stashRef)
         }
         AppMenuSeparator {}
-        // Held (デザイン規約 §回数押し).
+        // Held (デザイン規約 §回数押し): the one stash write that asks — what is dropped leaves the list, and only the
+        // discard record brings it back. The left
+        // menu's stash row offers it in the same words (`RefRowMenu`).
         AppMenuItem {
             id: stashDeleteItem
             code: "drop"
@@ -278,6 +288,10 @@ Item {
     }
 
     // Another worktree's uncommitted row: its door, then its work brought here (デザイン規約 §別の worktree を読む).
+    // These two rows only (user decision — ask before changing), and no WORKTREE card (`RefWorktreeMenu`):
+    // `worktree remove` / `prune` destroy, and a worktree holding uncommitted work gets no row that takes it away.
+    // It waits as the other two do (`runningWhy` / `waitEnded`, one of `levels`). Headless `carried-menu` /
+    // `carried-apply` / `carried-apply-refused`.
     AppMenu {
         id: carriedMenu
         heldReason: rowMenu.heldReason
@@ -285,6 +299,7 @@ Item {
         onWaitEnded: rowMenu.waitEnded()
         onClosed: rowMenu.dismissed()
         // The row's double-click, in the words and seat a branch another worktree holds has (`switchCommitItem`).
+        // Other products put the door on that row too (GitKraken: `Open Worktree` on each worktree's WIP node).
         AppMenuItem {
             id: carriedOpenRow
             //: The row that leads to the worktree whose uncommitted changes these are; its name follows it — the folder's,
@@ -295,13 +310,17 @@ Item {
             onTriggered: rowMenu.carriedOpenRequested(rowMenu.carriedPath)
         }
         AppMenuSeparator {}
-        // Words, not a command: it lands as `stash apply` lands, but no one command a reader would type does this
-        // (デザイン規約 §git 用語のコード表記).
+        // Words, not a command, and no chip (user decision — ask before changing): it lands as `stash apply` lands,
+        // but no one command a reader would type does this (デザイン規約 §git 用語のコード表記). The words say what is
+        // applied (`changes`), as other products name it (VS Code `Migrate Worktree Changes`), about as long as the
+        // menus' long rows (`Discard everything after it`). Not "here": in this app that is the row right-clicked
+        // (`Create branch here…`), so it would read as applying onto that row. The whole worktree only, no row per
+        // file (user decision — ask before changing).
         AppMenuItem {
             id: carriedApplyRow
             text: qsTr("Apply changes to this worktree")
             offered: rowMenu.carriedApplyOffered
-            // Not "here": in this app that is the row right-clicked (デザイン規約 §別の worktree を読む).
+            // Greyed, not taken away, while a conflict stands on either side (`CommitMenuState.standCarried`).
             //: %1 is the other worktree's name — its folder, or the branch the repository's own worktree has out.
             blockedReason: rowMenu.carriedApplyOut === "there" ? qsTr("Settle its conflicts first — %1")
                                                                  .arg(rowMenu.carriedName)
@@ -322,8 +341,13 @@ Item {
         // The first level holds the rows used often, in order of widening reach, the named branch's delete table last;
         // what is used rarely goes in the cards under them, GITHUB at the foot (デザイン規約 §メニュー).
         //
-        // Words, not a command: it opens a box, and what runs depends on what is typed. It shares a group with
-        // `switch`, being its create form (デザイン規約 §ブランチ・コミットへの移動).
+        // Words, not a command: it opens a box, and what runs depends on what is typed. Top of the menu, above the
+        // line, though the double-click opens the same box (user decision — ask before changing; the exception to
+        // デザイン規約 §メニュー「入口がそちら」): on most rows the double-click never reaches it. It shares a group with `switch`
+        // (user decision — ask before changing): what it runs, `switch -c <name> <oid>`, makes a branch and moves onto
+        // it, rightly read as a kind of moving to what is there. `switch` stands right under it, the line under
+        // `switch` since the command rows below are one run, and on a row whose target is no branch it is not offered
+        // (`canSwitch`), the group's line folding with it.
         AppMenuItem {
             id: branchHereCommitItem
             text: Words.createBranchHere
@@ -332,7 +356,8 @@ Item {
             onTriggered: rowMenu.branchHereRequested(rowMenu.oid)
         }
         // The name is the chip's, so the row does not repeat it; landing is by name, since the commit itself would
-        // leave HEAD on no branch.
+        // leave HEAD on no branch. Here as well as on the double-click (user decision — ask before changing, the same
+        // exception): the menu is the one place to read what the press will do before it.
         AppMenuItem {
             id: switchCommitItem
             // A branch another worktree holds leads to that worktree, in the same words and seat as the sidebar's row
@@ -356,7 +381,8 @@ Item {
             blockedReason: rowMenu.startWhy
             onTriggered: rowMenu.cherryPickRequested(rowMenu.oid)
         }
-        // Both cherry-pick and revert only add a commit, so both are a plain click.
+        // Both cherry-pick and revert only add a commit, so both are a plain click. Side by side: revert is
+        // cherry-pick's pair (copy it here / undo it here).
         AppMenuItem {
             code: "revert"
             offered: rowMenu.canSequence
@@ -365,7 +391,8 @@ Item {
         }
         AppMenuSeparator {}
         // The message is edited in the details pane's boxes, where the click that opens this menu has already put
-        // it.
+        // it. A click, pushed or not (`already pushed` only says so). The words name only where it goes: the clicked
+        // row is the one folded, into `parent` — the details pane's parent link already says `Go to parent commit`.
         AppMenuItem {
             code: "squash"
             //: Follows the `squash` chip: "squash into parent".
@@ -376,7 +403,10 @@ Item {
             onTriggered: rowMenu.squashRequested(rowMenu.oid)
         }
         // Held while this branch alone holds its tip; a plain click once something else does, since the commits then
-        // stay drawn and a cherry-pick brings them back (デザイン規約 §回数押し).
+        // stay drawn and a cherry-pick brings them back (デザイン規約 §回数押し; what counts as holding:
+        // `reachable.rs`). The row's warning colour goes with the mark: only where something is lost. The only row
+        // here that takes a commit away, beside `squash` — both rewrite where the commit lives. Local only: taking it
+        // off a remote needs a force push, which has its own hold.
         AppMenuItem {
             id: dropCommitItem
             code: "drop"
@@ -391,7 +421,8 @@ Item {
             }
         }
         // The clicked commit is the oldest one included; the plan shows the base it lands on as its own last row
-        // (デザイン規約 §フル interactive rebase).
+        // (`RebasePlanPane`). Beside `drop`, in the same rewriting group and on the same terms; a plain click — it
+        // opens a plan, and nothing is lost yet.
         AppMenuItem {
             code: "rebase --interactive"
             //: Follows the `rebase --interactive` chip: "from here up".
@@ -422,6 +453,15 @@ Item {
             blockedReason: rowMenu.startWhy
             onTriggered: rowMenu.rebaseRequested(rowMenu.integrateRef)
         }
+        // The branch taken back to this commit. `reset` is git's word for two jobs — moving the branch, and taking a
+        // path out of the index, which this application calls **Unstage** — so the move puts the command itself on the
+        // title as its verb: the `reset` chip, then `<branch> here` (規約 §git 用語のコード表記). The command is named
+        // once, there; each row keeps only its flag chip and a sentence saying what is kept or discarded, so a hand
+        // that knows `reset --soft` maps rows to commands at a glance and an eye that does not reads the sentence
+        // alone. `here`: the commit meant is the row the menu opened on, which the row already shows. Only `--hard`
+        // asks — a count of presses on its own row; the question bar is too much machinery for a one-line question —
+        // since `--soft` / `--mixed` discard no byte of content. The row does not say that `--hard` leaves untracked
+        // files: a menu row says what fits (規約 §長さ). When and why the card stands: `offers::CommitMenuOffers`.
         AppMenu {
             id: resetMenu
             // A stopped operation holds every row inside as the held doors do; the title stays live to show them.
@@ -446,13 +486,21 @@ Item {
                 text: qsTr("Keep everything, unstaged")
                 onTriggered: rowMenu.resetRequested("mixed")
             }
-            // Held. The sentence is about the commits; the note says the tracked uncommitted changes go too, which
-            // nothing else on screen says (規約 §ブランチを過去のコミットへ戻す).
+            // Held, in the hold's colour before it is touched (規約 §回数押しの色). The sentence names the commits
+            // (everything after it), but `--hard` overwrites the index and every tracked path of the working tree,
+            // which are not "after" anything: nothing else on screen says they go, and the reflog does not keep them.
+            // So the note says it first, in the seat `already pushed` takes (規約 §メニュー) — the hold already asks
+            // for the consent.
             AppMenuItem {
                 id: hardResetItem
                 code: "--hard"
                 text: qsTr("Discard everything after it")
-                // Two words and no count: `%n … file(s)` would show `(s)` verbatim, since no translation loads.
+                // Two words, as this menu's other notes (`already pushed` / `not merged` / `conflicts stay`): what
+                // tells it apart is the *uncommitted* part, and `too` means "besides the commits". Not `worktree`:
+                // the left menu's `WORKTREES` lists git worktrees, so the word would name another thing. No count:
+                // the uncommitted row behind the menu counts from the same status, and `%n … file(s)` would show
+                // `(s)` verbatim, since no translation loads (規約 §タイポグラフィ「複数形を `(s)` で畳まない」). Tracked
+                // files only (`hardResetTakes`): over a tree dirty with untracked files alone there is no note.
                 note: rowMenu.hardResetTakes > 0 && !rowMenu.opStanding ? qsTr("uncommitted too") : ""
                 holdPresses: Metrics.holdPressesWarned
                 // The commits come back from the branch's reflog and the uncommitted changes from the discard
@@ -467,7 +515,7 @@ Item {
         }
         AppMenuSeparator {}
         // The sidebar's `pull` row, in the same seat: a group of its own with the push, since both act on a branch, not
-        // this commit (デザイン規約 §取り込んで合流させる).
+        // this commit (seat, wording and colour: `RefRowMenu`'s pull row).
         AppMenuItem {
             id: pullCommitItem
             code: "pull"

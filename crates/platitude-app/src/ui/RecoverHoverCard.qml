@@ -7,7 +7,8 @@ import platitude.ui
 
 // What an entry of the discard log says when the pointer rests on it, as a graph row's card does (`CommitHoverCard`):
 // the operation in full, what it took and where, and when — written as the band writes it, the moment first
-// (破棄記録仕様.md). A card, not a tooltip: a tooltip lays its string out in one block.
+// (`platitude_core::discards`) so every line's head stands in one column. A card, not a tooltip: a tooltip lays its
+// string out in one block. What it says and in what order is a user decision — ask before changing.
 //
 // Owned by the list: its rows are recycled the moment they scroll off, and a popup parented to a row goes with it.
 AppCard {

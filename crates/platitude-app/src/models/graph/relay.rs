@@ -5,6 +5,20 @@
 //! The session sends its commit rows by id and new lanes; everything else
 //! about them is already here — on screen, or set aside by the relaying
 //! that took them ([`SetAside`]).
+//!
+//! Core's stand-in (`session::leaving`), not the sidebar's `ops::StandIn`:
+//! another owner and another signal — the rows come back on the write's
+//! refusal, and a landed delete is drawn again by the walk behind. A
+//! selected row taken off moves the selection to its neighbour
+//! (`followVanishedCommit`); a refusal that brings the row back does not
+//! bring the selection back.
+//!
+//! Headless picture: `delete-force feature/clash --preset clashing`, the
+//! one run where a ref's delete really takes rows off (`basic`'s
+//! `feature/topic-a` is held by origin, so nothing goes). The walk after
+//! the landing finds the same picture and replaces nothing, so what is
+//! shot is the relaid one. A stash's row goes at the press too
+//! (`delete-stash-go`).
 
 use std::collections::HashSet;
 

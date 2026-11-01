@@ -3,8 +3,8 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude.ui
 
-// The hand that picks the log's text out of its rows: a drag selects, a plain click puts the selection down
-// (デザイン規約 §git が言ったことを読む場所).
+// The hand that picks the log's text out of its rows: a drag selects, a plain click puts the selection down — with
+// Ctrl+C, the log's only way to copy (`CommandsPane`).
 //
 // Laid over the list, not inside the rows: a `Flickable` takes the grab from its children once a drag passes the
 // threshold, and `reuseItems` rebuilds a scrolled-away row, so a drag held by a row loses its grip.
@@ -92,8 +92,8 @@ Item {
         // Rows are as wide as the list, so any x inside it finds the same row.
         return pick.view.indexAt(1, pick.onRows(pick.view.contentY + inside))
     }
-    /// A content y clamped onto the band the rows stand on — what makes the ground under the last row a start
-    /// (規約 §git が言ったことを読む場所「始点はパネルの枠の中で誰も press を取らない所すべて」).
+    /// A content y clamped onto the band the rows stand on — what makes the ground under the last row a start (see the
+    /// header; 規約 §右のペインの字は掴める), a sweep from there running from the last row's end.
     /// From `originY`, not 0: rows of differing heights move the view's origin once it is sent to its end
     /// (`AppListView.clampY`). An empty log has no band, so `indexAt` finds nothing and the press goes to the list.
     function onRows(y) {

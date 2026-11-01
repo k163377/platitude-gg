@@ -3,9 +3,22 @@ pragma ComponentBehavior: Bound
 import QtQuick
 
 // How a run is handed out among tab names, and nothing else: widths measured elsewhere and a run go in, the strip's
-// layout answers come out (デザイン規約 §ウィンドウの縁 の譲る順). No font and no items, so the whole condition
-// table runs in one process (`tests/qml/tst_tabwidths.qml`); `tab-widths` covers that real widths go in and the
-// answers reach the tabs.
+// layout answers come out. No font and no items, so the whole condition table runs in one process
+// (`tests/qml/tst_tabwidths.qml`); `tab-widths` covers that real widths go in and the answers reach the tabs.
+//
+// **The order the strip gives way in**, short of room — it stops short of the grab run (`TabStrip`'s `grabRun`) and
+// narrows; narrowed all the way, it scrolls sideways:
+//   1. **The room kept for the `✕`** right of the name, by every tab alike, down to the tab's near step; past it name
+//      and mark overlap (`TabItemDelegate`'s fade). The tabs thin with every name whole: cutting names first leaves
+//      blanks once they can no longer be read. Alike so the marks stand the same distance in from every right edge.
+//   2. **The linked worktree's run** (`木 名前`, `splitName`), per tab: the share the name leaves over is that run's;
+//      short of it the folder name is cut in the middle, and below the mark's width the run goes whole. It is gone
+//      before a letter of the name is cut — a tab is read for which repository; where it stands comes next (user
+//      decision — ask before changing). A tab with no such run (in the repository's own worktree) goes from 1 to 3.
+//   3. **The names**, the longest first (`widest`): an even split would narrow `ui` too and take width from what has
+//      none to give. Those giving way come out at one width; under `TabMetrics.titleMinChars` the strip scrolls.
+// The window's floor follows this order: it is the tightest the band packs, so it counts the marks' room at its
+// minimum (`TabStrip.tabStripFloorW`). The state badges give way at the same time, not after (`TopBar`'s tab strip).
 //
 // Owns no number: the costs are `TabMetrics`'s, pushed in.
 QtObject {
@@ -40,8 +53,8 @@ QtObject {
     }
 
     /// How one tab spends the cap between its two runs: the repository's name, then the linked worktree's
-    /// (`TabTreeMark`). The name is served first (デザイン規約 §ウィンドウの縁 の譲る順), so the worktree's run is gone
-    /// before a letter of the name is cut.
+    /// (`TabTreeMark`). The name is served first (step 2 of the order in this file's header), so the worktree's run is
+    /// gone before a letter of the name is cut.
     ///
     /// Under `treeFloor` (`TabTreeMark.floorWidth`) the run goes whole, mark and all: a worktree name without its mark
     /// reads as the repository's name carrying on.
@@ -55,7 +68,7 @@ QtObject {
         return { titleW: titleW, treeW: treeW }
     }
 
-    /// The whole pass, in the order the band gives things up (デザイン規約 §ウィンドウの縁): the marks' room first, off
+    /// The whole pass, in the order the band gives things up (this file's header): the marks' room first, off
     /// every tab at once, then the names, the longest giving way first; below `minW` the strip scrolls.
     ///
     /// `nat` is every name's natural width, in any order. Whole pixels throughout: fractional widths come out a pixel
@@ -66,6 +79,9 @@ QtObject {
     function settle(nat, run) {
         const maxW = tabShare.ceiling(run, nat.length)
         const easeW = Math.min(tabShare.easeFullW, maxW)
+        // The easing's air is a fixed cost, like the mark's room: the cap bites on long names and the air goes to short
+        // ones, so costing both off one number would count twice. The pass costs the air at `maxW`, the cap being still
+        // unknown here; only the tab clamps it to the cap (`TabItemDelegate.titleEase`).
         let eased = 0
         let names = 0
         let capped = 0
@@ -87,7 +103,7 @@ QtObject {
                 wantNames: wantNames
             }
         }
-        // Every tab gives up the same mark room (同§): taking it only from tabs short of run stands the marks at
+        // Every tab gives up the same mark room (step 1): taking it only from tabs short of run stands the marks at
         // different distances from their edges.
         const room = Math.floor((run - eased - capped - nat.length * tabShare.padL) / nat.length)
         const markRoom = Math.max(tabShare.markRoomMin, Math.min(tabShare.markRoomFull, room))

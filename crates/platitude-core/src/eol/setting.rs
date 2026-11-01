@@ -67,11 +67,16 @@ impl AutoCrlf {
     }
 
     /// What git makes of one `core.autocrlf` record, in git's own boolean
-    /// vocabulary (rules-refs/core.md「`core.autocrlf` の綴りは git の bool 語彙」).
+    /// vocabulary (measured on 2.55): `input` in any case first; true is
+    /// `true` / `yes` / `on` or a non-zero integer; false is `false` / `no` /
+    /// `off` / `0` or an empty value; a key with no `=` is true.
     ///
-    /// `None` for a word git refuses: git will not run on that file, so it
-    /// reads like an unset key rather than a fourth value the picker could
-    /// restore.
+    /// `None` for any other word, which git refuses (`fatal: bad boolean
+    /// config value`): git will not run on that file, so it reads like an
+    /// unset key rather than a fourth value the picker could restore — the
+    /// settings screen can pick only that row. The warning
+    /// (`attrs::normalises`) and the settings screen read through this one
+    /// reader: two readings would give two answers to whether git decides.
     fn of_record(value: Option<&str>) -> Option<Self> {
         // A key written with no `=` at all: git reads it as true.
         let Some(value) = value else {
@@ -162,9 +167,10 @@ pub struct AutoCrlfWrite {
 /// value: the screen asked what this level sets.
 ///
 /// The file is read first and left alone when it already says it — not an
-/// optimisation: `--unset` of an absent key exits like its refusal of a
-/// multi-valued key. One key, so no retry pass: a lost lock leaves nothing
-/// half-written (rules-refs/core.md「`core.autocrlf` の書きは 1 キーなので 1 発」).
+/// optimisation: `--unset` of an absent key exits 5, as its refusal of a
+/// multi-valued key does, and the read spares the first of them. One key,
+/// so one write and no retry pass: a lost lock leaves nothing half-written
+/// (unlike identity's two keys, `identity::set_identity`).
 pub async fn set(
     executor: &GitExecutor,
     workdir: &Path,

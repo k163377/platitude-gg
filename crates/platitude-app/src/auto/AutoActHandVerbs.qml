@@ -10,7 +10,12 @@ import platitude.ui
 /// each is pressed where it stands.
 ///
 /// The run waits for the surface having moved — a hand that started is not yet the gesture. The hand is left running,
-/// so the anchor's ring is in the picture.
+/// so the anchor's ring is in the picture; the popup surfaces (`peek`, `ref-list`) are read off scene.png. Each surface
+/// has its preset (the registry's lines): `long` for `files`, `block` and the four `wip-*`; `edges` for `description`,
+/// `summary`; `spread` for `chosen`, `plan`; `manytags` for `tags`, `peek`, `ref-list`; `carried-many` for `carried`.
+/// A run that hit its ceiling names the stage it stuck at in its last `middle_hand surface= waiting=` line. In the two
+/// writable boxes (`wip-description` / `wip-summary`) a platform that pastes on middle (Linux) takes the press for the
+/// words, so the answer there is the hand stepping aside (`claimed=true took=false`); Windows scrolls.
 // `Item` because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts

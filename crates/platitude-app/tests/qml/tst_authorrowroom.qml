@@ -2,7 +2,7 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// Who gives way on the details pane's date line when the row is short (デザイン規約 §co-author の表示): the credit's
+// Who gives way on the details pane's date line when the row is short (`CommitAuthorRow.textRoom`): the credit's
 // name is cut, then folded to the face and its count, and only then does the date give up its time — whole, cut back
 // to its day. Whatever gives, the line's words stay clear of the parent line beside them, whose two parents always
 // stand. The row is set here by width alone; the pane's floor and the fonts are the app's (`details-align`).

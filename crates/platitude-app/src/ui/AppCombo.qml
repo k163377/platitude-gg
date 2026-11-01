@@ -42,7 +42,8 @@ ComboBox {
 
     /// The value; `editText` follows it. A model arriving snaps `currentIndex` to the first row and drags the text
     /// along, so the text is held here and put back once the swap settles. Only a person moves it — a picked row, or
-    /// `textEdited` (not emitted for text set in code) (rules-refs/app-ui.md「マージツール候補の `AppCombo`」).
+    /// `textEdited` (not emitted for text set in code). `editText` changing, `activeFocus` and `popup.opened` cannot
+    /// tell a person from the reset, which runs before `onModelChanged`.
     property string wanted: ""
     onWantedChanged: if (!combo.pickOnly && combo.editText !== combo.wanted) combo.editText = combo.wanted
     onActivated: index => {
@@ -84,7 +85,10 @@ ComboBox {
         // The plain boxes' inset (`SlimField`), which this field stands beside in the question bar — and the kind's
         // mark after it, a sign on the value (`leadMark`), its seat's air on the frame's side given back (`frameAir`).
         leftPadding: Theme.spaceXs + (combo.leadMark !== "" ? leadIcon.wordCell - combo.frameAir : 0)
-        // Stops the word short of the arrow; no list, the plain inset (rules-refs/app-ui.md「打つ欄の右で字を止めるのは山」).
+        // Stops the word short of the arrow: the control gives way only by the indicator's width, and the arrow's seat
+        // stands `spaceSm` further in, while a `TextInput` does not elide — unstopped, a long name runs under the
+        // arrow. So the inset is that gap plus the word's own inset. No list, the plain inset: no width is given up to
+        // an arrow not drawn. `tst_appcombo` holds it, and that the control gives way by exactly the indicator's width.
         rightPadding: combo.hasList ? Theme.spaceSm + Theme.spaceXs : Theme.spaceXs
         verticalAlignment: Text.AlignVCenter
         readOnly: combo.pickOnly
@@ -93,7 +97,8 @@ ComboBox {
         selectedTextColor: Theme.textPrimary
         onTextChanged: if (!combo.pickOnly) combo.editText = text
         onTextEdited: combo.wanted = text
-        // A typed value longer than the box scrolls to the caret, and unclipped its head is drawn out past the frame.
+        // A typed value longer than the box scrolls to the caret, and unclipped its head is drawn out past the frame
+        // (`set-upstream` with an 80-letter name shows it).
         clip: true
         TextMetrics {
             id: fit
@@ -190,8 +195,9 @@ ComboBox {
         }
     }
 
-    /// A press on the field, wherever it came from. Picking only, it toggles; editable, the caret lands and the list
-    /// comes down, and a second press only moves the caret (rules-refs/app-ui.md「`AppCombo` は押された所から開く」).
+    /// A press on the field, wherever it came from — the one meaning of a press, which the `TapHandler` (typed), the
+    /// `MouseArea` (`pickOnly`) and the automation verbs all enter. Picking only, it toggles; editable, the caret lands
+    /// and the list comes down, and a second press only moves the caret.
     function pressField() {
         if (combo.pickOnly) {
             if (combo.popup.opened)

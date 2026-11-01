@@ -8,6 +8,10 @@ import platitude.ui
 // branch offers the same things everywhere. Decided as it opens and frozen while it stands, but for standing again
 // when a command it waited for has ended (`standAgain`, デザイン規約 §メニュー).
 //
+// It carries only what the row's gestures do not reach: a rename is a click or two away on the row itself, and a
+// commit's hash is copied in the details pane the row's click opens (`Copy full hash`). The menu's rows are kept for
+// what has no other door — the deletes. `Create branch here…` is the exception (`refBranchHereItem` below).
+//
 // An `Item` because a menu measures the window through the item it was declared under (`AppMenu.ownerItem`).
 Item {
     id: refRowMenu
@@ -43,7 +47,8 @@ Item {
     property string runningWhy: ""
 
     /// The row the menu stands on. `refId` is what git knows it by, which on a stash is a selector, apart from
-    /// the row's message, and on a worktree with no branch out its path.
+    /// the row's message, and on a worktree with no branch out its path. `refId` never appears in a sentence
+    /// (デザイン規約 §メニュー).
     property string kind: ""
     property string refId: ""
     property string refOid: ""
@@ -56,8 +61,8 @@ Item {
     readonly property string integrateRef: refRowMenu.kind === "worktree" ? refRowMenu.refOid : refRowMenu.refId
 
     property bool canSwitch: false
-    /// Whether `switch` will raise a question (an operation standing, or unmerged files), worn as the row's `!`
-    /// (デザイン規約 §進行中の操作から出る).
+    /// Whether `switch` will raise a question (an operation standing, or unmerged files), worn as the row's `!` so it
+    /// is known before the press (user decision — ask before changing; the mark's seat: `AppMenuItem.asks`).
     property bool switchAsks: false
     /// The name the worktree holding this row's branch goes by, empty when none does; the switch row then opens that
     /// worktree and names it (`RepoPage.switchToRef`). Its WORKTREES row's name — the folder, or the branch the
@@ -78,7 +83,8 @@ Item {
     property string pullRuns: ""
     /// Why that row is greyed — `standing` / `diverged` / `own` / `held` (`Words.pullOut`) — or "" while it is live.
     property string pullOut: ""
-    /// The remote branch this row's branch tracks, which the `own` reason names.
+    /// The remote branch this row's branch tracks, which the `own` reason names. `branchesModel.upstreamOf` names a
+    /// remote reading only, so a branch tracking a local one (`branch.<n>.remote = .`) has no `aside` row.
     property string pullUpstream: ""
     /// The stash's drop, in the last group with the branch's delete table; a tag's deletes are its card's
     /// (`RefTagMenu`).
@@ -86,7 +92,10 @@ Item {
 
     // ---- bringing two lines of history together --------------------
     /// Whether merge / rebase are on offer — one reading for both rows and the rebase note, so the note appears
-    /// exactly where its row does. A stash is not a line of history.
+    /// exactly where its row does. A stash is not a line of history. Keep the tag in for both — a tag is a fixed
+    /// point, worth taking in and worth rebasing onto: dropped from one, the
+    /// same tag would offer it on the graph row (`CommitRowMenu`) and not on the TAGS row here. Core never looks at the
+    /// kind (`offers::ref_menu`'s `integrate_from`).
     readonly property bool integrateOffered:
         (refRowMenu.kind === "branch" || refRowMenu.kind === "remote" || refRowMenu.kind === "tag"
          || refRowMenu.kind === "worktree")
@@ -227,7 +236,8 @@ Item {
             "tagCarriers": menu.carriers,
             "tagOnlyThere": menu.rowGoes,
             "tagHere": sides === "here" || sides === "both",
-            // Held back reads as drift to core: the rows reaching over there stay out (offers::ref_menu).
+            // Held back reads as drift to core: the rows reaching over there stay out (offers::ref_menu), so `ref_menu`
+            // takes no argument of its own for it. `CommitMenuState.tagFacts` hands it the same way.
             "offers": GitFacts.refMenuOffers(
                 kind, full, oidHex,
                 refRowMenu.repoTab.state === "open",
@@ -302,7 +312,8 @@ Item {
     function standAgain() {
         if (!refRowMenu.showing)
             return
-        // A stash answers to its place in the list, which the command may have moved; the rest to their names.
+        // A stash answers to its place in the list, which the command may have moved; the rest to their names. Looked
+        // up in the stash list, not the graph: the graph's walk may not reach an old stash.
         const full = refRowMenu.kind === "stash" ? refRowMenu.stashesModel.fullOfOid(refRowMenu.refOid)
                                                  : refRowMenu.refId
         const oidHex = full === "" ? "" : refRowMenu.oidNow(refRowMenu.kind, full)
@@ -400,6 +411,8 @@ Item {
         // opens (`RefBranchMenu.standOn`), and nothing reads it while the menu is down.
 
         // `Create branch here…` and `switch` are one group: it runs `switch --create` (デザイン規約 §メニュー の入れ子).
+        // On top, over the first divider, in every section but STASHES: it gives the current branch's menu one live
+        // row, which would otherwise open on nothing but a greyed delete table.
         AppMenuItem {
             id: refBranchHereItem
             text: Words.createBranchHere
@@ -409,8 +422,9 @@ Item {
         }
         AppMenuItem {
             id: refSwitchItem
-            // A branch another worktree holds opens that worktree instead: the chip gives way to the worktree's name
-            // behind its tree mark (デザイン規約 §進行中の操作から出る).
+            // A branch another worktree holds opens that worktree instead (`SwitchAction::OpenHolder`): a worded door
+            // names where it goes before the press, so the chip gives way to `Open` and the worktree's name behind its
+            // tree mark — no `!`, since nothing is asked.
             code: refRowMenu.heldLeaf === "" ? "switch" : ""
             //: The row that leads to the worktree holding this branch; its name follows it — the folder's, or the branch
             //: the repository's own worktree has out.
@@ -419,7 +433,8 @@ Item {
             codeName: refRowMenu.heldLeaf
             offered: refRowMenu.canSwitch
             // Never greyed for its own reason: what stands in the move's way presses through to a question, marked by
-            // `asks` (デザイン規約 §進行中の操作から出る). Held doors still hold it (`heldReason`) — a move mid-rewrite
+            // `asks` (user decision — ask before changing) — a greyed row says why on hover only, and the hand reaching
+            // for it is the reader who wants to know. Held doors still hold it (`heldReason`) — a move mid-rewrite
             // is the exit nobody meant (§フル interactive rebase) — and so does a command the menu waits for
             // (`runningWhy`).
             blockedReason: ""
@@ -454,9 +469,15 @@ Item {
             onTriggered: refRowMenu.repoTab.rebase(refRowMenu.integrateRef, "", true)
         }
         AppMenuSeparator {}
-        // The group that moves the named branch along its upstream, with the push: naming the branch that moves in its
-        // own colour — the worktree's, which the row may not name (its upstream's), or this row's own
-        // (デザイン規約 §取り込んで合流させる).
+        // The group that moves the named branch along its upstream, one group with the push, above the delete table
+        // (user decision — ask before changing): merge / rebase bring the clicked row into the current branch,
+        // while a pull moves the branch itself, so the subject differs; in this seat it sits in the same place in every
+        // menu (規約 §メニュー). The sentence names the branch that moves (user decision — ask before changing), though
+        // a row's own name is usually left to the row (規約 §メニュー「行が自分で示しているものは行に任せる」): one row,
+        // in one seat, moves the current branch on its upstream's row and the row's own branch elsewhere, so the words
+        // alone would not say which moves before the press. Shaped as `merge` into <current> is. In the name's own
+        // colour (規約 §ref の種別「文の中の名前」): the current branch `textLink`, another local branch white; a greyed
+        // row greys its name too.
         AppMenuItem {
             id: refPullItem
             code: "pull"
@@ -465,13 +486,15 @@ Item {
             refTint: refRowMenu.pullRuns === "aside" ? Theme.textPrimary : Theme.textLink
             refMark: "branch"
             offered: refRowMenu.pullRuns !== ""
-            // Greyed where git would turn the press down, saying where to go instead (デザイン規約 §取り込んで合流させる).
+            // Greyed where git would turn the press down, saying where to go instead (`offers::PullOut`).
             blockedReason: Words.pullOut(refRowMenu.pullOut, refRowMenu.heldLeaf, refRowMenu.pullUpstream)
             reasonMarkWord: refRowMenu.pullOut === "held" ? refRowMenu.heldLeaf : ""
             reasonMarkKind: refRowMenu.heldHome ? "home" : "tree"
             reasonMarks: refRowMenu.pullOut === "own"
                          ? Words.listMarks(refPullItem.blockedReason, refRowMenu.pullUpstream, "remote") : []
-            // `git pull` resolves the other end itself; the fast-forward is told the branch.
+            // `git pull` resolves the other end itself; the fast-forward is told the branch. Headless: `pull-menu
+            // [<branch>|<remote ref>]`, `pull-blocked [chip][:<branch>]`, `pull-go`, `pull-ahead`, `pull-branch-go
+            // <branch>` (`--preset others-behind`; under a stopped merge `--preset others-merging`).
             onTriggered: refRowMenu.repoTab.pull(refRowMenu.pullRuns === "aside" ? refRowMenu.refId : "")
         }
         // The other way along the same upstream, on the BRANCH card's answers (デザイン規約 §リモートへ送る).
@@ -495,6 +518,9 @@ Item {
             id: refBothDeleteRow
             card: branchMenu
         }
+        // Held: what is dropped leaves the list, and only the discard record brings it back. The graph's stash row
+        // offers it in the same words
+        // (`CommitRowMenu`).
         AppMenuItem {
             id: refStashDropItem
             code: "drop"

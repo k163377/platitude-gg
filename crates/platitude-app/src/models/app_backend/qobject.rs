@@ -83,6 +83,9 @@ impl AppBackend {
         Member = auto_fetch_minutes,
         Notify = settings_changed
     );
+    // The settings box's validator bound — the one reader of
+    // `AUTO_FETCH_MAX_MINUTES` outside `session::auto_fetch_minutes`, which is
+    // where the ceiling is applied.
     qproperty!("autoFetchMaxMinutes", Member = auto_fetch_max, Constant);
     qproperty!(
         "gitConcurrency",
@@ -210,7 +213,7 @@ impl AppBackend {
 
     /// Whether the window may go now: no git write is queued or running
     /// (`Hub::writes_settled`). A slot over hub state — the recorded
-    /// exception in rules-refs/app-ui.md「アプリ終了の close ゲートは 1 本」.
+    /// exception, see `WindowQuitGate.qml`.
     /// Fails open: a missing hub means shutdown already owns the writes
     /// and joins them.
     #[qslot]

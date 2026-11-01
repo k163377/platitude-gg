@@ -614,7 +614,7 @@ mod periodic {
     /// A file without a trailing newline: staging the whole hunk must keep
     /// the missing newline. (Selecting only an addition after the
     /// unterminated line cannot be expressed as a partial patch; left as
-    /// asked: P3-確認事項 §触らないと決めたもの.)
+    /// it is — the `patch` module docs say why.)
     #[tokio::test]
     #[ignore = "duplicates whole_hunk_selection_keeps_the_hunk_verbatim: not worth the pre-merge run"]
     async fn stage_a_file_without_a_trailing_newline() {

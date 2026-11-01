@@ -6,13 +6,20 @@ import platitude.ui
 //
 // The shape is Chromium's Fluent arrow, measured drawn at device scale 8: the sharp triangle behind the ink is 1.24 ×
 // the ink's width across and 0.89 × down, and every corner is rounded by 0.16 × the ink's width.
+//
+// Painted as it appears (`InkCanvas`): the bar of a list whose rows come later (the diff, a WIP bucket) is born with
+// nowhere to go, and a list born 0 high settles its size while hidden, so nothing else asks for the first paint — and
+// every picture waits on `Ink.owed` to its ceiling (`code-grow`, `band-actions-alert`). Held by `tst_scrollarrow.qml`.
 InkCanvas {
     id: arrow
 
     /// Points down (the bar's far end) instead of up.
     property bool down: false
     /// Centred on the box's right edge, so the edge cuts it in half: the arrow of `PaneScrollBar`, whose slab is
-    /// likewise half of a thumb sunk into the pane's edge. The one square corner is the cut, as the slab's are.
+    /// likewise half of a thumb sunk into the pane's edge (user decision): a 10-wide triangle cut in half by the edge
+    /// line, 5 × 8 showing in a 12 end. The only square corners are the cut's, as the slab's are; the tip and the inner
+    /// corner stay round. Not rounded at the cut too: at 5px wide that reads as a dot, not a triangle (rejected side by
+    /// side).
     property bool buried: false
     /// The ink's width of the whole shape (a buried arrow shows half of it).
     property real span: 0

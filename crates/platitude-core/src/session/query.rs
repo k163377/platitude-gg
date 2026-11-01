@@ -231,7 +231,9 @@ impl RepoSession {
                 // already decoded (`preview::PreviewFiles`).
                 self.preview_files.sweep_before(epoch);
                 // Noted before the event: what the next re-read compares
-                // against is what the pane was handed.
+                // against is what the pane was handed. Only here, where the
+                // event goes out: noting a diff the pane never got would
+                // leave that file unrefreshed for as long as it stays put.
                 self.note_diff(&workdir, &target, fingerprint);
                 self.sink.event(SessionEvent::DiffLoaded {
                     target: target.clone(),
@@ -275,7 +277,8 @@ impl RepoSession {
     /// blocking thread and is skipped once the reader has moved on (else a
     /// walk down a file list would leave a colouring per row running). A panic
     /// here costs the file its colours and nothing else — the rows are
-    /// already out.
+    /// already out; the fallback's fancy-regex has panicked
+    /// before (bat #3156).
     fn paint_diff(
         self: &Arc<Self>,
         target: DiffTarget,

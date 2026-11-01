@@ -155,7 +155,9 @@ pub async fn set_url(
 ///
 /// Read in full and cut here, as `refs::head_state` does: beside a tag of
 /// the same name `--short` answers `heads/x`, which a push would take for
-/// another branch.
+/// another branch — planned under that name, it creates `heads/x` over
+/// there and records it as the upstream (measured on 2.55). Net:
+/// `push_source_integration`.
 pub(super) async fn current_branch(
     executor: &GitExecutor,
     workdir: &Path,

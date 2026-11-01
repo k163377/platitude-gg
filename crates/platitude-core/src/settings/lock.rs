@@ -16,9 +16,12 @@ impl Store {
         Some(beside.with_file_name(LOCK_FILE))
     }
 
-    /// Asks for sole use of these files. The answer separates "somebody
-    /// else has it" from "the question could not be asked" (a network
-    /// share can leave file locking unanswered).
+    /// Asks for sole use of these files: two processes on one store (a
+    /// jump-list launch beside a running window) would each overwrite what
+    /// the other wrote, the last one winning. The answer separates
+    /// "somebody else has it" from "the question could not be asked" (a
+    /// network share can leave file locking unanswered); only the first
+    /// refuses a window.
     pub fn claim(&self) -> Claim {
         let Some(path) = self.lock_path() else {
             // Nothing for a second process to overwrite. A run naming

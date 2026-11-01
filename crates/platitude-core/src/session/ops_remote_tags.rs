@@ -4,6 +4,12 @@
 //! Apart from [`super::ops_remote`] because a tag's whereabouts on a
 //! remote has to be asked for outright (every other sidebar row reads
 //! `refs/remotes/`), so every write here reads again on its way out.
+//!
+//! Only `ls-remote --tags` says it: nothing local records it, and a fetch
+//! does not put a drift right (`--prune` keeps the local tag,
+//! `--prune-tags` exits 1). Read unasked only by the catch-up
+//! (`RepoSession::catch_up_remote_tags`, off the write queue) and on a
+//! fetch's way out; the poll never reads it.
 
 use super::discard_record::{held_before, record_token};
 use super::*;
@@ -99,6 +105,9 @@ impl RepoSession {
     /// last, and says whether that changed anything. The only place the
     /// index is built. What it keeps comes out of the index itself, so the
     /// readings are held once ([`RemoteTagIndex::readings`]).
+    ///
+    /// Built in line, not on a task of its own: it runs once per fetch, so
+    /// there is nothing to keep off any other path.
     fn remerge_remote_tags(
         &self,
         configured: &[remote::Remote],
@@ -131,7 +140,7 @@ impl RepoSession {
     ///
     /// **The badge is re-read inside the write**: what a remote carries
     /// under `refs/tags/` has no local record, so the refs refresh after it
-    /// would not notice (rules-refs/core.md「タグのリモート状態」). Inside,
+    /// would not notice (module doc). Inside,
     /// as in [`Self::fetch_and_read_tags`]: the press has already agreed to
     /// reach the network. A refused push moved nothing and reads nothing —
     /// except one refused for a lease the remote has left
@@ -166,7 +175,7 @@ impl RepoSession {
                     .await;
                 }
                 // A leased push overwrote what the remote held, as the lease
-                // read it: that goes on the discard record (破棄記録仕様.md §2).
+                // read it: that goes on the discard record (`discards::record`).
                 if let Some(replaced) = result? {
                     let keep = record_token();
                     s.recorded_if(tag_pushed_over(&exec, &repo, &target, &replaced, &keep).await);

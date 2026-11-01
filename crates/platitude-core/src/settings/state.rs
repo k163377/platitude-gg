@@ -50,8 +50,10 @@ impl Default for Sections {
     }
 }
 
-/// One set for the whole application: per tab, the layout would jump on
-/// every tab switch.
+/// One set for the whole application (pane widths, folds, sections, tree
+/// or flat): per tab, the layout would jump on every tab switch, and the
+/// jump would be kept across restarts. The tags flag is applied per
+/// session, but the value remembered is this same one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LayoutState {
     pub sidebar_width: i32,
@@ -68,8 +70,9 @@ pub struct LayoutState {
     pub tags_shown: bool,
     pub wip_tree: bool,
     pub details_tree: bool,
-    /// Whether a diff is read side by side. A way of reading, so the
-    /// machine's (デザイン規約 §diff を 2 列で読む).
+    /// Whether a diff is read side by side; one column by default. A way
+    /// of reading, not a property of the file, so the machine's (実装計画.md
+    /// §7「設定はマシン単位で持つ」).
     pub diff_split: bool,
     pub sections: Sections,
 }

@@ -15,7 +15,18 @@
 //! terminal tab the app opens in it — outlasts the landing, so any later
 //! landing takes it away once it can, judged as above. Nothing else
 //! another session, the app or the user made is judged or named — its
-//! maker answers for it.
+//! maker answers for it: a start tree of a session that never landed, or
+//! an app tree nobody started in, stays.
+//!
+//! What no record names is never cleared, since whoever made it is
+//! unknown and may want it: a branch made before the hook kept records; a
+//! name given by `branch -m` (git hands that creation to no hook — measured);
+//! a tree with no branch out (detached); what a session made under the id
+//! it had before an edited interrupted prompt changed it; a start tree the
+//! app stopped marking (`claude-desktop-worktree` is the app's internal
+//! convention); and one the session's start did not write down that its
+//! transcripts do not name either (their directory's naming is Claude
+//! Code's internal convention).
 
 use std::path::{Path, PathBuf};
 

@@ -1,4 +1,4 @@
-//! Read off real reflogs (破棄記録仕様.md §3): which lines count, what each
+//! Read off real reflogs (`discards::read_repo`): which lines count, what each
 //! left only the old tip holding, the name a restore would take, and that a
 //! move which left nothing behind is no entry.
 
@@ -81,7 +81,7 @@ async fn a_tip_an_older_stash_stands_on_was_not_taken() {
 }
 
 /// A part whose commit this repository never had is drawn nowhere and
-/// waits for no walk: its restore is git's to refuse (§4).
+/// waits for no walk: its restore is git's to refuse.
 #[tokio::test]
 async fn a_tag_whose_object_is_not_here_is_absent() {
     let mut repo = TestRepo::init();
@@ -111,7 +111,7 @@ async fn a_tag_whose_object_is_not_here_is_absent() {
 
 /// A move's commits come back as a branch at the old tip: under the
 /// branch's own name where that is free, else with the suffix — and a
-/// detached HEAD's under `detached-pgg-restored` (§4).
+/// detached HEAD's under `detached-pgg-restored`.
 #[tokio::test]
 async fn a_move_comes_back_as_a_branch_named_clear_of_the_ones_here() {
     let mut repo = TestRepo::init();

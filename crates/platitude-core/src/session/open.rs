@@ -20,12 +20,15 @@ pub enum FirstPass {
     Swapped,
 }
 
-/// The record of the graph a consumer is showing — the row prints and the
-/// chips they wear — moved from the session that drew it to the one taking
-/// its place ([`RepoSession::take_drawn_graph`];
-/// rules-refs/core.md「画面に出ているグラフの記録はセッションより長生きする」).
-/// Without it the next session calls every picture new and redraws. The
-/// rows are not in it: the walk still runs.
+/// The record of the graph a consumer is showing — the row prints, the
+/// chips they wear and the pass number — moved from the session that drew
+/// it to the one taking its place over the same consumer
+/// ([`RepoSession::take_drawn_graph`], then `open_standing_in`). It
+/// outlives the session because it is the consumer's state. Moved, since
+/// the close throws it away: take it before `close()`. Without it the next
+/// session calls every picture new and redraws. The rows are not in it:
+/// the walk still runs. The new session's `log_gen` is seeded from its
+/// number, never the other way (`Shared::generation`).
 pub struct DrawnGraph(Shared);
 
 /// What an opening is settled with, all decided before the first git
@@ -264,7 +267,10 @@ async fn settle(s: Arc<RepoSession>, path: PathBuf) {
             }
             s.refresh_opening();
             // The fetch decision is spawned beside the reads, not awaited
-            // before them (rules-refs/core.md「開いたら 1 回 fetch する」).
+            // before them: the reads first, the fetch beside them (user
+            // decision — ask before changing). The decision reads the
+            // remote list, so awaited here it would put a process or two
+            // ahead of the graph's own reads (`RepoSession::fetch_on_open`).
             let opening = Arc::clone(&s);
             s.runtime.spawn(async move {
                 let fetching = opening.take_open_fetch(&workdir).await;

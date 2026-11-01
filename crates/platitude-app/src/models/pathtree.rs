@@ -27,7 +27,10 @@ impl<T> DirNode<T> {
     ///
     /// A path ending in `/` is itself the leaf and keeps its `/`: git's
     /// spelling of an embedded repository, one entry even under `-uall`
-    /// (`status::load`).
+    /// (`status::load`), as git never crosses that boundary. The `/` is the
+    /// one thing that says it is a directory. One row and no listing of
+    /// its files: `git add` puts one gitlink here and none of the files, so
+    /// a list would disagree with what the press does.
     pub(super) fn insert(&mut self, path: &str, make: impl FnOnce(usize) -> T) {
         let mut node = self;
         let mut rest = path.strip_suffix('/').unwrap_or(path);

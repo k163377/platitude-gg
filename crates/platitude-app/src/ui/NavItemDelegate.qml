@@ -65,8 +65,8 @@ Item {
     readonly property bool holdsOrigin: navRow.isRemoteRow && navRow.fullName === navRow.originRemote
     property real listWidth: 200
     /// Where this row's seat begins and how far each fold steps it in — one answer for every list
-    /// (`NavList.rowInset` / `nestStep`, デザイン規約 §余白), so a file's name stands where a branch's does. The
-    /// sidebar hands its own down, which its stand-in row reads too (`HeadPinRow`).
+    /// (`NavList.rowInset` / `nestStep`, where the shape is decided), so a file's name stands where a branch's does.
+    /// The sidebar hands its own down, which its stand-in row reads too (`HeadPinRow`).
     property int rowInset: Theme.spaceXs + Theme.iconSm - Theme.iconXs
     property int nestStep: Theme.iconSm / 2
     /// The layer an open name box is drawn in, and where this row's list sits in it (`NavList`), so the box follows
@@ -81,14 +81,16 @@ Item {
     /// Whether this row is one of those chosen (worktree list). Held by the list: delegates are recycled.
     property bool chosen: false
     /// The pointer is on another chosen row's stage affordance, and this row goes with it: what one press moves is
-    /// seen before it is pressed (デザイン規約 §その他の操作).
+    /// seen before it is pressed (`WipPane.stagePeerOf`).
     property bool stagePeer: false
     /// What each side of a conflict is called. **The two swap over during a rebase**, so they come from the model
     /// (`WorktreeModel.sideOurs` / `sideTheirs`); empty where git left nothing to name a side by.
     property string sideOurs: ""
     property string sideTheirs: ""
 
-    /// What the two sides each did to this file (デザイン規約 §conflict の種別).
+    /// What the two sides each did to this file (`Words.conflict`). Only the headless `conflict_kind` report calls it:
+    /// a hover on the row's conflict icon would never reach the reader (デザイン規約 §hover のツールチップ), so the
+    /// sentence stands in the diff pane.
     function conflictWords() {
         return Words.conflict(navRow.change, navRow.sideOurs, navRow.sideTheirs)
     }
@@ -166,9 +168,11 @@ Item {
     /// the whole of it fits the line it was already on (`NameCell.wholeOver`).
     readonly property real nameOverflow: rowLayout.nameWholeOver
 
-    // **The grounds in this list answer the hand alone** (click and pointer). The current branch is said by the name
-    // (`NavRowBody`, デザイン規約 §ref の種別): a ground for it would wear the selection's colour, leaving a click on it
-    // nothing to show.
+    // **The grounds in this list answer the hand alone** (click and pointer; デザイン規約 §色「今ここに立っていることは、
+    // 名前だけが言う」). The current branch is said by the name (`NavRowBody`, デザイン規約 §ref の種別): no `is_head`
+    // ground — `accentMuted` is `bgSelected`'s value, so it would wear the selection's colour, join a chosen neighbour
+    // into one band, and leave the rename's second click on that row nothing to aim at. The sticky stand-in's ground is
+    // `bgSurface` (`HeadPinRow`). Headless: `nav-jump branch:<row>` twice, on the current branch's row and on another.
     // The row a click last landed on. Without it the rename's second click has no target, and a click on a row whose
     // commit is already being read would look like it missed.
     Rectangle {
@@ -199,7 +203,8 @@ Item {
         height: Theme.rowHeight
         anchors.leftMargin: navRow.rowInset + navRow.depth * navRow.nestStep
         // Stops at the gutter of the list's scroll bar, which is drawn over the row's right-aligned column
-        // (デザイン規約 §QML 実装ルール の摘みの項).
+        // (デザイン規約 §QML 実装ルール の摘みの項). Not shaved to match the head's 6 (user decision — ask before
+        // changing): at 6 a pixel of ground is left before the thumb, the form `navBarGutter` exists to avoid.
         anchors.rightMargin: Theme.navBarGutter
         row: navRow
     }
@@ -262,7 +267,10 @@ Item {
             parent: rowLayout.nameInk
             anchors.fill: parent
             // Answers the press that asked, not a hand (`TipAsk.typed`); the folder the line names behind the tree
-            // mark (デザイン規約 §ref の種別「名前の印」).
+            // mark (デザイン規約 §ref の種別「名前の印」). **Asked only while there are words** (`asked` reads
+            // `withheldWhy` too): the box follows `words` while it is out, but the seat opens without looking at them,
+            // so an ask with no words stands an empty box. The target is the name's ink, not `NavRowBody.boxSeat`,
+            // which is visible only while a box stands in it.
             readonly property TipAsk withheldTip: TipAsk {
                 target: withheldBox
                 asked: withheldBox.visible && navRow.withheldWhy !== ""
@@ -286,7 +294,11 @@ Item {
     /// (`QAbstractItemView::verticalScrollbarValueChanged`), and what that row asks for waits on the seat until the
     /// hand moves (デザイン規約 §左メニューの所作「手が動いていない所へ来た行は開かない」「手が動いたかの見切り」).
     /// **Never the layout moving on its own**: these rows grow in place, and the row the hand walked to keeps its
-    /// light and its rest, as Qt's lists keep their hover on the item when rows open above it (§「点くのも同じ規則」).
+    /// light and its rest, as Qt's lists keep their hover on the item when rows open above it (§「点くのも同じ規則」) —
+    /// read off Qt's hover, an open row folding lifts the rows below and takes away the rest of the row the hand
+    /// walked to. The list's own opening scroll, its give-back and its fixup count as layout, not as the reader's
+    /// scroll (`NavList.onContentYChanged`). No verb: headless puts in no hover; `tests/qml/tst_navrowlight.qml`
+    /// measures it on the product's rows with a real pointer.
     readonly property int handMoves: navRow.paneHand !== null ? navRow.paneHand.moves : 0
     onHandMovesChanged: navRow.syncHand(false)
     readonly property int handShifts: navRow.paneHand !== null ? navRow.paneHand.shifts : 0
@@ -301,7 +313,7 @@ Item {
     /// (§hover のツールチップ「的が手の下で動けば」). A standing tip or menu of its own holds a row otherwise — the hand
     /// walked into it — but not one that slid away: no hand went there. **Not a row a read moved**
     /// (`HandWatch.disturbed`): it leaves the hand as a hand leaves it, and the seats weigh what stays
-    /// (§「外乱では閉じない」, `OpenRowSeat`).
+    /// (§「外乱では閉じない」, `OpenRowSeat`). Pinned by `tests/qml/tst_wheelunderopenrow.qml`.
     property bool slid: false
     function syncHand(shifted) {
         if (navRow.paneHand === null) {
@@ -361,7 +373,8 @@ Item {
     }
     /// The hand is on this row's open lines (`NavRowFacts.pointed`). **Read as the row's own hover**: the lines are a
     /// hover-taking sibling stacked over `rowGround` and take the pointer off its handler (rules-refs/app-ui.md
-    /// 「開いた行は段の hover を自分のものとして読む」).
+    /// 「`containsMouse` を奪うのは覆う `MouseArea` の子孫でない hover 持ちだけ」). A row reading the panel's hand
+    /// needs none of this: `syncHand` weighs the hand against the whole row, lines included (`rowHeight`).
     readonly property bool factsPointed: factsSeat.item ? factsSeat.item.pointed : false
     onFactsPointedChanged: if (navRow.paneHand === null) navRow.syncHand()
     /// Whether the tip these lines put out is standing (`NavRowFacts.tipShown`). **A row whose tip is up is still the
@@ -371,6 +384,7 @@ Item {
     /// Whether the menu standing was raised on this row while open (`rowPressed`). **The row is still the one being
     /// read**, as with its tip: the menu takes the pointer off the row, and the row reading that as the hand gone would
     /// shrink from under the menu about it (デザイン規約 §左メニューの所作). Once the menu goes, the hand decides again.
+    /// A headless run has no hand to lose, so only a real pointer sees this (`tst_openrowholdshand`).
     readonly property bool factsMenuOut: navRow.factsOpen && navRow.menuOnOpenRow
     /// Whether this row holds the wait the name box opens after, and whether a click now would still count as a
     /// double-click's second half — read by headless runs. Both are the sidebar's gesture's answer
@@ -409,7 +423,9 @@ Item {
     }
     /// What the box a second click opens is named after: the row's kind, what git knows it by, the commit it is on,
     /// and the name it shows (a stash is typed by its message, not by its selector). A worktree row renames the branch
-    /// it has out, else its folder (known to git by its path) — or opens no box and says why (`withheld`).
+    /// it has out, else its folder (known to git by its path) — or opens no box and says why (`withheld`): what the
+    /// rename changes is decided by what the row holds (user decision — ask before changing). The gesture is a
+    /// worktree's only way to its rename: no menu row (§左メニューの所作「右クリックは所作で届かないものだけ」).
     function renameNames() {
         if (navRow.kindHint === "worktree" && navRow.bucket !== "")
             return { "kind": "branch", "id": navRow.bucket, "oid": navRow.oid_hex, "name": navRow.bucket }
@@ -429,8 +445,12 @@ Item {
             navRow.fileClicked(navRow.bucket, navRow.fullName, navRow.orig_path,
                                modifiers === undefined ? Qt.NoModifier : modifiers)
         } else if (navRow.oid_hex !== "") {
-            // Every row naming a commit goes there, a worktree row to the commit its checkout stands on
-            // (デザイン規約 §左メニューの所作). A bare entry names none and answers a click with nothing.
+            // Every row naming a commit goes there, a worktree row to the commit its checkout stands on — the `HEAD`
+            // git writes in its entry (user decision — ask before changing): the row names a worktree, but a worktree
+            // stands on a commit. One row answers two questions: the click "where is it", the double-click "go there"
+            // (`SidebarRowGestures.activateRow`; nowhere to go on the worktree this tab stands in). A bare entry names
+            // none and answers a click with nothing. A worktree standing where no ref reaches lands too: its commit is
+            // handed to the walk (`session::walk`).
             navRow.refClicked(navRow.oid_hex)
         }
     }
@@ -457,7 +477,8 @@ Item {
     /// none. Every way the ask ends sends the leave for the path that asked — the hand walking off, the path changing
     /// under the hand (a recycled delegate) — so the pane's seat is never left waiting on a row that let go
     /// (`WipPane.pointEol`: the rest before the card, its beat, a hand back from the card answered at once). A mark
-    /// that goes comes with a status read: the pane weighs the card's target then (`WipPane.weighEol`).
+    /// that goes comes with a status read: the pane weighs the card's target then (`WipPane.weighEol`). Pinned by
+    /// `tst_eolask`.
     readonly property string eolAskFor: navRow.eol_mark && navRow.stillPointed ? navRow.fullName : ""
     property string eolAskedPath: ""
     onEolAskForChanged: {
@@ -478,6 +499,10 @@ Item {
             // 手の下で動けば hover は外れ、出したものはその瞬間に消える」).
             navRow.factsAsked(false, Qt.point(0, 0), navRow.slid)
     }
+    // The press on the row's own line is always the row's: declared after `rowLayout`, this area is over the name, so
+    // the name field never sees a press of its own and the drag is handed to it (`lineDragged`). On the open lines the
+    // lines' own area takes it (`NavRowFacts`). The stand-in answers with the same handlers, but for `lineReleased`
+    // (`HeadPinRow`).
     MouseArea {
         id: itemMouse
         anchors.fill: parent
@@ -501,7 +526,8 @@ Item {
         onDoubleClicked: mouse => navRow.rowDoubled(mouse.button)
     }
     /// The name as the open row shows it, and what a drag over it came away with — null and empty while the row
-    /// is closed (`NameCell.whole`).
+    /// is closed (`NameCell.whole`). What `nav-drag-open` reads — not the lines' `SweepPad`: the name is not in the
+    /// lines, so their `factsTook()` answers empty.
     readonly property Item nameField: rowLayout.nameWhole
     readonly property string nameTook: navRow.nameField ? navRow.nameField.selected : ""
     readonly property bool nameCaret: !!navRow.nameField && navRow.nameField.hasCaret
@@ -509,8 +535,10 @@ Item {
     readonly property string shownName: rowLayout.shownName
 
     /// A press on the row's **own line** (the open lines answer theirs in `NavRowFacts`). One that never moves is a
-    /// click; one that moves is going for the name, so the row opens **now** and the drag carries on into the name
-    /// (デザイン規約 §左メニューの所作「開いた字は掴める」).
+    /// click; one that moves is going for the name, so the row opens **now** — a press that moved counts as the hover
+    /// having begun, with no rest (`tipDelayMs`) waited for — and the drag carries on into the name. What an open row
+    /// shows (branch, worktree, upstream names) is there to be taken away; a drag sets nothing off
+    /// (規約 §hover のツールチップ「hover が出した字は選べて、コピーできる」).
     function linePressed(button, x, y) {
         if (button !== Qt.LeftButton)
             return
@@ -529,6 +557,11 @@ Item {
     /// the release — so the gesture is told at the press that the press is the row's (`ReclickGesture.take`), and at
     /// the release that it ended (`hear`): unless the click follows in that release, the press was no click — a sweep
     /// of the name, one let go off the row or taken away — and it came between two clicks all the same.
+    /// Not at the press, where the graph rows, the lane strip, the HEAD pin row and the chip cards answer
+    /// (規約 §グラフ行のダブルクリック): here the press already starts the sweep of the row's words (`lineDragged`,
+    /// `NavRowFacts`), so a row that went at the press would move the graph every time the reader set out to sweep.
+    /// Whether these rows should answer at the press is the user's call (P3-確認事項 §app); first decide how a sweep's
+    /// start is told from a click's — a threshold would be `lineDragged`'s own test turned round.
     function takePress() {
         if (navRow.reclick)
             navRow.reclick.take()
@@ -657,7 +690,9 @@ Item {
     /// row** too: what it says is its role (origin), a sentence and not a name. Every row of WORKTREES opens (it
     /// shows a folder name; the whole of it is its path).
     /// **A tag's row folds the remotes carrying its name** — a tag has no namespace, so each carrier takes a line
-    /// (`NavFacts.carrierLine`). A row with nothing else to say still opens: the name in full is reason enough.
+    /// (`NavFacts.carrierLine`). A row with nothing else to say still opens: the name in full is reason enough — a
+    /// worktree's bare entry and a tag no remote carries included. A tag only a remote has opens too: it is on no graph
+    /// row, so this is the one place that says where the name is.
     readonly property bool expands:
         navRow.opensFacts
         && !navRow.folder
@@ -677,8 +712,12 @@ Item {
     readonly property Item factsItem: factsSeat.item
     readonly property real lineHeight: rowLayout.height
 
-    // Hover says the name in full — what a folded or elided row cannot show (デザイン規約 §hover のツールチップ). A
-    // stash's name is its message; nobody hovers to learn `stash@{0}`.
+    // Hover says the name in full — what a folded or elided row cannot show (デザイン規約 §hover のツールチップ) — and
+    // only the name: where the row leads (`Switch to <name>` / `Create a branch at <name>`) the section and the
+    // gestures already say (§左メニューの所作). A folder row says its full path. A stash's name is its message; nobody
+    // hovers to learn `stash@{0}`. The rows that open — local and remote branches, tags, worktrees, and the current
+    // branch's pinned row (`HeadPinRow.tipWords`) — carry no full-name tip: they open down to the full name, and what
+    // the opened row puts up is a supplement only — a worktree's path, why a tag wears `warning` (`NavRowFacts`).
     readonly property string hoverText: {
         const full = navRow.fullName
         // A row that opens says it all under itself, name included (one pointer opens one thing). Its fold parents
@@ -711,7 +750,8 @@ Item {
     /// **`>= 0` first**: a pooled delegate reports `index` -1, which is also "no row", and every pooled row would claim
     /// the window's one tooltip (rules-refs/app-ui.md 「プールへ戻された delegate は `index` -1 を名乗る」).
     readonly property bool tipPointedAt: navRow.pointedTipRow >= 0 && navRow.pointedTipRow === navRow.index
-    /// The row's own tip is up (the output side, for the tests).
+    /// The row's own tip is up (the output side, for the tests). The window seat's answer, so false through the rest:
+    /// what the row wants said is `hoverText`, which `nav-tip` reads for its `wants=`.
     readonly property bool tipShown: rowTip.shown
     readonly property TipAsk rowTip: TipAsk {
         id: rowTip
@@ -823,7 +863,9 @@ Item {
             path: navRow.factsPath
             // **The rest on the row's own line asks for it too** — walking down to the lines would pay a second rest
             // for it. Both roads write the same ask, so the box stays up as the hand crosses into the lines. Not once
-            // the row slides out from under the hand (`slid`).
+            // the row slides out from under the hand (`slid`). **The run's stand-in counts too** (`tipPointedAt`): a
+            // hand there would ask, and without it no window run reaches this road — so `nav-open worktree:*` pictures
+            // the box, and its report waits for the supplement (`NavProbe.factsSays`).
             rowPointed: (navRow.handOn && !navRow.slid) || navRow.tipPointedAt
             // Why the row's own name wears the warning, said on a rest on that name alone: the lines under it keep
             // notes of their own. `rowHover` hears only the row's own line — the lines take the pointer off it.

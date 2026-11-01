@@ -4,7 +4,20 @@ import QtQuick.Layouts
 import platitude.ui
 
 // Whoever a commit message credits alongside its author, in one of two forms (規約 §co-author の表示): "◯ Name +N"
-// in the details pane's date row, or "Name, Name, Name" (`plain`) in the graph row's hover card.
+// in the details pane's date row, or "Name, Name, Name" (`plain`) in the graph row's hover card. Nobody credited,
+// nothing drawn: an ordinary state wears no mark.
+//
+// The pane's form: an `iconMd` identicon, the first name and `+N`, in `fontSm` `textSecondary` like the date. Folded to
+// one name and a count, so the line keeps its width however many are credited; everyone, with addresses (the one clue
+// that tells two people of one name apart), is on the card it opens (`CoAuthorCard`, `RefListPopup`'s ground, frame and
+// row height) — this form is the pane's alone. Its face pairs with the author's avatar and reads as the face column.
+// The pane's date row has no room to write everyone (about 230px), and the count goes unsaid only when it overflows:
+// naming everyone is the pane's job, so that is accepted.
+//
+// The hover card's form: the names with commas, in the same `fontSm` `textSecondary`, with no face, no `+N`, no
+// underline, and nothing opens. The card has no picture at all (author and date are words), so a face would be its only
+// hue, on the least important of its four lines; and the place to check is the right pane — a preview that grows a
+// second popup starts acting as the pane.
 //
 // It draws and reports; the card that names everyone belongs to the owner, since a popup cannot live inside a recycled
 // delegate.
@@ -25,9 +38,16 @@ Item {
     /// What the cut mark is drawn on (`LineText`): the pane's ground, or a card's where a card holds this line.
     property color ground: Theme.bgBase
 
-    // ---- folding the name away (規約 §co-author の表示) ----
+    // ---- folding the name away (user decisions — ask before changing) ----
+    // Where the date row cannot give the name even its floor, the name goes: "◯ +2", the face standing for the first
+    // and `+N` as it was before folding — a count that changes as the name goes reads as a different number of people.
+    // One person folds to the face alone. A name cut to nothing would be a stray `…` or an underline over a gap, naming
+    // nobody and looking broken. It happens near the right pane's least width, and on a commit with two or more parents
+    // the parent line's floor takes its room first (`CommitAuthorRow`).
     /// The fewest characters a name is cut to, with its mark — the chip names' floor (`GraphColumnMetrics`), measured
     /// the same way (rules-refs/app-ui.md「字数の床の値付けは実測の字送り」). A name shorter than that is its own floor.
+    /// A named line needs one: a `LineText` cut to 0 width draws its `…` ground outside the field — a stray `·`, or
+    /// an underline under nothing.
     readonly property int nameMinChars: 3
     readonly property TextMetrics letterInk: TextMetrics {
         font.family: Theme.uiFamily
@@ -52,13 +72,18 @@ Item {
     readonly property real nameNatural: line.nameWidth > 0 ? Math.min(names.implicitWidth, line.nameWidth)
                                                             : names.implicitWidth
     /// What the line asks of its holder whether or not it folds: folding on the width it is handed must not change
-    /// what it asks for, or the two chase each other.
+    /// what it asks for, or the two chase each other: the holder hands this, rounded up, as the line's
+    /// `Layout.maximumWidth` (`CommitAuthorRow.creditCeiling`), so asking the folded width would shrink what is handed
+    /// and the line would stay folded once room came back.
     readonly property real naturalWidth: Theme.iconMd + Theme.spaceXs + Math.ceil(line.nameNatural) + line.countSeat
     /// Folded, the face and the count: the least the line can be drawn in, which a holder keeps for it
     /// (`CommitAuthorRow`'s date gives way first).
     readonly property real foldedWidth: Theme.iconMd + line.countSeat
     /// The holder cannot give the name even its floor: the name goes and the face stands for the first, the count as
-    /// it was — "◯ +2", or the face alone for one. The card still names them all.
+    /// it was — "◯ +2", or the face alone for one. The card still names them all. Judged on what the handed `width`
+    /// leaves the name past the face and the count. Whether it folds splits by the OS font (two parents × one mate at
+    /// `14:min` folds on Windows, Linux keeps four letters), so a check names only forms that fold on both. Pinned by
+    /// `tst_matefold.qml`; headless `co-authors 0:min` / `co-authors 8:min --preset octopus-mates`.
     readonly property bool folded: !line.plain && line.records.length > 0
         && line.width - Theme.iconMd - Theme.spaceXs - line.countSeat < line.nameFloor
     /// The names did not fit — for a headless run, which cannot see the mark. Folded counts: nobody is named.
@@ -124,9 +149,12 @@ Item {
                 id: face
                 visible: !line.plain
                 code: line.faceAt(0)
+                // `iconMd`, not sized to the names' letters (a special design, user decision — ask before changing).
                 width: Theme.iconMd
                 height: Theme.iconMd
-                // A picture heading the names, on their capitals' middle (デザイン規約 §アイコンの席).
+                // A picture heading the names, on their capitals' middle (デザイン規約 §アイコンの席). Checked by
+                // `details-align`'s `face=` (the date's baseline − `WordFace.capitalMiddle` against the drawn face's
+                // middle, within 0.5px; the value is `faceOff=`), not by this placement's own numbers.
                 Layout.alignment: Qt.AlignVCenter
                 transform: Translate {
                     y: WordFace.capitalDropOf(names.baselineOffset, names.pixelSize, names.height)
@@ -159,7 +187,8 @@ Item {
                 }
             }
         }
-        // At rest one step down from the name it underlines (規約 §暗く落とした段), the name's own colour when lit.
+        // At rest one step down from the name it underlines (規約 §暗く落とした段), so it does not compete with the date;
+        // the name's own colour when lit. One line from the face to `+N`.
         BandRule {
             visible: !line.plain
             color: line.lit ? Theme.textSecondary : Theme.borderStrong

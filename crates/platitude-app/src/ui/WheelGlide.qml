@@ -10,6 +10,16 @@ import platitude.ui
 //
 // Read `at`, never the property: mid-flight the property is short of the aim, so a second notch measured from it
 // would fight the first instead of stacking.
+//
+// Held by five surfaces: the graph, the diff, the description box, the summary and the left menu's lists (`NavList`;
+// the WORKTREES list is a plain `AppListView` and does not glide). Every other hand that moves one of those views
+// calls the surface's `haltGlide()` first, or the notch in flight drags the reader back to the old row: arrow keys
+// (`GraphRowWalk.revealStep` / `DiffRowWalk.stepRows`), the bar's arrows and track (handed this glide as
+// `AutoScrollBar.stepGlide`, so a step stops it), `jumpToRow`, `GraphFind.goToMatch`, `shiftRows` / `showRowSoon` /
+// `anchorTimer` / `DiffScrollPlace`, a box's middle-click drift (`DescriptionBox.driftText` /
+// `MessageEditor.driftSummary`), `startAutoScroll`, and the left menu's reveals (the menu key, a name box, an open
+// row shown and given back, the middle button's drift). The wheel cannot be injected, so a run comes in through the
+// surfaces' functions (`sendRows` / `rollBy`); checking it is regression only.
 QtObject {
     id: glide
 

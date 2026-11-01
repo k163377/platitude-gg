@@ -35,9 +35,17 @@ pub struct WorktreeEntry {
     pub main: bool,
     /// The branch a rebase or bisect standing in this worktree is about,
     /// and which of the two ([`held_by_operation`]): listed `detached`, yet
-    /// git keeps the branch to this worktree as if it were checked out —
-    /// and turns a rename of it down from any worktree (builtin/branch.c
-    /// `reject_rebase_or_bisect_branch`). `None` elsewhere.
+    /// git keeps the branch to this worktree as if it were checked out
+    /// (`worktree add`, `switch` and `branch -d` elsewhere say `is already
+    /// used by worktree at`) — and turns a rename of it down from any
+    /// worktree, the stopped one included (builtin/branch.c
+    /// `reject_rebase_or_bisect_branch`; a branch merely checked out is
+    /// renamed, HEAD with it). So the name box turns it down before the press
+    /// (`NavSectionModel.heldByOperation`), and `note_worktree_holders` and
+    /// nav's `worktree_with` count it as checked out. A bisect is detached
+    /// only once it checks out a midpoint: with none between good and bad it
+    /// stays on the branch. `None` elsewhere. Net:
+    /// `a_branch_a_stopped_rebase_or_bisect_holds_is_named_by_the_listing`.
     pub held: Option<Held>,
 }
 
@@ -237,19 +245,24 @@ pub enum WorktreeOn {
 ///
 /// A folder holding something is turned down here, before git: git makes
 /// the `-b` branch first and only then looks at the folder, so its own
-/// refusal leaves the branch behind.
+/// refusal leaves the branch behind (the minimum and 2.55 alike:
+/// `git_makes_the_branch_before_it_turns_the_folder_down`). A path still
+/// listed for a worktree whose folder is gone is turned down by git after
+/// the branch too (`git_makes_the_branch_before_it_turns_a_listed_place_down`);
+/// the screen answers that one before the press.
 ///
-/// So is a `-b` name opening with `-`, which the name box never sends:
-/// git hands the name to its own `git branch` with nothing to end the
-/// options before it, and it runs as one (`-m` renames the branch out
-/// here).
+/// So is a `-b` name opening with `-`, which the name box never sends
+/// (`branch::is_valid_name`): git hands the name to its own `git branch`
+/// with nothing to end the options before it, and it runs as one (`-m`
+/// renames the branch out here:
+/// `git_hands_a_dash_led_name_to_its_branch_as_an_option`).
 ///
 /// The remote branch is spelled in full: `origin/feature` is ambiguous, and
 /// refused, where a local branch has that name.
 ///
 /// `--quiet` reaches the checkout's own `reset`, whose progress git
 /// writes to the pipe too once it runs past two seconds — ahead of any
-/// refusal after it.
+/// refusal after it (`a_slow_checkout_says_nothing_before_a_refusal`).
 ///
 /// A non-zero answer is read against what git recorded and left: a
 /// `post-checkout` hook that ended non-zero in its trace failed over a
@@ -365,10 +378,15 @@ pub fn folder_free(path: &Path) -> bool {
 /// which a refusal's heading is written from.
 ///
 /// Unforced, so git keeps what it refuses for (uncommitted changes, a
-/// lock, submodules); ignored files go with the folder
-/// (git-worktree(1)). Every refusal is a report
+/// lock — which one `-f` does not pass either, it takes `-f -f` —
+/// submodules); ignored files go with the folder uncounted
+/// (git-worktree(1)), and a worktree whose folder is gone loses its record
+/// alone. Every refusal is a report
 /// ([`crate::report::worktree_not_removed`]) but one: a worktree git does
 /// not know — removed elsewhere since the menu opened — is gone as asked.
+/// Run from inside the worktree it removes, git stops part-way, so the
+/// card greys the row of the worktree the tab stands in
+/// (`offers::worktree_card`).
 pub async fn remove(
     executor: &GitExecutor,
     workdir: &Path,
@@ -414,6 +432,8 @@ fn lock_reason(said: &str) -> Option<&str> {
 
 /// Where the worktree at `from` goes when its folder is renamed `name`:
 /// beside where it stands, in the same parent (git's paths, `/` throughout).
+/// Only the name changes (user decision — ask before changing): a worktree
+/// made outside `worktrees_folder` is renamed where it is, never moved in.
 /// Empty for a `from` with no parent.
 #[must_use]
 pub fn renamed_worktree_path(from: &str, name: &str) -> String {
@@ -434,7 +454,9 @@ pub fn is_folder_name(name: &str) -> bool {
 
 /// Whose rules a folder's name answers to beyond [`is_folder_name`]: Windows
 /// keeps characters, device names and a name's last letter for itself; Linux
-/// and macOS take anything else.
+/// and macOS take anything else. Each system's own rules only (user
+/// decision — ask before changing): a name Windows refuses is not refused
+/// on Linux or macOS.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Disk {
     Windows,
@@ -466,7 +488,12 @@ impl Disk {
     };
 
     /// What this system keeps out of `name`, a name [`is_folder_name`]
-    /// answered; `None` where it takes it.
+    /// answered; `None` where it takes it. Asked before the press (the
+    /// rename box's `taken`) and again before git runs ([`check_move`]).
+    /// Pinned by the unit tests and the Windows-only test of
+    /// `tests/it/worktree_move.rs` (without the refusal, `CON` goes red);
+    /// the verbs pair an `Arg::IsOnWindows` row with the same argument's row
+    /// for the other systems.
     #[must_use]
     pub fn refuses(self, name: &str) -> Option<DiskRefusal> {
         if self == Self::Posix {
@@ -542,12 +569,20 @@ fn check_move(from: &str, to: &str, name: &str) -> Result<(), GitError> {
 ///
 /// Turned down here, before git: a `to` that is not one folder in `from`'s
 /// parent, and anything already at `to` — git moves into a folder that is
-/// there, and would put the worktree inside it
-/// ([`crate::report::worktree_rename_refused`]).
+/// there, empty or not, and would put the worktree inside it (a file there
+/// it refuses, `already exists`) ([`crate::report::worktree_rename_refused`]).
+/// A rename that changes only the letter case is the same on a disk that
+/// ignores case: the folder itself is there (the box says `Only the letter
+/// case differs` before the press).
 ///
 /// Unforced, so git keeps everything else it refuses for: the repository's
-/// own worktree, a lock, submodules, a folder that is gone, and a path still
-/// listed for another worktree ([`crate::report::worktree_not_renamed`]).
+/// own worktree, a lock, submodules with contents, a folder that is gone,
+/// and a path still listed for another worktree
+/// ([`crate::report::worktree_not_renamed`]). The boxes answer only the
+/// folder's name, what the system takes, a free place and the other
+/// worktrees' records; the rest is git's, its words in the log. Measured in
+/// `tests/it/worktree_move.rs`: the same answers on 2.55 on Windows and the
+/// minimum 2.43 on Linux.
 pub async fn move_to(
     executor: &GitExecutor,
     cwd: &Path,

@@ -171,7 +171,9 @@ Item {
     // same through the menu key), `author` (the author row's cards; the graph row's menu) — every stage; and for the
     // first two stages alone, `author-files` (the author card; the commit's changed file's menu, `--preset github`),
     // `recover` (the discard log's card; the graph row's menu) and `tip` (the window's tooltip on a changed file's row;
-    // the graph row's menu).
+    // the graph row's menu). Presets: `eol` / `eol-key` run on `--preset eol` (the card on `src/flipped.kt`, the menu
+    // on `src/mixed.kt`), `author` on `--preset co-authors` (row 4; the other target is its co-author line),
+    // `recover` on `--preset discards`.
     PageStage {
         id: menuBlockTimer
         name: "menu_block"

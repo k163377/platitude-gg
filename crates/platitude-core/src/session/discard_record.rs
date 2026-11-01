@@ -1,14 +1,21 @@
 //! What a write leaves on Platitude GG's own record of what it took
-//! (破棄記録仕様.md §2), and the write that brings a part of it back (§4).
+//! (`discards::record`), and the write that brings a part of it back
+//! (`discards::restore`).
 //!
 //! **The record follows the write's own step**: what has to be read before
 //! the thing goes — a copy of the work, a branch's upstream, a stash's
-//! message — is read first, and a failure there stops the write with
-//! nothing taken; the line goes on once the step landed, and a failure
-//! there is reported on its own: the write stays done, and goes unlisted.
-//! A copy goes on as what the write took — what its paths held over what it
-//! left — also after a write that failed having taken some
-//! ([`discards::record_copy`]).
+//! message, a worktree's HEAD — is read first, and a failure there stops the
+//! write with nothing taken; the line goes on once the step landed, so a
+//! step git refused leaves none, and a failure there is reported on its own
+//! (as git's error, in git commands): the write stays done, and goes
+//! unlisted. A read made after the step for the record's sake (whether a
+//! push replaced the tip) fails nothing either. A copy goes on as what the
+//! write took — what its paths held over what it left — also after a write
+//! that failed having taken some ([`discards::record_copy`]). Of a write
+//! that takes two things (`Delete both`), only the half that went is
+//! written. What a remote held is what the lease read: a branch's tip the
+//! lease's commit, a tag's object and its commit as the lease's
+//! `ls-remote` read them (`remote::tags`).
 
 use std::collections::{BTreeSet, HashSet};
 
@@ -18,6 +25,8 @@ use crate::discards::{self, Copied, CopyOf, CopyOperation, RemoteTip, TagBefore}
 impl RepoSession {
     /// Answers a line written after a write landed: the log is told, and a
     /// failure goes out on its own (the write it follows is not undone).
+    /// Never as the write's `Err`: that puts the rows the write took back on
+    /// screen (the app's `ops_delete::delete_answered`).
     pub(super) fn recorded(&self, written: Result<(), GitError>) {
         match written {
             Ok(()) => self.sink.event(SessionEvent::DiscardsChanged {
@@ -78,12 +87,17 @@ impl RepoSession {
 
     /// Tells the discard log a write left `before` where only git's reflogs
     /// reach it now — neither HEAD, a branch nor a remote-tracking branch
-    /// holds it — which is what the log lists of a move (§3) and what lights
+    /// holds it — which is what the log lists of a move (`discards`) and what lights
     /// its seat. One walk, stopped at the first such commit. **Not against
     /// the tags**: every tag is an object to read before the walk starts,
     /// seconds at tens of thousands of them on every write that moves HEAD,
     /// so a commit only a tag holds lights the seat for an entry the log
-    /// does not list. A failure here fails nothing: the write landed.
+    /// does not list (as does one only the stash or another worktree's
+    /// detached HEAD holds). A failure here fails nothing: the write landed.
+    ///
+    /// Asked after amend, reset, the rebase family, pull, `Move here`,
+    /// leaving a detached HEAD and a continue that ends a rebase; a checkout
+    /// off a branch does not count HEAD, which the branch still holds.
     pub(super) async fn tell_if_left(
         &self,
         exec: &GitExecutor,
@@ -124,10 +138,12 @@ impl RepoSession {
     }
 
     /// Notes the branches a rebase moved together, read off their tips
-    /// before and after: one entry for them all (破棄記録仕様.md §2). One
+    /// before and after: one entry for them all (`discards::record_moves`). One
     /// branch moved is git's own line alone, and a rebase that stopped has
     /// moved none yet — the continue that finishes it moves them
-    /// ([`stopped_rebase_tips`]).
+    /// ([`stopped_rebase_tips`], read before a continue or a skip). Rebase,
+    /// squash, drop, reword and pull all come here. A branch something else
+    /// moved in the same span can join the group too.
     pub(super) async fn record_rebase_group(
         &self,
         exec: &GitExecutor,
@@ -159,7 +175,7 @@ impl RepoSession {
     }
 
     /// Brings back `parts` of one entry of the discard log, one after
-    /// another — the whole entry and a single part alike (§4) — each part
+    /// another — the whole entry and a single part alike — each part
     /// the record gave leaving a note that it is back. A part git refuses
     /// stops the rest, as the first step of a composite write does, and its
     /// refusal is the write's.
@@ -234,7 +250,8 @@ pub(super) async fn copy_of_choices(
     for (path, side) in rows {
         match side {
             // A repository of its own is no file to take: `clean -f -d`
-            // leaves it where it is, so it is no part of the copy either.
+            // leaves it where it is (exit 0), so it is no part of the copy
+            // either — `add` would make it a gitlink, or exit 128 unborn.
             stage::DiscardSide::Untracked if repo.workdir.join(path).join(".git").exists() => {}
             stage::DiscardSide::Untracked => untracked.push(path.clone()),
             stage::DiscardSide::Unstaged => tracked.push(path.clone()),
@@ -289,7 +306,7 @@ pub(super) async fn copy_of_partial(
 /// tracked change, staged or not, and the untracked files in the way of
 /// what `rev` tracks ([`in_the_way`]) — the other untracked files stay
 /// where they are — with the move it goes with, so the list tells the two
-/// as one (§2).
+/// as one (`Moved:`).
 pub(super) async fn copy_for_reset(
     exec: &GitExecutor,
     repo: &RepoInfo,
@@ -455,7 +472,9 @@ pub(super) fn record_token() -> CancellationToken {
 /// A remote's tag as the lease read it (`remote::HeldTag`), for the record:
 /// its own object — an annotated tag's, which this repository may never
 /// have had — and its commit where this repository has it, which the note
-/// stands on.
+/// stands on. Never from the screen's `expect`: that is the peeled commit
+/// a row showed, not the tag's object. A read here that fails after the
+/// push landed is the record's failure, not the push's (`recorded_if`).
 pub(super) async fn held_before(
     exec: &GitExecutor,
     workdir: &Path,

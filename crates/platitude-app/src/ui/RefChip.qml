@@ -12,15 +12,20 @@ Rectangle {
     /// Whether a name too long for `maxWidth` runs on to more lines of the same frame. On only in the list a chip
     /// unstacks into, the one place the name is shown in order to be read (規約 §hover のツールチップ).
     property bool wrapped: false
-    /// A second click is waiting out the double-click window before this becomes a name box
-    /// (デザイン規約 §グラフ行のダブルクリック): worn as the hover wash, one step over whatever the chip wears.
+    /// A second click is waiting out the double-click window before this becomes a name box: worn as the hover wash,
+    /// one step over whatever the chip wears (user decision — ask before changing). That wait is the one stretch in the
+    /// app where a press has visibly done nothing yet; a second click landing on the chip's card marks the chip the
+    /// reader is looking at there (`RefListPopup`).
     property bool waiting: false
     /// What this name reads, or what reads it, drawn inside this frame under the name —
-    /// `{mark, markTint, text, tone, ahead, behind}`, or null. Only the card a chip unfolds into sets it
-    /// (`RefListPopup`): a graph row is one chip tall.
+    /// `{mark, markTint, text, tone, ahead, behind}`, or null (user decision — ask before changing). Only the card a
+    /// chip unfolds into sets it (`RefListPopup`): a graph row is one chip tall. The line is the left panel's line
+    /// under a row — mark and name in `fontSm`, a gone upstream all `warning` + `is gone` — taken from the same table
+    /// (`NavFacts`, `RowHoverHost.mateOf`): one relation worded in two places drifts apart (規約 §グラフ行のダブルクリック).
     property var mate: null
     /// Whether that line leads somewhere (`mate.to` — `NavFacts.place`): a press goes to the commit the name stands
-    /// on. Said by the pointer as the left panel's lines say it (`NavFactLine.goes`): the underline and the hand.
+    /// on, the left panel's landing, and the card closes (user decision — ask before changing; a gone upstream leads
+    /// nowhere). Said by the pointer as the left panel's lines say it (`NavFactLine.goes`): the underline and the hand.
     readonly property bool mateGoes: chip.mate !== null && !!chip.mate.to
     /// Stands in for the pointer on those words where headless cannot put one (PGG_AUTO_ACT=ref-list-follow-lit).
     property bool matePointedAt: false
@@ -30,7 +35,8 @@ Rectangle {
     readonly property bool mateLit: mateBand.visible
     /// The name on that line was pressed: where it goes (`mate.to`).
     signal mateFollowed(var to)
-    /// What the hand's handler calls, and the one way in for a run (verify-ui §壊れない動詞の実装と反復).
+    /// What the hand's handler calls, and the one way in for a run (verify-ui §壊れない動詞の実装と反復;
+    /// PGG_AUTO_ACT=ref-list-follow).
     function followMate() {
         if (chip.mateGoes)
             chip.mateFollowed(chip.mate.to)
@@ -48,7 +54,8 @@ Rectangle {
 
     visible: records.length > 0
     // The name's line box plus the frame: two under the commit node, so the chip is not the loudest thing on the row.
-    // Extra wrapped lines take the family's own line spacing, which in CJK families is taller than the box.
+    // Extra wrapped lines take the family's own line spacing, which in CJK families is taller than the box: stacked by
+    // `fontChipLine`, the last line would bite into the frame. One `Label` wraps inside one frame and one ground.
     height: Theme.fontChipLine + Math.max(0, chip.nameLines - 1) * chipFont.lineSpacing + 2 * Theme.borderWidth
             + chip.mateRoom
     // Whole pixels: every term inside is fractional, and a width just past a whole pixel loses the right border
@@ -78,6 +85,10 @@ Rectangle {
     /// `+41` to `+4`, a wrong number.
     readonly property real countW: countLabel.implicitWidth
     /// The padlock's, the tree's or the house's seat (`MarkSeat`): a sign on the name (デザイン規約 §アイコンの席 の修飾).
+    /// Seats in the letters for both sides of the name, never boxes like `iconSm` (user decision — ask before
+    /// changing): a cloud in a box stands off its name by the spacing plus the box's own air, the one gap in the frame
+    /// wider than the rest. A seat apart from the badge's: "one slot, one mark" is the badge's rule (remote and PR
+    /// exclude each other), and the padlock answers another question.
     readonly property real markCell: nameMark.wordCell
     /// Its box in the row: the seat less the row's half gap after it, which the seat's own air stands in for — a sign
     /// keeps only its seat's air before the name it stands on.
@@ -125,12 +136,16 @@ Rectangle {
     readonly property string recWhere: rec.remote
     // One slot, one mark: the cloud, or the PR mark instead (規約 §グラフ行のダブルクリック).
     readonly property bool hasBadge: recRemote || recPr
-    /// The padlock ahead of the name: the worktree standing here is locked (デザイン規約 §ref の種別). That a worktree
-    /// stands here at all is the frame's green. Same mark and colour as the WORKTREES row (`NavRowBody`).
+    /// The padlock ahead of the name: the worktree standing here is locked. That a worktree stands here at all is the
+    /// frame's green alone — no tree as a state mark, which would be a second channel for it (user decision — ask
+    /// before changing) — so the seat is the lock's. The frame stays green: a lock is the standing worktree's state,
+    /// not another kind. Same mark and colour (`textSecondary`) as the WORKTREES row (`NavRowBody`).
+    /// `--preset worktrees` wears it on `vaulted` (no branch) and on `hotfix` / `spike` / `very-long…` (a branch out).
     readonly property bool hasLock: chip.recLocked
     /// The tree ahead of a name that is a worktree's folder, not a ref: bare, it would read as a branch
     /// (デザイン規約 §ref の種別) — the house where it is the repository's own. Never with the padlock, which already
-    /// says "worktree" (git never locks the repository's own).
+    /// says "worktree" (git never locks the repository's own): one mark before a name (user decision — ask before
+    /// changing). Bands and panes show no lock, so there the tree always stands.
     readonly property bool hasTree: chip.recKind === "worktree" && !chip.recLocked
     /// One seat for the padlock or the tree.
     readonly property bool hasMark: chip.hasLock || chip.hasTree
@@ -149,7 +164,7 @@ Rectangle {
         if (rec.kind === "head")
             return "head"
         // A worktree standing here with no branch out shares the held branch's key: one sheet per colour, and a key
-        // of its own over the same ink would draw two sheets nobody can tell apart (§重ね表示).
+        // of its own over the same ink would draw two sheets nobody can tell apart (`RefChipStack`).
         if (rec.kind === "worktree")
             return "worktree"
         return "local"
@@ -171,7 +186,8 @@ Rectangle {
     readonly property color kindColor: chip.kindColourFor(chip.kindKey)
     // Where it is. Grey, not textMuted, for what this repository does not hold: it can still be reached (§無効 is for
     // what cannot). The detached HEAD keeps its state colour; the current branch is `textLink`, as in the sidebar. A
-    // branch another worktree holds keeps the ordinary ink: the frame already says where the worktree is.
+    // branch another worktree holds keeps the ordinary ink: the name is that branch's, in this repository, and the
+    // frame already says a worktree stands on it (user decision — ask before changing).
     readonly property color nameColor: recKind === "head" ? Theme.warning
                                        : recHead ? Theme.textLink
                                        : !recHere ? Theme.textSecondary
@@ -182,14 +198,19 @@ Rectangle {
     border.width: Theme.borderWidth
 
     /// Where the ink starts, in whole pixels off the chip's top: the room the first line's box leaves around the ink,
-    /// halved, the odd pixel going up. Asked of the family, since each keeps a different room over its ascender
-    /// (rules-refs/app-ui.md「チップの中身はインクで置く」); headless draws in another font, so check on the real ones.
+    /// halved, the odd pixel going up. The first line's box, not the chip's height: halved over the height, a wrapped
+    /// chip's first line sits in the middle of the frame. Asked of the ink (`tightBoundingRect`), since a family keeps
+    /// more room over its ascender than under its descender, by its own amount: a line box centred in the frame puts
+    /// `g` and `/` on the frame, and a seat worked out from `ascent + descent` drops the leading and touches the top
+    /// frame on Ubuntu. This pixel cannot be read off a headless picture, drawn in another font (verify-ui スキル
+    /// §Windows での実行・デバッグの罠): check on the real ones.
     function inkTop(ink) {
         const room = Theme.fontChipLine - ink.tightBoundingRect.height
         return Theme.borderWidth + Math.ceil(room / 2)
     }
     /// Where a label goes to put its ink there, in whole pixels (a half pixel smears antialiasing into the margin).
-    /// Each label asks for itself: they differ in size.
+    /// Each label asks for itself: they differ in size, and one lift for the row hangs the smaller off the larger's
+    /// top.
     function inkY(label, ink) {
         return Math.round(chip.inkTop(ink) - label.baselineOffset - ink.tightBoundingRect.y)
     }
@@ -233,15 +254,16 @@ Rectangle {
         border.color: NavFacts.aimRim
     }
     // Mark, name, badge, then the count: the first three are this ref, the count is about the others, so it stands
-    // after them (デザイン規約 §重ね表示).
+    // after them (user decision — ask before changing). The count stays inside the frame: the fan stands on the ground
+    // behind the card, which the hover card takes (`RefChipStack`).
     Row {
         id: chipContent
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.leftMargin: Theme.spaceXs - chip.frameAir
-        // A whole gap from the frame, half a gap inside: the contents are one phrase, and at a whole gap each mark
-        // stood as far from its name as the name from the frame.
+        // A whole gap from the frame, half a gap inside (user decision — ask before changing): the contents are one
+        // phrase, and at a whole gap each mark stood as far from its name as the name from the frame.
         spacing: Theme.spaceXs / 2
         // The padlock or the tree ([`hasMark`]). Unlike the sidebar row's, the seat comes and goes: held open, it
         // would push every name on the graph one mark right. Its seat runs into the half gap after it
@@ -272,12 +294,16 @@ Rectangle {
             text: chip.recName
             textFormat: Text.PlainText
             color: chip.nameColor
+            // The chip's own face, not the code face a name wears in a sentence (user decision — ask before changing):
+            // the frame is the chip already, and the wider mono letters cut the name sooner in the same column.
             font.pixelSize: Theme.fontChip
             font.weight: chip.recHead ? Theme.fontWeightStrong : Font.Normal
             elide: chip.wrapped ? Text.ElideNone : Text.ElideRight
             // `Text.Wrap`: a ref name has no spaces, and this breaks anywhere when there is no word boundary.
             wrapMode: chip.wrapped ? Text.Wrap : Text.NoWrap
-            // Also when wrapped: handed its whole room, every chip in a list would be as wide as the widest name.
+            // Also when wrapped: handed its whole room, every chip in a list would be as wide as the widest name. A
+            // wrapping `Text` keeps its one-line `implicitWidth`, so this one line reads both ways: its own width where
+            // it fits, the whole room where it wraps.
             width: Math.min(implicitWidth, chip.nameRoom)
         }
         // Remote / PR badge: its width is reserved in `furnitureW`, so it survives any elision. A state after the name,
@@ -293,6 +319,8 @@ Rectangle {
                 id: badgeMark
                 x: -Theme.spaceXs / 2
                 kind: chip.recPr ? "pr" : "remote"
+                // Sized off the name's letters, the one scale every mark beside words takes — no step picked. Not
+                // a step up (`iconMd`): it reads nearly the same, and costs the chip width.
                 set: "name"
                 size: nameLabel.font.pixelSize
                 wordBase: nameLabel.baselineOffset
@@ -352,8 +380,9 @@ Rectangle {
         }
     }
     // The hand on that line: its whole box across the frame, the band's own rect (デザイン規約 §当たり判定「端に接しない
-    // ものは判定と塗りを一致させる」). Over the row's handlers, so a press here is never the row's. Built only where
-    // the line leads somewhere (rules-refs/app-ui.md「行のデリゲートが見せない部品は消す」).
+    // ものは判定と塗りを一致させる」). Over the row's handlers, so a press here is never the row's (`tst_matefollow`).
+    // Built only where the line leads somewhere (rules-refs/app-ui.md「行のデリゲートが見せない部品は消す」): a chip
+    // stands on every graph row.
     Loader {
         id: mateSeat
         active: chip.mateGoes

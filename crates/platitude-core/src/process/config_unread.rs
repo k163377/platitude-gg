@@ -2,17 +2,24 @@
 //!
 //! git replaces a configuration file by writing `<file>.lock` and renaming it
 //! over the file. On Windows a git started inside that moment cannot open
-//! the file: a repository command dies over it, and `git config --get*`
-//! carries on without it, answering from the files it could read — a key
-//! set only there reads as unset. The next git reads the file whole, so a
-//! read is asked once more; a write never is, since it may have written
-//! (internal-docs/gitの扱い.md §設定の書き換えと重なった読み). A file that
-//! stays unreadable fails the second run the same way, and that answer
-//! stands.
+//! the file (a file pending deletion: `Permission denied`): a repository
+//! command dies over it, and `git config --get*` carries on without it,
+//! answering from the files it could read (builtin/config.c `get_value`
+//! does not look at the read's result) — a key set only there reads as
+//! unset. On macOS and Linux the rename is instant to a reader and this
+//! never happens. The next git reads the file whole, so a read is asked
+//! once more, and once only; a write never is, since it may have written
+//! (user decision — ask before changing; internal-docs/gitの扱い.md
+//! §設定の書き換えと重なった読み). A file that stays unreadable fails the
+//! second run the same way, and that answer stands: an opening says so on
+//! a screen of its own (`GitError::ConfigUnreadable`), any other read
+//! fails as before.
 //!
 //! The words are git's own (config.c `repo_read_config`, wrapper.c
 //! `warn_on_fopen_errors` and `access_or_die` — `crate::relied_messages`); the
-//! executor runs git under `LC_ALL=C`, so they are never translated.
+//! executor runs git under `LC_ALL=C`, so they are never translated. A
+//! release that rewords them is not asked again and fails on its first
+//! answer, and the weekly check of the words turns red.
 
 use std::ffi::OsString;
 
@@ -35,7 +42,8 @@ pub(super) fn again(
         return died_over_a_file(stderr);
     }
     // Only `git config` goes on without the file: a repository command that
-    // warned and answered still answered about the repository.
+    // warned and answered still answered about the repository, and asking
+    // it again would run every `status` twice where another file never reads.
     buffered && is_config_read(args) && names_a_file(stderr, relied_messages::WARNING_LEAD)
 }
 
@@ -75,7 +83,9 @@ fn command(args: &[OsString]) -> Option<(&str, Vec<&str>)> {
 }
 
 /// Whether the command only reads: the subcommands that never write, and
-/// the reading forms of the ones that can.
+/// the reading forms of the ones that can. A reading subcommand run for
+/// the first time anywhere belongs here; one left out is only never asked
+/// again.
 fn reads_only(args: &[OsString]) -> bool {
     let Some((sub, rest)) = command(args) else {
         return false;

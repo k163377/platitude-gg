@@ -4,7 +4,12 @@ import platitude.ui
 
 // The sidebar's row gestures: which row was clicked last, and which one has a name box open in it. Held beside the
 // lists: only one row at a time is either, in whichever section, and both outlive the delegates that show them
-// (デザイン規約 §左メニューの所作).
+// (デザイン規約 §左メニューの所作). The pane keeps only aliases of `activeKey` / `editKey` / `menuOpen` and one-line
+// forwards (`stopEdit` / `submitEdit` / `beginRename` / `beginBranchAt` / `activateRow`); the lists and the peek take
+// this object as `gestures:`.
+//
+// `import platitude` is load-bearing: `RepoTab` / `NavSectionModel` are Rust-registered types, and without it
+// `RepoPage` loads as "unavailable" and no window comes up.
 QtObject {
     id: gestures
 
@@ -31,8 +36,11 @@ QtObject {
     /// (デザイン規約 §消す操作は先に画面から消す「消すのは行だけ、周りは生きたまま」).
     property bool held: false
 
-    /// The sidebar's one `ReclickGesture` (rules-refs/app-ui.md「間を空けた 2 回目のクリック」). What the wait was
-    /// aimed at is read at the click (`p`): by the time it runs out the row may be showing another name.
+    /// The sidebar's one `ReclickGesture` (one per surface — see its header). What the wait was
+    /// aimed at is read at the click (`p`): by the time it runs out the row may be showing another name. Its mark and
+    /// the box go with the list that carries them: the peek's close forgets the clicks (`SectionPeekPopup`), a fold
+    /// stops the box (`SidebarPane.applyFold`), a press elsewhere stops it (`RepoPage.releasePressedAway`). Headless:
+    /// `nav-reclick` / `nav-reclick-away`, `nav-rename-drop fold|away`.
     property ReclickGesture reclick: ReclickGesture {
         onRenameAsked: (key, p) => {
             if (p.withheld !== undefined)
@@ -43,14 +51,17 @@ QtObject {
     }
     property alias activeKey: gestures.reclick.activeKey
     /// The name a row is typed and renamed by: a stash's message (git knows it by its selector), a worktree's folder
-    /// (git knows it by its path), a remote branch without the remote it lives on, and the id for everything else.
+    /// (git knows it by its path), a remote branch without the remote it lives on, and the id for everything else —
+    /// the full name (`feature/login`), never the last part a folder row shows: retyped, that would quietly take the
+    /// branch out of its folder.
     function typedName(kind, id, name) {
         return kind === "stash" || kind === "worktreeFolder" ? name
              : kind === "remote" ? gestures.remoteBranchHalf(id) : id
     }
     /// A spaced second click a worktree's lock or gone folder turned down (`GitFacts.worktreeRename`): the row, and
-    /// why — said where the box would have stood, as a refused name's reason is, until the next press or key
-    /// (デザイン規約 §worktree の名前を変える「箱を開かないもの」).
+    /// why — said where the box would have stood, as a refused name's reason is, until the next press or key (user
+    /// decision — ask before changing; the words: `Words.worktreeRenameWithheld`, the put-down:
+    /// `RepoPage.dropWithheld`).
     property string withheldKey: ""
     property string withheldWhy: ""
     /// The worktree's folder in that line, which the tip stands the tree mark in front of.
@@ -142,7 +153,11 @@ QtObject {
     readonly property string editFolderWhy: gestures.editKind !== "worktreeFolder" ? ""
         : Words.worktreeRenameRefused(gestures.editText, gestures.editFolderPlace)
     /// A branch being renamed that a rebase or bisect stopped in some worktree holds — this one's too: git renames none
-    /// such, whatever the name (`NavSectionModel.heldByOperation`). Undefined for every other box.
+    /// such, whatever the name (`NavSectionModel.heldByOperation`). A branch merely checked out in a worktree is not
+    /// turned down: git renames it and moves that worktree's HEAD along, locked or not — a lock stops `worktree remove`
+    /// / `move` / `prune`, not this. Undefined for every other box. Headless:
+    /// `rename-branch-box fix/rebasing:fix/renamed --preset worktree-places` (`<branch>:<typed>` opens the box on a row
+    /// other than HEAD's).
     readonly property var editHeld: gestures.editMode === "rename" && gestures.editKind === "branch"
         ? gestures.worktreesModel.heldByOperation(gestures.editId) : undefined
     readonly property string editHeldWhy: gestures.editHeld === undefined ? ""
@@ -214,7 +229,7 @@ QtObject {
             return
         gestures.dropWithheld()
         // The box opens where the row is; folded, that is the peek beside the rail, and the list stays folded
-        // (デザイン規約 §左メニューを畳む). The box holds the peek open the way a menu does (`pinned`).
+        // (`SectionPeekPopup`). The box holds the peek open the way a menu does (`pinned`).
         gestures.editKind = kind
         gestures.editMode = mode
         gestures.editId = id
@@ -236,6 +251,9 @@ QtObject {
         gestures.editMode = ""
         gestures.editWaiting = false
     }
+    /// Sends what is typed without asking the box's refusal (`editRefused`): Enter is held back by the box itself
+    /// (`NavNameBox`), so a caller that is not the box — a run — asks `editRefused` first, the gate a hand's Enter
+    /// goes through (`rename-taken`).
     function submitEdit(text) {
         const kind = gestures.editKind
         const id = gestures.editId
@@ -266,14 +284,19 @@ QtObject {
             gestures.stopEdit()
             return
         }
-        // A rename keeps its box until git answers (デザイン規約 §答えの要らない報せ): git can still turn it down for what
-        // nothing here could know (another git holding a lock, a name taken in the moment since), and a box closed
-        // first loses what was typed. The page takes it down on the landing (`RepoPage.absorbWriteResult`).
+        // A rename keeps its box until git answers (デザイン規約 §答えの要らない報せ; user decision — ask before
+        // changing): git can still turn it down for what nothing here could know (another git holding a lock — in
+        // that moment, or a lock file a crashed git left —, a name taken since the press, a rebase or bisect stopped
+        // since in another worktree), and a box closed first loses what was typed. The page takes it down on the
+        // landing (`RepoPage.absorbWriteResult`).
         gestures.editWaiting = true
         gestures.host.renameSubmitted(kind, id, oid, text.trim())
     }
     /// A rename is out and git has not answered; the answer takes the box down, or leaves it holding the name to try
-    /// again — the report says why, and the name was not what git turned down.
+    /// again — the report says why, and the name was not what git turned down. So the box takes no refusal frame, and
+    /// for a lock Enter simply tries again. The words are the report bar's, never git's (user decision — ask before
+    /// changing); git's are under the row in the log. A rename with no box to go back to — a half-done one, whose row
+    /// could not be found — closes the box and leaves the bar alone (`Words.renameStillOpen`).
     property bool editWaiting: false
     function renameLanded() {
         if (gestures.editWaiting)
@@ -321,16 +344,17 @@ QtObject {
             gestures.stopEdit()
     }
     /// A line of an open row's facts was pressed (`NavRowFacts`): the graph goes to the commit it names and the panel
-    /// stays (デザイン規約 §左メニューの所作「行き先はグラフ」). The row `key` (`NavList.keyOf`) becomes the one last
-    /// clicked but arms nothing — a line was pressed, not the row's name.
+    /// stays (デザイン規約 §左メニューの所作「行き先はグラフ」, user decision): the graph lands where a single click on
+    /// that name's own row would, and the panel neither moves its selection to that row nor scrolls. The row `key`
+    /// (`NavList.keyOf`) — the row the press was in — becomes the one last clicked (`bgSelected`) but arms nothing — a
+    /// line was pressed, not the row's name; pressing that row's name afterwards is an ordinary second click.
     function followLine(key, oidHex) {
         gestures.noteClick(key)
         gestures.reclick.land(key)
         gestures.host.refActivated(oidHex)
     }
     /// The rows this gesture was made on have gone (the folded rail's peek closed): the memory and the wait go with
-    /// them, or the next visit's first click comes up as a second one
-    /// (rules-refs/app-ui.md「それを載せている一覧と共に消える」).
+    /// them, or the next visit's first click comes up as a second one (the three teardowns: `reclick` above).
     function forgetClicks() {
         gestures.reclick.forget()
     }

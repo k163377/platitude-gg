@@ -3,7 +3,10 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// One side (Before / After) of the diff pane's image preview; a side with no `sizeText` collapses.
+// One side (Before / After) of the diff pane's image preview; a side with no `sizeText` collapses. Why sides are
+// `file:` URLs and how their files are cleaned up: `platitude_core::preview`. Headless: `preview*` and `preview-close`
+// on `--preset pictures`, which wait on `settled` too — `DiffPane.diffSettled()` alone shoots before the decode, an
+// empty frame under the caption.
 ColumnLayout {
     id: previewCell
     /// `Before` / `After`.

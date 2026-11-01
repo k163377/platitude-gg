@@ -1,9 +1,21 @@
 //! Where a traced command's gits write their trace (`GitCommand::traced`):
 //! a receiver of the command's own, read while they run — a named pipe on
 //! Windows, an AF_UNIX stream socket elsewhere (trace2/tr2_dst.c, the
-//! minimum to 2.55). Nothing of the record goes to disk: a file of it that
-//! a git outliving the command (the fsmonitor daemon one of them started)
-//! held open would stay behind on Windows and go on growing.
+//! minimum to 2.55). Nothing of the record goes to disk, no temporary file
+//! either (user decision — ask before changing): a file of it that a git
+//! outliving the command (the fsmonitor daemon one of them started) held
+//! open would stay behind on Windows and go on growing. tokio's `net` is
+//! here for this alone; its TCP and UDP types stay barred (clippy.toml
+//! `disallowed-types`).
+//!
+//! A traced git keeps its fsmonitor (user decision — ask before changing):
+//! a daemon it starts — a push's far side's too — only connects to the
+//! receiver and stops tracing once it closes, while
+//! `-c core.fsmonitor=false` slows the write and drops the
+//! fsmonitor-valid marks from the index it writes, changing later reads.
+//!
+//! Pinned by `trace_record` (all seven go red with the record written to a
+//! folder) and this module's unit tests.
 //!
 //! Every git under the command opens a connection of its own — a hook's
 //! and a replay's too, since the variable is inherited. git waits for the

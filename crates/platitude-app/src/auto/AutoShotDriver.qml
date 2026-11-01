@@ -170,8 +170,9 @@ Item {
             driver.sceneMirror.item.refresh(attempt.number)
     }
     /// The source's texture stands — a mirror's completion (`onScheduledUpdateCompleted` / `onReady`), the window's
-    /// at once — and the grab is asked. A completion of no attempt under way (the mirror's own on being built) is
-    /// nobody's.
+    /// at once — and the grab is asked. A completion of no attempt under way (the mirror's own on being built — a
+    /// mirror that is not live updates itself once as it is made and says the same signal) is nobody's: taken, it
+    /// would save a blank picture and spend the completion the attempt is waiting for, which then runs to the watchdog.
     function refreshed(attempt) {
         if (attempt.stage !== "refreshing")
             return
@@ -254,7 +255,8 @@ Item {
     }
 
     // The overlay's render boundary, and why `WindowShotMirrors` builds the mirror `live: false`: a live one leaves
-    // nothing to wait on, and a popup opened in the completing turn is often not in its texture yet.
+    // nothing to wait on, and a popup opened in the completing turn is often not in its texture yet — a run in
+    // parallel then saves a blank overlay.png and passes.
     Connections {
         target: driver.overlayMirror ? driver.overlayMirror.item : null
         ignoreUnknownSignals: true
@@ -293,8 +295,10 @@ Item {
                          + " overlay=" + driver.overlay.stage + "/" + driver.overlay.number
                          + " scene=" + driver.scene.stage + "/" + driver.scene.number
                          + " parts=" + driver.shotParts + " ink=" + Ink.owed)
-            // What the write barrier was holding, if the run wanted a write
-            // (rules-refs/app-ui.md「天井まで行った run は…」).
+            // What the write barrier was holding, if the run wanted a write: `verb= press= run= watch= id=`, handed up
+            // on every change (`AutoActDriver.noteWrite` → `Main.noteAutoActWrite`). All four: `id=0` alone does not
+            // tell an arm out of order from an input not yet in or an ask the queue turned down. A broken contract
+            // never gets here — it ends the run on the spot (`AutoActDriver.sayBroken`).
             console.warn("write state " + driver.writeState)
             // What the verb was still waiting on and for how long (`Awaited`); `unsaid` for a verb that says none.
             const now = PerfProbe.clockMs()

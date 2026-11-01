@@ -473,7 +473,7 @@ async fn a_move_that_takes_nothing_off_the_branch_lands_on_it() {
 
 /// A carry whose session closes half-way finishes anyway, so the work it
 /// emptied the tree of is put back — read from the repository, since
-/// nobody is watching events (rules-refs/core.md「ローカル書き込みは走り切る」).
+/// nobody is watching events (`operation::Lane::Local`).
 ///
 /// Held at the stash: between it and the `switch` is the one stretch where
 /// a stopped write would leave the work somewhere other than the tree.
@@ -523,6 +523,12 @@ fn reached_the_stash(event: &SessionEvent) -> bool {
 
 /// A move that fails for a reason a stash cannot help with (a name git
 /// rejects) stops there: nothing is stashed.
+///
+/// The one witness that the carry adds no write after such a failure
+/// (`move_carrying`): the classifier's units
+/// (`branch::tests::every_other_failure_stays_an_error`) stop at "other
+/// words are not work in the way", so this stays pre-merge, not in
+/// `periodic`.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_move_that_fails_outright_stashes_nothing() {
     let mut repo = TestRepo::init();

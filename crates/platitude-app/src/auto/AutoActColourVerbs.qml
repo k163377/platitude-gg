@@ -34,6 +34,14 @@ Item {
     // The reach before the colours is witnessed: as the scroll left it (`scrolled`) — a small diff can be coloured
     // within one look, and a row that answered `firstChangedLine` is already built and measured — and once the rows
     // the scroll brought in stood across a polish pass (`looked`), null where the colours came first.
+    //
+    // The real run is `src/steps.rs --preset coloured`. A `.txt` gets no colours, so `coloured=false` fails it; the
+    // bare run is the default preset's four-row diff, where `held=` says no more than that rows with no tags did not
+    // move.
+    // A repository of one's own: `demo-repo basic --at <under the seat's target>`, commit a `.rs` of some thousands
+    // of lines, rewrite some of them (every 200th), pass it with `--repo`. On Linux build it right under the worktree
+    // (the container cannot see `target/`, which the build volume covers) and `git remote remove origin` first: the
+    // demo's origin is a Windows path, and the opening fetch to it is a write failure.
     PageStage {
         id: colourPlaceTimer
         name: "colour_place"

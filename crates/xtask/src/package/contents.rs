@@ -1,4 +1,4 @@
-//! What the bundle carries of Qt, by name (P5-確認事項 §3): the plugins and
+//! What the bundle carries of Qt, by name: the plugins and
 //! QML modules package puts in by hand, the frameworks that come with them,
 //! and why each thing Qt would also bring stays out. Then the readings that
 //! hold a built bundle, and the app's imports, to those lists — the
@@ -11,6 +11,10 @@
 //! in that a list does not name, and what comes along with a named thing —
 //! a framework a plugin loads, a module an import reaches — is named too:
 //! a Qt that moves either turns package red, by name.
+//!
+//! The bundle carries the least the app runs on, so that a new Qt brings
+//! nothing in unasked (user decision — ask before changing). When Qt is
+//! upgraded, that red is where these lists are reviewed.
 
 use std::path::Path;
 

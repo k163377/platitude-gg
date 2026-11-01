@@ -1,13 +1,14 @@
 //! The reader's own selection of the diff's text: where it runs, what
 //! each row draws of it, and what it hands the clipboard
 //! (デザイン規約 §diff の中身をコピーする). It lives here because only
-//! `shown` holds the file's own bytes (rules-refs/app-ui.md
-//! 「本文の選択とコピー」).
+//! `shown` holds the file's own bytes: which bytes were picked is the
+//! question only the side holding the original lines can answer. The hand
+//! is `DiffTextSelect`, the menu `DiffRowMenu`.
 //!
 //! **Column**: `0` is the rows' own lines (the only one as one column, the
 //! old side when split), `1` the new side of a split row; a drag is of one
-//! column (デザイン規約 §diff を 2 列で読む). Its wash goes on `sel` /
-//! `pair_sel`.
+//! column, the file the press picked (`DiffTextSelect`). Its wash goes on
+//! `sel` / `pair_sel`.
 //!
 //! **Place**: a position in the line as the row spells it, asked of the
 //! row's own layout (`LineRuler`) and turned into a byte and back here

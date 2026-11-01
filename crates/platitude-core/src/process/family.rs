@@ -9,9 +9,16 @@
 //! leaves running on purpose (the fsmonitor daemon) runs on.
 //!
 //! A run paced by something outside (`Pace::Elsewhere`: a remote, a
-//! credential prompt) is stopped at git alone: what it starts can be the
-//! person's own — the browser a credential helper opened is theirs from
-//! then on. So is every run off Windows.
+//! credential prompt) is stopped at git alone (user decision — ask before
+//! changing): what it starts can be the person's own — the browser a
+//! credential helper opened is theirs from then on. So is every run off
+//! Windows.
+//!
+//! Only a native process holds a folder against a rename: MSYS's `sh`
+//! reopens its working directory shared, and the fsmonitor daemon moves to
+//! `$HOME` and watches with sharing, so neither is in its way. The rename's
+//! witness in the tests is a native git held on its hook
+//! (`exec::HeldOnItsHook`).
 //!
 //! A whole run has a job object of its own. git is created suspended and
 //! let go once it is in the job, so every process it starts is born in it.
@@ -137,6 +144,14 @@ mod win32 {
     // The id list is read one word per id.
     const _: () = assert!(usize::BITS == 64);
 
+    /// Every git runs with a console of its own that shows no window. Not
+    /// `DETACHED_PROCESS` (no console at all): git then starts its children
+    /// with none either, and a child that is an MSYS shell (the `git
+    /// mergetool` script, a hook, a textconv or fsmonitor run through sh)
+    /// makes a console of its own, which on a machine whose default
+    /// terminal is Windows Terminal opens a visible window that stays. The
+    /// price is one `conhost.exe` per git; a shape that avoids paying it is
+    /// an open question in internal-docs/ハング調査.md.
     pub(super) const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     const CREATE_SUSPENDED: u32 = 0x0000_0004;
     const SYNCHRONIZE: u32 = 0x0010_0000;

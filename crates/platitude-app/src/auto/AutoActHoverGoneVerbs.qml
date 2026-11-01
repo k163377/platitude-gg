@@ -88,7 +88,10 @@ Item {
     // and says the names as they are now — a branch made on its commit (`RowHoverHost.chipChanged`) — and goes with a
     // row whose commit lost its names or left the graph, and with the stand-in standing for another commit
     // (`RowHoverHost.reseat` / `rowGone`). A list asked for under a menu opens on the names as they are
-    // (`RowHoverHost.openRefList` reads them off the chip).
+    // (`RowHoverHost.openRefList` reads them off the chip). `pin` runs on `--preset deep`; `commit` is `row`'s alone —
+    // the stand-in's tree is clean, with nothing to commit — and `amend` rewords a clean tree's HEAD. `row:commit` /
+    // `row:amend` are no witness for `rowGone`: the row's own send closes the list too — the witness is
+    // `tst_graphhover`'s `test_the_row_under_the_hand_rewritten_to_another_commit_lets_its_card_go`.
     PageStage {
         id: listRereadTimer
         name: "list_reread"
@@ -360,7 +363,8 @@ Item {
     //   `same`   — `src/mixed.kt` saved over in place: the row stays under the hand — lit, its card up with the new
     //              count;
     //   `fixed`  — `src/mixed.kt` saved over with its endings put right and a change kept: the row stays under the
-    //              hand, lit, and only its mark goes — the card goes with it (`WipPane.weighEol`);
+    //              hand, lit, and only its mark goes — the card goes with it (`WipPane.weighEol`); the one witness
+    //              of the path a mark goes by (the target's `alive`): a mark never changes alone on a live row;
     //   `above`  — a new file written above it, in a list too short to scroll: another row comes under the still hand
     //              as the read's — lit as the row under it, the card gone (the hand was on the row, not in the card),
     //              the hand held until it moves; moved two pixels, that row is still the lit one;

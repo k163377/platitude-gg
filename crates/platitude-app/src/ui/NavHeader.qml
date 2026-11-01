@@ -4,7 +4,14 @@ import QtQuick.Layouts
 import platitude.ui
 
 // Fixed sidebar section header: fold arrow, tinted icon, caption and count, plus the one control that section
-// carries at the end of the band — the tags-in-graph eye, or the `+` that writes a remote down.
+// carries at the end of the band — the tags-in-graph eye, or the `+` that writes a remote down. One at most: a
+// section's settings are reached from the settings.
+//
+// A section with no rows keeps its band, counting zero, unavailable (規約 §無効): chevron, mark and words go to
+// `textMuted`, the ground stays, the hover passes through, and the chevron stays turned shut. Its fold is left as it
+// was (`showsRows`): going from one repository to another, a section is there or not, and a fold rewritten while
+// empty would open differently back where it has rows. At zero the eye goes — a switch with nothing to take away
+// answers nothing — and the `+` stays, in the section's colour: no remote is when it is needed most.
 Rectangle {
     id: header
     property string caption
@@ -19,7 +26,7 @@ Rectangle {
     property bool showTagToggle: false
     property bool tagsShown: true
     /// The `+` that writes a remote down. Live at zero, unlike the rest of an empty band: a repository with no remote
-    /// is where it is needed (デザイン規約 §左メニューの所作).
+    /// is where it is needed.
     property bool showAddRemote: false
     /// Held while the pane's write doors are (`SidebarPane.doorsHeld`) — the one thing on the band that writes.
     /// Greyed, not hidden (規約 §無効).
@@ -29,7 +36,7 @@ Rectangle {
     signal addRemoteRequested()
 
     /// No rows, nothing to open: the band keeps its place and goes unavailable, as the folded rail's cells do
-    /// (規約 §無効).
+    /// (規約 §無効). By `count`, not the rows on show (`shownRows`): a band a filter emptied stays live.
     readonly property bool empty: header.count === 0
     /// Whether the rows are on show. The list reads this rather than `expanded`, so the fold a reader left survives a
     /// repository with none of that section.
@@ -76,7 +83,12 @@ Rectangle {
         spacing: Theme.spaceXs
         // The heading's marks, a step over its capitals and on their middle (デザイン規約 §アイコンの席 の文頭記号の
         // 見出し): each box is the caption's line. The chevron in an `iconSm` seat grows a step over a row's fold arrow
-        // (`NameCell`) and the caption does not move (デザイン規約 §左メニューの所作「畳みの山形は 2 階級ある」).
+        // (`NameCell`) and the caption does not move — the two ranks of fold arrow differ by the scale they are drawn
+        // at, and drawn at the heading's step only the ink grows, never the column or where the words start (規約
+        // §寸法: the box and the ink are two things). The `>_` at the menu's foot is drawn the same way
+        // (`CommandsToggle`, `set: "head"`). The seat is this `Item`, the `iconMd` box centred in it. A `NavIcon`
+        // straight in the RowLayout with only its `width` raised makes the seat that wide and pushes the caption right.
+        // The row's (`NameCell.foldSeat`) is an `iconSm` box drawn `set: "lead"`; both are one `NavIcon`.
         Item {
             visible: header.foldable
             Layout.preferredWidth: Theme.iconSm
@@ -124,8 +136,9 @@ Rectangle {
             font.pixelSize: Theme.fontMd
         }
         Item { Layout.fillWidth: true }
-        // Whether the graph draws tags — an eye, since a flag would read as a tag itself. On and off told apart by the
-        // tint (§暗く落とした段).
+        // Whether the graph draws tags — an eye, since a flag would read as a tag itself (and `⚑` is not in the UI
+        // font: a different shape on each OS) — what it switches is whether to look, so the layers' eye. On and off
+        // told apart by the tint (§暗く落とした段) and by the shape (`eye-off`): an icon's size does not read as a state.
         HoverToolButton {
             id: tagEye
             // Gone at zero tags, as on the folded rail's TAGS cell.
@@ -133,7 +146,8 @@ Rectangle {
             checkable: true
             checked: header.tagsShown
             // The band end's one seat: the mark a step down in the `iconLg` seat, as the `+` beside it
-            // (デザイン規約 §アイコンの席「④ の席」).
+            // (デザイン規約 §アイコンの席「④ の席」). The flat eye would show no difference at full size; the rule is
+            // the step's, so both marks keep it.
             padding: (Theme.iconLg - Theme.iconMd) / 2
             implicitWidth: Theme.iconLg
             implicitHeight: Theme.iconLg
@@ -145,7 +159,7 @@ Rectangle {
             onToggled: header.tagsToggled(checked)
         }
         // Writing a remote down, in the eye's seat. It keeps the section's tint on an empty band: it is the one thing
-        // there that can be pressed (規約 §無効).
+        // there that can be pressed (規約 §無効). Headless: `nav-add-remote`.
         HoverToolButton {
             visible: header.showAddRemote
             enabled: !header.addHeld

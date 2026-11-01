@@ -1,5 +1,5 @@
 //! What destructive operations took away, on real repositories
-//! (破棄記録仕様.md): read off git's reflogs, written to and read from
+//! (`discards`): read off git's reflogs, written to and read from
 //! Platitude GG's own record, and brought back.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.

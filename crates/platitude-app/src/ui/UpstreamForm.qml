@@ -3,8 +3,14 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// What the upstream question asks back: which remote, and which branch on it this one is measured against (デザイン規約
-// §ブランチが測られる相手を決める). Built from a `Component`, since it stands inside the question's bar.
+// What the upstream question asks back: which remote, and which branch on it this one is measured against (the flow:
+// `UpstreamFlow.qml`). Built from a `Component`, since it stands inside the question's bar.
+//
+// The remote is only picked; the branch name is typed, with a dropdown (user decision — ask before changing): its list
+// is the branches the picked remote holds here, a shortcut for typing and nothing more, and the two boxes wear
+// different grounds (デザイン規約 §選ぶ欄と打つ欄). Unlike the publish chooser, the remotes are the configured ones only,
+// with no `Add remote…` row. A remote just written down holds no tracking ref yet, so the name's list has nothing to
+// open (its mark drops) and typing answers.
 ColumnLayout {
     id: upstreamForm
 
@@ -33,8 +39,8 @@ ColumnLayout {
         id: askRow
         Layout.fillWidth: true
         spacing: Theme.spaceXs
-        /// Sized as `PublishForm`'s row (デザイン規約 §レイアウト初期値): the typed name asks first, the remote takes
-        /// what is left, both down to `askFieldMinW`.
+        /// Sized as `PublishForm`'s row (`askRow` there says why): the typed name asks first, the remote takes what is
+        /// left, both down to `askFieldMinW`.
         readonly property real room: upstreamForm.width - slash.width - 2 * askRow.spacing
         readonly property real nameWidth:
             Math.min(Math.max(Metrics.askFieldMinW, upstreamBranchField.wantedWidth),

@@ -146,7 +146,9 @@ impl PerfProbe {
         };
         let elapsed = self.clock_ms() - start;
         // Past the last frame: IO in the per-frame callback would move the
-        // frames being measured.
+        // frames being measured. So every `perf_frame` line arrives at the
+        // flush, after the bench: read each line's `clock_ms` (the app's one
+        // clock), never its arrival time.
         if self.trace_frames {
             let mut previous = start;
             for (index, &clock_ms) in self.frames.iter().enumerate() {

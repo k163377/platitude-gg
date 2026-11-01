@@ -7,7 +7,12 @@ import platitude
 import platitude.ui
 
 // The window's body: the band, the pages, and the mark beside the pointer. `AutoShotDriver.grabApp` grabs this
-// item, so anything drawn outside it is outside every screenshot. Where it sits in the window stays with `Main`.
+// item's subtree, so anything drawn outside it — a surface put straight under the `ApplicationWindow` — is outside
+// every screenshot, and the report line still goes green. Whatever fills the window goes in here, beside
+// `bodyColumn` rather than in it: every child of a Layout is laid out. The one exception is the window's edge
+// (`Main.windowEdge`), which `WindowShotMirrors` lays between this body and the overlay in scene.png alone; app.png
+// is this body only, so on Windows it is 2px narrower than the window (1440 → 1438). Where it sits in the window
+// stays with `Main`.
 Item {
     id: mainUi
 
@@ -29,7 +34,9 @@ Item {
     // ---- the floor the window may not be dragged under --------------------
     // Measured here, where both halves (band and page) are; the window adds its edge and applies it
     // (`Main.floorWidth` / `WindowShape.holdFloor`).
-    /// The page the floor is read off: the blank page with no tab open (same panes, same minimums).
+    /// The page the floor is read off: the blank page with no tab open (same panes, same minimums). Never `curPage`
+    /// alone: with no tab it is null, and only that window would shrink to the band's floor. Headless:
+    /// `window-floor --restore` (`tabs=0` answers `pageW=821`; `floorW=` adds the edge, 823 on Windows).
     readonly property var floorPage: mainUi.curPage !== null ? mainUi.curPage : blankPage.item
     readonly property real floorWidth:
         Math.max(topBar.floorWidth, mainUi.floorPage !== null ? mainUi.floorPage.floorWidth : 0)
@@ -42,7 +49,10 @@ Item {
         + (mainUi.floorPage !== null ? mainUi.floorPage.floorHeight : 0)
 
     // Where the pointer is. On the parent of all content: the one place a window-wide handler leaves the rows'
-    // hover alone (`HandWatch`).
+    // hover alone (`HandWatch`) — a `HoverHandler` takes hover over its item's whole area but does not kill that item's
+    // own children, where one on a sheet laid over the content would kill every row under it. Not a `PointHandler`: it
+    // goes active only with a press, and a hovering pointer is never reported. Under a popup `known` falls, which is
+    // the right answer there.
     HandWatch {
         id: hand
     }
@@ -80,7 +90,7 @@ Item {
             onCloseRequested: mainUi.window.close()
             onCaptionStripMoved: mainUi.chrome.reportCaptionStrip()
         }
-        // No divider under the chrome (デザイン規約 §ウィンドウの縁).
+        // No divider under the chrome: the panel closes itself with its own hairline (`TopBar`'s header).
 
         // Nothing open: the blank page.
         Loader {
@@ -114,7 +124,12 @@ Item {
             onAvatarSettingsRequested: (name, email) => mainUi.dialogSeat.openAvatarSettings(name, email)
         }
 
-        // The window's bottom edge, drawn maximised too: this side still has the taskbar under it.
+        // The window's bottom edge, drawn maximised too: this side still has the taskbar under it, and content touching
+        // it looks as if the window ran on down (`Main.edgeDrawn` has the other sides). The other sides' ink and width,
+        // so windowed the four come out one even 1px outline. One line: `splitterWidth`'s 4px is a split handle's,
+        // there is nothing to split at the window's foot, and over the edge the bottom alone would read 4px thick.
+        // Here, not on `Main.windowEdge`: this line stands on every OS (the floor counts it), the edge only where the
+        // window is frameless, so the two conditions part.
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: Theme.borderWidth

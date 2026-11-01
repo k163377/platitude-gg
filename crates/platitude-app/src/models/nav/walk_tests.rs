@@ -29,7 +29,7 @@ fn a_bucket_list_shows_one_run_and_answers_for_the_whole_tree() {
     assert_eq!(model.told(Role::Full, "d.txt", Role::Bucket), "staged");
 }
 /// A step runs out at its own list's ends; the pane carries the walk on
-/// (`FileRowWalk`, デザイン規約 §diff のファイル一覧).
+/// (`FileRowWalk`).
 #[test]
 fn the_arrows_walk_one_bucket_and_stop_at_its_ends() {
     let mut model = worktree("staged", Source::files(pending()));

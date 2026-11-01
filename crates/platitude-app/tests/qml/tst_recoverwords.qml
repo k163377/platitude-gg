@@ -2,7 +2,7 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// What the discard log says of an entry (`RecoverEntries`, 破棄記録仕様.md §3–§4): what the operation did, what each
+// What the discard log says of an entry (`RecoverEntries`): what the operation did, what each
 // part took, and what the restore makes of it — and the time, the moment first.
 Item {
     id: root
@@ -162,7 +162,7 @@ Item {
             compare(shown.restoredAs(worktree), "as a worktree there, on side-work")
         }
 
-        // Where it was taken, in the mark (P3-確認事項 §破棄記録と復元): a remote's tag alone wears the cloud on the
+        // Where it was taken, in the mark (`RecoverMark`): a remote's tag alone wears the cloud on the
         // shoulder a step down; here and on a remote at once is the pair; a remote's branch is the cloud itself.
         function test_the_mark_says_where_it_was_taken() {
             const tag = part("tag", { name: "v1" })

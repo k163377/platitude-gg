@@ -36,7 +36,11 @@ Item {
     function run(act, arg) {
         if (act === "name-box") {
             // The argument is `<行>[:<列幅>]`: the chip column dragged to that width (`0` = its floor, since the
-            // metrics clamp a drag), or left at its default.
+            // metrics clamp a drag), or left at its default. `box_w` − (`label_w` − 2 × `spaceXs`) is how far the box
+            // runs past the column into the graph — the box's floor (the whole placeholder) at work. The new-branch
+            // box (`Branch name`) fits even the column's floor, so `0` overhangs by 0 here; the floor tells on a
+            // rename box opened on a name longer than the column. `box_w=-1` is a run with no delegate on that row,
+            // whose picture is no witness either.
             if (arg.indexOf(":") >= 0)
                 page.setGraphColumns(Number(acts.nameRest()), graphPane.graphColWManual)
             graphPane.startNaming(graphModel.oidAt(acts.nameRow()))
@@ -47,9 +51,10 @@ Item {
                        + " box_w=" + (boxItem ? Math.round(boxItem.nameBoxWidth) : -1)
             })
         } else if (act === "name-box-drop") {
-            // The same box, and a press landing elsewhere while it stands; argument `<行>[:<打つ名前>]`. Empty, the
-            // box goes with the press; with a name in it, it stays. The name goes in the way a recycled delegate puts
-            // it back (`GraphRowDelegate.takeNamingFocus`), so the box on screen holds what the run says.
+            // The same box, and a press landing elsewhere while it stands; argument `<行>[:<打つ名前>]`, the row 1 or
+            // more (row 0 is WIP). Empty, the box goes with the press; with a name in it, it stays. The name goes in
+            // the way a recycled delegate puts it back (`GraphRowDelegate.takeNamingFocus`), so the box on screen
+            // holds what the run says.
             graphPane.startNaming(graphModel.oidAt(acts.nameRow()))
             if (acts.nameRest() !== "") {
                 graphPane.view.namingText = acts.nameRest()
@@ -106,7 +111,9 @@ Item {
             textBarTimer.order = act === "text-bar-away" ? ["rolled", "lit", "left"] : ["rolled", "lit"]
             textBarTimer.start()
         } else if (act === "graph-min") {
-            // Pulled past the floor so the clamp answers (the floor is lane 0's co-author badge kept whole).
+            // Pulled past the floor so the clamp answers (the floor is lane 0's co-author badge kept whole). Shot on
+            // `--preset co-authors`: the picture holds under a pixel between the tick and the badge, so zoom in and
+            // check the badge's outline is not cut.
             page.setGraphColumns(graphPane.labelWManual, 0)
             driver.reportAtCompletion(() => "graph_min w=" + graphPane.graphColW
                                              + " min=" + graphPane.graphColWMin)
@@ -141,6 +148,10 @@ Item {
     // The window cut: the walk stops at a round number of commits and only the footer says so. Waits: the walk having
     // answered (`truncated` starts false = "not asked yet" — app-ui.md §UI 自動化), the footer having a height, and the
     // view having arrived — read off the footer's own place, since `positionViewAtEnd()` is only the ask.
+    //
+    // `--preset deep` only: the walk stops at `session::DEFAULT_LOG_LIMIT` (2000), which no other preset reaches. The
+    // picture: the lanes run on faintly one row past the last node, and the subject column holds the count's line.
+    // With `--preset deep-detached` HEAD's stand-in (`graph-head`) and the cut share one frame.
     PageStage {
         id: graphTailTimer
         name: "graph_tail"
@@ -170,7 +181,8 @@ Item {
     // The press on that cut (`GraphTailFooter.loadMore`, the MouseArea handler's one line — verify-ui スキル
     // 「注入はハンドラ本体そのものへ入れる」). The new rows must arrive under the ones being read: a window regrown by
     // restarting the stream lands the same count, so `restarted=` / `held=` compare with the state before the press,
-    // taken on the press's own frame.
+    // taken on the press's own frame. `--preset deep` only; the picture has no footer at the end and every lane closed
+    // by the last row.
     PageStage {
         id: tailMoreTimer
         name: "graph_tail_more"
@@ -225,7 +237,11 @@ Item {
         name: "graph_head"
         /// Whether this run is moved off HEAD's row first. While HEAD is selected the stand-in wears the selection's
         /// ground (`picked=`) and does not light under the pointer, so the runs about a reader elsewhere select the
-        /// newest commit first — the page opens on HEAD's (`RepoPage.trySelectDefault`).
+        /// newest commit first — the page opens on HEAD's (`RepoPage.trySelectDefault`). These three want
+        /// `--preset deep-detached`, whose HEAD is not the newest commit: under `deep` HEAD is row 0, the row the page
+        /// opens on, so `-go`'s `landed=true` holds with the press unwired and `-lit` has nothing to light. `-below`
+        /// is the one form on the bottom edge. `graph-head` / `-back` run on `deep`, the stand-in wearing the
+        /// selection.
         readonly property bool standsAside: Harness.autoAct === "graph-head-below"
                                             || Harness.autoAct === "graph-head-go"
                                             || Harness.autoAct === "graph-head-lit"
@@ -340,7 +356,15 @@ Item {
     // stand-in instead, which a view sent to its end puts up at the top edge (`--preset deep`). `pin-lit` selects the
     // newest commit first, so the stand-in lights under the hand rather than wearing the selection — HEAD has to be
     // another commit (`--preset deep-detached`). The divider's pointer rests over its row once: the row's seat decides
-    // on its card after the rest, and the run ends on that decision (`PageSettled`), not inside it.
+    // on its card after the rest, and the run ends on that decision (`PageSettled`), not inside it. `pin`'s `ruled=` is
+    // the line the stand-in draws over its own ground (`GraphHeadPin.lines`); the rest of its band cutting the line is
+    // right.
+    //
+    // The narrowing side moves with a single lane too: `--preset noremote` (one) and `basic` (two) both answer
+    // `line=true refuses=false`, `max=` less `min=` being the room. `refuses=true` comes only from a window that
+    // crushes the max onto the floor, never the default one — a resting pointer shows no ring by design
+    // (規約 §掴める境界は答える「輪はドラッグで出す」); the drag that hits the max is `divider-refuse graph-max`. `shown=` is
+    // the MouseArea being there: the OS cursor is in no PNG, so how it overlaps is for a real window.
     PageStage {
         id: graphDividerTimer
         name: "graph_divider"
@@ -436,6 +460,8 @@ Item {
         }
     }
     // The lane column has to have taken its narrower width before there is anywhere to pan to, or a bar worth wanting.
+    // The bar is also bright while the hand is on it, which the headless hand never is (`Hand.away`). `middle-scroll`
+    // shoots on `--preset stashes`: three lanes give a thumb at six tenths, which a picture can read.
     PageStage {
         id: graphPanTimer
         name: "graph_pan"
@@ -443,11 +469,11 @@ Item {
             const op = graphPanTimer
             if (!Awaited.all("graph_pan_ready", { "ready": !(graphPane.graphXMax <= 0) }))
                 return
-            // The pointer is what puts this bar on screen (デザイン規約 §グラフを横へ送る), rested on the pane with the
+            // The pointer is what puts this bar on screen (`GraphLaneBar`), rested on the pane with the
             // first press; `-away` checks it goes too.
             if (Harness.autoAct === "middle-scroll") {
                 // The middle click, then a sideways drift. The argument is the column clicked — only the lanes take the
-                // drift (デザイン規約 §グラフを横へ送る).
+                // drift (`GraphPane`'s `MiddleAutoScroll`).
                 if (!op.input("scrolled", () => {
                         graphPane.restPointer(true)
                         const y = graphPane.height / 2
@@ -576,10 +602,12 @@ Item {
                                 + " at=" + Math.round(detailsPane.descriptionAt) })
         }
     }
-    // PGG_AUTO_ACT=middle-scroll-exit: the two ways a middle-click gesture ends (デザイン規約 §グラフを横へ送る), put in at
+    // PGG_AUTO_ACT=middle-scroll-exit: the two ways a middle-click gesture ends (`MiddleAutoScroll`), put in at
     // the pane's own press / move / release. `held` leaves the dead zone before letting go (the drift ends with the
     // hand); `click` never leaves it (the drift stays for the next press). The ticker has to have run before either
-    // is read — no movement cannot say whether anything asked.
+    // is read — no movement cannot say whether anything asked. The dead zone is proved by `travelled=false`, not
+    // `sent=false`: with the dead zone gone `sent=` still reads false. `--preset deep`: on a history the window holds,
+    // `sent=` is false for both and `click`'s "nothing moved" passes on nothing. No picture can judge it.
     PageStage {
         id: middleExitTimer
         name: "middle_exit"
@@ -622,7 +650,7 @@ Item {
     }
     // Waits on where the lanes ended up: a carrying gesture runs `graphX` to its maximum (the pointer is a pane's width
     // out), one that does not carry has `autoPanning` false from `MiddleAutoScroll.start`. The flag holds for the whole
-    // gesture (デザイン規約 §グラフを横へ送る), so a wait for it to fall never ends.
+    // gesture (`MiddleAutoScroll.panning`), so a wait for it to fall never ends.
     PageStage {
         id: middleScrollTimer
         name: "middle_scroll"
@@ -639,7 +667,9 @@ Item {
     // 矢印), pressed through the functions its handler calls. A click below the thumb sends one page; a hold runs on and
     // stops with the thumb's far end on the hand; a hand slid off before the pause ends keeps the run from starting;
     // letting go gives the bar back. Each stage waits on the view or the bar's own state, never on a clock; what each
-    // says is read at the press that ends it.
+    // says is read at the press that ends it. `page=` holds the click's move against the page as pressed (`sent=`):
+    // against the `trackPage` read at the report it goes red only under load. A run stuck at
+    // `bar_track_laid waiting=room` has a list its window holds — the wrong preset (`--preset long`).
     PageStage {
         id: barTrackTimer
         name: "bar_track"
@@ -712,7 +742,9 @@ Item {
     // pressed through the functions their handlers call. A click sends one step; a hold runs on past it; sliding off
     // stops the run with the hand still down; letting go stops it and gives the bar back. No clock is read: a run's
     // start is waited for on the view having gone past the press's step, its stop read off the bar's own state (only a
-    // running arrow moves the view), so a slow machine takes longer and says the same.
+    // running arrow moves the view), so a slow machine takes longer and says the same. `end=` is the arrow's length
+    // (12 = not shrunk) and `at=` where the view stopped; neither is judged. A run stuck at
+    // `bar_arrow_laid waiting=room` has a list its window holds — the wrong preset (`--preset long`).
     PageStage {
         id: barArrowTimer
         name: "bar_arrow"

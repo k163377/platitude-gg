@@ -4,11 +4,43 @@
 //! nothing outside the loaded window is found (`session::DEFAULT_LOG_LIMIT`),
 //! and the bar says so.
 //!
+//! Marks and moves, never filters: dropping rows would redraw lanes and
+//! edges as bridges over hidden commits, a second walk mode in core.
+//! Marking leaves the walk as it is.
+//!
 //! The line is taken literally (never split on spaces), and each field
-//! answers only the query shapes it can hold. Deliberately out: the
-//! description and a stash's `stash@{n}`, which would light a row for a
-//! reason nothing on it shows, and the domain half of an address, which
-//! would light every row (デザイン規約 §コミットを探す).
+//! answers only the query shapes it can hold — flattening every field into
+//! one string would let a single space hit a date's separator and three
+//! hex digits hit every hash. Three rules: short text matches anywhere
+//! (the subject, people's names, ref names); identifiers match from their
+//! start (addresses, the commit id — fields that share their tails would
+//! match every row from inside); long text is out (the description).
+//! Co-authors' names and addresses answer as the author's do.
+//!
+//! Names match anywhere because a name has parts: `Ada Lovelace` is looked
+//! up by the surname, `山田 太郎` by the given name. A prefix rule would not
+//! cut the noise either — over-matching comes from a name's head (`wrong`
+//! finds `wrongwrong`), which a prefix matches too. Addresses match from
+//! their start because everyone in one repository shares the domain, and a
+//! person is found by pasting the address or typing its head. Hex-looking
+//! words (`added`, `decade`) may answer both as text and as an id: the id
+//! side only adds rows.
+//!
+//! The boundary of this basic search is two sentences: only what a row
+//! already holds as a string (committer, commit date and changed paths
+//! need git to read, so they are out), and no field where one short word
+//! lights every row (the description is out; addresses and ids match from
+//! the start). Deliberately out besides: a stash's `stash@{n}`, which no
+//! row, list or band spells (only the command log does), so a row lit by
+//! `stash@` could not say why; and the author date, the one thing the row
+//! does not hold as text (epoch seconds; the `yyyy-MM-dd HH:mm` on screen
+//! is the display's), left to a search with ranges. The description is
+//! out because it is on no row: a row it lights has no visible reason.
+//! Known cost, accepted: features called only by their name (`identicon`,
+//! `mergetool`, `avatar`, `publish`) find nothing; searching the
+//! description from some length on does not help, since what decides is
+//! whether the word is common in that tree, unknowable before typing. A
+//! search that names its field closes the gap (デザイン規約 §アドバンス検索).
 
 use crate::oid::Oid;
 
@@ -45,7 +77,7 @@ impl Query {
 
     /// Hex only, but shorter than an object name is read from: the line
     /// may be the start of one no row answers yet, and the bar says why
-    /// (規約 §コミットを探す).
+    /// (the app's `GraphFind.qml`, its `hint`).
     pub fn short_of_an_oid(&self) -> bool {
         self.hex && self.needle.len() < MIN_OID_PREFIX
     }

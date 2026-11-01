@@ -11,7 +11,7 @@ import platitude.ui
 // the drawn `Label` — a ruler agreeing only with itself would pass any rule.
 //
 // `cargo xtask qmltest` runs offscreen, which advances every full-width glyph alike, so only the agreement is judged
-// here; real advances need `qmltestrunner` without `-platform offscreen` (rules-refs/app-ui.md).
+// here; real advances need `qmltestrunner` without `-platform offscreen`.
 Item {
     id: root
     width: 600

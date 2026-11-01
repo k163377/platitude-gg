@@ -3,7 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 
 // How the band's shortfall is handed out among the state badges, and nothing else: measured widths and the room in,
-// the group's two answers out (デザイン規約 §ウィンドウの縁 の譲る順). No font, so every boundary is asked in one
+// the group's two answers out (the steps: `BandStateGroup`'s header). No font, so every boundary is asked in one
 // process (`tests/qml/tst_bandshare.qml`), not through window widths that land differently per platform font; that
 // real widths reach the group is `PGG_AUTO_ACT=badges`. The costs are pushed in from `BandStateMetrics`.
 QtObject {
@@ -41,8 +41,10 @@ QtObject {
         return each > 0 ? Math.floor(tabRunAvail / each) : 3
     }
 
-    /// Whether the words are given up: narrowed past the floor, fewer than three tabs in view of a scrolling strip, or
-    /// the window on its floor (規約 §ウィンドウの縁).
+    /// Whether the words are given up: narrowed past the floor, or the tabs cramped — the two signals from the tabs'
+    /// side are fewer than three tabs in view of a scrolling strip, and the window on its floor (user decision). On the
+    /// floor the words go even with room for them: there nothing is left to share out, and the tabs are what is worth
+    /// keeping.
     function folded(cap, tabContentWidth, tabRunAvail, tabCount, windowAtFloor) {
         const scrolling = tabContentWidth > tabRunAvail
         return cap < bandShare.badgeMinW

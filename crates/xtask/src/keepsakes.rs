@@ -32,8 +32,12 @@ pub(crate) enum Landing<'a> {
 ///
 /// `--no-board` rides along: the board is the host's (`onto_the_board`).
 ///
-/// The claim is taken on this side: the one the run inside makes lands in
-/// the container's own `/tmp`, where it can never refuse anybody.
+/// The claim is taken on this side: `/out` is the same path in every
+/// container, and the claim the run inside makes lands in the container's
+/// own `/tmp`, where it can never refuse anybody. A second app handed the
+/// same `/out` cannot take `/out/config` and pictures the "another one is
+/// using these settings" window; the run reads that line and fails at once
+/// (`verify::outcome`'s `store_refused`).
 pub(crate) fn bridge(
     command: &mut Vec<String>,
     landing: Landing<'_>,

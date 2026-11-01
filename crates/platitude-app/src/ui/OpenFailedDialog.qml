@@ -4,7 +4,18 @@ import QtQuick.Layouts
 import platitude.ui
 
 // The folder the picker handed over cannot be opened. A window of its own: the folder never became a tab, so there is
-// nothing for a bar to stand over (デザイン規約 §可否・警告の出し場所).
+// nothing for a bar to stand over (デザイン規約 §可否・警告の出し場所). The picker's road alone comes here — where a
+// failure is said is the road's, its words the kind's (デザイン規約 §リポジトリを開く), and the words are
+// `Words.openFailure`'s alone (a sibling, not a variant: `OpenFailedScreen`). Headless: `open-not-a-repo` /
+// `open-bare` / `open-not-a-repo-retry` / `open-not-a-repo-cancel`.
+//
+// The path sits right under the heading, in the same seat for every kind: the picker is closed and a tab names only
+// the leaf, so this line alone names the folder. `Choose again…` opens the picker at the picked folder's parent
+// (`near`, `urlpath::picker_folder_url`): the repository looked for is usually beside it, the reason the picker opens
+// beside an open repository. Backing out has one shape: `Cancel`, Escape, and backing out of the picker opened again
+// all land on the screen from before this began — undoing one step instead would give `Cancel` a "back" meaning and
+// leave Escape the only way out of the loop. With no tab, the empty window's `Open repository…` is that screen. The
+// same folder taken again says the same words, the same number of times.
 AppDialog {
     id: openFailedDialog
 
@@ -39,7 +50,7 @@ AppDialog {
     onOpened: actions.acceptButton.forceActiveFocus()
 
     /// Every gap, padding included, starts a selection (規約 §右のペインの字は掴める) — a modal has no way to the
-    /// command log, so this is all there is to copy.
+    /// command log, so this is all there is to copy. Headless: `open-dialog-sweep`.
     textContent: failedColumn
 
     contentItem: ColumnLayout {
@@ -79,7 +90,9 @@ AppDialog {
             id: actions
             cancelText: Words.cancel
             acceptKind: "folder"
-            // `again`, not "another": on `other` nobody knows the folder was the wrong one.
+            // `again`, not "another": `another` claims the folder was the wrong one, which `other` cannot say and
+            // `config` contradicts (the fix is to choose the same folder again); the other kinds' headings already say
+            // it, so nothing is lost.
             acceptText: qsTr("Choose again…")
             onCancelled: openFailedDialog.close()
             onAccepted: openFailedDialog.retry()

@@ -1,5 +1,11 @@
 //! The tab registry: opening, reserving, closing, and what the
 //! sessions behind them are asked for.
+//!
+//! Only the tab in front holds a session, restored and switched to alike;
+//! the three doors are `Hub::reserve_tab`, `Hub::ensure_open` and
+//! `Hub::release_tab`. Headless: `tab-carry`, whose
+//! `Harness.openSessionCount` is the one way to say "two tabs, one
+//! repository" — a picture cannot.
 
 use super::sink::BridgeSink;
 use super::*;
@@ -20,8 +26,13 @@ impl Hub {
     /// Asks where `path` opens, without opening anything: the worktree
     /// the folder is in, and its repository
     /// ([`platitude_core::repo::place`]). Every road in asks this, and no
-    /// tab is shown until it answers (デザイン規約 §タブの所作
-    /// 「判定は 1 か所に置く」).
+    /// tab is shown until it answers (`TabsModel::ask`, then
+    /// `strip::landing_for`). Not a tab made first and dropped on a
+    /// failure: it would flash for a frame or two. A picked folder that will
+    /// not open never becomes a tab: its page would hold nothing to read, and
+    /// only its path would be carried to the next start. No waiting look
+    /// either: the answer comes a frame or two after the picker closes (a
+    /// slow network share is an open item in P5-確認事項).
     ///
     /// `false` with no runtime: nothing will ever answer.
     pub fn place_repo(&self, path: PathBuf, feed: Arc<Feed<OpenMsg>>) -> bool {
@@ -66,7 +77,7 @@ impl Hub {
     /// Answers with the token that stops it, or `None` with no runtime.
     ///
     /// Outside every session, since there is no repository yet
-    /// (デザイン規約 §リポジトリを取り寄せる). The budget is the settings'
+    /// (`CloneDialog.qml`). The budget is the settings'
     /// network timeout, as for a fetch.
     pub fn clone_repo(
         &self,
@@ -130,7 +141,7 @@ impl Hub {
 
     /// Where a tab whose worktree would not open is stood back: the
     /// repository's own worktree, `None` for a tab already in it
-    /// (デザイン規約 §タブの所作「立てない所へは立たない」).
+    /// (`TabsModel::stand_home`).
     ///
     /// Asked by the `RepoTab` drain before a refusal is shown, by tab id —
     /// the one thing a page knows about itself; and on every opening, for
@@ -150,6 +161,13 @@ impl Hub {
     /// Drafts stay, filed per worktree (`Tab::drafts`); `Tab::home` stays, as
     /// the repository does not move. A tab off the front holds no session
     /// and is read when it comes to the front.
+    ///
+    /// The command log stays: it records what this window ran, and the
+    /// window is the same; a command running at the move ends on its own
+    /// row. Until the new session answers, the tab counts as busy
+    /// (`RepoTab::stood` gives the count back), so the band and the menus
+    /// stand as for a running command: a write sent to a repository not yet
+    /// open is refused before git.
     pub fn restand_tab(&mut self, id: i32, path: PathBuf) -> bool {
         if !self.tabs.contains_key(&id) {
             return false;
@@ -253,7 +271,8 @@ impl Hub {
     /// the repository from the start.
     ///
     /// The rows handed to QML go with the page (`RepoPageStack`), which
-    /// is why the memory report forgets this tab's models. What the
+    /// is why the memory report forgets this tab's models — a gone
+    /// model's last report left in would be counted twice. What the
     /// session read goes even with a write still running
     /// (`RepoSession::close`).
     ///
@@ -439,7 +458,7 @@ impl Hub {
 }
 
 /// What git said, without the command line around it — the half a screen
-/// quotes (デザイン規約 §リポジトリを取り寄せる「赤は git の文言だけ」).
+/// quotes (the clone box's red line, `CloneDialog.qml`).
 /// The error's `Display` where git said nothing (never started, or killed
 /// by the budget).
 fn git_said(e: &platitude_core::GitError) -> String {
@@ -505,7 +524,14 @@ fn minutes_to_interval(minutes: u32) -> Option<std::time::Duration> {
 }
 
 /// Puts the settings in force on one session — every settings value passes
-/// through here, so none is written but never applied.
+/// through here, so none is written but never applied: a key added to the
+/// settings is added here too. The Hub keeps no auto-fetch interval of its
+/// own (it would double `settings.defaults`). `settings.toml` holds no
+/// per-repository value — every tab runs the same numbers, so
+/// `AppBackend.autoFetchMinutes` is the truth for all repositories and the
+/// fetch button's tooltip may name it. What varies per repository is state
+/// only, held by the session: no remote (`known_to_have_no_remote`) and
+/// the stop after repeated failures (`suspend_auto_fetch`).
 fn apply_repo_settings(session: &Arc<RepoSession>, applied: &platitude_core::settings::Defaults) {
     session.set_auto_fetch(minutes_to_interval(applied.auto_fetch_minutes));
     session.set_network_timeout(std::time::Duration::from_secs(applied.network_timeout_secs));

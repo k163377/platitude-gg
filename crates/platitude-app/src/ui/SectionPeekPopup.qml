@@ -7,6 +7,13 @@ import platitude.ui
 
 // The folded sidebar's one open section and when it is open. Which one, and whether it still has the pointer, are
 // held here, not in the rail cell: the pointer leaves the cell the moment it walks into the section.
+//
+// One section at a time, flush against the rail: its band and its rows themselves, gestures and right-click as in the
+// open list. Nothing between rail and section — a pointer on its way down would leave both and close it. It closes once
+// the pointer has left the cell and the section both, judged a beat later (`HoverSeat`), whichever way it goes: up to
+// the fold block, down to the next cell, right into the diff or the graph, off the top or bottom edge. A right-click
+// menu raised elsewhere does not change that — the cell still opens and closes the same (user decision — ask before
+// changing; `SidebarPane.openPeek`); only a menu raised on this section's own rows holds it (`pinned`).
 AppCard {
     id: peek
 
@@ -21,7 +28,11 @@ AppCard {
     required property real paneH
     required property real listW
     /// Holds it open with the pointer elsewhere: a menu raised from one of its rows stands over it, and taking the
-    /// row from under an open menu reads as the row having gone.
+    /// row from under an open menu reads as the row having gone; a name box open on one of its rows stands in it, the
+    /// list staying folded (a name half typed and lost to a pointer walking off is no gesture; unfolding would close
+    /// the diff), and it closes at the settle after the box goes (Enter, Escape, a click elsewhere). The popup takes
+    /// no keyboard of its own, but `SlimField.forceActiveFocus()` climbs to the ancestor focus scope, so the box can
+    /// be typed — checked on the output side (`NavItemDelegate.editFocused`, `nav-reclick`'s `focused=`).
     required property bool pinned
     /// The `+` on the band above these rows is held (`SidebarPane.doorsHeld`) — the same band, so the same answer.
     property bool addHeld: false
@@ -52,12 +63,15 @@ AppCard {
     /// The pointer came onto a cell (`NavRail.enterAt`): that section opens at once (規約 §hover のツールチップ「展開は
     /// 即時に開く」), in place of the one open. **Each section is a target of its own** (`keyOf`) — the popup is one,
     /// what it shows is not: a section held by its own rows (a menu raised on one, a name box open on one — `pinned`)
-    /// is not handed over, and the cell the hand is on meanwhile is an ask kept for the hold lifting.
+    /// is not handed over, and the cell the hand is on meanwhile is an ask kept for the hold lifting (`peek-hold`).
+    /// One key for all would take that ask as the same target's update and swap the rows out from under the menu or
+    /// the half-typed name. A hand-over is a close, then an open, so it goes through `onAboutToHide`.
     function openAt(kind, top) {
         peekKeeper.point(peek.targetOf(kind, top), true)
     }
     /// A click on the cell under the pointer toggles the section — closed, the hover cannot bring it back, as the
-    /// pointer has not moved (the seat's latch); a click can (`HoverSeat.press`), whatever the latch says.
+    /// pointer has not moved (the seat's latch); a click can (`HoverSeat.press`), whatever the latch says
+    /// (`nav-peek-again`).
     function toggleAt(kind, top) {
         // By `kind`, not `visible`: the popup is still visible on the way out, and a click then would close what it
         // meant to open.
@@ -89,12 +103,12 @@ AppCard {
     // before the next click, while the popup is still visible (`toggleAt`).
     onAboutToHide: {
         // The last-click mark goes with these rows: kept, a later peek's first click would count as the rename
-        // gesture's second (デザイン規約 §左メニューの所作). `gestures` is checked because closing a tab takes it
+        // gesture's second (`ReclickGesture`). `gestures` is checked because closing a tab takes it
         // down before this popup.
         if (peek.kind !== "" && peek.gestures)
             peek.gestures.forgetClicks()
         peek.kind = ""
-        // The list has gone, whatever the last hover said.
+        // The list has gone, whatever the last hover said. A `true` left here opens every later peek for good.
         peek.contentPointed = false
     }
     /// Smoke hooks (PGG_AUTO_ACT=nav-reclick): the open list's, for the section beside the folded rail.
@@ -168,11 +182,15 @@ AppCard {
     }
 
     // Flush against the rail, level with the cell that opened it, and only growing downwards — a section taller than
-    // the pane would otherwise be laid out from the pane's top, away from its cell. Rows that do not fit scroll.
+    // the pane would otherwise be laid out from the pane's top, away from its cell. Rows that do not fit scroll. The
+    // lower the section, the less room it gets, taken knowingly: the first row level with its own mark is worth more
+    // than how many rows show at once. Its rows open under themselves as the panel's do (`NavRowFacts`), and the peek
+    // makes room for that and stays up: a row moving inside it is no reason for it to go.
     x: peek.paneW
     y: peek.top
     width: peek.listW
-    // Header band (`NavHeader`, `rowHeight`) + rows + the frame's two lines, at most to the pane's foot. Never
+    // Header band (`NavHeader`, `rowHeight` — `headerHeight` is the fold block's) + rows + the frame's two lines, at
+    // most to the pane's foot. Never
     // empty: a cell holding a zero does not open (NavRail).
     height: Math.min(Theme.rowHeight + peekList.count * Theme.rowHeight + 2 * Theme.borderWidth,
                      Math.max(0, peek.paneH - peek.top))
@@ -181,13 +199,14 @@ AppCard {
     padding: Theme.borderWidth
     margins: 0
     // The hand walking in off the rail crosses that padding, which the content's handler cannot see; a hand resting
-    // on it would otherwise close the section (デザイン規約 §左メニューを畳む).
+    // on it would otherwise close the section.
     tracksPointer: true
     // Leaving closes it (above).
     closesOnPressOutside: false
 
     // The sidebar's own ground (the header band would be lost on `bgElevated`); the frame floats it (規約 §メニュー),
-    // and square corners since it starts flush against the rail.
+    // and square corners since it starts flush against the rail. Through `AppCard`'s face, never a `background` of its
+    // own: that takes away the `cardFace` that `AppCard.pointerInside` reads.
     faceColor: Theme.bgSurface
     faceRadius: 0
 
@@ -212,7 +231,7 @@ AppCard {
             }
         }
         // The section's own band (the tags eye, the remote `+`) without the fold arrow: there is nothing to fold away
-        // to here (デザイン規約 §左メニューの所作).
+        // to here, and a mark that stands has to do something: one that answers nothing looks broken.
         NavHeader {
             caption: peek.caption
             iconKind: peek.rail.sectionOf(peek.kind).icon

@@ -4,8 +4,35 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-// The state badges, giving way as the tab names do (規約 §ウィンドウの縁): whole words, narrowed together, one mark.
-// The card the pointer opens carries all of it at every step.
+// The state badges, giving way as the tab names do: whole words, narrowed together, one mark. The card the pointer
+// opens carries all of it at every step (`BandStateCard`). Which states the band says, and in which colour, is
+// 規約 §ウィンドウの縁; how they are drawn and give way is this file's.
+//
+// **Order**: the operation under way, `CONFLICTS`, `SET IDENTITY`, `STALE GRAPH`, `NO LFS`, `OLD GIT`. `OLD GIT` is the
+// environment's mark and stands until git is replaced, so it comes last; the five before it say something is in the
+// middle of something — `STALE GRAPH` goes with the next reading that lands, `NO LFS` with its files leaving the list.
+//
+// **Three steps as the band narrows** (the tabs give way at the same time — `TopBar`'s tab strip):
+//   1. While there is room, the words whole: the group's ceiling is the natural width of the words standing.
+//   2. Short of it, the whole group narrows together to its first letters and a `…`, on the tab names' max-min share
+//      (`BandStateShare.cap`: only the long give, and those giving come out at one width) — floored in characters as
+//      a tab is, but lower (`stateMinChars`).
+//   3. Under that floor, or once the tabs are cramped (`BandStateShare.folded`), the whole group folds into one `…`.
+// Tuned on shapes an ordinary setup stands in: `OLD GIT` goes once git is replaced, and fitting the giving way to it
+// would fit it to what most windows never have. So: with one tab the group does not narrow (the one name asks for no
+// more than itself), and three states beside a strip of long names stay words above the floor — the names stop at
+// their floor and scroll, leaving the group no one to give to.
+//
+// A badge added touches: its word in `Words`; here its `*BadgeShown`, `*BadgeW`, `naturalWidth`, `settleCap`'s `want`
+// and its `StateBadge`; `BandStateMetrics`' measuring `BadgeWord` and `*W`; `BandStateCard`'s row, `badgeRun` and
+// `rowsLaidOut`; and `TopBar`'s automation exposure.
+//
+// What answers for it, one layer each: the share-out's table is `tst_bandshare.qml`; the wiring from the share-out to
+// what is drawn, and which model value raises which badge, is `tst_bandgroup.qml` (this group built for real, a real
+// `BandStateMetrics` beside it as witness); the stopped operation's four words and bisect are
+// `models::worktree::tests`. The table alone is not enough: with the group's `badgeMinW` wiring pinned to 0,
+// `tst_bandshare` and the three UI verbs still pass. Headless: `badges` / `badges-hover` / `badges-hover-early`
+// (`identity-tip` reads the same card).
 Item {
     id: stateGroup
 
@@ -22,14 +49,17 @@ Item {
     property real tabRunAvail: 0
     property int tabCount: 0
     /// The padding of the operation panel's buttons, handed in: the theme has no number for a Fusion `ToolButton`'s
-    /// padding.
+    /// padding, so the folded mark's width borrows theirs. Handed in as that relation ("as the buttons"), never a
+    /// copied number — a copy goes quietly wrong when the other side moves.
     property real controlPadding: 0
     /// The operation panel's buttons have folded into end cells (`TopBar.actionsFolded`), and the mark follows them
-    /// (規約 §ウィンドウの縁「畳んだ `…` の箱」).
+    /// into a `railWidth` cell with the wash over the whole cell, as theirs (`stateToggle`). Off the panel's fold,
+    /// which is a function of the window's width: the group's `Layout.minimumWidth` moving with it is no ring with the
+    /// row's share-out, where one read off this group's own laid-out width would be.
     property bool cellFolded: false
     /// Where the band's line of words stands, in this group's y: the tab names' baseline (`TabStrip.titleBaseline`).
-    /// The badges' words stand on it with them, and the boxes are cut round the words from there
-    /// (規約 §ウィンドウの縁「バッジの箱」).
+    /// The badges' words stand on it with them, and the boxes are cut round the words from there (`BandStateMetrics`'
+    /// badge box).
     required property real lineBaseline
 
     /// What can be the matter here, one expression each, read by both the mark and the card (`BandStateCard`) so the
@@ -39,22 +69,44 @@ Item {
                                          && stateGroup.stateWorktree.opText !== ""
     readonly property bool conflictBadgeShown: stateGroup.stateWorktree !== null
                                                && stateGroup.stateWorktree.hasConflicts
-    /// Also a save whose halves did not both land: the identity is then set, but not as asked.
+    /// Also a save whose halves did not both land: the identity is then set, but not as asked — the gate closed over a
+    /// half hands it here. Still `SET IDENTITY` (the same operation keeps its word); only the tooltip tells the half
+    /// apart. For this session only: carried over, it would be a copy of the identity the app does not keep.
     readonly property bool identityBadgeShown: AppBackend.identityState === "missing" || AppBackend.identityUnsaved
         || (stateGroup.curPage !== null && !stateGroup.curPage.pageTab.identityReady)
+    /// Headless: `old-git` / `old-git-card` / `old-git-fold`, on `git_shim`'s old version.
     readonly property bool oldGitBadgeShown: AppBackend.gitUnsupported
-    /// The graph and the repository disagree, either way (`failed` / `stale`): one badge, the card tells them apart,
-    /// and nowhere else says it (デザイン規約 §ウィンドウの縁).
+    /// The graph and the repository disagree, either way (user decision — ask before changing): the walk stopped
+    /// part-way and rows are missing (`failed`), or every row is there but the rebuild meant to replace them did not
+    /// land, so all are old (`stale`). The reader stands the same in both — nothing on screen can be taken as now — so
+    /// one word, and the card's line tells them apart (`BandStateCard`'s `staleRow`). `danger` either way (規約 §状態
+    /// 「今止まっている・失敗した」), so the folded mark turns red too (`tint`): two colours on one word would give a
+    /// mark that says nothing but its colour two weights. Outlined, not filled — the fill is `CONFLICTS`', files
+    /// waiting on the reader; this one is only read. Not the window's cut (`Only the first N commits are loaded`): that
+    /// walk ran to the end and stops by design, in `textSecondary`.
+    ///
+    /// **Said by this badge alone.** In the middle of the column the words would sit over the rows that did arrive; at
+    /// the foot (the window's cut line) they are off screen at opening, the first chunk being 512 rows. One state, one
+    /// place — the band is always in view, and git's words go in the badge's card. `failed` is one state whether part
+    /// of the walk arrived or none of it. Headless: `graph-stale` / `graph-stopped` (`WindowBadgeActs`).
     readonly property bool staleBadgeShown: stateGroup.curPage !== null
                                             && (stateGroup.curPage.pageGraph.failed
                                                 || stateGroup.curPage.pageGraph.stale)
-    /// Pending files need Git LFS and git cannot run it here (`WorktreeModel.lfsNeeded`).
+    /// Pending files need Git LFS and git cannot run it here (`WorktreeModel.lfsNeeded`; what counts and when it is
+    /// asked again: `platitude_core::lfs`, `session/lfs.rs`). `warning`'s outline: the app is saying it, and nothing
+    /// has happened yet (規約 §状態). Not pressable and no road out, as `OLD GIT`: installing is work outside this
+    /// window. Gone on the next tick after an install. The count rides in with the status
+    /// (`SessionEvent::StatusLoaded::lfs_needed`), so nothing here counts or asks. Wiring: `tst_bandgroup.qml`;
+    /// headless `no-lfs` / `no-lfs-card` (`--preset lfs`) and all six at once, `badges-all` / `badges-all-hover`
+    /// (`--preset lfs-conflict`). The desk's Git for Windows carries LFS, so a git without it is `git_shim --no-lfs`
+    /// (picked by the verb's name).
     readonly property bool lfsBadgeShown: stateGroup.stateWorktree !== null
                                           && stateGroup.stateWorktree.lfsNeeded > 0
     readonly property bool stateShown: stateGroup.opBadgeShown || stateGroup.conflictBadgeShown
                                        || stateGroup.identityBadgeShown || stateGroup.oldGitBadgeShown
                                        || stateGroup.staleBadgeShown || stateGroup.lfsBadgeShown
-    /// The narrowest a badge is drawn before the group gives up on words, in characters (規約 §ウィンドウの縁).
+    /// The narrowest a badge is drawn before the group gives up on words, in characters: two and a `…`, under the tab
+    /// names' floor — capital words are told apart by two letters (user decision).
     readonly property int stateMinChars: 2
     /// Settled where it is measured (`BandStateMetrics`).
     readonly property real stateBadgeMinW: badgeMetrics.minW
@@ -84,7 +136,8 @@ Item {
     readonly property string stateCardSize: stateCard.laidOutSize
     readonly property bool stateCardLaidOut: stateCard.laidOut
 
-    /// The folded mark's colour: `danger` when a conflict or a stale graph is among them (規約 §ウィンドウの縁 / §状態).
+    /// The folded mark's colour — the heaviest state's: `danger` when a conflict or a stale graph is among them, else
+    /// `warning` (規約 §状態). The mark says nothing but its colour, so its name is `Accessible.name`.
     readonly property color tint: stateGroup.conflictBadgeShown || stateGroup.staleBadgeShown
                                   ? Theme.danger : Theme.warning
     /// The group's ceiling; `foldedWidth` below is its floor, and the window's floor is costed at the mark
@@ -99,8 +152,9 @@ Item {
     readonly property real foldedWidth: stateGroup.cellFolded
         ? Theme.railWidth : stateMark.implicitWidth + 2 * stateGroup.controlPadding
     /// The folded mark's frame: as deep as the badges it stands for, and where they stand — folding gives up the words,
-    /// not the box (規約 §ウィンドウの縁「畳んだ `…` の箱」). The cell runs the band's depth; a frame that deep lies
-    /// along the band's top and bottom edges and reads as a box glued to the window.
+    /// not the box; only the width changes, as the panel's buttons fold (`ActionButton.foldedDepth`). The cell runs the
+    /// band's depth; a frame that deep lies along the band's top and bottom edges and reads as a box glued to the
+    /// window. Always framed: the mark stands only while something is the matter.
     readonly property real foldedDepth: opBadge.height
     /// Where every badge's box stands: its words' baseline on the band's line. Whole pixels, so the frame's lines stay
     /// sharp.
@@ -123,10 +177,14 @@ Item {
                                                 stateGroup.tabRunAvail, stateGroup.tabCount,
                                                 stateGroup.windowAtFloor)
 
-    /// Whether the band has ever placed this group; the card waits for it. A cell the row has not laid out yet is
-    /// still at (0, 0), where the offscreen pointer sits (rules-refs/app-ui.md「初めて立つセルはまだ原点に居る」).
-    /// Kept once said: the row leaves a cell where it put it. Never make this group the row's first cell — the card
-    /// would never open (`badges-hover`).
+    /// Whether the band has ever placed this group; the card waits for it. The row places no cell that is not
+    /// standing, so a cell standing for the first time is still at (0, 0), where the offscreen pointer sits
+    /// (rules-refs/app-ui.md「ヘッドレスの窓には手が乗っている」): the hover taken there would open the card over a band
+    /// nobody touched and close it `hoverKeepMs` later — a different picture every run. Placed under a hand already
+    /// there, the card waits for that hand to move. Kept once said: the row leaves a cell where it put it. Never make
+    /// this group the row's first cell — the origin would be its place, and the card would never open
+    /// (`badges-hover`). Only the automation's stand-in (`pointedAt`) is asked again once this turns
+    /// (`badges-hover-early`, the pointer put down before the group is placed).
     property bool placed: false
     onXChanged: stateGroup.placed = true
 
@@ -156,8 +214,10 @@ Item {
 
     /// The pointer, or the stand-in, is on a group that can answer it: standing, and placed — a pointer that cannot
     /// move, written before `placed`, would never ask again. The card unfolds what the mark stands for, so it opens
-    /// at once (規約 §hover のツールチップ「展開は即時に開く」); the seat closes it a beat after the last thing asking for
-    /// it lets go, and does not put it back under the same still hand once dismissed. **A parked hand asks nothing**
+    /// at once (規約 §hover のツールチップ「展開は即時に開く」; this card on that side of the line is a user decision —
+    /// ask before changing; a cut name's whole text stays on the other, `TipSeat`); the seat closes it a beat after the
+    /// last thing asking for it lets go, and does not put it back under the same still hand once dismissed. **A parked
+    /// hand asks nothing**
     /// (`Hand.away`, as every `HandWatch` reads it): a headless run gets Qt's enter at the offscreen cursor while the
     /// band has not placed this group yet, and the hover that leaves behind would raise the card for a beat in a run
     /// that put no hand here — a card in the census by the luck of the frame.
@@ -182,7 +242,7 @@ Item {
     visible: stateGroup.stateShown
     implicitHeight: stateGroup.foldedDepth
     // The row shares out by what each item asks for above its floor, so ask for the words — and folded, for the mark
-    // alone, or the words' width stands empty beside it (デザイン規約 §ウィンドウの縁「タブと群は同時に譲る」).
+    // alone, or the words' width stands empty beside it (`TopBar`'s tab strip: the two give way at once).
     implicitWidth: stateGroup.folded ? stateGroup.foldedWidth : stateGroup.naturalWidth
 
     readonly property HoverSeat stateKeep: HoverSeat {
@@ -303,7 +363,7 @@ Item {
                 Layout.maximumWidth: Math.ceil(implicitWidth)
             }
         }
-        // Outlined `danger`, and ahead of `OLD GIT` (規約 §ウィンドウの縁).
+        // Outlined `danger`, and ahead of `OLD GIT` (`staleBadgeShown`, the header's order).
         StateBadge {
             id: staleBadge
             box: badgeMetrics
@@ -322,7 +382,7 @@ Item {
             }
         }
         // Cleared by an install as `OLD GIT` is, but ahead of it: it also goes with the files that raised it
-        // (規約 §ウィンドウの縁).
+        // (`lfsBadgeShown`).
         StateBadge {
             id: lfsBadge
             box: badgeMetrics
@@ -357,8 +417,9 @@ Item {
         }
     }
 
-    // `…` typed — the same glyph and width on both OSes (規約 §ウィンドウの縁). Outside `Theme.buttonMinWidth`, which
-    // is for a box round a word.
+    // `…` typed — the same glyph and width on both OSes, unlike the East Asian Ambiguous `↑` `↓` `→` `·`. Outside
+    // `Theme.buttonMinWidth`, which is for a box round a word. Hover and a press both open the card: a small target
+    // answers however it is touched.
     Rectangle {
         id: stateToggle
         visible: stateGroup.folded
@@ -385,10 +446,11 @@ Item {
             border.color: stateGroup.tint
             radius: Theme.radiusSm
         }
-        // On the band's line, as the words it stands for (規約 §ウィンドウの縁「畳んだ `…` の箱」— a glyph, on the
-        // line's one baseline): the frame is cut round the words' capitals from that line, and a centred line puts the
-        // dots wherever the face's descent leaves them. The face's own report of the dots' ink is no help —
-        // Noto Sans JP's spans 7px.
+        // On the band's line, as the words it stands for (a glyph, on the line's one baseline): the frame is cut round
+        // the words' capitals from that line, and a centred line puts the dots wherever the face's descent leaves them.
+        // Where in the line the dots fall is the face's: in Noto Sans JP / Noto Sans CJK JP they come within 1px of the
+        // middle of the capital-cut frame. The face's own report of the dots' ink is no help — Noto Sans JP's spans
+        // 7px.
         Label {
             id: stateMark
             anchors.horizontalCenter: markFrame.horizontalCenter

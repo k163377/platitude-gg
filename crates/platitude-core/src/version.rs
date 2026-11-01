@@ -220,7 +220,8 @@ fn leading_number(part: &str) -> Option<u32> {
 /// What one candidate git answered when asked its version. An old git
 /// still runs the app, and `Missing` vs `Failed` is what a reader needs to
 /// fix a typed path. The wording is the caller's; this carries only what
-/// git or the OS said.
+/// git or the OS said. Facts, not a verdict: an API that answered `Err`
+/// for an old git would claim to stop what nothing stops, and be misread.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Probe {
     /// It ran, and named a version at or above [`MINIMUM_GIT`].

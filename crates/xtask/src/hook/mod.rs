@@ -6,6 +6,16 @@
 //!
 //! Each handler reads the hook's JSON payload from stdin and answers on
 //! stdout; printing nothing means "no objection".
+//!
+//! This mod.rs holds code on purpose — `run`'s dispatch and the
+//! `pre_shell` chain — against the declarations-only mod.rs of
+//! rules/structure.md §分割: the answer is the first refusal in the
+//! chain's order, and seeing that order in one file outweighs a pure
+//! mod.rs.
+//!
+//! A guard pays only when it removes calls, or cuts a lot of context in
+//! one go: each deny costs a round trip that carries the whole context of
+//! that moment. Before adding one, count which of the two it is.
 
 use std::io::Read;
 
@@ -185,6 +195,9 @@ fn session_end(input: &str) -> Result<(), String> {
 
 /// PreToolUse(Bash|PowerShell). One decision per call — two JSON objects
 /// on stdout is not a payload — so the first refusal is the answer.
+/// `repeat` goes last because of what its ledger means: a line a guard
+/// before it refused never runs, so only lines the whole chain let
+/// through may be recorded.
 fn pre_shell(input: &str) -> Result<(), String> {
     let _refused = git::pre_git(input)?
         || seat::pre_takeover(input)?

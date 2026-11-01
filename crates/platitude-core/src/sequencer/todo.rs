@@ -117,10 +117,15 @@ pub struct MergedTodo {
 ///
 /// git decides which refs follow a rewrite (`update-ref` lines under
 /// `--update-refs`); working the set out again here would disagree with it
-/// exactly where it matters (rules-refs/core.md「helper は git の todo を書き換える」).
+/// exactly where it matters. On 2.51: one line per local branch in the
+/// range, none for a tag or outside the range, and none for a branch another
+/// worktree has out (a `# Ref … checked out at '<path>'` comment instead).
 /// So the plan's command lines are written and every other git line
 /// travels with the commit it came after — a moved step takes its ref with
-/// it. Comments go.
+/// it, after a reword's `exec` (that exec rewrites HEAD). Comments go. A
+/// line after a commit the plan does not hold is dropped and named
+/// (`MergedTodo::orphaned`): carried to the tip, it would move a ref nobody
+/// asked to move.
 ///
 /// Matched on the id, which git abbreviates and the plan spells whole.
 ///

@@ -19,6 +19,11 @@ struct LaneState {
 }
 
 /// Incremental lane allocator.
+///
+/// Sequential by nature: a row's lanes depend on every row before it, so
+/// neither the allocation nor the walk feeding it splits across threads —
+/// split, the pieces would have to be put back in the same order. Only
+/// reading git's output can run beside it.
 #[derive(Debug, Default)]
 pub struct GraphBuilder {
     lanes: Vec<Option<LaneState>>,

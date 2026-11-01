@@ -4,9 +4,20 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// The operation panel's branch card, filed as the left menu's BRANCHES section (デザイン規約 §操作パネル), a folder
-// being a row that opens a nested card. **Built as it opens, one card at a time** — a whole tree on the press costs an
-// item per local branch (rules-refs/app-ui.md「ブランチのカードは開く時に組む、1 段ずつ」).
+// The operation panel's branch card, filed as the left menu's BRANCHES section (user decision; the panel's cards follow
+// the left menu — `TopBar`'s header), a folder being a row that opens a nested card under a hand at rest (§メニュー
+// の入れ子); a folder's row says only its segment, as the left menu's, and a branch row acts on the whole name. The
+// rows' ends follow the left menu's order: counts, then the cloud (remote / PR / gone badges).
+//
+// **Built as it opens, one card at a time**: the press makes the top card only,
+// and a folder's card makes its rows the first time it opens (`onAboutToShow`; automation `fillFolder` / `rowFor`) —
+// a whole tree on the press costs an item per local branch (`NavSectionModel.cardLevel`,
+// ci/baseline/code-costs-windows-x64.md). Each level is the whole branch tree's, whatever the left menu folds or
+// filters to. A folder whose card would hold nothing has no row (`AppMenu.delegate`), so whether a folder offers
+// anything comes from Rust before its card is made (`CardRow.offers` → `AppMenu.promises`).
+//
+// A folder's row is in the rows' own `wordColor`: a row that opens with `>` is never dimmed, a heading neither
+// (`AppMenuItem` `font.weight`; pinned by `tests/qml/tst_opsbranchmenu.qml`).
 AppMenu {
     id: card
 
@@ -105,7 +116,8 @@ AppMenu {
                 }))
             } else {
                 // Under the card's `contentItem`: made under the card itself, the item has no scene until the card
-                // adds it, and Qt warns on every build.
+                // adds it, and Qt warns on every build (`Created graphical object was not placed in the graphics
+                // scene`). A folder's card is made under its parent card and goes in with `addMenu`.
                 into.addItem(branchRow.createObject(into.contentItem, {
                     "text": row.name,
                     "full": row.full,

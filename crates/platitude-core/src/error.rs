@@ -82,10 +82,15 @@ pub enum GitError {
 
     /// A repository git will not open for the account running it: the
     /// folder is owned by someone else and `safe.directory` does not name
-    /// it (setup.c, 2.37.1 to 2.55 — a network drive, a clone another
-    /// account made, a WSL mount). `stderr` is git's whole answer, which
-    /// ends in the `git config --global --add safe.directory` line that
-    /// allows it; the screen puts a heading of its own over it.
+    /// it (setup.c `detected dubious ownership`, 2.37.1 to 2.55 and the
+    /// maintenance releases 2.30.5 to 2.36.2; 2.37.0 says `unsafe
+    /// repository` — a network drive, a clone another account made, a WSL
+    /// mount). Told apart in `repo::open`. `stderr` is git's whole answer,
+    /// which ends in the `git config --global --add safe.directory` line
+    /// that allows it; the screen puts a heading of its own over it (kind
+    /// `untrusted`; user decision — ask before changing). Held by
+    /// `exec::open_names_a_folder_git_will_not_trust_as_untrusted`, made
+    /// with `GIT_TEST_ASSUME_DIFFERENT_OWNER=1`.
     #[error("git does not trust the owner of {}: {stderr}", path.display())]
     UntrustedOwner { path: PathBuf, stderr: String },
 
@@ -94,7 +99,8 @@ pub enum GitError {
     /// (`process::config_unread`): not the moment another git was replacing it, but
     /// a file that stays unreadable (its permissions, a program holding it
     /// open). `stderr` is git's whole answer, which names the file; the
-    /// screen puts a heading of its own over it.
+    /// screen puts a heading of its own over it (user decision — ask before
+    /// changing).
     #[error("git could not read the configuration of {}: {stderr}", path.display())]
     ConfigUnreadable { path: PathBuf, stderr: String },
 
@@ -105,6 +111,10 @@ pub enum GitError {
     /// A message written here: a value the application refused to hand
     /// over, or a write git raised nothing against that did not take
     /// effect all the same. Shown as is.
+    ///
+    /// Most guard what the screen already stops before the press: core
+    /// cannot take the app's gate as a contract, so they stay. A refusal
+    /// before git that the screen can reach and must state is `Withheld`.
     #[error("{message}")]
     Rejected { message: String },
 
@@ -114,6 +124,11 @@ pub enum GitError {
     /// [`GitError::Reported`] one step earlier. Nothing ran, so it names no
     /// command and no exit code: showing one would name a command the
     /// reader never ran (デザイン規約 §git が言ったことを読む場所).
+    ///
+    /// Every refusal this end decides before git and the screen must state
+    /// (a plan's refusals, a tip that moved, a rewrite over a standing
+    /// operation, a folder in the way, a partial stage gone stale —
+    /// `report` and `stage::refusal` build them).
     #[error("{message}")]
     Withheld {
         message: String,

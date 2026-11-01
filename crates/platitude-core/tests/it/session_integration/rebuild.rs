@@ -366,6 +366,9 @@ async fn a_pass_nobody_asked_for_any_more_leaves_the_graph_alone() {
 
 /// One tick, one rebuild: an outside commit moves a ref *and* cleans the
 /// tree, and the poll reads both.
+///
+/// Counted after `refresh_poll_tracked().outcome()`: the task closes the
+/// tick, an unchanged one included, and the swap it asked for.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_poll_rebuilds_the_graph_once() {
     let mut repo = TestRepo::init();

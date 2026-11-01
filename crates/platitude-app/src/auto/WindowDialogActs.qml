@@ -36,7 +36,8 @@ Item {
             "report": () => acts.pickerLine() })
     }
     /// `folder=` names this machine, so `beside_worktree=` is what is judged: whether the picker came up in the folder
-    /// holding the worktree the tab stands in (`RepoTab.picker_folder_url`; the cases are verbs.md `open-picker`).
+    /// holding the worktree the tab stands in (`RepoTab.picker_folder_url`; the cases are the `open-picker` row of
+    /// `verify::verbs::window`).
     /// Compared as paths, not as text — a space arrives percent-encoded — and the worktree's folder is the product's
     /// own conversion's to find (`GitFacts.folderUrlOf`), not split here. No page, no worktree: `false`.
     function pickerLine() {
@@ -63,6 +64,8 @@ Item {
     // PGG_AUTO_ACT=clone-dialog / clone-go / clone-refused: entered through the ☰'s row (`TabStrip.clickCloneRow`) so
     // the relays from the row to the window run too. The source is the repository this run opened — a path works on
     // both OSes with no remote built. The folder name decides which: its own lands beside, the source's is refused.
+    // An argument names another source (taken as the URL). The box is modal, so its picture is overlay.png's; only
+    // `clone-go`, whose box has gone down, leaves the clone's graph in app.png.
     readonly property bool cloneAct: Harness.autoAct === "clone-dialog"
                                      || Harness.autoAct === "clone-go"
                                      || Harness.autoAct === "clone-refused"
@@ -140,7 +143,9 @@ Item {
     }
 
     // PGG_AUTO_ACT=open-not-a-repo / open-bare / open-unreadable and the two ways back out. The picker is the
-    // platform's own window, so the run enters where its answer lands — the path it accepted.
+    // platform's own window, so the run enters where its answer lands — the path it accepted. With no argument xtask
+    // makes the folder (`verify::repos::folder_for`; no preset can be one). `-retry` is judged on the `picker …
+    // folder=` line naming the refused folder's parent, `-cancel` on `tabs=` / `active=` being what they were before.
     readonly property bool pickAct: Harness.autoAct === "open-not-a-repo"
                                     || Harness.autoAct === "open-bare"
                                     || Harness.autoAct === "open-unreadable"
@@ -213,7 +218,9 @@ Item {
 
     // PGG_AUTO_ACT=open-fail-tab / -bare / -unreadable / -log / open-fail-sweep: the road that keeps its tab. Nothing
     // checks the folder first, so the page says what failed (`kind=`). `-log` then opens the command log as the `>_`
-    // there does.
+    // there does: the log reaching that screen is the claim, and an empty panel is fine. `commands=` (like the
+    // dialog's `dialog=`) is that window's own visibility. Kind `other` (git gave no answer) cannot be made from the
+    // app: picturing it takes a throwaway patch that has `repo::open` return `TimedOut`.
     //
     // The failing tab stands (`tab`), then the log opened (`logged`) or the words swept (`swept`).
     WindowStage {
@@ -331,10 +338,15 @@ Item {
 
     // PGG_AUTO_ACT=identity-tip: the mark's reason, read where the pointer cannot go. `badge=` is the group in
     // whichever shape the width left it — the mark alone would fail a band saying what it should. Dismissal waits on
-    // `identityUnsaved`, the save's answer.
+    // `identityUnsaved`, the save's answer: dismissed as soon as it stands, the run overtakes git's two subprocesses,
+    // photographs the mid-write `missing` and goes green.
     //
     // Each hop says itself (`step=`) so a run that stalls says where; a line carries only what could have come out the
-    // other way. `step=` lines stand apart: `must_say` matches a run of the last line (verbs.md).
+    // other way. `step=` lines stand apart: `must_say` matches a run of the last line (verbs.md). Which lines are
+    // missing splits the cause: none = the question never stood or the save did not half-land; up to `dismissed` = the
+    // dialog does not close; up to `pointed` = the card does not come up (that line's `badge=` / `placed=` name the
+    // rest of `asking`). A green run ends two ticks after `dismissed`, so a run at the ceiling points at step one, the
+    // half save, first.
     WindowStage {
         id: identityTipTimer
         name: "identity_tip"
@@ -354,6 +366,8 @@ Item {
                 return
             }
             if (op.at("dismissed")) {
+                // `!opened` is the dialog off the screen: `close()` drops `opened` and `visible` in one call, so no
+                // "still closing" stands between the dismissal, the pointer and the card.
                 if (!Awaited.all("identity_tip_ready", { "ready": !(identityDialog.opened),
                                                          "page": PageSettled.windowSettled(window) }))
                     return
@@ -381,11 +395,14 @@ Item {
 
     // PGG_AUTO_ACT=quit-waits / quit-locked: the close while git is still writing — the commit is held by the sleeping
     // pre-commit hook of `--preset slowhook`, so the gate turns the close away and stands the wait dialog up.
-    // `quit-waits` photographs that; `quit-locked` closes again, then watches the held write land anyway.
+    // `quit-waits` photographs that — the loading shape with no buttons, the dialog in overlay.png and its seat over
+    // the window in scene.png; `quit-locked` closes again, then watches the held write land anyway.
     //
     // Closed through `window.close()`, as the ✕ and Exit are: once the modal stands it is the only road left (the
-    // modal seals the pointer and `Shortcut`s — rules-refs/app-ui.md「アプリ終了の close ゲートは 1 本」). A handler
-    // called from QML would run whatever the modal covers.
+    // modal seals the pointer and `Shortcut`s — `QuitWaitDialog.qml`). A handler
+    // called from QML would run whatever the modal covers, so no verb can say the pointer side is sealed: that is Qt's
+    // modal itself. Under automation the dialog's own close (settled → the window closes itself) is not fired; its
+    // wiring is `WindowQuitGate.qml`'s `onSettled` (→ `gate.window.close()`), which no verb covers.
     //
     // Not the settled page before the landing: the commit moves it, and the landing reads it settled by name.
     WindowStage {
@@ -499,7 +516,8 @@ Item {
 
     // PGG_AUTO_ACT=gate-sweep: the `solo` screen, its words taken from the air (規約 §右のペインの字は掴める) — before
     // any repository opens there is no log to reach. Run in `solo`'s state (the harness holds the real lock), the one
-    // where the path shows; the other gate, a git that will not answer, needs a PATH without git and has no verb.
+    // where the path shows; the other gate, a git that will not answer, needs a PATH without git and has no verb — a
+    // run's PATH is xtask's (`path_with_qt`). Shoot that one by starting the exe directly with only Qt's bin on PATH.
     WindowStage {
         id: gateSweepTimer
         name: "gate_sweep"

@@ -1,7 +1,8 @@
 //! Git LFS, as far as this app has to know it: which pending files the
 //! `lfs` filter would clean on their way into the index, and whether git
 //! can run that filter here. Nothing is converted or fetched — the filter
-//! is git's and Git LFS's (デザイン規約 §ウィンドウの縁 の `NO LFS`).
+//! is git's and Git LFS's (the band's `NO LFS` badge: the app's
+//! `BandStateGroup.qml`).
 //!
 //! Without Git LFS the filter is either undefined (git stores the whole
 //! file where a pointer belonged) or defined and failing — which `git add`
@@ -22,7 +23,9 @@ use crate::status::StatusItem;
 /// How many bytes of paths one `check-attr` is handed. Under Windows'
 /// 32767-character command line with room for git's own words: a byte is
 /// at most one UTF-16 unit, so a path is never longer there than here.
-/// Batches stay large because the process is most of the price.
+/// Counted in bytes, not paths: a count of long paths crosses the limit
+/// and the spawn itself fails. Batches stay large because the process is
+/// most of the price.
 const ATTR_BYTES: usize = 24_000;
 
 /// Whether the working tree holds content of this entry still to be
@@ -92,11 +95,16 @@ pub async fn filtered(
 /// It decides what `git add` does with a file the filter cannot clean
 /// (gitattributes(5)): refuse it where the filter is required, take it
 /// whole where it is not. So it is the one way a pending file that needs
-/// Git LFS cannot be copied by a discard (破棄記録仕様.md §2.1).
+/// Git LFS cannot be copied by a discard (`discards::copy`).
 ///
 /// A value git cannot read as a boolean answers false here (the read exits
 /// 128); git itself dies on it in every command that cleans or smudges a
 /// file — `add` and `restore` alike — whatever the attributes say.
+///
+/// A required filter that cannot run stops `git status` itself
+/// (`clean filter 'lfs' failed`) wherever git has to clean an entry again
+/// to read the tree — a racy entry, a rename. Measured in
+/// `tests/it/lfs_integration.rs`.
 pub async fn required(
     executor: &GitExecutor,
     workdir: &Path,
@@ -113,7 +121,9 @@ pub async fn required(
 }
 
 /// Whether git can run Git LFS here: `git lfs version` answers, where a
-/// missing one is git's `'lfs' is not a git command` and exit 1.
+/// missing one is git's `'lfs' is not a git command` and exit 1 — an
+/// answer, hence `answers_by_code(1)`; without it every tick that asks
+/// would log a failure.
 ///
 /// Any other exit is no better — an LFS that cannot say its version will
 /// not clean a file either. A cancel or a git that did not start is an

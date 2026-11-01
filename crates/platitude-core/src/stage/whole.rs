@@ -72,11 +72,13 @@ pub async fn stage_all(
         .map_err(locked_out(ReportKind::StageLocked))
 }
 
-/// What unstages before the first commit, ahead of its pathspecs: the
+/// What unstages before the first commit, ahead of its pathspecs, for one
+/// file and for all: `restore --staged` cannot run without a HEAD. The
 /// entries leave the index, the disk is left alone (`--cached`).
 /// `--force` because a file edited again after `add` has staged content
 /// that is neither HEAD's nor the disk's, which `rm` refuses to drop
-/// unforced — the same staged bytes `restore --staged` drops where there
+/// unforced (`staged content different from both the file and the HEAD`,
+/// git 2.55) — the same staged bytes `restore --staged` drops where there
 /// is a HEAD.
 const UNBORN_UNSTAGE: [&str; 7] = [
     "rm",
@@ -188,8 +190,11 @@ pub async fn discard_to_head(
 
 /// `git clean -f -d -- <paths>`: deletes untracked files. `-d` so a
 /// directory pathspec still takes the whole tree. An emptied parent
-/// directory stays on disk, which status does not show. Destructive — the
-/// caller confirms first.
+/// directory stays on disk, which status does not show (git tracks no
+/// empty directory). Accepted, not cleaned up: it is the other side of
+/// status listing an untracked directory file by file (`-uall`), which
+/// lets one file in it be staged alone. Destructive — the caller confirms
+/// first.
 pub async fn remove_untracked(
     executor: &GitExecutor,
     workdir: &Path,
@@ -204,8 +209,9 @@ pub async fn remove_untracked(
 }
 
 /// Which side of the worktree a chosen row was standing on. Carried
-/// with the path: a file changed on both sides has a row in each bucket,
-/// and which was chosen decides whether what is staged survives.
+/// with the path, from the caller's choice: a file changed on both sides
+/// has a row in each bucket, status cannot say afterwards which one was
+/// chosen, and which was chosen decides whether what is staged survives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiscardSide {
     /// An unstaged edit: the disk goes back to the index, what is staged

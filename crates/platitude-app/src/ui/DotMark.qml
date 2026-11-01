@@ -16,7 +16,7 @@ Item {
         id: dot
         anchors.horizontalCenter: parent.horizontalCenter
         y: Math.round(mark.middle - dot.height / 2)
-        /// Twice the hairline the drawn flag dash takes (規約 §git 用語のコード表記): a round mark of one pixel would
+        /// Twice the hairline the drawn flag dash takes (`ActionButtonLabel`'s flag): a round mark of one pixel would
         /// disappear beside 12px text.
         width: Theme.borderWidth * 2
         height: dot.width

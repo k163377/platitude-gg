@@ -4,6 +4,9 @@
 //! at ([`side_at`], [`branch_name_on`]). Nothing is asked of GitHub or of git: the address is read
 //! off `remote.<name>.url` as written, so a URL git rewrites on the way
 //! out (`url.<base>.insteadOf`) or an ssh host alias is not seen through.
+//! The harness's `--preset github` rests on that: git goes to bare
+//! repositories beside the worktree while the links still name GitHub
+//! (`xtask::demo::remote::github`).
 //!
 //! Only github.com: an enterprise host is indistinguishable by its name
 //! from any other forge.

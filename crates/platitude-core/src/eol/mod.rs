@@ -6,6 +6,11 @@
 //! notices never offer a fix (デザイン規約 §改行コードの警告, which also
 //! defines cases (a)–(d), see [`Reading`]).
 //!
+//! Do not give a notice a door to a write, on the warning bar or on its
+//! card: no converting the file's contents, no remark that
+//! `.gitattributes` is missing — that is where other git GUIs' accidents
+//! gather. The notices only say.
+//!
 //! (a) and (b) are exact and settled here by [`read`]. (c) and (d) need to
 //! know what the files around this one look like, which the patch cannot
 //! say; [`read`] reports the shape and the caller pairs it with a baseline.

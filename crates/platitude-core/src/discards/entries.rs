@@ -1,11 +1,15 @@
 //! The entries, made of what the reading found: the moves git's reflogs
 //! hold that left commits nothing reaches, and the record's lines — each
-//! made into the parts a restore brings back (破棄記録仕様.md §4), named as
-//! they would be now.
+//! made into the parts a restore brings back (`restore`), named as they
+//! would be now. One operation is one entry; an entry of several parts
+//! comes back whole or part by part (`Discard::restores_by_part`).
 //!
-//! A line that says which of git's own lines it goes with (§2) takes them
-//! in: a `reset --hard`'s copy joins the reset that threw the work away,
-//! and a rebase that moved branches together is one entry.
+//! A record line is listed even where a ref still reaches its commits — the
+//! name, upstream, stash entry, worktree or copy went — its lost commits
+//! then none. A line that says which of git's own lines it goes with
+//! (`Moved:`) takes them in: a `reset --hard`'s copy joins the reset that
+//! threw the work away (alone where that move is not listed: a ref reaches
+//! its old tip), and a rebase that moved branches together is one entry.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -22,7 +26,7 @@ pub(super) struct Settled {
     pub(super) lost: Vec<Oid>,
 }
 
-/// The names already taken, which a restore's name keeps clear of (§4).
+/// The names already taken, which a restore's name keeps clear of.
 #[derive(Debug, Default)]
 pub(super) struct Taken {
     pub(super) branches: HashSet<String>,
@@ -149,7 +153,10 @@ impl Reading<'_> {
         };
         entry.name = line.get("Branch").to_string();
         // The worktree where it stands now — the one the record names, moved
-        // since or not — else where the record says it was.
+        // since or not (the repository moved whole, `git worktree move`) —
+        // else where the record says it was. git reuses a name: a worktree
+        // made later in a folder of the removed one's name gets it, and the
+        // copy then goes into that one.
         let path = self
             .here
             .worktrees
@@ -260,7 +267,7 @@ impl Reading<'_> {
             // Where it stands on the graph: the commit it peels to — the
             // note's parent here, `Remote-commit:` for the remote's own. A tag
             // whose commit this repository never had stands nowhere; the
-            // restore is git's to refuse (§4, `Look::Absent`).
+            // restore is git's to refuse (`Look::Absent`).
             let tip = if part == 0 {
                 self.first.unwrap_or(object)
             } else {
@@ -347,7 +354,7 @@ impl Reading<'_> {
 
 /// A branch put back at a move's old tip: under its own name where that is
 /// free — a branch another tool deleted, one renamed since — else with the
-/// suffix; what a detached HEAD held under `detached-pgg-restored` (§4).
+/// suffix; what a detached HEAD held under `detached-pgg-restored`.
 fn branch_part(settled: &Settled, names: &mut Names<'_>) -> Part {
     let name = if settled.found.detached {
         let free = suffixed("detached", &|candidate| names.taken_branch(candidate));

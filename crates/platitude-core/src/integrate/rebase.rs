@@ -9,6 +9,9 @@ use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 use crate::relied_messages;
 
+/// How a rebase runs. No autostash field, on purpose: every rebase over a
+/// dirty tree goes through the session's own carry, which gives staged
+/// work back staged (`session::build::carry_across`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RebaseOptions {
     /// `--onto <newbase>`: transplant onto something other than `upstream`.
@@ -16,7 +19,8 @@ pub struct RebaseOptions {
     /// Which branch to rebase; HEAD when `None`.
     pub branch: Option<String>,
     /// Move refs that pointed into the rewritten range along with it
-    /// (git 2.38+, inside the minimum version).
+    /// (git 2.38+, inside the minimum version). The one flag the app's
+    /// rebases add: branches stacked on the range move with it.
     pub update_refs: bool,
     /// `--root`: replay from the first commit; `upstream` is left off, as
     /// the first commit has no parent to name.
@@ -35,11 +39,13 @@ pub enum RebaseOutcome {
     /// (`RepoSession`'s carry), and a second refusal has to say why in
     /// git's own words.
     Blocked(GitError),
-    /// git stopped part-way and left the rebase standing — not a failure;
-    /// the carried work waits in the stash until the operation is over
+    /// git stopped part-way and left the rebase standing — not a failure
+    /// (user decision — ask before changing); the carried work waits in the
+    /// stash until the operation is over
     /// (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
     /// Becomes [`super::Landing`] after the carry
-    /// (`session::build::rewrite_carrying`).
+    /// (`session::build::rewrite_carrying`): `Blocked` keeps it out of
+    /// `Landing` until then.
     Stopped,
 }
 
@@ -82,14 +88,18 @@ pub(crate) fn turned_down(said: &str) -> bool {
 /// rebase above and the driven one in [`crate::sequencer`].
 ///
 /// Exit 1 is both the refusal a stash gets past (told by its wording) and
-/// the stop (told by `rebase-merge` left standing). The code is read as
-/// well as the marker: a rebase asked for while another is in progress
-/// exits 128 with `rebase-merge` there, and the marker alone would hide
-/// git's reason. A read that fails answers "not a stop", so git's own
-/// words reach the screen.
+/// the stop (told by `rebase-merge` / `rebase-apply` left standing); this
+/// is the one place either is decided. The code is read as well as the
+/// marker: a rebase asked for while another is in progress exits 128 with
+/// `rebase-merge` there (measured on 2.55: only the refusal and the stop
+/// are 1, an upstream git cannot read is 128 too), and the marker alone
+/// would hide git's reason. A read that fails answers "not a stop", so
+/// git's own words reach the screen. Held by `integrate_integration::rebase`
+/// and `session_integration::carry_rewrite`.
 ///
 /// Exit 0 is not always Done: an `edit` stop exits 0 with the marker
-/// standing (`an_edit_stop_says_so_and_names_the_commit_it_sits_on`).
+/// standing (measured on 2.55,
+/// `an_edit_stop_says_so_and_names_the_commit_it_sits_on`).
 ///
 /// The `pre-rebase` hook's no is a report
 /// ([`crate::report::ReportKind::RewritePreRebase`]): nothing moved, and
@@ -174,13 +184,16 @@ pub struct RebaseStop {
     /// be amended); git marks it by leaving `rebase-merge/amend`.
     pub editing: bool,
     /// The commit the stop left HEAD on, full hex — the amend marker's
-    /// contents (git's `intend_to_amend`). Empty where the file could not
+    /// contents (git's `intend_to_amend`): both the commit the exit card
+    /// names and the one the amend aims at. Empty where the file could not
     /// be read.
     ///
     /// Not `rebase-merge/stopped-sha`: that names the todo's commit, which
     /// a reword, squash or reorder ahead of the `edit` step leaves out of
-    /// the history
-    /// (`an_edit_stop_after_a_reword_names_the_replayed_commit_not_the_todos`).
+    /// the history (measured on 2.55,
+    /// `an_edit_stop_after_a_reword_names_the_replayed_commit_not_the_todos`).
+    /// A todo of picks alone shows no difference, so a test of one proves
+    /// nothing here.
     pub oid: String,
 }
 
@@ -195,7 +208,10 @@ pub struct RebaseStop {
 #[must_use]
 pub fn rebase_standing(git_dir: &Path) -> (Option<crate::conflict::Progress>, RebaseStop) {
     // A marker there but unreadable still says `editing` — it errs toward
-    // holding `--skip` back (`skip_is_free`).
+    // holding `--skip` back (`skip_is_free`): one tick of `editing: false`
+    // turns the exit card's `--skip` from a counted press back into a plain
+    // click, and that click takes the stopped commit away. Progress, on the
+    // other hand, is dropped when unreadable: a stale N/M reads as progress.
     let amend = git_dir.join("rebase-merge/amend");
     let editing = amend.exists();
     let oid = std::fs::read_to_string(&amend)
@@ -248,10 +264,12 @@ pub(crate) fn rebase_command(
     if let Some(editor) = todo_editor {
         // `--no-rebase-merges` pins off `rebase.rebaseMerges`: the editor
         // keeps the lines git put in (`sequencer::merge_todo`), so its
-        // `label onto` / `reset onto` would travel into the plan and replay
-        // a shape nobody composed. Driven form only — a plain rebase leaves
-        // the config the person's own
-        // (rules-refs/core.md「駆動 rebase だけ `--no-rebase-merges` で釘付け」).
+        // `label onto` / `reset onto` (`reset [new root]` under `--root`)
+        // would travel into the plan and replay a shape nobody composed.
+        // Driven form only — a plain rebase leaves the config the person's
+        // own. Nets: `tests::only_the_driven_rebase_pins_rebase_merges_off`,
+        // and git's side at the minimum too in `integrate_integration::todo`
+        // (`a_plan_runs_whole_with_rebase_merges_set_in_the_config`).
         cmd = cmd
             .args(["--interactive", "--no-rebase-merges"])
             .env("GIT_SEQUENCE_EDITOR", editor);

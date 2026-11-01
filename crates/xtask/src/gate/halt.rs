@@ -1,14 +1,19 @@
 //! A gate that stops at its first red (反映前テストの機械化.md §最初の赤で止まる).
 //!
 //! A red decides the run, and the fix it asks for nearly always voids the
-//! stamps the rest could earn. So on either side nothing more starts, a step
-//! waiting for room gives its place up, and a running step is ended with what
-//! it started ([`crate::watched::run_step`]) — except a `linux` step with a
-//! container of its own, which is left to finish ([`super::runner`]). Every
-//! step it kept from running or ended is filed as `halted`.
+//! stamps the rest could earn: the verbs read the app and core trees whole.
+//! So on either side nothing more starts, a step waiting for room gives its
+//! place up, and a running step is ended with what it started
+//! ([`crate::watched::run_step`]) — except a `linux` step with a container
+//! of its own, which is left to finish ([`super::runner`]). Every step it
+//! kept from running or ended is filed as `halted`.
 //!
 //! `--keep-going` (implied by `--whole`) runs the rest, but a red always-step
 //! stops the run either way ([`super::sides::run_sides`]).
+//!
+//! The cost: a red that needed no fix (a load swing) leaves what it stopped
+//! to the next run. Not optimised for: a red that only load brings out is a
+//! wait to fix (.claude/rules/code.md, tests run in parallel by default).
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};

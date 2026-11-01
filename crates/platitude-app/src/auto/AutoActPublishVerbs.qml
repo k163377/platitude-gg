@@ -111,7 +111,7 @@ Item {
                                           + " name=" + remoteDialog.wantedName)
             driver.reportAtCompletion(() => acts.publishLines())
         } else if (act === "publish-upstream") {
-            // A push with an upstream the far side does not have yet (デザイン規約 §ブランチが測られる相手を決める):
+            // A push with an upstream the far side does not have yet (`PublishFlow.startPublishAsk`):
             // the question the toolbar's press raises must open on that name, or the answer just given is asked again.
             // The upstream goes in at the slot the question's pill calls — the question is `set-upstream-go`'s subject.
             publishUpstreamTimer.want = arg === "" ? "brand-new" : arg
@@ -145,7 +145,8 @@ Item {
             page.pushNow()
         } else if (act === "push-outdated") {
             // Against a remote that has moved on (`--preset outrun`): git refuses and the session fetches on the
-            // refusal, so what comes back is a report (デザイン規約 §答えの要らない報せ).
+            // refusal, so what comes back is a report (デザイン規約 §答えの要らない報せ) — and the fetch ring turning in
+            // the picture is right.
             page.pushNow()
             driver.barrierNotice.start()
         } else if (act === "force-push") {
@@ -163,17 +164,17 @@ Item {
             fetchedRefListTimer.start()
         } else if (act === "fetch-recover") {
             // A fetch that cannot land leaves a failure standing; `Main` then fires one that can and reads what the
-            // success takes down by itself.
+            // success takes down by itself. Self-contained on the default preset; the log's own failed row stays.
             repoTab.fetch("pgg-no-such-remote")
         } else if (act === "fetch-recover-held") {
             // The same recovery over a log panel the reader opened, which the fetch leaves standing
-            // (デザイン規約 §git が言ったことを読む場所). Opened by the `>_`'s own function, so a build where the press
+            // (`CommandsOwner`). Opened by the `>_`'s own function, so a build where the press
             // stopped reaching the rule ends with the panel gone.
             page.toggleCommands()
             repoTab.fetch("pgg-no-such-remote")
         } else if (act === "fetch-fail") {
-            // The argument is how many fetches to fail (`fetchFailRuns`), so one verb reaches the warning shape and
-            // the stopped one.
+            // The argument is how many fetches to fail (`fetchFailRuns`), so one verb reaches the warning shape (1–2)
+            // and the stopped one (3). The remote has to be out of reach: `--preset unreachable`.
             AppBackend.setAutoFetchMinutes(0)
             AppBackend.setAutoFetchMinutes(5)
             fetchFailTimer.start()
@@ -196,8 +197,12 @@ Item {
         }
         return true
     }
-    /// PGG_AUTO_ACT=push-default: stops with the sidebar showing the mark. `markedOrigin` names it only once both
-    /// `git config` writes ran and the refresh behind them republished, so the picture is of a marked repository.
+    /// PGG_AUTO_ACT=push-default: stops with the sidebar showing the mark (the push destination and
+    /// `checkout.defaultRemote`). `markedOrigin` names it only once both `git config` writes ran and the refresh behind
+    /// them republished, so the picture is of a marked repository. Run on `--preset unpublished`, with two remotes:
+    /// with one, the marked row and an unmarked one frame the same, and the mark is one badge at the row's end, which
+    /// frames the same unwired. `local=` is the side that can be taken off; a mark from global config cannot
+    /// (デザイン規約 §リモートを書き留める).
     PageStage {
         id: pushDefaultTimer
         name: "push_default"
@@ -263,7 +268,9 @@ Item {
     }
     /// PGG_AUTO_ACT=push-hover: the tip on the band's push button, the one place the count a push sends (or an
     /// overwrite drops) is said. The opening's fetch is waited out first: the shared tooltip takes the words once as
-    /// it opens, so a count that moved later would be photographed stale.
+    /// it opens, so a count that moved later would be photographed stale. The words are overlay.png's / scene.png's.
+    /// The overwrite it describes on `--preset forkdiverged` is pressed by `force-push` on the same preset, leased on
+    /// `fork/main`'s tip — a lease on origin's fails as `stale info`.
     PageStage {
         id: pushHoverTimer
         name: "push_hover"
@@ -297,7 +304,8 @@ Item {
     /// PGG_AUTO_ACT=publish-remotes-marked: the first push's destination list with the mark in it. The mark's write is
     /// waited out first — the question reads the marked remote as it opens — and the list opened, as `publish-remotes`
     /// opens it, only once the question is dressed and the bar is all the way down. The list is asked for each beat
-    /// until it is up: the form is created asynchronously with the ask bar.
+    /// until it is up: the form is created asynchronously with the ask bar. `marked=` is the field the rows read
+    /// (`AppCombo.markedRow`); the icon in the row is the picture's.
     PageStage {
         id: publishMarkedTimer
         name: "publish_marked"
@@ -332,8 +340,9 @@ Item {
                                 + " name=" + repoTab.pushDefault })
         }
     }
-    /// PGG_AUTO_ACT=remote-menu: the menu a remote's own row raises, left standing (overlay.png). `rows=`: two on a
-    /// remote that is not origin, one on the remote both keys already name (デザイン規約 §メニュー). Raised each beat
+    /// PGG_AUTO_ACT=remote-menu: the menu a remote's own row (its folder row: the repository's settings) raises, left
+    /// standing (overlay.png). `rows=`: two on a remote that is not origin, one on the remote both keys already name
+    /// (`markedOrigin`), whose `Mark as origin (default remote)` row goes (デザイン規約 §メニュー). Raised each beat
     /// until it is up.
     PageStage {
         id: remoteMenuTimer
@@ -359,9 +368,10 @@ Item {
                                 + " marked=" + repoTab.pushDefault })
         }
     }
-    /// PGG_AUTO_ACT=remote-url: the form that holds a remote's URL, left standing (overlay.png) — the other way to the
-    /// mark. `box=` is whether the line is checked, which a picture of a form cannot be trusted for. Asked for each
-    /// beat until it is up.
+    /// PGG_AUTO_ACT=remote-url: the form that holds a remote's URL (`Where <remote> is`), left standing (overlay.png) —
+    /// the other way to the mark. `box=` is whether the line is checked as the form opened, which a picture of a form
+    /// cannot be trusted for. The form with the box out (a mark from global config) is beyond this verb: checked by eye
+    /// on a real machine. Asked for each beat until it is up.
     PageStage {
         id: remoteUrlTimer
         name: "remote_url"
@@ -420,7 +430,10 @@ Item {
         }
     }
     // The refusal must be on the button before the second go is sent, and the report is the only proof it got there —
-    // the go clears the mark before the shot. The write barrier completes this one.
+    // the go clears the mark before the shot. The write barrier completes this one. Shot on `--preset diverged
+    // --allow-write-failure`: a real non-fast-forward refusal, then a force that lands. No `must_say` holds the line —
+    // the run is judged on its last picture, the mark gone. The button's yellow `!` shape is a push at a remote out of
+    // reach, rigged as `fetch-fail` is.
     PageStage {
         id: pushRetryTimer
         name: "push_retry"
@@ -644,6 +657,12 @@ Item {
             "report": () => driver.verbReport() })
     }
     /// `publish-new-go`: the dialog's own button, once visible and valid (an empty URL cannot be submitted).
+    ///
+    /// A full run needs a remote that answers: `demo-repo noremote --at <dir>`, `git init --bare` beside it, and its
+    /// `file:///…` passed as `publish-new-go 'origin|file:///…' --repo <repo>`. The unreachable side is built by URL —
+    /// `noremote` with a `file:///…` to no directory, `--allow-write-failure` — not by `--preset unreachable`: a run
+    /// without the argument fails to parse (`verify::options`), and that preset's `main` is already pushed with an
+    /// upstream, so no first push comes (watchdog).
     PageStage {
         id: publishNewTimer
         name: "publish_new"
@@ -681,7 +700,8 @@ Item {
     }
     /// PGG_AUTO_ACT=publish-tip: the question `publish-taken` stops at, with a hand on its pill — the tip is the only
     /// place that says what an overwrite would drop. The hand goes on once the bar has stopped moving: the tooltip
-    /// places itself against the pill as it opens, and would stand where a travelling pill was.
+    /// places itself against the pill as it opens, and would stand where a travelling pill was. `carried` has nothing
+    /// to say on its pill, so no tip stands and that run waits out its watchdog.
     PageStage {
         id: publishTipTimer
         name: "publish_tip"
@@ -711,9 +731,10 @@ Item {
         id: publishAnswerTimer
         name: "publish_answer"
         order: ["read", "answered"]
-        /// Whether the answer comes from the name box instead of the pill (`PublishFlow.enterBranch`). A held question
-        /// is never answered this way — the key is not a gesture (`AskBar.answerFromForm`) — so such a run waits out
-        /// its watchdog.
+        /// Whether the answer comes from the name box instead of the pill (`PublishFlow.enterBranch` raises the box's
+        /// `accepted`; that a real Enter raises it is `tst_askanswer`'s). A held question is never answered this way —
+        /// the key is not a gesture (`AskBar.answerFromForm`) — so such a run (`publish-enter taken`) waits out its
+        /// watchdog by rule.
         property bool byKey: false
         function answering() {
             return "publish answering far=" + publishFlow.publishState

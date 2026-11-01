@@ -56,10 +56,19 @@ pub fn isolated_env() -> Vec<(OsString, OsString)> {
 
 /// Git executor for integration tests. The raw `GitExecutor::new()` remains
 /// available for tests that intentionally exercise the host configuration.
+/// Without the isolation the host's config leaks in: a permission warning
+/// about `~/.config/git/ignore` lands on stderr, and a nothing-to-commit or
+/// an empty revert reads red.
 ///
 /// The stock budget is raised to the suite's overall backstop: the
 /// everyday cap would decide by load (`wait.rs`), and a wedged git must
 /// still fail a test that awaits the executor directly, with no `Patience`.
+/// `OVERALL_BUDGET` is a floor no load breaks — only a livelock reaches it.
+/// A command's own cap (`GitCommand::timeout`) still binds it; the stock
+/// one is what every command that names none runs on, `repo::open`'s probe
+/// included. The write queue's local lane is outside this lift: it drops
+/// the stock budget altogether, so a test waiting on a write is named red
+/// by `Patience` / `bounded`.
 pub fn isolated() -> GitExecutor {
     GitExecutor::new()
         .with_stock_timeout(super::wait::OVERALL_BUDGET)

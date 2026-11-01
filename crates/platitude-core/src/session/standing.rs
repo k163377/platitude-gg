@@ -12,7 +12,11 @@
 //! offers its report under it; a write takes a stamp on its way out
 //! ([`Standing::fence`]) and a report stamped before that is refused. So
 //! HEAD never moves backwards past a write, and no consumer orders the
-//! reads itself.
+//! reads itself. A refused read is read again (`read_refs_from` /
+//! `read_status_from`): a write reads the status again only where it moved
+//! refs, so a status fenced by a fetch that brought nothing would otherwise
+//! wait for the next tick. Pinned by `session_integration::head`; the
+//! offer's classes by this module's unit tests.
 //!
 //! **The report numbers run across sessions.** A consumer arms a landing
 //! on "the first report after this write" by the number the write's

@@ -4,7 +4,13 @@ import QtQuick.Layouts
 import platitude.ui
 
 // Where a remote is written down — a name and a URL — or its URL corrected (デザイン規約 §リモートを書き留める). A
-// dialog, because this is repository configuration (デザイン規約 §可否・警告の出し場所).
+// dialog, because this is repository configuration (デザイン規約 §可否・警告の出し場所); a question that called it
+// waits in its bar and comes back with the new remote picked (`PublishFlow`).
+//
+// The repository over there is made on the host's web page: git has no repository creation, and public / private
+// exists only in a forge API (実装計画.md §1 スコープ外), so the answer under git alone is to have the URL of the
+// repository made there typed in. One dialog adds and corrects — the two differ only in which field is already
+// filled; renaming is the left menu's (both here would make one sheet two).
 AppDialog {
     id: remoteDialog
 
@@ -23,7 +29,9 @@ AppDialog {
         remoteDialog.editing === "" && remoteDialog.wantedName !== ""
         && remoteDialog.taken.indexOf(remoteDialog.wantedName) >= 0
 
-    /// The remote was written down, the URL as typed: `git remote add` contacts nothing.
+    /// The remote was written down, the URL as typed: `git remote add` contacts nothing — an unreachable URL is
+    /// registered with exit 0, and a wrong one shows only at the next push. The remote then stays: correcting what is
+    /// there (this dialog's correction form) is the way back.
     signal submitted(string name, string url)
     /// The box was left changed. Its own signal: it writes config keys, not the remote.
     signal markChanged(string name, bool marked)
@@ -38,7 +46,9 @@ AppDialog {
         remoteDialog.marked = marked === true
         remoteDialog.markLocal = markLocal !== false
         markBox.checked = remoteDialog.marked
-        // `origin` only while there is no remote at all (デザイン規約 §リモートを書き留める).
+        // `origin` only while there is no remote at all: the name clone gives the first one, and nothing to clash
+        // with. With any remote the box is empty — a prefill would be a taken name or an invention — and the caret
+        // goes to it (`onOpened`).
         nameField.text = name !== "" ? name : takenNames.length === 0 ? "origin" : ""
         urlField.text = url
         remoteDialog.open()
@@ -72,7 +82,10 @@ AppDialog {
         spacing: Theme.spaceLg
 
         // The remote it corrects behind the cloud, a sign on the name (デザイン規約 §ref の種別「名前の印」) — a field,
-        // since only one says where a name stands.
+        // since only one says where a name stands. `Add remote` is the bare word with no article (§長さ): it names
+        // the kind about to be made. No chip either — `remote` is a noun here, where the chip rule
+        // (§git 用語のコード表記) loosens by that one word. Every door to this form says the same words
+        // (`Words.addRemote`).
         CardText {
             Layout.fillWidth: true
             text: remoteDialog.editing === "" ? qsTr("Add remote") : remoteDialog.whereIs(remoteDialog.editing)
@@ -88,7 +101,9 @@ AppDialog {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
             color: Theme.textSecondary
-            // Shared by the add and correction forms (デザイン規約 §リモートを書き留める).
+            // One line saying only what is asked. `the repository on your host` carries "it already exists over
+            // there" in its article; that `git remote add` contacts nothing stays off screen (§長さ). Shared by the
+            // add and correction forms, so it cannot tell someone correcting a URL to create anything.
             text: qsTr("Enter the URL of the repository on your host.")
         }
 
@@ -120,8 +135,14 @@ AppDialog {
             }
         }
 
-        // Which remote is origin (デザイン規約 §リモートを書き留める). Not on the first remote's add form: every push
-        // goes there anyway.
+        // Which remote is origin (both keys: `remote::OriginMarks`). Not on the first remote's add form: every push
+        // goes there anyway. The words put `origin` first and the role in a parenthesised phrase (user decision — ask
+        // before changing): `origin` is far better known than `default remote`, so the words stay even where a
+        // remote is called `origin`; a phrase, not a name, so §タイポグラフィ「丸括弧に名前を入れない」 does not apply.
+        // The line under it says only what the push side loses — `checkout.defaultRemote` only answers a `switch`
+        // git refused as ambiguous. One mark only (one value per key): it moves by marking another, and only this box
+        // takes it off. A mark from the global config cannot be taken off here (git has no local "unset"), so the
+        // box stands out of reach and the line, in `warning`, names the one move left.
         ColumnLayout {
             id: markRow
             Layout.fillWidth: true

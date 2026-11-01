@@ -57,15 +57,25 @@ Item {
     /// Runs `act` if it is one of this family's, and says whether it was.
     function run(act, arg) {
         if (act === "delete-branch" || act === "delete-branch-go" || act === "delete-branch-refused") {
+            // All three take the branch as their argument: without it the press runs `git branch --delete -- ''` and
+            // photographs nothing. The plain delete runs with the menu up: a merged branch goes and the menu closes,
+            // a refused one turns the row into `branch -D` + `not merged`. The refused side is `--preset basic`'s
+            // `feature/topic-a` (`-refused` stops on that row, `-go` presses it through); both need
+            // `--allow-write-failure`, the refusal being what they show. The landing `ref_delete` claims is
+            // `base --preset plan` (the must_say spells the name); other arguments claim the press alone.
             // All three own their completion (`AutoActCompletion.defersCompletion`) and go on off the press.
             driver.beginWrite(act)
             deleteRowTimer.afterPress = act === "delete-branch-go" ? "hold"
                                       : act === "delete-branch-refused" ? "refused" : "menu"
             deleteRowTimer.start()
         } else if (act === "delete-gone") {
-            // The row and its chip leave at the press, git asked behind them (デザイン規約 §消す操作は先に画面から消す).
-            // A tag, because git refuses no tag delete. The page holds the in-between open for the shot
-            // (`RepoPage.holdGoneRows`) — a demo repository answers before a picture can be grabbed.
+            // The row and its chip leave at the press, git asked behind them (デザイン規約 §消す操作は先に画面から消す);
+            // the only verb photographing that in-between, before the write barrier. A tag, because git refuses no
+            // tag delete, so the run cannot fall onto the road back. Run as `v0.3-local --preset basic`: the must_say
+            // spells the name and the count (`total=2`). The page holds the in-between open for the shot
+            // (`RepoPage.holdGoneRows`) — a demo repository answers before a picture can be grabbed — by stopping
+            // the forwarding, not by adding an edge after the press. The road back (rows and chip return, the menu
+            // turns `branch -D` + `not merged`) is `delete-branch-refused`'s.
             page.holdGoneRows = true
             page.openRefMenu("tag", arg, arg, tagsModel.oidOfName(arg))
             refMenu.openSub(refTagCard)
@@ -102,8 +112,9 @@ Item {
             page.openRefMenu("stash", stashesModel.nameAt(0),
                              stashesModel.fullAt(0), dropOid)
             if (act === "delete-stash-go") {
-                // The drop takes the entry's row off the graph; the write barrier alone would photograph the graph
-                // still holding it (the same edge `stash-pop-row` waits on).
+                // The drop takes the entry's row off the graph at the press, through the stand-in (logged `graph laid
+                // out again in place`); the write barrier alone would photograph the graph still holding it (the same
+                // edge `stash-pop-row` waits on).
                 driver.awaitGraphGone(dropOid)
                 refStashDropItem.completeHold()
             }
@@ -125,16 +136,24 @@ Item {
         } else if (act === "delete-upstream-go" || act === "delete-both-go") {
             // A local branch's menu and a row of its delete table that reaches its reading: that alone, or the pair.
             // What reaches the remote is leased to the reading's commit as the BRANCH card froze it
-            // (`RefRowMenu.branchFacts`), so a card holding the wrong one is a refused write. The branch has to be
-            // tracked, merged and in step (`--preset stack`'s `side`).
+            // (`RefRowMenu.branchFacts`, `remoteCounterpartOid`), so a card holding the wrong one is a refused write —
+            // `[rejected] (stale info)`, and the run fails on `write failed`, which is the judgement. The branch has to
+            // be tracked, merged and in step (`--preset stack`'s `side` / `next`). The picture: the row gone from
+            // BRANCHES, the chip's cloud dropped.
             page.openRefMenu("branch", arg, arg, branchesModel.oidOfName(arg))
             driver.holdToEnd(act === "delete-both-go" ? driver.refRowMenu.deleteBothItem
                                                       : driver.refRowMenu.deleteRemoteItem)
         } else if (act === "delete-force") {
+            // Past the UI: `-D` outright. `feature/clash --preset clashing` is the ref run whose commit rows only that
+            // name held leave the graph (`session::leaving` → `GraphModel.relay_walk`, logged `graph laid out again
+            // in place`); `--preset basic`'s `feature/topic-a` is still held by origin, so no row goes.
             repoTab.deleteBranch(arg, true)
         } else if (act === "delete-branch-chip") {
             // The same delete from the graph row's menu (`BranchDeleteRow`), pressed from the sampler on the
-            // sidebar's terms: both entrances end at `RepoPage.deleteRow`.
+            // sidebar's terms: both entrances end at `RepoPage.deleteRow`. The argument is a merged branch, run as
+            // `base --preset plan` (the must_say spells the name). The landing folds the menu by one road whatever
+            // the entrance (`BranchDeleteRow.landing`, off the BRANCH card's `landedDelete`); this verb and
+            // `delete-branch` each drive it from their own entrance, and claim it with the same shape of line.
             driver.beginWrite(act)
             chipDeleteTimer.start()
         } else if (act === "pull-menu") {
@@ -178,10 +197,15 @@ Item {
             })
             tagChipTimer.start()
         } else if (act === "chip-menu") {
-            // The chip raises the row's menu aimed at its name (デザイン規約 §グラフ行の右クリック).
+            // The chip raises the row's menu aimed at its name (デザイン規約 §グラフ行の右クリック). The branch is
+            // required: without it the menu aims at an empty name. Whether the rows are drawn from the answer is
+            // `tests/qml/tst_commitrowmenu.qml`'s, the answer `offers::ref_menu`'s; this run holds the aim alone.
             page.openRowMenu(branchesModel.oidOfName(arg), { "kind": "branch", "name": arg })
             chipMenuTimer.start()
         } else if (act === "chip-menu-current") {
+            // The current branch's chip: its first level always carries the delete table (デザイン規約 §左メニューの所作).
+            // `--preset basic`'s `main` is one ahead of origin, so this run shows the drifted side, all three rows out;
+            // the reason's line is `delete-blocked-tip :remote`'s. Read as a pair with `chip-menu`.
             page.openRowMenu(branchesModel.oidOfName(worktree.branch),
                              { "kind": "branch", "name": worktree.branch })
             chipMenuTimer.start()
@@ -190,13 +214,19 @@ Item {
             // is the current branch, a name is one another worktree has checked out. `<branch>:remote` aims at
             // the row reaching the remote reading, out when the two names stand on different commits while the
             // local row may be pressable (デザイン規約 §左メニューの所作 の削除の表).
+            // The arguments exist to show reasons other than "current": `feature/topic-a --preset worktrees` (another
+            // worktree has it out) says `reason=Checked out in topic — …`; bare `:remote` is the current branch's
+            // remote row, and `--preset basic`'s `main` is one ahead of origin, so it says
+            // `reason=Differs from origin/main` (デザイン規約 §メニュー「「今できない」行は無効で残す」).
+            // `aside=true`: the tip box stands outside the menu, beside it, over neither neighbouring row.
             const named = arg.endsWith(":remote") ? arg.slice(0, -7) : arg
             const blockedOn = named === "" ? worktree.branch : named
             page.openRefMenu("branch", blockedOn, blockedOn, branchesModel.oidOfName(blockedOn))
             acts.blockedTipRow.tipForced = true
             blockedTipTimer.start()
         } else if (act === "menu-highlight") {
-            // The keyboard's road to `highlighted` — the only one that can be driven from here.
+            // The keyboard's road to `highlighted` — the only one that can be driven from here, so the only run whose
+            // picture shows the highlight's overlay colour. Index 1 is the second item in `RefRowMenu`'s order.
             const litOn = arg === "" ? worktree.branch : arg
             page.openRefMenu("branch", litOn, litOn, branchesModel.oidOfName(litOn))
             refMenu.currentIndex = 1
@@ -205,7 +235,10 @@ Item {
             // The early answer dresses the delete row before any click; the menu goes up from the sampler
             // (`earlyDeleteTimer`). `-far` differs only in the repository: its branch's tip is outside the drawn rows
             // (`--preset deep-parked`), so git answers every time, where the plain one takes whichever road the refs'
-            // timing hands it.
+            // timing hands it; its picture is the plain one's, so the line alone judges it. An unmerged branch
+            // (`feature/topic-a`) answers `code=branch -D presses=3 note=not merged`, a merged one keeps
+            // `--delete` with `presses=2` (the plain two). The current branch has no delete row, so it ends on the
+            // unasked line and fails — its table is `delete-blocked-tip`'s and `chip-menu-current`'s.
             earlyDeleteTimer.start()
         } else if (act === "branch-at-tag") {
             sidebarPane.beginBranchAt("tag", tagsModel.nameAt(0),
@@ -451,6 +484,7 @@ Item {
         id: chipMenuTimer
         name: "chip_menu"
         // `ref=` must stay down: a second menu on the chip's side is the split this entrance is joined to prevent.
+        // `delete=` is a snapshot: on an unmerged branch it reads the early `-D` or the plain `--delete`, both right.
         onTriggered: chipMenuTimer.complete({
             "name": "chip_menu_ready",
             "when": () => ({ "ready": !(!refMenu.opened && !commitMenu.opened) }),
@@ -488,8 +522,9 @@ Item {
     // The tag menu's rows. The push row's whole shape (chip, hold, colour) is decided by what a remote was last heard
     // to carry (`RefRowMenu`), and `push` / `push --force` differ by five glyphs in an otherwise identical card — so
     // the report spells it out. `wants` is what the run waits for: that reading lands well after the fetch it rides
-    // out with (rules-refs/core.md「タグのリモート状態は `ls-remote --tags` で訊くしかない」), so waiting on the fetch
-    // alone photographs the plain row as the forced one.
+    // out with (a second `ls-remote --tags` — `session/ops_remote_tags.rs`), so waiting on the fetch
+    // alone photographs the plain row as the forced one. `lease=` is beyond any picture. A forced `push-tag` ends at
+    // the press (`holdToEnd`, below), so its picture has `popups=0` and no card in the census.
     PageStage {
         id: tagMenuTimer
         name: "tag_menu"
@@ -604,6 +639,13 @@ Item {
                 // Judged on the sidebar after: waits for this name's reading to change, as `createTagTimer` does — what
                 // it is held against is read at the press, and kept where the press went in (`was`, `errorBefore`,
                 // `noticeBefore`).
+                //
+                // `both-delete` runs on a name held on both sides (`v1.0`): elsewhere the row is not offered
+                // (`both_del=false`), and holding a row that is not there to its end waits out the watchdog. A delete
+                // of a drifted name (`v1.5`) passes by a road no hand has: the two rows reaching the drifted reading
+                // stand greyed (user decision — デザイン規約 §メニュー「「今できない」行は無効で残す」), but
+                // `AppMenuItem.completeHold` does not look at that; the greyed card is `tag-menu v1.5:drift`'s. A
+                // lease refusal is made with a `--repo` whose fetch and push destinations differ.
                 if (!op.input("pressed", () => {
                         const was = tagsModel.tagSides(op.tag)
                         const errorBefore = repoTab.lastError
@@ -674,7 +716,8 @@ Item {
                                               + " total=" + tagsModel.total })
                 return
             }
-            // Refused, nothing moves: the answer is what is shot — a bar it raised, read by the bar's barrier.
+            // Refused, nothing moves: the answer is what is shot — a bar it raised, read by the bar's barrier, or for a
+            // refusal nobody classified GIT COMMANDS' red. `tag_kept` fails the `tag_gone` claim, as it should.
             if (page.noticeCard.open) {
                 driver.reportAtCompletion(() => tagGoneTimer.keptLine())
                 op.stop()
@@ -720,6 +763,8 @@ Item {
             // in hand when the graph gave it as the card opened (`RefBranchMenu.deleteAnswered`) or git echoes the
             // branch asked about, which the asking clears before the question goes out (app-ui.md §UI 自動化).
             // Both sides say the same three words; `unknown` is git's alone, what a run whose reads fell over says.
+            // No road waits here in silence: `check_branch_delete` answers even when its reads fail, so a silence
+            // left is the event loop's (verify-ui implement.md, the watchdog ceiling).
             op.complete({
                 "name": "delete_early_answered",
                 "when": () => ({ "answered": refBranchCard.deleteAnswered

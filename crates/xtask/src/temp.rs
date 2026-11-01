@@ -5,6 +5,8 @@
 //! alone, and `target/` is ignored, so the primary's status stays clean.
 //! A `cargo clean` in the primary takes all of it — the runs standing, the
 //! claims, the templates and the trees a person kept (`verify::keep`).
+//! The Write / Edit hooks do not count a write in here as one into the
+//! primary checkout (`hook::seat::in_throwaway_trees`).
 //!
 //! In the container it is the container's own `/tmp`: `/work` is the
 //! host's checkout across a mount, where a rename is not atomic and what a
@@ -60,7 +62,12 @@ fn in_the_primary() -> PathBuf {
 /// there that holds none is not one. Children inherit it, so it is set on
 /// what starts the git: the app a verify-ui run drives, whose working
 /// directory and the folders the open-refused verbs hand it hold no
-/// repository.
+/// repository (`verify::child`; every git the app starts inherits it),
+/// and the gate's integration tests (`tests/gate/support.rs`,
+/// `Sandbox::env`, which spells the place again by hand). `clone` /
+/// `init` look for no repository, so a preset's git needs no ceiling; a
+/// `shipped` / `package` stand's app runs only `git --version`. A new
+/// door that starts a git which looks for a repository takes this too.
 pub(crate) fn stop_git_above(command: &mut Command) -> &mut Command {
     command.env("GIT_CEILING_DIRECTORIES", root())
 }

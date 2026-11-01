@@ -38,8 +38,10 @@ struct Worktree {
 /// What destructive operations took away in the repository `workdir`
 /// stands in, newest first: every move off a tip that left commits no ref
 /// reaches, read off each reflog's newest `limit` lines (the graph's
-/// window, §3; `None` reads them whole), and the record's lines to the same
-/// depth — each with the parts a restore brings back (§4).
+/// window, following its growth and the configured first count; `None`
+/// reads them whole), and the record's lines to the same depth — each with
+/// the parts a restore brings back (`entries`). Read in the background,
+/// never on a UI action's path (性能.md §設計規則).
 pub async fn read_repo(
     executor: &GitExecutor,
     workdir: &Path,
@@ -87,7 +89,7 @@ pub async fn read_repo(
         .filter(|oid| named.insert(*oid))
         .collect();
     // Every stash entry holds what it stood on, not only the newest one
-    // `refs/stash` names (§3).
+    // `refs/stash` names.
     let held: Vec<Oid> = worktrees
         .iter()
         .filter_map(|worktree| worktree.detached_at)
@@ -114,7 +116,8 @@ pub async fn read_repo(
 
 /// Names each worktree a part puts work back into by its git directory
 /// as a session opened there names it ([`super::restore::worktree_at`]): the key
-/// of that worktree's write order, which the restore takes its turn in (§4).
+/// of that worktree's write order, which the restore takes its turn in
+/// (`RepoSession::write_into`).
 /// Once per worktree; a worktree gone — a folder left where it stood included — is
 /// named by nothing.
 async fn name_worktrees(
@@ -160,7 +163,7 @@ async fn stash_entries(
 /// Takes every part whose tip is no commit this repository has off the
 /// graph (`Look::Absent`): a remote's tag never fetched, a commit gc took.
 /// No walk can draw it, so nothing waits for one to — its restore is git's
-/// to refuse (§4). One `rev-list --no-walk` per batch of tips, which names
+/// to refuse. One `rev-list --no-walk` per batch of tips, which names
 /// the commits it finds and passes over what is missing.
 async fn mark_absent(
     executor: &GitExecutor,
@@ -211,7 +214,7 @@ fn record_tips(line: &records::Line) -> Vec<Oid> {
 }
 
 /// The branch and tag names the repository has, which a restore's name
-/// keeps clear of (§4).
+/// keeps clear of (`entries`).
 async fn taken_names(
     executor: &GitExecutor,
     workdir: &Path,
@@ -286,7 +289,8 @@ fn worktrees_of(listed: Vec<WorktreeEntry>, workdir: &Path) -> Vec<Worktree> {
 }
 
 /// A linked worktree's name under `$GIT_DIR/worktrees/`: the last part of the
-/// `gitdir:` its `.git` file points to (gitrepository-layout(5)).
+/// `gitdir:` its `.git` file points to (gitrepository-layout(5)), not always
+/// its folder's name.
 fn linked_id(path: &Path) -> Option<String> {
     let text = std::fs::read_to_string(path.join(".git")).ok()?;
     let gitdir = text.trim().strip_prefix("gitdir:")?.trim();
@@ -299,8 +303,11 @@ fn linked_id(path: &Path) -> Option<String> {
 }
 
 /// Every branch's reflog and every worktree's HEAD reflog in one `log -g`, by
-/// ref: each ref's lines newest first. A ref with no reflog has no lines;
-/// an unborn HEAD is passed over (`--ignore-missing`).
+/// ref: each ref's lines newest first. A ref with no reflog has no lines
+/// (exit 0); an unborn HEAD (`HEAD 0000…` in the listing) and a ref gone
+/// are passed over (`--ignore-missing`: without it the whole read fails on
+/// `bad revision`). Not the remote-tracking refs' reflogs: someone else's
+/// force push taken in by a fetch is nothing this repository threw away.
 async fn reflogs(
     executor: &GitExecutor,
     workdir: &Path,

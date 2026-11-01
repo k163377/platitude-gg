@@ -17,7 +17,9 @@ permissions:
   contents: read
 
 # The newest push holds every commit the ones before it carried, so a run
-# still going when another push lands is cancelled for it.
+# still going when another push lands is cancelled for it. A whole test
+# running stops nothing here: land pushes its tags as it lands and main's
+# pushes come later, so the two mostly test different commits.
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: true

@@ -32,7 +32,8 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The `+` on a REMOTES band gone unavailable around it: a `+` wired to
     // nothing frames like one that opened the form. `folded` reaches the
-    // dialog from the rail's cell and must leave the fold standing.
+    // dialog from the rail's cell and must leave the fold standing; the
+    // plain run alone passes with that door dead, so the two are a pair.
     Verb {
         name: "nav-add-remote",
         when: &[(
@@ -47,7 +48,10 @@ pub(super) const TABLE: &[Verb] = &[
     // the readings come from `ls-remote --tags` after the fetch, so
     // stopping at the fetch photographs the plain row. The pair: plain
     // alone passes an implementation that never reads the remotes, drift
-    // alone one that always forces.
+    // alone one that always forces. `v1 --preset tag-hidden` has no line
+    // here: origin hides its `v1` from reads, so the look after git's
+    // `already exists` finds no tag over there, nothing is reported and the
+    // failure stays git's with the log open — the picture judges it.
     Verb {
         name: "push-tag",
         when: &[(
@@ -404,7 +408,10 @@ pub(super) const TABLE: &[Verb] = &[
     // `outsider` the name is there but its commit is not in this
     // repository. An opening fetch would bring that commit in and turn
     // `outsider` into `refused`; `verify::seed` holds it off and this row
-    // says so. `plain` claims only that the check answered.
+    // says so (seeded, REMOTES lists three of origin's branches — `main`,
+    // `taken`, `carried` — where a fetched window lists four). The picture
+    // tells none of the three apart. `plain` claims only that the check
+    // answered, so an argument nobody measured stays green.
     Verb {
         name: "publish-taken",
         when: &[
@@ -438,7 +445,8 @@ pub(super) const TABLE: &[Verb] = &[
     // The answer given; the line goes out in the turn of the press. With
     // no argument the branch is one no remote holds, so `far=free` pins
     // the fixture (the gone bar looks the same either way); other branches
-    // claim only that a classification arrived.
+    // claim only that a classification arrived. git cannot send `outsider`,
+    // so that run fails on `write failed`.
     Verb {
         name: "publish-go",
         when: &[(
@@ -468,7 +476,7 @@ pub(super) const TABLE: &[Verb] = &[
     // The question of what a branch is measured against: `there=` is
     // whether the typed name is one this repository holds. `:missing`
     // types a name no demo repository carries, answerable all the same —
-    // the next push makes it (デザイン規約 §ブランチが測られる相手を決める).
+    // the next push makes it (`UpstreamFlow.targetIsThere`).
     // The pair: plain alone passes an implementation that reads nothing,
     // `:missing` alone one that never looks at the refs. A bare `:` empties
     // the name: on a branch with an upstream the question turns into taking
@@ -608,7 +616,8 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "pull_menu open=true kind=remote pull=false",
     },
     // The same row where git would turn the press down: both sides of the
-    // tree moved (bringing them together is a choice), a branch aside with
+    // tree moved (`--preset diverged`; bringing them together is a choice,
+    // so the same with `pull.rebase` set), a branch aside with
     // commits of its own (`--preset others-behind`'s `feature/mine`), or
     // one another worktree has out (`--preset tracked-elsewhere`'s
     // `feature/topic-a`). The row is out and its tooltip says where to go.

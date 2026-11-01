@@ -1,5 +1,8 @@
 //! The session handle itself: what one open repository holds, and what
 //! it cancels on the way out (the opening sequence is [`super::open`]).
+//!
+//! Named `repo_session`, not `repo`: a child module `session::repo` would
+//! clash with `crate::repo`.
 
 use super::*;
 
@@ -34,7 +37,11 @@ pub struct RepoSession {
     pub(super) info: Mutex<Option<RepoInfo>>,
     pub(super) shared: Arc<Mutex<Shared>>,
     pub(super) log_options: Mutex<LogOptions>,
+    /// Numbers installs, for ordering only; ownership is `log_cancel`'s
+    /// (`RepoSession::take_log_run`).
     pub(super) log_gen: AtomicU64,
+    /// The token of the pass that owns the graph — the one decider of who
+    /// owns it, in call order.
     pub(super) log_cancel: Mutex<Option<CancellationToken>>,
     /// One commit-details read at a time, numbered (`load_details`).
     pub(super) details_read: Latest,
@@ -199,6 +206,10 @@ pub struct RepoSession {
     pub(super) write_join: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// One permit, held by a running poll: a tick that arrives while the
     /// previous one is still reading is dropped.
+    ///
+    /// The one serialisation of a session's polls, on purpose: a slow
+    /// repository stretches its own interval. Not a thread per tab — the
+    /// polls are already tasks on the multi-thread runtime.
     pub(super) poll_slot: Arc<tokio::sync::Semaphore>,
     /// A read this session owes the worktree: a write landed in it
     /// while this session was already reading, so the read holding the
@@ -219,6 +230,12 @@ pub struct RepoSession {
     pub(super) pacing: super::pacer::Pacing,
     /// One pass in flight per snapshot, for the reads asked for from more
     /// than one place at once ([`ReadFlight`]).
+    ///
+    /// Every way in passes it: a refresh, the poll and a write's settling
+    /// all go through `read_refs` / `read_status`. Not `poll_slot` or
+    /// `write_running`, which guard other things: the poll passes a
+    /// replaying write on purpose, and a manual refresh and
+    /// `ask_merge_tool` meet neither.
     pub(super) refs_read: ReadFlight<Reread>,
     pub(super) status_read: ReadFlight<Reread>,
     pub(super) stash_read: ReadFlight<StashRead>,
@@ -275,7 +292,12 @@ pub struct RepoSession {
     /// The listing runs on the page's tick and learns that a worktree has
     /// committed long before that worktree's own `status` reading does
     /// (`session::carried`); a row drawn from the older reading would
-    /// stand on a commit the worktree has left (`relay::Standing`).
+    /// stand on a commit the worktree has left (`relay::Standing`). So this
+    /// tree's poll reads the listing beside refs and status and walks once,
+    /// after all three (`poll_reads`): a walk ahead of the listing draws
+    /// from the old one and misses that a reading is behind. Nets:
+    /// `session_integration/paced.rs` and `carried_moved.rs` (no pass after
+    /// a move draws the worktree on the commit it left).
     ///
     /// Kept apart from [`Self::worktree_holders`], which decides whether
     /// the refs are read and the graph walked again: folded in there, every

@@ -48,14 +48,16 @@ impl RepoSession {
     /// `git stash pop <selector>` (drops the stash on success).
     ///
     /// A restore that conflicts is a success: git keeps the entry, so it
-    /// lands where an apply would (デザイン規約 §変更を退避する). The exit
+    /// lands where an apply would — the conflicted file rows, and nothing
+    /// more said. The exit
     /// code cannot tell that from a refusal that did nothing, so the
     /// working tree decides (`conflicts_now`) — only if it was settled
-    /// beforehand: git refuses outright onto unmerged paths, and the
-    /// conflicts standing afterwards are the old ones.
+    /// beforehand: git refuses outright onto unmerged paths (`needs
+    /// merge`), and the conflicts standing afterwards are the old ones —
+    /// read alone, they would turn a pop that did nothing into a success.
     ///
     /// An entry the pop took from the list goes on the discard record
-    /// (破棄記録仕様.md §2); one a conflict left there did not go.
+    /// (`discards::record`); one a conflict left there did not go.
     pub fn stash_pop(self: &Arc<Self>, selector: String) -> Option<OperationId> {
         let s = Arc::clone(self);
         self.write(
@@ -118,7 +120,7 @@ impl RepoSession {
     }
 
     /// `git stash drop <selector>`; the entry goes on the discard record
-    /// (破棄記録仕様.md §2). Its row leaves the graph at the press, with the
+    /// (`discards::record`). Its row leaves the graph at the press, with the
     /// commits only it held (`session::leaving`).
     pub fn stash_drop(self: &Arc<Self>, selector: String) -> Option<OperationId> {
         let s = Arc::clone(self);

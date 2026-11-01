@@ -24,7 +24,7 @@ Item {
         color: Theme.bgBase
     }
     // Under the column, so a press reaches it only where nothing else took one and `Close` keeps its presses
-    // (規約 §右のペインの字は掴める — this screen has no command log to take git's words from).
+    // (規約 §右のペインの字は掴める — this screen has no command log to take git's words from). Headless: `gate-sweep`.
     SweepPad {
         id: gateHand
         anchors.fill: gateColumn
@@ -42,13 +42,16 @@ Item {
             horizontalAlignment: Text.AlignHCenter
             width: parent.width
         }
+        // Another process has the files: one sentence and no more (規約 §長さ), the line under it, and plain `Close`
+        // as the only way out.
         NoticeLine {
             visible: AppBackend.alreadyRunning
             text: qsTr("Platitude GG is already open. Its window is the one to use.")
             width: parent.width
         }
-        // Which executable has the files, since two builds look alike and the taskbar does not say which it started.
-        // Wrapped, not cut (規約 §右のペインの字は掴める).
+        // Which executable has the files — the settings directory it holds, `fontSm` `textSecondary` in mono: a
+        // development build and the real one look alike on screen and the taskbar does not say which it started, so
+        // this line alone tells which one is in the way. Wrapped, not cut (規約 §右のペインの字は掴める).
         CardText {
             visible: AppBackend.alreadyRunning
             text: AppBackend.heldElsewhere

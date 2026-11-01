@@ -35,7 +35,9 @@ fn id_of(version: &str, head: &str, tagged: &str) -> BuildId {
 /// The worktree this binary was built in, empty when it was not built in
 /// one — the right pane's corner names it so parallel sessions' windows
 /// can be told apart (CLAUDE.md §ビルド・テスト). Read from the build
-/// path, so a build from a plain checkout carries no mark.
+/// path, so a build from a plain checkout carries no mark. Also what keeps
+/// a worktree build's settings apart (`platitude_core::settings` `Build`):
+/// a release drops it from the corner's line only, never here.
 pub fn build_tree() -> String {
     tree_of(&env!("CARGO_MANIFEST_DIR").replace('\\', "/")).to_string()
 }

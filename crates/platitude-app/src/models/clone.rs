@@ -40,15 +40,16 @@ impl CloneModel {
     fn clone_done(&mut self, path: String);
 
     /// git refused, in `message`'s words — shown in the dialog that asked,
-    /// which is still standing (デザイン規約 §リポジトリを取り寄せる).
+    /// which is still standing (`CloneDialog.qml`).
     #[qsignal]
     fn clone_failed(&mut self, message: String);
 
     /// Fetches `url` into a folder called `name` inside the folder
     /// `parent_url` names (a `file://` URL from the FolderDialog).
     ///
-    /// Not checked here: a taken destination or a dead URL is git's to
-    /// refuse, and the dialog stays open to show what git says.
+    /// Not checked here: a taken destination, a dead URL or refused
+    /// credentials are git's to refuse, and the dialog stays open to show
+    /// what git says.
     #[qslot]
     fn clone_repository(&mut self, url: String, parent_url: String, name: String) {
         let url = url.trim().to_string();

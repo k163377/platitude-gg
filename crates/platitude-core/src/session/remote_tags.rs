@@ -173,8 +173,9 @@ impl RemoteTagIndex {
         }
     }
 
-    /// Which reading of this name is the right one (デザイン規約
-    /// §左メニューの所作 の TAGS の段). `against` — the remote this
+    /// Which reading of this name is the right one, in three steps (user
+    /// decision — ask before changing; shown by the app's `NavFacts.qml`).
+    /// `against` — the remote this
     /// repository's tag rows act on — decides wherever it carries the name.
     /// Where it does not, the remotes decide only by agreeing: one commit
     /// among them is the right one, two are no answer. The copy here never
@@ -208,7 +209,9 @@ impl RemoteTagIndex {
     /// unasked: `against` where it carries the name, else the one remote
     /// that does. `None` where no remote carries it, or several do without
     /// `against` — then only a holder named on its own can be reached
-    /// (デザイン規約 §左メニューの所作 の削除の表).
+    /// (user decision — ask before changing; デザイン規約 §左メニューの所作 の
+    /// 削除の表). git does not refuse deleting a name the remote lacks, so
+    /// no row aims at a remote without it.
     pub fn delete_target(&self, name: &str, against: &str) -> Option<&str> {
         let carriers = || self.run_of(name).iter().flat_map(|e| e.remotes.iter());
         if let Some(reference) = carriers().find(|c| c.remote.as_str() == against) {

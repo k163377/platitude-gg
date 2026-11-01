@@ -3,10 +3,10 @@ import QtTest
 import platitude.ui
 
 // How far a fold steps a row in, and how far a name stands from its mark, read off the marks themselves in every
-// list that folds (デザイン規約 §余白): one depth down, a chevron's box starts under the middle of the chevron above
-// it; a change mark's box ends where a chevron's does; and a name starts as far past its mark's box in the file
-// lists as in the sidebar. The lists draw different marks in the seat (fold arrow, change code), so a step or a
-// placement written per list would agree with itself in one and drift in another.
+// list that folds (`NavList.rowInset` / `nestStep`, `NameCell.seatSize`): one depth down, a chevron's box starts under
+// the middle of the chevron above it; a change mark's box ends where a chevron's does; and a name starts as far past
+// its mark's box in the file lists as in the sidebar. The lists draw different marks in the seat (fold arrow, change
+// code), so a step or a placement written per list would agree with itself in one and drift in another.
 Item {
     id: root
     width: 400

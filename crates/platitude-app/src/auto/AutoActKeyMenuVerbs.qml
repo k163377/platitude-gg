@@ -8,6 +8,10 @@ import platitude.ui
 /// door a hand's press takes, then the run enters the key's own handler — or, on the graph, Qt's request: with no place
 /// (Windows' Shift+F10), or with one (xcb's menu key at the pointer, which the window turns away). Each says whether a
 /// menu stood, and whether it stood under its target's left end. Built by `AutoActDriver`.
+///
+/// `files:` wants an unstaged row (`files:b.txt --preset dirty`), `diff:` a diff with removed lines
+/// (`diff:notes.txt --preset manyhunks`). `scene.png` shows how the card hangs off the row. Windows' Shift+F10 and
+/// xcb's Menu key themselves are only fired in a real window (P3-確認事項).
 // `Item` because `QtObject` has no default property to hold the timer below.
 Item {
     id: acts
@@ -117,7 +121,8 @@ Item {
             // The row the press clicked, found by the pane's own reading (`WipPane.rowIn`).
             const row = acts.wipPane.rowIn("unstaged", rest)
             // The click also opened the file's diff (`RepoPage.toggleDiff`), a git subprocess away: what the run
-            // photographs and records is the pane with its rows (`DiffPane.diffSettled`).
+            // photographs and records is the pane with its rows (`DiffPane.diffSettled`). Unwaited, the diff lands
+            // after the ask and its rows (`DiffRowDelegate`) come and go between the picture and the census.
             return {
                 "keyboard": !!row && row.ListView.view.activeFocus,
                 "diff": acts.page.diffKey === "unstaged:" + rest && acts.diffPane.diffSettled()

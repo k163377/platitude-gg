@@ -2,7 +2,7 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// The graph column's right edge (デザイン規約 §グラフ列は最も広い所のレーンまで): past it a lane and a face sink into the
+// The graph column's right edge (`LaneDissolve`): past it a lane and a face sink into the
 // ground together, over `spaceSm`, and the edge stays with the column while the lanes are sent sideways. Read off the
 // window — the dissolve is laid over the canvas, so the canvas's own buffer does not show it.
 Item {

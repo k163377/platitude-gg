@@ -40,7 +40,8 @@ QtObject {
 
     /// Why a name cannot stand beside the branches or tags already there (`NavSectionModel.nameClash`, undefined where
     /// nothing is in the way): one of that name, one under it or above it — one sentence each way, naming which of
-    /// the two would have to be the folder — or one that differs only in letter case. `tag` picks the noun. Said
+    /// the two would have to be the folder (user decision — ask before changing: "in the way" alone does not say how)
+    /// — or one that differs only in letter case. `tag` picks the noun. Said
     /// before the press by every box that makes or renames a branch or a tag (デザイン規約 §左メニューの所作「名前の衝突」).
     function nameClashed(clash, tag) {
         if (clash === undefined)
@@ -168,7 +169,9 @@ QtObject {
     /// Opening a repository, as the graph's empty state, the tab strip's `+` menu and its accessible name offer it.
     readonly property string openRepository: qsTr("Open repository…")
 
-    /// Adding a remote, as the sidebar header, the collapsed rail and the publish flow offer it.
+    /// Adding a remote, as the sidebar header, the collapsed rail and the publish flow offer it: every door to the same
+    /// dialog says its heading's words (`RemoteDialog`). The REMOTES band's `+` and the folded rail's empty REMOTES
+    /// cell are marks alone, so this is their tooltip and their only name.
     readonly property string addRemote: qsTr("Add remote…")
 
     /// The command log's own name — its heading (`CommandsToggle`) and the word every tip that sends a reader there
@@ -203,12 +206,14 @@ QtObject {
     readonly property string finishStoppedFirst: qsTr("Finish the stopped operation first")
 
     /// Why the `pull` row is greyed while both sides have moved, from both entrances (`RefRowMenu` / `CommitRowMenu`;
-    /// デザイン規約 §取り込んで合流させる).
+    /// `offers::PullOut::Diverged`). The second half names where to go: a greyed row alone is a dead end.
     readonly property string pullDiverged: qsTr(
         "The branches have diverged, so pick the remote branch and rebase onto it")
     /// …and while a branch the worktree is not on has commits its upstream lacks: a fast-forward is all a pull does
-    /// from here. What cannot happen, then why, the way other clients put it (lazygit, GitLens); `upstream` is what it
-    /// tracks.
+    /// from here. What cannot happen, then why, naming the upstream (user decision — ask before changing), with no
+    /// next step — the way other clients put it (lazygit `Cannot fast-forward '<branch>' because it has commits which
+    /// were never on its remote branch`, GitLens `Unable to fetch branch '<branch>' from <remote> as it cannot be
+    /// fast-forwarded`); `upstream` is what it tracks.
     function pullOwnCommits(upstream) {
         //: %1 is the remote branch this branch tracks, e.g. origin/feature/login.
         return qsTr("Cannot fast-forward — it has commits not on %1").arg(upstream)
@@ -259,13 +264,14 @@ QtObject {
     readonly property string badgeSetIdentity: qsTr("SET IDENTITY")
     readonly property string badgeOldGit: qsTr("OLD GIT")
     /// What is drawn is out of date: the walk gave up part-way, or the rebuild that would refresh the rows did not
-    /// land. The badge is the only place this state is said (デザイン規約 §ウィンドウの縁).
+    /// land. The badge is the only place this state is said (`BandStateGroup.staleBadgeShown`).
     readonly property string badgeStaleGraph: qsTr("STALE GRAPH")
-    /// Pending files need Git LFS and git cannot run it here (デザイン規約 §ウィンドウの縁).
+    /// Pending files need Git LFS and git cannot run it here (`BandStateGroup.lfsBadgeShown`).
     readonly property string badgeNoLfs: qsTr("NO LFS")
 
     /// The one way a commit's moment is written, from the epoch seconds rows carry. The commands panel's `HH:mm:ss`
-    /// clock stays its own.
+    /// clock stays its own. Always in the reader's time zone (user decision — ask before changing;
+    /// 規約 §author の hover), so the core carries no zone.
     function stamp(epochSeconds) {
         return Qt.formatDateTime(new Date(epochSeconds * 1000), "yyyy-MM-dd HH:mm")
     }
@@ -280,7 +286,10 @@ QtObject {
     /// panel and in a chip's card (`NavFacts.apartNote`), and the delete rows that reach a remote in the branch's
     /// delete table and the tag card, named there by what the copy the menu is about is read against
     /// (デザイン規約 §左メニューの所作 の削除の表). Says the state only: a line pointing at the row that deletes the
-    /// reading would outgrow the menu it explains.
+    /// reading would outgrow the menu it explains. One sentence for all of them (user decision), naming who the right
+    /// reading belongs to — a sentence that does not say "apart from what" leaves the reader to guess the reference.
+    /// **A word with no direction**: two readings of a tag have no before and after, so `differs` (TortoiseGit's tag
+    /// comparison says `Differ`), never `ahead` / `behind` / `diverged`; and `from`, never `than`.
     function differsFrom(reference) {
         return qsTr("Differs from %1").arg(reference)
     }
@@ -303,10 +312,13 @@ QtObject {
     /// Why a folder would not open, from the kind core answered with (`plain` / `bare` / `untrusted` / `config` /
     /// `other`), for both the picker's dialog and a tab's failed screen (デザイン規約 §リポジトリを開く). `untrusted`
     /// is a folder another account owns (`safe.directory`), whose heading is this application's and whose way out —
-    /// the `git config --global --add safe.directory` line — is in git's own words underneath. `config` is a
-    /// configuration file git could not open, named in git's words underneath. `other` says only that much: what
-    /// happened is git's to say, quoted underneath. `plain`'s heading is git's own words for it (setup.c `not a git
-    /// repository`, as 2.43.0 to 2.56.0 write them).
+    /// the `git config --global --add safe.directory` line — is in git's own words underneath (user decision — ask
+    /// before changing). `config` is a configuration file git could not open, named in git's words underneath (user
+    /// decision), with the reader's step between (`openFailureNext`). `other` says only that much: what
+    /// happened is git's to say, quoted underneath; it is as unopenable as the rest, so seat and ways out are theirs.
+    /// `plain`'s heading is git's own words for it (setup.c `not a git repository`, as 2.43.0 to 2.56.0 write them),
+    /// and only for a folder holding no `.git` of its own (`platitude_core::repo::open`): a broken repository is never
+    /// called absent. One line each (規約 §長さ): "not a repository" already covers what git says of parent folders.
     function openFailure(kind) {
         switch (kind) {
         case "bare": return qsTr("A bare repository has nothing to show")
@@ -374,7 +386,10 @@ QtObject {
     }
 
     /// The heading for a write that did not happen, from the kind core answered with (`RepoTab.writeReportKind`).
-    /// Whoever decided is the subject, and a branch and a tag share one sentence (デザイン規約 §答えの要らない報せ).
+    /// Whoever decided is the subject, and a branch and a tag share one sentence (デザイン規約 §答えの要らない報せ). The
+    /// remote is the subject where it said no (`<remote> would not …`); `<name> was not sent` where git decided, from
+    /// this end's out-of-date picture — the session is already fetching, so nothing is left to ask. One sentence for
+    /// both kinds: the pressed row is still on screen and says which, and the far side's answer names neither.
     function writeReported(kind, remote, name) {
         // The far side's refusals are two words, what was asked and what for (`drain::report_word`): the heading turns
         // on the first.
@@ -448,8 +463,8 @@ QtObject {
     readonly property string historyNotRewritten: qsTr("The history was not rewritten")
 
     /// The heading at the plan's door, where a preview turns the range down before it opens
-    /// (`RepoPage.onRefusedPlan`). Unlike the row menu's one heading, each shape is written out: no pressed row is on
-    /// screen to name it (デザイン規約 §答えの要らない報せ).
+    /// (`RepoPage.onRefusedPlan`, which says why its colour differs from the row menu's). Unlike the row menu's one
+    /// heading, each shape is written out: no pressed row is on screen to name it.
     function planRefused(kind) {
         switch (kind) {
         case "across-merge":
@@ -464,12 +479,16 @@ QtObject {
         }
     }
 
-    /// The second line of every report: always this application's own words, never anybody's message
-    /// (デザイン規約 §答えの要らない報せ). Where git ran and something said no — a hook, a signing key, another git, a rule
+    /// The second line of every report: always this application's own words, never anybody's message — no git's, a
+    /// hook's or a remote's sentence rides into it (user decision — ask before changing; デザイン規約 §答えの要らない報せ).
+    /// Where git ran and something said no — a hook, a signing key, another git, a rule
     /// over there — the line says who, and sends the reader to the log, where that row has what they said
     /// (`reportPlace`). `remote` and `name` are the heading's; `fact` the one thing core hands over besides
     /// (`WriteReport::fact`). The refusals a read answers say what the remote turned out to be, and no more: the graph
-    /// shows the rest once the read that follows has landed.
+    /// shows the rest once the read that follows has landed. So one plain sentence per cause, the remote its subject,
+    /// differing only in what the remote was like; the heading names the ref (user decision — ask before changing). A
+    /// compound write (Delete both, a replace) says only the half turned down: the half that went through is the rows
+    /// on screen (user decision — ask before changing).
     function writeReportedWhy(kind, remote, name, fact) {
         if (kind.startsWith("delete-") || kind.startsWith("update-"))
             return Words.remoteRefusedWhy(kind, remote, name)
@@ -492,7 +511,7 @@ QtObject {
         case "pre-push-delete":
             return qsTr("The pre-push hook turned it down — see %1").arg(Words.commandsTitle)
         // `pre-commit`, `commit-msg`, `prepare-commit-msg` alike — and a reword's or a replayed commit's, in a
-        // rewrite put back where it began.
+        // rewrite put back where it began. Which hook is not said: what a hook writes is up to its author.
         //: %1 is the command log's own title.
         case "commit-hook":
         case "rewrite-commit-hook":
@@ -584,7 +603,9 @@ QtObject {
         // git's own words list the files and end in advice to the terminal; the log keeps them. What stood in the way
         // is this worktree's own work: a file changed here that they change too, or one standing where they put a
         // file — said as the other tools say it, by what would have been lost, in git's `would be overwritten`
-        // (unpack-trees.c, as 2.43.0 to 2.56.0 write it).
+        // (unpack-trees.c, as 2.43.0 to 2.56.0 write it; GitHub Desktop `The following files would be overwritten`,
+        // IntelliJ `Your local changes will be overwritten by …`). User decision — ask before changing: no `you`, and
+        // `this worktree` as the menu row says it, not `here`. Only when git turned it down for overwriting.
         case "carried-in-the-way":
             return qsTr("Uncommitted changes in this worktree would be overwritten.")
         // Turned down before git: a file here — committed or not — stands where one of their untracked files goes.
@@ -705,10 +726,11 @@ QtObject {
 
     /// The colour a report's own hairline wears: `warning` while the gesture is still going (the rename box is open,
     /// or a half-done rename is left standing), `danger` once it is over (デザイン規約 §答えの要らない報せ). A worktree
-    /// git would not remove is `warning` too: the worktree still stands, with what kept it there. So is one that was
-    /// not made, or made with its hook failed: what stood in its way was there before the press, which the menus warn
-    /// of (デザイン規約 §答えの要らない報せ). So are another worktree's changes not applied: nothing was written, and they
-    /// are still there to try again.
+    /// git would not remove is `warning` too (user decision — ask before changing): the worktree still stands, with
+    /// what kept it there. So is one that was not made, or made with its hook failed: what stood in its way was there
+    /// before the press, which the menus warn of (デザイン規約 §答えの要らない報せ). On the axis a worktree not made is
+    /// `danger`'s, but the worktree reports keep to one yellow (user decision — ask before changing). So are another
+    /// worktree's changes not applied: nothing was written, and they are still there to try again.
     function reportTone(kind) {
         return Words.renameStillOpen(kind) || kind === "half-rename" || kind === "rename-unfinished"
                || Words.reportNamesWorktree(kind) ? "warning" : "danger"
@@ -722,7 +744,9 @@ QtObject {
                            : qsTr("%1 loses %n commits.", "", count).arg(name)
     }
 
-    /// What the two sides each did to a conflicted file, from git's two stage letters (デザイン規約 §conflict の種別).
+    /// What the two sides each did to a conflicted file, from git's two stage letters. A sentence about one side calls
+    /// it by its branch (デザイン規約 §conflict の ours / theirs), and ends there: it can only be about a conflict, so
+    /// nothing says so again. Said in the diff pane only (`DiffFileNotices`).
     function conflict(change, ours, theirs) {
         const us = Words.ourSide(ours)
         const them = Words.theirSide(theirs)
@@ -776,10 +800,13 @@ QtObject {
         }
     }
 
-    /// The search's note when nothing answers and the whole history is loaded (デザイン規約 §コミットを探す).
+    /// The search's note when nothing answers and the whole history is loaded (`GraphFind.unansweredNote`). The shape
+    /// is other products': `No results` for no match (VS Code, Chrome, GitLens, Git Graph), and widening as a fact plus
+    /// a short press (Outlook's `Showing recent results... More`, JetBrains' `Nothing found.` + `Set scope to …`).
     readonly property string findNone: qsTr("No results in the whole history")
     /// The same when older commits are not loaded: the press that loads the next `step` (`findLoadFurther`, the words a
-    /// press acts on — the graph's tail says the same, and the count it was cut at).
+    /// press acts on — the graph's tail says the same, and the count it was cut at). No loaded count here: the press
+    /// says there is more, and the graph's tail says how much is loaded.
     function findNoneWithMore(step) {
         return qsTr("No results · %1").arg(Words.findLoadFurther(step))
     }
@@ -788,7 +815,7 @@ QtObject {
     }
 
     /// A file's mode change as its one line (`DiffModel.modeFrom` / `modeTo`), each side as `modeSide` says it
-    /// (デザイン規約 §mode の変更).
+    /// (`DiffFileNotices`).
     function modeLine(from, to) {
         return qsTr("File mode changed · %1 → %2").arg(Words.modeSide(from)).arg(Words.modeSide(to))
     }
@@ -799,7 +826,11 @@ QtObject {
         return sides.length === 2 ? Words.modeLine(sides[0], sides[1]) : pair
     }
     /// One side of a mode change (`DiffModel.modeFrom` / `modeTo`): the octal as git prints it, and what it means for
-    /// the one permission git records — whether the file runs (デザイン規約 §mode の変更).
+    /// the one permission git records — whether the file runs (user decision — ask before changing). The numbers are
+    /// the spelling git, GitHub (`File mode changed from 100644 to 100755`), GitKraken, Fork and Sourcetree print; the
+    /// brackets say what they mean. Not `rwxr-xr-x`: that spells group and other bits git does not keep (a local
+    /// `chmod 700` is recorded as `100755`). git keeps only the owner's executable bit since 2005-04-17 (`e44794706`);
+    /// a mode from before that (`100664`) is far older than the minimum git and is left a bare number.
     function modeSide(mode) {
         switch (mode) {
         case "100755": return qsTr("%1 (executable)").arg(mode)
@@ -901,7 +932,8 @@ QtObject {
     /// `[at, kind, , length]` each, in the sentence's order (`CardText.marks`). `sentence` is the function that writes
     /// it, called once per name with `stand` in that name's place; `names` is `[[name, kind], …]` in the order it takes
     /// them — `[name, kind, own colour]` where the name says where the reader is. A name that is empty or wears no mark
-    /// is left out.
+    /// is left out. Seated by the sentence, never searched for: a search would land on another word — a worktree named
+    /// `from` on the sentence's own `from`.
     function marksOf(sentence, names) {
         const real = names.map(name => name[0])
         const marks = []

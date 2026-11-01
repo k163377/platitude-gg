@@ -4,9 +4,20 @@ import QtQuick.Layouts
 import platitude.ui
 
 // The details pane's band while the selected row is a stash, standing in place of `COMMIT` and dressed like
-// `PaneHeader`: `STASH`, and the two things git can do with it from here, spelled as the stash row's menu spells them
-// (デザイン規約 §変更を退避する — also why `stash@{n}` is not drawn nor searched for, and why `drop` stays on the
-// row's menu).
+// `PaneHeader`: `STASH` with the stash mark at its left, and at its right the two things git can do with it from here
+// — `apply` (keeps the entry) and `pop` (drops it) —, spelled as the stash row's menu spells them, `stash` itself being
+// the band's name. In place of `COMMIT`, not under it: a `COMMIT` band with a "this is really a stash" band below
+// spends two lines on the heading and makes the wrong word read first. `drop` is not here: it is held on the stash's
+// row menus, the left menu's and the graph's, in the same words.
+//
+// The reflog spelling (`stash@{n}`) is not drawn: what the entry is, three places already say — its message in the box
+// below, its name in the left list, its kind in the mark and in `apply` / `pop`. What is left is its place in the
+// stack, which the left list says by listing newest first. Not drawn, so not searched for either (`find`'s module
+// docs): a row must not light up for a word it does not show.
+//
+// Chips although the band has no column of them: the graph's stash row already says these in git's
+// spelling, and one gesture must not go by two names. At `fontSm`, the band's step — one `fontMd` word among them
+// would be another voice.
 Rectangle {
     id: band
 

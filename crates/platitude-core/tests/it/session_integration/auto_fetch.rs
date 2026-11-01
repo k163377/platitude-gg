@@ -1,5 +1,8 @@
 //! The auto-fetch timer, the fetch an opening fires, and the fetch a
 //! refused push asks for.
+//!
+//! The timer's own schedule is held by the units beside `AutoFetchTicker`;
+//! what stays here is the timer wired to a real fetch.
 
 use std::sync::Arc;
 use std::time::Duration;

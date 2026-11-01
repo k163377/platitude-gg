@@ -4,12 +4,20 @@ import QtQuick
 import platitude.ui
 
 // The run a tab draws after the repository's name while it stands in a linked worktree: the WORKTREES mark and
-// the worktree's folder name (デザイン規約 §タブの所作). Drawn wherever a name is followed by the worktree it stands
-// in — the tab and its stand-in, the operation panel's name line (`OpsPicker.trail`), a menu row
-// (`AppMenuItem.trail`) — so a fix to the run reaches them all.
+// the worktree's folder name. Drawn wherever a name is followed by the worktree it stands in — the tab and its
+// stand-in, the operation panel's name line (`OpsPicker.trail`), a menu row (`AppMenuItem.trail`) — so a fix to the
+// run reaches them all.
+//
+// **Where the tab stands is said by this run; the tab's name does not change** (user decision — ask before changing):
+// the tab names the repository (its own worktree's folder), and a name that changed with the worktree would make one
+// repository's tab read as another tab. A tab in the repository's own worktree draws nothing here: a run on every tab
+// would have the strip saying where, not which repository. Shortened first when the strip is short (`TabShare`'s order
+// step 2); hovering the tab says the worktree's full path (`TabItemDelegate.pathTip`).
 //
 // The mark is what parts the two names — without it the run reads as the repository's name carrying on — so the run
-// is dropped whole rather than drawn without it (`floorWidth`, `TabShare.splitName`).
+// is dropped whole rather than drawn without it (`floorWidth`, `TabShare.splitName`): the mark takes its width first,
+// the name the rest. Not in parentheses (デザイン規約 §タイポグラフィ「丸括弧に名前を入れない」). The step before the mark is
+// the holder's (`gap`); no margin is written either side of the mark, and no `step − the mark's air` is worked out.
 //
 // Given a width, not asking for one: a tab hands it the cap's leftover after the name, and it cuts its name to it
 // (`CutName`).
@@ -54,7 +62,7 @@ Item {
         font.pixelSize: nameRun.pixelSize
         text: "n".repeat(Theme.nameMaxChars)
     }
-    // The same reading a tab's floor is taken from (規約 §レイアウト初期値).
+    // The same reading a tab's floor is taken from (`TabMetrics.titleMinChars`).
     TextMetrics {
         id: floorRuler
         font: capRuler.font

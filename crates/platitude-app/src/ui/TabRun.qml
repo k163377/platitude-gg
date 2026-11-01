@@ -3,7 +3,10 @@ pragma ComponentBehavior: Bound
 import QtQuick
 
 // Where the strip's run has scrolled to, its two ends, and the travel that moves it with nothing in hand (the carry
-// is `TabCarry`'s).
+// is `TabCarry`'s). The one owner of the strip's scroll: `TabStrip` only forwards. Several hands write `contentX`
+// (the wheel, a held tab's drift, the stand-in's travel, an asked-for travel), so every hand that comes after a
+// travel calls `halt()` before it writes — else for 200ms two writers draw over each other. Where to go is
+// `wholeAt` alone; `showTab` (200ms) and `landOn` (at once) differ only in how they get there.
 QtObject {
     id: tabRun
 
@@ -35,7 +38,8 @@ QtObject {
         tabRun.travel.stop()
     }
 
-    /// Where the strip has to stand for `tab` to be whole in the run: the least move (as `ListView.Contain`).
+    /// Where the strip has to stand for `tab` to be whole in the run: the least move (as `ListView.Contain`). Not
+    /// `positionViewAtIndex`, which jumps.
     function wholeAt(tab) {
         let to = tabRun.view.contentX
         if (!tab)
@@ -47,7 +51,10 @@ QtObject {
         return tabRun.clamp(to)
     }
 
-    /// Travels the strip until `tab` is whole in the run, animated rather than jumped (デザイン規約 §タブの所作).
+    /// Travels the strip until `tab` is whole in the run — the least move (`wholeAt`) — animated rather than jumped,
+    /// and quick: the app's animation time, 200ms (user decision; 規約 §QML 実装ルール). A jump hides which way and how
+    /// far the strip went, which is what the hand that pressed was asking. The wheel and a press outrank it (`halt`):
+    /// a strip being sent goes where the sending hand sends it.
     /// Answers false when there is nowhere to go, or a travel is already headed there — restarting mid-flight would
     /// begin the 200ms over.
     function showTab(tab) {
@@ -63,8 +70,8 @@ QtObject {
         return true
     }
 
-    /// The same landing without the travel, for a strip that has stood nowhere yet (デザイン規約 §タブの所作): there is
-    /// no previous place to read the motion against.
+    /// The same landing without the travel, for a strip that has stood nowhere yet (`TabStrip.stood`): there is no
+    /// previous place to read the motion against.
     function landOn(tab) {
         if (!tab)
             return false

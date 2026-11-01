@@ -5,9 +5,17 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// The card under the author's name in the details pane (デザイン規約 §author の hover).
+// The card under the author's name in the details pane, opened right under the name the moment the pointer is on it.
+// One block of face, name and address, shaped as a `CoAuthorCard` row (same ground, frame, row height and indent). The
+// pane writes a person one way; what the card adds is the address, the only thing that tells two people of one name
+// apart. Writing the name again also undoes the pane's cut (the name line clips). Its own card, not a `ToolTip`: a
+// tooltip holds only a string, so no face. The committer stands as a second block only when they are somebody else
+// (an ordinary state wears no mark, 規約 §状態): without that block, who put the commit here is said nowhere in the app.
 //
 // A popup: anything declared inside the pane's column would be clipped by it and painted under the list below.
+// Opening, the wait to close and the report are the co-author card's, copied (`DetailsAuthorCards`). Who differs from
+// whom is decided in Rust (`committerDiffers` / `timeDiffers`), with the rule for telling two people apart
+// (デザイン規約 §アバターを与える). Headless: the pair `author-card` / `author-card-open` (`--preset authorship`).
 AppCard {
     id: authorCard
 
@@ -28,12 +36,19 @@ AppCard {
     /// How wide this card may stand; what is over it wraps. A popup clamps its position to the window, never its
     /// width, so without a cap a long address runs off the edge. The owner measures it (`DetailsAuthorCards.takeRoom`).
     property real maxWidth: 0
-    /// What is left of it for a row's own words, once the frame's padding is out.
+    /// What is left of it for a row's own words, once the frame's padding is out. Taken off here, not by the caller:
+    /// `maxWidth` is the width the card may stand at, and a caller taking the padding off would spell the same size
+    /// in a second place (`CoAuthorCard.rowCap` does the same).
     readonly property real rowCap: authorCard.maxWidth > 0
         ? authorCard.maxWidth - 2 * authorCard.padding : Number.MAX_VALUE
 
-    /// Either difference names both acts, even in the same second (デザイン規約 §author の hover).
+    /// Either difference names both acts, even in the same second: the date line shows the author's moment and this
+    /// card opens over it, so the moment to compare against is off the screen. The same person committing later
+    /// (amend / rebase) gets two lines under one block. Absolute stamps, as the date line's: one scale on one card.
+    /// In the reader's time zone like every stamp (`Words.stamp`, 規約 §author の hover): on another clock these two
+    /// lines could not tell a time zone from a later commit.
     readonly property bool actsShown: authorCard.committerDiffers || authorCard.timeDiffers
+    /// git's own words, lower case. No `Author:` label: the name already says who.
     readonly property string wroteWord: qsTr("authored")
     readonly property string putWord: qsTr("committed")
     readonly property var wroteAct: ({ word: authorCard.wroteWord, stamp: Words.stamp(authorCard.authoredAt) })
@@ -45,7 +60,8 @@ AppCard {
                                       : [authorCard.wroteAct, authorCard.putAct]
     /// ...and when somebody else put it here, the moment they did stands under *their* name.
     readonly property var committerActs: authorCard.committerDiffers ? [authorCard.putAct] : []
-    // Measured off hidden labels: `TextMetrics` comes out a few pixels short of what a Label takes.
+    // One word column for both blocks, so the stamps' heads line up. Measured off hidden labels: `TextMetrics` comes
+    // out a few pixels short of what a Label takes.
     readonly property real wordColW: Math.max(wroteMetric.implicitWidth, putMetric.implicitWidth)
     CardText {
         id: wroteMetric
@@ -136,7 +152,9 @@ AppCard {
             color: Theme.textSecondary
             pixelSize: Theme.fontSm
         }
-        // One step under the address, none between the stamps (デザイン規約 §author の hover).
+        // `authored <stamp>` / `committed <stamp>`, one step (`spaceXs`) under the address and none between them: the
+        // address is the name's, and the two stamps are a pair to compare. What marks the change of person is the
+        // block's own step under its last line.
         Column {
             id: actLines
             visible: block.hasAct

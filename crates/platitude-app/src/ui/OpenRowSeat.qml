@@ -24,6 +24,11 @@ QtObject {
     /// `openKey` itself. A row that comes under a still hand is refused until the hand moves and the rest runs again
     /// (`HandWatch.stillHeld`): an open row is taller, so the rows below move, and opening whatever lands under a still
     /// pointer would have rows trading places (デザイン規約 §左メニューの所作).
+    /// **A held bar folds the row the moment it is grabbed** (`HoverSeat.barHeld`), and an ask while it is held is
+    /// refused (`barBlocks`). Left to the row, which reads hover again only when the hand moves, it would close after
+    /// the drag: the scroll the opening sent would stay unreturned (the drag moved the list, so it is the reader's —
+    /// `NavList.openHeld`), and a recycled delegate would ask to close under another row's name, leaving `openKey`
+    /// set. Folded at the grab, the list gives back only what the opening sent. Headless: `nav-open-foot bar`.
     property HoverSeat seat: HoverSeat {
         hand: openRow.hand
         restMs: Metrics.tipDelayMs

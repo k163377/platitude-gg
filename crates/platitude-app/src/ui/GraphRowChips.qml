@@ -92,7 +92,8 @@ Item {
         field.forceActiveFocus()
     }
     // The open box can reach past the column onto the lane cell, which is laid out after this column and would draw
-    // over it.
+    // over it. The column's floor (`GraphColumnMetrics.labelColWMin`) does not grow for the box: an outgrown box
+    // covers the lanes instead, and the row's press area leaves its span out (`GraphRowDelegate.pressArea`).
     z: chipColumn.naming ? 1 : 0
 
     RefChipStack {
@@ -109,20 +110,31 @@ Item {
         records: chipColumn.records
         waiting: chipColumn.waiting
         unstacked: chipColumn.listOpen
-        // The names the chip cannot fit are read in the card.
+        // The names the chip cannot fit are read in the card. `spaceXs` off each side: a chip filling the column keeps
+        // the pane's inset from the left frame line, one of the graph's two outer edges that take it — the steps
+        // inside the graph stay `spaceSm` (デザイン規約 §QML 実装ルール のペインの内寸).
         maxWidth: chipColumn.columnWidth - Theme.spaceSm
     }
     // A double-click on a row with nowhere to switch to asks for a name, where the chips would be
-    // (デザイン規約 §可否・警告の出し場所「表示の切り替えで足りるならそれで済ませる」).
+    // (デザイン規約 §可否・警告の出し場所「表示の切り替えで足りるならそれで済ませる」). Enter makes the branch and moves
+    // onto it; Escape or a press on another row closes it unasked — a discard costs seconds of retyping — and one with
+    // nothing put in it goes with any press elsewhere (`GraphPane.dropEmptyBoxes`). A rename is the same box in the
+    // same seat, opening on the name selected whole, its frame the renamed kind's.
     Loader {
         id: nameSeat
         active: chipColumn.naming
         // Ends where the chip ended while the column holds it, and from there grows to the left; once it outgrows the
-        // column the head stays at the column's and the box grows into the graph (規約 §グラフ行のダブルクリック
-        // 「改名の箱は名前の幅」/「開く向きは 1 つ」).
+        // column the head stays at the column's and the box grows into the graph, up to `boxReach` (user decision —
+        // ask before changing): chips stand at the column's right end, so a box starting at the column's head would
+        // jump the pressed name left; past the column it grows the way the chip's card opens (`RefListPopup`). While
+        // the box stands the column is its own (`GraphRowDelegate.partAt` / the press mask), and what it covers of the
+        // lanes it covers only while it stands. Headless
+        // `graph-rename-fit`: `stands=` names right / full / head / capped. The left menu's box measures off labels
+        // too (`NavNameBox.wantWidth`), and stops at the window's edge.
         x: Theme.spaceXs + Math.max(0, chipColumn.boxRoom - (nameSeat.item ? nameSeat.item.width : 0))
         anchors.verticalCenter: parent.verticalCenter
         onLoaded: chipColumn.focusBox()
+        // `SlimField` as it comes (its own height, `fontMd`), not the chip's 18-high line box.
         sourceComponent: SlimField {
             id: nameField
             /// The words' widths, paddings included, which Controls takes out of `width` before laying the text and
@@ -133,9 +145,12 @@ Item {
             readonly property real openedW: Math.ceil(openedInk.implicitWidth) + nameField.padsW
             readonly property real typedW: Math.ceil(nameField.contentWidth) + nameField.padsW
             readonly property real padsW: nameField.leftPadding + nameField.rightPadding
-            /// What the box asks for. A box making a name takes the column, and the placeholder whole where that is
-            /// wider. A rename takes its words: what is typed, never narrower than the name it opened holding, and the
-            /// placeholder whole once rubbed out — a box cut short of either says nothing.
+            /// What the box asks for. A box making a name takes the column (it opens empty: no name to fit), and the
+            /// placeholder whole where that is wider. A rename takes its words: what is typed, never narrower than the
+            /// name it opened holding (a cut name is nothing to read against before Enter), and the placeholder whole
+            /// once rubbed out — a box cut short of either says nothing. The column's own floor stays: it promises a
+            /// name's first three letters (`GraphColumnMetrics.chipNameMinW`), and widened for this sentence
+            /// the name column would be sized by this box.
             readonly property real wantW: chipColumn.namingMode !== "rename"
                 ? Math.max(chipColumn.boxRoom, nameField.placeholderW)
                 : Math.max(nameField.openedW, nameField.text === "" ? nameField.placeholderW : nameField.typedW)
@@ -164,7 +179,10 @@ Item {
             refused: chipColumn.namingRefused
             /// That tip answers what is typed, not a hand: it stands until the typing changes it (`TipAsk.typed`).
             /// A worktree's folder in the refusal's line has the tree mark stood in front of it (デザイン規約 §ref の種別
-            /// 「名前の印」).
+            /// 「名前の印」). Asks `activeFocus`, unlike the left menu's box (`NavNameBox.tipTyped`, which asks `visible`
+            /// because it is carried into a layer): this one sits in its Loader by anchors and is never carried, so Qt
+            /// reports no binding loop. Left as it is; align it with `NavNameBox` when this box is next reworked (the
+            /// ratchet of .claude/rules/structure.md).
             readonly property bool tipTyped: nameField.refused && nameField.activeFocus
                                              && chipColumn.namingRefusedWhy !== ""
             readonly property TipAsk nameTip: TipAsk {
@@ -206,7 +224,8 @@ Item {
         anchors.fill: rowStack
         sourceComponent: Item {
             id: withheldBox
-            // Answers the press that asked, not a hand (`TipAsk.typed`); the folder in it behind the tree mark.
+            // Answers the press that asked, not a hand (`TipAsk.typed`); the folder in it behind the tree mark. Asked
+            // only while there are words, as `NavItemDelegate.withheldSeat` says why.
             readonly property TipAsk withheldTip: TipAsk {
                 target: withheldBox
                 asked: withheldBox.visible && chipColumn.withheldWhy !== ""

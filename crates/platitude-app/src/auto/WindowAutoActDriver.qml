@@ -12,9 +12,12 @@ import platitude.ui
 /// Built by `WindowHarness` only when a verb was given. What the verbs act on is handed in below: a file of its own
 /// cannot see the window's ids, and the one list says how far the harness reaches into the window.
 ///
-/// The verbs live in the items at the foot, grouped by the part of the window they answer for; each gates itself on
-/// `Harness.autoAct` (rules-refs/structure.md「窓側の自動化は動詞が自分で `running:` に立つ」). The two that stay
-/// here read the change signals latched just below, which have to be connected before their verb starts.
+/// The verbs live in the items at the foot, grouped by the part of the window they answer for. Each takes its own
+/// turn — its sampler writes `Harness.autoAct === "<verb>"` into its own `running:` — so `begin()` is empty, and the
+/// only things started by name are the chains inside one verb, which move with it. That is why this side splits by
+/// part of the window without splitting a dispatch, and why a family needs no other road to its verbs. The page side
+/// is not this shape: `AutoActDriver.runAutoAct()` starts its samplers by id. The two that stay here read the change
+/// signals latched just below, which have to be connected before their verb starts.
 // An `Item` only because `QtObject` has no default property to hold the timers below.
 Item {
     id: driver
@@ -62,7 +65,9 @@ Item {
     // of the press (`was=` is the half the picture cannot hold). The standing panel is a precondition read only in
     // the stage that presses (rules-refs/app-ui.md「動詞の前提条件は入力を出す枝で読む」): the press takes it down.
     // The failing command is the page's dispatch (`AutoActFindVerbs`), so the press joins it: a failure latched before
-    // it — the opening fetch's — is not the one this run clears.
+    // it — the opening fetch's — is not the one this run clears. `Clear` empties the rows and the header's line and
+    // folds the panel too, so `open=false` is right and the mark rests at `textMuted`; the picture is the window after
+    // the fold, with nothing of the panel in it.
     WindowStage {
         id: commandsClearActTimer
         name: "commands_clear"

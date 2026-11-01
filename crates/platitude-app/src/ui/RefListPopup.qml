@@ -6,11 +6,27 @@ import platitude
 import platitude.ui
 
 // The refs a graph row has, unstacked one per row: branches first, then the tags the chip had no room for. Opens
-// over the chip with its first row on the chip's own seat, and scrolls inside the page (規約 §グラフ行のダブルクリック)
-// — so the width is measured over the rows the page can seat (`layOutRows`).
+// over the chip with its first row on the chip's own seat — the chip's frame seen to widen and bring out the names it
+// hid, the same name never twice on screen — for a lone chip too, a tag's included (user decision — ask before
+// changing): it is cut by the same column. **It always grows right, into the graph, names left-aligned** (user
+// decision — ask before changing): "left, else flipped right" would open one chip different ways on different rows,
+// with nothing on screen saying why; a name is told apart by its head, so the head holds still. It covers the lanes
+// and subjects only while the hand rests, and stops the menus' `spaceXxl` short of the edge (`RowHoverHost`).
+// **Names are whole and wrap**, one frame per row: nothing can hover over what hover opened (規約 §hover のツールチップ).
+// **At most the page tall, scrolling inside** (user decision — ask before changing): one commit can carry more names
+// than a page seats, and a row card's answer (capping at the room) does not serve here — so the width is measured
+// over the rows the page can seat (`layOutRows`). It opens at once, as an expansion does (規約 §hover のツールチップ
+// 「展開は即時に開く」); the line under a name is a note inside it, with no second wait. It closes when the hand is on
+// neither it nor the chip column; its ground, frame and rows are a menu's (規約 §メニュー).
 //
 // Owned by the page: delegates are recycled out from under an open popup. A popup, because anything declared inside
 // the list is clipped by it and painted under the row below.
+//
+// A rename never closes it from here: closed first, the commit it stood on (`RowHoverHost.refListOid`) is gone before
+// the owner can open the box. `RepoPage.startRename` takes it down (`RowHoverHost.closeRefList`). Headless:
+// `graph-reclick-list` / `graph-reclick-across` / `ref-list-pick` / `ref-list-lit`, through the hooks below; the seat
+// and the cover by `ref-list` (`covers=`) and `ref-list-card`. No preset photographs a wrapped name: build a throwaway
+// repository with a ref of about 235 characters and aim at it with `--repo`.
 AppCard {
     id: refList
 
@@ -22,8 +38,10 @@ AppCard {
     property var mates: []
     /// The branch the worktree is on; that one leads nowhere.
     property string currentBranch: ""
-    /// One was double-clicked: the reader is going there. The whole chip, so its kind travels with it. A single click
-    /// never moves (規約 §グラフ行のダブルクリック).
+    /// One was double-clicked: the reader is going there. The whole chip, so its kind travels with it. **A single click
+    /// never moves** (user decision — ask before changing): the card stands on the chip's seat, so a click aimed at the
+    /// chip lands on a row here, and a click that moved would `switch` whoever pressed the chip twice, spaced — as a
+    /// double-click with a strangely long window.
     signal picked(var chip)
     /// One was clicked once, plainly: its row becomes the one being read. The second click and a held click have no
     /// signal here — both go in at the graph's own row (`rowClicks`).
@@ -66,7 +84,8 @@ AppCard {
     /// The graph pane's click handling (`noteRowClick` / `dropRowRename` / `rowRenameArmed` / `rowClickGuarded` /
     /// `heldRowClick`) and the commit the rows are on, handed over by the owner. **These rows are the graph's row**:
     /// the card opens on the chip's seat, so a reader clicking there twice hits the row, then the card — answered
-    /// apart, the second click would count as a first (規約 §グラフ行のダブルクリック).
+    /// apart, the second click would count as a first. Every row answers as the graph's row does (user decision —
+    /// ask before changing): a plain click picks the row, a double-click moves, a spaced second click renames.
     property var rowClicks: null
     property string rowOid: ""
     /// The width of the chip this card covers, `+N` and fan included, handed over by the owner: a floor, with a row's
@@ -77,10 +96,14 @@ AppCard {
     // Sized here: a recycling list has no implicit height of its own to hand a popup.
     width: refList.cardWidth
     height: refList.cardHeight
-    // The rows' wash reaches the frame, where a menu keeps a `spaceXs` band; the corner answers that instead
-    // (規約 §グラフ行のダブルクリック「行の重ね色はカードの枠の内側いっぱいに届く」).
+    // The rows' wash reaches the frame (user decision — ask before changing): it says which row is under the hand, and
+    // its target is the row's band. A menu keeps a `spaceXs` band to hold its highlight off the round corners; here the
+    // corner answers that instead. The frame's thickness and no less: at 0 the wash paints over the frame itself. The
+    // chip's side air is the row's (`chipInset`), and the owner takes both off `chipRoom` — left in, the card's right
+    // edge passes the `spaceXxl` stop (`RowHoverHost.seatRefList`).
     padding: Theme.borderWidth
-    // The chip's own corner, so the first and last rows' wash meets the frame flush (規約 §グラフ行のダブルクリック).
+    // The chip's own corner, so the first and last rows' wash meets the frame flush with no sliver of ground in the
+    // corner (user decision — ask before changing).
     faceRadius: Theme.radiusSm
     // Nothing stands between the chip and this: the pointer has to be able to walk down into it without leaving both.
     margins: 0
@@ -89,7 +112,8 @@ AppCard {
     contentPointed: contentHover.hovered
 
     /// The row holding the `i`th record, scrolled on screen first: a recycling list's `itemAtIndex` is null for a row
-    /// not shown.
+    /// not shown. Every hook below goes through here — a run asking `itemAtIndex` directly gets null for a row off
+    /// screen and waits, silent, for the watchdog.
     function rowAt(i) {
         if (i < 0 || i >= refList.records.length)
             return null
@@ -123,7 +147,8 @@ AppCard {
         return true
     }
     /// Hover cannot be injected (verify-ui §hover の絵の撮り方): a run writes the row's `pointedAt` and reads the wash
-    /// back with `rowLit` (PGG_AUTO_ACT=ref-list-lit).
+    /// back with `rowLit` (PGG_AUTO_ACT=ref-list-lit) — off the row, not the picture: the wash is one step off the
+    /// ground, so a row that never took the answer pictures like one that did.
     function pointRow(i) {
         const row = refList.rowAt(i)
         if (!row)
@@ -189,10 +214,14 @@ AppCard {
     /// records. **Qt works out what is hovered from pointer events, not geometry**: a card that grows after it appears
     /// cannot tell that the hand walking down off the chip is already inside it, and closes under it.
     ///
-    /// It measures the rows the list is about to show (the card is given the page for this call): a second set laid
-    /// out just to measure is over the operation budget alone (ci/baseline/code-costs-windows-x64.md). A card that
-    /// does not fit is measured over the rows in view, and a longer name below the fold wraps
-    /// (規約 §グラフ行のダブルクリック「カードの中の名前は全文」). Rows past the fold count a plain row each for the
+    /// It measures the rows the list is about to show (user decision — ask before changing: a recycling list cannot
+    /// answer for rows it has not built, so the width is that of the rows the page seats as the card opens; the card
+    /// is given the page for this call): a second set laid
+    /// out just to measure — a `Column` + `Repeater` beside the list — is over the operation budget alone on
+    /// `--preset stack`'s row 3, 42 refs (ci/baseline/code-costs-windows-x64.md). The answers are written into plain
+    /// properties (`rowsWidth` / `rowsHeight`), never bound. A card that
+    /// does not fit is measured over the rows in view, and a longer name below the fold wraps, as any name too long
+    /// for the card does (see the top). Rows past the fold count a plain row each for the
     /// height — they can only be taller, so such a card is already at its cap.
     function layOutRows() {
         refList.measuring = true
@@ -205,7 +234,9 @@ AppCard {
             if (!row)
                 break
             // Laid out before it is read: the first row is built before the room is set, and the chip's positioner
-            // answers a pass late (`RefChip.layOutNow`) — read unasked, the name is cut at the column's width.
+            // answers a pass late (`RefChip.layOutNow`) — read unasked, the name is cut at the column's width, and
+            // where it is the widest row the card opens at the column's width and cuts the name in its own frame
+            // (`tst_refstack.qml`'s `RefChipRoom` holds the chip's half).
             row.layOutNow()
             widest = Math.max(widest, row.implicitWidth)
             stacked += row.height
@@ -230,15 +261,18 @@ AppCard {
         /// bindings: a recycling list's built rows change as it scrolls, and the card would breathe.
         property real rowsWidth: 0
         property real rowsHeight: 0
-        /// What a row keeps between its far end and the frame, set with the width: the bar's trough when a bar comes
-        /// out, else `spaceXs` (規約 §グラフ行のダブルクリック「バーは張り付く側」).
+        /// What a row keeps between its far end and the frame, set with the width: the bar's trough (`navBarGutter`,
+        /// where the rows' ink stops) when a bar comes out, else `spaceXs`. The wash still runs to the frame, the bar
+        /// standing over it.
         property real rightInset: Theme.spaceXs
 
         AppListView {
             id: rowsList
             anchors.fill: parent
             model: refList.records
-            // The idle step counted from this card's `bgElevated` ground (規約 §ペインのスクロールバー).
+            // The sticking bar (user decision — ask before changing): each row's reading's remote stands right-aligned
+            // on that edge, the first case of 規約 §QML 実装ルール's choice of bar. The idle step counted from this
+            // card's `bgElevated` ground (規約 §ペインのスクロールバー).
             verticalBar: PaneScrollBar {
                 idleColor: Theme.borderSubtle
             }
@@ -257,16 +291,21 @@ AppCard {
                 /// A run's stand-in for the pointer resting on this row (`pointRow`): hover cannot be injected. Named
                 /// for the sidebar's (`NavItemDelegate.tipPointedAt`).
                 property bool pointedAt: false
-                /// Wearing the hover wash — every row, whether or not it leads anywhere (規約 §グラフ行のダブルクリック).
+                /// Wearing the hover wash — every row, whether or not it leads anywhere: rows that light and rows that
+                /// do not, mixed under a hand walking down, read as a list that sometimes stops answering. A
+                /// `textMuted` one included: the exception to 規約 §無効.
                 readonly property bool lit: rowHover.hovered || refRow.pointedAt
                 // The reader is already there: only the move comes off, the colour stays (§ref の種別). A tag leads
-                // nowhere too (§タグのダブルクリックは入力欄へ).
+                // nowhere too: moving onto one would detach HEAD (`offers::SwitchAction::None`).
                 readonly property bool current:
                     refRow.modelData.kind === "branch" && refRow.modelData.name === refList.currentBranch
                 // The two markers (a detached HEAD, a worktree with no branch here) name no ref. Only the move comes
                 // off: the chip keeps its colour, or the detached HEAD would be amber on the row and grey in its card.
                 // A branch another worktree has out leads to that worktree, as the graph row's double-click does
-                // (`RepoPage.switchToRef`).
+                // (`RepoPage.switchToRef`'s `holder`): refused here, only a double-click aimed at the chip would go
+                // nowhere while the same row's words go (`tests/qml/tst_listrowpick.qml`, headless `ref-list-held`).
+                // A worktree's folder row leads nowhere: a folder is no ref (`GraphRowDelegate.nameChip`); making it
+                // lead to its worktree is open, to be decided with the folder's rename (P3-確認事項, the worktree item).
                 readonly property bool leadsNowhere:
                     refRow.modelData.kind === "head" || refRow.modelData.kind === "worktree" || refRow.current
                     || refRow.modelData.kind === "tag"
@@ -277,7 +316,8 @@ AppCard {
                 }
                 /// Asked of the record, not of `whose.visible`: the card is measured before it opens
                 /// (`RowHoverHost.openRefList`), and nothing inside a closed popup is visible — the room read there
-                /// came to nothing, and taken back once the card was up it came out of the chip.
+                /// came to nothing, and taken back once the card was up it came out of the chip (a tag row naming
+                /// whose reading it is wrapped its chip). `tests/qml/tst_reflistroom.qml` holds it.
                 readonly property real whoseRoom: rowChip.recWhere !== "" ? whose.width + Theme.spaceSm : 0
                 /// The counterpart named inside this row's chip frame (`RefChip.mate`), or null.
                 readonly property var mate:
@@ -305,14 +345,14 @@ AppCard {
                     id: rowChip
                     y: refList.chipInset
                     // The card is placed so this lands where the covered chip's name started: a name's head is what
-                    // holds still (規約 §グラフ列は最も広い所のレーンまで).
+                    // holds still (規約 §グラフ・インタラクション定数「名前は頭で見分ける」).
                     x: Theme.spaceXs
                     records: [refRow.modelData]
                     // The wait mark the row's own chip wears, on whichever of the two the reader is looking at
-                    // (規約 §グラフ行のダブルクリック).
+                    // (`RefChip.waiting`).
                     waiting: refList.rowClicks ? refList.rowClicks.rowRenameArmed(refRow.modelData) : false
-                    // Names here are shown to be read: what does not fit wraps
-                    // (規約 §グラフ行のダブルクリック「カードの中の名前は全文」).
+                    // Names here are shown to be read: what does not fit wraps, the frame still one and the row as tall
+                    // as it needs (see the top).
                     wrapped: true
                     maxWidth: refRow.chipRoom
                     mate: refRow.mate
@@ -389,10 +429,12 @@ AppCard {
                     id: rowHover
                 }
                 // The row reaches under the bar: the bar is the view's child, over the rows, and takes its own
-                // presses first (as in `NavItemDelegate`).
+                // presses first (as in `NavItemDelegate`). The bar's gutter (`rightInset`) holds back only the ink.
                 TapHandler {
                     id: rowTap
-                    // At the press, like the graph's rows (rules-refs/app-ui.md「左ボタンは押下で答える」).
+                    // At the press, like the graph's rows (rules-refs/app-ui.md「左ボタンは押下で答える」). The move is
+                    // the double-tap's alone: on `onTapped`, the spaced second click — which lands here, the card
+                    // standing on the chip's seat — would fire `switchToRef`.
                     onPressedChanged: if (rowTap.pressed) refRow.leftClick(rowTap.point.modifiers)
                     onDoubleTapped: refRow.doubleClick(rowTap.point.modifiers)
                 }
@@ -400,8 +442,9 @@ AppCard {
                 function rightClick() {
                     refList.menuAsked(refRow.modelData)
                 }
-                // Every row, those going nowhere included: the menu is the commit's, and only its cards follow the
-                // row (`tests/qml/tst_listrowmenu.qml`).
+                // Every row, those going nowhere included (`leadsNowhere`: a folder, the HEAD marker, the current
+                // branch, a tag): the menu is the commit's, and only its cards follow the row — those rows lose just
+                // the move (`tests/qml/tst_listrowmenu.qml`; `list-menu` calls `rightClick()`, past this handler).
                 TapHandler {
                     acceptedButtons: Qt.RightButton
                     // The list stays up under the menu: the owner's settle checks the menu.

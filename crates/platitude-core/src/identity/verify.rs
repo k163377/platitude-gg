@@ -80,8 +80,10 @@ pub struct Signature {
 /// The object's `gpgsig` header is read first and an unsigned commit stops
 /// there, in one process: no `%G?`-family placeholder tells an unsigned
 /// commit from an SSH-signed one without `gpg.ssh.allowedSignersFile`
-/// (rules-refs/core.md「署名の有無は」). With a header present, `N` means
-/// git could not judge it.
+/// (measured on git 2.55: `%G?` `%GS` `%GK` `%GG` `%GF` `%GP` `%GT` all
+/// print the same for both), so no single command does it. With a header
+/// present, `N` means git could not judge it. The process count is pinned
+/// by the observer test in `identity_integration`.
 pub async fn verify_commit(
     executor: &GitExecutor,
     workdir: &Path,

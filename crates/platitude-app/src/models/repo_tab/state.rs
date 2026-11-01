@@ -244,19 +244,26 @@ impl RepoTab {
 
     /// A fetch ended, whoever asked for it: counts consecutive failures
     /// and stops the timer after enough (デザイン規約 §リモートから取り込む).
+    /// Whoever asked: the fetch button speaks for how fetching is going.
+    /// One success, a pressed one too, puts the count back to 0 — else a
+    /// press that went through would keep saying the last one failed.
+    /// A pull's fetch is not one: it answers as a write (`OperationKind::Pull`)
+    /// — the button counts how `git fetch` is doing, and a pull also fails
+    /// on a conflict or a dirty tree.
     ///
     /// `announce` is whether this one may raise the command log: only a
-    /// fetch the user pressed may. The timer's and the opening's count but
-    /// say nothing beyond the button — a machine that slept or went offline
-    /// fails them as a matter of course, and the panel would be thrown up
-    /// at every interval and every tab opened (デザイン規約
-    /// §リモートから取り込む, the one exception to a failure raising the log).
+    /// fetch the user pressed may, once per run of failures. The timer's and
+    /// the opening's count (the `!` shows) but say nothing beyond the
+    /// button (user decision — ask before changing) — a machine that slept
+    /// or went offline fails them as a matter of course, the reader has
+    /// nothing to do about it, and the panel would be thrown up at every
+    /// interval and every tab opened (the one exception to a failure raising
+    /// the log, デザイン規約 §リモートから取り込む).
     pub(super) fn fetch_settled(&mut self, error: &str, announce: bool) {
         if error.is_empty() {
             self.fetch_failures = 0;
             self.fetch_log_raised = false;
-            // The header line is state, and a landed fetch makes it untrue
-            // (デザイン規約 §リモートから取り込む「成功が 1 回入れば数は 0 に戻る」).
+            // The header line is state, and a landed fetch makes it untrue.
             // Rows are history and stay.
             if self.last_error_from_fetch {
                 self.take_down_last_error();
@@ -347,6 +354,10 @@ impl RepoTab {
         let message = platitude_core::commit::join_message(&subject, &body);
         let options = platitude_core::commit::CommitOptions {
             amend,
+            // Not offered across the bridge: the screen has no road to an
+            // empty commit — Commit goes through only with something staged,
+            // an amend aside (`WipCommitBlock`), where core adds the flag
+            // itself for an empty HEAD (`commit::commit`).
             allow_empty: false,
             reset_author: amend && reset_author,
         };

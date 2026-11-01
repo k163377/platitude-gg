@@ -6,15 +6,29 @@ import platitude.ui
 // The hand that picks the diff's text out of its rows: a drag selects, a right-click asks for the menu, a plain click
 // puts the selection down (デザイン規約 §diff の中身をコピーする).
 //
+// A drag starts anywhere in the code column that no press belongs to — the ground under a short file's last row too,
+// a sweep from there running on as the last row: nowhere in the frame does a press do nothing. Two exceptions only: a
+// hunk heading (its press is its two words', `takesPress`) and the gutter (numbers and the `+`, outside the column).
+// A drag takes the new side, unchanged and added lines; a removed line is taken whole from the menu (`DiffRowMenu`) —
+// as one column; as two, the column pressed is the file. A drag past the frame sends the diff after it (rows up and
+// down, text sideways) along the one path each already has. A re-read drops the selection (`DiffModel` lays out new
+// rows on every partial stage).
+//
 // It covers the code: it starts after the first gutter, whose `+` keeps taking presses (`gutterW`), and stops short of
-// the list's bar, which is drawn over the rows (`barRoom`, rules-refs/app-ui.md「一覧の上に面を重ねたら」). A drag is
-// of one column — the one the press landed in (デザイン規約 §diff を 2 列で読む).
+// the list's bar, which is drawn over the rows (`barRoom`, rules-refs/app-ui.md「一覧の上に面を重ねたら」). Side by
+// side, the selection is the column's: the press picks the column and the file — left the old file (context and
+// removed), right the new (context and added) — its wash is on that column only, and a drag across the hairline stays
+// in it (pointing at its own line ends). `Copy removed lines` comes only off the right column (`removed_offered`):
+// the left's own `Copy` already takes them.
 //
 // **Laid over the list**, not in the rows: a `Flickable` takes the grab from its children past the drag threshold,
 // and `reuseItems` rebuilds a scrolled-away row. A plain `MouseArea` with hover left to the rows — a `HoverHandler`
 // here would take their `+` and lit hunk.
 //
 // Where a press landed in the file is the model's to say (`DiffModel::selection`); this knows pixels.
+//
+// Headless: `diff-select` / `diff-copy` / `diff-menu` / `diff-copy-removed`; the clipboard is read back through
+// `ClipboardHelper.lastCopied` (the clipboard itself does not answer).
 Item {
     id: pick
 
@@ -125,7 +139,9 @@ Item {
     // ---- pixels to rows ----------------------------------------------------------------------------------------
     /// Which row a point of this item is over, or -1 where the list has no rows. **Clamped twice**: to the frame, so a
     /// drag past either edge keeps naming the row it can still see, and to the rows (`onRows`), so the ground under
-    /// the last row belongs to that row (rules-refs/app-ui.md「本文の面の掴み代は」).
+    /// the last row belongs to that row: the body's grip is every place in the frame nobody else takes a press at
+    /// (規約 §右のペインの字は掴める; the log's `CommandsTextSelect` is the same). A hunk heading's press stays the
+    /// heading's (`takesPress`; `diff-sweep`'s `ours=false`).
     function rowAt(y) {
         const inside = Math.max(0, Math.min(y, pick.height - 1))
         // One pixel in from the left: rows are as wide as the list, so any x inside it finds the same row.

@@ -5,8 +5,15 @@ import platitude
 import platitude.ui
 
 // Where a repository is cloned from: a URL, a folder to put it in, and the folder's name. A dialog, since there is no
-// repository yet for a question bar to stand over; it stays up for the whole call, and git's refusal is read out
-// underneath (デザイン規約 §リポジトリを取り寄せる).
+// repository yet for a question bar to stand over (規約 §可否・警告の出し場所); it stays up for the whole call, and
+// git's refusal is read out underneath. The one way in is ☰'s `Clone repository…`
+// (`TabStrip.cloneRepositoryRequested` → `Main.startClone`); the folder is always named, never left to git
+// (`remote::clone`). Headless: `clone-dialog` / `clone-go` / `clone-refused`.
+//
+// **No line explaining the box**: the three fields say it all — what, where, under which name. `Add remote` carries
+// one only because its field cannot say where a URL comes from. **Nothing is checked before the press**: a taken
+// destination, a URL that does not answer and refused credentials are git's to refuse, and unlike the picker's
+// folder the box is still standing when the refusal arrives, so it has somewhere to be said.
 AppDialog {
     id: cloneDialog
 
@@ -33,7 +40,8 @@ AppDialog {
                                       && cloneDialog.parentUrl !== "" && !cloneDialog.cloning
 
     signal submitted(string url, string parentUrl, string name)
-    /// The box is going away by any road (button, Escape, …); a clone still out is stopped by it.
+    /// The box is going away by any road (button, Escape, …); a clone still out is stopped by it — one way to call it
+    /// off. Whatever folder the stopped clone left behind stays: clearing it is the reader's to do.
     signal cancelled()
     /// Bring the platform's folder dialog up, starting at whatever is chosen now.
     signal chooseFolder(string near)
@@ -97,7 +105,8 @@ AppDialog {
         spacing: Theme.spaceLg
 
         Label {
-            // No article: it names a kind (§長さ).
+            // No article: it names a kind (§長さ). Plain words, as the buttons are: no code face in a dialog's heading
+            // (§git 用語のコード表記).
             text: qsTr("Clone repository")
             font.pixelSize: Theme.fontXl
             font.weight: Theme.fontWeightStrong
@@ -177,7 +186,9 @@ AppDialog {
 
         DialogActions {
             cancelText: Words.cancel
-            // The mark's seat is where the ring turns while git is out (§進行中・回数押しの定数「待てるボタンには席が要る」).
+            // The mark's seat is where the ring turns while git is out (§進行中・回数押しの定数「待てるボタンには席が要る」),
+            // the word staying on, dimmed. **The ring is all the progress there is**: git's progress lines are
+            // human-facing output, and only machine-readable output is parsed (core.md §git サブプロセス規約).
             acceptKind: "fetch"
             acceptText: qsTr("Clone")
             busy: cloneDialog.cloning

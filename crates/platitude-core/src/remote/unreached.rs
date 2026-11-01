@@ -3,7 +3,10 @@
 //! screen's header line names these three in its own words
 //! (デザイン規約 §git が言ったことを読む場所); every other failure to reach
 //! a remote (no route, a name that does not resolve, a timeout) is git's
-//! first line as it stands.
+//! first line as it stands. The three are everyday (a new machine, WSL, a
+//! first SSH connection), hence a sentence of the screen's (user decision —
+//! ask before changing). OpenSSH never translates its words, so they read
+//! the same under any locale.
 
 use crate::relied_messages;
 

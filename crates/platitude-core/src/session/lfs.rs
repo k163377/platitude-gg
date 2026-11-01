@@ -1,6 +1,6 @@
 //! What the band's `NO LFS` stands on: how many pending files need Git
-//! LFS where git cannot run it (デザイン規約 §ウィンドウの縁) — and which of
-//! them a discard could not copy (破棄記録仕様.md §2.1), the files whose
+//! LFS where git cannot run it (the app's `BandStateGroup.qml`) — and which of
+//! them a discard could not copy (`discards::copy`), the files whose
 //! discard the screen warns of as one that cannot be brought back.
 
 use super::*;

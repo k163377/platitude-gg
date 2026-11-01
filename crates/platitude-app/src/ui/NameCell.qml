@@ -20,7 +20,9 @@ RowLayout {
     /// files have their own field (`models::details::FileItem.collapsed`).
     property bool folded: false
     /// Whether a change mark belongs in the seat (a ref row has none). The seat is held open either way: a layout
-    /// drops an invisible child, and every name at one depth has to begin in the same column.
+    /// drops an invisible child, and every name at one depth has to begin in the same column — dropped, a folded
+    /// leaf would stand left of its parent folder. One answer per list (the section's kind), so two neighbouring rows
+    /// never start their names in different columns.
     property bool showChange: true
     /// Whether the seat is in the row at all — off for a list whose rows never wear anything there. One answer per
     /// list, like `showChange`.
@@ -37,14 +39,20 @@ RowLayout {
     property color markTint: Theme.warning
     /// A `NavIcon.kind` for the seat that is not a change code: a locked worktree's padlock, a gone folder's bang, the
     /// WORKTREES mark on a branch another worktree has out. Only one of fold arrow, change code and this ever draws.
+    /// At the fold arrow's scale, in its column between fold arrows: drawn at the heading's step, a mark a rank
+    /// stronger than the fold arrow would stand inside the nesting. Centred on the capitals' middle (`seatBase`), not
+    /// on the box top or the row's middle, where each mark would stand at its own height against the name.
     property string seatMark: ""
     property color seatTint: Theme.textSecondary
     /// Whether the name is in the row at all; the seat stays, so a box opening over the name (`NavItemDelegate`'s
     /// rename) moves no other column. The owner's `Layout.fillWidth` follows this, so the slack goes to the box.
     property bool showName: true
-    /// The same name in full, drawn over the cut one in its own place while the row is open (デザイン規約
-    /// §左メニューの所作); empty leaves the cut name. Nothing beside it moves: a name too long for one line wraps
-    /// downward out of the row, which grows by it (`NavItemDelegate.nameOverflow`).
+    /// The same name in full, drawn over the cut one in its own place while the row is open (`NavRowFacts`) — the cut
+    /// two-label `CutName` swapped for a grabbable, wrapping `CardText`, in the row's own colour and weight; empty
+    /// leaves the cut name. Nothing beside it moves: a name too long for one line wraps downward out of the row, which
+    /// grows by it (`NavItemDelegate.nameOverflow`). **Not the name moved down into a line with the row's own emptied**
+    /// (user decision — ask before changing): a name that fits would leave the row blank on the left, and what the
+    /// reader was reading would move the moment a hand rested on it.
     property string whole: ""
     /// That field, and how far it hangs below the one line a name is drawn on (a drag goes into the first; the row
     /// grows by the second). The overhang is counted off the field's own line, not the label's: the two differ by a
@@ -55,14 +63,15 @@ RowLayout {
     /// Automation: the turn the fold arrow is drawn at, -1 without one. Read off the icon itself, so a run cannot go
     /// green with the arrow unwired.
     readonly property real foldTurn: foldSeat.item ? foldSeat.item.turn : -1
-    /// How wide the slot every row opens with is (デザイン規約 §余白「その席は `iconXs` で、印は席の中央に置く」).
-    /// The fold arrow, the change codes and the state marks are
+    /// How wide the slot every row opens with is (user decision — ask before changing; デザイン規約 §アイコンの席 の文頭記号).
+    /// The fold arrow, the padlock, the `!`, the `tree` state and the change codes are
     /// all drawn to the name's letters (`set: "lead"`) at one scale and centred across the seat; the widest, the
     /// filled house (12.32 squares), comes out a little wider than it at `fontMd` in a face with tall capitals (Noto
     /// Sans JP). The seat is the column the marks centre on, not a frame: a mark's ink may run a little past it.
     ///
     /// One width for every list, so a name stands as far from its mark in the file lists as in the sidebar; measured
-    /// per row, the padlock and the fold arrow would step the names in and out.
+    /// per row, the padlock and the fold arrow would step the names in and out; per list, the same chevron would stand
+    /// off its name by a different gap in one list (`tests/qml/tst_foldstep.qml`).
     readonly property int seatSize: Theme.iconXs
     /// Where the name itself is drawn — the lines a row opens read their voice off it, and it knows whether the name
     /// was cut (`NavRowFacts`, rules/app-ui.md「測って押し出す値は…」).
@@ -138,7 +147,8 @@ RowLayout {
         Layout.fillWidth: true
         spacing: 0
         // Built only on a rename (the seat's rule). Invisible while inactive: an empty loader would still take the
-        // spacing.
+        // spacing. `!folder` first: a folder row stacks its own path in the same field, and this test alone keeps an
+        // arrow from growing on it.
         Loader {
             id: origSeat
             active: !nameCell.folder && nameCell.origPath !== ""
@@ -150,13 +160,16 @@ RowLayout {
             sourceComponent: CutName {
                 text: nameCell.origPath
                 pixelSize: Theme.fontMd
-                // Where it came from is context, in the context colour (§テキスト); `textMuted` is the disabled signal
-                // (§無効) and cannot carry a second meaning.
+                // Where it came from is context, in the context colour (§テキスト), the new name in the row's own (user
+                // decision — ask before changing); `textMuted` is the disabled signal (§無効) and cannot carry a second
+                // meaning.
                 color: Theme.textSecondary
             }
         }
         // The `→` between the names, drawn in its place (デザイン規約 §アイコンの席 の字の代替): smaller and quieter than
-        // the names, so it does not read as the change-kind arrow at the row's head. It joins two words, so a word's
+        // the names — at the letters' scale about half the capitals' height, in `textSecondary` (user decision — ask
+        // before changing) — so it does not read as the blue change-kind arrow at the row's head nor outshout the
+        // file's name. It joins two words, so a word's
         // step stands either side of its room. Its box is the names' line, so it is set against their baseline on the
         // face's own `+`'s middle.
         Loader {

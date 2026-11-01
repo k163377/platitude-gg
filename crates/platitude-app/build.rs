@@ -11,6 +11,8 @@
 
 use std::process::Command;
 
+/// `PLATITUDE_`, not `PGG_`: build inputs, not harness knobs (those are
+/// `harness::knobs`').
 const GIVEN_COMMIT: &str = "PLATITUDE_GIVEN_COMMIT";
 const GIVEN_TAGS: &str = "PLATITUDE_GIVEN_TAGS";
 /// The compiled resource, beside the manifest.

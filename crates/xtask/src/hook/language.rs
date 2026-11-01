@@ -18,10 +18,17 @@ const WRAP_UP: &str = "mcp__ccd_turn__wrap_up";
 /// wide read can push past this; a message not found is not judged.
 const TAIL: u64 = 1 << 20;
 
-/// Fewer Latin letters than this is too short to tell.
+/// Fewer Latin letters than this is too short to tell (`All green.` is not
+/// judged).
 const LETTERS: usize = 25;
 
-/// Kana and kanji under this share (percent) of the letters is English.
+/// Kana and kanji under this share (percent) of the letters is English;
+/// Japanese mixed with identifiers and commands stays Japanese. An English
+/// line that only names Japanese documents and sections (kana and kanji
+/// between this and about 30 percent, a small share of English lines) is
+/// let go: the same band holds Japanese lines dense with identifiers, logs
+/// and English quotes, and neither the share nor a count of English
+/// function words tells the two apart.
 const JAPANESE_SHARE: usize = 8;
 
 const BETWEEN_CALLS: &str = "直前にユーザーへ書いた一言が英語だった。ユーザーが読む文は、ツールの合間の一言も報告も \
@@ -36,7 +43,9 @@ const BOX: &str = "wrap_up の recap / ask が英語だった。ユーザーが�
      (識別子・コマンド・SHA はそのまま。英語の件名などを引く時は、日本語の説明で包む)。";
 
 /// PostToolUse: the note for an English line written just ahead of this
-/// call. A subagent's lines reach nobody but the session.
+/// call, read off the session record, where Claude Code has written the
+/// call's line by the time this event runs. A subagent's lines reach
+/// nobody but the session.
 pub(super) fn post_tool(input: &str) -> Option<&'static str> {
     if own_value_field(input, "agent_id").is_some() {
         return None;
@@ -56,7 +65,8 @@ pub(super) fn stop(input: &str) -> Option<&'static str> {
 }
 
 /// PreToolUse: a wrap-up box asked for in English is refused before it is
-/// drawn. Answers whether it refused.
+/// drawn — its `recap` and `ask`; the buttons' wording is not judged.
+/// Answers whether it refused.
 pub(super) fn pre_tool(input: &str) -> bool {
     if own_string_field(input, "tool_name").as_deref() != Some(WRAP_UP) {
         return false;

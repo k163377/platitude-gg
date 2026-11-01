@@ -7,7 +7,14 @@ import platitude.ui
 
 // The repository pages: one row per tab, and a page only for the tab in front. A tab that leaves the front is taken
 // down with its models and state, and its session let go of (`RepoPage.leaveFront`); coming back reads the repository
-// again — the price of the memory budget (internal-docs/性能.md §予算).
+// again — the price of the memory budget (internal-docs/性能.md §予算). Taking the page down also means no part writes a
+// reset of its own for a tab switch.
+//
+// Do not cheapen the switch back (user decision — ask before changing): no kept sessions for tabs out of front (an
+// LRU), no lighter `RepoSession::refresh_quick` on a large repository, no opening in stages (the newest 64–100
+// commits first) — what the time to the first picture waits on is the processes queued before the walk, not the walk
+// (ci/baseline/code-costs-windows-x64.md). The other worktrees' pass stays right after the open
+// (`RepoSession::refresh_opening`).
 //
 // The root is the `StackLayout` itself, so its `Layout.*` stay where they are read (rules-refs/structure.md §分割の各論).
 StackLayout {
@@ -42,7 +49,9 @@ StackLayout {
     currentIndex: Math.max(0, stack.tabsModel.currentIndex)
 
     // Handing over before the strip moves — the layout to the next tab, the commit editor's draft to the hub — since
-    // the page is taken down behind this (`TabsModel::leaving_tab`).
+    // the page is taken down behind this (`TabsModel::leaving_tab`). The signal makes the order (leaving page's
+    // `reportLayout`, then the coming page's `applySavedLayout`); left to binding evaluation, which runs first is
+    // undefined.
     Connections {
         target: stack.tabsModel
         function onLeavingTab(index) {

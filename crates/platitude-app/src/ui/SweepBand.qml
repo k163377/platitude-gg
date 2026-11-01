@@ -1,7 +1,7 @@
 import QtQuick
 
 // The hand under a framed text box, over the inset band its view leaves between the frame and the words. The whole
-// frame takes a caret (デザイン規約 §コミットメッセージの 2 つの枠), but a `TextArea` in a `ScrollView` is sized to the
+// frame takes a caret (`MessageEditor`'s boxes), but a `TextArea` in a `ScrollView` is sized to the
 // inset view, so without this the band takes no press (`tst_messageband`).
 //
 // It lies under the view, so the words, the scroll bar and the description box's grip keep every press they had

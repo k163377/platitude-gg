@@ -8,7 +8,16 @@
 //! reading). A heavy read pushes the next one out at once; light reads
 //! pull it back in a step at a time ([`Estimate`]). Nothing here reads a
 //! clock to decay, so a late timer, a suspended machine or a hidden window
-//! leaves the pace where the reads put it.
+//! leaves the pace where the reads put it. Pacing by weight, with these
+//! defaults and both bounds settable, is a user decision (ask before
+//! changing). Being a proxy, it promises nothing about CPU use, the load
+//! on the disk, or how soon a change reaches the screen.
+//!
+//! With many worktrees the ceiling wins over the share: once each one's
+//! interval reaches the worktrees' ceiling (how many that takes for a
+//! large tree: ci/baseline/poll-cost-windows-x64.md), more of them raise
+//! the share of the time their reads take, in proportion to the count —
+//! the ceiling's freshness is kept over the share.
 //!
 //! The ranges are a person's to set ([`PaceBounds`]): a lower floor reads
 //! changes sooner and spends more of the machine, a higher ceiling spends

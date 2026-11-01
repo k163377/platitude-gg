@@ -80,7 +80,13 @@ impl TabsModel {
     pub(super) fn stood_worktree(&mut self, index: i32);
 
     /// Somebody asked to be shown the repository now in front, so the band
-    /// travels to that tab's seat (デザイン規約 §タブの所作).
+    /// travels to that tab's seat (`TabStrip.askFrontTab`), as far and as
+    /// fast as a press on the stand-in. Three roads ask: a repository
+    /// opened (picker, startup arguments) — its tab lands at the end, where
+    /// the reader never scrolled, so a band that stayed put would bear
+    /// every new tab out of view; an already open one asked for, or a tab
+    /// stood in another worktree — the move is the answer, and an answer
+    /// out of view is none; and the tabs a restart puts back.
     ///
     /// Not `current_index_changed`: a press or a carry moves that too, and
     /// there the reader has put the band where it is. Emitted after the
@@ -136,14 +142,16 @@ impl TabsModel {
         self.settle_opening();
     }
 
-    /// Puts back the tabs the last session had open.
+    /// Puts back the tabs the last session had open, in the order the
+    /// reader left them in (`TabsModel::report` writes the strip's order).
     ///
     /// Tabs are reserved, not opened: a `git` startup per tab would spend
     /// the startup budget on repositories nobody has looked at. Each opens
     /// when first selected.
     ///
-    /// A path no longer a directory is dropped; one still there but no
-    /// longer a repository keeps its tab and shows its failure.
+    /// A path no longer a directory is dropped (and logged) — out of the
+    /// reader's hands; one still there but no longer a repository keeps
+    /// its tab and shows its failure — worth showing.
     #[qslot]
     fn restore_tabs(&mut self) {
         let Some(saved) = Hub::with(|hub| hub.state().tabs.clone()) else {
@@ -160,8 +168,8 @@ impl TabsModel {
             let worktree = crate::urlpath::shown_path(&saved_tab.path);
             let repo = crate::urlpath::shown_path(&saved_tab.repo);
             // A linked worktree that has gone falls back to the repository's
-            // own (デザイン規約 §タブの所作「立てない所へは立たない」);
-            // only a gone repository drops the tab.
+            // own (`TabsModel::stand_home`); only a gone repository drops
+            // the tab.
             let worktree = if std::path::Path::new(&worktree).is_dir() {
                 worktree
             } else {

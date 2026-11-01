@@ -2,10 +2,11 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// The seat that opens the list of what destructive operations took away (破棄記録仕様.md), stacked on the git
+// The seat that opens the list of what destructive operations took away, stacked on the git
 // commands' seat at the foot of the left menu and dressed as that seat, colours included: a section band while the
 // menu is open, the rail's end block folded, and the head of the list's own band while the list is up
-// (`CommandsToggle`).
+// (`CommandsToggle`). The one way in: not in the operations panel at the top right. Its place, its colours, its name
+// and the light after a discard are user decisions — ask before changing (the light's blink, `RepoPage.blinkRecover`).
 Rectangle {
     id: toggle
 

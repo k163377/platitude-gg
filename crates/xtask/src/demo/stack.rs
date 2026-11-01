@@ -129,7 +129,7 @@ fn stack_rows(repo: &mut DemoRepo) -> Result<(), String> {
     }
 
     // The fan draws exactly what two tags draw (same-colour sheets are
-    // one), so only `+41` tells them apart (デザイン規約 §重ね表示).
+    // one), so only `+41` tells them apart (`RefChipStack.qml`).
     for (name, series) in [("bank", 10), ("heap", 11), ("pile", 12)] {
         let body = format!("pile {name}\n");
         repo.commit(

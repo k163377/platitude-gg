@@ -12,14 +12,22 @@
       trunk  accent        #3B82F6
       branch graphLane[1]  #E69F00
 
-    The frame is not decoration. bgElevated over a dark taskbar is 1.10:1,
-    so without it the icon has no outline there; borderStrong carries
-    2.15:1 on Windows dark and 2.46:1 on the Ubuntu dock. The dark tile is
-    what carries the light side (16.09:1 over a light taskbar), where the
-    strokes alone would sink.
+    The frame is not decoration. bgElevated is 1.10:1 over the Windows dark
+    taskbar and 1.04:1 over the Ubuntu dock, so without it the icon has no
+    outline there; borderStrong carries 2.15:1 on Windows dark and 2.46:1
+    on the Ubuntu dock. The dark tile is what carries the light side
+    (16.09:1 over a light taskbar), where the strokes alone would sink.
 
-    The branch is a lane color rather than warning/danger: lane colors
-    name nothing in the UI, so the app's signage keeps its meaning.
+    The branch is a lane color rather than warning, danger or refTag: those
+    name a state or a kind inside the UI, and worn by the icon for good
+    they would mean less there. Lane colors name nothing.
+
+    The branch is drawn first and the trunk over it, in both cuts: the
+    other order breaks the trunk in two where they meet.
+
+    The drawing is the app's own: the strokes and nodes redraw NavIcon's
+    branch mark. Not git's official logo (it comes with a CC BY 3.0
+    attribution), nor any other git client's shape.
 
     Drawn for 24px and up. At 16-20px use platitude-16.svg.
   -->

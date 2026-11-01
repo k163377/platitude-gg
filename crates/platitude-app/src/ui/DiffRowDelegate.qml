@@ -6,12 +6,26 @@ import platitude
 import platitude.ui
 
 // One row of the diff: as one column, two numbers with the mark's seat between them and the line; side by side, each
-// side's number, seat and line either side of a hairline (デザイン規約 §diff を 2 列で読む). A heading spans both.
+// side's number, seat and line either side of a hairline. A row that is not a line spans both: hunk headings, a
+// commit's band, the binary note.
+// Which number column a line's number stands in is what tells added from removed where colour cannot (type 2 colour
+// blindness merges the two grounds — `Theme.diffAddedBg`): keep the old and new numbers in columns of their own.
 //
-// The mark is the only thing in a line that takes a press (デザイン規約 §diff の中のステージ); which row the pointer is
-// on is the pane's question (`hoverHunk` / `hoverLine`, `DiffPane.settlePointedRow`).
+// The mark is the only thing in a line that takes a press (デザイン規約 §diff の中のステージ; user decision — ask
+// before changing): the text is a surface to read, select and copy, and a line's one answer to the pointer is putting
+// its mark out. Which row the pointer is on is the pane's question (`hoverHunk` / `hoverLine`,
+// `DiffPane.settlePointedRow`). A press on it writes that line at once, and the line moves to the other side where it
+// was pressed. Selecting lines is the text's (`DiffTextSelect`, which takes the hit test); staging selects no lines.
 //
 // The two layouts are Loaders — only the one in use is built (rules-refs/app-ui.md「行のデリゲートが見せない部品は消す」).
+//
+// Two columns are laid out in Rust (`encode::pair_rows` → the `pair_*` roles, the right side's marks in the one
+// `marks` record); the toggle is `DiffModel.setSplit` (`relay_rows`: no read, the place held) and the choice is kept
+// as `layout.diff_split` (`AppBackend.saveLayoutFlags` / `startDiffSplit`). Each side's line is a `DiffLineCell`, its
+// mark a `DiffStageMark`; the band's toggle is `DiffViewToggle`. Side by side, each side's `+` / `−` stands on its own
+// line, nothing on an empty seat, and a press stages that column's line; a conflict's combined diff takes the same
+// two columns, its side band at each column's left edge. Headless: `diff-split` / `split-tools` / `split-copy`
+// (`AutoActSplitVerbs`).
 Rectangle {
     id: diffRow
 
@@ -49,7 +63,8 @@ Rectangle {
 
     required property real rowWidth
     /// How far the file's text has been sent sideways (`DiffCodeScroll.offset`); the gutter and the hunk headings
-    /// stay put (デザイン規約 §diff を横へ送る).
+    /// stay put (デザイン規約 §diff を横へ送る): a gutter that travels takes the `+` out of reach (no staging one line
+    /// while reading a long one), and an `@@` slid off leaves nothing saying which hunk is being read.
     required property real codeX
     /// One measured column of the mono font (`DiffTextMetrics.charW`) — only the wash on an empty line needs it.
     required property real charW
@@ -104,11 +119,11 @@ Rectangle {
     readonly property var pairMarks: diffRow.marks.pair
     /// One of git's conflict fences (`encode::DiffRow`).
     readonly property bool fence: diffRow.ownMarks.fence
-    /// This line ends the file without a newline (デザイン規約 §行末の改行が無いこと).
+    /// This line ends the file without a newline (`DiffLineCell`'s mark).
     readonly property bool noNewline: diffRow.ownMarks.noNewline
     /// "ours" / "theirs" / "" — which side of a conflict the line came from (`side_of_markers`).
     readonly property string side: diffRow.ownMarks.side
-    /// The find bar's hits on this line, and the one it stands on (デザイン規約 §diff の中を探す).
+    /// The find bar's hits on this line, and the one it stands on (`DiffFindBar`).
     readonly property var found: diffRow.ownMarks.found
     readonly property var foundNow: diffRow.ownMarks.foundNow
     readonly property bool pairFence: diffRow.pairMarks ? diffRow.pairMarks.fence : false
@@ -118,11 +133,14 @@ Rectangle {
     readonly property var pairFoundNow: diffRow.pairMarks ? diffRow.pairMarks.foundNow : []
 
     width: diffRow.rowWidth
+    // The list's row, not a code line height (IntelliJ's 1.2 at 13 is 15.6): the row holds the `+` / `−` mark and a
+    // hunk heading's words, which need the room.
     height: Theme.rowHeight
     onRowsGenChanged: diffRow.tellWidth()
     /// Says what this row was laid out at. Guarded: a reading can turn over while the row is still being built,
     /// before its parts exist. **Read off the cells, not off a binding over them** — from a cell's own
-    /// `onInkWidthChanged` such a binding is still one value behind (rules-refs/app-ui.md「幅の申告はセル自身のプロパティから読む」).
+    /// `onInkWidthChanged` such a binding (`inkWidth: codeRoom.inkWidth`) is still one value behind, and a deep row's
+    /// width is filed under the row reused next.
     function tellWidth() {
         if (diffRow.banded)
             return
@@ -151,7 +169,9 @@ Rectangle {
     /// no side and spans the row.
     readonly property bool twoColumns: diffRow.split && !diffRow.banded && diffRow.kind !== "meta"
                                        && diffRow.kind !== "mode"
-    /// A changed line is bold, a fence is not (規約 §シンタックスハイライト). Named here because **the ruler has to be
+    /// A changed line is bold, a fence is not. Three roles: the ground says which side (`groundOf`), the weight says
+    /// the line changed, and the syntax colours every line's words — so a changed line's code reads in the same words
+    /// as its context. A fence is scaffolding and keeps the plain weight. Named here because **the ruler has to be
     /// set in the weight the row is drawn in** — a bold face that advances differently puts every wash and press out
     /// (`DiffTextSelect` reads it off this row for the same reason).
     readonly property bool codeBold: !diffRow.fence && (diffRow.kind === "add" || diffRow.kind === "del")
@@ -194,7 +214,9 @@ Rectangle {
              // The window's band ground (`PaneHeader`): the hunk's own would make a commit and its hunks read as one
              // kind of row.
              : kind === "commit" ? Theme.bgElevated
-             // The empty seat of a split row (規約 §diff を 2 列で読む): a step up, so it does not read as a blank line.
+             // The empty seat of a split row (across from a line with no partner): a step up, so it does not read as a
+             // blank line. No token of its own: the value is also a hunk heading's, but a heading spans the row and
+             // carries words, so the two do not mix.
              : kind === "" ? Theme.bgElevated
              : "transparent"
     }
@@ -214,8 +236,8 @@ Rectangle {
         Tips.dropIn(diffRow)
     }
     ListView.onReused: diffRow.pooled = false
-    /// The pointer is on this hunk's heading, so the whole hunk lights — only the heading does it
-    /// (デザイン規約 §diff の中のステージ).
+    /// The pointer is on this hunk's heading, so the whole hunk lights in `bgHover` — what the heading's buttons take,
+    /// shown as they are reached. Only the heading does it: a pointer on a line is reading (デザイン規約 §diff の中のステージ).
     readonly property bool inAimedHunk: diffRow.partial && diffRow.hoverLine < 0 && diffRow.hoverHunk === diffRow.hunk
     /// The mark's seat between the numbers, none on a heading (`DiffTextMetrics.seatW`, デザイン規約 §diff の中のステージ).
     readonly property int stageSeatW: diffRow.banded ? 0 : diffRow.seatW
@@ -326,7 +348,8 @@ Rectangle {
     }
 
     // ---- two columns ---------------------------------------------------------------------------------------------
-    // Old side left, new right, each on its own ground; both travel by the one send (デザイン規約 §diff を 2 列で読む).
+    // Old side left, new right, each on its own ground; both travel by the one send (`DiffPane`'s `codeScroll`). The
+    // hairline between them is `borderSubtle` (the pane edges' hairline) and breaks on a heading's row, which spans.
     Loader {
         id: splitBody
         active: diffRow.twoColumns
@@ -485,7 +508,10 @@ Rectangle {
             spacing: Theme.spaceXs
             // Unstaged side only: on the staged side, unstaging puts the hunk back where it can be discarded. Pressed
             // through (デザイン規約 §回数押し), with no ask bar — it stands in the heading of what it takes. Shaped like
-            // a confirmed menu row: a frame around one word in a heading reads as a box come loose.
+            // a confirmed menu row: a frame around one word in a heading reads as a box come loose. `Discard hunk`
+            // stays the word: what goes is the hunk as this diff shows it, from the working tree alone
+            // (`platitude_core::stage::discard_partial`, no `--cached`), so what is partly staged survives
+            // (`stage_integration::discard_a_single_hunk` holds "the index is untouched"). The hunk is the only unit.
             ActionButton {
                 id: discardHunkButton
                 /// The plain delete's ink and count — the hunk comes back from the discard record, and a hunk is the
@@ -496,8 +522,10 @@ Rectangle {
                 text: qsTr("Discard hunk")
                 font.pixelSize: Theme.fontSm
                 // Asleep until the pointer is on this heading (デザイン規約 §diff の中のステージ), the press mark with it —
-                // the one grey hold mark (§回数押しの色): the heading is one grey line. Its shape still says it takes
-                // several.
+                // the one grey hold mark (§回数押しの色): headings repeat once per hunk and must not read louder than
+                // the file's one `Stage file`, so from `@@` to the mark the heading is one grey line (user decision —
+                // ask before changing). Its shape still says it takes several. That grey has no hue to step down, so
+                // off it falls to §無効's `textMuted` (`HoldIcon.ink`).
                 tone: diffRow.underPointer ? discardHunkButton.discardTone : Theme.textSecondary
                 holdHue: discardHunkButton.tone
                 holdTone: discardHunkButton.discardTone
@@ -509,11 +537,16 @@ Rectangle {
                 onHeld: diffRow.discardRequested(diffRow.hunk)
             }
             // The file rows' `+` / `−` colours, only under the pointer; at rest `textSecondary`, the `@@` line's own
-            // (デザイン規約 §diff の中のステージ).
+            // (`diffHunkHeaderFg` is the same value), never a `*Dim` — dimmed words read as disabled
+            // (デザイン規約 §diff の中のステージ). `fontSm` with the discard beside it, under the band's `fontMd`
+            // `Stage file`: the smaller scope is the smaller type. All lit, the 2–4 words of the hunks would outshout
+            // the one word that stages the file.
             ActionButton {
                 id: stageHunkButton
                 // As deep as the held button beside it, so the two words stand on one line: the hold mark makes that
-                // one the deeper (by an amount the face decides), and a `Row` sets its children by their tops.
+                // one the deeper (by an amount the face decides), and a `Row` sets its children by their tops — at its
+                // own depth this word stands 4px high on macOS, 2px on Windows. Headless: `hunk-tools`' `level=` (the
+                // `fonts` tier, shot on macOS every push).
                 height: discardHunkButton.visible ? discardHunkButton.height : stageHunkButton.implicitHeight
                 text: diffRow.staged ? qsTr("Unstage hunk") : qsTr("Stage hunk")
                 font.pixelSize: Theme.fontSm
@@ -525,4 +558,5 @@ Rectangle {
         }
     }
     // No per-line discard: a bare `×` has no words to say what it takes (デザイン規約 §回数押し「回数押しの的は文字を持つ」).
+    // One line goes by staging the hunk's other lines, then discarding the hunk.
 }

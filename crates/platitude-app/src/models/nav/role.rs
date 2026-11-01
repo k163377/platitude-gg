@@ -102,6 +102,11 @@ pub(super) enum Role {
     Folder,
     /// How far a local branch stands from its upstream. Past the end of
     /// `NavItem`: no folder row is measured, so these carry no field.
+    ///
+    /// Roles, not a string built here (`↑a ↓b`): the side that draws the
+    /// marks holds the counts (`HeadTrack`). Not a slot per row either:
+    /// the section tells `changed()` only when rows move, so a binding
+    /// over a slot would never be weighed again.
     Ahead,
     Behind,
 }

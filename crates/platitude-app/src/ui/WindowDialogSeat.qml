@@ -7,7 +7,10 @@ import platitude
 import platitude.ui
 
 // The settings screen and the clone box (with the clone's model and folder chooser), each built on its first opening
-// through the doors below (rules-refs/app-ui.md「窓が黙って実体化するダイアログは Loader の後ろに置く」).
+// through the doors below (rules-refs/app-ui.md「窓が黙って実体化するダイアログは Loader の後ろに置く」). Built eagerly
+// under `Main`, they would weigh on the working set of a window that opens no repository, and its floor would rise as
+// the settings screen grows. Each door sets its loader `active` and then calls the item: the build is synchronous, so
+// the item is there on the next line.
 //
 // The Loaders fill the seat: the dialogs size off their parent (`AppDialog.fills`), and an unsized loader opens them
 // as an empty strip.
@@ -19,7 +22,9 @@ Item {
     required property var tabsModel
 
     /// Both screens built up front, for a caller that reads their properties before opening them (the harness).
-    /// False in every window a person opens.
+    /// False in every window a person opens. `WindowHarness` raises it only on a run with a verb or the identity hook:
+    /// the window's verbs read `opened` and the like before opening (`WindowDialogActs` / `WindowSettingsActs`), and a
+    /// null there is a dead run.
     property bool keepBuilt: false
 
     /// The dialogs are null until built — on first opening, or up front with [`keepBuilt`].
@@ -29,8 +34,8 @@ Item {
     /// Whether the settings screen is up — the identity gate holds itself back behind it (`IdentityGate`).
     readonly property bool settingsOpened: settingsLoader.item !== null && settingsLoader.item.opened
 
-    /// Opens the clone box at the open repository's folder (as `openRepositoryPicker` does), else the folder
-    /// dialog's own.
+    /// Opens the clone box beside the open repository (`urlpath::picker_folder_url`, the one place the picker asks
+    /// too), else the folder dialog's own folder: a second clone of a repository usually goes beside the first.
     function startClone() {
         const near = seat.curPage !== null ? seat.curPage.pageTab.pickerFolderUrl : ""
         cloneLoader.active = true
@@ -40,7 +45,7 @@ Item {
         settingsLoader.active = true
         settingsLoader.item.openAt(category)
     }
-    /// The same door, told whom it was opened on before it opens (デザイン規約 §アバターを与える).
+    /// The same door, told whom it was opened on before it opens (a face's pen, `AvatarButton`).
     function openAvatarSettings(name, email) {
         settingsLoader.active = true
         settingsLoader.item.prefillName = name
@@ -53,7 +58,8 @@ Item {
     CloneModel {
         id: cloneModel
         // Joined here: the clone happens before there is a tab, and opening one is the strip's job
-        // (`models/clone.rs`).
+        // (`models/clone.rs`). It lands as an opened folder does — a tab joins and comes to the front — with the box
+        // gone down first.
         onCloneDone: path => {
             if (cloneLoader.item)
                 cloneLoader.item.landed()
@@ -80,6 +86,8 @@ Item {
             }
         }
     }
+    // Its own instance, not `Open repository`'s (`Main.folderDialog`): sharing one, each would carry off the other's
+    // `currentFolder`.
     FolderDialog {
         id: cloneFolderDialog
         title: qsTr("Where to put it")

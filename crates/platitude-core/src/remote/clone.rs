@@ -12,13 +12,17 @@ use crate::process::{GitCommand, GitExecutor};
 /// becomes.
 ///
 /// The destination is always named, or the caller would have to parse
-/// git's human-facing `Cloning into '…'`
-/// (rules-refs/core.md「`remote::clone` は行き先を必ず名指しする」).
+/// git's human-facing `Cloning into '…'`, and only machine-readable output
+/// is parsed (core.md §git サブプロセス規約).
 ///
 /// The parent is the working directory, so git's refusals name the
 /// destination as the dialog spells it. git makes missing leading folders
 /// and refuses a non-empty destination; that comes back untouched in
-/// [`GitError::Failed`].
+/// [`GitError::Failed`] — a destination taken or a URL that does not
+/// answer alike, and those words are the dialog's.
+///
+/// The one write with no session: it goes through no `RepoSession` queue,
+/// and its one caller is the app's `Hub::clone_repo`.
 pub async fn clone(
     executor: &GitExecutor,
     url: &str,

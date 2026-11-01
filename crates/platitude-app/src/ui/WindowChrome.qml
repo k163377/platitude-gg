@@ -45,8 +45,10 @@ Item {
     /// screenshot shows where the hit test was told it is. It stands for both runs, which move together.
     property string sentStrip: "none"
 
-    /// Tells the hit test where the band's grab-runs are, in scene coordinates. Called on the strip's layout changes
-    /// and on a window resize, which the strip cannot see. Two runs — past the last tab, and the seam before the
+    /// Tells the hit test where the band's grab-runs are, in scene coordinates: the grab is the platform's own
+    /// gesture (HTCAPTION), and the scene only says where. Not `startSystemMove`: it keeps Qt's hit test, fault and
+    /// all (`winframe::take_frame_hit_test`). Called on the strip's layout changes and on a window resize, which the
+    /// strip cannot see. Two runs — past the last tab, and the seam before the
     /// window buttons — both reaching the band's top, so one bottom carries them.
     function reportCaptionStrip() {
         if (!chrome.window.captionMerged || chrome.topBar.grabRunItem === null)

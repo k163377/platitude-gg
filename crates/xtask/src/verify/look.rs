@@ -484,9 +484,11 @@ fn off_ps(pid: u32, shot_dir: &Path) -> Result<Threads, String> {
 }
 
 /// The dump, written by `MiniDumpWriteDump` itself from a PowerShell of
-/// its own — a process, so the ceiling can end it ([`bounded`]). Not
-/// `rundll32 comsvcs.dll,MiniDump`: its file holds no memory and its own
-/// taker cannot open it (internal-docs/ハング調査.md §次の 1 回で何が読めるか).
+/// its own (`Add-Type`) — a process, so the ceiling can end it
+/// ([`bounded`]). Not `rundll32 comsvcs.dll,MiniDump … full`: its header's
+/// flags claim full memory while the file holds only the stacks, and its
+/// ACL admits only SYSTEM / Administrators, so its own taker cannot open
+/// it.
 ///
 /// `PGG_PID`, `PGG_PATH`, `PGG_KIND` and `PGG_WRITE` are filled in by
 /// [`dump_of`]; the path sits in a single-quoted literal, which a temp

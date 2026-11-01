@@ -4,9 +4,12 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The find bar over the diff (デザイン規約 §diff の中を探す): what a query marks and where the bar stands, how it steps
+/// The find bar over the diff (`DiffFindBar`): what a query marks and where the bar stands, how it steps
 /// round, what two typed lines and the three options do, how it reads two columns, how it is seeded from the hand's
-/// selection, and how it goes. Every verb opens one file's diff as `diff-file` does, then does its one thing.
+/// selection, and how it goes. Every verb opens one file's diff as `diff-file` does, then does its one thing. All ten
+/// are run on `--preset manyhunks`' `notes.txt` (`reworded` on each of its 20 added lines). All ten defer their
+/// completion (`AutoActCompletion.defersCompletion`): left to the page, `page=settled` completes the run before the
+/// line its must_say reads is said.
 // `Item` because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
@@ -249,7 +252,8 @@ Item {
                 return "diff_find_long open=" + bar.open + " matches=" + m.findCount
                        + " overflows=" + bar.boxOverflows + " scrolled=" + (bar.boxScrolled > 0)
                        + " focused=" + bar.boxFocused + " sent=" + Math.round(bar.boxScrolled)
-            // `diff-find` / `diff-find-lines`: the plain answer, and how many rows the standing hit covers.
+            // `diff-find` / `diff-find-lines`: the plain answer, and how many rows the standing hit covers. `query=`
+            // last: it varies, so a must_say ends before it.
             return (settled.act === "diff-find-lines" ? "diff_find_lines" : "diff_find")
                    + " open=" + bar.open + " matches=" + m.findCount + " at=" + m.findAt
                    + " lines=" + bar.lines + " spans=" + acts.rowsStoodOn()

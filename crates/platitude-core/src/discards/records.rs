@@ -1,9 +1,9 @@
-//! Reading Platitude GG's own record ([`RECORD_REF`], 破棄記録仕様.md §2):
+//! Reading Platitude GG's own record ([`RECORD_REF`]):
 //! one line of the record's reflog each, in one of two shapes (`record`
 //! writes them):
 //!
 //! - **a copy** of thrown-away work — the stash-shaped commit itself
-//!   (§2.1), its `Operation:` one of `discard`, `hunk`, `lines`,
+//!   (`copy`), its `Operation:` one of `discard`, `hunk`, `lines`,
 //!   `untracked`, `reset --hard`;
 //! - **a note** of anything else — a commit whose first parent is what was
 //!   taken (a branch's tip, a stash entry, the commit a tag or a worktree
@@ -67,12 +67,12 @@ impl Line {
     }
 }
 
-/// The `Operation:` words a copy carries (§2.1).
+/// The `Operation:` words a copy carries.
 pub(super) const COPY_OPERATIONS: [&str; 5] =
     ["discard", "hunk", "lines", "untracked", "reset --hard"];
 
 /// The record as read: its lines, newest first, to `limit` (the graph's
-/// window, §3), and the parts `restored` notes name, by line and part
+/// window, `read_repo`), and the parts `restored` notes name, by line and part
 /// number.
 #[derive(Debug, Default)]
 pub(super) struct Read {

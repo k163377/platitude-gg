@@ -1,7 +1,9 @@
 //! The `Co-authored-by` lines a commit message carries. For a commit, git
 //! is asked (`%(trailers:…)` in `details`) and [`parse_co_authors`] splits
 //! the packed field; a message still being typed has no object to ask
-//! about, so [`co_authors_in`] reads the text itself.
+//! about, so [`co_authors_in`] reads the text itself — git's rule copied,
+//! since `git interpret-trailers` would be a process per keystroke. The
+//! commit editor's `+N` follows it as the text is typed.
 
 /// What git is told to put between trailer values (the unit separator):
 /// it cannot appear in a name or an address, and is not the NUL that ends

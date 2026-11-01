@@ -41,7 +41,7 @@ pub(super) const TABLE: &[Verb] = &[
     // refuses it and the box says so (デザイン規約 §答えの要らない報せ).
     // The pair is the refused run and one that goes through, since a box
     // refusing everything frames the same. Every field is the output side
-    // (rules-refs/app-ui.md「断りのツールチップ」): `box=` drawn and focused,
+    // (`AutoActNavBoxVerbs.qml`, `tag_name_box`): `box=` drawn and focused,
     // `tip=` read through the box, `text=` the sentence the reader gets.
     // The other names a tag's box refuses before the press: git 2.55's own
     // rules (`HEAD`), and the tags already there — taken, a folder's
@@ -350,7 +350,7 @@ pub(super) const TABLE: &[Verb] = &[
             ),
         ],
         // No preset: a worktree of `demo-repo worktrees` opened with
-        // `--repo` is the one this tab stands in (verbs.md).
+        // `--repo` is the one this tab stands in (`AutoActNavVerbs.qml`).
         plain: "card=true offered=true blocked=true tip=true code=worktree remove branch=true \
                 presses=2 cut=false says=This tab is showing this worktree",
     },
@@ -760,7 +760,9 @@ pub(super) const TABLE: &[Verb] = &[
     // over stood-in models; left for a window is the lookups — the real
     // model answering, for the row that asked — which `says=` claims, one
     // run per lookup a section makes. `says=` carrying a name is also the
-    // row having opened (the sentence is empty until then).
+    // row having opened (the sentence is empty until then). The colour of
+    // the counts (`HeadTrack`) is `tst_navfacts.qml`'s too. Each claim is
+    // keyed on the argument alone, not the preset.
     Verb {
         name: "nav-open",
         when: &[
@@ -771,10 +773,12 @@ pub(super) const TABLE: &[Verb] = &[
                 Arg::Is("branch:2"),
                 "says=main local= track=1/0 held= up=origin/main gone=false",
             ),
-            // A reading git can no longer reach: `gone` is a role and
-            // `upstreamOf` answers only refs that exist, so a row reading
-            // just one of the two loses this state (`up=` empty,
-            // `gone=false`).
+            // A reading git can no longer reach (`--preset gone`, the one
+            // repository with a `[gone]` upstream; the row wears the
+            // warning colour and `!`): the role (`Role::Bucket`) reaching
+            // the row. `gone` is a role and `upstreamOf` answers only refs
+            // that exist, so a row reading just one of the two loses this
+            // state (`up=` empty, `gone=false`).
             (
                 Arg::Is("branch:1"),
                 "says=release-1.2 local= track=0/0 held= up=origin/release-1.2 gone=true",
@@ -791,22 +795,33 @@ pub(super) const TABLE: &[Verb] = &[
             // is the seat with none): opening pushes the rows below, so a
             // stand-in placed by counting whole rows leaves its seat here.
             (Arg::Is("head::1"), "open=true under=1 sat=true"),
+            // `--preset tracked-elsewhere`: `trackedBy`, `worktreeHolding`
+            // and the path's leaf.
             (
                 Arg::Is("remote:1:topic-a"),
                 "says=origin/feature/topic-a local=feature/topic-a track=1/0 held=topic",
             ),
-            // WORKTREES rows on `--preset worktrees` (every annotation
-            // `git worktree list` prints). The folder name leads; the path
-            // is this machine's and rides at the tail. The state is
-            // claimed, not its words (a lock draws no line — the padlock
-            // is all of it). `worktree:1` holds a branch reading a remote:
-            // the lines and counts are that branch's, which no role of
-            // this row carries.
+            // WORKTREES rows: the lines are what BRANCHES says of the
+            // branch held (name, counts, upstream) and the state. The
+            // folder name leads; `why=` / `path=` are free text at the
+            // tail (the path is this machine's), so a claim stops before
+            // them. The state is claimed, not its words. `worktree:1` on
+            // `--preset tracked-elsewhere` holds a branch reading a remote:
+            // the lines and counts (`track=`) are that branch's, asked of
+            // the branches' section in four slots no role of this row
+            // carries. The same argument on `--preset worktrees` lands
+            // this claim on a detached row and fails (read that row off the
+            // picture).
             (
                 Arg::Is("worktree:1"),
                 "says=topic local= track=1/0 held= up=origin/feature/topic-a gone=false \
                  branch=feature/topic-a",
             ),
+            // `--preset worktrees`' gone folder: `Role::Change`. `why=`
+            // (`Folder is gone`) is git's state name, left to the picture.
+            // No claim for a lock (`worktree:3`): a lock draws no line
+            // (`tst_navfacts.qml`) and `Role::Change` carrying `LOCKED` is
+            // `models::nav::field_tests`'.
             (
                 Arg::Is("worktree:2"),
                 "says=gone local= track=0/0 held= up= gone=false branch=gone/branch state=PRUNABLE",
@@ -820,9 +835,12 @@ pub(super) const TABLE: &[Verb] = &[
     // others are read against and which stands elsewhere, both off the
     // index alone (`RemoteTagIndex::carriers_against`); `here_apart=`
     // the copy here weighed by the same test — what the row's own name
-    // wears (`RemoteTagIndex::apart_at`). The empty list means something
-    // only because the run fetches and waits for the reading first
-    // (`AutoActNavBoxVerbs.navOpenTagTimer`).
+    // wears (`RemoteTagIndex::apart_at`); `by=` the remotes whose reading
+    // counts as the right one, empty where they disagree. The picture
+    // shows which lines are marked, never what they were weighed against
+    // (the default remote, not the copy here). The empty list means
+    // something only because the run fetches and waits for the reading
+    // first (`AutoActNavBoxVerbs.navOpenTagTimer`).
     Verb {
         name: "nav-open-tag",
         // `says=` carrying the name is the row having opened; `open=` is
@@ -1023,7 +1041,9 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "counts=true",
     },
     // The same opening inside the folded rail's popup: `peek=true` is the
-    // popup surviving the rows under it moving.
+    // popup surviving the rows under it moving. Neither half proves
+    // anything alone: a row that never opened and one that opened as the
+    // peek went both leave a picture with no lines.
     Verb {
         name: "nav-peek-open",
         when: &[],
@@ -1031,12 +1051,14 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The four ways the pointer leaves the folded rail's open section:
     // `peek=` empty is the section gone, `peek=<kind>` standing, and only
-    // `-into` (the hand inside what it opened) must stand
-    // (verbs.md の `nav-peek-shut` の行). A section on its way out
-    // (`HoverSeat` waits a beat) frames like one standing, so the eye
-    // passes the state these verbs disprove. `top=` follows because
-    // `peek=` alone is a prefix of `peek=branch`; `width=` is the rail's
-    // and stays out of the claim.
+    // `-into` (the hand inside what it opened) must stand — the pair that
+    // keeps a leave that may close apart from one that must not
+    // (`AutoActNavVerbs.qml`). A section on its way out (`HoverSeat` waits
+    // a beat) frames like one standing, so the eye passes the state these
+    // verbs disprove. `top=` follows because `peek=` alone is a prefix of
+    // `peek=branch`; `width=` is the rail's and stays out of the claim.
+    // The claims name `branch` whatever the argument, so another
+    // section's run fails.
     Verb {
         name: "nav-peek-away",
         when: &[],
@@ -1205,14 +1227,17 @@ pub(super) const TABLE: &[Verb] = &[
     // A tag that was made. The write answers before the read that puts
     // the row in TAGS, so the barrier alone passes on an unchanged
     // sidebar; `at=` is the commit asked for, since a count alone passes
-    // a tag left on HEAD.
+    // a tag left on HEAD. The plain claim spells the name, so the argument
+    // is `v9.9-new` and nothing else; `total=4` is the default preset's
+    // three tags and this one.
     Verb {
         name: "create-tag",
         when: &[(Arg::Ends(":box"), "create_tag box=true mode=tag")],
         plain: "create_tag tag=v9.9-new row=1 total=4 at=true",
     },
     // The field's third mode, on the same line; which mode it came up in
-    // is the picture's (the box reads `Tag name`).
+    // is the picture's (the empty box reads `Tag name`, in the `refTag`
+    // frame).
     Verb {
         name: "nav-tag-box",
         when: &[],

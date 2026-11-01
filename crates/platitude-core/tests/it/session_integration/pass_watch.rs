@@ -150,7 +150,7 @@ async fn a_graph_read_again_is_no_longer_behind() {
 /// The fault the screen is driven with reaches the pass's ordinary
 /// reporting arm. An injection that stopped reaching the walk would leave
 /// the `STALE GRAPH` verbs photographing a healthy graph and passing
-/// (rules-refs/app-ui.md「`STALE GRAPH` の動確は `graph-stale` / `graph-stopped`」),
+/// (`graph-stale` / `graph-stopped`, `WindowBadgeActs`' `staleActTimer`),
 /// so the outcome, the words, and the mark are held here.
 #[tokio::test(flavor = "multi_thread")]
 async fn the_fault_the_screen_is_driven_with_fails_the_walk() {

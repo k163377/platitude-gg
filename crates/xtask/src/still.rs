@@ -6,7 +6,10 @@
 //! gate (`perf::sampler::Limits`) sees a build only after the run it
 //! spoiled, so the two are ordered here: `perf` holds the machine still
 //! for its runs; a build announces itself and waits for a hold to lift
-//! before it begins; a hold waits for the builds already announced.
+//! before it begins; a hold waits for the builds already announced. The
+//! hold leaves the CPU gate's foreign limit where it is: that still
+//! answers for the load that is no build of ours (a busy browser, another
+//! program's work).
 //!
 //! Builds are announced where the compiling happens (`app_build::app_exe` /
 //! `app_build::shipped_exe`, `watched::run_step`), so a verb that builds need not
@@ -457,8 +460,19 @@ fn announce(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Announced, S
 
 /// The lock beside `note`, held and still at its own name. A lock file
 /// here can be a dead run's that a reader is sweeping under its lock
-/// ([`announcing`]), so a file found held, or held after the name went,
-/// is opened again (rules-refs/core.md「lock ファイルは握ったまま消し」).
+/// ([`announcing`]), so a file found held (`WouldBlock`), or held after the
+/// name went, is opened again by name: pids come round again and each run's
+/// first announcement takes the same number, so a dead run's leavings and a
+/// new run meet at one name.
+///
+/// The sweepers ([`held`], [`announcing`]) remove a name while still
+/// holding its lock, never after letting go: in the microseconds between,
+/// a newcomer opening the name would hold an inode no longer at it, and its
+/// announcement would leave a note with no lock for the next reader to
+/// clear as litter. Windows behaves as POSIX here (`remove_file` succeeds
+/// on a file anyone has open, the name goes at once, a new file there takes
+/// a lock of its own), so there is no OS branch. A lock file every process
+/// opens stays ([`Name::Shared`], as `verify::ownership` keeps its own).
 fn lock_beside(note: &Path) -> Result<Locked, String> {
     lock_beside_polled(note, &|| {})
 }
@@ -594,8 +608,7 @@ fn live_notes(busy: &Path) -> Vec<Note> {
 /// instant ([`announce`] locks before it writes), or a killed process's
 /// leavings. One somebody holds is a build under way — missing it would
 /// let a hold stand beside it. One nobody holds is litter, taken down
-/// while this holds the lock, as [`held`] does
-/// (rules-refs/core.md「lock ファイルは握ったまま消し」).
+/// while this holds the lock, as [`held`] does (why: [`lock_beside`]).
 fn announcing(lock: &Path) -> Option<Note> {
     let file = File::options().read(true).write(true).open(lock).ok()?;
     match file.try_lock() {

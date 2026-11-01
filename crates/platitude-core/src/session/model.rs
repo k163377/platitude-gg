@@ -37,7 +37,10 @@ pub enum LabelKind {
     RemoteBranch,
     /// Another worktree standing on this commit with no branch out — a
     /// synthetic chip like `Head`. A worktree with a branch out is said by
-    /// that branch's chip instead (`RefLabel::held_elsewhere`).
+    /// that branch's chip instead (`RefLabel::held_elsewhere`). Its text is
+    /// the folder name alone: it names only what it holds, and that a
+    /// worktree stands here is all it says (user decision — ask before
+    /// changing).
     ///
     /// Before `Tag`: the tags must stay the tail of a commit's run for the
     /// TAGS eye's cut ([`LabelIndex::cut`]).
@@ -94,7 +97,10 @@ pub(crate) struct LabelIndex {
 
 impl LabelIndex {
     /// Sorts loose `(commit, chip)` pairs into the run, each commit's chips
-    /// in the order the row draws them.
+    /// in the order the row draws them: the current branch (or the detached
+    /// HEAD marker) first, then by `LabelKind` — locals, remotes, worktree
+    /// markers, tags. Sorted here once: the chip's one name, its unfolded
+    /// card and its tooltip all list in this order.
     pub(crate) fn from_pairs(mut pairs: Vec<(Oid, RefLabel)>) -> Self {
         pairs.sort_by(|(left_oid, left), (right_oid, right)| {
             left_oid.cmp(right_oid).then_with(|| {
@@ -235,8 +241,8 @@ pub struct LogRow {
     /// (`session::carried`).
     pub carried: Option<super::Carried>,
     /// A commit only the discard log's picked entry reaches — drawn for
-    /// that entry, not because the repository holds it (破棄記録仕様.md,
-    /// [`super::ShownDiscard`]). Its edges draw dashed. False everywhere
+    /// that entry, not because the repository holds it
+    /// ([`super::ShownDiscard`]). Its edges draw dashed. False everywhere
     /// else.
     pub provisional: bool,
 }

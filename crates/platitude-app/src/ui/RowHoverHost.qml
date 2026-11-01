@@ -107,7 +107,9 @@ Item {
         })
     }
     /// The hand came onto the chip `anchor` of `oidHex`'s row (or the stand-in's), with `records` to unstack: the
-    /// list opens at once (規約 §hover のツールチップ「展開は即時に開く」).
+    /// list opens at once (規約 §hover のツールチップ「展開は即時に開く」) — so no branch for a hand coming back: on the
+    /// list already out the seat only holds it (`HoverSeat.point` settles, no `openAsked`). Seated again, it would be
+    /// measured off the stack's corner with the sheets taken down, and land a fan right and a `lift` low.
     function pointChip(oidHex, atRow, records, anchor) {
         const key = host.chipKey(oidHex, anchor)
         listSeat.point({
@@ -157,8 +159,9 @@ Item {
     /// above it — and what hangs off it stays, the hand inside it or not: the view puts itself back over it
     /// (`GraphRowWalk.shiftRows`), and the row under the hand asks again as the rows read it (デザイン規約 §hover
     /// のツールチップ「外乱では閉じない」). The stand-in standing for another commit is another chip: what its list said
-    /// is gone (§グラフの中で HEAD を見失わない). What went goes, out or kept, the hand inside it, a menu on the list, or
-    /// not; a choice's rows, with no view putting itself back, let theirs go either way.
+    /// is gone, the hand inside it or not (user decision — ask before changing; `GraphHeadPin`). What went goes, out
+    /// or kept, the hand inside it, a menu on the list, or not; a choice's rows, with no view putting itself back, let
+    /// theirs go either way.
     function rowGone(row) {
         const pin = host.graphPane.headPin
         if (row === pin) {
@@ -257,18 +260,31 @@ Item {
         graceMs: Metrics.hoverKeepMs
         // Behind a menu nothing comes out; under the chip's list the card gives way (the list is the more particular
         // of the two). Only while the list stands, not its beat: `tipDelayMs` outlasts `hoverKeepMs`, so a card asked
-        // for as the hand comes down off the chip opens after the list has gone.
+        // for as the hand comes down off the chip opens after the list has gone. Headless: `ref-list-card`, read
+        // beside `row-card`.
         blockedBy: host.menuDoor !== null ? "menu" : listSeat.state === "shown" ? "list" : ""
-        // A second click waiting out its window holds hover still (規約 §グラフ行のダブルクリック).
+        // A second click waiting out its window holds hover still (`ReclickGesture.armed`): both seats, since
+        // closing is as much a change as opening (`HoverSeat.frozen`) — a card coming or going then is a change nobody
+        // asked for. Headless `graph-reclick-still` (the card's rest
+        // running under the wait) and `graph-reclick-mark` (the mark, taken inside the wait).
         frozen: host.view.renameWaiting
         onOpenAsked: target => host.openRowCard(target)
     }
+    // What keeps the list up is three things only: the hand on that chip's column (`pointed`), the hand inside the
+    // card (`AppCard.pointerInside` → the hold `inside`) and a menu raised from its own rows (the hold `menu`). The
+    // rows answer every leave (`GraphRowDelegate.pointerCrossed`): Qt hands the hover to the card drawn over the chip
+    // before it tells the row the leave — frame-sync hover is dealt from the top and what went is pruned last — so the
+    // card holds itself through the beat that leave starts. Not by swallowing leaves: the row cannot tell the card's
+    // cover from a hand off the column's bare left (the card opens on the right-set chip) to the header, the left
+    // panel or out of the window, and the list would stand where no hand is. Headless `ref-list-leave`
+    // (`0:off` / `0:1` / `0:back` / `0:menu` on `--preset tags`, `head:off` / `head:back` / `head:menu` on
+    // `--preset deep`).
     readonly property HoverSeat listSeat: HoverSeat {
         id: listSeat
         hand: host.hand
         card: refList
         // The list opens the moment the hand is on the chip: a hold lifts with the hand's move, a dismissal with the
-        // hand leaving the chip and coming back.
+        // hand leaving the chip and coming back. Only the card waits its rest (`cardSeat`, the supplement).
         expands: true
         restMs: 0
         graceMs: Metrics.hoverKeepMs
@@ -290,7 +306,10 @@ Item {
     }
     /// The standing menu was raised on a row of the list out — on that list's commit: the menu stands on the list and
     /// holds it, and the hold is that list's (a held target is not handed over, `HoverSeat`); its close lets the
-    /// hand decide again (the hold falling starts the beat).
+    /// hand decide again (the hold falling starts the beat). Never "any menu stands": under the graph's menu the list
+    /// would stay after the hand left it. A list that goes first takes its menu with it (`RepoPage`, `withdraw`).
+    /// Headless: `menu-hover` (against `row-card`), `menu-list` (against `ref-list` and `list-menu`), and
+    /// `ref-list-leave 0:menu` for the list going on the beat once the menu closes with the hand away.
     readonly property bool menuOnList: host.menuDoor !== null && host.menuDoor.area === "refList"
                                        && listSeat.shown && listSeat.target.oid === host.menuDoor.key
     onMenuOnListChanged: listSeat.hold("menu", host.menuOnList)
@@ -340,11 +359,14 @@ Item {
         rowCard.x = at.x
         rowCard.y = at.y
         // A graph row shows the whole subject, so its card glances at the body and offers the rest; a choice's row
-        // shows one cut line, so its card holds nothing back and offers no way out (デザイン規約 §複数のコミットを選ぶ).
+        // shows one cut line, so its card holds nothing back — cut there too, the whole text would be nowhere — and
+        // offers no way out: a door would lead away from what the reader is picking (`ChosenCommitRow`).
         // Assigned, not bound: one card serves both lists.
         const whole = row.wholeMessage === true
-        // Bounded either way — an uncapped body would cover the list it opened from. The whole card gets all the room
-        // under the row: a quarter to the subject, the rest to the body less three rows for author, date and margins.
+        // Bounded either way — an uncapped body would cover the list it opened from, and a subject taller than the
+        // window puts the card's foot off screen. The whole card gets all the room under the row, and stops there:
+        // short of it hides for no reason the reader can see. A quarter to the subject, the rest to the body less three
+        // rows for author, date and margins; only a message at `--preset edges`' walls is cut.
         const below = Math.max(0, host.height - at.y)
         rowCard.bodyRows = whole ? 0 : Metrics.hoverBodyRows
         rowCard.subjectHeight = whole ? below / 4 : host.graphPane.height / 4
@@ -353,8 +375,8 @@ Item {
         rowCard.open()
     }
     /// Opens the chip's names on the chip's own seat: the first row lands exactly on the chip, and the card always
-    /// grows right, into the graph (規約 §グラフ行のダブルクリック) — picking a side by name length would open the same
-    /// chip differently on different rows.
+    /// grows right, into the graph (user decision — ask before changing; `RefListPopup`) — picking a side by name
+    /// length would open the same chip differently on different rows.
     function openRefList(target) {
         host.seatRefList(target)
         refList.open()
@@ -409,8 +431,12 @@ Item {
     /// branch: the chip's frame already says it (デザイン規約 §ref の種別).
     function mateOf(chip, here, oidHex) {
         const name = chip.name
-        // A tag's reading — the copy here, or a remote's on this commit — standing apart from the right one: the test
-        // the left panel's TAGS rows wear their warning by (`NavSectionModel.tagApartAt`), its note said as the line.
+        // A tag's reading — the copy here, or a remote's on this commit — standing apart from the right one, and only
+        // then (user decision — ask before changing): the test the left panel's TAGS rows wear their warning by
+        // (`NavSectionModel.tagApartAt`), its note said as the line, all of it `warning` (`NavFacts.apartLine`). The
+        // line says why itself, as a gone upstream's does: no hover opens over a hover card. Asked by the card row's
+        // oid, which names a local reading and a remote's alike. Headless: `fetch-ref-list`'s
+        // `fetch_ref_list row= apart= says=`.
         if (chip.kind === "tag")
             return host.tagsModel !== null && host.tagsModel.tagApartAt(name, oidHex, host.tagAgainst)
                  ? NavFacts.apartLine(NavFacts.apartNote(host.tagsModel.tagWeighedAgainst(name, host.tagAgainst)))

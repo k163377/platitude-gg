@@ -18,7 +18,9 @@
 //! passphrase prompt, and background reads come in bursts; both share
 //! what the reserve leaves, so however many are running or stalled, a
 //! click finds a slot. A background command overtaken by
-//! [`OVERTAKEN_LIMIT`] interactive ones is served next.
+//! [`OVERTAKEN_LIMIT`] interactive ones is served next. Not two pools
+//! (`n` here plus `n` elsewhere, `2n` in all): the setting reads "N git
+//! processes in all, background a part of them".
 //!
 //! **Waiting ends on the token and leaves nothing behind** —
 //! [`super::GitExecutor::execute`] selects on the command's token, the

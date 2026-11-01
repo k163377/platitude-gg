@@ -22,8 +22,7 @@ Item {
                     "Not a folder name on Windows — it cannot end in a dot")
         }
 
-        /// Where the second click opens no box: what cannot be done, then the folder (デザイン規約 §worktree の名前を変える
-        /// 「箱を開かないもの」).
+        /// Where the second click opens no box: what cannot be done, then the folder (`Words.worktreeRenameWithheld`).
         function test_a_worktree_the_click_cannot_rename_says_why() {
             compare(Words.worktreeRenameWithheld("locked", "vaulted"), "Cannot rename — vaulted is locked")
             compare(Words.worktreeRenameWithheld("gone", "gone"), "Cannot rename — gone is missing")

@@ -1,6 +1,11 @@
 //! Pure rules QML asks by value: every slot reads only its arguments (the
 //! exception app-ui.md grants the `GitFacts` singleton), so a slot that
 //! reads state has no place here.
+//!
+//! Adding an argument to a slot means counting every QML caller
+//! (`grep -rn "<slotName>" --include=*.qml`): nothing type-checks the
+//! call, and a call one argument short leaves the single line
+//! `Error: Insufficient arguments` and kills the calling function there.
 
 use qtbridge::qobject;
 use qtbridge::qtbridge_type_lib::QVariantMap;
@@ -51,7 +56,10 @@ impl GitFacts {
         !platitude_core::discards::recorded_whole(unborn, &not_copied, &paths)
     }
 
-    /// `chips` less the ones `gone` names by key.
+    /// `chips` less the ones `gone` names by key — asked where the chips are
+    /// drawn (`GraphRowDelegate`, `GraphHeadPin`), not by a role: the rows
+    /// are lent out (`QListModel::get`), and `GraphRowItem` is at its
+    /// 15-field cap.
     #[qslot]
     fn chips_shown(&self, chips: Chips, gone: Vec<String>) -> Chips {
         crate::encode::chips_shown(&chips, &gone)
@@ -400,7 +408,8 @@ impl GitFacts {
     /// The move a press on a ref adds up to, in the word
     /// `RepoPage.switchToRef` branches on: `switch` / `materialize` /
     /// `move` / `holder`, or `""` — also for any `kind` but the chip words
-    /// `branch` / `remote`.
+    /// `branch` / `remote` (the chip's own `kind`, which the sidebar's
+    /// `refSwitchRequested` hands on too).
     #[qslot]
     fn switch_action(
         &self,

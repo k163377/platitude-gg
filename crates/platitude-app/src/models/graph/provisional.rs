@@ -1,4 +1,4 @@
-//! The discard log's picked entry on the graph (破棄記録仕様.md): the
+//! The discard log's picked entry on the graph (`platitude_core::discards`): the
 //! session walks its parts' tips and draws what only those tips reach
 //! dashed (`RepoSession::show_discard`); this side answers which rows those
 //! are and where they stand, for the rows to stay lit while every other row
@@ -106,8 +106,8 @@ impl GraphModel {
     }
 
     /// Whether the row is one of the entry's tips drawn as `look`: a copy of
-    /// thrown-away work as an uncommitted row is (破棄記録仕様.md: the picked
-    /// entry's head with its uncommitted row), a dropped stash as a stash's.
+    /// thrown-away work as an uncommitted row is (the picked entry's head
+    /// with its uncommitted row), a dropped stash as a stash's.
     pub(super) fn provisional_tip_drawn_as(&self, row: usize, look: &str) -> bool {
         self.provisional_on
             && self

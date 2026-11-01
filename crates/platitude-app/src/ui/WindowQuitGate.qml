@@ -6,6 +6,15 @@ import platitude.ui
 // the gate vetoes and stands the dialog up, the dialog takes itself down when the queue settles (`QuitWaitDialog`),
 // and the gate closes the window.
 //
+// The app has one close gate (user decision — ask before changing: local writes run to completion). The ☰'s Exit and
+// the band's ✕ both go `TopBar.closeRequested` → `root.close()`, so every way out reaches `Main.onClosing`, which asks
+// `AppBackend.readyToQuit()` (= `Hub::writes_settled`: the open tabs' `local_writes_pending` and the `parked_writes`
+// closed tabs left behind). The gate, the dialog and the yield are this one part. The harness's `Qt.quit()` comes
+// through close as well: an automated run is let through only after `finishAutoAct` (`yields`), and writes after that
+// are guarded by the `take_write_join` join in `Hub::shutdown`.
+// `readyToQuit` is a slot that reads hidden state, the recorded exception: only events and timers call it. A qproperty
+// cannot work — a write a closed tab left behind has no drain to notify it. Headless: `quit-waits` / `quit-locked`.
+//
 // The user must `anchors.fill` it over the window: the dialog sizes off its parent (the `WindowDialogSeat` trap).
 Item {
     id: gate

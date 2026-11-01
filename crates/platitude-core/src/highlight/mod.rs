@@ -13,7 +13,10 @@
 //! past it go out plain.
 //!
 //! Without the file each hunk starts cold, and its first lines can come
-//! out coloured as the file never would: top-of-file rules differ.
+//! out coloured as the file never would: top-of-file rules differ (QML's
+//! `readonly property` is one token or another by where it stands). The
+//! walk is used only where the file still says what the hunk says
+//! (`patch::hunk_agrees`).
 //!
 //! # Conflicts
 //!

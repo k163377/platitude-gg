@@ -186,9 +186,10 @@ fn path_program() -> String {
 /// nothing can hold a handle to a different one (`Hub::executor` is
 /// cloned by every session).
 ///
-/// A named git that does not answer falls back to `PATH`'s (デザイン規約
-/// §設定の画面): obeying it would put the window behind the missing-git
-/// gate, which has no way to the settings box that could fix the path.
+/// A named git that does not answer falls back to `PATH`'s (gitの扱い.md
+/// §対応範囲): obeying it would put the window behind the missing-git
+/// gate, which has no way to the settings box that could fix the path. The
+/// box says why in red each time the screen opens (`SettingsAppPane.load`).
 fn resolve_git(runtime: &tokio::runtime::Runtime, git_path: &str) -> GitChoice {
     if git_path.is_empty() {
         return GitChoice::on_path();

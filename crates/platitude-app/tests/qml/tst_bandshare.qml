@@ -3,7 +3,7 @@ import QtTest
 import platitude.ui
 
 // How the band hands its shortfall out among the state badges, and which of the group's three shapes that leaves
-// (デザイン規約 §ウィンドウの縁 の譲る順).
+// (the steps: `BandStateGroup`'s header).
 //
 // The arithmetic only: which widths go in is the font's and the model's (`PGG_AUTO_ACT=badges`). A window width does
 // not name a shape — the same number folds on one platform's font and keeps its words on another's.

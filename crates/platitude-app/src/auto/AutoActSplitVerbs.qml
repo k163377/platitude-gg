@@ -4,8 +4,11 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The verbs of the diff read side by side (デザイン規約 §diff を 2 列で読む). All three open one file's diff as
-/// `diff-file` does and flip it through the band's own toggle before doing their one thing (`act`).
+/// The verbs of the diff read side by side (`DiffRowDelegate`). All three open one file's diff as
+/// `diff-file` does and flip it through the band's own toggle before doing their one thing (`act`). All three run on
+/// `--preset manyhunks`' `notes.txt`, whose tally is `pairs=20 alone=0 both=120`; `diff-split` also on
+/// `src/steps.rs --preset coloured`, the side where colours are painted again onto the two columns' rows. A run just
+/// past the flip may log `DelegateModel::cancel: index out range N 0` once: Qt's own line, harmless.
 // `Item` because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts

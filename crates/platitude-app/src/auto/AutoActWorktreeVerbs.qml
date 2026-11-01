@@ -14,7 +14,14 @@ import platitude.ui
 /// The argument is `<kind>:<ref>[=<name>][@graph]` — `kind` is `branch` / `remote` / `tag` / `worktree` (by its
 /// folder) or `commit` (`row:<n>` or an id, graph only); `name` what is typed into the box; `@graph` raises the graph
 /// row's menu instead of the left menu row's. The box can only be typed into on the graph: the left menu's box is
-/// filled as it opens, and nothing opens it holding a name.
+/// filled as it opens, and nothing opens it holding a name, so a left run stops at the empty box.
+///
+/// The repositories: `--preset basic` (`branch:feature/topic-a` free, `branch:main` the current branch,
+/// `remote:origin/feature/remote-only` with no local branch — a following one is made, `tag:v0.2` the box alone),
+/// `--preset worktrees` (`feature/topic-a` held by another worktree), `--preset rebase-conflict`
+/// (`feature/clash`, held by the rebase stopped here) and `--preset worktree-places` (places taken or recorded, a free
+/// one, a folder long enough to be cut, a branch held by a worktree stopped mid-rebase; and the box's refusals on
+/// `commit:row:0=<name>`). What each answers is its row in `verify/verbs/nav.rs`.
 // An `Item` only because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
@@ -350,7 +357,9 @@ Item {
             }
             if (op.mode === "refused") {
                 // Somebody else takes the name first — through the product's own door, ahead in the queue — while the
-                // box still holds it unrefused: the refs that would refuse it have not been read again yet.
+                // box still holds it unrefused: the refs that would refuse it have not been read again yet. Writes run
+                // one after another, so git always turns the worktree down after it (`a branch named … already
+                // exists`). Run with `--allow-write-failure`.
                 op.input("taken", () => {
                     acts.repoTab.createBranch(op.naming, op.witnessed("oid"), false)
                 })
@@ -364,7 +373,8 @@ Item {
                 return true
             }))
             op.stop()
-            // git turns the worktree down: the bar is the answer, the log stays shut (`write_notice log=`).
+            // git turns the worktree down: the bar is the answer, in the gesture's yellow, and the log stays shut
+            // (`write_notice log=`; user decision — ask before changing).
             if (op.mode === "refused")
                 acts.driver.barrierNotice.start()
         }
@@ -377,6 +387,10 @@ Item {
     /// opened through its door holding it, since nothing types into it) or at the reason no box opened; `worktree-rename`
     /// sends `<name>` and waits for the listing that names the new folder (デザイン規約 §グラフ行のダブルクリック).
     /// `worktree-rename` has no `order`: a rename withheld from the box ends on the reason after the second click.
+    /// The left menu's named form skips the clicks, so the gesture itself is the bare form's to show. The fixtures are
+    /// `--preset worktrees`' `detached` (no branch: the folder's box), `topic` (renames its branch) and `vaulted`
+    /// (locked: no box, the reason names the folder, not the lock's own sentence). The worktree this tab stands in is
+    /// `worktree-rename-stand`'s (`WindowTabActs`).
     /// The worktree as the run found it — its folder's whole path, and the commit it stands on — are witnesses (`full`,
     /// `oid`): the rename takes the folder's row away.
     PageStage {

@@ -28,16 +28,17 @@ pub struct DiffRow {
     pub text: String,
     /// What changed inside this row (`platitude_core::intraline`), as runs
     /// of places in the line as spelled ([`spelled_ranges`]); the pane
-    /// lays the stronger wash there (デザイン規約 §シンタックスハイライト).
+    /// lays the stronger wash there (`DiffLineCell`).
     pub emph: Runs,
     /// One of git's conflict fences (`<<<<<<<` / `|||||||` / `=======` /
     /// `>>>>>>>`); the pane drops its voice for these
-    /// (デザイン規約 §シンタックスハイライト).
+    /// (`DiffLineCell.fence`).
     pub fence: bool,
     /// The line ends its side without a newline — git's
-    /// `\ No newline at end of file`, folded onto this row
-    /// (デザイン規約 §行末の改行が無いこと). git prints one note per side,
-    /// so the row it lands on says which side.
+    /// `\ No newline at end of file`, folded onto this row (the pane draws
+    /// it as a mark at the line's end, `DiffLineCell`). git prints one note
+    /// per side, so the row it lands on says which side; in a combined
+    /// diff git prints none.
     pub no_newline: bool,
     /// The hunk and the line within it (-1 on the hunk header) — the
     /// indices [`platitude_core::patch::HunkSelect`] addresses.
@@ -63,8 +64,9 @@ pub struct LineMarks {
     pub no_newline: bool,
     pub side: String,
     /// The find bar's hits on this line, and among them the one the bar
-    /// stands on, laid the way the row draws them (デザイン規約 §diff の中を探す).
+    /// stands on, laid the way the row draws them (`DiffFindBar`).
     /// Written after the rows by `DiffModel::lay_found`; empty at birth.
+    /// Here, not roles of their own: `DiffLineItem` has all 15 of its roles.
     pub found: crate::encode::markup::Runs,
     pub found_now: crate::encode::markup::Runs,
 }
@@ -109,8 +111,7 @@ impl Record for LineMarks {
 }
 
 /// The marks of one row of the diff: its own line's, and — on a split
-/// row that has a line on the right — that line's as well
-/// (デザイン規約 §diff を 2 列で読む).
+/// row that has a line on the right — that line's as well (`SplitRow`).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Marks {
     pub own: LineMarks,
@@ -148,11 +149,19 @@ impl platitude_core::mem::Footprint for Marks {
 
 /// Whether the patch has a new side and no old one (untracked, or newly
 /// added to the index); the pane drops piecemeal staging for it
-/// (デザイン規約 §diff の中のステージ).
+/// (デザイン規約 §diff の中のステージ). Its one hunk, all added, is the
+/// whole file: `Stage hunk` would say the header's `Stage file` a step
+/// quieter and each line's `+` repeat it line by line, so only the
+/// header's word stays (`Unstage file` on the staged side), and the rows
+/// stay plain under the pointer — a ground lit where nothing can be aimed
+/// offers what is not there.
 ///
 /// The new side has to be named: a headerless patch parses with both
 /// sides empty ([`platitude_core::parse::diff::parse_patch`]), and
-/// unknown is not new.
+/// unknown is not new. An untracked file and a staged new one give git
+/// output identical to the byte, and only `--- /dev/null` tells. A deletion
+/// is not matched and keeps its tools: all its lines are `−`, but they are
+/// on the old side, and staging part of one means something.
 pub fn is_new_file(patches: &[FilePatch]) -> bool {
     !patches.is_empty()
         && patches.iter().all(|p| {
@@ -166,7 +175,20 @@ pub fn is_new_file(patches: &[FilePatch]) -> bool {
 /// breaking what it stores, and which: `"gitlink"` (a `Subproject commit`
 /// line) or `"lfs"` (a file through Git LFS — the pointer git keeps); `""`
 /// where parts can be taken. The pane offers the whole file only, as for a
-/// new one, and says why (デザイン規約 §diff の中のステージ).
+/// new one — the header's `Stage file` / `Unstage file` and the file's
+/// whole discard — and says why (デザイン規約 §diff の中のステージ; user
+/// decision — ask before changing): a tool other files have, missing with
+/// no reason, reads as a bug. Which is decided by mode `160000` and by
+/// git's `filter=lfs` attribute, also where Git LFS does not run: the
+/// attribute says what the file is.
+///
+/// What a part would do: git takes a part of a pointer's diff and stores a
+/// broken pointer, and a discard leaves a fragment of one or an empty file
+/// in the working tree; a part of a gitlink's is `corrupt patch for
+/// submodule` (128). Core's `stage` does not refuse them: the screen is
+/// the gate. Headless `diff-file` (`diff_pieces offered= whole=`): the
+/// hunk heading's words stand without a hand while parts are offered, so a
+/// picture shows them, but a line's `+` stands only under the hand.
 pub fn whole_only_why(patches: &[FilePatch]) -> &'static str {
     if patches.iter().any(|p| p.gitlink) {
         "gitlink"
@@ -253,6 +275,8 @@ pub fn flatten_patches(
             // That commit's mode change, under its band: the two modes as
             // git prints them, a colon apart (markup keeps it as it is, as
             // it would not a space), worded by the pane (`Words.modeLineOf`).
+            // In the text, not a role of their own: `DiffLineItem` has all
+            // 15 of its roles.
             if let Some((from, to)) = &patch.mode_change {
                 rows.push(spanning("mode", &format!("{from}:{to}"), at));
             }
@@ -290,7 +314,7 @@ pub fn flatten_patches(
                 markers: String::new(),
             });
             for (line_index, line) in hunk.lines.iter().enumerate() {
-                // The note rides the row above (デザイン規約 §行末の改行が無いこと);
+                // The note rides the row above (`DiffRow::no_newline`);
                 // after a hunk header there is none, and none is invented.
                 if line.kind == DiffLineKind::NoNewline {
                     if let Some(row) = rows.last_mut()
@@ -337,12 +361,14 @@ pub fn flatten_patches(
     rows
 }
 
-/// One row of a diff read side by side (デザイン規約 §diff を 2 列で読む).
+/// One row of a diff read side by side (the app's `DiffRowDelegate`).
 ///
 /// A run of removals followed by a run of additions pairs k-th with k-th —
 /// the pairing the in-line emphasis was worked out by
-/// (`platitude_core::intraline::hunk_marks`); the longer run's tail stands
-/// alone. Rows that are not lines keep the left and have no right.
+/// (`platitude_core::intraline::hunk_marks`), so the two cannot disagree;
+/// the longer run's tail stands alone, and a context line stands on both
+/// sides. Rows that are not lines (hunk headings, a commit's band, the
+/// binary note) keep the left, have no right, and are drawn full width.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SplitRow {
     /// The old side, or `kind == ""` for nothing there.

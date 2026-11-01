@@ -420,7 +420,9 @@ pub enum NameClash {
     Under(String),
     /// One that differs only in letter case: the same file to a disk
     /// that ignores case, which a repository may be opened from at any
-    /// time. Carries the one in the way.
+    /// time, so it clashes on every disk. There git turns the loose ref
+    /// down naming a name nobody has (`a branch named 'C3' already exists`,
+    /// 2.55.0.windows.3). Carries the one in the way.
     Case(String),
 }
 

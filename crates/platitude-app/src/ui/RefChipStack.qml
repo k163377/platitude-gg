@@ -4,14 +4,27 @@ import QtQuick
 import platitude.ui
 
 // The chip column of one commit: the front card (`RefChip`) and behind it one sheet per colour the row carries — the
-// front card's own colour may take a second, saying "and more of these" — while the card's `+N` counts the names
-// (デザイン規約 §重ね表示). The fan goes down and right within the column's width, pushing the front card left; the
-// card the chip unfolds into grows the same way over it (§グラフ行のダブルクリック).
+// front card's own colour may take a second, saying "and more of these" — while the card's `+N` counts the names.
+// The fan goes down and right within the column's width, pushing the front card left; the card the chip unfolds into
+// grows the same way over it (`RefListPopup`).
+//
+// The row's other refs are said on two channels, colour and count, and neither can be read off the other: one colour
+// is one sheet however many carry it, so a row of 41 tags draws the very fan a row of 2 does and only `+41` tells
+// them apart. One sheet per colour, not per name: the colour is what a chip says first (frame = kind,
+// デザイン規約 §ref の種別), and a sheet per name only says it again. The one repeat is the sheet straight behind the
+// front card in the card's own colour, at the same step as any other ([`sheets`]). Six colours are counted — the five
+// frame colours and a tag's dimmed step (`RefChip.kindKeys`) — so five sheets at most.
+//
+// A sheet is its kind's chip with only the edge showing: the frame and the kind's ground (user decision — ask before
+// changing; what shows is a `spaceXs / 2` strip, and painted in, it reads as neither a card nor a frame). The deepest
+// sheet's right edge stands where a bare chip's would, and the front card moves left by the fan. A left edge that
+// differs row to row is accepted: the hover card opens from the front card's top left down and right, onto the ground
+// the fan stands on.
 Item {
     id: stack
 
     /// The row's records, in the order core sorted them: the current branch (or the detached HEAD marker) first, then
-    /// locals, remotes and tags (`build_label_map`). The front card is the first of them.
+    /// locals, remotes, worktree markers and tags (`LabelIndex::from_pairs`). The front card is the first of them.
     property var records: []
     /// How wide the column leaves this: the front card is cut to what is left of it after the fan.
     property real maxWidth: Metrics.labelColW
@@ -25,10 +38,15 @@ Item {
     /// The mark as the card is actually wearing it, for the run that photographs the wait (`RefChip.waiting`).
     readonly property alias chipWaiting: frontChip.waiting
 
-    /// How far each sheet stands right of the one in front: the card's half gap, so what shows is a card's edge.
+    /// How far each sheet stands right of the one in front: the card's half gap, so what shows is a card's edge
+    /// (user decision — ask before changing: at `spaceXs` the fan reaches too far right).
     readonly property real step: Theme.spaceXs / 2
     /// How far each sheet falls: the steepest whole step the row's sheet count fits, one rate for the whole row,
-    /// between a border and [`step`] (デザイン規約 §重ね表示).
+    /// between a border and [`step`] — steeper than the step, what shows is a band of the sheet's ground. One rate
+    /// for the row (user decision): stepped down with depth, only the deepest row's last sheet turns and slides
+    /// sideways. Not a flat border either (user decision): the edges touch into one thick line, and a one-sheet row
+    /// reads as a shadow. What has to fit is the chip's height and the fan's depth with a border free above and below
+    /// ([`fanDepthMax`]) — count it again when a colour joins `RefChip.kindKeys`.
     readonly property real drop: {
         if (stack.sheets.length === 0)
             return stack.step
@@ -82,7 +100,8 @@ Item {
     /// The widest fan, which the column's floor keeps back (`GraphColumnMetrics.chipFurnitureW`).
     readonly property real fanMaxW: stack.maxSheets * stack.step
     /// How far the stack rises off the row's middle, so the row centres card and fan together, the odd pixel above
-    /// (デザイン規約 §重ね表示).
+    /// (user decision — ask before changing): with the card alone centred, a deep row's fan spills down and sits on
+    /// the row's floor.
     readonly property real lift: Math.floor(stack.fanDepth / 2)
     /// …and with every sheet drawn, as `stackedWidth`: where the stack stood as the reader saw it.
     readonly property real stackedLift: Math.floor(stack.sheetsStacked.length * stack.drop / 2)

@@ -3,8 +3,10 @@ import QtQuick.Controls.Fusion
 import platitude.ui
 
 // The mark a changed line puts out for the hand: `+` stages, `−` unstages — the direction of the write, not the kind
-// of line; unframed (デザイン規約 §diff の中のステージ). Hidden rather than unbuilt off the pointer: the pointer moves
-// faster than a canvas can be built and painted.
+// of line (an added and a removed line on the unstaged side both stage with `+`); in the pair's colours, unframed —
+// a frame at this size reads as a box come loose — with no ground but the pointer's `bgHover`
+// (デザイン規約 §diff の中のステージ). Hidden rather than unbuilt off the pointer: the pointer moves faster than a
+// canvas can be built and painted.
 Rectangle {
     id: mark
 

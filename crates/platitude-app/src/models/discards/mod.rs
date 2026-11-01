@@ -1,5 +1,5 @@
-//! What destructive operations took away from the repository on screen
-//! (破棄記録仕様.md), read off git's reflogs and Platitude GG's own record
+//! What destructive operations took away from the repository on screen,
+//! read off git's reflogs and Platitude GG's own record
 //! when the discard log asks (`platitude_core::discards`), and brought back
 //! through the tab's session.
 //!

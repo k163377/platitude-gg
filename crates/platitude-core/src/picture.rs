@@ -1,6 +1,8 @@
 //! What a picture becomes on its way into the store: decoded, cut to its
-//! centre square (a face is drawn into a square), averaged down to
-//! [`SIDE`] and written back out as PNG. The store holds that alone.
+//! centre square (a face is clipped to a circle, and uncut a 4:3 photo
+//! would be squashed in it), averaged down to [`SIDE`] and written back
+//! out as PNG. The store holds that alone; the picked file is only read.
+//! The cut is always the centre, so the settings screen needs no crop.
 //!
 //! Shrinking here is what bounds memory: a file's bytes say nothing about
 //! its pixels, and each decode stays resident per person given a picture
@@ -10,7 +12,10 @@
 //! person is still there.
 //!
 //! Reading is PNG and JPEG only, by content: each additional decoder is
-//! surface that runs on a file this application did not make.
+//! surface that runs on a file this application did not make, and stills
+//! only — a GIF taken in would still end up one frame. The path
+//! stays pure Rust (the conditions are on `png` in this crate's
+//! `Cargo.toml`).
 
 use std::io::Cursor;
 

@@ -1,8 +1,10 @@
 //! The one gate a tree holds: a second gate in the same tree would run
 //! the same steps over the same build directory and wait on the first's
-//! cargo, so it is refused with the first's pid. What runs at once across
-//! the machine is the budget's (`crate::budget`); this is an exclusion
-//! and answers at once.
+//! cargo, so it is refused with the first's pid. The usual second gate is
+//! one shot again because the first went to the background on a tool
+//! call's timeout and looked finished. `land`'s gate takes the same note
+//! (`gate::run::for_landing`). What runs at once across the machine is the
+//! budget's (`crate::budget`); this is an exclusion and answers at once.
 //!
 //! Liveness is the lock, as in `still` and `budget`: a lock nobody holds
 //! is free whatever note stands beside it, so a gate killed mid-run

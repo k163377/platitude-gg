@@ -6,6 +6,18 @@ import platitude.ui
 
 // The graph pane's column arithmetic: what each of the three columns may be and is, and how far the lanes are sent
 // sideways. Draws nothing; the pane, rows, dividers and find bar read their geometry here.
+//
+// The graph column reaches as far as the widest place's lanes: `graphDefaultLanes` by default, and a divider drag
+// widens it up to the repository's most lanes. Past the last lane is always blank, and that width comes out of the
+// subject column — no column is spent where nothing is drawn. A narrow window stops it first where `messageMinW` would
+// no longer be left to the subjects (the ceiling is the narrower of the two); on a thin history the column stops at
+// its content, so the divider does not move wider — narrower always moves, one lane still has room down to the floor.
+// A drag past either bound gets the one refusal badge (`GraphColumnDividers`, `RefusalBadge`): the last lane or the
+// window, to the hand both are one "no more". Squeezed until ceiling meets floor, the column has one width: no line,
+// and the badge on hover (`graphColWFixed`). Past the column's edge everything drawn sinks into the row's ground
+// (`LaneDissolve`). The chip column narrows to a name's first 3 characters and a `…`: counted in characters, and
+// three, as a tab title's floor is — both are names told apart by their head. Both dragged widths are remembered in
+// state.toml (`PageLayout.reportLayout`).
 QtObject {
     id: metrics
 
@@ -35,7 +47,7 @@ QtObject {
         text: "n"
     }
     /// How many leading characters, plus the cut mark, the chip column keeps at its narrowest — counted in characters
-    /// like a tab's (規約 §ウィンドウの縁).
+    /// like a tab's (`TabMetrics.titleMinChars`).
     readonly property int labelMinChars: 3
     readonly property real chipNameMinW: Math.ceil(chipCutInk.advanceWidth
         + labelMinChars * chipLetterInk.advanceWidth)
@@ -52,19 +64,22 @@ QtObject {
     }
     /// The seat a mark round a chip's name takes, at the chip's letters (`MarkSeat`): the padlock's, the tree's or the
     /// house's before the name (`RefChip.markCell`), the cloud's or the pull request's after it (`RefChip.badgeCell`)
-    /// — one width whatever the mark.
+    /// — one width whatever the mark, priced as `RefChip` seats it. What each mark's ink reaches (`NavIcon.reaches`)
+    /// stays out of here.
     readonly property real chipMarkSeat: MarkSeat.cell(Theme.fontChip)
     /// Everything a chip spends on what is not the name: fan, count with its half gap (`RefChip`'s row spacing), the
     /// two marks' seats, plus the frame's padding either side, less the seat's air the mark before the name gives back
     /// on the frame's side (`RefChip.frameAir`). Every mark counts though it comes and goes — the column must fit the
-    /// worst-dressed chip (rules-refs/app-ui.md「チップ列の狭める床」).
+    /// worst-dressed chip: a branch a locked worktree holds, on a remote too, with other refs on its commit. Neither
+    /// `--preset worktrees` nor `basic` has one; build a throwaway repository and shoot it with `--repo`.
     readonly property real chipFurnitureW: chipFan.fanMaxW
         + chipCountInk.implicitWidth + Theme.spaceXs / 2
         + 2 * chipMarkSeat
         + 2 * Theme.spaceXs - MarkSeat.airAt(Theme.fontChip)
     // The chip column's floor — name, furniture, and the `spaceSm` `GraphRowChips` keeps in front of the chip; move
-    // any of those and this moves too — and its ceiling, where the next two columns can still say something
-    // (規約 §グラフ列は最も広い所のレーンまで).
+    // any of those and this moves too — and its ceiling, where the next two columns can still say something. The
+    // floor stays under `Metrics.labelColW` (`tst_refstack.qml` pins it): the automatic `labelW` is not clamped to it,
+    // so a floor past it would open every window with crushed chips. Headless: `divider-refuse label-min`.
     readonly property real labelColWMin: chipNameMinW + chipFurnitureW + Theme.spaceSm
     readonly property real labelColWMax: Math.max(labelColWMin, paneW - graphColWMin - Metrics.messageMinW)
     // The automatic width does not follow the pane: the lanes give instead (`graphColWMax`), and the window's floor
@@ -85,22 +100,31 @@ QtObject {
     readonly property real graphColWMin: Math.ceil(Metrics.laneInset + Metrics.laneW / 2
         + Metrics.nodeIcon / 2 - 2 * Theme.borderWidth + (Theme.iconSm + Theme.borderWidth) / 2)
         - Theme.spaceSm
-    // The ceiling: the lanes' full width, or earlier where the message column would vanish
-    // (規約 §グラフ列は最も広い所のレーンまで).
+    // The ceiling: the lanes' full width, or earlier where the message column would vanish. Floor and ceiling are each
+    // decided here once, and both the shown width (`graphColW`) and the drag's clamp
+    // (`GraphColumnDividers.dragDividerTo`) read them: either side on a formula of its own brings back a width that is
+    // written but not in force. Headless: `graph-divider` read as the `--preset noremote` / `basic` pair.
     readonly property real graphColWMax: Math.max(graphColWMin,
         Math.min(graphFullW, paneW - labelW - Metrics.messageMinW))
     /// Nothing but the tail gap between ceiling and floor, so a drag would do nothing: the divider drops its line and
-    /// turns the cursor away (規約 §グラフ列は最も広い所のレーンまで). A one-lane history still has a drag.
+    /// answers a hover with the refusal badge beside the unchanged cursor (規約 §掴める境界は答える). A one-lane
+    /// history still has a drag.
     readonly property bool graphColWFixed: graphColWMax <= graphColWMin + Theme.spaceSm
     // Rounded for the same one-grid reason as `labelW`.
     readonly property real graphColW: Math.round(Math.min(graphColWMax,
         graphColWManual >= 0 ? Math.max(graphColWManual, graphColWMin)
                              : Metrics.laneInset + Metrics.graphDefaultLanes * Metrics.laneW + Theme.spaceSm))
+    /// How far the lanes are sent sideways, when they overflow their column (widening the column is the divider's
+    /// business). Three hands write it, each over its own reach: a left drag on the lanes, over the lane column only —
+    /// it moves what it grabs, so where it can grab is its reach (`GraphLanePan`); the wheel's sideways component
+    /// (tilt, touchpad), anywhere on the graph — the input says it means sideways (`GraphList.wheelPanned`); and the
+    /// middle-click drift, only when pressed in the lane column (`GraphPane`'s `MiddleAutoScroll`). Plus the bar
+    /// (`GraphLaneBar`).
     property real graphX: 0
     readonly property real graphXMax: Math.max(0, graphFullW - graphColW)
     onGraphXMaxChanged: graphX = Math.min(graphX, graphXMax)
     /// The lane bar's height, written by the bar (`GraphLaneBar`). The list adds it to its run-out while the lanes
-    /// overflow, or the bar covers the oldest row for good (`GraphList.bottomMargin`, デザイン規約 §グラフを横へ送る).
+    /// overflow, or the bar covers the oldest row for good (`GraphList.bottomMargin`).
     property real laneBarRoom: 0
     /// Where a subject's first character sits. Must match GraphRowDelegate's third column, which lays out the same
     /// steps; the find bar's cap is measured from here.

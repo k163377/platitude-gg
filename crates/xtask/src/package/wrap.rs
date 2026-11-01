@@ -1,6 +1,7 @@
 //! What the bundle is handed over in: a zip anyone opens, or a DMG only its
 //! password opens — the form a run of the public repository keeps, where
-//! whoever can read the run can take the file (P5-確認事項 §3.5).
+//! whoever can read the run can take the file (`.github/workflows/snapshot.yml`
+//! says why, and how one is opened).
 
 use std::ffi::OsStr;
 use std::io::Write;

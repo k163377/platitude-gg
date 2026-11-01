@@ -6,8 +6,11 @@ use super::*;
 
 /// The reads a pass takes before the walk: the remote-tracking tips the
 /// rows are marked against, and the walk's own inputs ([`WalkInputs`]).
-/// One set serves both passes of one ask
-/// (rules-refs/core.md「pass が walk の前に読む物は 1 組で取る」).
+/// One set serves both passes of one ask (`RepoSession::restart_log`):
+/// the rebuilding pass starts the moment the painting one lands, so asking
+/// again would launch processes for an answer one walk older. A stash
+/// pushed outside meanwhile is drawn by the next tick
+/// (`session_integration::rebuild::the_two_passes_of_one_ask_read_the_stashes_once`).
 #[derive(Clone)]
 pub(super) struct PassReads {
     tips: RemoteTips,
@@ -41,7 +44,11 @@ impl RepoSession {
 
     /// Changes the graph window size (`None` = full history) and restarts.
     /// Also resets the tail's step (`log_window_step`), which growing the
-    /// window leaves alone.
+    /// window leaves alone — the one place the step is decided. A direct
+    /// pass: the graph empties and the view goes back to the top, which is
+    /// why the tail's press takes `grow_log_window` instead. Called while
+    /// the tab is still opening it runs no pass (no workdir yet, so
+    /// `restart_log` returns early) and the open does not walk twice.
     pub fn set_log_limit(self: &Arc<Self>, limit: Option<u32>) {
         {
             let mut options = self.lock_log_options();
@@ -179,7 +186,24 @@ impl RepoSession {
 
     /// Restarts the log → graph stream. With tags enabled this runs two
     /// passes: a tag-less one that paints at once, then a tag-inclusive
-    /// rebuild swapped in (rules-refs/core.md「2 段ストリーミング」).
+    /// rebuild swapped in without a flicker — `--tags` makes git set up a
+    /// frontier over every tag before the first row, which the first pass
+    /// does not wait for.
+    ///
+    /// Reset-and-stream is for open, Reload, the tags toggle and a window
+    /// size change only; background triggers go through `refresh_log`,
+    /// which stays silent when the picture is the same.
+    ///
+    /// A walk this cancels sends neither `LogFinished` nor `LogFailed`: a
+    /// later `refresh_log` replaces it with `LogReplaced` (rightly), so a
+    /// waiter takes either shape (`support::session::pass_of`).
+    ///
+    /// While a tab opens, the fast pass may never land: a rebuild that
+    /// overtakes it swallows it without a word. A test asserts only its
+    /// order there (before the swap, if it lands) and pins its presence and
+    /// row count on a toggle after a settled baseline, where nothing can
+    /// take the log token from the two passes
+    /// (`session_integration::window::tag_only_commits_follow_the_include_tags_option`).
     pub fn restart_log(self: &Arc<Self>) {
         let Some(workdir) = self.workdir() else {
             return;
@@ -223,7 +247,9 @@ impl RepoSession {
     ///
     /// Call on the caller's thread before spawning the pass: call order
     /// decides which pass owns the graph, and spawn order does not follow
-    /// it (rules-refs/core.md「担当を決めるのはキャンセルトークン 1 つ」).
+    /// it. This token alone decides ownership: `log_gen` is taken in spawn
+    /// order, and judging by both can make each pass stand down, leaving
+    /// Reload with no answer.
     ///
     /// The number and the handover are taken under one lock: otherwise two
     /// racing asks could number in one order and take the stream in the
@@ -265,8 +291,9 @@ impl RepoSession {
                 return RefreshOutcome::Cancelled;
             };
             // Superseded: resetting now would blank the record of what is
-            // on screen for a stream nobody wants
-            // (rules-refs/core.md「降ろされたパスの state はそのまま」).
+            // on screen for a stream nobody wants, and the next rebuild,
+            // finding no record, would paste the same picture again (an idle
+            // flicker). A pass stood down leaves the state as it is.
             if cancel.is_cancelled() {
                 watch.answered();
                 return RefreshOutcome::Cancelled;
@@ -403,8 +430,8 @@ impl RepoSession {
         reads: Option<PassReads>,
     ) -> RefreshOutcome {
         // Superseded before it began: skip the walk, the most expensive
-        // read in the app
-        // (rules-refs/core.md「始まる前に取り上げられた pass は walk しない」).
+        // read in the app. One half of closing a baseline; the other is
+        // `wait_for_graph_passes` (`support::session::CaptureSink::opened_graph`).
         // The check under the lock below stops a finished pass from
         // installing.
         if cancel.is_cancelled() {
@@ -558,6 +585,10 @@ impl RepoSession {
     /// The opening's [`Self::refresh_quick`], the stashes left to the
     /// opening's first pass, which reads and publishes them
     /// ([`RepoSession::walk_inputs`]).
+    ///
+    /// Do not put the other worktrees' pass off to cheapen the open (user
+    /// decision — ask before changing; the tab-switch costs are listed in
+    /// the app's `RepoPageStack.qml`): it starts here, with the rest.
     pub(super) fn refresh_opening(self: &Arc<Self>) {
         self.settle_snapshots(false);
         self.refresh_carried();
@@ -570,8 +601,9 @@ impl RepoSession {
         // The places in the flights are taken here, and the status flight
         // held on until the rebuild is asked: a caller closing the reads
         // (`wait_for_snapshot_reads`) has closed that ask too, as when each
-        // read asked from inside its own pass. The pass is counted from
-        // here, so `wait_for_graph_passes` covers it.
+        // read asked from inside its own pass — else a baseline's
+        // `refresh_log_tracked` would be taken over by this later ask. The
+        // pass is counted from here, so `wait_for_graph_passes` covers it.
         let refs = self.refs_read.stamp();
         let tree = self.status_read.stamp();
         let held = self.graph_passes.enter();

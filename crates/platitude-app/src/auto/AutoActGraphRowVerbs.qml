@@ -80,7 +80,12 @@ Item {
         if (act === "row-part") {
             // Hover cannot be injected, so this writes what a real pointer writes (`GraphRowDelegate.pointerRowX`) and
             // leaves the decision to the row — the decision is what the verb tests, so `chipExpandRequested` (as
-            // `ref-list` does) would prove nothing about the boundary.
+            // `ref-list` does) would prove nothing about the boundary. `ref-list` / `row-card` never cross it, so they
+            // are read with this one. A right-click does not part the row (デザイン規約 §グラフ行の右クリック). The
+            // argument is `<行>:<x>:<chip|row>`; the boundary is the column's width, not the fonts', so on
+            // `--preset tags` the points hold on every machine: `0:150:chip` (2px inside the column's right end, the
+            // room beyond the name's frame), `0:160:row` (past the divider), `0:10:chip` (the column's left, no chip
+            // there), `2:10:row` (a row with no chips).
             const parts = arg.split(":")
             rowPartTimer.row = Number(parts[0])
             rowPartTimer.want = parts[2]
@@ -98,7 +103,11 @@ Item {
             leaveTimer.start()
         } else if (act === "list-menu") {
             // The right-click on a row of the stacked list (デザイン規約 §グラフ行の右クリック). The argument is
-            // `<行>[:<カードの行>]`.
+            // `<行>[:<カードの行>]`, both 0 when left out: `--preset tags`' `1:1` is a tag's row; `--preset worktrees`'
+            // `1:0` a branch another worktree holds and `1:1` the folder of a worktree with no branch. Every row
+            // takes the right-click (a folder going nowhere, HEAD's marker, a tag, the current branch), but this
+            // calls the row's `rightClick()` directly, past its handler's gate — that gate is
+            // `tests/qml/tst_listrowmenu.qml`'s, with a real pointer.
             const at = arg.split(":")
             refListOpenTimer.row = at[0] === "" ? 0 : Number(at[0])
             refListOpenTimer.cards = false
@@ -108,6 +117,11 @@ Item {
             // Entered where the hover timer would (hover cannot be injected). `-card` walks row → card → chip → asked
             // again from under the list: both card closes have to hold, and either failing leaves `open=true`. No row
             // given is HEAD's, the one commit sure to have a chip (row 0 is the uncommitted row on a dirty preset).
+            // The chip's end shows past the card where the front name is longer than the rest: `--preset tags` row 1
+            // and `--preset worktrees` row 1 (`worktree-b +1`) are that shape, for `covers=`. `-card` is read beside
+            // `row-card` on the same row and preset: `row_card open=false list=true subject=true` here against
+            // `open=true list=false` there answers "no card while the list is out", `subject=true` saying the card did
+            // come once. `--preset tags` row 0 holds a chip of three tiers.
             refListOpenTimer.row = arg === "" ? -1 : Number(arg)
             refListOpenTimer.cards = act === "ref-list-card"
             refListOpenTimer.start()
@@ -128,7 +142,7 @@ Item {
             refListOpenTimer.litRow = lit.length > 1 ? Number(lit[1]) : 0
             refListOpenTimer.start()
         } else if (act === "ref-list-follow" || act === "ref-list-follow-lit") {
-            // The name a row of that list opens under itself, pressed (デザイン規約 §グラフ行のダブルクリック) or,
+            // The name a row of that list opens under itself, pressed (`RefChip.mateGoes`) or,
             // `-lit`, rested on. The argument is `<行>[:<カードの行>]`; no row given is HEAD's.
             const follow = arg.split(":")
             refListOpenTimer.row = follow[0] === "" ? -1 : Number(follow[0])
@@ -191,12 +205,15 @@ Item {
             acts.choose(acts.rowsArg(arg, [1, 3, 5]), false, "drop")
         } else if (act === "graph-choose-said" || act === "graph-choose-sweep") {
             // A row of the chosen list: its card saying the whole message (`said`), or its words dragged away
-            // (`sweep`). The argument is the rows, as `graph-choose` takes them.
+            // (`sweep`). The argument is the rows, as `graph-choose` takes them. Run on `--preset co-authors`: every
+            // message on `basic` is one line with no body, so there is nothing to cut.
             acts.choose(acts.rowsArg(arg, [1, 3, 5]), false, act === "graph-choose-said" ? "said" : "sweep")
         } else if (act === "graph-choose" || act === "graph-choose-range") {
             // The first press is plain; the held ones after it move only the choice (デザイン規約 §複数のコミットを選ぶ).
             // The argument is the rows, `:`-separated — Ctrl one at a time, or `-range`'s one Shift press from the
-            // first to the last, so that one wants exactly two.
+            // first to the last, so that one wants exactly two. Where row 0 is the working tree's, a range starts at 1:
+            // `--preset basic` is such a preset, which the defaults fit. `compared=` is 2 for a choice of two (the
+            // two-point comparison) and more for the union of three or more.
             const sweeps = act === "graph-choose-range"
             acts.choose(acts.rowsArg(arg, sweeps ? [1, 5] : [1, 3, 5]), sweeps, "")
         } else {
@@ -338,7 +355,7 @@ Item {
                                 + " branch=" + worktree.branch })
         }
         /// Through the page's own opener, the one a file row's press goes to; the stack is the shot, so its rows are
-        /// waited for.
+        /// waited for. `bands=` is the claim; the picture is read for the order band, `@@`, lines, band, `@@`, lines.
         function stacked() {
             const op = chosenRowTimer
             if (op.at("start")) {
@@ -517,7 +534,10 @@ Item {
     }
     // The name under a row of that list, pressed or rested on once the list is up. The landing is read off the graph —
     // the selection is the press's own bookkeeping — as the graph's row for that commit lit and laid out (`nav-jump`).
-    // No `order`: a row with nothing under its name ends once the row is built.
+    // No `order`: a row with nothing under its name ends once the row is built. Both ways round: HEAD's row on
+    // `--preset basic` (`main` opens `origin/main`, the upstream) and `1:0 --preset tracked-elsewhere`
+    // (`origin/feature/topic-a` opens the local `feature/topic-a`). `-lit`'s picture is scene.png (the card is
+    // overlay.png's).
     PageStage {
         id: listFollowTimer
         name: "list_follow"
@@ -668,7 +688,8 @@ Item {
             if (!op.input("pointed", () => refList.pointRow(refListOpenTimer.litRow)))
                 return
             // `lit=` is read off the row: the wash is one shade over the card's ground. `nowhere=`: only a row with
-            // nowhere to go has no name colour to stand in for its wash.
+            // nowhere to go has no name colour to stand in for its wash — aimed anywhere else the run proves nothing.
+            // On `--preset tags` all three of row 0's card rows go nowhere, so `0:1` lands on one.
             op.complete({ "name": "list_lit_pointed", "when": () => ({}), "report": () => {
                 const row = acts.listRow(refListOpenTimer.litRow)
                 return "ref_list_lit row=" + refListOpenTimer.litRow
@@ -692,8 +713,10 @@ Item {
                        + " row=" + refListOpenTimer.witnessed("row")
             } })
     }
-    // The view is sent to its end until the stand-in is up on the top edge (as `graph-head` does); then the pointer
-    // goes onto its chip and the card is waited for on that chip, since a card on a row's chip is up too.
+    // The view is sent to its end until the stand-in is up on the top edge (as `graph-head` does, `--preset deep`);
+    // then the pointer goes onto its chip and the card is waited for on that chip, since a card on a row's chip is up
+    // too. `deep`'s HEAD carries one name, so a picture of the card covering a fan of names runs on a throwaway
+    // repository with names added at HEAD (`--repo`).
     PageStage {
         id: headListTimer
         name: "graph_head_list"
@@ -814,7 +837,9 @@ Item {
                                 + " names=" + graphPane.headPin.records.length })
         }
     }
-    // Rests on the row until the card is up (`tipDelayMs` after the rest), then makes the return in one turn.
+    // Rests on the row until the card is up (`tipDelayMs` after the rest), then makes the return in one turn. `held=`
+    // is the claim; `moved=` is a guard — the seat comes off the row's pointer, which a headless run cannot move, so
+    // a card jumping sideways shows only in a real window.
     PageStage {
         id: cardReturnTimer
         name: "card_return"
@@ -863,6 +888,11 @@ Item {
         }
     }
     // The card is opened synchronously; this just lets the layout settle before it is measured and photographed.
+    // `open=` is the Popup's own `opened`; `lit=` the asked row's `GraphRowDelegate.lit` — the hover band is one step
+    // off the ground, so a picture cannot tell a band gone from one never there. `credit=` is the width handed to the
+    // credit line (0: nobody credited) and `cut=` its name elided: `CommitHoverCard`'s width rule is read off these
+    // two alone. `list=` is the chip list, `ref-list-card`'s side. On `--preset co-authors` row 4 has no body
+    // (`body=false`) and row 7 credits nobody (`credit=0`).
     PageStage {
         id: rowCardTimer
         name: "row_card"
@@ -901,7 +931,11 @@ Item {
                        + " body=" + (rowCard.body !== "")
             } })
     }
-    // The press on that card's note, and where it leaves the reader; the shot is of the arrival.
+    // The press on that card's note, and where it leaves the reader; the shot is of the arrival. One preset has a card
+    // that cuts its message, `--preset edges` at row 7: on any other row or preset the note never stands and the run
+    // waits silently to the watchdog (`card-note-lit` the same). `picked=` is the claim (the press landed on the
+    // commit the card was of), `open=false` the card gone with the press, `mark=` the right pane naming where it
+    // arrived. With `-esc` no picture answers any of it: the whole line is the verdict, `took=` its heart.
     PageStage {
         id: cardMessageTimer
         name: "card_message"
@@ -961,7 +995,7 @@ Item {
         }
     }
     // The hand resting on that note: put in once the note is there (as the press waits), read a beat later off the
-    // paint.
+    // paint. Its resting half is `row-card 7` on the same preset; the two are read as a pair.
     PageStage {
         id: cardNoteTimer
         name: "card_note"
@@ -1055,6 +1089,10 @@ Item {
     // PGG_AUTO_ACT=ref-list-leave. Each stage goes in once the one before has landed, and the last waits out the beat
     // the leave started (`RowHoverHost.listSettling`) — a leave that starts none is read at once, which is the list
     // left standing with no hand near it. No `order`: a row whose chip leaves no bare stretch ends once it is in view.
+    // What is right per end: `off` (a place with no row — the pane's heading, the left menu, outside the window) the
+    // list goes; `back` it is held, not laid out again; `menu` it stays, the hold coming before the menu's refusal; a
+    // row number, it stands on that row's chip. `same=` bites on `--preset tags` row 0, whose chip wears a fan: a list
+    // laid out again moves right by the fan and down by `lift`.
     PageStage {
         id: leaveTimer
         name: "ref_list_leave"

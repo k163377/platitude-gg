@@ -91,6 +91,12 @@ pub struct GraphModel {
     window_step: i32,
     /// A press of the tail is out and the wider walk has not landed; the
     /// footer wears the wait (デザイン規約 §進行中・回数押しの定数).
+    /// Cleared only by a settled walk (`settle_footer`), a restart
+    /// (`start_walk`) or a failed one (`fail_walk`). A swap pass that
+    /// panics leaves it up and the ring turning: `PassWatch` reports a
+    /// swap pass to the tab (`Told::Operation`, its error row), not to
+    /// this model. Not a lie, but clearing it needs a notice that reaches
+    /// the graph.
     growing: bool,
     /// Completed stream passes (direct + replacements + reloads). QML
     /// watches this edge to re-resolve the selection by oid.
@@ -118,7 +124,7 @@ pub struct GraphModel {
     /// (`find::Query::short_of_an_oid`) — what the find bar's hint answers.
     short_of_an_oid: bool,
     /// Whether the newest row is one of the answers; the graph steps down
-    /// from under the card for it (規約 §コミットを探す). The worktree
+    /// from under the card for it (`GraphFind.findClears`). The worktree
     /// row never matches, so true also means a clean tree.
     first_matched: bool,
     /// Lanes running off the end of the window (`encode::tail_lanes`),

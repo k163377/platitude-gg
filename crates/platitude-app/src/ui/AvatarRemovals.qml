@@ -1,7 +1,7 @@
 import QtQuick
 import platitude.ui
 
-// Avatar removals pressed through and waiting out their floor (デザイン規約 §回数押し): `{ email, url }` — the person,
+// Avatar removals pressed through and waiting out their floor (`HoldDriver.landed`): `{ email, url }` — the person,
 // and the picture the press saw. Kept apart from the rows: an assignment landing meanwhile rebuilds every row of the
 // settings list, and a removal must not go with its row. Each is given once — by its row's floor (`give`), or, the row
 // rebuilt away, by this list's own (`floor`) — and a person given another picture or none meanwhile is struck off for

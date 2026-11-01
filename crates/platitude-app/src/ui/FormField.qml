@@ -3,6 +3,10 @@ import QtQuick.Controls.Fusion
 import platitude.ui
 
 // A text box at the height buttons and combo boxes use, for form input.
+//
+// Never set words beside it on its baseline (`Qt.AlignBaseline`): while its height is not given explicitly, a
+// `TextField`'s `baselineOffset` answers where the text would stand packed at the top, not centred (`heightValid()`
+// false adds no centring — 4px high in a `controlHeight` box).
 TextField {
     id: form
 

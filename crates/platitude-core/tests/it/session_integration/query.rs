@@ -1,4 +1,7 @@
 //! Reads that reuse what a read already landed.
+//!
+//! Not a second copy of a unit: what these hold is how the reads go in a
+//! real session — one at a time, in order, and cancelled.
 
 use std::sync::Arc;
 
@@ -12,6 +15,10 @@ use platitude_core::stage;
 
 /// Asks coalesce, but one made while a read runs books a repeat, and the
 /// repeat sees what changed in between.
+///
+/// A flight that dropped the second ask would answer a refresh behind a
+/// write with the reading from before it — and still pass tests that ask
+/// three times in a row; only holding the read inside its window catches it.
 // `worker_threads = 2`: the hook below parks a worker (`CaptureSink::hook_once`).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_request_made_while_a_read_runs_gets_a_read_of_its_own() {
@@ -663,7 +670,9 @@ async fn a_file_saved_over_in_place_is_marked_for_what_it_holds_now() {
     };
     // A poll over the tree as it was first: the opening's reads leave the
     // marks to be read again once (`forget_eol_derived`), and this is that
-    // once — the next is weighed on what moved alone.
+    // once — the next is weighed on what moved alone. Without it the
+    // overwrite below would be read on that staleness and pass with no
+    // stat in the status key.
     poll().await;
     assert_eq!(
         said(&sink.events.lock().unwrap()),

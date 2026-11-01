@@ -59,6 +59,12 @@ macro_rules! field_by_bridge {
         })*
     };
 }
+// A `String` field reads through the bridge's own conversion, `String::from(&QString)`, which
+// reads the UTF-16 straight (`from_utf16_lossy`, no `QByteArray` between: upstream's intended
+// form); an unpaired surrogate comes out as U+FFFD (`wire_qml`). Not counting the UTF-8 length
+// first to allocate once: quicker on a short CJK string, slower on a long one (two scans), and no
+// difference told on the product's path (`GitFacts.chipsShown`, 1 to 30 chips, ASCII and CJK —
+// ci/baseline/code-costs-windows-x64.md §橋の値の組み立て).
 field_by_bridge!(
     [] bool,
     [] i32,
@@ -126,6 +132,10 @@ pub(crate) fn has_field(map: &QVariantMap, key: &'static str) -> bool {
 /// built on every read, from the same few dozen names, and turning each to
 /// UTF-16 on every build is a visible share of a row's
 /// (ci/baseline/code-costs-windows-x64.md §橋の値の組み立て).
+///
+/// A copy, not the cache lent out to `insert_clone`: no difference told on
+/// the product's path (same section), and a nested record looking its own
+/// keys up while the cache is lent would hit `RefCell already borrowed`.
 fn key_of(name: &'static str) -> QString {
     thread_local! {
         static KEYS: std::cell::RefCell<std::collections::HashMap<(usize, usize), QString>> =
@@ -147,6 +157,10 @@ fn key_of(name: &'static str) -> QString {
 /// bridge reads and writes it in the call's argument array: laid out as
 /// the Qt type itself (`repr(transparent)` over cxx-qt-lib's layout of
 /// it), under the metatype Qt knows that type by.
+///
+/// Kept though cxx-qt-lib has the same Qt types: these are the
+/// `QMetaTypeCompatible` side, naming a slot's metatype to qtbridge, not a
+/// stand-in for the container (`each_slot_wire_is_its_qt_type`).
 macro_rules! slot_wire {
     ($(#[$doc:meta])* $name:ident($inner:ty) = $metatype:ident) => {
         $(#[$doc])*

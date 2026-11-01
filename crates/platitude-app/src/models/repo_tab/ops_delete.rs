@@ -5,6 +5,13 @@
 //! under the id it got back, so every row that moves has an answer
 //! coming. What the waiting means is `ops::StandIn`'s (tested in
 //! `ops::stand_in_tests`); this file is the wiring.
+//!
+//! The write slots themselves are the signal (`deleteBranch`,
+//! `deleteRemoteBranch`, `deleteBranchEverywhere`, `deleteTag`,
+//! `deleteTagEverywhere`, `deleteRemoteTag`, `dropStash`,
+//! `removeWorktree`): there is no second call for a press to spell out.
+//! Only what the arguments cannot say is handed in — `rowGoes` and the
+//! lease `expect`.
 
 use super::*;
 

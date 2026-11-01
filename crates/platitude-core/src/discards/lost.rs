@@ -26,6 +26,14 @@ pub(super) const TIPS_PER_WALK: usize = 200;
 /// branches, the tags, the stash and `held` (the other worktrees' detached
 /// HEADs) do not, each with its parents, in `rev-list` order. A start gc
 /// has taken is passed over (`--ignore-missing`).
+///
+/// Its cost grows with the number of tags: `rev-list` reads every tag's
+/// object before it walks, seconds a call at tens of thousands of tags
+/// against well under one without `--tags`. A background read, so nothing
+/// stops, but the list's entries come that much later. `--tags` keeps an
+/// old tip only a tag reaches from being called lost: do not drop it
+/// without another way to tell (such as indexing the tags' peeled values
+/// and looking the walk's commits up in it).
 pub(super) async fn unreached(
     executor: &GitExecutor,
     cwd: &Path,

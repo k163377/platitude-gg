@@ -95,7 +95,8 @@ FROM core AS app
 # never fetches Qt or the fonts again.
 #
 # The fonts and the locale of a Japanese Ubuntu desktop, the machine
-# a picture taken here stands for (P5-確認事項 §実測済み). Every desktop
+# a picture taken here stands for (user decision — ask before changing;
+# what such a desktop carries: P5-確認事項 §実測済み). Every desktop
 # install has what ubuntu-desktop-minimal depends on and recommends —
 # fonts-dejavu-core, fonts-noto-cjk (Noto Sans CJK JP and Noto Sans Mono
 # CJK JP, the Ubuntu links of both chains in デザイン規約), fonts-noto-core,

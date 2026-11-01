@@ -17,9 +17,9 @@ pub enum SwitchAction {
     /// The branch is checked out in another worktree: git refuses the
     /// move outright (`fatal: '<branch>' is already used by worktree at
     /// …`), locked or not, and no stash or leaving an operation clears it.
-    /// So the press stands the tab in that worktree (デザイン規約
-    /// §進行中の操作から出る) without asking: that writes nothing and is
-    /// one press back.
+    /// So the press stands the tab in that worktree without asking (user
+    /// decision — ask before changing): that writes nothing and is one press
+    /// back. No question bar and no `!`: that mark means "pressing asks".
     OpenHolder,
     /// An ordinary `switch` onto an existing local branch.
     Switch,

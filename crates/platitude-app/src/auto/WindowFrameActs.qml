@@ -20,7 +20,10 @@ Item {
 
     // PGG_AUTO_ACT=window-fill: whether the contents reach all four edges while maximised. Numbers, because a
     // maximised app leaves no desktop beside it to show a gap against. Windowed again for the shot, as `state minimize`
-    // ends: the maximised window is read in the press that puts it back, the one moment it still stands.
+    // ends: the maximised window is read in the press that puts it back, the one moment it still stands. Offscreen
+    // maximises to 800×800, so the right line is `at=0,0 size=800x800` on both OSes (a FAIL still says
+    // `screenshot saved=true`). Whether the window's edge lands off the screen is not headless's to judge: the edge
+    // rule rests on pixels measured in a real window (rules-refs/app-ui.md).
     WindowStage {
         id: fillActTimer
         name: "window_fill"
@@ -74,11 +77,19 @@ Item {
             + " window=" + window.width + "x" + window.height
     }
 
-    // PGG_AUTO_ACT=window-floor [fold|log|wip|rail] (the five forms: verbs.md `window-floor`). With no argument the
-    // saved shape is xtask's 320x240, under every floor; `fold` / `log` stand the window on its floor, then put the
-    // list back / open the log — the width's floor rises under a window already standing on it, the height's holds
-    // still (デザイン規約 §窓の床). `rail` folds, stands on the floor and opens the log: the log comes up as far as the
-    // panes let it, over the rail's last cell unless they hold it.
+    // PGG_AUTO_ACT=window-floor [fold|log|wip|rail] (five forms, the bare one among them). With no argument the
+    // saved shape is xtask's 320x240, under every floor (the app cannot make itself smaller than its floor); `fold` /
+    // `log` stand the window on its floor, then put the list back / open the log — the width's floor rises under a
+    // window already standing on it, the height's holds still, folded or not (デザイン規約 §窓の床). `rail` folds,
+    // stands on the floor and opens the log: the log comes up as far as the panes let it, over the rail's last cell
+    // unless they hold it. `wip` turns the right pane to the worktree first and wants `--preset rebase-conflict`:
+    // `wip=true wipScrolls=true` is the face standing with its exit card below and reachable. Only the forms that ask
+    // for it answer `wip=`; the others land on the default selection, which is the OS's. With no argument only a run
+    // handed a repository waits for it: `--restore` has no page and reports the blank page's floor (`tabs=0`).
+    //
+    // Related floors are read elsewhere: a band carrying a state badge by `badges`'s `bandW=`; the details pane by
+    // `details-fit`'s unjudged `overH=` (`--preset edges` row 7 in a window held at the floor — a `--config-dir` whose
+    // `state.toml` is under the floor, which startup raises to it).
     //
     // The stages: the face asked for (`shaped`), the window stood on its floor (`shrunk`) and the menu read there
     // (`floored`), then the floor moved under it (`raised`, landed as `risen`); `wip` moves nothing after the menu's
@@ -194,7 +205,7 @@ Item {
     }
 
     // ---- whether the left menu stands whole in the room the page gives it ----
-    // Read off the layout itself (デザイン規約 §窓の床「左メニューが全部入る」): the floor's own sum would agree with
+    // Read off the layout itself (`PageLayout.panesFloorHeight`): the floor's own sum would agree with
     // itself whatever the rail drew. A `SplitView` and a `Column` lay out on polish, so a reading is taken once the
     // menu's numbers have stood across a polish pass — one taken before the polish answers for the shape before it.
     /// The menu's end and the room the page gives it, read off the layout now.
@@ -236,7 +247,10 @@ Item {
             + " menu=" + held + " menuEnd=" + menu.end + " menuRoom=" + menu.room
             + " floorW=" + floorW + " floorH=" + floorH
             // `floorW` is the larger of these two plus the edge's two columns (`Main.floorWidth`). Folding lowers
-            // `pageW` only.
+            // `pageW` only. Today `pageW` is the larger in every shape, on either OS, so the number of state badges
+            // does not move the window's floor — read `bandW=` anyway: adding to the band or the panel is what would.
+            // `bandW=` is the floor of what the band and panel held in this run: the run always seeds an identity, so
+            // no `SET IDENTITY` stands in it. `edge=` is 1 in a Windows window, 0 on Linux.
             + " bandW=" + Math.ceil(topBar.floorWidth)
             + " pageW=" + (window.floorPage !== null
                            ? Math.ceil(window.floorPage.floorWidth) : 0)
@@ -259,7 +273,12 @@ Item {
     }
 
     // PGG_AUTO_ACT=state: two runs sharing one --config-dir are what actually tests this — a single run can only ever
-    // agree with itself.
+    // agree with itself. The second adds `--restore`, the road where the app opens the tabs it remembers; the line
+    // agreeing across the two is the round trip. The tabs' lazy load is read off the log instead: three tabs restored,
+    // one `opened repository tab` line.
+    //
+    // `minimize`: passing is `windowMax=true` with `windowW` / `windowH` still the size from before maximising. The
+    // report made while maximised is what makes it a test: without it a cut wiring passes.
     WindowStage {
         id: stateActTimer
         name: "state"
@@ -337,6 +356,7 @@ Item {
             + " windowH=" + AppBackend.startWindowHeight()
             + " windowMax=" + AppBackend.startWindowMaximized()
             + " autoFetch=" + AppBackend.autoFetchMinutes
+            // 0 is the whole history (`settings.toml` writes it as `initial_commits = 0`).
             + " initialCommits=" + AppBackend.initialCommits
     }
 }

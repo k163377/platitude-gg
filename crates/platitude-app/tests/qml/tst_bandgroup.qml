@@ -4,8 +4,8 @@ import QtTest
 import platitude.ui
 
 // The real `BandStateGroup`, driven by its own inputs: the wiring between the share-out and what the band draws
-// (デザイン規約 §ウィンドウの縁 の譲る順). Why `tst_bandshare.qml` alone is not enough: rules-refs/app-ui.md
-// 「単体だけでは足りない」.
+// (the steps: `BandStateGroup`'s header). Why `tst_bandshare.qml` alone is not enough: with the group's `badgeMinW`
+// wiring pinned to 0, that table and the three UI verbs still pass (`BandStateGroup`'s header has the layers).
 //
 // Nothing here recomputes a cap or a floor: the numbers come off the group, and a second `BandStateMetrics` outside
 // it witnesses that the floor it reports is a real measurement.
@@ -217,7 +217,7 @@ Control {
         }
 
         /// Folded, the group is laid out at its mark alone (`TopBar`), so a fold read off its own width would never
-        /// come undone (rules-refs/app-ui.md「畳んだ群は印のセルだけを取る」).
+        /// come undone (`BandStateGroup.room`, `TopBar`'s `bandAsked`).
         function test_the_fold_reads_the_room_handed_in_not_the_width_drawn() {
             const folded = widestFolded()
             verify(folded > 0, "the group never gave its words up at any width down to 16")
@@ -254,7 +254,7 @@ Control {
 
         /// Files that need Git LFS where git cannot run it raise their own badge, drawn after the rest of the page's
         /// (only `OLD GIT` would follow it), with room asked for it — and in yellow: the mark turns red only for a
-        /// conflict or a stale graph (デザイン規約 §ウィンドウの縁).
+        /// conflict or a stale graph (`BandStateGroup.tint`).
         function test_files_that_need_git_lfs_raise_their_own_badge_last_among_the_pages() {
             verify(!group.lfsBadgeShown, "nothing needs Git LFS")
             const without = group.naturalWidth
@@ -319,7 +319,7 @@ Control {
         }
 
         /// The words stand on the band's line, a whole pixel, and each box is cut round the capitals: as much air
-        /// over them as under the baseline (規約 §ウィンドウの縁「バッジの箱」). The baseline is the drawn word's own;
+        /// over them as under the baseline (`BandStateMetrics`' badge box). The baseline is the drawn word's own;
         /// the cap height is the second measurer's.
         function test_the_words_stand_on_the_bands_line_in_a_box_cut_round_the_capitals() {
             const badges = badgesStanding()
@@ -339,7 +339,7 @@ Control {
         }
 
         /// Folded, the frame is the badges' box where they stood, in the band's own cell and in an end cell alike: a
-        /// frame the cell's depth lies along the band's top and bottom edges (規約 §ウィンドウの縁「畳んだ `…` の箱」).
+        /// frame the cell's depth lies along the band's top and bottom edges (`BandStateGroup.foldedDepth`).
         /// Read against the second measurer, not the group's `foldedDepth`.
         function test_the_folded_mark_keeps_the_badges_box_clear_of_the_bands_edges() {
             const standing = badgesStanding()[0].mapToItem(group, 0, 0).y

@@ -25,12 +25,13 @@ pub(super) struct Move {
     pub(super) old: Oid,
     pub(super) new: Oid,
     /// Made on a detached HEAD — its tip comes back under
-    /// `detached-pgg-restored`, no branch's name (§4).
+    /// `detached-pgg-restored`, no branch's name.
     pub(super) detached: bool,
 }
 
 /// Parses `%H<US>%gD<US>%gs` lines into their refs, each ref's lines in the
-/// order git gave them (newest first): `%gD` with `--date=unix` reads
+/// order git gave them (newest first per ref; the refs' lines come
+/// interleaved by time, measured on 2.55): `%gD` with `--date=unix` reads
 /// `main@{1790974132}` for a branch `--branches` named (`refs/heads/main@{…}`
 /// for one named in full — both read as `main`), and `HEAD@{…}`,
 /// `worktrees/c/HEAD@{…}` for the HEADs named as given.
@@ -86,8 +87,8 @@ pub(super) fn branch_moves(branch: &str, lines: &[Line]) -> Vec<Move> {
 /// rebase's `returning to refs/heads/<b>` that its own lines were `<b>`'s.
 /// The lines between a rebase's return and its start are its own work —
 /// its picks, and what an `exec` it ran wrote (a reword's
-/// `commit (amend)`): only the start is asked about (§1: what an operation
-/// did on its way is not listed). `folder` names the worktree for a detached
+/// `commit (amend)`): only the start is asked about (what an operation
+/// did on its way is not listed, `discards`). `folder` names the worktree for a detached
 /// HEAD left behind; `worktree` is how an entry names the worktree (empty for
 /// the one the session stands in) and `path` where it is (empty the same).
 pub(super) fn head_moves(
@@ -187,6 +188,7 @@ pub(super) fn kind_of(message: &str) -> Option<DiscardKind> {
         // The other branches a rebase moves with `--update-refs`.
         Some(DiscardKind::Rebase)
     } else if message.starts_with("branch: Reset to") {
+        // `branch -f` and `switch -C`.
         Some(DiscardKind::Moved)
     } else {
         None
@@ -204,7 +206,9 @@ fn head_kind_of(message: &str) -> Option<DiscardKind> {
 }
 
 /// `delete_branch: <name> <upstream> [<tip>]` — how JetBrains IDEs write a
-/// delete into HEAD's reflog: the name, and the tip in brackets at the end.
+/// delete into HEAD's reflog, HEAD's value unchanged: the name, and the tip
+/// in brackets at the end. A test writes the same line into HEAD's reflog
+/// alone with `update-ref -m <msg> HEAD HEAD`.
 fn deleted_branch(message: &str) -> Option<(String, Oid)> {
     let rest = message.strip_prefix("delete_branch: ")?;
     let name = rest.split(' ').next()?.to_string();

@@ -6,7 +6,8 @@ import QtQuick.Layouts
 import platitude.ui
 
 // The people a commit message credits beside its author, one to a row with the address that tells two of the same
-// name apart. A popup: declared inside the pane's column it would be clipped and painted under the list below.
+// name apart. A popup: declared inside the pane's column it would be clipped and painted under the list below. Opened
+// from the details pane only — the graph row's hover card grows no second popup (`CommitHoverCard`).
 AppCard {
     id: mateCard
 

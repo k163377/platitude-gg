@@ -175,6 +175,12 @@ pub(super) struct PaneRead {
 /// asked later it would put the older list back. Stepping onto a worktree
 /// counts as a reading of it, so nothing asked before the step is handed —
 /// a read asked before the pane stepped off a worktree and back included.
+///
+/// The key is `same_path_key` of the path git printed, so a test stands the
+/// pane on the path `git worktree list` spells: a temp path spelled by hand
+/// is an 8.3 short name on Windows and never matches. Net:
+/// `tests::the_pane_takes_only_the_newest_reading_of_the_worktree_it_stands_on`
+/// and `session_integration::carried`.
 #[derive(Default)]
 pub(super) struct Pane(std::sync::Mutex<PaneState>);
 
@@ -642,7 +648,9 @@ impl super::RepoSession {
     ///
     /// The last ask wins (`carried_read` stops the read the pane stepped
     /// off), and the pane is handed only a reading of the worktree it
-    /// stands on, asked after the one it holds ([`Pane`]).
+    /// stands on, asked after the one it holds ([`Pane`]). Never hand the
+    /// `carried_read` token to the worktree reads: a row's read stopped by
+    /// the pane's token takes the row down and lands as `Moved`.
     pub fn read_carried_status(self: &Arc<Self>, path: String, name: String) {
         let (key, number) = self.carried_pane.stand(&path, &name);
         let s = Arc::clone(self);

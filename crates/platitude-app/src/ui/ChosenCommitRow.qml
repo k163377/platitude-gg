@@ -5,12 +5,21 @@ import platitude.ui
 
 // One commit of a choice, as the right pane lists it: face on the graph's lane, summary cut to one line, and the hash
 // plate. The only press the row takes is a Ctrl one, which drops the commit; its words are fields
-// (デザイン規約 §複数のコミットを選ぶ).
+// (デザイン規約 §複数のコミットを選ぶ / §右のペインの字は掴める), and the gaps around them stay as the seat a hand
+// reaches for a value from. **Taking out is all a row does** (user decision — ask before changing): picking is the
+// graph's, and a row that picked, lit or had a menu would look like a second home of the choice; taking out is this
+// list's because it is where what is held is read. No adding, and the last one stays, as on the graph.
+// **The faces are linked by the graph's lane** (user decision — ask before changing): rows alone do not say what two
+// commits are the two ends of. **Summary only, one line** (user decision — ask before changing): a list followed by
+// eye reads best with its rows one height; the rest is in the card. The card is the graph's own on the right pane's
+// seat (`RowHoverHost.chosenSeat`); this row has no hover of its own and reads the pane's hand by geometry
+// (`syncHand`). Headless: `graph-choose-said` (the card), `graph-choose-sweep` (the words), `graph-choose-drop` (the
+// Ctrl press).
 Item {
     id: commitRow
 
     /// One row as `GraphModel.chosenRows` names it (`oid`, `sha8`, `subject`, `body`, `author`, `authorTime`, `avatar`,
-    /// `avatarUrl`, `mates`, and `laneAbove` / `laneBelow` — "", "solid" or "dashed", デザイン規約 §複数のコミットを選ぶ).
+    /// `avatarUrl`, `mates`, and `laneAbove` / `laneBelow` — "", "solid" or "dashed", `GraphModel::chosen_lanes`).
     required property var modelData
     /// The card the page has out, by target key (`RowHoverHost.cardKey`); the row it is of keeps its band while the
     /// card stands over it.
@@ -149,11 +158,13 @@ Item {
         anchors.rightMargin: Theme.navBarGutter
 
         // The graph's lane through the faces, at its weight and dash, under the face as the graph's is under its node.
-        // One colour, not the lanes': a choice mixes lanes, and the row carries none of them.
+        // One colour, not the lanes': a choice mixes lanes, and the row carries none of them. No arrowheads: newest on
+        // top reads as the graph does, and a head does not fit the 8px between two faces.
         InkCanvas {
             id: lane
             /// A dashed link shows only in the gap between two faces, so its dashes are laid from that gap: as many
-            /// whole ones as fit, the air left over split between the two ends. Laid from anywhere else, the gap
+            /// whole ones as fit, the air left over split between the two ends, each a `fillRect` — not `setLineDash`,
+            /// which counts its dashes from the stroke's start. Laid from anywhere else, the gap
             /// catches a dash cut by a face, or a dash from each row meeting at the seam as one stroke. `top` is where
             /// the gap starts in this row's frame (every row stands its face alike — `faceDrop` — so the gap is the
             /// row less a face); the half drawn is `from`–`to`.
@@ -221,7 +232,9 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             sha8: commitRow.modelData.sha8
             fullSha: commitRow.modelData.oid
-            // A step under the summary beside it (デザイン規約 §複数のコミットを選ぶ).
+            // A step under the summary beside it, in colour and size: in the details pane the hash is its column's
+            // value, here it stands next to a sentence. `fontCode`, git's own step, one under the words' `fontMd` —
+            // mono at the same size reads larger than the words beside it.
             shaColor: Theme.textMuted
             shaSize: Theme.fontCode
             onCopyRequested: text => commitRow.copyRequested(text)
@@ -247,7 +260,8 @@ Item {
 
     // Declared last, so the Ctrl press it takes is taken before the words can select on it; every other press is
     // refused and goes on down as if this were not here. Deaf to hover, which would take the pointer from the fields
-    // and the row's handler (rules-refs/app-ui.md「行に重ねる面の `HoverHandler` は祖先が持つ」).
+    // and the row's handler (rules-refs/app-ui.md「行に重ねる面の `HoverHandler` は祖先が持つ」). No `cursorShape`: set
+    // here, the whole row wears the arrow and the words lose their I-beam.
     MouseArea {
         id: dropHand
         anchors.fill: parent

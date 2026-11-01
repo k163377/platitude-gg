@@ -10,8 +10,9 @@ const TPM_RIGHTBUTTON: u32 = 0x0002;
 
 /// Whether the window covers the whole work area — this window's
 /// "maximised". Not `IsZoomed`: a frameless window Qt maximises is not
-/// zoomed, and the resize edges only need to know whether there is
-/// anywhere left to drag an edge to.
+/// zoomed, so off it the top 8px of a maximised window — the tab row —
+/// would answer as a resize edge. The edges only need to know whether
+/// there is anywhere left to drag one to.
 fn fills_work_area(window: *mut c_void) -> bool {
     let mut rect = Rect::default();
     let mut info = MonitorInfo {

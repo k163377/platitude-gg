@@ -51,7 +51,9 @@ pub enum PassStep {
 ///
 /// Handed in at [`RepoSession::open`], like the sink and the command
 /// observer. Nothing in this crate implements one, so the shipped binary
-/// has no door here.
+/// has no door here — a test-only slot on `RepoSession` would instead be a
+/// Mutex resident in every session. Tests drive it through
+/// `support::session::PassDoors` (`session_integration::pass_watch`).
 pub trait PassHooks: Send + Sync + 'static {
     /// Called by every pass that reaches `at`, on that pass's own task;
     /// what runs there, and how often, is the implementation's. **The door
@@ -143,7 +145,11 @@ impl Drop for PassWatch<'_> {
         if self.answered {
             return;
         }
-        // Closing: nothing is left to read a report.
+        // Closing: nothing is left to read a report. A test of this silence
+        // closes from inside the pass (`PassDoors::run_inside_next_pass`):
+        // closed first, the cancel checks at `run_swap_pass`'s start and at
+        // the reset stop the pass before the door. `wait_for_graph_passes`
+        // proves the silence.
         if self.session.root_cancel.is_cancelled() {
             return;
         }

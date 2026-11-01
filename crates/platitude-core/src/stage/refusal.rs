@@ -49,7 +49,12 @@ pub(super) fn moved(kind: ReportKind, command: String, out: &GitOutput) -> GitEr
 /// held the index's lock (`index.lock': File exists`, the same at the
 /// minimum and 2.55) — a report, as a commit's is; any other failure goes
 /// through as it was. `kind` is the lock's report for that verb
-/// ([`ReportKind::StageLocked`] and the two beside it).
+/// ([`ReportKind::StageLocked`] and the two beside it), for the parts and
+/// the whole-file `add` / `restore` / `reset` / `rm --cached` alike.
+/// `clean` and the partial discard's `apply` (no `--cached`) take no index
+/// lock. Past a side a discard already threw away, "nothing was
+/// discarded" is untrue and git's words stand (`discard_rows`). Pinned by
+/// the lock tests of `stage_integration::refusals`.
 pub(super) fn locked_out(kind: ReportKind) -> impl Fn(GitError) -> GitError {
     move |error| match error {
         GitError::Failed {

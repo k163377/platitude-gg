@@ -222,8 +222,8 @@ async fn update_refs_moves_the_branches_git_named_and_no_others() {
 mod periodic {
     use super::*;
 
-    /// Why the flag is passed: rules-refs/core.md
-    /// 「駆動 rebase だけ `--no-rebase-merges` で釘付け」. The history comes out
+    /// Why the flag is passed: the comment on it in
+    /// `integrate::rebase::rebase_command`. The history comes out
     /// the same either way today; what is held is that the minimum git (the
     /// Linux container) takes the flag with the config standing.
     #[tokio::test]

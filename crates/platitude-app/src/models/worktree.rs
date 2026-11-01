@@ -11,8 +11,9 @@ use super::qml_register;
 // WorktreeModel: where the tree stands, as one record — HEAD and what
 // derives from it, the standing operation, and the last status's counts.
 // The one place QML reads HEAD from: other models are told the same report
-// (`hub::sink`) but are not a source
-// (rules-refs/app-ui.md「HEAD の oid の正は」). The file list itself is a
+// (`hub::sink`) but are not a source. `headOid` comes off the status and
+// answers detached too; `NavSectionModel.headOid` is the tip of the branch
+// HEAD is on, empty while detached. The file list itself is a
 // NavSectionModel.
 // ---------------------------------------------------------------------------
 
@@ -48,6 +49,11 @@ pub struct WorktreeModel {
     /// Whether something other than the current branch reaches its tip —
     /// whether a rewrite leaves the old commits drawn or only in the
     /// reflog. False until told: the answer that asks more of the person.
+    /// The one input that makes the drop row a count of presses or a
+    /// click; a derived value of the record (`StateMsg::HeadReach`) the
+    /// session pushes ahead. Asked as the menu opens, the answer would move
+    /// the row's `holdPresses` and `AppMenu.holdIndent` would indent every
+    /// row again. Headless: `drop-commit` / `drop-commit-go`.
     head_reached_elsewhere: bool,
     /// An answer to `head_reached_elsewhere` has landed. Before this edge
     /// its `false` is "not asked yet", not the answer.
@@ -115,6 +121,10 @@ pub struct WorktreeModel {
     /// separate field so the separator is the view's to draw (規約 §余白)
     /// and `op_text` stays empty exactly when nothing runs — what every
     /// `opText === ""` test asks.
+    ///
+    /// No preset holds the two at once: a check builds
+    /// `--preset rebase-conflict` with `--at`, runs `git bisect start` in
+    /// it and hands it over with `--repo`.
     op_also: String,
     has_conflicts: bool,
     staged_count: i32,
@@ -156,7 +166,7 @@ pub struct WorktreeModel {
     /// The working-tree side is not counted: a commit carries the index.
     eol_staged_count: i32,
     /// Pending files that need Git LFS where git cannot run it — the band's
-    /// `NO LFS` (デザイン規約 §ウィンドウの縁). 0 wherever git runs it.
+    /// `NO LFS` (`BandStateGroup.qml`). 0 wherever git runs it.
     lfs_needed: i32,
     /// Of those, the paths a discard could not copy (the filter is
     /// required): a discard of one is not brought back, so it is held in
@@ -164,9 +174,19 @@ pub struct WorktreeModel {
     /// デザイン規約 §回数押し).
     not_copied: Vec<String>,
     /// Whether what a `reset --hard` takes holds such a path — read off
-    /// the status, so the untracked ones do not count: most survive the
-    /// reset, and the ones in the way of where it goes are not known until
-    /// it is aimed (P3-確認事項 §触らないと決めたもの).
+    /// the status, so the untracked ones do not count (nor in
+    /// `hard_reset_takes`): most survive the reset, and the ones in the way
+    /// of where it goes are not known until it is aimed. Such an untracked
+    /// path stays `warning` though the copy misses it (`git add` refuses it)
+    /// and the reset deletes it for good: the record's `Not-copied:` line
+    /// names it. Read before the row is drawn, so the colour is settled
+    /// when the menu opens.
+    ///
+    /// Do not colour per destination (user decision — an edge case; ask
+    /// before changing): it would take one more git question as the menu
+    /// opens, wherever an uncopiable untracked file stands — whether the
+    /// destination holds that path, the read core's
+    /// `session::discard_record::in_the_way` makes.
     hard_reset_not_copied: bool,
     /// File-list rows of each change kind, for the graph's uncommitted row
     /// (`status::Kinds`), off this status at no git of its own. Conflicts
@@ -322,6 +342,9 @@ impl WorktreeModel {
     qproperty!("treeRevision", Member = tree_revision, Notify = changed);
     qproperty!("wipRowStands", Member = wip_row_stands, Notify = changed);
 
+    // Said for every status drained, whether or not a row moved — the one
+    // to wait on for "the status was read" (`NavSectionModel.changed` is
+    // said only when its rows change).
     #[qsignal]
     fn changed(&mut self);
 
@@ -617,9 +640,11 @@ impl WorktreeModel {
     /// screen. Answers whether it moved.
     ///
     /// Only the badge's word and count move here
-    /// (`RepoSession::refresh_op_progress`), and "nothing standing" is
-    /// ignored — the status after the write ends the badge
-    /// (rules-refs/app-ui.md「バッジの `n/m` は進捗専用の tick が運ぶ」).
+    /// (`RepoSession::refresh_op_progress`), through the same `settle_op`
+    /// as a status, so the words are decided in one place. "Nothing
+    /// standing" is ignored — the status after the write ends the badge:
+    /// the tick runs only while a replay is out, and one taken before git
+    /// writes its first marker would blink the badge as it comes up.
     fn drain_progress(&mut self) -> bool {
         let Some(feed) = self.progress_feed.clone() else {
             return false;

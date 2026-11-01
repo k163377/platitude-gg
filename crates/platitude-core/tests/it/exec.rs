@@ -1,8 +1,8 @@
 //! The execution layer against the real system git.
 //!
 //! These await the executor directly (no `CaptureSink`, so no `Patience`,
-//! and test executors carry no stock timeout), so `bounded` is the
-//! backstop that names a wedged git.
+//! and the test executors' stock budget is only the overall backstop —
+//! `support::exec::isolated`), so `bounded` is what names a wedged git.
 
 use crate::support::TestRepo;
 use crate::support::exec::{env, observed_env};

@@ -124,8 +124,9 @@ Item {
                     op.witness("pressNames", acts.names())
                     // waits(measured): the origin of `headMs=` below, which the report prints and nothing here reads
                     op.witness("pressedAt", Date.now())
-                    // The panel of the tab moved to before it has read anything, which the run's own shot, taken at
-                    // the landing, cannot show; the next frame is drawn long before git can answer. A grab that could
+                    // The panel of the tab moved to before it has read anything (the branch field's `Loading…`, the
+                    // buttons' depth; not judged), which the run's own shot, taken at the landing, cannot show; the
+                    // next frame is drawn long before git can answer. A grab that could
                     // not be asked for is said as such rather than waited on; one answering after the run ended is
                     // kept by none.
                     if (door === "repo" && pressed) {

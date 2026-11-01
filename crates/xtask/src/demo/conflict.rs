@@ -150,7 +150,7 @@ pub(super) fn rebase_conflict(repo: &mut DemoRepo) -> Result<(), String> {
 /// A drop whose replay goes through and whose restore collides: the
 /// uncommitted edit sits on the line the newest commit rewrote. The drop
 /// is of HEAD, so the verb needs no argument; the landing is a move's
-/// (デザイン規約 §未コミット変更がある状態での移動).
+/// (`RepoSession::checkout` in platitude-core).
 pub(super) fn drop_collides(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
     repo.commit(

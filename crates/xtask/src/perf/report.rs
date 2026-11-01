@@ -10,6 +10,9 @@ use super::display::Screen;
 use super::fonts::{FontWalk, signed_mb};
 use super::{Options, Reading};
 
+/// Bytes over 1024 * 1024: every "MB" the report prints is really MiB.
+/// Kept so the numbers stay comparable with the record and its 300 budget
+/// line (internal-docs/メモリと操作応答の改善計画.md).
 pub(super) fn mb(bytes: u64) -> f64 {
     bytes as f64 / (1024.0 * 1024.0)
 }
@@ -160,6 +163,9 @@ fn memory(opts: &Options, kept: &[Reading], context: &Context<'_>) {
             screen.name, screen.hz, screen.width, screen.height, screen.x, screen.y
         );
     }
+    // A software working set has no D3D floor under it: a different
+    // quantity, so memory is all a software run answers, and only beside a
+    // D3D run of the same commit.
     if opts.software {
         println!(
             "  renderer    : the software scene graph (--software), whose frames need no display; \

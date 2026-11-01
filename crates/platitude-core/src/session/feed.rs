@@ -11,6 +11,9 @@ use super::*;
 /// catches a scheduling-dependent share of them.
 /// [`RepoSession::set_recording`] (the log panel's switch) is exact for
 /// everything asked from then on, whose work is spawned after the store.
+/// A test counting only what follows the opening flips it there, once the
+/// opening is closed (`support::session::CaptureSink::opened_graph` /
+/// `opening_settled`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Recording {
     /// The commands the user asked for, and nothing else. The default:

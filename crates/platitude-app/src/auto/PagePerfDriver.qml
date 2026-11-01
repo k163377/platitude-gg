@@ -39,6 +39,8 @@ Item {
                                   && worktree.loaded
 
     // Every stage change goes through here (rules/app-ui.md §UI 自動化「段を持つドライバは段が変わるたびに名乗る」).
+    // Stage names are hyphenated (`details-frame`) so a `perf_stage` line never contains the `perf_*_frame` events
+    // `perf::interactions` finds by substring.
     function enter(next) {
         driver.stage = next
         Harness.report("perf_stage " + next + " operation=" + driver.operation)

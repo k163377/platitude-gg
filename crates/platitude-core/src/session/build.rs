@@ -129,7 +129,18 @@ pub(super) async fn run_plan(
 /// in the way (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
 ///
 /// Answers a [`Landing`](integrate::Landing): the dirty-tree refusal is
-/// what the carry handles, so it never reaches a caller.
+/// what the carry handles, so it never reaches a caller. Squash, drop
+/// and rebase onto all come through this one carry; refused or stopped,
+/// the screen says the landing and the count only, the log stays closed
+/// (user decision — ask before changing): the refusal is this carry's cue
+/// to go round, the stop is git's own landing. Headless:
+/// `drop-commit-go --preset drop-collides`, `drop-stops --preset
+/// drop-stops`.
+///
+/// Fired bare first: whether the tree is in the way is git's call, and a
+/// copy of that check drifts from it. Untracked files are not in a
+/// rebase's way, so a tree holding only those takes one command and no
+/// stash.
 pub(super) async fn rewrite_carrying(
     executor: &GitExecutor,
     repo: &RepoInfo,
@@ -199,12 +210,13 @@ impl Carried<'_> {
     /// (`MERGE_HEAD`, `REVERT_HEAD` …) down with it, so nothing is carried
     /// under one. A rewrite says so in a report of its own; a merge or a
     /// pull keeps git's refusal — the screen offers neither under a
-    /// standing operation, and git's own check before a merge reads
-    /// `MERGE_HEAD` and `CHERRY_PICK_HEAD` but not `REVERT_HEAD`
-    /// (builtin/merge.c, the minimum to 2.55), so this is the backstop. A
-    /// move cannot get here: git refuses every move under a standing
-    /// operation in words of its own
-    /// (rules-refs/core.md「立っている操作の上への rewrite は断る」).
+    /// standing operation (`RefMenuOffers::standing`,
+    /// `CommitMenuOffers::standing`, `PullOut::Standing`), and git's own
+    /// check before a merge reads `MERGE_HEAD` and `CHERRY_PICK_HEAD` but
+    /// not `REVERT_HEAD` (builtin/merge.c, the minimum to 2.55), so this is
+    /// the backstop. A move cannot get here: git refuses every move under a
+    /// standing operation in words of its own (why a rewrite cannot be left
+    /// to git: `carry_across`).
     fn under_standing(&self, state: &OpState, refusal: GitError) -> GitError {
         match self {
             Carried::Rewrite(_) => report::rewrite_while_standing(standing_name(state)),
@@ -216,7 +228,9 @@ impl Carried<'_> {
 /// What a merge and a pull bring in: git turns both down over uncommitted
 /// work its fast-forward or merge would write over, in the same words
 /// ([`integrate::refused_over_work`]), so both go round through the same
-/// stash (デザイン規約 §履歴を合流させる).
+/// stash (デザイン規約 §履歴を合流させる) — only then, not up front (user
+/// decision — ask before changing): `stash push -u`, the merge or pull,
+/// `stash pop --index`; a conflict stop leaves the entry in the stash.
 pub(super) enum Integrate<'a> {
     /// `git merge <rev>`.
     Merge {
@@ -249,6 +263,14 @@ impl Integrate<'_> {
 /// Runs `what`, going round through a stash when git refuses it over work
 /// in the way — the one refusal a stash gets past; any other comes back as
 /// git said it.
+///
+/// Only once refused: the everyday case is the very file being fixed here
+/// moving over there too, and without the carry that refusal lands in the
+/// log as a failure (user decision — ask before changing). The refusal is
+/// told by `would be overwritten` alone (a fast-forward exits 1, a real
+/// merge 2 with `Merge with strategy ort failed`, neither leaves a marker —
+/// measured on 2.55). The same three steps as a switch and a rebase
+/// (`carry_across`). Held by `session_integration::carry_integrate`.
 pub(super) async fn integrate_carrying(
     executor: &GitExecutor,
     repo: &RepoInfo,
@@ -357,15 +379,19 @@ pub(super) async fn move_carrying(
 /// better to report.
 ///
 /// Not `--autostash`: it restores with a plain `stash apply` (everything
-/// staged comes back unstaged), and a stopped rebase or merge parks the
-/// work in `.git/rebase-merge/autostash` / `MERGE_AUTOSTASH`, out of
-/// `stash list` and the graph.
+/// staged comes back unstaged — there is no way to pass `--index`, and no
+/// setting changes it; one application, one way staging survives a
+/// carry), and a stopped rebase or merge parks the work in
+/// `.git/rebase-merge/autostash` / `MERGE_AUTOSTASH`, out of `stash list`
+/// and the graph. The price of carrying here: nothing comes back by itself
+/// after a `--continue` / `--abort` typed later. Intended: a stopped
+/// rewrite is one the person has not settled yet, and writing the tree
+/// back silently under it is the riskier side.
 ///
 /// The restore is skipped when the command stops part-way: git will not
 /// write into an index holding unmerged paths, so a `pop` does nothing
 /// while reporting the conflict it walked into
-/// (rules-refs/core.md「`stash pop` の非ゼロを conflict と読めるのは」).
-/// The entry stays in the stash list for the person settling the
+/// (`RepoSession::stash_pop`). The entry stays in the stash list for the person settling the
 /// conflict, where the same commands typed by hand would leave it.
 async fn carry_across(
     executor: &GitExecutor,
@@ -375,8 +401,19 @@ async fn carry_across(
     cancel: &CancellationToken,
 ) -> Result<integrate::Landing, GitError> {
     // Asked before the stash, whatever is carried: one `rev-parse` on a
-    // path already four processes long (`Carried::under_standing`). A
-    // bisect carries — it is no `InProgress`.
+    // path already four processes long (`Carried::under_standing`). git's
+    // refusal cannot tell it: over a standing merge / cherry-pick / revert a
+    // rebase, plain or `--interactive`, is refused in a dirty tree's words
+    // (`cannot rebase: Your index contains uncommitted changes.`, plus
+    // `unstaged changes` while unresolved — measured on 2.55), and the
+    // `stash push` that follows writes a resolved index and takes the marker
+    // down with it, so the pop would land the resolution as plain staged
+    // changes and call it a success. Only an unresolved conflict is safe by
+    // accident (`could not write index`). The backstop for every carried
+    // route; a plan run is refused before this
+    // (`RepoSession::rebase_interactive`). A bisect carries — it is no
+    // `InProgress` and survives a stash. Held by
+    // `integrate_integration::standing_op` / `session_integration::standing_op`.
     let state = opstate::detect(executor, &repo.workdir, cancel).await?;
     if integrate::InProgress::from_state(&state).is_some() {
         return Err(what.under_standing(&state, refusal));

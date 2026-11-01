@@ -60,8 +60,7 @@ fn the_answer_the_pane_is_waiting_for_lands_however_late() {
     assert_eq!(tab.signature_code, "G");
 }
 
-// Coming back to a row asks again
-// (デザイン規約 §署名の表示「同じ行へ戻ってくれば投げ直す」).
+// Coming back to a row asks again (`signature_wanted`).
 #[test]
 fn coming_back_to_a_row_takes_the_answer_to_the_asking_that_brought_it() {
     let mut tab = asked_about_both();

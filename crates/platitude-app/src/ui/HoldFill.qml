@@ -15,11 +15,13 @@ Rectangle {
     /// edge (menu rows).
     property real inset: 0
     /// How far past the control's own sides the fill reaches: a menu row fills the card's side padding too, so the
-    /// mark at the row's edge has as much fill on its left as on its right (デザイン規約 §回数押し).
+    /// mark at the row's edge has as much fill on its left as on its right — inside the row only, the air left of the
+    /// mark is narrower than on its right.
     property real bleed: 0
 
     /// A white delete keeps the plain ink for its words only: the fill carries the warning, as its mark does
-    /// (デザイン規約 §回数押しの色).
+    /// (デザイン規約 §回数押しの色). Not a fill in the ground's blue-grey (`borderStrong`): pressed, it cannot be told
+    /// from the hover wash.
     readonly property color full: Qt.colorEqual(holdFill.tone, Theme.textPrimary) ? Theme.warning : holdFill.tone
     /// The step down each tone has (デザイン規約 §暗く落とした段).
     readonly property color down: Qt.colorEqual(holdFill.full, Theme.warning) ? Theme.warningDim

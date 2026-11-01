@@ -7,6 +7,10 @@ import platitude.ui
 
 // A report with nothing to decide (デザイン規約 §答えの要らない報せ): the question bar's shape, with the pill turned into
 // the one word that takes it back up. One report stands at a time, above whatever question is standing.
+//
+// `OK` only says "read": one click takes the bar down, and Escape does the same — a count of presses is for an answer
+// that loses something (§回数押し). No ✕: the question bar's ✕ walks away without answering, and a report has nowhere
+// to walk away to.
 Rectangle {
     id: bar
 
@@ -54,7 +58,8 @@ Rectangle {
         bar.acknowledged()
     }
 
-    /// The height the words ask for, and the two edges a run photographs on (as `AskBar.settled` / `shut`).
+    /// The height the words ask for, and the two edges a run photographs on (as `AskBar.settled` / `shut`). It grows
+    /// by the wrapped line, and a run shoots that as `AskBar.openHeight` says.
     readonly property real openHeight: bar.open ? noticeRow.implicitHeight + 2 * Theme.spaceMd : 0
     readonly property bool settled: bar.openHeight > 0 && bar.implicitHeight === bar.openHeight
     readonly property bool shut: !bar.open && bar.implicitHeight === 0
@@ -126,8 +131,10 @@ Rectangle {
                 pixelSize: Theme.fontMd
                 weight: Theme.fontWeightStrong
             }
-            // Wrapped, never cut: nothing caps the height (デザイン規約 §答えの要らない報せ). Plain text: a lock's reason
-            // is somebody's own words, and a `<` in them is a character, not markup.
+            // Wrapped, never cut: nothing caps the height (デザイン規約 §答えの要らない報せ). A line can carry somebody's
+            // own words (a lock's reason) and run long; the bar grows by the words and the middle of the page goes down
+            // by as much — a cap on the lines would be cutting again. Plain text: a `<` in those words is a character,
+            // not markup.
             Label {
                 id: detailWord
                 Layout.fillWidth: true
@@ -156,6 +163,7 @@ Rectangle {
                 onLinkAsked: href => bar.linkAsked(href)
             }
         }
+        // Stays in the middle of the bar however many lines the words take.
         Rectangle {
             id: okPill
             Layout.alignment: Qt.AlignVCenter

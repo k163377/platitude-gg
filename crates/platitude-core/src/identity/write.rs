@@ -30,16 +30,23 @@ impl IdentityWrite {
 
 /// Records `user.name` and `user.email`, and answers what git holds after.
 ///
-/// The pair cannot be made atomic
-/// (rules-refs/core.md「identity の 2 連書きは原子化できない」), so the write
+/// The pair cannot be made atomic: `git config` writes one key per
+/// process, `--edit` takes no lock, a lock of this end's own would be a
+/// second config writer, and libgit2 is ruled out (CLAUDE.md 絶対制約). A
+/// half write (the new name over the old address) leaves
+/// `Identity::is_complete()` true and would stay unnoticed, so the write
 /// reads itself back and goes again once when it differs: the writes are
 /// idempotent and contention clears by the second pass, while any other
-/// failure answers the same however often asked.
+/// failure answers the same however often asked, so two passes are all.
+/// Not adopted: reading before the write and putting it back on failure —
+/// the putting back meets the same lock.
 ///
 /// Only an empty name is refused — the only thing git refuses, and only at
-/// commit time ("Author identity unknown"); the rest is git's to handle
-/// (rules-refs/core.md「検証は git に任せる」). Values are trimmed, as git
-/// would, so the stored configuration equals what commits show.
+/// commit time ("Author identity unknown"); the rest is git's to handle: an
+/// empty address goes through as `<>`, git drops `<`, `>` and line breaks
+/// from the author line, and the config write escapes `\n`, so nothing is
+/// injected. Values are trimmed, as git would, so the stored configuration
+/// equals what commits show.
 pub async fn set_identity(
     executor: &GitExecutor,
     workdir: &Path,

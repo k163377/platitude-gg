@@ -1,6 +1,37 @@
-//! What destructive operations took away (破棄記録仕様.md §3), read off
-//! git's own reflogs and Platitude GG's own record, and how each is brought
-//! back (§4).
+//! What destructive operations took away, listed for the repository as one
+//! log read off git's own reflogs and Platitude GG's own record, and how
+//! each is brought back — the feature's entry. A restore only adds: a name
+//! stood up again or the work applied again, never a ref moved (no Undo /
+//! Redo, 破棄記録仕様.md — user decision). Written by `record` and `copy`
+//! (`session::discard_record` places them round each write), read by
+//! `read` (`moves`, `lost`, `records`, `entries`), brought back by
+//! `restore`; on screen as `RepoPage`'s discard log (`RecoverPane`,
+//! `RecoverBand`, the provisional rows of `session::shown_discard`).
+//!
+//! **Listed, of Platitude GG's own writes**: a local branch deleted
+//! (`Delete both`'s local half included) or moved off its tip — reset
+//! (`--soft` / `--mixed` / `--hard`), `Move here` (`switch --force-create`),
+//! history rewritten (rebase, squash, drop, reword, reorder), amend, a pull
+//! that rebases; a remote branch deleted (its row, `push --delete` from the
+//! local row, `Delete both`, a remote branch replaced, the delete-and-make
+//! after a rename here) or force-pushed; a worktree removed; a stash
+//! dropped, or popped where its entry went; a tag deleted here or on a
+//! remote, or force-pushed there; uncommitted work discarded (files, hunks,
+//! lines), untracked files deleted, the work `reset --hard` threw away; the
+//! commits a detached HEAD left behind when it switched to a branch.
+//!
+//! **Not listed**: what no explicit discard took — fetch's changes (a
+//! remote-tracking ref pruned, someone else's force push taken in, a tag
+//! `fetch.pruneTags` removed); an operation's own work on its way (a merge,
+//! rebase, cherry-pick or revert stopped part-way, the side of a conflict
+//! not taken); settings — a remote's URL or origin mark, an upstream
+//! changed (the upstream a branch delete took comes back with the branch);
+//! a staged version unstaged over a different working-tree one; what
+//! Platitude GG never runs (`branch -M` over a branch, `stash clear`,
+//! `tag -f`, `worktree remove --force` …). Other tools' operations are not
+//! required: what git's own reflogs hold is listed whoever made it, but git
+//! deletes a branch's reflog with the branch, so another tool's delete is
+//! listed only where it wrote it into HEAD's reflog.
 //!
 //! - **The reflogs**: every local branch's, and every worktree's HEAD —
 //!   a reset, an amend, a rebase, a branch set by hand, a detached HEAD
@@ -89,20 +120,26 @@ pub enum DiscardKind {
     ForcePushedTag,
 }
 
-/// The ref whose reflog holds Platitude GG's own records (§2: outside
-/// `refs/heads`, one for the repository). Each line's value is the record —
-/// for thrown-away work the stash-shaped copy itself, for the rest a commit
-/// on what was taken carrying what to put back in its trailers (`record`).
+/// The ref whose reflog holds Platitude GG's own records: outside
+/// `refs/heads`, one for the repository — every worktree shares it, and it
+/// takes lines while HEAD is detached or unborn. Its reflog is made by
+/// `update-ref --create-reflog`: `core.logAllRefUpdates=true` makes one only
+/// for `refs/heads`, `refs/remotes`, `refs/notes` and HEAD (git-config(1)).
+/// Each line's value is the record — for thrown-away work the stash-shaped
+/// copy itself, for the rest a commit on what was taken carrying what to put
+/// back in its trailers (`record`). Its newest value shows in other tools'
+/// `git log --all` and goes out with `push --mirror` and `bundle --all` — a
+/// copy being the thrown-away work itself.
 pub const RECORD_REF: &str = "refs/pgg/discards";
 
-/// What the record's `Worktree:` names the main worktree by (§2.1): no
+/// What the record's `Worktree:` names the main worktree by: no
 /// name git gives a linked one under `$GIT_DIR/worktrees/` — those are a
 /// folder's name, and a linked worktree may well sit in a folder `main`.
 const MAIN_WORKTREE: &str = ".";
 
-/// One thing an entry brings back, and as what (§4). Names are the ones the
-/// restore would take now: the old one where it is free, else with
-/// `-pgg-restored` (and `-1`, `-2` …) after it.
+/// One thing an entry brings back, and as what (`restore`). Names are the
+/// ones the restore would take now, decided as the list is read: the old one
+/// where it is free, else with `-pgg-restored` (and `-1`, `-2` …) after it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Restore {
     /// A branch `name` at `tip`, measured against `upstream` where the
@@ -125,7 +162,7 @@ pub enum Restore {
     Stash { commit: Oid, message: String },
     /// The copy `copy` of thrown-away work put back into the worktree at
     /// `path`: as it was staged where that goes, unstaged where only that
-    /// goes, else as a stash entry (§4). `git_dir` is that worktree's git
+    /// goes, else as a stash entry (`restore`). `git_dir` is that worktree's git
     /// directory as a session opened there names it — the write order the
     /// restore waits its turn in — empty where the worktree is gone.
     Changes {
@@ -146,12 +183,12 @@ pub enum Look {
     Stash,
     /// Nothing: no commit this repository has (a remote's tag never
     /// fetched, a commit gc took). No walk draws it, and its restore is
-    /// git's to refuse (§4).
+    /// git's to refuse.
     Absent,
 }
 
 /// Where a stash-shaped commit draws when its own base is a commit
-/// Platitude GG made for it (§2.1 `Stands-on:`): the commit `made` — what a
+/// Platitude GG made for it (`Stands-on:`, `copy`): the commit `made` — what a
 /// discard left, which draws no row — and the commit `on` it was made on,
 /// which the stash's row draws on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -184,11 +221,11 @@ pub struct Part {
     pub lost: Vec<Oid>,
     /// How many paths a copy or a stash holds; 0 otherwise.
     pub files: u32,
-    /// Paths thrown away without a copy (§2.1 `Not-copied:`), which the
+    /// Paths thrown away without a copy (`Not-copied:`, `copy`), which the
     /// restore does not bring back.
     pub not_copied: Vec<String>,
     /// The remote it was taken from — a remote's branch or tag, deleted or
-    /// pushed over — which the restore stands here (§4); empty otherwise.
+    /// pushed over — which the restore stands here; empty otherwise.
     pub remote: String,
     /// The record line it was read from, and its number there — what the
     /// note a restore leaves names (`record::record_restored`). `None` for
@@ -235,16 +272,17 @@ impl Discard {
             .collect()
     }
 
-    /// Whether a part can be brought back alone (§4). Not the branches one
-    /// rebase moved: they went together and come back together, and a
-    /// commit of theirs alone is a cherry-pick off the graph.
+    /// Whether a part can be brought back alone. Not the branches one
+    /// rebase moved: they went together and come back together (user
+    /// decision — ask before changing), and a commit of theirs alone is a
+    /// cherry-pick off the entry's provisional rows.
     pub fn restores_by_part(&self) -> bool {
         self.parts.len() > 1 && self.kind != DiscardKind::Rebase
     }
 }
 
 /// The name a restore takes: `name` while no `taken` one has it, else the
-/// first free one of [`suffixed`] (§4).
+/// first free one of [`suffixed`].
 pub fn free_name(name: &str, taken: &impl Fn(&str) -> bool) -> String {
     if taken(name) {
         suffixed(name, taken)
@@ -254,7 +292,7 @@ pub fn free_name(name: &str, taken: &impl Fn(&str) -> bool) -> String {
 }
 
 /// `<name>-pgg-restored`, then `-1`, `-2` … after it, the first no `taken`
-/// one has — where a thing had no name of its own, the start (§4: a
+/// one has — where a thing had no name of its own, the start (a
 /// detached HEAD's commits as `detached-pgg-restored`).
 pub fn suffixed(name: &str, taken: &impl Fn(&str) -> bool) -> String {
     let base = format!("{name}-pgg-restored");

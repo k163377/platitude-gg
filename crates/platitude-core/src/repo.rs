@@ -43,6 +43,9 @@ pub async fn open(
         });
     }
 
+    // On the stock budget, no cap of its own: a test harness raises the
+    // stock budget in one place (`GitExecutor::with_stock_timeout`), and a
+    // short wall clock here would let load decide the very first command.
     let cmd = GitCommand::new().cwd(path).args([
         "rev-parse",
         "--show-toplevel",
@@ -154,6 +157,9 @@ pub(crate) fn git_dir_of(workdir: &Path) -> Option<PathBuf> {
 /// link, whole or broken (the entry, not what it names). Only the folder:
 /// how far up git looked is git's alone (`GIT_CEILING_DIRECTORIES`, a
 /// filesystem boundary), so a parent's `.git` says nothing of its answer.
+/// A folder opened inside a broken repository is left to git's words: under
+/// a `.git` folder it reads as no repository in every release; under a
+/// `gitdir:` file, up to 2.55 the same, from 2.56 as git failing.
 fn holds_a_dot_git(folder: &Path) -> bool {
     folder.join(".git").symlink_metadata().is_ok()
 }
@@ -221,7 +227,8 @@ pub async fn place(
 /// differently from a picker and from `git worktree list` (separators, a
 /// trailing one, Windows letter case, the 8.3 short name, links). A path
 /// that will not resolve falls back to `repo_key`, which keeps two absent
-/// paths apart.
+/// paths apart. Not for the state file either: on Windows its answer
+/// carries the `\\?\` prefix, so `state.toml` keeps `repo_key`.
 pub fn open_key(path: &str) -> PathBuf {
     let path = path.trim();
     std::fs::canonicalize(path).unwrap_or_else(|_| PathBuf::from(crate::settings::repo_key(path)))

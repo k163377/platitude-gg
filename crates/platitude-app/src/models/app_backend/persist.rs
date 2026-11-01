@@ -165,8 +165,11 @@ impl AppBackend {
     }
 
     /// Works out whether there is a restart to offer: the box holds a git
-    /// this run is not on, and that git answered. Called wherever either
-    /// moves.
+    /// this run is not on, and that git answered — an old one too
+    /// (gitの扱い.md §対応範囲). Called wherever either
+    /// moves. The one place the offer is spelled: the button, its warning
+    /// line, the press's gate (`restart_now`), the screen's held way out
+    /// and the other chapters' lock all read `gitPathOffersRestart`.
     pub(super) fn settle_restart_offer(&mut self) {
         self.git_path_offers_restart = !self.restart_wanted
             && !self.git_path_names_the_run
@@ -193,7 +196,9 @@ impl AppBackend {
             let previous = hub.state().window;
             hub.set_window_state(platitude_core::settings::WindowState {
                 // A maximized window reports the screen's size; keep the
-                // last normal geometry so restoring goes back to it.
+                // last normal geometry so restoring goes back to it. Filed
+                // as the windowed shape, those numbers would become the next
+                // launch's restore rectangle and feed themselves.
                 x: if maximized { previous.x } else { Some(x) },
                 y: if maximized { previous.y } else { Some(y) },
                 width: if maximized { previous.width } else { width },

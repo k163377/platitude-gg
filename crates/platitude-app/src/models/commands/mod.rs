@@ -255,7 +255,9 @@ impl CommandsModel {
 
     /// The machine's UTC offset (`selection::clock_of`), sent when the tab
     /// attaches and whenever the panel comes up, so a change of offset
-    /// reaches the rows that arrive afterwards.
+    /// reaches the rows that arrive afterwards. The model stamps the clock
+    /// itself (the `clock` role); only the zone comes from the screen, as
+    /// `std::time` knows UTC alone.
     #[qslot]
     fn set_zone_minutes(&mut self, minutes: i32) {
         self.zone_minutes = minutes;

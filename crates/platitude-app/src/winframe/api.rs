@@ -68,8 +68,10 @@ pub fn fit_to_work_area(screen: &str) -> bool {
     false
 }
 
-// `WM_NCCALCSIZE` stays Qt's (rules-refs/app-ui.md「不採用: `WM_NCCALCSIZE` の横取り」);
-// the way out is the window's custom margins, which the bridge does not expose.
+// `WM_NCCALCSIZE` stays Qt's. Taken by the subclass to drop the non-client area, Qt never sees
+// the message and keeps its frame margins: only the client grows, and the right and bottom come
+// out black. A message Qt builds state from cannot be taken; a pure query (`WM_NCHITTEST`) can.
+// The way out is the window's custom margins, which the bridge does not expose.
 
 /// Takes `WM_NCHITTEST` away from Qt for the windows that are up: every
 /// point is client except the resize borders and the strips
@@ -94,7 +96,8 @@ pub fn take_frame_hit_test() {
 /// Where the band's empty runs sit, in logical scene pixels: `x0..x1`
 /// each, from the window's top down to `bottom`. Scaled per hit test, so
 /// a DPI change needs no new report. Every report carries all of them; a
-/// run that has gone comes back empty.
+/// run that has gone comes back empty. One door for both: a report per run
+/// would leave a run that went standing at its last width.
 pub fn set_caption_strips(runs: [(f64, f64); CAPTION_RUNS], bottom: f64) {
     #[cfg(windows)]
     win32::set_caption_strips(runs, bottom);

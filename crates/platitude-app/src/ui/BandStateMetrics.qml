@@ -16,12 +16,13 @@ Item {
     /// Whether the operation also has a second word and a step count, both drawn inside its badge.
     required property bool hasAlso
     required property bool hasStep
-    /// The words' floor, in characters (規約 §ウィンドウの縁).
+    /// The words' floor, in characters (`BandStateGroup.stateMinChars`).
     required property int minChars
 
     /// Whole pixels: boxes are laid out on whole ones, and a ceiling summed from the fractions comes out under what
     /// the rounded widths add up to — the share-out then finds itself short at exactly the natural width, and every
-    /// word elides in a band with room to spare.
+    /// word elides in a band with room to spare. Windows' faces give these words no fractions, so only the other OSes
+    /// show it.
     readonly property int opW: Math.ceil(mOpText.implicitWidth
                                           + (metrics.hasAlso
                                              ? 2 * Theme.spaceXs + mDot.implicitWidth + mOpAlso.implicitWidth : 0)
@@ -33,10 +34,12 @@ Item {
     readonly property int staleW: Math.ceil(mStale.implicitWidth) + 2 * Theme.spaceXs
     readonly property int lfsW: Math.ceil(mLfs.implicitWidth) + 2 * Theme.spaceXs
 
-    /// The badge box, the band's and the card's alike (規約 §ウィンドウの縁「バッジの箱」). The words are capitals only,
-    /// so the box is cut round the capitals' ink — the line's descent is air no letter uses: as much air over the cap
-    /// height as under the baseline, the most of it that fits in the band's box step (`iconXl`, the `+`'s wash). Whole
-    /// pixels, so the frame's lines stay sharp and the two airs come out equal.
+    /// **The badge box**, the band's, the card's and the folded `…`'s alike. The words stand on the tab names' baseline
+    /// (one line, one baseline — as the panel's words do). The words are capitals only, so the box is cut round the
+    /// capitals' ink — the line's descent is air no letter uses, and a line box centred leaves more air on top the
+    /// larger the face's ascent: as much air over the cap height as under the baseline, the most of it that fits in the
+    /// band's box step (`iconXl`, the `+`'s wash). Whole pixels, so the frame's lines stay sharp and the two airs come
+    /// out equal. The drawn dot between two words stands on the capitals' middle too (`capMiddle`).
     readonly property int capRows: Math.round(stateFont.capitalHeight)
     readonly property int air: Math.floor((Theme.iconXl - 2 * Theme.borderWidth - metrics.capRows) / 2)
     readonly property int depth: metrics.capRows + 2 * metrics.air + 2 * Theme.borderWidth
@@ -51,7 +54,9 @@ Item {
 
     /// The narrowest a badge is drawn with words in it. Settled by `settleMinW`: `advanceWidth` is a method, so a
     /// binding on it holds the default font's answer (rules-refs/app-ui.md「`FontMetrics.advanceWidth()` も同じ側」).
-    /// Counted in `n`s, not `averageCharacterWidth` (rules-refs/app-ui.md「字数の床の値付けは実測の字送り」).
+    /// Counted in `n`s, not `averageCharacterWidth` (rules-refs/app-ui.md「字数の床の値付けは実測の字送り」). Not what
+    /// `window-floor`'s `bandW=` counts: at the window's floor the group folds to its mark (`windowAtFloor`), so that
+    /// is `BandStateGroup.foldedWidth`; this floor only decides where the words are given up.
     property real minW: 0
     function settleMinW() {
         metrics.minW = Math.ceil(stateFont.advanceWidth("…") + metrics.minChars * stateFont.advanceWidth("n"))

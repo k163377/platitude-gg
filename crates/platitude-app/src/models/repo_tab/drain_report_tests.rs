@@ -441,7 +441,8 @@ fn a_rename_press_says_whether_the_tab_stands_in_that_worktree() {
 
 /// An identity read that failed is an answer too: the commit button stops
 /// waiting on a running command and says the name and email could not be
-/// read — until a read lands (`TabMsg::AuthorUnread`).
+/// read — until a read lands (`TabMsg::AuthorUnread`). The only net for
+/// it: no preset can make the read fail.
 #[test]
 fn an_identity_that_could_not_be_read_is_an_answer() {
     let mut tab = RepoTab::default();

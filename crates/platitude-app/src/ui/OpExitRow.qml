@@ -5,7 +5,7 @@ import platitude.ui
 
 // One row of the stopped operation's card: `AppMenuItem`'s row standing in a pane — the menu's chip, sentence and hold
 // mark exactly, so the menu's reader reads it untaught. Not `MenuItem` itself, which only lays out inside a Menu.
-// **The sentence wraps where a menu's is cut** (デザイン規約 §進行中の操作から出る): a menu is as wide as its widest
+// **The sentence wraps where a menu's is cut** (user decision — ask before changing): a menu is as wide as its widest
 // row and says the rest on hover, while this card is only as wide as the pane — and what a row does is the one thing
 // it is there to say. The chip, the mark and the note stand on the first line.
 Item {
@@ -25,7 +25,8 @@ Item {
     /// the same answer reads this, so the wording holds between presses.
     readonly property alias armedPresses: holdDrive.armedPresses
     /// `warning` unless the row names `danger` itself — the card's held rows do: what they throw away is the work of
-    /// the stopped operation, which the discard record does not keep (デザイン規約 §回数押し の色の表).
+    /// the stopped operation, which the discard record does not keep (デザイン規約 §回数押し の色の表). The default is
+    /// `AppMenuItem.holdTone`'s, on the same terms (user decision — ask before changing).
     property color holdTone: Theme.warning
     /// The width this row's chip asks the card's shared column to hold, so every sentence starts on the same x.
     readonly property real codeColSeat: codeLabel.implicitWidth
@@ -43,7 +44,9 @@ Item {
     signal picked()
 
     /// Automation: run the row to its end — every press at once where it takes several, the plain press where not. A
-    /// row turned off answers it as it answers a hand: not at all. Answers whether the presses went in.
+    /// row turned off answers it as it answers a hand: not at all. Answers whether the presses went in. A click row
+    /// emits `picked()` itself: `HoldDriver.runOut()` does nothing at `holdPresses <= 0`, and `--continue` / `--quit`
+    /// / a free `--skip` would sit silent to the watchdog.
     function completeHold() {
         if (!opRow.enabled)
             return false
@@ -110,7 +113,7 @@ Item {
         off: opRow.holdOff
         visible: opRow.armedPresses > 0 && !holdDrive.loading
     }
-    // The ring the row's work turns in the mark's seat once the floor has passed (デザイン規約 §回数押し).
+    // The ring the row's work turns in the mark's seat once the floor has passed (`HoldDriver.loading`).
     SpinnerIcon {
         x: holdMark.x + Math.round((holdMark.width - width) / 2)
         y: holdMark.y + Math.round((holdMark.height - height) / 2)

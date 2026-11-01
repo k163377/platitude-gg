@@ -2,6 +2,33 @@ import QtQuick
 
 /// The press-count state machine every confirmed control shares (デザイン規約 §回数押し). The owner keeps its gestures and
 /// its paint; this owns the count, the progress and the completion's phases.
+///
+/// A press counts the moment it lands, so quick presses go through (user decision — ask before changing): no wait
+/// after the first — a control that needs a pause feels like click, mode switch, double-click, and the quick second
+/// press is swallowed. Counted on the input side, never waiting for the paint. `AbstractButton` delivers a fast second
+/// press as a press and adds the double-click on another path (`qquickabstractbutton.cpp` `handlePress` /
+/// `mouseDoubleClickEvent`), so every part counts one per press. The count goes back to zero when the pointer leaves
+/// ([`leave`]) or after `holdResetMs` with no press (`idle`) — both sliding the fill back over `holdBackMs` — and at
+/// once when focus leaves a keyboard count ([`focusLost`]). The first press fixes the count and the target; the last
+/// locks.
+///
+/// The fill stops part way at each press: full at the first, it reads as "did it run?". At the last it fills, takes
+/// the tone's dimmed step at once ([`dimmed`] — the work is running), holds `holdFloorMs` so the full fill is seen, and
+/// past the floor the owner turns the ring in the mark's seat while its work is out ([`loading`]); then zero at once.
+///
+/// What runs is decided at the last press and runs there ([`finished`]). An answer arriving during the floor (not
+/// merged, refused), a swapped target or a closed menu does not change it: answered after the floor, a consent to a
+/// plain delete would run as a forced one, and a card reopened on another target would take the old confirmation.
+/// Owners take one of three shapes. One that waits on its own work (a toolbar button, an exit card's row) runs it under
+/// the full fill and turns to the ring past the floor; the diff's `Discard hunk` does not wait — it settles at the
+/// floor and the hunk goes with the diff's reread. One whose leaving is all that waits (a menu row's menu closing, the
+/// ask bar's pill going up) leaves at [`landed`]; the work runs behind and its progress is said where it lands (graph,
+/// left menu, log). One whose answer takes it off the screen at once (the settings avatar's `Remove`, the plan's
+/// `Discard` and run) accepts at the last press — its content fixed there, and through the floor it takes no edit, swap
+/// or other button — and gives that content once at [`landed`]. It calls the answer off only when the target expired
+/// (the plan closed: the tip moved, an operation started, the tab moved to another worktree; the person's picture
+/// changed or went), never because the control went unpressable or busy, which the operation itself mostly causes; an
+/// expired answer neither comes back nor lands on another target.
 QtObject {
     id: drive
 
@@ -64,7 +91,9 @@ QtObject {
     }
     /// The count or the premise moved before the last press: the presses so far are dropped, and a release still under
     /// the hand answers nothing (owners read this before treating a release as a plain click). Latched until the next
-    /// [`begin`].
+    /// [`begin`]: compared with the live values instead, a target that went and came back would revive the gesture.
+    /// What decides `holdPresses` moves in the background (a fetch's answer, the reach walk, git's refusal), so read
+    /// between presses it would change the presses' meaning half way (`tst_holdlatch`).
     property bool stale: false
     onHoldPressesChanged: drive.noteSpoiled()
     onPremiseChanged: drive.noteSpoiled()
@@ -152,7 +181,7 @@ QtObject {
     function letUp() {
         drive.pressed = false
     }
-    /// The pointer left the control part way: the count goes back to zero (デザイン規約 §回数押し).
+    /// The pointer left the control part way: the count goes back to zero.
     function leave() {
         if (drive.done || drive.count === 0)
             return
@@ -187,7 +216,9 @@ QtObject {
         drive.progress = 0
     }
     onWaitingChanged: if (drive.done && drive.floorPassed && !drive.waiting) drive.settle()
-    /// Automation: the whole gesture at once, with no hand behind it and no floor waited out.
+    /// Automation: the whole gesture at once, with no hand behind it and no floor waited out — `finished` and
+    /// `landed` are both out before it returns, so a verb that compares a count across the write counts before
+    /// calling it (`avatar-remove`).
     function runOut() {
         if (drive.done || drive.holdPresses <= 0)
             return
@@ -201,8 +232,9 @@ QtObject {
     function holdKey(key) {
         return key === Qt.Key_Space || key === Qt.Key_Return || key === Qt.Key_Enter
     }
-    /// One of those keys, arriving fresh — auto-repeat is dropped on both edges (デザイン規約 §回数押し): a key held down
-    /// would otherwise count presses nobody made. Owners with their own answer for the same key ask this too.
+    /// One of those keys, arriving fresh — auto-repeat is dropped on both edges: a held key repeats its press on every
+    /// platform and its release on some, and one key held down would count presses nobody made and press it through.
+    /// Owners with their own answer for the same key ask this too.
     function ownsKey(event) {
         return !event.isAutoRepeat && drive.holdKey(event.key)
     }

@@ -6,7 +6,8 @@ import platitude.ui
 // The details editor's action row: the button that writes the message back, and the warning of what that costs. It
 // stands from the moment a caret enters either box — appearing as the first character lands would move everything
 // below under the hand. No discard button on purpose: a draft is thrown away by Escape or by reading another commit
-// (デザイン規約 §コミットメッセージの 2 つの枠), and a one-click discard would be the only one in the app.
+// (`DetailsPane.syncMessage`), and a one-click discard of typed words would be the only one in the app — a press that
+// loses something is held (規約 §回数押し), and those two roads are enough.
 ColumnLayout {
     id: actions
 
@@ -65,7 +66,8 @@ ColumnLayout {
         frameColor: saveButton.enabled ? Theme.accent : Theme.borderDefault
         activeFocusOnTab: true
         // Feeding a plan's `reword` row, the chip is that row's verb and nothing runs on this press
-        // (デザイン規約 §git 用語のコード表記「interactive rebase の todo 動詞は、コマンドと同じに扱う」).
+        // (デザイン規約 §git 用語のコード表記「interactive rebase の todo 動詞は、コマンドと同じに扱う」), so the phrase is the
+        // plan's too: `reword` *in the plan* — only the run button runs.
         phraseHead: actions.intoPlan ? "reword" : "commit --amend"
         text: actions.intoPlan ? qsTr("in the plan") : qsTr("the message")
         phraseFace: actions.committerFace

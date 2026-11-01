@@ -133,7 +133,8 @@ fn leaf(preset: &str, name: &str) -> String {
 /// Not the executable's bytes: the linker stamps every link (PE time, PDB
 /// GUID), so every relink and every seat would get its own set of
 /// templates, each built mid-gate; the sources are the same on every
-/// seat.
+/// seat. The bytes, comments included: a comment-only change rebuilds
+/// every preset — accepted, since it is rare.
 ///
 /// The git version because the repository is that git's output
 /// (`--old-git` runs still build with the real one). The day because a

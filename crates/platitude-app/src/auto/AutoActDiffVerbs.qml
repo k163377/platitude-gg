@@ -25,7 +25,9 @@ Item {
     readonly property var graphPane: driver.graphPane
     readonly property var diffRowMenu: driver.diffRowMenu
     readonly property var writeBarrier: driver.barrierWrite
-    /// The verbs that open a file's preview: each waits for the decode and reports what the pane shows.
+    /// The verbs that open a file's preview: each waits for the decode and reports what the pane shows. The pictures
+    /// are `--preset pictures`'; a binary file's face needs a repository of its own passed with `--repo` (a bare
+    /// `git init` will do).
     readonly property var previews: ["preview", "preview-unstaged", "preview-staged", "preview-close"]
     /// The verbs whose own operation takes over at the rows. `diff-sweep`, `-bar` and `-blank` read the laid-out
     /// view, a frame behind the rows — their operations wait for it.
@@ -55,6 +57,8 @@ Item {
                 // True even here — falsy reads as "not mine" to the dispatch chain.
                 return true
             }
+            // The rename's source from the model: named without it, git reads the diff as a file appearing from
+            // nothing, and a pure rename's `No changes to show` could not be shot.
             page.toggleDiff(named ? head : "unstaged", filePath,
                             unstagedModel.origOf(filePath))
             acts.beginRows(act)
@@ -137,7 +141,8 @@ Item {
     /// The drag the four text verbs share (デザイン規約 §diff の中身をコピーする), entered through the functions the hand's
     /// own handlers call (`DiffTextSelect`) since hover and a real button cannot be injected. It runs from the head of
     /// the first line past the first removed one so the selection holds both sides — a one-sided drag passes on half
-    /// the rule. Answers what the drag picked, read as it lands.
+    /// the rule. Answers what the drag picked, read as it lands. `diff-select` stops with the selection laid: its
+    /// picture is for the removed line wearing no ground — a few pixels, judged on a crop.
     function pickDiffText(act) {
         const removedRow = diffPane.firstRemovedRow()
         const lastRow = Math.min(diffPane.view.count - 1, removedRow + 1)
@@ -168,7 +173,10 @@ Item {
         return name + " holdsRemoved=" + (removed !== "" && text.indexOf(removed) >= 0)
                + " lines=" + (text === "" ? 0 : text.split("\n").length)
     }
-    /// The offered menu as it stands at completion, not the diagnostic emitted by its opening signal.
+    /// The offered menu as it stands at completion, not the diagnostic emitted by its opening signal (`PageReports`):
+    /// that line is history, never the claim. With only the opening's `diff_menu open=true rows=2` in the log and a
+    /// completion report of `diff_row` / `diff_pick` alone (`diff-menu notes.txt --preset manyhunks`), the verdict is
+    /// red — so `diff-menu`'s `when` waits for the menu to show and its report reads the menu's own state.
     function menuLine() {
         return "diff_menu open=" + diffRowMenu.showing + " rows=" + diffRowMenu.menu.offeredRows
                + " copy=" + diffRowMenu.canCopy + " removed=" + diffRowMenu.removed
@@ -205,11 +213,20 @@ Item {
                + " url=" + (diffPane.diffModel.previewNewUrl === ""
                             && diffPane.diffModel.previewOldUrl === "" ? "empty" : "held")
     }
-    // Waits for the rows, never a fixed time (rules-refs/app-ui.md「diff の行を触る自動化フックは行の到着で計る」). No
-    // ceiling: a row that never lands is ended by the watchdog.
+    // Waits for the rows, never a fixed time: a fixed wait turns a run whose read came late, and a run with nothing
+    // dirty, into a picture of an empty pane that passes. Asks until a row lands, acts on it in that beat and reports.
+    // No ceiling: a row that never lands is ended by the watchdog.
     //
     // Witnessed as the rows land (`rowLine`): `ready`, `rows`, `line` — the first changed line, which the stage that
-    // acts on it presses — and `waited`.
+    // acts on it presses — and `waited`. The line is said only once the rows are in, so `ready=` is always true there:
+    // what judges is the line being said at all (`diff_row act=<verb> ready=true`). `ready` is a changed line in the
+    // first hunk; for `diff-file`, the read over with rows, a picture, a binary or the headers alone (a mode-only
+    // change, a bare rename — `DiffFileNotices.headersOnly`).
+    //
+    // `diff-file`'s `diff_pieces`: a hunk heading's two words stand whenever parts are offered, hand or not, so the
+    // picture reads them; a line's `+` only comes under a hand, so that side is the line's. Judged on
+    // `--preset gitlink`'s `vendor/nest` and `--preset lfs`' `art/cover.psd` (whole file only — `hunk-tools` has no
+    // tools to light there) and on `--preset modes`' `tool.sh` / `build.sh` (`mode=`).
     PageStage {
         id: stageRowTimer
         name: "diff_rows"
@@ -253,7 +270,12 @@ Item {
                 return
             }
             // Sweeps the band's path (規約 §右のペインの字は掴める). `cut=` is what the picture cannot answer: whether the
-            // field holds a value longer than the band. What the sweep found is witnessed as it lands.
+            // field holds a value longer than the band. What the sweep found is witnessed as it lands. The argument is
+            // required (the band names only the file it is handed), and xtask seeds a 1100px details pane so the band
+            // always cuts (`verify::seed`). The cut is in the middle (`DiffPaneHeader`'s `cutAt: "middle"`) and a cut
+            // value sweeps only as far as it shows, so `text=` is the tail: `es/refs_join_snapshot.rs` (`res/…` on
+            // Linux) for `--preset longpaths`'
+            // `unstaged:crates/platitude-core/src/session/integration/support/fixtures/refs_join_snapshot.rs`.
             if (act === "diff-band-sweep") {
                 op.input("swept", () => {
                     op.witness("swept", diffPane.headerHand.sweepAir(7, "cut=" + diffPane.headerCut))
@@ -263,7 +285,9 @@ Item {
                 return
             }
             // Which rows name the two sides: the picture cannot say how many should have, and a resolved conflict is
-            // where none did.
+            // where none did. `conflicts:<path>` on `--preset conflict-typed` (the markers typed over into one line,
+            // so both sides are removals); `--preset conflict` reads the marked side with the same run. `told=` is
+            // only the two colours lent — `both=` is rows actually wearing them.
             if (act === "conflict-sides") {
                 op.complete({ "name": "diff_rows_ready", "when": () => op.landed(),
                               "report": () => [op.rowLine(), "conflict_sides " + diffPane.sideTally()] })
@@ -271,7 +295,8 @@ Item {
             }
             // The page's tick. The file is untouched, so core answers with nothing (`RepoSession::refresh_diff`): the
             // ask itself is the edge, read as it goes in (`ticked`). `loading=`: a tick must not reload the pane like
-            // a click.
+            // a click. Rows replaced by a write from outside are not pictured here — core's
+            // `session_integration::query` holds that.
             if (act === "diff-tick") {
                 op.input("ticked", () => {
                     const asked = page.pollDiff()
@@ -291,7 +316,9 @@ Item {
                 // Closed by the header `✕`'s own path, once the pane has been read: after the close nothing of it is
                 // left to read, so the pane as it stood is witnessed before (`stood`, `was`). Whether the decoded
                 // pictures left the process is read from outside; QML can only say the pane let go of the URLs
-                // (`url=empty`).
+                // (`url=empty`). From outside: the run in the background on `--preset bigpicture`, its WorkingSet
+                // sampled with `Get-Process` every 25ms, the peak after `preview_pane` read against the trough after
+                // `preview_close`. The picture is a run that never opened one, so the line is the judgment.
                 op.input("closed", () => {
                     op.witness("stood", acts.previewLine())
                     op.witness("was", diffPane.diffModel.previewKind)
@@ -301,7 +328,9 @@ Item {
                                                                    acts.closeLine(op.witnessed("was"))] })
                 return
             }
-            // Hover cannot be injected, so the row the pointer would be on is named.
+            // Hover cannot be injected, so the row the pointer would be on is named. At rest the heading's words are
+            // `textSecondary`, so their coloured form is shot only here and by `hunk-tools`. A new file offers no
+            // tools to split it (規約 §diff の中のステージ): `untracked:<path>` shows neither the `+` nor the words.
             if (act === "line-tools") {
                 op.input("tools", () => {
                     diffPane.showLineTools(0, line)
@@ -330,7 +359,10 @@ Item {
             const op = stageRowTimer
             // Escape enters the page's own handler, the one line `Keys.onEscapePressed` calls
             // (`RepoPage.escapePressed`; verify-ui「注入はハンドラ本体そのものへ入れる」). `took=` and `shown=` are
-            // separate failures the picture cannot tell apart.
+            // separate failures the picture cannot tell apart. `diff-escape` takes `diff-file`'s argument and preset
+            // (`b.txt --preset dirty`); its picture is the one a run that never opened draws, so the line is the
+            // whole judgment. How Escape is dealt out (which seat reaches it, the order against a standing bar) is
+            // `tests/qml/tst_escape.qml`'s.
             if (act === "diff-escape") {
                 // The hand enters the pane first (`DiffPane.handArrived`, the wheel's path): closing the pane that
                 // holds the keyboard is the case that breaks — where the keyboard lands decides whether a second
@@ -414,6 +446,7 @@ Item {
         onTriggered: {
             // A closed pane is done. What it lands on need not have rows — a picture, a binary or an embedded
             // repository has none (`DiffPane.diffSettled`) — so waiting for rows would hold those to the watchdog.
+            // `stage-line untracked:vendor/loose.txt --preset embedded` is the run that moves onto such a file.
             if (!Awaited.all("diff_staged", {
                 "written": acts.wroteAndSettled(),
                 "landed": !(page.diffShown && !(diffPane.diffSettled() && diffPane.picturesSettled)) }))
@@ -427,8 +460,10 @@ Item {
     // diff-bar: the text hand over the rows leaves the bar's strip free (`AppListView.barRoom`) — the bar is drawn over
     // the rows, so a hand covering the frame takes every press on the trough. Claims: `clear=` (the hand's right edge
     // against the bar's left) and `reach=` (the hand still answers at its last pixel). The settle waits for the bar, so
-    // a fixture with no bar never reports and ends at the watchdog. `reach=` is a press on that pixel
-    // (`DiffTextSelect.barTally`), so the hand's whole tally is read as that press goes in (`tally`).
+    // a fixture with no bar never reports and ends at the watchdog — run it on `--preset manyhunks`' `notes.txt`
+    // (320 rows), not `--preset dirty`'s `b.txt`, which fits. `reach=` is a press on that pixel
+    // (`DiffTextSelect.barTally`), so the hand's whole tally is read as that press goes in (`tally`). The picture is
+    // no witness: the line judges.
     PageStage {
         id: diffBarTimer
         name: "diff_bar"
@@ -460,6 +495,10 @@ Item {
     // `DiffModel.selectRow` does), or a hand that selects nothing at all passes. `quiet=` covers a second pass after a
     // sideways send too (`DiffCodeScroll.offset`); `sent=` says the code moved and that pass still had rows. `rows=0`
     // is a fixture with nowhere to press. What the drags found, read as each let go, is witnessed (`found`).
+    // `--preset widechars`' `marks.txt` only: every row's line ends inside the pane. The judged drags all end selecting
+    // nothing, so one more is left standing for the picture (`standPastTheEnd`): the point is the ground stopping at
+    // the last character — a few pixels, judged on a crop; the ground lands on added lines, so on `marks.txt` crop
+    // below the eight removed ones.
     PageStage {
         id: diffBlankTimer
         name: "diff_blank"
@@ -696,7 +735,8 @@ Item {
     // line-run: lines staged one after another. The pane refuses a press while its rows are still coming
     // (`RepoPage.diffSettling`), so each waits on exactly that. Settling tied to a file-list signal sent only when its
     // rows differ never ends at the second line of a file already on both sides — the case this pins. A line that
-    // never comes is named by the ceiling (`line_run_ready waiting=line`).
+    // never comes is named by the ceiling (`line_run_ready waiting=line`). `notes.txt` of `--preset manyhunks`; the
+    // picture is a diff either way, so the count is the judgment.
     PageStage {
         id: lineRunTimer
         name: "line_run"
@@ -755,7 +795,12 @@ Item {
                             + " graph=" + graphPane.view.activeFocus })
     }
     // diff-follow: where the pane lands when its file is moved whole from the file list — the next file on that side,
-    // or the same file on its new side when none is left (デザイン規約 §diff の中のステージ).
+    // or the same file on its new side when none is left (デザイン規約 §diff の中のステージ). The picture says only
+    // that a diff is shown; `landed=` is the judgment. The cases (`alone=` names them): `b.txt --preset dirty`
+    // (`alone=false landed=unstaged:c.txt`), `notes.txt --preset manyhunks` (`alone=true landed=staged:notes.txt`),
+    // `staged:a.txt --preset dirty` (`landed=staged:c.txt`), and `untracked:untracked.txt --preset dirty`
+    // (`landed=unstaged:c.txt`) — staged whole, its diff is not empty: the trigger is the list no longer holding the
+    // file on that side.
     //
     // Witnessed as the move went in: `was`, the key the pane stood on; `alone`, whether the file stood alone on its
     // side.
@@ -805,7 +850,15 @@ Item {
     // code-send: half by the bar's own path, the rest by the hand that carries the rows too. Reads where the code and
     // rows ended up — a bar bound to nothing still takes a press, a hand wired to nothing still starts. Waits for
     // `viewLaidOut`; nowhere sideways to go is said and completed from `start`, which is why no `order` is declared
-    // (rules-refs/app-ui.md「欠けた前提は言って止まる」).
+    // (rules-refs/app-ui.md「欠けた前提は言って止まる」). A diff sent to its end and one with nowhere to go picture alike,
+    // so a fixture that fits fails on its line (`max=0`, no bar): `wide.txt` of `--preset widelines` is the subject,
+    // `columns.txt` of `--preset widechars` the second, its reach made by full-width text (`max=` above 0, hand and
+    // bar moving). `measured=` is the width of the rows the model offered, laid out and measured; `drawn=` the widest
+    // row actually laid out (`DiffReach`); `max=` the larger less the pane's width — the two agree on ASCII and on
+    // full-width text alike. The anchor's ring belongs in the PNG; the gutter (two number columns and the `+` seat)
+    // and the hunk headings stay put (デザイン規約 §diff を横へ送る). Headless never shows a column count
+    // disagreeing with the drawn width — offscreen gives every full-width glyph one advance; measure that with
+    // `qmltestrunner` on the platform's own plugin, not `-platform offscreen`.
     PageStage {
         id: codeSendTimer
         name: "code_send"
@@ -852,11 +905,13 @@ Item {
     //  - `grew=` the drawn width rose when that row was laid out; `past=` beyond what the pick measured.
     //  - `kept=` the same width under the same row after going back to the head and down again (delegate reuse).
     //  - `ends=` sent to the far end with that row on screen, the frame's right edge is the line's end
-    //    (`DiffPane.codeInkRight` against the pane's own gap). The only claim that catches a reach running past every
-    //    line — `codeMax` derives from the same width, so it agrees with itself everywhere else.
+    //    (`DiffPane.codeInkRight` against the pane's own gap, `Theme.spaceSm` — `tail=`). The only claim that catches a
+    //    reach running past every line — `codeMax` derives from the same width, so it agrees with itself everywhere
+    //    else.
     //
-    // The send is last, so the shot stands at the diff's end, the only frame where room past the text would show. A
-    // diff that fits its frame completes from `start`, which is why no `order` is declared.
+    // The numbers differ between OSes; only their order agrees. The send is last, so the shot stands at the diff's
+    // end, the only frame where room past the text would show — the short lines have flowed off to the left and the
+    // widest is the only ink. A diff that fits its frame completes from `start`, which is why no `order` is declared.
     //
     // Witnessed as each jump goes in: `measured` and `drawn0` before the first, `drawn` and `row` at the foot, `back`
     // at the head, `again` and `rowAgain` at the foot again.
@@ -1118,7 +1173,8 @@ Item {
     // like `details-sweep`. `reach=` sweeps from nine starts, each judged over a cleared selection — one start (the
     // middle hides it) or one read at the end would pass a partial reach. `ours=`: a press on a hunk heading's words
     // stays the hunk's (規約 §diff の中のステージ). What the sweeps and the heading's press found, read as each landed, is
-    // witnessed (`found`).
+    // witnessed (`found`). Run on `--preset dirty`'s `b.txt` (three rows, shorter than the frame): a file that fills
+    // the frame (`--preset manyhunks`' `notes.txt`) leaves no ground, and says nothing.
     PageStage {
         id: diffSweepTimer
         name: "diff_sweep"
@@ -1168,7 +1224,9 @@ Item {
     // place: the line staged above it goes, and the rows on screen stay where they stand (`DiffModel.layOutKept`, Qt
     // keeping the rows on screen as rows above them go). Waits for `viewLaidOut` (before it the scroll goes nowhere); a
     // laid-out diff with less than `readY` of room is said and completed from `start`, which is why no `order` is
-    // declared (rules-refs/app-ui.md「欠けた前提は言って止まる」).
+    // declared (rules-refs/app-ui.md「欠けた前提は言って止まる」). `--preset manyhunks`' `notes.txt` only: a diff that
+    // fits the pane proves nothing — `--preset dirty`'s `b.txt` never keeps a place and ends on `room=0`. The picture
+    // is a weak witness; the line judges.
     PageStage {
         id: keepPlaceTimer
         name: "keep_place"

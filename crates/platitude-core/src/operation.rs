@@ -10,7 +10,8 @@
 //! `SessionEvent::WriteSettled`, and every git command spawned under it
 //! (`SessionEvent::CommandStarted::operation`). A consumer waiting on its
 //! own write matches the id, never the order or the kind: two stash
-//! operations answer under the same label.
+//! operations answer under the same label (`session_integration::operations`
+//! tells an apply and a pop of the same entry apart by id).
 //!
 //! The graph's and the details' generations and `head_seq` order other
 //! things (unasked reads move them) and are not this id.
@@ -89,7 +90,7 @@ pub enum OperationKind {
     Identity,
     /// `git worktree remove`: another worktree taken off the disk.
     Worktree,
-    /// Something the discard log lists, brought back (破棄記録仕様.md §4):
+    /// Something the discard log lists, brought back (`discards::restore`):
     /// a branch, a tag, a stash entry, a worktree, or thrown-away work
     /// put back into its worktree.
     Restore,
@@ -202,7 +203,9 @@ impl OperationKind {
     /// **Not read off [`Self::lane`]**, which says how a write is
     /// supervised: the two pulls and the composite deletes are paced by the
     /// network but move a ref here, so they stay behind a rename accepted
-    /// before them. `false` only for a push and the three fetches, whose
+    /// before them (read off the lane, a new session's delete overtakes an
+    /// old session's accepted rename: `fatal: no branch named`). `false`
+    /// only for a push and the three fetches, whose
     /// effect is all at the other end — ordering them would hold a commit
     /// behind a round trip for nothing. Exhaustive for the lane's reason.
     #[must_use]
@@ -274,7 +277,15 @@ pub enum Lane {
     /// queue waits it out — no stock budget, no cancellation, even through
     /// a close. A kill mid-write loses what the user asked for (a killed
     /// commit is gone); a wedged hook shows as busy, with the command in
-    /// the log.
+    /// the log. (User decision — ask before changing.)
+    ///
+    /// A close stops intake only: the running write and the queued ones
+    /// still run (`RepoSession::close`). The application's quit gate waits
+    /// for them (`RepoSession::local_writes_pending`,
+    /// `Hub::writes_settled`), and its exit joins
+    /// `RepoSession::take_write_join` before the runtime drops — before
+    /// `kill_on_drop` could end git mid-write. Pinned by
+    /// `session_integration::write_queue::a_close_waits_out_the_running_write_and_the_queue`.
     Local,
     /// Paced by the far end of a network connection, whose one real way to
     /// hang is a remote that stopped answering. Keeps the stock time

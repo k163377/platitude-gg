@@ -8,15 +8,27 @@ import platitude.ui
 /// (デザイン規約 §左メニューの所作). What each section says is here, not in the shared list, row and lines
 /// (`NavList` / `NavItemDelegate` / `NavRowFacts` / `NavFactLine`), so none of them tests which section it is in.
 ///
+/// The table, under the row's own line (its name shown whole in place, `NameCell.whole`) — each line only when there
+/// is something for it: BRANCHES — the worktree holding the branch, the upstream. REMOTES — the local branch reading
+/// this ref with its measure, and the worktree holding that local; which local is git's configuration alone (a branch
+/// of the same name is another branch, 規約 §ref の種別), so a ref nobody tracks opens on its name only. WORKTREES — the
+/// branch it has out with its measure, that branch's upstream as BRANCHES says it, and `Folder is gone`; the path is
+/// the supplement, never a line (`NavRowFacts.path`). TAGS — one line per remote carrying the name, in name order;
+/// which of them stands on the right reading is said by colour, not by order (`carrierLine`). The remote's own row,
+/// fold rows and STASHES rows do not open (`NavItemDelegate.expands`).
+///
 /// The relations are one read from different ends — a branch names its worktree and its reading, a remote-tracking
 /// ref the branch reading it and that branch's worktree, a worktree its branch — so the lines are the same parts in a
-/// different order.
+/// different order. A new section, or one more line, is one more row of this table. The sticky stand-in asks it too,
+/// handing over a BRANCHES row's worth of values as a plain object (`HeadPinRow.gatherFacts`).
 QtObject {
     id: navFacts
 
     /// The fill and rim of the band a line that goes somewhere wears under the hand (`NavRowFacts.aimBand`), and of
     /// the same line on a stacked card (`RefChip`). The row's own wash once more over the row's: lit the same as the
-    /// row, nothing would change under the hand. A rim with no alpha draws none.
+    /// row, nothing would change under the hand (user decision — ask before changing). Not taken: `bgPressed`'s wash
+    /// (3.85:1 for the words on a card), `bgSelected` (1.01:1 on a card — a hue alone), an `accent` rim with no fill,
+    /// an underline alone (the row's fill unchanged). A rim with no alpha draws none.
     readonly property color aimFill: Theme.bgHover
     readonly property color aimRim: "transparent"
 
@@ -33,6 +45,8 @@ QtObject {
         const branch = kind === "worktree" && leaf ? row.bucket : ""
         // What that branch reads, and whether git can reach it. A branch row reads the slot its badge is drawn from
         // (`Role::Bucket`), so the mark and the line cannot disagree; a row naming another's branch asks its section.
+        // **Two doors**: `upstreamOf` answers only a reading that is there (`BranchItem.upstream`), so a gone one is
+        // asked for apart — read through the first alone, a gone branch would never say so.
         const asked = kind === "worktree" && branch !== "" && row.branchesModel !== null ? branch : ""
         const upstream = kind === "branch" && row.sectionModel !== null
                        ? row.sectionModel.upstreamOf(row.fullName)
@@ -40,7 +54,8 @@ QtObject {
         const gone = kind === "branch" ? row.bucket
                    : asked !== "" ? row.branchesModel.upstreamGoneOf(asked) : ""
         // The remotes carrying this tag, each `{remote, apart}` — apart from where the remote this window acts on has
-        // it (`NavSectionModel.tagRemotes`). One call for both halves, so they cannot disagree.
+        // it (`NavSectionModel.tagRemotes`). One call for both halves, so they cannot disagree. Not
+        // `remoteTagDrift`, which measures against the copy here. Headless: `nav-open-tag` on `--preset tagremotes`.
         const tagged = kind === "tag" && leaf && row.sectionModel !== null
         const remotes = tagged ? row.sectionModel.tagRemotes(row.fullName, row.pushRemote) : []
         // The copy here, weighed by the same test as those remotes: its own commit against the right reading
@@ -51,7 +66,9 @@ QtObject {
         // disagree and nobody decides (`NavSectionModel.tagWeighedAgainst`).
         const by = tagged ? row.sectionModel.tagWeighedAgainst(row.fullName, row.pushRemote) : ""
         // The worktree holding the branch this row is about: its own on a BRANCHES row, the one named above on a
-        // REMOTES row. A worktree's row asks nobody — it is the worktree.
+        // REMOTES row — asked by that local's name, since a remote-tracking ref is nobody's checkout. A worktree's row
+        // asks nobody — it is the worktree. A REMOTES row with all three lines (a reading, a local tracking it, another
+        // worktree holding that local) is built only by `--preset tracked-elsewhere` (headless `nav-open`).
         const holds = kind === "branch" ? row.fullName : kind === "remote" ? local : ""
         const held = row.folder || holds === "" || row.worktreesModel === null ? ""
                    : row.worktreesModel.worktreeHolding(holds)
@@ -80,8 +97,10 @@ QtObject {
             "branch": branch,
             // Shown as the folder the path ends in. Asked only when there is one, so this table runs where `GitFacts`
             // is absent (`tests/qml/tst_navrowlight.qml`).
-            // By its folder, the repository's own worktree too: the row above already says the branch it keeps
-            // (デザイン規約 §ref の種別「リポジトリ自身の worktree の呼び名」).
+            // By its folder, the repository's own worktree too — the one exception to the rule of naming it by its
+            // branch (デザイン規約 §ref の種別「リポジトリ自身の worktree の呼び名」), on BRANCHES' and REMOTES' opened
+            // lines: the row above already says that branch, and the same word twice says nothing (user decision —
+            // ask before changing).
             "heldBy": held === "" ? "" : GitFacts.pathLeaf(held),
             // The holder is the repository's own worktree, which wears the house (`NavSectionModel.homeBranch`).
             "heldHome": held !== "" && holds === row.worktreesModel.homeBranch,
@@ -116,10 +135,10 @@ QtObject {
                     : []
         return navFacts.joined(drawn.filter(line => line !== null), a.at)
     }
-    /// Two ways to one commit are one target (デザイン規約 §左メニューの所作「行き先が同じなら判定は 1 つ」): a line
-    /// going where the row stands drops its `to` (its press is the row's click), and one going where the line above
-    /// goes shares that band (`withAbove`). Only neighbours are compared — the table's order already puts every such
-    /// pair side by side.
+    /// Two ways to one commit are one target — a press goes to a commit, so two targets for it ask one question twice:
+    /// a line going where the row stands drops its `to` (its press is the row's click), and one going where the line
+    /// above goes shares that band (`withAbove`). Only neighbours are compared — the table's order already puts every
+    /// such pair side by side.
     function joined(lines, at) {
         for (let i = 0; i < lines.length; i++) {
             if (lines[i].to && lines[i].to.oid === at)
@@ -152,8 +171,9 @@ QtObject {
              : { "mark": a.heldHome ? "home" : "tree", "markTint": Theme.success, "text": a.heldBy,
                  "tone": Theme.textSecondary, "ahead": 0, "behind": 0, "note": "", "to": a.heldTo }
     }
-    /// What that branch is measured against. One git cannot reach says so in git's word (`gone`), name first, and
-    /// goes nowhere.
+    /// What that branch is measured against. One git cannot reach says so in git's word (`gone`), the whole line in
+    /// `warning`, and goes nowhere: the row's far-end mark wears `!`, but a mark cannot tell "nothing to follow" from
+    /// "something to follow", so the line says it in words. Name first, since every line's words start in one column.
     function readingLine(a) {
         if (a.upstream === "")
             return null
@@ -162,8 +182,8 @@ QtObject {
                  "text": a.gone ? qsTr("%1 is gone").arg(a.upstream) : a.upstream,
                  "tone": tint, "ahead": 0, "behind": 0, "note": "", "to": a.gone ? null : a.upstreamTo }
     }
-    /// One remote carrying this tag, by name alone. Whether it stands on the right reading is said by colour
-    /// (デザイン規約 §左メニューの所作 の TAGS の段), and why by the note a rest opens — a clause on one line would make
+    /// One remote carrying this tag, by name alone. Whether it stands on the right reading is said by colour, `warning`
+    /// (user decision; デザイン規約 §状態), and why by the note a rest opens — a clause on one line would make
     /// the column ragged. It goes nowhere: a remote is not a row of this panel. But it names that remote on its own, so
     /// a menu asked for on it acts on that remote (`aim`, `NavRowFacts.lineMenu`).
     function carrierLine(carried, note) {
@@ -180,14 +200,15 @@ QtObject {
         return by !== "" ? Words.differsFrom(by) : Words.remotesDisagree
     }
     /// The same said inside a chip's card, as the line under a tag's name (`RowHoverHost.mateOf`): nothing can hover
-    /// over a card that hover opened (デザイン規約 §グラフ行のダブルクリック), so the reason stands on the card itself,
+    /// over a card that hover opened (デザイン規約 §hover のツールチップ), so the reason stands on the card itself,
     /// in the shape a gone upstream's line has there. It goes nowhere: it names no ref.
     function apartLine(note) {
         return { "mark": "remote", "markTint": Theme.warning, "text": note,
                  "tone": Theme.warning, "ahead": 0, "behind": 0, "note": "", "to": null }
     }
     /// The one state a mark cannot name: a folder git can no longer find (`!` names nothing). A lock's padlock says it
-    /// all — its reason is the locker's words, not this panel's (デザイン規約 §左メニューの所作).
+    /// all — its reason is the locker's words, not this panel's (デザイン規約 §左メニューの所作). Read off `change`, the
+    /// slot the row's lead mark is drawn from (`NavRowBody.seatMark`), so the mark and the line cannot disagree.
     function stateLine(a) {
         return a.state !== "PRUNABLE" ? null
              : { "mark": "", "markTint": Theme.warning, "text": qsTr("Folder is gone"),

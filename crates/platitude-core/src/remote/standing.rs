@@ -3,12 +3,19 @@
 //!
 //! Nothing here runs git; [`super::push`] does, and the two must resolve
 //! the same destination or the toolbar names a remote the send never goes
-//! to.
+//! to. The name shown, the counts, whether it can be pressed and the lease
+//! all come from that one destination, on the toolbar and on a branch's
+//! row alike. Read off names instead, a branch `topic` measured against a
+//! branch here called `origin/base` and marked `pushRemote = origin`
+//! would be shown going to `origin/base`, counted against it and leased
+//! to origin's `base`, while the send goes to `origin/topic`.
 
 /// What a push of a branch can do, read off the last status (the branch
 /// the worktree is on) or refs listing (any other) and the marked remote.
 /// The counts come from the last fetch, so a push they say fits may still
-/// be refused (デザイン規約 §リモートへ送る).
+/// be refused (デザイン規約 §リモートへ送る): they are trusted only to say
+/// a push cannot land. With no remote at all a branch is `Publish` — the
+/// question can make one.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum PushStanding {
     /// No branch here to send: detached, or nothing checked out.
@@ -25,7 +32,13 @@ pub enum PushStanding {
     /// remote, or marked to `.` itself by either key. A send there moves a
     /// branch here — the upstream where that is a branch here (`git push .
     /// <branch>:<it>`), else the branch onto itself — which is no send to
-    /// anywhere, so none is offered.
+    /// anywhere, so none is offered: the toolbar and a branch's row stand
+    /// unpressable saying why, and the send refuses too. Not asked as a
+    /// first push either: the answer would rewrite the upstream as a
+    /// remote's, and under a `.` mark the push would still stay here. The
+    /// two ways are one standing, and the UI gives both the same reason
+    /// (user decision — ask before changing). A branch whose upstream here
+    /// is gone (`[gone]`) is `Publish` instead.
     StaysHere,
     /// The push goes to a marked remote other than the tracked one, and
     /// nothing here tracks the branch over there ([`PushTrack`]): no
@@ -63,7 +76,10 @@ impl PushStanding {
 /// A push there moves a branch here; it sends nothing anywhere.
 pub(super) const THIS_REPOSITORY: &str = ".";
 
-/// What a branch is measured against, as its configuration names it.
+/// What a branch is measured against, as its configuration names it —
+/// the toolbar's from the status tick (`PushMarks::upstream_is_here`), a
+/// row's from the listing (`RefEntry::upstream_is_here`). Net:
+/// `upstream_here_integration`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Upstream<'a> {
     /// Nothing is configured.
@@ -98,7 +114,10 @@ impl<'a> Upstream<'a> {
 pub struct PushTrack {
     /// The tracking ref as the remote branches are listed (`fork/main`).
     /// Empty where nothing here tracks the branch over there: never
-    /// fetched, or no fetch refspec of that remote takes it in.
+    /// fetched, no fetch refspec of that remote takes it in (or takes it
+    /// outside the remote branches), or `remote.<name>.push` sends it under
+    /// another name or not at all. A fetch reads every remote, so it is
+    /// usually there.
     pub tracking: String,
     pub ahead: i32,
     pub behind: i32,
@@ -220,6 +239,7 @@ pub fn push_standing<'a>(
     if unborn {
         return PushStanding::Unborn;
     }
+    // Before the `.` mark: the question's answer names the destination.
     if upstream == Upstream::None || !upstream_tracked {
         return PushStanding::Publish;
     }
@@ -239,7 +259,12 @@ pub fn push_standing<'a>(
 /// remote than the upstream's, or at all, the upstream being a branch
 /// here. git refuses the push by the destination's ref (`[rejected]
 /// (non-fast-forward)`), so only that ref's counts say how it goes, and
-/// before that ref is fetched none do.
+/// before that ref is fetched none do (user decision — ask before
+/// changing). Read by the upstream's counts instead, a diverged
+/// destination would stand a plain `push` with no `push -f` after the
+/// refusal, and `ahead = 0` read as clean would make a branch unpressable
+/// the moment it is marked. With a ref, the count rows of the table apply
+/// unchanged, and the overwrite leases to that ref's tip as shown.
 fn marked_standing(push_track: &PushTrack) -> PushStanding {
     if push_track.tracking.is_empty() {
         return PushStanding::Elsewhere;

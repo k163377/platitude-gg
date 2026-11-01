@@ -4,9 +4,10 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-// The list the seat opens over the left menu's sections (破棄記録仕様.md). The git commands' seat stays under it. One
-// entry is picked at a time, and what it would bring back is told over the graph (`RecoverBand`); a rest on an entry
-// opens its card, as a graph row's does (`RecoverHoverCard`).
+// The list the seat opens over the left menu's sections. The git commands' seat stays under it. One
+// entry is picked at a time, and what it would bring back is told over the graph (`RecoverBand`) — a picked row opens
+// nothing in place: the left panel is too narrow; a rest on an entry opens its card, as a graph row's does
+// (`RecoverHoverCard`). The list's band, filter, rows and rings are user decisions — ask before changing.
 Rectangle {
     id: pane
 
@@ -183,8 +184,10 @@ Rectangle {
 
     color: Theme.bgSurface
 
-    // Laid over the left menu, which stays up underneath (`SidebarPane`): no press, hover or wheel the list leaves
-    // falls through to the filter, its fold block or the sections (rules-refs/app-ui.md の `RecoverPane` の行).
+    // Laid over the left menu, which stays up underneath (`SidebarPane`): no press, hover or wheel the list leaves —
+    // the band's gaps, round the `✕`, the ground below the rows — falls through to the filter, its fold block or the
+    // sections. A bare Rectangle takes none of them, so this area lies first, under everything else here
+    // (rules-refs/app-ui.md「他の面の上に重ねた面は入力を素通しする」; net: `tst_recoverpane.qml`).
     MouseArea {
         anchors.fill: parent
         hoverEnabled: true
@@ -259,6 +262,7 @@ Rectangle {
     }
 
     // ---- the filter, a row of its own under the band: the left menu's own field (`SidebarFilterRow`) ----
+    // Not inside the band: a field there is too narrow to use.
     Item {
         id: filterRow
         anchors.left: parent.left
@@ -485,7 +489,7 @@ Rectangle {
             paired: row.entry.paired
         }
         // What was done to what, after the seat every left menu row opens with (`NameCell.seatSize`), the names as
-        // code with no mark of their own (デザイン規約 §ref の種別「破棄記録は種類を語で言わない」), one line cut at the
+        // code with no mark of their own (`RecoverEntries`), one line cut at the
         // end (`CodeLine`). The whole of it is the card's and the band's. A pair of marks is wider than the seat, and
         // that row's words move over by the difference.
         CodeLine {

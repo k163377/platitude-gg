@@ -30,13 +30,14 @@ AppListView {
     // while the right panes kept showing the old commit.
     keyNavigationEnabled: false
     /// Where the keyboard goes when a press lands in this pane; every way in (row, lanes, find card closing, headless
-    /// hook) comes through here.
+    /// hook) comes through here. Opening a tab alone does not take it (user decision — ask before changing). Escape can
+    /// stay a window `Shortcut` because this list has no Escape handler of its own.
     function takeKeyboard() {
         graphList.forceActiveFocus()
     }
     /// Gives the keyboard up when the pane leaves the screen: Qt keeps active focus on an item it made invisible and
     /// keys keep arriving (only `focus = false` lets go) — with a diff open over the graph, the arrows would walk the
-    /// selection behind it and so close the diff.
+    /// selection behind it and so close the diff. A tab switch leaves by the same road.
     onVisibleChanged: {
         if (!graphList.visible)
             graphList.focus = false
@@ -46,8 +47,10 @@ AppListView {
     // No header band here: this sliver drops the first row so its bottom line meets the neighbouring bands' bottom
     // edge when scrolled to the top.
     topMargin: Theme.headerHeight - Theme.graphRowHeight
-    // A run-out so the oldest row does not read as clipped, plus the lane bar's strip while the lanes overflow, so the
-    // last row ends above the bar.
+    // A run-out so the oldest row does not read as clipped — the lanes visibly break off before the edge — and no more
+    // (more reads as a blank row). Plus, while the lanes overflow, the lane bar's strip (user decision — ask before
+    // changing): scrolled to the end, what the bar covers is the last row, which nothing can move further, so that one
+    // edge clears it with room instead of a gutter. The strip is the bar's own height, not a token.
     bottomMargin: Theme.spaceSm + (graphList.columns.graphXMax > 0 ? graphList.columns.laneBarRoom : 0)
     property real labelWidth: graphList.columns.labelW
     property real graphColWidth: graphList.columns.graphColW
@@ -84,8 +87,12 @@ AppListView {
     property var namingRefusedMarks: []
     // The two clicks the rows answer with one gesture (デザイン規約 §グラフ行のダブルクリック). One for the whole graph,
     // shared with the chip's card (via `GraphPane.noteRowClick`): a pooled delegate would drop or misplace the wait,
-    // and the card opens on the chip's seat, so a second click landing on it must still count as the second.
-    // Keyed by the ref's kind and name (`encode::Chip::key`) — the same on both surfaces and stable across repaints.
+    // and the card opens on the chip's seat, so a second click landing on it must still count as the second — a memory
+    // per surface turns that second into a first, and the rename "sometimes does nothing". Headless
+    // `graph-reclick-scrolled` (the row pooled under the wait) and `graph-reclick-across` (row, then card).
+    // Keyed by the ref's kind and name (`encode::Chip::key`) — the same on both surfaces and stable across repaints:
+    // keyed by the whole record, a background pass rewriting a flag (the cloud, the PR, `here`) would cut the gesture.
+    // The card closing forgets nothing: the row under it is still on screen, wearing the mark.
     readonly property ReclickGesture reclick: ReclickGesture {
         id: reclick
         onRenameAsked: (key, names) => graphList.rowRenameRequested(names.oid, names.chip)
@@ -94,7 +101,8 @@ AppListView {
     /// first ref, read now (the row may show something else when the wait ends); null where the row draws no ref.
     function noteClick(oidHex, chip) {
         // While a box stands, a click only takes it down (`RepoPage.activateRow`); arming a rename here would reopen it
-        // a beat later. The key still counts, so the next click is an ordinary second one.
+        // a beat later. The key still counts, so the next click is an ordinary second one. Mostly the press has taken
+        // the box down already (`GraphPane.stopNaming`); this is for the box a half-typed name keeps standing.
         const nameable = chip !== null && graphList.namingOid === ""
         return reclick.click(chip === null ? "" : chip.key,
                              nameable ? { "oid": oidHex, "chip": chip } : null)
@@ -109,7 +117,8 @@ AppListView {
     }
     readonly property alias clicksHushed: reclick.hushed
     /// The hand over the pane (`HandWatch`), which the rows read their light and their rest off — never their own
-    /// hover (デザイン規約 §グラフ行のダブルクリック「グラフが動いて手の下へ来た行は点くが、手が動くまで何も開かない」).
+    /// hover: a row the graph moved under a still hand lights, and opens nothing until the hand moves (デザイン規約
+    /// §左メニューの所作「手が動いていない所へ来た行は開かない」).
     required property HandWatch hand
     /// What stands over these rows at the hand's place and is not a row: the current branch's stand-in. A row under
     /// it is not under the hand.
@@ -147,7 +156,9 @@ AppListView {
     property bool askDanger: false
     // Rows dim while a search is on; written by the pane, which owns the find card.
     property bool findOn: false
-    // The row the worktree stands on writes its message in the branch's blue (規約 §グラフの中で HEAD を見失わない).
+    // The row the worktree stands on writes its message in the branch's blue, as its stand-in does (`GraphHeadPin`),
+    // and keeps it once back in the list (user decision — ask before changing): pressing the stand-in lands on the row,
+    // and the colour going out at that moment is the ground shifting just where certainty matters most.
     readonly property int headRow: graphList.graphModel.headRow
     /// The commits the page is holding, as a set of ids, and their count (デザイン規約 §複数のコミットを選ぶ). Empty while
     /// the worktree's row is shown — it is no commit and never joins a choice.
@@ -206,8 +217,8 @@ AppListView {
         const bottom = graphList.indexAt(0, graphList.contentY + graphList.height - Theme.graphRowHeight)
         return row >= graphList.firstVisibleRow() && (bottom < 0 || row <= bottom)
     }
-    /// The one clamp (`AppListView.clampY`), kept to the span of the discard log's entry while one is on the graph
-    /// (破棄記録仕様.md): the rows it would bring back, first to last, are all the view goes over. A span shorter than
+    /// The one clamp (`AppListView.clampY`), kept to the span of the discard log's entry while one is on the graph:
+    /// the rows it would bring back, first to last, are all the view goes over. A span shorter than
     /// the view stands in its middle, with what it forked from in sight, and does not move.
     function clampY(y) {
         const minY = graphList.originY - graphList.topMargin
@@ -226,8 +237,9 @@ AppListView {
     /// Every way of moving the view that does not ask the clamp — the bar's thumb, a flick, `positionViewAtIndex`, a
     /// rebuild — is brought back inside the entry's span here, and so is the view when the span itself moves. **Never
     /// from inside a `contentY` change**: the list is still laying its rows out for that position, and a second write
-    /// leaves the position and the rows drawn apart — the view stands still showing rows it is not at
-    /// (rules-refs/app-ui.md の `GraphList.keepToSpan` の行).
+    /// leaves the position and the rows drawn apart — the view stands still showing rows it is not at and presses seem
+    /// to do nothing; hence `Qt.callLater` (rules-refs/app-ui.md「`contentY` の書き戻しを `onContentYChanged` の中で
+    /// 同期にしない」). Headless: `recover-open`'s `tipShown=` (the picked entry's tip row on screen) and `y=`.
     function keepToSpan() {
         if (!graphList.graphModel.provisionalOn || graphList.graphModel.provisionalFirst < 0)
             return

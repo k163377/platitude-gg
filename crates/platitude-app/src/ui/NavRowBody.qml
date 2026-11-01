@@ -23,10 +23,12 @@ RowLayout {
     /// below the row's own line (`NameCell.whole`).
     readonly property Item nameWhole: nameCell.wholeField
     readonly property real nameWholeOver: nameCell.wholeOver
-    /// The repository's own worktree (`models::nav::item::MAIN`): named by its branch, told apart by the house.
+    /// The repository's own worktree (`models::nav::item::MAIN`): named by its branch, told apart by the house. Not by
+    /// its folder: that is the tab's name and the window's title already.
     readonly property bool homeWorktree: body.row.kindHint === "worktree" && body.row.change === "MAIN"
     /// The branch that row is named by. Empty when detached (git lists no `branch` line), and the folder name stands
-    /// instead — else the row is a house and a blank.
+    /// instead — else the row is a house and a blank. Both sides are held by `tst_navfacts`'
+    /// `test_the_repositorys_own_worktree_is_named_by_the_branch_it_has_out`, on rows built by hand.
     readonly property string homeName: body.homeWorktree ? body.row.bucket : ""
     /// The name this row draws: the main worktree's branch, else the row's own (`homeName`).
     readonly property string shownName: body.homeName !== "" ? body.homeName : body.row.name
@@ -39,7 +41,10 @@ RowLayout {
     readonly property bool heldHome: body.row.kindHint === "branch" && body.row.change === "HELD"
                                      && body.row.worktreesModel !== null
                                      && body.row.fullName === body.row.worktreesModel.homeBranch
-    /// Whether this section has a mark seat — not STASHES / TAGS (デザイン規約 §余白「印の立たないセクションは席を取らない」).
+    /// Whether this section has a mark seat — not STASHES / TAGS (user decision — ask before changing): flat lists of
+    /// names, with nothing that folds and no worktree state, so the seat would always be empty ground and read as a
+    /// margin nobody wrote. Their names start at the row's head. One answer per section; a TAGS row's opened lines
+    /// keep the seat for their cloud (`NavFactLine`).
     readonly property bool seated: body.row.kindHint !== "stash" && body.row.kindHint !== "tag"
     /// The row-end columns' seat for a state after the name — the badge, the push mark: the seat of the name's letters
     /// (`MarkSeat`, デザイン規約 §アイコンの席 の名指し), one width down the rows.
@@ -67,8 +72,11 @@ RowLayout {
         showChange: body.row.kindHint === "file"
         // A worktree's state rides the change slot (`models::nav::item`): lock, prunable `!`, or the main worktree's
         // house (git never locks or prunes the main one, so they never contend). A branch another worktree holds wears
-        // `tree`, not the padlock, which means `git worktree lock`. Open, `tree` goes (the lines name that worktree)
-        // but a worktree's own state stays, so it does not flicker under the pointer.
+        // `tree`, not the padlock, which means `git worktree lock` (user decision — ask before changing); its name
+        // keeps its colour, since a click still jumps and merge / rebase still work — `textMuted` would lie. Open,
+        // `tree` goes (the lines name that worktree) but a worktree's own state stays, so it does not flicker under the
+        // pointer. Do not give a WORKTREES row the `tree` mark (user decision — ask before changing): its seat is the
+        // lock's, the `!`'s and the house's, and one seat holds one mark.
         seatMark: body.row.kindHint === "branch"
                     ? (body.row.change === "HELD" && !body.row.factsOpen ? (body.heldHome ? "home" : "tree") : "")
                 : body.row.kindHint !== "worktree" ? ""
@@ -79,7 +87,11 @@ RowLayout {
         seatTint: body.row.change === "PRUNABLE" ? Theme.warning
                 : nameCell.seatMark === "tree" || body.heldHome ? Theme.success
                 : Theme.textSecondary
-        // The main worktree is named by its branch, in the name's place (デザイン規約 §左メニューの所作; `homeName`).
+        // The main worktree is named by its branch, in the name's place (`homeName`), so the name's face and colour
+        // come with it. Not right-aligned in the far column: every name in this panel starts here, and a lone word at
+        // the opposite edge reads as a row with no name, only a note. Nor the name emptied and the
+        // branch put there — with `showName: false` this cell does not stretch, the slack is shared by preferred
+        // widths, and the branch stands a third of the way along.
         name: body.shownName
         // A staged rename's source, as the commit's file list shows it. Not `orig_path`, which a folder row uses for
         // its own path.
@@ -91,7 +103,10 @@ RowLayout {
             : body.row.factsOpen && body.row.factsHereApart ? Theme.warning
             : body.row.only_remote ? Theme.textSecondary : Theme.textPrimary
         weight: body.row.is_head ? Theme.fontWeightStrong : Font.Normal
-        // A pending file's line-ending mark; the row's hover says what, the diff pane in full.
+        // A pending file's line-ending mark (デザイン規約 §改行コードの警告): a `!` on the name's right shoulder, not at
+        // the row's right end — that is the seat of the stage `+` the hover puts out, and a mark there would hide the
+        // moment the hand reached for it. The row's hover opens the line-ending card and nothing else (`EolHoverCard`,
+        // after the usual rest), which adds what the mark does not say; the diff pane says it in full.
         marked: body.row.kindHint === "file" && body.row.eol_mark
     }
     Item {
@@ -101,8 +116,8 @@ RowLayout {
         Layout.fillHeight: true
     }
     // A linked worktree's branch, right-aligned; `CutName` keeps the column's edge. Not while the open lines name it,
-    // not on a detached worktree (a word here reads as a branch), and not on the main worktree, already named by it
-    // (デザイン規約 §左メニューの所作).
+    // not on a detached worktree (a word here reads as a branch — "no branch" is said by the empty column), and not on
+    // the main worktree, already named by it: there it would say the row's one fact twice.
     Loader {
         id: branchSeat
         active: !body.row.folder && body.row.kindHint === "worktree" && body.row.bucket !== "" && !body.homeWorktree
@@ -116,8 +131,11 @@ RowLayout {
         }
     }
     // Every branch's distance from its upstream (`models::nav` の `Role::Ahead` rides each row); none when level or
-    // untracked (デザイン規約 §左メニューの所作). The main worktree, named by its branch and opening no line for it,
-    // draws that branch's measure here only while open — the counts it read as it opened (`NavFacts.answers`).
+    // untracked (デザイン規約 §左メニューの所作). The main worktree, named by its branch and opening no line for it (the
+    // same word would stand right under the name; its upstream line still opens), draws that branch's measure here
+    // only while open (user decision — ask before changing), as a BRANCHES row does — the counts it read as
+    // it opened (`NavFacts.answers`; its own `ahead` role is 0). Held by `tst_navfacts`'
+    // `test_the_repositorys_own_worktree_draws_its_branchs_measure_only_while_open`.
     Loader {
         id: trackSeat
         readonly property int ahead: body.homeWorktree ? body.row.factsAhead : body.row.ahead
@@ -137,10 +155,11 @@ RowLayout {
     Loader {
         id: remoteSeat
         /// An upstream that is gone (`models::nav::field` の `Role::Bucket`), kept as a badge: `has_remote` is false
-        /// once the far side deleted the ref.
+        /// once the far side deleted the ref. A role, not a slot (`upstreamGoneOf`): a slot read in a binding freezes,
+        /// and the badge would not follow a fetch.
         readonly property bool gone: body.row.kindHint === "branch" && body.row.bucket !== ""
-        // Stays while the row is open, unlike the seat mark: the counts beside it would shift (デザイン規約
-        // §左メニューの所作).
+        // Stays while the row is open, unlike the seat mark: the counts beside it measure from this cloud and would
+        // shift (user decision — ask before changing; デザイン規約 §左メニューの所作).
         active: !body.row.folder
                 && (remoteSeat.gone
                     || ((body.row.kindHint === "branch"

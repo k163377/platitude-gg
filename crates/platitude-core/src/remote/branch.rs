@@ -47,7 +47,7 @@ impl RemoteBranch {
     }
 
     /// `<remote> <branch>`, the pair as the discard record keeps it
-    /// (破棄記録仕様.md §2 `Upstream:`). A space parts the two where a slash
+    /// (`Upstream:`, `discards::record`). A space parts the two where a slash
     /// cannot: no branch name holds one (git-check-ref-format), so the
     /// last space is the cut even where the remote — a path or a URL —
     /// holds spaces of its own.
@@ -150,20 +150,26 @@ impl RemoteBranchState {
 /// `expect` is the commit the screen showed the branch on, and the delete
 /// is leased to it: a remote that moved since is refused
 /// (`[rejected] (stale info)`, read as outdated) rather than losing
-/// commits this repository never had. The oid travels from the press —
-/// the remote-tracking ref is no pin, a background fetch moves it
-/// ([`super::PushForce`]).
+/// commits this repository never had (user decision — ask before
+/// changing). The oid travels from the press — the remote-tracking ref is
+/// no pin, a background fetch moves it ([`super::PushForce`]).
 ///
 /// The name goes qualified as `refs/heads/<branch>`, as a tag's does
 /// ([`super::delete_remote_tag`]): a bare name is matched against every
 /// ref over there, so one the remote already dropped fails before the
 /// lease is weighed (`remote ref does not exist`) and one a tag shares
 /// fails as ambiguous. Qualified, a dropped branch is the lease's refusal
-/// like any other move.
+/// like any other move (git's `remote.c` `match_explicit` carries only a
+/// name starting `refs/` through to it).
 ///
-/// Read like an ordinary push (`--porcelain`, then
-/// [`super::refusal::refusal`]): a far-side refusal (protected branch,
-/// hook) is a report to pass on (デザイン規約 §リモートブランチを消す).
+/// git itself refuses nothing here: unlike a local `-d`, `push --delete`
+/// does not count the commits only that branch holds, so the menu row's
+/// hold stands in for that refusal. Whether the far side refuses (the current
+/// branch's upstream, the remote's default branch, a protected branch, a
+/// hook) only the far git knows, so the row is offered anyway. Read like
+/// an ordinary push (`--porcelain`, then [`super::refusal::refusal`]): a
+/// far-side refusal is a report to pass on (デザイン規約 §答えの要らない報せ),
+/// and that is the end of it — what could fix it is over there.
 ///
 /// What tracked it keeps its upstream here; [`untrack_deleted`] is the
 /// step after.
@@ -199,20 +205,24 @@ pub async fn delete_remote_branch(
 /// reads, and that warning is for a branch the far side dropped on its own
 /// (merged and deleted there), so the now useless branch here is not
 /// forgotten. A delete asked for here is no such case: the warning would
-/// only nag about the reader's own act.
+/// only nag about the reader's own act (user decision — ask before
+/// changing).
 ///
-/// Judged by the push alone: the delete went where `target.remote` pushes,
-/// and so does every branch tracking `target`. A `pushurl` naming
-/// another repository than the fetch URL changes nothing — the reader
-/// deleted the branch their pushes go to, and the next fetch reading the
-/// name back from the other side is that configuration's own doing.
-/// Another remote name writing to the same repository is not followed: its
-/// branches keep the upstream (P3-確認事項 §リモートの別名).
+/// Judged by the push alone (user decision — ask before changing): the
+/// delete went where `target.remote` pushes, and so does every branch
+/// tracking `target`. A `pushurl` naming another repository than the fetch
+/// URL changes nothing — the reader deleted the branch their pushes go
+/// to, and the next fetch reading the name back from the other side is
+/// that configuration's own doing. Nothing could tell the two URLs name
+/// one repository anyway: git has no repository id, and the spellings
+/// differ (https and ssh, mirrors). Another remote name writing to the
+/// same repository is not followed: its branches keep the upstream
+/// (P3-確認事項 §リモートの別名).
 ///
 /// Only settings in this repository's own config file, and only where
 /// they are the upstream git goes by: one inherited from an included or
 /// the global file is configuration kept elsewhere on purpose, left as it
-/// is.
+/// is (user decision — ask before changing).
 pub async fn untrack_deleted(
     executor: &GitExecutor,
     workdir: &Path,
@@ -308,7 +318,8 @@ async fn tracking_branches(
 ///
 /// Read as git reads the setting: the last `remote` wins, and `merge` is
 /// multi-valued — a branch merging more than this one name (an octopus
-/// `pull`) does not track it alone, and is not picked.
+/// `pull`) does not track it alone, and is not picked: taking the upstream
+/// off would drop every one of its merges.
 fn parse_tracking(bytes: &[u8], target: &RemoteBranch) -> Vec<String> {
     let merge_ref = target.head_ref();
     // Per branch: the last `remote` read, and every `merge`.

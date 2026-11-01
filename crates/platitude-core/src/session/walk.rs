@@ -292,8 +292,10 @@ impl RepoSession {
     ///
     /// Not "is the tree dirty": a merge resolved all-ours and staged
     /// leaves `git status` empty with `MERGE_HEAD` standing, and still
-    /// writes a merge. The row draws the commit about to be written, and a
-    /// standing operation alone is enough for one (`graph::wip_row_stands`).
+    /// writes a two-parent merge (git 2.55; the `conflict-ours` demo preset
+    /// shows it, `session_integration::stream` pins it). The row draws the
+    /// commit about to be written, and a standing operation alone is enough
+    /// for one (`graph::wip_row_stands`).
     ///
     /// Sides are the merge's alone: a stopped cherry-pick raises the row
     /// the same way but writes no second parent.
@@ -391,7 +393,11 @@ impl RepoSession {
 }
 
 /// Where the other worktrees stand when they stand on no branch, as
-/// the walk wants them.
+/// the walk wants them. The walk starts only from `HEAD`, the branches,
+/// the remotes (the tags, the stashes, a merge's incoming): a detached
+/// worktree on a commit none of those reach would get no row, and its
+/// WORKTREES row's click and its chip would lead nowhere. Headless:
+/// `nav-jump worktree:1 --preset worktree-detached`.
 fn detached_oids(standing: &super::joins::WorktreeHolders) -> Vec<Oid> {
     standing
         .detached
@@ -402,6 +408,12 @@ fn detached_oids(standing: &super::joins::WorktreeHolders) -> Vec<Oid> {
 
 /// The walk both passes run: the same commits in the same order through
 /// the same window.
+///
+/// `--date-order`, not `--topo-order`: topo sinks an orphan root's history
+/// to the end. Both put no parent above its child, which `GraphBuilder` and
+/// the stash sift rely on. A test of this needs one more commit on the main
+/// line after the orphan side, or topo passes it too
+/// (`session_integration::an_independent_history_sits_where_its_date_puts_it`).
 ///
 /// A stash may vanish between the listing and the walk, so the oids that
 /// join it are asked for with `--ignore-missing` — and so may a worktree,

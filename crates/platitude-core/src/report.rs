@@ -5,6 +5,16 @@
 //! The screen writes both lines from the kind: what said no — a hook here,
 //! a signing key, another git, a rule over there — in its own words, and
 //! the words of whoever said it only under the command's row in the log.
+//!
+//! Which words make which kind is held by the units here; the integration
+//! tests that name a kind hold the wiring from a real refusal to it, not
+//! the rule again.
+//!
+//! Do not make a report of a failure git never answered — `TimedOut`,
+//! `Spawn`, `GitNotFound`: the screen answers it with the command log,
+//! and that log's row is the only place that names which command was
+//! stopped, so the log is kept up for it (`half_renamed` and
+//! `stash_not_renamed` hand such an error back as it is).
 
 /// Which report this is — what the screen says in its own words is chosen
 /// from this alone (`Words.writeReported`).
@@ -75,7 +85,9 @@ pub enum ReportKind {
     /// a bisect begun. Nothing moved and the box
     /// stays open, so the gesture goes on
     /// (デザイン規約 §答えの要らない報せ「下端の線は必ず状態色を着る」).
-    /// git's words are the log's; the screen says it in its own.
+    /// git's words are the log's; the screen says it in its own, and
+    /// hands git's to neither the box nor the bar (user decision — ask
+    /// before changing).
     RenameRefused,
     /// The same, because git said a lock it needed was taken
     /// ([`lock_taken`]).
@@ -92,8 +104,8 @@ pub enum ReportKind {
     /// removal down, a lock it named, or this end finding the stash list
     /// moved so that which entry to drop could not be worked out — the log
     /// has that step's words, and the screen says one thing: both names
-    /// stand (gitの扱い.md §類型 — a lock race in the gap between two commands
-    /// is too rare to tell apart).
+    /// stand (gitの扱い.md §分類しない物 — a lock race in the gap between two
+    /// commands is too rare to tell apart).
     HalfRenamed,
     /// A stash git would not store under the new message, or whose entry
     /// could not be read again — nothing moved, and the box stays open as
@@ -118,8 +130,8 @@ pub enum ReportKind {
     WorktreeRemoveRefused,
     /// A worktree git took off its list but could not empty: git goes
     /// on to drop its record after a folder it could not delete in full
-    /// (a file held open is the usual cause on Windows). Half done, as
-    /// [`Self::HalfRenamed`].
+    /// (exit 255; a file held open or a path too long are the usual causes,
+    /// on Windows). Half done, as [`Self::HalfRenamed`].
     WorktreeHalfRemoved,
     /// A worktree `git worktree add` would not make — the branch out in
     /// another worktree or its name taken, between the menu opening and
@@ -198,8 +210,7 @@ pub enum ReportKind {
     DropAllCommits,
 
     /// The two the outside world makes after the plan was worked out — the
-    /// premise going while the write is on its way
-    /// (rules-refs/core.md「`Withheld` は git を撃つ前にこちらが断った書き込み」).
+    /// premise going while the write is on its way (`GitError::Withheld`).
     ///
     /// The branch moved after the plan was composed: a rebase silently
     /// drops what the fixed todo leaves out, so the replay is refused with
@@ -228,7 +239,11 @@ pub enum ReportKind {
     /// git turned the replay down at its first checkout, which would write
     /// over untracked files here ([`crate::relied_messages::UNTRACKED_IN_THE_WAY`]);
     /// nothing moved. Which commit that checkout lands on is git's to work
-    /// out (sequencer.c `skip_unnecessary_picks`), so nothing asks first.
+    /// out (sequencer.c `skip_unnecessary_picks`: a reword's own commit, the
+    /// parent a squash goes into, a drop's upstream), and the carry's
+    /// `stash -u` moves a dirty tree out first, so nothing asks first:
+    /// guessing would turn down rewrites git takes
+    /// (`a_reword_whose_commit_let_go_of_an_untracked_file_goes_through`).
     RewriteUntrackedInTheWay,
 }
 
@@ -334,8 +349,19 @@ pub fn withheld_about(kind: ReportKind, name: &str, message: String) -> crate::e
 /// ([`crate::relied_messages::LOCK_LEFT_BEHIND`]): that is a plain refusal.
 ///
 /// Only git's words: where it names no lock (a reftable branch rename says
-/// `branch rename failed`, the minimum's stash apply nothing at all), a
-/// lock file found on disk afterwards is no proof of what turned it down.
+/// `branch rename failed`, a reftable stash drop `Could not drop stash
+/// entry`, the minimum's stash apply nothing at all), a lock file found on
+/// disk afterwards is no proof of what turned it down (measured on 2.55).
+///
+/// The reftable words come from tag create and delete, the stash store and
+/// commit, and only where `flock_acquire` meets `EEXIST`. The screen's
+/// second line keeps git's hedge (`Another git process seems to be
+/// running`). `core.lockfilePid` (2.54+, off by default) adds the holder's
+/// pid: a live one (`Lock may be held by process N`) hedges the same way and
+/// is a lock; a gone one is a plain refusal
+/// (`tests::a_lock_whose_holder_git_says_is_gone_is_no_other_gits`). A demo
+/// repository gets the reftable store with `refs migrate
+/// --ref-format=reftable` (2.48+).
 #[must_use]
 pub(crate) fn lock_taken(said: &str) -> bool {
     crate::relied_messages::LOCK_TAKEN.found_in(said)
@@ -451,7 +477,11 @@ pub fn stash_gone(oid: &str) -> crate::error::GitError {
 /// A worktree git did not take away, from its answer to
 /// `worktree remove`. git's `die()` exits 128 before anything is deleted;
 /// any other failure came after the folder's deletion began, and git drops
-/// its record regardless (builtin/worktree.c `remove_worktree`).
+/// its record regardless (builtin/worktree.c `remove_worktree`) — on
+/// Windows, a process holding a file or its working directory in the
+/// folder: `error: failed to delete …: Permission denied`, 255. Nets:
+/// `tests/it/worktree_remove.rs` and this module's unit tests, the half
+/// removal copied off a real run.
 ///
 /// `locked` is the reason git said the worktree is locked with (empty for
 /// none), where a lock is what it said no for — the first thing it checks.

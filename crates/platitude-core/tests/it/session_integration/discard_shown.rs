@@ -1,4 +1,4 @@
-//! The discard log's picked entry on the graph (破棄記録仕様.md): the walk
+//! The discard log's picked entry on the graph (`session::shown_discard`): the walk
 //! takes its tips, the commits only those tips reach come out
 //! provisional with every edge they send dashed, and taking the entry off
 //! walks them away again.

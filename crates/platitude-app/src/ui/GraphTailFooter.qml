@@ -5,8 +5,16 @@ import QtQuick.Controls.Fusion
 import platitude.ui
 
 // Window cut: the lanes run on into the footer, fading out, and the message sits where subjects go. One row tall unless
-// the message wraps — it is the only thing explaining the cut. The whole footer is a press, worn like a row's, that
-// loads the next step of history (`session::log_window_step`); no mark on the lanes, since the words name the cut.
+// the message wraps — it is the only thing explaining the cut. One row of fading lane is the least that reads as "it
+// goes on". The whole footer is a press, worn like a row's (`bgHover`, the hand cursor), that loads the next step of
+// history (`session::log_window_step`; user decision — ask before changing); no mark on the lanes, since the words name
+// the cut. Once a step reaches the end of history the footer goes, all of it.
+//
+// The words start at the subject column, as every subject above: centred, they would make the one row in the graph
+// that moves with every divider drag. The offer leads and the count follows (`Load <step> more commits (<n> loaded)`):
+// the fading lanes already say where it is cut, so the words say what can be done. The underline is always drawn
+// (user decision — ask before changing) under the words only, to say "pressable" before any hover; `borderStrong` at
+// rest so it does not compete with the words. The ring after the words, not in a reserved seat.
 Item {
     id: tail
 
@@ -18,8 +26,9 @@ Item {
     required property real graphFullWidth
     required property bool findOn
 
-    /// The search passed the last row over, so the lanes here start from its dimmed strength (規約 §コミットを探す) —
-    /// as they do while the discard log's entry is on the graph, which this end is never part of.
+    /// The search passed the last row over, so the lanes here start from its dimmed strength
+    /// (`GraphRowDelegate.dimmed`) — as they do while the discard log's entry is on the graph, which this end is never
+    /// part of.
     readonly property bool dimmed: (tail.findOn && !tail.graphModel.tailMatched) || tail.graphModel.provisionalOn
     onDimmedChanged: tailCanvas.requestPaint()
 
@@ -111,7 +120,7 @@ Item {
         height: contentHeight
         y: (parent.height - height) / 2
         // Where every subject above starts: the three steps of `GraphColumnMetrics.subjectTextX` (margin, tick, gap),
-        // added as `GraphHeadPin` adds them.
+        // added as `GraphHeadPin` adds them — one dropped, and this one line stands 6px left of the column.
         leftPadding: Theme.spaceSm + 2 * Theme.borderWidth + Theme.spaceXs
         // And where they stop: the pane's own inset, the same a row's message keeps (規約 §余白).
         rightPadding: Theme.spaceXs
@@ -126,7 +135,7 @@ Item {
         font.weight: Theme.fontWeightStrong
     }
     // The underline that says the line can be pressed: `borderStrong` at rest, the words' colour under the pointer
-    // (規約 §author の hover). Drawn, since the label's box is the whole subject column.
+    // (as the author name's, `CommitAuthorRow`). Drawn, since the label's box is the whole subject column.
     Rectangle {
         x: tailMessage.x + tailMessage.leftPadding
         y: tailMessage.y + tailMessage.height + Theme.borderWidth

@@ -218,7 +218,9 @@ QtObject {
     }
 
     /// What the TAG card stands on — the same answer `RefRowMenu.tagFacts` gives at the other entrance. A chip drawing
-    /// one remote's reading names that remote on its own, so the card acts on it (`NavSectionModel.tagAimAt`).
+    /// one remote's reading names that remote on its own, so the card's `push` and deletes act on it (user decision —
+    /// ask before changing; `NavSectionModel.tagAimAt`). The copy here and a reading several remotes share on this
+    /// commit name none: the card's default stands.
     function tagFacts(kind, full, oidHex) {
         if (kind !== "tag")
             return { "pushRemote": menuState.repoTab.defaultRemote, "offers": [] }
@@ -273,8 +275,10 @@ QtObject {
         menu.offerCarried()
     }
     /// Whether that worktree's work has an apply row — false where the row is gone — and what greys it: a conflict
-    /// standing on either side (デザイン規約 §メニュー「「今できない」行は無効で残す」). Here first: git applies nothing
-    /// over one, whichever side would be brought.
+    /// standing on either side (デザイン規約 §メニュー「「今できない」行は無効で残す」; user decision — ask before changing).
+    /// There: which of its sides to carry is not decided. Here: git applies nothing over an unmerged index — so with
+    /// both, the reason says here. That worktree's count is the row's, as old as its last read (`session::pace`); the
+    /// write reads the tree afresh when its turn comes (`RepoSession::apply_carried`).
     function standCarried() {
         const menu = menuState.menu
         const tally = menuState.graphModel.carriedTally(menuState.graphModel.carriedRowOf(menu.carriedPath))
@@ -307,6 +311,8 @@ QtObject {
         if (menu === null || !menu.showing)
             return
         // Another worktree's row: gone where that worktree went clean, its apply read again otherwise.
+        // No test reaches this branch: `tst_commitrowmenu` covers the menu's side (the wait, the shape,
+        // `withdraw`), and choosing between withdrawing and reading again needs a graph model with the row.
         if (menu.carriedShowing) {
             if (menuState.graphModel.carriedRowOf(menu.carriedPath) < 0) {
                 menu.withdraw()

@@ -20,6 +20,14 @@ impl NavSectionModel {
         }
     }
 
+    /// One instance and one feed per bucket run: a `Feed` has one consumer and
+    /// is drained once. Only `arrange` narrows to the run, and every run's
+    /// source is the worktree's whole status, so what asks about the tree
+    /// (`holdsPath` / `besidePath` / `bucketOf` / `origOf` / `changeOf`)
+    /// answers the same from any instance (the page keeps asking the unstaged
+    /// one, `page.wipUnstaged`), while what asks about rows on screen
+    /// (`rowOfFileIn` / `stepFile` / `edgeFile` / `shownRows`) answers for
+    /// its own bucket only.
     pub(super) fn attach_worktree_feed(&mut self, tab_id: i32, run: String) {
         self.tab_id = tab_id;
         self.section = "files".to_string();
@@ -44,7 +52,9 @@ impl NavSectionModel {
     /// ([`crate::hub::CarriedStatusMsg`]). One list where this window's
     /// tree has three ([`super::Bucket::Whole`]): the three split by the
     /// index, and nothing here moves that worktree's index. A separate instance
-    /// all the same — both trees are fed while the pane shows either.
+    /// all the same — both trees are fed while the pane shows either — on a
+    /// feed of its own (`carried_nav`): fed through this tree's runs, every
+    /// paced read of this tree would take the other worktree's rows away.
     pub(super) fn attach_carried_feed(&mut self, tab_id: i32) {
         self.tab_id = tab_id;
         self.section = "files".to_string();

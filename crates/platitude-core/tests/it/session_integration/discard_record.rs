@@ -1,5 +1,5 @@
 //! Writes that take something away leave it on the discard record
-//! (破棄記録仕様.md §2) once they have, and a restore brings it back (§4) —
+//! (`discards::record`) once they have, and a restore brings it back (`discards::restore`) —
 //! each through the session's queue as a write of its own, the log told by
 //! [`SessionEvent::DiscardsChanged`].
 
@@ -261,7 +261,7 @@ async fn a_staged_rename_comes_back_with_both_its_names() {
 /// Work thrown away in a linked worktree and brought back from the
 /// main one waits its turn there: a commit accepted in that worktree before
 /// the restore takes in only what was staged for it, and the work comes
-/// back staged behind it (破棄記録仕様.md §4). The commit is held by a hook
+/// back staged behind it (`RepoSession::write_into`). The commit is held by a hook
 /// across the restore's acceptance; the witness is the moment the restore
 /// starts, read off the commit's own answers then — the commit's tree alone
 /// would let a restore that did not wait pass, since the hook lets go

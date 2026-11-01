@@ -50,7 +50,11 @@ enum AppMsg {
         path: String,
         probe: version::Probe,
         /// Whether the git asked is the binary this run spawns, whatever
-        /// the spelling (`process::same_program`).
+        /// the spelling (`process::same_program`). The restart offer is
+        /// judged by binary (user decision — ask before changing): an empty
+        /// box is the git `PATH` resolves, and choosing the running one again
+        /// withdraws the offer — separators and Windows case say nothing
+        /// about which program it is.
         names_the_run: bool,
     },
     /// The readback and verdict travel together: a drain between two

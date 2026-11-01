@@ -57,7 +57,8 @@ impl DiffModel {
     }
     qproperty!("selHasNew", Member = sel_has_new, Notify = changed);
     qproperty!("selRemoved", Member = sel_removed, Notify = changed);
-    // The find bar's answers (デザイン規約 §diff の中を探す): properties, so the count follows a re-lay nobody typed for.
+    // The find bar's answers (`DiffFindBar`): properties, so the count
+    // follows a re-lay nobody typed for.
     qproperty!("findCount", Member = find_count, Notify = changed);
     qproperty!("findAt", Member = find_at, Notify = changed);
     qproperty!("findSearching", Member = find_searching, Notify = changed);
@@ -326,6 +327,11 @@ impl DiffModel {
     }
 
     /// A press landed: the selection starts here, empty.
+    ///
+    /// Three arguments, the column first (`sel_side`), here and in the
+    /// other selection slots: a QML caller left at another arity dies on a
+    /// TypeError part-way through its handler, and a verb then goes
+    /// silently to the watchdog — change every caller with the signature.
     #[qslot]
     fn begin_select(&mut self, side: i32, row: i32, at: i32) {
         let Some(position) = SourcePosition::new(row, at) else {

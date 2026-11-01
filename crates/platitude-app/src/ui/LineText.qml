@@ -26,7 +26,8 @@ Item {
     /// Added to the space between words. Negative only in `CodeChip`, where a mono space would split a command and its
     /// flag into two words on one ground.
     property real wordSpacing: 0
-    /// The opaque ground the cut mark is drawn on, over the glyphs it cuts.
+    /// The opaque ground the cut mark is drawn on, over the glyphs it cuts. Off a pane, hand in the ground beneath
+    /// (`CommitHoverCard`'s credit line): left at the pane's, the `…` stands in a pane-coloured box on the card.
     property color ground: Theme.bgBase
     /// Whatever is laid over `ground` where this line stands (a row's hover wash). The mark's patch wears both
     /// layers, or it reads as a box around the `…`.
@@ -50,6 +51,7 @@ Item {
     /// Where an end cut's mark starts: the far edge of the last character standing whole before it. Cut by the pixel,
     /// a character stands half under the mark and reads as another (`12` as `1` and a stroke). One binding over what
     /// moves the answer, since `positionAt` is a call (rules/app-ui.md「メソッドはバインディングが依存を取らない」).
+    /// Held, with `tailSlack`, by `tests/qml/tst_linecut.qml`.
     readonly property real markAt: {
         const room = Math.max(0, line.width - markLabel.implicitWidth)
         if (!line.clipped || line.cutsHead || field.text === "" || field.contentWidth <= 0)
@@ -98,8 +100,9 @@ Item {
     /// Where the caret ended up, for a run that has to say why a drag came away with nothing.
     readonly property alias caretPos: field.cursorPosition
 
-    /// Selects the whole value, for automation and `Ctrl+A`; takes the caret first, as `Ctrl+A` does
-    /// (rules-refs/app-ui.md「`persistentSelection` を使わない」).
+    /// Selects the whole value, for automation and `Ctrl+A`; takes the caret first, as `Ctrl+A` does. `Ctrl+A` comes
+    /// only to the field with the focus, so a selection made without it is a second way no hand can take, and
+    /// `details-select-away` would go green for ever (規約 §右のペインの字は掴める「選択は窓に 1 つだけ」).
     function selectAll() {
         field.forceActiveFocus()
         field.selectAll()
@@ -197,7 +200,7 @@ Item {
         // On even without `grabbable`: `Ctrl+C` has to reach a swept selection.
         selectByKeyboard: true
         // No `persistentSelection` — one selection in the window, camera included
-        // (rules-refs/app-ui.md「`persistentSelection` を使わない」).
+        // (規約 §右のペインの字は掴める「選択は窓に 1 つだけ」).
         selectionColor: Theme.accent
         selectedTextColor: Theme.textOnAccent
         padding: 0

@@ -56,6 +56,9 @@ Item {
                    || act === "edit-message-leave" || act === "edit-message-refused"
                    || act === "edit-message-focus" || act === "edit-message-away") {
             // HEAD's own: the only row that takes typing (`offers::message_edit`), branch or not.
+            // The typing forms type their argument. `reword` has no default: with none it sends an empty subject,
+            // nothing is written and the run waits out the watchdog. A registered line is split on spaces (and so is
+            // `gate --verb`), so what is typed is one word.
             page.jumpToRef(worktree.headOid)
             rewordTimer.order = act === "edit-message-focus" ? ["focused"]
                               : act === "edit-message-away" ? ["focused", "away"]
@@ -172,6 +175,14 @@ Item {
                    || act === "revert-stops") {
             if (act === "revert-commit" || act === "revert-stops") {
                 // A right-click selects the row too (GraphRowDelegate), so both steps are taken.
+                // `onscreen=` is a test only over a tall history: in a tree that fits the pane it holds from the start.
+                // Stack some 40 commits on `demo-repo co-authors --at <dir>`, pass it with `--repo` and aim deep
+                // (`row:44`). A tree handed to the container needs `git config commit.gpgsign false` first: that
+                // preset's signing key is a Windows absolute path, unreadable from `/work`, and `git revert` exits 128.
+                // Throw a failed run's tree away (or `reset --hard`): a stopped revert leaves staged changes and the
+                // next run fails on `your local changes would be overwritten`. On `--preset deep` the revert comes out
+                // empty — a right landing with nothing new on the tip, so the picture is the one from before, and the
+                // line says `op=revert follows=true` all the same.
                 const oidHex = driver.autoActOid(arg)
                 graphPane.jumpToRow(graphModel.rowOf(oidHex))
                 page.activateRow(oidHex)
@@ -191,8 +202,8 @@ Item {
                         tipLandedTimer.start()
                     repoTab.merge(arg, false, false, "")
                 } else if (act === "rebase-onto" || act === "rebase-stops" || act === "replay-running") {
-                    // `rebase-stops` answers in the worktree (規約 §未コミット変更がある状態で履歴を書き換える
-                    // の着地表); `replay-running` answers nowhere — its subject is the screen while git is out.
+                    // `rebase-stops` answers in the worktree (`RepoPage.pendingWipSelect`); `replay-running`
+                    // answers nowhere — its subject is the screen while git is out.
                     if (act === "rebase-stops") {
                         opStoppedTimer.start()
                     } else if (act === "replay-running") {
@@ -276,6 +287,14 @@ Item {
     // controls a run pressed would be the scheduler's — so the menu goes up once it is in (`WorktreeModel`'s
     // `headReachKnown`) and nothing is out that would raise the menu greyed. The presses come past the dispatch, so the
     // write barrier starts behind them: armed earlier, a write asked meanwhile would open it.
+    //
+    // The commit is an object name or `row:<n>` (`autoActOid`; over a dirty tree row 0 is the worktree's): a branch
+    // name is not resolved, as `plan_edit` takes none. Both forms of the row: `--preset diverged` is the hold, `basic`
+    // the click; for the form a tag alone decides, `git tag` on a `diverged` repository and pass it with `--repo`.
+    // Over uncommitted work core goes round through the stash (デザイン規約 §未コミット変更がある状態で履歴を書き換える):
+    // `--preset drop-collides` is that detour landing on a conflict as the work comes back, `drop-stops` the replay
+    // itself stopping. A detour that succeeds opens no log; to picture it, pass the `--config-dir` a `state change`
+    // run opened the log in (`rebase --interactive` → `stash push` → `rebase --interactive` → `stash pop --index`).
     PageStage {
         id: dropTimer
         name: "drop_row"
@@ -596,7 +615,9 @@ Item {
     // page after a pass that beat the status was offered the landing and turned it down; `wip=` is the pass carrying
     // ours landing on this window's tree. Every worktree's row wears the same all-zero id, so taking row 0's id for
     // ours lands the press on another worktree's. No `order`: a run not started with the hold up (both harness calls
-    // answer whether it was) ends on whichever call said so.
+    // answer whether it was) ends on whichever call said so. On `--preset carried-clashing`: `clashing` stands on
+    // `side/clash`, where the replay stops, so the pass leads with its row (`otherTop`); under another preset the run
+    // waits silently to the watchdog. `op=REBASING` is the stopped operation still standing.
     PageStage {
         id: stoppedLandingTimer
         name: "wip_stop_landing"
@@ -708,7 +729,7 @@ Item {
     }
     /// `pull-branch-go`: the branch level with the commit its upstream stands on, read off one listing — before the
     /// press the two differ, and nothing but the fast-forward makes them meet — with the write answered first, so a
-    /// refusal reads as one.
+    /// refusal reads as one. The picture: the branch's chip moved onto the new tip, the selection where it was.
     PageStage {
         id: pullBranchTimer
         name: "pull_branch"
@@ -757,6 +778,9 @@ Item {
                                 + " moved=" + (worktree.headOid !== pullPressTimer.witnessed("headBefore")) })
         }
     }
+    // Where `merge-branch` / `cherry-pick` / `revert-commit` / `pull-go` leave the reader: the selection on the new
+    // tip, its row on screen. This sampler alone completes them (`AutoActCompletion.defersCompletion`): the write
+    // barrier, first right after the answer, would end the run on a picture of the write's edge with no line.
     PageStage {
         id: tipLandedTimer
         name: "tip_landed"
@@ -769,7 +793,8 @@ Item {
         /// commit selected before the press — for a merge from a ref row, the old tip. `settling`: the refs publish
         /// ahead of the status, the rebuilt graph and the sidebar, and a fast-forward lands on a row the graph
         /// already has (the upstream's), so every other gate here opens while the WIP row still leashes the old tip
-        /// and the counts still say behind.
+        /// and the counts still say behind — a merge that makes a commit only looks whole because its row appears
+        /// after the graph is rebuilt.
         function ready() {
             const row = graphModel.rowOf(page.selectedOid)
             return {
@@ -860,7 +885,9 @@ Item {
                              + " rows=" + graphModel.rowTotal].concat(driver.verbReport()) })
     }
     // Where a merge that stopped on conflicts left the reader: the worktree, its conflicted rows on screen, and
-    // nothing calling it a failure.
+    // nothing calling it a failure (デザイン規約 §進行中の操作から出る) — no commit added, no error band, the command
+    // log not raised; `error=` / `log=` are the claims no picture answers, `op=` / `files=` ride along. Needs
+    // `--preset clashing`: the other conflict presets are built already stopped, so the press's answer never shows.
     PageStage {
         id: mergeStoppedTimer
         name: "merge_stopped"
@@ -883,6 +910,11 @@ Item {
     // `mergeStoppedTimer`'s twin for the operations that step (cherry-pick, revert, rebase, a stopped drop): the same
     // checks, plus the `--continue` row the merge does not have — for these it is a step onward
     // (規約 §進行中の操作から出る).
+    // Each needs a preset not stopped yet: `cherry-pick-stops feature/clash --preset clashing`,
+    // `revert-stops row:1 --preset revert-clashes`, `rebase-stops main --preset rebase-clashes`,
+    // `drop-stops row:2 --preset drop-stops`. One built already stopped (`cherry-pick-conflict`, `rebase-conflict`)
+    // cannot show what the press answers. A failed run's tree is thrown away: the stopped operation left in it fails
+    // the next run for another reason.
     PageStage {
         id: opStoppedTimer
         name: "op_stopped"
@@ -917,7 +949,10 @@ Item {
             const op = rewordTimer
             if (!Awaited.all("reword_ready", { "ready": driver.cardSettled, "page": PageSettled.settled(page) }))
                 return
-            // "edit-message-focus" types nothing: the caret is photographed over the commit's own body.
+            // "edit-message-focus" types nothing: the caret is photographed over the commit's own body, so HEAD needs
+            // one (`--preset co-authors`); its resting side is `co-authors 0` on the same preset, read as a pair.
+            // `color=` is what is read (`textPrimary` against the resting `textSecondary`). Focus, unlike hover, can
+            // be injected: `forceActiveFocus()` takes offscreen.
             if (Harness.autoAct === "edit-message-focus") {
                 op.input("focused", () => {
                     detailsPane.focusDescription()
@@ -930,7 +965,10 @@ Item {
             // "edit-message-away" puts the caret in the same way, then presses on the pane's band through the window's
             // own watcher: the save row that stood for the caret comes down with it (デザイン規約 §コミットメッセージの
             // 2 つの枠). `stood=` says the caret was in first — whether the save row stood before the press away,
-            // witnessed there; `page=` that the page itself holds the keyboard after.
+            // witnessed there; `page=` that the page itself holds the keyboard after (left in a list or a scroll, it
+            // would eat the arrows). The press enters `FocusRelease.pressedAt` (`Main.caretHand`), the function a real
+            // press passes through; Qt's delivery order — the press reaching the watcher before the field — is not
+            // reproduced here, `tst_pagerelease` / `tst_fieldrelease` hold it with a real pointer.
             if (Harness.autoAct === "edit-message-away") {
                 op.input("focused", () => {
                     detailsPane.focusDescription()

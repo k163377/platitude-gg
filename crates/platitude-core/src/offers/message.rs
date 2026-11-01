@@ -48,10 +48,12 @@ impl MessageEdit {
 /// operation's own word — `""` exactly when nothing stands
 /// (`WorktreeModel.op_text`).
 ///
-/// **Only HEAD's own commit.** Amending an older one replays every commit
-/// after it, and the first stray keystroke would start that; rewrites
-/// asked for by name stay in the commit menu ([`super::commit_menu`]'s
-/// `edit_history`).
+/// **Only HEAD's own commit** (user decision — ask before changing). The
+/// boxes are a surface a click drops a caret on, so whatever they accept
+/// is what a stray keystroke can start. Amending an older one replays
+/// every commit after it (each gets a new id); rewrites asked for by name
+/// (squash, drop) stay in the commit menu ([`super::commit_menu`]'s
+/// `edit_history`), and the boxes are the amend's alone.
 ///
 /// **Nothing while an operation stands**, since git refuses the amend
 /// there (`You are in the middle of a merge -- cannot amend`; mid-rebase
@@ -61,9 +63,10 @@ impl MessageEdit {
 ///
 /// **The exemption is HEAD's, and nothing narrower.** Holding it to the
 /// commit the stop began on refuses the second amend: the first moves
-/// HEAD off it and nothing under `rebase-merge/` follows
-/// (rules-refs/core.md「`edit` 停止中の amend の門」, デザイン規約
-/// §フル interactive rebase).
+/// HEAD off it and nothing under `rebase-merge/` follows, `amend` included.
+/// Telling an amend from a commit a terminal stacked on the stop would take
+/// an ancestry read every tick, to refuse something git itself lets through
+/// — not worth it (デザイン規約 §フル interactive rebase).
 ///
 /// **Detached still takes typing**: `commit --amend` works on a detached
 /// HEAD, unlike the menu's rewrite rows, which need a branch.

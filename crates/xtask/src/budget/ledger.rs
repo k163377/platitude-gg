@@ -449,7 +449,11 @@ impl Pool {
     /// `queue::standing`) and still holds on, and a probe that cannot be
     /// asked holds too. The cost is a room a person may have to end by
     /// hand; the other way round is a machine quietly at twice its budget,
-    /// which nothing downstream can detect.
+    /// which nothing downstream can detect. Ending a leftover is a
+    /// person's job: what stays is a cargo, a container or the app, and
+    /// `cargo xtask kill` reaps only the app. The runner sees as far as the
+    /// engine's CLI; a container whose CLI was killed too is the engine's
+    /// `ps` to find.
     ///
     /// A unit that has started nothing (`child` zero) is let go at once.
     fn leftover(&self, path: &Path) -> Result<Option<Ticket>, String> {

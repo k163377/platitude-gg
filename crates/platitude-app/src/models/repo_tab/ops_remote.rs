@@ -3,8 +3,9 @@
 use super::*;
 
 impl RepoTab {
-    /// Everything uncommitted, in one entry, untracked files included
-    /// (デザイン規約 §変更を退避する「未追跡は必ず含める」).
+    /// Everything uncommitted, in one entry, untracked files always
+    /// included: new files left behind alone are the most surprising thing a
+    /// stash does. Only the button's tooltip says so (`BandStashButton`).
     ///
     /// `message` is the summary standing in the commit box, or empty for
     /// git's own `WIP on …`; the press asks nothing.

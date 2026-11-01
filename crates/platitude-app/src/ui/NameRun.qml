@@ -3,9 +3,15 @@ import platitude.ui
 
 // A name behind its kind's mark as one code chip, cut in the middle to the width it is given (デザイン規約 §ref の種別
 // 「文の中の名前」): the run a band, a tab or a row draws where it names a worktree (`TabTreeMark`, `CarriedPane`,
-// `DiffPaneHeader`, the uncommitted row) — so a fix to the run reaches them all. The mark in its kind's colour, the
-// name in the code face, both on one ground from the head of the mark's seat, which holds the mark's air, to half a gap
-// past the name's ink (`WordFace.groundEnd`).
+// `DiffPaneHeader`, the uncommitted row `GraphRowDelegate.carriedRun`) — so a fix to the run (the mark's
+// `inkBeside`, the mono `CutName`, the ground) reaches them all. The mark in its kind's colour, the name in the code
+// face, both on one ground from the head of the mark's seat, which holds the mark's air, to half a gap past the name's
+// ink (`WordFace.groundEnd`).
+//
+// The width ceiling is each caller's: `TabTreeMark` takes what its holder hands it (a tab its share of the band; a
+// holder with no ceiling of its own — the panel, a menu row — the name ceiling, `cappedWidth` / `capWidth`),
+// `CarriedPane` `Math.min(implicitWidth, parent.width)`, `DiffPaneHeader` a quarter of the header, the uncommitted row
+// `markCell + carriedNameMax`. Whether it was cut: `cutting`.
 Item {
     id: run
 

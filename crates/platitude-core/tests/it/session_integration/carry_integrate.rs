@@ -151,6 +151,12 @@ async fn a_merge_that_stops_after_the_carry_leaves_the_work_in_the_stash() {
 }
 
 /// A merge refused for any other reason stops there: nothing is stashed.
+///
+/// The one witness that the carry adds no write after such a refusal
+/// (`integrate_carrying`): the classifier's units (`refused_over_work`)
+/// stop at "other words are not work in the way", so this stays pre-merge,
+/// not in `periodic`. A rewrite needs no such test: git runs first, and the
+/// arm that adds nothing after it is passed by every rewrite that lands.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_merge_that_fails_outright_stashes_nothing() {
     let mut repo = TestRepo::init();

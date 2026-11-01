@@ -41,8 +41,10 @@ pub(super) struct Sample {
     pub(super) os_peak_working_set: Option<u64>,
     pub(super) private: u64,
     /// The OS device name of the screen the window was on, empty while
-    /// there is no window yet — not Qt's friendly name
-    /// (internal-docs/性能.md「性能計測の画面対応」).
+    /// there is no window yet — read off the process's `MainWindowHandle`,
+    /// not Qt's `ScreenInfo.name`: on real hardware that is the friendly
+    /// name, which never matches the OS `DISPLAYn` the Hz is joined on
+    /// (`perf::display`).
     pub(super) display: String,
     /// Whether the window in front belonged to the measured process.
     /// Evidence only: a window not in front is still composited, and the

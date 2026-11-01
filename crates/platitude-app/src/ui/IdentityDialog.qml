@@ -4,9 +4,11 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-// The startup gate when git has no identity to commit with. It asks for that pair only — the rest of git's
-// configuration is in the settings screen (`SettingsDialog`). The owner opens and closes it; "Not now" leaves the app
-// usable, since reading a repository needs no identity.
+// The startup gate when git has no identity to commit with — the one card left of the settings family. It asks one
+// thing, so it shows one thing (user decision — ask before changing): the pair, with `Not now` and `Save` at its
+// foot, no `MERGE EDITOR`, no category rail; an identity already set is edited in the settings screen's `Git`
+// (`SettingsDialog`). A card is a question, so it takes the caret as it opens. The owner opens and closes it;
+// "Not now" leaves the app usable, since reading a repository needs no identity.
 AppDialog {
     id: identityDialog
 
@@ -43,6 +45,8 @@ AppDialog {
                 return
             identityDialog.saving = false
             // Not on "git raised nothing": a half-landed write raises nothing either. Close only when git reports both.
+            // The two writes cannot be made one, so a half is shown by each box's check (`IdentityFields`); trimming
+            // is Rust's alone.
             if (AppBackend.identityNameSaved && AppBackend.identityEmailSaved)
                 identityDialog.close()
         }

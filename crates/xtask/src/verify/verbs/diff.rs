@@ -5,7 +5,7 @@
 use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
-    // The find bar over the diff (デザイン規約 §diff の中を探す), on
+    // The find bar over the diff (the app's `DiffFindBar`), on
     // manyhunks' notes.txt: `reworded` stands on each of the 20 added
     // lines. `at=1` is the first from the top of the view, `spans=1` the
     // one row the standing hit covers, `focused=true` the caret in the box.
@@ -95,7 +95,7 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "moved=true stopped=false lit=true focused=true",
     },
     // The second click on the row being read closes the diff, and the
-    // light goes out with it in both lists (デザイン規約 §diff のファイル一覧).
+    // light goes out with it in both lists (`FileRowDelegate.qml`).
     // Read as a pair: one alone frames like a list with no diff up.
     // `open=false` makes the dark list the list's own answer.
     Verb {
@@ -243,7 +243,8 @@ pub(super) const TABLE: &[Verb] = &[
         // stores, and a line over the rows says which (デザイン規約 §diff の中の
         // ステージ). A mode change has its line too, the only one where no
         // line of the file changed, and it stands over the line-ending
-        // warning (§mode の変更). The lines are read as they stand.
+        // warning (the app's `DiffFileNotices`). The lines are read as they
+        // stand.
         when: &[
             (
                 Arg::WithPreset("gitlink"),
@@ -423,7 +424,7 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "diff_blank quiet=true clamped=true backwards=true across=true sent=true",
     },
-    // The diff read side by side (規約 §diff を 2 列で読む). `saved=` is
+    // The diff read side by side (the app's `DiffRowDelegate`). `saved=` is
     // the choice read back off the store after the page reported its
     // layout; the tally after these two is the fixture's own shape.
     Verb {

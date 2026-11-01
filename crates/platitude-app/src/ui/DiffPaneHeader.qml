@@ -19,14 +19,16 @@ Rectangle {
     /// (デザイン規約 §別の worktree を読む).
     required property bool writable
     /// The worktree the file belongs to, where it is not this window's — said after the path, which leads
-    /// (デザイン規約 §別の worktree を読む).
+    /// (デザイン規約 §別の worktree を読む; user decision — ask before changing): the band is there for the path, and the
+    /// worktree follows in the phrase it has everywhere: `DIFF <path> — <mark><name>`. One space between caption
+    /// and path (user decision: `DIFF` is the band's name, the path its content); the dash heading the worktree's
+    /// phrase is the band's only separator.
     required property string worktreeName
     /// That worktree is the repository's own: the name wears the house (規約 §ref の種別「名前の印」).
     property bool worktreeHome: false
     required property bool conflicted
     required property bool busy
-    /// Whether the rows are read as two columns (`DiffModel.split`) — what the toggle shows
-    /// (デザイン規約 §diff を 2 列で読む).
+    /// Whether the rows are read as two columns (`DiffModel.split`) — what the toggle shows (`DiffViewToggle`).
     required property bool split
 
     /// The band's sweep hand, named so a run can enter it (as a card's is at `<card>.background.pad`).
@@ -55,7 +57,7 @@ Rectangle {
     // The row under it can be a hunk heading of the same colour (デザイン規約 §diff の中のステージ).
     BandRule { z: 1 }
     // The band's air hands presses to the path (規約 §右のペインの字は掴める). Under the row, so the buttons keep
-    // their presses.
+    // their presses. Headless: `diff-band-sweep`, with `details_width = 1100` seeded so the path is cut.
     SweepPad {
         id: headerHand
         anchors.fill: parent
@@ -129,8 +131,9 @@ Rectangle {
             }
         }
         // The band's spare room goes to this spacer: a layout with room nothing takes spreads it between its items.
-        // The three after it say `fillWidth: false`, since a nested layout fills by default. The toggle stands on every
-        // diff (デザイン規約 §diff を 2 列で読む).
+        // The three after it say `fillWidth: false`, since a nested layout fills by default. **The band's right end is
+        // one trio** (user decision — ask before changing): the toggle pair, `Stage file`, the `✕`, all pushed to the
+        // right end, `spaceSm` (the band's step) between them. The toggle stands on every diff (`DiffViewToggle`).
         Item { Layout.fillWidth: true }
         DiffViewToggle {
             id: viewToggle
@@ -138,7 +141,11 @@ Rectangle {
             split: header.split
             onChosen: split => header.splitChosen(split)
         }
-        // The pane's one standing colour word (デザイン規約 §diff の中のステージ).
+        // The pane's one standing colour word (デザイン規約 §diff の中のステージ). An `ActionButton`: a `HoverToolButton`
+        // wears only the colours the palette routes, not a tone of its own. Headless `hunk-tools` (`caption=`: the
+        // band's `DIFF` and path on one baseline). Do not line its right end up with the hunks' `Stage hunk`: it ends
+        // further in by the `✕` beside it (25px left of the hunk's word), and the band's divider makes it read as the
+        // right end of another box.
         ActionButton {
             id: stageFileButton
             Layout.fillWidth: false
@@ -152,8 +159,8 @@ Rectangle {
                  ? qsTr("Unstage the whole file at once") : qsTr("Stage the whole file at once")
             onActivated: header.stageFileRequested()
         }
-        // The third of the band's end trio: the toggle pair's `iconXl` seat, band-tall reach and mark box
-        // (規約 §diff を 2 列で読む).
+        // The third of the band's end trio, in the toggle pair's seat: `iconXl` wide, band-tall reach, `iconXl` mark
+        // box. Its ink stays lighter than the pair's, and its wash stays its own circle.
         CloseToolButton {
             Layout.fillWidth: false
             Layout.fillHeight: true

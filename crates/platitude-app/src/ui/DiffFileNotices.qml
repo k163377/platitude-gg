@@ -6,8 +6,16 @@ import QtQuick.Layouts
 import platitude.ui
 
 // What the diff pane says about the file itself, above the rows — one line each, in one seat (デザイン規約
-// §改行コードの警告): the mode in the rows' weight (§mode の変更), the rest in the notes' — and the picture that stands
-// in for a file no rows can show.
+// §改行コードの警告): the mode in the rows' weight, the rest in the notes' — and the picture that stands in for a file
+// no rows can show. None of them changes the ground.
+//
+// With a mode change, top to bottom: the mode line, then whatever else the file says — `Line endings change · …`
+// (warning), `Whole file only · stored by Git LFS` (right-aligned) then the rows, `Binary file · 8 B → 9 B`, the
+// pictures before and after, or the hunks. A rename with the same contents gets the mode line alone (the file list's
+// `old → new` says the rename). No mode line for a file created or deleted (`new file mode` / `deleted file mode`
+// declare a file, they change none), for a change of type (file ↔ symlink: git prints a deletion and a creation), or
+// for a conflict's combined diff (its `mode` line is another shape, and the conflict lines say what each side did);
+// the parser reads only the `old mode` / `new mode` pair (`FilePatch::mode_change`).
 ColumnLayout {
     id: notices
 
@@ -52,11 +60,14 @@ ColumnLayout {
 
     spacing: 0
 
-    // -- a conflict with only one side left: git prints no patch (`* Unmerged path`), so say what each side did
-    //    (デザイン規約 §conflict の種別).
-    // Each side's branch behind its mark (デザイン規約 §ref の種別「名前の印」), on one line whose names give way in the
-    // middle and never its words (`CodeLine`, `middle`). In the explaining words' colour, not the disabled one: its
-    // names a step down with them, and the branch stood on in its own (デザイン規約 §conflict の種別).
+    // -- a conflict with only one side left (`DU` / `UD` / `AU` / `UA`): the index holds one side's version only, so
+    //    git prints no patch (`* Unmerged path`) and this sentence is all the pane shows — saying what each side did
+    //    (`Words.conflict`) already says why, so no `No changes to show`.
+    // Each side's branch behind its mark (デザイン規約 §ref の種別「名前の印」), on one line, never wrapped: the names give
+    // way in the middle, the longer first, never the words (user decision — ask before changing; the menus' rule,
+    // `CodeLine`, `middle`), and the whole line is the tip of a hand on it. In the explaining words' `textSecondary`,
+    // not the disabled `textMuted`, which would sink the names and marks into the row's colour (user decision — ask
+    // before changing): its names a step down with them, and the branch stood on in its own `textLink`.
     CodeLine {
         visible: notices.diffModel.unmerged
         Layout.margins: Theme.spaceSm
@@ -87,10 +98,13 @@ ColumnLayout {
         theirsColor: notices.theirsColor
         nameCap: notices.nameCap
     }
-    // -- the mode, first: an attribute of the file, where the line endings below are how its contents are written,
-    //    next to the rows. A change of the file's as its lines are, so it is said in their weight — the code face
-    //    and size, in `textPrimary` — on the pane's own ground: no file holds these words, so they are not dressed as
-    //    lines (デザイン規約 §mode の変更). No row of the diff carries it, and no part of the diff moves it.
+    // -- the mode, first (user decisions — ask before changing): an attribute of the file, where the line endings below
+    //    are how its contents are written, next to the rows. A change of the file's as its lines are, so it is said,
+    //    one line, in their weight — the code face and size, in `textPrimary` — on the pane's own ground: no file holds
+    //    these words, so dressed as lines it would read as diff. Unsaid, a mode-only change would look like `No changes
+    //    to show` and one beside lines would go unseen (as would the mode a part left behind on its side). No row of
+    //    the diff carries it, and no part of the diff moves it (`patch::header`): it has no tools. On a mode-only
+    //    change it stands instead of `No changes to show` — it says the whole change.
     Label {
         id: modeLine
         objectName: "mode"
@@ -103,7 +117,9 @@ ColumnLayout {
         font.pixelSize: Theme.fontCode
         color: Theme.textPrimary
     }
-    // -- line endings: one line for the file, words only (デザイン規約 §改行コードの警告).
+    // -- line endings: one line for the file, words only (デザイン規約 §改行コードの警告). This line is the diff's one
+    //    mark for it — no row is marked: a CR is invisible, with nowhere in a line to stand, and the count of (b) says
+    //    enough.
     Label {
         id: endingsLine
         objectName: "endings"
@@ -117,8 +133,11 @@ ColumnLayout {
         font.pixelSize: Theme.fontSm
         color: Theme.warning
     }
-    // -- a file the pane offers whole only: no hunk or line tools, and this says why (デザイン規約 §diff の中のステージ).
-    //    On the right, under the header's word it explains — the staging tools stand at that edge.
+    // -- a file the pane offers whole only: no hunk or line tools, and this says why (デザイン規約 §diff の中のステージ;
+    //    user decision — ask before changing). The line-ending warning's seat and voice. On the right (user
+    //    decision), under the header's word it explains — the staging tools stand at that edge. Only where that is the
+    //    one reason tools are missing (`DiffPane.wholeWhy`): a new file's one hunk shows itself, and another
+    //    worktree's diff and a commit's never had tools.
     Label {
         id: wholeLine
         objectName: "whole"
@@ -141,8 +160,18 @@ ColumnLayout {
         oldSize: notices.diffModel.previewOldSize
         newSize: notices.diffModel.previewNewSize
     }
-    // -- an embedded git repository: no patch, ever. It names the commit staging would record (core
-    //    `details::embedded`); what staging costs is git's to say (デザイン規約 §作業ツリーの中の別リポジトリ).
+    // -- an embedded git repository (a directory with its own `.git`, which `status` answers as one entry): no patch,
+    //    ever, so the file's one line of note (user decision — ask before changing), in the line-ending warning's seat
+    //    and voice, its words in `textMuted`. Heading and value: the name, and the commit it stands on in 8 digits
+    //    (core `details::embedded`) — the commit staging records, so one value answers both questions. The name is
+    //    git's: `git add` says `warning: adding embedded git repository`, so the log at the stage and the screen agree.
+    //    Not `submodule` — a tracked gitlink's word, and a registered one never shows as this untracked row — and no
+    //    noun of our own (a reader would need it explained). What staging loses (the files inside, a clone's copy) is
+    //    git's to say, in its warning and hint in the log: said here too, one line would hold two causes and keep
+    //    neither (規約 §長さ). A note, not `No changes to show`: that says "nothing changed", this "there is no patch at
+    //    all", and the same words would make the directory look empty. The row's `+` stays — git decides whether it
+    //    can, and a refusal is shown in git's words. Its file row is one line too (`models::pathtree`). Headless
+    //    `wip-embedded` (preset `embedded`).
     Label {
         visible: notices.diffModel.embedded
         Layout.margins: Theme.spaceSm
@@ -154,7 +183,8 @@ ColumnLayout {
         color: Theme.textMuted
     }
     // -- headers and no hunks (a pure rename, an empty file added): a blank frame would read as a failed load. One line
-    //    for both — git is not asked a second question for why. A mode change has its own line above.
+    //    for both (user decision — ask before changing) — git is not asked a second question for why. A mode change,
+    //    the third headers-only read, has its own line above (`FilePatch::mode_change`).
     Label {
         visible: notices.headersOnly && notices.diffModel.modeFrom === ""
         Layout.margins: Theme.spaceSm

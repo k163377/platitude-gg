@@ -4,9 +4,14 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The discard log's seat and its list (破棄記録仕様.md), put on screen for a picture — an entry picked from it, on the
+/// The discard log's seat and its list, put on screen for a picture — an entry picked from it, on the
 /// graph under the band that tells it, the card a rest on an entry opens, and what a press on the band's `Restore`
 /// leaves.
+///
+/// The list reads the reflogs and the record's ref (`refs/pgg/discards`) as it opens, so the fixture is a preset:
+/// `--preset discards` holds every kind of entry under forty commits (numbered in `xtask::demo::discards`),
+/// `--preset discards-deep` one entry past the graph's window. The loading ring and how the card opens are
+/// `tests/qml/tst_recoverpane.qml`'s, the words `tst_recoverwords.qml`'s.
 // `Item` because `QtObject` has no default property to hold the samplers below.
 Item {
     id: acts
@@ -22,9 +27,10 @@ Item {
     readonly property bool opens: Harness.autoAct === "recover-open"
     /// The run's argument, a comma list of looks: `fold` folds the left menu, `lit` lights the seat and holds it lit
     /// for the picture, `blink` blinks it as a discard does and frames it once the blink is over, `filter:<words>`
-    /// types into the list's filter; for `recover-open` a number picks that entry (0 when none is named), `none` picks
-    /// none, `card` rests a hand on the first entry the list shows, none picked, and `restore` / `part:<n>` press the
-    /// band's `Restore` for the whole entry / its part n once it is on the graph.
+    /// types into the list's filter (no comma: it splits the looks); for `recover-open` a number picks that entry, by
+    /// its place in the whole list (0 when none is named), `none` picks none, `card` rests a hand on the first entry
+    /// the list shows, none picked (the card is in overlay.png), and `restore` / `part:<n>` press the band's `Restore`
+    /// for the whole entry / its part n once it is on the graph — a refused press frames the band still standing.
     readonly property var looks: Harness.autoActArg === "" ? [] : Harness.autoActArg.split(",")
     readonly property var parts: acts.looks.filter(look => look.startsWith("part:"))
     /// The fold this run asked for, so the sampler knows which width it waits for.
@@ -77,9 +83,12 @@ Item {
                + " listed=" + sidebarPane.autoRecover.shownEntries.count
                + " card=" + sidebarPane.autoRecover.cardOpen
                + " pick=" + page.recoverPick
+               // The picked entry drawn on the graph for now.
                + " shown=" + graph.provisionalOn
-               // Whether a part of the picked entry comes back alone too: its band's per-part presses.
+               // Whether a part of the picked entry comes back alone too: its band's per-part presses (false for
+               // what one rebase moved).
                + " byPart=" + (page.recoverPicked !== null && page.recoverPicked.byPart)
+               // The entry's tip row, and the rows the scroll is held to.
                + " tip=" + graph.provisionalTipRow
                + " span=" + graph.provisionalFirst + "-" + graph.provisionalLast
                // Whether the view went to the picked entry: its tip's row on screen, and where the view stands.
@@ -87,7 +96,8 @@ Item {
                + " y=" + Math.round(view.contentY)
                // Per part, whether what it would bring back is on the graph.
                + " reach=" + page.recoverReach.join("/")
-               // The restores this tab answered, and how the last one's work came back.
+               // The restores this tab answered, and how the last one's work came back (`whole` / `unstaged` /
+               // `stash`).
                + " restores=" + driver.repoTab.restoreSeq
                + " how=" + driver.repoTab.restoreHow
                + " refused=" + (driver.repoTab.lastWriteError !== "")

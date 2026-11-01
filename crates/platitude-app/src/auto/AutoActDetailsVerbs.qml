@@ -108,6 +108,8 @@ Item {
             parentsCardTimer.start()
         } else if (act === "details-fit") {
             // Overflow is glyphs cut at the window's edge, which headless cannot see, so the pane reports the number.
+            // The wall is `--preset edges` row 7 (a 2000-character subject, a 120-byte co-author name); the shape a
+            // `fits=false` takes is rules-refs/app-ui.md's `Layout.fillWidth` line.
             //
             // No row named keeps the one the page opened on: `Number("")` is 0, and row 0 of a dirty tree (both
             // presets this verb runs on) is the worktree's — the card never settles and the run waits out the
@@ -125,6 +127,12 @@ Item {
                 page.activateRow(graphModel.oidAt(Number(arg)))
             cornerTimer.start()
         } else if (act === "divider-refuse") {
+            // The nine bounds a drag can be refused at, the argument naming place and way: `graph-max` / `graph-min` /
+            // `label-min` / `label-max` (the graph's two dividers) and `sidebar-min` / `details-min` / `log-min` (the
+            // three SplitView bars) on `--preset basic`; `desc-max` / `desc-min` (the description box's grip) want a
+            // body longer than the box (`--preset long`). The ring is in the PNG: the boundary stands where it
+            // stopped, the ring apart from it, where the pointer went.
+            //
             // The log's bar has no geometry while the log is shut — open it and let it lay out before measuring.
             if (arg === "log-min" && !page.commandsOpen) {
                 page.commandsOpen = true
@@ -151,7 +159,8 @@ Item {
     }
     /// What the window did with the drag past whichever boundary `which` names (`divider-refuse`), read as it stands.
     /// A picture cannot answer it: every refusal frames the same way, and the column widths are not on screen as
-    /// numbers.
+    /// numbers. With `label-min`, `labelW=` is the chip column's floor (`GraphColumnMetrics.labelColWMin`) — kept out
+    /// of must_say: a floor counted in characters moves in pixels with the OS's font.
     function refusalLine(which) {
         return "divider_refuse refuses=" + page.refusalShown
                + " line=" + page.refusalLineShown(which)
@@ -224,7 +233,10 @@ Item {
 
     /// A summary box's right-click menu (`FieldMenu`) on the box in the state the argument names, asked for through the
     /// box's own request — the entry Qt's right-click takes. `rows=` (on the table) and `live=` (can be pressed) are
-    /// read off the card: a greyed row and a lit one differ by a shade a picture leaves to the eye.
+    /// read off the card: a greyed row and a lit one differ by a shade a picture leaves to the eye. `scene.png` shows
+    /// how the card hangs off the box. The request is the keyboard's, so the card opens under the caret: the picture of
+    /// a right-click opening it under the pointer is not this verb's — offscreen's cursor never leaves the screen's
+    /// corner, so that one is looked at in a real window. Each state's rows are held row by row by `tst_fieldmenu`.
     PageStage {
         id: fieldMenuTimer
         name: "field_menu"
@@ -292,7 +304,8 @@ Item {
     /// tip does not go down to change its mind. Whether the words change at all is `tst_hashplate`'s.
     ///
     /// Both claims compare the screen against what the control says it offers, so a translation stays green and a
-    /// tip that kept the old sentence goes red.
+    /// tip that kept the old sentence goes red. The tip is in the picture (overlay.png / scene.png), but which of the
+    /// two sentences the moment owes is not.
     ///
     /// Witnessed as the press lands: `was`, what the tip was carrying — empty in `-counting`; `offered`, whether the
     /// tip up before the press carried the control's word.
@@ -324,8 +337,9 @@ Item {
                 return
             }
             if (op.counting) {
-                // The tip that follows must carry the control's current word — the attached property hands over the
-                // one it had when the pointer arrived unless the answer re-arms it.
+                // The tip that follows must carry the control's current word. The window's one box binds its text to
+                // the target's `TipAsk.words` (`TipSeat`); a box that took the words once, as it rose, comes up with
+                // the offer — the box this half catches.
                 op.complete({
                     "name": "hash_tip_up",
                     "when": () => op.up(),
@@ -363,7 +377,8 @@ Item {
     /// the shown one picked out (規約 §右のペインの字は掴める). No picture answers it — the clipboard is not on screen.
     ///
     /// The drag goes first: after the tap has put the hash on the clipboard, a drag that also copied could not be
-    /// told apart. A run enters the hand's own functions, so whether a press reaches the plate is `tst_hashplate`'s.
+    /// told apart. A run enters the hand's own functions, so whether a press reaches the plate is `tst_hashplate`'s
+    /// (the parent links' same gesture too).
     ///
     /// Witnessed as the drag let go: `held`, whether it left the shown hash picked out; `quiet`, whether it left the
     /// pad as it found it.
@@ -418,6 +433,11 @@ Item {
     /// land (`caret`), the words answer their own press wherever nothing stands over them (`grabs`), and a press on
     /// the value's own box is still somebody else's (`ours` — false on the plate's two, whose controls keep every
     /// press across their whole face).
+    ///
+    /// Every start is in the gap (`SweepRoom`), never on the value: a run that injected the press on the words would
+    /// pass with the room taken out. Nine starts, three across the gap by three down the line's whole band
+    /// (`CommitAuthorRow.bandFor`) — a verb firing only the middle point passes with the gesture broken. A cut value
+    /// (`mate:7 --preset edges`) is out of scope: a sweep reaches what is on screen, the whole is `details-select`'s.
     PageStage {
         id: detailsSweepTimer
         name: "details_sweep"
@@ -493,7 +513,7 @@ Item {
         }
     }
 
-    /// The parent line against the room the row leaves it (デザイン規約 §右のペインの親). Headless sees neither a cut
+    /// The parent line against the room the row leaves it (`HashPlate.parentFit`). Headless sees neither a cut
     /// digit nor a crowded date, so the row says them: two parents always stand (`floor`), a count stands exactly when
     /// parents were left out and says how many (`said`), the links are git's parents in git's order (`order`), every
     /// link is cut alike (`even`), the name and the date lines are whole (`crowd`) and the pane holds its row (`fits`).
@@ -554,12 +574,14 @@ Item {
                                            "report": () => detailsParentsTimer.line() })
         }
     }
-    /// The author row's two lines, each read as one (デザイン規約 §右のペインの親): the name and the commit's hash on one
+    /// The author row's two lines, each read as one (`CommitAuthorRow`): the name and the commit's hash on one
     /// baseline (`line1`), the date, the credit and the parents on the next (`line2`), and the two counts of one size
     /// (`sizes`), and the credit's face on the middle of the date line's capitals (`face`, デザイン規約 §アイコンの席 — read
     /// off the window's face, `WordFace`, not off the row). A pixel off is what the eye catches and a picture cannot be
     /// asked, so the row says it. Each value after the claims is that word's baseline less its line's first word's (the
-    /// name's, the date's), and the face's middle less the capitals'; `-` is a word not drawn.
+    /// name's, the date's), and the face's middle less the capitals'; `-` is a word not drawn. `16:min --preset
+    /// octopus-mates` (thirteen parents, twelve co-authors, the pane on its floor) is the row squeezed hardest. The
+    /// raw offsets differ by OS (Windows 1–4px, Linux 0), so a picture from one OS settles nothing.
     PageStage {
         id: detailsAlignTimer
         name: "details_align"
@@ -608,12 +630,14 @@ Item {
                                          "report": () => detailsAlignTimer.line() })
         }
     }
-    /// The count's card (デザイン規約 §右のペインの親): hover cannot be injected, so the run writes the count's stand-in
+    /// The count's card (`ParentListCard`): hover cannot be injected, so the run writes the count's stand-in
     /// and reads the card the page put up. Where it stands is the claim no picture answers to the pixel: its first
     /// hash on the seat a single parent's hash has, at the line's right end and middle (`seat`), the arrow left outside
     /// the card (`clear`), nothing else of the line standing beside it (`bare`), every parent on a row of its own and
     /// whole (`whole`, `rows`). `-go` presses a row and reads where the page went (`landed`) and that the card went
-    /// with the press (`shut`).
+    /// with the press (`shut`). The card opens only off a `+N` (`--preset octopus` row 0): a row whose parents all
+    /// stand waits out the watchdog. The picture is scene.png (the card is an overlay). Whether a real press reaches
+    /// the card's row, and a drag on it selects, is `tst_parentcard.qml`'s.
     ///
     /// Witnessed as the card was asked for: `seatY`, the first hash's row of pixels, and `plateWidth`, the plate's
     /// width, before the card came out; as the row was pressed: `want`, the parent the press names.
@@ -756,7 +780,10 @@ Item {
         id: cornerTimer
         name: "corner"
         // `shown=` is the label's own visibility: reporting the room that decided it would go
-        // green with the binding cut.
+        // green with the binding cut. The PNG answers it too — the pale words in the corner, there or not. The
+        // worktree's pane has no corner to give (`shown=false room=0` on any preset), so the pair is read on the
+        // details pane only; the third right pane, another worktree's, is not this verb's — `carried-stand`'s
+        // `corner=` claims it. The preset rows apply only to a run that names its preset (`verify/verbs/panes.rs`).
         //
         // The pane has to be done arriving: a details pane still reading its file list leaves its whole bottom bare,
         // so the corner reads as standing whatever the commit holds (`DetailsPane.bottomRoomSettled`). The worktree's
@@ -786,7 +813,10 @@ Item {
     // the list still reports its old height.
     //
     // `keeps=` says what the box borrowed room from (the author card / the commit button) is still on screen — the
-    // picture cannot, because the overflow draws over the window's own footer.
+    // picture cannot, because the overflow draws over the window's own footer. `grip=` stays out of must_say: a run
+    // with no grip is one side of the pair (`--preset edges` row 7 offers it; row 4 has no body and none). `rows=2` is
+    // the floor itself. Read the PNG every time: with every number right, the text inside the box can stop at its old
+    // height (the TextEdit viewport's repaint, rules-refs/app-ui.md), which only the picture shows.
     PageStage {
         id: descGrowTimer
         name: "desc_grow"

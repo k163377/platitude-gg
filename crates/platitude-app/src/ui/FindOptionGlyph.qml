@@ -2,10 +2,11 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// One mark inside the find bar's box (デザイン規約 §diff の中を探す): an option that is on or off (`case` / `word` /
-// `regex`, the glyphs editors use for them) or the new-line press. Every mark has the same seat — the box's inner
-// height, square — whatever its ink is wide, so the four read as one row of keys. An option that is on wears a plain
-// frame a step inside its seat, and its ink goes to `textPrimary`: no colour, as the band's toggles have none.
+// One mark inside the find bar's box (`DiffFindBar`): an option that is on or off (`case` / `word` / `regex`, the
+// glyphs editors use for them) or the new-line press. Every mark has the same seat — the box's inner height, square —
+// whatever its ink is wide (`Aa`'s wider ink does not move it), so the four read as one row of keys. An option that is
+// on wears a plain `textPrimary` frame a step inside its seat, and its ink goes to `textPrimary`: no colour (user
+// decision — ask before changing), as the band's unified ⇄ split pair says its state by lightness, not colour.
 HoverToolButton {
     id: glyph
 

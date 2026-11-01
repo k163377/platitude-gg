@@ -227,7 +227,7 @@ pub(crate) fn keep_system_gestures() {
 extern "system" fn allow_one(window: *mut c_void, _param: isize) -> i32 {
     // Not `WS_CAPTION`: the window menu's Move and Size want it, but
     // with the non-client area still there the platform would draw a
-    // caption over the band.
+    // caption over the band. Those two rows stay dead (P5-確認事項 §10).
     let wanted = WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU | WS_THICKFRAME;
     // SAFETY: `window` is live for the length of this callback, and
     // both calls take and return a plain integer.

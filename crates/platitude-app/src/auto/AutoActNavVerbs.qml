@@ -46,12 +46,20 @@ Item {
                    || act === "nav-peek-away" || act === "nav-peek-into"
                    || act === "nav-peek-out" || act === "nav-peek-shut") {
             // Hover cannot be injected, so the rail cell is named. "-away" walks the pointer off the cell, "-into" down
-            // into the opened list, "-out" on out the far side, "-shut" clicks the cell; only "-into" leaves the
-            // section standing. "nav-peek" on an empty section stays shut (NavRail.enterAt).
+            // into the opened list, "-out" on out the far side (the diff / graph), "-shut" clicks the cell; only
+            // "-into" leaves the section standing — read beside the others, or a leave that may close and one that
+            // must not collapse into one state. "-shut" also leaves the list folded (`collapsed=true`: a click on the
+            // cell does not put it back — the picture's to show). "nav-peek" on an empty section stays shut
+            // (NavRail.enterAt): `--preset empty`, where WORKTREES alone has a row to open. The open section is a
+            // popup, so it is in overlay.png; `nav-peek-rename`'s box stands inside it there.
             //
             // The section goes a beat after the pointer leaves (`HoverSeat`, `Metrics.hoverKeepMs`), so the three
             // whose subject is its going wait for it (`peekGoneWanted`) — finished on the rail's answer, the run
             // frames it standing.
+            //
+            // `nav-fold no-tags` takes the tags off the graph first, for the rail without the TAGS flag — through
+            // `setTagsShown` itself, not the eye's press, which is `tags-eye`'s. The rail's pictures are four:
+            // `nav-fold` and `nav-fold no-tags`, each on `basic` and on `--preset empty`.
             if (arg === "no-tags")
                 repoTab.setTagsShown(false)
             page.foldByHand(true)
@@ -80,16 +88,17 @@ Item {
             navRailTimer.start()
         } else if (act === "nav-peek-again") {
             // The cell clicked shut and clicked again with the hand where it was: the second click opens — a press is
-            // a new ask, past the latch the first click left (`SectionPeekPopup.toggleAt`, `HoverSeat.press`).
+            // a new ask, past the latch the first click left (`SectionPeekPopup.toggleAt`, `HoverSeat.press`); a hover
+            // alone does not bring it back.
             page.foldByHand(true)
             peekAgainTimer.kind = arg === "" ? "branch" : arg
             peekAgainTimer.start()
         } else if (act === "menu-peek") {
-            // The folded rail's section and a standing menu (デザイン規約 §左メニューを畳む). `behind` rests on the
-            // BRANCHES cell with a graph row's menu up — it opens — and walks off it; `under` raises that menu over the
-            // open section; `own` raises the menu on one of the section's rows and walks the hand out — the one menu it
-            // stays under; `own-swap` rests on the TAGS cell under that menu and walks off it — the held section is not
-            // swapped: BRANCHES stays and TAGS never comes in.
+            // The folded rail's section and a standing menu (デザイン規約 §メニュー; `SectionPeekPopup`). `behind` rests on
+            // the BRANCHES cell with a graph row's menu up — it opens (user decision) — and walks off it; `under`
+            // raises that menu over the open section; `own` raises the menu on one of the section's rows and walks the
+            // hand out — the one menu it stays under; `own-swap` rests on the TAGS cell under that menu and walks off
+            // it — the held section is not swapped: BRANCHES stays and TAGS never comes in.
             page.foldByHand(true)
             menuPeekTimer.how = arg === "" ? "behind" : arg
             // The menu or the section first, as `how` names, then the other.
@@ -130,12 +139,14 @@ Item {
         } else if (act === "nav-reclick-elsewhere") {
             // The same gesture on the open list by the hand's own road — each click a press through the window's
             // watcher, then the release the row answers at — with a press on the details pane after the first
-            // (デザイン規約 §左メニューの所作「間を空けた 2 回目」).
+            // (`ReclickGesture`'s header).
             elsewhereTimer.start()
         } else if (act === "nav-add-remote") {
-            // The `+` of the REMOTES band, live even while the band is unavailable (デザイン規約 §左メニューの所作), put
+            // The `+` of the REMOTES band, live even while the band is unavailable (`NavHeader.showAddRemote`), put
             // in at the band's own signal. "folded" is the other door: the rail's REMOTES cell, which at zero answers
-            // its click with the dialog, put in at `NavRail.tapAt` (`peekTap`) so the routing tested is the cell's.
+            // its click with the dialog, put in at `NavRail.tapAt` (`peekTap`) so the routing tested is the cell's. The
+            // subject is the `+` with no remote at all (`--preset noremote`: the band greyed and folded, the `+` alone
+            // live). The dialog is overlay.png's.
             if (arg === "folded") {
                 page.foldByHand(true)
                 navProbe.peekTap("remote")
@@ -157,16 +168,18 @@ Item {
             pinEdgeTimer.start()
         } else if (act === "nav-pin-seat") {
             // The stand-in in the seat a fold opened for it, with no hand on it (`nav-open head::<row>` has to light
-            // it). The argument is `<畳む行>[:<手を置く行>]`: the BRANCHES row shut at its own click (`NavProbe.clickRow`),
-            // and optionally a row to rest on, whose opening pushes the seat down — a stand-in placed by counting
-            // whole rows would stay put.
+            // it, and a lit stand-in wears the full name it opens with). The argument is `<畳む行>[:<手を置く行>]`: the
+            // BRANCHES row shut at its own click (`NavProbe.clickRow`), and optionally a row to rest on, whose opening
+            // pushes the seat down — a stand-in placed by counting whole rows would stay put.
             const seatParts = ("" + arg).split(":")
             pinSeatTimer.row = seatParts[0] === "" ? 0 : Number(seatParts[0])
             pinSeatTimer.rest = seatParts.length > 1 ? Number(seatParts[1]) : -1
             pinSeatTimer.order = pinSeatTimer.rest >= 0 ? ["folded", "rested"] : ["folded"]
             pinSeatTimer.start()
         } else if (act === "nav-close") {
-            // Sections stay packed against the top; a closed header resting at the pane's foot is the failure.
+            // Sections stay packed against the top; a closed header resting at the pane's foot (`pane` less a row) is
+            // the failure — save where the sections truly overflow, which puts it at the foot rightly (`ground=pane`:
+            // no ground left). `--preset basic` leaves room, so its header sits under 300. Judged by the picture.
             navProbe.closeSection(arg)
             navSectionTimer.start()
         } else if (act === "nav-filter") {
@@ -199,6 +212,13 @@ Item {
             // greyed row wears its tip); the others press `worktree remove` — landing, or refused by git into the
             // report bar. `worktree-held` holds the in-between open: what the press took off the screen before
             // anything was read again.
+            // The folder is the row's `name`, the repository's own worktree included: the screen draws that row
+            // with its branch, but `--preset worktrees` names it `repo`. That preset's rows: `topic` (on a branch,
+            // removable), `detached` (no branch), `hotfix` / `spike` (locked with / without a reason), `repo` (a card
+            // with no `worktree remove`), `gone` (its folder gone: removing it drops the record alone). The worktree
+            // this tab stands in (`This tab is showing this worktree`) takes no preset: open `topic` of
+            // `cargo xtask demo-repo worktrees` with `--repo` and run `worktree-menu topic`. `worktree-remove-refused`
+            // is `topic --preset carried` (uncommitted work), with `--allow-write-failure`.
             const go = arg.endsWith(":go")
             worktreeMenuTimer.worktree = go ? arg.slice(0, -3) : arg
             worktreeMenuTimer.onGraph = act === "worktree-graph"
@@ -375,7 +395,9 @@ Item {
                 }))
                 return
             op.stop()
-            // git keeps the worktree and says why: the bar is the answer, and the log stays shut (`write_notice log=`).
+            // git keeps the worktree and says why: the bar is the answer, in the gesture's yellow, and the log stays
+            // shut (`write_notice log=`; user decision — ask before changing). `mark=` is the tree mark before the
+            // folder in the heading, worn only by a notice naming a worktree.
             if (op.refused)
                 driver.barrierNotice.start()
             else if (op.holding)
@@ -387,7 +409,9 @@ Item {
     // What the press took off the screen, with git done and the listing that would let it go withheld: the row, and
     // what the worktree marked — its chip on the graph (on no branch), or its branch's frame and the branches list's
     // tree mark. The screen cannot tell a mark the window hides from one the refs no longer carry, so the claim is the
-    // gone set and the branch row's own word (`mark=`, empty where `HELD` was).
+    // gone set and the branch row's own word (`mark=`, empty where `HELD` was) — the press also takes the worktree out
+    // of core's holders, so the picture is the same either way. `chips=` is `GraphModel.goneChips`: `held:<branch>`
+    // for one on a branch (only the green frame and the lock come off), `worktree:<folder>` for one on none.
     PageStage {
         id: worktreeHeldTimer
         name: "worktree_held"
@@ -438,8 +462,9 @@ Item {
             if (!Awaited.all("pin_edge_ready", { "ready": !(branchesModel.headRow < 0) }))
                 return
             // Re-applied every tick until it pins: a list asked for its end before its layout pass has nowhere to go.
-            // A section showing every row keeps answering 0 and the run waits out its watchdog — hence the preset in
-            // verbs.md. Where the list came to rest at the last ask (`NavProbe.scrollBranchesToEnd`) is kept.
+            // A section showing every row keeps answering 0 (`rested=0`) and the run waits out its watchdog — hence
+            // `--preset stack`, the one preset whose BRANCHES has more rows than it shows (30 branches). Where the list
+            // came to rest at the last ask (`NavProbe.scrollBranchesToEnd`) is kept.
             if (op.at("start") && !op.input("pinned", () => {
                     const rested = navProbe.scrollBranchesToEnd()
                     const pinned = op.pinned()
@@ -515,7 +540,9 @@ Item {
                                 + " lit=" + navProbe.headPinLit
                                 + " depth=" + branchesModel.headDepth
                                 + " says=" + branchesModel.headShownName
-                                // Unjudged, for a reader.
+                                // Unjudged, for a reader: `sat=` is the match itself, and a claim on `at=` / `gap=`
+                                // would go red whenever the row height token moves. `above=` is the seat off screen
+                                // riding the edge — false on every preset now, all of which fit.
                                 + " at=" + Math.round(navProbe.headPinY)
                                 + " gap=" + Math.round(navProbe.headPinSeatY())
                                 + " above=" + navProbe.headPinAbove
@@ -682,8 +709,9 @@ Item {
         }
     }
     // Three waits: the splitter handing the pane its width; the diff's read having landed (`DiffPane.diffSettled`),
-    // since a pane still reading frames like one that has; and, for `peekGoneWanted`, the section having gone — the
-    // popup itself, not `kind`: that clears as the exit begins (`SectionPeekPopup.onAboutToHide`).
+    // since a pane still reading frames like one that has, and completing on the rail's width alone puts
+    // `DiffRowDelegate` in the census on one run and not the next; and, for `peekGoneWanted`, the section having
+    // gone — the popup itself, not `kind`: that clears as the exit begins (`SectionPeekPopup.onAboutToHide`).
     PageStage {
         id: navRailTimer
         name: "nav_rail"
@@ -696,7 +724,9 @@ Item {
                    + " width=" + Math.round(sidebarPane.width)
                    + " peek=" + sidebarPane.peekKind
                    // `top` equals `cell` (the opening mark's top edge) or the list walked off its cell; `end` <=
-                   // `pane` says it grew down and stopped at the pane's foot.
+                   // `pane` says it grew down and stopped at the pane's foot. The four mean something only while
+                   // `peek=` names a section (closed, they are the shut popup's), and part only on a section with more
+                   // rows than the pane holds — `nav-unfold` runs on `--preset manytags`.
                    + " top=" + Math.round(navProbe.peekY)
                    + " cell=" + Math.round(sidebarPane.peekTop)
                    + " end=" + Math.round(navProbe.peekBottom)
@@ -729,9 +759,11 @@ Item {
                 page.autoReplayHeld = true
         }
     }
-    // The doors, tried once the replay is under way. Each is read back, since a refused door frames like an untouched
-    // pane; the picture is for the rest of the pane staying live. After that the sampler waits for the blocked row's
-    // tooltip, the last thing to arrive (`Metrics.tipDelayMs`).
+    // The doors, tried once the replay is under way (`base --preset plan`). Each is read back, since a refused door
+    // frames like an untouched pane; the picture is for everything not held staying at full weight — rows, bands, the
+    // rail, `>_` (the plan's whole-pane freeze is `rebase-plan`'s picture). The menu is overlay.png's, its overlap
+    // with the rows scene.png's. After that the sampler waits for the blocked row's tooltip, the last thing to arrive
+    // (`Metrics.tipDelayMs`).
     PageStage {
         id: navHeldTimer
         name: "doors_held"
@@ -790,10 +822,13 @@ Item {
                + " why=" + (refSwitchItem.blockedWhy !== "")
     }
     // PGG_AUTO_ACT=tags-eye: the eye moves the walk, so the answer is the named tag's commit's row (a tag whose
-    // commit a branch also reaches keeps its row, and frames like a switch that did nothing).
+    // commit a branch also reaches keeps its row, and frames like a switch that did nothing). The eye takes every tag
+    // off the graph, walk and chips; the left menu's TAGS stays — the way back. So the argument must be a tag only it
+    // reaches: `--preset tagonly`'s `v1.1-kept`, the one such commit (its `v1.0` is on the trunk, and a run on it
+    // waits at the first stage until the watchdog).
     //
     // The graph is emptied before it is rebuilt, so the row is read only after `finishCount` moves. Tags back on
-    // lands twice, tag-less first (rules-refs/core.md「2 段ストリーミング」), and the row being back tells the second
+    // lands twice, tag-less first (`RepoSession::restart_log`), and the row being back tells the second
     // pass. The press waits for the row too, at the start alone: the page is current after the tag-less pass
     // (rules-refs/app-ui.md「動詞の前提条件は入力を出す枝で読む」).
     PageStage {
@@ -846,7 +881,13 @@ Item {
         }
     }
     // PGG_AUTO_ACT=nav-jump: the claim is read off the graph's row for the commit, lit and laid out
-    // (`GraphRowDelegate.selected`) — the page's selection is the click's own bookkeeping.
+    // (`GraphRowDelegate.selected`) — the page's selection is the click's own bookkeeping, true of the opening
+    // selection even with the wiring dead. So the rows pictured are ones whose commit is not the one the window opened
+    // on (a jump to that row draws the same with the wiring cut): `--preset worktrees`' `worktree:1` (detached at
+    // `v0.1`) and `worktree:5` (`topic`, at `feature/topic-a`'s tip), against other sections' `branch:1`. A worktree
+    // standing where no ref reaches is `--preset worktree-detached` (`worktree:1`; its row wears the worktree's
+    // marker). A target commit off the graph ends at once on `same=false lit=false at=-1` — FAIL, picture kept; a
+    // folder row or a bare entry's row names no commit and waits out the watchdog.
     PageStage {
         id: jumpTimer
         name: "nav_jump"
@@ -864,7 +905,8 @@ Item {
         }
         /// The landing, on the commit the row named when pressed (`want`, witnessed before the click: a recycled
         /// delegate asked afterwards can show another row's name). A commit the walk never reached is an answer: the
-        /// page had settled before the click (`PageSettled`), so the row will not arrive. Not so another worktree's
+        /// page had settled before the click (`PageSettled`), so the row will not arrive, and waiting for it would end
+        /// at the watchdog with no picture left. Not so another worktree's
         /// HEAD: the walk that draws it follows the worktrees' listing, which the settle does not wait for. A row the
         /// model has but the view has not laid out yet is waited for.
         function landed() {
@@ -913,12 +955,16 @@ Item {
         }
     }
     // PGG_AUTO_ACT=nav-reclick / nav-reclick-away: every stage waits for its own answer — the row existing, the first
-    // click's double-click window passing (`rowGuarded`), and for "-away" the section having gone.
+    // click's double-click window passing (`rowGuarded`), and for "-away" the section having gone. Read as a pair:
+    // `armed=false` alone passes a gesture that is dead. The plain form opens the box; under "-away" nothing may
+    // happen — a peek's next first click taken for a second would put the list back and close the diff of a click
+    // meant only to look. The box opens inside the open section and keeps it open (`SectionPeekPopup.pinned`), so
+    // the plain form stays `collapsed=true`; `focused=` is the box having the keyboard (false, it cannot be typed in).
     PageStage {
         id: reclickTimer
         name: "nav_reclick"
         /// The argument `<section>[:<row>]`, the row 0 by default — a section folding names into folders has no
-        /// row to rename at its top.
+        /// row to rename at its top (on `basic`, BRANCHES takes `branch:1` = `feature/topic-a`).
         readonly property string kind: {
             const arg = Harness.autoActArg
             const cut = arg.indexOf(":")
@@ -995,7 +1041,7 @@ Item {
                                 + " away=" + op.away
                                 + " armed=" + op.witnessed("armed")
                                 // The fold stays for a box, the box is there, and it has the keyboard
-                                // (デザイン規約 §左メニューを畳む).
+                                // (`SectionPeekPopup.pinned`).
                                 + " collapsed=" + page.sidebarCollapsed
                                 + " box=" + (sidebarPane.editKey !== "")
                                 + " focused=" + sidebarPane.peekSection.rowFocused(op.row)
@@ -1086,7 +1132,8 @@ Item {
         }
     }
     /// PGG_AUTO_ACT=nav-add-remote: the run stops with the real dialog on screen. `collapsed=` says which door it came
-    /// through, and that the folded one left the list folded (デザイン規約 §左メニューを畳む).
+    /// through, and that the folded one left the list folded (`NavRail.addableAt`) — putting it back would
+    /// close a diff being read. `name=` is `origin` only where there is no remote yet (`RemoteDialog`).
     PageStage {
         id: navAddRemoteTimer
         name: "nav_add_remote"
@@ -1100,7 +1147,8 @@ Item {
                                 + " name=" + remoteDialog.wantedName })
         }
     }
-    // The column has to be laid out again before the header that was closed can say where it ended up.
+    // The column has to be laid out again before the header that was closed can say where it ended up. `header=` is
+    // that header's top, `ground=` the top of the ground left under the last section.
     PageStage {
         id: navSectionTimer
         name: "nav_section"
@@ -1114,7 +1162,11 @@ Item {
                                 + " pane=" + Math.round(sidebarPane.height) })
         }
     }
-    /// What each section's model kept under the filter; the picture says what was drawn.
+    /// What each section's model kept under the filter, as `shown()/total` (a section with none is ordinary — its
+    /// heading keeps the total); the picture says what was drawn. The argument is typed into the field itself, and all
+    /// five sections narrow at once. Filtered BRANCHES / TAGS / STASHES leave the tree for full names (no folder rows;
+    /// `feature/topic-a` whole); REMOTES keeps each remote's row with its matching branches flat under it by branch
+    /// name (`origin` → `feature/topic-a`; デザイン規約 §左メニューの所作) — a full `origin/feature/…` row is the regression.
     PageStage {
         id: navFilterTimer
         name: "nav_filter"

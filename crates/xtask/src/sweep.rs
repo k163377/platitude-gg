@@ -238,7 +238,9 @@ const CANONICAL: &[Line] = &[
     },
     // The release every verify-ui run and every window drives
     // (`app_build::app_exe`). Alone in this profile: a release without the
-    // harness would write the same bin, and the product is `shipped`.
+    // harness would write the same bin, and the product is `shipped`. So a
+    // bare `cargo build --release` is not kept buildable: the product is
+    // built by `cargo xtask shipped`, and a bare release goes against that.
     Line {
         host_only: false,
         profile: "release",

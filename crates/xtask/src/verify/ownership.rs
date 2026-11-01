@@ -271,6 +271,11 @@ fn sweep_older_than(base: &Path, now: SystemTime, age: Duration) -> usize {
 /// for a directory that was already standing, so a timestamp name alone
 /// lets concurrent runs silently share one. The pid and serial cover two
 /// processes, or one process twice, within one clock tick.
+///
+/// Every directory a run makes without being told where goes through
+/// here too: a preset repository's root (`demo::claim_root`, under the
+/// `pgg-demo` all six seats share) and a container run's share on the
+/// host (`keepsakes::keepsake_dir`).
 pub(crate) fn claim_dir(base: &Path, stem: &str) -> Result<PathBuf, String> {
     std::fs::create_dir_all(base).map_err(|e| format!("could not make {}: {e}", base.display()))?;
     let nanos = SystemTime::now()

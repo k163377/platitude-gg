@@ -1,5 +1,9 @@
 //! The ref joins behind the sidebar snapshot and the row chips, and the
 //! per-listing lookups they share.
+//!
+//! Who holds a branch (another worktree, the green frame and the tree
+//! mark) is matched here once for both: a row and a chip deciding it
+//! apart could have the chip offer a move the row refuses.
 
 use super::*;
 
@@ -22,7 +26,10 @@ pub(super) struct RefJoins<'a> {
 }
 
 /// What the worktrees other than this session's are standing on, as
-/// of the last worktree read.
+/// of the last worktree read. Joined with the refs here, in core
+/// (`BranchItem::held_elsewhere`, `RefLabel::held_elsewhere`): in the app
+/// the `NavItem` fields are what every row carries, so a join there would
+/// grow every row for one bit.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct WorktreeHolders {
     /// The branches they have out, by short name, each with whether the
@@ -134,7 +141,7 @@ impl<'a> RefJoins<'a> {
     }
 
     /// Whether the worktree holding this branch is locked — the chip's padlock
-    /// (デザイン規約 §ref の種別).
+    /// (`RefChip.hasLock`).
     fn held_locked(&self, r: &RefEntry) -> bool {
         self.holder_of(r) == Some(true)
     }
@@ -301,9 +308,16 @@ pub(super) fn status_key(workdir: &std::path::Path, status: &WorktreeStatus) -> 
     hasher.finish()
 }
 
-/// The two fingerprints of one listing
-/// (rules-refs/core.md「refs のキーは 2 本」). `git for-each-ref` lists in
+/// The two fingerprints of one listing: whether to walk again, and whether
+/// to rebuild the snapshot and the chip map. `git for-each-ref` lists in
 /// refname order, so equal listings hash equal.
+///
+/// The joins are gated on `listing`, never on `walk`: gated on the
+/// positions alone, a write that moves no ref never reaches the screen
+/// (`Set upstream…` writes two config keys —
+/// `session_integration::rebuild::setting_an_upstream_rebuilds_what_the_rows_read`).
+/// They are built only on a tick it moved: built every tick, they are a
+/// quiet tick's dominant cost on a large repository (`refs_join_at_scale`).
 pub(super) struct RefsKeys {
     /// Where every ref points and where HEAD is — whether the walk runs
     /// again. Nothing else goes in: re-walking for a chip-only change
@@ -358,8 +372,10 @@ pub(super) fn join_key(
     remote_tags_gen.hash(&mut hasher);
     // A worktree taken or given back moves no ref.
     worktrees_gen.hash(&mut hasher);
-    // The remote defaults and URLs ride in the snapshot and move no ref
-    // (rules-refs/core.md「remotes の名前・URL と印の全部」).
+    // The remotes' names, URLs and every mark ride in the snapshot and
+    // move no ref. Left out, a refresh where only a mark moved reads as
+    // the same input, the held snapshot goes out again, and the sidebar
+    // keeps the mark on its old row.
     remotes.push_default.hash(&mut hasher);
     remotes.checkout_default.hash(&mut hasher);
     remotes.branch_push_remotes.hash(&mut hasher);
@@ -509,7 +525,8 @@ impl RepoSession {
     ///
     /// Answers which reads have to run again; the caller asks for them at
     /// once, since a session's first worktree read lands after its first
-    /// refs read (rules-refs/app-ui.md「他所が持っている」).
+    /// refs read: left to the next poll tick, a tab just opened would draw
+    /// no "held elsewhere" mark until then.
     ///
     /// The heads record is the caller's (`relay::note_worktree_heads`): a
     /// listing in hand noted again (`RepoSession::note_worktrees_going`) is

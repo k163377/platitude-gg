@@ -98,8 +98,10 @@ Rectangle {
     /// The loaded form, so the owner can read what was put into it.
     readonly property alias formItem: formLoader.item
     /// A form that says its answer is finished answers the question, as the pill does (デザイン規約
-    /// §立っている質問は 1 か所で聞く). Which keystroke means "finished" is the form's to decide (`AppCombo.submitted`);
-    /// whether it may answer is the bar's.
+    /// §立っている質問は 1 か所で聞く; user decision — ask before changing). Which keystroke means "finished" is the
+    /// form's to decide (`AppCombo.submitted`); whether it may answer is the bar's. Needed because a question with a
+    /// form gives the focus to the form's box, not the pill (typing is the first thing to do there), so the pill's own
+    /// Enter never reaches it; what runs is the pill's.
     function answerFromForm() {
         // A key cannot do what the dark pill cannot, and a held question is the pill's alone: the gesture is the
         // intent, and a keystroke is not one (§進行中・回数押しの定数).
@@ -189,6 +191,11 @@ Rectangle {
     ///
     /// A pill just pressed through keeps the bar down for its floor, the question answered or not: the full fill is
     /// what the answer looks like (デザイン規約 §回数押し).
+    ///
+    /// The words wrap and the bar grows by the line (`NoticeBar` alike), the page's centre giving up as much: Layouts
+    /// have no height-for-width, but a `Text` / `CardText` answers a new `implicitHeight` once its width is set and the
+    /// column polishes again (as `CommitHoverCard`'s `CardText`). The width decides it, so a run shoots the wrap in a
+    /// window whose graph is squeezed to its least (`--config-dir` holding a large `[layout] details_width`).
     readonly property real openHeight: bar.open || holdDrive.settling ? askRow.implicitHeight + 2 * Theme.spaceMd : 0
     readonly property bool settled: bar.openHeight > 0 && bar.implicitHeight === bar.openHeight
     /// The other edge: answered and all the way back up (a shot taken on the answer shows the bar half-retracted).
@@ -213,7 +220,8 @@ Rectangle {
         color: bar.tone
     }
     // The question's words can be swept from the air around them (規約 §右のペインの字は掴める). Under the row, so
-    // the pill, the ✕ and the form keep every press they had.
+    // the pill, the ✕ and the form keep every press they had. Its content is the words' column (`askWords`), so the
+    // form's boxes, the pill and the ✕ are never walked. Headless: `ask-sweep`.
     SweepPad {
         id: askHand
         anchors.fill: parent
@@ -234,7 +242,8 @@ Rectangle {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spaceXs
-                // The chip stands on the heading's first line (デザイン規約 §立っている質問は 1 か所で聞く): both hang
+                // The chip stands on the heading's first line, where the sentence starts: floated beside the middle of
+                // a wrapped heading it reads as a word of its own, not part of the sentence. Both hang
                 // from the top and the one whose word stands higher drops to the other's baseline, in whole pixels.
                 // Centred on the line, the chip's word stands under the heading's by half the leading a field files
                 // under its line (2〜3px on macOS); on the row's `Qt.AlignBaseline` the two faces' depths leave the
@@ -249,7 +258,11 @@ Rectangle {
                     weight: Theme.fontWeightStrong
                 }
                 // A field (the pad above), wrapped, never cut but for a name past the name ceiling, given back whole
-                // under the hand: the bar grows by the line (デザイン規約 §立っている質問は 1 か所で聞く).
+                // under the hand: the bar grows by the line and the list goes down with it (デザイン規約
+                // §立っている質問は 1 か所で聞く). The name is cut in its middle (user decision — ask before changing),
+                // a remote's at its end (`CardText.holdsNames`, デザイン規約 §寸法): a question names a branch, a remote
+                // or a worktree's folder — names only this window shows — and with the tail gone the reader cannot tell
+                // what the question is about.
                 CardText {
                     id: askWord
                     text: bar.label
@@ -441,7 +454,7 @@ Rectangle {
                 // Dragging off calls the presses off (the grab keeps `pressed` true out there). Read off the moves, not
                 // `containsPress`: that also falls on the release and would open the latch before `onReleased` read it.
                 onPositionChanged: if (!containsMouse) holdDrive.leave()
-                // The hand left the pill part way through its presses: back to zero (デザイン規約 §回数押し).
+                // The hand left the pill part way through its presses: back to zero (`HoldDriver.leave`).
                 onExited: holdDrive.leave()
                 onCanceled: holdDrive.letUp()
             }

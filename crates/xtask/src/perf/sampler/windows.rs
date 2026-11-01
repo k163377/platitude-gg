@@ -224,7 +224,8 @@ const DISPLAY_CLASS: &str = "public class PerfDisplay : System.Windows.Forms.Nat
 ///   suspended, joins a job object, and only then is resumed; `app=` is
 ///   the job's accounting, which keeps the time of children that already
 ///   exited. A process the job will not take (`note:`) is resumed all the
-///   same and counted alone.
+///   same and counted alone. Jobs nest, so this holds when the shell that
+///   runs xtask is itself in a job (Claude Code's).
 ///
 /// Two phases, on one pipe each way: the script compiles, makes the job
 /// and says `ready`; the pid comes down stdin; `resumed` and then the

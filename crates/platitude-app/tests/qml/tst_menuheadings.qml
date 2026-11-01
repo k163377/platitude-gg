@@ -4,7 +4,7 @@ import QtTest
 import platitude.ui
 import "painted.js" as Painted
 
-// A card of headings alone begins their words on one x (デザイン規約 §操作パネル): the heading without the WORKTREES
+// A card of headings alone begins their words on one x (`AppMenu.alignsHeadings`): the heading without the WORKTREES
 // mark holds the mark's step — the shape `TopBar`'s stand card has. Every other menu keeps each heading's own step.
 Item {
     id: root

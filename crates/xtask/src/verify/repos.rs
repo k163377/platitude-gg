@@ -6,7 +6,7 @@ use std::process::Command;
 
 /// Names of a spread of lengths, for the verbs whose subject is the tab
 /// strip: the short ones keep their width and the long ones give way
-/// together (デザイン規約 §ウィンドウの縁), which a row of `repo`s cannot show.
+/// together (the app's `TabShare.qml`), which a row of `repo`s cannot show.
 const TAB_NAMES: [&str; 16] = [
     "ui",
     "platitude-gg",
@@ -84,7 +84,7 @@ fn named_strip(count: usize, front: &str, verb: &str) -> Result<Vec<PathBuf>, St
 /// named none and the ordinary one-repository fixture stands.
 ///
 /// The band's shortfall is shared between the tab strip and the state
-/// group (規約 §ウィンドウの縁), so where the group gives up its words
+/// group (the app's `TopBar.qml`), so where the group gives up its words
 /// depends on the tabs beside it; against one repository it reaches the
 /// window's floor still wearing them.
 pub(super) fn band_tab_count(arg: &str) -> Result<Option<usize>, String> {

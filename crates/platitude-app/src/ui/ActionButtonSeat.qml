@@ -23,7 +23,9 @@ Item {
     property color holdTint: seat.tint
     property bool holdOff: false
     /// The failure mark for a button with no word left (`ActionButton.folded`), at the icon's upper corner with the
-    /// raise and half gap it keeps from a word (デザイン規約 §操作パネル).
+    /// raise and half gap it keeps from a word: the mark's right shoulder (デザイン規約 §アイコンの席 の ⑤), set half a
+    /// gap out from the mark box's top-right corner (§git 用語のコード表記「`!` の席」) — a ⑥-style exception. Over a
+    /// hold's fraction, the fraction box's corner: the seat's corner floats above a shallow fraction.
     property bool cornerAlert: false
     property color cornerAlertTone: seat.tint
     /// The pixel size of the word the seat heads on its line; zero where it heads none (stacked under the word,
@@ -147,6 +149,8 @@ Item {
     // A held button with an icon wears both as a fraction across a slash: the hold mark alone would cost `push -f` the
     // icon that says it is a push (デザイン規約 §回数押し).
     // Centred at its own size whatever the step: the folded seat is deeper, and the halves keep their distance in it.
+    // The pair's ink keeps equal air above and below — under a word from the word's foot (the lower of the chip's and
+    // the letters'), folded from the frame; the optical lift a lone mark gets is not applied to it.
     Item {
         id: pair
         width: Theme.iconSm + seat.pairAlong

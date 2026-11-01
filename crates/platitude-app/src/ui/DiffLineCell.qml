@@ -5,8 +5,11 @@ import QtQuick.Controls.Fusion
 import platitude.ui
 
 // One line of the diff: the text, its two washes (what changed, what is selected) and the no-newline mark. One per
-// row in one column, one per side in two (`DiffRowDelegate`). The cell clips and the line travels sideways under it;
-// only a heading elides (デザイン規約 §diff を横へ送る).
+// row in one column, one per side in two (`DiffRowDelegate`). The cell clips and the line travels sideways under it:
+// a line runs to its end and is sent to be read — a `…` for its tail would pass "cannot be read" off as "read to the
+// end". Only a heading elides (デザイン規約 §diff を横へ送る): it is the pane's own words, giving its right edge to its
+// two buttons. **The line's own `x` moves, never the list's `contentX`**: the
+// `ListView` keeps its own `contentWidth`, and the two would fight over it.
 Item {
     id: cell
 
@@ -18,14 +21,19 @@ Item {
     /// What changed inside this line, as runs of layout places (`[{ from, len }, …]`, `encode::DiffRow.emph`).
     required property var emph
     /// The reader's selection on this line (`DiffModel.sel` — `{whole, runs}`), empty on every line `Copy` would not
-    /// take: the wash is the answer (デザイン規約 §diff の中身をコピーする).
+    /// take: the wash is the answer (デザイン規約 §diff の中身をコピーする) — removed lines and hunk headings stay plain.
+    /// Not a faint wash on removed lines to say "in the range": over the line's ground and the syntax emphasis it would
+    /// be a third tier answering the one question whether a line is taken.
     required property var sel
     /// The find bar's hits on this line, and the one it stands on, as runs over the drawn text (`LineMarks`).
     required property var found
     required property var foundNow
-    /// One of git's conflict fences: the words drop their voice (デザイン規約 §シンタックスハイライト).
+    /// One of git's conflict fences (`<<<<<<<` / `|||||||` / `=======` / `>>>>>>>`), the scaffolding git stands round
+    /// the two sides: the words drop to `textMuted` — in the added line's colours, the part nobody reads would be the
+    /// loudest thing in the pane. The ground stays the added line's (`DiffRowDelegate.groundOf`): the line is really
+    /// in the working-tree file, and staged as it is it goes into the commit. Not bold (`DiffRowDelegate.codeBold`).
     required property bool fence
-    /// This line ends the file without a newline (デザイン規約 §行末の改行が無いこと).
+    /// This line ends the file without a newline (the mark below).
     required property bool noNewline
     /// The weight this line is set in, decided by the row: the ruler must use the same weight, or a bold face that
     /// advances differently puts every wash and press out.
@@ -87,7 +95,7 @@ Item {
     onFoundNowChanged: cell.settleFoundNow()
     Component.onCompleted: cell.settleWashes()
 
-    // The stronger wash under what changed (デザイン規約 §シンタックスハイライト), under the Label and sent with it.
+    // The stronger wash under what changed (where: `platitude_core::intraline`), under the Label and sent with it.
     Repeater {
         model: cell.emphRects
         delegate: Rectangle {
@@ -98,7 +106,8 @@ Item {
             color: cell.kind === "add" ? Theme.diffAddedEmphBg : Theme.diffRemovedEmphBg
         }
     }
-    // The selection, over the emphasis and under the text, so a selected line keeps its syntax colours.
+    // The selection, over the emphasis and under the text, so a selected line keeps its syntax colours (the comment
+    // colour stands on `bgSelected` at 5.73:1, the band `diffAddedBg` / `diffRemovedBg` are in).
     Repeater {
         model: cell.sel && cell.sel.whole ? [{ "whole": true }] : cell.selRects
         delegate: Rectangle {
@@ -113,7 +122,7 @@ Item {
         }
     }
     // The find bar's hits, over the selection and under the text: every hit in the lighter wash, the one the bar
-    // stands on in the denser (デザイン規約 §diff の中を探す).
+    // stands on in the denser (`DiffFindBar`).
     Repeater {
         model: cell.foundRects
         delegate: Rectangle {
@@ -141,10 +150,12 @@ Item {
         elide: cell.banded ? Text.ElideRight : Text.ElideNone
         height: cell.height
         verticalAlignment: Text.AlignVCenter
-        // A heading starts at the row's left edge, not past the empty number columns (デザイン規約 §diff の中のステージ).
+        // A heading starts at the row's left edge (`spaceXs`), not past the number columns, which are empty on it (user
+        // decision — ask before changing): indented, the pane's own words would line up with the file's lines across
+        // a groove that says nothing. The file's lines start right of the columns.
         leftPadding: cell.banded ? Theme.spaceXs : 0
-        // A commit's mode change under its band carries the two modes alone; the words are the pane's
-        // (デザイン規約 §mode の変更).
+        // A commit's mode change under its band (one per commit when several are read stacked, so each mode reads as
+        // its commit's) carries the two modes alone; the words are the pane's (`Words.modeLine`).
         text: cell.kind === "mode" ? Words.inked(Words.modeLineOf(cell.text)) : cell.text
         // Every line is markup, coloured or not (`markup::styled`), so the format never changes under a row.
         textFormat: Text.StyledText
@@ -154,15 +165,27 @@ Item {
         // row's two buttons.
         font.pixelSize: cell.banded ? Theme.fontSm : Theme.fontCode
         // The whole colour of a line the theme said nothing about; a changed line stays `textPrimary` and a fence
-        // drops to muted (デザイン規約 §シンタックスハイライト).
+        // drops to muted (`fence`). A row that is not a line of the file takes its kind's colour, never the syntax's.
         color: cell.fence ? Theme.textMuted
                : cell.kind === "hunk" ? Theme.diffHunkHeaderFg
                : cell.kind === "commit" ? Theme.textSecondary
                : cell.kind === "meta" ? Theme.textMuted
                : Theme.textPrimary
     }
-    // git's `\ No newline at end of file` as a mark at the line's end (デザイン規約 §行末の改行が無いこと). Built only
-    // on the line that has it (rules-refs/app-ui.md「行のデリゲートが見せない部品は消す」).
+    // git's `\ No newline at end of file` as a mark at the line's end (user decision — ask before changing; GitHub's
+    // way). The note is git's about the line above it; as a row of its own it stands between the `-` and the `+` and
+    // reads as about the added line below. A mark says which line by the line it ends, and the line's ground already
+    // names the side. Where both sides lack the newline git prints a note per side, so two marks stand; on an
+    // unchanged line the one note serves both. A combined diff never has one (git does not print it there).
+    //
+    // `no-entry` (`NavIcon`), a sign after the line's code. In `danger`, an exception kept to match other GUIs: the
+    // colour rules alone give `textMuted` (outside the three states — nothing is stopped and little spreads,
+    // 規約 §状態). It travels with the code (規約 §diff を横へ送る): it names the line's end, so it is out of view when
+    // that is. The words are the hover's (`No newline at end of file`, 規約 §hover のツールチップ). Built only
+    // on the line that has it (rules-refs/app-ui.md「行のデリゲートが見せない部品は消す」). Never selected or copied: the
+    // note is folded onto its line (`encode::flatten_patches`) and is no row. Headless: `diff-file` on `--preset eol`'s
+    // `unstaged:src/bare.kt` — old side without a final newline, new side CRLF, the one shape whose note stands between
+    // the `-` and the `+`.
     Loader {
         id: noEolMark
         active: cell.noNewline

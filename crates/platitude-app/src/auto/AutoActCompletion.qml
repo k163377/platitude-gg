@@ -72,6 +72,10 @@ QtObject {
         return ["commit", "amend", "op-exit-go"].indexOf(act) >= 0
     }
 
+    /// Whether the page hands this verb's completion to somebody else (its own sampler, or the window). **Every new
+    /// window-level verb goes in here**: left out, the page completes the run the moment it claims the verb, and the
+    /// shot runs ahead of the verb — a green picture of nothing. A verb done in one tick (`tab-drag`, `tab-hold`)
+    /// passes by chance without it, so a pass is no proof the entry is there.
     function defersCompletion(act) {
         return ["publish", "publish-taken", "publish-tip", "publish-remotes", "publish-add",
                 "publish-go", "publish-enter", "publish-new-go", "publish-dismiss",

@@ -210,7 +210,7 @@ impl AppBackend {
                     }
                     .into();
                     // The answer is what offers the restart, an old git's
-                    // too (デザイン規約 §設定の画面).
+                    // too (`SettingsAppPane.gitButtonTone`).
                     self.settle_restart_offer();
                 }
                 AppMsg::IdentitySaved(written) => {

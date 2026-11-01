@@ -17,6 +17,18 @@
 //! numbered goes with it. What one page's own boxes wait on is that page's
 //! ([`Press`], [`TreeOut`], kept on the tab model the boxes belong to): a
 //! page that went away has nothing left to empty or walk anybody off.
+//!
+//! Bringing one more operation here takes three steps that only work
+//! together: the slot that asks for the write records what is pending
+//! itself, under the id the queue accepted (no announcing signal such as
+//! `deleting(kind, id)`); the answer is handed out by that id from
+//! `drain::settle_write` (no guessing from the order of `writeSeq`); and
+//! the owner is held where what it holds lives (above). `Press` is the
+//! base: an owner that remembers more holds one and adds its own part
+//! (`TreeOut`, `BranchDeleteOut`); `StandIn` and `DiffReread` are other
+//! kinds. QML is left with handing out the picture and saying that an edge
+//! came (`listingDrawn`, `takeStashLanding`, `takeCommitLanding`,
+//! `takeDiffRead`).
 
 mod branch_delete_out;
 #[cfg(test)]

@@ -31,7 +31,9 @@ ColumnLayout {
     property string stashRef: ""
     /// Whether the commit on show is a stash entry (`CommitAuthorRow.stashed`). Taken as a commit's details land, not
     /// read off `stashRef`: the selection moves at the click and the details a beat later, and between the two the
-    /// commit still on show would have its parents counted by the next one's rule.
+    /// commit still on show would have its parents counted by the next one's rule (a stash to an ordinary commit
+    /// stands the index / untracked parents as links). The page judges, not core: `DetailsModel.parentHexes` carries
+    /// every git parent (two or three for a stash), and the session keeps no stash table outside the walk.
     property bool stashShown: false
     /// The commit `stashShown` was taken for.
     property string stashJudged: ""
@@ -88,7 +90,7 @@ ColumnLayout {
     property int pointedTipRow: -1
     /// A right-click menu of the page's stands over this pane (デザイン規約 §メニュー).
     property bool menuStanding: false
-    /// Which changed file the middle pane is reading, so its row can say so (デザイン規約 §diff のファイル一覧).
+    /// Which changed file the middle pane is reading, so its row can say so (`FileRowDelegate`, `FileRowWalk`).
     /// Empty while the graph is in the middle.
     property string readPath: ""
     /// The menu key on the changed files (デザイン規約 §メニュー のキーボード): the menu of the file the arrows stand on,
@@ -127,7 +129,8 @@ ColumnLayout {
     readonly property alias hand: paneHand
     /// The commit the content under the hand was last laid out for; another one landing is the content moving. Told
     /// to the hand before the cards let go of the commit before: the hand in a card counts as over the pane only
-    /// while the card stands.
+    /// while the card stands. Only a new sha counts: `changed` also rings for an avatar read again, and closing on
+    /// every ring would take a card away under the hand.
     property string shownSha: ""
     Connections {
         target: detailsPane.details
@@ -155,7 +158,7 @@ ColumnLayout {
     /// its status letter (`D` for a file the commit deletes).
     signal fileMenuRequested(string path, string origPath, string change)
     /// The arrows walked onto another file. Not `fileActivated`: a click on the file already open closes the diff,
-    /// and holding Down walks on (規約 §diff のファイル一覧).
+    /// and holding Down walks on (`FileRowWalk`).
     signal fileWalked(string path, string origPath)
     signal parentClicked(string oidHex)
     signal copyRequested(string text)
@@ -181,7 +184,12 @@ ColumnLayout {
         && detailsPane.details.shaHex === detailsPane.planDraftOid
         && (detailsPane.planDraftSubject !== "" || detailsPane.planDraftBody !== "")
 
-    /// Only on a commit change: a different message is a different commit.
+    /// Only on a commit change: a different message is a different commit. **A draft here is dropped unasked**, on the
+    /// two roads the reader takes on purpose: reading another commit (a click or an arrow) and Escape (which puts the
+    /// resting text back and takes the caret out, so the save row goes). What is written here rewrites a commit that
+    /// exists, and its own words stay in it; a question on leaving would stand in front of every click in the graph.
+    /// The save row's button is the one way to keep it. The commit editor's text is another matter: its commit does
+    /// not exist yet, so its words live nowhere else (`WipCommitBlock`).
     function syncMessage() {
         if (detailsPane.details.shaHex === detailsPane.baseOid)
             return
@@ -220,8 +228,10 @@ ColumnLayout {
     /// unchanged, and the next `reword` would refuse with nothing on screen to say why.
     onPlanHoldsDraftChanged: detailsPane.fillMessage(detailsPane.planHoldsDraft)
     /// The plan is gone: a reword left in the boxes would stand under the plain amend as a one-press rewrite
-    /// (デザイン規約 §コミットメッセージの 2 つの枠). Only what was written under the plan — an amend half-written
-    /// before it is the reader's own, and nothing on screen could give it back.
+    /// (drafts here are dropped unasked, `syncMessage`). Only what was written under the plan — an amend half-written
+    /// before it is the reader's own, and nothing on screen could give it back (headless `plan-amend-kept`). A plan
+    /// draft the reader edited is thrown away (user decision — ask before changing); `Discard` holds instead while
+    /// there is one (`RepoPage.planDiscards`).
     function dropDraft() {
         if (!detailsPane.boxFromPlan)
             return
@@ -278,8 +288,8 @@ ColumnLayout {
     readonly property real descriptionAt: block.descriptionAt
 
     // -- what this pane lends the message editor --
-    // The pair's geometry lives in `MessageEditor`; everything else keeps its own height
-    // (デザイン規約 §コミットメッセージの 2 つの枠), so the file list is the one thing here that gives.
+    // The pair's geometry lives in `MessageEditor`; everything else keeps its own height (`DescriptionBox`'s bound),
+    // so the file list is the one thing here that gives.
     /// Leaves the file list its band and two rows; past this the block scrolls and the pane's bottom holds
     /// (規約 §窓の床).
     readonly property real blockRoom: Math.max(0, detailsPane.height - Theme.headerHeight
@@ -365,19 +375,21 @@ ColumnLayout {
         id: chosenList
         visible: detailsPane.choosing
         Layout.fillWidth: true
-        // Divided as the worktree's buckets are (規約 §バケツごとの一覧). This list's want is counted, not read
+        // Divided as the worktree's buckets are (規約 §バケツごとの一覧): a list that has room is its content's height
+        // and does not scroll; only one that overflows does. This list's want is counted, not read
         // off its content: a view's content height is 0 for the frame its model is replaced in, which would flash the
         // pane to the list below each time the choice changes. The margins are counted too, or the view stands short
-        // of its own content and scrolls with nothing to reach.
+        // of its own content and scrolls with nothing to reach. The files' want is read off their content: the tree
+        // view adds folder rows, which a count of files cannot measure. Headless: `graph-choose`'s `spare=0`.
         Layout.preferredHeight: detailsPane.choosing
             ? Math.min(chosenList.topMargin + detailsPane.chosenCommits.length * Theme.graphRowHeight
                        + chosenList.bottomMargin,
                        Math.max(detailsPane.listRoom / 2, detailsPane.listRoom - fileList.contentHeight))
             : 0
-        // `spaceXs` over the first face and under the last (デザイン規約 §複数のコミットを選ぶ). Each face stands in its
-        // row's middle moved down to its summary's capitals (`ChosenCommitRow`), so the two margins differ by that drop
-        // twice. The top one can go below zero: what it then hides is the first row's empty air, and the row's hover
-        // wash stops at the band.
+        // `spaceXs` over the first face and under the last (user decision — ask before changing). Each face stands in
+        // its row's middle moved down to its summary's capitals (`ChosenCommitRow`), so the two margins differ by that
+        // drop twice. The top one can go below zero: what it then hides is the first row's empty air, and the row's
+        // hover wash stops at the band.
         topMargin: Theme.spaceXs - (Theme.graphRowHeight - Theme.iconLg) / 2 - detailsPane.chosenFaceDrop
         bottomMargin: Theme.spaceXs - (Theme.graphRowHeight - Theme.iconLg) / 2 + detailsPane.chosenFaceDrop
         model: detailsPane.chosenCommits
@@ -483,7 +495,7 @@ ColumnLayout {
         onContentYChanged: paneHand.rowsMoved()
         onCountChanged: paneHand.rowsMoved()
         onYChanged: paneHand.rowsMoved()
-        // The arrows move the file being read (規約 §diff のファイル一覧); Qt's own key navigation moves
+        // The arrows move the file being read (`FileRowWalk`); Qt's own key navigation moves
         // `currentIndex` and tells nobody.
         keyNavigationEnabled: false
         Keys.onUpPressed: event => event.accepted = fileWalk.stepFile(-1, event.isAutoRepeat)

@@ -5,10 +5,31 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// Ctrl+F over a diff: a strip under the DIFF band, the pane's full width, that the rows step down for
-// (デザイン規約 §diff の中を探す). The box takes lines (Ctrl+Enter) and holds its three options and the new-line mark at
-// its right end; the count, the arrows and the `✕` keep to the strip's right end. One grade under the band's own tools
-// throughout: seats `iconLg` with `iconSm` marks, words in the box's `fontMd`.
+// Ctrl+F over a diff (デザイン規約 §diff の中を探す: when Ctrl+F is the diff's, and what keeps in step with the graph's
+// find): a strip under the DIFF band, the pane's full width, that the rows step down for (user decision — ask before
+// changing). Not the graph's floating card: over a diff it would cover the first hunk heading's `Discard hunk` /
+// `Stage hunk` and the rows' right end. Under the band is where `DiffFileNotices` already pushes the rows down, a shape
+// this pane knows (IntelliJ's bar stands there too). The box takes lines (Ctrl+Enter) and holds its three options and
+// the new-line mark at its right end (VS Code's place; IntelliJ's is outside the box); the count, the arrows and the
+// `✕` keep to the strip's right end. One grade under the band's own tools throughout (user decision — ask before
+// changing): seats `iconLg` with `iconSm` marks, the `✕`'s grade; words in the box's `fontMd`, as IntelliJ and VS Code
+// count in their box's size. The box starts `spaceXs` in from the pane's edge, the column a hunk heading's `@@` starts
+// in.
+//
+// Keys: Enter / Shift+Enter step to the next / previous hit, round at the ends (the find box of Chrome, Firefox,
+// VS Code, IntelliJ, Sublime Text and Zed alike); Ctrl+Enter breaks the line (VS Code, Zed, Sublime Text; IntelliJ's is
+// Ctrl+Shift+Enter) — a key nothing on screen shows, so the box carries the ↵ mark (IntelliJ's "Enter a new line");
+// Escape closes; Alt+C / W / R flip the options (VS Code). Closing (`✕` / Escape) takes the marks away and gives the
+// keyboard back to the rows. Ctrl+F over selected text puts that text in the box, lines and all (VS Code, IntelliJ);
+// with none, the last query comes back selected.
+//
+// Hits wear a ground under their words (`Theme.diffFindBg`; the one stood on `diffFindCurrentBg`): the graph's way of
+// dimming rows cannot mark a word. No hits is `0 / 0`, in no state colour (as the graph's card). A line that cannot be
+// read as a pattern (an unclosed `(`) is refused: no count, the frame in `warning`, the reason in the tip
+// (`textfind::QueryError`). Zero hits is "searched, nothing there", a refusal "cannot search" — two answers.
+//
+// Not here, on purpose: replace, selecting every hit, a list of hits (a diff is read, not edited); finding inside the
+// selection (the diff's selection is for copying); a list of past queries (keeping the last one is enough).
 Rectangle {
     id: bar
 
@@ -101,7 +122,8 @@ Rectangle {
     readonly property real inset: (Theme.headerHeight - Theme.iconLg) / 2
     readonly property real boxMinWidth: 160
     /// One line of the box, paddings included — what the box is tall with one line in it, and the marks' seats'
-    /// side, so they stand the same above and below the letters on every face.
+    /// side, so they stand the same above and below the letters on every face (a fixed `iconLg - 2` is a pixel off
+    /// over and under on a face whose line is 19px).
     readonly property real lineHeight: (field.implicitHeight - field.topPadding - field.bottomPadding)
                                        / Math.max(1, field.lineCount) + field.topPadding + field.bottomPadding
 
@@ -149,9 +171,11 @@ Rectangle {
                 typed: true
                 words: box.shownError
             }
-            // The lines run sideways, never wrapped — a typed line is one line of the text. Past the box's width the
-            // view follows the caret, as a one-line field's does (規約 §diff を横へ送る「行は端まで在る」); up and down
-            // the box grows instead, so nothing is ever out of sight that way.
+            // The lines run sideways, never wrapped — a typed line is one line of the text, and wrapped it could not be
+            // told from a query of two lines. Past the box's width the view follows the caret, as a one-line field's
+            // does, with no bar (規約 §diff を横へ送る「行は端まで在る」); up and down
+            // the box grows instead, so nothing is ever out of sight that way. A bare `TextArea` would draw what runs
+            // past its width over the marks and outside the frame, and would not follow the caret.
             Flickable {
                 id: fieldView
                 anchors.left: parent.left

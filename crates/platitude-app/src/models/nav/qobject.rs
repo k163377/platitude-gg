@@ -91,6 +91,9 @@ impl NavSectionModel {
         self.eol_marks_here().any(|m| m.path == path)
     }
 
+    // Said only when the rows changed (`drain`'s `arrived`), not on every
+    // status: a partial stage moves no row. A wait on "the status was
+    // read" listens to `WorktreeModel.changed` instead.
     #[qsignal]
     pub(super) fn changed(&mut self);
 
@@ -130,7 +133,9 @@ impl NavSectionModel {
 
     /// A worktree listing arrived, whether or not it moved anything — a
     /// listing of its own, as the stashes' is: the worktree a removal took
-    /// away waits on it.
+    /// away waits on it. Left unwired, that row stands in until the next
+    /// poll tick, and only runs whose refs read comes later look quick
+    /// (green on Windows, slow on Linux).
     #[qsignal]
     pub(super) fn worktrees_settled(&mut self);
 
@@ -379,7 +384,8 @@ impl NavSectionModel {
     }
 
     /// Which row on show this ref sits on; -1 when it is on none. What a
-    /// list asks before scrolling to a row nobody clicked on.
+    /// list asks before scrolling to a row nobody clicked on. Asked here:
+    /// walking `nameAt` from QML crosses the bridge once per ref.
     #[qslot]
     fn row_of_name(&self, name: String) -> i32 {
         self.row_of(&name)
@@ -387,6 +393,10 @@ impl NavSectionModel {
 
     /// The remote branch this one speaks for (`origin/main`); empty when
     /// it speaks for none, and for every section but the branches.
+    ///
+    /// The configured upstream only, never a remote branch of the same name
+    /// (user decision — ask before changing): a fallback would seat the
+    /// delete table's remote rows on a branch with no upstream (`topic-a`).
     #[qslot]
     fn upstream_of(&self, name: String) -> String {
         self.all
@@ -430,6 +440,10 @@ impl NavSectionModel {
     /// `upstream_local` / `upstream_gone`). What the menu offers to take
     /// off (`offers::ref_menu`'s `tracked`); empty where it has none, and
     /// for every section but the branches.
+    ///
+    /// The menu's entrances read this, not `upstream_of`: that one answers
+    /// remote readings only and is empty for a branch here (`remote = .`)
+    /// and for a gone upstream, which can be taken off all the same.
     #[qslot]
     pub(super) fn upstream_named(&self, name: String) -> String {
         self.all
@@ -481,8 +495,10 @@ impl NavSectionModel {
     ///
     /// For rows naming somebody else's branch, e.g. a worktree's
     /// (デザイン規約 §左メニューの所作). A slot, not a role: only this
-    /// section can answer for a name, so it is read once as the row opens
-    /// and a fetch landing meanwhile does not move it.
+    /// section can answer for a name (the worktrees' own source has no
+    /// `branch_named`), so it is read once as the row opens and a fetch
+    /// landing meanwhile does not move it. Every other row's pair is its
+    /// own role.
     #[qslot]
     pub(super) fn ahead_of(&self, name: String) -> i32 {
         self.all
@@ -647,7 +663,7 @@ impl NavSectionModel {
     ///
     /// `apart` is read against the right reading, which `against` — the
     /// remote this window's tag rows act on (`RepoTab.defaultRemote`;
-    /// デザイン規約 §タグを作る・送る) — decides where it carries the name, and
+    /// `RefTagMenu`'s push row) — decides where it carries the name, and
     /// the remotes by agreeing where it does not; never the copy here: a
     /// local tag that is itself the odd one out would put the mark on
     /// everybody else.

@@ -3,8 +3,8 @@ import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
-// The operation panel's name as a box of two lines, name and counts over the upstream (rules-refs/app-ui.md
-// 「操作パネルの名前(`OpsPicker`)は 2 行で 1 つの箱」). The arithmetic is the picker's own, so it is asked with no window.
+// The operation panel's name as a box of two lines, name and counts over the upstream (`OpsPicker.qml`). The
+// arithmetic is the picker's own, so it is asked with no window.
 //
 // A control, to hand the pickers the window's font as `Main` does: the names are priced in `Theme.uiFamily` and drawn
 // in the face they inherit, and a default face lays a name out wider than its price — cut where it fits.
@@ -74,7 +74,7 @@ Control {
         "bugfix/keep-the-long-branch-names-readable-in-every-menu-card-tooltip-question-bar-"
         + "notice-and-the-commit-button-too"
 
-    // A name with its card hung off it, as `TopBar` hangs both (rules-refs/app-ui.md「名前から落とすカードは名前にぶら下げる」).
+    // A name with its card hung off it, as `TopBar` hangs both (`TopBar`'s `standMenu`).
     component Door: OpsPicker {
         id: door
         property alias card: doorCard
@@ -184,7 +184,7 @@ Control {
             tryCompare(longName, "trackPlace", "after")
         }
 
-        /// The worktree's run gives before the name (規約 §操作パネル の譲る順), and what is left of it is laid out
+        /// The worktree's run gives before the name (`TopBar`'s order), and what is left of it is laid out
         /// at the width its line was priced at: the counts still follow it at their own step.
         function test_the_worktree_s_run_gives_before_the_name() {
             verify(inTree.lineOneWhole > inTree.lineTwoWhole, "the name and its run are the longer line")

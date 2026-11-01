@@ -44,8 +44,8 @@ pub(crate) fn pasted(bytes: usize) -> String {
     s
 }
 
-/// A release message long enough that no pane shows it whole
-/// (デザイン規約 §コミットメッセージの 2 つの枠). Written out, not
+/// A release message long enough that no pane shows it whole (the app's
+/// `MessageEditor` / `DescriptionBox`). Written out, not
 /// repeated: a repeated sentence says nothing about how a real message
 /// wraps, and real ones arrive both wrapped at 72 columns and as one long
 /// line.
@@ -102,7 +102,7 @@ const SPREAD_FILES: usize = 3;
 
 /// A history where every commit touches its own handful of files: the one
 /// shape in which a choice overflows both of the lists sharing its pane,
-/// commits and files (デザイン規約 §複数のコミットを選ぶ). `deep` cannot
+/// commits and files (`DetailsPane.qml`). `deep` cannot
 /// stand in (it writes the same blob every time, so its commits change
 /// nothing), nor can `long` (its files are in one commit).
 pub(super) fn spread(repo: &mut DemoRepo) -> Result<(), String> {
@@ -550,8 +550,7 @@ pub(super) fn edges(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["commit", "--allow-empty", "--author=日 <あ>", "-m", "一"])?;
 
     // Longer than any pane is tall, so pulling the description box open
-    // reaches the bound the pull stops at
-    // (デザイン規約 §コミットメッセージの 2 つの枠).
+    // reaches the bound the pull stops at (the app's `DescriptionBox`).
     let long_subject = pasted(2000);
     let long_body = format!(
         "{}\n\n{}\n\nCo-authored-by: {} <{}@example.com>\n",

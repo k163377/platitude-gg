@@ -118,8 +118,11 @@ pub fn colors_cached(
 }
 
 /// Whether a [`LexCache`] was walked down this same text. Deliberately not
-/// [`crate::details::fingerprint`]: a wrong answer here costs only a
-/// repaint (rules-refs/core.md「staleness のハッシュは問いごとに持つ」).
+/// [`crate::details::fingerprint`], though both are a `DefaultHasher`: the
+/// questions differ, and so does a wrong answer's price. Both sides of
+/// this comparison are made by the same binary in the same run, and a
+/// wrong answer costs only a repaint; that one's goes wrong as a partial
+/// write.
 fn source_hash(text: &str) -> u64 {
     let mut hasher = std::hash::DefaultHasher::new();
     text.hash(&mut hasher);
@@ -144,9 +147,18 @@ fn patch_colors(
     }
     // The fast path, without loading the fallback set (`theme::assets`).
     if let Some(lang) = super::grammar::for_path(patch.path()) {
-        // …unless the file has outgrown its grammar (`tree::reads`) and
-        // the fallback set has a real syntax for it; with none, the
-        // grammar's partial answer is still the best there is.
+        // …unless the file has outgrown its grammar (`tree::reads`: newer
+        // syntax, Kotlin's `when` guards or `val [a, b]`, can cost every
+        // row past the break its captures) and the fallback set has a real
+        // syntax for it; with none (plist, jsonc, mjs — `theme::reads`),
+        // the grammar's partial answer is still the best there is.
+        //
+        // Whole files, not per hunk: keeping the tree for the hunks above
+        // the break was rejected — re-propose only with new measurements.
+        // The lexer's cost grows with a hunk's depth while the grammar reads
+        // the file in one go, so those shallow hunks are where the lexer is
+        // cheapest, and moving them would be slower. Swap a road only after
+        // measuring both at the same depth.
         let outgrown = source.is_some_and(|text| !super::tree::reads(lang, text))
             && super::theme::reads(patch.path());
         if !outgrown {

@@ -34,7 +34,8 @@ pub(super) async fn stash_everything(
 /// keeping the staged/unstaged split for as long as git will take it.
 ///
 /// A non-zero exit is judged by the working tree ([`conflicts_now`]):
-/// unmerged paths mean the restore landed and awaits settling; otherwise
+/// unmerged paths mean the restore landed and awaits settling — the
+/// screen is the conflicted file rows, and git keeps the entry; otherwise
 /// it did nothing, and the split is given up on (below) or git's message
 /// goes through. The stash emptied the tree, so any unmerged path came
 /// from the restore.

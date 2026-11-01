@@ -109,12 +109,17 @@ async fn skip_past_empty_commits(
 }
 
 /// Where the sequence came to rest: done, stopped on a conflict, or failed
-/// (the empty stops are answered by the loop before this).
+/// (the empty stops are answered by the loop before this and land `Done`).
 ///
-/// The code is read as well as the marker: a cherry-pick or revert asked
-/// for while one is already standing exits 128 with its own marker there.
-/// A read that fails answers "no", so git's reason reaches the screen
-/// instead of a `rev-parse` error.
+/// A conflict is exit 1 with the operation's own marker (`CHERRY_PICK_HEAD`
+/// / `REVERT_HEAD`, and the sequencer for several revisions — measured on
+/// 2.55); only that is a stop. A dirty tree, a name git cannot read and an
+/// index with unmerged paths left are all exit 128 with no marker. The
+/// code is read as well as the marker: a cherry-pick or revert asked for
+/// while one is already standing exits 128 with its own marker there, and
+/// the marker alone would swallow git's "another one is running". A read
+/// that fails answers "no", so git's reason reaches the screen instead of
+/// a `rev-parse` error. Held by `integrate_integration::pick_revert`.
 async fn landed(
     executor: &GitExecutor,
     workdir: &Path,

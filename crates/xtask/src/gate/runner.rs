@@ -235,8 +235,9 @@ const RUNNER: &str = "xtask-runner-";
 
 /// The task runner the steps start from: this program, built from the
 /// tree once and copied beside the logs, so no `cargo run` launcher waits
-/// on cargo's lock of `target/debug`
-/// (反映前テストの機械化.md §群の並走と動詞の並列).
+/// on cargo's lock of `target/debug`: cargo holds it for a build, and the
+/// launchers and the checks group's `cargo test` beside them would wait
+/// on each other.
 ///
 /// Built from the tree because under `land` the rebase has just brought
 /// sources in; copied because the landing has renamed the slot away from

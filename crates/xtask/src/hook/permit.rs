@@ -1,9 +1,12 @@
 //! The landing permit: main moves on the user's own `/land`, once.
 //!
 //! Read off UserPromptSubmit and kept per session beside the primary
-//! checkout's `.git`. The rules — open / spent / closed, which prompts are
-//! the user's own, and why only the typed command opens it — are in
-//! internal-docs/反映前テストの機械化.md §land の許可.
+//! checkout's `.git`. The rules — open / waiting / spent / closed, and why
+//! only the typed command opens it — are in
+//! internal-docs/反映前テストの機械化.md §land の許可; which prompts are
+//! the user's own is `the_users_words`. UserPromptSubmit is handed the
+//! text as typed; the transcript keeps the app's `<command-message>`
+//! expansion of it, read the same way (`is_land`).
 
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};

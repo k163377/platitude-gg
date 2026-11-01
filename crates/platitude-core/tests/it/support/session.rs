@@ -29,7 +29,7 @@ pub struct Pass {
 /// Reads a landed pass out of the one event that ends it: a stream's
 /// `LogFinished` or a rebuild's `LogReplaced`. Which shape carries a given
 /// ask is a scheduling accident, so a wait must accept both
-/// (rules-refs/core.md「`restart_log` の着地はストリームとは限らない」).
+/// (`RepoSession::restart_log`).
 pub fn pass_of(event: &SessionEvent) -> Option<Pass> {
     match event {
         SessionEvent::LogFinished {
@@ -81,9 +81,12 @@ impl CaptureSink {
     /// middle of a read: a hook that parks holds the reader there while
     /// the test drives the rest.
     ///
-    /// The hook runs under `block_in_place`; a bare park stalls the runtime
-    /// on Linux (rules-refs/core.md
-    /// 「hook で reader を停める配信は `block_in_place` の下で走らせる」).
+    /// The hook runs under `block_in_place`. A bare park stops the test for
+    /// good on Linux: the child's exit (pidfd), its pipes and the
+    /// `Patience` timer all sit in the epoll of the worker the hook blocks,
+    /// and nothing outside wakes it — 0% CPU until the gate's ceiling.
+    /// Windows does not show it. `block_in_place` refuses a current_thread
+    /// runtime, hence the worker count asserted below.
     /// The sink records before it runs the hook, so a wait over recorded
     /// events sees the event that parked.
     pub fn hook_once(
@@ -123,8 +126,22 @@ impl CaptureSink {
         .await
     }
 
-    /// Establishes the opening graph baseline by causal waits, in the order
-    /// rules-refs/core.md「baseline は開始条件を列挙して待つ」 gives.
+    /// Establishes the opening graph baseline by causal waits, in this
+    /// order: the opening snapshots (`Opened` only accepted the path), their
+    /// readers out of the single flight (`wait_for_snapshot_reads` — the
+    /// snapshot events go out from inside the readers, which may ask for a
+    /// graph refresh after), a tracked graph refresh, the passes it
+    /// displaced stopped (`wait_for_graph_passes` — an ask only cancels the
+    /// previous pass, and a cancel is no proof it stopped), then the pass
+    /// that landed.
+    ///
+    /// The tracked refresh alone does not close the baseline: the opening's
+    /// tag-bearing pass comes after the chips have landed, so the refresh
+    /// only cancels it, and a walk that slipped out would count as one the
+    /// badge caused. Two guards together close it: a pass taken before it
+    /// starts does not walk (`run_swap_pass`), and one already started is
+    /// awaited by `wait_for_graph_passes` (`GraphPasses` registers before
+    /// the spawn). A test that counts walks goes through here.
     pub async fn opened_graph(&self, session: &Arc<RepoSession>, total: u32) -> Pass {
         self.opening_settled(session).await;
         let outcome = crate::support::wait::bounded(
@@ -195,7 +212,8 @@ impl CaptureSink {
     }
 
     /// Waits for `pred` over the event list; each delivery wakes it, and
-    /// the budget is only a failure backstop.
+    /// the budget is only a failure backstop. `pred` runs inside the events
+    /// lock: a panic there poisons it, so judge what it found outside.
     pub async fn wait_for<T>(&self, what: &str, pred: impl Fn(&[SessionEvent]) -> Option<T>) -> T {
         let mut patience = Patience::new();
         let mut changed = self.changed.subscribe();
@@ -282,6 +300,12 @@ pub fn scenario() -> (TestRepo, String) {
 /// git still running there. Dropped unwaited it fails the test, so a test
 /// that forgets is red whether or not one of its gits happened to be
 /// running. The rest is the session's own (`Deref`).
+///
+/// A push or fetch the test asked for is awaited to its answer before the
+/// close: the close cancels network writes, so a test that does not wait
+/// hits the cancel whatever it asserts — and the cancel stops only git
+/// itself, leaving the `git-receive-pack` / `git-upload-pack` it started
+/// standing in the clone and the origin.
 pub struct TestSession {
     session: Arc<RepoSession>,
     waited: AtomicBool,
@@ -519,8 +543,14 @@ pub async fn write_settled(sink: &CaptureSink, id: OperationId) -> Vec<FollowUp>
 /// running executable, here the test binary's directory.
 ///
 /// Once per process and published by `rename`: copying straight onto the
-/// path puts one test's write fd under another's exec (`ETXTBSY` on Linux
-/// — rules-refs/core.md「テストが差し込む実行ファイルは rename で置く」).
+/// path puts one test's write fd under another's exec (`ETXTBSY` on Linux,
+/// where git's `sh` answers `Text file busy` and the replay reads as a
+/// failed rebase). Never seen on Windows — only `cargo xtask linux` shows
+/// it; `session_integration`'s replay tests going red by turns point here.
+/// The `Once` is there to make the others wait (no exec overlaps the copy),
+/// and the per-process staging name depends on it: without it a half-copied
+/// file is published. A fork that inherits the write fd is beyond both; the
+/// exec side retries instead (`support::busy`).
 pub fn install_todo_editor() {
     static INSTALLED: std::sync::Once = std::sync::Once::new();
     // Every caller waits for the one copy; the rename covers other
@@ -561,7 +591,8 @@ pub fn publish_helper(
     if let Err(error) = published {
         // Windows locks a running executable (still readable), so the
         // rename can lose to a helper another run left behind. Only one
-        // holding this build's bytes will do. The refusal names its
+        // holding this build's bytes will do: any other would run an old
+        // helper under today's asserts. The refusal names its
         // condition: the raw rename error reads as an unrelated permission
         // problem.
         let _ = std::fs::remove_file(&staged);

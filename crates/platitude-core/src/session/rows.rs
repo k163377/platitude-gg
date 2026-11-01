@@ -303,8 +303,8 @@ impl CarriedRows {
             if wip.head != anchor {
                 return true;
             }
-            // No chip (デザイン規約 §未コミット行が名乗るもの): the worktree
-            // rides on the row, for its words and for the pane it opens.
+            // No chip (why: `GraphRowDelegate.qml`): the worktree rides on
+            // the row, for its words and for the pane it opens.
             let mut row = wip_row(&wip.head, &[], builder);
             row.carried = Some(wip.clone());
             out.push(row);

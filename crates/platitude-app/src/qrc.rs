@@ -129,7 +129,9 @@ pub const fn tree_len(prefix: &str, path: &str, len: usize) -> usize {
 
 /// The tree [`tree`] builds with no time on it, byte for byte (a test holds
 /// it to that), for a static's initializer ([`embed`]). The file's bytes
-/// are copied once and whole; a name outside ASCII stops the build.
+/// are copied once and whole (`copy_from_slice`: a byte-by-byte loop makes
+/// const evaluation heavy on a large QML file); a name outside ASCII stops
+/// the build.
 pub const fn untimed<const N: usize>(prefix: &str, path: &str, bytes: &[u8]) -> [u8; N] {
     let mut out = [0u8; N];
     let (magic, rest) = out.split_at_mut(4);
