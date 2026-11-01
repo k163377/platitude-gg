@@ -123,7 +123,7 @@ fn part_reader(then: Then) -> Command {
     }
     #[cfg(not(windows))]
     {
-        let first = "head -c 1 > /dev/null; : > got; printf 'got\\n'";
+        let first = "dd bs=1 count=1 > /dev/null 2>&1; : > got; printf 'got\\n'";
         let rest = match then {
             Then::Hold => "exec sleep 600",
             Then::Drain => "cat > /dev/null; : > eof",
