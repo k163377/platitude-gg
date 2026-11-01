@@ -263,8 +263,8 @@ Rectangle {
     function completePushHold() {
         return pushButton.completeHold()
     }
-    /// Automation: the push button's gesture is still under way (`ActionButton.gesturing`) — false again once the
-    /// button blanked it, which is a press that sent nothing.
+    /// Automation: the push button's gesture is still under way (`ActionButton.gesturing`) — the automated press is run
+    /// out from rest, not over one.
     readonly property bool pushHolding: pushButton.gesturing
     /// A press landed somewhere in the window (`Main`, off `FocusRelease.pressedAnywhere`), for the strip
     /// (`TabStrip.pressLanded`).

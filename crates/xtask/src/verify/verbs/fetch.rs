@@ -120,8 +120,9 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "open_fetch fails=0 behind=1 top=origin/main",
     },
-    // Intermediate communication is valid only after the real busy
-    // edge was observed and latched for the asynchronous image grab.
+    // Intermediate communication is valid only after the push was seen
+    // running — its busy edge, or its answer where one drain both began
+    // and ended it — and latched for the asynchronous image grab.
     Verb {
         name: "force-push-hold",
         when: &[],

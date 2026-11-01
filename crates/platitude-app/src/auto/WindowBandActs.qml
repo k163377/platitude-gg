@@ -17,25 +17,40 @@ Item {
     required property Item mainUi
     required property IdentityDialog identityDialog
 
-    // The ring is latched on the real busy edge, which is often shorter than a sampler's beat; the hold keeps a fast
-    // child from clearing it before the image callback runs.
+    /// The push mode on the latch (`latchBusy`). Read at report time it is already the push's answer: a fast push has
+    /// levelled the branch with its remote.
+    property string pushModeAtBusy: ""
+
+    /// Holds up the ring of the write its verb photographs — `push` or `fetch`, the word the tab's `busyOp` takes and
+    /// the write's answer is given under — on the first of the write's two records below, with the mode a push ran
+    /// in. The edge comes first where there is one: it is seen while the write still runs, before the reads after it
+    /// can move the mode; the answer stands in for a write that showed none.
+    function latchBusy(word) {
+        if (Harness.autoAct === "force-push-hold" && word === "push" && !acts.topBar.holdPushBusy) {
+            acts.pushModeAtBusy = acts.topBar.pushMode
+            acts.topBar.holdPushBusy = true
+        }
+        if (Harness.autoAct === "fetch-busy" && word === "fetch")
+            acts.topBar.holdFetchBusy = true
+    }
+
+    // The ring is latched on the write's own records — its busy edge, often shorter than a sampler's beat, or its
+    // answer — and the hold keeps a fast child from clearing it before the image callback runs.
     Connections {
         target: acts.topBar.curPage ? acts.topBar.curPage.pageTab : null
         function onBusyOpChanged() {
-            const op = acts.topBar.curPage.pageTab.busyOp
-            if (Harness.autoAct === "force-push-hold" && op === "push" && !acts.topBar.holdPushBusy) {
-                acts.pushModeAtBusy = acts.topBar.pushMode
-                acts.topBar.holdPushBusy = true
-            }
-            if (Harness.autoAct === "fetch-busy" && op === "fetch")
-                acts.topBar.holdFetchBusy = true
+            acts.latchBusy(acts.topBar.curPage.pageTab.busyOp)
+        }
+        // A write begun and ended within one drain shows no edge above — a drain notifies once for its whole queue
+        // (`RepoTab::write_answers`) — so its answer, under the same word (`writeAnswerOp`), latches too.
+        function onWriteSeqChanged() {
+            const tab = acts.topBar.curPage.pageTab
+            for (let i = 0; i < tab.writeAnswerCount(); i++)
+                acts.latchBusy(tab.writeAnswerOp(i))
         }
     }
-    /// The push mode on the busy edge. Read at report time it is already the push's answer: a fast push has levelled
-    /// the branch with its remote.
-    property string pushModeAtBusy: ""
 
-    // PGG_AUTO_ACT=force-push-hold: the push's hold run out on a diverged branch, and the ring latched on its edge.
+    // PGG_AUTO_ACT=force-push-hold: the push's hold run out on a diverged branch, and the ring latched on the push.
     WindowStage {
         id: pushHoldTimer
         name: "force_push_hold"
@@ -48,19 +63,16 @@ Item {
                         "diverged": topBar.curPage !== null && topBar.pushMode === "diverged",
                         "idle": !topBar.pushHolding }))
                     return
-                // Answers whether it went in: a button met deaf is pressed a beat later.
+                // Answers whether it went in: a button met deaf is pressed a beat later. One that went in has sent
+                // the push — the presses run out at once, from rest and on a diverged branch, the last one asking
+                // for it (`HoldDriver.runOut`) — so it is never pressed again, though the latch can stand beats
+                // later: a push queued behind the tab's opening fetch starts once that one has settled
+                // (`RepoTab::ask_session`).
                 op.input("pressed", () => topBar.completePushHold())
                 return
             }
-            // A press the button blanked: the tab's opening fetch took git, the button went deaf and the fill blanked
-            // with nothing sent (`ActionButton.onLiveChanged`) — no gesture and no edge. Pressed again, in a
-            // generation of its own. A completed press stands until its edge above, so nothing is pressed twice.
-            if (!topBar.holdPushBusy && !topBar.pushHolding) {
-                op.again()
-                return
-            }
-            // The ring is held, so the page can be waited for: the row the opening selected is still reading its
-            // details, and the mode was latched on the edge (`pushModeAtBusy`).
+            // Waited out from the beat after the press: the ring, latched once the push is seen (`latchBusy`), and
+            // the page, whose row the opening selected is still reading its details.
             op.complete({
                 "name": "force_push_hold_landed",
                 "when": () => ({ "busy": topBar.holdPushBusy, "page": PageSettled.windowSettled(window) }),
@@ -68,7 +80,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=fetch-busy: the same latch on fetch. The page's driver fires the fetch; this waits for the edge.
+    // PGG_AUTO_ACT=fetch-busy: the same latch on fetch. The page's driver fires the fetch; this waits for the latch.
     WindowStage {
         id: fetchBusyTimer
         name: "fetch_busy"
