@@ -59,9 +59,8 @@ pub(crate) fn record(
         cwd,
         agent,
         owner::codex_pid().ok_or(
-            "no Codex process is visible in this command's ancestry; Windows sandbox isolation \
-             can hide it. Run awake codex work/idle from this Codex chat outside the sandbox \
-             (require_escalated), then check cargo xtask awake. Do not substitute another PID",
+            "no Codex process is visible in this command's ancestry (a Windows sandbox can hide \
+             it: internal-docs/codex/ハーネス.md, 診断と手動 fallback)",
         )?,
         marks,
     )
