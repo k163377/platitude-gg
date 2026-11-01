@@ -16,6 +16,7 @@ mod plan;
 mod publish;
 mod rebase;
 mod refused;
+mod reword_messages;
 mod sides;
 mod standing_op;
 mod todo;

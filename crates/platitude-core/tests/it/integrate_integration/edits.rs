@@ -228,9 +228,9 @@ async fn the_range_read_is_this_branchs_history_and_not_another() {
     );
 }
 
-/// The remaining todo's `exec` line reads the reword's message file in the
-/// later `--continue` (another process), so the file must outlive the stop;
-/// a later clean rebase sweeps it.
+/// The remaining todo's `exec` line reads the reword's message in the later
+/// `--continue` (another git), so the message must outlive the stop; the
+/// rebase's end takes it (`reword_messages`).
 #[tokio::test]
 async fn a_reword_behind_a_conflict_survives_the_stop_and_continue() {
     let mut repo = TestRepo::init();
@@ -273,21 +273,9 @@ async fn a_reword_behind_a_conflict_survives_the_stop_and_continue() {
     repo.git(&["rebase", "--continue"]);
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "new words");
 
-    let head = repo.git(&["rev-parse", "HEAD"]);
-    let outcome = sequencer::rebase_interactive(
-        &exec,
-        &repo_info,
-        "HEAD~1",
-        &[RebaseStep::pick(head, "new words")],
-        &RebaseOptions::default(),
-        &helper(),
-        &cancel,
-    )
-    .await
-    .expect("a clean run");
-    assert!(matches!(outcome, RebaseOutcome::Done), "{outcome:?}");
-    let leftovers: Vec<_> = std::fs::read_dir(repo.path.join(".git").join("platitude"))
+    assert!(!repo_info.git_dir.join("rebase-merge").exists(), "done");
+    let leftovers: Vec<_> = std::fs::read_dir(repo_info.git_dir.join("platitude"))
         .map(|entries| entries.flatten().map(|e| e.file_name()).collect())
         .unwrap_or_default();
-    assert!(leftovers.is_empty(), "swept: {leftovers:?}");
+    assert!(leftovers.is_empty(), "nothing left: {leftovers:?}");
 }

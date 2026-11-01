@@ -1,6 +1,15 @@
 //! Running the rebase: the helper that installs the todo list, and the
-//! message files the reword `exec` lines read while git replays.
+//! messages the reword `exec` lines read while git replays.
+//!
+//! A message is read when its `exec` line runs, which can be a later
+//! `--continue` in another process — after this application was closed, or
+//! from another git. So it is put down in the rebase's own state folder,
+//! by the helper, once git has made that folder: git takes the folder away
+//! whenever the rebase ends, run to the end, aborted or quit, whoever ends
+//! it, and the message goes with it. Nothing here removes one, so nothing
+//! another run is still to read can go.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use tokio_util::sync::CancellationToken;
@@ -21,8 +30,20 @@ pub const TODO_EDITOR_FLAG: &str = "--todo-editor";
 /// Name of the helper executable, which ships beside the application.
 pub const HELPER_NAME: &str = "pgg-todo-editor";
 
-/// Scratch tag of the message files reword `exec` lines read.
-const REWORD_MSG_TAG: &str = "REWORD_MSG";
+/// git's state folder of an interactive rebase, under the worktree's own
+/// git directory: where the todo the helper is handed lives.
+const STATE_DIR: &str = "rebase-merge";
+
+/// Where, in the plan, each reword's message starts: after the todo, one
+/// to a reword in the order of their `exec` lines. A todo holds none, and
+/// a message that does is refused before the plan is made.
+const MESSAGE_MARK: char = '\0';
+
+/// The file in the rebase's state folder the `n`-th reword's `exec` line
+/// reads (from 1).
+fn message_name(n: usize) -> String {
+    format!("platitude-reword-{n}")
+}
 
 /// Locates the helper next to the running executable (packaging must keep
 /// the two together).
@@ -75,10 +96,9 @@ pub async fn rebase_interactive(
         source,
     };
 
-    // Message files must outlive a stopped replay (a later `--continue`
-    // runs the remaining `exec` lines); they go only once the rebase is
-    // known not to be standing.
-    let mut message_files: Vec<ScratchFile> = Vec::new();
+    let state = repo.git_dir.join(STATE_DIR);
+    let mut messages = String::new();
+    let mut rewords = 0;
     let mut lines: Vec<TodoLine> = Vec::new();
     for step in steps {
         lines.push(TodoLine::Command {
@@ -96,26 +116,32 @@ pub async fn rebase_interactive(
                 message: format!("reword of {} has no message", step.oid),
             });
         };
-        let file = ScratchFile::create(
-            &repo.git_dir,
-            REWORD_MSG_TAG,
-            normalized(message).as_bytes(),
-        )
-        .map_err(io_error)?;
+        // The plan's mark between messages: one inside a message would hand
+        // every later reword its neighbour's words. git refuses such a
+        // message anyway.
+        if message.contains(MESSAGE_MARK) {
+            return Err(GitError::Rejected {
+                message: format!("the new message of {} holds a NUL character", step.oid),
+            });
+        }
+        rewords += 1;
+        messages.push(MESSAGE_MARK);
+        messages.push_str(&normalized(message));
         // `--allow-empty`: a marker commit made empty on purpose is reworded
         // like any other, as git's own `reword` does (`ALLOW_EMPTY`). The
         // index is the picked commit's here, so nothing else can come of it.
         lines.push(TodoLine::Exec {
             command: format!(
                 "git commit --amend --allow-empty --cleanup=whitespace --file {}",
-                sh_quote(&shell_path(file.path()))
+                sh_quote(&shell_path(&state.join(message_name(rewords))))
             ),
         });
-        message_files.push(file);
     }
 
-    let plan = ScratchFile::create(&repo.git_dir, "rebase-todo", render_todo(&lines).as_bytes())
-        .map_err(io_error)?;
+    let mut plan = render_todo(&lines);
+    plan.push_str(&messages);
+    let plan =
+        ScratchFile::create(&repo.git_dir, "rebase-todo", plan.as_bytes()).map_err(io_error)?;
     let editor = sequence_editor_command(helper, plan.path());
     // Exit 1 answers (work in the way, or a stopped replay), each with its
     // own landing on screen; a 128 stays a failure
@@ -129,8 +155,7 @@ pub async fn rebase_interactive(
         .traced();
     let command = cmd.describe();
     let ran = executor.run_unchecked(cmd, cancel).await;
-    // The todo is installed (or refused) by now; only the message files
-    // may still have a reader.
+    // The todo and the messages are installed (or refused) by now.
     drop(plan);
     // A non-zero end is a failure for `landed` to read, as `GitExecutor::run`
     // answers it; the trace that names a refusal is read here first.
@@ -162,22 +187,6 @@ pub async fn rebase_interactive(
             // whatever stands.
             outcome = Err(report::rewrite_refused(kind, command, code, stderr));
         }
-    }
-    match &outcome {
-        // Kept for the `--continue`; what an abort strands is swept on the
-        // next rebase that runs to the end. An error keeps them too:
-        // `landed`'s probe can fail over a rebase that is in fact standing,
-        // and a missing file breaks a `--continue`.
-        Ok(RebaseOutcome::Stopped) | Err(_) => {
-            for file in message_files {
-                file.keep();
-            }
-        }
-        Ok(RebaseOutcome::Done) => {
-            drop(message_files);
-            ScratchFile::sweep(&repo.git_dir, REWORD_MSG_TAG);
-        }
-        Ok(RebaseOutcome::Blocked(_)) => drop(message_files),
     }
     outcome
 }
@@ -269,13 +278,27 @@ pub fn sequence_editor_command(helper: &Path, plan: &Path) -> String {
     )
 }
 
-/// Todo-editor mode: writes the plan over git's todo file, keeping the
-/// lines git put in it ([`super::merge_todo`]). Returns what had to be
-/// left out, for the helper to name on stderr.
+/// Todo-editor mode: puts each reword's message down beside git's todo —
+/// in the rebase's state folder, made by git before it asks for the todo —
+/// then writes the plan over the todo, keeping the lines git put in it
+/// ([`super::merge_todo`]). Returns what had to be left out, for the helper
+/// to name on stderr.
+///
+/// Every message is down before the todo names it; a failure fails the
+/// helper, and git then ends the rebase and takes its state folder.
 pub fn apply_plan(plan_path: &Path, todo_path: &Path) -> std::io::Result<Vec<String>> {
     let plan = std::fs::read_to_string(plan_path)?;
+    let mut parts = plan.split(MESSAGE_MARK);
+    let todo = parts.next().unwrap_or_default();
+    let state = todo_path.parent().unwrap_or(Path::new(""));
+    for (at, message) in parts.enumerate() {
+        // Synced: a stopped rebase can wait out a restart of the machine.
+        let mut file = std::fs::File::create(state.join(message_name(at + 1)))?;
+        file.write_all(message.as_bytes())?;
+        file.sync_all()?;
+    }
     let generated = std::fs::read_to_string(todo_path)?;
-    let merged = super::merge_todo(&plan, &generated);
+    let merged = super::merge_todo(todo, &generated);
     std::fs::write(todo_path, merged.text)?;
     Ok(merged.orphaned)
 }
@@ -416,6 +439,36 @@ mod tests {
                 "{err}"
             );
         }
+        assert_eq!(asked.count(), 0, "nothing was asked of git");
+    }
+
+    /// A NUL inside one message would slide every later message onto the
+    /// reword before it; the plan is never made.
+    #[tokio::test]
+    async fn a_reword_message_holding_a_nul_is_refused_before_git_runs() {
+        let (exec, asked) = refusing::git();
+        let (repo, cancel) = (refusing::repo(), CancellationToken::new());
+        let reword = |oid: &str, message: &str| RebaseStep {
+            action: TodoAction::Reword,
+            message: Some(message.to_string()),
+            ..RebaseStep::pick(oid, "subject")
+        };
+        let steps = [reword("aaa", "first\0half"), reword("bbb", "second")];
+        let err = rebase_interactive(
+            &exec,
+            &repo,
+            "HEAD~2",
+            &steps,
+            &RebaseOptions::default(),
+            no_helper(),
+            &cancel,
+        )
+        .await
+        .expect_err("the plan would misplace the second message");
+        assert!(
+            matches!(&err, GitError::Rejected { message } if message.contains("NUL")),
+            "{err}"
+        );
         assert_eq!(asked.count(), 0, "nothing was asked of git");
     }
 }

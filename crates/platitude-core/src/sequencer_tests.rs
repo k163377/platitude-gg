@@ -1,7 +1,7 @@
 //! Tests of [`crate::sequencer`]'s todo rendering and helpers, in a
 //! file of their own (structure.md §分割).
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::sequencer::*;
 
@@ -261,6 +261,31 @@ fn apply_plan_writes_the_plan_over_the_todo_file() {
         std::fs::read_to_string(&todo).expect("read"),
         "pick aaa one\n"
     );
+}
+
+/// The messages after the plan's todo go beside git's todo, numbered as
+/// the `exec` lines read them, and git's todo gets the todo alone.
+#[test]
+fn apply_plan_puts_each_message_beside_the_todo() {
+    let dir = crate::temp::dir();
+    let plan = dir.path().join("plan");
+    let state = dir.path().join("rebase-merge");
+    std::fs::create_dir(&state).expect("the state folder git makes");
+    let todo = state.join("git-rebase-todo");
+    std::fs::write(
+        &plan,
+        "pick aaa one\nexec first\npick bbb two\nexec second\n\0one\n\0two\n\nbody\n",
+    )
+    .expect("write plan");
+    std::fs::write(&todo, "pick aaa one\npick bbb two\n").expect("write todo");
+    apply_plan(&plan, &todo).expect("apply");
+    let read = |path: PathBuf| std::fs::read_to_string(path).expect("read");
+    assert_eq!(
+        read(todo),
+        "pick aaa one\nexec first\npick bbb two\nexec second\n"
+    );
+    assert_eq!(read(state.join("platitude-reword-1")), "one\n");
+    assert_eq!(read(state.join("platitude-reword-2")), "two\n\nbody\n");
 }
 
 /// Sized like a history and reordered end to end, because done as a scan

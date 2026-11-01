@@ -101,9 +101,9 @@ pub(crate) async fn landed(
     cancel: &CancellationToken,
 ) -> Result<RebaseOutcome, GitError> {
     let Err(error) = result else {
-        // Unlike the exit-1 branch, a failed probe travels: "Done" makes
-        // the caller sweep the reword message files a standing rebase's
-        // todo still reads.
+        // Unlike the exit-1 branch, a failed probe travels: "Done" over a
+        // rebase an `edit` stop may have left standing would say it ended,
+        // where git waits on the reader.
         return match opstate::detect(executor, workdir, cancel).await {
             Ok(state) if state.rebasing => Ok(RebaseOutcome::Stopped),
             Ok(_) => Ok(RebaseOutcome::Done),

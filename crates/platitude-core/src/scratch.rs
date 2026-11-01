@@ -80,32 +80,6 @@ impl ScratchFile {
         &self.path
     }
 
-    /// Leaves the file behind for a reader that outlives the handle (a
-    /// stopped rebase's remaining `exec` lines read their message files on a
-    /// later `--continue`). [`Self::sweep`] collects what nobody came back
-    /// for.
-    pub fn keep(self) -> PathBuf {
-        let path = self.path.clone();
-        std::mem::forget(self);
-        path
-    }
-
-    /// Removes every leftover file carrying `tag`. Call only when no reader
-    /// of a [`Self::keep`] can be standing.
-    pub fn sweep(git_dir: &Path, tag: &str) {
-        let Ok(entries) = std::fs::read_dir(git_dir.join(DIR_NAME)) else {
-            return;
-        };
-        let prefix = format!("{tag}-");
-        for entry in entries.flatten() {
-            if entry.file_name().to_string_lossy().starts_with(&prefix)
-                && let Err(error) = std::fs::remove_file(entry.path())
-            {
-                tracing::debug!(path = %entry.path().display(), %error, "scratch leftover not removed");
-            }
-        }
-    }
-
     /// Removes the file a failed write left, answering `failed` as it was
     /// where the file went and as [`LeftBehind`] where it stayed.
     fn discard(self, failed: std::io::Error) -> std::io::Error {

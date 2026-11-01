@@ -6,7 +6,8 @@
 //!
 //! Rewording is `pick` plus `exec git commit --amend --file`, not a
 //! `reword` line: `reword` opens `GIT_EDITOR`, pinned to `true`, so the
-//! message would silently stay as it was.
+//! message would silently stay as it was. The file is in the rebase's own
+//! state folder, which git takes away with the rebase (`run`).
 
 mod plan;
 mod run;
