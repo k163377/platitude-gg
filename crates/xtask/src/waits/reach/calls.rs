@@ -398,9 +398,9 @@ impl Program {
         self.local_function(code, &name, arg.start)
     }
 
-    /// Whether every binding of `name` in `code` is a local given a function
-    /// spelled in the code, and never given anything else: what calling it
-    /// does is that function's body, read where it stands.
+    /// Whether the binding of `name` seen at `at` in `code` is a local given a
+    /// function spelled in the code, and never given anything else: what
+    /// calling it does is that function's body, read where it stands.
     pub(super) fn local_function(&mut self, code: usize, name: &str, at: usize) -> bool {
         let (d, u, range) = {
             let c = &self.codes[code];

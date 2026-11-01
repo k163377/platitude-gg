@@ -59,6 +59,7 @@ impl Path {
     }
 }
 
+#[derive(Clone)]
 pub(super) struct Call {
     pub path: Path,
     /// Each argument's tokens.
@@ -80,6 +81,7 @@ pub(super) enum WriteKind {
     Put(Range<usize>),
 }
 
+#[derive(Clone)]
 pub(super) struct Write {
     pub path: Path,
     pub kind: WriteKind,
@@ -167,35 +169,19 @@ impl Facts {
                 .locals
                 .iter()
                 .filter(|l| inside(l.at))
-                .map(|l| Local {
-                    name: l.name.clone(),
-                    at: l.at,
-                    scope: l.scope.clone(),
-                    init: l.init.clone(),
-                    param: l.param,
-                    depth: l.depth,
-                    defaults: l.defaults.clone(),
-                })
+                .cloned()
                 .collect(),
             calls: self
                 .calls
                 .iter()
                 .filter(|c| inside(c.path.at))
-                .map(|c| Call {
-                    path: c.path.clone(),
-                    args: c.args.clone(),
-                    line: c.line,
-                })
+                .cloned()
                 .collect(),
             writes: self
                 .writes
                 .iter()
                 .filter(|w| inside(w.path.at))
-                .map(|w| Write {
-                    path: w.path.clone(),
-                    kind: w.kind.clone(),
-                    line: w.line,
-                })
+                .cloned()
                 .collect(),
             paths: self
                 .paths

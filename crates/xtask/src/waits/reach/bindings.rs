@@ -61,14 +61,20 @@ fn wrapping_or_returning_a_value_does_not_transfer_its_ownership() {
 fn recursive_helpers_do_not_cache_an_unfinished_answer_as_plain() {
     let members = "    property var ticks: []\n    function left() { return pane.chosen ? acts.right() : acts.ticks }\n    function right() { return acts.left() }";
     for form in [
-        "const first = acts.left(); acts.right().push(true)",
-        "const first = acts.right(); acts.left().push(true)",
+        "acts.left().push(true)\nacts.right().push(true)",
+        "acts.right().push(true)\nacts.left().push(true)",
     ] {
         let got = found(
             &driver(""),
             &verbs(members, &indented(form, "            ")),
         );
-        assert!(!got.is_empty(), "an unfinished origin passed: {form}");
+        let lines: std::collections::BTreeSet<usize> =
+            got.iter().map(|(_, line, _)| *line).collect();
+        assert_eq!(
+            lines.len(),
+            2,
+            "whichever helper is read first, both answers are the product's: {form}: {got:?}"
+        );
     }
 }
 

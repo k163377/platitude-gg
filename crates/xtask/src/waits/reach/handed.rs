@@ -55,16 +55,7 @@ impl Program {
                     .iter()
                     .enumerate()
                     .find(|(_, arg)| is_handed(arg))?;
-                let at = arg.start;
-                Some((
-                    Call {
-                        path: call.path.clone(),
-                        args: call.args.clone(),
-                        line: call.line,
-                    },
-                    index,
-                    at,
-                ))
+                Some((call.clone(), index, arg.start))
             })
             .collect();
         let mut handed = Vec::new();

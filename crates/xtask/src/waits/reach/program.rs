@@ -117,6 +117,12 @@ pub(super) struct Program {
     /// reading (`super::origin`).
     pub(super) local_origins: HashMap<(usize, usize), Origin>,
     pub(super) return_origins: HashMap<(usize, usize), Origin>,
+    /// How many times a reading met the placeholder a local or a function's
+    /// return leaves in its cache while its own origin is being read
+    /// (`super::origin`). An origin computed while the count moved was joined
+    /// over an answer not there yet, and is not cached: the next ask reads it
+    /// whole.
+    pub(super) provisional_reads: usize,
     pub(super) prop_origins: HashMap<(usize, usize, String), Origin>,
     /// What each container holds, by the site that made it, as the reading
     /// before found every put — read by this reading (`super::origin`).
@@ -176,6 +182,7 @@ impl Program {
             origin_collected: HashMap::new(),
             local_origins: HashMap::new(),
             return_origins: HashMap::new(),
+            provisional_reads: 0,
             prop_origins: HashMap::new(),
             contents: HashMap::new(),
             contents_collected: HashMap::new(),
@@ -257,6 +264,7 @@ impl Program {
         self.language_props.clear();
         self.local_origins.clear();
         self.return_origins.clear();
+        self.provisional_reads = 0;
         self.prop_origins.clear();
         self.codes.clear();
         self.roots.clear();
@@ -596,7 +604,7 @@ impl Program {
             let is_param =
                 parent.is_none() && unit.bound.iter().any(|(_, bound)| bound.name == name);
             // A parameter every caller hands the same object stands for that object — one named whole, given no
-            // default.
+            // default, hidden by no local and never given another value.
             let param = parent
                 .is_none()
                 .then(|| unit.params.iter().position(|p| p == name))
@@ -809,10 +817,7 @@ impl Program {
     /// to build where the caller made it.
     pub(super) fn hand_over(&mut self, code: usize, callee: usize, handed: &Origin) {
         let (cd, cu) = (self.codes[callee].doc, self.codes[callee].unit);
-        let handed = match handed.clone() {
-            made @ Origin::Fresh { maker, .. } if maker == code => made.handed_to(callee),
-            other => other,
-        };
+        let handed = handed.clone().handed_from(code, callee);
         for i in 0..self.docs[cd].units[cu].params.len() {
             self.bind(cd, cu, i, None);
             let joined = self
@@ -834,10 +839,7 @@ impl Program {
             let value = self.arg_value(code, d, arg.clone());
             self.bind(cd, cu, i, value);
             // A value the caller made, handed down, is the callee's to build as the caller's own.
-            let origin = match self.origin_of(code, arg.clone()) {
-                made @ Origin::Fresh { maker, .. } if maker == code => made.handed_to(callee),
-                other => other,
-            };
+            let origin = self.origin_of(code, arg.clone()).handed_from(code, callee);
             let joined = self
                 .origin_collected
                 .remove(&(cd, cu, i))

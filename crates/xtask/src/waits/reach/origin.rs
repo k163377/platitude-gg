@@ -61,7 +61,7 @@ const HELD: usize = usize::MAX;
 impl Origin {
     /// Transfer only what the giving context owns. A borrowed container
     /// keeps its owner through a wrapper or an identity function.
-    fn handed_from(self, owner: usize, holder: usize) -> Origin {
+    pub(super) fn handed_from(self, owner: usize, holder: usize) -> Origin {
         match self {
             made @ Origin::Fresh { maker, .. } if maker == owner => made.handed_to(holder),
             other => other,
@@ -828,8 +828,10 @@ impl Program {
         }
     }
 
-    /// Where a local of `code` came from: its value and every value given
-    /// it after. What is put inside it is its containers' (`contents`).
+    /// Where the local of `code` seen at `at` — or, where none hides it, a
+    /// parameter of the code's unit — came from: its value (what the callers
+    /// hand a parameter, and its default) and every value given it after.
+    /// What is put inside it is its containers' (`contents`).
     fn local_origin(&mut self, code: usize, name: &str, at: usize) -> Origin {
         let (d, u, range) = {
             let c = &self.codes[code];
@@ -850,10 +852,14 @@ impl Program {
             .unwrap_or(at);
         let key = (code, declaration);
         if let Some(known) = self.local_origins.get(&key) {
+            if *known == Origin::Unset {
+                self.provisional_reads += 1;
+            }
             return known.clone();
         }
         // Asked again while being read (`x = x.concat(…)`): nothing yet.
         self.local_origins.insert(key, Origin::Unset);
+        let before = self.provisional_reads;
         let mut origin = Origin::Unset;
         let mut given = false;
         if let Some((i, bound)) = parameter {
@@ -915,7 +921,11 @@ impl Program {
             }
         }
         let origin = if given { origin } else { Origin::Unknown };
-        self.local_origins.insert(key, origin.clone());
+        if self.provisional_reads == before {
+            self.local_origins.insert(key, origin.clone());
+        } else {
+            self.local_origins.remove(&key);
+        }
         origin
     }
 
@@ -928,9 +938,14 @@ impl Program {
     /// from, as its own code made or holds it.
     fn return_origin(&mut self, d: usize, u: usize) -> Origin {
         if let Some(known) = self.return_origins.get(&(d, u)) {
+            if *known == Origin::Unset {
+                self.provisional_reads += 1;
+            }
             return known.clone();
         }
+        // Asked again while being read (two functions calling each other): nothing yet.
         self.return_origins.insert((d, u), Origin::Unset);
+        let before = self.provisional_reads;
         let code = self.code_of(d, u);
         let range = self.codes[code].range.clone();
         let returns = self.facts_of(d, u).within(&range).returns;
@@ -941,7 +956,11 @@ impl Program {
         if origin == Origin::Unset {
             origin = Origin::Plain;
         }
-        self.return_origins.insert((d, u), origin.clone());
+        if self.provisional_reads == before {
+            self.return_origins.insert((d, u), origin.clone());
+        } else {
+            self.return_origins.remove(&(d, u));
+        }
         origin
     }
 }
