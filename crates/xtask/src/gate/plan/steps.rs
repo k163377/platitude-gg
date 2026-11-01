@@ -173,6 +173,7 @@ pub(super) fn select(
         reach,
         changed,
         read.everything,
+        ask.whole,
     ));
     // Its configuration is clippy's alone, read by every crate's run and
     // by nothing a test or a build reads.
@@ -362,11 +363,17 @@ fn qmltest_reads(g: &Graph, dir: &Path) -> QmlTestReads {
 /// every gate, and run.
 ///
 /// Ahead of clippy: it compiles nothing of the app.
+///
+/// `together` adds the one-process run of every file on each side
+/// (`qmltest --together`) — the whole gate's alone, asked for by name
+/// (`--whole`): a version move that raises a pre-merge gate to the whole
+/// tier does not bring it, so the landing's gate is no longer for it.
 fn qmltest_steps(
     reads: &QmlTestReads,
     reach: &Reach,
     changed: &[String],
     everything: bool,
+    together: bool,
 ) -> Vec<Step> {
     let host: Vec<String> = reads.runner.union(&reads.process).cloned().collect();
     let mut linux = host.clone();
@@ -394,6 +401,22 @@ fn qmltest_steps(
             Side::Linux,
             false,
             xtask(&["linux", "qmltest"]),
+            &linux,
+        ));
+    }
+    if together {
+        steps.push(step(
+            "qmltest-together",
+            Side::Host,
+            false,
+            xtask(&["qmltest", "--together"]),
+            &host,
+        ));
+        steps.push(step(
+            "qmltest-together-linux",
+            Side::Linux,
+            false,
+            xtask(&["linux", "qmltest", "--together"]),
             &linux,
         ));
     }
@@ -1053,7 +1076,7 @@ mod tests {
     #[test]
     fn the_qt_runner_runs_beside_both_chains() {
         let reads = super::QmlTestReads::default();
-        let qml = super::qmltest_steps(&reads, &Reach::default(), &[], true);
+        let qml = super::qmltest_steps(&reads, &Reach::default(), &[], true, false);
         let ids: Vec<&str> = qml.iter().map(|s| s.id.as_str()).collect();
         assert_eq!(ids, ["qmltest", "qmltest-linux"]);
         assert!(qml.iter().all(|s| s.beside && !s.release), "{ids:?}");
@@ -1062,6 +1085,40 @@ mod tests {
                 .iter()
                 .all(|s| !s.beside && !s.release)
         );
+    }
+
+    /// The one-process run of every file is owed by the whole gate alone,
+    /// on both sides and beside both chains like the runs apart; a plan of
+    /// everything that was not asked for by name — a version move raising a
+    /// pre-merge gate to the whole tier — leaves it out.
+    #[test]
+    fn the_one_process_run_is_the_whole_gates_alone() {
+        let reads = super::QmlTestReads::default();
+        let whole = super::qmltest_steps(&reads, &Reach::default(), &[], true, true);
+        let ids: Vec<&str> = whole.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            [
+                "qmltest",
+                "qmltest-linux",
+                "qmltest-together",
+                "qmltest-together-linux"
+            ]
+        );
+        assert!(whole.iter().all(|s| s.beside && !s.release), "{ids:?}");
+        let together: Vec<&super::Step> =
+            whole.iter().filter(|s| s.id.contains("together")).collect();
+        assert_eq!(together[0].side, super::Side::Host);
+        assert_eq!(together[1].side, super::Side::Linux);
+        assert!(
+            together
+                .iter()
+                .all(|s| s.command.ends_with(&["--together".to_string()]))
+        );
+        assert_eq!(together[0].inputs, whole[0].inputs);
+        assert_eq!(together[1].inputs, whole[1].inputs);
+        let raised = super::qmltest_steps(&reads, &Reach::default(), &[], true, false);
+        assert!(raised.iter().all(|s| !s.id.contains("together")));
     }
 
     /// The boundaries as this tree draws them: the runner as built holds

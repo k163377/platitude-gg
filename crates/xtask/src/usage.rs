@@ -215,7 +215,7 @@ commands:
                       also said, so the drift reaches the person who has
                       to decide which side was wrong
 
-  qmltest [<tst_name>...]
+  qmltest [<tst_name>...] | qmltest --together
       The QtTest files under crates/platitude-app/tests/qml, run through
       Qt's own qmltestrunner (offscreen). They hold what only QML can be
       asked — whether a Canvas that owes the screenshot a paint has
@@ -225,23 +225,23 @@ commands:
       product's directory is called `ui`; the Rust-backed `platitude`
       module is staged all but empty, with the stand-ins under
       tests/qml/stubs (`GitFacts`, `Harness`, `PerfProbe`) as its
-      singletons. Nothing of the app
-      is compiled, so a file answers in a fraction of a second.
-      Named files (by stem, `tst_ink`) run apart, one process each — the
-      road for a file being written; the gate names none, and then every
-      file runs in one process. Every TestCase every file declares has to
+      singletons. Nothing of the app is compiled.
+      Every file runs in a process of its own — the files named (by
+      stem, `tst_ink`) or, with none named, all of them — and a red file
+      does not stop the rest. Every TestCase every file declares has to
       be in the log finished — a file may declare several, an
       initTestCase without its cleanup is a run that went down inside
-      that case, and nothing here is optional, so a case simply absent is
-      a run that fell short rather than one that was allowed to. A run
-      that is not green is then run one file per process, which is what
-      says which file; the verdict stays the first run's either way. When
-      every file passes apart and they fail together, it names the last
-      file that finished green and the first that failed, and leaves the
-      cause undetermined; a run that is not green keeps its staging and a
-      manifest under target/qmltest/failed (the newest five). `gate` runs
-      it, on both sides, when a changed file lies under what a run reads;
-      `cargo xtask linux qmltest` is the container.
+      that case, and a case simply absent is a run that fell short rather
+      than one that was allowed to. `--together` runs every file in one
+      process instead: a red there that the files' own processes do not
+      show says the files are not independent of each other, and the
+      verdict names the last file that finished green and the first that
+      failed, the cause undetermined. A run that is not green keeps its
+      staging and a manifest under target/qmltest/failed, in the group of
+      its kind (suite, selected, together; the newest five of each).
+      `gate` runs the files apart, on both sides, when a changed file lies
+      under what a run reads, and the one-process run in the whole gate
+      alone; `cargo xtask linux qmltest` is the container.
 
   deny
       cargo-deny over deny.toml: the bans that keep networking crates and

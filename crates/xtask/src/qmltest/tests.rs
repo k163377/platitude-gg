@@ -2,8 +2,8 @@
 
 use super::{
     Came, FAILED, KEPT, LITTER_AGE, MANIFEST, Manifest, Ran, Setup, TESTS, beyond_the_newest,
-    case_names, environment, failed_root, keep, litter, manifest, outcomes, reported_paths,
-    run_each, short_of, sweep, tests_in, unfinished_in,
+    case_names, environment, failed_root, first_break, keep, litter, manifest, outcomes,
+    reported_paths, run_each, short_of, sweep, tests_in, together_verdict, unfinished_in,
 };
 use crate::yard::Yard;
 use std::ffi::OsString;
@@ -37,7 +37,7 @@ fn a_red_run_is_kept_with_its_manifest_and_only_the_newest_stand() {
         ended: "exit code: 1".to_string(),
     }];
     let tests = [format!("{TESTS}/tst_x.qml")];
-    let dir = keep(&setup, &tests, true, &runs, "1793102832-4242").expect("kept");
+    let dir = keep(&setup, &tests, "suite", &runs, "1793102832-4242").expect("kept");
     let group = root.join(failed_root()).join(FAILED).join("suite");
     assert_eq!(dir, group.join("1793102832-4242"));
     assert!(!staged.exists(), "moved, not copied");
@@ -76,6 +76,65 @@ fn a_red_run_is_kept_with_its_manifest_and_only_the_newest_stand() {
     assert_eq!(left.len(), KEPT, "{left:?}");
     assert_eq!(left[0], "1793102801-1", "the oldest went: {left:?}");
     assert!(left.contains(&"1793102832-4242".to_string()), "{left:?}");
+}
+
+/// The one-process run's red names where that run broke and keeps its
+/// own words, and says what it does not establish.
+#[test]
+fn a_red_one_process_run_names_where_it_broke() {
+    let said = "FAIL!  : qmltestrunner::Ink::test_a_mark_is_owed_once()";
+    let files = vec![
+        ("tests/qml/tst_hashplate.qml".to_string(), Came::Green),
+        (
+            "tests/qml/tst_ink.qml".to_string(),
+            Came::Red(said.to_string()),
+        ),
+        ("tests/qml/tst_tagcard.qml".to_string(), Came::Green),
+    ];
+    let why = together_verdict(said, &files);
+    assert!(why.contains("did not pass together"), "{why}");
+    assert!(
+        why.contains(&format!(
+            "tests/qml/tst_hashplate.qml finished green, then tests/qml/tst_ink.qml was the \
+             first to fail: {said}"
+        )),
+        "the first broken boundary is named: {why}"
+    );
+    assert!(why.contains("not why"), "{why}");
+    assert!(why.ends_with(&format!("The run said: {said}")), "{why}");
+    let short = vec![
+        ("a".to_string(), Came::Green),
+        ("b".to_string(), Came::Unmentioned),
+    ];
+    assert!(
+        together_verdict("killed", &short)
+            .contains("a finished green, and the log names nothing from b on")
+    );
+}
+
+/// The boundary is where the log stops being green, whatever comes
+/// after; a first file that broke has no green before it.
+#[test]
+fn the_first_break_is_the_first_file_not_green_and_the_one_before_it() {
+    let red = Came::Red("FAIL!  : x".to_string());
+    let files = vec![
+        ("a".to_string(), Came::Green),
+        ("b".to_string(), Came::Green),
+        ("c".to_string(), red.clone()),
+        ("d".to_string(), Came::Green),
+    ];
+    assert_eq!(first_break(&files), Some((Some("b"), "c", &red)));
+    let first = vec![("a".to_string(), red.clone())];
+    assert_eq!(first_break(&first), Some((None, "a", &red)));
+    let short = vec![
+        ("a".to_string(), Came::Green),
+        ("b".to_string(), Came::Unmentioned),
+    ];
+    assert_eq!(
+        first_break(&short),
+        Some((Some("a"), "b", &Came::Unmentioned))
+    );
+    assert_eq!(first_break(&files[..2]), None);
 }
 
 #[test]

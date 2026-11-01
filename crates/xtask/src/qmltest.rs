@@ -10,6 +10,13 @@
 //! The runner's `-o` log is the only output that survives: its redirected
 //! output on Windows comes back empty.
 //!
+//! Two roads: each file in a `qmltestrunner` of its own (the daily and the
+//! pre-merge gates — a process shares Qt's type registration and plugin
+//! bookkeeping with nothing), or every file in one process (`--together`,
+//! the whole gate's alone). A red of the second that the first does not
+//! show says the files are not independent of each other, and names where
+//! the one-process run first broke ([`together_verdict`]).
+//!
 //! A run that is not green keeps its staging directory — the import tree
 //! as staged, every runner's log, and a manifest of what the runners were
 //! handed ([`MANIFEST`]) — under [`FAILED`], where only this module's sweep
@@ -30,13 +37,22 @@ mod tests;
 pub(crate) static QMLTEST: command::Command = command::Command {
     id: "qmltest.run",
     call: "qmltest",
-    purpose: "the QtTest files, run by Qt's own runner",
+    purpose: "the QtTest files, run by Qt's own runner, one process each",
     run_in: Where::Seat,
     needs: &[],
     permission: Permission::Plain,
 };
 
-pub(crate) static COMMANDS: &[&command::Command] = &[&QMLTEST];
+pub(crate) static TOGETHER: command::Command = command::Command {
+    id: "qmltest.together",
+    call: "qmltest --together",
+    purpose: "every QtTest file in one qmltestrunner: the whole gate's run, where files not independent show",
+    run_in: Where::Seat,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&QMLTEST, &TOGETHER];
 
 const TESTS: &str = "crates/platitude-app/tests/qml";
 const UI: &str = "crates/platitude-app/src/ui";
@@ -77,13 +93,19 @@ const WHOLE: Duration = Duration::from_secs(15 * 60);
 /// Where a run that was not green leaves its staging directory, one per
 /// run, named `<second it started>-<pid>` so that the names sort by age.
 const FAILED: &str = "failed";
-/// The newest failed runs retained separately for whole-suite and selected-file invocations.
+/// The groups a red run is kept under in [`FAILED`], each holding its own
+/// newest [`KEPT`]: the whole suite in processes of their own, a selection
+/// of files, and the one-process run (`--together`).
+const GROUPS: [&str; 3] = ["suite", "selected", "together"];
+/// How many red runs of a group stand: the newest.
 const KEPT: usize = 5;
 /// A staging directory with no run behind it — what a run killed before
 /// its end leaves — is taken once it is this old: no run stands this long.
 const LITTER_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 /// What a kept directory says about its run ([`manifest`]).
 const MANIFEST: &str = "manifest.txt";
+/// The one-process run's log (`--together`), inside the staging directory.
+const TOGETHER_LOG: &str = "all.txt";
 
 /// The variables a Qt run reads that a manifest lists when inherited:
 /// name prefixes, compared in upper case. Every variable set on the
@@ -122,17 +144,29 @@ struct Ran {
 }
 
 pub fn run(args: &[String]) -> Result<(), String> {
-    if let Some(unknown) = args.iter().find(|arg| arg.starts_with('-')) {
+    let together = args.iter().any(|arg| arg == "--together");
+    if let Some(unknown) = args
+        .iter()
+        .find(|arg| arg.starts_with('-') && *arg != "--together")
+    {
         return Err(format!(
-            "unknown option {unknown:?} (qmltest takes file names alone)"
+            "unknown option {unknown:?} (qmltest takes file names, or --together alone)"
         ));
+    }
+    let files: Vec<String> = args
+        .iter()
+        .filter(|arg| *arg != "--together")
+        .cloned()
+        .collect();
+    if together && !files.is_empty() {
+        return Err("--together runs every file in one process and takes no file names".into());
     }
     let root = crate::tree::workspace_root();
     let every = tests_in(&root)?;
     if every.is_empty() {
         return Err(format!("no tst_*.qml under {TESTS}"));
     }
-    let tests = chosen(&every, args)?;
+    let tests = chosen(&every, &files)?;
     let started = SystemTime::now();
     let work = work_rel();
     let import = stage(&root, &root.join(&work))?;
@@ -147,8 +181,20 @@ pub fn run(args: &[String]) -> Result<(), String> {
         exe: &exe,
     };
     let mut runs = Vec::new();
-    // Each file owns a process: engines do not own Qt's type registration or plugin globals.
-    let verdict = run_each(&tests, |test| run_one(&setup, test, &mut runs));
+    let verdict = if together {
+        all_together(&setup, &tests, &mut runs)
+    } else {
+        // Each file owns a process: engines do not own Qt's type registration or plugin globals.
+        run_each(&tests, |test| run_one(&setup, test, &mut runs))
+    };
+    // Which of [`FAILED`]'s groups a red run is kept in: the whole suite, a selection, or the one-process run.
+    let group = if together {
+        "together"
+    } else if files.is_empty() {
+        "suite"
+    } else {
+        "selected"
+    };
     let verdict = match verdict {
         Ok(()) => {
             let _ = std::fs::remove_dir_all(root.join(&work));
@@ -157,7 +203,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Err(why) => Err(with_evidence(
             &setup,
             &tests,
-            args.is_empty(),
+            group,
             &runs,
             &run_name(started),
             why,
@@ -165,6 +211,62 @@ pub fn run(args: &[String]) -> Result<(), String> {
     };
     sweep(&root);
     verdict
+}
+
+/// Every file in one `qmltestrunner` (`--together`): a red here that the
+/// files' own processes do not show says the files are not independent of
+/// each other — state one leaves in the process for the next, or Qt's
+/// process-wide type registration and plugin bookkeeping. The red names
+/// where the run first broke; its cause is the record's to pursue
+/// (internal-docs/P3-確認事項.md §開発環境(QtTest の run)).
+fn all_together(setup: &Setup, tests: &[String], runs: &mut Vec<Ran>) -> Result<(), String> {
+    let said = match runner(setup, TESTS, TOGETHER_LOG, runs) {
+        // A run that stopped part-way leaves the rest unmentioned, which a
+        // count of failures reads as a pass ([`unfinished_in`]).
+        Ok(text) => match short_of(setup.root, tests, &text) {
+            Ok(()) => {
+                println!("qmltest: PASS ({} file(s), one process)", tests.len());
+                return Ok(());
+            }
+            Err(why) => why,
+        },
+        Err(why) => why,
+    };
+    // The log on disk, not `said`: a killed run's words are the kill.
+    let log =
+        std::fs::read_to_string(setup.root.join(setup.work).join(TOGETHER_LOG)).unwrap_or_default();
+    Err(together_verdict(&said, &outcomes(setup.root, tests, &log)))
+}
+
+/// The red of a one-process run: where it first broke ([`first_break`]),
+/// and the run's own words. What it establishes is the place, not the
+/// cause; the files' own processes answer for each file alone.
+fn together_verdict(said: &str, files: &[(String, Came)]) -> String {
+    let place = match first_break(files) {
+        Some((Some(before), first, Came::Red(why))) => {
+            format!("{before} finished green, then {first} was the first to fail: {why}")
+        }
+        Some((None, first, Came::Red(why))) => {
+            format!("{first}, the first file, failed: {why}")
+        }
+        Some((Some(before), first, _)) => {
+            format!("{before} finished green, and the log names nothing from {first} on")
+        }
+        Some((None, _, _)) | None => "the log names no file at all".to_string(),
+    };
+    format!(
+        "qmltest: the files did not pass together in one process — {place}. Each file in a process \
+         of its own is the daily gate's answer; this run says where the one-process run broke, not \
+         why. The run said: {said}"
+    )
+}
+
+/// The first file that did not come out green, the file just before it
+/// (green, then, if there is one), and what the log says of it.
+fn first_break(files: &[(String, Came)]) -> Option<(Option<&str>, &str, &Came)> {
+    let at = files.iter().position(|(_, came)| *came != Came::Green)?;
+    let before = at.checked_sub(1).map(|b| files[b].0.as_str());
+    Some((before, files[at].0.as_str(), &files[at].1))
 }
 
 /// The cases the log does not answer for, as the words a red run comes
@@ -607,12 +709,12 @@ fn runner(setup: &Setup, input: &str, log: &str, runs: &mut Vec<Ran>) -> Result<
 fn with_evidence(
     setup: &Setup,
     tests: &[String],
-    whole_suite: bool,
+    group: &str,
     runs: &[Ran],
     name: &str,
     why: String,
 ) -> String {
-    match keep(setup, tests, whole_suite, runs, name) {
+    match keep(setup, tests, group, runs, name) {
         Ok(dir) => {
             let shown = dir
                 .strip_prefix(setup.root)
@@ -631,13 +733,13 @@ fn with_evidence(
 }
 
 /// Writes the manifest into the staging directory and moves the directory
-/// under [`FAILED`], answering where it stands. A directory that will not
-/// move (a file in it still held open) stands where it ran, with the
-/// manifest in it, until [`LITTER_AGE`] takes it.
+/// under [`FAILED`]'s `group` ([`GROUPS`]), answering where it stands. A
+/// directory that will not move (a file in it still held open) stands
+/// where it ran, with the manifest in it, until [`LITTER_AGE`] takes it.
 fn keep(
     setup: &Setup,
     tests: &[String],
-    whole_suite: bool,
+    group: &str,
     runs: &[Ran],
     name: &str,
 ) -> Result<PathBuf, String> {
@@ -645,11 +747,7 @@ fn keep(
     let said = manifest(&gather(setup, tests, runs, name));
     std::fs::write(work.join(MANIFEST), said)
         .map_err(|e| format!("{}: {e}", work.join(MANIFEST).display()))?;
-    let failed = setup
-        .root
-        .join(failed_root())
-        .join(FAILED)
-        .join(if whole_suite { "suite" } else { "selected" });
+    let failed = setup.root.join(failed_root()).join(FAILED).join(group);
     std::fs::create_dir_all(&failed).map_err(|e| format!("{}: {e}", failed.display()))?;
     let dir = failed.join(name);
     if std::fs::rename(&work, &dir).is_ok() {
@@ -708,15 +806,19 @@ fn gather(setup: &Setup, tests: &[String], runs: &[Ran], run: &str) -> Manifest 
         .iter()
         .map(|ran| std::fs::read_to_string(work.join(&ran.log)).unwrap_or_default())
         .collect();
-    let files = tests
-        .iter()
-        .flat_map(
-            |test| match runs.iter().position(|ran| ran.input == *test) {
-                Some(at) => outcomes(setup.root, std::slice::from_ref(test), &logs[at]),
-                None => vec![(test.clone(), Came::NotRun)],
-            },
-        )
-        .collect();
+    let files = match runs.iter().position(|ran| ran.input == TESTS) {
+        // One process over the directory: its one log speaks for every file.
+        Some(at) => outcomes(setup.root, tests, &logs[at]),
+        None => tests
+            .iter()
+            .flat_map(
+                |test| match runs.iter().position(|ran| ran.input == *test) {
+                    Some(at) => outcomes(setup.root, std::slice::from_ref(test), &logs[at]),
+                    None => vec![(test.clone(), Came::NotRun)],
+                },
+            )
+            .collect(),
+    };
     let mut probe = Command::new(setup.exe);
     given(&mut probe, setup);
     let set = probe
@@ -876,7 +978,7 @@ fn reported_paths(text: &str) -> Option<(Vec<String>, Vec<String>)> {
 /// own newest: `together` (what a run of every file in one runner left;
 /// no run writes it now) is never counted with `suite`.
 fn sweep(root: &Path) {
-    for group in ["suite", "selected"] {
+    for group in GROUPS {
         let failed = root.join(failed_root()).join(FAILED).join(group);
         if let Ok(entries) = std::fs::read_dir(&failed) {
             let names = entries

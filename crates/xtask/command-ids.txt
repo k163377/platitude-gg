@@ -44,6 +44,7 @@ linux.witness
 package.snapshot
 perf.measure
 qmltest.run
+qmltest.together
 relied-messages.audit
 relied-messages.check
 relied-messages.master
