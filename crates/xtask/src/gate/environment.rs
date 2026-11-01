@@ -1,5 +1,8 @@
-//! Inputs supplied by the host rather than the Git tree. A step's source key cannot stand for a different Qt,
-//! font installation or inherited runtime setting. Read once per plan; never print environment values.
+//! Inputs supplied by the host rather than the Git tree: a step's source key cannot stand for a different Qt,
+//! font installation, git or inherited runtime setting. Read once per plan; never print environment values.
+//! The shell's own variables (`PATH`, `HOME`) are no input: cargo puts this tree's `target/debug` on the PATH
+//! of every `cargo xtask`, and two shells spell theirs apart, so a green keyed on them would stop carrying
+//! between seats and shells.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -8,11 +11,13 @@ use super::plan::{Side, Step};
 
 pub(super) struct Environment {
     inherited: String,
+    /// The git every run's subprocesses answer with: the host's, found on PATH.
+    git: Option<String>,
     qt: Option<Result<String, String>>,
 }
 
 impl Environment {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             inherited: inherited(std::env::vars_os().map(|(name, value)| {
                 (
@@ -20,21 +25,33 @@ impl Environment {
                     value.to_string_lossy().into_owned(),
                 )
             })),
+            git: None,
             qt: None,
         }
     }
 
-    pub fn identity(&mut self, step: &Step) -> Result<String, String> {
-        // The launcher supplies the container's environment; it does not inherit the host's Qt or fonts.
+    pub(super) fn identity(&mut self, step: &Step) -> Result<String, String> {
+        // The launcher supplies the container's environment; it does not inherit the host's Qt, git or fonts.
         if step.side == Side::Linux {
             return Ok("container".into());
         }
+        // Spelled apart: whole, the paths would be edges of the graph (反映前テストの機械化.md §依存木).
+        let app = format!("crates/{}", "platitude-app");
+        let qt_source = format!("{}/{}", "crates/xtask/src", "qt.rs");
         let qt = step.release
-            || step.inputs.iter().any(|path| {
-                path.starts_with("crates/platitude-app") || path == "crates/xtask/src/qt.rs"
-            });
+            || step
+                .inputs
+                .iter()
+                .any(|path| path.starts_with(&app) || *path == qt_source);
+        let git = self
+            .git
+            .get_or_insert_with(|| {
+                crate::subprocess::git_query(".", &["--version"])
+                    .unwrap_or_else(|| "git absent".into())
+            })
+            .clone();
         let mut identity = format!(
-            "{}:{}:{}",
+            "{}:{}:{git}:{}",
             std::env::consts::OS,
             std::env::consts::ARCH,
             self.inherited
@@ -70,8 +87,7 @@ fn inherited(values: impl Iterator<Item = (String, String)>) -> String {
             .any(|prefix| name.starts_with(prefix))
                 || matches!(
                     name.as_str(),
-                    "PATH"
-                        | "QMAKE"
+                    "QMAKE"
                         | "LANG"
                         | "LD_LIBRARY_PATH"
                         | "RUSTFLAGS"
@@ -80,8 +96,6 @@ fn inherited(values: impl Iterator<Item = (String, String)>) -> String {
                         | "RUSTUP_TOOLCHAIN"
                         | "XDG_CONFIG_HOME"
                         | "XDG_DATA_HOME"
-                        | "HOME"
-                        | "USERPROFILE"
                 )
         })
         .collect();
@@ -215,8 +229,8 @@ mod tests {
     use super::{files, inherited};
 
     #[test]
-    fn runtime_overrides_change_identity_but_activity_marks_do_not() {
-        let base = vec![("PATH".into(), "qt/bin".into())];
+    fn runtime_overrides_change_identity_but_the_shells_own_and_activity_marks_do_not() {
+        let base = vec![("QT_QPA_PLATFORM".into(), "offscreen".into())];
         let original = inherited(base.clone().into_iter());
         for variable in [
             "QT_BIN",
@@ -229,9 +243,11 @@ mod tests {
             changed.push((variable.into(), "another".into()));
             assert_ne!(original, inherited(changed.into_iter()), "{variable}");
         }
-        let mut activity = base;
-        activity.push(("CODEX_THREAD_ID".into(), "another-seat".into()));
-        assert_eq!(original, inherited(activity.into_iter()));
+        for variable in ["PATH", "HOME", "USERPROFILE", "CODEX_THREAD_ID"] {
+            let mut same = base.clone();
+            same.push((variable.into(), "another-seat".into()));
+            assert_eq!(original, inherited(same.into_iter()), "{variable}");
+        }
     }
 
     #[test]
