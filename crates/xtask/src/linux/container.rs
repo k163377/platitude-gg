@@ -708,6 +708,31 @@ mod tests {
             .is_ok_and(|stat| !stat.contains(") Z "))
     }
 
+    /// Until `/proc/<pid>/environ` carries `mark`: a child's exec sets its
+    /// environment up after it has closed the pipe that lets `spawn`
+    /// return, so a walk of `/proc` begun at once can find the sleeper
+    /// unmarked and the stop take nothing.
+    #[cfg(target_os = "linux")]
+    fn marked_in_proc(pid: u32, mark: &str) {
+        let want = format!("{}={mark}", super::STEP_MARK);
+        // waits(ceiling): ten seconds for an exec to show its environment — a sleeper that never does is the
+        // failure named below, not a run that hangs
+        let began = std::time::Instant::now();
+        loop {
+            let environ = std::fs::read(format!("/proc/{pid}/environ")).unwrap_or_default();
+            if environ.split(|b| *b == 0).any(|var| var == want.as_bytes()) {
+                return;
+            }
+            assert!(
+                began.elapsed() < std::time::Duration::from_secs(10),
+                "the sleeper never showed its mark"
+            );
+            // waits(paced): a look at the child's environment every 10 ms — no event says an exec is through,
+            // and the loop ends when the mark is there
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
     /// Its last line counts what went and what was left. Linux only, where
     /// `/proc` is what the walk reads; the container runs this crate's
     /// tests every gate.
@@ -717,6 +742,7 @@ mod tests {
         let (_root, state, mark) = a_marked_root("stop");
         let mut marked = a_sleeper_marked(&mark);
         let mut unmarked = a_sleeper_marked(&format!("{mark}-other"));
+        marked_in_proc(marked.id(), &mark);
         let stop = std::process::Command::new("sh")
             .args(["-c", &super::stop_script(), "pgg-stop", &mark])
             .arg(&state)
