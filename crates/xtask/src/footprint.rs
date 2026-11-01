@@ -529,19 +529,6 @@ mod tests {
             .expect("a child to watch")
     }
 
-    /// Read for absence: a reused pid could only make this answer yes.
-    fn still_running(pid: u32) -> bool {
-        if cfg!(windows) {
-            let out = Command::new("tasklist")
-                .args(["/FI", &format!("PID eq {pid}"), "/NH"])
-                .output()
-                .expect("tasklist");
-            String::from_utf8_lossy(&out.stdout).contains(&pid.to_string())
-        } else {
-            Path::new(&format!("/proc/{pid}")).exists()
-        }
-    }
-
     #[test]
     fn a_sampler_that_started_is_reaped_when_the_next_one_fails() {
         let started = a_child_that_waits();
@@ -554,8 +541,9 @@ mod tests {
         ]);
 
         assert!(outcome.is_err(), "the failure was swallowed");
+        // Read for absence: a reused pid could only make this answer yes.
         assert!(
-            !still_running(pid),
+            !crate::subprocess::process_exists(pid),
             "the first sampler ({pid}) outlived the watch that never got built"
         );
     }
