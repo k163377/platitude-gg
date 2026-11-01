@@ -513,8 +513,8 @@
 
 | 撮りたい状態 | 動詞 | 因果的な証拠 |
 |---|---|---|
-| force push 通信中(枠あり) | `force-push-hold --preset diverged` | `busyOp == "push"` を latch。`push_hold mode=diverged busy=true` |
-| fetch 通信中(枠なし) | `fetch-busy` | `busyOp == "fetch"` を latch。`fetch_busy busy=true fails=0 turned=false` |
+| force push 通信中(枠あり) | `force-push-hold --preset diverged` | `busyOp == "push"` の edge か、同じ notify が運んだ答えの列の `push`(1 回の drain で始まって終わった時)を latch。`push_hold mode=diverged busy=true` |
+| fetch 通信中(枠なし) | `fetch-busy` | `busyOp == "fetch"` の edge か、同じ notify が運んだ答えの列の `fetch`(1 回の drain で始まって終わった時)を latch。`fetch_busy busy=true fails=0 turned=false` |
 | merge tool 候補 loading | `settings-tools-loading` | `mergeToolsLoading == true` を latch。`settled=false loading=true open=true` |
 
 fetch の黄 / 赤、通常 push、起動直後の loading を撮る必要があるなら、同じ型の専用 latch
