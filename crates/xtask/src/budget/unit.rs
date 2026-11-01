@@ -211,7 +211,7 @@ pub(crate) fn standalone(
     if !room.waited.is_zero() {
         println!(
             "waited {} for room on the machine ({what}) — `cargo xtask budget` says who has it",
-            crate::seats::age::format_age(Some(room.waited))
+            crate::seats::format_age(Some(room.waited))
         );
     }
     Ok(room)

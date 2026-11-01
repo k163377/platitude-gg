@@ -1,5 +1,5 @@
-//! The execution context shared by the container launcher and commands it runs.
-//! A child reading this protocol does not depend on how the host starts or builds a container.
+//! The mark a container's processes carry. Nothing else of `linux` belongs here: a reader of the mark
+//! (`qmltest`, `sweep`, a verify run) is keyed on this file alone, not on how a container is started or built.
 
 /// Set for everything the container runs, and by nothing else: the mark a
 /// run reads to know it is not on the machine whose checkout it is writing.

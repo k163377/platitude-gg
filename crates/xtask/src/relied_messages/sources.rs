@@ -612,7 +612,7 @@ fn remote_tags(url: &str, line: Line) -> Result<Vec<String>, String> {
 /// The primary checkout's `target/relied-messages`: one cache every seat shares,
 /// as `crate::temp` keeps one tree of throwaways.
 fn cache_dir() -> PathBuf {
-    if std::env::var_os(crate::linux::IN_CONTAINER).is_some() {
+    if std::env::var_os(crate::linux::environment::IN_CONTAINER).is_some() {
         return crate::temp::root().join("relied-messages");
     }
     let workspace = crate::tree::workspace_root();

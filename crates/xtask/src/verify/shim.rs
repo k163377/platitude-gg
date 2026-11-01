@@ -5,10 +5,6 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-pub(super) use super::git_shim::{
-    OTHER_GIT, SHIM_NO_LFS, SHIM_REAL, SHIM_SLOW, SHIM_VERSION, Slow,
-};
-
 /// The git the shim hands everything else to, found the way the app finds
 /// it — the first one on the PATH the run was going to use.
 pub(super) fn real_git(path: &std::ffi::OsStr) -> Result<PathBuf, String> {

@@ -37,7 +37,7 @@ pub(crate) fn root() -> &'static Path {
 pub(crate) fn place() -> &'static Path {
     static PLACE: OnceLock<PathBuf> = OnceLock::new();
     PLACE.get_or_init(|| {
-        if std::env::var_os(crate::linux::IN_CONTAINER).is_some() {
+        if std::env::var_os(crate::linux::environment::IN_CONTAINER).is_some() {
             std::env::temp_dir()
         } else {
             in_the_primary()
@@ -79,7 +79,7 @@ mod tests {
     /// templates by seat.
     #[test]
     fn the_folder_is_the_primary_checkouts_target_tmp() {
-        if std::env::var_os(crate::linux::IN_CONTAINER).is_some() {
+        if std::env::var_os(crate::linux::environment::IN_CONTAINER).is_some() {
             return;
         }
         let place = super::place();

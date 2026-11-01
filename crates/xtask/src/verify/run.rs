@@ -186,7 +186,7 @@ fn announce(opts: &super::options::Options, arg: &str, repos: &[std::path::PathB
 /// container a checkout's `.git` names a Windows path git calls fatal.
 fn gitconfig_for(verb: &str, shot_dir: &std::path::Path) -> Result<std::path::PathBuf, String> {
     let config = gitconfig_home(
-        std::env::var_os(crate::linux::IN_CONTAINER).is_some(),
+        std::env::var_os(crate::linux::environment::IN_CONTAINER).is_some(),
         shot_dir,
     )?
     .join("gitconfig");

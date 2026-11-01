@@ -1,4 +1,4 @@
-//! Seat assignment, release, and takeover.
+//! Handing letters out (`cargo xtask seat`): assigning, releasing and taking over a seat.
 
 use super::worktrees::{WORKTREES, commits_in, dirty_lines, has_a_directory, seat_entries_of};
 use super::{

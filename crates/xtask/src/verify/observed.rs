@@ -103,7 +103,7 @@ impl Standing {
         let dirty = crate::subprocess::git_query(&here, &["status", "--porcelain"])
             .is_some_and(|status| !status.trim().is_empty());
         Standing {
-            side: if std::env::var_os(crate::linux::IN_CONTAINER).is_some() {
+            side: if std::env::var_os(crate::linux::environment::IN_CONTAINER).is_some() {
                 "container"
             } else {
                 "host"

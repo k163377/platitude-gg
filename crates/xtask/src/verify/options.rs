@@ -343,7 +343,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
                 let asked = it
                     .next()
                     .ok_or("--slow-git needs <subcommand>:<ms>[:quiet] (status:1500:quiet)")?;
-                super::shim::Slow::parse(asked)?;
+                super::git_shim::Slow::parse(asked)?;
                 opts.slow_git = asked.clone();
             }
             "--other-git" => {

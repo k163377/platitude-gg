@@ -1,4 +1,4 @@
-//! Publishing authority reads the claim without changing the seat.
+//! Whether a run's pictures may go on the board from a seat: the claim is read, never taken.
 
 use super::claim::{Held, Identity, Standing, lock_reason, standing, whose};
 use super::commands;

@@ -329,7 +329,7 @@ fn common_dir(tree: &Path) -> Option<PathBuf> {
     if std::env::var_os(UNDER).is_some() {
         return None;
     }
-    common_git_dir(&crate::seats::worktrees::slashed(tree)).map(PathBuf::from)
+    common_git_dir(&crate::seats::slashed(tree)).map(PathBuf::from)
 }
 
 fn hold_in(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Hold, String> {
@@ -700,7 +700,7 @@ impl Note {
             "{} (pid {}, for {})",
             self.what,
             self.pid,
-            crate::seats::age::format_age(Some(age))
+            crate::seats::format_age(Some(age))
         )
     }
 }

@@ -12,11 +12,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+use super::git_shim::{OTHER_GIT, SHIM_NO_LFS, SHIM_REAL, SHIM_SLOW, SHIM_VERSION};
 use super::options::Options;
-use super::shim::{
-    OTHER_GIT, SHIM_NO_LFS, SHIM_REAL, SHIM_SLOW, SHIM_VERSION, identity_answer, identity_seed,
-    real_git,
-};
+use super::shim::{identity_answer, identity_seed, real_git};
 use crate::wait::{Budget, LOOK_AGAIN, Wait};
 
 /// Grace after the app-side watchdog before the parent reaps a wedged GUI.

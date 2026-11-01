@@ -136,7 +136,7 @@ pub(super) fn start_container(root: &Path, name: &str, gate: u32, tag: &str) -> 
         .arg("--workdir")
         .arg(super::WORK)
         .arg("--env")
-        .arg(format!("{}=1", super::IN_CONTAINER));
+        .arg(format!("{}=1", super::environment::IN_CONTAINER));
     super::given_commit(&mut cmd, root);
     super::qmltest_mount(&mut cmd, root)?;
     cmd.arg(tag)
@@ -351,7 +351,7 @@ pub(super) fn exec_line(container: &str, inside: &[String], mark: &str) -> Resul
     }
     super::marked(&mut cmd);
     cmd.arg("--env")
-        .arg(format!("{}=1", super::IN_CONTAINER))
+        .arg(format!("{}=1", super::environment::IN_CONTAINER))
         .arg("--env")
         .arg(format!("{STEP_MARK}={mark}"))
         .arg("--workdir")
@@ -574,7 +574,7 @@ mod tests {
         for env in [
             format!("{}=1", crate::still::UNDER),
             format!("{}=1", crate::budget::HELD),
-            format!("{}=1", super::super::IN_CONTAINER),
+            format!("{}=1", super::super::environment::IN_CONTAINER),
             format!("{}=1758-40-linux-12", super::STEP_MARK),
         ] {
             assert!(

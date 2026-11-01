@@ -1,4 +1,5 @@
-//! Worktree listings and roster paths, independent of moving seat claims.
+//! Worktree listings, roster paths and what one tree measures (on disk, dirty, commits ahead).
+//! Nothing here moves a claim.
 
 /// The reusable worktree seats: a topical worktree pays a cold target/
 /// build and keeps the gigabytes, so sessions rotate through these six.

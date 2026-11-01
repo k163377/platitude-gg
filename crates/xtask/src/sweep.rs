@@ -264,9 +264,9 @@ fn tested_here(package: &str) -> bool {
 }
 
 /// Whether this process is out here rather than inside the gate's
-/// container (`linux::IN_CONTAINER`).
+/// container (`linux::environment::IN_CONTAINER`).
 fn on_the_host() -> bool {
-    std::env::var_os(crate::linux::IN_CONTAINER).is_none()
+    std::env::var_os(crate::linux::environment::IN_CONTAINER).is_none()
 }
 
 impl Line {

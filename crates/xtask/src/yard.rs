@@ -91,7 +91,7 @@ mod tests {
         // the same way: the primary checkout's `target/tmp`.
         assert!(
             text.contains(".join(\"target\").join(\"tmp\")")
-                && text.contains(crate::linux::IN_CONTAINER)
+                && text.contains(crate::linux::environment::IN_CONTAINER)
                 && text.contains("gitdir:"),
             "{} no longer finds crate::temp's folder the way it does",
             support.display()

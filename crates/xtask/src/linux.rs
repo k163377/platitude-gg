@@ -130,7 +130,6 @@ const OUT_MOUNT: &str = "/out";
 /// one-verb container; one per checkout, since a template is keyed by
 /// that checkout's preset sources.
 pub(crate) const DEMO_MOUNT: &str = "/tmp/pgg-demo";
-pub(crate) use environment::IN_CONTAINER;
 
 /// Task-runner verbs worth running in there. Naming one means `cargo xtask
 /// <verb>`, so the command reads the same as on the host.
@@ -848,7 +847,7 @@ struct Alive {
 
 /// The names of the trees a `git worktree list --porcelain` listing
 /// holds. Pure, so a test can hold the naming.
-fn checkout_names(trees: &[crate::seats::worktrees::WorktreeBlock]) -> BTreeSet<String> {
+fn checkout_names(trees: &[crate::seats::WorktreeBlock]) -> BTreeSet<String> {
     trees
         .iter()
         .map(|tree| checkout_name(Path::new(&tree.path)))
@@ -880,11 +879,11 @@ fn tags_named_by_all<'a>(trees: &[&'a Path]) -> (BTreeSet<String>, Vec<(&'a Path
 
 fn alive(root: &Path) -> Result<Alive, String> {
     let listing = crate::subprocess::git_query(
-        &crate::seats::worktrees::slashed(root),
+        &crate::seats::slashed(root),
         &["worktree", "list", "--porcelain"],
     )
     .ok_or("git worktree list failed — is git on PATH and this a repository?")?;
-    let trees = crate::seats::worktrees::worktree_blocks(&listing);
+    let trees = crate::seats::worktree_blocks(&listing);
     if trees.is_empty() {
         return Err("git worktree list named no tree at all".into());
     }
@@ -939,7 +938,7 @@ fn orphan_volumes<'a>(listed: &'a str, names: &BTreeSet<String>) -> Vec<&'a str>
 /// The build cache is left untrimmed on that road ([`TrimTheCache`]).
 fn housekeeping(root: &Path) -> Result<(), String> {
     static KEPT: std::sync::OnceLock<Result<(), String>> = std::sync::OnceLock::new();
-    if cfg!(target_os = "linux") || std::env::var_os(IN_CONTAINER).is_some() {
+    if cfg!(target_os = "linux") || std::env::var_os(environment::IN_CONTAINER).is_some() {
         return Ok(());
     }
     KEPT.get_or_init(|| {
@@ -1109,7 +1108,7 @@ fn in_container(
         // (`verify::observed`) and keeps its temporary files to the
         // container's own `/tmp` (`verify::run`).
         .arg("--env")
-        .arg(format!("{IN_CONTAINER}=1"));
+        .arg(format!("{}=1", environment::IN_CONTAINER));
     given_commit(&mut cmd, root);
 
     qmltest_mount(&mut cmd, root)?;
