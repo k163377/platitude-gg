@@ -215,8 +215,11 @@ fn app_processes() -> Result<Vec<(u32, String)>, String> {
         return Ok(proc_scan());
     }
     // macOS: comm is the full executable path for processes started by
-    // path, which every launch of a built binary is.
-    let output = crate::subprocess::run_captured(Command::new("ps").args(["-axo", "pid=,comm="]))?;
+    // path, which every launch of a built binary is. One `-o` per field:
+    // POSIX reads all of an argument after its `=` as the heading.
+    let output = crate::subprocess::run_captured(
+        Command::new("ps").args(["-ax", "-o", "pid=", "-o", "comm="]),
+    )?;
     let listing = String::from_utf8_lossy(&output.stdout);
     Ok(listing
         .lines()
