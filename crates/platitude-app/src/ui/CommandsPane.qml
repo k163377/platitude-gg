@@ -169,6 +169,7 @@ Rectangle {
                     // A remote out of reach is said in this application's words; the rest is git's first line, and
                     // the whole of it is under the row (デザイン規約 §git が言ったことを読む場所).
                     text: "— " + (pane.errorWhy !== "" ? Words.unreachedWhy(pane.errorWhy) : pane.errorText)
+                    textFormat: Text.PlainText
                     elide: Text.ElideRight
                     maximumLineCount: 1
                     font.pixelSize: Theme.fontSm
