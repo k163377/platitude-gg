@@ -17,10 +17,9 @@ const DUMP_FILE: &str = "app.dmp";
 /// process itself.
 const THREADS_FILE: &str = "threads.txt";
 
-/// How long a look at the app may take: the listing is one PowerShell,
-/// the dump writes the process's whole memory to disk. Windows only — the
-/// walk of `/proc` takes no process.
-#[cfg(windows)]
+/// How long a look at the app may take: the listing is one PowerShell or
+/// one `ps` (the walk of `/proc` takes no process), the dump writes the
+/// process's whole memory to disk.
 const LISTING_CEILING: Duration = Duration::from_secs(15);
 #[cfg(windows)]
 const DUMP_CEILING: Duration = Duration::from_secs(60);
@@ -243,7 +242,6 @@ fn listed(threads: &[String]) -> String {
 /// neighbourhood. The symbol search path is empty and prompts are off, or
 /// an `_NT_SYMBOL_PATH` naming a symbol server spends the listing's
 /// ceiling on the network.
-#[cfg(windows)]
 const LISTING_SCRIPT: &str = "Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
@@ -368,12 +366,58 @@ if (PGG_WALK -eq 1) {
     [PggThreads]::End()
 }";
 
+/// How this system lists a process's threads ([`threads_of`]) — asked
+/// here alone, for the look and for the check of what it says
+/// (`super::faults`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Lister {
+    /// Every thread, and the stacks of a process about to be reaped
+    /// ([`off_powershell`]): Windows.
+    PowerShell,
+    /// Every thread with its name ([`off_proc`]): Linux.
+    Proc,
+    /// Every thread ([`off_ps`]): macOS.
+    Ps,
+    /// None: no stock tool lists a process's threads the same way on the
+    /// other systems, and their `/proc`, where there is one, is not
+    /// Linux's.
+    Nothing,
+}
+
+impl Lister {
+    pub(super) const fn lists(self) -> bool {
+        !matches!(self, Self::Nothing)
+    }
+
+    pub(super) const fn walks_stacks(self) -> bool {
+        matches!(self, Self::PowerShell)
+    }
+}
+
+pub(super) const LISTER: Lister = if cfg!(windows) {
+    Lister::PowerShell
+} else if cfg!(target_os = "linux") {
+    Lister::Proc
+} else if cfg!(target_os = "macos") {
+    Lister::Ps
+} else {
+    Lister::Nothing
+};
+
+fn threads_of(pid: u32, shot_dir: &Path, after: After) -> Result<Threads, String> {
+    match LISTER {
+        Lister::PowerShell => off_powershell(pid, shot_dir, after),
+        Lister::Proc => off_proc(pid),
+        Lister::Ps => off_ps(pid, shot_dir),
+        Lister::Nothing => Err("no thread listing on this system".to_string()),
+    }
+}
+
 /// Every thread of the process ([`LISTING_SCRIPT`]), written whole beside
 /// the pictures ([`THREADS_FILE`]) and read back from there. The stacks
 /// are walked only of a process about to be reaped ([`After`]): the walk
 /// suspends each thread.
-#[cfg(windows)]
-fn threads_of(pid: u32, shot_dir: &Path, after: After) -> Result<Threads, String> {
+fn off_powershell(pid: u32, shot_dir: &Path, after: After) -> Result<Threads, String> {
     let script = LISTING_SCRIPT
         .replace("PGG_PID", &pid.to_string())
         .replace("PGG_WALK", if after == After::Reaped { "1" } else { "0" });
@@ -389,8 +433,7 @@ fn threads_of(pid: u32, shot_dir: &Path, after: After) -> Result<Threads, String
 
 /// The same off `/proc`, with each thread's name. It leaves no file and no
 /// stacks (`/proc/<pid>/task/<tid>/stack` is root's).
-#[cfg(unix)]
-fn threads_of(pid: u32, _shot_dir: &Path, _after: After) -> Result<Threads, String> {
+fn off_proc(pid: u32) -> Result<Threads, String> {
     let tasks = std::fs::read_dir(format!("/proc/{pid}/task"))
         .map_err(|error| format!("/proc/{pid}/task could not be read: {error}"))?;
     let mut threads = Vec::new();
@@ -419,6 +462,25 @@ fn threads_of(pid: u32, _shot_dir: &Path, _after: After) -> Result<Threads, Stri
         lines: threads,
         stacks: Vec::new(),
     })
+}
+
+/// The same off `ps -M`: a line per thread under a heading, the first
+/// one carrying the command. No names and no stacks. Written whole beside
+/// the pictures ([`THREADS_FILE`]).
+fn off_ps(pid: u32, shot_dir: &Path) -> Result<Threads, String> {
+    let mut command = Command::new("ps");
+    command.args(["-M", "-p", &pid.to_string()]);
+    let mut threads = listing(bounded(
+        "the thread listing",
+        command,
+        LISTING_CEILING,
+        Some(&shot_dir.join(THREADS_FILE)),
+    ))?;
+    threads.lines.remove(0);
+    if threads.lines.is_empty() {
+        return Err(format!("`ps -M` lists no threads of {pid}"));
+    }
+    Ok(threads)
 }
 
 /// The dump, written by `MiniDumpWriteDump` itself from a PowerShell of
@@ -555,7 +617,7 @@ fn dump_of(pid: u32, whose: &str, shot_dir: &Path, after: After) -> String {
 /// does not carry.
 #[cfg(not(windows))]
 fn dump_of(_pid: u32, _whose: &str, _shot_dir: &Path, _after: After) -> String {
-    "  no dump on this system: the threads above are the whole of the look".to_string()
+    "  no dump on this system: the thread listing is the whole of the look".to_string()
 }
 
 #[cfg(test)]

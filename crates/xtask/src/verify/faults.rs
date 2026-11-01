@@ -18,6 +18,8 @@
 
 use std::time::Instant;
 
+use super::look::LISTER;
+
 /// A cheap verb: every case is about where the process stopped, not what
 /// the verb shows.
 const VERB: &str = "band";
@@ -46,10 +48,11 @@ struct Case {
     /// reads, quoted from [`super::wedge`] and [`super::outcome`], so
     /// rewording them there is a red here.
     wants: &'static [&'static str],
-    /// The same, held to on Windows alone: only the listing there walks
-    /// stacks (`super::look::threads_of`), and the gate's host side runs
+    /// The same, held to where this system lists threads, and where its
+    /// listing walks stacks too ([`LISTER`]): the gate's host side runs
     /// wherever the tree is checked out.
-    wants_on_windows: &'static [&'static str],
+    wants_of_the_listing: &'static [&'static str],
+    wants_of_the_stacks: &'static [&'static str],
     /// A watchdog abort also reaches `exiting`, so these words tell it
     /// from an act that completed before stopping.
     forbids: &'static [&'static str],
@@ -57,14 +60,11 @@ struct Case {
 
 impl Case {
     fn missing(&self, said: &str) -> Vec<String> {
-        let here: &[&str] = if cfg!(windows) {
-            self.wants_on_windows
-        } else {
-            &[]
-        };
+        let held = |wants: &'static [&'static str], here: bool| if here { wants } else { &[] };
         self.wants
             .iter()
-            .chain(here.iter())
+            .chain(held(self.wants_of_the_listing, LISTER.lists()))
+            .chain(held(self.wants_of_the_stacks, LISTER.walks_stacks()))
             .filter(|want| !said.contains(**want))
             .map(|want| format!("missing `{want}`"))
             .chain(
@@ -99,12 +99,12 @@ const CASES: &[Case] = &[
             "> exiting ",
             "it got as far as `exiting`",
             "left no wedge.txt",
-            // Past the heading: the listing answered.
             "threads at the ceiling:",
-            " alive — ",
         ],
+        // Past the heading: the listing answered.
+        wants_of_the_listing: &[" alive — "],
         // The one line a stop inside the exit is read off.
-        wants_on_windows: &["the main thread stands in:"],
+        wants_of_the_stacks: &["the main thread stands in:"],
         forbids: &["auto-act watchdog expired"],
     },
     Case {
@@ -118,7 +118,8 @@ const CASES: &[Case] = &[
             "it got as far as `exiting`",
             "the app's own account: wedged in `exiting`",
         ],
-        wants_on_windows: &[],
+        wants_of_the_listing: &[],
+        wants_of_the_stacks: &[],
         forbids: &["auto-act watchdog expired"],
     },
     Case {
@@ -130,7 +131,8 @@ const CASES: &[Case] = &[
             "the stations it reached:",
             "event-loop ",
         ],
-        wants_on_windows: &[],
+        wants_of_the_listing: &[],
+        wants_of_the_stacks: &[],
         forbids: &["auto_act complete=band"],
     },
     Case {
@@ -157,7 +159,8 @@ const CASES: &[Case] = &[
             "under the app:",
             "pictures on disk:",
         ],
-        wants_on_windows: &[],
+        wants_of_the_listing: &[],
+        wants_of_the_stacks: &[],
         // A listing that came back is a stall that did not happen.
         forbids: &["auto-act watchdog expired", " alive — "],
     },
@@ -243,7 +246,7 @@ fn drive(me: &std::path::Path, case: &Case, build: bool) -> Result<String, Strin
 
 #[cfg(test)]
 mod tests {
-    use super::{BACKSTOP_MS, CASES, TURNING_MS, VERB};
+    use super::{BACKSTOP_MS, CASES, LISTER, TURNING_MS, VERB};
 
     /// Every held run carries only the backstop, and the two with no
     /// deadline thread want a hold's words: a ceiling counted from the
@@ -281,24 +284,32 @@ mod tests {
             .iter()
             .find(|case| case.wants.contains(&"left no wedge.txt"))
             .expect("the observed shape");
-        assert!(observed.wants.contains(&" alive — "));
+        assert!(observed.wants_of_the_listing.contains(&" alive — "));
         assert!(
             observed
-                .wants_on_windows
+                .wants_of_the_stacks
                 .contains(&"the main thread stands in:")
         );
         assert!(
-            !CASES
-                .iter()
-                .any(|case| case.wants.contains(&"the main thread stands in:")),
-            "the stack line is a Windows want alone"
+            !CASES.iter().any(|case| {
+                case.wants.contains(&" alive — ")
+                    || case.wants.contains(&"the main thread stands in:")
+            }),
+            "a listing's lines are owed only where there is one"
         );
         let said = observed.wants.join("\n");
         let missing = observed.missing(&said);
         assert_eq!(
             missing.is_empty(),
-            !cfg!(windows),
-            "off Windows the wants alone satisfy the case; on it the stack is owed too: {missing:?}"
+            !LISTER.lists(),
+            "where the system lists threads its lines are owed too: {missing:?}"
+        );
+        assert_eq!(
+            missing
+                .iter()
+                .any(|m| m.contains("the main thread stands in:")),
+            LISTER.walks_stacks(),
+            "the stack is owed where the listing walks one: {missing:?}"
         );
     }
 
@@ -309,7 +320,8 @@ mod tests {
             let said = case
                 .wants
                 .iter()
-                .chain(case.wants_on_windows.iter())
+                .chain(case.wants_of_the_listing)
+                .chain(case.wants_of_the_stacks)
                 .copied()
                 .collect::<Vec<_>>()
                 .join("\n");
