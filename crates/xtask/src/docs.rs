@@ -61,9 +61,10 @@ pub(crate) fn oversize(path: &str, bytes: usize) -> Option<String> {
     (bytes > cap).then(|| {
         format!(
             "OVER-CAP: {bytes} bytes against a cap of {cap} — this document is read again by \
-             every call after it, so cut what it says: what a name can find (a type, a part, \
-             a command, a function) goes to .claude/rules-refs, and only what applies whatever \
-             file is touched stays (CLAUDE.md 規約の置き場所)"
+             every call after it, so cut what it says: what concerns one part goes into a \
+             comment at that part, what binds several parts and a name can find goes to \
+             .claude/rules-refs, and only what applies whatever file is touched stays \
+             (CLAUDE.md 規約の置き場所)"
         )
     })
 }
@@ -114,7 +115,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if !over.is_empty() {
         wrong.push(format!(
             "{} always-loaded document(s) over cap: every byte of one is read again by every \
-             call after it, so what a name can find goes to .claude/rules-refs and only what \
+             call after it, so what concerns one part goes into a comment at that part, what \
+             binds several parts and a name can find goes to .claude/rules-refs, and only what \
              applies whatever file is touched stays",
             over.len()
         ));

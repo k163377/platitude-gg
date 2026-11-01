@@ -8,11 +8,12 @@
 //! The backstop only has to be loud once, so a file has one of three
 //! standings:
 //!
-//! * **on the ledger** — .claude/rules-refs/structure.md 分割しない判断 holds
-//!   a written reason not to split it. No backstop and no baseline entry
-//!   (a length kept for it would be rewritten on every growth without
-//!   anyone re-reading the reason); the one check left is that the entry
-//!   names a file still there.
+//! * **on the ledger** — .claude/rules-refs/structure.md 分割しない判断 lists
+//!   its path, and the file's own header comment gives the reason not to
+//!   split it. No backstop and no baseline entry (a length kept for it
+//!   would be rewritten on every growth without anyone re-reading the
+//!   reason); the one check left is that the entry names a file still
+//!   there.
 //! * **in the baseline** — pinned at the length it had. It may shrink, and
 //!   the baseline follows it down; it may not grow.
 //! * **neither** — the backstop applies as written.
@@ -58,7 +59,8 @@ const BACKSTOP: usize = 1000;
 
 /// Where the ratchet keeps what was already over when it went in.
 const BASELINE: &str = "crates/xtask/structure-baseline.txt";
-/// The written refusals to split, which outrank the backstop.
+/// The exemptions from the backstop, which outrank it: paths only, one a
+/// line — the reason not to split lives in that file's header comment.
 const LEDGER: &str = ".claude/rules-refs/structure.md";
 /// The heading whose section holds them.
 const LEDGER_SECTION: &str = "## 分割しない判断";
@@ -209,8 +211,8 @@ fn check_baseline(
         match baseline.get(&file.path) {
             None => failures.push(format!(
                 "{}: {}, {} past the {BACKSTOP}-line backstop — ask the design the question \
-                 ({RULES} §長さの閾値): split the responsibility out, or record in {LEDGER} \
-                 why it is not split",
+                 ({RULES} §長さの閾値): split the responsibility out, or write why it is \
+                 not split in its header comment and list its path in {LEDGER}",
                 file.path,
                 file.measured(),
                 file.code - BACKSTOP,
@@ -219,8 +221,8 @@ fn check_baseline(
                 failures.push(format!(
                     "{}: {}, {} more than the {was} it is pinned at and {} past the \
                      {BACKSTOP}-line backstop — a pinned file may only shrink \
-                     ({RULES} §長さの閾値): split first, or record in {LEDGER} why it is \
-                     not split",
+                     ({RULES} §長さの閾値): split first, or write why it is not split in \
+                     its header comment and list its path in {LEDGER}",
                     file.path,
                     file.measured(),
                     file.code - was,

@@ -56,13 +56,13 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 
 ## PGG_AUTO_ACT 動詞表
 
-**全動詞の正本は [verbs.md](verbs.md)** — 動確の前に、使う動詞の項を動詞名で Grep して必ず読む(引数を省くと何も撮れない動詞がある)。**動詞を足したら verbs.md へ追記する**。**報告行で判定すると書いたら `crates/xtask/src/verify/verbs/*.rs` の表にも行を足す** — verbs.md の `must_say` は散文で、機械はそちらを読まない。表に行が無い動詞は**絵だけで判定される**ので、壊れた run が緑で通る。
+**[verbs.md](verbs.md) は索引**(1 動詞 1 行 = 名前・引数 / preset・何を見せるか)— 動確の前に、使う動詞を動詞名で Grep して必ず読む(引数・preset を省くと何も撮れない動詞がある)。**報告行の読み方・待ち・罠は各動詞のドライバのコメントが正本** — `crates/platitude-app/src/auto/*.qml` の `act === "<動詞>"` の隣と、判定は `crates/xtask/src/verify/verbs/*.rs` の `Verb` 行。どちらも動詞名を `"<動詞>"` の綴りで Grep する。**動詞を足したら verbs.md に索引の 1 行を足し、説明はドライバのコメントに書く**。足す・消す・改名は登録表 `crates/xtask/verb-lines.txt` の行も揃える(verbs.md 冒頭)。**報告行で判定するなら `verify/verbs/*.rs` の表にも行を足す** — 表に行が無い動詞は**絵だけで判定される**ので、壊れた run が緑で通る。
 
 **ダイアログ・メニューの見た目は headless で撮れる**: `WindowShotMirrors.qml` のオーバーレイミラー(`ShaderEffectSource`)が **overlay.png** を app.png と並べて保存する(ロック状態と無関係)。オーバーレイ自体の grabToImage は "no QML engine" で不可、ミラーが唯一の経路。
 
 **白紙の overlay.png は「その時点で何も開いていなかった」の意味**。報告行 `overlay saved=<bool> popups=<n> yield=<bool>` の **`popups=` がオーバーレイ自身が抱えていた数**(メニュー 1 / サブメニューを開けば 2 / モーダルは dimmer を伴って 2 以上)、`yield=` が窓の枠を場面へ返していたか(外の press で閉じるメニュー・リストが立っていたか)。`commit-menu` / `reset-menu` はこの行が must_say — **overlay が主題の動詞には同じ 1 行を足せる**(`verify/verbs.rs`)。「閉じたか」は `Popup.opened` の報告行で読む。
 
-**絵は試行の単位で撮る** — page の成立 → 元の更新 → grab → 答えの確認を 1 試行とし、待機(ambient の読み・インク)で止まった試行は捨てて page から撮り直す。行は `picture run= artifact= attempt=<n> waiting= / held= / ink= / saved=`(正本は 反映前テストの機械化.md §検証時点)。
+**絵は試行の単位で撮る** — page の成立 → 元の更新 → grab → 答えの確認を 1 試行とし、待機(ambient の読み・インク)で止まった試行は捨てて page から撮り直す。行は `picture run= artifact= attempt=<n> waiting= / held= / ink= / saved=`(読み方は `AutoShotDriver.qml` の `Attempt`)。
 
 **overlay が空でない run は 3 枚目 `scene.png` を出す** —— app.png と overlay.png を**描かれた座標のまま重ねた 1 枚**で、**窓の縁(Windows の窓モードの 1px)が写るのはこの 1 枚だけ**(app.png は本体だけ = Windows では窓より 2px 狭い)。「開いたものは、それを開けたものに対して**どこに**立っているか」(hover の席・カードの密着・メニューの掛かり方)はこれでしか読めない。報告行は `scene saved=<bool>`。**hover の席を見せる時はこの 1 枚を board に出す**。**撮る絵は run が頭で名乗り**(`pictures run= wanted=…`)、**1 枚ごとに `picture run= artifact= saved=<bool>`** — 頼んだ絵が全部 `saved=true` でなければ契約違反(保存の失敗は後の絵で取り消せない)。
 

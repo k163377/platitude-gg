@@ -136,9 +136,10 @@ commands:
       crates/**/*.rs and *.qml, and what the tree spends on comments —
       an always-step of `gate`, and a second or two on its own. Three
       standings: a file the ledger (.claude/rules-refs/structure.md
-      分割しない判断) gives a written reason not to split has no backstop
-      at all, and the run asks only that the entry still names a file
-      that is there — the entry goes when the file is split away; a file
+      分割しない判断) lists by path — its reason not to be split is
+      written in its own header comment — has no backstop at all, and the
+      run asks only that the entry still names a file that is there (the
+      entry goes when the file is split away); a file
       already over when this went in is pinned by
       crates/xtask/structure-baseline.txt at the length it had, free to
       shrink (the pin follows it down) and not to grow; everything else

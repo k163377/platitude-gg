@@ -1,7 +1,7 @@
 # platitude-gg 開発規約
 
 **platitude-gg** — 軽量・マルチプラットフォーム(Windows / macOS arm64 / Ubuntu。**Intel Mac は対象外**)の git GUI。機能要件・スコープ外の正本は [実装計画.md](internal-docs/実装計画.md) — 機能実装の前に該当セクションを読む。
-本ファイルは全セッション共通の不変条件だけ。**規約本体は分割配置**: コード共通(Rust / QML)→ [code.md](.claude/rules/code.md)、core → [core.md](.claude/rules/core.md)、app → [app-ui.md](.claude/rules/app-ui.md)、分割・共通化 → [structure.md](.claude/rules/structure.md)(該当クレートに触れると自動ロード。**各論は `.claude/rules-refs/` の同名ファイル** — 触る項を Grep で引く)。動確・起動・`PGG_AUTO_ACT` 動詞表は **verify-ui スキル**、反映前テスト(gate / land / 動詞の登録表)は [反映前テストの機械化.md](internal-docs/反映前テストの機械化.md)、依存の追加は [依存とライセンス.md](internal-docs/依存とライセンス.md)。
+本ファイルは全セッション共通の不変条件だけ。**規約本体は分割配置**: コード共通(Rust / QML)→ [code.md](.claude/rules/code.md)、core → [core.md](.claude/rules/core.md)、app → [app-ui.md](.claude/rules/app-ui.md)、分割・共通化 → [structure.md](.claude/rules/structure.md)(該当クレートに触れると自動ロード。**1 部品の決定はその部品のコメント、複数の部品に効く各論は `.claude/rules-refs/` の同名ファイル** — 触る項を Grep で引く)。動確・起動・`PGG_AUTO_ACT` 動詞表は **verify-ui スキル**、反映前テスト(gate / land / 動詞の登録表)は [反映前テストの機械化.md](internal-docs/反映前テストの機械化.md)、依存の追加は [依存とライセンス.md](internal-docs/依存とライセンス.md)。
 
 ## 絶対制約(変更には人間の明示承認が必要)
 
@@ -49,11 +49,11 @@
 
 ## 現在のフェーズ: **Phase 3 の操作まで配線済み(未配線の操作なし)**
 
-- **配線済み操作の一覧・意匠決定・実装対応は [.claude/rules-refs/app-ui.md](.claude/rules-refs/app-ui.md) が正**。残作業と要判断は [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読む**。配布準備期の検証項目は [P5-確認事項.md](internal-docs/P5-確認事項.md) へ積む
+- **配線済み操作の一覧は [.claude/rules-refs/app-ui.md](.claude/rules-refs/app-ui.md)、各操作の意匠決定・実装対応はその部品のコメントが正**。残作業と要判断は [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読む**。配布準備期の検証項目は [P5-確認事項.md](internal-docs/P5-確認事項.md) へ積む
 
 ## 規約の置き場所と本ファイルの運用
 
-- ルール追加は「非自明・繰り返し発生・行動可能」を満たす場合のみ。**常時ロードされる文書には上限がある**(毎回の呼び出しが読み直す。**機械化済み: `cargo xtask docs` と post-write hook**): 本ファイル **12KB**、`.claude/rules/*.md` **各 8KB**。置き場所: 全セッション共通の不変条件 → 本ファイル / 触るファイルによらず効く規則 → `.claude/rules/`(参照ファイルを置かない = 常時ロード)/ **名前で引ける各論(型・部品・コマンド・関数・操作)→ `.claude/rules-refs/` の同名ファイルへ 1 項目 1 行** / 確認の段・gate を撃つ時機 → gate スキル / UI の検証手順・動詞 → verify-ui スキル / レビュー観点 → review-points スキル / 機械で守れる規則 → hooks(実体は xtask の <!--call:hook.event-->`hook <event>`、反映前テストの機械化.md §hook)
-- 書くのは罠と決定事項だけ(アーキテクチャはコードが語る)。規約は行動と完了条件、hook は観測できる条件の強制。規約違反への対策は、既存の矛盾・重複・誤った誘導を先に削る
+- ルール追加は「非自明・繰り返し発生・行動可能」を満たす場合のみ。**常時ロードされる文書には上限がある**(毎回の呼び出しが読み直す。**機械化済み: `cargo xtask docs` と post-write hook**): 本ファイル **12KB**、`.claude/rules/*.md` **各 8KB**。置き場所: 全セッション共通の不変条件 → 本ファイル / 触るファイルによらず効く規則 → `.claude/rules/`(参照ファイルを置かない = 常時ロード)/ **1 つの部品(型・QML 部品・関数・モジュール・動詞・コマンド)だけの決定・罠・理由 → その部品のコメント**(文書に集めない = 変える人が同じ場所で読んで直す。数部品に跨る機能は状態か判断を持つ部品へ書き、他はそこを指す)/ **複数の部品に効く名前付きの各論(共有部品・API の罠・型の使い方)→ `.claude/rules-refs/` の同名ファイルへ 1 項目 1 行** / 確認の段・gate を撃つ時機 → gate スキル / UI の検証手順・動詞 → verify-ui スキル / レビュー観点 → review-points スキル / 機械で守れる規則 → hooks(実体は xtask の <!--call:hook.event-->`hook <event>`、反映前テストの機械化.md §hook)
+- 書くのは罠と決定事項だけ(アーキテクチャはコードが語る)。文書に残すのは横断の方針・選び方・索引と未決事項で、部品の中身はそこを指さずに部品自身が言う。規約は行動と完了条件、hook は観測できる条件の強制。規約違反への対策は、既存の矛盾・重複・誤った誘導を先に削る
 - **バージョン番号はソース・設定の定義から引く** — 管理方針と参照先は [gitの扱い.md](internal-docs/gitの扱い.md)
 - **増え続けるもの(機能一覧・確認事項・実測値)は本ファイルには索引だけ**
