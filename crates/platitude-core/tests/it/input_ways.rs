@@ -260,8 +260,8 @@ fn ended_peaks(child: &mut std::process::Child, _own: usize) -> String {
     let (commit, working_set) = os::process_peaks(child.as_raw_handle().cast());
     format!(
         "git_commit_peak_mib={:.1} git_working_set_peak_mib={:.1}",
-        commit as f64 / MIB,
-        working_set as f64 / MIB
+        commit as f64 / crate::input_costs::MIB,
+        working_set as f64 / crate::input_costs::MIB
     )
 }
 
@@ -270,8 +270,8 @@ fn ended_peaks(child: &mut std::process::Child, own: usize) -> String {
     let peak = os::reap_peak(child.id());
     format!(
         "git_maxrss_mib={:.1} own_peak_at_spawn_mib={:.1}",
-        peak as f64 / MIB,
-        own as f64 / MIB
+        peak as f64 / crate::input_costs::MIB,
+        own as f64 / crate::input_costs::MIB
     )
 }
 
@@ -280,8 +280,6 @@ fn ended_peaks(child: &mut std::process::Child, _own: usize) -> String {
     assert!(child.wait().unwrap().success());
     "git_peaks=unread".into()
 }
-
-const MIB: f64 = 1024.0 * 1024.0;
 
 #[cfg(target_os = "linux")]
 fn widen(pipe: &impl std::os::fd::AsRawFd) {

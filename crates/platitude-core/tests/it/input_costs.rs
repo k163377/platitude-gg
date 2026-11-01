@@ -331,7 +331,7 @@ impl Meter {
     }
 }
 
-const MIB: f64 = 1024.0 * 1024.0;
+pub(crate) const MIB: f64 = 1024.0 * 1024.0;
 
 #[cfg(windows)]
 #[expect(
@@ -686,20 +686,21 @@ pub(crate) mod os {
         }
     }
 
+    /// No counters, in the shape the others' are started in (`default()`).
     #[derive(Default, Clone, Copy)]
-    pub struct Io;
+    pub struct Io {}
 
     pub fn peak_working_set() -> usize {
         0
     }
 
     pub fn io() -> Io {
-        Io
+        Io {}
     }
 
     impl Io {
         pub fn since(&self, _: &Io) -> Io {
-            Io
+            Io {}
         }
 
         pub fn add(&mut self, _: &Io) {}
