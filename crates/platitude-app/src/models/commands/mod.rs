@@ -215,7 +215,7 @@ impl CommandsModel {
 
     #[qslot]
     fn attach(&mut self, tab_id: i32) {
-        self.held = crate::harness::HeldRecords::default();
+        self.held = crate::harness::HeldRecords::from_knobs();
         self.tab_id = tab_id;
         let invoker = self.get_qml_method_invoker();
         self.feed = crate::hub::attach_feed(tab_id, |f| &f.commands, invoker);

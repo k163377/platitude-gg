@@ -48,7 +48,8 @@ Item {
             rig.owing = ["graph"]
             tryVerify(() => rig.route.read)
             compare(root.reads, 2)
-            compare(Stages.reports(Harness.said).filter(line => line.startsWith("one_reading read=")), ["one_reading read=2"])
+            compare(Stages.reports(Harness.said).filter(line => line.startsWith("one_reading read=")),
+                    ["one_reading read=2"])
             compare(rig.route.owedAtRead, ["graph"])
             const completed = Harness.said.filter(line => line.startsWith("complete run="))
             compare(completed.length, 1)

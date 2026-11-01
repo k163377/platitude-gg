@@ -61,7 +61,7 @@ Item {
         }
         onTriggered: {
             if (bucketAllTimer.at("start")) {
-                // The heading exists once the list has laid its sections out, which is a frame after the rows arrive.
+                // The heading exists once the list has laid its sections out: a polish pass after the rows arrive.
                 if (!Awaited.all("bucket_all_heading", { "heading": wipPane.rowAt(0) !== null }))
                     return
                 bucketAllTimer.input("pressed", () => driver.pressWrite("bucket:" + bucketAllTimer.from,

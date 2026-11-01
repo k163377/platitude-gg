@@ -327,7 +327,7 @@ Item {
         }
     }
     // Waits for the details, which carry the credit line, and for the row to stop moving: a width asked for arrives a
-    // frame after the row it resizes.
+    // polish pass after the row it resizes.
     PageStage {
         id: coAuthorTimer
         name: "co_author"

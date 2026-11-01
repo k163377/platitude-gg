@@ -35,7 +35,7 @@ Item {
     /// `{ key, polish }`, null while there are none.
     property var sizing: null
     /// -1 until its conditions hold; otherwise the polish mark taken once they all hold.
-    property int readyLayout: -1
+    property int readyPolish: -1
     /// The completion asked for, and whether its report has been read and said: the one way to the completion's walk.
     property var completing: null
     property bool asked: false
@@ -109,16 +109,17 @@ Item {
             terms["sized:" + name] = sized
         return { "when": when, "owed": owed, "unsized": unsized, "terms": terms }
     }
-    /// Data and page holds can change a layout with a positive size. Require the pass after those conditions hold,
-    /// restarting the mark if they fall again; passes while a read was still pending cannot settle its result.
+    /// Adds the `laid-out:completion` term: data and page holds can change a layout with a positive size, so the
+    /// pass after every other term holds is required — the mark restarts if they fall again, and a pass made while a
+    /// read was still pending settles nothing of its result.
     function markReady(terms) {
         if (!Object.keys(terms).every(key => terms[key])) {
-            route.readyLayout = -1
+            route.readyPolish = -1
             return
         }
-        if (route.readyLayout === -1)
-            route.readyLayout = Awaited.layoutMark()
-        const passed = Awaited.layoutPassedSince(route.readyLayout)
+        if (route.readyPolish === -1)
+            route.readyPolish = Awaited.layoutMark()
+        const passed = Awaited.layoutPassedSince(route.readyPolish)
         terms["laid-out:completion"] = passed
         if (!passed)
             Awaited.askLayout()

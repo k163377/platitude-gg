@@ -137,7 +137,7 @@ Item {
             // The beat too: a box the beat is still keeping up stands where the next case's hand goes.
             tryVerify(() => !shared.box.visible && !shared.settling && !peekCard.visible, undefined,
                       "each case starts with nothing out")
-            // The rows are laid out a frame after they are added; the bar stands once they overflow.
+            // The rows are laid out a polish pass after they are added; the bar stands once they overflow.
             tryVerify(() => barOf(list).visible, undefined, "the list has somewhere to go")
         }
         /// The bar a case took and did not get to let go of — a failed check leaves the button down for the next case.

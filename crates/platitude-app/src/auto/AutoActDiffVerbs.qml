@@ -472,8 +472,8 @@ Item {
             return { "ready": !(diffPane.view.count <= 0 || !diffPane.textHand.barOut) }
         }
         onTriggered: {
-            // Settle: the rows' height read until it stands across a polish pass (the view lays them out a polish pass after they
-            // arrive), and the bar out.
+            // Settle: the rows' height read until it stands across a polish pass (the view lays them out a polish
+            // pass after they arrive), and the bar out.
             if (diffBarTimer.at("start")) {
                 if (!Awaited.all("diff_bar_ready", diffBarTimer.ready()))
                     return
@@ -753,8 +753,8 @@ Item {
         onTriggered: {
             const op = lineRunTimer
             const done = op.at(op.order[op.order.length - 1])
-            // The list builds its items a frame after the rows arrive, so an early empty answer is not "none" and is
-            // waited on.
+            // The list builds its items a polish pass after the rows arrive, so an early empty answer is not "none"
+            // and is waited on.
             const line = diffPane.firstChangedLine(0)
             if (!Awaited.all("line_run_ready", { "settled": !page.diffSettling, "line": done || line >= 0 }))
                 return

@@ -20,19 +20,19 @@ Item {
     StageRig { id: rig }
     Automation.PageStage {
         id: op
-        name: "initial_layout"
+        name: "input_layout"
         order: ["changed"]
         onTriggered: {
             op.input("changed", () => { first.width = 80 })
-            op.complete({ "name": "initial_layout_ready", "when": () => ({ "accepted": first.width === 80 }),
+            op.complete({ "name": "input_layout_ready", "when": () => ({ "accepted": first.width === 80 }),
                             "report": () => {
                                 root.reportedX = second.x
-                                return "initial_layout x=" + second.x
+                                return "input_layout x=" + second.x
                             } })
         }
     }
     TestCase {
-        name: "StageInitialLayout"
+        name: "StageInputLayout"
         when: windowShown
         function test_an_input_is_laid_out_even_when_no_read_was_pending() {
             Automation.Awaited.window = stage
@@ -42,7 +42,7 @@ Item {
             tryVerify(() => rig.route.asked)
             compare(second.x, 20, "the new placement still needs a polish")
             compare(root.reportedX, -1, "an immediately true condition does not settle the layout")
-            stage.frameSwapped()
+            Automation.Awaited.frames = Automation.Awaited.frames + 3
             rig.route.attempt()
             verify(!rig.route.read)
             stage.visible = true

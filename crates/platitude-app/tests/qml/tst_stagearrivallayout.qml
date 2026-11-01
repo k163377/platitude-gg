@@ -45,7 +45,7 @@ Item {
             rig.route.attempt()
             compare(second.x, 20, "the new placement still needs a polish")
             compare(root.reportedX, -1, "no report on the old placement")
-            stage.frameSwapped()
+            Automation.Awaited.frames = Automation.Awaited.frames + 3
             rig.route.attempt()
             verify(!rig.route.read)
             stage.visible = true
