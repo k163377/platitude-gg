@@ -3,16 +3,17 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// One side (Before / After) of the diff pane's image preview; a side with no `sizeText` collapses. Why sides are
-// `file:` URLs and how their files are cleaned up: `platitude_core::preview`. Headless: `preview*` and `preview-close`
-// on `--preset pictures`, which wait on `settled` too — `DiffPane.diffSettled()` alone shoots before the decode, an
-// empty frame under the caption.
+// One side (Before / After) of the diff pane's image preview; a side with no `sizeText` collapses. What a side is
+// shown from and when its bytes are let go: `platitude_core::preview` and the app's `preview_images`. Headless:
+// `preview*` and `preview-close` on `--preset pictures`, which wait on `settled` too — `DiffPane.diffSettled()` alone
+// shoots before the decode, an empty frame under the caption.
 ColumnLayout {
     id: previewCell
     /// `Before` / `After`.
     required property string caption
-    /// A `file:` URL (the working-tree file, or core's copy of the blob) stamped with its read, so a file that moved
-    /// under the pane comes back as a changed source (`DiffModel.previewOldUrl`).
+    /// The working-tree file's `file:` URL stamped with its read, or the `image://` a blob's bytes are held under —
+    /// new for every read — so a side that moved under the pane comes back as a changed source
+    /// (`DiffModel.previewOldUrl`).
     required property string url
     required property string sizeText
     /// `DiffModel.previewVector`: SVG scales smoothly, pixel rasters stay crisp.
@@ -95,7 +96,7 @@ ColumnLayout {
             mipmap: true
             visible: status === Image.Ready
         }
-        // A side with nothing to show: a file core could not write, or a format this runtime has no decoder for.
+        // A side with nothing to show: a blob core could not read, or a format this runtime has no decoder for.
         Label {
             anchors.centerIn: parent
             width: Math.min(implicitWidth, parent.width - 2 * Theme.spaceSm)

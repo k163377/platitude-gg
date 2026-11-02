@@ -432,9 +432,8 @@ impl DiffModel {
         self.shown_marks = Default::default();
         self.shown_colors = Default::default();
         self.apply_endings(None);
+        // Lets go of the pictures held for it: no next read is coming.
         self.apply_preview(None);
-        // No next read is coming to sweep the picture files.
-        crate::hub::with_session(self.tab_id, |s| s.release_preview());
         self.forget_selection();
         self.reset();
         self.changed();

@@ -1,5 +1,5 @@
-//! Pictures in every bucket the diff pane previews from, and one too big
-//! for anything but a file to carry.
+//! Pictures in every bucket the diff pane previews from, and one past what
+//! a data URL could carry.
 
 use super::repo::DemoRepo;
 
@@ -100,7 +100,7 @@ pub(super) fn pictures(repo: &mut DemoRepo) -> Result<(), String> {
 /// could carry (16 MiB).
 const BIG_SIDE: u32 = 3000;
 
-/// One picture too big for anything but a file, changed by the newest
+/// One picture past what a data URL could carry, changed by the newest
 /// commit (what `perf --file` opens) and again in the tree, so both diffs
 /// have two sides to decode.
 pub(super) fn bigpicture(repo: &mut DemoRepo) -> Result<(), String> {

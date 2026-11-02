@@ -95,10 +95,6 @@ impl Hub {
                 crate::harness::station(crate::harness::Station::RuntimeStopping);
                 rt.shutdown_timeout(std::time::Duration::from_secs(2));
             }
-            // Sessions took their own picture files; this is the run's
-            // directory and whatever a cut-short read left in it.
-            crate::harness::station(crate::harness::Station::RunDirClearing);
-            platitude_core::preview::remove_run_dir();
         }
     }
 

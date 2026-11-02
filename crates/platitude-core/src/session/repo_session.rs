@@ -99,12 +99,6 @@ pub struct RepoSession {
     /// (`highlight::LexCache`), so the re-read after a partial stage starts
     /// near its hunks. Self-invalidating by the source text's hash.
     pub(super) lex_cache: Mutex<Option<crate::highlight::LexCache>>,
-    /// The files a picture's blob sides are written to so the pane can
-    /// name them by URL (`preview::PreviewFiles`). Numbered by the diff
-    /// epoch above; each read published sweeps the reads before it, the
-    /// pane closing sweeps them all ([`RepoSession::release_preview`]),
-    /// and the close removes the directory.
-    pub(super) preview_files: preview::PreviewFiles,
     /// Where the repository stands, as the reads left it — HEAD and what
     /// derives from it, the dirty tree, the merge's sides, the rebase stop
     /// and the merge tool; the one record of each. Its stamps keep a read
@@ -433,7 +427,6 @@ impl RepoSession {
     /// reports to, and what it had drawn let go.
     pub fn close(&self) {
         self.root_cancel.cancel();
-        self.preview_files.remove_all();
         if let Some(order) = self.write_order() {
             order.leave(self);
         }
@@ -540,13 +533,6 @@ impl RepoSession {
         *relock(&self.lex_cache) = None;
         *relock(&self.remote_tag_index) = Arc::new(RemoteTagIndex::default());
         *relock(&self.eol_baselines) = HashMap::new();
-    }
-
-    /// The pane closed: the picture files the last diff read wrote are
-    /// nobody's to look at any more. The next read sweeps them too, so
-    /// this only matters for a pane that is not reading again.
-    pub fn release_preview(&self) {
-        self.preview_files.release();
     }
 
     /// How many local writes are queued or running — the ones

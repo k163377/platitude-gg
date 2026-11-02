@@ -1,6 +1,7 @@
 //! Hands the linker the Windows resource with the exe's icon and the name
 //! the shell shows for it (without it, `platitude-gg.exe`), and the binary
-//! the commit it is built from (`models::build_id`).
+//! the commit it is built from (`models::build_id`); builds the C++ of the
+//! preview's image provider (`preview_images`).
 //!
 //! `assets/platitude.res` is checked in compiled: the resource compiler
 //! comes only with the Windows SDK. `assets/platitude.rc` says how to
@@ -22,6 +23,16 @@ fn main() {
     println!("cargo:rerun-if-changed={RESOURCE}");
     stamp_commit();
     link_resource();
+    build_image_provider();
+}
+
+/// The preview's image provider (`src/preview_images.rs`): the C++ class
+/// its bridge generates, against Qt Quick.
+fn build_image_provider() {
+    cxx_qt_build::CxxQtBuilder::new()
+        .qt_module("Quick")
+        .file("src/preview_images.rs")
+        .build();
 }
 
 /// The commit `HEAD` names and the one the version's tag names, each empty

@@ -1,53 +1,122 @@
 //! Best-effort content previews for the diff pane: the old/new content of
 //! a diff target, so the UI can render images and report binary sizes.
-//! Sides are files a `file:` URL can name — the working tree's own, or a
-//! blob written out of `git cat-file` ([`PreviewFiles`]). A side that
-//! cannot be read is absent, which is also what "added" and "deleted"
-//! look like.
+//! A picture side is shown from the working tree's own file, or from a
+//! blob's bytes read out of `git cat-file` into memory ([`Picture`]):
+//! nothing is written for it. A side that cannot be read is absent, which
+//! is also what "added" and "deleted" look like.
 //!
-//! Sides reach the UI as `file:` URLs, never base64 (user decision — ask
-//! before changing): as a string, one 16MB image alone weighs about 43MB
-//! and a picture past the limit cannot show at all; a written blob file
-//! has no limit. An opened picture costs its decoded pixels, and closing
-//! the pane gives all of it back.
+//! A blob's picture reaches the UI as its bytes, which the application
+//! hands an `Image` through an image provider, never as base64 (user
+//! decision — ask before changing): as a string, one 16MB image alone
+//! weighs about 43MB and a picture past the limit cannot show at all; the
+//! bytes have no limit. An opened picture costs its bytes and its decoded
+//! pixels, and the pane moving on or closing gives all of it back.
 
-use std::collections::BTreeSet;
-use std::io::Write as _;
+use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
 
 use crate::details::DiffTarget;
+use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
-/// Extensions the UI renders with a QML `Image`, and their MIME types. By
-/// extension on purpose: sniffing would fetch both sides before deciding
-/// whether to fetch them.
-const IMAGE_TYPES: [(&str, &str); 11] = [
-    ("png", "image/png"),
-    ("jpg", "image/jpeg"),
-    ("jpeg", "image/jpeg"),
-    ("gif", "image/gif"),
-    ("bmp", "image/bmp"),
-    ("webp", "image/webp"),
-    ("svg", "image/svg+xml"),
-    ("ico", "image/x-icon"),
-    ("tif", "image/tiff"),
-    ("tiff", "image/tiff"),
-    ("avif", "image/avif"),
-];
+/// A picture format the diff pane renders, as a path's extension names it
+/// (in any case). By extension on purpose: sniffing would fetch both sides
+/// before deciding whether to fetch them. A format the runtime cannot
+/// decode degrades in the UI (`Image.status === Error`), so listing one is
+/// safe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImageFormat {
+    Png,
+    Jpeg,
+    Gif,
+    Bmp,
+    Webp,
+    Svg,
+    Ico,
+    Tiff,
+    Avif,
+}
 
-/// MIME type for paths the preview treats as images. A format the runtime
-/// cannot decode degrades in the UI (`Image.status === Error`), so
-/// listing one is safe.
-pub fn image_mime(path: &str) -> Option<&'static str> {
-    let ext = Path::new(path).extension()?.to_str()?;
-    IMAGE_TYPES
-        .iter()
-        .find(|(e, _)| ext.eq_ignore_ascii_case(e))
-        .map(|(_, mime)| *mime)
+impl ImageFormat {
+    /// The format `path`'s extension names; `None` for every other path,
+    /// which the pane shows no picture for.
+    pub fn of_path(path: &str) -> Option<Self> {
+        let ext = Path::new(path).extension()?.to_str()?.to_ascii_lowercase();
+        Some(match ext.as_str() {
+            "png" => Self::Png,
+            "jpg" | "jpeg" => Self::Jpeg,
+            "gif" => Self::Gif,
+            "bmp" => Self::Bmp,
+            "webp" => Self::Webp,
+            "svg" => Self::Svg,
+            "ico" => Self::Ico,
+            "tif" | "tiff" => Self::Tiff,
+            "avif" => Self::Avif,
+            _ => return None,
+        })
+    }
+
+    /// Whether the format is drawn from shapes, which scale smoothly,
+    /// rather than from pixels.
+    pub fn is_vector(self) -> bool {
+        matches!(self, Self::Svg)
+    }
+}
+
+/// A blob's picture as `git cat-file` gave it, and the format the path it
+/// was at names: what picks a decoder where the bytes do not say, as a
+/// file's name would. No format where that path names none (a side renamed
+/// from one that is no picture's) — the bytes alone then say.
+///
+/// Held for as long as the pane shows it, so at its own length: a read
+/// grows its buffer past what arrived.
+#[derive(Clone, PartialEq, Eq)]
+pub struct PictureBytes {
+    bytes: Arc<[u8]>,
+    format: Option<ImageFormat>,
+}
+
+impl PictureBytes {
+    /// `bytes` as read from `path`.
+    pub fn new(bytes: Vec<u8>, path: &str) -> Self {
+        Self {
+            bytes: Arc::from(bytes),
+            format: ImageFormat::of_path(path),
+        }
+    }
+
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    pub fn format(&self) -> Option<ImageFormat> {
+        self.format
+    }
+}
+
+/// The bytes by their count: a picture's whole contents would bury any
+/// message that prints one.
+impl fmt::Debug for PictureBytes {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "PictureBytes({} bytes, {:?})",
+            self.bytes.len(),
+            self.format
+        )
+    }
+}
+
+/// What an `Image` shows one picture side from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Picture {
+    /// The working tree's own file, shown where it stands.
+    File(PathBuf),
+    /// A blob's bytes, held in memory.
+    Bytes(PictureBytes),
 }
 
 /// One side of a preview (old = before the change, new = after).
@@ -55,22 +124,18 @@ pub fn image_mime(path: &str) -> Option<&'static str> {
 pub struct PreviewSide {
     /// Content size in bytes.
     pub size: u64,
-    /// The working-tree file, or the file the blob was written to. Images
-    /// only, and only until the pane's next read sweeps it
-    /// ([`PreviewFiles::sweep_before`]).
-    pub file: Option<PathBuf>,
-    /// Why a wanted `file` is not there — the only trace of it: a
-    /// size-only side otherwise reads like one no file was asked for.
-    /// `None` when the file is there or was never wanted.
-    pub unwritten: Option<String>,
+    /// What an image's side is shown from; `None` for a binary that is no
+    /// image, or for a blob `cat-file` would not give whole (its row in the
+    /// command log says why).
+    pub picture: Option<Picture>,
 }
 
 /// Old/new content of one diff target, loaded when the text diff is not
 /// the whole story (binary files, images).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FilePreview {
-    /// Set when the path names an image the UI should render.
-    pub image_mime: Option<&'static str>,
+    /// The picture format the path names, where the UI renders one.
+    pub format: Option<ImageFormat>,
     /// `None` = the file does not exist on that side (added/deleted) or
     /// could not be read.
     pub old: Option<PreviewSide>,
@@ -79,8 +144,8 @@ pub struct FilePreview {
 
 /// Where one side's content lives.
 enum SideSource {
-    /// `spec` is `<rev>:<path>` for `git cat-file`; `path`'s extension
-    /// names the file the blob is written to.
+    /// `spec` is `<rev>:<path>` for `git cat-file`; `path` names a
+    /// picture's format ([`PictureBytes`]).
     Blob {
         spec: String,
         path: String,
@@ -90,233 +155,25 @@ enum SideSource {
     Absent,
 }
 
-// ---------------------------------------------------------------------------
-// The files a blob side is written to
-// ---------------------------------------------------------------------------
-
-/// This run's preview directory; each session has a directory inside it.
-pub fn run_dir() -> PathBuf {
-    std::env::temp_dir().join(format!("platitude-gg-{}", std::process::id()))
-}
-
-/// Removes everything the run wrote, for after the last session is gone.
-/// Best-effort: a file a reader still holds open stays.
-pub fn remove_run_dir() {
-    let dir = run_dir();
-    if let Err(error) = std::fs::remove_dir_all(&dir)
-        && error.kind() != std::io::ErrorKind::NotFound
-    {
-        tracing::debug!(path = %dir.display(), %error, "the run's preview files were not all removed");
-    }
-}
-
-/// The preview files one session writes, and the sweeps that take them
-/// away again.
-///
-/// A blob side is written to `<epoch>-<side>.<ext>`, the epoch being the
-/// diff read's own ([`crate::session::RepoSession`] numbers them): a
-/// re-read is a new file and a new URL, and an `Image` reloads only on a
-/// changed source. The pane moving on sweeps the reads before it
-/// ([`Self::sweep_before`]), the pane closing sweeps all
-/// ([`Self::release`]), the session closing removes the directory
-/// ([`Self::remove_all`]). Only settled reads are swept, whatever their
-/// number, so a slow read landing after a fast one still hands the pane
-/// files that are there. Pinned by `preview_integration` and, in
-/// `session_integration::query`,
-/// `a_pictures_file_goes_with_the_pane_and_its_directory_with_the_session`,
-/// which fails at once on a picture side landed by size alone.
-pub struct PreviewFiles {
-    dir: PathBuf,
-    /// The reads whose files are on disk and no longer being written.
-    settled: Mutex<BTreeSet<u64>>,
-    /// Whether `dir` is inside the run's directory, which the last session
-    /// out removes; a caller-chosen directory's parent is not ours.
-    in_run_dir: bool,
-}
-
-/// How many sessions the run's directory belongs to.
-///
-/// An empty directory is not an abandoned one: a session that has not
-/// previewed yet has written nothing, and removing the directory then
-/// fails its next write (`create_dir_all` makes parent and child in two
-/// steps; a removal between them is `NotFound` — on Windows also the
-/// pending delete's `ERROR_ACCESS_DENIED` — landing the side by size
-/// alone). The lock keeps a session being made from racing the exit that
-/// read the count as zero.
-static SESSIONS: Mutex<usize> = Mutex::new(0);
-
-impl PreviewFiles {
-    /// One session's directory inside the run's, made on first write: a
-    /// session that never previews a picture never touches the disk.
-    pub fn new() -> Self {
-        static NEXT: AtomicU64 = AtomicU64::new(1);
-        let serial = NEXT.fetch_add(1, Ordering::Relaxed);
-        *crate::session::relock(&SESSIONS) += 1;
-        Self {
-            dir: run_dir().join(format!("s{serial}")),
-            settled: Mutex::new(BTreeSet::new()),
-            in_run_dir: true,
-        }
-    }
-
-    /// The same, at a directory the caller chose.
-    pub fn at(dir: PathBuf) -> Self {
-        Self {
-            dir,
-            settled: Mutex::new(BTreeSet::new()),
-            in_run_dir: false,
-        }
-    }
-
-    /// Where the files of the read numbered `epoch` go.
-    pub fn read(&self, epoch: u64) -> PreviewRead<'_> {
-        PreviewRead { files: self, epoch }
-    }
-
-    /// Removes the files of every settled read numbered below `epoch`, once
-    /// that read is handed to the pane (what it still shows of them is
-    /// already decoded).
-    pub fn sweep_before(&self, epoch: u64) {
-        self.sweep(|read| read < epoch);
-    }
-
-    /// Removes the files of every settled read — the pane closed.
-    pub fn release(&self) {
-        self.sweep(|_| true);
-    }
-
-    /// Removes everything, directory included — the session closing. A
-    /// read still writing may leave its file; the drop removes the
-    /// directory once more.
-    pub fn remove_all(&self) {
-        crate::session::relock(&self.settled).clear();
-        if let Err(error) = std::fs::remove_dir_all(&self.dir)
-            && error.kind() != std::io::ErrorKind::NotFound
-        {
-            tracing::debug!(path = %self.dir.display(), %error, "preview files not all removed");
-        }
-    }
-
-    /// A file that would not go — on Windows, one the pane's decoder still
-    /// has open — keeps its read settled, so the next sweep asks again.
-    fn sweep(&self, wanted: impl Fn(u64) -> bool) {
-        let mut settled = crate::session::relock(&self.settled);
-        let gone: Vec<u64> = settled.iter().copied().filter(|e| wanted(*e)).collect();
-        if gone.is_empty() {
-            return;
-        }
-        let mut held = BTreeSet::new();
-        if let Ok(entries) = std::fs::read_dir(&self.dir) {
-            for entry in entries.flatten() {
-                let name = entry.file_name();
-                let Some(read) = epoch_of(&name.to_string_lossy()) else {
-                    continue;
-                };
-                if !gone.contains(&read) {
-                    continue;
-                }
-                if let Err(error) = std::fs::remove_file(entry.path()) {
-                    tracing::debug!(path = %entry.path().display(), %error, "preview file not removed");
-                    held.insert(read);
-                }
-            }
-        }
-        settled.retain(|e| !gone.contains(e) || held.contains(e));
-    }
-}
-
-impl Default for PreviewFiles {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Drop for PreviewFiles {
-    fn drop(&mut self) {
-        self.remove_all();
-        if !self.in_run_dir {
-            return;
-        }
-        // Only the last session out removes the run's directory, holding
-        // the count so no session is made meanwhile ([`SESSIONS`]). Files a
-        // cut-short read left keep it.
-        let mut sessions = crate::session::relock(&SESSIONS);
-        *sessions = sessions.saturating_sub(1);
-        if *sessions > 0 {
-            return;
-        }
-        if let Err(error) = std::fs::remove_dir(run_dir())
-            && !matches!(
-                error.kind(),
-                std::io::ErrorKind::NotFound | std::io::ErrorKind::DirectoryNotEmpty
-            )
-        {
-            tracing::debug!(%error, "the run's preview directory was not removed");
-        }
-    }
-}
-
-/// The number in front of `<epoch>-<side>.<ext>`.
-fn epoch_of(name: &str) -> Option<u64> {
-    name.split('-').next()?.parse().ok()
-}
-
-/// One diff read's claim on the files: where its sides go, and the word
-/// that it has finished writing them.
-pub struct PreviewRead<'a> {
-    files: &'a PreviewFiles,
-    epoch: u64,
-}
-
-impl PreviewRead<'_> {
-    /// `<epoch>-<side>.<ext>`, the extension taken from the blob's
-    /// repository path: a decoder is picked by it when the bytes do not say.
-    fn path_for(&self, side: &str, repo_path: &str) -> PathBuf {
-        let name = match Path::new(repo_path).extension().and_then(|e| e.to_str()) {
-            Some(ext) => format!("{}-{side}.{ext}", self.epoch),
-            None => format!("{}-{side}", self.epoch),
-        };
-        self.files.dir.join(name)
-    }
-
-    /// Both sides are written, or never will be: from here on a sweep may
-    /// take this read's files.
-    fn settle(&self) {
-        crate::session::relock(&self.files.settled).insert(self.epoch);
-    }
-}
-
-// ---------------------------------------------------------------------------
-// The preview itself
-// ---------------------------------------------------------------------------
-
 /// Loads the preview for `target`; `None` when a text diff already tells
 /// the whole story (non-image, non-binary files). An image's blob sides
-/// are written under `read`, which is settled on the way out whatever
-/// was found.
+/// are read whole into memory.
 pub async fn file_preview(
     executor: &GitExecutor,
     workdir: &Path,
     target: &DiffTarget,
     is_binary: bool,
-    read: PreviewRead<'_>,
     cancel: &CancellationToken,
 ) -> Option<FilePreview> {
-    let mime = image_mime(target_path(target));
-    if mime.is_none() && !is_binary {
-        read.settle();
+    let format = ImageFormat::of_path(target_path(target));
+    if format.is_none() && !is_binary {
         return None;
     }
-    let want_file = mime.is_some();
+    let want_picture = format.is_some();
     let (old_src, new_src) = side_sources(workdir, target);
-    let old = load_side(executor, workdir, &old_src, want_file, &read, "old", cancel).await;
-    let new = load_side(executor, workdir, &new_src, want_file, &read, "new", cancel).await;
-    read.settle();
-    Some(FilePreview {
-        image_mime: mime,
-        old,
-        new,
-    })
+    let old = load_side(executor, workdir, &old_src, want_picture, cancel).await;
+    let new = load_side(executor, workdir, &new_src, want_picture, cancel).await;
+    Some(FilePreview { format, old, new })
 }
 
 /// A file bigger than this is not walked for syntax context: the reading
@@ -524,17 +381,15 @@ async fn load_side(
     executor: &GitExecutor,
     workdir: &Path,
     source: &SideSource,
-    want_file: bool,
-    read: &PreviewRead<'_>,
-    side: &str,
+    want_picture: bool,
     cancel: &CancellationToken,
 ) -> Option<PreviewSide> {
     match source {
         SideSource::Blob { spec, path } => {
-            let into = want_file.then(|| read.path_for(side, path));
-            blob_side(executor, workdir, spec, into, cancel).await
+            let picture_at = want_picture.then_some(path.as_str());
+            blob_side(executor, workdir, spec, picture_at, cancel).await
         }
-        SideSource::WorkingTree(path) => working_tree_side(path, want_file).await,
+        SideSource::WorkingTree(path) => working_tree_side(path, want_picture).await,
         SideSource::Absent => None,
     }
 }
@@ -542,33 +397,28 @@ async fn load_side(
 /// Reads one side out of the object database. No side is data: added,
 /// deleted and unborn HEAD all look like that from here.
 ///
-/// An image side is streamed into `into` and sized by what arrived; one
-/// that could not be written is sized by `cat-file -s` like a non-image
-/// binary, and carries why ([`PreviewSide::unwritten`]).
+/// A picture side (`picture_at`, the path it was at, given) is read whole
+/// and sized by what arrived; one that could not be read is sized by
+/// `cat-file -s` like a non-image binary.
 async fn blob_side(
     executor: &GitExecutor,
     workdir: &Path,
     spec: &str,
-    into: Option<PathBuf>,
+    picture_at: Option<&str>,
     cancel: &CancellationToken,
 ) -> Option<PreviewSide> {
     if !blob_is_there(executor, workdir, spec, cancel).await {
         return None;
     }
-    let mut unwritten = None;
-    if let Some(path) = into {
-        match write_blob(executor, workdir, spec, &path, cancel).await {
-            Ok(size) => {
+    if let Some(path) = picture_at {
+        match read_blob(executor, workdir, spec, cancel).await {
+            Ok(bytes) => {
                 return Some(PreviewSide {
-                    size,
-                    file: Some(path),
-                    unwritten: None,
+                    size: bytes.len() as u64,
+                    picture: Some(Picture::Bytes(PictureBytes::new(bytes, path))),
                 });
             }
-            Err(error) => {
-                tracing::debug!(spec, %error, "preview blob not written; size only");
-                unwritten = Some(error.to_string());
-            }
+            Err(error) => tracing::debug!(spec, %error, "preview blob not read; size only"),
         }
     }
     let size_cmd = GitCommand::new()
@@ -582,94 +432,39 @@ async fn blob_side(
     let size: u64 = out.stdout_utf8().trim().parse().ok()?;
     Some(PreviewSide {
         size,
-        file: None,
-        unwritten,
+        picture: None,
     })
 }
 
-/// Streams `git cat-file blob <spec>` into `path`, answering how many
-/// bytes arrived. A file left half-written by a failure is removed.
-async fn write_blob(
+/// `git cat-file blob <spec>`, whole, across every chunk the pipe hands
+/// over.
+async fn read_blob(
     executor: &GitExecutor,
     workdir: &Path,
     spec: &str,
-    path: &Path,
     cancel: &CancellationToken,
-) -> Result<u64, WriteBlobError> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)
-            .map_err(|error| WriteBlobError::at(dir, "could not be made", error))?;
-    }
-    let mut file = std::fs::File::create(path)
-        .map_err(|error| WriteBlobError::at(path, "could not be opened", error))?;
-    let mut written = 0u64;
-    let mut failed: Option<std::io::Error> = None;
+) -> Result<Vec<u8>, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["cat-file", "blob"])
         .arg(spec);
-    let ran = executor
-        .run_streaming(cmd, cancel, &mut |chunk| {
-            if failed.is_some() {
-                return;
-            }
-            match file.write_all(chunk) {
-                Ok(()) => written += chunk.len() as u64,
-                Err(error) => failed = Some(error),
-            }
-        })
-        .await;
-    drop(file);
-    let outcome = match (ran, failed) {
-        (Err(error), _) => Err(WriteBlobError::Git(error)),
-        (Ok(_), Some(error)) => Err(WriteBlobError::at(path, "could not be written to", error)),
-        (Ok(_), None) => Ok(written),
-    };
-    if outcome.is_err()
-        && let Err(error) = std::fs::remove_file(path)
-    {
-        tracing::debug!(path = %path.display(), %error, "half-written preview file not removed");
-    }
-    outcome
-}
-
-#[derive(Debug, thiserror::Error)]
-enum WriteBlobError {
-    /// `cat-file` itself fell over.
-    #[error("{0}")]
-    Git(#[from] crate::error::GitError),
-    /// A step of the write did. The path and step are the whole
-    /// diagnosis: a bare `NotFound` cannot say whether the directory, the
-    /// file or the stream went, and the side carries only this sentence.
-    #[error("{} {step}: {error}", path.display())]
-    Io {
-        path: PathBuf,
-        step: &'static str,
-        error: std::io::Error,
-    },
-}
-
-impl WriteBlobError {
-    fn at(path: &Path, step: &'static str, error: std::io::Error) -> Self {
-        Self::Io {
-            path: path.to_path_buf(),
-            step,
-            error,
-        }
-    }
+    let mut bytes = Vec::new();
+    executor
+        .run_streaming(cmd, cancel, &mut |chunk| bytes.extend_from_slice(chunk))
+        .await?;
+    Ok(bytes)
 }
 
 /// Reads one side straight from the working tree: the file itself is the
 /// preview, so nothing is copied.
-async fn working_tree_side(path: &Path, want_file: bool) -> Option<PreviewSide> {
+async fn working_tree_side(path: &Path, want_picture: bool) -> Option<PreviewSide> {
     let meta = tokio::fs::metadata(path).await.ok()?;
     if !meta.is_file() {
         return None;
     }
     Some(PreviewSide {
         size: meta.len(),
-        file: want_file.then(|| path.to_path_buf()),
-        unwritten: None,
+        picture: want_picture.then(|| Picture::File(path.to_path_buf())),
     })
 }
 
@@ -679,13 +474,16 @@ mod tests {
     use crate::refusing;
 
     #[test]
-    fn image_mime_matches_extensions_case_insensitively() {
-        assert_eq!(image_mime("art/logo.PNG"), Some("image/png"));
-        assert_eq!(image_mime("photo.jpeg"), Some("image/jpeg"));
-        assert_eq!(image_mime("icon.svg"), Some("image/svg+xml"));
-        assert_eq!(image_mime("readme.md"), None);
-        assert_eq!(image_mime("no-extension"), None);
-        assert_eq!(image_mime("tricky.png.txt"), None);
+    fn a_paths_extension_names_its_format_in_any_case() {
+        assert_eq!(ImageFormat::of_path("art/logo.PNG"), Some(ImageFormat::Png));
+        assert_eq!(ImageFormat::of_path("photo.jpeg"), Some(ImageFormat::Jpeg));
+        assert_eq!(ImageFormat::of_path("photo.jpg"), Some(ImageFormat::Jpeg));
+        assert_eq!(ImageFormat::of_path("scan.TIF"), Some(ImageFormat::Tiff));
+        assert_eq!(ImageFormat::of_path("icon.svg"), Some(ImageFormat::Svg));
+        assert_eq!(ImageFormat::of_path("readme.md"), None);
+        assert_eq!(ImageFormat::of_path("no-extension"), None);
+        assert_eq!(ImageFormat::of_path("tricky.png.txt"), None);
+        assert_eq!(ImageFormat::of_path("art/.png"), None);
     }
 
     /// The executor cannot run anything and the repository is not there,
@@ -693,7 +491,6 @@ mod tests {
     #[tokio::test]
     async fn plain_text_has_no_preview_and_asks_git_nothing() {
         let (exec, asked) = refusing::git();
-        let (_dir, files) = files();
 
         let preview = file_preview(
             &exec,
@@ -702,7 +499,6 @@ mod tests {
                 path: "notes.txt".to_string(),
             },
             false,
-            files.read(1),
             &CancellationToken::new(),
         )
         .await;
@@ -711,95 +507,13 @@ mod tests {
         assert_eq!(asked.count(), 0, "nothing was asked of git");
     }
 
-    /// A directory of this test's own; the temp dir outlives the files,
-    /// whose drop removes only their own directory.
-    fn files() -> (tempfile::TempDir, PreviewFiles) {
-        let dir = crate::temp::dir();
-        let files = PreviewFiles::at(dir.path().join("s"));
-        (dir, files)
-    }
-
-    fn write(files: &PreviewFiles, epoch: u64, side: &str) -> PathBuf {
-        let read = files.read(epoch);
-        let path = read.path_for(side, "art/logo.png");
-        std::fs::create_dir_all(path.parent().expect("a parent")).expect("dir");
-        std::fs::write(&path, b"png").expect("write");
-        path
-    }
-
+    /// A message that prints a picture says how big it is, not what it holds.
     #[test]
-    fn a_side_is_named_by_its_read_and_keeps_the_extension() {
-        let (_dir, files) = files();
-        let read = files.read(7);
-        assert!(read.path_for("old", "a/b.JPG").ends_with("7-old.JPG"));
-        assert!(read.path_for("new", "bare").ends_with("7-new"));
-    }
-
-    #[test]
-    fn a_sweep_takes_the_settled_reads_before_the_epoch_and_leaves_the_rest() {
-        let (_dir, files) = files();
-        let first = write(&files, 1, "old");
-        let second = write(&files, 2, "new");
-        let unsettled = write(&files, 3, "new");
-        files.read(1).settle();
-        files.read(2).settle();
-        files.sweep_before(3);
-        assert!(!first.exists(), "a settled read before the epoch goes");
-        assert!(!second.exists());
-        assert!(unsettled.exists(), "a read still writing is left alone");
-        // The unsettled one lands and is swept by the next read after it.
-        files.read(3).settle();
-        files.sweep_before(4);
-        assert!(!unsettled.exists());
-    }
-
-    #[test]
-    fn a_release_takes_every_settled_read_whatever_its_number() {
-        let (_dir, files) = files();
-        let newest = write(&files, 9, "new");
-        let writing = write(&files, 10, "new");
-        files.read(9).settle();
-        files.release();
-        assert!(!newest.exists());
-        assert!(writing.exists(), "not settled, so not this sweep's to take");
-    }
-
-    #[test]
-    fn dropping_the_files_removes_their_directory() {
-        let (temp, files) = files();
-        let path = write(&files, 1, "new");
-        let dir = files.dir.clone();
-        drop(files);
-        assert!(!path.exists());
-        assert!(!dir.exists());
-        assert!(
-            temp.path().exists(),
-            "what is above the files is left alone"
+    fn a_picture_prints_its_bytes_by_their_count() {
+        let picture = PictureBytes::new(vec![0; 3 * 1024 * 1024], "art/logo.PNG");
+        assert_eq!(
+            format!("{picture:?}"),
+            "PictureBytes(3145728 bytes, Some(Png))"
         );
-    }
-
-    /// A session on its way out leaves the run's directory to one that has
-    /// written nothing yet ([`SESSIONS`]). Only this half is assertable
-    /// here: whether the last session out removes it depends on what the
-    /// parallel tests hold.
-    #[test]
-    fn the_run_directory_stays_while_another_session_holds_it() {
-        let live = PreviewFiles::new();
-        std::fs::create_dir_all(run_dir()).expect("the run's directory");
-        drop(PreviewFiles::new());
-        assert!(
-            run_dir().exists(),
-            "a session's exit does not take the directory another one is about to write to"
-        );
-        drop(live);
-    }
-
-    #[test]
-    fn a_read_of_the_files_of_nothing_sweeps_nothing_and_fails_nothing() {
-        let (_dir, files) = files();
-        files.read(1).settle();
-        files.sweep_before(2);
-        files.release();
-        files.remove_all();
     }
 }

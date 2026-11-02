@@ -190,8 +190,8 @@ impl RepoSession {
         );
         match diff {
             Ok(raw) => {
-                // Passed while reading: everything below (a picture written
-                // to disk, a colouring walk) would be spent for nobody.
+                // Passed while reading: everything below (a picture's bytes
+                // read, a colouring walk) would be spent for nobody.
                 if !self.diff_is_current(epoch) {
                     return DiffReadOutcome::Overtaken;
                 }
@@ -209,27 +209,13 @@ impl RepoSession {
                 let patches = Arc::new(patches);
                 let marks = Arc::new(crate::intraline::marks(&patches));
                 let is_binary = patches.iter().any(|p| p.is_binary);
-                let preview = preview::file_preview(
-                    &self.executor,
-                    &workdir,
-                    &target,
-                    is_binary,
-                    self.preview_files.read(epoch),
-                    &cancel,
-                )
-                .await;
+                let preview =
+                    preview::file_preview(&self.executor, &workdir, &target, is_binary, &cancel)
+                        .await;
                 // Asked again: the pane can move on during the picture read.
                 if !self.diff_is_current(epoch) {
-                    // This read's files go too: nothing will name them, and
-                    // the read that passed this one sweeps only below
-                    // itself, possibly already (`preview::PreviewFiles`).
-                    self.preview_files.sweep_before(epoch + 1);
                     return DiffReadOutcome::Overtaken;
                 }
-                // Earlier reads' picture files go now, whether or not this
-                // one wrote any: what the pane still shows of them it has
-                // already decoded (`preview::PreviewFiles`).
-                self.preview_files.sweep_before(epoch);
                 // Noted before the event: what the next re-read compares
                 // against is what the pane was handed. Only here, where the
                 // event goes out: noting a diff the pane never got would

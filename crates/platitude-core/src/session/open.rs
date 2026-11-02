@@ -165,7 +165,6 @@ impl RepoSession {
             rereads: Rereads::default(),
             last_diff: Mutex::new(None),
             lex_cache: Mutex::new(None),
-            preview_files: preview::PreviewFiles::new(),
             log_cancel: Mutex::new(None),
             details_read: Latest::default(),
             plan_read: Latest::default(),

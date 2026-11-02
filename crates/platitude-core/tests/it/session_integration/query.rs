@@ -795,9 +795,9 @@ async fn a_diff_of_a_file_through_git_lfs_says_so() {
 }
 
 /// A picture's blob side has no path a URL could name, so the session
-/// writes it to a file of the run's own (`preview::PreviewFiles`).
+/// hands the pane its bytes, every read anew (`preview::Picture::Bytes`).
 #[tokio::test(flavor = "multi_thread")]
-async fn a_pictures_file_goes_with_the_pane_and_its_directory_with_the_session() {
+async fn a_pictures_blob_reaches_the_pane_as_its_bytes() {
     let mut repo = TestRepo::init();
     // The extension is all the preview asks; the bytes are anything git
     // calls binary.
@@ -808,43 +808,31 @@ async fn a_pictures_file_goes_with_the_pane_and_its_directory_with_the_session()
     let (sink, session) = opened(&repo).await;
     sink.opening_settled(&session).await;
 
-    /// What a picture read said about its old side. A side without a file
-    /// is final, not pending (`preview::blob_side`): waiting for the file
-    /// would spend the silence budget and report only that nothing was said.
-    enum OldSide {
-        File(std::path::PathBuf),
-        /// The size, and what stopped the write — the reason is what the
-        /// failure has to say (`preview::PreviewSide::unwritten`).
-        SizeOnly(u64, Option<String>),
-    }
-
-    fn old_sides(events: &[SessionEvent]) -> Vec<OldSide> {
+    /// The old side of every picture read so far, as it arrived.
+    fn old_sides(events: &[SessionEvent]) -> Vec<platitude_core::preview::PreviewSide> {
         events
             .iter()
             .filter_map(|event| match event {
-                // Only a picture asks for a file; a binary that is no
-                // picture lands by size on purpose.
                 SessionEvent::DiffLoaded {
                     preview: Some(preview),
                     ..
-                } if preview.image_mime.is_some() => preview.old.as_ref(),
+                } if preview.format.is_some() => preview.old.clone(),
                 _ => None,
-            })
-            .map(|side| match &side.file {
-                Some(path) => OldSide::File(path.clone()),
-                None => OldSide::SizeOnly(side.size, side.unwritten.clone()),
             })
             .collect()
     }
 
     /// Outside the wait: a panic in the predicate poisons the sink's lock.
-    fn file_of(side: OldSide) -> std::path::PathBuf {
-        match side {
-            OldSide::File(path) => path,
-            OldSide::SizeOnly(size, why) => panic!(
-                "the picture's old side arrived by size alone ({size} bytes), \
-                 with no file for the pane to show it from: {}",
-                why.unwrap_or_else(|| "nothing said why".to_string())
+    fn bytes_of(
+        side: &platitude_core::preview::PreviewSide,
+    ) -> (Vec<u8>, Option<platitude_core::preview::ImageFormat>) {
+        match &side.picture {
+            Some(platitude_core::preview::Picture::Bytes(picture)) => {
+                (picture.bytes().to_vec(), picture.format())
+            }
+            other => panic!(
+                "the picture's old side arrived as {other:?} ({} bytes), not as its bytes",
+                side.size
             ),
         }
     }
@@ -852,40 +840,26 @@ async fn a_pictures_file_goes_with_the_pane_and_its_directory_with_the_session()
     let target = DiffTarget::Unstaged {
         path: "logo.png".to_string(),
     };
+    let committed = (
+        b"\0PNG-shaped bytes\n".to_vec(),
+        Some(platitude_core::preview::ImageFormat::Png),
+    );
     session.load_diff(target.clone());
-    let first = file_of(
-        sink.wait_for("the picture's diff", |events| old_sides(events).pop())
-            .await,
-    );
-    assert!(
-        first.starts_with(platitude_core::preview::run_dir()),
-        "written under the run's own directory: {}",
-        first.display()
-    );
-    assert!(first.is_file());
-    let dir = first.parent().unwrap().to_path_buf();
+    let first = sink
+        .wait_for("the picture's diff", |events| old_sides(events).pop())
+        .await;
+    assert_eq!(bytes_of(&first), committed);
 
-    // The pane closed: the file goes, the directory stays.
-    session.release_preview();
-    assert!(!first.exists(), "released with the pane");
-    assert!(dir.exists());
-
-    // Read again: a new name, since the URL has to change.
+    // Read again: the bytes come again, for the pane to hold under a new
+    // name.
     session.load_diff(target);
-    let second = file_of(
-        sink.wait_for("the picture's second diff", |events| {
-            old_sides(events)
-                .into_iter()
-                .find(|side| !matches!(side, OldSide::File(file) if *file == first))
+    let second = sink
+        .wait_for("the picture's second diff", |events| {
+            let sides = old_sides(events);
+            (sides.len() > 1).then(|| sides[sides.len() - 1].clone())
         })
-        .await,
-    );
-    assert!(second.is_file());
-    assert_eq!(second.parent().unwrap(), dir);
-
-    session.close();
-    assert!(!second.exists());
-    assert!(!dir.exists(), "the session's directory goes with the close");
+        .await;
+    assert_eq!(bytes_of(&second), committed);
     session.close_and_wait().await;
 }
 

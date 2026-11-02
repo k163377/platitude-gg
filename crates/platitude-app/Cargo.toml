@@ -22,10 +22,17 @@ memprobe = []
 [dependencies]
 platitude-core.workspace = true
 qtbridge = "0.3"
-# `QUrl`, which qtbridge's type library does not re-export (`urlpath`). The
+# `QUrl` (`urlpath`) and the Qt types the image provider's bridge names
+# (`preview_images`), which qtbridge's type library does not re-export. The
 # version and features qtbridge-type-lib already takes it with, so the tree
 # holds one cxx-qt-lib.
 cxx-qt-lib = { version = "0.10", features = ["qt_gui", "qt_qml"] }
+# The preview's image provider (`preview_images`): a `QQuickImageProvider`
+# its CXX-Qt bridge derives, registered through cxx-qt-lib's `QQmlEngine`.
+# `cxx` is what the bridge expands into. The versions the tree already holds
+# under qtbridge.
+cxx = "1.0"
+cxx-qt = "0.10"
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
@@ -34,6 +41,11 @@ tracing.workspace = true
 # `tracing-log`: nothing here logs through `log`; a dependency that does
 # goes unheard until it is back on.
 tracing-subscriber = { version = "0.3", default-features = false, features = ["smallvec", "fmt", "std"] }
+
+[build-dependencies]
+# Builds the C++ the image provider's bridge generates, against the Qt
+# qtbridge finds (`build.rs`).
+cxx-qt-build = "0.10"
 
 [lints]
 workspace = true

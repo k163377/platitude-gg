@@ -183,8 +183,19 @@ impl DiffModel {
         self.ending_ext = words.ext;
     }
 
-    /// Maps the core preview onto the QML-facing strings. `None` resets.
+    /// Maps the core preview onto the QML-facing strings, holding a blob
+    /// side's bytes for the pane (`preview_images`). `None` resets. What
+    /// the last preview held is let go: each read holds its pictures under
+    /// ids of its own, so the URLs the pane is handed name none of those.
     pub(super) fn apply_preview(&mut self, preview: Option<&FilePreview>) {
+        let before = std::mem::take(&mut self.preview_held);
+        self.show_preview(preview);
+        for id in before {
+            crate::preview_images::release(&id);
+        }
+    }
+
+    fn show_preview(&mut self, preview: Option<&FilePreview>) {
         let Some(p) = preview else {
             self.preview_kind.clear();
             self.preview_old_url.clear();
@@ -194,33 +205,47 @@ impl DiffModel {
             self.preview_new_size.clear();
             return;
         };
-        self.preview_kind = if p.image_mime.is_some() {
+        self.preview_kind = if p.format.is_some() {
             "image".to_string()
         } else {
             "binary".to_string()
         };
-        self.preview_vector = p.image_mime == Some("image/svg+xml");
-        // The read's fingerprint rides the URL: an `Image` reloads only when
-        // its source string changes, and the working-tree side keeps its
-        // path. Qt ignores a `file:` URL's query.
+        self.preview_vector = p.format.is_some_and(ImageFormat::is_vector);
+        // An `Image` reloads only when its source string changes. A held
+        // picture is a new id for every read; the working-tree side keeps
+        // its path, so the read's fingerprint rides its URL — Qt ignores a
+        // `file:` URL's query.
         let stamp = &self.fingerprint;
-        let url = |side: &Option<PreviewSide>| -> String {
-            let Some(file) = side.as_ref().and_then(|s| s.file.as_deref()) else {
-                return String::new();
-            };
-            let url = crate::urlpath::file_url(file);
-            if url.is_empty() {
-                return url;
+        let tab = self.tab_id;
+        let mut held = Vec::new();
+        let mut url = |side: &Option<PreviewSide>| -> String {
+            match side.as_ref().and_then(|s| s.picture.as_ref()) {
+                None => String::new(),
+                Some(Picture::File(file)) => {
+                    let url = crate::urlpath::file_url(file);
+                    if url.is_empty() {
+                        return url;
+                    }
+                    format!("{url}?read={stamp}")
+                }
+                Some(Picture::Bytes(picture)) => {
+                    let id = crate::preview_images::hold(tab, picture);
+                    let url = crate::preview_images::url(&id);
+                    held.push(id);
+                    url
+                }
             }
-            format!("{url}?read={stamp}")
         };
+        let old_url = url(&p.old);
+        let new_url = url(&p.new);
         let size = |side: &Option<PreviewSide>| -> String {
             side.as_ref()
                 .map(|s| human_size(s.size))
                 .unwrap_or_default()
         };
-        self.preview_old_url = url(&p.old);
-        self.preview_new_url = url(&p.new);
+        self.preview_old_url = old_url;
+        self.preview_new_url = new_url;
+        self.preview_held = held;
         self.preview_old_size = size(&p.old);
         self.preview_new_size = size(&p.new);
     }
@@ -350,6 +375,7 @@ mod tests {
     use super::*;
     use crate::models::notify::runs_of;
     use platitude_core::parse::diff::parse_patch;
+    use platitude_core::preview::PictureBytes;
 
     /// How a re-read moved the rows, by the keys the model keeps them by.
     fn edit(before: &str, after: &str, split: bool) -> crate::models::notify::Edit {
@@ -467,5 +493,62 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A blob side is held for the pane under an `image://` URL of its
+    /// tab's; the working-tree side stays a `file:` URL stamped with the
+    /// read. The next read lets the last one's bytes go, and the pane
+    /// closing lets go of the rest.
+    #[test]
+    fn a_pane_holds_its_pictures_until_the_next_read_or_its_close() {
+        let picture = |bytes: &[u8]| PreviewSide {
+            size: bytes.len() as u64,
+            picture: Some(Picture::Bytes(PictureBytes::new(
+                bytes.to_vec(),
+                "logo.png",
+            ))),
+        };
+        let file = std::env::temp_dir().join("logo.png");
+        let read = |old: &[u8]| FilePreview {
+            format: Some(ImageFormat::Png),
+            old: Some(picture(old)),
+            new: Some(PreviewSide {
+                size: 1,
+                picture: Some(Picture::File(file.clone())),
+            }),
+        };
+        let mut model = DiffModel {
+            tab_id: 41,
+            fingerprint: "00ff".to_string(),
+            ..DiffModel::default()
+        };
+
+        model.apply_preview(Some(&read(b"first")));
+        let first = model.preview_held.clone();
+        assert_eq!(first.len(), 1, "the blob side, not the file");
+        assert_eq!(model.preview_old_url, crate::preview_images::url(&first[0]));
+        assert!(first[0].starts_with("t41-"), "{first:?}");
+        assert!(crate::preview_images::is_held(&first[0]));
+        assert_eq!(
+            model.preview_new_url,
+            format!("{}?read=00ff", crate::urlpath::file_url(&file))
+        );
+
+        model.apply_preview(Some(&read(b"second")));
+        let second = model.preview_held.clone();
+        assert_ne!(model.preview_old_url, crate::preview_images::url(&first[0]));
+        assert!(
+            !crate::preview_images::is_held(&first[0]),
+            "the last read's bytes go"
+        );
+        assert!(crate::preview_images::is_held(&second[0]));
+
+        model.apply_preview(None);
+        assert!(model.preview_held.is_empty());
+        assert!(
+            !crate::preview_images::is_held(&second[0]),
+            "the pane closed"
+        );
+        assert_eq!(model.preview_old_url, "");
     }
 }

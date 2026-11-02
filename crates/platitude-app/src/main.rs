@@ -9,6 +9,7 @@ mod hub;
 mod logsink;
 mod models;
 mod ops;
+mod preview_images;
 mod qml_engine;
 mod qrc;
 #[cfg(test)]
@@ -82,6 +83,7 @@ fn main() {
     let mut app = QGuiApplication::new();
     let mut engine = QQmlApplicationEngine::new();
     qml_engine::arm(engine.pin_mut());
+    preview_images::install(engine.pin_mut());
     // The slug, not a display name: QStandardPaths joins it into
     // `~/.cache/<name>/` and xcb makes it the WM_CLASS class, where a space
     // costs a desktop-file match.

@@ -5,7 +5,7 @@ use platitude_core::Oid;
 use platitude_core::details::DiffTarget;
 use platitude_core::eol;
 use platitude_core::parse::diff::{DiffLineLocation, FilePatch};
-use platitude_core::preview::{FilePreview, PreviewSide};
+use platitude_core::preview::{FilePreview, ImageFormat, Picture, PreviewSide};
 use qtbridge::qtbridge_type_lib::QVariantMap;
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, QmlObject, qobject};
 
@@ -239,14 +239,17 @@ pub struct DiffModel {
     find_error: String,
     /// "" (text diff only) / "image" / "binary".
     preview_kind: String,
-    /// `file:` URLs for the image sides ("" = no renderable image there):
-    /// the working-tree file, or the file core wrote the blob to
-    /// (`platitude_core::preview::PreviewFiles`), stamped with the read
-    /// (`rows::apply_preview`).
+    /// URLs for the image sides ("" = no renderable image there): the
+    /// working-tree file's `file:` URL stamped with the read, or the
+    /// `image://` a blob's bytes are held under (`preview_images`) —
+    /// `rows::apply_preview`.
     preview_old_url: String,
     preview_new_url: String,
-    /// Whether the previewed image is a vector one (`image/svg+xml`); the
-    /// cell picks its upscale smoothing by it.
+    /// The ids the shown preview's bytes are held under, let go when the
+    /// next read is shown or the pane closes.
+    preview_held: Vec<String>,
+    /// Whether the previewed image is a vector one
+    /// (`ImageFormat::is_vector`); the cell picks its upscale smoothing by it.
     preview_vector: bool,
     /// Human-readable sizes ("" = the side does not exist).
     preview_old_size: String,

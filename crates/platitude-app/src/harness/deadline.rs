@@ -72,24 +72,23 @@ pub(crate) enum Station {
     TabsClosing = 4,
     WritesJoining = 5,
     RuntimeStopping = 6,
-    RunDirClearing = 7,
     /// The hub is down; Qt is still standing.
-    HubDown = 8,
+    HubDown = 7,
     /// Dropping the QML engine and the Qt application while Qt's own
     /// threads still run, so the exit finds nothing of Qt's left to take
     /// down (`main`).
-    QtTearingDown = 9,
+    QtTearingDown = 8,
     /// Inside `std::process::exit`: on Windows `ExitProcess` ends every
     /// other thread — the deadline thread among them — before the loaded
     /// libraries' detach, so a hang there is named only by the trail.
-    Exiting = 10,
+    Exiting = 9,
 }
 
 impl Station {
     /// Every station, at the index of its number ([`Station::of`] decodes
     /// by it). A new station is added here by hand — only the matches
     /// below are checked by the compiler.
-    const ALL: [Station; 11] = [
+    const ALL: [Station; 10] = [
         Self::Starting,
         Self::EventLoop,
         Self::LeftEventLoop,
@@ -97,7 +96,6 @@ impl Station {
         Self::TabsClosing,
         Self::WritesJoining,
         Self::RuntimeStopping,
-        Self::RunDirClearing,
         Self::HubDown,
         Self::QtTearingDown,
         Self::Exiting,
@@ -112,7 +110,6 @@ impl Station {
             Self::TabsClosing => "closing the tabs",
             Self::WritesJoining => "joining the writes in flight",
             Self::RuntimeStopping => "stopping the runtime",
-            Self::RunDirClearing => "clearing the run directory",
             Self::HubDown => "the hub is down",
             Self::QtTearingDown => "tearing Qt down",
             Self::Exiting => "exiting",
@@ -132,7 +129,6 @@ impl Station {
             Self::TabsClosing => "tabs-closing",
             Self::WritesJoining => "writes-joining",
             Self::RuntimeStopping => "runtime-stopping",
-            Self::RunDirClearing => "run-dir-clearing",
             Self::HubDown => "hub-down",
             Self::QtTearingDown => "qt-tearing-down",
             Self::Exiting => "exiting",

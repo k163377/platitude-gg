@@ -312,7 +312,12 @@ impl Hub {
         };
         session.close();
         match page {
-            PageAfter::TakenDown => tab.feeds.release_all(),
+            PageAfter::TakenDown => {
+                tab.feeds.release_all();
+                // The page's diff pane goes with it, and the pictures held
+                // for it (`preview_images`).
+                crate::preview_images::release_tab(id);
+            }
             // The invokers stay: the page attaches once, when built, and
             // would be left attached to nothing. Queued reads are the old
             // worktree's; the log's messages stay.
@@ -372,6 +377,8 @@ impl Hub {
                 session.close();
                 self.park_writes_of(&session);
             }
+            // Whatever its diff pane still held (`preview_images`).
+            crate::preview_images::release_tab(id);
             crate::harness::memprobe::forget(id);
             tracing::info!(tab = id, "closed repository tab");
         }
@@ -552,4 +559,50 @@ fn apply_repo_settings(session: &Arc<RepoSession>, applied: &platitude_core::set
     // Walks nothing twice on a new session: with no workdir yet the
     // restart returns, and the opening's own `restart_log` reads this.
     session.set_log_limit(applied.initial_commits);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use platitude_core::preview::PictureBytes;
+
+    /// A closed tab's page goes without its diff pane clearing, so the
+    /// close itself lets go of what the pane held (`preview_images`), and
+    /// of nothing another tab holds. The ids start high: the pictures are
+    /// held process-wide, beside the tabs of the other tests.
+    #[test]
+    fn closing_a_tab_lets_go_of_its_pictures() {
+        let mut hub = Hub {
+            runtime: Some(
+                tokio::runtime::Builder::new_current_thread()
+                    .build()
+                    .expect("a runtime"),
+            ),
+            executor: GitExecutor::new(),
+            git_program: String::new(),
+            restart_wanted: false,
+            tabs: HashMap::new(),
+            next_tab_id: 900,
+            parked_writes: Vec::new(),
+            saves: saves::Saves::default(),
+            store: Store::ephemeral(),
+            settings: Settings::default(),
+            saved_state: State::default(),
+            state: State::default(),
+            held_elsewhere: String::new(),
+        };
+        let repo = PathBuf::from("repo");
+        let closed = hub.reserve_tab(repo.clone(), repo.clone()).expect("a tab");
+        let open = hub.reserve_tab(repo.clone(), repo).expect("a tab");
+        let picture = PictureBytes::new(vec![1, 2, 3], "logo.png");
+        let gone = crate::preview_images::hold(closed, &picture);
+        let kept = crate::preview_images::hold(open, &picture);
+
+        hub.close_tab(closed);
+        assert!(!crate::preview_images::is_held(&gone));
+        assert!(crate::preview_images::is_held(&kept));
+
+        hub.close_tab(open);
+        assert!(!crate::preview_images::is_held(&kept));
+    }
 }

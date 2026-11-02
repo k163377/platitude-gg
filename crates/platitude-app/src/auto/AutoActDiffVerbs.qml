@@ -197,8 +197,8 @@ Item {
                + " why=" + notes.wholeShown + " mode=" + notes.modeShown
                + " order=" + notes.fileLinesOrder
     }
-    /// `kind=` and `pictures=` (sides decoded) are what the picture cannot tell: an unread pane and a `file:` URL
-    /// naming nothing both photograph as an empty frame.
+    /// `kind=` and `pictures=` (sides decoded) are what the picture cannot tell: an unread pane and a source
+    /// naming nothing (a `file:` URL, or an `image://` id let go) both photograph as an empty frame.
     function previewLine() {
         return "preview_pane kind=" + diffPane.diffModel.previewKind
                + " binary=" + diffPane.diffModel.isBinary
