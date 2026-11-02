@@ -90,6 +90,55 @@ async fn details_read_co_authors_whatever_case_the_trailer_used() {
     assert!(d.message.contains("Co-Authored-By: Claude Opus 5"));
 }
 
+/// The editor's count (`trailers::co_authors_in`, a copy of git's rule so
+/// it costs no process per keystroke) credits whoever git records for the
+/// same body: each body is committed under a subject and git's own
+/// trailer read is the answer.
+#[test]
+fn a_typed_body_credits_whoever_git_records() {
+    let mut repo = TestRepo::init();
+    let bodies = [
+        "Co-authored-by: Bob <b@e.com>",
+        "Co-authored-by: A <a@e.com>\nCo-Authored-By: B <b@e.com>",
+        "Some prose.\n\nCo-authored-by: Bob <b@e.com>\nSigned-off-by: Al <a@e.com>",
+        // A git-generated trailer lets prose share the block, up to 3 lines
+        // of it per trailer.
+        "Some prose.\n\nPaired today.\nCo-authored-by: Bob <b@e.com>\nSigned-off-by: Al <a@e.com>",
+        "Some prose.\n\nPaired today, and on and on.\nMore prose.\nAnd more.\nCo-authored-by: Bob <b@e.com>",
+        "I wrote Co-authored-by: nobody <n@e.com> in the body.",
+        "Prose.\n\nCo-authored-by : Bob <b@e.com>",
+        "Prose.\n\nCo-authored-by: Bob\n  <b@e.com>",
+        "Prose.\n\n  indented first\nCo-authored-by: Bob <b@e.com>",
+        "Prose.\n\nCo_authored_by: Bob <b@e.com>\nCo-authored-by: Al <a@e.com>",
+        "Prose.\n\nCo-authored-by: Bob <b@e.com>\n\n",
+        // `commit -m` keeps a `#` line; git's trailer read passes over it.
+        "Prose.\n\n# a note\nCo-authored-by: Bob <b@e.com>",
+        // …and ends the trailer before it: the indented line after it
+        // continues nothing.
+        "Prose.\n\nSigned-off-by: Al <a@e.com>\nCo-authored-by: Bob <b@e.com>\n# note\n Carol <c@e.com>",
+    ];
+    let mut wrong = Vec::new();
+    for body in bodies {
+        repo.git(&[
+            "commit",
+            "--allow-empty",
+            "-m",
+            &format!("subject\n\n{body}"),
+        ]);
+        let field = repo.git(&[
+            "log",
+            "-1",
+            "--format=%(trailers:key=Co-authored-by,valueonly,separator=%x1f)",
+        ]);
+        let typed = platitude_core::trailers::co_authors_in(body);
+        let recorded = platitude_core::trailers::parse_co_authors(&field);
+        if typed != recorded {
+            wrong.push(format!("{body:?}: typed {typed:?}, git {recorded:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
 #[tokio::test]
 async fn details_report_renames_with_scores() {
     let mut repo = TestRepo::init();

@@ -19,43 +19,118 @@ pub struct CoAuthor {
     pub email: String,
 }
 
-/// The `Co-authored-by` trailers a message body carries, by git's rule:
-/// the trailer block is the last paragraph, and only if every line is a
-/// `key: value` or an indented continuation — so a body that mentions
-/// "Co-authored-by:" in prose credits nobody.
+/// The trailers git writes itself; one in the last paragraph lets prose
+/// share the block (`trailer.c` `git_generated_prefixes`).
+const GIT_GENERATED: [&str; 2] = ["Signed-off-by: ", "(cherry picked from commit "];
+
+/// The `Co-authored-by` trailers a message body carries, by git's rule
+/// (`trailer.c` `find_trailer_block_start`; fixed against git's own read in
+/// the `details_diff` integration test): the trailer block is the last
+/// paragraph, if every line in it is a trailer or a continuation of one —
+/// or, with a git-generated trailer among them, if trailers are at least a
+/// quarter of its lines. So a body that mentions "Co-authored-by:" in prose
+/// credits nobody. `#` lines are passed over, as git reads them as comments.
 pub fn co_authors_in(body: &str) -> Vec<CoAuthor> {
-    let lines: Vec<&str> = body.trim_end().lines().collect();
-    let start = lines
-        .iter()
-        .rposition(|line| line.trim().is_empty())
-        .map_or(0, |blank| blank + 1);
-    let block = &lines[start.min(lines.len())..];
-    if block.is_empty() || !block.iter().all(|line| is_trailer_line(line)) {
+    let lines: Vec<&str> = body.lines().collect();
+    let Some(start) = trailer_block_start(&lines) else {
         return Vec::new();
+    };
+    // A continuation joins its trailer's value with one space (git's
+    // `unfold_value`); a `#` line ends the trailer before it, so an indented
+    // line after one continues nothing (`trailer_info_get`).
+    let mut values = Vec::new();
+    let mut open: Option<String> = None;
+    for line in &lines[start..] {
+        if line.starts_with('#') {
+            values.extend(open.take());
+            continue;
+        }
+        if line.trim().is_empty() {
+            continue;
+        }
+        if line.starts_with([' ', '\t']) {
+            if let Some(value) = open.as_mut() {
+                value.push(' ');
+                value.push_str(line.trim());
+            }
+            continue;
+        }
+        values.extend(open.take());
+        if let Some(at) = separator(line)
+            && line[..at].trim().eq_ignore_ascii_case("co-authored-by")
+        {
+            open = Some(line[at + 1..].trim().to_string());
+        }
     }
-    block
+    values.extend(open);
+    values
         .iter()
-        .filter_map(|line| {
-            let (key, value) = line.split_once(':')?;
-            key.trim()
-                .eq_ignore_ascii_case("co-authored-by")
-                .then(|| value.trim())
-        })
-        .flat_map(parse_co_authors)
+        .flat_map(|value| parse_co_authors(value))
         .collect()
 }
 
-fn is_trailer_line(line: &str) -> bool {
-    if line.starts_with(' ') || line.starts_with('\t') {
-        return true;
+/// Where the last paragraph starts, if git takes it for the trailer block.
+/// Read from the bottom as git does; the top of the body stands where the
+/// blank line after the subject would.
+fn trailer_block_start(lines: &[&str]) -> Option<usize> {
+    let (mut trailers, mut others, mut continuations) = (0usize, 0usize, 0usize);
+    let mut generated = false;
+    let mut only_spaces = true;
+    let mut start = 0;
+    for (at, line) in lines.iter().enumerate().rev() {
+        if line.starts_with('#') {
+            others += continuations;
+            continuations = 0;
+            continue;
+        }
+        if line.trim().is_empty() {
+            if only_spaces {
+                continue;
+            }
+            start = at + 1;
+            break;
+        }
+        only_spaces = false;
+        if GIT_GENERATED.iter().any(|prefix| line.starts_with(prefix)) {
+            trailers += 1;
+            continuations = 0;
+            generated = true;
+        } else if line.starts_with(|c: char| c.is_ascii_whitespace()) {
+            continuations += 1;
+        } else if separator(line).is_some() {
+            trailers += 1;
+            continuations = 0;
+        } else {
+            others += 1 + continuations;
+            continuations = 0;
+        }
     }
-    let Some((key, _)) = line.split_once(':') else {
-        return false;
-    };
-    !key.is_empty()
-        && key
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    if only_spaces {
+        return None;
+    }
+    others += continuations;
+    ((generated && trailers * 3 >= others) || (trailers > 0 && others == 0)).then_some(start)
+}
+
+/// Where a trailer line's `:` stands (`trailer.c` `find_separator`): a key
+/// of ASCII letters, digits and `-`, then optional blanks — no `_`, and no
+/// key at all is no trailer.
+fn separator(line: &str) -> Option<usize> {
+    let mut blanks = false;
+    for (at, c) in line.char_indices() {
+        if c == ':' {
+            return (at > 0).then_some(at);
+        }
+        if !blanks && (c.is_ascii_alphanumeric() || c == '-') {
+            continue;
+        }
+        if at > 0 && (c == ' ' || c == '\t') {
+            blanks = true;
+            continue;
+        }
+        return None;
+    }
+    None
 }
 
 /// Splits a packed trailer field into one entry per person. The address
