@@ -1,7 +1,7 @@
 # メッセージ・パッチの渡し方の実測(Windows x64)
 
 commit のメッセージ・部分ステージと部分破棄のパッチ・破棄記録の復元のパッチを、一時ファイル
-(`scratch::ScratchFile` = 作成・書き込み・`sync_all`・削除)で渡す形と、stdin(`process::Input`)で渡す形の
+(作成・書き込み・`sync_all`・削除)で渡す形と、stdin(`process::Input`)で渡す形の
 前後比較。**読むのは前後の差**で、予算行との絶対値は [perf-windows-x64.md](perf-windows-x64.md) §判定 が正。
 Linux(コンテナ)の同じ比較と、不採用・保留の全体は [input-costs-linux-x64.md](input-costs-linux-x64.md)。
 
@@ -79,7 +79,7 @@ git のハンドルから読んだ値。
 | 同、ファイルを stdin に開く | 85.2 – 86.8 – 95.4ms | 161.0 / 134.6 MiB |
 | 同、パイプ(この process の送り手)— **採用** | 86.5 – 87.6 – 96.2ms | 161.0 / 134.6 MiB |
 | git 無し: 同じパイプを Git for Windows の `cat`(MSYS の実行時の上で動く)へ送るだけ | 13.6 – 14.5 – 15.0ms | — |
-| 一時ファイルの作成・書き込み・sync・削除(`ScratchFile`) | 13.9 – 14.7 – 20.2ms | — |
+| 一時ファイルの作成・書き込み・sync・削除 | 13.9 – 14.7 – 20.2ms | — |
 
 ## 観測
 

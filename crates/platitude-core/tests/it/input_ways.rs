@@ -3,9 +3,9 @@
 //! stdin, from a pipe this process writes as the executor does, from that
 //! pipe made 1 MiB wide (Linux), and from a memfd (Linux); the same pipes
 //! into `cat` alone, which is the send and the pipe without git's reading;
-//! and the scratch file the patch went through by path (made, written,
+//! and a temporary file the patch would go through by path (made, written,
 //! synced, removed). Every round asks each reading way once, in an order of
-//! its own ([`shuffled`]); the scratch file is timed as many times after
+//! its own ([`shuffled`]); the temporary file is timed as many times after
 //! them, so its write and sync stand before no reading way's clock. One
 //! line says each way's p10, median and p90. Then each
 //! of git's ways is run once more for git's own peaks, read off the ended
@@ -35,7 +35,7 @@ use tokio::process::Command;
 use crate::input_costs::os;
 use crate::support::TestRepo;
 
-/// Rounds of the reading ways, and times the scratch file is timed.
+/// Rounds of the reading ways, and times the temporary file is timed.
 const ROUNDS: usize = 40;
 
 /// Where the rounds' orders start: the same orders on every run.
@@ -90,7 +90,7 @@ enum Way {
     CatPipe,
     #[cfg(target_os = "linux")]
     CatPipeWide,
-    ScratchFile,
+    TempFile,
 }
 
 impl Way {
@@ -106,14 +106,14 @@ impl Way {
             Way::CatPipe => "cat_pipe",
             #[cfg(target_os = "linux")]
             Way::CatPipeWide => "cat_pipe_1mib",
-            Way::ScratchFile => "scratch_file",
+            Way::TempFile => "temp_file",
         }
     }
 
     /// What it hands its reader on stdin.
     fn fed(self) -> Fed {
         match self {
-            Way::GitByPath | Way::ScratchFile => Fed::None,
+            Way::GitByPath | Way::TempFile => Fed::None,
             Way::GitFileOnStdin => Fed::File,
             Way::GitPipe | Way::CatPipe => Fed::Pipe { wide: false },
             #[cfg(target_os = "linux")]
@@ -169,15 +169,20 @@ impl Ground {
 }
 
 /// One timed run of `way`: from what its reader is handed (a memfd's write
-/// among it) to the reap, or the scratch file's make-write-sync-remove.
+/// among it) to the reap, or the temporary file's make-write-sync-remove.
 async fn timed(ground: &Ground, way: Way) -> Duration {
-    if way == Way::ScratchFile {
+    if way == Way::TempFile {
+        // Under the git directory, as a patch handed by path would be.
+        let dir = ground.git_dir.join("platitude");
+        let path = dir.join(format!("probe-{}", std::process::id()));
         // waits(measured): the way's own time is the measurement and judges nothing
         let started = Instant::now();
-        let scratch =
-            platitude_core::scratch::ScratchFile::create(&ground.git_dir, "probe", &ground.patch)
-                .unwrap();
-        drop(scratch);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut file = std::fs::File::create(&path).unwrap();
+        file.write_all(&ground.patch).unwrap();
+        file.sync_all().unwrap();
+        drop(file);
+        std::fs::remove_file(&path).unwrap();
         return started.elapsed();
     }
     let (program, args) = ground.reader(way);
@@ -400,12 +405,12 @@ async fn ways_in() {
             took[at].push(timed(&ground, ways[at]).await);
         }
     }
-    let mut scratch = Vec::new();
+    let mut temp = Vec::new();
     for _ in 0..ROUNDS {
-        scratch.push(timed(&ground, Way::ScratchFile).await);
+        temp.push(timed(&ground, Way::TempFile).await);
     }
-    ways.push(Way::ScratchFile);
-    took.push(scratch);
+    ways.push(Way::TempFile);
+    took.push(temp);
     let lines: Vec<String> = ways
         .iter()
         .zip(took.iter_mut())

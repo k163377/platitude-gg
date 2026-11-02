@@ -44,7 +44,7 @@ pub(crate) mod relied_messages;
 pub mod remote;
 pub mod repo;
 pub mod report;
-pub mod scratch;
+pub(crate) mod scratch;
 pub mod sequencer;
 #[cfg(test)]
 mod sequencer_tests;
