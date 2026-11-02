@@ -112,6 +112,7 @@ commands-copy	ChangeIcon CommandRowDelegate CommandsPane CommandsTextSelect File
 commands-escape --allow-write-failure	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 commands-fail --allow-write-failure	ChangeIcon CommandRowDelegate CommandsPane CommandsTextSelect GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 commands-fail-shut --allow-write-failure	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
+commands-fail-shut fold --allow-write-failure	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 commands-select	ChangeIcon CommandRowDelegate CommandsPane CommandsTextSelect FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 commands-sweep	ChangeIcon CommandRowDelegate CommandsPane CommandsTextSelect GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 commit	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
@@ -317,7 +318,7 @@ graph-choose-diff hook.sh --preset modes	ChangeIcon ChosenCommitRow DiffLineCell
 graph-choose-drop	ChangeIcon ChosenCommitRow FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 graph-choose-range	ChangeIcon ChosenCommitRow FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 graph-choose-said --preset co-authors	AppCardFace ChangeIcon ChosenCommitRow CommitHoverCard FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
-graph-choose-said 7:8:11 --preset deep	AppCardFace ChosenCommitRow CommitHoverCard GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
+graph-choose-said 7:8:11 --preset edges	AppCardFace ChangeIcon ChosenCommitRow CommitHoverCard FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 graph-choose-sweep --preset co-authors	ChangeIcon ChosenCommitRow FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 graph-divider	AppCardFace ChangeIcon CommitHoverCard GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 graph-divider pin --preset deep	GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
@@ -325,7 +326,6 @@ graph-divider pin-lit --preset deep-detached	GraphRowChips GraphRowDelegate Name
 graph-head --preset deep	GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 graph-head-back --preset deep	GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 graph-head-below --preset deep-detached	GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
-graph-head-go --preset deep	GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 graph-head-go --preset deep-detached	GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 graph-head-list --preset deep	AppCardFace GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefListPopup RefRowMenu RemoteRowMenu TabItemDelegate
 graph-head-list click --preset deep	GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
@@ -445,7 +445,7 @@ name-box 1	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate Na
 name-box-drop 1	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 name-box-drop 1:newname	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 name-branch topic --preset deep	GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
-nav-add-remote	AppCardFace ChangeIcon DialogActions FormField GraphRowChips GraphRowDelegate LabeledField NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteDialog RemoteRowMenu TabItemDelegate WipTallyRow
+nav-add-remote --preset noremote	AppCardFace ChangeIcon DialogActions FileRowDelegate FormField GraphRowChips GraphRowDelegate LabeledField NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteDialog RemoteRowMenu TabItemDelegate
 nav-add-remote folded --preset noremote	AppCardFace ChangeIcon DialogActions FileRowDelegate FormField GraphRowChips GraphRowDelegate LabeledField NameCell OpsPicker RefRowMenu RemoteDialog RemoteRowMenu TabItemDelegate
 nav-branch-box branch:main	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavNameBox NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 nav-branch-box tag:v1.0.0:away --preset manytags	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavNameBox NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow

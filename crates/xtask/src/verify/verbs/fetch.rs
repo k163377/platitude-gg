@@ -41,10 +41,15 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The panel taken down without being emptied — the only way the
     // mark's red is on screen with nothing over it. `wrong=true` fails a
-    // refusal that never landed, `open=false` a press that never came.
+    // refusal that never landed, `open=false` a press that never came;
+    // `fold` is the folded rail's `>_`, `folded=true` a rail that stayed
+    // open.
     Verb {
         name: "commands-fail-shut",
-        when: &[],
+        when: &[(
+            Arg::Is("fold"),
+            "commands_shut wrong=true open=false folded=true",
+        )],
         plain: "commands_shut wrong=true open=false",
     },
     // The same panel taken down by Escape, its fourth way out

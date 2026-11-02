@@ -203,7 +203,7 @@ Item {
             page.openRowMenu(branchesModel.oidOfName(arg), { "kind": "branch", "name": arg })
             chipMenuTimer.start()
         } else if (act === "chip-menu-current") {
-            // The current branch's chip: its first level always carries the delete table (デザイン規約 §左メニューの所作).
+            // The current branch's chip: its first level always carries the delete table (`RefBranchMenu`).
             // `--preset basic`'s `main` is one ahead of origin, so this run shows the drifted side, all three rows out;
             // the reason's line is `delete-blocked-tip :remote`'s. Read as a pair with `chip-menu`.
             page.openRowMenu(branchesModel.oidOfName(worktree.branch),
@@ -226,10 +226,12 @@ Item {
             blockedTipTimer.start()
         } else if (act === "menu-highlight") {
             // The keyboard's road to `highlighted` — the only one that can be driven from here, so the only run whose
-            // picture shows the highlight's overlay colour. Index 1 is the second item in `RefRowMenu`'s order.
+            // picture shows the highlight's overlay colour. Index 0 is `Create branch here…`, on offer on every branch
+            // with a commit: Qt's `currentIndex` counts the hidden rows too, and index 1 (`switch`) is hidden on the
+            // current branch (the default).
             const litOn = arg === "" ? worktree.branch : arg
             page.openRefMenu("branch", litOn, litOn, branchesModel.oidOfName(litOn))
-            refMenu.currentIndex = 1
+            refMenu.currentIndex = 0
             driver.reportAtCompletion(() => "menu_highlight index=" + refMenu.currentIndex)
         } else if (act === "delete-branch-early" || act === "delete-branch-early-far") {
             // The early answer dresses the delete row before any click; the menu goes up from the sampler

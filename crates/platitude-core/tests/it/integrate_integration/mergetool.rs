@@ -132,9 +132,7 @@ mod periodic {
     /// real `--tool-help` still answers in that shape.
     #[tokio::test]
     #[ignore = "this machine's merge tools: seconds on Windows, not worth the pre-merge run"]
-    #[mry::lock(conflict::available_tools)]
     async fn available_tools_never_offers_one_that_needs_a_terminal() {
-        conflict::mock_available_tools().calls_real_impl();
         let repo = TestRepo::init();
         let (exec, cancel) = env();
         let names = conflict::available_tools(&exec, &repo.path, &cancel)

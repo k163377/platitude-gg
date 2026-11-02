@@ -4,10 +4,11 @@
 //! out of `ask_merge_tools` has to end in that event — including the two
 //! that never search (a session still opening, one whose opening failed).
 //!
-//! The machine's tools are mocked (`conflict::mock_available_tools`). The
-//! mock of a free function is one for the whole binary, so every test that
-//! sets it — or reads the real one — holds
-//! `#[mry::lock(conflict::available_tools)]`. The real read is in [`periodic`].
+//! The machine's tools are mocked (`conflict::mock_available_tools`). mry
+//! keeps a free function's mock per thread, and a test that sets one holds
+//! `#[mry::lock(conflict::available_tools)]`; the session sees it because it
+//! runs on the test's own thread (`#[tokio::test]`). The real read is in
+//! [`periodic`].
 
 use platitude_core::conflict;
 use platitude_core::session::{RepoSession, SessionEvent};
@@ -183,11 +184,7 @@ mod periodic {
     /// machine has.
     #[tokio::test]
     #[ignore = "this machine's merge tools: seconds on Windows, not worth the pre-merge run"]
-    #[mry::lock(conflict::available_tools)]
     async fn an_ask_inside_the_opening_still_names_the_configured_tool() {
-        // Held and told to call through, so no pre-merge test's machine can
-        // stand in for this one.
-        conflict::mock_available_tools().calls_real_impl();
         let mut repo = TestRepo::init();
         repo.commit_file("a.txt", "a\n", "first");
         repo.git(&["config", "mergetool.demo-editor.cmd", "true"]);
