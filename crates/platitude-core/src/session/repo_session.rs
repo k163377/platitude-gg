@@ -313,9 +313,8 @@ pub struct RepoSession {
     /// the word that it was let go, for the asks that call stacked
     /// nothing for (`auto_fetch::RemoteTagSlot`).
     pub(super) remote_tags_slot: super::auto_fetch::RemoteTagSlot,
-    /// One permit: the walk is the only part of a refresh that scales
-    /// with the history, and a tick arriving mid-walk is dropped.
-    pub(super) head_reach_slot: Arc<tokio::sync::Semaphore>,
+    /// The one reachability walk at a time, and the setting it reads.
+    pub(super) head_reach: super::head_reach::HeadReach,
     /// One merge-tool candidate read at a time: opening settings twice in
     /// a row starts one slow `mergetool --tool-help`
     /// (ci/baseline/code-costs-windows-x64.md).

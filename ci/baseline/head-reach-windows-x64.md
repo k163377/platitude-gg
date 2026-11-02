@@ -1,8 +1,9 @@
 # ブランチ先端を他が掴んでいるかの実測(Windows x64)
 
 drop 行を回数押しにするかクリックにするかの判定
-(`reachable::reached_without_branch`)が払う git のコスト。**refs が動いた
-refresh と書き込み 1 件ごとに 1 回**走る。
+(`reachable::reached_without`)が払う git のコスト。**refs が動いた
+refresh と書き込み 1 件ごとに最大 1 回**走る(refs の一覧だけで答えが出る時は
+走らない)。設定画面を閉じた時も、`rebase.updateRefs` が答えを決める形なら 1 回。
 
 - 対象: `JetBrains/kotlin` full clone(refs 53,672 本 = タグ 45,846 /
   リモートブランチ 7,824 / ローカル 1、コミット 138,915)

@@ -23,6 +23,7 @@ mod diff_reads;
 mod discard_record;
 mod discard_shown;
 mod head;
+mod head_reach;
 mod helper_binary;
 mod merge_tools;
 mod operations;

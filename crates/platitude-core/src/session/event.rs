@@ -301,9 +301,10 @@ pub enum SessionEvent {
         generation: u64,
         from: String,
     },
-    /// Whether anything besides HEAD's branch still reaches its tip — so
-    /// the rewrite rows can tell whether the old commits stay drawn or go
-    /// to the reflog ([`crate::reachable`]). Sent when the answer moves.
+    /// Whether anything besides HEAD's branch still reaches its tip once a
+    /// rewrite moves the branch off it — so the rewrite rows can tell
+    /// whether the old commits stay drawn or go to the reflog
+    /// ([`crate::reachable`]). Sent when the answer moves.
     HeadReachChecked {
         reached_elsewhere: bool,
     },

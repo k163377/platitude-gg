@@ -5,6 +5,27 @@
 
 use super::*;
 
+/// What the reachability question keeps between asks.
+pub(super) struct HeadReach {
+    /// One permit: the walk is the only part of a refresh that scales
+    /// with the history, and a tick arriving mid-walk is dropped.
+    slot: Arc<tokio::sync::Semaphore>,
+    /// Whether a rewrite takes the branches on the tip along (the person's
+    /// `rebase.updateRefs`) — read by the reach that first needs it
+    /// ([`RepoSession::reached_elsewhere`]), dropped by
+    /// [`RepoSession::reread_update_refs`].
+    update_refs: Derived<bool>,
+}
+
+impl Default for HeadReach {
+    fn default() -> Self {
+        Self {
+            slot: Arc::new(tokio::sync::Semaphore::new(1)),
+            update_refs: Derived::default(),
+        }
+    }
+}
+
 impl RepoSession {
     /// Takes what a read saw of HEAD into the record (`Standing`) and
     /// reports where it moved — or, after a write, that it stayed.
@@ -26,12 +47,15 @@ impl RepoSession {
 
     /// Records what the refs read saw of the branch tip, including the
     /// half of the reachability question the listing answers alone:
-    /// another ref sitting exactly on the tip.
+    /// what else sits exactly on the tip.
     ///
     /// That half is how tags count without being walked (their cost scales
     /// with the tag count — ci/baseline/head-reach-windows-x64.md). A tag
     /// strictly ahead of the tip is missed, which costs a hold mark on a
-    /// row that could have been a click.
+    /// row that could have been a click. So is a branch another worktree
+    /// has out, until a worktree listing has named it
+    /// (`worktree_holders`) — the opening's can land after its refs read —
+    /// and a ref move asks again.
     pub(super) fn record_head_from_refs(&self, looked: u64, refs: &[RefEntry], head: &HeadState) {
         // Offered first: a listing a later read has moved past says
         // nothing about the tip, and a hold from it would walk the reach
@@ -43,10 +67,11 @@ impl RepoSession {
         if offer == HeadOffer::Stale {
             return;
         }
+        let holders = self.worktree_holders();
         let hold = head.oid.map(|tip| HeadHold {
             tip,
             branch: head.branch.clone().unwrap_or_default(),
-            on_a_ref: reachable::a_ref_sits_on_head(refs, head),
+            on_tip: reachable::OnTip::of(refs, head, |name| holders.branches.contains_key(name)),
         });
         self.standing.set_hold(hold);
         // After the hold: both are in place before anything this read
@@ -75,11 +100,15 @@ impl RepoSession {
             self.publish_head_reach(false);
             return;
         };
-        if hold.on_a_ref {
+        // A branch on the tip that the rewrite leaves there holds it as a
+        // tag does — once the setting is known (`reached_elsewhere`).
+        let left_on_tip = !hold.on_tip.branches.is_empty()
+            && self.head_reach.update_refs.peek(|along| !along) == Some(true);
+        if hold.on_tip.kept || left_on_tip {
             self.publish_head_reach(true);
             return;
         }
-        let Ok(permit) = Arc::clone(&self.head_reach_slot).try_acquire_owned() else {
+        let Ok(permit) = Arc::clone(&self.head_reach.slot).try_acquire_owned() else {
             tracing::trace!("head reach skipped: the previous walk has not finished");
             return;
         };
@@ -87,15 +116,7 @@ impl RepoSession {
         self.runtime.spawn(async move {
             let _permit = permit;
             let cancel = s.root_cancel.clone();
-            match reachable::reached_without_branch(
-                &s.exec_background,
-                &workdir,
-                &hold.tip.to_hex(),
-                &hold.branch,
-                &cancel,
-            )
-            .await
-            {
+            match s.reached_elsewhere(&workdir, &hold, &cancel).await {
                 Ok(reached) => s.publish_head_reach(reached),
                 // A failed walk answers with the mark: it is the safe
                 // answer, and the next refresh asks again.
@@ -105,6 +126,71 @@ impl RepoSession {
                 }
             }
         });
+    }
+
+    /// Reads `rebase.updateRefs` again — where the person may have changed
+    /// it: the settings screen closing — and asks the reach again where the
+    /// setting decides it (a branch on the tip, nothing kept beside it).
+    pub fn reread_update_refs(self: &Arc<Self>) {
+        self.head_reach.update_refs.forget();
+        let s = Arc::clone(self);
+        self.runtime.spawn(async move {
+            // After a walk in flight, which may have read the setting
+            // before it was dropped: asked while it runs, the reach would
+            // be dropped as a refresh's tick is, and nothing else asks
+            // again before a ref moves.
+            let Ok(walked) = Arc::clone(&s.head_reach.slot).acquire_owned().await else {
+                return;
+            };
+            drop(walked);
+            if s.standing
+                .hold()
+                .is_some_and(|hold| !hold.on_tip.kept && !hold.on_tip.branches.is_empty())
+            {
+                s.settle_head_reach();
+            }
+        });
+    }
+
+    /// The rest of the question, past the listing: whether anything the
+    /// rewrite leaves reaches the tip.
+    ///
+    /// A branch on the tip asks for the person's `rebase.updateRefs` first
+    /// — without it the branch stays and holds the tip, with it the branch
+    /// moves and is left out of the walk with HEAD's own. Read the first
+    /// time a branch on the tip asks, and not watched: the setting rarely
+    /// moves (user decision — ask before changing). It is read again where
+    /// the person may have changed it ([`Self::reread_update_refs`]),
+    /// and afresh by the next session — only the tab in front has one, so
+    /// a tab brought back to the front or reopened does.
+    async fn reached_elsewhere(
+        &self,
+        workdir: &Path,
+        hold: &HeadHold,
+        cancel: &CancellationToken,
+    ) -> Result<bool, GitError> {
+        let mut moving = vec![hold.branch.clone()];
+        if !hold.on_tip.branches.is_empty() {
+            let along = self
+                .head_reach
+                .update_refs
+                .get_or_try_init(|| {
+                    reachable::rewrites_take_branches_along(&self.exec_background, workdir, cancel)
+                })
+                .await?;
+            if !along {
+                return Ok(true);
+            }
+            moving.extend(hold.on_tip.branches.iter().cloned());
+        }
+        reachable::reached_without(
+            &self.exec_background,
+            workdir,
+            &hold.tip.to_hex(),
+            &moving,
+            cancel,
+        )
+        .await
     }
 
     fn publish_head_reach(&self, reached_elsewhere: bool) {

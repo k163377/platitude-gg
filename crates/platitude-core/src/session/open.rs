@@ -222,7 +222,7 @@ impl RepoSession {
             worktree_heads: Mutex::new(Arc::new(std::collections::HashMap::new())),
             worktree_gen: AtomicU64::new(0),
             remote_tags_slot: super::auto_fetch::RemoteTagSlot::default(),
-            head_reach_slot: Arc::new(tokio::sync::Semaphore::new(1)),
+            head_reach: super::head_reach::HeadReach::default(),
             merge_tools_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             auto_fetch: Mutex::new(None),
             auto_fetch_interval: Mutex::new(None),

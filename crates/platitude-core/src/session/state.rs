@@ -288,10 +288,12 @@ impl Shared {
 ///
 /// Each is a single answer about the whole repository (does git normalise
 /// line endings here, what remotes are configured). Invalidation stays in
-/// the two event boundaries that own it: before a write's refresh, and
-/// after an external ref move — which has already read the current remote
+/// the event boundaries that own it: before a write's refresh, and after
+/// an external ref move — which has already read the current remote
 /// answer, so it drops line-ending context at once and remotes only for
-/// the following read (see [`RepoSession::forget_derived`]).
+/// the following read (see [`RepoSession::forget_derived`]); the settings
+/// screen closing for `rebase.updateRefs`
+/// ([`RepoSession::reread_update_refs`]).
 ///
 /// Hand-written: these are cancellable async subprocess reads that expire
 /// on an event, never on a clock — outside what `salsa` (pure sync

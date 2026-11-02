@@ -174,7 +174,7 @@ Porcelain の入出力を「利用者の体験のために変わりうる」と�
 |---|---|
 | `commit.gpgsign` / `tag.gpgSign` / `gpg.format` | 署名は利用者の約束(forge の required signatures)。署名できない時は報せ `CommitUnsigned` |
 | `branch.<n>.merge` / `branch.<n>.remote` | pull がどこへ取りに行くかは利用者の設定(合流の仕方だけ釘付け = 上の表) |
-| `rebase.updateRefs` | アプリの rebase は `--update-refs` をどちらの向きにも付けない(git の既定 = 今のブランチだけ。デザイン規約 §履歴を合流させる「既定のフラグ」)。利用者が立てていれば git のとおり範囲のブランチも動き、枝のまとまりの読みは `session::discard_record` の `record_rebase_group` / `stopped_rebase_tips` |
+| `rebase.updateRefs` | アプリの rebase は `--update-refs` をどちらの向きにも付けない(git の既定 = 今のブランチだけ。デザイン規約 §履歴を合流させる「既定のフラグ」)。利用者が立てていれば git のとおり範囲のブランチも動き、枝のまとまりの読みは `session::discard_record` の `record_rebase_group` / `stopped_rebase_tips`、drop の回数押しの判定もこの設定を読む(`reachable::rewrites_take_branches_along`) |
 | `gc.auto` / `maintenance.auto` | リポジトリの保守は利用者の物。後ろで走る gc が取るロックは `*Locked` の報せで受ける |
 | `core.fsmonitor` / `core.untrackedCache` | 外すと書き込みが遅くなり index の印が消える。trace2 の受け口はデーモンが繋いでも閉じるだけ(`process::trace_sink` のコメント) |
 

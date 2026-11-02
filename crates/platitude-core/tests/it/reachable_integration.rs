@@ -23,8 +23,13 @@ fn scenario() -> (TestRepo, String) {
 }
 
 async fn reached(repo: &TestRepo, tip: &str) -> bool {
+    reached_without(repo, tip, &["main"]).await
+}
+
+async fn reached_without(repo: &TestRepo, tip: &str, moving: &[&str]) -> bool {
     let (executor, cancel) = env();
-    reachable::reached_without_branch(&executor, &repo.path, tip, "main", &cancel)
+    let moving: Vec<String> = moving.iter().map(ToString::to_string).collect();
+    reachable::reached_without(&executor, &repo.path, tip, &moving, &cancel)
         .await
         .expect("ask what holds the tip")
 }
@@ -55,7 +60,7 @@ async fn only_a_branch_at_or_beyond_the_tip_holds_it() {
     );
 
     // Tags are not in the walk (`reachable`'s module doc): one on the tip is
-    // caught by `reachable::a_ref_sits_on_head`, one strictly ahead is missed.
+    // caught by `reachable::OnTip`, one strictly ahead is missed.
     repo.git(&["tag", "v2", "keep"]);
     repo.git(&["branch", "-D", "keep"]);
     assert!(
@@ -96,4 +101,54 @@ async fn remote_tracking_refs_and_the_stash_hold_the_tip_like_branches() {
         reached(&repo, &tip).await,
         "a stash made on the tip holds it"
     );
+}
+
+/// Under `rebase.updateRefs` the branches on the tip move with HEAD's, and
+/// are left out of the walk beside it; what is further along still holds.
+#[tokio::test]
+async fn the_branches_a_rewrite_takes_along_are_left_out_of_the_walk() {
+    let (mut repo, tip) = scenario();
+    repo.git(&["branch", "keep"]);
+    assert!(reached_without(&repo, &tip, &["main"]).await);
+    assert!(
+        !reached_without(&repo, &tip, &["main", "keep"]).await,
+        "with both left out, nothing else is there"
+    );
+
+    repo.git(&["switch", "--quiet", "--create", "ahead"]);
+    repo.commit_file("b.txt", "1\n", "beyond");
+    repo.git(&["switch", "--quiet", "main"]);
+    assert!(
+        reached_without(&repo, &tip, &["main", "keep"]).await,
+        "a branch further along is not one the rewrite moves"
+    );
+}
+
+/// git's own side of reading the setting; that the command line asks for a
+/// boolean is held by `reachable`'s unit tests (rules-refs/core.md
+/// `periodic`).
+mod periodic {
+    use super::*;
+
+    /// Read as git reads a boolean; anything else answers false.
+    #[tokio::test]
+    #[ignore = "git's boolean spellings behind a fixed command line: not worth the pre-merge run"]
+    async fn the_setting_is_read_as_git_reads_a_boolean() {
+        let (mut repo, _) = scenario();
+        let (executor, cancel) = env();
+        let along = async |repo: &TestRepo| {
+            reachable::rewrites_take_branches_along(&executor, &repo.path, &cancel)
+                .await
+                .expect("read the setting")
+        };
+        assert!(!along(&repo).await, "unset is git's default");
+        for truthy in ["true", "yes", "on", "1"] {
+            repo.git(&["config", "rebase.updateRefs", truthy]);
+            assert!(along(&repo).await, "{truthy:?}");
+        }
+        for falsy in ["false", "no", "0", "banana"] {
+            repo.git(&["config", "rebase.updateRefs", falsy]);
+            assert!(!along(&repo).await, "{falsy:?}");
+        }
+    }
 }

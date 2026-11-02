@@ -30,16 +30,17 @@ use super::*;
 /// process-wide (module doc).
 static NEXT_HEAD_SEQ: AtomicU64 = AtomicU64::new(0);
 
-/// What the refs listing last saw of the branch tip, which is everything
-/// the reachability walk needs to start (see [`crate::reachable`]).
+/// What the refs listing last saw of the branch tip — the listing's part
+/// of the reachability question, which the setting and the walk finish
+/// (see [`crate::reachable`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct HeadHold {
     /// The commit HEAD is on.
     pub(super) tip: Oid,
     /// Short name of the branch HEAD is on; empty when detached.
     pub(super) branch: String,
-    /// Some other ref sits exactly on `tip` — answered without a walk.
-    pub(super) on_a_ref: bool,
+    /// What else sits exactly on `tip` — answered without a walk.
+    pub(super) on_tip: reachable::OnTip,
 }
 
 /// What became of a report of HEAD.
