@@ -18,19 +18,22 @@
 //!   the baseline follows it down; it may not grow.
 //! * **neither** — the backstop applies as written.
 //!
-//! Six other questions of how the tree is divided are counted here too:
+//! Seven other questions of how the tree is divided are counted here too:
 //! the product's QML may not name a harness type ([`modules`]), the app's
 //! Rust may not look a `PGG_*` variable up outside the module that owns
 //! them ([`env`]), the product's QML closes no popup but its own
 //! ([`popups`]), QML asks the graph, not a row's id, which row is this
 //! window's worktree ([`wiprow`]), every text box the product declares
 //! hands its right-click and its menu key to the product's menu
-//! ([`textboxes`]), and the core matches git's words only against the
-//! messages of its table ([`relied_messages`]).
+//! ([`textboxes`]), the repository's words are drawn by `PlainTextLabel`
+//! and never by a label guessing its format ([`labels`]), and the core
+//! matches git's words only against the messages of its table
+//! ([`relied_messages`]).
 //!
 //! The fn half of the same § is left to clippy's `too_many_lines`.
 
 mod env;
+pub(crate) mod labels;
 mod modules;
 mod popups;
 mod relied_messages;
@@ -123,16 +126,19 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let (closed_for, product_files) = popups::check(&root)?;
     let (asked_the_id, qml_files) = wiprow::check(&root)?;
     let (styled_boxes, text_boxes) = textboxes::check(&root)?;
+    let (guessed_formats, label_files) = labels::check(&root)?;
     let (stray_messages, word_readers) = relied_messages::check(&root)?;
     let boundary_broken = crossed.len() + looked_up.len();
     let closing_for_others = closed_for.len();
     let menus_kept = styled_boxes.len();
+    let formats_guessed = guessed_formats.len();
     let messages_strayed = stray_messages.len();
     failures.extend(crossed);
     failures.extend(looked_up);
     failures.extend(closed_for);
     failures.extend(asked_the_id);
     failures.extend(styled_boxes);
+    failures.extend(guessed_formats);
     failures.extend(stray_messages);
 
     for failure in &failures {
@@ -149,6 +155,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
              {product_files} product files closing nothing but their own, \
              {qml_files} QML files asking the graph which row is this window's, \
              {text_boxes} text boxes handing their menu and their key to the product's, \
+             {label_files} product files drawing input with PlainTextLabel alone, \
              {word_readers} core functions reading git's words through the table — PASS",
             counted.len(),
             comment_share(physical, code),
@@ -174,6 +181,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Err(format!(
             "{menus_kept} line(s) a text box leaves to the style's menu or to nothing \
              (.claude/rules-refs/app-ui.md「`FieldMenu` = 文字の欄の右クリック」)"
+        ))
+    } else if formats_guessed == failures.len() {
+        Err(format!(
+            "{formats_guessed} line(s) drawing input with a label that guesses its format, or \
+             naming a format outside the parts that draw markup ({})",
+            labels::RULE
         ))
     } else {
         Err(format!(

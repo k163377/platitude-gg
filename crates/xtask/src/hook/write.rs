@@ -139,6 +139,15 @@ fn qml_notes(path: &str) -> Result<Vec<String>, String> {
         if file_name != "Theme.qml" {
             notes.extend(qml_weight_notes(&content));
         }
+        // The product draws input with PlainTextLabel alone; the same reading
+        // `cargo xtask structure` makes, said while the edit is still in hand.
+        if module == "src/ui/" {
+            notes.extend(
+                crate::structure::labels::findings(&file_name, &content)
+                    .into_iter()
+                    .map(|finding| format!("line {}: {}", finding.line, finding.what)),
+            );
+        }
     }
     Ok(notes)
 }
