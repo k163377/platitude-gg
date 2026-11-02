@@ -35,7 +35,11 @@ use crate::process::{GitCommand, GitExecutor};
 ///   `local_repo_env` (environment.c, the same fifteen at the minimum and
 ///   2.55) with `GIT_EXTERNAL_DIFF`, `GIT_DIFF_OPTS`, the four pathspec
 ///   variables (environment.h), `GIT_NAMESPACE` and `GIT_REFLOG_ACTION`.
-/// - Rebase: `GIT_SEQUENCE_EDITOR` (1.7.8); paths: `:(literal)` (1.9).
+/// - Rebase: `GIT_SEQUENCE_EDITOR` (1.7.8), handed the rebase's own stdin
+///   (`launch_specified_editor` sets nothing of it, and `start_command`
+///   passes the parent's on — v2.43.0 `editor.c` / `run-command.c`;
+///   `integrate_integration::todo` sends the plan that way on the minimum
+///   binary); paths: `:(literal)` (1.9).
 /// - A traced write's record (`process::trace`): `GIT_TRACE2_EVENT` set to
 ///   a receiver of the write's own (`process::trace_sink`) — a named pipe
 ///   on Windows, `af_unix:stream:<absolute path>` elsewhere, each process's
@@ -125,6 +129,10 @@ use crate::process::{GitCommand, GitExecutor};
 ///   `merge-base`: `--is-ancestor`.
 /// - `mergetool`: `--no-prompt`, `--gui`, `--tool=`, `--tool-help`;
 ///   custom recipes are read with `config --get-regexp`.
+/// - `mktree` on an empty stdin: writes and names the empty tree (outside
+///   `--batch`, v2.43.0 `builtin/mktree.c`; the Documentation names stdin
+///   and the printed id only). `discards_integration::recording` notes on
+///   it on the minimum binary.
 /// - `name-rev`: `--name-only`, `--refs=refs/heads/*`.
 /// - `push`: `--porcelain`, `--set-upstream`, `--force-with-lease[=ref:oid]`,
 ///   `--force`, `--delete`, `--no-follow-tags` (`OPT_BIT` in v2.43.0

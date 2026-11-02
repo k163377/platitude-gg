@@ -516,6 +516,54 @@ async fn a_deleted_tag_comes_back_on_its_own_object() {
     );
 }
 
+/// A tag on what is no commit has no commit to note on: its note stands on
+/// the empty tree, nothing is put down under the git directory for it, and
+/// the tag still comes back on its object.
+#[tokio::test]
+async fn a_deleted_tag_on_a_tree_is_noted_on_the_empty_tree_and_puts_nothing_down() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "1\n", "c1");
+    let tree = repo.git(&["rev-parse", "HEAD^{tree}"]);
+    repo.git(&["tag", "on-a-tree", &tree]);
+    let (executor, cancel) = env();
+    let dir = git_dir(&repo);
+    let before = discards::tag_before(
+        &executor,
+        &repo.path,
+        "on-a-tree",
+        "refs/tags/on-a-tree",
+        &cancel,
+    )
+    .await
+    .expect("read the tag")
+    .expect("the tag is there");
+    assert_eq!(before.commit, None, "a tree peels to no commit");
+    repo.git(&["tag", "--delete", "on-a-tree"]);
+
+    discards::record_tag_delete(&executor, &repo.path, &dir, Some(&before), None, &cancel)
+        .await
+        .expect("note the delete");
+
+    assert_eq!(
+        repo.git(&["rev-parse", &format!("{}^{{tree}}", discards::RECORD_REF)]),
+        "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "the note stands on the empty tree"
+    );
+    assert!(
+        !dir.join("platitude").exists(),
+        "the note put nothing down under the git directory"
+    );
+    let found = read(&repo).await;
+    let deleted = one(&found, DiscardKind::DeletedTag);
+    assert_eq!(
+        restores(deleted),
+        vec![&Restore::Tag {
+            name: "on-a-tree".to_string(),
+            object: oid(&tree),
+        }]
+    );
+}
+
 /// A worktree removed comes back where it was, on the branch it had
 /// out.
 #[tokio::test]

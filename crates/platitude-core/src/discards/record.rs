@@ -45,7 +45,6 @@ use crate::error::GitError;
 use crate::oid::Oid;
 use crate::process::{GitCommand, GitExecutor};
 use crate::remote::RemoteBranch;
-use crate::scratch::ScratchFile;
 
 /// Who writes the record: the name, with an empty email, on every copy,
 /// note and record line (`GIT_AUTHOR_*` / `GIT_COMMITTER_*`), dated when
@@ -514,7 +513,7 @@ async fn note(
 ) -> Result<(), GitError> {
     let tree = match parent {
         Some(parent) => tree_of(executor, workdir, parent, cancel).await?,
-        None => empty_tree(executor, workdir, git_dir, cancel).await?,
+        None => empty_tree(executor, workdir, cancel).await?,
     };
     let parents: Vec<Oid> = parent.copied().into_iter().collect();
     let mut trailers = trailers.to_vec();
@@ -602,16 +601,18 @@ pub(super) async fn write_tree(
     oid_out(&out.stdout_utf8(), "git write-tree")
 }
 
-/// The empty tree, written from an index with nothing in it — the object
-/// format's own id, whichever it is.
+/// The empty tree — the object format's own id, whichever it is — written
+/// to the object store by `mktree` reading the closed stdin every command
+/// without input gets: no entries, and outside `--batch` an empty input is
+/// still written and named (v2.43.0 `builtin/mktree.c`).
 pub(super) async fn empty_tree(
     executor: &GitExecutor,
     workdir: &Path,
-    git_dir: &Path,
     cancel: &CancellationToken,
 ) -> Result<Oid, GitError> {
-    let index = ScratchFile::fresh(git_dir, "empty-index").map_err(io_error)?;
-    write_tree(executor, workdir, git_dir, index.path(), cancel).await
+    let cmd = GitCommand::new().cwd(workdir).arg("mktree");
+    let out = executor.run(cmd, cancel).await?;
+    oid_out(&out.stdout_utf8(), "git mktree")
 }
 
 /// A command that runs none of the user's hooks: they are looked for in a

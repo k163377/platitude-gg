@@ -588,7 +588,7 @@ async fn untracked_taken(
         executor.run(cmd, cancel).await?;
     }
     let left = write_tree(executor, of.workdir, of.git_dir, index.path(), cancel).await?;
-    let empty = empty_tree(executor, of.workdir, of.git_dir, cancel).await?;
+    let empty = empty_tree(executor, of.workdir, cancel).await?;
     Ok((left != empty).then_some(left))
 }
 
@@ -609,7 +609,7 @@ async fn untracked_tree(
     };
     index.take(executor, of, paths, not_copied, cancel).await?;
     let tree = write_tree(executor, of.workdir, of.git_dir, index.file.path(), cancel).await?;
-    let empty = empty_tree(executor, of.workdir, of.git_dir, cancel).await?;
+    let empty = empty_tree(executor, of.workdir, cancel).await?;
     Ok((tree != empty).then_some(tree))
 }
 
