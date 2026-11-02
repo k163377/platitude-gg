@@ -6,7 +6,8 @@
 //! The verb that plays the scene is put into the tree for the film and
 //! taken out after it (`inject`); everything else is here. The frames are
 //! drawn by the app — the hand and the caption band included — so this
-//! side only assembles PNGs it never decodes (`png::animate`).
+//! side reads PNGs only to compare them, and carries them into the APNG
+//! as they are (`png::animate`).
 
 mod bake;
 mod changes;

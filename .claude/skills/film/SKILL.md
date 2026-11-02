@@ -23,7 +23,8 @@ description: platitude-gg の動き(hover・カード・メニュー・ドラッ
    2. <!--cmd:film.in-->`cargo xtask film in` —— film 動詞をその木へ入れる(QML 部品 1 つと 8 ファイルの置換。commit しない)
    3. `cargo xtask film shoot <台本>... --side <側>` —— 最初の台本が release を組む(2 本目以降は組まない。`--no-build` で 1 本目も)
    4. <!--cmd:film.out-->`cargo xtask film out` —— 同じ置換を逆に当てて外す。**`git status --short` に自分の変更しか無いのを見てから**木を戻す(`git switch <席の枝>`)
-3. **焼く** —— `cargo xtask film bake <台本>` が撮った側を全部、1 本の時計で `target/film/<名前>/<側>.png` にし、**字幕ごとの最後のコマ**の path を名指す。**その PNG を Read で見て、ラベルで言う変化が写っているかを確かめる**(コマには手・字幕の帯が描いてある)。いつ何が変わったかは `cargo xtask film changes <台本> --side <側>`(変わったコマ・時刻・変わった箱)
+3. **焼く** —— `cargo xtask film bake <台本>` が撮った側を全部、1 本の時計で `target/film/<名前>/<側>.png` にし、**字幕ごとの最後のコマ**の path を名指す。**その PNG を Read で見て、ラベルで言う変化が写っているかを確かめる**(コマには手・字幕の帯が描いてある)。いつ何が変わったかは `cargo xtask film changes <台本> --side <側>`(変わったコマ・時刻・変わった箱。帯は比べず、字幕の変わり目は字幕の番号で言う)
+   - **帯の右端の「コマ n」は、そのコマのファイル `target/film/<名前>/<側>/fNNNN.png` の番号**(4 桁に詰める。コマ 27 は `f0027.png`)—— 段取りの後の最初のコマが 1(段取りのコマは `s0000.png` から、番号なし)。ループの中の今の位置と、ユーザーとの間でコマを名指す語になる。絵が止まっている間のコマは帯を除いた絵と字幕で比べて最初のコマに畳むので、焼いた APNG の番号は飛ぶ。番号は側ごとの物で、before と after の同じ番号は同じ時刻ではない
 4. **board へ出す** —— 1 場面 1 run で `cargo xtask shots add --label "<何が変わるか>" --before target/film/<名前>/main.png --after target/film/<名前>/now.png`(順・ラベルの規則は verify-ui スキル)
 
 ## 台本

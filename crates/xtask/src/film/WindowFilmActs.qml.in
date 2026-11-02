@@ -10,7 +10,7 @@ import platitude.ui
 // PGG_AUTO_ACT=film, put into the tree by `cargo xtask film in` and never committed. Plays a scene with synthetic
 // input — QtTest's TestEvent, real mouse and key events through the window, so hover is Qt's own — and grabs the
 // scene's views of the window (the content with the overlay over it), the hand and the caption band under them, every
-// tick into Harness.shotDir as fNNNN.png, with frames.tsv beside them.
+// tick into Harness.shotDir as fNNNN.png (sNNNN.png under the setup, see `number`), with frames.tsv beside them.
 // The arg (film/scene.rs writes it): "<views>;<scale>;<tick ms>;<tag>;<tag colour>;<step>;<step>…", the views as
 // x,y,w,h in window coordinates joined by "/", the tag and the captions percent-encoded, the colour a Theme token's
 // name. Steps:
@@ -45,6 +45,15 @@ Item {
     property bool held: false
     property var glide: null
     property int frames: 0
+    /// The frames grabbed past the setup so far (`scene::is_setup`: a caption that starts with "-").
+    property int filmed: 0
+    /// The band's frame number: a frame past the setup is numbered from 1 and named by it (fNNNN.png), so a reader
+    /// of a looping film sees where it stands and can name the frame. The setup's frames, cut by `bake`, are 0 —
+    /// unnumbered — and named sNNNN.png.
+    property int number: 0
+    /// The band's caption. With `number`, set as the grab is asked for and its frames.tsv row written: a caption
+    /// step played before the grab renders would otherwise put the next caption over the row's.
+    property string bandCaption: ""
     /// A grab is on its way: the sources' completions count toward it only while one is.
     property bool shooting: false
     property real shotAt: 0
@@ -246,7 +255,13 @@ Item {
         lens.owed--
         if (lens.owed > 0)
             return
-        const name = "f" + String(acts.frames).padStart(4, "0") + ".png"
+        const setup = acts.captionText.startsWith("-")
+        if (!setup)
+            acts.filmed++
+        acts.number = setup ? 0 : acts.filmed
+        acts.bandCaption = acts.captionText
+        const name = (setup ? "s" : "f") + String(setup ? acts.frames - acts.filmed : acts.filmed).padStart(4, "0")
+            + ".png"
         acts.frames++
         acts.lines += name + "\t" + Math.round(acts.shotAt) + "\t" + Math.round(acts.hand.x) + "\t"
             + Math.round(acts.hand.y) + "\t" + acts.caption + "\t" + (acts.held ? 1 : 0) + "\n"
@@ -336,8 +351,9 @@ Item {
     }
 
     // What a frame is taken of: each view of the content with the overlay over it, magnified by `scale` without
-    // smoothing, the hand over them, and the band that names the side and the caption. Behind everything; the grab
-    // renders it on its own.
+    // smoothing, the hand over them, and the band that names the side, the caption and the frame's number. Behind
+    // everything; the grab renders it on its own. `bake::picture_height` takes the band to start right under the
+    // tallest tile: the frames are compared above it.
     Item {
         id: lens
 
@@ -431,23 +447,41 @@ Item {
                 y: Theme.spaceSm
                 width: measuring.width
                 wrapMode: Text.Wrap
-                text: acts.captionText
+                text: acts.bandCaption
                 color: Theme.textPrimary
                 font.family: Theme.uiFamily
                 font.pixelSize: Theme.fontXl
                 font.bold: true
+            }
+            Text {
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.spaceMd
+                y: Theme.spaceSm
+                text: acts.number > 0 ? "コマ " + acts.number : ""
+                color: Theme.textSecondary
+                font.family: Theme.uiFamily
+                font.pixelSize: Theme.fontXl
             }
         }
         Text {
             id: measuring
 
             x: tagText.x + tagText.width + Theme.spaceLg
-            width: lens.width - x - Theme.spaceMd
+            width: lens.width - x - Theme.spaceLg - numberRoom.width - Theme.spaceMd
             visible: false
             wrapMode: Text.Wrap
             font.family: Theme.uiFamily
             font.pixelSize: Theme.fontXl
             font.bold: true
+        }
+        // The caption wraps short of the widest number a film reaches, so a growing number never runs into it.
+        Text {
+            id: numberRoom
+
+            visible: false
+            text: "コマ 0000"
+            font.family: Theme.uiFamily
+            font.pixelSize: Theme.fontXl
         }
     }
 }

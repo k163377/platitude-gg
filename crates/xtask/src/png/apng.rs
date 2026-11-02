@@ -57,12 +57,6 @@ pub(crate) fn animate(frames: &[Frame]) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-/// The image data of a PNG, chunk bodies in order: two frames that carry
-/// the same are the same picture.
-pub(crate) fn image_data(file: &[u8]) -> Result<Vec<&[u8]>, String> {
-    parts(file).map(|(_, data)| data)
-}
-
 /// A frame's header body and its image data chunks. A palette picture is
 /// refused: two frames could carry two palettes, and an APNG has one.
 fn parts(file: &[u8]) -> Result<(Vec<u8>, Vec<&[u8]>), String> {
@@ -131,7 +125,7 @@ fn frame_control(sequence: u32, header: &[u8], ms: u32) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Frame, animate, image_data, parts};
+    use super::{Frame, animate, parts};
     use crate::png::{decode, rgba};
 
     fn chunks(file: &[u8]) -> Vec<(String, Vec<u8>)> {
@@ -180,7 +174,7 @@ mod tests {
         assert_eq!(numbers, [0, 1, 2, 3, 4]);
         // 70 s stands as 7000 hundredths.
         assert_eq!(all[4].1[20..24], [0x1b, 0x58, 0, 100]);
-        assert_eq!(all[5].1[4..], image_data(&blue).expect("data")[0][..]);
+        assert_eq!(all[5].1[4..], parts(&blue).expect("data").1[0][..]);
         // A reader that knows no animation sees the first frame.
         assert_eq!(
             decode(&film).expect("decodes").pixel(2, 1),

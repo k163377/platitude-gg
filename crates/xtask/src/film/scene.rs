@@ -92,7 +92,8 @@ const ACTS: &[(&str, Option<usize>)] = &[
 ];
 
 /// Whether a caption is the setup's: frames under it are cut, and each
-/// side's clock starts at the first frame after it.
+/// side's clock starts at the first frame after it. The component reads the
+/// same mark to leave a frame unnumbered (`WindowFilmActs.qml.in`, `number`).
 pub(super) fn is_setup(caption: &str) -> bool {
     caption.starts_with('-')
 }

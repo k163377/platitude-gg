@@ -7,6 +7,6 @@ mod inflate;
 mod read;
 mod write;
 
-pub(crate) use apng::{Frame, animate, image_data};
+pub(crate) use apng::{Frame, animate};
 pub(crate) use read::{Image, decode};
 pub(crate) use write::rgba;

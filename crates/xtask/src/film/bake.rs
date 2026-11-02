@@ -5,8 +5,10 @@
 
 use std::path::{Path, PathBuf};
 
+use super::changes::{changed, same_size};
 use super::shoot::{CAPTIONS, SCENE_COPY};
 use super::{SIDES, Side, scene};
+use crate::png::Image;
 
 /// The clock the sides are put on, in milliseconds.
 const STEP_MS: u64 = 40;
@@ -64,7 +66,8 @@ pub(super) fn run(tree: &Path, args: &[String]) -> Result<(), String> {
         .unwrap_or_default();
     for (side, rows) in &runs {
         let out = dir.join(format!("{}.png", side.name));
-        let (frames, ms) = bake(rows, end, &out)?;
+        let picture_height = picture_height(&dir.join(side.name))?;
+        let (frames, ms) = bake(rows, picture_height, end, &out)?;
         println!("film: {} — {frames} frames, {ms} ms", out.display());
     }
     println!("the last frame under each caption:");
@@ -163,24 +166,43 @@ pub(super) fn all_rows(side: &Path) -> Result<Vec<Row>, String> {
     Ok(rows)
 }
 
+/// The height of the picture of the window atop a side's frames: the band
+/// under it is the component's own — the side's tag, the caption by its
+/// number in frames.tsv, and the frame's number, which every frame changes.
+/// The component's `lens` stands the tiles in one row, as tall as the
+/// tallest view, with the band right under it.
+pub(super) fn picture_height(side: &Path) -> Result<u32, String> {
+    let path = side.join(SCENE_COPY);
+    let text =
+        std::fs::read_to_string(&path).map_err(|e| format!("reading {}: {e}", path.display()))?;
+    let scene = scene::parse(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(scene.views.iter().map(|view| view[3]).max().unwrap_or(0) * scene.scale)
+}
+
 /// The side as an APNG at `out`; says how many frames and milliseconds.
-fn bake(rows: &[Row], end: u64, out: &Path) -> Result<(usize, u64), String> {
+fn bake(rows: &[Row], picture_height: u32, end: u64, out: &Path) -> Result<(usize, u64), String> {
     let times: Vec<u64> = rows.iter().map(|row| row.ms).collect();
     let files: Vec<Vec<u8>> = rows
         .iter()
         .map(|row| std::fs::read(&row.file).map_err(|e| format!("{}: {e}", row.file.display())))
         .collect::<Result<_, String>>()?;
-    // A frame grabbed while nothing moved carries the one before's bytes.
+    // A frame grabbed while nothing moved stands as the one kept before it,
+    // whose number the band keeps showing.
     let mut picked: Vec<(usize, u64)> = Vec::new();
+    let mut kept: Option<(Image, usize)> = None;
     for (index, ms) in timeline(&times, end, STEP_MS, HOLD_MS) {
+        let image = crate::png::decode(&files[index])
+            .map_err(|e| format!("{}: {e}", rows[index].file.display()))?;
+        let caption = rows[index].caption;
+        let still = kept.as_ref().is_some_and(|(before, before_caption)| {
+            same_frame((before, *before_caption), (&image, caption), picture_height)
+        });
         match picked.last_mut() {
-            Some((last, total))
-                if crate::png::image_data(&files[*last])?
-                    == crate::png::image_data(&files[index])? =>
-            {
-                *total += ms;
+            Some((_, total)) if still => *total += ms,
+            _ => {
+                picked.push((index, ms));
+                kept = Some((image, caption));
             }
-            _ => picked.push((index, ms)),
         }
     }
     let frames: Vec<crate::png::Frame> = picked
@@ -193,6 +215,15 @@ fn bake(rows: &[Row], end: u64, out: &Path) -> Result<(usize, u64), String> {
     let film = crate::png::animate(&frames)?;
     std::fs::write(out, film).map_err(|e| format!("writing {}: {e}", out.display()))?;
     Ok((picked.len(), picked.iter().map(|(_, ms)| ms).sum()))
+}
+
+/// Whether the `next` frame shows what the `before` one does: the picture
+/// above the band, under the caption of the same number. The band's frame
+/// number is all they may differ in.
+fn same_frame(before: (&Image, usize), next: (&Image, usize), picture_height: u32) -> bool {
+    before.1 == next.1
+        && same_size(before.0, next.0)
+        && changed(before.0, next.0, picture_height).is_none()
 }
 
 /// Which row stands at each step of the clock, and for how long: the last
@@ -223,7 +254,33 @@ fn timeline(times: &[u64], end: u64, step: u64, hold: u64) -> Vec<(usize, u64)> 
 
 #[cfg(test)]
 mod tests {
-    use super::timeline;
+    use super::{same_frame, timeline};
+    use crate::png::{decode, rgba};
+
+    /// Four rows of picture over one of band: a frame whose number alone
+    /// moved is the frame before; a new caption, a moved picture or another
+    /// size is a frame of its own.
+    #[test]
+    fn a_frame_differing_in_the_band_alone_is_the_frame_before() {
+        let marked = |at: (u32, u32)| {
+            decode(&rgba(6, 5, |x, y| {
+                if (x, y) == at {
+                    [200, 0, 0, 255]
+                } else {
+                    [9, 9, 9, 255]
+                }
+            }))
+            .expect("decodes")
+        };
+        let plain = decode(&rgba(6, 5, |_, _| [9, 9, 9, 255])).expect("decodes");
+        let renumbered = marked((4, 4));
+        let moved = marked((1, 1));
+        let wider = decode(&rgba(7, 5, |_, _| [9, 9, 9, 255])).expect("decodes");
+        assert!(same_frame((&plain, 1), (&renumbered, 1), 4));
+        assert!(!same_frame((&plain, 1), (&renumbered, 2), 4));
+        assert!(!same_frame((&plain, 1), (&moved, 1), 4));
+        assert!(!same_frame((&plain, 1), (&wider, 1), 4));
+    }
 
     #[test]
     fn the_clock_holds_each_row_until_the_next_and_the_last_for_the_hold() {
