@@ -529,9 +529,10 @@ Item {
     // run of tabs — it rides at the run's end — so the one it lines up with is the `✕` beside it. Only the hit area
     // runs the band's depth (`iconXl` wide), so a hand coming down off the tabs lands on it at any height — but on a
     // Windows window not maximised, whose top 8px are the system's resize edge and never reach the scene (every cell of
-    // the band, ☰ included). The wash keeps its `iconXl` box (§当たり判定), wider than the `✕`'s because this mark
-    // stands bare on the band while the `✕` sits inside a tab that is its own wash. Drawn in `NavIcon` though every
-    // font has a `+`: its shape and stroke would be whatever family the OS resolved (規約 §寸法「印は描いて出す」).
+    // the band, ☰ included). The wash keeps its `iconXl` box (§QML 実装ルール「広げるのは判定だけ」), wider than the `✕`'s
+    // because this mark stands bare on the band while the `✕` sits inside a tab that is its own wash. Drawn in
+    // `NavIcon` though every font has a `+`: its shape and stroke would be whatever family the OS resolved
+    // (規約 §寸法「印は描いて出す」).
     //
     // Ink and wash are set as padding and inset: a `Control` re-lays its `contentItem` and `background` from those, so
     // a size written on either is lost on the next layout; `anchors.verticalCenter` would leave the seat the mark's

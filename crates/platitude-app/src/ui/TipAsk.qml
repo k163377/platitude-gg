@@ -12,7 +12,7 @@ import platitude.ui
 ///
 /// **A target that moves under the hand** — a row in a list, a line in the diff — moves with a surface whose hand
 /// knows it (`hand`, a `HandWatch` told `rowsMoved` as the rows go): what the rows brought under a hand that did not
-/// move asks nothing until the hand has moved (デザイン規約 §左メニューの所作「手が動いていない所へ来た行は開かない」 —
+/// move asks nothing until the hand has moved (デザイン規約 §hover のツールチップ「手が動いていない所へ来た行は開かない」 —
 /// Qt hands its hover to whatever arrives under a still pointer), and the rows moving takes the box down at once
 /// (§hover のツールチップ「的が手の下で動けば hover は外れ、出したものはその瞬間に消える」). The surface is the nearest
 /// list over the target that names its hand (`rowsHand`, found once the ask is built), unless the target hands one in;
@@ -47,7 +47,7 @@ QtObject {
     /// A word in `words` that is a place to go, and its href (`HoverToolButton.tipPlace`).
     property string place: ""
     property string href: ""
-    /// The word the tree mark stands in front of, and which mark (規約 §ref の種別「ツールチップだけは字の中」), found at
+    /// The word the tree mark stands in front of, and which mark (規約 §ref の種別「ツールチップと見出し(報せ・質問・ダイアログ)は字の中」), found at
     /// the sentence's edge by `Words.tipNameSeat`. The sentence is never split round a mark: translation, selection
     /// and copy would all break at the seam. Marks and `place` may share one sentence (`CardText.namedMarkup`).
     property string markWord: ""

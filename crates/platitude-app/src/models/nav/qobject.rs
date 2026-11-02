@@ -110,9 +110,9 @@ impl NavSectionModel {
     pub(super) fn rows_arrived(&mut self);
 
     // A refs snapshot arrived, whether or not it moved anything. Not
-    // `changed`, which stays quiet on identical rows: a write that leaves
-    // the refs as they were (a cherry-pick of a commit the branch already
-    // has) still owes its landing (`RepoPage.tryPendingHeadSelect`).
+    // `changed`, which stays quiet on identical rows: what waits on a
+    // write's listing is still owed when the rows come back the same
+    // (`RepoPage`'s `onRefsSettled`: a move's landing, a delete's row).
     #[qsignal]
     pub(super) fn refs_settled(&mut self);
 

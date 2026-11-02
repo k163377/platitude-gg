@@ -302,9 +302,9 @@ fn listed_by_tasklist(ok: bool, stdout: &str, stderr: &str, pid: u32) -> Behind 
 /// (FreeBSD's). The name is the rest of the line: macOS answers with the
 /// program's path, which may hold spaces.
 ///
-/// **A zombie is nobody**: it holds nothing, and in the container PID 1
-/// is cargo, which reaps nothing it did not start — read as alive, it
-/// would hold a machine claim for as long as the container lived.
+/// **A zombie is nobody**: it holds nothing, and one can stay listed for
+/// a container's whole run (`reap::processes`) — read as alive, it would
+/// hold a machine claim for as long as the container lived.
 #[cfg(not(windows))]
 fn behind(pid: u32) -> Behind {
     let Ok(out) = std::process::Command::new("ps")

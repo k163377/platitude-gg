@@ -367,7 +367,7 @@ ComboBox {
                 height: Theme.iconSm
                 anchors.right: parent.right
                 // Clear of the list's floating thumb: right-set ink on that side would stand under it whenever the
-                // list scrolls (デザイン規約 §ペインのスクロールバー「その辺に右揃えのインクが立つ」).
+                // list scrolls (デザイン規約 §QML 実装ルール「その辺に右揃えのインクが立つ」).
                 anchors.rightMargin: rows.ScrollBar.vertical.width - row.rightPadding
                 anchors.verticalCenter: parent.verticalCenter
             }

@@ -5,9 +5,8 @@
 use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
-    // `edge=` rides along in the report as diagnosis: whether an edge
-    // lands off the screen is a question for a real monitor, which the
-    // offscreen platform lacks.
+    // Not judged: whether an edge lands off the screen is a question for a
+    // real monitor, which the offscreen platform lacks.
     Verb {
         name: "window-fill",
         when: &[],

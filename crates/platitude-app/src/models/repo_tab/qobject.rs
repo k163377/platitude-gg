@@ -713,7 +713,7 @@ impl RepoTab {
     }
 
     /// The same two over the gathered set: one git command however many
-    /// rows were chosen (デザイン規約 §その他の操作).
+    /// rows were chosen (デザイン規約 §バケツごとの一覧と、ペインの分け方).
     #[qslot]
     fn stage_paths(&mut self) {
         self.drain_paths(|s, paths| s.stage_paths(paths));

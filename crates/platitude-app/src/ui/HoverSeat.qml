@@ -28,7 +28,7 @@ import platitude.ui
 /// lifts a latch is the seat's kind**: any move for one that rests — the rest is the judgement, as Qt's tooltips wake
 /// on the mouse's own moves (2px and a pause is a hand's own hover); for one that opens at once (`expands`), the hand
 /// off its target — as a Qt Quick tooltip a press hid returns only when its item's hover changes
-/// (デザイン規約 §左メニューの所作「手が動いたかの見切り」) — and a press, for an owner that gives its target one (`press`).
+/// (デザイン規約 §hover のツールチップ「手が動いたかの見切り」) — and a press, for an owner that gives its target one (`press`).
 ///
 /// What a reread does to a target is the owner's to weigh, and dismisses nothing (デザイン規約 §hover のツールチップ「外乱では閉じない」): one
 /// whose showing is gone (a row's commit out of the graph, a chip with no names left) goes by `forget`, picked by what

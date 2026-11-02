@@ -22,8 +22,9 @@ import platitude.ui
 // Owned by the page: delegates are recycled out from under an open popup. A popup, because anything declared inside
 // the list is clipped by it and painted under the row below.
 //
-// A rename never closes it from here: closed first, the commit it stood on (`RowHoverHost.refListOid`) is gone before
-// the owner can open the box. `RepoPage.startRename` takes it down (`RowHoverHost.closeRefList`). Headless:
+// A rename never closes it from here: `RepoPage.startRename` takes it down as the box opens
+// (`RowHoverHost.closeRefList`). Until then it stands through the second click's wait, its row wearing the wait's
+// mark (`RefChip.waiting`); the commit travels with the gesture (`GraphList.noteClick`), not with the card. Headless:
 // `graph-reclick-list` / `graph-reclick-across` / `ref-list-pick` / `ref-list-lit`, through the hooks below; the seat
 // and the cover by `ref-list` (`covers=`) and `ref-list-card`. No preset photographs a wrapped name: build a throwaway
 // repository with a ref of about 235 characters and aim at it with `--repo`.
@@ -334,7 +335,7 @@ AppCard {
                 }
 
                 // The row is the band and owns the air around its chip, so the wash covers the whole target
-                // (規約 §当たり判定).
+                // (規約 §QML 実装ルール「端に接しないものは判定と塗りを一致させる」).
                 implicitWidth: Theme.spaceXs + rowChip.width + refRow.whoseRoom
                 width: rows.width
                 height: rowChip.height + 2 * refList.chipInset

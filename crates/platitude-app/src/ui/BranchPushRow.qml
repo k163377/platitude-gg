@@ -11,7 +11,8 @@ import platitude.ui
 // entrances carry the row and the card it reads, so the two cannot disagree. The branch the worktree is on gets no row
 // (`RefsSnapshot::branch_push` answers nothing for it): its push's one door is the toolbar
 // (規約 §メニュー「そこにしか入口が無いもの」). Nor does a remote branch's row: it is a reading of what is over there, with
-// nothing to send. The forms are read off the branch's own counts and marks — against its upstream, or against the
+// nothing to send. A branch another worktree has out keeps the row: git pushes a branch checked out anywhere.
+// The forms are read off the branch's own counts and marks — against its upstream, or against the
 // tracking ref of where a mark sends it (`remote::standing`). The destination is named as the remote branch
 // (`origin/feature/x`); `…` says the question comes first.
 //

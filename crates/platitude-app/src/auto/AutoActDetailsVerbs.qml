@@ -759,7 +759,7 @@ Item {
                    + "/" + Math.round(detailsPane.valueRow.parent.width)
                    + " over=" + Math.round(detailsPane.contentOverflow)
                    + " pane=" + Math.round(detailsPane.width)
-                   // `overH=` rides along unjudged, like `edge=` in `window_fill`: whether the pane needs a scroll of
+                   // `overH=` rides along unjudged, like `edge=` in `window_floor`: whether the pane needs a scroll of
                    // its own depends on the window.
                    + " overH=" + Math.round(detailsPane.contentOverHeight)
                    + " paneH=" + Math.round(detailsPane.height)

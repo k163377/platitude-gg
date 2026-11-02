@@ -317,11 +317,11 @@ InkCanvas {
             }
         } else if (icon.kind === "remote") {
             // Three lobes off a flat base, as wide as its siblings (smaller reads as shrunk beside a name): every mark
-            // takes about as much of the grid, the cloud's points standing 1.2x out from the grid's centre (user
-            // decision — ask before changing). The middle lobe rises alone — three of a size read as bumps — and the
-            // ends stay well below it: the line does not shrink, so at `iconSm` a shallower valley fills with ink. The
-            // angles are where the circles cross; an arc stopped short is joined by a straight line that dents the
-            // outline.
+            // takes about as much of the grid (user decision — ask before changing), the cloud grown inside its
+            // `iconSm` seat rather than moved up to `iconMd`. The middle lobe rises alone — three of a size read as
+            // bumps — and the ends stay well below it: the line does not shrink, so at `iconSm` a shallower valley
+            // fills with ink. The angles are where the circles cross; an arc stopped short is joined by a straight
+            // line that dents the outline.
             ctx.lineJoin = "round"
             ctx.beginPath()
             ctx.arc(4.6 * s, 10 * s, 2.9 * s, Math.PI * 0.5, Math.PI * 1.445)

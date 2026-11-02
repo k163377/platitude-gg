@@ -6,7 +6,7 @@ import platitude.ui
 // pointer and the pane's hand (`HandWatch`, as `DetailsPane` keeps it): the parents' count unfolds every parent at
 // once and the hand inside the card holds it; a card the reader dismissed is not put back under the same still hand;
 // another commit landing takes the card down and holds the hand, so nothing of the new commit's opens until the hand
-// has walked (`ParentListCard`, デザイン規約 §hover のツールチップ「手が動いていない所へ来た物は開かない」).
+// has walked (`ParentListCard`, デザイン規約 §hover のツールチップ「手が動いていない所へ来た行は開かない」).
 Item {
     id: root
     width: 520

@@ -237,7 +237,7 @@ Item {
         }
 
         /// A seat that rests: any move of the hand is the hand's own, and the rest judges (デザイン規約
-        /// §左メニューの所作「手が動いたかの見切り」).
+        /// §hover のツールチップ「手が動いたかの見切り」).
         function test_a_dismissal_lifts_when_the_hand_moves() {
             hand.stir(Qt.point(50, 50))
             handed.point(root.a(), true)

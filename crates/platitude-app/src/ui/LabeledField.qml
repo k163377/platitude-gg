@@ -7,10 +7,8 @@ import platitude.ui
 // In `textPrimary` (user decision — ask before changing; it reaches the dialogs too): on the settings screen the quiet
 // side is the explanation (`HelpText`), and a caption in the note's ink would leave nothing to tell the two apart. Same
 // step as a chapter heading in `Font.Normal`, no capitals and no rule (`SettingsSection`). A chapter whose heading
-// already names its one box needs no caption (`LINE ENDINGS` / `MERGE EDITOR` / `GIT EXECUTABLE`). The recorded rule
-// gives a caption only to a chapter of several boxes (the identity's `Name` / `Email address`), while the settings
-// screen also captions single boxes its heading does not name (`Interval`, `At once`, `Initial commits`) — open
-// (internal-docs/文書とコードの食い違い.md).
+// already names its one box needs no caption (`LINE ENDINGS` / `MERGE EDITOR` / `GIT EXECUTABLE`); any other box
+// wears one, alone in its chapter or not (`Interval`, `At once`, the identity's `Name` / `Email address`).
 ColumnLayout {
     id: field
 

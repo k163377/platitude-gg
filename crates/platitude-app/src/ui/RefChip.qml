@@ -379,7 +379,7 @@ Rectangle {
             font.underline: chip.mateAimed
         }
     }
-    // The hand on that line: its whole box across the frame, the band's own rect (デザイン規約 §当たり判定「端に接しない
+    // The hand on that line: its whole box across the frame, the band's own rect (デザイン規約 §QML 実装ルール「端に接しない
     // ものは判定と塗りを一致させる」). Over the row's handlers, so a press here is never the row's (`tst_matefollow`).
     // Built only where the line leads somewhere (rules-refs/app-ui.md「行のデリゲートが見せない部品は消す」): a chip
     // stands on every graph row.

@@ -163,10 +163,10 @@ Rectangle {
         if (!diffPane.visible)
             findBar.dropAway()
     }
-    /// Where the pointer is. **The pane works out which row it is over, not the rows** — a rebuilt row is not hovered
-    /// until the mouse moves again (rules-refs/app-ui.md「行を作り直すと、新しい item は次のマウス移動まで hover
-    /// しない」), and every write rebuilds the rows under the hand: asked of the row, the next `+` would not come out
-    /// after one line is staged until the mouse is wiggled — no run of presses. Asked on three triggers: this
+    /// Where the pointer is. **The pane works out which row it is over, not the rows** — right after a rebuild a row's
+    /// hover is not to be trusted (rules-refs/app-ui.md「行を作り直した直後は、行の hover を当てにしない」), and every
+    /// write rebuilds the rows under the hand: asked of the row, the next `+` could wait for the mouse to be wiggled
+    /// after one line is staged — no run of presses. Asked on three triggers: this
     /// handler's point, the list's `contentY`, and `pointedRowTimer` once replaced rows are laid out. **On the pane**:
     /// laid over the rows, a `HoverHandler` takes their hover away.
     HoverHandler {

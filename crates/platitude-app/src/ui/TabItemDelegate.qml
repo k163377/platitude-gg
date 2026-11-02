@@ -273,7 +273,7 @@ Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         // Width held to the mark's own box (デザイン規約 §寸法): the usual `iconLg` seat would hang over the next tab
         // and eat its hover. The height stays `iconLg` so a hand coming down the strip lands on it, and the wash is
-        // inset back to the ink (§当たり判定, as `TabStrip`'s `+`).
+        // inset back to the ink (§QML 実装ルール「広げるのは判定だけ」, as `TabStrip`'s `+`).
         implicitWidth: tabItem.metrics.markSeat
         // Drawn at the seat it is measured at (`TabMetrics.closeMark`): a step above the other closing marks.
         markSize: tabItem.metrics.markSeat

@@ -8,7 +8,7 @@ import platitude.ui
 // (`tst_hoverunderstillhand`):
 //  - a row's tip is asked through the list's hand (`TipAsk.hand`, found through `AppListView.rowsHand`): the rows
 //    moving take the box down at once, and the row that arrived under the still hand asks nothing until the hand has
-//    moved — any move, the rest being the judgement (デザイン規約 §左メニューの所作「手が動いたかの見切り」);
+//    moved — any move, the rest being the judgement (デザイン規約 §hover のツールチップ「手が動いたかの見切り」);
 //  - behind a menu standing in the window nothing comes out and what is out goes the moment the menu stands; a row of
 //    the menu itself is not behind it, nor is a refusal of what is typed (デザイン規約 §メニュー);
 //  - what the menu took down comes back once the hand has moved, not as the menu goes (the product's file row).

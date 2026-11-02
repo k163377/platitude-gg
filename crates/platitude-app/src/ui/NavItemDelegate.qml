@@ -292,13 +292,13 @@ Item {
     /// Every move of the hand is one read per row, and so is the reader moving the rows under it (`HandWatch.shifts`):
     /// the light goes to the row under the hand, as Qt's own lists hand their hover on with a scroll
     /// (`QAbstractItemView::verticalScrollbarValueChanged`), and what that row asks for waits on the seat until the
-    /// hand moves (デザイン規約 §左メニューの所作「手が動いていない所へ来た行は開かない」「手が動いたかの見切り」).
+    /// hand moves (デザイン規約 §hover のツールチップ「手が動いていない所へ来た行は開かない」「手が動いたかの見切り」).
     /// **Never the layout moving on its own**: these rows grow in place, and the row the hand walked to keeps its
-    /// light and its rest, as Qt's lists keep their hover on the item when rows open above it (§「点くのも同じ規則」) —
-    /// read off Qt's hover, an open row folding lifts the rows below and takes away the rest of the row the hand
-    /// walked to. The list's own opening scroll, its give-back and its fixup count as layout, not as the reader's
-    /// scroll (`NavList.onContentYChanged`). No verb: headless puts in no hover; `tests/qml/tst_navrowlight.qml`
-    /// measures it on the product's rows with a real pointer.
+    /// light and its rest, as Qt's lists keep their hover on the item when rows open above it (§hover のツールチップ
+    /// 「手が歩いて来た行が光を持つ」) — read off Qt's hover, an open row folding lifts the rows below and takes away
+    /// the rest of the row the hand walked to. The list's own opening scroll, its give-back and its fixup count as
+    /// layout, not as the reader's scroll (`NavList.onContentYChanged`). No verb: headless puts in no hover;
+    /// `tests/qml/tst_navrowlight.qml` measures it on the product's rows with a real pointer.
     readonly property int handMoves: navRow.paneHand !== null ? navRow.paneHand.moves : 0
     onHandMovesChanged: navRow.syncHand(false)
     readonly property int handShifts: navRow.paneHand !== null ? navRow.paneHand.shifts : 0
@@ -343,7 +343,7 @@ Item {
             return
         }
         // A move of the hand, however small: the light goes to the row under it, the slid row's goes, and the row
-        // under it asks — the seat's rest judges whether it opens (デザイン規約 §左メニューの所作「手が動いたかの見切り」).
+        // under it asks — the seat's rest judges whether it opens (デザイン規約 §hover のツールチップ「手が動いたかの見切り」).
         navRow.slid = false
         navRow.handOn = on
     }
@@ -608,7 +608,7 @@ Item {
     function rowPressed(button, modifiers, aim) {
         if (button === Qt.RightButton) {
             // Only rows with operations behind them open a menu. A worktree's is the ref menu too: the branch it has
-            // out, or its commit, and its own card (デザイン規約 §左メニューの所作).
+            // out, or its commit, and its own card (`RefRowMenu.offerOn`).
             if (!navRow.folder && navRow.oid_hex !== ""
                     && (navRow.kindHint === "branch"
                         || navRow.kindHint === "remote"

@@ -246,7 +246,7 @@ Item {
             compare(hand.moves, heard, "with the hand never having moved")
             compare(row.index, opened, "the row is still the one that opened")
             // The light goes to the row under the hand, as Qt's own lists hand their hover on with a scroll (the wash
-            // is no judgement — デザイン規約 §左メニューの所作「手が動いたかの見切り」).
+            // is no judgement — デザイン規約 §hover のツールチップ「手が動いたかの見切り」).
             verify(!row.washLit, "the row that slid away lets its light go")
             verify(list.rowWashLit(list.indexAt(testCase.handX, sent + handY)), "to the row under the hand")
 
@@ -286,7 +286,7 @@ Item {
         }
 
         /// A row folding its lines moves the rows under the hand, which the reader did not move: the row the hand
-        /// walked to keeps the light, as Qt's own lists keep it on their item (デザイン規約 §左メニューの所作「行が自分で
+        /// walked to keeps the light, as Qt's own lists keep it on their item (デザイン規約 §hover のツールチップ「行が自分で
         /// 伸び縮みした時だけは、手が歩いて来た行が光を持つ」), until the hand's own move hands it to the row under it.
         function test_a_row_folding_its_lines_leaves_the_light_on_the_row_the_hand_walked_to() {
             const top = testCase.restAt(Theme.rowHeight / 2)

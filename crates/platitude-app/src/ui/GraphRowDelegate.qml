@@ -452,7 +452,7 @@ Item {
     /// Where along the row the hand is, or -1 for "not on this row" — read off the pane's hand (`HandWatch`) each
     /// time it moves and each time the rows move under it. A row the graph brought under a still hand is the row
     /// under it, as Qt's hover says (`tst_hoverunderstillhand.qml`); what it asks for waits on its seat for the hand
-    /// (デザイン規約 §左メニューの所作「手が動いていない所へ来た行は開かない」). A headless run writes it too
+    /// (デザイン規約 §hover のツールチップ「手が動いていない所へ来た行は開かない」). A headless run writes it too
     /// (`pointerCrossed`).
     property real pointerRowX: -1
     readonly property HandWatch hand: rowItem.ListView.view ? rowItem.ListView.view.hand : null

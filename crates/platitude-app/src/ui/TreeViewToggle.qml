@@ -7,7 +7,7 @@ import platitude.ui
 // cell's content and takes the step the cell's height leaves
 // (デザイン規約 §寸法「ファイル一覧の tree ⇄ paths の切り替えもセルの中身の側」): the family's top step, `iconXl`, on
 // the 32px band too. Whether it looks small is judged by the ink, not the box.
-// The hit area runs the band's full depth; the wash keeps the mark's box (§当たり判定「広げるのは判定だけ」).
+// The hit area runs the band's full depth; the wash keeps the mark's box (§QML 実装ルール「広げるのは判定だけ」).
 RowLayout {
     id: toggle
 

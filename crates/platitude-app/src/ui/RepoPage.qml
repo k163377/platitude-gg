@@ -237,8 +237,8 @@ FocusScope {
     // ---- which worktree the WIP pane is about ---------------------
     //
     // **Every uncommitted row carries git's all-zero id**, ours and other worktrees' alike
-    // (P3-確認事項 §別の worktree の未コミット行), so the worktree is named by its path. **Empty means this window's own
-    // tree, and only then can anything here be written.**
+    // (rules-refs/app-ui.md「worktree の行は全部 git の all-zero id を着ている」), so the worktree is named by its
+    // path. **Empty means this window's own tree, and only then can anything here be written.**
     property string carriedPath: ""
     property string carriedName: ""
     /// That worktree is the repository's own, whose name wears the house (規約 §ref の種別「名前の印」).
@@ -1073,7 +1073,7 @@ FocusScope {
         }
     }
     // What a remote itself offers. Its own menu: a remote is repository configuration, and the ref menu is about
-    // refs (デザイン規約 §左メニューの所作).
+    // refs (`RemoteRowMenu`).
     Loader {
         id: remoteMenuSeat
         anchors.fill: parent

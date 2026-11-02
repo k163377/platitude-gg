@@ -851,7 +851,7 @@ Item {
         // this order a meaning, which the split into families breaks. Every family built above is asked here, and
         // only here (one road to a verb). A family left out comes back, for a verb on the completion ledger, as
         // `auto_act ran=<verb>` below and the watchdog's silence a ceiling later — which reads as proof the verb ran.
-        // After adding a family, check by machine that this chain asks it.
+        // After adding a family, add it to this chain: nothing checks that it is asked.
         const known =
             wipVerbs.run(act, arg)
             || fileRowVerbs.run(act, arg)

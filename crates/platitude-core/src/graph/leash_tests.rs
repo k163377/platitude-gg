@@ -52,9 +52,9 @@ fn a_row_with_no_object_is_not_in_the_map_from_commit_to_row() {
 }
 
 /// Another worktree's row, drawn above the commit that worktree stands
-/// on, may not move any commit's lane or colour: a worktree picked up on
-/// window focus would re-colour chains under the reader's eyes
-/// (P3-確認事項 §別の worktree の未コミット行). Covers a commit a lane
+/// on, may not move any commit's lane or colour: a worktree picked up at
+/// the page's pace would re-colour chains under the reader's eyes
+/// (`session::pacer`). Covers a commit a lane
 /// already waits for (`02`, HEAD) and tips nothing waits for (`04`, `06`).
 #[test]
 fn a_row_for_another_worktree_moves_no_lane_and_no_colour() {

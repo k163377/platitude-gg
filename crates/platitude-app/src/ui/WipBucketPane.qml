@@ -160,7 +160,7 @@ ColumnLayout {
                 else if (bucketPane.pane.stageHotKey === bucket + ":" + path)
                     bucketPane.pane.stageHotKey = ""
             }
-            // Every highlighted row that can go the same way, in one git command (デザイン規約 §その他の操作).
+            // Every highlighted row that can go the same way, in one git command (デザイン規約 §バケツごとの一覧と、ペインの分け方).
             onStageClicked: (bucket, path) => bucketPane.pane.moveStage(bucket, path)
         }
     }

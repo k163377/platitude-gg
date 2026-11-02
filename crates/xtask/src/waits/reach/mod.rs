@@ -1,7 +1,7 @@
 //! The reach rule of the app's harness: what an operation does is read
 //! across every call it makes, so a helper, or a function shared between
 //! files, is held to what the operation's own body would be
-//! (反映前テストの機械化 §検証時点).
+//! (rules-refs/app-ui.md「観測・遷移・完了は分ける」).
 //!
 //! Code an operation runs is in one of three contexts, each with its one
 //! responsibility:

@@ -27,7 +27,11 @@ pub struct EditPlan {
 }
 
 impl EditPlan {
-    /// Rebase options that replay exactly this plan's range.
+    /// Rebase options that replay exactly this plan's range. No
+    /// `--update-refs`: a one-commit edit moves the current branch alone, as
+    /// git does by default, and another branch standing in the range stays
+    /// on the old commits (user decision — ask before changing; デザイン規約
+    /// §履歴を合流させる「既定のフラグ」).
     pub fn options(&self) -> RebaseOptions {
         RebaseOptions {
             root: self.root,

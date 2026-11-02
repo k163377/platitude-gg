@@ -114,10 +114,11 @@ impl<'a> Upstream<'a> {
 pub struct PushTrack {
     /// The tracking ref as the remote branches are listed (`fork/main`).
     /// Empty where nothing here tracks the branch over there: never
-    /// fetched, no fetch refspec of that remote takes it in (or takes it
-    /// outside the remote branches), or `remote.<name>.push` sends it under
-    /// another name or not at all. A fetch reads every remote, so it is
-    /// usually there.
+    /// fetched, or no fetch refspec of that remote takes it in (or takes it
+    /// outside the remote branches). Empty too, with that ref here, where
+    /// `remote.<name>.push` sends the branch under another name or not at
+    /// all: such a refspec decides `%(push)` whatever `push.default` says
+    /// (`track_of`). A fetch reads every remote, so it is usually there.
     pub tracking: String,
     pub ahead: i32,
     pub behind: i32,

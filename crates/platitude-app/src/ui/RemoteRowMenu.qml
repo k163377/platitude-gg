@@ -1,9 +1,8 @@
 import QtQuick
 import platitude.ui
 
-// What a remote itself offers, from its REMOTES row (デザイン規約 §左メニューの所作) — configuration, so a menu of
-// its own. No chips: the mark row runs `git config`, a word only the command log spells
-// (デザイン規約 §git 用語のコード表記).
+// What a remote itself offers, from its REMOTES row — configuration, so a menu of its own. No chips: the mark row
+// runs `git config`, a word only the command log spells (デザイン規約 §git 用語のコード表記).
 //
 // The origin mark (デザイン規約 §リモートを書き留める) has two doors with one sentence and one slot: this menu's row
 // and `RemoteDialog`'s box, both `RepoTab.markOrigin` (`remote.pushDefault` and `checkout.defaultRemote` together; an
@@ -80,8 +79,8 @@ Item {
             refMark: "remote"
             onTriggered: remoteRowMenu.urlRequested(remoteRowMenu.remote)
         }
-        // No divider: both rows are one group. Gone on the remote both keys already name; a remote only one key
-        // names keeps it, to finish the mark (デザイン規約 §リモートを書き留める).
+        // No divider: both rows are one group (user decision — ask before changing). Gone on the remote both keys
+        // already name; a remote only one key names keeps it, to finish the mark (デザイン規約 §リモートを書き留める).
         AppMenuItem {
             id: markItem
             text: qsTr("Mark as origin (default remote)")

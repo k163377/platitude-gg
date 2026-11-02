@@ -748,7 +748,8 @@ Item {
     // top-level folder spells its path and its shown name alike, so a tip built from the shown name instead of the fold
     // key passes there. Widths are checked at the sidebar's floor — `sidebar_width = 180` in the `state.toml` of
     // `--config-dir` (core takes anything under 180 as out of range and falls back to 260). The folded rail's peek
-    // (`nav-peek worktree`) shows the same worktree marks; read the two together.
+    // (`nav-peek worktree`) draws the WORKTREES rows with the same delegate (`NavItemDelegate`, `SectionPeekPopup`),
+    // so a worktree row's marks change in both pictures; read the two together.
     PageStage {
         id: navTipTimer
         name: "nav_tip"

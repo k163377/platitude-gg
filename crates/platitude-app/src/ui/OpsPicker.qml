@@ -131,7 +131,7 @@ HoverToolButton {
     readonly property real foldWidth: picker.bareBox + Math.max(picker.lineOneFloor, picker.lineTwoFloor)
     /// What lies between the two — the most this picker can give.
     readonly property real slack: picker.wholeWidth - picker.foldWidth
-    /// The second line's mark, at its words' step (規約 §寸法「語の中に組む印は、その語の段に従う」).
+    /// The second line's mark, at its words' step (デザイン規約 §アイコンの席 の ⑥: the header).
     readonly property int noteSeat: Theme.iconSm
     /// The one column both lines' marks stand in, as wide as the wider mark, so the words after them start on one x.
     /// **Both marks centred in it** (user decision): marks stacked in a column are read by its axis. At today's steps

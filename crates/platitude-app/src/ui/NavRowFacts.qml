@@ -98,7 +98,7 @@ Item {
     }
 
     /// The band a line that goes somewhere is pressed in, in this item's coordinates — **target and wash are one
-    /// rect** (デザイン規約 §当たり判定「端に接しないものは判定と塗りを一致させる」). Across the whole item
+    /// rect** (デザイン規約 §QML 実装ルール「端に接しないものは判定と塗りを一致させる」). Across the whole item
     /// (`bandReach`), and half the line step above and below so neighbouring bands meet. **Never above this item's
     /// top**: that is the row's own line. Lines going to one commit share one band (`NavFacts.joined`).
     function bandOf(row) {

@@ -31,7 +31,7 @@
 - `push-retry --preset diverged --allow-write-failure`: 非早送りの拒否を受けてから force で着地させる(判定は絵だけ)— 詳細は `AutoActPublishVerbs.qml`
 - `reset-soft` / `reset-mixed` / `reset-hard`(引数は完全な oid か `row:<n>`。省略時は HEAD の 1 つ下の行): ブランチを戻し、着地を報告行で判定する — 詳細は `AutoActHistoryVerbs.qml` と `verify/verbs/sequencer.rs`
 - `reset-hard-confirm`(引数は `reset-soft` と同じ): hard の回数押し行を出した所で止め、行末の note を読む — 詳細は同上
-- `commit-menu` / `reset-menu` / `branch-card` / `tag-card`(引数はコミットの oid・省略で HEAD の 1 つ下の行。止まった merge の下は `--preset others-merging`。判定は overlay.png 側の報告行)/ `fetch` / `settings` — 詳細は `AutoActHistoryVerbs.qml` と `verify/verbs/graph.rs`
+- `commit-menu` / `reset-menu` / `branch-card` / `tag-card`(引数はコミットの oid・省略で HEAD の 1 つ下の行。止まった merge の下は `--preset others-merging`。判定は overlay.png 側の報告行)/ `fetch` / `settings` — 詳細は `AutoActHistoryVerbs.qml` と `verify/verbs/graph.rs`(`fetch` は `AutoActPublishVerbs.qml`、`settings` は `AutoActFindVerbs.qml`)
 - `github-card` / `github-choice` / `diff-github` / `github-ref` / `github-remote` / `github-file`(**`--preset github` で撃つ**。引数に `:others` を足すと OTHER REMOTES のカードまで開く): GitHub のページへのリンクの GITHUB カード(規約 §GitHub のページへのリンク)— 詳細は `AutoActGithubVerbs.qml` と `verify/verbs/github.rs`
 - `menu-wait` / `menu-wait after`(`--preset slowhook`)/ `menu-wait stash` / `menu-wait stash-ref`(`--preset stashes`)/ `menu-wait replay`(`--preset replay`): 書き込みが走っている間に開いたメニュー(規約 §メニュー)— 詳細は `AutoActHistoryVerbs.qml` の `menuWaitTimer`
 - `open-picker` [`worktree`]: ピッカーが開くフォルダ(ダイアログはどちらの PNG にも写らないので判定は報告行だけ)— 詳細は `verify/verbs/window.rs` / `WindowDialogActs.qml`

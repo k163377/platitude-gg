@@ -118,7 +118,7 @@ AppListView {
     readonly property alias clicksHushed: reclick.hushed
     /// The hand over the pane (`HandWatch`), which the rows read their light and their rest off — never their own
     /// hover: a row the graph moved under a still hand lights, and opens nothing until the hand moves (デザイン規約
-    /// §左メニューの所作「手が動いていない所へ来た行は開かない」).
+    /// §hover のツールチップ「手が動いていない所へ来た行は開かない」).
     required property HandWatch hand
     /// What stands over these rows at the hand's place and is not a row: the current branch's stand-in. A row under
     /// it is not under the hand.

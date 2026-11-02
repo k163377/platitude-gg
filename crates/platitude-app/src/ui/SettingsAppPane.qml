@@ -594,8 +594,7 @@ ColumnLayout {
                     onActivated: index => pane.pickWorktreesReading(index)
                 }
                 // Each reading shows only the boxes it reads: the two bounds, the one interval, or none — `Off`
-                // reads no worktree at all, and a number or a unit beside it would say otherwise (user decision — ask
-                // before changing).
+                // reads no worktree at all, and a number or a unit beside it would say otherwise.
                 FormField {
                     id: worktreesFloorField
                     visible: AppBackend.worktreesReading === "auto"

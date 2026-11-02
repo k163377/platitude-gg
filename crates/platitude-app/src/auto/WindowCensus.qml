@@ -39,8 +39,9 @@ Item {
     /// The objects this walk visited, by their address-bearing string; `true` once visited as shown.
     property var visited: ({})
 
-    /// The part's name off `<File>_QMLTYPE_n`. A name that is no file — an inline component's bare name, a C++ type's
-    /// class name — is dropped by the parent (`Composition::is_component`).
+    /// The part's name off `<File>_QMLTYPE_n`. An inline component (`Inner(0x…)`), a C++ type and an object that
+    /// only adds properties (`QQuickItem_QML_n`) carry no such mark and are not noted; a QML file outside the app (the
+    /// style's `ToolTip`) is dropped by the parent (`Composition::is_component`).
     function note(object) {
         const text = String(object)
         const mark = text.indexOf("_QMLTYPE_")

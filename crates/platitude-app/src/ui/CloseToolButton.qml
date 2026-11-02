@@ -18,7 +18,7 @@ HoverToolButton {
     id: closeButton
 
     /// How big a target this is. A caller with room around it hands in a larger one, and the wash stays `iconLg`
-    /// (規約 §当たり判定「広げるのは判定だけ」).
+    /// (規約 §QML 実装ルール「広げるのは判定だけ」).
     property real seat: Theme.iconLg
     /// How big the mark is drawn: a step under what it closes (§寸法), so beside a screen's `fontXl` title it is larger.
     property real markSize: Theme.iconSm

@@ -411,7 +411,7 @@ Item {
         }
     }
     // Another worktree's uncommitted row read in this window, with every writing control down
-    // (P3-確認事項 §別の worktree の未コミット行). Every field is read off the output side — built from `writable`,
+    // (`RepoPage.wipWritable`). Every field is read off the output side — built from `writable`,
     // each would go green with the disabling unwired (app-ui.md §UI 自動化).
     PageStage {
         id: carriedReadTimer
@@ -1009,7 +1009,7 @@ Item {
     // PGG_AUTO_ACT=eol-walk / eol-stay. The hand on the row's words as the pane hears it (`HandWatch.stir`), the card
     // out, then the unstaged list sent down under the still hand: the card goes and the hand is held. A whole row
     // (`eol-walk`): the light goes to the row that arrived under the hand at once, and its own card comes after a
-    // tremor and the rest (デザイン規約 §左メニューの所作「手が動いたかの見切り」). A
+    // tremor and the rest (デザイン規約 §hover のツールチップ「手が動いたかの見切り」). A
     // pixel (`eol-stay`): the row the hand stayed on keeps its light, and the tremor brings its card back after the
     // rest (`HoverSeat.displace`). The report reads the state at the stage it stops at — `gone=` the card down,
     // `slid_lit=` the first row's light, `under_lit=` the light of the row under the hand, `back=` the card up — but

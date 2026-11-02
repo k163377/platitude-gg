@@ -197,8 +197,8 @@ MenuItem {
     /// `delete-blocked-tip feature/topic-a --preset worktrees`.
     property var reasonMarks: []
     /// The word the tooltip stands the worktree's mark against (`TipAsk.markWordNow`, デザイン規約 §ref の種別
-    /// 「ツールチップだけは字の中」): the folder in a turned-down row's reason. A row's own names, the folder among them,
-    /// are `tipMarks`.
+    /// 「ツールチップと見出し(報せ・質問・ダイアログ)は字の中」): the folder in a turned-down row's reason. A row's own
+    /// names, the folder among them, are `tipMarks`.
     readonly property string tipMarkWord: menuItem.blocked ? menuItem.reasonMarkWord : ""
     /// …and which mark (`TipAsk.markKindNow`).
     readonly property string tipMarkKind: menuItem.blocked ? menuItem.reasonMarkKind : ""

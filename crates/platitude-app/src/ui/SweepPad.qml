@@ -13,8 +13,8 @@ import platitude.ui
 //
 // Where it goes on a scrolling surface: inside a `Flickable`, the pad lies inside the view (`SettingsDialog`'s
 // chapters) — laid outside, it gets no press at all, the view swallowing whatever its children did not take; the
-// hand's `preventStealing` keeps a drag from turning into a flick half-way. Over a `ListView` it is the other way
-// round, the pad above the view, since `reuseItems` rebuilds the rows.
+// hand's `preventStealing` keeps a drag from turning into a flick half-way. In a `ListView` each row carries its own
+// pad (`ChosenCommitRow`); a hand over the whole list is `DiffTextSelect`'s, since `reuseItems` rebuilds the rows.
 Item {
     id: pad
 

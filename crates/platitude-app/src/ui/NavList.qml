@@ -222,8 +222,8 @@ AppListView {
     // The reader moving this list (a notch's glide or the bar's step, `moving`, or the middle button's drift) is the
     // rows moving under the hand (`HandWatch.rowsMoved`): what the row under it had out goes, and nothing opens until
     // the hand walks. **Not the list's own writes in between** (an opening shown or given back): those are rows
-    // growing and shrinking, where the row the hand walked to keeps its rest (デザイン規約 §左メニューの所作「点くのも
-    // 同じ規則」).
+    // growing and shrinking, where the row the hand walked to keeps its rest (デザイン規約 §hover のツールチップ
+    // 「手が歩いて来た行が光を持つ」).
     onContentYChanged: {
         if (navList.openHeld && Math.abs(navList.contentY - navList.openShownY) >= 1)
             navList.openHeld = false

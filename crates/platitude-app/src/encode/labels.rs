@@ -83,10 +83,12 @@ pub fn kind_from_word(word: &str) -> Option<LabelKind> {
 /// two markers (the detached HEAD, a worktree with no branch out),
 /// which name no ref.
 ///
-/// The worktree's `""` is what keeps a folder chip from being a door for
-/// the double-click (its menu and its rename go by `named_kind_word`):
-/// answering `worktree` here makes it one, so settle what that gesture
-/// does first.
+/// The double-click doors do not read this: each picks its own kinds
+/// (`GraphRowDelegate.branchRecords`, `RefListPopup`'s `leadsNowhere`),
+/// so a folder chip is no door whatever this answers. The worktree's
+/// `""` keeps a folder row of a chip's list from choosing its commit on a
+/// plain click (`RefListPopup`'s `nameable`); its menu and its rename go
+/// by `named_kind_word`.
 pub fn ref_kind_word(word: &str) -> &'static str {
     match kind_from_word(word) {
         Some(LabelKind::LocalBranch) => "branch",
@@ -377,8 +379,8 @@ mod tests {
         assert_eq!(ref_kind_word(""), "");
     }
 
-    /// A worktree's chip opens a menu (its card) and still names no
-    /// ref: the rename and switch gestures read `ref_kind_word`.
+    /// A worktree's chip opens a menu (its card) and has a folder to
+    /// rename, and still names no ref (`ref_kind_word`).
     #[test]
     fn a_worktrees_chip_aims_a_menu_and_the_head_marker_none() {
         assert_eq!(named_kind_word("worktree"), "worktree");

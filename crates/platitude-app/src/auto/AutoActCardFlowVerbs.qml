@@ -58,7 +58,7 @@ Item {
     // PGG_AUTO_ACT=card-latch. The hand on HEAD's row as the pane hears it (`HandWatch.stir`), its card out, then the
     // row's menu raised: the blocker takes the card down and latches it (`HoverSeat.onBlockedByChanged`). The menu
     // dismissed, the hand still where it was: nothing comes back; a tremor is the hand's own move, and the card comes
-    // back after the rest (デザイン規約 §左メニューの所作「手が動いたかの見切り」). `tremor_card=` is read in the tremor's own
+    // back after the rest (デザイン規約 §hover のツールチップ「手が動いたかの見切り」). `tremor_card=` is read in the tremor's own
     // turn: the card put out then (`visible`, up from the open call on, where `opened` waits out the enter
     // transition). No stage stops at the tremor: the rest it starts runs on under the picture, so what it shows would
     // be the machine's speed.

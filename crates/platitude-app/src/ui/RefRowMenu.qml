@@ -289,8 +289,9 @@ Item {
     /// holding this row's branch, if another does. `aim` is a remote the reader named on its own
     /// (`RepoPage.openRefMenu`), which the TAG card acts on.
     function offerOn(kind, name, full, oidHex, worktreePath, aim) {
-        // A worktree with a branch out is that branch's menu, carrying the worktree's card: the worktree is where
-        // the branch is, and the row says both (デザイン規約 §左メニューの所作).
+        // A WORKTREES row opens the same menu as a branch row (user decision — ask before changing): a worktree
+        // with a branch out is that branch's menu, carrying the worktree's card — the worktree is where the branch
+        // is, and the row says both. One with none stands on its commit (`integrateRef`, `standOn`).
         if (kind === "worktree") {
             const worktree = refRowMenu.worktreesModel.worktreeFacts(full)
             if (worktree !== undefined && worktree.branch !== "")

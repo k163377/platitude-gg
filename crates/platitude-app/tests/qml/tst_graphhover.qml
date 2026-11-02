@@ -7,7 +7,7 @@ import platitude.ui
 // and its two seats (`RowHoverHost`), the chip's list and the commit's card. The real delegates, in a stand-in for the
 // list and the pane.
 //
-// What a hand that walked to a row opens, and what a hand the rows moved under does not (デザイン規約 §左メニューの所作
+// What a hand that walked to a row opens, and what a hand the rows moved under does not (デザイン規約 §hover のツールチップ
 // 「手が動いていない所へ来た行は開かない」, which the graph's rows keep too — `GraphList.hand`): the search sending the
 // view to a match (`GraphFind.goToMatch`), a wheel notch, the arrows — every move of the rows hands Qt's hover to
 // whatever arrives under the still pointer (`tst_hoverunderstillhand.qml`), and the row must not take that for a hand
@@ -446,7 +446,7 @@ Item {
             compare(host.cardKey, "", "nothing opens under the still hand")
 
             // A tremor where it rested: the hand's own move, and the rest judges — the row's card comes after it
-            // (デザイン規約 §左メニューの所作「手が動いたかの見切り」).
+            // (デザイン規約 §hover のツールチップ「手が動いたかの見切り」).
             mouseMove(list, list.labelWidth + list.graphColWidth + 42,
                       2 * Theme.graphRowHeight + Theme.graphRowHeight / 2)
             tryVerify(() => host.cardKey === "card:graph:" + root.oid(5), undefined,

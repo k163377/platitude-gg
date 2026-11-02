@@ -649,8 +649,9 @@ impl super::RepoSession {
     /// The last ask wins (`carried_read` stops the read the pane stepped
     /// off), and the pane is handed only a reading of the worktree it
     /// stands on, asked after the one it holds ([`Pane`]). Never hand the
-    /// `carried_read` token to the worktree reads: a row's read stopped by
-    /// the pane's token takes the row down and lands as `Moved`.
+    /// `carried_read` token to the worktree reads: the pane's next step
+    /// would stop them — the row left as it was (`CarriedRead::Unread`) and
+    /// the pass ended `Dropped`.
     pub fn read_carried_status(self: &Arc<Self>, path: String, name: String) {
         let (key, number) = self.carried_pane.stand(&path, &name);
         let s = Arc::clone(self);

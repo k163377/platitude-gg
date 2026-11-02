@@ -88,7 +88,7 @@ Item {
     // line (規約 §hover のツールチップ「ラベルに入らなかった 1 点」).
     CloseToolButton {
         id: closeMark
-        // Flush with the band's right edge, all of its air inside the seat (規約 §当たり判定).
+        // Flush with the band's right edge, all of its air inside the seat (規約 §QML 実装ルール「当たり判定は塗りより大きくてよい」).
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         // A `toolbarHeight` square seat, no smaller than a window button's `railWidth` × `toolbarHeight` hit. The mark

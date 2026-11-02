@@ -8,9 +8,9 @@ import platitude.ui
 // run on rather than being cut short of it**: the `✕` stands only on the tab in front and the one under the hand, so a
 // cut would shrink the name the moment the mark comes out. A name cut in the middle goes under the same way — cut or
 // not, it must not re-lay as the mark appears. **A gradient, not a step** (規約 §省略の表し方): a step says the name ended
-// there. **A disc, not a square**: the same circle as the mark's wash (§当たり判定) — squared off, the letters come back
-// along a vertical line and leave an empty band against the wash's curve. Only while the mark shows: a tab with no mark
-// reads its name to its far edge.
+// there. **A disc, not a square**: the same circle as the mark's wash (`CloseToolButton`) — squared off, the letters
+// come back along a vertical line and leave an empty band against the wash's curve. Only while the mark shows: a tab
+// with no mark reads its name to its far edge.
 //
 // Painted over, not masked: offscreen renders in software, where `ShaderEffect` draws nothing — and `MultiEffect`,
 // built on it, likewise, with no warning. A mask would take the name out of every headless picture, and out of a real

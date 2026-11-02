@@ -8,7 +8,7 @@ import platitude.ui
 // repository's to know (デザイン規約 §手元の改名の後のリモート). Draws nothing: the bar belongs to the graph.
 // Branches and tags take one road; only how the two names are spelled differs (`oldSide` / `newSide`). No grey
 // line under the heading (user decision — ask before changing): the three answers say it themselves, words once in
-// the bar (デザイン規約 §答えの要らない報せ「言葉はバーに 1 度だけ」); `askDetail` stays empty and `AskBar` folds
+// the bar (デザイン規約 §立っている質問は 1 か所で聞く「言葉はバーに 1 度だけ」); `askDetail` stays empty and `AskBar` folds
 // it. Asked only after a branch with an upstream, or a tag the remote holds under the same name on the same commit,
 // was renamed (`RepoPage.carryBranchRenameOver` / `armRenameTagRemote`). Raised once the rename has landed
 // (`RepoPage`, on `writeBranchOp` / `writeTagOp`), from what was read before it. Headless: `rename-local-upstream*` /
