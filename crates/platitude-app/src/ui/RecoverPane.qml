@@ -302,6 +302,9 @@ Rectangle {
         anchors.top: filterRow.bottom
         anchors.bottom: parent.bottom
         model: pane.shownEntries
+        // The left menu's docked bar: the list stands in the menu's seat, and its rows' `ago` column is right-aligned
+        // ink on that edge (規約 §QML 実装ルール's choice of bar).
+        verticalBar: PaneScrollBar {}
         // The rows moved under the hand: the reader's wheel and bar (`HandWatch.rowsMoved`) — the hand the rows' tips
         // read too (`TipAsk.hand`). The list put back after a read tells the hand itself (`rowKeep`).
         rowsHand: paneHand

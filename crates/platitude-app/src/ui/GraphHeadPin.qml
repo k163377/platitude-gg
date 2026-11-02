@@ -21,7 +21,7 @@ import platitude.ui
 /// The card of its chip closes there and then — the stand-in steps aside once the row is on screen, leaving the card
 /// nowhere to stand — and the second click of the same double-click is let pass (`GraphPane.hushRowClicks`): another
 /// row now sits where the stand-in was. A row arriving in that seat lights but opens nothing until the hand moves
-/// (規約 §左メニューの所作「手が動いていない所へ来た行は開かない」). The chip's list is not closed by disturbances and
+/// (規約 §hover のツールチップ「手が動いていない所へ来た行は開かない」). The chip's list is not closed by disturbances and
 /// goes once the stand-in stands for another commit (user decisions — `RowHoverHost.rowGone`).
 ///
 /// Adopted by the pane, not the list: inside the list, the lane column's press strip (`GraphLanePan`) would answer for
@@ -227,12 +227,16 @@ Rectangle {
             color: Theme.bgSurface
         }
         Rectangle {
+            id: fade
+            // The ground at zero alpha, as `LaneDissolve`'s: `transparent` is black and would fade through a colour the
+            // ground has not got.
+            readonly property color clear: Qt.rgba(Theme.bgSurface.r, Theme.bgSurface.g, Theme.bgSurface.b, 0)
             y: pin.rowAbove ? pin.groundRoom : 0
             width: parent.width
             height: pin.fadeRoom
             gradient: Gradient {
-                GradientStop { position: 0; color: pin.rowAbove ? Theme.bgSurface : "transparent" }
-                GradientStop { position: 1; color: pin.rowAbove ? "transparent" : Theme.bgSurface }
+                GradientStop { position: 0; color: pin.rowAbove ? Theme.bgSurface : fade.clear }
+                GradientStop { position: 1; color: pin.rowAbove ? fade.clear : Theme.bgSurface }
             }
         }
         // A row's two grounds, in its order with selection winning (`GraphRowDelegate`), over the row and its sliver
