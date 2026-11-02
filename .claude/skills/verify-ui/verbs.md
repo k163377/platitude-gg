@@ -209,6 +209,7 @@
 - `merge-stops`(引数はブランチ名。**`--preset clashing` が要る**。同じ 1 押しの**もう 1 つの着地** = 選択は WIP 行へ行き、エラー帯もコマンドログの持ち上げも出ない(規約 §進行中の操作から出る)— 詳細は `AutoActHistoryVerbs.qml` の `mergeStoppedTimer`)
 
 - `merge-commit`(引数なし、**`--preset conflict-staged` 必須**。止まった merge を、箱を空にしたまま commit ボタンで仕上げる — 詳細は `AutoActWipVerbs.qml`、判定は `verify/verbs/sequencer.rs`)
+- `merge-standing`(引数なし、`--preset conflict-staged` か merge が止まった `--repo`。箱を空にしたまま止まり、後ろに立つ merge の文が placeholder に出る所 — 何も書かない。詳細は `AutoActWipVerbs.qml`)
 - `drop-stops`(引数は `drop-commit-go` と同じ、**`--preset drop-stops` + `row:2` 必須**。stash 経由で回り直した replay が止まった着地 — 詳細は `AutoActHistoryVerbs.qml` の `opStoppedTimer`)
 - `cherry-pick-stops`(**`feature/clash --preset clashing` 必須**。押した cherry-pick が conflict で止まった着地 — 詳細は同上)
 - `revert-stops`(引数は `revert-commit` と同じ、**`--preset revert-clashes` + `row:1` 必須** — 詳細は同上)

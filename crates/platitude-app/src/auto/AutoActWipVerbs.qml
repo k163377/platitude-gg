@@ -228,6 +228,15 @@ Item {
             // The press's own answer, read by the completion `mergeCommitTimer` makes.
             driver.act.witness("commitPressed", wipPane.pressCommit())
             driver.reportAtCompletion(() => "merge_commit pressed=" + driver.act.witnessed("commitPressed"))
+        } else if (act === "merge-standing") {
+            // The boxes emptied under a stopped merge and left so: the message standing behind them shows as the
+            // placeholder (デザイン規約 §進行中の操作から出る). The picture is the claim — the words are the
+            // repository's and are drawn as written (`SummaryArea.placeholder`). `--preset conflict-staged`, or a
+            // `--repo` whose merge has stopped; nothing is written.
+            page.showWip()
+            wipPane.clearMessage()
+            driver.reportAtCompletion(() => "merge_standing merging=" + worktree.opMerging
+                                            + " empty=" + (wipPane.subjectText === "" && wipPane.bodyText === ""))
         } else if (act === "op-exit" || act === "op-exit-go") {
             // "-go" runs the named row to its end (`OpExitRow.completeHold`). The argument is the bare word, as the
             // option parser turns away a positional starting with `--` (`verify::options`). Required: without it

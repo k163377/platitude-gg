@@ -211,6 +211,14 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "merge_committed merging=false kept=true typed=false",
     },
+    // The boxes emptied under a stopped merge and left so: the picture shows
+    // the standing message as the placeholder, and the line says the merge
+    // still stands and the boxes are empty.
+    Verb {
+        name: "merge-standing",
+        when: &[],
+        plain: "merge_standing merging=true empty=true",
+    },
     // The plan standing open with a verb of each cost. `dirty=` opens the
     // run button, `pushed=` is the amber the range earned, `selected=` the
     // row the model opened on — the highlight in the picture is the
