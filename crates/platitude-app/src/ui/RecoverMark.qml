@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls.Fusion
 import platitude.ui
 
 // The discard log's mark for an entry or a part (`RecoverEntries`): what kind of thing it took, in its section's
@@ -9,8 +8,13 @@ import platitude.ui
 //   alone would not say tag, and the pair below means something else; a remote's branch is the cloud itself, REMOTES'
 //   mark
 // - here and on a remote at once: the kind over the cloud across a slash — two things taken, two marks — a fraction
-//   like `ActionButtonSeat`'s in `iconXs` halves, wider than one mark by `pairSpread`: the one mark whose seat is
-//   wider than `MarkSeat`'s one width (a special design)
+//   like `ActionButtonSeat`'s in `iconXs` halves, stood up: taller than wide, short of the row at either end, and as
+//   wide as the seat lets it be — centred on the seat as a lone mark is, it keeps air to the row's edge and to the
+//   words' first letter, so every row's words start in one column. The one mark whose seat is wider than
+//   `MarkSeat`'s one width (a special design)
+//
+// Two pairs in a row put the cloud of the one above over the kind of the one below, in the same columns — the pair is
+// narrow — so a pair stays inside its row, with air left between the two.
 //
 // The band's lines are one part each, so they never pair: of them, only a remote's tag wears the shoulder cloud.
 Item {
@@ -26,11 +30,18 @@ Item {
     /// The pixel size of the words the mark heads: a lone mark is drawn to their letters, the box's middle their
     /// capitals' middle (デザイン規約 §アイコンの席 の文頭記号) — the caller stands the box's middle there.
     property real size: Theme.fontMd
-    /// How much wider the pair stands than one mark: what a row moves its name over by.
-    readonly property int pairSpread: Theme.iconSm - Theme.spaceXs
+    /// The pair's box: the kind at its top-left corner, the cloud at its bottom-right. As wide as the seat lets it be:
+    /// the ink keeps a pixel or more of air to the row's edge and before the words (`RecoverPane`'s row, the box
+    /// centred on the seat).
+    readonly property int pairWidth: Theme.iconSm + Theme.spaceXs
+    readonly property int pairHeight: Theme.iconLg
+    /// The slash, end to end, as long as `ActionButtonSeat`'s and at its weight — lighter than the halves, being
+    /// neither of them.
+    readonly property real slashReach: Theme.iconSm + Theme.spaceXs / 2
+    readonly property real slashStroke: Metrics.iconStroke * Theme.iconSm / 16
 
-    implicitWidth: mark.paired ? Theme.iconXs + mark.pairSpread : Theme.iconSm
-    implicitHeight: mark.paired ? Theme.iconSm + Theme.spaceXs : Theme.iconSm
+    implicitWidth: mark.paired ? mark.pairWidth : Theme.iconSm
+    implicitHeight: mark.paired ? mark.pairHeight : Theme.iconSm
 
     // A step taller than the box, on the box's middle: the branch and the tree run past the capitals both ways and
     // come out as tall as the box, and a canvas only the box's height cuts what lands past it.
@@ -52,10 +63,12 @@ Item {
             anchors.topMargin: -Theme.spaceXs / 2
         }
     }
-    // The halves a step under the mark they stand for, at opposite corners of the pair's box across the slash.
+    // The halves at opposite corners of the pair's box across the slash. The box keeps the pair's size whether or not
+    // the mark is paired, so a row handed another entry shows a slash drawn once at that size.
     Item {
         visible: mark.paired
-        anchors.fill: parent
+        width: mark.pairWidth
+        height: mark.pairHeight
         NavIcon {
             x: 0
             y: 0
@@ -64,11 +77,23 @@ Item {
             kind: mark.kind
             tint: mark.tint
         }
-        Label {
-            anchors.centerIn: parent
-            text: "/"
-            color: Theme.textSecondary
-            font.pixelSize: Theme.fontSm
+        // Drawn, not a glyph — a font's `/` keeps its own slant and sits on its baseline — through the box's middle at
+        // 45°, as far across as up. Square to the line between the halves' centres (`ActionButtonSeat`'s) it would lie
+        // almost flat in a box this tall.
+        InkCanvas {
+            anchors.fill: parent
+            onPaint: {
+                const ctx = getContext("2d")
+                const half = mark.slashReach / 2 / Math.SQRT2
+                ctx.clearRect(0, 0, width, height)
+                ctx.strokeStyle = Theme.textSecondary
+                ctx.lineWidth = mark.slashStroke
+                ctx.lineCap = "round"
+                ctx.beginPath()
+                ctx.moveTo(width / 2 - half, height / 2 + half)
+                ctx.lineTo(width / 2 + half, height / 2 - half)
+                ctx.stroke()
+            }
         }
         NavIcon {
             x: parent.width - width

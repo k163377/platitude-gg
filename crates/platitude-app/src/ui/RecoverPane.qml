@@ -480,8 +480,8 @@ Rectangle {
         // menu's tint for that kind (`RecoverEntries.tintOf`).
         RecoverMark {
             id: entryMark
-            // A lone mark's box centred on the seat as `NameCell` centres its own; a pair starts the seat.
-            x: Theme.spaceXs - (row.entry.paired ? 0 : (Theme.iconSm - Theme.iconXs) / 2)
+            // The box centred on the seat as `NameCell` centres its own, a pair's as a lone mark's.
+            x: Theme.spaceXs + (Theme.iconXs - entryMark.width) / 2
             // The head of the row's words, on their capitals' middle (デザイン規約 §アイコンの席 の文頭記号).
             y: Math.round(title.y + title.baselineOffset - WordFace.capitalMiddle(entryMark.size)
                           - entryMark.height / 2)
@@ -493,11 +493,11 @@ Rectangle {
         }
         // What was done to what, after the seat every left menu row opens with (`NameCell.seatSize`), the names as
         // code with no mark of their own (`RecoverEntries`), one line cut at the
-        // end (`CodeLine`). The whole of it is the card's and the band's. A pair of marks is wider than the seat, and
-        // that row's words move over by the difference.
+        // end (`CodeLine`). The whole of it is the card's and the band's. Every row's words start in one column, a
+        // pair's too (`RecoverMark.pairWidth`).
         CodeLine {
             id: title
-            x: Theme.spaceXs + (row.entry.paired ? entryMark.pairSpread : 0) + Theme.iconXs + Theme.spaceXs
+            x: Theme.spaceXs + Theme.iconXs + Theme.spaceXs
             y: 0
             width: whenLabel.x - Theme.spaceXs - title.x
             height: Theme.rowHeight
