@@ -13,10 +13,18 @@ TextField {
     /// The value is chosen: no caret and nothing a key can add, but the ground stays (規約 §選ぶ欄と打つ欄 の例外 —
     /// among grounded boxes, one without a ground reads as disabled). What the press opens is the caller's.
     property bool choosing: false
+    /// The words the empty box shows, drawn by the box itself with a `PlainTextLabel`: a form field's can be the
+    /// repository's or the machine's (the path of the git in use, a default read off the backend), and Qt's
+    /// `PlaceholderText` reads markup in them (`SummaryArea.placeholder`). `placeholderText` stays empty, so the
+    /// style draws nothing.
+    property string placeholder: ""
     /// A choosing box was pressed, or took Enter / Space.
     signal picking()
 
     readOnly: form.choosing
+    // The style's own width formula (Fusion's TextField.qml) with this box's placeholder in it.
+    implicitWidth: implicitBackgroundWidth + leftInset + rightInset
+                   || Math.max(contentWidth, hint.implicitWidth) + leftPadding + rightPadding
     implicitHeight: Theme.controlHeight
     font.pixelSize: Theme.fontMd
     // The inset every box shares (`SlimField`); only the height tells a form field from a slim one.
@@ -35,6 +43,23 @@ TextField {
     ContextMenu.menu: null
     ContextMenu.onRequested: menuSeat.offer()
     Keys.onMenuPressed: event => event.accepted = menuSeat.offer()
+    // Laid out as the style's PlaceholderText is (Fusion's TextField.qml), so the words stand where they stood.
+    PlainTextLabel {
+        id: hint
+        x: form.leftPadding
+        y: form.topPadding
+        width: form.width - (form.leftPadding + form.rightPadding)
+        height: form.height - (form.topPadding + form.bottomPadding)
+        text: form.placeholder
+        font: form.font
+        color: form.placeholderTextColor
+        horizontalAlignment: form.horizontalAlignment
+        verticalAlignment: form.verticalAlignment
+        visible: !form.length && !form.preeditText
+                 && (!form.activeFocus || form.horizontalAlignment !== Qt.AlignHCenter)
+        elide: Text.ElideRight
+        renderType: form.renderType
+    }
     FieldMenuSeat {
         id: menuSeat
         editor: form

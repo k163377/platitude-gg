@@ -101,7 +101,7 @@ ColumnLayout {
             FormField {
                 id: nameField
                 Layout.fillWidth: true
-                placeholderText: fields.namePlaceholder
+                placeholder: fields.namePlaceholder
                 onAccepted: fields.submitted()
                 onTextEdited: fields.edited()
                 // The characters git drops from an author line; keeping them out keeps the config agreeing with
@@ -127,7 +127,7 @@ ColumnLayout {
             FormField {
                 id: emailField
                 Layout.fillWidth: true
-                placeholderText: fields.emailPlaceholder
+                placeholder: fields.emailPlaceholder
                 onAccepted: fields.submitted()
                 onTextEdited: fields.edited()
                 validator: RegularExpressionValidator {

@@ -2,7 +2,8 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// Repository names and git's diagnostic strings are data, including when they contain HTML tags.
+// Repository names and git's diagnostic strings are data, including when they contain HTML tags: the label every
+// input is drawn with (`PlainTextLabel`), the parts built on it, and a box's own placeholder all keep them as written.
 Item {
     id: root
     width: 1000
@@ -38,6 +39,11 @@ Item {
         ruler: null
     }
     CloneDialog { id: clone }
+    PlainTextLabel { id: plainLabel; y: 420; text: root.payload }
+    // The message standing behind an empty box (a stopped merge's), drawn by the box's own label, not Qt's.
+    SummaryArea { id: summaryBox; y: 460; width: 900; placeholder: root.payload }
+    FormField { id: formBox; y: 520; width: 900; placeholder: root.payload }
+    DescriptionBox { id: descBox; y: 560; width: 900; height: 80; placeholder: root.payload }
     Text { id: plain; visible: false; textFormat: Text.PlainText }
 
     TestCase {
@@ -96,6 +102,22 @@ Item {
             const message = "fatal: repository '" + root.payload + "' does not exist"
             clone.said(message)
             checkSpelling(clone.contentItem, message)
+        }
+
+        function test_plain_text_label_keeps_tags() {
+            checkSpelling(plainLabel, root.payload)
+        }
+
+        function test_standing_placeholder_keeps_tags() {
+            checkSpelling(summaryBox, root.payload)
+        }
+
+        function test_form_placeholder_keeps_tags() {
+            checkSpelling(formBox, root.payload)
+        }
+
+        function test_description_placeholder_keeps_tags() {
+            checkSpelling(descBox, root.payload)
         }
 
         function test_an_image_tag_stays_text() {

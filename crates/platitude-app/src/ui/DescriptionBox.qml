@@ -32,7 +32,8 @@ Rectangle {
 
     property alias text: area.text
     property alias readOnly: area.readOnly
-    property alias placeholderText: area.placeholderText
+    /// The words the empty box shows, drawn by the box with a `PlainTextLabel` (`SummaryArea.placeholder` says why).
+    property string placeholder: ""
     /// The colour the text is painted in — the side the smoke hooks report (`descriptionColor`): `focused` alone reads
     /// lit even where the colour's binding is broken. Headless: `edit-message-focus` against `wip-message(-focus)`.
     readonly property color textColor: area.color
@@ -272,11 +273,37 @@ Rectangle {
             color: !area.readOnly && box.focused ? Theme.textPrimary : Theme.textSecondary
             background: null
             padding: 0
+            // The style's own size formula (Fusion's TextArea.qml) with this box's placeholder in it: a standing
+            // message that wraps grows the text as the style's placeholder did, and the view scrolls it.
+            implicitWidth: Math.max(contentWidth + leftPadding + rightPadding,
+                                    implicitBackgroundWidth + leftInset + rightInset,
+                                    hint.implicitWidth + leftPadding + rightPadding)
+            implicitHeight: Math.max(contentHeight + topPadding + bottomPadding,
+                                     implicitBackgroundHeight + topInset + bottomInset,
+                                     hint.implicitHeight + topPadding + bottomPadding)
             onActiveFocusChanged: if (area.activeFocus) box.unpin()
             // The product's right-click menu, not the style's, and the menu key's (`FieldMenuSeat`).
             ContextMenu.menu: null
             ContextMenu.onRequested: menuSeat.offer()
             Keys.onMenuPressed: event => event.accepted = menuSeat.offer()
+            // Laid out as the style's PlaceholderText is (Fusion's TextArea.qml), so the words stand where they stood.
+            PlainTextLabel {
+                id: hint
+                x: area.leftPadding
+                y: area.topPadding
+                width: area.width - (area.leftPadding + area.rightPadding)
+                height: area.height - (area.topPadding + area.bottomPadding)
+                text: box.placeholder
+                font: area.font
+                color: area.placeholderTextColor
+                horizontalAlignment: area.horizontalAlignment
+                verticalAlignment: area.verticalAlignment
+                visible: !area.length && !area.preeditText
+                         && (!area.activeFocus || area.horizontalAlignment !== Qt.AlignHCenter)
+                wrapMode: area.wrapMode
+                elide: Text.ElideRight
+                renderType: area.renderType
+            }
             FieldMenuSeat {
                 id: menuSeat
                 editor: area

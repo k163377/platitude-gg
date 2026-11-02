@@ -115,7 +115,7 @@ AppDialog {
                 id: nameField
                 Layout.fillWidth: true
                 // Never a name Add would refuse (デザイン規約 §リモートを書き留める).
-                placeholderText: remoteDialog.taken.indexOf("origin") >= 0 ? "" : "origin"
+                placeholder: remoteDialog.taken.indexOf("origin") >= 0 ? "" : "origin"
                 onAccepted: remoteDialog.submit()
             }
             Label {
@@ -130,7 +130,7 @@ AppDialog {
             FormField {
                 id: urlField
                 Layout.fillWidth: true
-                placeholderText: qsTr("git@github.com:you/your-repo.git")
+                placeholder: qsTr("git@github.com:you/your-repo.git")
                 onAccepted: remoteDialog.submit()
             }
         }

@@ -118,7 +118,7 @@ AppDialog {
                 id: urlField
                 Layout.fillWidth: true
                 enabled: !cloneDialog.cloning
-                placeholderText: qsTr("git@github.com:you/your-repo.git")
+                placeholder: qsTr("git@github.com:you/your-repo.git")
                 onTextChanged: cloneDialog.settleName()
                 onAccepted: cloneDialog.submit()
             }
@@ -174,14 +174,13 @@ AppDialog {
 
         // git's own words, the only red here (規約 §リポジトリを開く「赤は git の文言だけ」). Wrapped: a refusal names
         // the destination or the URL, worth reading whole.
-        Label {
+        PlainTextLabel {
             Layout.fillWidth: true
             visible: cloneDialog.refusal !== ""
             wrapMode: Text.Wrap
             color: Theme.danger
             font.pixelSize: Theme.fontSm
             text: cloneDialog.refusal
-            textFormat: Text.PlainText
         }
 
         DialogActions {

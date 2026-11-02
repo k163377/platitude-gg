@@ -263,9 +263,9 @@ ColumnLayout {
             SummaryArea {
                 id: summaryArea
                 readOnly: editor.readOnly
-                placeholderText: editor.readOnly ? ""
-                                 : editor.standingSubject !== "" ? editor.standingSubject
-                                 : qsTr("Commit summary")
+                placeholder: editor.readOnly ? ""
+                             : editor.standingSubject !== "" ? editor.standingSubject
+                             : qsTr("Commit summary")
                 // A caret in the box also takes it over from the pin.
                 onActiveFocusChanged: if (summaryArea.activeFocus) editor.unpinSummary()
                 Keys.onEscapePressed: event => {
@@ -296,9 +296,9 @@ ColumnLayout {
     DescriptionBox {
         id: descBox
         readOnly: editor.readOnly
-        placeholderText: editor.readOnly ? ""
-                         : editor.standingBody !== "" ? editor.standingBody
-                         : qsTr("Description")
+        placeholder: editor.readOnly ? ""
+                     : editor.standingBody !== "" ? editor.standingBody
+                     : qsTr("Description")
         border.color: editor.attention ? Theme.accent : Theme.borderSubtle
         restHeight: editor.descRest
         room: editor.descRoom

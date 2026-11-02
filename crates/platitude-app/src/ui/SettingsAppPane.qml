@@ -175,8 +175,8 @@ ColumnLayout {
         // backslash in what the box shows, its value or its placeholder (規約 §パスの区切り). `answered` folds `ok` and
         // `old` so the supported minimum and the newest git read alike.
         return "shown=" + gitPathField.text + " stored=" + AppBackend.gitPath
-             + " named=" + (gitPathField.placeholderText !== "")
-             + " native=" + (gitPathField.text.includes("\\") || gitPathField.placeholderText.includes("\\"))
+             + " named=" + (gitPathField.placeholder !== "")
+             + " native=" + (gitPathField.text.includes("\\") || gitPathField.placeholder.includes("\\"))
              + " answered=" + (AppBackend.gitPathState === "ok" || AppBackend.gitPathState === "old")
              + " offers=" + AppBackend.gitPathOffersRestart
              + " held=" + pane.gitButtonRestarts
@@ -406,7 +406,7 @@ ColumnLayout {
                 // must name the one running. From `process::default_program_path` — one step past what the app
                 // spawns: behind Git for Windows' launcher on PATH, the git it launches. Spelled with `/` where it
                 // comes in (規約 §パスの区切り).
-                placeholderText: AppBackend.gitPathInUse
+                placeholder: AppBackend.gitPathInUse
                 onPicking: pane.openGitPicker()
             }
             // One session runs one git: swapped mid-run, open tabs would be on the old one and new tabs on the new, and
@@ -500,7 +500,7 @@ ColumnLayout {
                 FormField {
                     id: fetchField
                     implicitWidth: 160
-                    placeholderText: qsTr("off")
+                    placeholder: qsTr("off")
                     inputMethodHints: Qt.ImhDigitsOnly
                     validator: IntValidator {
                         bottom: 1
@@ -664,7 +664,7 @@ ColumnLayout {
                 FormField {
                     id: concurrencyField
                     implicitWidth: 160
-                    placeholderText: String(AppBackend.gitConcurrencyDefault)
+                    placeholder: String(AppBackend.gitConcurrencyDefault)
                     inputMethodHints: Qt.ImhDigitsOnly
                     validator: IntValidator {
                         bottom: 1
@@ -702,7 +702,7 @@ ColumnLayout {
                     implicitWidth: 160
                     // Disabled, not cleared, under the whole history (§無効): unchecking gives the number back.
                     enabled: !wholeHistoryBox.checked
-                    placeholderText: String(AppBackend.initialCommitsDefault)
+                    placeholder: String(AppBackend.initialCommitsDefault)
                     inputMethodHints: Qt.ImhDigitsOnly
                     // No top: the only ceiling is the property's own type (`session::log_limit`).
                     validator: IntValidator {

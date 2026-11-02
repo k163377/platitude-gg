@@ -9,6 +9,18 @@ TextArea {
     id: summary
     /// Being written in: the caret is here, or this box's own menu stands over it (`FieldMenuSeat.holding`).
     readonly property bool caretHeld: summary.activeFocus || menuSeat.holding
+    /// The words the empty box shows, drawn by the box itself with a `PlainTextLabel`: a stopped merge's message is
+    /// the repository's, and Qt's `PlaceholderText` reads its markup (`<b>` or a bare `&lt;` turns it rich —
+    /// `merge-standing`). `placeholderText` stays empty, so the style draws nothing.
+    property string placeholder: ""
+    // The style's own size formula (Fusion's TextArea.qml) with this box's placeholder in it: a standing message
+    // that wraps grows the box, as the style's placeholder did.
+    implicitWidth: Math.max(contentWidth + leftPadding + rightPadding,
+                            implicitBackgroundWidth + leftInset + rightInset,
+                            hint.implicitWidth + leftPadding + rightPadding)
+    implicitHeight: Math.max(contentHeight + topPadding + bottomPadding,
+                             implicitBackgroundHeight + topInset + bottomInset,
+                             hint.implicitHeight + topPadding + bottomPadding)
     wrapMode: TextArea.Wrap
     font.pixelSize: Theme.fontLg
     font.weight: Theme.fontWeightStrong
@@ -33,6 +45,24 @@ TextArea {
     ContextMenu.menu: null
     ContextMenu.onRequested: menuSeat.offer()
     Keys.onMenuPressed: event => event.accepted = menuSeat.offer()
+    // Laid out as the style's PlaceholderText is (Fusion's TextArea.qml), so the words stand where they stood.
+    PlainTextLabel {
+        id: hint
+        x: summary.leftPadding
+        y: summary.topPadding
+        width: summary.width - (summary.leftPadding + summary.rightPadding)
+        height: summary.height - (summary.topPadding + summary.bottomPadding)
+        text: summary.placeholder
+        font: summary.font
+        color: summary.placeholderTextColor
+        horizontalAlignment: summary.horizontalAlignment
+        verticalAlignment: summary.verticalAlignment
+        visible: !summary.length && !summary.preeditText
+                 && (!summary.activeFocus || summary.horizontalAlignment !== Qt.AlignHCenter)
+        wrapMode: summary.wrapMode
+        elide: Text.ElideRight
+        renderType: summary.renderType
+    }
     FieldMenuSeat {
         id: menuSeat
         editor: summary
