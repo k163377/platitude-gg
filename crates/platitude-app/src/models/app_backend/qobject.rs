@@ -221,6 +221,13 @@ impl AppBackend {
         Hub::with(Hub::writes_settled).unwrap_or(true)
     }
 
+    /// The settings screen closed: the open repositories read
+    /// `rebase.updateRefs` again (`Hub::reread_update_refs`).
+    #[qslot]
+    fn settings_closed(&self) {
+        Hub::with(|hub| hub.reread_update_refs());
+    }
+
     #[qsignal]
     pub(super) fn exit_requested(&mut self);
 

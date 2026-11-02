@@ -420,6 +420,17 @@ impl Hub {
         }
     }
 
+    /// Has every open tab read `rebase.updateRefs` again — the moment the
+    /// settings screen closes, where the person may have changed it
+    /// (`RepoSession::reread_update_refs`).
+    pub fn reread_update_refs(&self) {
+        for tab in self.tabs.values() {
+            if let Some(session) = &tab.session {
+                session.reread_update_refs();
+            }
+        }
+    }
+
     pub fn session(&self, id: i32) -> Option<Arc<RepoSession>> {
         self.tabs.get(&id).and_then(|t| t.session.clone())
     }

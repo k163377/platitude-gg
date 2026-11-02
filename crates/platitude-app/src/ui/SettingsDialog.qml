@@ -135,6 +135,9 @@ AppDialog {
         settingsDialog.applyFields()
         settingsDialog.prefillName = ""
         settingsDialog.prefillEmail = ""
+        // The moment a setting changed outside the app is read again (rebase.updateRefs, which decides the drop's hold
+        // — `RepoSession::reread_update_refs`); nothing watches for it otherwise.
+        AppBackend.settingsClosed()
     }
     // Each category writes its own, so a field finished in one never queues a `git config` for the other.
     function applyFields() {
