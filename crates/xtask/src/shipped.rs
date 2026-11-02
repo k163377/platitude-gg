@@ -12,17 +12,28 @@
 //! a load takes as long as the machine makes it, and a stretch of clock
 //! that ends first says nothing about the QML. Then the window stands
 //! ([`STAND`]) — the one wait whose end is the answer (`wait::stood`): a
-//! window still there at the end stood that long. This runner kills it: a
-//! shipped build has no watchdog (that is a harness knob).
+//! window still there at the end stood that long. This runner then ends
+//! it: a shipped build has no watchdog (that is a harness knob). The end is
+//! the stop an IDE sends, which the window must answer as its own close —
+//! Ctrl+C through a console on Windows ([`console`]), SIGINT elsewhere
+//! ([`signal`]); a failed run ends with a kill.
 
+use std::ffi::OsStr;
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread::JoinHandle;
 use std::time::Duration;
 
-use crate::app_out::collect_marking;
+use crate::app_out::{Said, collect_marking};
 use crate::command::{self, Permission, Where};
 use crate::wait::{Budget, Expired, LOOK_AGAIN, Wait, stood};
+
+#[cfg(windows)]
+mod console;
+#[cfg(unix)]
+mod signal;
 
 pub(crate) static SHIPPED: command::Command = command::Command {
     id: "shipped.build",
@@ -59,6 +70,14 @@ const STARTED: &str = "build tree";
 /// links no app crate, and no file may read a crate root): a rewording on
 /// either side is a run that waits out its ceiling.
 const LOADED: &str = "window loaded";
+
+/// The app's line once a stop from outside reached its close
+/// (`app_backend/lifecycle.rs`), kept by hand as [`LOADED`] is.
+const DELIVERED: &str = "a stop from outside requested window close";
+
+/// How long a window asked to close may take to end: the settings flush
+/// and `Hub::shutdown` over an empty store, many times over.
+const CLOSE_CEILING: Duration = Duration::from_secs(30);
 
 /// How the run ended, as the wait saw it.
 enum Ending {
@@ -107,6 +126,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
             other => return Err(format!("shipped does not take {other:?}")),
         }
     }
+    #[cfg(windows)]
+    if let Some(ran) = console::run_as_parent() {
+        return ran;
+    }
     let root = crate::tree::workspace_root();
     // Counted like any compile, whether a gate asked for it or a session.
     let _room = crate::budget::standalone(
@@ -123,61 +146,161 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let exe =
         crate::app_build::shipped_exe(&root, &path, crate::app_build::BuildEnv::default(), build)?;
 
+    #[cfg(windows)]
+    if !console::is_host() {
+        drop(_room);
+        return console::run_host();
+    }
+    #[cfg(windows)]
+    console::protect()?;
+
     // Its own directory, never the settings of the person at this machine.
     let config = crate::keepsakes::keepsake_dir("shipped")?;
-    let mut cmd = Command::new(&exe);
-    // A stray `PGG_AUTO_ACT` in the shell would make this a run other
-    // than the one being judged.
-    crate::app_env::clear_automation(&mut cmd);
-    cmd.current_dir(&config)
-        .env("PATH", &path)
-        .env("QT_QPA_PLATFORM", "offscreen")
-        .env("QT_FORCE_STDERR_LOGGING", "1")
-        .env("PGG_CONFIG_DIR", &config)
-        .env("PGG_LOG", "info")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    crate::qt::offscreen_fonts(&mut cmd);
-    // Apart from the cache the person's own windows use (`verify::child`).
-    cmd.env("QML_DISK_CACHE_PATH", exe.with_file_name("qmlcache"));
     println!("running the shipped build offscreen: {}", config.display());
 
     let mut wait = Wait::new("the shipped build", Budget::whole(LOAD_CEILING), LOOK_AGAIN);
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("failed to start the app: {e}"))?;
-    crate::budget::child_started(child.id(), &exe.display().to_string());
-    // Raised by the line itself, the moment it arrives.
-    let loaded = Arc::new(AtomicBool::new(false));
-    let out = child
-        .stdout
-        .take()
-        .map(|pipe| collect_marking(pipe, Arc::clone(&loaded), said_loaded));
-    let err = child
-        .stderr
-        .take()
-        .map(|pipe| collect_marking(pipe, Arc::clone(&loaded), said_loaded));
-
-    let ending = wait_out(&mut child, &loaded, &mut wait);
-    // Killed on every road but its own exit, a failed look included: a
-    // shipped build has no watchdog to end it.
-    if !matches!(ending, Ok(Ending::LeftEarly { .. })) {
-        let _ = child.kill();
-        let _ = child.wait();
-    }
-    let ending = ending?;
-
-    let join = |h: Option<std::thread::JoinHandle<crate::app_out::Said>>| {
-        h.and_then(|h| h.join().ok())
-            .map(|said| said.lines)
-            .unwrap_or_default()
+    let mut window = Started::spawn(app_command(&exe, &path, &config), &exe)?;
+    let ending = wait_out(&mut window.child, &window.loaded, &mut wait);
+    let stopped = if matches!(ending, Ok(Ending::StillUp { .. })) {
+        stop(&mut window.child)
+    } else {
+        Ok(())
     };
-    let lines: Vec<String> = join(err).into_iter().chain(join(out)).collect();
+    let lines = window.finish(matches!(ending, Ok(Ending::LeftEarly { .. })));
+    let ending = ending?;
     for line in &lines {
         println!("  | {line}");
     }
     println!("{}", verdict(&lines, &ending)?);
+    stopped?;
+    check_delivery(&lines)?;
+    #[cfg(windows)]
+    {
+        console::check_left_cargo(&exe)?;
+        console::check_other_parent(&exe)?;
+    }
+    #[cfg(unix)]
+    signal::check_ignored_hangup(&exe, &path)?;
     Ok(())
+}
+
+/// A window this run started, its output read as it arrives.
+struct Started {
+    child: Child,
+    /// Raised by the line itself, the moment it arrives.
+    loaded: Arc<AtomicBool>,
+    out: Option<JoinHandle<Said>>,
+    err: Option<JoinHandle<Said>>,
+}
+
+impl Started {
+    fn spawn(mut cmd: Command, exe: &Path) -> Result<Self, String> {
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| format!("failed to start the app: {e}"))?;
+        crate::budget::child_started(child.id(), &exe.display().to_string());
+        let loaded = Arc::new(AtomicBool::new(false));
+        let out = child
+            .stdout
+            .take()
+            .map(|pipe| collect_marking(pipe, Arc::clone(&loaded), said_loaded));
+        let err = child
+            .stderr
+            .take()
+            .map(|pipe| collect_marking(pipe, Arc::clone(&loaded), said_loaded));
+        Ok(Self {
+            child,
+            loaded,
+            out,
+            err,
+        })
+    }
+
+    /// What it said, stderr first. Killed on every road but its own exit
+    /// (`left`), a failed look included: a shipped build has no watchdog to
+    /// end it. A window that answered its stop has already gone, and the
+    /// kill finds nothing.
+    fn finish(mut self, left: bool) -> Vec<String> {
+        if !left {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+        let join = |h: Option<JoinHandle<Said>>| {
+            h.and_then(|h| h.join().ok())
+                .map(|said| said.lines)
+                .unwrap_or_default()
+        };
+        join(self.err).into_iter().chain(join(self.out)).collect()
+    }
+}
+
+/// The stop an IDE sends the window it waits on.
+#[cfg(windows)]
+fn stop(child: &mut Child) -> Result<(), String> {
+    close_after(child, "a waiting cargo's Ctrl+C", console::send)
+}
+
+/// The stop an IDE sends the window it waits on.
+#[cfg(unix)]
+fn stop(child: &mut Child) -> Result<(), String> {
+    let pid = child.id();
+    close_after(child, "an IDE's SIGINT", || {
+        signal::send(pid, signal::SIGINT)
+    })
+}
+
+/// Sends a window that stood its `stop`, and waits for a normal exit.
+fn close_after(
+    child: &mut Child,
+    stop: &str,
+    send: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    send()?;
+    let mut wait = Wait::new(
+        "the shipped build",
+        Budget::whole(CLOSE_CEILING),
+        LOOK_AGAIN,
+    );
+    loop {
+        if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
+            if !status.success() {
+                return Err(format!("{stop} ended the shipped build abruptly: {status}"));
+            }
+            println!("PASS: {stop} closed the shipped build normally");
+            return Ok(());
+        }
+        wait.look_again(&format!("a normal exit after {stop}"))
+            .map_err(|e| e.to_string())?;
+    }
+}
+
+/// The close the stop asked for went the window's own way.
+fn check_delivery(lines: &[String]) -> Result<(), String> {
+    if !lines.iter().any(|line| line.contains(DELIVERED)) {
+        return Err("the stop did not reach the window's close route".into());
+    }
+    Ok(())
+}
+
+/// The shipped build as every run of this command starts it: offscreen,
+/// on a settings directory of its own. Its output goes where the caller
+/// says.
+fn app_command(exe: &Path, path: &OsStr, config: &Path) -> Command {
+    let mut cmd = Command::new(exe);
+    // A stray `PGG_AUTO_ACT` in the shell would make this a run other
+    // than the one being judged.
+    crate::app_env::clear_automation(&mut cmd);
+    cmd.current_dir(config)
+        .env("PATH", path)
+        .env("QT_QPA_PLATFORM", "offscreen")
+        .env("QT_FORCE_STDERR_LOGGING", "1")
+        .env("PGG_CONFIG_DIR", config)
+        .env("PGG_LOG", "info");
+    crate::qt::offscreen_fonts(&mut cmd);
+    // Apart from the cache the person's own windows use (`verify::child`).
+    cmd.env("QML_DISK_CACHE_PATH", exe.with_file_name("qmlcache"));
+    cmd
 }
 
 /// Waits for the window to load, then stands it.

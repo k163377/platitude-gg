@@ -297,6 +297,13 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       is out, or the ceiling, which only names a load that never ends —
       how long a load takes is the machine's, so no stretch of clock
       stands in for the line.
+      The window that stood is then stopped as an IDE stops it — Ctrl+C
+      through its console on Windows, SIGINT elsewhere — and must close
+      normally through its own close. On Windows two more windows take a
+      Ctrl+C that must not reach them, once cargo left and under a parent
+      that is not cargo, and must stand; elsewhere a second window must
+      stand through a SIGHUP its launcher ignored, then close normally on
+      SIGTERM.
       What it is for is the failure only this build has: a QML file in
       `platitude.ui` that reaches into `platitude.auto` resolves in every
       build this runner drives and loads nothing in the shipped one.

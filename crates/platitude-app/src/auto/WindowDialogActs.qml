@@ -396,10 +396,11 @@ Item {
     // PGG_AUTO_ACT=quit-waits / quit-locked: the close while git is still writing — the commit is held by the sleeping
     // pre-commit hook of `--preset slowhook`, so the gate turns the close away and stands the wait dialog up.
     // `quit-waits` photographs that — the loading shape with no buttons, the dialog in overlay.png and its seat over
-    // the window in scene.png; `quit-locked` closes again, then watches the held write land anyway.
+    // the window in scene.png; `quit-locked` closes a second time, then watches the held write land.
     //
-    // Closed through `window.close()`, as the ✕ and Exit are: once the modal stands it is the only road left (the
-    // modal seals the pointer and `Shortcut`s — `QuitWaitDialog.qml`). A handler
+    // The first close goes through `window.close()`, as the ✕ and Exit do; the second through
+    // `AppBackend.exitRequested`, as a stop from outside does (`console.rs`, `signals.rs`). Once the modal stands
+    // these are the only roads left (the modal seals the pointer and `Shortcut`s — `QuitWaitDialog.qml`). A handler
     // called from QML would run whatever the modal covers, so no verb can say the pointer side is sealed: that is Qt's
     // modal itself. Under automation the dialog's own close (settled → the window closes itself) is not fired; its
     // wiring is `WindowQuitGate.qml`'s `onSettled` (→ `gate.window.close()`), which no verb covers.
@@ -454,7 +455,7 @@ Item {
                                                      "held": tab !== null && tab.busyCount !== 0 }))
                     return
                 op.input("retried", () => {
-                    window.close()
+                    AppBackend.exitRequested()
                 })
                 return
             }
