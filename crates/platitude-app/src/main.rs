@@ -263,6 +263,7 @@ fn main() {
     qrc::embed!("ui/PageLayout.qml");
     qrc::embed!("ui/PaneHeader.qml");
     qrc::embed!("ui/PaneScrollBar.qml");
+    qrc::embed!("ui/PlainTextLabel.qml");
     qrc::embed!("ui/ParentListCard.qml");
     qrc::embed!("ui/PublishFlow.qml");
     qrc::embed!("ui/PublishForm.qml");

@@ -173,6 +173,7 @@ OpsPicker 1.0 OpsPicker.qml
 PageLayout 1.0 PageLayout.qml
 PaneHeader 1.0 PaneHeader.qml
 PaneScrollBar 1.0 PaneScrollBar.qml
+PlainTextLabel 1.0 PlainTextLabel.qml
 ParentListCard 1.0 ParentListCard.qml
 PublishFlow 1.0 PublishFlow.qml
 PublishForm 1.0 PublishForm.qml
