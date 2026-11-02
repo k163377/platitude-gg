@@ -222,6 +222,9 @@ impl AppBackend {
     }
 
     #[qsignal]
+    pub(super) fn exit_requested(&mut self);
+
+    #[qsignal]
     pub(super) fn git_state_changed(&mut self);
 
     #[qsignal]
@@ -541,7 +544,9 @@ impl AppBackend {
         Hub::with(|hub| hub.flush_state());
     }
 
-    /// Starts the git version check (call once from QML on startup).
+    /// Listens for a stop from outside (`console` / `signals`) and, in the
+    /// window that has the files, starts the git version check. Called once
+    /// from QML on startup.
     #[qslot]
     fn initialize(&mut self) {
         self.start_up()

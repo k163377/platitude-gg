@@ -5,6 +5,16 @@ use super::*;
 impl AppBackend {
     pub(super) fn start_up(&mut self) {
         self.check_feed.attach(self.get_qml_method_invoker());
+        if self.stop_listener.is_none() {
+            match stop::listen(Arc::clone(&self.check_feed)) {
+                Ok(listener) => self.stop_listener = listener,
+                // `cargo xtask shipped` reads this line, word for word.
+                Err(error) => tracing::warn!(%error, "could not listen for a stop from outside"),
+            }
+        }
+        if self.already_running {
+            return;
+        }
         let feed = Arc::clone(&self.check_feed);
         let spawned = Hub::with(|hub| {
             let Some(handle) = hub.runtime_handle() else {
@@ -162,6 +172,11 @@ impl AppBackend {
         let mut probed = false;
         for msg in self.check_feed.drain() {
             match msg {
+                AppMsg::Stop => {
+                    // What `cargo xtask shipped` waits for, word for word.
+                    tracing::info!("a stop from outside requested window close");
+                    self.exit_requested();
+                }
                 AppMsg::GitOk { version, supported } => {
                     self.git_state = "ok".into();
                     self.git_version = version;

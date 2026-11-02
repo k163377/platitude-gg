@@ -12,11 +12,22 @@ use super::qml_register;
 
 mod avatars;
 mod build_id;
+#[cfg(windows)]
+mod console;
 mod identity;
 mod lifecycle;
 mod persist;
 mod qobject;
+#[cfg(unix)]
+mod signals;
 mod start;
+
+/// A stop from outside the window: a launcher's console on Windows, a
+/// signal elsewhere.
+#[cfg(windows)]
+use console as stop;
+#[cfg(unix)]
+use signals as stop;
 
 pub use build_id::{build_id, build_tree};
 
@@ -25,6 +36,7 @@ use start::{Assignments, assignments, section_open, with_flag, with_layout, with
 pub(crate) use start::app_workdir;
 
 enum AppMsg {
+    Stop,
     GitOk {
         version: String,
         supported: bool,
@@ -195,4 +207,5 @@ pub struct AppBackend {
     /// with the log down.
     commands_shown: bool,
     check_feed: Arc<Feed<AppMsg>>,
+    stop_listener: Option<stop::Listener>,
 }

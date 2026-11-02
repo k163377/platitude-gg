@@ -255,11 +255,15 @@ ApplicationWindow {
         anchors.fill: parent
     }
 
-    // A different git was chosen: this window closes, and `main` starts the successor once the settings files are let
-    // go of (`SettingsAppPane`'s `Restart to apply`). Read here because `root.close()` is the one road out — the close
-    // gate that waits a running write out stands on it.
+    // A stop came from outside (`app_backend/console.rs`, `signals.rs`), or a different git was chosen: this
+    // window closes, and for the latter `main` starts the successor once the settings files are let go of
+    // (`SettingsAppPane`'s `Restart to apply`). Read here because `root.close()` is the one road out — the close gate
+    // that waits a running write out stands on it.
     Connections {
         target: AppBackend
+        function onExitRequested() {
+            root.close()
+        }
         function onRestartWantedChanged() {
             if (AppBackend.restartWanted)
                 root.close()
@@ -378,10 +382,10 @@ ApplicationWindow {
         // First: what it seeds (the window's opening shape, the strip's first tabs) is read further down.
         const acts = harness.ask()
         chrome.decorateWindow()
+        AppBackend.initialize()
         // A window that is only here to say another process has the files does none of the rest: its store is empty
         // (`main`'s `claim_store`), and the saved shape is the real window's to wear.
         if (!AppBackend.alreadyRunning) {
-            AppBackend.initialize()
             windowShape.applySavedWindow()
             root.startingTabs()
             if (!root.tabsClaimed)
