@@ -173,30 +173,28 @@ Rectangle {
         anchors.top: parent.top
         height: Theme.rowHeight
 
-        Label {
+        PlainTextLabel {
             id: clock_
             x: Theme.spaceMd
             anchors.verticalCenter: parent.verticalCenter
             text: row.clock
-            // Named on all five labels: the ruler is set in this format (`row.ruler`), and an `AutoText` guess from
+            // `PlainTextLabel` on all five: the ruler (`row.ruler`) is set in plain text, and a format guessed from
             // what a command carries would draw a line the ruler has never seen.
-            textFormat: Text.PlainText
             color: Theme.textMuted
             font.family: Theme.monoFamily
             font.pixelSize: Theme.fontSm
         }
         // `git` never varies, so it is muted; what changes from row to row is the part after it.
-        Label {
+        PlainTextLabel {
             id: program
             x: row.clockEnd + Theme.spaceLg
             anchors.verticalCenter: parent.verticalCenter
             text: "git"
-            textFormat: Text.PlainText
             color: Theme.textMuted
             font.family: Theme.monoFamily
             font.pixelSize: Theme.fontSm
         }
-        Label {
+        PlainTextLabel {
             id: argsText
             // One space after `git`: the ruler is handed `git <args>` as one string (`CommandsModel.columnText`), so
             // a selection lands on the pixels the copy names. The width is written, since a right anchor would move
@@ -205,7 +203,6 @@ Rectangle {
             width: Math.max(0, outcome.x - Theme.spaceMd - x)
             anchors.verticalCenter: parent.verticalCenter
             text: row.args
-            textFormat: Text.PlainText
             elide: Text.ElideRight
             color: Theme.textPrimary
             font.family: Theme.monoFamily
@@ -218,18 +215,16 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             // The same one space the copy puts between them: two words about how it went.
             spacing: row.charW
-            Label {
+            PlainTextLabel {
                 text: row.result
                 visible: text !== ""
-                textFormat: Text.PlainText
                 color: Theme.danger
                 font.family: Theme.monoFamily
                 font.pixelSize: Theme.fontSm
             }
-            Label {
+            PlainTextLabel {
                 // Exit 0 is not written, only the time it took: a code that is always 0 says nothing.
                 text: row.status === "running" ? qsTr("running…") : row.duration
-                textFormat: Text.PlainText
                 color: row.status === "running" ? Theme.accent : Theme.textMuted
                 font.family: Theme.monoFamily
                 font.pixelSize: Theme.fontSm
@@ -238,14 +233,13 @@ Rectangle {
     }
 
     // Indented to the command. Positioned, not anchored: `program` is inside `line`, neither parent nor sibling.
-    Label {
+    PlainTextLabel {
         id: outputText
         visible: row.showsOutput
         x: program.x
         y: line.height + Theme.spaceXs
         width: row.width - program.x - Theme.spaceMd
         text: row.output
-        textFormat: Text.PlainText
         wrapMode: Text.Wrap
         color: Theme.textSecondary
         font.family: Theme.monoFamily

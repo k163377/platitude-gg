@@ -383,10 +383,9 @@ Item {
             onNatWChanged: tabStrip.settleTitleCap()
             Component.onCompleted: tabStrip.settleTitleCap()
 
-            Label {
+            PlainTextLabel {
                 id: nameLabel
                 text: measured.title
-                textFormat: Text.PlainText
                 // The tab's tracking, or the strip and the tab read one name at two widths.
                 font.letterSpacing: tabMetrics.titleTracking(measured.title.length)
                 font.weight: tabStrip.tabsModel.currentIndex === measured.index ? Theme.fontWeightStrong : Font.Normal

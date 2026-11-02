@@ -365,7 +365,7 @@ AppCard {
                 }
                 // Whose reading this is: a drifted tag puts one bare name on two rows, with no namespace to tell them
                 // apart. Meta, in the row's meta colour (§ref の種別).
-                Label {
+                PlainTextLabel {
                     id: whose
                     visible: rowChip.recWhere !== ""
                     // At the row's far end, so it lines up across rows; it stops at the bar's gutter.
@@ -374,7 +374,6 @@ AppCard {
                     y: refList.chipInset + Theme.borderWidth
                        + Math.round((Theme.fontChipLine - whose.height) / 2)
                     text: rowChip.recWhere
-                    textFormat: Text.PlainText
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontSm
                     // A third at most: the name it qualifies comes first.

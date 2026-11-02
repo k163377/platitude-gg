@@ -41,7 +41,7 @@ ColumnLayout {
     RowLayout {
         Layout.fillWidth: true
         spacing: Theme.spaceXs
-        Label {
+        PlainTextLabel {
             id: captionWord
             text: previewCell.caption
             font.pixelSize: Theme.fontSm
@@ -54,7 +54,7 @@ ColumnLayout {
             Layout.preferredHeight: captionWord.implicitHeight
             middle: captionWord.baselineOffset - WordFace.signMiddle(captionWord.font.pixelSize)
         }
-        Label {
+        PlainTextLabel {
             Layout.fillWidth: true
             text: previewCell.sizeText
             font.pixelSize: Theme.fontSm

@@ -404,7 +404,7 @@ Rectangle {
                         tint: acceptPill.wordInk
                         buttonWord: true
                     }
-                    Label {
+                    PlainTextLabel {
                         id: acceptWord
                         visible: bar.code === ""
                         text: bar.accept

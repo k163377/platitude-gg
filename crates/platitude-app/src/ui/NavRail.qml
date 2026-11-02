@@ -258,7 +258,7 @@ Rectangle {
                 // Caption and count at once, so the caption's colour (NavHeader). Seated by its ink (`countInkTop`), in
                 // whole pixels: a half pixel smears the digits. `Math.round` takes a half down the cell
                 // (`countInkTop` says why that way).
-                Label {
+                PlainTextLabel {
                     id: countLabel
                     anchors.horizontalCenter: parent.horizontalCenter
                     y: Math.round(rail.countInkTop(countInk) - countLabel.baselineOffset - countInk.tightBoundingRect.y)

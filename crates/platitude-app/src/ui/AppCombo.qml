@@ -155,11 +155,10 @@ ComboBox {
             enabled: !combo.pickOnly
             onTapped: combo.pressField()
         }
-        Label {
+        PlainTextLabel {
             anchors.fill: parent
             visible: input.text === ""
             text: combo.placeholder
-            textFormat: Text.PlainText
             color: Theme.textMuted
             font: combo.font
             leftPadding: input.leftPadding
@@ -341,12 +340,11 @@ ComboBox {
             }
         }
         contentItem: Item {
-            Label {
+            PlainTextLabel {
                 id: rowWord
                 anchors.fill: parent
                 anchors.rightMargin: mark.visible ? mark.width + mark.anchors.rightMargin : 0
                 text: row.modelData
-                textFormat: Text.PlainText
                 color: Theme.textPrimary
                 font.pixelSize: Theme.fontMd
                 verticalAlignment: Text.AlignVCenter

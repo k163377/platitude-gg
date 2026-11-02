@@ -54,7 +54,7 @@ RowLayout {
             width: legMark.wordCell
             height: countWord.implicitHeight
         }
-        Label {
+        PlainTextLabel {
             id: countWord
             text: leg.count
             color: leg.hue

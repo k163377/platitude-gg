@@ -147,7 +147,7 @@ Rectangle {
         }
         // Emptied by its text, never hidden: a Layout skips an invisible item and its spacing with it, and the row
         // would no longer add up to `fixedWidth`.
-        Label {
+        PlainTextLabel {
             id: count
             text: findBar.searching ? qsTr("%1 / %2").arg(findBar.atMatch).arg(findBar.matches) : ""
             color: Theme.textSecondary
@@ -155,7 +155,7 @@ Rectangle {
             // Held at its widest (`loaded`) and right-aligned, so the numbers grow away from the box.
             Layout.preferredWidth: widest.implicitWidth
             horizontalAlignment: Text.AlignRight
-            Label {
+            PlainTextLabel {
                 id: widest
                 visible: false
                 font: count.font

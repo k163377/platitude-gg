@@ -219,7 +219,7 @@ Item {
             anchors.fill: parent
             color: line.groundOverlay
         }
-        Label {
+        PlainTextLabel {
             id: markLabel
             // On the words' own baseline, not at the patch's middle: the two are half a pixel apart where the face's
             // leading is odd, and each rounds its own way — the head of a path cut in its middle would stand a pixel

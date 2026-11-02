@@ -24,7 +24,7 @@ Item {
     /// `TextMetrics` reports a few pixels tighter than the Label the number is set in. Whole pixels — the columns and
     /// the code are laid out from this one number.
     readonly property int numberW: Math.ceil(numberMeasure.implicitWidth)
-    Label {
+    PlainTextLabel {
         id: numberMeasure
         visible: false
         text: metrics.diffModel.widestNo

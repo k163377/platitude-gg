@@ -351,10 +351,9 @@ Rectangle {
             color: Theme.danger
             wrapMode: Text.Wrap
         }
-        Label {
+        PlainTextLabel {
             width: parent.width
             text: pane.curPage !== null ? pane.curPage.recoverError : ""
-            textFormat: Text.PlainText
             font.pixelSize: Theme.fontSm
             color: Theme.textSecondary
             wrapMode: Text.Wrap
@@ -505,7 +504,7 @@ Rectangle {
             marks: row.entry.listMarks
             pixelSize: Theme.fontMd
         }
-        Label {
+        PlainTextLabel {
             id: whenLabel
             anchors.right: parent.right
             anchors.rightMargin: Theme.navBarGutter

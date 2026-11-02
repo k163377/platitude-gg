@@ -362,7 +362,7 @@ Item {
     }
 
     // The stamp's day in the date's own face: the step the date is cut back to (`dateDayRoom`).
-    Text {
+    PlainTextLabel {
         id: dayRuler
         visible: false
         text: Words.stampDay(authorRow.details.authorTime)

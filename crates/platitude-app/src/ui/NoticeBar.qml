@@ -135,12 +135,11 @@ Rectangle {
             // own words (a lock's reason) and run long; the bar grows by the words and the middle of the page goes down
             // by as much — a cap on the lines would be cutting again. Plain text: a `<` in those words is a character,
             // not markup.
-            Label {
+            PlainTextLabel {
                 id: detailWord
                 Layout.fillWidth: true
                 visible: bar.detailPlace === "" && bar.detailMarks.length === 0
                 text: bar.detail
-                textFormat: Text.PlainText
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSm
                 wrapMode: Text.Wrap

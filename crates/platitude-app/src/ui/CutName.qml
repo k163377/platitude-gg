@@ -198,13 +198,12 @@ Item {
     // field — where the name alone would float up off the heading beside it and off a tree mark set by it. Checked by
     // `carried-stand topic --preset carried`, `carried-read <name> --preset carried`, `clone-dialog` (a modal box:
     // overlay.png).
-    Label {
+    PlainTextLabel {
         id: headLabel
         visible: cut.inked
         anchors.fill: parent
         verticalAlignment: Text.AlignVCenter
         text: cut.headText
-        textFormat: Text.PlainText
         color: cut.color
         font.family: cut.mono ? Theme.monoFamily : Theme.uiFamily
         font.pixelSize: cut.pixelSize
@@ -213,14 +212,13 @@ Item {
         // The family arrives with the window and the size with the caller; either changes what fits.
         onFontChanged: cut.relayout()
     }
-    Label {
+    PlainTextLabel {
         id: tailLabel
         anchors.fill: parent
         horizontalAlignment: Text.AlignRight
         verticalAlignment: Text.AlignVCenter
         visible: cut.inked && cut.tailText !== ""
         text: cut.tailText
-        textFormat: Text.PlainText
         color: cut.color
         font: headLabel.font
     }

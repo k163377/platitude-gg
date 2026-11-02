@@ -32,7 +32,7 @@ RowLayout {
         Layout.preferredHeight: sizeWord.implicitHeight
         middle: sizeWord.baselineOffset - WordFace.signMiddle(sizeWord.font.pixelSize)
     }
-    Label {
+    PlainTextLabel {
         id: sizeWord
         visible: binaryLine.sized
         text: binaryLine.removed ? qsTr("was %1").arg(binaryLine.oldSize)
@@ -53,7 +53,7 @@ RowLayout {
         wordBase: sizeWord.baselineOffset
         tint: Theme.textMuted
     }
-    Label {
+    PlainTextLabel {
         visible: binaryLine.bothSides
         text: binaryLine.newSize
         color: Theme.textMuted

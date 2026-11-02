@@ -109,7 +109,7 @@ Rectangle {
         color: toggle.wrong ? Theme.danger : Theme.textSecondary
     }
     // The sections' step, so the count sits as `(2)` does after `BRANCHES`.
-    Label {
+    PlainTextLabel {
         id: commandsCount
         visible: toggle.captioned && toggle.counted
         x: toggle.captionX + commandsName.implicitWidth + Theme.spaceXs

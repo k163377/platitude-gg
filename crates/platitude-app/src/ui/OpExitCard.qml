@@ -76,7 +76,7 @@ Rectangle {
             Layout.leftMargin: Theme.spaceXs
             Layout.bottomMargin: Theme.spaceXs
             spacing: Theme.spaceXs
-            Label {
+            PlainTextLabel {
                 id: opName
                 text: opExitCard.worktree.opText
                 font.pixelSize: Theme.fontMd
@@ -91,7 +91,7 @@ Rectangle {
                 Layout.preferredHeight: opName.implicitHeight
                 middle: opName.baselineOffset - WordFace.signMiddle(opName.font.pixelSize)
             }
-            Label {
+            PlainTextLabel {
                 visible: opExitCard.worktree.opAlso !== ""
                 text: opExitCard.worktree.opAlso
                 font.pixelSize: Theme.fontMd
@@ -100,7 +100,7 @@ Rectangle {
             }
             // How far it got. The dash stays a character, not a drawn mark: it is part of a sentence, and renders
             // alike on both OSes.
-            Label {
+            PlainTextLabel {
                 visible: opExitCard.worktree.opSteps > 0
                 text: qsTr("— %1 of %2")
                       .arg(opExitCard.worktree.opStep)

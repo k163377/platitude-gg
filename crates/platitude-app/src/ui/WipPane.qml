@@ -801,7 +801,7 @@ ColumnLayout {
                 color: Theme.textSecondary
             }
             // The count stands at the caption's own step, as in every heading band (see DetailsChangesBand's).
-            Label {
+            PlainTextLabel {
                 transform: Translate { y: headerBand.capsLift }
                 text: "(" + wipPane.unstagedModel.total + ")"
                 font.pixelSize: Theme.fontMd

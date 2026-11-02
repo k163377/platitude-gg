@@ -163,13 +163,12 @@ Rectangle {
                 }
                 // One line here; the failed row keeps the whole. Capped: eliding trims only the last line of a
                 // multi-line message, and the band would grow over the rows.
-                Label {
+                PlainTextLabel {
                     Layout.fillWidth: true
                     visible: pane.errorText !== ""
                     // A remote out of reach is said in this application's words; the rest is git's first line, and
                     // the whole of it is under the row (デザイン規約 §git が言ったことを読む場所).
                     text: "— " + (pane.errorWhy !== "" ? Words.unreachedWhy(pane.errorWhy) : pane.errorText)
-                    textFormat: Text.PlainText
                     elide: Text.ElideRight
                     maximumLineCount: 1
                     font.pixelSize: Theme.fontSm

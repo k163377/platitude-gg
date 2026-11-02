@@ -75,7 +75,7 @@ Item {
             wordBase: categoryWord.baselineOffset
             tint: Theme.textSecondary
         }
-        Label {
+        PlainTextLabel {
             id: categoryWord
             text: head.word
             font.pixelSize: Theme.fontXl

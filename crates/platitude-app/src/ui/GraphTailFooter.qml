@@ -112,7 +112,7 @@ Item {
         }
     }
     // Kept in the subject column, in the secondary colour: the window is normal, not a state (デザイン規約 §状態).
-    Label {
+    PlainTextLabel {
         id: tailMessage
         x: tail.labelWidth + tail.graphColWidth
         width: tail.width - x

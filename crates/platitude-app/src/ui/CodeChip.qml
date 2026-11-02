@@ -111,7 +111,7 @@ Item {
         nameAir: WordFace.nameAir(wordFace, chip.shownWord)
         tint: chip.markTint
     }
-    Label {
+    PlainTextLabel {
         id: wordLabel
         // Hidden where the field below draws the word, so it is drawn and pressed once; kept, since every measurement
         // this chip makes is read off it and a `Text` lays out while invisible.
@@ -125,7 +125,6 @@ Item {
         elide: !chip.cutToWidth && chip.cap <= 0 ? Text.ElideNone
              : chip.cutAt === "end" ? Text.ElideRight : Text.ElideMiddle
         text: chip.word
-        textFormat: Text.PlainText
         color: chip.tint
         font.family: Theme.monoFamily
         // A mono space is wider than the air at the ground's ends, so a command and its flag would read as two words

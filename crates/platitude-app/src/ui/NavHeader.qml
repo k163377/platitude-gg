@@ -119,7 +119,7 @@ Rectangle {
         }
         // An all-capitals heading is centred on its capitals, not on its line box: the box keeps the descenders'
         // room under the baseline, which a caption in capitals never uses, and the words would sit low in the band.
-        Label {
+        PlainTextLabel {
             id: captionLabel
             transform: Translate { y: header.capsLift }
             text: header.caption
@@ -129,7 +129,7 @@ Rectangle {
         }
         // At the caption's own step, in its own label: what says it is a count is the weight and the colour
         // (デザイン規約 §タイポグラフィ).
-        Label {
+        PlainTextLabel {
             transform: Translate { y: header.capsLift }
             text: "(" + header.count + ")"
             color: Theme.textMuted

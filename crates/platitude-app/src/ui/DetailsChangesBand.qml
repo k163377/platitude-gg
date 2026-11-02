@@ -27,7 +27,7 @@ Rectangle {
         anchors.leftMargin: Theme.spaceXs
         anchors.rightMargin: Theme.spaceXs
         spacing: Theme.spaceXs
-        Label {
+        PlainTextLabel {
             id: changesCaption
             transform: Translate { y: changesBand.capsLift }
             text: changesBand.caption
@@ -36,7 +36,7 @@ Rectangle {
             color: Theme.textSecondary
         }
         // The caption's size; weight and colour mark it as a count (規約 §タイポグラフィ).
-        Label {
+        PlainTextLabel {
             transform: Translate { y: changesBand.capsLift }
             text: "(" + changesBand.count + ")"
             font.pixelSize: Theme.fontMd

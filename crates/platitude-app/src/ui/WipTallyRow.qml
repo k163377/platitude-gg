@@ -44,7 +44,7 @@ RowLayout {
             width: tallyMark.wordCell
             height: tallyCount.implicitHeight
         }
-        Label {
+        PlainTextLabel {
             id: tallyCount
             text: tally.count
             color: tallyMark.tint

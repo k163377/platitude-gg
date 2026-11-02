@@ -105,7 +105,7 @@ ColumnLayout {
     //    to show` and one beside lines would go unseen (as would the mode a part left behind on its side). No row of
     //    the diff carries it, and no part of the diff moves it (`patch::header`): it has no tools. On a mode-only
     //    change it stands instead of `No changes to show` — it says the whole change.
-    Label {
+    PlainTextLabel {
         id: modeLine
         objectName: "mode"
         visible: notices.diffModel.modeFrom !== ""
@@ -120,7 +120,7 @@ ColumnLayout {
     // -- line endings: one line for the file, words only (デザイン規約 §改行コードの警告). This line is the diff's one
     //    mark for it — no row is marked: a CR is invisible, with nowhere in a line to stand, and the count of (b) says
     //    enough.
-    Label {
+    PlainTextLabel {
         id: endingsLine
         objectName: "endings"
         visible: notices.diffModel.endingKind !== ""
@@ -138,7 +138,7 @@ ColumnLayout {
     //    decision), under the header's word it explains — the staging tools stand at that edge. Only where that is the
     //    one reason tools are missing (`DiffPane.wholeWhy`): a new file's one hunk shows itself, and another
     //    worktree's diff and a commit's never had tools.
-    Label {
+    PlainTextLabel {
         id: wholeLine
         objectName: "whole"
         visible: notices.wholeWhy !== ""
@@ -172,7 +172,7 @@ ColumnLayout {
     //    all", and the same words would make the directory look empty. The row's `+` stays — git decides whether it
     //    can, and a refusal is shown in git's words. Its file row is one line too (`models::pathtree`). Headless
     //    `wip-embedded` (preset `embedded`).
-    Label {
+    PlainTextLabel {
         visible: notices.diffModel.embedded
         Layout.margins: Theme.spaceSm
         Layout.fillWidth: true

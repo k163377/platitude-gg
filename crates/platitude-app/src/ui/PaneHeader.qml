@@ -24,7 +24,7 @@ Rectangle {
         font.weight: Theme.fontWeightStrong
         color: Theme.textSecondary
     }
-    Label {
+    PlainTextLabel {
         anchors.verticalCenter: parent.verticalCenter
         anchors.left: headerLabel.right
         anchors.leftMargin: Theme.spaceXs

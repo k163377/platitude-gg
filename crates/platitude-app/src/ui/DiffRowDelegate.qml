@@ -278,7 +278,7 @@ Rectangle {
                 id: gutter
                 height: parent.height
                 spacing: 0
-                Label {
+                PlainTextLabel {
                     id: oldNoCol
                     // No padding toward the seat, which carries the whole gap between the numbers. Both columns
                     // close on a heading, which takes the row from its left edge.
@@ -298,7 +298,7 @@ Rectangle {
                     width: diffRow.stageSeatW
                     height: parent.height
                 }
-                Label {
+                PlainTextLabel {
                     width: diffRow.banded ? 0 : diffRow.numberW + Theme.spaceXs
                     height: parent.height
                     verticalAlignment: Text.AlignVCenter
@@ -396,7 +396,7 @@ Rectangle {
                     height: parent.height
                     color: column.sideHere === "ours" ? diffRow.oursColor : diffRow.theirsColor
                 }
-                Label {
+                PlainTextLabel {
                     id: noCol
                     width: Theme.spaceXs + diffRow.numberW
                     leftPadding: Theme.spaceXs

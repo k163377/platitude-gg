@@ -169,21 +169,19 @@ Item {
     // Measured only. A Label, not TextMetrics, which reports a few pixels tighter than the visible Label. A hidden
     // ruler wears every font setting the drawn word wears — the chip's `wordSpacing`, the weight — or the box comes out
     // wider than the word.
-    Label {
+    PlainTextLabel {
         id: widest
         visible: false
         text: btnLabel.widestText
-        textFormat: Text.PlainText
         font.family: btnLabel.widestCode ? Theme.monoFamily : Theme.uiFamily
         font.wordSpacing: btnLabel.widestCode ? -Theme.spaceXs : 0
         font.pixelSize: btnLabel.fontSize
     }
     // `wantWidth`'s ruler.
-    Label {
+    PlainTextLabel {
         id: wanted
         visible: false
         text: btnLabel.text
-        textFormat: Text.PlainText
         font.family: btnLabel.code ? Theme.monoFamily : Theme.uiFamily
         // The drawn weight, or the want is measured in a face the word is not set in (as `widest` above).
         font.weight: btnLabel.wordWeight
@@ -199,7 +197,7 @@ Item {
         font.family: Theme.uiFamily
         font.pixelSize: btnLabel.fontSize
     }
-    Label {
+    PlainTextLabel {
         id: mateFull
         visible: false
         text: btnLabel.mateWord
@@ -269,7 +267,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
         }
         // Invisible when empty: a `Row` charges a gap for a visible child of no width.
-        Label {
+        PlainTextLabel {
             id: countWord
             visible: btnLabel.phraseCount !== ""
             text: btnLabel.phraseCount
@@ -278,23 +276,21 @@ Item {
             font.pixelSize: btnLabel.fontSize
             anchors.verticalCenter: parent.verticalCenter
         }
-        Label {
+        PlainTextLabel {
             id: midWords
             visible: btnLabel.midCap > 0
             width: Math.min(implicitWidth, btnLabel.midCap)
             elide: Text.ElideRight
             text: btnLabel.text
-            textFormat: Text.PlainText
             color: btnLabel.tint
             font.family: Theme.uiFamily
             font.pixelSize: btnLabel.fontSize
             anchors.verticalCenter: parent.verticalCenter
         }
-        Label {
+        PlainTextLabel {
             id: noteWord
             visible: btnLabel.phraseNote !== ""
             text: btnLabel.phraseNote
-            textFormat: Text.PlainText
             color: btnLabel.phraseNoteTint
             font.family: Theme.uiFamily
             font.pixelSize: Theme.fontSm
@@ -343,7 +339,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             anchors.verticalCenterOffset: WordFace.capitalDrop(lineRef)
         }
-        Label {
+        PlainTextLabel {
             id: mateCount
             visible: btnLabel.phraseMates > 0
             text: btnLabel.mateFits ? btnLabel.mateWord : ellipsis.text
@@ -353,7 +349,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
         }
     }
-    Label {
+    PlainTextLabel {
         id: headText
         visible: !btnLabel.phrased && !btnLabel.folded
         anchors.left: parent.left
@@ -366,7 +362,6 @@ Item {
         // Not the cell's width, which comes from this (a loop).
         width: Math.min(implicitWidth, btnLabel.wordCeiling)
         text: btnLabel.head
-        textFormat: Text.PlainText
         color: btnLabel.tint
         font.family: btnLabel.code ? Theme.monoFamily : Theme.uiFamily
         font.weight: btnLabel.wordWeight
@@ -402,9 +397,8 @@ Item {
                 }
             }
         }
-        Label {
+        PlainTextLabel {
             text: btnLabel.flagRest
-            textFormat: Text.PlainText
             color: btnLabel.tint
             font.family: Theme.monoFamily
             font.pixelSize: btnLabel.fontSize

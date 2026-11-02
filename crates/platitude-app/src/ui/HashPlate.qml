@@ -524,7 +524,7 @@ ColumnLayout {
         // The parents the room could not hold, counted as the credit line counts its names (デザイン規約
         // §co-author の表示). Resting on it opens them all (`ParentListCard`). A step ahead of it, not a comma
         // (`a, b, c +5`): the count is not one of the links.
-        Label {
+        PlainTextLabel {
             id: moreLabel
             visible: !plate.unrolled && plate.parentsLeft > 0
             text: "+" + plate.parentsLeft

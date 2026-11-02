@@ -174,7 +174,7 @@ Item {
                 Layout.maximumWidth: line.plain || line.nameWidth <= 0 ? Number.POSITIVE_INFINITY : line.nameWidth
             }
             // Everybody after the first, whether the first is named or only faced: folding does not change the count.
-            Label {
+            PlainTextLabel {
                 id: countLabel
                 visible: !line.plain && line.records.length > 1
                 text: "+" + (line.records.length - 1)

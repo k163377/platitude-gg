@@ -98,7 +98,7 @@ Rectangle {
                     }
                     HoverHandler { id: ontoHover }
                 }
-                Label {
+                PlainTextLabel {
                     visible: !planPane.waiting && !planPane.planModel.root && planPane.planModel.ontoRef === ""
                     text: planPane.planModel.ontoOid.substring(0, 8)
                     font.family: Theme.monoFamily
@@ -240,7 +240,7 @@ Rectangle {
                         pixelSize: Theme.fontMd
                         color: Theme.textSecondary
                     }
-                    Label {
+                    PlainTextLabel {
                         Layout.alignment: Qt.AlignVCenter
                         text: planPane.planModel.ontoOid.substring(0, 8)
                         font.family: Theme.monoFamily

@@ -173,7 +173,7 @@ Item {
             }
         }
 
-        Label {
+        PlainTextLabel {
             Layout.alignment: Qt.AlignVCenter
             text: planRow.oid_hex.substring(0, 8)
             font.family: Theme.monoFamily

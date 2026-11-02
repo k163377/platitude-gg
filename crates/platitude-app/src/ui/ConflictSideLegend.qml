@@ -52,10 +52,9 @@ RowLayout {
                 size: Theme.fontSm
                 cap: legend.nameCap
             }
-            Label {
+            PlainTextLabel {
                 visible: !side.modelData.branch
                 text: side.modelData.name
-                textFormat: Text.PlainText
                 font.pixelSize: Theme.fontSm
                 color: Theme.textSecondary
                 elide: Text.ElideMiddle

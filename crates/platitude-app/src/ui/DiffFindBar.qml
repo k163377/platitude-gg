@@ -279,7 +279,7 @@ Rectangle {
         Item { Layout.fillWidth: true }
         // Emptied by its text, never hidden: a Layout skips an invisible item and its spacing with it. Held at its
         // widest (`loaded`) and right-aligned, so the numbers grow away from the box.
-        Label {
+        PlainTextLabel {
             id: count
             Layout.alignment: Qt.AlignTop
             Layout.topMargin: (Theme.headerHeight - implicitHeight) / 2
@@ -288,7 +288,7 @@ Rectangle {
             text: bar.searching ? qsTr("%1 / %2").arg(bar.atMatch).arg(bar.matches) : ""
             color: Theme.textSecondary
             font.pixelSize: Theme.fontMd
-            Label {
+            PlainTextLabel {
                 id: widest
                 visible: false
                 font: count.font

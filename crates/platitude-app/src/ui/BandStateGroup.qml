@@ -309,7 +309,7 @@ Item {
             visible: stateGroup.opBadgeShown
             naturalW: stateGroup.opBadgeW
             cap: stateGroup.cap
-            Label {
+            PlainTextLabel {
                 text: stateGroup.stateWorktree !== null ? stateGroup.stateWorktree.opText : ""
                 color: Theme.warning
                 font.pixelSize: Theme.fontSm
@@ -329,14 +329,14 @@ Item {
                 Layout.alignment: Qt.AlignTop
                 Layout.topMargin: badgeMetrics.capMiddle - opDot.implicitHeight / 2
             }
-            Label {
+            PlainTextLabel {
                 visible: stateGroup.stateWorktree !== null && stateGroup.stateWorktree.opAlso !== ""
                 text: stateGroup.stateWorktree !== null ? stateGroup.stateWorktree.opAlso : ""
                 color: Theme.warning
                 font.pixelSize: Theme.fontSm
                 font.weight: Theme.fontWeightStrong
             }
-            Label {
+            PlainTextLabel {
                 visible: stateGroup.stateWorktree !== null && stateGroup.stateWorktree.opSteps > 0
                 text: stateGroup.stateWorktree === null ? ""
                       : qsTr("%1/%2").arg(stateGroup.stateWorktree.opStep).arg(stateGroup.stateWorktree.opSteps)

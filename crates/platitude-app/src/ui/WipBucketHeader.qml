@@ -57,7 +57,7 @@ Rectangle {
         }
         // The count in its own label at the caption's step (デザイン規約 §タイポグラフィ). The conflicted bucket has
         // none — its rows are the number.
-        Label {
+        PlainTextLabel {
             visible: bucketHeader.section !== "conflicts"
             transform: Translate { y: bucketHeader.capsLift }
             text: "(" + bucketHeader.count + ")"
@@ -71,7 +71,7 @@ Rectangle {
         // nothing is disabled: `textSecondary` as the caption beside it, not the disabled grey, and outside the
         // heading's `danger` — a wait is not a failure. No mark seat, so the ring comes after the words
         // (規約 §進行中・回数押しの定数「ボタンでない席でも言葉は残る」).
-        Label {
+        PlainTextLabel {
             id: waitWord
             visible: bucketHeader.waitingForTool
             text: qsTr("Waiting for %1").arg(bucketHeader.worktree.mergeTool)

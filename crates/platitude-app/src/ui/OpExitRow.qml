@@ -149,7 +149,7 @@ Item {
                 wordBaseline: codeLabel.y + codeLabel.baselineOffset
                 size: codeLabel.font.pixelSize
             }
-            Label {
+            PlainTextLabel {
                 id: codeLabel
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
@@ -159,7 +159,7 @@ Item {
                 color: opRow.wordColor
             }
         }
-        Label {
+        PlainTextLabel {
             id: rowLabel
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignTop
@@ -169,7 +169,7 @@ Item {
             wrapMode: Text.Wrap
             color: opRow.wordColor
         }
-        Label {
+        PlainTextLabel {
             id: noteLabel
             Layout.alignment: Qt.AlignTop
             Layout.topMargin: (opRow.firstBand - noteLabel.implicitHeight) / 2

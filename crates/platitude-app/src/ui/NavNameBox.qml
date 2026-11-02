@@ -126,18 +126,16 @@ SlimField {
         + "+" + Math.round(box.rowsHeight) + " out=" + box.out
 
     // Measure `inkText` and the placeholder apart from the field, whose own layout needs a width first.
-    Label {
+    PlainTextLabel {
         id: ink
         visible: false
         text: box.inkText
-        textFormat: Text.PlainText
         font: box.font
     }
-    Label {
+    PlainTextLabel {
         id: placeholderInk
         visible: false
         text: box.placeholderText
-        textFormat: Text.PlainText
         font: box.font
     }
 }

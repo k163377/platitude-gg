@@ -288,11 +288,10 @@ Rectangle {
                 height: markBox.height
             }
         }
-        Label {
+        PlainTextLabel {
             id: nameLabel
             y: chip.inkY(nameLabel, nameInk)
             text: chip.recName
-            textFormat: Text.PlainText
             color: chip.nameColor
             // The chip's own face, not the code face a name wears in a sentence (user decision — ask before changing):
             // the frame is the chip already, and the wider mono letters cut the name sooner in the same column.
@@ -330,7 +329,7 @@ Rectangle {
             }
         }
         // How many more names: row meta, in the meta colour (author, date).
-        Label {
+        PlainTextLabel {
             id: countLabel
             y: chip.inkY(countLabel, countInk)
             visible: chip.hasCount
@@ -369,11 +368,10 @@ Rectangle {
             }
         }
         // Seated to its ink (`inkY`): centred on the box, a `fontSm` line hangs low.
-        Label {
+        PlainTextLabel {
             id: mateText
             y: chip.inkY(mateText, countInk)
             text: chip.mate ? chip.mate.text : ""
-            textFormat: Text.PlainText
             color: chip.mate ? chip.mate.tone : Theme.textSecondary
             font.pixelSize: Theme.fontSm
             font.underline: chip.mateAimed

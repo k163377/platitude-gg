@@ -201,18 +201,16 @@ Item {
             onTextEdited: chipColumn.namingEdited(nameField.text)
             Keys.onEscapePressed: chipColumn.namingCancelled()
             // The rulers, never drawn: the field's own placeholder cannot be measured before the box has a width.
-            Label {
+            PlainTextLabel {
                 id: placeholderInk
                 visible: false
                 text: nameField.placeholderText
-                textFormat: Text.PlainText
                 font: nameField.font
             }
-            Label {
+            PlainTextLabel {
                 id: openedInk
                 visible: false
                 text: chipColumn.namingMode === "rename" ? chipColumn.namingOpenedWith : ""
-                textFormat: Text.PlainText
                 font: nameField.font
             }
         }

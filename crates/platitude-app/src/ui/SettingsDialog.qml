@@ -311,7 +311,7 @@ AppDialog {
                             kind: categoryRow.modelData.icon
                             tint: categoryRow.enabled ? Theme.textPrimary : Theme.textMuted
                         }
-                        Label {
+                        PlainTextLabel {
                             id: categoryWord
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.left: categoryMark.right

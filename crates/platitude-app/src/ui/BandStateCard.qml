@@ -169,7 +169,7 @@ AppCard {
                     anchors.horizontalCenter: parent.horizontalCenter
                     y: stateCard.box.wordTop
                     spacing: Theme.spaceXs
-                    Label {
+                    PlainTextLabel {
                         id: opWord
                         text: stateCard.opText
                         color: Theme.warning
@@ -185,14 +185,14 @@ AppCard {
                         Layout.alignment: Qt.AlignTop
                         Layout.topMargin: stateCard.box.capMiddle - opDot.implicitHeight / 2
                     }
-                    Label {
+                    PlainTextLabel {
                         visible: stateCard.opAlso !== ""
                         text: stateCard.opAlso
                         color: Theme.warning
                         font.pixelSize: Theme.fontSm
                         font.weight: Theme.fontWeightStrong
                     }
-                    Label {
+                    PlainTextLabel {
                         visible: stateCard.opSteps > 0
                         text: qsTr("%1/%2").arg(stateCard.opStep).arg(stateCard.opSteps)
                         color: Theme.warning
