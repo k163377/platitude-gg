@@ -145,10 +145,20 @@ extern "system" fn handled(event: u32) -> i32 {
 }
 
 /// The host's Ctrl+C reaches every process on its console: the host's own
-/// processes let it pass.
+/// processes let it pass. And Ctrl+C turned off further up — a caller
+/// started in a process group of its own, or one that set
+/// `SetConsoleCtrlHandler(NULL, TRUE)` — passes to every child, so the
+/// window would obey it as a console program does (`app_backend/console.rs`)
+/// and never hear the stop; the cargo this host stands for leaves Ctrl+C on
+/// for its child, so the flag is taken off before anything starts.
 pub(super) fn protect() -> Result<(), String> {
     // SAFETY: a process-lifetime callback; no child inherits it.
     if unsafe { SetConsoleCtrlHandler(Some(handled), 1) } == 0 {
+        return Err(std::io::Error::last_os_error().to_string());
+    }
+    // SAFETY: clears this process's ignore-Ctrl+C flag, which the children
+    // it starts from here on inherit.
+    if unsafe { SetConsoleCtrlHandler(None, 0) } == 0 {
         return Err(std::io::Error::last_os_error().to_string());
     }
     Ok(())
