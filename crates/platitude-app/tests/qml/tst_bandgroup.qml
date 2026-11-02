@@ -63,6 +63,11 @@ Control {
         height: Theme.toolbarHeight
     }
 
+    /// The hand over the band, as `TopBar`'s `bandHand`: handed to the group only by the case that reads it.
+    HandWatch {
+        id: hand
+    }
+
     /// A menu standing in the window, clear of the group (`OutsidePress`): what the state card is behind.
     AppMenu {
         id: menu
@@ -88,6 +93,8 @@ Control {
 
         /// The page's inputs too: a case failing part-way would hand the next the state it stopped in.
         function init() {
+            group.hand = null
+            group.x = 0
             group.width = 400
             group.room = Qt.binding(() => group.width)
             group.windowAtFloor = false
@@ -171,6 +178,25 @@ Control {
             verify(!group.stateCardOpen, "the menu gone, the card stays down for the hand on the mark")
             mouseClick(group, mark.x, mark.y)
             tryVerify(() => group.stateCardOpen, undefined, "the press on the mark brings it back")
+        }
+
+        /// The group moves under a hand that does not — a read adding badges, a narrower window — and the marks that
+        /// came under it wait for the hand's own next move (`movedUnderHand`; 規約 §hover のツールチップ「手が動いて
+        /// いない所へ来た行は開かない」). Qt hands the hover to what arrives under a still pointer, so the group asks.
+        function test_marks_that_came_under_a_still_hand_wait_for_it_to_move() {
+            group.hand = hand
+            group.placed = true
+            const spot = Qt.point(group.width + 40, group.height / 2)
+            mouseMove(root, spot.x, spot.y)
+            tryVerify(() => hand.known, undefined, "the band hears the hand")
+            verify(!group.asking, "off the group, nothing asks")
+            group.x = 80
+            tryVerify(() => group.asking, undefined, "the group came under the hand")
+            // waits(paced): a card that must **not** open under the still hand; it opens at once when it does.
+            wait(Metrics.hoverKeepMs * 2)
+            verify(!group.stateCardOpen, "the marks came under a still hand: nothing opens")
+            mouseMove(root, spot.x + 1, spot.y)
+            tryVerify(() => group.stateCardOpen, undefined, "the hand's own move opens it")
         }
 
         /// The reported floor first: had it drifted from the measurement, every case below would agree with itself.

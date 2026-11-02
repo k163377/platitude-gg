@@ -24,12 +24,13 @@ import platitude.ui
 // their floor and scroll, leaving the group no one to give to.
 //
 // A badge added touches: its word in `Words`; here its `*BadgeShown`, `*BadgeW`, `naturalWidth`, `settleCap`'s `want`
-// and its `StateBadge`; `BandStateMetrics`' measuring `BadgeWord` and `*W`; `BandStateCard`'s row, `badgeRun` and
-// `rowsLaidOut`; and `TopBar`'s automation exposure.
+// and its `StateBadge`, and `tint` if it is outlined in `danger`; `BandStateMetrics`' measuring `BadgeWord` and `*W`;
+// `BandStateCard`'s row, `badgeRun` and `rowsLaidOut`; and `TopBar`'s automation exposure.
 //
 // What answers for it, one layer each: the share-out's table is `tst_bandshare.qml`; the wiring from the share-out to
-// what is drawn, and which model value raises which badge, is `tst_bandgroup.qml` (this group built for real, a real
-// `BandStateMetrics` beside it as witness); the stopped operation's four words and bisect are
+// what is drawn, which model value raises which badge, and the card waiting for a hand the marks came under, is
+// `tst_bandgroup.qml` (this group built for real, a real `BandStateMetrics` beside it as witness, a real pointer for
+// the hand); the stopped operation's four words and bisect are
 // `models::worktree::tests`. The table alone is not enough: with the group's `badgeMinW` wiring pinned to 0,
 // `tst_bandshare` and the three UI verbs still pass. Headless: `badges` / `badges-hover` / `badges-hover-early`
 // (`identity-tip` reads the same card).
@@ -43,6 +44,9 @@ Item {
     /// Stands in for the pointer where headless cannot put one (`badges-hover` / `identity-tip`). It meets the real
     /// hover in `stateKeep`, so the card answers one question either way.
     property bool pointedAt: false
+    /// The hand over the band (`TopBar.bandHand`). The group moves under a hand that does not: a read stopping an
+    /// operation adds badges, a narrower window folds them (`movedUnderHand`).
+    property HandWatch hand: null
     /// What the tab strip made of its own run — the group folds off the strip's width as well as its own, and the two
     /// do not always change in the same frame.
     property real tabContentWidth: 0
@@ -186,7 +190,19 @@ Item {
     /// (`badges-hover`). Only the automation's stand-in (`pointedAt`) is asked again once this turns
     /// (`badges-hover-early`, the pointer put down before the group is placed).
     property bool placed: false
-    onXChanged: stateGroup.placed = true
+    onXChanged: {
+        stateGroup.placed = true
+        stateGroup.movedUnderHand()
+    }
+    onWidthChanged: stateGroup.movedUnderHand()
+
+    /// The marks came under whatever hand is on the band without its moving: what they offer waits for its next move
+    /// (デザイン規約 §hover のツールチップ「手が動いたかの見切り」 — the state card is named there). The row lays the group
+    /// out in its polish, before the next frame hands hover to what stands under a still pointer.
+    function movedUnderHand() {
+        if (stateGroup.hand !== null)
+            stateGroup.hand.rowsMoved()
+    }
 
     signal identityEditRequested()
 
@@ -248,9 +264,10 @@ Item {
     readonly property HoverSeat stateKeep: HoverSeat {
         id: stateKeep
         card: stateCard
-        // The card opens the moment the hand is on the marks. No pane's hand: the band does not move under the hand,
-        // so nothing comes under a still one — a card the reader dismissed comes back with the hand leaving the group
-        // and coming back, or, folded, a press on the `…` (`stateMouse`, `HoverSeat.expands`).
+        // The card opens the moment the hand is on the marks — once the hand has moved, when the marks came under it
+        // (`movedUnderHand`). A card the reader dismissed comes back with the hand leaving the group and coming back,
+        // or, folded, a press on the `…` (`stateMouse`, `HoverSeat.expands`).
+        hand: stateGroup.hand
         expands: true
         // Behind any menu in the window — a page's right-click, the ☰ beside it — the card goes the moment it stands
         // and nothing opens while it does (デザイン規約 §メニュー「メニューが立っている間、その裏の hover は引っ込む」).
@@ -431,7 +448,7 @@ Item {
         width: implicitWidth
         radius: Theme.radiusSm
         // In an end cell the wash fills the cell, as the folded buttons' do; elsewhere it stays in the frame
-        // (規約 §当たり判定「広げるのは判定だけ」).
+        // (規約 §QML 実装ルール「広げるのは判定だけ」).
         color: stateGroup.cellFolded && stateMouse.containsMouse ? Theme.bgHover : "transparent"
         Accessible.role: Accessible.Button
         Accessible.name: qsTr("What needs attention here")

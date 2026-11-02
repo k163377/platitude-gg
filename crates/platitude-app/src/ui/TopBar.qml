@@ -555,11 +555,18 @@ Rectangle {
             onCaptionStripMoved: topBar.captionStripMoved()
         }
 
+        /// The hand over the band — a passive handler on the row, which takes no part's hover. The state group's marks
+        /// can come under a still one, and its card waits for the hand to move (`BandStateGroup.movedUnderHand`).
+        HandWatch {
+            id: bandHand
+        }
+
         BandStateGroup {
             id: stateGroup
             curPage: topBar.curPage
             windowAtFloor: topBar.windowAtFloor
             pointedAt: topBar.statePointedAt
+            hand: bandHand
             // **Narrowed and folded against the band as it would be with its words** (`bandAsked` says why).
             room: groupAsked.width
             tabContentWidth: tabStrip.contentWidth
