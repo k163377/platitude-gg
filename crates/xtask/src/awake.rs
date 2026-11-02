@@ -428,7 +428,8 @@ fn apply(dir: &Path, name: &str, writer: &Writer, mark: Mark<'_>) -> Result<Opti
         std::fs::write(holder_path(dir), &reservation)
             .map_err(|e| format!("could not reserve the holder's name: {e}"))?;
     }
-    let pid = holder::spawn(dir, hook).ok_or("could not start the holder")?;
+    let pid =
+        holder::spawn(dir, hook).map_err(|why| format!("could not start the holder: {why}"))?;
     // A holder that has read already named itself; one that has not reads
     // its pid here or takes the reservation it was started under.
     let _held = lock(dir)?;

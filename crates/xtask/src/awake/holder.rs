@@ -869,12 +869,15 @@ pub(super) fn script(dir: &Path, reserved: u32) -> String {
 ///
 /// The script is handed over in a file of its own under `dir`, named by
 /// its content — the command lines have no room for it — which the holder
-/// reads and removes as it starts. A start that fails removes it here.
+/// reads and removes as it starts. A start that fails removes it here, and
+/// says why: PowerShell's own words, or what WMI answered
+/// ([`create_command`]).
 #[cfg(windows)]
-pub(super) fn spawn(dir: &Path, reserved: u32) -> Option<u32> {
+pub(super) fn spawn(dir: &Path, reserved: u32) -> Result<u32, String> {
     use std::process::Stdio;
     let path = script_path(dir, reserved);
-    std::fs::write(&path, script(dir, reserved)).ok()?;
+    std::fs::write(&path, script(dir, reserved))
+        .map_err(|e| format!("could not write {}: {e}", path.display()))?;
     let pid = std::process::Command::new("powershell")
         .args([
             "-NoProfile",
@@ -883,19 +886,29 @@ pub(super) fn spawn(dir: &Path, reserved: u32) -> Option<u32> {
             &create_command(dir, reserved),
         ])
         .stdin(Stdio::null())
-        .stderr(Stdio::null())
         .output()
-        .ok()
-        .and_then(|out| String::from_utf8_lossy(&out.stdout).trim().parse().ok());
-    if pid.is_none() {
+        .map_err(|e| format!("could not run PowerShell: {e}"))
+        .and_then(|out| {
+            let said = String::from_utf8_lossy(&out.stdout);
+            said.trim().parse().map_err(|_| {
+                let complained = String::from_utf8_lossy(&out.stderr);
+                format!(
+                    "PowerShell {} said {:?}, and {:?} on stderr",
+                    out.status,
+                    said.trim(),
+                    complained.trim()
+                )
+            })
+        });
+    if pid.is_err() {
         let _ = std::fs::remove_file(&path);
     }
     pid
 }
 
 #[cfg(not(windows))]
-pub(super) fn spawn(_dir: &Path, _reserved: u32) -> Option<u32> {
-    None
+pub(super) fn spawn(_dir: &Path, _reserved: u32) -> Result<u32, String> {
+    Err("the holder is Windows' alone".into())
 }
 
 /// What the PowerShell that asks WMI runs: a command line of its own, as
@@ -903,7 +916,8 @@ pub(super) fn spawn(_dir: &Path, _reserved: u32) -> Option<u32> {
 /// characters. The holder's command reads its script from [`spawn`]'s
 /// file, drops the file, and runs the script as a script block — no
 /// script file runs, so no execution policy has a say, as with any
-/// `-EncodedCommand`.
+/// `-EncodedCommand`. Prints the holder's pid, or what `Create` returned
+/// in its stead.
 #[cfg(windows)]
 pub(super) fn create_command(dir: &Path, reserved: u32) -> String {
     let bootstrap = format!(
@@ -924,7 +938,8 @@ pub(super) fn create_command(dir: &Path, reserved: u32) -> String {
            -Property @{{ ShowWindow = [uint16]0 }}; \
          $made = Invoke-CimMethod -ClassName Win32_Process -MethodName Create \
            -Arguments @{{ CommandLine = '{holder}'; ProcessStartupInformation = $hidden }}; \
-         if ($made.ReturnValue -eq 0) {{ $made.ProcessId }}"
+         if ($made.ReturnValue -eq 0) {{ $made.ProcessId }} \
+         else {{ 'Win32_Process.Create returned ' + $made.ReturnValue }}"
     )
 }
 #[cfg(windows)]
