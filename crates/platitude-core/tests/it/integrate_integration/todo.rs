@@ -110,7 +110,7 @@ async fn the_helper_refuses_a_malformed_invocation() {
     let out = std::process::Command::new(helper())
         .arg("--wrong-flag")
         .arg("a")
-        .arg("b")
+        .stdin(std::process::Stdio::null())
         .output()
         .expect("run helper");
     assert!(
@@ -118,6 +118,116 @@ async fn the_helper_refuses_a_malformed_invocation() {
         "an unknown flag must fail the rebase"
     );
     assert!(String::from_utf8_lossy(&out.stderr).contains("unknown argument"));
+}
+
+/// No plan on stdin fails the helper, which git takes as the editor's
+/// failure and ends the rebase on; git's todo is left as git wrote it.
+#[tokio::test]
+async fn the_helper_refuses_a_stdin_with_no_plan() {
+    let dir = crate::support::temp::dir();
+    let todo = dir.path().join("git-rebase-todo");
+    let generated = "pick aaa one\npick bbb two\n";
+    std::fs::write(&todo, generated).expect("git's todo");
+    let out = std::process::Command::new(helper())
+        .arg(sequencer::TODO_EDITOR_FLAG)
+        .arg(&todo)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("run helper");
+    assert!(!out.status.success(), "nothing came to install");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("no rebase plan came on stdin"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(std::fs::read_to_string(&todo).expect("read"), generated);
+}
+
+/// A plan of which only a part came — the sender's end closed early: a
+/// stop that ends git alone off Windows, or an application gone mid-send —
+/// is turned down whole, and git's todo is left as git wrote it: cut at a
+/// line, it would drop the commits after the cut in silence.
+#[tokio::test]
+async fn the_helper_refuses_a_plan_cut_short() {
+    use std::io::Write as _;
+
+    let dir = crate::support::temp::dir();
+    let todo = dir.path().join("git-rebase-todo");
+    let generated = "pick aaa one\npick bbb two\n";
+    let whole = sequencer::framed("pick bbb two\npick aaa one\n");
+    let at_a_line = whole.len() - "pick aaa one\n".len();
+    for cut in [at_a_line, whole.len() - 1] {
+        std::fs::write(&todo, generated).expect("git's todo");
+        let mut run = std::process::Command::new(helper())
+            .arg(sequencer::TODO_EDITOR_FLAG)
+            .arg(&todo)
+            .stdin(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("run helper");
+        {
+            let mut stdin = run.stdin.take().expect("its stdin");
+            stdin
+                .write_all(&whole.as_bytes()[..cut])
+                .expect("send the part");
+        }
+        let out = run.wait_with_output().expect("the helper ends");
+        let said = String::from_utf8_lossy(&out.stderr);
+        assert!(!out.status.success(), "cut at {cut}: nothing whole came");
+        assert!(said.contains("came cut short"), "cut at {cut}: {said}");
+        assert_eq!(
+            std::fs::read_to_string(&todo).expect("read"),
+            generated,
+            "cut at {cut}"
+        );
+    }
+}
+
+/// The plan reaches the helper on git's stdin, handed on through git's
+/// shell — here past every pipe's width, a reword's message the size of it
+/// (beyond the 1 MiB `process::child` widens a Linux pipe to) — and nothing
+/// of it is put down under the git directory: no folder of this
+/// application's own is made there.
+#[tokio::test]
+async fn a_plan_past_any_pipes_width_reaches_the_helper_and_puts_nothing_down() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    repo.commit_file("b.txt", "two\n", "second");
+    let (exec, cancel) = env();
+    let repo_info = info(&repo).await;
+    let plan = sequencer::plan_for(&exec, &repo.path, "HEAD~1", &cancel)
+        .await
+        .expect("plan");
+    let body: String = (0..30_000)
+        .map(|at| format!("line {at:05} of a body longer than any pipe ...........\n"))
+        .collect();
+    let message = format!("a long one\n\n{body}");
+    assert!(message.len() > 1 << 20, "{} bytes", message.len());
+    let steps = vec![RebaseStep {
+        action: TodoAction::Reword,
+        message: Some(message.clone()),
+        ..plan[0].clone()
+    }];
+    let outcome = sequencer::rebase_interactive(
+        &exec,
+        &repo_info,
+        "HEAD~1",
+        &steps,
+        &RebaseOptions::default(),
+        &helper(),
+        &cancel,
+    )
+    .await
+    .expect("interactive rebase");
+    assert!(
+        matches!(outcome, integrate::RebaseOutcome::Done),
+        "{outcome:?}"
+    );
+    assert_eq!(repo.git(&["log", "-1", "--format=%B"]), message.trim_end());
+    assert!(
+        !repo_info.git_dir.join("platitude").exists(),
+        "the plan went through no file"
+    );
 }
 
 /// The runtime lookup, pointed at Cargo's binary directory: packaging must

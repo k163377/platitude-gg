@@ -3,25 +3,38 @@
 //! through a shell and reads its exit code, which a windowed application
 //! cannot serve.
 //!
-//! Usage: `pgg-todo-editor --todo-editor <plan> <todo>` (git appends `<todo>`).
+//! Usage: `pgg-todo-editor --todo-editor <todo>` with the plan on stdin
+//! (git appends `<todo>`, and hands its own stdin on).
 
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use platitude_core::sequencer::{TODO_EDITOR_FLAG, apply_plan};
+use platitude_core::sequencer::{TODO_EDITOR_FLAG, apply_plan, unframed};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let [flag, plan, todo] = args.as_slice() else {
+    let [flag, todo] = args.as_slice() else {
         return fail(&format!(
-            "usage: pgg-todo-editor {TODO_EDITOR_FLAG} <plan> <todo>"
+            "usage: pgg-todo-editor {TODO_EDITOR_FLAG} <todo>, with the plan on stdin"
         ));
     };
     if flag != TODO_EDITOR_FLAG {
         return fail(&format!("unknown argument `{flag}`"));
     }
-    match apply_plan(&PathBuf::from(plan), &PathBuf::from(todo)) {
+    // To its end, which can come early: only a plan whose whole length came
+    // is installed (`sequencer::unframed`).
+    let input = match std::io::read_to_string(std::io::stdin()) {
+        Ok(input) => input,
+        Err(error) => return fail(&format!("could not read the rebase plan: {error}")),
+    };
+    if input.is_empty() {
+        return fail("no rebase plan came on stdin");
+    }
+    let Some(plan) = unframed(&input) else {
+        return fail("the rebase plan came cut short");
+    };
+    match apply_plan(plan, &PathBuf::from(todo)) {
         Ok(orphaned) => {
             // A line the plan does not cover (the range moved in between).
             // Reported, not carried: placed anywhere it would move a ref

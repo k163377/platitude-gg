@@ -1,6 +1,23 @@
 //! Running the rebase: the helper that installs the todo list, and the
 //! messages the reword `exec` lines read while git replays.
 //!
+//! The plan goes in on the rebase's stdin, which git hands its sequence
+//! editor as it is (`launch_specified_editor` touches no stdin, and
+//! `start_command` passes the parent's on — v2.43.0 `editor.c` /
+//! `run-command.c`, on Windows as `fhin`): nothing of it is put down. The
+//! `exec` lines' children are handed the same stdin, at its end by then,
+//! and so is a `core.fsmonitor` hook git runs before the editor
+//! (`query_fsmonitor_hook` → `capture_command`, `fsmonitor.c`); hooks
+//! proper get none (`hook.c`).
+//!
+//! What reaches the helper can be a part: off Windows a stopped run ends
+//! git alone (`process::family`), and the helper reads on to the end the
+//! stop then gives it; an application gone mid-send closes its end with git
+//! still running; a hook that read stdin would have eaten its head. A plan
+//! cut at a line would drop the commits after it in silence, so the plan
+//! goes with its length ([`framed`]) and the helper installs only a whole
+//! one ([`unframed`]).
+//!
 //! A message is read when its `exec` line runs, which can be a later
 //! `--continue` in another process — after this application was closed, or
 //! from another git. So it is put down in the rebase's own state folder,
@@ -19,12 +36,11 @@ use crate::integrate::{RebaseOptions, RebaseOutcome, rebase_command};
 use crate::process::{GitExecutor, Trace};
 use crate::repo::RepoInfo;
 use crate::report;
-use crate::scratch::ScratchFile;
 
 use super::todo::{RebaseStep, TodoAction, TodoLine, render_todo};
 
-/// Argument that puts the helper into todo-editor mode. It takes the plan
-/// path, and git appends the todo path.
+/// Argument that puts the helper into todo-editor mode. It reads the plan
+/// on stdin, and git appends the todo path.
 pub const TODO_EDITOR_FLAG: &str = "--todo-editor";
 
 /// Name of the helper executable, which ships beside the application.
@@ -93,11 +109,6 @@ pub async fn rebase_interactive(
         return Err(report::drop_all_commits());
     }
 
-    let io_error = |source| GitError::Io {
-        command: "git rebase --interactive".to_string(),
-        source,
-    };
-
     let state = repo.git_dir.join(STATE_DIR);
     let mut messages = String::new();
     let mut rewords = 0;
@@ -142,9 +153,7 @@ pub async fn rebase_interactive(
 
     let mut plan = render_todo(&lines);
     plan.push_str(&messages);
-    let plan =
-        ScratchFile::create(&repo.git_dir, "rebase-todo", plan.as_bytes()).map_err(io_error)?;
-    let editor = sequence_editor_command(helper, plan.path());
+    let editor = sequence_editor_command(helper);
     // Exit 1 answers (work in the way, or a stopped replay), each with its
     // own landing on screen; a 128 stays a failure
     // (.claude/rules/core.md「終了コードで答える問い合わせ」) — and so does a
@@ -152,13 +161,12 @@ pub async fn rebase_interactive(
     // an ssh signing program's are in git's record, not its words
     // ([`refused_by`]).
     let cmd = rebase_command(&repo.workdir, upstream, options, Some(&editor))
+        .input(framed(&plan))
         .answers_by_code(1)
         .except_when(not_a_stop)
         .traced();
     let command = cmd.describe();
     let ran = executor.run_unchecked(cmd, cancel).await;
-    // The todo and the messages are installed (or refused) by now.
-    drop(plan);
     // A non-zero end is a failure for `landed` to read, as `GitExecutor::run`
     // answers it; the trace that names a refusal is read here first.
     let (result, refused) = match ran {
@@ -270,16 +278,27 @@ async fn put_back(
     .await
 }
 
-/// The `GIT_SEQUENCE_EDITOR` value that installs `plan` as the todo list.
+/// The plan as it goes on git's stdin: its length in bytes on a line of
+/// its own, then the plan. The helper takes only a plan whose whole length
+/// came ([`unframed`]).
+pub fn framed(plan: &str) -> String {
+    format!("{}\n{plan}", plan.len())
+}
+
+/// The plan [`framed`] sent, where all of it came; `None` for anything
+/// else — cut anywhere, its head gone, or nothing at all.
+pub fn unframed(input: &str) -> Option<&str> {
+    let (length, plan) = input.split_once('\n')?;
+    (length.parse::<usize>().ok()? == plan.len()).then_some(plan)
+}
+
+/// The `GIT_SEQUENCE_EDITOR` value that installs the plan on its stdin as
+/// the todo list.
 ///
 /// git runs this through a shell, so the words are quoted and separators
 /// made forward — backslashes would read as escapes.
-pub fn sequence_editor_command(helper: &Path, plan: &Path) -> String {
-    format!(
-        "{} {TODO_EDITOR_FLAG} {}",
-        sh_quote(&shell_path(helper)),
-        sh_quote(&shell_path(plan))
-    )
+pub fn sequence_editor_command(helper: &Path) -> String {
+    format!("{} {TODO_EDITOR_FLAG}", sh_quote(&shell_path(helper)))
 }
 
 /// Todo-editor mode: puts each reword's message down beside git's todo —
@@ -290,8 +309,7 @@ pub fn sequence_editor_command(helper: &Path, plan: &Path) -> String {
 ///
 /// Every message is down before the todo names it; a failure fails the
 /// helper, and git then ends the rebase and takes its state folder.
-pub fn apply_plan(plan_path: &Path, todo_path: &Path) -> std::io::Result<Vec<String>> {
-    let plan = std::fs::read_to_string(plan_path)?;
+pub fn apply_plan(plan: &str, todo_path: &Path) -> std::io::Result<Vec<String>> {
     let mut parts = plan.split(MESSAGE_MARK);
     let todo = parts.next().unwrap_or_default();
     let state = todo_path.parent().unwrap_or(Path::new(""));

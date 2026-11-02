@@ -294,9 +294,10 @@ impl GitCommand {
     }
 
     /// Hands git `input` on stdin — for a command that names stdin as what
-    /// it reads (`commit --file=-`, `apply -`) — and closes it after, so git
-    /// reads its end. Every other command gets a closed stdin: nothing here
-    /// answers a prompt.
+    /// it reads (`commit --file=-`, `apply -`), or one whose child reads
+    /// the stdin git hands on (an interactive rebase's sequence editor) —
+    /// and closes it after, so the reader reads its end. Every other
+    /// command gets a closed stdin: nothing here answers a prompt.
     ///
     /// Sent while git's output is read, so neither waits on the other. A
     /// git that closes its end while the send is still under way answers as

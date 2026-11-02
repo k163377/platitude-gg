@@ -192,15 +192,8 @@ fn a_ref_line_with_no_commit_left_is_reported_rather_than_moved() {
 
 #[test]
 fn editor_command_is_shell_quoted_with_forward_slashes() {
-    let cmd = sequence_editor_command(
-        Path::new(r"C:\Program Files\pg\platitude-gg.exe"),
-        Path::new(r"C:\repo\.git\platitude\rebase-todo-1"),
-    );
-    assert_eq!(
-        cmd,
-        "'C:/Program Files/pg/platitude-gg.exe' --todo-editor \
-         'C:/repo/.git/platitude/rebase-todo-1'"
-    );
+    let cmd = sequence_editor_command(Path::new(r"C:\Program Files\pg\platitude-gg.exe"));
+    assert_eq!(cmd, "'C:/Program Files/pg/platitude-gg.exe' --todo-editor");
 }
 
 #[test]
@@ -252,15 +245,29 @@ fn a_parent_header_is_read_out_of_the_headers_alone() {
 #[test]
 fn apply_plan_writes_the_plan_over_the_todo_file() {
     let dir = crate::temp::dir();
-    let plan = dir.path().join("plan");
     let todo = dir.path().join("todo");
-    std::fs::write(&plan, "pick aaa one\n").expect("write plan");
     std::fs::write(&todo, "pick aaa one\npick bbb two\n").expect("write todo");
-    apply_plan(&plan, &todo).expect("apply");
+    apply_plan("pick aaa one\n", &todo).expect("apply");
     assert_eq!(
         std::fs::read_to_string(&todo).expect("read"),
         "pick aaa one\n"
     );
+}
+
+/// A framed plan comes back whole, and only whole: cut at any byte, its
+/// head eaten at any byte, or nothing at all is no plan.
+#[test]
+fn only_a_whole_framed_plan_comes_back() {
+    let plan = "pick bbb two\nexec x\npick aaa one\n\0new words\n";
+    let sent = framed(plan);
+    assert_eq!(unframed(&sent), Some(plan));
+    for cut in 0..sent.len() {
+        assert_eq!(unframed(&sent[..cut]), None, "cut at {cut}");
+    }
+    for eaten in 1..sent.len() {
+        assert_eq!(unframed(&sent[eaten..]), None, "head eaten to {eaten}");
+    }
+    assert_eq!(unframed(""), None);
 }
 
 /// The messages after the plan's todo go beside git's todo, numbered as
@@ -268,17 +275,12 @@ fn apply_plan_writes_the_plan_over_the_todo_file() {
 #[test]
 fn apply_plan_puts_each_message_beside_the_todo() {
     let dir = crate::temp::dir();
-    let plan = dir.path().join("plan");
     let state = dir.path().join("rebase-merge");
     std::fs::create_dir(&state).expect("the state folder git makes");
     let todo = state.join("git-rebase-todo");
-    std::fs::write(
-        &plan,
-        "pick aaa one\nexec first\npick bbb two\nexec second\n\0one\n\0two\n\nbody\n",
-    )
-    .expect("write plan");
+    let plan = "pick aaa one\nexec first\npick bbb two\nexec second\n\0one\n\0two\n\nbody\n";
     std::fs::write(&todo, "pick aaa one\npick bbb two\n").expect("write todo");
-    apply_plan(&plan, &todo).expect("apply");
+    apply_plan(plan, &todo).expect("apply");
     let read = |path: PathBuf| std::fs::read_to_string(path).expect("read");
     assert_eq!(
         read(todo),
