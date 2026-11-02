@@ -173,7 +173,9 @@ Rectangle {
                     Layout.alignment: Qt.AlignTop
                     Layout.topMargin: Math.max(0, Math.round(reachWords.baselineOffset - walkFurther.baselineOffset))
                     visible: band.canWalkFurther
-                    text: qsTr("Load %L1 more commits").arg(band.step)
+                    // The step is a count: said as a number, the button's words stay the app's whatever the band
+                    // hands it (a tool button leaves its words to the style, which guesses their format).
+                    text: Words.loadFurther(Number(band.step))
                     font.pixelSize: Theme.fontSm
                     onClicked: band.furtherAsked()
                 }

@@ -103,7 +103,7 @@ FindBar {
                     ? Words.findNoneWithMore(find.graphModel.windowStep)
                     : Words.findNone
     unansweredAction: find.graphModel.truncated && !find.graphModel.growing
-                      ? Words.findLoadFurther(find.graphModel.windowStep) : ""
+                      ? Words.loadFurther(find.graphModel.windowStep) : ""
     onNoteActed: find.loadFurther()
     // Hex under the floor finds no commit by its hash, and nothing on screen says where the floor is: `731` could be a
     // missing commit or an id not read yet. A fact about ids, never an order: "at least N characters" as other

@@ -804,13 +804,14 @@ QtObject {
     /// is other products': `No results` for no match (VS Code, Chrome, GitLens, Git Graph), and widening as a fact plus
     /// a short press (Outlook's `Showing recent results... More`, JetBrains' `Nothing found.` + `Set scope to …`).
     readonly property string findNone: qsTr("No results in the whole history")
-    /// The same when older commits are not loaded: the press that loads the next `step` (`findLoadFurther`, the words a
+    /// The same when older commits are not loaded: the press that loads the next `step` (`loadFurther`, the words a
     /// press acts on — the graph's tail says the same, and the count it was cut at). No loaded count here: the press
     /// says there is more, and the graph's tail says how much is loaded.
     function findNoneWithMore(step) {
-        return qsTr("No results · %1").arg(Words.findLoadFurther(step))
+        return qsTr("No results · %1").arg(Words.loadFurther(step))
     }
-    function findLoadFurther(step) {
+    /// The press that walks a list further by `step` rows: the find bar's note and the discard log's band say it.
+    function loadFurther(step) {
         return qsTr("Load %L1 more commits").arg(step)
     }
 
