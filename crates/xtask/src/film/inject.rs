@@ -82,8 +82,8 @@ const EDITS: &[Edit] = &[
         new: "    WindowFilmActs {\n        window: driver.window\n        mainUi: driver.mainUi\n    }\n    \
               WindowSettingsActs {\n",
     },
-    // The verb finishes itself (`finishAutoAct`), as the window's other
-    // long verbs do.
+    // The page hands the run's completion to the window, where the film's
+    // own operation completes it once the scene has played.
     Edit {
         path: "crates/platitude-app/src/auto/AutoActCompletion.qml",
         old: "\"window-fill\", \"solo\", \"gate-sweep\", \"window-floor\",",
@@ -310,6 +310,19 @@ mod tests {
     fn every_edit_finds_its_text_once_in_this_tree() {
         let edited = substituted(Way::In, read).expect("every edit applies");
         assert!(edited.len() > 1);
+    }
+
+    /// The component stands outside the waits audit, so it is held here to
+    /// the rule the audit holds the harness to: a run completes only from
+    /// an operation (`StageTimer.complete`). The window's door called
+    /// straight is the end a breach makes, which the contract reads as no
+    /// completion however well the scene played.
+    #[test]
+    fn the_component_completes_from_its_own_operation() {
+        let component = super::COMPONENT;
+        assert!(!component.contains("finishAutoAct"));
+        assert!(component.contains("WindowStage {"));
+        assert!(component.contains(".complete({"));
     }
 
     #[test]

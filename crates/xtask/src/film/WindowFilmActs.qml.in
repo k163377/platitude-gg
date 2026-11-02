@@ -319,11 +319,20 @@ Item {
             }
             if (acts.shooting)
                 return
-            acts.ended = true
             Harness.writeFile(Harness.shotDir + "/frames.tsv", acts.lines)
-            Harness.report("film done frames=" + acts.frames + " ms=" + Math.round(t))
-            acts.window.finishAutoAct()
+            acts.ended = true
         }
+    }
+    // The run's completion (`StageTimer.complete`): the scene played to its last frame saved is the one stage this
+    // verb reaches, and the completion's hold reads the page out after it. The scene's clock above is no operation:
+    // its beats are no run's stages.
+    WindowStage {
+        id: filmDone
+        name: "film"
+        running: acts.on && acts.ended
+        onTriggered: filmDone.complete({ "name": "film_done", "when": () => ({ "ended": acts.ended }),
+                                         "report": () => "film done frames=" + acts.frames
+                                                         + " ms=" + Math.round(acts.shotAt) })
     }
 
     // What a frame is taken of: each view of the content with the overlay over it, magnified by `scale` without
