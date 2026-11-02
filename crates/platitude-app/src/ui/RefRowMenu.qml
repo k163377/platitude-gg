@@ -461,13 +461,13 @@ Item {
             refSentence: qsTr("%1 onto it")
             refName: refRowMenu.worktree.branch
             refMark: "branch"
-            // A tag stays put under a rebase onto it: git peels it to its commit, and `--update-refs` carries
-            // branches only (デザイン規約 §履歴を合流させる).
+            // A tag stays put under a rebase onto it: git peels it to its commit, and the rebase moves the current
+            // branch alone (デザイン規約 §履歴を合流させる「既定のフラグ」).
             offered: refRowMenu.integrateOffered
             blockedReason: refRowMenu.startWhy
             // Published = reachable from a remote-tracking ref, as of the last fetch.
             note: refRowMenu.rebasePublished ? Words.rewritesPushed : ""
-            onTriggered: refRowMenu.repoTab.rebase(refRowMenu.integrateRef, "", true)
+            onTriggered: refRowMenu.repoTab.rebase(refRowMenu.integrateRef, "")
         }
         AppMenuSeparator {}
         // The group that moves the named branch along its upstream, one group with the push, above the delete table

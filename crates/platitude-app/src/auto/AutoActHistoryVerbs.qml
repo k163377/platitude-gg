@@ -153,7 +153,7 @@ Item {
             const clash = arg === "" ? "side/clash" : arg
             page.openRefMenu("branch", clash, clash, branchesModel.oidOfName(clash))
             stoppedLandingTimer.start()
-            repoTab.rebase(clash, "", true)
+            repoTab.rebase(clash, "")
         } else if (act === "integrate-menu") {
             acts.openIntegrateMenu(arg)
         } else if (act === "pull-go" || act === "pull-ahead") {
@@ -211,7 +211,7 @@ Item {
                         // What a click does next; the other two land long after the menu is gone, this one does not.
                         refMenu.close()
                     }
-                    repoTab.rebase(arg, "", true)
+                    repoTab.rebase(arg, "")
                 }
             }
         } else {
@@ -469,7 +469,7 @@ Item {
             if (menuWaitTimer.mode === "replay") {
                 return driver.pressWrite("rebase", () => {
                     // `--preset replay`'s other line: three hundred steps, replayed for seconds.
-                    repoTab.rebase("base", "", true)
+                    repoTab.rebase("base", "")
                     return true
                 })
             }

@@ -1687,7 +1687,7 @@ FocusScope {
             onCherryPickRequested: oidHex => repoTab.cherryPick(oidHex)
             onRevertRequested: oidHex => repoTab.revert(oidHex)
             onMergeRequested: ref => repoTab.merge(ref, false, false, "")
-            onRebaseRequested: ref => repoTab.rebase(ref, "", true)
+            onRebaseRequested: ref => repoTab.rebase(ref, "")
             onPullRequested: branch => repoTab.pull(branch)
             onCheckDeleteRequested: branch => repoTab.checkBranchDelete(branch)
             onForceDeleteRequested: branch => repoTab.deleteBranch(branch, true)

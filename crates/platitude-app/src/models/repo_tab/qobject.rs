@@ -1334,12 +1334,10 @@ impl RepoTab {
     /// other rewrite here carries it
     /// (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
     #[qslot]
-    fn rebase(&mut self, upstream: String, onto: String, update_refs: bool) {
+    fn rebase(&mut self, upstream: String, onto: String) {
         let options = platitude_core::integrate::RebaseOptions {
             onto: (!onto.is_empty()).then_some(onto),
-            branch: None,
-            update_refs,
-            root: false,
+            ..Default::default()
         };
         self.ask_session(|s| s.rebase(upstream, options));
     }

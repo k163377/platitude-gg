@@ -554,17 +554,15 @@ async fn writes_that_leave_commits_behind_tell_the_log() {
 }
 
 /// `top` on `base` on `main`, and `main` one commit on — touching `b.txt`
-/// as `base` does where `conflict`, so a rebase of `top` onto it stops at
-/// `base`'s commit.
-fn stacked(repo: &mut TestRepo, conflict: bool) {
+/// as `base` does, so a rebase of `top` onto it stops at `base`'s commit.
+fn stacked(repo: &mut TestRepo) {
     repo.commit_file("a.txt", "1\n", "c1");
     repo.git(&["switch", "--quiet", "-c", "base"]);
     repo.commit_file("b.txt", "base\n", "b1");
     repo.git(&["switch", "--quiet", "-c", "top"]);
     repo.commit_file("t.txt", "top\n", "t1");
     repo.git(&["switch", "--quiet", "main"]);
-    let file = if conflict { "b.txt" } else { "m.txt" };
-    repo.commit_file(file, "main\n", "m1");
+    repo.commit_file("b.txt", "main\n", "m1");
     repo.git(&["switch", "--quiet", "top"]);
 }
 
@@ -585,19 +583,17 @@ async fn one_rebase_of_both(repo: &TestRepo) {
 
 /// A rebase moving branches together that stops on a conflict moves them
 /// when it finishes: the continue that finishes it puts them on the record
-/// as one entry.
+/// as one entry. They move together under the person's own
+/// `rebase.updateRefs` — no rebase of the app's asks for it.
 #[tokio::test(flavor = "multi_thread")]
 async fn branches_moved_together_after_a_stop_are_one_entry() {
     let mut repo = TestRepo::init();
-    stacked(&mut repo, true);
+    stacked(&mut repo);
+    repo.git(&["config", "rebase.updateRefs", "true"]);
     let (sink, session) = opened(&repo).await;
 
-    let options = RebaseOptions {
-        update_refs: true,
-        ..RebaseOptions::default()
-    };
     let id = session
-        .rebase("main".to_string(), options)
+        .rebase("main".to_string(), RebaseOptions::default())
         .expect("the rebase is accepted");
     assert_eq!(write_answer(&sink, id).await, None, "a stop is no failure");
     repo.write_file("b.txt", "both\n");
@@ -613,7 +609,8 @@ async fn branches_moved_together_after_a_stop_are_one_entry() {
 }
 
 /// Two branches on one tip that one rebase moved together off it onto one
-/// new tip are both the entry's: each comes back under its own name.
+/// new tip (the person's own `rebase.updateRefs`) are both the entry's:
+/// each comes back under its own name.
 #[tokio::test(flavor = "multi_thread")]
 async fn two_branches_on_one_tip_one_rebase_moved_both_come_back() {
     let mut repo = TestRepo::init();
@@ -624,14 +621,11 @@ async fn two_branches_on_one_tip_one_rebase_moved_both_come_back() {
     repo.git(&["switch", "--quiet", "main"]);
     repo.commit_file("m.txt", "main\n", "m1");
     repo.git(&["switch", "--quiet", "topic"]);
+    repo.git(&["config", "rebase.updateRefs", "true"]);
     let (sink, session) = opened(&repo).await;
 
-    let options = RebaseOptions {
-        update_refs: true,
-        ..RebaseOptions::default()
-    };
     let id = session
-        .rebase("main".to_string(), options)
+        .rebase("main".to_string(), RebaseOptions::default())
         .expect("the rebase is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
     assert_eq!(
@@ -887,29 +881,4 @@ async fn a_tag_pushed_over_is_recorded_as_the_remote_held_it() {
         }
     );
     session.close_and_wait().await;
-}
-
-/// What git itself does behind the fixed command lines the tests above
-/// pass — left to the full gate (rules-refs/core.md `periodic`).
-mod periodic {
-    use super::*;
-
-    /// The branches a rebase moves together are one entry also where the
-    /// user's own setting moved them (`rebase.updateRefs`), not the screen.
-    #[tokio::test(flavor = "multi_thread")]
-    #[ignore = "a user's rebase.updateRefs moving branches git's way: not worth the pre-merge run"]
-    async fn branches_the_setting_moves_together_are_one_entry() {
-        let mut repo = TestRepo::init();
-        stacked(&mut repo, false);
-        repo.git(&["config", "rebase.updateRefs", "true"]);
-        let (sink, session) = opened(&repo).await;
-
-        let id = session
-            .rebase("main".to_string(), RebaseOptions::default())
-            .expect("the rebase is accepted");
-        assert_eq!(write_answer(&sink, id).await, None);
-
-        one_rebase_of_both(&repo).await;
-        session.close_and_wait().await;
-    }
 }

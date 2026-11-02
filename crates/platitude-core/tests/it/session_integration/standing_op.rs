@@ -193,10 +193,7 @@ async fn a_rebase_onto_under_a_standing_cherry_pick_stops_at_the_carry() {
     let (sink, session) = opened(&repo).await;
     session.rebase(
         "side".into(),
-        platitude_core::integrate::RebaseOptions {
-            update_refs: true,
-            ..Default::default()
-        },
+        platitude_core::integrate::RebaseOptions::default(),
     );
     let refusal = write_result(&sink, OperationKind::Rebase)
         .await
@@ -239,10 +236,7 @@ async fn a_dirty_tree_under_a_bisect_still_carries() {
     let (sink, session) = opened(&repo).await;
     session.rebase(
         "main".into(),
-        platitude_core::integrate::RebaseOptions {
-            update_refs: true,
-            ..Default::default()
-        },
+        platitude_core::integrate::RebaseOptions::default(),
     );
     assert_eq!(
         write_result(&sink, OperationKind::Rebase).await,

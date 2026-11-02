@@ -88,12 +88,8 @@ impl RebasePlanModel {
         root: bool,
     ) {
         let options = platitude_core::integrate::RebaseOptions {
-            onto: None,
-            branch: None,
-            // Branches inside the range move along with it, always
-            // (デザイン規約 §履歴を合流させる — 既定のフラグ).
-            update_refs: true,
             root,
+            ..Default::default()
         };
         crate::hub::with_session(self.tab_id, move |s| {
             s.rebase_interactive(upstream, steps, options, expect);

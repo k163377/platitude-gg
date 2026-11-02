@@ -123,8 +123,8 @@ fn full(short: &str) -> String {
     format!("{short}{}", "0".repeat(40 - short.len()))
 }
 
-/// Writing the plan whole instead would pass `--update-refs` and move no
-/// ref.
+/// Writing the plan whole instead would move no ref under a person's own
+/// `rebase.updateRefs`.
 #[test]
 fn the_plan_carries_over_the_ref_lines_git_wrote() {
     let plan = format!(

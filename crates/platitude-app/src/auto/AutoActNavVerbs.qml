@@ -158,7 +158,7 @@ Item {
             // Every door onto the history (left pane and graph) while a replaying write runs; nothing freezes or dims
             // (`SidebarPane.doorsHeld`). The rebase is real — the argument is the branch rebased onto and the menus'
             // subject (`heldBranch`) — and its rise is latched below.
-            repoTab.rebase(arg, "", true)
+            repoTab.rebase(arg, "")
             navHeldTimer.start()
         } else if (act === "nav-pin-edge") {
             // The current branch's stand-in riding the edge its row scrolled out of (`HeadPinRow`): the list is taken

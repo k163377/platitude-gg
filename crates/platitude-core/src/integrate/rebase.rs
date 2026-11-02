@@ -11,17 +11,17 @@ use crate::relied_messages;
 
 /// How a rebase runs. No autostash field, on purpose: every rebase over a
 /// dirty tree goes through the session's own carry, which gives staged
-/// work back staged (`session::build::carry_across`).
+/// work back staged (`session::build::carry_across`). No `--update-refs`
+/// field either: every rebase moves the current branch alone, as git does
+/// by default, and a branch standing in the range stays on the old commits
+/// (user decision — ask before changing; デザイン規約 §履歴を合流させる
+/// 「既定のフラグ」). A person's own `rebase.updateRefs` is theirs.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RebaseOptions {
     /// `--onto <newbase>`: transplant onto something other than `upstream`.
     pub onto: Option<String>,
     /// Which branch to rebase; HEAD when `None`.
     pub branch: Option<String>,
-    /// Move refs that pointed into the rewritten range along with it
-    /// (git 2.38+, inside the minimum version). The one flag the app's
-    /// rebases add: branches stacked on the range move with it.
-    pub update_refs: bool,
     /// `--root`: replay from the first commit; `upstream` is left off, as
     /// the first commit has no parent to name.
     pub root: bool,
@@ -258,9 +258,6 @@ pub(crate) fn rebase_command(
     todo_editor: Option<&str>,
 ) -> GitCommand {
     let mut cmd = GitCommand::new().cwd(workdir).arg("rebase");
-    if options.update_refs {
-        cmd = cmd.arg("--update-refs");
-    }
     if let Some(editor) = todo_editor {
         // `--no-rebase-merges` pins off `rebase.rebaseMerges`: the editor
         // keeps the lines git put in (`sequencer::merge_todo`), so its
@@ -350,6 +347,20 @@ mod tests {
             let described =
                 rebase_command(Path::new("repo"), "upstream", &options, editor).describe();
             assert!(described.contains("--no-autostash"), "{described}");
+        }
+    }
+
+    /// Neither `--update-refs` nor `--no-update-refs`, on either form: git's
+    /// default moves the current branch alone, and a person's own
+    /// `rebase.updateRefs` stays theirs (gitの扱い.md §釘付けない物). What git
+    /// does under the setting is `integrate_integration::todo`'s.
+    #[test]
+    fn a_rebase_leaves_update_refs_to_git() {
+        let options = RebaseOptions::default();
+        for editor in [Some("editor"), None] {
+            let described =
+                rebase_command(Path::new("repo"), "upstream", &options, editor).describe();
+            assert!(!described.contains("update-refs"), "{described}");
         }
     }
 }

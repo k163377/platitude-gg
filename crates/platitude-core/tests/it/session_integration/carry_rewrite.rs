@@ -115,13 +115,10 @@ async fn a_squash_over_a_dirty_tree_carries_the_work_across() {
     session.close_and_wait().await;
 }
 
-/// What a `rebase <current> onto it` fires with: the flags the two menu
+/// What a `rebase <current> onto it` fires with: the options the two menu
 /// rows pass — no autostash knob among them.
 fn rebase_onto() -> platitude_core::integrate::RebaseOptions {
-    platitude_core::integrate::RebaseOptions {
-        update_refs: true,
-        ..Default::default()
-    }
+    platitude_core::integrate::RebaseOptions::default()
 }
 
 /// A rebase onto a new base goes round the same way (not `--autostash`, as

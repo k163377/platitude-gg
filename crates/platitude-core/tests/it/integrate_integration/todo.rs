@@ -240,14 +240,14 @@ async fn the_helper_is_found_beside_the_other_binaries() {
     assert!(Path::new(&built).is_file());
 }
 
-/// `--update-refs` works because git's own todo is kept: git writes the
-/// `update-ref` lines itself, none for a tag, a branch outside the range, or
-/// one another worktree has checked out. A helper that overwrote the
-/// whole file would drop them and the flag would move nothing
-/// (デザイン規約 §フル interactive rebase); working the set out here would be
-/// a second copy of git's rule.
+/// A person's own `rebase.updateRefs` works because git's own todo is kept:
+/// git writes the `update-ref` lines itself, none for a tag, a branch
+/// outside the range, or one another worktree has checked out. A helper
+/// that overwrote the whole file would drop them and the setting would move
+/// nothing (デザイン規約 §フル interactive rebase); working the set out here
+/// would be a second copy of git's rule.
 #[tokio::test]
-async fn update_refs_moves_the_branches_git_named_and_no_others() {
+async fn the_setting_moves_the_branches_git_named_and_no_others() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "c1");
     repo.commit_file("b.txt", "two\n", "c2");
@@ -266,6 +266,7 @@ async fn update_refs_moves_the_branches_git_named_and_no_others() {
     let was_held = repo.git(&["rev-parse", "held"]);
     let was_outside = repo.git(&["rev-parse", "outside"]);
     let was_tag = repo.git(&["rev-parse", "t-inside"]);
+    repo.git(&["config", "rebase.updateRefs", "true"]);
 
     let (exec, cancel) = env();
     let repo_info = info(&repo).await;
@@ -275,10 +276,7 @@ async fn update_refs_moves_the_branches_git_named_and_no_others() {
     // Reword the oldest, so every id after it changes.
     steps[0].action = TodoAction::Reword;
     steps[0].message = Some("c2 said again".into());
-    let options = RebaseOptions {
-        update_refs: true,
-        ..RebaseOptions::default()
-    };
+    let options = RebaseOptions::default();
     let outcome = sequencer::rebase_interactive(
         &exec,
         &repo_info,
@@ -322,13 +320,14 @@ async fn update_refs_moves_the_branches_git_named_and_no_others() {
     assert_eq!(
         repo.git(&["rev-parse", "t-inside"]),
         was_tag,
-        "and a tag is not a ref `--update-refs` moves"
+        "and a tag is not a ref the setting moves"
     );
 }
 
-/// git's own side of two flags this crate passes; that they are passed is
-/// held by `integrate::rebase`'s unit tests and the `--update-refs` test
-/// above (rules-refs/core.md `periodic`).
+/// git's own side of the flag this crate passes over a person's config, and
+/// of the `rebase.updateRefs` it leaves to them; that the flag is passed is
+/// held by `integrate::rebase`'s unit tests, and the setting's moves by the
+/// test above (rules-refs/core.md `periodic`).
 mod periodic {
     use super::*;
 
@@ -393,6 +392,7 @@ mod periodic {
         repo.commit_file("f.txt", "two\n", "c2");
         repo.commit_file("f.txt", "three\n", "c3");
         repo.git(&["branch", "inside", "HEAD~1"]);
+        repo.git(&["config", "rebase.updateRefs", "true"]);
         let was_inside = repo.git(&["rev-parse", "inside"]);
         let was_head = repo.git(&["rev-parse", "HEAD"]);
 
@@ -404,10 +404,7 @@ mod periodic {
         // Edit the first of them: the replay stops there with the refs still
         // only promised.
         steps[0].action = TodoAction::Edit;
-        let options = RebaseOptions {
-            update_refs: true,
-            ..RebaseOptions::default()
-        };
+        let options = RebaseOptions::default();
         let outcome = sequencer::rebase_interactive(
             &exec,
             &repo_info,
