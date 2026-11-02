@@ -35,6 +35,12 @@ jobs:
       - &toolchain
         name: Rust toolchain
         run: rustup toolchain install --no-self-update
+      # The linker .cargo/config.toml names on Linux.
+      - &linker
+        name: mold
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mold
       - name: Against the ledger
         run: cargo run --locked -p xtask -- relied-messages watch
 
@@ -46,6 +52,7 @@ jobs:
     steps:
       - *checkout
       - *toolchain
+      - *linker
       # What git's build takes beyond the image's compiler and make — the
       # container's git-build stage installs the same (ci/linux/Dockerfile).
       - name: zlib's headers

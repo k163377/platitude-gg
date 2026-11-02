@@ -3,6 +3,18 @@
 [alias]
 xtask = "run --quiet --locked -p xtask --"
 
+# The linker on Linux. The C++ the image provider's bridge generates
+# (platitude-app's build.rs, built by cxx-qt-build) comes in a static
+# archive after Qt's libraries, which GNU ld.bfd, the system default, will
+# not reach back for; left unnamed, cxx-qt-build switches the link to lld
+# or gold by itself. mold rather than those two: the fastest of the three
+# (user decision — ask before changing). Named here, it is left alone, and
+# every crate links with it, so it is installed wherever Linux builds run
+# (ci/linux/Dockerfile, the CI workflows). A RUSTFLAGS in the environment
+# takes this line's place, and cxx-qt-build picks for itself again.
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
 # What the C and C++ dependencies are compiled with (cc-rs reads both).
 [env]
 # A tree-sitter grammar's parser.c exports its `tree_sitter_<lang>`

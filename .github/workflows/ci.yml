@@ -52,11 +52,12 @@ jobs:
       # are left as they are.
       - name: Rust toolchain
         run: rustup toolchain install --no-self-update
+      # mold: the linker .cargo/config.toml names on Linux.
       - name: Install Linux build deps
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libgl1-mesa-dev libxkbcommon-dev
+          sudo apt-get install -y --no-install-recommends libgl1-mesa-dev libxkbcommon-dev mold
       - name: Qt
         uses: ./.github/actions/qt
       # After Qt: QMAKE names the Qt the builds are made against, version
