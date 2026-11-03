@@ -67,9 +67,10 @@ Item {
     property var marks: []
     /// Names past the name ceiling (`Theme.nameMaxChars`) cut in the middle — a remote's at its end (デザイン規約 §寸法
     /// 「upstream 名だけは末尾で切る」) — and the whole line given back by a hand on a cut name — a heading's
-    /// (デザイン規約 §寸法「名前の天井」). Off, every name is drawn whole and wraps. Set on headings only (the notice,
-    /// the question, the remote dialog, the discard log's band and card): a second line and the tooltip are never
-    /// cut. A copy takes the line as drawn, cut names included (`tst_cardcopy`).
+    /// (デザイン規約 §寸法「名前の天井」). Off, every name is drawn whole and wraps. Set on headings (the notice, the
+    /// question, the remote dialog, the discard log's band and card) and on the question's second line (user decision
+    /// — ask before changing); the notice's second line and the tooltip are never cut. A copy takes the line as drawn,
+    /// cut names included (`tst_cardcopy`).
     property bool holdsNames: false
     /// The line as drawn, before the rooms: `text` with each name the marks give a length for cut where
     /// `holdsNames` cuts it, the marks moved onto it, and which of them were cut — `{ text, marks, cuts }`.

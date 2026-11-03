@@ -32,27 +32,40 @@ ColumnLayout {
     /// row).
     property alias remotePick: remotePick
     property alias branchPick: upstreamBranchField
+    /// The least width the pair takes, as `PublishForm.leastWidth`.
+    readonly property real leastWidth: 2 * Metrics.askFieldMinW + slash.width + 2 * askRow.spacing
 
     spacing: Theme.spaceXs
 
     RowLayout {
         id: askRow
+        /// Sized as `PublishForm`'s row (`askRow` there says why): the typed name asks first, the remote takes what is
+        /// left, both down to `askFieldMinW` — and on a row narrower than the two floors, the remote down to what its
+        /// name needs (never past half the row) and the name to the rest; past the floors a short remote comes back up
+        /// to its floor a pixel at a time.
+        readonly property real room: upstreamForm.width - slash.width - 2 * askRow.spacing
+        readonly property bool narrow: askRow.room < 2 * Metrics.askFieldMinW
+        readonly property real remoteFloor:
+            Math.min(Metrics.askFieldMinW,
+                     Math.max(Math.min(remotePick.wantedWidth, askRow.room / 2),
+                              askRow.room - 2 * Metrics.askFieldMinW
+                              + Math.min(remotePick.wantedWidth, Metrics.askFieldMinW)))
+        readonly property real nameFloor: askRow.narrow ? askRow.room - askRow.remoteFloor : Metrics.askFieldMinW
+        readonly property real nameWidth:
+            Math.min(Math.max(askRow.nameFloor, upstreamBranchField.wantedWidth),
+                     Math.max(askRow.nameFloor, askRow.room - askRow.remoteFloor))
+        readonly property real remoteCeiling: Math.max(askRow.remoteFloor, askRow.room - askRow.nameWidth)
         Layout.fillWidth: true
         spacing: Theme.spaceXs
-        /// Sized as `PublishForm`'s row (`askRow` there says why): the typed name asks first, the remote takes what is
-        /// left, both down to `askFieldMinW`.
-        readonly property real room: upstreamForm.width - slash.width - 2 * askRow.spacing
-        readonly property real nameWidth:
-            Math.min(Math.max(Metrics.askFieldMinW, upstreamBranchField.wantedWidth),
-                     Math.max(Metrics.askFieldMinW, askRow.room - Metrics.askFieldMinW))
-        readonly property real remoteCeiling: Math.max(Metrics.askFieldMinW, askRow.room - askRow.nameWidth)
         AppCombo {
             id: remotePick
             leadMark: "remote"
             pickOnly: true
-            Layout.minimumWidth: Metrics.askFieldMinW
+            // Both lists spread across the form to show each name whole, whatever the boxes gave way to.
+            spreadWithin: upstreamForm
+            Layout.minimumWidth: askRow.remoteFloor
             Layout.maximumWidth: askRow.remoteCeiling
-            Layout.preferredWidth: Math.max(Metrics.askFieldMinW, remotePick.wantedWidth)
+            Layout.preferredWidth: Math.max(askRow.remoteFloor, remotePick.wantedWidth)
             model: upstreamForm.remotes
             wanted: upstreamForm.remote
             onActivated: index => upstreamForm.remotePicked(index)
@@ -69,8 +82,9 @@ ColumnLayout {
         AppCombo {
             id: upstreamBranchField
             leadMark: "branch"
-            Layout.minimumWidth: Metrics.askFieldMinW
-            Layout.maximumWidth: Math.max(Metrics.askFieldMinW, askRow.room - Metrics.askFieldMinW)
+            spreadWithin: upstreamForm
+            Layout.minimumWidth: askRow.nameFloor
+            Layout.maximumWidth: Math.max(askRow.nameFloor, askRow.room - askRow.remoteFloor)
             Layout.preferredWidth: askRow.nameWidth
             Layout.fillWidth: true
             model: upstreamForm.branches

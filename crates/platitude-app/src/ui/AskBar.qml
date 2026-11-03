@@ -87,13 +87,20 @@ Rectangle {
     readonly property alias armedPresses: holdDrive.armedPresses
     /// The sweep hand over the question's words, exposed so a run can enter it (as `<card>.background.pad` is).
     property alias pad: askHand
+    /// Automation: where the words and the two controls stand, so a test can read the two columns
+    /// (`tst_askseats.qml`), as `NoticeBar.pill` is read.
+    readonly property alias words: askWords
+    readonly property alias heading: headingRow
+    readonly property alias detailLine: detailWord
+    readonly property alias pill: acceptPill
+    readonly property alias closeButton: dismissButton
     /// What the question needs to have an answer at all (a chooser, a name box), declared by whoever raises it; the
     /// bar seats it under the words. Null where the pill alone answers.
     ///
     /// **Put down before the next one goes in** (`GraphPane.startAsking`), not at the press: a Loader handed the
     /// component it already has keeps the item, so the next question of the same kind would come up holding what was
-    /// typed into the first — and clearing it at the press takes the form out from under a bar still on screen,
-    /// dropping the pill and the ✕ (centred against the row) by half its height.
+    /// typed into the first — and clearing it at the press takes the form out from under a bar still on screen, and
+    /// the pill standing on its line (`askColumns`) with it.
     property Component form: null
     /// The loaded form, so the owner can read what was put into it.
     readonly property alias formItem: formLoader.item
@@ -196,7 +203,8 @@ Rectangle {
     /// have no height-for-width, but a `Text` / `CardText` answers a new `implicitHeight` once its width is set and the
     /// column polishes again (as `CommitHoverCard`'s `CardText`). The width decides it, so a run shoots the wrap in a
     /// window whose graph is squeezed to its least (`--config-dir` holding a large `[layout] details_width`).
-    readonly property real openHeight: bar.open || holdDrive.settling ? askRow.implicitHeight + 2 * Theme.spaceMd : 0
+    readonly property real openHeight: bar.open || holdDrive.settling ? askColumns.implicitHeight + 2 * Theme.spaceMd
+                                                                      : 0
     readonly property bool settled: bar.openHeight > 0 && bar.implicitHeight === bar.openHeight
     /// The other edge: answered and all the way back up (a shot taken on the answer shows the bar half-retracted).
     readonly property bool shut: !bar.open && bar.implicitHeight === 0
@@ -219,7 +227,7 @@ Rectangle {
     BandRule {
         color: bar.tone
     }
-    // The question's words can be swept from the air around them (規約 §右のペインの字は掴める). Under the row, so
+    // The question's words can be swept from the air around them (規約 §右のペインの字は掴める). Under the columns, so
     // the pill, the ✕ and the form keep every press they had. Its content is the words' column (`askWords`), so the
     // form's boxes, the pill and the ✕ are never walked. Headless: `ask-sweep`.
     SweepPad {
@@ -227,20 +235,51 @@ Rectangle {
         anchors.fill: parent
         content: askWords
     }
-    RowLayout {
-        id: askRow
+    // Two columns (デザイン規約 §立っている質問は 1 か所で聞く; user decision — ask before changing). On the left the words —
+    // the heading, the line under it and the form, whichever stand, packed from the top — and on the right the two
+    // controls, their right edges on one line: the ✕ at the top, its mark's top on the heading's, and the pill at the
+    // bottom. Every row of the words keeps the right column's room. The pill's foot is the words' foot, so a form's
+    // boxes, the pill's height, share its line. Words that end higher than the ✕ with the pill `spaceXs` under its
+    // seat — a heading alone, or a heading and its line — leave the right column to set the height, and stay at the
+    // top.
+    //
+    // Words that cannot keep a pair of boxes' floors beside the pill (the graph at its least) put the pill on a line
+    // of its own under them, its right edge still the ✕'s (user decision — ask before changing): the heading and the
+    // ✕, then the line under it and the form, then the pill. The right column is then the ✕ alone: the heading keeps
+    // the ✕'s room and every other row takes the whole width — a line keeping room for a pill that is not beside it
+    // breaks early for nothing.
+    Item {
+        id: askColumns
+        /// What the words keep beside the pill at least, every question alike: a pair of boxes on their floor — what a
+        /// form names (`PublishForm.leastWidth`), else two `askFieldMinW` (a chooser alone names none). Narrower, a
+        /// heading behind a code chip breaks inside its words, and a form's boxes give way below their floor.
+        readonly property real wordsLeast: formLoader.item !== null && formLoader.item.leastWidth !== undefined
+                                           ? formLoader.item.leastWidth : 2 * Metrics.askFieldMinW
+        readonly property bool pillUnder: askColumns.width - acceptPill.width - Theme.spaceMd < askColumns.wordsLeast
+        /// The right column's least height: the ✕'s seat, `spaceXs`, and the pill.
+        readonly property real controlsHeight: dismissButton.y + dismissButton.height + Theme.spaceXs
+                                               + acceptPill.height
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.margins: Theme.spaceMd
-        spacing: Theme.spaceMd
+        // Under the words, the pill stands a form's gap below them (the line over a form is the same `spaceXs` twice).
+        implicitHeight: askColumns.pillUnder ? askWords.implicitHeight + Theme.spaceSm + acceptPill.height
+                                         : Math.max(askWords.implicitHeight, askColumns.controlsHeight)
         ColumnLayout {
             id: askWords
-            Layout.fillWidth: true
+            anchors.left: parent.left
+            anchors.right: parent.right
+            // The right column (the pill is wider than the ✕'s mark) and the gap in front of it — none where the pill
+            // stands under the words, and the heading keeps the ✕'s room alone.
+            anchors.rightMargin: askColumns.pillUnder ? 0 : acceptPill.width + Theme.spaceMd
+            anchors.top: parent.top
             spacing: Theme.spaceXs
             // `push main where?` reads as one sentence, so the chip takes the heading's weight.
             RowLayout {
+                id: headingRow
                 Layout.fillWidth: true
+                Layout.rightMargin: askColumns.pillUnder ? Theme.iconSm + Theme.spaceMd : 0
                 spacing: Theme.spaceXs
                 // The chip stands on the heading's first line, where the sentence starts: floated beside the middle of
                 // a wrapped heading it reads as a word of its own, not part of the sentence. Both hang
@@ -281,20 +320,31 @@ Rectangle {
             }
             // **Hidden when empty**, not merely empty: an empty `CardText` still stands a line high, a blank band under
             // the heading (`RenameCarryFlow`'s question); a layout skips what is not visible, spacing and all.
+            // Its names cut at the name ceiling as the heading's are, the whole line under the hand (user decision —
+            // ask before changing): a name of a hundred letters otherwise breaks over three lines at its dashes.
             CardText {
+                id: detailWord
                 text: bar.detail
                 marks: bar.detailMarks
+                holdsNames: true
                 visible: bar.detail !== ""
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
                 Layout.fillWidth: true
             }
-            // Unloaded only as the next question is dressed (`form`).
+            // Unloaded only as the next question is dressed (`form`). Its boxes stand `controlHeight` tall, the pill's
+            // height (`PublishForm`, `UpstreamForm`, `RenameCarryForm`). Hidden with no form, as the line above is: an
+            // empty one still takes the column's spacing, and the pill's foot would stand that far under the words.
             Loader {
                 id: formLoader
+                visible: bar.form !== null
                 sourceComponent: bar.form
+                // The column's width from the start, not from the column's first layout: until then a Loader of no
+                // width leaves the form at its own implicit width, which the form's boxes work out from that width
+                // (`PublishForm.askRow`) — a pass that grows the form by a pixel, over and over.
+                width: askWords.width
                 Layout.fillWidth: true
-                Layout.topMargin: bar.form === null ? 0 : Theme.spaceXs
+                Layout.topMargin: Theme.spaceXs
             }
         }
         // The answer — a click, or a hold where the question asks for one. The only thing on the bar that acts.
@@ -304,7 +354,9 @@ Rectangle {
             readonly property bool lit: acceptMouse.containsMouse || bar.pointedAt
             /// The names its tip says, behind their marks (`TipAsk.marksNow`).
             readonly property var tipMarks: bar.tipMarks
-            Layout.alignment: Qt.AlignVCenter
+            // The right column's foot (`askColumns`).
+            x: askColumns.width - acceptPill.width
+            y: askColumns.height - acceptPill.height
             implicitWidth: acceptRow.implicitWidth + 2 * Theme.spaceMd
             implicitHeight: Theme.controlHeight
             radius: Theme.radiusSm
@@ -425,6 +477,9 @@ Rectangle {
             readonly property TipAsk pillTip: TipAsk {
                 id: pillTip
                 target: acceptPill
+                // Flush under the pill: over it stand the heading and the ✕. Its foot is at or under the words'
+                // foot (`askColumns`), so nothing of the bar's words is under it (`TipAsk.under`).
+                under: true
                 asked: bar.tip !== "" && acceptPill.lit
                 words: bar.tip
             }
@@ -472,21 +527,15 @@ Rectangle {
                 event.accepted = true
             }
         }
-        // The way out that can be seen (Escape and a click elsewhere walk away too), a step under what it closes
-        // (デザイン規約 §寸法).
-        NavIcon {
-            Layout.alignment: Qt.AlignVCenter
-            width: Theme.iconSm
-            height: Theme.iconSm
-            kind: "close"
-            tint: dismissMouse.containsMouse ? Theme.textPrimary : Theme.textSecondary
-            MouseArea {
-                id: dismissMouse
-                anchors.fill: parent
-                anchors.margins: -Theme.spaceXs
-                hoverEnabled: true
-                onClicked: bar.dismiss()
-            }
+        // The way out that can be seen (Escape and a click elsewhere walk away too), a step under what it closes, in
+        // the bars' one seat (デザイン規約 §寸法). In the top-right corner (user decision — ask before changing): the
+        // mark's right edge on the pill's and its top on the heading's — up in the corner, it leaves the pill under it
+        // its air instead of sitting on its shoulder.
+        CloseToolButton {
+            id: dismissButton
+            x: askColumns.width - dismissButton.width + (dismissButton.width - dismissButton.markSize) / 2
+            y: headingRow.y - (dismissButton.height - dismissButton.markSize) / 2
+            onClicked: bar.dismiss()
         }
     }
     // Escape as a shortcut: the focus may be on the pill, the form's box or the graph list (which takes it on a row

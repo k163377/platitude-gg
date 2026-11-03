@@ -11,7 +11,8 @@ Item {
 
     readonly property string longRemote: "origin-with-a-very-long-name-for-a-remote"
     // Wider than both floors and the `/` in any face: the scenes that hand the bar the width this name asks for are
-    // about a destination too long for it, not one narrower than the two floors (which overflows on purpose).
+    // about a destination too long for it, not a row narrower than the two floors (where the floors give way —
+    // `test_a_row_narrower_than_two_floors_gives_them_way`).
     readonly property string absurdRemote: "origin-with-a-name-so-long-no-question-bar-could-hold-it-beside-a-branch"
     readonly property string longBranch: "feature/a-branch-name-that-is-far-too-long-to-sit-in-one-box"
 
@@ -47,9 +48,14 @@ Item {
             form.width = root.width
             form.remote = "origin"
             form.branch = "feature/new-thing"
+            upstream.width = root.width
+            upstream.remote = "origin"
+            upstream.branch = "feature/new-thing"
             // Both halves: the destination is back on its floor a frame before the name has grown into the room.
             tryVerify(() => form.remotePick.width === Metrics.askFieldMinW
                             && form.branchField.x + form.branchField.width >= form.width - 1)
+            tryVerify(() => upstream.remotePick.width === Metrics.askFieldMinW
+                            && upstream.branchPick.x + upstream.branchPick.width >= upstream.width - 1)
         }
 
         /// The gap before the answer pill is the bar's own margin, not slack the row left.
@@ -104,9 +110,8 @@ Item {
             verify(b.name.width >= Metrics.askFieldMinW, "and the name keeps its floor: " + b.name.width)
         }
 
-        /// The same rules with an `AppCombo` name box, whose ceiling is worked out from what that name asked for.
-        /// Not asked: a bar narrower than the two floors and the `/` — nothing shrinks past the floor, so the row
-        /// overflows there on purpose (デザイン規約 §窓の床).
+        /// The same rules with an `AppCombo` name box, whose ceiling is worked out from what that name asked for. A
+        /// row narrower than the two floors is `test_a_row_narrower_than_two_floors_gives_them_way`'s.
         function test_the_upstream_row_shares_by_the_same_rules() {
             const remote = upstream.remotePick
             const name = upstream.branchPick
@@ -124,25 +129,88 @@ Item {
             verify(remote.width < remote.wantedWidth, "it wanted more: " + remote.wantedWidth)
             verify(name.width >= Metrics.askFieldMinW, "and the name keeps its floor: " + name.width)
 
-            // Both too long: both on the floor, the name scrolling inside its box. The destination comes down a frame
-            // after the name, so its width is waited for too.
+            // Both too long, on a row exactly two floors wide: both on the floor, the name scrolling inside its box.
+            // The destination comes down a frame after the name, so its width is waited for too.
             upstream.branch = root.longBranch
-            upstream.width = 2 * Metrics.askFieldMinW
+            upstream.width = upstream.leastWidth
             tryVerify(() => name.width === Metrics.askFieldMinW)
             tryCompare(remote, "width", Metrics.askFieldMinW)
             verify(name.wantedWidth > name.width, "with more text than box, which is where it scrolls")
+            upstream.width = root.width
         }
 
         function test_both_too_long_puts_the_destination_on_the_floor() {
             const b = boxes()
             form.remote = root.longRemote
             form.branch = root.longBranch
-            form.width = 2 * Metrics.askFieldMinW
+            form.width = form.leastWidth
             // Waited on the name: the destination is already on the floor, so it cannot tell the row has settled.
             tryVerify(() => b.name.width === Metrics.askFieldMinW)
             compare(b.remote.width, Metrics.askFieldMinW, "and the destination is on the same floor")
             verify(b.name.wantedWidth > b.name.width, "with more text than box, which is where it scrolls")
             form.width = root.width
+        }
+
+        /// The graph at its floor: a row narrower than the two floors. The floors give way so nothing runs past the
+        /// row — the destination down to what its own name needs, never past half the row, the name to the rest.
+        function test_a_row_narrower_than_two_floors_gives_them_way() {
+            const b = boxes()
+            const narrowWidth = form.leastWidth - 60
+            // A short destination: as wide as its name, the name box the rest.
+            form.width = narrowWidth
+            tryVerify(() => b.name.x + b.name.width <= form.width + 0.5 && b.name.x + b.name.width >= form.width - 1)
+            verify(b.remote.wantedWidth < (narrowWidth - Metrics.askFieldMinW), "origin is a short name")
+            compare(b.remote.width, b.remote.wantedWidth, "the destination as wide as its name")
+            verify(b.name.width > b.remote.width, "the name takes the rest: " + b.name.width)
+
+            // Both too long: half the row each, still inside it.
+            form.remote = root.longRemote
+            form.branch = root.longBranch
+            tryVerify(() => Math.abs(b.remote.width - b.name.width) <= 1)
+            verify(b.name.x + b.name.width <= form.width + 0.5,
+                   "the pair ends at " + (b.name.x + b.name.width) + " of " + form.width)
+            form.width = root.width
+        }
+
+        /// Widening the row across the two floors never jumps a box: a short destination comes back up to its floor a
+        /// pixel for each the row gains, the name keeping the width it had where the floors met (`askRow.remoteFloor`).
+        function test_widening_across_the_two_floors_jumps_no_box_data() {
+            return [
+                { tag: "publish", form: form, remote: form.remotePick, name: form.branchField },
+                { tag: "upstream", form: upstream, remote: upstream.remotePick, name: upstream.branchPick },
+            ]
+        }
+
+        function test_widening_across_the_two_floors_jumps_no_box(data) {
+            let was = null
+            for (let width = data.form.leastWidth - 40; width <= data.form.leastWidth + 120; width += 4) {
+                data.form.width = width
+                tryVerify(() => Math.abs(data.name.x + data.name.width - width) <= 1)
+                const now = { remote: data.remote.width, name: data.name.width }
+                if (was !== null) {
+                    verify(Math.abs(now.remote - was.remote) <= 4 && Math.abs(now.name - was.name) <= 4,
+                           "at " + width + " the boxes went from " + was.remote + "/" + was.name + " to "
+                           + now.remote + "/" + now.name)
+                }
+                was = now
+            }
+            verify(data.remote.width === Metrics.askFieldMinW, "and the destination is back on its floor")
+        }
+
+        /// The same with the upstream's `AppCombo` name box, whose floors are its own arithmetic (`UpstreamForm`).
+        function test_the_upstream_row_gives_its_floors_way_too() {
+            const remote = upstream.remotePick
+            const name = upstream.branchPick
+            upstream.width = upstream.leastWidth - 60
+            tryVerify(() => name.x + name.width <= upstream.width + 0.5 && name.x + name.width >= upstream.width - 1)
+            compare(remote.width, remote.wantedWidth, "the destination as wide as its name")
+            verify(name.width > remote.width, "the name takes the rest: " + name.width)
+
+            upstream.remote = root.longRemote
+            upstream.branch = root.longBranch
+            tryVerify(() => Math.abs(remote.width - name.width) <= 1)
+            verify(name.x + name.width <= upstream.width + 0.5,
+                   "the pair ends at " + (name.x + name.width) + " of " + upstream.width)
         }
     }
 }
