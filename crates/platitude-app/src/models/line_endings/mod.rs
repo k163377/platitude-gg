@@ -29,14 +29,15 @@ mod work;
 enum EolMsg {
     /// A read landed: what that file holds, and what git would use there.
     Read {
-        /// Carried back so an answer for a repository the reader has
-        /// moved off is dropped.
-        path: String,
+        /// The read's number (`LineEndingsModel::read_generation`): an
+        /// older one is dropped, whatever path it names — the read before
+        /// a pick's re-read can land after it.
+        generation: u64,
         held: String,
         effective: String,
     },
     /// A read could not be made at all — git's own words.
-    ReadFailed { path: String, message: String },
+    ReadFailed { generation: u64, message: String },
     /// A write finished; `error` is git's words, empty on success.
     Written { path: String, error: String },
 }
@@ -61,6 +62,11 @@ pub struct LineEndingsModel {
     error: String,
     feed: Arc<Feed<EolMsg>>,
     attached: bool,
+    /// The number of the read the screen is waiting on (a latest read —
+    /// the newest ask answers); zero until the first.
+    read_generation: u64,
+    /// The standing read's token, cancelled by the next ask.
+    read_cancel: Option<tokio_util::sync::CancellationToken>,
 }
 
 impl Default for LineEndingsModel {
@@ -74,6 +80,8 @@ impl Default for LineEndingsModel {
             error: String::new(),
             feed: Arc::new(Feed::default()),
             attached: false,
+            read_generation: 0,
+            read_cancel: None,
         }
     }
 }

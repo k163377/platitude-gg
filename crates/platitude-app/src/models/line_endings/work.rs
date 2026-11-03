@@ -42,8 +42,18 @@ impl LineEndingsModel {
     /// Asks git what that repository's own file sets, and what git would
     /// use there — two reads, since the effective level cannot say which
     /// of its records came from that file.
+    ///
+    /// A latest read (`platitude_core::session` — `asks`): numbered, and the
+    /// read before it stopped, so only the newest ask's answer is shown.
     fn ask(&mut self) {
         self.listen();
+        self.read_generation += 1;
+        if let Some(previous) = self.read_cancel.take() {
+            previous.cancel();
+        }
+        let cancel = tokio_util::sync::CancellationToken::new();
+        self.read_cancel = Some(cancel.clone());
+        let generation = self.read_generation;
         let feed = Arc::clone(&self.feed);
         let path = self.repo_path.clone();
         let spawned = Hub::with(|hub| {
@@ -52,7 +62,6 @@ impl LineEndingsModel {
             };
             let executor = hub.executor();
             handle.spawn(async move {
-                let cancel = tokio_util::sync::CancellationToken::new();
                 let workdir = PathBuf::from(&path);
                 let held = setting::held(&executor, &workdir, ConfigScope::Local, &cancel).await;
                 let effective = setting::effective(&executor, &workdir, &cancel)
@@ -60,12 +69,14 @@ impl LineEndingsModel {
                     .map(spelled);
                 let msg = match (held, effective) {
                     (Ok(held), Ok(effective)) => EolMsg::Read {
-                        path,
+                        generation,
                         held: spelled(held),
                         effective,
                     },
+                    // A stopped read answers nothing: a newer one is out.
+                    (Err(e), _) | (_, Err(e)) if e.is_cancelled() => return,
                     (Err(e), _) | (_, Err(e)) => EolMsg::ReadFailed {
-                        path,
+                        generation,
                         message: e.to_string(),
                     },
                 };
@@ -92,12 +103,11 @@ impl LineEndingsModel {
         self.changed();
         let feed = Arc::clone(&self.feed);
         let path = self.repo_path.clone();
+        // A run ask: held by the hub, so the window cannot close over the
+        // write half way and the quit gate counts it (`hub::saves`).
         let spawned = Hub::with(|hub| {
-            let Some(handle) = hub.runtime_handle() else {
-                return false;
-            };
-            let executor = hub.executor();
-            handle.spawn(async move {
+            let executor = hub.save_executor();
+            hub.spawn_save(async move {
                 let cancel = tokio_util::sync::CancellationToken::new();
                 let workdir = PathBuf::from(&path);
                 let wanted = AutoCrlf::spoken(&value);
@@ -116,8 +126,7 @@ impl LineEndingsModel {
                     },
                 };
                 feed.push(msg);
-            });
-            true
+            })
         })
         .unwrap_or(false);
         if !spawned {
@@ -134,11 +143,11 @@ impl LineEndingsModel {
             // dropped, for the reason `read_at` empties the field.
             match msg {
                 EolMsg::Read {
-                    path,
+                    generation,
                     held,
                     effective,
                 } => {
-                    if path != self.repo_path {
+                    if generation != self.read_generation {
                         continue;
                     }
                     // Only a read the screen asked for clears `error`; a
@@ -152,8 +161,11 @@ impl LineEndingsModel {
                         self.error = String::new();
                     }
                 }
-                EolMsg::ReadFailed { path, message } => {
-                    if path != self.repo_path {
+                EolMsg::ReadFailed {
+                    generation,
+                    message,
+                } => {
+                    if generation != self.read_generation {
                         continue;
                     }
                     self.state = "error".into();
