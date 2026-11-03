@@ -664,3 +664,62 @@ mod periodic {
         assert_eq!(out.stdout_utf8(), "", "a stat-only change is not a change");
     }
 }
+
+/// A blob of `size` bytes in `repo`, and its object id.
+fn blob_of(repo: &mut TestRepo, size: usize) -> std::io::Result<(Vec<u8>, String)> {
+    let bytes: Vec<u8> = (0..size).map(|i| (i % 251) as u8).collect();
+    std::fs::write(repo.path.join("big.bin"), &bytes)?;
+    let oid = repo.git(&["hash-object", "-w", "big.bin"]);
+    Ok((bytes, oid))
+}
+
+/// A piped run hands its receiver every chunk, in order, through a channel
+/// that holds one at a time: the read waits for room rather than dropping
+/// what does not fit.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_piped_run_hands_over_every_chunk_in_order() {
+    let mut repo = TestRepo::init();
+    let (bytes, oid) = blob_of(&mut repo, 2 * 1024 * 1024).expect("the blob");
+    let (exec, cancel) = env();
+    let (to, mut from) = tokio::sync::mpsc::channel::<Vec<u8>>(1);
+    let cmd = GitCommand::new()
+        .cwd(&repo.path)
+        .args(["cat-file", "blob"])
+        .arg(&oid);
+    let gathered = tokio::spawn(async move {
+        let mut gathered = Vec::new();
+        while let Some(chunk) = from.recv().await {
+            gathered.extend_from_slice(&chunk);
+        }
+        gathered
+    });
+    exec.run_piped(cmd, &cancel, &to)
+        .await
+        .expect("the piped run");
+    drop(to);
+    assert!(gathered.await.expect("the receiver") == bytes);
+}
+
+/// A receiver that takes one chunk and goes ends the run, failed, and git
+/// with it: git, blocked on output nobody reads, still holds its stderr
+/// open, and the read waits on neither.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_piped_run_ends_with_git_when_its_receiver_goes() {
+    let mut repo = TestRepo::init();
+    let (_, oid) = blob_of(&mut repo, 32 * 1024 * 1024).expect("the blob");
+    let (exec, cancel) = env();
+    let (to, mut from) = tokio::sync::mpsc::channel::<Vec<u8>>(1);
+    let cmd = GitCommand::new()
+        .cwd(&repo.path)
+        .args(["cat-file", "blob"])
+        .arg(&oid);
+    let receiver = async move {
+        assert!(from.recv().await.is_some(), "a first chunk");
+        drop(from);
+    };
+    let (ran, ()) = tokio::join!(exec.run_piped(cmd, &cancel, &to), receiver);
+    assert!(
+        matches!(ran, Err(GitError::Io { .. })),
+        "the run ends as its receiver goes: {ran:?}"
+    );
+}

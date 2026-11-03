@@ -64,7 +64,7 @@ async fn timeout_kills_the_child() {
         None,
         Some(Duration::from_millis(300)),
         &cancel,
-        &mut |_| {},
+        &mut Stdout::new(&mut Out::Streamed(&mut |_| {}), false),
     )
     .await
     .unwrap();
@@ -78,10 +78,18 @@ async fn cancellation_kills_the_child() {
     let cancel = CancellationToken::new();
     let cancel_clone = cancel.clone();
     let mut ready = false;
-    let outcome = run_child(&mut child, &mut family, None, None, &cancel, &mut |_| {
+    let mut on_stdout = |_: &[u8]| {
         ready = true;
         cancel_clone.cancel();
-    })
+    };
+    let outcome = run_child(
+        &mut child,
+        &mut family,
+        None,
+        None,
+        &cancel,
+        &mut Stdout::new(&mut Out::Streamed(&mut on_stdout), false),
+    )
     .await
     .unwrap();
     assert!(ready, "the child announced that it had started");
@@ -182,7 +190,7 @@ async fn a_send_failing_past_part_of_the_input_ends_the_child_with_stdin_open() 
             Some(&input),
             None,
             &CancellationToken::new(),
-            &mut |_| {},
+            &mut Stdout::new(&mut Out::Streamed(&mut |_| {}), false),
         ),
     )
     .await;
@@ -222,11 +230,14 @@ async fn a_cancel_past_part_of_the_input_ends_the_child_with_stdin_open() {
             Some(&input),
             None,
             &cancel,
-            &mut |chunk| {
-                if chunk.windows(3).any(|w| w == b"got") {
-                    stop.cancel();
-                }
-            },
+            &mut Stdout::new(
+                &mut Out::Streamed(&mut |chunk| {
+                    if chunk.windows(3).any(|w| w == b"got") {
+                        stop.cancel();
+                    }
+                }),
+                false,
+            ),
         ),
     )
     .await
@@ -271,6 +282,8 @@ async fn a_deadline_past_part_of_the_input_ends_the_child_with_stdin_open() {
         }
     };
     let cancel = CancellationToken::new();
+    let mut out = Out::Streamed(&mut on_stdout);
+    let mut on_stdout = Stdout::new(&mut out, false);
     let run = run_child(
         &mut child,
         &mut family,
@@ -335,7 +348,7 @@ async fn an_input_past_the_width_widens_the_stdin_and_one_within_it_does_not() {
                 Some(&input),
                 None,
                 &CancellationToken::new(),
-                &mut |_| {},
+                &mut Stdout::new(&mut Out::Streamed(&mut |_| {}), false),
             ),
         )
         .await

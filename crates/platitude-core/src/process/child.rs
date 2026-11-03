@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::process::{Child, ChildStdin};
+use tokio::process::{Child, ChildStdin, ChildStdout};
 use tokio_util::sync::CancellationToken;
 
 use super::command::Input;
@@ -15,6 +15,94 @@ use super::family::Family;
 const STDERR_CAP: usize = 256 * 1024;
 
 const STDOUT_CHUNK: usize = 64 * 1024;
+
+/// Where a run's stdout goes.
+pub(super) enum Out<'a> {
+    /// Kept whole for the caller — and so dropped again for a run asked
+    /// once more ([`super::config_unread`]).
+    Kept(&'a mut Vec<u8>),
+    /// Handed on as it comes.
+    Streamed(&'a mut (dyn FnMut(&[u8]) + Send)),
+    /// Sent on as it comes, the read waiting while the receiver is behind:
+    /// git's output stops in its pipe until the receiver catches up. A
+    /// receiver gone breaks the pipe.
+    Piped(&'a tokio::sync::mpsc::Sender<Vec<u8>>),
+}
+
+impl Out<'_> {
+    /// Hands `chunk` on; `false` where its receiver is gone.
+    async fn take(&mut self, chunk: &[u8]) -> bool {
+        match self {
+            Out::Kept(kept) => {
+                kept.extend_from_slice(chunk);
+                true
+            }
+            Out::Streamed(on_stdout) => {
+                on_stdout(chunk);
+                true
+            }
+            Out::Piped(to) => to.send(chunk.to_vec()).await.is_ok(),
+        }
+    }
+
+    pub(super) fn is_kept(&self) -> bool {
+        matches!(self, Out::Kept(_))
+    }
+
+    /// Drops what the run kept, for the run asked once more.
+    pub(super) fn restart(&mut self) {
+        if let Out::Kept(kept) = self {
+            kept.clear();
+        }
+    }
+}
+
+/// One run's stdout: where it goes, the row's copy of it where the command
+/// keeps one (`GitCommand::logs_stdout`), and whether any of it went.
+pub(super) struct Stdout<'s, 'a> {
+    out: &'s mut Out<'a>,
+    log: Option<Vec<u8>>,
+    printed: bool,
+}
+
+impl<'s, 'a> Stdout<'s, 'a> {
+    pub(super) fn new(out: &'s mut Out<'a>, logs: bool) -> Self {
+        Self {
+            out,
+            log: logs.then(Vec::new),
+            printed: false,
+        }
+    }
+
+    /// Whether any of it went, and the row's copy — empty where the
+    /// command keeps none.
+    pub(super) fn ended(self) -> (bool, Vec<u8>) {
+        (self.printed, self.log.unwrap_or_default())
+    }
+
+    /// Hands on all of `pipe`, chunk by chunk, to its end; a broken pipe
+    /// where the receiver is gone.
+    async fn pump(&mut self, pipe: &mut ChildStdout) -> std::io::Result<()> {
+        let mut buf = vec![0u8; STDOUT_CHUNK];
+        loop {
+            let n = pipe.read(&mut buf).await?;
+            if n == 0 {
+                return Ok(());
+            }
+            let chunk = &buf[..n];
+            if let Some(log) = self.log.as_mut() {
+                log.extend_from_slice(chunk);
+            }
+            self.printed = true;
+            if !self.out.take(chunk).await {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::BrokenPipe,
+                    "the reader of git's output is gone",
+                ));
+            }
+        }
+    }
+}
 
 pub(super) enum ChildOutcome {
     Finished {
@@ -30,9 +118,9 @@ pub(super) enum ChildOutcome {
 }
 
 /// The run is ended ([`Family::end`]) when the timeout or the token fires,
-/// a pipe git prints to breaks, or its input cannot be sent, and git is
-/// reaped on every road out of here. A whole run's stop whose end cannot be
-/// told is an error, not a cancel.
+/// a pipe git prints to breaks (its stdout's receiver gone among them), or
+/// its input cannot be sent, and git is reaped on every road out of here. A
+/// whole run's stop whose end cannot be told is an error, not a cancel.
 ///
 /// `input` is sent while stdout and stderr are read — one future each,
 /// polled together, so a git that answers as it reads cannot stall with
@@ -50,7 +138,7 @@ pub(super) async fn run_child(
     input: Option<&Input>,
     timeout: Option<Duration>,
     cancel: &CancellationToken,
-    on_stdout: &mut (dyn FnMut(&[u8]) + Send),
+    stdout: &mut Stdout<'_, '_>,
 ) -> std::io::Result<ChildOutcome> {
     let mut stdin_pipe = child.stdin.take();
     if let (Some(pipe), Some(input)) = (&stdin_pipe, input) {
@@ -85,17 +173,10 @@ pub(super) async fn run_child(
             }
         };
         let stdout_fut = async {
-            if let Some(r) = stdout_pipe.as_mut() {
-                let mut buf = vec![0u8; STDOUT_CHUNK];
-                loop {
-                    let n = r.read(&mut buf).await?;
-                    if n == 0 {
-                        break;
-                    }
-                    on_stdout(&buf[..n]);
-                }
+            match stdout_pipe.as_mut() {
+                Some(pipe) => stdout.pump(pipe).await,
+                None => Ok(()),
             }
-            Ok::<(), std::io::Error>(())
         };
         let stderr_fut = async {
             let mut acc = Vec::new();
@@ -112,10 +193,11 @@ pub(super) async fn run_child(
             }
             Ok::<Vec<u8>, std::io::Error>(acc)
         };
+        // Either pipe's error ends the reading at once: a receiver gone
+        // leaves git alive, blocked on its stdout, and its stderr open.
         let readers = async {
-            let (out_res, err_res) = tokio::join!(stdout_fut, stderr_fut);
-            out_res?;
-            err_res
+            let ((), stderr) = tokio::try_join!(stdout_fut, stderr_fut)?;
+            Ok::<Vec<u8>, std::io::Error>(stderr)
         };
         // A send that fails stops the wait at once: git, its stdin still
         // open, would read on without end.

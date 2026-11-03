@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 
-use super::child::{ChildOutcome, run_child};
+use super::child::{ChildOutcome, Out, Stdout, run_child};
 use super::command::{
     CommandEnd, CommandObserver, GitCommand, GitOutput, Kept, TimeBudget, shell_quote,
 };
@@ -409,6 +409,32 @@ impl GitExecutor {
         Ok(out)
     }
 
+    /// [`Self::run_streaming`], each chunk sent to `to` and the read
+    /// waiting while `to`'s receiver is behind: git's output stops in its
+    /// pipe until the receiver catches up, so no more of it stands in
+    /// memory than the channel holds. A receiver gone ends git, and the run
+    /// fails. A run that sent anything is not asked once more
+    /// (`config_unread`): its receiver would read the start twice.
+    pub async fn run_piped(
+        &self,
+        cmd: GitCommand,
+        cancel: &CancellationToken,
+        to: &tokio::sync::mpsc::Sender<Vec<u8>>,
+    ) -> Result<GitOutput, GitError> {
+        let described = cmd.describe();
+        let out = self
+            .execute(&cmd, cancel, &mut Out::Piped(to), None)
+            .await?;
+        if out.code != 0 {
+            return Err(GitError::Failed {
+                command: described,
+                code: out.code,
+                stderr: out.stderr_utf8().trim().to_string(),
+            });
+        }
+        Ok(out)
+    }
+
     async fn run_buffered(
         &self,
         cmd: &GitCommand,
@@ -685,14 +711,17 @@ impl GitExecutor {
         // (ci/baseline/code-costs-windows-x64.md).
         let spawned = started.elapsed();
 
-        let mut printed = false;
-        let (outcome, kept) = {
-            let mut each = |chunk: &[u8]| {
-                printed |= !chunk.is_empty();
-                out.take(chunk);
-            };
-            run_keeping(&mut child, &mut family, cmd, row.budget, cancel, &mut each).await
-        };
+        let mut stdout = Stdout::new(out, cmd.logs_stdout);
+        let outcome = run_child(
+            &mut child,
+            &mut family,
+            cmd.input.as_ref(),
+            row.budget,
+            cancel,
+            &mut stdout,
+        )
+        .await;
+        let (printed, kept) = stdout.ended();
         // Reaped (or killed) whichever way it ended: the life is spent.
         super::meter::charge(started.elapsed());
         let outcome = outcome.map_err(|source| {
@@ -871,61 +900,6 @@ impl GitExecutor {
                 report(CommandEnd::Cancelled, waited, started.elapsed(), "");
                 Err(GitError::Cancelled { command: described })
             }
-        }
-    }
-}
-
-/// [`run_child`], with a copy of stdout for the log's row where the
-/// command asks for one (`GitCommand::logs_stdout`); empty otherwise.
-async fn run_keeping(
-    child: &mut tokio::process::Child,
-    family: &mut Family,
-    cmd: &GitCommand,
-    budget: Option<Duration>,
-    cancel: &CancellationToken,
-    on_stdout: &mut (dyn FnMut(&[u8]) + Send),
-) -> (std::io::Result<ChildOutcome>, Vec<u8>) {
-    let mut kept = Vec::new();
-    let input = cmd.input.as_ref();
-    if !cmd.logs_stdout {
-        return (
-            run_child(child, family, input, budget, cancel, on_stdout).await,
-            kept,
-        );
-    }
-    let mut both = |chunk: &[u8]| {
-        kept.extend_from_slice(chunk);
-        on_stdout(chunk);
-    };
-    let outcome = run_child(child, family, input, budget, cancel, &mut both).await;
-    (outcome, kept)
-}
-
-/// Where a run's stdout goes.
-enum Out<'a> {
-    /// Kept whole for the caller — and so dropped again for a run asked
-    /// once more ([`super::config_unread`]).
-    Kept(&'a mut Vec<u8>),
-    /// Handed on as it comes.
-    Streamed(&'a mut (dyn FnMut(&[u8]) + Send)),
-}
-
-impl Out<'_> {
-    fn take(&mut self, chunk: &[u8]) {
-        match self {
-            Out::Kept(kept) => kept.extend_from_slice(chunk),
-            Out::Streamed(on_stdout) => on_stdout(chunk),
-        }
-    }
-
-    fn is_kept(&self) -> bool {
-        matches!(self, Out::Kept(_))
-    }
-
-    /// Drops what the run kept, for the run asked once more.
-    fn restart(&mut self) {
-        if let Out::Kept(kept) = self {
-            kept.clear();
         }
     }
 }
