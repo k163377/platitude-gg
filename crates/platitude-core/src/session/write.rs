@@ -1,5 +1,6 @@
-//! The session write queue: one request at a time, in submission order,
-//! each followed by the refreshes it invalidated.
+//! The session write queue: one request at a time, in submission order —
+//! except an unasked fetch, which yields while it waits ([`next_request`])
+//! — each followed by the refreshes it invalidated.
 //!
 //! **Three boundaries, one id.** *Accepted* when [`RepoSession::write`]
 //! hands its [`OperationId`] back (synchronously, so queue order is the
@@ -150,9 +151,11 @@ impl RepoSession {
         // a composite delete is network-paced yet takes a ref away here.
         //
         // **Numbered, placed and queued under one lock.** The loop serves
-        // the queue in order and each request waits for its own place, so
-        // a pair placed in the other order than queued leaves the loop
-        // waiting, for good, on a place held by a request only it can run.
+        // the queue in order — but for an unasked fetch, which takes no
+        // place (`next_request`) — and each request waits for its own
+        // place, so a pair placed in the other order than queued leaves the
+        // loop waiting, for good, on a place held by a request only it can
+        // run.
         // Numbered outside, two racing requests could also be logged in the
         // wrong order across sessions. Ids answer to equality alone
         // ([`OperationId`]).
@@ -238,7 +241,9 @@ impl RepoSession {
         }
     }
 
-    /// Runs queued writes one at a time, in submission order.
+    /// Runs queued writes one at a time, in submission order — except an
+    /// unasked fetch, which yields to a write somebody asked for queued
+    /// behind it ([`next_request`]).
     ///
     /// A close stops intake only: the running write and the queued tail
     /// still run (the quit gate holds the window for them —
@@ -249,11 +254,12 @@ impl RepoSession {
         self: Arc<Self>,
         mut queue: tokio::sync::mpsc::UnboundedReceiver<WriteRequest>,
     ) {
+        let mut held = std::collections::VecDeque::new();
         loop {
             let request = tokio::select! {
                 biased;
                 _ = self.root_cancel.cancelled() => break,
-                request = queue.recv() => match request {
+                request = next_request(&mut queue, &mut held) => match request {
                     Some(request) => request,
                     None => return,
                 },
@@ -261,7 +267,7 @@ impl RepoSession {
             self.serve(request).await;
         }
         queue.close();
-        while let Some(request) = queue.recv().await {
+        while let Some(request) = next_request(&mut queue, &mut held).await {
             self.serve(request).await;
         }
     }
@@ -604,5 +610,44 @@ impl RepoSession {
 fn note_failed(failed: &mut Vec<FollowUp>, read: FollowUp) {
     if !failed.contains(&read) {
         failed.push(read);
+    }
+}
+
+/// The next request to serve: the first write somebody asked for that is
+/// queued, else the oldest unasked fetch held back, else whatever comes
+/// next. `None` once the queue is closed and empty.
+///
+/// An unasked fetch — fired by a chance tick, then a run ask that yields
+/// (`session::asks`) — is passed by later writes only while it waits: one
+/// that has started is not stopped. It takes no place in the worktree's order
+/// ([`OperationKind::writes_here`]), so serving it later reorders nothing
+/// the order guards; the writes somebody asked for keep theirs.
+///
+/// A fetch that wakes an idle loop is held back too and the queue drained
+/// once more: a write queued right behind it, before this task runs again,
+/// still goes first.
+async fn next_request(
+    queue: &mut tokio::sync::mpsc::UnboundedReceiver<WriteRequest>,
+    held: &mut std::collections::VecDeque<WriteRequest>,
+) -> Option<WriteRequest> {
+    loop {
+        loop {
+            match queue.try_recv() {
+                Ok(request) if !request.operation.kind.asked_for() => {
+                    held.push_back(request);
+                }
+                Ok(request) => return Some(request),
+                Err(_) => break,
+            }
+        }
+        if let Some(request) = held.pop_front() {
+            return Some(request);
+        }
+        match queue.recv().await {
+            Some(request) if !request.operation.kind.asked_for() => {
+                held.push_back(request);
+            }
+            other => return other,
+        }
     }
 }

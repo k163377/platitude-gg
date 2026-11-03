@@ -8,7 +8,7 @@
 //!
 //! | kind | answers | gate | a second ask while one is out | on failure |
 //! |---|---|---|---|---|
-//! | run | a change somebody asked for | the write queue (`session::write`) | queues | git's words |
+//! | run | a change somebody asked for | the write queue (`session::write`) | queues; an unasked fetch yields to the writes behind it | git's words |
 //! | follow, folded | the repository as it stands, one answer for every asker | [`Coalesce`]; `ReadFlight` where the askers wait | one more run after the one under way, on the latest inputs | read again at the next chance |
 //! | follow, taken over | the same, by a long pass whose partial answer may go | [`Takeover`] | the newer stops the older, [`TAKEOVER_STREAK`] times in a row at most | read again at the next chance |
 //! | latest | what the screen is looking at | `Latest`, `DiffEpoch` | the newer stops the older | answered too where the screen shows a wait |

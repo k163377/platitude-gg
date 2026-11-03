@@ -3,6 +3,7 @@
 //! walks single writes whose remaining claim is git's.
 
 use crate::support::session::{opened, write_answer, write_result};
+use crate::support::wait::bounded;
 use crate::support::{TestRepo, barrier_hook};
 use platitude_core::OperationKind;
 use platitude_core::commit::CommitOptions;
@@ -325,6 +326,58 @@ async fn each_ask_is_answered_under_the_id_it_was_given() {
     std::fs::write(&release, b"go").expect("the hook is released");
     assert_eq!(write_answer(&sink, held).await, None, "the commit landed");
     assert_eq!(write_answer(&sink, mine).await, None, "and the branch did");
+    session.close_and_wait().await;
+}
+
+/// An unasked fetch waiting in the queue yields to a write somebody asked
+/// for that queued behind it (`session::write::next_request`). The commit
+/// held inside git by its hook keeps both waiting until they are in line.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_waiting_unasked_fetch_yields_to_an_asked_write_behind_it() {
+    let mut origin = TestRepo::init();
+    origin.commit_file("f.txt", "0\n", "root");
+    let mut repo = TestRepo::init();
+    repo.commit_file("root.txt", "0\n", "root");
+    let url = origin.file_url();
+    repo.git(&["remote", "add", "origin", &url]);
+    repo.write_file("new.txt", "content\n");
+    repo.git(&["add", "new.txt"]);
+    let release = repo.path.join("hook-release");
+    repo.write_hook("pre-commit", &barrier_hook(&release));
+
+    let (sink, session) = opened(&repo).await;
+    // An hour, so only the hand-stepped tick fires.
+    session.set_auto_fetch(Some(std::time::Duration::from_secs(3600)));
+    let held = session
+        .commit("held by the hook".into(), CommitOptions::default())
+        .expect("the commit was accepted");
+    let ticker = session.auto_fetch_ticker().expect("auto fetch is on");
+    assert!(
+        bounded("the fetch tick", ticker.tick()).await,
+        "the running timer took the tick"
+    );
+    let branch = session
+        .create_branch("topic".into(), None, false)
+        .expect("the branch was accepted");
+
+    std::fs::write(&release, b"go").expect("the hook is released");
+    assert_eq!(write_answer(&sink, held).await, None, "the commit landed");
+    assert_eq!(write_answer(&sink, branch).await, None, "the branch landed");
+    assert_eq!(write_result(&sink, OperationKind::AutoFetch).await, None);
+    let finished = |kind: OperationKind| {
+        sink.events
+            .lock()
+            .unwrap()
+            .iter()
+            .position(
+                |e| matches!(e, SessionEvent::WriteFinished { kind: got, .. } if *got == kind),
+            )
+            .expect("the write finished")
+    };
+    assert!(
+        finished(OperationKind::Branch) < finished(OperationKind::AutoFetch),
+        "the branch asked for after the fetch was served first"
+    );
     session.close_and_wait().await;
 }
 
