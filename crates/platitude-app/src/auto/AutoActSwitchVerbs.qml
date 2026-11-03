@@ -84,11 +84,12 @@ Item {
             // operation standing the switch just moves. `switch-conflicted[-go]` is the third shape:
             // `feature/clash[:1] --preset cherry-pick-quit`, no operation, the index unmerged. The bar's line says
             // only that it came down; whether the operation went and the move followed is the landing's line, and
-            // `log=false` (no error raised) is only in the lines.
+            // `log=false` (no error raised) is only in the lines. `switch-conflicted main` presses the branch already
+            // out: a move never sent asks nothing, so the press is turned away (`pressed=false`) and no bar comes.
             switchStoppedTimer.go = act.endsWith("-go")
             // "-go" says the bar as it stopped, then answers it.
             switchStoppedTimer.order = switchStoppedTimer.go ? ["stopped", "answered"] : []
-            page.switchToRef("branch", arg.split(":")[0])
+            switchStoppedTimer.pressed = page.switchToRef("branch", arg.split(":")[0]) !== false
             switchStoppedTimer.start()
         } else if (act === "switch-remote") {
             page.switchToRef("remote", arg)
@@ -414,6 +415,8 @@ Item {
         id: switchStoppedTimer
         name: "switch_stopped"
         property bool go: false
+        /// The press's own answer (`switchToRef`): false is a press turned away, which raised no bar to wait for.
+        property bool pressed: false
         function line() {
             return "switch_stopped code=" + graphPane.askCode
                    + " accept=" + graphPane.askCard.accept
@@ -422,13 +425,17 @@ Item {
                    + " op=" + worktree.opCommand
                    + " branch=" + worktree.branch
                    + " log=" + page.commandsOpen
+                   + " pressed=" + switchStoppedTimer.pressed
+                   // `open`, raised as the question is asked (`GraphPane.startAsking`), not `settled`: a bar on its way
+                   // down still reads unsettled.
+                   + " bar=" + graphPane.askCard.open
         }
         onTriggered: {
             const op = switchStoppedTimer
             if (op.at("start")) {
                 if (!op.go) {
                     op.complete({ "name": "switch_stopped_ready",
-                                  "when": () => ({ "ready": graphPane.askCard.settled }),
+                                  "when": () => ({ "ready": !op.pressed || graphPane.askCard.settled }),
                                   "report": () => op.line() })
                     return
                 }

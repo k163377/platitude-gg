@@ -849,6 +849,7 @@ stash-state unborn --preset empty	NameCell NavItemDelegate NavRowBody OpsPicker 
 stash-tip 0 --preset stashes	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 state	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 switch-conflicted feature/clash --preset cherry-pick-quit	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
+switch-conflicted main --preset cherry-pick-quit	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 switch-conflicted-go feature/clash:1 --preset cherry-pick-quit	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 switch-held feature/topic-a --preset worktrees	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 switch-lands feature/clash:0 --preset clashing	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate

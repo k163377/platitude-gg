@@ -144,9 +144,18 @@ pub(super) const TABLE: &[Verb] = &[
     // One clause fewer: no operation to put down, only the unmerged index
     // the reader's own `--quit` left. The empty `op=` says so — the bar
     // frames like `switch-stopped`'s.
+    //
+    // `main` is the branch already out: the press moves nothing, so it is
+    // turned away before the question (`pressed=false`) and no question was
+    // raised (`code=` empty, `bar=false` — both set as a question is asked,
+    // in the press's own turn) — a build that asks raises a bar whose answer
+    // sends nothing at all.
     Verb {
         name: "switch-conflicted",
-        when: &[],
+        when: &[(
+            Arg::Starts("main"),
+            "switch_stopped code= accept= hold=false bang=false op= branch=main log=false pressed=false bar=false",
+        )],
         plain: "switch_stopped code=stash accept= hold=false bang=false op= branch=main log=false",
     },
     // The one nothing here can clear, so not a question: the press stands

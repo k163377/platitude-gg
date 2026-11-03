@@ -716,6 +716,11 @@ FocusScope {
             page.openHolder(local)
             return true
         }
+        // The branch already out, a tag or the detached marker moves nothing, so it raises nothing either — ahead of
+        // the leave question, which would put the work down for a move never sent (`switch-conflicted main`). A tag's
+        // row offers a branch at its commit instead (`startNaming`).
+        if (action === "")
+            return false
         // Ahead of the branches below: the one that lands on an existing local branch asks git what the move would
         // cost before it moves, and that read is worth nothing while an operation is standing.
         if (page.standsInTheWay(leaving)) {
@@ -732,9 +737,7 @@ FocusScope {
             page.moveLanding = local
             repoTab.checkoutMovingBranch(local, name, leaving === true)
         }
-        // A tag or the detached marker moves nothing and raised nothing (a tag's row offers a branch at its commit
-        // instead, `startNaming`).
-        return action !== ""
+        return true
     }
 
     // Landing on the remote branch moves the existing local one onto it — the one move here that can take commits off

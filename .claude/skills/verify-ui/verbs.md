@@ -358,7 +358,7 @@
 - `state`(設定・画面状態の永続化。`--config-dir` を渡した 2 回目に `--restore` — 詳細は `WindowFrameActs.qml` の `stateActTimer`)
 - `settings-git`(設定画面の `Git` の分類 — `GLOBAL` の IDENTITY / MERGE EDITOR の 2 章と、その下の `REPOSITORY OVERRIDE` 群。引数なし。`Application` の側は `settings <分>`)
 - `rename-taken <名前>`(**`--preset reflock` + `--allow-write-failure` が要る**。箱が知り得ない理由で git が断る名前を本当に submit した時の箱と報せバー。撃ち方: `rename-taken held --preset reflock --allow-write-failure` — 詳細は `AutoActNavBoxVerbs.qml` の `rename-taken` の枝と `renameTakenTimer`、判定は `verify/verbs/nav.rs`)
-- `switch-conflicted-go <ブランチ>[:<stash の本数>]`(**`--preset cherry-pick-quit` が要る**。unmerged な index の上で switch した時の質問バーに答えた着地。**対の `switch-conflicted` と組で撃つ**(`switch-conflicted feature/clash` と `switch-conflicted-go feature/clash:1`)— 詳細は `AutoActSwitchVerbs.qml` の `switch-stopped` の枝、組で読む理由は `verify/verbs/switch.rs`)
+- `switch-conflicted-go <ブランチ>[:<stash の本数>]`(**`--preset cherry-pick-quit` が要る**。unmerged な index の上で switch した時の質問バーに答えた着地。**対の `switch-conflicted` と組で撃つ**(`switch-conflicted feature/clash` と `switch-conflicted-go feature/clash:1`)。`switch-conflicted main` は今のブランチを押す形で、質問は立たない(`pressed=false bar=false`)— 詳細は `AutoActSwitchVerbs.qml` の `switch-stopped` の枝、組で読む理由は `verify/verbs/switch.rs`)
 - `settings-eol true|input|false|inherited`(**引数は必須**、タブは 1 本でよい。`REPOSITORY OVERRIDE` の改行コードの章を選ぶ — 詳細は `WindowSettingsActs.qml` の `endingsTimer`、判定は `verify/verbs/identity.rs`)
 - `settings-switch`(引数なし。左の分類の列を押して `Application` → `Git` へ移る唯一の経路 — 詳細は `WindowSettingsActs.qml` の `categorySwitchTimer`、判定は `verify/verbs/identity.rs`)
 - `settings-escape [app|git]`(設定画面の出口 — `✕` と Escape が乗っている `SettingsDialog.escapeOut` を通す。引数は分類(省略で `app`)— 詳細は `WindowSettingsActs.qml` の `escapeTimer`、判定は `verify/verbs/identity.rs`)
