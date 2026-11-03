@@ -237,9 +237,10 @@ impl RepoSession {
             let cmd = GitCommand::new().cwd(workdir).args(args.to_vec());
             self.executor.run(cmd, cancel)
         };
+        // git's text conversion stays out (`eol::untracked_patch`).
         let (unstaged, staged, untracked) = tokio::join!(
-            run(&["diff", "--no-ext-diff"]),
-            run(&["diff", "--cached", "--no-ext-diff"]),
+            run(&["diff", "--no-ext-diff", "--no-textconv"]),
+            run(&["diff", "--cached", "--no-ext-diff", "--no-textconv"]),
             eol::untracked_shapes(&self.executor, workdir, cancel),
         );
 
@@ -277,9 +278,8 @@ impl RepoSession {
                 // The one shape the column cannot finish: the sentence
                 // counts lines, and only the patch has them.
                 eol::Shape::Mixed => {
-                    let target = DiffTarget::Untracked { path: path.clone() };
                     if let Ok(raw) =
-                        details::file_diff_raw(&self.executor, workdir, &target, cancel).await
+                        eol::untracked_patch(&self.executor, workdir, &path, cancel).await
                     {
                         readings.insert((path, false), eol::read_one(&raw));
                     }

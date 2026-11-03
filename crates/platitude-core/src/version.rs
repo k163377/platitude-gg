@@ -87,9 +87,9 @@ use crate::process::{GitCommand, GitExecutor};
 ///   `<key> <value>` writes. `checkout.defaultRemote` (2.19),
 ///   `remote.pushDefault`, and `filter.lfs.required` are supported keys.
 ///   `lfs_integration` checks typed bool reads; absent `--unset` exits 5.
-/// - `diff`: `--cached`, `--no-ext-diff`, `--find-renames`, `--no-renames`,
-///   `--name-status`, `--diff-filter=`, `-z`, `--no-index` (1.5.1),
-///   `--end-of-options` (2.24).
+/// - `diff`: `--cached`, `--no-ext-diff`, `--no-textconv`, `--find-renames`,
+///   `--no-renames`, `--name-status`, `--diff-filter=`, `-z`, `--no-index`
+///   (1.5.1), `--end-of-options` (2.24).
 /// - `diff-tree`: `-r`, `--no-commit-id`, `-z`, `--name-status`,
 ///   `--name-only`, `--diff-filter=`, `--find-renames`, `--no-renames`,
 ///   `--root`, `--no-ext-diff`, `-p`, `--binary`, `--full-index`,

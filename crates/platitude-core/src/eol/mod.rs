@@ -50,7 +50,7 @@ pub use attrs::{Ruling, normalises, ruling, rulings, rulings_given};
 pub use notice::{Notice, settle};
 pub use read::{Sighting, read, read_one};
 pub use sample::{baseline, cache_key};
-pub use working_tree::{Shape, untracked_shapes, working_tree_shapes};
+pub use working_tree::{Shape, untracked_patch, untracked_shapes, working_tree_shapes};
 
 /// A line terminator this module can name.
 ///

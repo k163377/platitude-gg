@@ -568,6 +568,54 @@ async fn a_file_changed_on_both_sides_is_marked_once_per_side() {
     session.close_and_wait().await;
 }
 
+/// The marks read the bytes, past a text conversion that fails: a
+/// textconv describes what it prints, and one that fails would fail every
+/// read of the pending change, a tracked file's and a new one's alike.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failing_textconv_leaves_the_marks_to_the_bytes() {
+    use platitude_core::eol::{Eol, Notice};
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "one\ntwo\n", "root");
+    repo.write_file("f.txt", "one\r\ntwo\r\n");
+    repo.write_file("new.txt", "a\r\nb\nc\n");
+    repo.write_file(".git/info/attributes", "*.txt diff=boom\n");
+    repo.git(&["config", "diff.boom.textconv", "false"]);
+    let (sink, session) = opened(&repo).await;
+    sink.opening_settled(&session).await;
+    let marks = sink
+        .wait_for("both files marked", |events| {
+            events.iter().rev().find_map(|e| match e {
+                SessionEvent::StatusLoaded { eol_marks, .. } if eol_marks.len() == 2 => {
+                    Some(eol_marks.iter().cloned().collect::<Vec<_>>())
+                }
+                _ => None,
+            })
+        })
+        .await;
+    let notice = |path: &str| {
+        marks
+            .iter()
+            .find(|mark| mark.path == path && !mark.staged)
+            .map(|mark| mark.notice.clone())
+    };
+    assert_eq!(
+        notice("f.txt"),
+        Some(Notice::Flipped {
+            from: Eol::Lf,
+            to: Eol::Crlf
+        })
+    );
+    assert_eq!(
+        notice("new.txt"),
+        Some(Notice::Mixed {
+            lines: 1,
+            added: Eol::Crlf,
+            file: Eol::Lf
+        })
+    );
+    session.close_and_wait().await;
+}
+
 /// The line-ending setting written into this repository's own file
 /// reaches the notices by the poll. The settings screen writes it outside
 /// the session (`models::line_endings`), like `git config core.autocrlf` in

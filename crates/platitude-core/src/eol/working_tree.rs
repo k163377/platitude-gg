@@ -33,6 +33,41 @@ pub async fn untracked_shapes(
     Ok(working_tree_shapes(&out.stdout))
 }
 
+/// An untracked file's patch against nothing: the line count of a
+/// [`Shape::Mixed`] file. git's text conversion stays out — a textconv
+/// describes what it prints, not the bytes, and one that fails would fail
+/// the read on every look.
+pub async fn untracked_patch(
+    executor: &GitExecutor,
+    workdir: &Path,
+    path: &str,
+    cancel: &CancellationToken,
+) -> Result<Vec<u8>, GitError> {
+    // Exit 1 (the sides differ) is the normal case. The arguments are file
+    // names, not pathspecs — no magic prefix.
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .answers_by_code(1)
+        .args([
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--no-index",
+            "--",
+            "/dev/null",
+        ])
+        .arg(path);
+    let out = executor.run_unchecked(cmd, cancel).await?;
+    if out.code != 0 && out.code != 1 {
+        return Err(GitError::Failed {
+            command: format!("git diff --no-index /dev/null {path}"),
+            code: out.code,
+            stderr: out.stderr_utf8().trim().to_string(),
+        });
+    }
+    Ok(out.stdout)
+}
+
 /// What a file's bytes on disk look like, as `ls-files --eol` reports them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Shape {
