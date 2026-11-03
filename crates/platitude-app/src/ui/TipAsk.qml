@@ -36,6 +36,11 @@ QtObject {
     property bool typed: false
     /// The box stands beside the target, level with the hand, rather than over its words (`NavRowFacts`).
     property bool beside: false
+    /// The box opens flush under the target first, over it only where there is no room under it: a target on a bar at
+    /// the top of a list, whose own words and way out are what a box over it would cover — `AskBar`'s pill (user
+    /// decision, ask before changing; デザイン規約 §立っている質問は 1 か所で聞く) — and a box's cut name, on the side its
+    /// list comes down (`AppCombo.cutTip`, `SlimField.cutTip`).
+    property bool under: false
     /// The target is a row among rows, naming the side its box stands on first (`"left"` / `"right"`); empty for any
     /// other target (規約 §hover のツールチップ「行の的は、行の横に立つ」). Named by `FileRowDelegate`,
     /// `NavItemDelegate`, `HeadPinRow`, `AppMenuItem`, `DiffStageMark` and `DiffLineCell`'s end mark; not by

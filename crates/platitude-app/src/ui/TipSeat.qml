@@ -143,6 +143,7 @@ Item {
         heldAsk.href = ask.href
         heldAsk.rowSide = ask.rowSide
         heldAsk.beside = ask.beside
+        heldAsk.under = ask.under
         heldAsk.hand = ask.hand
         machine.retarget(heldAsk)
     }
@@ -271,8 +272,9 @@ Item {
         const goesLeft = firstLeft ? handLeft >= edge : handRight > last
         return Math.max(edge, Math.min(goesLeft ? handLeft : handRight, last))
     }
-    /// Flush against the target: above while there is room, else below. When neither fits (a wrapped name in a short
-    /// window), the roomier side — "below" alone would hang out of the window with `margins` off.
+    /// Flush against the target: above while there is room, else below — below first for a target that asks for it
+    /// (`TipAsk.under`). When neither fits (a wrapped name in a short window), the roomier side — "below" alone would
+    /// hang out of the window with `margins` off.
     function seatY() {
         const at = box.parent
         const ask = machine.target
@@ -297,6 +299,8 @@ Item {
         }
         const above = p.y
         const below = seat.host.height - (p.y + at.height)
+        if (ask.under)
+            return box.implicitHeight <= below || below >= above ? at.height : -box.implicitHeight
         return box.implicitHeight <= above || above >= below ? -box.implicitHeight : at.height
     }
     /// Reads the hand's seat off for a box coming out now, and again a turn later, before anything is drawn: the

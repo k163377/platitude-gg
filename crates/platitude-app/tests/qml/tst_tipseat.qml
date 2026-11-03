@@ -94,6 +94,18 @@ Item {
             id: askWide; target: wideTyped; words: "A name is needed"; typed: true; asked: wideTyped.refused
         }
     }
+    // A target that asks for its box under it first (a question bar's pill, `TipAsk.under`), with room both ways.
+    Item {
+        id: pillLike
+        x: 450
+        y: 180
+        width: 80
+        height: 28
+        HoverHandler { id: onPillLike }
+        readonly property TipAsk underTip: TipAsk {
+            target: pillLike; words: "Press three times"; under: true; asked: onPillLike.hovered
+        }
+    }
     // The rows among rows: the right panel's (room on the left only), the left panel's (asks
     // for the left, has no room there), a menu's (room both ways, asks for the right), one as wide as the window.
     // None of them overlapping another target: a hover-taking item stacked over a row takes the pointer off it.
@@ -176,6 +188,7 @@ Item {
             Hand.heldBar = null
             tryVerify(() => !root.box.visible && seat.current === null, undefined, "each walk starts with nothing out")
             rowA.x = 0
+            pillLike.y = 180
             shows.clear()
         }
 
@@ -203,6 +216,19 @@ Item {
             const overhang = (root.box.height - row.height) / 2
             fuzzyCompare(at.top, -overhang, 1, "centred on the row's band, not above it or below it")
             fuzzyCompare(at.bottom, row.height + overhang, 1)
+        }
+
+        /// Under first, with room both ways: flush under the target, no gap for the hand to cross.
+        function test_a0_a_target_asking_for_under_has_its_box_flush_under_it() {
+            const at = restOn(pillLike, 0.5)
+            compare(at.top, pillLike.height, "the box's top on the target's foot")
+        }
+
+        /// …and over it where there is no room under it: at the window's foot, under the last row.
+        function test_a0_a_target_asking_for_under_with_no_room_there_has_its_box_over_it() {
+            pillLike.y = wideRow.y + wideRow.height
+            const at = restOn(pillLike, 0.5)
+            compare(at.bottom, 0, "the box's foot on the target's top")
         }
 
         // Every target waits its own rest; the neighbour's box goes first (規約「隣の的へは箱を下ろしてから移る」).
