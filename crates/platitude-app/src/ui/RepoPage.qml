@@ -653,13 +653,14 @@ FocusScope {
     function standsInTheWay(leaving) {
         return leaving !== true && worktree.movesBlocked
     }
-    // The stash heading reads on from its `stash` chip as one sentence and names where the move lands; what goes in
-    // is every uncommitted change, untracked files too (`session::build::leave_operation`). Conflicts are named while
-    // any stand: git's own stash refuses an unmerged file, so they are what the reader would not expect to go in. Its
-    // second line only says the standing operation ends; with nothing standing the heading is the whole question
-    // (user decision — ask before changing).
+    // Either heading reads on from its chip (`rebase --abort` / `stash`) as one sentence and names where the move
+    // lands. What the stash takes is every uncommitted change, untracked files too (`session::build::leave_operation`).
+    // Conflicts are named while any stand: git's own stash refuses an unmerged file, so they are what the reader would
+    // not expect to go in. The stash question's second line only says the standing operation ends; with nothing
+    // standing its heading is the whole question (user decision — ask before changing).
     readonly property string leaveHeading:
-        worktree.leaveUndoes ? qsTr("Undo it and go?")
+        //: Read on from the `rebase --abort` chip at its head; %1 is the branch the move lands on.
+        worktree.leaveUndoes ? qsTr("and switch to %1?")
         //: Read on from the `stash` chip at its head; %1 is the branch the move lands on.
         : worktree.conflictCount > 0 ? qsTr("all uncommitted changes including conflicts and switch to %1?")
         //: Read on from the `stash` chip at its head; %1 is the branch the move lands on.
@@ -676,8 +677,8 @@ FocusScope {
         // §状態, §回数押し) and the command on the question's line are core's (offers::leaving_undoes / leave_code).
         page.startRowAsk(worktree.headOid, page.leaveHeading, page.leaveDetail,
                          worktree.leaveUndoes, "", retry, worktree.leaveUndoes, "", null,
-                         worktree.leaveCode, worktree.leaveUndoes ? "" : local,
-                         local === worktree.branch ? Theme.textLink : Theme.textPrimary, "branch")
+                         worktree.leaveCode, local, local === worktree.branch ? Theme.textLink : Theme.textPrimary,
+                         "branch")
     }
 
     // ---- what a chip leads to --------------------------------------
