@@ -5,7 +5,8 @@ import platitude.ui
 
 // The question bar's two columns (デザイン規約 §立っている質問は 1 か所で聞く): the words on the left, packed from the
 // top; the ✕ at the top of the right column and the pill at its foot, their right edges on one line. Every shape a
-// question can take — a form or not, a line under the heading or not — keeps the same seats.
+// question can take — a form or not, a line under the heading or not — keeps the same seats, but a heading alone that
+// would stand on one line in the two columns, which puts the heading, the pill and the ✕ on one row.
 //
 // A control, to hand the bar the window's font as `Main` does: the boxes' widths are that face's, fractions and all.
 Control {
@@ -15,12 +16,25 @@ Control {
     font.family: Theme.uiFamily
     font.pixelSize: Theme.fontMd
 
+    /// A heading that stands whole on one row at the root's width.
+    readonly property string shortHeading: "all uncommitted changes and switch to main?"
+    /// One that wraps in the two columns of a 560 bar.
+    readonly property string longHeading: "all uncommitted changes including conflicts and switch to feature/clash?"
+
     AskBar {
         id: bar
         width: root.width
         code: "stash"
-        label: "Put it aside and go?"
+        label: root.shortHeading
         accept: ""
+    }
+    /// The ✕'s mark as the bar asks it for its air (`AskBar.askColumns.closeInk`).
+    NavIcon {
+        id: closeInk
+        visible: false
+        kind: "close"
+        width: bar.closeButton.markSize
+        height: bar.closeButton.markSize
     }
     Component {
         id: publishForm
@@ -51,6 +65,7 @@ Control {
             tryVerify(() => bar.shut)
             bar.width = root.width
             bar.code = "stash"
+            bar.label = root.shortHeading
             bar.detailMarks = []
         }
 
@@ -65,13 +80,18 @@ Control {
                 { tag: "a form and a line", line: "origin/feature/new-thing does not exist yet; this makes it.",
                   form: true },
                 { tag: "a form alone", line: "", form: true },
-                { tag: "a line alone", line: "The files waiting on a decision go to the stash, markers and all.",
-                  form: false },
-                { tag: "a heading alone", line: "", form: false },
+                { tag: "a line alone", line: "The cherry-pick ends here.", form: false },
+                // Wrapped in the two columns anyway, so not one row (`askColumns.oneRow`).
+                { tag: "a heading alone that wraps in the two columns", line: "", form: false,
+                  heading: root.longHeading, width: 560 },
             ]
         }
 
         function test_every_shape_keeps_the_two_columns(data) {
+            if (data.heading !== undefined)
+                bar.label = data.heading
+            if (data.width !== undefined)
+                bar.width = data.width
             bar.detail = data.line
             bar.form = data.form ? publishForm : null
             bar.open = true
@@ -101,8 +121,8 @@ Control {
 
         /// Words shorter than the right column leave the height to it: the pill `spaceXs` under the ✕'s seat, and the
         /// ✕'s mark up in the corner, its top on the heading's.
-        function test_a_heading_alone_takes_the_height_of_the_close_and_the_pill() {
-            bar.detail = ""
+        function test_a_heading_and_a_line_take_the_height_of_the_close_and_the_pill() {
+            bar.detail = "The cherry-pick ends here."
             bar.form = null
             bar.open = true
             tryVerify(() => bar.settled)
@@ -110,6 +130,82 @@ Control {
             compare(edges(bar.pill).top, close.bottom + Theme.spaceXs, "the pill spaceXs under the ✕'s seat")
             compare(close.top + (bar.closeButton.height - bar.closeButton.markSize) / 2, edges(bar.heading).top,
                     "the ✕'s mark's top on the heading's")
+        }
+
+        /// Where the heading's first line and the pill's word stand, in the bar's own y.
+        function headingBase() {
+            return bar.headingWords.mapToItem(bar, 0, bar.headingWords.baselineOffset).y
+        }
+        function pillBase() {
+            return bar.pillWord.mapToItem(bar, 0, bar.pillWord.base).y
+        }
+
+        /// A heading alone, on one line in the two columns: the three on one row, the heading on the pill's word's
+        /// baseline, the ✕'s mark still in the corner, on the pill's middle, and the pill a step short of its ink.
+        function test_a_heading_alone_stands_on_one_row_with_the_pill_and_the_close() {
+            bar.detail = ""
+            bar.form = null
+            bar.open = true
+            tryVerify(() => bar.settled)
+            const words = edges(bar.words)
+            const heading = edges(bar.heading)
+            const pill = edges(bar.pill)
+            const close = edges(bar.closeButton)
+            const markRight = close.right - (bar.closeButton.width - bar.closeButton.markSize) / 2
+            const inkLeft = markRight - bar.closeButton.markSize + (closeInk.width - closeInk.inkRight)
+            const middle = edge => (edge.top + edge.bottom) / 2
+            compare(markRight + Theme.spaceMd, bar.width, "the ✕'s mark keeps its corner")
+            compare(pill.right + Theme.spaceSm, inkLeft, "the pill a step short of the ✕'s ink")
+            verify(words.right + Theme.spaceMd <= pill.left,
+                   "the words end at " + words.right + ", clear of the pill at " + pill.left)
+            verify(Math.abs(headingBase() - pillBase()) <= 0.5,
+                   "the heading's baseline " + headingBase() + " on the pill's word's " + pillBase())
+            verify(Math.abs(middle(close) - middle(pill)) <= 0.5,
+                   "the ✕'s middle " + middle(close) + " on the pill's " + middle(pill))
+            compare(bar.height, Math.max(heading.bottom, pill.bottom) + Theme.spaceMd, "one row high")
+        }
+
+        /// A heading one line long in the two columns but not beside the ✕ as well: still one row, the heading on two
+        /// lines and the pill and the ✕ on its first — never the pill a row under a single line.
+        function test_a_heading_the_close_wraps_keeps_one_row() {
+            // Long, so the width it asks for stays clear of the words' floor beside the pill (`pillUnder`).
+            bar.label = root.longHeading
+            bar.detail = ""
+            bar.form = null
+            bar.open = true
+            tryVerify(() => bar.settled)
+            // Two pixels inside the two columns' words: the ✕'s room on the row takes more than that.
+            bar.width = bar.heading.implicitWidth + 2 * Theme.spaceMd + bar.pill.width + Theme.spaceMd + 2
+            const heading = () => edges(bar.heading)
+            tryVerify(() => heading().bottom - heading().top > bar.pill.height, undefined,
+                      "the heading wraps on the row")
+            const pill = edges(bar.pill)
+            const close = edges(bar.closeButton)
+            const markRight = close.right - (bar.closeButton.width - bar.closeButton.markSize) / 2
+            const inkLeft = markRight - bar.closeButton.markSize + (closeInk.width - closeInk.inkRight)
+            const middle = edge => (edge.top + edge.bottom) / 2
+            compare(pill.right + Theme.spaceSm, inkLeft, "the pill still beside the ✕")
+            verify(Math.abs(headingBase() - pillBase()) <= 0.5,
+                   "the pill's word " + pillBase() + " on the heading's first line " + headingBase())
+            verify(Math.abs(middle(close) - middle(pill)) <= 0.5, "and the ✕'s mark on the pill's middle")
+        }
+
+        /// At the graph's floor a heading alone takes the floor's shape like any question — the pill under the words —
+        /// however short: no row beside the pill keeps the words their floor (`pillUnder` ahead of `oneRow`).
+        function test_a_heading_alone_at_the_floor_puts_the_pill_under_it() {
+            bar.width = 335
+            bar.code = "push"
+            bar.label = "Push it where?"
+            bar.detail = ""
+            bar.form = null
+            bar.open = true
+            tryVerify(() => bar.settled)
+            const words = edges(bar.words)
+            const pill = edges(bar.pill)
+            verify(bar.heading.implicitWidth + 2 * Theme.spaceMd + bar.pill.width + Theme.spaceMd <= bar.width,
+                   "the fixture: the heading would fit one line beside the pill")
+            compare(pill.top, words.bottom + Theme.spaceSm, "the pill a form's gap under the heading")
+            compare(words.right + Theme.spaceMd, bar.width, "the words take the whole width")
         }
 
         /// The graph at its floor: the form's two boxes on their floor do not fit beside the pill, so the pill stands
@@ -194,7 +290,7 @@ Control {
         /// No form, no room for one: the words end at their last line, so the pill's foot is not pushed under it by
         /// the column's spacing.
         function test_words_with_no_form_end_at_their_last_line() {
-            bar.detail = "The files waiting on a decision go to the stash, markers and all."
+            bar.detail = "The cherry-pick ends here."
             bar.form = null
             bar.open = true
             tryVerify(() => bar.settled)

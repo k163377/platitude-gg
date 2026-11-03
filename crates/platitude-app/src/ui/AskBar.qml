@@ -91,8 +91,10 @@ Rectangle {
     /// (`tst_askseats.qml`), as `NoticeBar.pill` is read.
     readonly property alias words: askWords
     readonly property alias heading: headingRow
+    readonly property alias headingWords: askWord
     readonly property alias detailLine: detailWord
     readonly property alias pill: acceptPill
+    readonly property alias pillWord: wordSeat
     readonly property alias closeButton: dismissButton
     /// What the question needs to have an answer at all (a chooser, a name box), declared by whoever raises it; the
     /// bar seats it under the words. Null where the pill alone answers.
@@ -240,14 +242,21 @@ Rectangle {
     // controls, their right edges on one line: the ✕ at the top, its mark's top on the heading's, and the pill at the
     // bottom. Every row of the words keeps the right column's room. The pill's foot is the words' foot, so a form's
     // boxes, the pill's height, share its line. Words that end higher than the ✕ with the pill `spaceXs` under its
-    // seat — a heading alone, or a heading and its line — leave the right column to set the height, and stay at the
-    // top.
+    // seat — a heading and its line, or a heading alone that wraps — leave the right column to set the height, and
+    // stay at the top.
     //
     // Words that cannot keep a pair of boxes' floors beside the pill (the graph at its least) put the pill on a line
     // of its own under them, its right edge still the ✕'s (user decision — ask before changing): the heading and the
     // ✕, then the line under it and the form, then the pill. The right column is then the ✕ alone: the heading keeps
     // the ✕'s room and every other row takes the whole width — a line keeping room for a pill that is not beside it
     // breaks early for nothing.
+    //
+    // A heading alone — no line under it, no form — that would stand on one line in the two columns puts the pill and
+    // the ✕ beside it on one row (user decision — ask before changing): in two columns the pill would stand a row
+    // under the only words there are. The ✕ keeps its corner and the pill stands left of it, a step from its ink; the
+    // heading's first line stands on the pill's word and the ✕'s mark on the pill's middle, so the few widths where
+    // the ✕'s extra room wraps the heading keep the pill and the ✕ on its first line. A heading that wraps in the two
+    // columns anyway keeps them.
     Item {
         id: askColumns
         /// What the words keep beside the pill at least, every question alike: a pair of boxes on their floor — what a
@@ -259,21 +268,56 @@ Rectangle {
         /// The right column's least height: the ✕'s seat, `spaceXs`, and the pill.
         readonly property real controlsHeight: dismissButton.y + dismissButton.height + Theme.spaceXs
                                                + acceptPill.height
+        /// The air the ✕'s mark holds inside its box, asked of the mark (デザイン規約 §余白): the pill beside it on one
+        /// row counts it into its step. `NavIcon.inkRight` is arithmetic, so it answers with no scene around it.
+        readonly property NavIcon closeInk: NavIcon {
+            kind: "close"
+            width: dismissButton.markSize
+            height: dismissButton.markSize
+        }
+        readonly property real closeAir: askColumns.closeInk.width - askColumns.closeInk.inkRight
+        /// Where the pill stands on one row: `spaceSm` short of the ✕'s ink, whose box ends at the corner.
+        readonly property real rowPillX: askColumns.width - dismissButton.markSize + askColumns.closeAir
+                                         - Theme.spaceSm - acceptPill.width
+        /// Decided on the heading's unwrapped width (`CardText.implicitWidth`) against the two columns' words, which
+        /// neither layout moves.
+        readonly property bool oneRow:
+            !askColumns.pillUnder && bar.detail === "" && bar.form === null
+            && headingRow.implicitWidth <= askColumns.width - acceptPill.width - Theme.spaceMd
+        /// The heading's first baseline and the pill's word's, each from its own top. The heading's is its words'
+        /// where `headingRow` stands them (a chip standing deeper drops them to its baseline); the pill's is its word's
+        /// in the middle of the pill.
+        readonly property real headingBase: askWord.baselineOffset
+            + (bar.code === "" ? 0 : Math.max(0, Math.round(askCode.baselineOffset - askWord.baselineOffset)))
+        readonly property real pillBase: acceptRow.y + wordSeat.y + wordSeat.base
+        /// On one row the two stand on one baseline (rules-refs/app-ui.md「`CardText` を語と同じ行に置く所は、
+        /// ベースラインを揃える」): both hang from the top and the one whose word stands higher drops by the
+        /// difference, in whole pixels. One value each, which the ✕ reads too, so nothing on the row reads another
+        /// item's place.
+        readonly property real rowHeadingY: Math.max(0, Math.round(askColumns.pillBase - askColumns.headingBase))
+        readonly property real rowPillY: Math.max(0, Math.round(askColumns.headingBase - askColumns.pillBase))
+        /// That row's height: down to the heading's foot or the pill's, whichever is lower.
+        readonly property real rowHeight: Math.max(askColumns.rowHeadingY + headingRow.implicitHeight,
+                                                   askColumns.rowPillY + acceptPill.height)
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.margins: Theme.spaceMd
         // Under the words, the pill stands a form's gap below them (the line over a form is the same `spaceXs` twice).
         implicitHeight: askColumns.pillUnder ? askWords.implicitHeight + Theme.spaceSm + acceptPill.height
-                                         : Math.max(askWords.implicitHeight, askColumns.controlsHeight)
+                        : askColumns.oneRow ? askColumns.rowHeight
+                        : Math.max(askWords.implicitHeight, askColumns.controlsHeight)
         ColumnLayout {
             id: askWords
             anchors.left: parent.left
             anchors.right: parent.right
             // The right column (the pill is wider than the ✕'s mark) and the gap in front of it — none where the pill
-            // stands under the words, and the heading keeps the ✕'s room alone.
-            anchors.rightMargin: askColumns.pillUnder ? 0 : acceptPill.width + Theme.spaceMd
+            // stands under the words, and the heading keeps the ✕'s room alone. On one row, up to the pill.
+            anchors.rightMargin: askColumns.pillUnder ? 0
+                                 : askColumns.oneRow ? askColumns.width - askColumns.rowPillX + Theme.spaceMd
+                                 : acceptPill.width + Theme.spaceMd
             anchors.top: parent.top
+            anchors.topMargin: askColumns.oneRow ? askColumns.rowHeadingY : 0
             spacing: Theme.spaceXs
             // `push main where?` reads as one sentence, so the chip takes the heading's weight.
             RowLayout {
@@ -354,9 +398,9 @@ Rectangle {
             readonly property bool lit: acceptMouse.containsMouse || bar.pointedAt
             /// The names its tip says, behind their marks (`TipAsk.marksNow`).
             readonly property var tipMarks: bar.tipMarks
-            // The right column's foot (`askColumns`).
-            x: askColumns.width - acceptPill.width
-            y: askColumns.height - acceptPill.height
+            // The right column's foot (`askColumns`), or left of the ✕ on one row.
+            x: askColumns.oneRow ? askColumns.rowPillX : askColumns.width - acceptPill.width
+            y: askColumns.oneRow ? askColumns.rowPillY : askColumns.height - acceptPill.height
             implicitWidth: acceptRow.implicitWidth + 2 * Theme.spaceMd
             implicitHeight: Theme.controlHeight
             radius: Theme.radiusSm
@@ -477,8 +521,10 @@ Rectangle {
             readonly property TipAsk pillTip: TipAsk {
                 id: pillTip
                 target: acceptPill
-                // Flush under the pill: over it stand the heading and the ✕. Its foot is at or under the words'
-                // foot (`askColumns`), so nothing of the bar's words is under it (`TipAsk.under`).
+                // Flush under the pill: over it, or beside it on one row, stand the heading and the ✕. Its foot is at
+                // or under the words' foot (`askColumns`), so nothing of the bar's words is under it (`TipAsk.under`)
+                // — but on one row whose heading wraps, where the pill stands on its first line: no question with a
+                // tip is a heading alone (each says its cost on a line or carries a form).
                 under: true
                 asked: bar.tip !== "" && acceptPill.lit
                 words: bar.tip
@@ -530,11 +576,14 @@ Rectangle {
         // The way out that can be seen (Escape and a click elsewhere walk away too), a step under what it closes, in
         // the bars' one seat (デザイン規約 §寸法). In the top-right corner (user decision — ask before changing): the
         // mark's right edge on the pill's and its top on the heading's — up in the corner, it leaves the pill under it
-        // its air instead of sitting on its shoulder.
+        // its air instead of sitting on its shoulder. On one row the pill stands left of it instead (`rowPillX`), and
+        // its mark is centred on the pill's middle.
         CloseToolButton {
             id: dismissButton
             x: askColumns.width - dismissButton.width + (dismissButton.width - dismissButton.markSize) / 2
-            y: headingRow.y - (dismissButton.height - dismissButton.markSize) / 2
+            y: askColumns.oneRow
+               ? Math.round(askColumns.rowPillY + (acceptPill.height - dismissButton.height) / 2)
+               : headingRow.y - (dismissButton.height - dismissButton.markSize) / 2
             onClicked: bar.dismiss()
         }
     }
