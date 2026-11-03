@@ -29,6 +29,7 @@ mod merge_tools;
 mod operations;
 mod paced;
 mod pass_watch;
+mod pictures;
 mod published;
 mod query;
 mod rebuild;
