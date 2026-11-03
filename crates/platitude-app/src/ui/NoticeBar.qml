@@ -156,7 +156,6 @@ Rectangle {
                 // The field links it among the names it sets as code (`CardText.place`).
                 place: bar.detailPlace
                 placeHref: bar.detailHref
-                placeTint: detailLink.pointedLink !== "" ? Theme.textSecondary : Theme.textMuted
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
                 onLinkAsked: href => bar.linkAsked(href)

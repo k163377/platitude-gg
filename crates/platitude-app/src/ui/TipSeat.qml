@@ -390,10 +390,9 @@ Item {
                  : tipWords.markAt >= 0
                  ? [[tipWords.markAt, tipWords.ask.markKindNow, undefined, tipWords.markWord.length]]
                  : []
-            // The pointer step is a colour, which can only ride inside the field's markup (`CardText.place`).
+            // The field draws the place and its pointer step (`CardText.placeTint`).
             place: tipWords.ask !== null ? tipWords.ask.place : ""
             placeHref: tipWords.ask !== null ? tipWords.ask.href : ""
-            placeTint: tipWords.pointedLink !== "" ? Theme.textSecondary : Theme.textMuted
             onLinkAsked: href => seat.linkAsked(href)
             pixelSize: Theme.fontMd
             color: Theme.textPrimary

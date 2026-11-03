@@ -26,7 +26,9 @@ Item {
     /// still set as code round it; empty for none. Found outside the names, where the line first says it.
     property string place: ""
     property string placeHref: ""
-    property color placeTint: Theme.textMuted
+    /// The tip's dress: `textMuted`, `textSecondary` under the pointer — a colour, which can only ride inside the
+    /// field's markup.
+    readonly property color placeTint: cardText.pointedLink !== "" ? Theme.textSecondary : Theme.textMuted
     property color color: Theme.textPrimary
     /// The anchor the pointer is on (empty on none), and the press on it — an anchor, since only the field knows where
     /// a run of glyphs inside a sentence begins and ends. Its colour is whatever the markup gave it: `linkColor` is
