@@ -100,7 +100,7 @@ pub async fn verify_commit(
     // Paced by gpg / ssh-keygen and their agent (`process::Pace`).
     let cmd = GitCommand::new()
         .cwd(workdir)
-        .args(["log", "-1", "-z", "--format=%G?%x00%GS%x00%GK", rev])
+        .args(["log", "-1", "-z", "--format=%G?%x00%GS%x00%GK", rev, "--"])
         .paced_elsewhere();
     let out = executor.run(cmd, cancel).await?;
     let text = out.stdout_utf8();

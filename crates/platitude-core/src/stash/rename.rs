@@ -136,10 +136,14 @@ async fn read_entry(
     cancel: &CancellationToken,
 ) -> Result<StashCommit, GitError> {
     const FORMAT: &str = "--format=%H%x00%T%x00%P%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI";
-    let cmd =
-        GitCommand::new()
-            .cwd(workdir)
-            .args(["log", "-1", FORMAT, "--end-of-options", selector]);
+    let cmd = GitCommand::new().cwd(workdir).args([
+        "log",
+        "-1",
+        FORMAT,
+        "--end-of-options",
+        selector,
+        "--",
+    ]);
     let out = executor.run(cmd, cancel).await?;
     let text = out.stdout_utf8();
     let fields: Vec<&str> = text.trim_end_matches('\n').split('\0').collect();

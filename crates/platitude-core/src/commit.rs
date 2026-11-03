@@ -244,6 +244,7 @@ async fn head_is_empty(
             "--root",
             "-r",
             "HEAD",
+            "--",
         ])
         .answers_by_code(1);
     let out = executor.run_unchecked(cmd, cancel).await?;
@@ -364,7 +365,8 @@ pub async fn is_in_history(
 /// How many commits `rev` reaches that `tip` does not — what a force push
 /// of `tip` would take off the far side (デザイン規約 §相手の履歴を置き換える),
 /// or what a branch `rev` moved onto `tip` would lose. Only asked when
-/// `rev` is here to walk.
+/// `rev` is here to walk. The `--` keeps git from statting the range as a
+/// path (`edge_strings::a_range_of_names_on_the_wall_is_counted_not_statted`).
 pub async fn count_beyond(
     executor: &GitExecutor,
     workdir: &Path,
@@ -376,7 +378,8 @@ pub async fn count_beyond(
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["rev-list", "--count"])
-        .arg(&range);
+        .arg(&range)
+        .arg("--");
     let out = executor.run(cmd, cancel).await?;
     out.stdout_utf8()
         .trim()

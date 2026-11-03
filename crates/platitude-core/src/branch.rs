@@ -147,10 +147,10 @@ impl ResetMode {
 
 /// Moves the ref HEAD is on (the current branch) to `rev`, an object id.
 ///
-/// No `--` (to `reset` it opens the pathspec form, which takes no mode
-/// flag) and no `--end-of-options` (the minimum git refuses it in `reset`
-/// — see [`crate::version::MINIMUM_GIT`]). A caller with a *name* resolves it first
-/// with `rev-parse --end-of-options`.
+/// No `--end-of-options` (the minimum git refuses it in `reset` — see
+/// [`crate::version::MINIMUM_GIT`]), so a caller with a *name* resolves it
+/// first with `rev-parse --end-of-options`. The `--` after the rev, with
+/// no path behind it, keeps the mode form.
 ///
 /// Not a way out of an operation in progress (the UI does not offer it):
 /// mid-merge, `Soft` refuses and the other two silently drop `MERGE_HEAD`.
@@ -163,7 +163,7 @@ pub async fn reset(
 ) -> Result<(), GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
-        .args(["reset", "--quiet", mode.flag(), rev]);
+        .args(["reset", "--quiet", mode.flag(), rev, "--"]);
     executor.run(cmd, cancel).await.map(drop)
 }
 
@@ -425,9 +425,9 @@ mod tests {
         }
     }
 
-    /// No `--` and no `--end-of-options` ([`reset`]).
+    /// A `--` with no path after it, and no `--end-of-options` ([`reset`]).
     #[tokio::test]
-    async fn a_reset_names_its_mode_and_the_revision_and_nothing_more() {
+    async fn a_reset_names_its_mode_and_the_revision_with_no_path_after() {
         let (exec, asked) = crate::refusing::git();
         let cancel = CancellationToken::new();
         for mode in [ResetMode::Soft, ResetMode::Mixed, ResetMode::Hard] {
@@ -444,9 +444,9 @@ mod tests {
         assert_eq!(
             asked.displays(),
             [
-                "git reset --quiet --soft 0123abcd",
-                "git reset --quiet --mixed 0123abcd",
-                "git reset --quiet --hard 0123abcd",
+                "git reset --quiet --soft 0123abcd --",
+                "git reset --quiet --mixed 0123abcd --",
+                "git reset --quiet --hard 0123abcd --",
             ]
         );
     }

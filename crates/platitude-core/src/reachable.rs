@@ -122,7 +122,7 @@ fn command(workdir: &Path, tip: &str, moving: &[String]) -> GitCommand {
         .iter()
         .filter(|branch| !branch.is_empty())
         .fold(cmd, |cmd, branch| cmd.arg(format!("--exclude={branch}")))
-        .args(["--branches", "--remotes", "--glob=refs/stash*"])
+        .args(["--branches", "--remotes", "--glob=refs/stash*", "--"])
 }
 
 #[cfg(test)]

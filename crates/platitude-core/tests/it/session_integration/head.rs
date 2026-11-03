@@ -4,11 +4,12 @@
 //! (`session::standing`).
 
 use crate::support::TestRepo;
+use crate::support::exec::env;
 use crate::support::remote::origin_and_clone;
 use crate::support::session::{open_unawaited, opened, write_result};
 use crate::support::wait::bounded;
-use platitude_core::OperationKind;
 use platitude_core::session::{RefreshOutcome, SessionEvent};
+use platitude_core::{OperationKind, commit};
 
 /// Every `HeadObserved` the session has sent, as `(oid, seq)`.
 fn heads_of(events: &[SessionEvent]) -> Vec<(Option<String>, u64)> {
@@ -147,6 +148,34 @@ async fn the_read_after_a_write_reports_head_even_where_it_stayed() {
 }
 
 /// A consumer woken for an unchanged record would be woken for nothing.
+/// A file named `HEAD` at the top of the worktree is not HEAD: git reads a
+/// rev no `--` follows as a path too, and stops a name that is both as
+/// ambiguous — here the walk that starts at HEAD and the amend check that
+/// diffs it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_file_named_head_is_not_taken_for_it() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "0\n", "root");
+    repo.commit_file("f.txt", "1\n", "second");
+    repo.write_file("HEAD", "a file\n");
+
+    let (executor, cancel) = env();
+    let empties = commit::amend_would_empty(&executor, &repo.path, &cancel).await;
+    assert!(
+        matches!(empties, Ok(false)),
+        "the amend check reads HEAD's own change: {empties:?}"
+    );
+    let (sink, session) = opened(&repo).await;
+    sink.opening_settled(&session).await;
+    let outcome = bounded(
+        "the tracked graph read",
+        session.refresh_log_tracked().outcome(),
+    )
+    .await;
+    assert!(outcome.landed(), "the graph walks from HEAD: {outcome:?}");
+    session.close_and_wait().await;
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_quiet_tick_reports_nothing_of_head() {
     let mut repo = TestRepo::init();

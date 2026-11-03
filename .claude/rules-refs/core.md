@@ -18,6 +18,7 @@
 - **`stash apply` / `pop` には `--no-index` を必ず渡す**(2.52 からの `stash.index=true` が apply / pop を `--index` にする — `stash::pop`)。**`stash apply` は追跡分を当ててから untracked を戻し、untracked の置き場が埋まっていると追跡分を当てたまま断る**(断りとロックの見分け・untracked を後から戻す形は `session::carried_apply` と `report::carried_refused`)
 - **git を撃つ前にこちらが断る書き込みは `GitError::Withheld`、UI が先に止める残りは `GitError::Rejected`**(使い分けの理由はその型のコメント。個別の箇所は Grep が正)
 - **`rev-list --exclude` は名前空間を外して書く** — `--branches` に `refs/heads/` を付けると何も除外されず「他の誰かが掴んでいる」が常に真(エラーも警告も無し)。`--tags` / `--remotes` も同様。`--glob` / `--all` だけ `refs/` 始まり
+- **rev を取る `rev-list` / `log` / `show` / `diff` / `diff-tree` / `diff-index` / `reset` は rev の後ろに `--` を置く**(`--end-of-options` では足りない)— 無いと git が rev をパスとしても lstat し、同名のファイル(worktree の `HEAD` 等)で `ambiguous argument`、stat の届かない長さで `failed to stat … Filename too long` を出して落ちる。長さの壁は OS で違い、Windows はフォルダと引数の合計(ふつうの長さの枝名 2 本の範囲で届く)、Linux は 1 要素の長さ(250 バイト級の名前が要る)— 数字は `edge_strings` の表。`merge-base` / `rev-parse` / `name-rev` / `cat-file` / `ls-tree` / `for-each-ref --points-at` は rev をパスと見ない
 - **`--glob=<pattern>` は階層にしか当たらない** — `--glob=refs/stash` は 0 件(`refs/stash*` なら拾う)。素の rev `refs/stash` は stash 無しで `fatal: ambiguous argument`、`--ignore-missing` は間違った oid も黙って捨てる = 安全側と逆。`reachable::command` は `--glob` を採る
 - **`--all` で HEAD は外せない** — `--exclude=<現在のブランチ> --all` でも先端が negative に残る。外したい walk は `--branches --remotes` を並べる
 - `git config <key> <value>` はダッシュ始まりの値もそのまま(`--` は値として保存される)

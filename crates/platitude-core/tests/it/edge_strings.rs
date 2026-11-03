@@ -9,6 +9,7 @@
 //! |---|---|
 //! | a ref name's last component | 250 bytes on Linux — a loose ref is the file `<name>.lock` against a 255-byte filename. NTFS counts UTF-16 units and took 301 bytes of kanji, so a repository can hold a ref only Windows can spell |
 //! | a path component | 255 bytes on both |
+//! | a rev no `--` follows | `rev-list`, `log`, `show`, `diff`, `diff-tree`, `diff-index` and `reset` stat it as a path too (`--end-of-options` does not stop that; `log` on 2.55 stats a single rev but not a range), and die where the stat cannot answer: on Linux a component over 255 bytes with every component before it present, on Windows without `core.longpaths` the folder, a separator and the rev reaching 260 UTF-16 units. A range joins two names, so branches both systems hold spell a rev neither can stat |
 //! | subject, body, author name, address, URL | none. git took a megabyte of each |
 //! | the short end | one character of anything, an empty subject, and an empty address — but *not* an empty author name, which git alone refuses |
 //!
@@ -23,7 +24,7 @@ use crate::support::TestRepo;
 use crate::support::exec::env;
 use platitude_core::parse::log::{LOG_FORMAT_ARG, LogParser};
 use platitude_core::refs::{self, RefKind};
-use platitude_core::{GitCommand, status};
+use platitude_core::{GitCommand, commit, publish, status};
 
 /// Bytes a ref's last component may have, from the measurement above.
 const REF_WALL: usize = 250;
@@ -104,6 +105,53 @@ async fn a_ref_whose_last_character_ends_on_the_wall_comes_back_whole() {
         "the branch reads back"
     );
     assert!(found(RefKind::Tag, &tag), "and so does the tag");
+}
+
+/// A branch moved onto another, both on the wall, counted the way the move
+/// asks what the branch loses ([`commit::count_beyond`]) and a rewrite
+/// what it takes off a remote ([`publish::state_of`]). Each system has its
+/// own wall, so the range stands past both: on Linux its first component
+/// joins the bare name to `refs`, past 255 bytes; on Windows the whole
+/// stands past MAX_PATH from the repository's folder, which ordinary names
+/// reach too.
+#[tokio::test]
+async fn a_range_of_names_on_the_wall_is_counted_not_statted() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "1\n", "root");
+    let tip = to_the_byte("a", REF_WALL);
+    repo.git(&["branch", &tip]);
+    repo.commit_file("a.txt", "2\n", "ahead");
+    let name = format!(
+        "feature/far-too-long-to-sit-in-any-box-or-chip/{}",
+        to_the_byte("b", REF_WALL)
+    );
+    repo.git(&["branch", &name]);
+    let own = format!("refs/heads/{name}");
+    let range = format!("{tip}..{own}");
+    let first = range.split('/').next().unwrap_or_default();
+    assert!(first.len() > 255, "the first component passes Linux's wall");
+    if cfg!(windows) {
+        let units = |s: &str| s.encode_utf16().count();
+        let folder = units(&repo.path.to_string_lossy());
+        assert!(
+            folder + 1 + units(&range) >= 260,
+            "the range reaches MAX_PATH from {folder} units of folder"
+        );
+    }
+
+    let (executor, cancel) = env();
+    let lost = commit::count_beyond(&executor, &repo.path, &own, &tip, &cancel)
+        .await
+        .expect("the move's count");
+    assert_eq!(lost, 1, "the branch is one commit past the other");
+    let state = publish::state_of(&executor, &repo.path, &range, &cancel)
+        .await
+        .expect("the rewrite's count");
+    assert_eq!(
+        (state.total, state.unpublished),
+        (1, 1),
+        "and no remote has that commit"
+    );
 }
 
 /// The credit trailer comes after the long body, so the trailer scan has

@@ -99,6 +99,7 @@ pub async fn commit_details(
         "--diff-merges=first-parent",
         DETAILS_FORMAT_ARG,
         &hex,
+        "--",
     ]);
     let out = executor.run(cmd, cancel).await?;
     let unexpected = |message: String| GitError::UnexpectedOutput {
@@ -217,7 +218,8 @@ async fn union_chunk(
             "--diff-merges=first-parent",
             "--format=%x01",
         ])
-        .args(oids.iter().map(Oid::to_hex));
+        .args(oids.iter().map(Oid::to_hex))
+        .arg("--");
     let out = executor.run(cmd, cancel).await?;
     let mut changes = Vec::new();
     // The first split is what stands before the first record: nothing.
@@ -260,6 +262,7 @@ pub async fn compare_files(
         "--find-renames",
         from_hex.as_str(),
         to_hex.as_str(),
+        "--",
     ]);
     let out = executor.run(cmd, cancel).await?;
     parse_name_status(&out.stdout).map_err(|e| GitError::UnexpectedOutput {

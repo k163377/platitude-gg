@@ -203,7 +203,7 @@ pub(crate) async fn read_rows(
             "-z",
             "--format=%H%x00%P%x00%an%x00%ae%x00%s",
         ])
-        .arg(range);
+        .args([range, "--"]);
     let out = executor.run(cmd, cancel).await?;
     let fields: Vec<&[u8]> = out.stdout.split(|b| *b == 0).collect();
     let mut read = RangeRead::default();

@@ -458,7 +458,7 @@ fn walk_command(
             cmd = cmd.arg(oid.to_hex());
         }
     }
-    cmd
+    cmd.arg("--")
 }
 
 /// What a walk that stopped means: with a parse error, the cancel was the

@@ -226,7 +226,8 @@ async fn count(
     if exclude_remotes {
         cmd = cmd.args(["--not", "--remotes"]);
     }
-    let out = executor.run(cmd, cancel).await?;
+    // Last: everything after it is a path (`commit::count_beyond`).
+    let out = executor.run(cmd.arg("--"), cancel).await?;
     let text = out.stdout_utf8();
     text.trim().parse().map_err(|_| GitError::UnexpectedOutput {
         command: format!("git rev-list --count {range}"),
