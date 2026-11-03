@@ -623,7 +623,7 @@ FocusScope {
         page.moveLocal = local
         page.moveStart = start === undefined ? "" : start
         if (page.standsInTheWay(leaving)) {
-            page.askLeaveOperation(function () { page.runSwitch(true) })
+            page.askLeaveOperation(local, function () { page.runSwitch(true) })
             return
         }
         page.runSwitch(leaving === true)
@@ -653,22 +653,31 @@ FocusScope {
     function standsInTheWay(leaving) {
         return leaving !== true && worktree.movesBlocked
     }
+    // The stash heading reads on from its `stash` chip as one sentence and names where the move lands; what goes in
+    // is every uncommitted change, untracked files too (`session::build::leave_operation`). Conflicts are named while
+    // any stand: git's own stash refuses an unmerged file, so they are what the reader would not expect to go in. Its
+    // second line only says the standing operation ends; with nothing standing the heading is the whole question
+    // (user decision — ask before changing).
     readonly property string leaveHeading:
-        worktree.leaveUndoes ? qsTr("Undo it and go?") : qsTr("Put it aside and go?")
+        worktree.leaveUndoes ? qsTr("Undo it and go?")
+        //: Read on from the `stash` chip at its head; %1 is the branch the move lands on.
+        : worktree.conflictCount > 0 ? qsTr("all uncommitted changes including conflicts and switch to %1?")
+        //: Read on from the `stash` chip at its head; %1 is the branch the move lands on.
+        : qsTr("all uncommitted changes and switch to %1?")
     readonly property string leaveDetail:
         worktree.leaveUndoes ? qsTr("Nothing it did since it started is kept.")
-        // Nothing standing: only the files are in the way.
-        : worktree.opCommand === ""
-        ? qsTr("The files waiting on a decision go to the stash, markers and all.")
+        : worktree.opCommand === "" ? ""
         //: %1 is the standing operation in git's own spelling, e.g. cherry-pick.
-        : qsTr("The %1 stops; its files go to the stash, markers and all.").arg(worktree.opCommand)
-    function askLeaveOperation(retry) {
+        : qsTr("The %1 ends here.").arg(worktree.opCommand)
+    /// `local`: the branch the move lands on.
+    function askLeaveOperation(local, retry) {
         // Marked on HEAD's row — a rebase runs detached, so that is the only name the tree has for where it is
         // (デザイン規約 §立っている質問は 1 か所で聞く). Whether leaving undoes work in hand (`danger` and a hold —
         // §状態, §回数押し) and the command on the question's line are core's (offers::leaving_undoes / leave_code).
         page.startRowAsk(worktree.headOid, page.leaveHeading, page.leaveDetail,
                          worktree.leaveUndoes, "", retry, worktree.leaveUndoes, "", null,
-                         worktree.leaveCode)
+                         worktree.leaveCode, worktree.leaveUndoes ? "" : local,
+                         local === worktree.branch ? Theme.textLink : Theme.textPrimary, "branch")
     }
 
     // ---- what a chip leads to --------------------------------------
@@ -724,7 +733,7 @@ FocusScope {
         // Ahead of the branches below: the one that lands on an existing local branch asks git what the move would
         // cost before it moves, and that read is worth nothing while an operation is standing.
         if (page.standsInTheWay(leaving)) {
-            page.askLeaveOperation(function () { page.switchToRef(kind, name, true) })
+            page.askLeaveOperation(local, function () { page.switchToRef(kind, name, true) })
             return true
         }
         if (action === "switch")
