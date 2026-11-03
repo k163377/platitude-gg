@@ -6,7 +6,7 @@
 //!   fsmonitor, and both — in a worktree, since switching either on
 //!   writes the index and the corpus is read only.
 //! - `cat-file blob` a process each, against one resident `--batch`.
-//! - The existence probe (`preview::blob_is_there`), against a resident
+//! - The existence probe (`preview::blob_oid`), against a resident
 //!   `--batch-check`.
 //!
 //! The product hands stdin only to a command that reads one finite input

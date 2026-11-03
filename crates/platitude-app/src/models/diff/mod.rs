@@ -244,11 +244,11 @@ pub struct DiffModel {
     preview_kind: String,
     /// URLs for the image sides ("" = no renderable image there): the
     /// working-tree file's `file:` URL stamped with the read, or the
-    /// `image://` a blob's bytes are held under (`preview_images`) —
+    /// `image://` a blob is held under (`preview_images`) —
     /// `rows::apply_preview`.
     preview_old_url: String,
     preview_new_url: String,
-    /// The ids the shown preview's bytes are held under, let go when the
+    /// The ids the shown preview's blobs are held under, let go when the
     /// next read is shown or the pane closes.
     preview_held: Vec<String>,
     /// Whether the previewed image is a vector one

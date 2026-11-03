@@ -32,6 +32,7 @@ fn build_image_provider() {
     cxx_qt_build::CxxQtBuilder::new()
         .qt_module("Quick")
         .file("src/preview_images.rs")
+        .file("src/preview_decode.rs")
         .build();
 }
 

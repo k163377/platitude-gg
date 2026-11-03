@@ -9,6 +9,7 @@ mod hub;
 mod logsink;
 mod models;
 mod ops;
+mod preview_decode;
 mod preview_images;
 mod qml_engine;
 mod qrc;
@@ -400,6 +401,9 @@ fn main() {
     let restart = Hub::with(|hub| hub.restart_wanted()).unwrap_or(false);
     Hub::shutdown();
     harness::station(harness::Station::HubDown);
+    // The preview's decoders run Qt's image readers on threads of their
+    // own, whose reads went with the hub.
+    preview_images::stand_down();
     // Qt is dropped here, after the hub (nothing left pushing at its
     // objects) and never left to `exit`: on Windows `ExitProcess` ends every
     // other thread before the libraries' detach, so Qt's static teardown

@@ -29,17 +29,24 @@ fn write_bytes(repo: &TestRepo, rel: &str, bytes: &[u8]) {
     std::fs::write(repo.path.join(rel), bytes).unwrap();
 }
 
-/// A blob side's bytes and the format that goes with them.
-fn held(side: &preview::PreviewSide) -> (&[u8], Option<ImageFormat>) {
+/// A blob side's bytes, read from `repo` as when the picture is drawn, and
+/// the format that goes with them.
+async fn drawn(repo: &TestRepo, side: &preview::PreviewSide) -> (Vec<u8>, Option<ImageFormat>) {
     match side.picture.as_ref() {
-        Some(Picture::Bytes(picture)) => (picture.bytes(), picture.format()),
-        other => panic!("a blob side holds its bytes, not {other:?}"),
+        Some(Picture::Blob(picture)) => {
+            let (executor, cancel) = env();
+            let bytes = preview::read_picture(&executor, &repo.path, picture, &cancel)
+                .await
+                .expect("the picture's object");
+            (bytes, picture.format())
+        }
+        other => panic!("a blob side names its object, not {other:?}"),
     }
 }
 
 /// The staged addition also stands for an unborn HEAD: `HEAD:<path>` not
 /// resolving means "no old side" either way, and the probe answers without
-/// a cat-file (`preview::blob_is_there`; the log side is in `answer_reads.rs`).
+/// a cat-file (`preview::blob_oid`; the log side is in `answer_reads.rs`).
 #[tokio::test]
 async fn a_side_that_is_not_there_previews_as_absent() {
     let mut repo = TestRepo::init();
@@ -79,7 +86,7 @@ async fn a_side_that_is_not_there_previews_as_absent() {
         Some(Picture::File(repo.path.join("stray.png")))
     );
 
-    // Staged addition: the index blob is read into memory, with the
+    // Staged addition: the index blob is named by its object, with the
     // format the path it is at names.
     let p = preview::file_preview(
         &executor,
@@ -95,7 +102,10 @@ async fn a_side_that_is_not_there_previews_as_absent() {
     .unwrap();
     assert!(p.old.is_none(), "no HEAD side for a newly added file");
     let new = p.new.unwrap();
-    assert_eq!(held(&new), (TINY_PNG, Some(ImageFormat::Png)));
+    assert_eq!(
+        drawn(&repo, &new).await,
+        (TINY_PNG.to_vec(), Some(ImageFormat::Png))
+    );
     assert_eq!(new.size, TINY_PNG.len() as u64);
 
     // Staged deletion: old side only.
@@ -111,7 +121,7 @@ async fn a_side_that_is_not_there_previews_as_absent() {
     )
     .await
     .unwrap();
-    assert_eq!(held(&p.old.unwrap()).0, TINY_PNG);
+    assert_eq!(drawn(&repo, &p.old.unwrap()).await.0, TINY_PNG);
     assert!(p.new.is_none(), "deleted from the index");
 
     // Root commit: no parent, so no old side.
@@ -151,8 +161,8 @@ async fn modified_image_previews_the_index_blob_and_the_tree_file() {
         .unwrap();
     let old = p.old.unwrap();
     assert_eq!(
-        held(&old),
-        (TINY_PNG, Some(ImageFormat::Png)),
+        drawn(&repo, &old).await,
+        (TINY_PNG.to_vec(), Some(ImageFormat::Png)),
         "the index side is read out"
     );
     let new = p.new.unwrap();
@@ -189,8 +199,8 @@ async fn committed_image_previews_parent_and_commit_blobs() {
         .unwrap();
     let old = p.old.unwrap();
     let new = p.new.unwrap();
-    assert_eq!(held(&old).0, TINY_PNG);
-    assert_eq!(held(&new).0, v2.as_slice());
+    assert_eq!(drawn(&repo, &old).await.0, TINY_PNG);
+    assert_eq!(drawn(&repo, &new).await.0, v2.as_slice());
     assert_eq!(old.size, TINY_PNG.len() as u64);
     assert_eq!(new.size, v2.len() as u64);
 }
@@ -329,8 +339,14 @@ async fn renamed_image_reads_the_old_side_from_orig_path() {
     )
     .await
     .unwrap();
-    assert_eq!(held(&p.old.unwrap()), (TINY_PNG, Some(ImageFormat::Jpeg)));
-    assert_eq!(held(&p.new.unwrap()), (TINY_PNG, Some(ImageFormat::Png)));
+    assert_eq!(
+        drawn(&repo, &p.old.unwrap()).await,
+        (TINY_PNG.to_vec(), Some(ImageFormat::Jpeg))
+    );
+    assert_eq!(
+        drawn(&repo, &p.new.unwrap()).await,
+        (TINY_PNG.to_vec(), Some(ImageFormat::Png))
+    );
 
     let p = preview::file_preview(
         &executor,
@@ -341,7 +357,10 @@ async fn renamed_image_reads_the_old_side_from_orig_path() {
     )
     .await
     .unwrap();
-    assert_eq!(held(&p.old.unwrap()), (TINY_PNG, None));
+    assert_eq!(
+        drawn(&repo, &p.old.unwrap()).await,
+        (TINY_PNG.to_vec(), None)
+    );
 }
 
 #[tokio::test]
@@ -401,8 +420,8 @@ async fn svg_gets_an_image_preview_alongside_its_text_diff() {
         .unwrap();
     assert_eq!(p.format, Some(ImageFormat::Svg));
     assert_eq!(
-        held(&p.new.unwrap()),
-        (svg.as_bytes(), Some(ImageFormat::Svg))
+        drawn(&repo, &p.new.unwrap()).await,
+        (svg.as_bytes().to_vec(), Some(ImageFormat::Svg))
     );
 }
 
@@ -451,5 +470,68 @@ async fn a_large_image_is_handed_over_whole() {
     .unwrap();
     let new = p.new.unwrap();
     assert_eq!(new.size, staged.len() as u64);
-    assert_eq!(held(&new).0, staged.as_slice());
+    assert_eq!(drawn(&repo, &new).await.0, staged.as_slice());
+}
+
+/// A blob side is its object: the index moving between the read and the
+/// draw leaves the picture the diff was read against.
+#[tokio::test]
+async fn a_blob_side_draws_the_object_the_diff_was_read_against() {
+    let mut repo = TestRepo::init();
+    write_bytes(&repo, "logo.png", TINY_PNG);
+    repo.git(&["add", "--", "logo.png"]);
+    repo.git(&["commit", "-m", "v1"]);
+    write_bytes(&repo, "logo.png", &tiny_png_v2());
+
+    let (executor, cancel) = env();
+    let p = preview::file_preview(
+        &executor,
+        &repo.path,
+        &DiffTarget::Unstaged {
+            path: "logo.png".to_string(),
+        },
+        true,
+        &cancel,
+    )
+    .await
+    .unwrap();
+    repo.git(&["add", "--", "logo.png"]);
+    assert_eq!(drawn(&repo, &p.old.unwrap()).await.0, TINY_PNG);
+}
+
+/// A streamed picture tells how its read ended before its chunks stop: a
+/// receiver that sees the channel close already knows whether it saw the
+/// whole picture (`PictureReader::stream`).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_streamed_picture_is_told_whole_before_its_chunks_stop() {
+    let mut repo = TestRepo::init();
+    write_bytes(&repo, "logo.png", TINY_PNG);
+    let oid = repo.git(&["hash-object", "-w", "logo.png"]);
+    let picture = preview::PictureBlob::new(
+        Oid::from_hex_str(&oid).expect("an object id"),
+        TINY_PNG.len() as u64,
+        "logo.png",
+    );
+    let (executor, cancel) = env();
+    let reader = preview::PictureReader::new(
+        executor,
+        repo.path.clone(),
+        tokio::runtime::Handle::current(),
+        cancel,
+    );
+    let (to, mut chunks) = tokio::sync::mpsc::channel(4);
+    let open = to.downgrade();
+    let (said, heard) = tokio::sync::oneshot::channel();
+    reader.stream(picture, to, move |streamed| {
+        // A sender still standing is the channel still open.
+        said.send((streamed.is_ok(), open.upgrade().is_some())).ok();
+    });
+    let mut bytes = Vec::new();
+    while let Some(chunk) = chunks.recv().await {
+        bytes.extend_from_slice(&chunk);
+    }
+    let (whole, open) = heard.await.expect("the read's end told");
+    assert!(whole, "the read ended whole");
+    assert!(open, "told while its chunks could still come");
+    assert_eq!(bytes, TINY_PNG);
 }

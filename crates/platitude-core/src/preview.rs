@@ -1,23 +1,28 @@
 //! Best-effort content previews for the diff pane: the old/new content of
 //! a diff target, so the UI can render images and report binary sizes.
 //! A picture side is shown from the working tree's own file, or from a
-//! blob's bytes read out of `git cat-file` into memory ([`Picture`]):
-//! nothing is written for it. A side that cannot be read is absent, which
-//! is also what "added" and "deleted" look like.
+//! blob named by its object ([`Picture`]): nothing is written for it. A
+//! side that cannot be read is absent, which is also what "added" and
+//! "deleted" look like.
 //!
-//! A blob's picture reaches the UI as its bytes, which the application
-//! hands an `Image` through an image provider, never as base64 (user
-//! decision — ask before changing): as a string, one 16MB image alone
-//! weighs about 43MB and a picture past the limit cannot show at all; the
-//! bytes have no limit. An opened picture costs its bytes and its decoded
-//! pixels, and the pane moving on or closing gives all of it back.
+//! A blob's picture reaches the UI by its object, whose bytes the
+//! application's image provider reads through the session when an `Image`
+//! asks for them ([`PictureReader`]), never as base64 (user decision — ask
+//! before changing): as a string, one 16MB image alone weighs about 43MB and a
+//! picture past the limit cannot show at all; a blob read when it is drawn
+//! has no limit. An opened picture costs its decoded pixels, and the pane
+//! moving on or closing gives all of it back.
+//!
+//! Drawing a side holds of its compressed bytes only those on their way to
+//! the decoder where Qt reads its format in order (PNG, JPEG, GIF, SVG), and
+//! all of them, from the read to the end of its decode, for any other
+//! (ci/baseline/preview-pictures-windows-x64.md).
 
-use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
 
+use crate::Oid;
 use crate::details::DiffTarget;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
@@ -66,47 +71,34 @@ impl ImageFormat {
     }
 }
 
-/// A blob's picture as `git cat-file` gave it, and the format the path it
-/// was at names: what picks a decoder where the bytes do not say, as a
-/// file's name would. No format where that path names none (a side renamed
-/// from one that is no picture's) — the bytes alone then say.
+/// A blob's picture: its object, its size, and the format the path it was
+/// at names — what picks a decoder where the bytes do not say, as a file's
+/// name would. No format where that path names none (a side renamed from
+/// one that is no picture's): the bytes alone then say.
 ///
-/// Held for as long as the pane shows it, so at its own length: a read
-/// grows its buffer past what arrived.
-#[derive(Clone, PartialEq, Eq)]
-pub struct PictureBytes {
-    bytes: Arc<[u8]>,
+/// Its bytes are read when it is drawn ([`PictureReader`]) and not before,
+/// nor kept after. By its object, not by `<rev>:<path>`: the index or a ref
+/// may move before the picture is drawn, and the object is the content the
+/// diff was read against — the same in every worktree of the repository.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PictureBlob {
+    oid: Oid,
+    size: u64,
     format: Option<ImageFormat>,
 }
 
-impl PictureBytes {
-    /// `bytes` as read from `path`.
-    pub fn new(bytes: Vec<u8>, path: &str) -> Self {
+impl PictureBlob {
+    /// The object `oid`, `size` bytes, as it stood at `path`.
+    pub fn new(oid: Oid, size: u64, path: &str) -> Self {
         Self {
-            bytes: Arc::from(bytes),
+            oid,
+            size,
             format: ImageFormat::of_path(path),
         }
     }
 
-    pub fn bytes(&self) -> &[u8] {
-        &self.bytes
-    }
-
     pub fn format(&self) -> Option<ImageFormat> {
         self.format
-    }
-}
-
-/// The bytes by their count: a picture's whole contents would bury any
-/// message that prints one.
-impl fmt::Debug for PictureBytes {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "PictureBytes({} bytes, {:?})",
-            self.bytes.len(),
-            self.format
-        )
     }
 }
 
@@ -115,8 +107,8 @@ impl fmt::Debug for PictureBytes {
 pub enum Picture {
     /// The working tree's own file, shown where it stands.
     File(PathBuf),
-    /// A blob's bytes, held in memory.
-    Bytes(PictureBytes),
+    /// A blob, read when it is drawn.
+    Blob(PictureBlob),
 }
 
 /// One side of a preview (old = before the change, new = after).
@@ -125,8 +117,7 @@ pub struct PreviewSide {
     /// Content size in bytes.
     pub size: u64,
     /// What an image's side is shown from; `None` for a binary that is no
-    /// image, or for a blob `cat-file` would not give whole (its row in the
-    /// command log says why).
+    /// image.
     pub picture: Option<Picture>,
 }
 
@@ -144,8 +135,8 @@ pub struct FilePreview {
 
 /// Where one side's content lives.
 enum SideSource {
-    /// `spec` is `<rev>:<path>` for `git cat-file`; `path` names a
-    /// picture's format ([`PictureBytes`]).
+    /// `spec` is `<rev>:<path>` for `git rev-parse`; `path` names a
+    /// picture's format ([`PictureBlob`]).
     Blob {
         spec: String,
         path: String,
@@ -157,7 +148,7 @@ enum SideSource {
 
 /// Loads the preview for `target`; `None` when a text diff already tells
 /// the whole story (non-image, non-binary files). An image's blob sides
-/// are read whole into memory.
+/// are named by their objects, not read.
 pub async fn file_preview(
     executor: &GitExecutor,
     workdir: &Path,
@@ -231,7 +222,7 @@ async fn read_source(
 ) -> Source {
     match source {
         SideSource::Blob { spec, .. } => {
-            if !blob_is_there(executor, workdir, spec, cancel).await {
+            if blob_oid(executor, workdir, spec, cancel).await.is_none() {
                 return Source::Absent;
             }
             read_capped_blob(executor, workdir, spec, cancel).await
@@ -349,7 +340,7 @@ fn side_sources(workdir: &Path, target: &DiffTarget) -> (SideSource, SideSource)
     }
 }
 
-/// Whether the object database holds this side at all.
+/// The object this side is, where the object database holds it at all.
 ///
 /// The specs [`side_sources`] builds routinely name a side that is not
 /// there (the parent side of an added file, `HEAD:` before there is a
@@ -363,18 +354,21 @@ fn side_sources(workdir: &Path, target: &DiffTarget) -> (SideSource, SideSource)
 ///
 /// A read that never ran and a spec that resolved to nothing are the same
 /// answer here: no content to show.
-async fn blob_is_there(
+async fn blob_oid(
     executor: &GitExecutor,
     workdir: &Path,
     spec: &str,
     cancel: &CancellationToken,
-) -> bool {
+) -> Option<Oid> {
     let cmd = GitCommand::new()
         .cwd(workdir)
         .answers_by_code(1)
         .args(["rev-parse", "--verify", "-q"])
         .arg(spec);
-    matches!(executor.run_unchecked(cmd, cancel).await, Ok(out) if out.code == 0)
+    match executor.run_unchecked(cmd, cancel).await {
+        Ok(out) if out.code == 0 => Oid::from_hex_str(out.stdout_utf8().trim()).ok(),
+        _ => None,
+    }
 }
 
 async fn load_side(
@@ -394,12 +388,9 @@ async fn load_side(
     }
 }
 
-/// Reads one side out of the object database. No side is data: added,
-/// deleted and unborn HEAD all look like that from here.
-///
-/// A picture side (`picture_at`, the path it was at, given) is read whole
-/// and sized by what arrived; one that could not be read is sized by
-/// `cat-file -s` like a non-image binary.
+/// Sizes one side in the object database and, for a picture side
+/// (`picture_at`, the path it was at, given), names its object. No side is
+/// data: added, deleted and unborn HEAD all look like that from here.
 async fn blob_side(
     executor: &GitExecutor,
     workdir: &Path,
@@ -407,24 +398,11 @@ async fn blob_side(
     picture_at: Option<&str>,
     cancel: &CancellationToken,
 ) -> Option<PreviewSide> {
-    if !blob_is_there(executor, workdir, spec, cancel).await {
-        return None;
-    }
-    if let Some(path) = picture_at {
-        match read_blob(executor, workdir, spec, cancel).await {
-            Ok(bytes) => {
-                return Some(PreviewSide {
-                    size: bytes.len() as u64,
-                    picture: Some(Picture::Bytes(PictureBytes::new(bytes, path))),
-                });
-            }
-            Err(error) => tracing::debug!(spec, %error, "preview blob not read; size only"),
-        }
-    }
+    let oid = blob_oid(executor, workdir, spec, cancel).await?;
     let size_cmd = GitCommand::new()
         .cwd(workdir)
         .args(["cat-file", "-s"])
-        .arg(spec);
+        .arg(oid.to_hex());
     let out = executor.run_unchecked(size_cmd, cancel).await.ok()?;
     if out.code != 0 {
         return None;
@@ -432,27 +410,128 @@ async fn blob_side(
     let size: u64 = out.stdout_utf8().trim().parse().ok()?;
     Some(PreviewSide {
         size,
-        picture: None,
+        picture: picture_at.map(|path| Picture::Blob(PictureBlob::new(oid, size, path))),
     })
 }
 
-/// `git cat-file blob <spec>`, whole, across every chunk the pipe hands
-/// over.
-async fn read_blob(
+/// The bytes of `picture`, whole: `git cat-file blob` of its object in the
+/// repository at `workdir`, into a buffer of its size.
+pub async fn read_picture(
     executor: &GitExecutor,
     workdir: &Path,
-    spec: &str,
+    picture: &PictureBlob,
     cancel: &CancellationToken,
 ) -> Result<Vec<u8>, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["cat-file", "blob"])
-        .arg(spec);
-    let mut bytes = Vec::new();
+        .arg(picture.oid.to_hex());
+    let mut bytes = Vec::with_capacity(usize::try_from(picture.size).unwrap_or(0));
     executor
         .run_streaming(cmd, cancel, &mut |chunk| bytes.extend_from_slice(chunk))
         .await?;
     Ok(bytes)
+}
+
+/// [`read_picture`], chunk by chunk to `to` as git gives them, the read
+/// waiting while `to`'s receiver is behind (`GitExecutor::run_piped`): no
+/// more of the picture stands in memory than the channel holds. So git
+/// lives as long as the receiver takes — holding its process slot, and
+/// within its time limit, past which the read ends failed.
+pub async fn stream_picture(
+    executor: &GitExecutor,
+    workdir: &Path,
+    picture: &PictureBlob,
+    cancel: &CancellationToken,
+    to: &tokio::sync::mpsc::Sender<Vec<u8>>,
+) -> Result<(), GitError> {
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["cat-file", "blob"])
+        .arg(picture.oid.to_hex());
+    executor.run_piped(cmd, cancel, to).await.map(drop)
+}
+
+/// What reads a pane's pictures when they are drawn: a session's git, its
+/// worktree, the runtime it runs on and the token of the diff read the
+/// pane shows, which the pane's next read and the session's close end
+/// (`RepoSession::picture_reader`). The session's git, so a read under way
+/// is one of the session's runs — counted where a stand-down waits for
+/// them, and kept in the command log as its reads are.
+#[derive(Clone)]
+pub struct PictureReader {
+    executor: GitExecutor,
+    workdir: PathBuf,
+    runtime: tokio::runtime::Handle,
+    cancel: CancellationToken,
+}
+
+impl PictureReader {
+    pub fn new(
+        executor: GitExecutor,
+        workdir: PathBuf,
+        runtime: tokio::runtime::Handle,
+        cancel: CancellationToken,
+    ) -> Self {
+        Self {
+            executor,
+            workdir,
+            runtime,
+            cancel,
+        }
+    }
+
+    /// This reader, its reads stopped as well by the token answered with
+    /// it: what one drawing reads with, so that each of its reads stops
+    /// with the drawing.
+    pub fn scoped(&self) -> (Self, CancellationToken) {
+        let stop = self.cancel.child_token();
+        let scoped = Self {
+            cancel: stop.clone(),
+            ..self.clone()
+        };
+        (scoped, stop)
+    }
+
+    /// Reads `picture`'s bytes on the runtime and hands them to `done`
+    /// there. A read the runtime drops unrun — it has stopped — drops
+    /// `done` unanswered.
+    pub fn read(
+        &self,
+        picture: PictureBlob,
+        done: impl FnOnce(Result<Vec<u8>, GitError>) + Send + 'static,
+    ) {
+        let reader = self.clone();
+        self.runtime.spawn(async move {
+            done(read_picture(&reader.executor, &reader.workdir, &picture, &reader.cancel).await);
+        });
+    }
+
+    /// Streams `picture`'s bytes to `to` on the runtime ([`stream_picture`])
+    /// and tells `done` how the read ended before `to` is let go: a receiver
+    /// that sees the channel close already knows whether it saw the whole
+    /// picture. A read the runtime drops unrun drops `done` unanswered, and
+    /// `to` with it.
+    pub fn stream(
+        &self,
+        picture: PictureBlob,
+        to: tokio::sync::mpsc::Sender<Vec<u8>>,
+        done: impl FnOnce(Result<(), GitError>) + Send + 'static,
+    ) {
+        let reader = self.clone();
+        self.runtime.spawn(async move {
+            let streamed = stream_picture(
+                &reader.executor,
+                &reader.workdir,
+                &picture,
+                &reader.cancel,
+                &to,
+            )
+            .await;
+            done(streamed);
+            drop(to);
+        });
+    }
 }
 
 /// Reads one side straight from the working tree: the file itself is the
@@ -505,15 +584,5 @@ mod tests {
 
         assert!(preview.is_none());
         assert_eq!(asked.count(), 0, "nothing was asked of git");
-    }
-
-    /// A message that prints a picture says how big it is, not what it holds.
-    #[test]
-    fn a_picture_prints_its_bytes_by_their_count() {
-        let picture = PictureBytes::new(vec![0; 3 * 1024 * 1024], "art/logo.PNG");
-        assert_eq!(
-            format!("{picture:?}"),
-            "PictureBytes(3145728 bytes, Some(Png))"
-        );
     }
 }

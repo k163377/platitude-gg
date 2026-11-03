@@ -1,31 +1,38 @@
-//! The diff pane's pictures held in memory: a blob side's bytes
-//! (`platitude_core::preview::PictureBytes`), named
-//! `image://pgg-preview/<id>`, which a QML `Image` reads through an image
-//! provider with no file between ([`qobject::PreviewImageProvider`]). Qt
-//! decodes them as it would a file of the same bytes and name.
+//! The diff pane's pictures that have no file: a blob side
+//! (`platitude_core::preview::PictureBlob`), named
+//! `image://pgg-preview/<id>`, which a QML `Image` reads through an
+//! asynchronous image provider ([`qobject::PreviewImageProvider`]). Asked
+//! for a picture, the provider answers at once with a response
+//! ([`qobject::PreviewImageResponse`]) and has the tab's session read the
+//! blob (`platitude_core::preview::PictureReader`) for a thread of its own
+//! to decode as Qt would a file of the same bytes and name — streamed into
+//! Qt's reader where that reads in order (`preview_decode`), else whole. An
+//! opened picture costs its decoded pixels (`platitude_core::preview`), and
+//! no Qt thread waits on git.
 //!
-//! A pane holds a read's pictures until it shows the next read or closes
-//! (`DiffModel::apply_preview`); a tab let go of takes whatever its panes
-//! still held ([`release_tab`]). The ids are the tab's, numbered for the
-//! whole run, so a re-read is a new URL and an `Image` loads it afresh.
+//! A pane holds a read's pictures — their objects, not their bytes — until
+//! it shows the next read or closes (`DiffModel::apply_preview`); a tab let
+//! go of takes whatever its panes still held ([`release_tab`]). The ids are
+//! the tab's, numbered for the whole run, so a re-read is a new URL and an
+//! `Image` loads it afresh.
 
 #![expect(
     unsafe_code,
-    reason = "Qt takes an image provider only as an object handed over by pointer, \
-              and hands the provider the size to answer by pointer"
+    reason = "Qt takes an image provider and its responses only as objects handed over by \
+              pointer, and the CXX bridge to them is unsafe code of its own"
 )]
 
 use std::collections::BTreeMap;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 
 use cxx_qt::casting::Upcast;
-use cxx_qt_lib::{
-    QImage, QQmlEngine, QQmlImageProviderBase, QQmlImageProviderBaseImageType, QSize, QString,
-};
-use platitude_core::preview::{ImageFormat, PictureBytes};
+use cxx_qt::{CxxQtThread, CxxQtType, Threading};
+use cxx_qt_lib::{QImage, QQmlEngine, QQmlImageProviderBase, QSize, QString};
+use platitude_core::preview::{ImageFormat, PictureBlob, PictureReader};
 use qtbridge::qtbridge_type_lib::QQmlApplicationEngine;
+use tokio_util::sync::CancellationToken;
 
 #[cxx_qt::bridge]
 mod qobject {
@@ -38,37 +45,85 @@ mod qobject {
         type QString = cxx_qt_lib::QString;
         include!("cxx-qt-lib/qqmlimageproviderbase.h");
         type QQmlImageProviderBase = cxx_qt_lib::QQmlImageProviderBase;
-        #[namespace = "rust::cxxqtlib1"]
-        type QQmlImageProviderBaseImageType = cxx_qt_lib::QQmlImageProviderBaseImageType;
+
+        include!(<QtQuick/QQuickImageProvider>);
+        type QQuickTextureFactory;
+
+        /// A texture factory holding `image`, which Qt owns once it is
+        /// handed over.
+        #[Self = "QQuickTextureFactory"]
+        #[cxx_name = "textureFactoryForImage"]
+        fn texture_factory_for_image(image: &QImage) -> *mut QQuickTextureFactory;
+
+        /// Qt's asynchronous provider. It has no `Q_OBJECT` of its own, so
+        /// it is no `#[qobject]`, whose downcast is a `qobject_cast`.
+        type QQuickAsyncImageProvider;
     }
 
     extern "C++Qt" {
-        include!(<QtQuick/QQuickImageProvider>);
         #[qobject]
         #[base = QQmlImageProviderBase]
         type QQuickImageProvider;
+
+        #[qobject]
+        type QQuickImageResponse;
+    }
+
+    #[namespace = "rust::cxxqt1"]
+    unsafe extern "C++" {
+        include!("cxx-qt/casting.h");
+
+        /// The asynchronous provider as the `QQuickImageProvider` it
+        /// derives from — the step its missing `#[qobject]` leaves out.
+        #[cxx_name = "upcastPtr"]
+        #[rust_name = "as_quick_image_provider"]
+        unsafe fn upcast_async_provider(
+            provider: *const QQuickAsyncImageProvider,
+        ) -> *const QQuickImageProvider;
     }
 
     extern "RustQt" {
         /// The provider the engine is handed ([`super::install`]).
         #[qobject]
-        #[base = QQuickImageProvider]
+        #[base = QQuickAsyncImageProvider]
         type PreviewImageProvider = super::PreviewImageProviderRust;
 
         #[cxx_override]
-        #[cxx_name = "requestImage"]
-        unsafe fn request_image(
+        #[cxx_name = "requestImageResponse"]
+        fn request_image_response(
             self: Pin<&mut PreviewImageProvider>,
             id: &QString,
-            size: *mut QSize,
             requested_size: &QSize,
-        ) -> QImage;
+        ) -> *mut QQuickImageResponse;
+
+        /// One picture on its way, finished on its own thread by the read
+        /// ([`super::Answer`]).
+        #[qobject]
+        #[base = QQuickImageResponse]
+        type PreviewImageResponse = super::PreviewImageResponseRust;
+
+        #[cxx_override]
+        #[cxx_name = "textureFactory"]
+        fn texture_factory(self: &PreviewImageResponse) -> *mut QQuickTextureFactory;
+
+        #[cxx_override]
+        #[cxx_name = "errorString"]
+        fn error_string(self: &PreviewImageResponse) -> QString;
+
+        #[cxx_override]
+        fn cancel(self: Pin<&mut PreviewImageResponse>);
     }
 
-    impl cxx_qt::Constructor<(), BaseArguments = (QQmlImageProviderBaseImageType,)>
-        for PreviewImageProvider
-    {
+    unsafe extern "RustQt" {
+        /// Qt's own signal, which it waits for from every response.
+        #[inherit]
+        #[qsignal]
+        fn finished(self: Pin<&mut PreviewImageResponse>);
     }
+
+    impl cxx_qt::Constructor<()> for PreviewImageProvider {}
+    impl cxx_qt::Constructor<()> for PreviewImageResponse {}
+    impl cxx_qt::Threading for PreviewImageResponse {}
 
     #[namespace = "rust::cxxqtlib1"]
     unsafe extern "C++" {
@@ -76,21 +131,22 @@ mod qobject {
 
         #[rust_name = "new_preview_image_provider"]
         fn make_unique() -> UniquePtr<PreviewImageProvider>;
+
+        #[rust_name = "new_preview_image_response"]
+        fn make_unique() -> UniquePtr<PreviewImageResponse>;
     }
 }
 
 /// The provider holds nothing of its own: what it hands out is [`HELD`].
 pub struct PreviewImageProviderRust;
 
-/// Made as Qt Quick's `Image` kind of provider: the kind that answers with
-/// a `QImage`, decoded on the thread that asks.
 impl cxx_qt::Constructor<()> for qobject::PreviewImageProvider {
     type NewArguments = ();
-    type BaseArguments = (QQmlImageProviderBaseImageType,);
+    type BaseArguments = ();
     type InitializeArguments = ();
 
-    fn route_arguments(_: ()) -> ((), (QQmlImageProviderBaseImageType,), ()) {
-        ((), (QQmlImageProviderBaseImageType::Image,), ())
+    fn route_arguments(_: ()) -> ((), (), ()) {
+        ((), (), ())
     }
 
     fn new(_: ()) -> PreviewImageProviderRust {
@@ -99,41 +155,286 @@ impl cxx_qt::Constructor<()> for qobject::PreviewImageProvider {
 }
 
 impl qobject::PreviewImageProvider {
-    /// Qt's question for the picture `id`, decoded whole. Asked from the
-    /// thread the `Image` loads on — the GUI thread for a synchronous
-    /// `Image`, Qt's pixmap reader for the pane's asynchronous cell — so it
-    /// reads [`HELD`] behind its lock and nothing of this object.
-    ///
-    /// # Safety
-    ///
-    /// `size` is null or a `QSize` Qt holds for the call.
-    unsafe fn request_image(
+    /// Qt's question for the picture `id`, asked on its image-loading
+    /// thread: answered at once with a response the read finishes, so that
+    /// thread goes on to its next image while git runs.
+    fn request_image_response(
         self: Pin<&mut Self>,
         id: &QString,
-        size: *mut QSize,
         _requested_size: &QSize,
-    ) -> QImage {
-        let image = picture(&String::from(id))
-            .and_then(|picture| decode(&picture))
-            .unwrap_or_default();
-        // SAFETY: Qt passes `size` null or pointing at a `QSize` of its own
-        // for the length of the call.
-        if let Some(size) = unsafe { size.as_mut() } {
-            *size = image.size();
-        }
-        image
+    ) -> *mut qobject::QQuickImageResponse {
+        let mut response = qobject::new_preview_image_response();
+        let answer = Answer {
+            thread: Some(response.qt_thread()),
+        };
+        // Told on the response's own thread, behind this return — after Qt
+        // has heard of the response, which has to see `finished`.
+        let stop = match picture(&String::from(id)) {
+            Some(Held {
+                picture,
+                reader: Some(reader),
+            }) => Some(draw(&reader, picture, answer)),
+            _ => None,
+        };
+        response.pin_mut().rust_mut().stop = stop;
+        let response = response.into_raw();
+        // SAFETY: `response` is a live object, just made, which Qt owns from
+        // this answer on; the upcast is to the class it derives from.
+        unsafe { Upcast::<qobject::QQuickImageResponse>::upcast_ptr(response) }.cast_mut()
     }
+}
+
+/// What a response answers with: its picture once read and decoded — null
+/// until then, and for good where none came — and the token that stops
+/// its read.
+#[derive(Default)]
+pub struct PreviewImageResponseRust {
+    image: QImage,
+    stop: Option<CancellationToken>,
+}
+
+impl cxx_qt::Constructor<()> for qobject::PreviewImageResponse {
+    type NewArguments = ();
+    type BaseArguments = ();
+    type InitializeArguments = ();
+
+    fn route_arguments(_: ()) -> ((), (), ()) {
+        ((), (), ())
+    }
+
+    fn new(_: ()) -> PreviewImageResponseRust {
+        PreviewImageResponseRust::default()
+    }
+}
+
+impl qobject::PreviewImageResponse {
+    /// The picture, for Qt to own; none where it did not come.
+    fn texture_factory(&self) -> *mut qobject::QQuickTextureFactory {
+        if self.image.is_null() {
+            return std::ptr::null_mut();
+        }
+        qobject::QQuickTextureFactory::texture_factory_for_image(&self.image)
+    }
+
+    /// Why no picture came, which is what makes the `Image` an error.
+    fn error_string(&self) -> QString {
+        if self.image.is_null() {
+            QString::from("the picture could not be read")
+        } else {
+            QString::default()
+        }
+    }
+
+    /// The `Image` no longer wants the picture: its read stops, and the
+    /// response finishes with none, which Qt still waits for.
+    fn cancel(self: Pin<&mut Self>) {
+        if let Some(stop) = &self.stop {
+            stop.cancel();
+        }
+    }
+}
+
+/// How many of git's chunks stand between the read and the decoder: what
+/// is held of a picture's compressed bytes while it is drawn.
+const CHUNKS_IN_FLIGHT: usize = 4;
+
+/// Starts drawing `picture` on a thread of its own: its read streamed into
+/// a decoder (`preview_decode`) where Qt's reader of its format reads in
+/// order, and, where that is not so or the stream answers no picture, its
+/// bytes read whole and decoded from memory. Answers the token that stops
+/// the drawing's reads.
+///
+/// The thread is none of Qt's and runs no event loop: an animated SVG's
+/// renderer cannot start its timer there, and Qt says so once per drawing
+/// (`qsvgrenderer.cpp`) — the picture is its first frame either way.
+fn draw(reader: &PictureReader, picture: PictureBlob, answer: Answer) -> CancellationToken {
+    let (reader, stop) = reader.scoped();
+    let stopped = stop.clone();
+    // Past the stand-down the answer goes untold, which tells of no picture.
+    let Some(drawing) = Drawing::start() else {
+        return stop;
+    };
+    let drawn = std::thread::Builder::new()
+        .name("pgg-picture".to_string())
+        .spawn(move || {
+            let _drawing = drawing;
+            let format = picture.format();
+            let streamed = match format
+                .is_none_or(|format| crate::preview_decode::streams(qt_name(format).as_bytes()))
+            {
+                true => stream(&reader, picture.clone(), format),
+                false => None,
+            };
+            let image = streamed.or_else(|| match stopped.is_cancelled() {
+                true => None,
+                false => read_whole(&reader, picture),
+            });
+            answer.tell(image);
+        });
+    // The thread not started took the answer with it, which tells of no
+    // picture.
+    if let Err(error) = drawn {
+        tracing::warn!(%error, "no thread to draw a preview picture on");
+    }
+    stop
+}
+
+/// `picture` decoded as it is streamed, on the calling thread, which waits
+/// on the read. The decoder stops this read alone where it leaves it: the
+/// drawing goes on to read the picture whole.
+fn stream(
+    reader: &PictureReader,
+    picture: PictureBlob,
+    format: Option<ImageFormat>,
+) -> Option<QImage> {
+    let (reader, stop) = reader.scoped();
+    let (to, chunks) = tokio::sync::mpsc::channel(CHUNKS_IN_FLIGHT);
+    let whole = Arc::new(AtomicBool::new(false));
+    let told = Arc::clone(&whole);
+    reader.stream(picture, to, move |streamed| match streamed {
+        Ok(()) => told.store(true, Ordering::Release),
+        Err(error) => tracing::debug!(%error, "preview picture not streamed"),
+    });
+    crate::preview_decode::decode(chunks, whole, format.map(qt_name), &stop)
+}
+
+/// The drawings under way, each on a thread of its own, and whether more
+/// may start ([`stand_down`]).
+static DRAWINGS: (Mutex<Drawings>, Condvar) = (
+    Mutex::new(Drawings {
+        under_way: 0,
+        stood_down: false,
+    }),
+    Condvar::new(),
+);
+
+struct Drawings {
+    under_way: usize,
+    stood_down: bool,
+}
+
+fn drawings() -> MutexGuard<'static, Drawings> {
+    DRAWINGS.0.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// One drawing under way, counted while it lives.
+struct Drawing;
+
+impl Drawing {
+    /// `None` once the drawings have stood down.
+    fn start() -> Option<Self> {
+        let mut drawings = drawings();
+        if drawings.stood_down {
+            return None;
+        }
+        drawings.under_way += 1;
+        Some(Self)
+    }
+}
+
+impl Drop for Drawing {
+    fn drop(&mut self) {
+        let mut drawings = drawings();
+        drawings.under_way = drawings.under_way.saturating_sub(1);
+        DRAWINGS.1.notify_all();
+    }
+}
+
+/// Starts no more drawings, and waits for those under way to end, their
+/// reads stopped with the sessions — what is left is the decoding in hand.
+/// Qt has to outlive them: a decoder ended mid-read by `exit` on Windows
+/// can die holding a lock Qt's teardown then waits on for good, and on
+/// Linux `exit` takes Qt's statics down under one still running (`main`).
+pub fn stand_down() {
+    let mut drawings = drawings();
+    drawings.stood_down = true;
+    while drawings.under_way > 0 {
+        drawings = DRAWINGS
+            .1
+            .wait(drawings)
+            .unwrap_or_else(PoisonError::into_inner);
+    }
+}
+
+/// `picture`'s bytes read whole and decoded from memory, on the calling
+/// thread, which waits on the read: the side's compressed bytes are held
+/// until decoded (ci/baseline/preview-pictures-windows-x64.md).
+fn read_whole(reader: &PictureReader, picture: PictureBlob) -> Option<QImage> {
+    let format = picture.format();
+    let (said, heard) = std::sync::mpsc::channel();
+    reader.read(picture, move |read| {
+        // The asker gone is nobody left to tell.
+        said.send(read).ok();
+    });
+    match heard.recv() {
+        Ok(Ok(bytes)) => decode(&bytes, format),
+        Ok(Err(error)) => {
+            tracing::debug!(%error, "preview picture not read");
+            None
+        }
+        Err(_) => None,
+    }
+}
+
+/// A picture decoded on a thread of its own, on its way to its response's.
+struct Decoded(QImage);
+
+// SAFETY: a `QImage` is a value, moved whole to the one thread that holds
+// it next; nothing else holds this one.
+unsafe impl Send for Decoded {}
+
+/// A drawing's word to its response, told on the response's thread: the
+/// picture, or none, and `finished` either way. Dropped untold — the
+/// drawing never ran — it tells of no picture, since Qt waits for every
+/// response to finish.
+struct Answer {
+    thread: Option<CxxQtThread<qobject::PreviewImageResponse>>,
+}
+
+impl Answer {
+    fn tell(mut self, image: Option<QImage>) {
+        if let Some(thread) = self.thread.take() {
+            finish(&thread, image.map(Decoded));
+        }
+    }
+}
+
+impl Drop for Answer {
+    fn drop(&mut self) {
+        if let Some(thread) = self.thread.take() {
+            finish(&thread, None);
+        }
+    }
+}
+
+/// Finishes the response on its thread with `image`.
+fn finish(thread: &CxxQtThread<qobject::PreviewImageResponse>, image: Option<Decoded>) {
+    let queued = thread.queue(move |mut response| {
+        if let Some(Decoded(image)) = image {
+            response.as_mut().rust_mut().image = image;
+        }
+        response.finished();
+    });
+    // Qt let the response go: nobody is left to tell.
+    queued.ok();
 }
 
 /// The host part of the provider's URLs.
 const PROVIDER: &str = "pgg-preview";
 
-/// The pictures held, by id. Asked from whichever thread the `Image` loads
-/// on (the cell loads asynchronously), so behind a lock rather than in the
-/// GUI thread's objects.
-static HELD: Mutex<BTreeMap<String, PictureBytes>> = Mutex::new(BTreeMap::new());
+/// One picture held: its object, and what reads it — the session of the
+/// tab that read its diff, `None` where that tab had none open.
+#[derive(Clone)]
+struct Held {
+    picture: PictureBlob,
+    reader: Option<PictureReader>,
+}
 
-fn held() -> MutexGuard<'static, BTreeMap<String, PictureBytes>> {
+/// The pictures held, by id. Asked from Qt's image-loading thread, so
+/// behind a lock rather than in the GUI thread's objects.
+static HELD: Mutex<BTreeMap<String, Held>> = Mutex::new(BTreeMap::new());
+
+fn held() -> MutexGuard<'static, BTreeMap<String, Held>> {
     HELD.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
@@ -142,16 +443,16 @@ fn tab_prefix(tab: i32) -> String {
     format!("t{tab}-")
 }
 
-/// Holds `picture` for a pane of the tab `tab`, answering the id it is
-/// held under.
-pub fn hold(tab: i32, picture: &PictureBytes) -> String {
+/// Holds `picture` for a pane of the tab `tab`, to be read by `reader`,
+/// answering the id it is held under.
+pub fn hold(tab: i32, picture: PictureBlob, reader: Option<PictureReader>) -> String {
     static NEXT: AtomicU64 = AtomicU64::new(1);
     let id = format!(
         "{}{}",
         tab_prefix(tab),
         NEXT.fetch_add(1, Ordering::Relaxed)
     );
-    held().insert(id.clone(), picture.clone());
+    held().insert(id.clone(), Held { picture, reader });
     id
 }
 
@@ -178,21 +479,20 @@ pub fn is_held(id: &str) -> bool {
     held().contains_key(id)
 }
 
-/// The picture held under `id`, its bytes shared: the lock is let go
-/// before anything is decoded.
-fn picture(id: &str) -> Option<PictureBytes> {
+/// The picture held under `id`: the lock is let go before anything is
+/// read.
+fn picture(id: &str) -> Option<Held> {
     held().get(id).cloned()
 }
 
-/// `picture` decoded, read first as the format its path names. That is a
-/// hint, as a file's suffix is: bytes the named format cannot read are
+/// `bytes` decoded, read first as `format`, the one their path names. That
+/// is a hint, as a file's suffix is: bytes the named format cannot read are
 /// read again by their own signature — `QImage::fromData` does not read
 /// past a format named outright.
-fn decode(picture: &PictureBytes) -> Option<QImage> {
-    picture
-        .format()
-        .and_then(|format| QImage::from_data(picture.bytes(), Some(qt_name(format))))
-        .or_else(|| QImage::from_data(picture.bytes(), None))
+fn decode(bytes: &[u8], format: Option<ImageFormat>) -> Option<QImage> {
+    format
+        .and_then(|format| QImage::from_data(bytes, Some(qt_name(format))))
+        .or_else(|| QImage::from_data(bytes, None))
 }
 
 /// The name Qt's image readers know `format` by.
@@ -217,8 +517,8 @@ pub fn install(engine: Pin<&mut QQmlApplicationEngine>) {
     // SAFETY: `provider` is a live object, just made and owned by nobody;
     // each upcast is to the class it derives from.
     let base: *const QQmlImageProviderBase = unsafe {
-        let quick: *const qobject::QQuickImageProvider = Upcast::upcast_ptr(provider);
-        Upcast::upcast_ptr(quick)
+        let asynchronous: *const qobject::QQuickAsyncImageProvider = Upcast::upcast_ptr(provider);
+        Upcast::upcast_ptr(qobject::as_quick_image_provider(asynchronous))
     };
     // SAFETY: `QQmlEngine::addImageProvider` takes ownership of the
     // provider, which nothing else holds.
@@ -227,9 +527,12 @@ pub fn install(engine: Pin<&mut QQmlApplicationEngine>) {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
-    use platitude_core::preview::{ImageFormat, PictureBytes};
+    use platitude_core::preview::{ImageFormat, PictureBlob, PictureReader};
+    use platitude_core::process::GitCommand;
+    use platitude_core::{GitExecutor, Oid};
+    use tokio_util::sync::CancellationToken;
 
     /// One pixel, to load.
     const PNG: [u8; 70] = [
@@ -240,14 +543,35 @@ mod tests {
         0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
     ];
 
-    /// The pixel, as read from `path`.
-    fn png(path: &str) -> PictureBytes {
-        PictureBytes::new(PNG.to_vec(), path)
+    /// The pixel as an icon: one entry, the PNG itself as its image — which
+    /// Qt's reader seeks to.
+    fn ico() -> Vec<u8> {
+        let mut ico = vec![0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 32, 0];
+        ico.extend_from_slice(&(PNG.len() as u32).to_le_bytes());
+        ico.extend_from_slice(&22u32.to_le_bytes());
+        ico.extend_from_slice(&PNG);
+        ico
     }
 
-    /// The format of what the provider would decode for `id`.
-    fn asked(id: &str) -> Option<Option<ImageFormat>> {
-        super::picture(id).map(|picture| picture.format())
+    /// A drawing of 3 × 2 whose `<svg` stands past the bytes Qt's reader
+    /// peeks at to tell an SVG: told by its name alone.
+    fn svg() -> Vec<u8> {
+        let mut svg = b"<?xml version=\"1.0\"?>\n<!--".to_vec();
+        svg.resize(svg.len() + 5000, b' ');
+        svg.extend_from_slice(
+            b"-->\n<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"3\" height=\"2\"/>\n",
+        );
+        svg
+    }
+
+    /// An object no repository here holds.
+    fn absent() -> Oid {
+        Oid::from_hex_str("0123456789abcdef0123456789abcdef01234567").expect("an object id")
+    }
+
+    /// What is held under `id`.
+    fn picture(id: &str) -> Option<PictureBlob> {
+        super::picture(id).map(|held| held.picture)
     }
 
     /// Every hold is a new id, so a re-read is a new URL; a tab let go of
@@ -255,49 +579,159 @@ mod tests {
     /// start.
     #[test]
     fn a_picture_goes_by_its_id_or_with_its_tab() {
-        let first = super::hold(1, &png("logo.PNG"));
-        let again = super::hold(1, &png("logo.png"));
-        let other = super::hold(12, &png("photo.jpg"));
+        let at = |path: &str| PictureBlob::new(absent(), 70, path);
+        let first = super::hold(1, at("logo.PNG"), None);
+        let again = super::hold(1, at("logo.png"), None);
+        let other = super::hold(12, at("photo.jpg"), None);
         assert_ne!(first, again);
         assert_eq!(super::url(&first), format!("image://pgg-preview/{first}"));
-        assert_eq!(
-            super::picture(&first).map(|picture| picture.bytes().to_vec()),
-            Some(PNG.to_vec())
-        );
-        assert_eq!(asked(&first), Some(Some(ImageFormat::Png)));
+        assert_eq!(picture(&first), Some(at("logo.PNG")));
 
         super::release(&first);
-        assert_eq!(asked(&first), None);
-        assert!(asked(&again).is_some());
+        assert_eq!(picture(&first), None);
+        assert!(picture(&again).is_some());
 
         super::release_tab(1);
-        assert_eq!(asked(&again), None);
-        assert_eq!(asked(&other), Some(Some(ImageFormat::Jpeg)));
+        assert_eq!(picture(&again), None);
+        assert_eq!(
+            picture(&other).and_then(|picture| picture.format()),
+            Some(ImageFormat::Jpeg)
+        );
         super::release_tab(12);
     }
 
-    /// The child: a Qt application with the provider installed, holding
-    /// one picture and letting another go, writing the QML that reads them
-    /// by their ids and saying how each `Image` came out.
+    /// The git the child reads with, kept off this machine's configuration.
+    fn executor(dir: &Path) -> GitExecutor {
+        GitExecutor::new().with_env([
+            ("GIT_CONFIG_GLOBAL", dir.join("no-config").into_os_string()),
+            ("GIT_CONFIG_NOSYSTEM", "1".into()),
+            (
+                "XDG_CONFIG_HOME",
+                dir.join("no-config-home").into_os_string(),
+            ),
+        ])
+    }
+
+    /// A repository at `dir/repo` holding each of `contents` as an object,
+    /// and their objects, in order.
+    async fn repository(
+        executor: &GitExecutor,
+        dir: &Path,
+        contents: &[&[u8]],
+    ) -> (PathBuf, Vec<Oid>) {
+        let repo = dir.join("repo");
+        std::fs::create_dir_all(&repo).expect("the repository's folder");
+        let cancel = CancellationToken::new();
+        executor
+            .run(GitCommand::new().cwd(&repo).args(["init", "-q"]), &cancel)
+            .await
+            .expect("git init");
+        let mut oids = Vec::new();
+        for bytes in contents {
+            std::fs::write(repo.join("content"), bytes).expect("the content");
+            let out = executor
+                .run(
+                    GitCommand::new()
+                        .cwd(&repo)
+                        .args(["hash-object", "-w", "content"]),
+                    &cancel,
+                )
+                .await
+                .expect("the content's object");
+            oids.push(Oid::from_hex_str(out.stdout_utf8().trim()).expect("an object id"));
+        }
+        (repo, oids)
+    }
+
+    /// A picture whose format streams is drawn from its stream, with no
+    /// whole read behind it: its read is told whole before its chunks stop.
     #[test]
-    #[ignore = "started by pictures_held_here_load_through_the_provider, offscreen, as a process of its own"]
+    fn a_picture_that_streams_is_drawn_from_its_stream() {
+        let dir = crate::temp::root().join(format!("pgg-preview-stream-{}", std::process::id()));
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("a runtime");
+        let executor = executor(&dir);
+        let (repo, oids) = runtime.block_on(repository(&executor, &dir, &[&PNG]));
+        let reader = PictureReader::new(
+            executor,
+            repo,
+            runtime.handle().clone(),
+            CancellationToken::new(),
+        );
+        let picture = PictureBlob::new(oids[0], 70, "logo.png");
+        let image = super::stream(&reader, picture, Some(ImageFormat::Png));
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(
+            image.map(|image| (image.width(), image.height())),
+            Some((1, 1))
+        );
+    }
+
+    /// The child: a Qt application with the provider installed, holding
+    /// pictures by their objects with a reader on its own runtime — and one
+    /// with none, one whose reader was stopped, one let go — writing the
+    /// QML that reads them by their ids and saying how each `Image` came
+    /// out.
+    #[test]
+    #[ignore = "started by held_pictures_are_read_from_git_through_the_provider, offscreen, as a process of its own"]
     fn provider_side() {
         let Some(dir) = std::env::var_os("PREVIEW_IMAGES_DIR") else {
             return;
         };
+        let dir = PathBuf::from(dir);
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("a runtime");
+        let executor = executor(&dir);
+        let (ico, svg) = (ico(), svg());
+        let (repo, oids) = runtime.block_on(repository(&executor, &dir, &[&PNG, &ico, &svg]));
+        let (oid, icon, drawing) = (oids[0], oids[1], oids[2]);
+        let reader = |cancel: CancellationToken| {
+            PictureReader::new(
+                executor.clone(),
+                repo.clone(),
+                runtime.handle().clone(),
+                cancel,
+            )
+        };
+        let live = Some(reader(CancellationToken::new()));
+        let stopped = CancellationToken::new();
+        stopped.cancel();
         let mut app = qtbridge::qtbridge_type_lib::QGuiApplication::new();
         let mut engine = qtbridge::qtbridge_type_lib::QQmlApplicationEngine::new();
         crate::qml_engine::arm(engine.pin_mut());
         super::install(engine.pin_mut());
-        let one = super::hold(7, &png("logo.png"));
-        let misnamed = super::hold(7, &png("photo.jpg"));
-        let unnamed = super::hold(7, &png("data.bin"));
-        let gone = super::hold(7, &png("logo.png"));
+        let blob = |oid: Oid, path: &str| PictureBlob::new(oid, 70, path);
+        let one = super::hold(7, blob(oid, "logo.png"), live.clone());
+        let misnamed = super::hold(7, blob(oid, "photo.jpg"), live.clone());
+        let unnamed = super::hold(7, blob(oid, "data.bin"), live.clone());
+        let icon_named = super::hold(7, blob(icon, "favicon.ico"), live.clone());
+        let icon_misnamed = super::hold(7, blob(icon, "favicon.png"), live.clone());
+        let drawing = super::hold(
+            7,
+            PictureBlob::new(drawing, svg.len() as u64, "drawing.svg"),
+            live.clone(),
+        );
+        let unread = super::hold(7, blob(absent(), "logo.png"), live.clone());
+        let closed = super::hold(7, blob(oid, "logo.png"), Some(reader(stopped)));
+        let unserved = super::hold(7, blob(oid, "logo.png"), None);
+        let gone = super::hold(7, blob(oid, "logo.png"), live);
         super::release(&gone);
         let urls = [
             ("one", super::url(&one)),
             ("misnamed", super::url(&misnamed)),
             ("unnamed", super::url(&unnamed)),
+            ("icon", super::url(&icon_named)),
+            ("misnamed icon", super::url(&icon_misnamed)),
+            ("drawing", super::url(&drawing)),
+            ("unread", super::url(&unread)),
+            ("closed", super::url(&closed)),
+            ("unserved", super::url(&unserved)),
             ("gone", super::url(&gone)),
             ("none", super::url("t7-0")),
         ];
@@ -329,19 +763,26 @@ mod tests {
         crate::qml_engine::load(engine.pin_mut(), &crate::urlpath::file_url(&qml))
             .expect("the images load");
         app.pin_mut().exec();
+        // `main`'s order: the reads stop, the drawings end, then Qt goes.
+        runtime.shutdown_background();
+        super::stand_down();
         drop(engine);
         qtbridge::collect_garbage();
         drop(app);
     }
 
-    /// Bytes held in this process show in an `Image` through
-    /// `image://pgg-preview/<id>`, loaded off the GUI thread as the pane's
-    /// cell loads them, with no file between — under an extension that
-    /// names another format too, as a misnamed file would, and from a path
-    /// that names none; an id let go, or never held, is an error, not a
-    /// picture.
+    /// A blob held by its object shows in an `Image` through
+    /// `image://pgg-preview/<id>`, read from git by its reader when the
+    /// `Image` asks, while Qt's image-loading thread goes on — under an
+    /// extension that names another format too, as a misnamed file would,
+    /// and from a path that names none; an icon, whose reader seeks, read
+    /// whole by its name, and streamed first where its name says otherwise;
+    /// a drawing its bytes do not tell soon enough, by its name. An object
+    /// git cannot read, a reader whose session closed, a picture no session
+    /// can read, an id let go and one never held are each an error, not a
+    /// picture, and none leaves its `Image` loading.
     #[test]
-    fn pictures_held_here_load_through_the_provider() {
+    fn held_pictures_are_read_from_git_through_the_provider() {
         let dir = crate::temp::root().join(format!("pgg-preview-images-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("a folder for the QML");
         let out = std::process::Command::new(std::env::current_exe().expect("this test binary"))
@@ -369,6 +810,12 @@ mod tests {
                 "one\t1\t1x1",
                 "misnamed\t1\t1x1",
                 "unnamed\t1\t1x1",
+                "icon\t1\t1x1",
+                "misnamed icon\t1\t1x1",
+                "drawing\t1\t3x2",
+                "unread\t3\t0x0",
+                "closed\t3\t0x0",
+                "unserved\t3\t0x0",
                 "gone\t3\t0x0",
                 "none\t3\t0x0"
             ],

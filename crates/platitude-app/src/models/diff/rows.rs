@@ -199,9 +199,10 @@ impl DiffModel {
     }
 
     /// Maps the core preview onto the QML-facing strings, holding a blob
-    /// side's bytes for the pane (`preview_images`). `None` resets. What
-    /// the last preview held is let go: each read holds its pictures under
-    /// ids of its own, so the URLs the pane is handed name none of those.
+    /// side for the pane's image provider (`preview_images`). `None`
+    /// resets. What the last preview held is let go: each read holds its
+    /// pictures under ids of its own, so the URLs the pane is handed name
+    /// none of those.
     pub(super) fn apply_preview(&mut self, preview: Option<&FilePreview>) {
         let before = std::mem::take(&mut self.preview_held);
         self.show_preview(preview);
@@ -232,6 +233,12 @@ impl DiffModel {
         // `file:` URL's query.
         let stamp = &self.fingerprint;
         let tab = self.tab_id;
+        // A blob side is read by the session that read its diff, when the
+        // `Image` asks (`preview_images`).
+        let reader = match p.format {
+            Some(_) => crate::hub::from_session(tab, |s| s.picture_reader()).flatten(),
+            None => None,
+        };
         let mut held = Vec::new();
         let mut url = |side: &Option<PreviewSide>| -> String {
             match side.as_ref().and_then(|s| s.picture.as_ref()) {
@@ -243,8 +250,8 @@ impl DiffModel {
                     }
                     format!("{url}?read={stamp}")
                 }
-                Some(Picture::Bytes(picture)) => {
-                    let id = crate::preview_images::hold(tab, picture);
+                Some(Picture::Blob(picture)) => {
+                    let id = crate::preview_images::hold(tab, picture.clone(), reader.clone());
                     let url = crate::preview_images::url(&id);
                     held.push(id);
                     url
@@ -390,7 +397,7 @@ mod tests {
     use super::*;
     use crate::models::notify::runs_of;
     use platitude_core::parse::diff::parse_patch;
-    use platitude_core::preview::PictureBytes;
+    use platitude_core::preview::PictureBlob;
 
     /// A failed read ends the wait and says so; the next ask waits again
     /// with the failure gone, so it never stands for a read it is not about.
@@ -529,19 +536,17 @@ mod tests {
 
     /// A blob side is held for the pane under an `image://` URL of its
     /// tab's; the working-tree side stays a `file:` URL stamped with the
-    /// read. The next read lets the last one's bytes go, and the pane
+    /// read. The next read lets the last one's pictures go, and the pane
     /// closing lets go of the rest.
     #[test]
     fn a_pane_holds_its_pictures_until_the_next_read_or_its_close() {
-        let picture = |bytes: &[u8]| PreviewSide {
-            size: bytes.len() as u64,
-            picture: Some(Picture::Bytes(PictureBytes::new(
-                bytes.to_vec(),
-                "logo.png",
-            ))),
+        let oid = Oid::from_hex_str("0123456789abcdef0123456789abcdef01234567").expect("an id");
+        let picture = |size: u64| PreviewSide {
+            size,
+            picture: Some(Picture::Blob(PictureBlob::new(oid, size, "logo.png"))),
         };
         let file = std::env::temp_dir().join("logo.png");
-        let read = |old: &[u8]| FilePreview {
+        let read = |old: u64| FilePreview {
             format: Some(ImageFormat::Png),
             old: Some(picture(old)),
             new: Some(PreviewSide {
@@ -555,7 +560,7 @@ mod tests {
             ..DiffModel::default()
         };
 
-        model.apply_preview(Some(&read(b"first")));
+        model.apply_preview(Some(&read(5)));
         let first = model.preview_held.clone();
         assert_eq!(first.len(), 1, "the blob side, not the file");
         assert_eq!(model.preview_old_url, crate::preview_images::url(&first[0]));
@@ -566,12 +571,12 @@ mod tests {
             format!("{}?read=00ff", crate::urlpath::file_url(&file))
         );
 
-        model.apply_preview(Some(&read(b"second")));
+        model.apply_preview(Some(&read(6)));
         let second = model.preview_held.clone();
         assert_ne!(model.preview_old_url, crate::preview_images::url(&first[0]));
         assert!(
             !crate::preview_images::is_held(&first[0]),
-            "the last read's bytes go"
+            "the last read's pictures go"
         );
         assert!(crate::preview_images::is_held(&second[0]));
 

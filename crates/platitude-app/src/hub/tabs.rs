@@ -564,15 +564,14 @@ fn apply_repo_settings(session: &Arc<RepoSession>, applied: &platitude_core::set
 #[cfg(test)]
 mod tests {
     use super::*;
-    use platitude_core::preview::PictureBytes;
+    use platitude_core::Oid;
+    use platitude_core::preview::PictureBlob;
 
-    /// A closed tab's page goes without its diff pane clearing, so the
-    /// close itself lets go of what the pane held (`preview_images`), and
-    /// of nothing another tab holds. The ids start high: the pictures are
-    /// held process-wide, beside the tabs of the other tests.
-    #[test]
-    fn closing_a_tab_lets_go_of_its_pictures() {
-        let mut hub = Hub {
+    /// A hub whose runtime nobody drives, numbering its tabs after
+    /// `next_tab_id`: the pictures are held process-wide, so each test
+    /// numbers its tabs apart from the others'.
+    fn hub(next_tab_id: i32) -> Hub {
+        Hub {
             runtime: Some(
                 tokio::runtime::Builder::new_current_thread()
                     .build()
@@ -582,7 +581,7 @@ mod tests {
             git_program: String::new(),
             restart_wanted: false,
             tabs: HashMap::new(),
-            next_tab_id: 900,
+            next_tab_id,
             parked_writes: Vec::new(),
             saves: saves::Saves::default(),
             store: Store::ephemeral(),
@@ -590,19 +589,54 @@ mod tests {
             saved_state: State::default(),
             state: State::default(),
             held_elsewhere: String::new(),
-        };
+        }
+    }
+
+    /// A picture to hold, by an object nothing reads here.
+    fn picture() -> PictureBlob {
+        let oid = Oid::from_hex_str("0123456789abcdef0123456789abcdef01234567").expect("an id");
+        PictureBlob::new(oid, 3, "logo.png")
+    }
+
+    /// A closed tab's page goes without its diff pane clearing, so the
+    /// close itself lets go of what the pane held (`preview_images`), and
+    /// of nothing another tab holds.
+    #[test]
+    fn closing_a_tab_lets_go_of_its_pictures() {
+        let mut hub = hub(900);
         let repo = PathBuf::from("repo");
         let closed = hub.reserve_tab(repo.clone(), repo.clone()).expect("a tab");
         let open = hub.reserve_tab(repo.clone(), repo).expect("a tab");
-        let picture = PictureBytes::new(vec![1, 2, 3], "logo.png");
-        let gone = crate::preview_images::hold(closed, &picture);
-        let kept = crate::preview_images::hold(open, &picture);
+        let gone = crate::preview_images::hold(closed, picture(), None);
+        let kept = crate::preview_images::hold(open, picture(), None);
 
         hub.close_tab(closed);
         assert!(!crate::preview_images::is_held(&gone));
         assert!(crate::preview_images::is_held(&kept));
 
         hub.close_tab(open);
+        assert!(!crate::preview_images::is_held(&kept));
+    }
+
+    /// A tab let go of stays, with no session, to be read from the start
+    /// when selected again (`Hub::release_tab`): its page goes with the
+    /// session, and the pictures the page's diff pane held go with the
+    /// page; another tab's stay.
+    #[test]
+    fn releasing_a_tab_lets_go_of_its_pictures() {
+        let mut hub = hub(950);
+        let repo = PathBuf::from("repo");
+        let released = hub.open_tab(repo.clone(), repo.clone()).expect("a tab");
+        let open = hub.open_tab(repo.clone(), repo).expect("a tab");
+        let gone = crate::preview_images::hold(released, picture(), None);
+        let kept = crate::preview_images::hold(open, picture(), None);
+
+        hub.release_tab(released);
+        assert!(!crate::preview_images::is_held(&gone));
+        assert!(crate::preview_images::is_held(&kept));
+        assert!(hub.tabs.contains_key(&released), "let go of, not closed");
+
+        hub.release_tab(open);
         assert!(!crate::preview_images::is_held(&kept));
     }
 }

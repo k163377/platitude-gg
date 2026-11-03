@@ -93,6 +93,21 @@ impl RepoSession {
         );
     }
 
+    /// What reads the pictures of the diff the pane shows, when they are
+    /// drawn: this session's git in its worktree. A latest ask
+    /// (`session::asks`): it reads under the newest diff read's token
+    /// (`DiffEpoch::watch`), so the pane's next read stops it, as does the
+    /// session's close. `None` while the repository is not open.
+    pub fn picture_reader(&self) -> Option<preview::PictureReader> {
+        let (_, read) = self.diff_epoch.watch(&self.root_cancel);
+        Some(preview::PictureReader::new(
+            self.executor.clone(),
+            self.workdir()?,
+            self.runtime.clone(),
+            read,
+        ))
+    }
+
     /// Loads a unified diff for one file, and its colours behind it.
     pub fn load_diff(self: &Arc<Self>, target: DiffTarget) {
         self.runtime.spawn(self.read_diff(target));
@@ -215,7 +230,7 @@ impl RepoSession {
         );
         match diff {
             Ok(raw) => {
-                // Passed while reading: everything below (a picture's bytes
+                // Passed while reading: everything below (a preview's sides
                 // read, a colouring walk) would be spent for nobody.
                 if !self.diff_is_current(epoch) {
                     return DiffReadOutcome::Overtaken;
@@ -237,7 +252,7 @@ impl RepoSession {
                 let preview =
                     preview::file_preview(&self.executor, &workdir, &target, is_binary, &cancel)
                         .await;
-                // Asked again: the pane can move on during the picture read.
+                // Asked again: the pane can move on while the sides are read.
                 if !self.diff_is_current(epoch) {
                     return DiffReadOutcome::Overtaken;
                 }

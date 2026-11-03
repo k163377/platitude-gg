@@ -4,14 +4,14 @@ import QtQuick.Layouts
 import platitude.ui
 
 // One side (Before / After) of the diff pane's image preview; a side with no `sizeText` collapses. What a side is
-// shown from and when its bytes are let go: `platitude_core::preview` and the app's `preview_images`. Headless:
+// shown from and what it costs: `platitude_core::preview` and the app's `preview_images`. Headless:
 // `preview*` and `preview-close` on `--preset pictures`, which wait on `settled` too — `DiffPane.diffSettled()` alone
 // shoots before the decode, an empty frame under the caption.
 ColumnLayout {
     id: previewCell
     /// `Before` / `After`.
     required property string caption
-    /// The working-tree file's `file:` URL stamped with its read, or the `image://` a blob's bytes are held under —
+    /// The working-tree file's `file:` URL stamped with its read, or the `image://` a blob is held under —
     /// new for every read — so a side that moved under the pane comes back as a changed source
     /// (`DiffModel.previewOldUrl`).
     required property string url
@@ -89,7 +89,8 @@ ColumnLayout {
             fillMode: Image.PreserveAspectFit
             source: previewCell.url
             asynchronous: true
-            // A closed pane keeps no picture in the pixmap cache.
+            // A closed pane keeps no picture in the pixmap cache. So every draw of a blob side is a `git cat-file`
+            // of its own (`preview::PictureReader`).
             cache: false
             // No `sourceSize`: it rescales rasters at decode, blurring small icons.
             smooth: previewFrame.displayScale < 1 || previewCell.isVector
