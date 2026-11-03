@@ -55,9 +55,35 @@ mod qobject {
         #[cxx_name = "textureFactoryForImage"]
         fn texture_factory_for_image(image: &QImage) -> *mut QQuickTextureFactory;
 
+        /// The C++ `QImage` behind `cxx_qt_lib::QImage`, for a member that
+        /// crate does not bind.
+        #[cxx_name = "QImage"]
+        type QImageMembers;
+
+        /// Converts the image to `format` — in place where the two are of
+        /// one depth, with no second buffer.
+        #[cxx_name = "convertTo"]
+        fn convert_to(
+            self: Pin<&mut QImageMembers>,
+            format: QImageFormat,
+            flags: ImageConversionFlags,
+        );
+
         /// Qt's asynchronous provider. It has no `Q_OBJECT` of its own, so
         /// it is no `#[qobject]`, whose downcast is a `qobject_cast`.
         type QQuickAsyncImageProvider;
+    }
+
+    #[namespace = "rust::cxxqtlib1"]
+    extern "C++" {
+        include!("cxx-qt-lib/qimage.h");
+        type QImageFormat = cxx_qt_lib::QImageFormat;
+    }
+
+    #[namespace = "Qt"]
+    extern "C++" {
+        include!(<QtCore/qnamespace.h>);
+        type ImageConversionFlags = super::ImageConversionFlags;
     }
 
     extern "C++Qt" {
@@ -269,7 +295,7 @@ fn draw(reader: &PictureReader, picture: PictureBlob, answer: Answer) -> Cancell
                 true => None,
                 false => read_whole(&reader, picture),
             });
-            answer.tell(image);
+            answer.tell(image.map(for_texture));
         });
     // The thread not started took the answer with it, which tells of no
     // picture.
@@ -374,6 +400,50 @@ fn read_whole(reader: &PictureReader, picture: PictureBlob) -> Option<QImage> {
         }
         Err(_) => None,
     }
+}
+
+/// `Qt::ImageConversionFlags`, a `QFlags` over the `int` this wraps.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct ImageConversionFlags(i32);
+
+impl ImageConversionFlags {
+    /// `Qt::AutoColor`, Qt's own default.
+    const AUTO_COLOR: Self = Self(0);
+}
+
+// SAFETY: `QFlags<Qt::ImageConversionFlag>` holds one `int` and is
+// trivially copied, as this is.
+unsafe impl cxx::ExternType for ImageConversionFlags {
+    type Id = cxx::type_id!("Qt::ImageConversionFlags");
+    type Kind = cxx::kind::Trivial;
+}
+
+/// `image` as Qt Quick's texture takes it: an ARGB32 picture — an RGBA
+/// PNG's, an icon's — premultiplied in place. Handed one as it is, the
+/// texture factory converts a copy while the response still holds the
+/// original: the picture's decoded size again, at once, for each side drawn
+/// (`QQuickDefaultTextureFactory` in `qquickpixmapcache.cpp`;
+/// ci/baseline/preview-pictures-windows-x64.md). A format of another depth
+/// takes a second buffer wherever it is converted, and is left to the
+/// factory. Qt's own file reader turns an opaque picture to RGB32 in place
+/// instead, a texture that draws the same.
+fn for_texture(mut image: QImage) -> QImage {
+    use cxx_qt_lib::QImageFormat as Format;
+    if image.format() == Format::Format_ARGB32 {
+        // SAFETY: `QImageMembers` is the C++ class `cxx_qt_lib::QImage` is
+        // laid out as; `image` is a live one, held only here.
+        let members = unsafe {
+            Pin::new_unchecked(
+                &mut *std::ptr::from_mut(&mut image).cast::<qobject::QImageMembers>(),
+            )
+        };
+        members.convert_to(
+            Format::Format_ARGB32_Premultiplied,
+            ImageConversionFlags::AUTO_COLOR,
+        );
+    }
+    image
 }
 
 /// A picture decoded on a thread of its own, on its way to its response's.
@@ -572,6 +642,36 @@ mod tests {
     /// What is held under `id`.
     fn picture(id: &str) -> Option<PictureBlob> {
         super::picture(id).map(|held| held.picture)
+    }
+
+    /// An ARGB32 picture goes to its texture premultiplied in its own
+    /// buffer — the pixels Qt's premultiplied format holds for its colours —
+    /// and a picture of a format the texture takes goes as it is.
+    #[test]
+    fn an_argb32_picture_is_premultiplied_in_its_own_buffer() {
+        use cxx_qt_lib::{QColor, QImage, QImageFormat};
+        let colours = [
+            QColor::from_rgba(255, 0, 0, 255),
+            QColor::from_rgba(255, 128, 0, 128),
+            QColor::from_rgba(0, 0, 255, 0),
+        ];
+        let painted = |format: QImageFormat| {
+            let mut image = QImage::from_width_height_and_format(3, 1, format);
+            for (x, colour) in (0..).zip(&colours) {
+                image.set_pixel_color(x, 0, colour);
+            }
+            image
+        };
+        let straight = painted(QImageFormat::Format_ARGB32);
+        // The buffer's serial number, which a buffer of its own renews.
+        let buffer = straight.cache_key() >> 32;
+        let drawn = super::for_texture(straight);
+        assert_eq!(drawn.cache_key() >> 32, buffer, "the same buffer");
+        assert_eq!(drawn, painted(QImageFormat::Format_ARGB32_Premultiplied));
+
+        let opaque = painted(QImageFormat::Format_RGB32);
+        let key = opaque.cache_key();
+        assert_eq!(super::for_texture(opaque).cache_key(), key, "left alone");
     }
 
     /// Every hold is a new id, so a re-read is a new URL; a tab let go of
