@@ -119,6 +119,21 @@ impl DiffModel {
         }
     }
 
+    /// A read is out: the pane waits, and an earlier failure no longer
+    /// stands for it.
+    pub(super) fn waiting(&mut self) {
+        self.loading = true;
+        self.unread = false;
+    }
+
+    /// The read failed (`DiffMsg::Unread`): the pane stops waiting and says
+    /// so, keeping the rows a re-read had shown.
+    pub(super) fn went_unread(&mut self) {
+        self.loading = false;
+        self.unread = true;
+        self.requested_at = None;
+    }
+
     pub(super) fn begin_request(&mut self, title: String, target: DiffTarget) {
         self.begin_request_in(String::new(), title, target);
     }
@@ -143,7 +158,7 @@ impl DiffModel {
         self.fingerprint = String::new();
         // Like the fingerprint, about bytes not read yet.
         self.apply_endings(None);
-        self.loading = true;
+        self.waiting();
         // Likewise: the colours on screen are the last read's.
         self.coloured = false;
         if !same_file {
@@ -376,6 +391,23 @@ mod tests {
     use crate::models::notify::runs_of;
     use platitude_core::parse::diff::parse_patch;
     use platitude_core::preview::PictureBytes;
+
+    /// A failed read ends the wait and says so; the next ask waits again
+    /// with the failure gone, so it never stands for a read it is not about.
+    #[test]
+    fn an_unread_diff_ends_the_wait_until_the_next_ask() {
+        let mut model = DiffModel::default();
+        model.waiting();
+        // waits(measured): only has to be some stamp — the test reads that it goes, never its time
+        model.requested_at = Some(std::time::Instant::now());
+        model.went_unread();
+        assert!(!model.loading);
+        assert!(model.unread);
+        assert!(model.requested_at.is_none(), "no round trip to log");
+        model.waiting();
+        assert!(model.loading);
+        assert!(!model.unread);
+    }
 
     /// How a re-read moved the rows, by the keys the model keeps them by.
     fn edit(before: &str, after: &str, split: bool) -> crate::models::notify::Edit {

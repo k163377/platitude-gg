@@ -221,6 +221,9 @@ pub struct DiffModel {
     /// repository has no commit yet (the case `git add` refuses).
     embedded_sha8: String,
     loading: bool,
+    /// The last read of this file failed (`DiffMsg::Unread`): the pane says
+    /// so instead of `No changes to show`. Down again at the next ask.
+    unread: bool,
     /// Whether the settled colours have been laid over the rows on screen;
     /// stays false for a language with no rules. Nothing is drawn from it —
     /// it is what a headless run waits on (`colour-place`).

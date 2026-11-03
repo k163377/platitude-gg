@@ -261,6 +261,11 @@ impl RepoSession {
             Err(e) if e.is_cancelled() => self.passed_or_closing(epoch),
             Err(e) => {
                 self.fail("diff", e);
+                // A latest read answers its failure too (`session::asks`):
+                // the pane the reader is still on stops waiting.
+                if self.diff_is_current(epoch) {
+                    self.sink.event(SessionEvent::DiffUnread { target });
+                }
                 DiffReadOutcome::Failed
             }
         }

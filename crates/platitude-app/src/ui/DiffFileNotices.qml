@@ -43,6 +43,7 @@ ColumnLayout {
     /// A read that came back with headers and no hunks (a pure rename, a mode change, an empty file added): nothing
     /// below the notices will ever fill in.
     readonly property bool headersOnly: notices.rowCount === 0 && !notices.diffModel.loading
+                                        && !notices.diffModel.unread
                                         && !notices.diffModel.isBinary && !notices.diffModel.unmerged
                                         && !notices.diffModel.embedded && notices.diffModel.previewKind === ""
                                         && notices.diffModel.title !== ""
@@ -52,6 +53,9 @@ ColumnLayout {
     readonly property string wholeShown: wholeLine.visible ? wholeLine.text : ""
     readonly property string fileLinesOrder: [modeLine, endingsLine, wholeLine].filter(line => line.visible)
                                              .sort((a, b) => a.y - b.y).map(line => line.objectName).join(",")
+
+    /// The command log was asked for from the unread line (`DiffPane.linkAsked`).
+    signal linkAsked(string href)
 
     /// A side's own colour: the current branch's where it is the branch stood on, none for any other.
     function sideTint(side) {
@@ -192,6 +196,22 @@ ColumnLayout {
         elide: Text.ElideRight
         text: qsTr("No changes to show")
         color: Theme.textMuted
+    }
+    // -- a read git could not make (`DiffModel.unread`): `No changes to show` would say nothing changed. What failed
+    //    is said, and where git's words are, in the notice bar's way (デザイン規約 §答えの要らない報せ): the log's
+    //    title is the one word that goes there (`Words.commandsHref`), in the tip's dress. Rows a re-read had shown
+    //    stay below it.
+    CardText {
+        id: unreadLine
+        visible: notices.diffModel.unread
+        Layout.margins: Theme.spaceSm
+        Layout.fillWidth: true
+        //: %1 is the command log's own title.
+        text: qsTr("This diff could not be read — see %1").arg(Words.commandsTitle)
+        place: Words.commandsTitle
+        placeHref: Words.commandsHref
+        color: Theme.textMuted
+        onLinkAsked: href => notices.linkAsked(href)
     }
     RowLayout {
         visible: notices.diffModel.previewKind === "image"

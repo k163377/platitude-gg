@@ -540,12 +540,17 @@ pub enum DiffMsg {
         /// `SessionEvent::DiffColoured`).
         settled: bool,
     },
+    /// The diff of `target` could not be read: the pane stops waiting
+    /// (git's words are on the tab's error surface).
+    Unread { target: DiffTarget },
 }
 
 impl DiffMsg {
     pub fn target(&self) -> &DiffTarget {
         match self {
-            DiffMsg::Loaded { target, .. } | DiffMsg::Coloured { target, .. } => target,
+            DiffMsg::Loaded { target, .. }
+            | DiffMsg::Coloured { target, .. }
+            | DiffMsg::Unread { target } => target,
         }
     }
 }

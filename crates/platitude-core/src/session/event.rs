@@ -371,6 +371,12 @@ pub enum SessionEvent {
         oid: Oid,
         error: GitError,
     },
+    /// The diff of `target` could not be read; git's words went out as
+    /// [`Self::OpFailed`]. Sent only for the diff the reader is still on,
+    /// so the pane stops waiting for rows that are not coming.
+    DiffUnread {
+        target: DiffTarget,
+    },
     DiffLoaded {
         target: DiffTarget,
         /// Shared with the colouring that follows, which reads the same

@@ -379,6 +379,9 @@ impl SessionSink for BridgeSink {
                     settled,
                 });
             }
+            SessionEvent::DiffUnread { target } => {
+                self.feeds.diff.push(DiffMsg::Unread { target });
+            }
             SessionEvent::CommandStarted {
                 id,
                 display,

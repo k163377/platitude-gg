@@ -28,6 +28,7 @@ impl DiffModel {
     qproperty!("embedded", Member = embedded, Notify = changed);
     qproperty!("embeddedSha8", Member = embedded_sha8, Notify = changed);
     qproperty!("loading", Member = loading, Notify = changed);
+    qproperty!("unread", Member = unread, Notify = changed);
     qproperty!("carriedAt", Member = current_at, Notify = changed);
     qproperty!("coloured", Member = coloured, Notify = changed);
     qproperty!("previewKind", Member = preview_kind, Notify = changed);
@@ -424,6 +425,7 @@ impl DiffModel {
         self.embedded = false;
         self.embedded_sha8 = String::new();
         self.loading = false;
+        self.unread = false;
         self.fingerprint = String::new();
         self.coloured = false;
         // Kept past here, a closed pane holds the whole diff's heap.
@@ -471,6 +473,7 @@ impl DiffModel {
                     ..
                 } => {
                     self.loading = false;
+                    self.unread = false;
                     if let Some(t0) = &asked {
                         tracing::info!(
                             elapsed_ms = t0.elapsed().as_millis() as u64,
@@ -519,6 +522,10 @@ impl DiffModel {
                     self.repaint_rows(&colors);
                     self.shown_colors = colors;
                 }
+                // No rows are coming: the pane stops waiting, keeps what it
+                // shows (the last rows for a file read again) and says the
+                // read failed; git's words are in the command log.
+                DiffMsg::Unread { .. } => self.went_unread(),
             }
         }
         self.changed();

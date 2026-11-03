@@ -2495,8 +2495,8 @@ FocusScope {
         page.commandsOpen = true
         page.commandsAttention = true
     }
-    /// The one link tooltips and the notice bar's line carry (`Words.commandsHref`); other hrefs are ignored — a tip is
-    /// not a browser.
+    /// The one link tooltips, the notice bar's line and the diff pane's unread line carry (`Words.commandsHref`); other
+    /// hrefs are ignored — a tip is not a browser.
     function tipLinkAsked(href) {
         if (href === Words.commandsHref)
             page.raiseCommands()
@@ -3873,6 +3873,7 @@ FocusScope {
                             onCloseRequested: page.closeDiffToGraph()
                             onCopyRequested: text => clipboard.copy(text)
                             onCodeMenuRequested: page.openCodeMenu()
+                            onLinkAsked: href => page.tipLinkAsked(href)
                             onDiscardHunkRequested: hunk => page.discardHunkNow(hunk)
                             onStageFileRequested: {
                                 if (page.diffStaged)

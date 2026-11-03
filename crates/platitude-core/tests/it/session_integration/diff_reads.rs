@@ -202,3 +202,43 @@ async fn a_re_read_dropped_unread_holds_nothing_up() {
     );
     session.close_and_wait().await;
 }
+
+/// A diff git cannot produce — a textconv that always fails — still
+/// answers the pane (`SessionEvent::DiffUnread`, a latest read's failure:
+/// `session::asks`), beside git's words on the error surface, so the pane
+/// stops waiting for rows that are not coming.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_diff_git_cannot_read_still_answers_the_pane() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "1\n", "root");
+    repo.write_file("f.txt", "2\n");
+    repo.write_file(".git/info/attributes", "f.txt diff=boom\n");
+    repo.git(&["config", "diff.boom.textconv", "false"]);
+    let (sink, session) = opened(&repo).await;
+    sink.opening_settled(&session).await;
+
+    session.load_diff(unstaged("f.txt"));
+    let target = sink
+        .wait_for("the unread answer", |evs| {
+            evs.iter().find_map(|e| match e {
+                SessionEvent::DiffUnread { target } => Some(target.clone()),
+                _ => None,
+            })
+        })
+        .await;
+    assert_eq!(target, unstaged("f.txt"));
+    let (failed, loaded) = {
+        let events = sink.events.lock().unwrap();
+        (
+            events
+                .iter()
+                .any(|e| matches!(e, SessionEvent::OpFailed { op: "diff", .. })),
+            events
+                .iter()
+                .any(|e| matches!(e, SessionEvent::DiffLoaded { .. })),
+        )
+    };
+    assert!(failed, "git's words went to the error surface");
+    assert!(!loaded, "and no rows came");
+    session.close_and_wait().await;
+}

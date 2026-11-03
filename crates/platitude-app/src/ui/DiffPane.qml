@@ -100,6 +100,9 @@ Rectangle {
     signal copyRequested(string text)
     /// A right-click on the text; the selection it acts on is already settled (`DiffTextSelect.askMenu`).
     signal codeMenuRequested()
+    /// A place word in the pane's notes was pressed — the command log, from a diff git could not produce
+    /// (`DiffFileNotices`); the page goes there (`RepoPage.tipLinkAsked`).
+    signal linkAsked(string href)
 
     /// A press on one line's mark (デザイン規約 §diff の中のステージ). Named so a run enters where the mark does — the
     /// mark exists only under a pointer, and a press on it cannot be injected (verify-ui).
@@ -445,10 +448,10 @@ Rectangle {
         const m = diffPane.diffModel
         // `embedded` never becomes rows: git will not open a nested repository, so the pane shows a line about it
         // (`DiffFileNotices`); nor does a read of headers alone, nor a conflict with one side left (git prints no
-        // patch, and the pane says what each side did). Each one left out here is a verb opening such a diff that waits
-        // to its watchdog.
+        // patch, and the pane says what each side did), nor a read git could not make (the pane says so). Each one left
+        // out here is a verb opening such a diff that waits to its watchdog.
         return !m.loading && (diffList.count > 0 || m.isBinary || m.previewKind !== "" || m.embedded
-                              || fileNotices.headersOnly || m.unmerged)
+                              || fileNotices.headersOnly || m.unmerged || m.unread)
     }
     /// Automation: a settled read is not yet a picture on screen — the decode is asynchronous
     /// (`DiffFileNotices.picturesSettled`).
@@ -540,6 +543,7 @@ Rectangle {
             oursColor: diffPane.sideColor("ours")
             theirsColor: diffPane.sideColor("theirs")
             nameCap: diffPane.width / 3
+            onLinkAsked: href => diffPane.linkAsked(href)
         }
         AppListView {
             id: diffList
