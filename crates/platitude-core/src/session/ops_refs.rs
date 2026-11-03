@@ -120,10 +120,11 @@ impl RepoSession {
     /// (internal-docs/性能.md §設計規則). Unanswered in time, or unreadable,
     /// the row stays plain and a refusal at the press still turns it.
     ///
-    /// **Every ask is answered**, a failed read included
-    /// ([`SessionEvent::BranchDeleteChecked::merged`]), so a harness
-    /// waiting for the echo sees a run whose reads fell over. That failure
-    /// is not logged: it is an open question, and the press asks git.
+    /// **Every ask a newer one did not stop is answered**, a failed read
+    /// included ([`SessionEvent::BranchDeleteChecked::merged`]), so a
+    /// harness waiting for the echo sees a run whose reads fell over. That
+    /// failure is not logged: it is an open question, and the press asks
+    /// git.
     pub fn check_branch_delete(self: &Arc<Self>, branch: String) {
         let Some(workdir) = self.workdir() else {
             self.sink.event(SessionEvent::BranchDeleteChecked {
@@ -138,13 +139,19 @@ impl RepoSession {
             .and_then(|snapshot| snapshot.local_named(&branch))
             .and_then(|item| item.upstream_oid)
             .map_or_else(|| "HEAD".to_string(), |oid| oid.to_hex());
+        // A latest read (`session::asks`): the menu opened last is the one
+        // waiting, so the ask before it stops and says nothing — an answer
+        // about it landing last would leave the open menu's row unanswered.
+        let cancel = self.latest.branch_delete.begin(&self.root_cancel);
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
-            let cancel = s.root_cancel.clone();
             let rev = format!("refs/heads/{branch}");
             let merged = branch::is_merged_into(&s.executor, &workdir, &rev, &reference, &cancel)
                 .await
                 .ok();
+            if cancel.is_cancelled() {
+                return;
+            }
             s.sink
                 .event(SessionEvent::BranchDeleteChecked { branch, merged });
         });

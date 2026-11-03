@@ -911,9 +911,9 @@ async fn a_pictures_blob_reaches_the_pane_as_its_bytes() {
     session.close_and_wait().await;
 }
 
-/// Every ask about a delete is answered, a failed read included — as
-/// "cannot say". The row draws that like a merged branch, so this event is
-/// the only place the two are told apart.
+/// An ask about a delete no newer one stopped is answered, a failed read
+/// included — as "cannot say". The row draws that like a merged branch, so
+/// this event is the only place the two are told apart.
 #[tokio::test(flavor = "multi_thread")]
 async fn an_ask_about_a_delete_is_answered_even_where_the_read_fails() {
     let mut repo = TestRepo::init();

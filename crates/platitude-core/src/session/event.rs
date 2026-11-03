@@ -267,8 +267,8 @@ pub enum SessionEvent {
         /// `None` where the reads could not say. Drawn like merged (no
         /// `-D`: a delete not shown to be refused is offered plain, and git
         /// answers the press), but kept apart for reading a run afterwards
-        /// — every ask is answered, so a bare delete row is one whose
-        /// answer said so.
+        /// — every ask a newer one did not stop is answered, so a bare
+        /// delete row is one whose answer said so.
         merged: Option<bool>,
     },
     /// Answer to [`RepoSession::check_plan_published`]: how many commits

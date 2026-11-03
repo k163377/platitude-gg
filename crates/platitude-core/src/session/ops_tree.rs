@@ -437,18 +437,17 @@ impl RepoSession {
                 if !standing {
                     // No read of the other worktrees runs while one is moved: a
                     // `status` standing in the folder is what Windows refuses the
-                    // rename for. The read under way is waited out, and the ones
-                    // due meanwhile skip their turn (`refresh_carried`).
-                    let _reads = s.carried_slot.acquire().await;
-                    return crate::worktrees::move_to(
-                        &exec,
-                        &repo.workdir,
-                        &from,
-                        &to,
-                        &name,
-                        &cancel,
-                    )
-                    .await;
+                    // rename for. The read under way is waited out; a pass asked
+                    // for meanwhile waits for the move and runs after it, a
+                    // paced one is planned again by its pace.
+                    let reads = s.carried_pass.hold().await;
+                    let moved =
+                        crate::worktrees::move_to(&exec, &repo.workdir, &from, &to, &name, &cancel)
+                            .await;
+                    if let Some(turn) = reads {
+                        s.run_carried_owed(turn);
+                    }
+                    return moved;
                 }
                 // Before anything can turn the rename down: every answer from
                 // here comes from a session that stood down, so the tab stands

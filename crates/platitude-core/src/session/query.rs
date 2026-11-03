@@ -37,14 +37,39 @@ impl RepoSession {
     ///
     /// A plan's range starts from HEAD, which has commits, so there is no
     /// unborn case to keep off git here.
+    ///
+    /// A follow read (`session::asks`): asked while one is out, it is
+    /// owed to that one and read again after it on the range asked last,
+    /// so an older count never lands after a newer one.
     pub fn check_plan_published(self: &Arc<Self>, range: String) {
-        self.spawn_read("publish", |s, workdir, cancel| async move {
-            let state = publish::state_of(&s.executor, &workdir, &range, &cancel).await?;
-            Ok(SessionEvent::PlanPublished {
-                range,
-                published: state.published(),
-            })
-        });
+        *relock(&self.plan.range) = range;
+        let Some(turn) = self.plan.published.ask() else {
+            return;
+        };
+        let s = Arc::clone(self);
+        self.runtime
+            .spawn(async move { s.plan_published_on_turn(turn).await });
+    }
+
+    async fn plan_published_on_turn(self: Arc<Self>, mut turn: Turn) {
+        loop {
+            self.plan.published.take_owed();
+            let range = relock(&self.plan.range).clone();
+            if let Some(workdir) = self.workdir() {
+                let cancel = self.root_cancel.clone();
+                match publish::state_of(&self.executor, &workdir, &range, &cancel).await {
+                    Ok(state) => self.sink.event(SessionEvent::PlanPublished {
+                        range,
+                        published: state.published(),
+                    }),
+                    Err(e) => self.fail("publish", e),
+                }
+            }
+            match self.plan.published.end(turn) {
+                Some(next) => turn = next,
+                None => return,
+            }
+        }
     }
 
     /// Asks whether `oid` carries a signature and what git makes of it.
@@ -56,7 +81,7 @@ impl RepoSession {
     pub fn check_signature(self: &Arc<Self>, oid: Oid) {
         self.spawn_read_latest(
             "signature",
-            &self.signature_read,
+            &self.latest.signature,
             move |s, workdir, cancel| async move {
                 let signature =
                     identity::verify_commit(&s.executor, &workdir, &oid.to_hex(), &cancel).await?;

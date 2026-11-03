@@ -273,7 +273,7 @@ impl RepoSession {
             return;
         };
         let timeout = self.network_timeout();
-        let cancel = self.remote_branch_read.begin(&self.root_cancel);
+        let cancel = self.latest.remote_branch.begin(&self.root_cancel);
         // What the push would send: the history the far tip has to be in for
         // the push to fast-forward it.
         let tip = format!("refs/heads/{local}");

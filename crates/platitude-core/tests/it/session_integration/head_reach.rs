@@ -113,35 +113,6 @@ async fn a_branch_another_worktree_has_out_holds_the_tip_under_the_setting() {
     session.close_and_wait().await;
 }
 
-/// Once the setting is known to take a branch on the tip along, a ref
-/// moving elsewhere asks the walk again: the listing does not answer
-/// "held" for that branch on its own.
-#[tokio::test(flavor = "multi_thread")]
-async fn a_known_setting_keeps_a_branch_on_the_tip_out_of_the_listings_answer() {
-    let mut repo = a_branch_on_the_tip();
-    repo.git(&["config", "rebase.updateRefs", "true"]);
-    let (sink, session) = opened(&repo).await;
-    answered(&sink, "the opening's answer, the setting read", false).await;
-    sink.opening_settled(&session).await;
-
-    moved_a_ref_elsewhere(&mut repo, &session).await;
-    // The listing answers inside the poll's refs read, so a wrong answer
-    // is out by now; the walk it starts instead can only say "not held".
-    let held_said = sink.events.lock().unwrap().iter().any(|e| {
-        matches!(
-            e,
-            SessionEvent::HeadReachChecked {
-                reached_elsewhere: true
-            }
-        )
-    });
-    assert!(
-        !held_said,
-        "the listing called the branch on the tip a holder"
-    );
-    session.close_and_wait().await;
-}
-
 /// The setting is read again where the person may have changed it — the
 /// settings screen closing — and the answer follows with no ref moving,
 /// both ways.
@@ -158,6 +129,27 @@ async fn the_setting_read_again_moves_the_answer_with_no_ref_moving() {
     repo.git(&["config", "--unset", "rebase.updateRefs"]);
     session.reread_update_refs();
     answered(&sink, "the branch staying again", true).await;
+    session.close_and_wait().await;
+}
+
+/// With the setting already read (on), a ref moving still asks the walk —
+/// the setting kept is not an answer: the branch further along that held
+/// the tip goes, and the answer turns to "not held".
+#[tokio::test(flavor = "multi_thread")]
+async fn a_known_setting_still_walks_when_the_refs_move() {
+    let mut repo = a_branch_on_the_tip();
+    repo.git(&["config", "rebase.updateRefs", "true"]);
+    repo.git(&["switch", "--quiet", "--create", "ahead"]);
+    repo.commit_file("c.txt", "3\n", "beyond");
+    repo.git(&["switch", "--quiet", "main"]);
+    let (sink, session) = opened(&repo).await;
+    answered(&sink, "the opening's answer, the setting read", true).await;
+    sink.opening_settled(&session).await;
+
+    repo.git(&["branch", "--delete", "--force", "ahead"]);
+    let outcome = bounded("the tracked poll", session.refresh_poll_tracked().outcome()).await;
+    assert!(outcome.landed(), "the poll read the moved ref: {outcome:?}");
+    answered(&sink, "the branch further along gone", false).await;
     session.close_and_wait().await;
 }
 

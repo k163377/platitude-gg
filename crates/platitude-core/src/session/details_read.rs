@@ -59,7 +59,8 @@ impl RepoSession {
     ) -> Option<DetailsTask> {
         let workdir = self.workdir()?;
         let (generation, cancel) = self
-            .details_read
+            .latest
+            .details
             .begin_numbered(&self.root_cancel, &NEXT_REQUEST);
         let (send, done) = tokio::sync::oneshot::channel();
         let task = DetailsTask { generation, done };
@@ -124,7 +125,8 @@ impl RepoSession {
     pub fn load_details(self: &Arc<Self>, oid: Oid) -> Option<DetailsTask> {
         let workdir = self.workdir()?;
         let (generation, cancel) = self
-            .details_read
+            .latest
+            .details
             .begin_numbered(&self.root_cancel, &NEXT_REQUEST);
         let (send, done) = tokio::sync::oneshot::channel();
         let task = DetailsTask { generation, done };

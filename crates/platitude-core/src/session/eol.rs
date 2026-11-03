@@ -212,27 +212,36 @@ impl RepoSession {
     /// Three reads for the whole tree: the two pending diffs (sized by the
     /// change) and one `ls-files --eol` for untracked files, whose column
     /// answers without a patch — except for a mixed new file.
+    ///
+    /// A follow read (`session::asks`): a reading one of whose reads
+    /// failed is kept stale, so the next status read reads it again
+    /// instead of waiting for the tree to move.
     pub(super) async fn settle_eol_marks(
         &self,
         workdir: &Path,
         status: &WorktreeStatus,
         cancel: &CancellationToken,
     ) -> Arc<Vec<EolMark>> {
-        let marks = Arc::new(if status.is_dirty() {
+        let (marks, missed) = if status.is_dirty() {
             self.read_eol_marks(workdir, status, cancel).await
         } else {
-            Vec::new()
-        });
+            (Vec::new(), false)
+        };
+        if missed {
+            self.eol_marks_stale.store(true, Ordering::SeqCst);
+        }
+        let marks = Arc::new(marks);
         *relock(&self.eol_marks) = Arc::clone(&marks);
         marks
     }
 
+    /// The marks, and whether a read behind them failed.
     async fn read_eol_marks(
         &self,
         workdir: &Path,
         status: &WorktreeStatus,
         cancel: &CancellationToken,
-    ) -> Vec<EolMark> {
+    ) -> (Vec<EolMark>, bool) {
         let run = |args: &[&'static str]| {
             let cmd = GitCommand::new().cwd(workdir).args(args.to_vec());
             self.executor.run(cmd, cancel)
@@ -243,6 +252,7 @@ impl RepoSession {
             run(&["diff", "--cached", "--no-ext-diff", "--no-textconv"]),
             eol::untracked_shapes(&self.executor, workdir, cancel),
         );
+        let mut missed = missed_by(&unstaged) || missed_by(&staged) || missed_by(&untracked);
 
         // One reading per row: a path changed on both sides has a row in
         // each bucket, each with a change of its own to say — the index
@@ -278,9 +288,9 @@ impl RepoSession {
                 // The one shape the column cannot finish: the sentence
                 // counts lines, and only the patch has them.
                 eol::Shape::Mixed => {
-                    if let Ok(raw) =
-                        eol::untracked_patch(&self.executor, workdir, &path, cancel).await
-                    {
+                    let raw = eol::untracked_patch(&self.executor, workdir, &path, cancel).await;
+                    missed |= missed_by(&raw);
+                    if let Ok(raw) = raw {
                         readings.insert((path, false), eol::read_one(&raw));
                     }
                 }
@@ -289,7 +299,7 @@ impl RepoSession {
         }
         readings.retain(|_, reading| *reading != eol::Reading::Quiet);
         if readings.is_empty() {
-            return Vec::new();
+            return (Vec::new(), missed);
         }
 
         // Which are text at all, in one spawn — once per path, whichever
@@ -300,15 +310,23 @@ impl RepoSession {
             .collect::<std::collections::BTreeSet<_>>()
             .into_iter()
             .collect();
-        let converting = self.normalising(workdir, cancel).await.unwrap_or(false);
-        let rulings = eol::rulings_given(&self.executor, workdir, &paths, converting, cancel)
-            .await
-            .unwrap_or_else(|e| {
-                if !e.is_cancelled() {
-                    tracing::debug!(error = %e, "line-ending rulings failed");
-                }
-                Vec::new()
-            });
+        let converting = self.normalising(workdir, cancel).await;
+        missed |= missed_by(&converting);
+        let rulings = eol::rulings_given(
+            &self.executor,
+            workdir,
+            &paths,
+            converting.unwrap_or(false),
+            cancel,
+        )
+        .await;
+        missed |= missed_by(&rulings);
+        let rulings = rulings.unwrap_or_else(|e| {
+            if !e.is_cancelled() {
+                tracing::debug!(error = %e, "line-ending rulings failed");
+            }
+            Vec::new()
+        });
         let ruled: std::collections::HashMap<&str, eol::Ruling> =
             paths.iter().map(String::as_str).zip(rulings).collect();
 
@@ -334,6 +352,12 @@ impl RepoSession {
                 });
             }
         }
-        marks
+        (marks, missed)
     }
+}
+
+/// A read that failed for a reason of git's: a cancelled one says nothing
+/// about the tree.
+fn missed_by<T>(read: &Result<T, GitError>) -> bool {
+    read.as_ref().is_err_and(|e| !e.is_cancelled())
 }

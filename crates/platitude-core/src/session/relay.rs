@@ -94,8 +94,8 @@ impl RepoSession {
     }
 
     /// Asks again for the readings the listing has moved past: due at once
-    /// where the page paces its worktrees, else a pass of their own — a
-    /// second ask while one runs is dropped, so asking costs nothing
+    /// where the page paces its worktrees, else a pass of their own — one
+    /// asked while a read of them runs is owed to it and runs after it
     /// (`RepoSession::refresh_carried`).
     fn read_worktrees_behind(self: &Arc<Self>, readings: &[Carried], current: &[Carried]) {
         let behind: Vec<String> = readings

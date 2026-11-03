@@ -37,16 +37,17 @@ pub struct RepoSession {
     pub(super) info: Mutex<Option<RepoInfo>>,
     pub(super) shared: Arc<Mutex<Shared>>,
     pub(super) log_options: Mutex<LogOptions>,
-    /// Numbers installs, for ordering only; ownership is `log_cancel`'s
+    /// Numbers installs, for ordering only; ownership is `log_run`'s
     /// (`RepoSession::take_log_run`).
     pub(super) log_gen: AtomicU64,
-    /// The token of the pass that owns the graph — the one decider of who
-    /// owns it, in call order.
-    pub(super) log_cancel: Mutex<Option<CancellationToken>>,
-    /// One commit-details read at a time, numbered (`load_details`).
-    pub(super) details_read: Latest,
-    /// One interactive-rebase plan ask at a time (`ask_rebase_plan`).
-    pub(super) plan_read: Latest,
+    /// The pass that owns the graph — the one decider of who owns it, in
+    /// call order — and where the next pass starts from.
+    pub(super) log_run: Arc<Takeover>,
+    /// The latest reads, one gate each.
+    pub(super) latest: super::latest::LatestReads,
+    /// The interactive-rebase plan's reads: its rows and how much of its
+    /// range a remote has (`ask_rebase_plan`, `check_plan_published`).
+    pub(super) plan: super::ops_integrate::PlanReads,
     /// The write the queue is serving, from before git runs it until the
     /// reads it invalidated have published; `None` between requests. Read
     /// by the poll, which stays out mid-operation unless the write replays
@@ -109,33 +110,12 @@ pub struct RepoSession {
     /// name the merge tool even with nothing conflicted. Cleared by that
     /// read, so the common case does not pay the spawns on every poll.
     pub(super) merge_tool_wanted: std::sync::atomic::AtomicBool,
-    /// One signature verification at a time: a selection that moves on
-    /// cancels the gpg or ssh-keygen run the last one started
-    /// (`session::latest`).
-    pub(super) signature_read: Latest,
     /// The discard log's picked entry, which the walk takes one tip more
     /// for (`session::shown_discard`); `None` while nothing is picked.
     pub(super) shown_discard: Mutex<Option<Arc<ShownDiscard>>>,
-    /// One remote-branch check at a time — a name being typed asks per
-    /// settled keystroke, and each ask is a network round trip.
-    pub(super) remote_branch_read: Latest,
-    /// One check of whether a remote already has HEAD's commit at a time,
-    /// for the rare pass that could not read it off its rows
-    /// ([`RepoSession::settle_head_published`]).
-    pub(super) head_published_read: Latest,
-    /// One check of whether an amend would leave HEAD empty at a time
-    /// ([`RepoSession::check_amend`]): the tree moves under a ticked amend
-    /// box, and only the newest ask answers.
-    pub(super) amend_read: Latest,
     /// Whether an amend is in view, and what the last ask was about
     /// ([`RepoSession::watch_amend`]).
     pub(super) amend_watch: Mutex<super::author::AmendWatch>,
-    /// One read of another worktree's files at a time
-    /// ([`RepoSession::read_carried_status`]), which also orders the
-    /// answers: reads of different trees finish in any order, and the pane
-    /// would show whichever finished last — the worktree the reader stepped
-    /// off.
-    pub(super) carried_read: Latest,
     /// Which other worktree the read-only pane stands on, and which reading of
     /// it the pane holds (`carried::Pane`).
     pub(super) carried_pane: super::carried::Pane,
@@ -161,7 +141,8 @@ pub struct RepoSession {
     /// repeated by every status read until something asks for them again.
     pub(super) eol_marks: Mutex<Arc<Vec<EolMark>>>,
     /// Set when the marks are worth re-reading whatever status says: a
-    /// write landed, or the tab has only just opened.
+    /// write landed, HEAD moved, a read behind them failed, or the tab has
+    /// only just opened.
     pub(super) eol_marks_stale: std::sync::atomic::AtomicBool,
     /// What Git LFS asks of the pending files where git cannot run it,
     /// repeated by every status read until it is read again
@@ -198,22 +179,20 @@ pub struct RepoSession {
     /// the loop mid-write, and `kill_on_drop` then ends git itself — so a
     /// shutdown joins this first.
     pub(super) write_join: Mutex<Option<tokio::task::JoinHandle<()>>>,
-    /// One permit, held by a running poll: a tick that arrives while the
-    /// previous one is still reading is dropped.
+    /// One poll at a time: a clock tick that arrives while the previous
+    /// one is still reading is dropped (a chance ask —
+    /// [`Coalesce::try_turn`]); a write's news is owed
+    /// ([`RepoSession::read_again`]), because a refused tick comes round
+    /// again and that news does not.
     ///
     /// The one serialisation of a session's polls, on purpose: a slow
     /// repository stretches its own interval. Not a thread per tab — the
     /// polls are already tasks on the multi-thread runtime.
-    pub(super) poll_slot: Arc<tokio::sync::Semaphore>,
-    /// A read this session owes the worktree: a write landed in it
-    /// while this session was already reading, so the read holding the
-    /// slot began before that write and cannot answer for it
-    /// ([`RepoSession::read_again`]). Remembered, because a refused clock
-    /// tick comes round again and a write's news does not.
-    pub(super) read_owed: std::sync::atomic::AtomicBool,
-    /// One permit for a read of the other worktrees — one worktree's, or a
-    /// pass over all of them — so two never run at once.
-    pub(super) carried_slot: Arc<tokio::sync::Semaphore>,
+    pub(super) poll_gate: Coalesce,
+    /// One read of the other worktrees at a time — one worktree's, or a
+    /// pass over all of them. A pass asked for while one runs is owed to
+    /// it; a paced read is a chance ask, its pace planning it again.
+    pub(super) carried_pass: Coalesce,
     /// Whether the other worktrees are read at all (`set_worktrees_pace` — the
     /// settings' "off", which holds for the page's pace and an opening
     /// alike), which there are, what their reads left and the read in
@@ -226,7 +205,7 @@ pub struct RepoSession {
     /// than one place at once ([`ReadFlight`]).
     ///
     /// Every way in passes it: a refresh, the poll and a write's settling
-    /// all go through `read_refs` / `read_status`. Not `poll_slot` or
+    /// all go through `read_refs` / `read_status`. Not `poll_gate` or
     /// `write_running`, which guard other things: the poll passes a
     /// replaying write on purpose, and a manual refresh and
     /// `ask_merge_tool` meet neither.
@@ -237,6 +216,9 @@ pub struct RepoSession {
     /// list handed on is still the newest (`RepoSession::stashes_standing`).
     pub(super) stash_listings: Mutex<StashListings>,
     pub(super) worktrees_read: ReadFlight<WorktreeRead>,
+    /// The author configuration's reads, answering with the reads that
+    /// did not land (`RepoSession::refresh_author`).
+    pub(super) author_read: ReadFlight<Vec<FollowUp>>,
     /// Submission end of the write queue (`session::write`).
     pub(super) write_tx: tokio::sync::mpsc::UnboundedSender<WriteRequest>,
     /// The order this worktree's local writes run in, shared with
@@ -311,7 +293,9 @@ pub struct RepoSession {
     pub(super) head_reach: super::head_reach::HeadReach,
     /// One merge-tool candidate read at a time: opening settings twice in
     /// a row starts one slow `mergetool --tool-help`
-    /// (ci/baseline/code-costs-windows-x64.md).
+    /// (ci/baseline/code-costs-windows-x64.md). A once ask that shares the
+    /// read under way (`session::asks`): the second ask is answered by the
+    /// first's event, which is what puts the screen's combo down.
     pub(super) merge_tools_slot: Arc<tokio::sync::Semaphore>,
     /// The running auto-fetch timer, if any.
     pub(super) auto_fetch: Mutex<Option<AutoFetch>>,

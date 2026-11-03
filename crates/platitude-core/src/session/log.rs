@@ -86,12 +86,16 @@ impl RepoSession {
         };
         let grown = options.limit;
 
-        let (run_cancel, mut run) = self.take_log_run();
+        let (run_cancel, mut run, lap) = self.take_log_run();
         let held = self.graph_passes.enter();
 
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
             let _held = held;
+            let Some(_lap) = lap.start().await else {
+                run.answer(RefreshOutcome::Cancelled);
+                return;
+            };
             // Only a failure leaves the press unanswered: a swap pass
             // reports a failed walk to the tab (`run_swap_pass` -> `fail`),
             // not the graph. Put the window back and take the ordinary
@@ -209,13 +213,17 @@ impl RepoSession {
             return;
         };
 
-        let (run_cancel, mut run) = self.take_log_run();
+        let (run_cancel, mut run, lap) = self.take_log_run();
         let held = self.graph_passes.enter();
 
         let s = Arc::clone(self);
         let options = self.log_options();
         self.runtime.spawn(async move {
             let _held = held;
+            let Some(_lap) = lap.start().await else {
+                run.answer(RefreshOutcome::Cancelled);
+                return;
+            };
             // The last pass answers for the ask.
             let outcome = if options.include_tags {
                 let fast = LogOptions {
@@ -241,9 +249,9 @@ impl RepoSession {
     }
 
     /// Takes the log stream over: a fresh token for this pass, the one it
-    /// displaces cancelled, and the numbered ask it answers as
-    /// ([`GraphRun`]) — a displaced pass's caller waits for the later
-    /// number ([`RepoSession::graph_answer`]).
+    /// displaces stopped or waited out ([`Lap::start`] below), and the
+    /// numbered ask it answers as ([`GraphRun`]) — a displaced pass's
+    /// caller waits for the later number ([`RepoSession::graph_answer`]).
     ///
     /// Call on the caller's thread before spawning the pass: call order
     /// decides which pass owns the graph, and spawn order does not follow
@@ -255,17 +263,16 @@ impl RepoSession {
     /// racing asks could number in one order and take the stream in the
     /// other, leaving the displaced pass waiting on a number nothing
     /// answers.
-    pub(super) fn take_log_run(&self) -> (CancellationToken, GraphRun) {
-        let run_cancel = self.root_cancel.child_token();
-        let (run, displaced) = {
-            let mut owner = relock(&self.log_cancel);
-            (self.graph_passes.ask(), owner.replace(run_cancel.clone()))
-        };
-        // Cancelled outside the lock: it wakes somebody else's task.
-        if let Some(prev) = displaced {
-            prev.cancel();
-        }
-        (run_cancel, run)
+    ///
+    /// A follow ask taken over (`session::asks`): the pass starts with
+    /// [`Lap::start`], which waits for the pass under way to land where
+    /// stopping it would make too many stopped in a row — a stream of asks
+    /// on a slow machine still lands a picture.
+    pub(super) fn take_log_run(&self) -> (CancellationToken, GraphRun, Lap) {
+        let (lap, run) = self
+            .log_run
+            .take(&self.root_cancel, || self.graph_passes.ask());
+        (lap.token(), run, lap)
     }
 
     /// Streams one pass straight to the UI (chunked, resets the graph).

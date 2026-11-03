@@ -6,24 +6,17 @@
 use super::*;
 
 /// What the reachability question keeps between asks.
+#[derive(Default)]
 pub(super) struct HeadReach {
-    /// One permit: the walk is the only part of a refresh that scales
-    /// with the history, and a tick arriving mid-walk is dropped.
-    slot: Arc<tokio::sync::Semaphore>,
+    /// One answer at a time — the walk is the only part of a refresh that
+    /// scales with the history — and an ask while one is out owed to it
+    /// (a follow ask, `session::asks`): the last hold is always answered.
+    gate: Coalesce,
     /// Whether a rewrite takes the branches on the tip along (the person's
     /// `rebase.updateRefs`) — read by the reach that first needs it
     /// ([`RepoSession::reached_elsewhere`]), dropped by
     /// [`RepoSession::reread_update_refs`].
     update_refs: Derived<bool>,
-}
-
-impl Default for HeadReach {
-    fn default() -> Self {
-        Self {
-            slot: Arc::new(tokio::sync::Semaphore::new(1)),
-            update_refs: Derived::default(),
-        }
-    }
 }
 
 impl RepoSession {
@@ -92,64 +85,90 @@ impl RepoSession {
     /// is rebuilt: it describes the same picture (whether a rewrite leaves
     /// the old commits drawn).
     pub(super) fn settle_head_reach(self: &Arc<Self>) {
-        let Some(workdir) = self.workdir() else {
-            return;
-        };
-        let Some(hold) = self.standing.hold() else {
-            // No tip (an unborn branch): nothing to lose, nothing to ask.
-            self.publish_head_reach(false);
-            return;
-        };
-        // A branch on the tip that the rewrite leaves there holds it as a
-        // tag does — once the setting is known (`reached_elsewhere`).
-        let left_on_tip = !hold.on_tip.branches.is_empty()
-            && self.head_reach.update_refs.peek(|along| !along) == Some(true);
-        if hold.on_tip.kept || left_on_tip {
-            self.publish_head_reach(true);
-            return;
-        }
-        let Ok(permit) = Arc::clone(&self.head_reach.slot).try_acquire_owned() else {
-            tracing::trace!("head reach skipped: the previous walk has not finished");
+        let Some(turn) = self.head_reach.gate.ask() else {
+            tracing::trace!("head reach owed to the one under way");
             return;
         };
         let s = Arc::clone(self);
-        self.runtime.spawn(async move {
-            let _permit = permit;
-            let cancel = s.root_cancel.clone();
-            match s.reached_elsewhere(&workdir, &hold, &cancel).await {
-                Ok(reached) => s.publish_head_reach(reached),
-                // A failed walk answers with the mark: it is the safe
-                // answer, and the next refresh asks again.
+        self.runtime
+            .spawn(async move { s.reach_on_turn(turn).await });
+    }
+
+    /// Answers on `turn`, and once more for each ask owed meanwhile. Each
+    /// answer reads the hold standing as it starts, so an answer about a
+    /// tip HEAD has left is followed by one about where it is now.
+    async fn reach_on_turn(self: Arc<Self>, mut turn: Turn) {
+        loop {
+            self.head_reach.gate.take_owed();
+            let failed = match self.reach_now().await {
+                Ok(Some(reached)) => {
+                    self.publish_head_reach(reached);
+                    false
+                }
+                Ok(None) => false,
+                // A failed walk answers with the mark: it is the safe answer.
                 Err(e) => {
-                    tracing::warn!(error = %e, "could not tell whether the branch tip is held");
-                    s.publish_head_reach(false);
+                    if !e.is_cancelled() {
+                        tracing::warn!(error = %e, "could not tell whether the branch tip is held");
+                    }
+                    self.publish_head_reach(false);
+                    !e.is_cancelled()
+                }
+            };
+            match self.head_reach.gate.end(turn) {
+                Some(next) => turn = next,
+                None => {
+                    // Owed to the next refs read (`publish_refs`), not run
+                    // again at once: a git that fails keeps failing.
+                    if failed {
+                        self.head_reach.gate.owe();
+                    }
+                    return;
                 }
             }
-        });
+        }
+    }
+
+    /// Whether a reach is owed: an ask no run has taken yet — a failed
+    /// answer's among them — which the next refs read asks again even where
+    /// no ref moved.
+    pub(super) fn head_reach_owed(&self) -> bool {
+        self.head_reach.gate.owed()
+    }
+
+    /// The answer for the hold standing now; `None` where no repository is
+    /// open.
+    async fn reach_now(&self) -> Result<Option<bool>, GitError> {
+        let Some(workdir) = self.workdir() else {
+            return Ok(None);
+        };
+        let Some(hold) = self.standing.hold() else {
+            // No tip (an unborn branch): nothing to lose, nothing to ask.
+            return Ok(Some(false));
+        };
+        if hold.on_tip.kept {
+            return Ok(Some(true));
+        }
+        let cancel = self.root_cancel.clone();
+        self.reached_elsewhere(&workdir, &hold, &cancel)
+            .await
+            .map(Some)
     }
 
     /// Reads `rebase.updateRefs` again — where the person may have changed
     /// it: the settings screen closing — and asks the reach again where the
-    /// setting decides it (a branch on the tip, nothing kept beside it).
+    /// setting decides it (a branch on the tip, nothing kept beside it). A
+    /// walk under way may have read the setting before it was dropped; the
+    /// ask is owed to it and answered again after it.
     pub fn reread_update_refs(self: &Arc<Self>) {
         self.head_reach.update_refs.forget();
-        let s = Arc::clone(self);
-        self.runtime.spawn(async move {
-            // After a walk in flight, which may have read the setting
-            // before it was dropped: asked while it runs, the reach would
-            // be dropped as a refresh's tick is, and nothing else asks
-            // again before a ref moves.
-            let Ok(walked) = Arc::clone(&s.head_reach.slot).acquire_owned().await else {
-                return;
-            };
-            drop(walked);
-            if s.standing
-                .hold()
-                .is_some_and(|hold| !hold.on_tip.kept && !hold.on_tip.branches.is_empty())
-            {
-                s.settle_head_reach();
-            }
-        });
+        if self
+            .standing
+            .hold()
+            .is_some_and(|hold| !hold.on_tip.kept && !hold.on_tip.branches.is_empty())
+        {
+            self.settle_head_reach();
+        }
     }
 
     /// The rest of the question, past the listing: whether anything the
@@ -206,7 +225,7 @@ impl RepoSession {
     /// unborn); `walked` is the mark on its row (exact —
     /// `session::published`), or `None` where the window stopped short of
     /// HEAD: a detached HEAD more than a window's worth of commits back.
-    /// Only then is git asked, one read at a time (`head_published_read`).
+    /// Only then is git asked, one read at a time (`latest.head_published`).
     pub(super) fn settle_head_published(self: &Arc<Self>, head: Option<Oid>, walked: Option<bool>) {
         // Once the record has moved past the HEAD this pass walked from,
         // the walk the move started answers instead.
@@ -235,12 +254,14 @@ impl RepoSession {
         if !self.standing.claim_published_ask(oid, refs) {
             return;
         }
+        // Before the spawn: the ask order decides which read stands, and
+        // spawn order does not follow it (`session::latest`).
+        let cancel = self.latest.head_published.begin(&self.root_cancel);
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
             let Some(workdir) = s.workdir() else {
                 return;
             };
-            let cancel = s.head_published_read.begin(&s.root_cancel);
             let range = publish::only(&oid.to_hex());
             match publish::state_of(&s.exec_background, &workdir, &range, &cancel).await {
                 Ok(state) => s.publish_head_published(HeadPublished {

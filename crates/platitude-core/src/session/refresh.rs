@@ -126,7 +126,18 @@ impl RepoSession {
                 let remote_tags = self.remote_tag_index();
                 let key = keys.walk;
                 let previous = relock(&self.refs_key).replace(key);
-                *relock(&self.join_key) = Some(inputs);
+                // Not where the push counts could not be read: the snapshot
+                // repeats the last ones, and the next read builds it again
+                // and asks once more (a follow read, `session::asks`).
+                *relock(&self.join_key) =
+                    (unmoved.is_some() || push_tracks.is_some()).then_some(inputs);
+                // Whether a tip is held by nothing else depends on where the
+                // refs point: re-asked when they move, on the first read, and
+                // after an answer that failed. It reads the hold recorded
+                // above, not the snapshot below.
+                if previous != Some(key) || self.head_reach_owed() {
+                    self.settle_head_reach();
+                }
                 if let Some(held) = unmoved {
                     self.sink.event(SessionEvent::RefsLoaded {
                         snapshot: held,
@@ -170,10 +181,7 @@ impl RepoSession {
                 // nothing else may run inside it.
                 self.apply_refs(label_map);
                 let refs_moved = previous.is_some_and(|previous| previous != key);
-                // Whether a tip is held by nothing else depends on where the
-                // refs point: re-asked when they move, and on the first read.
                 if previous != Some(key) {
-                    self.settle_head_reach();
                     // A HEAD move swaps the checked-out files, and with them
                     // the line-ending neighbours.
                     self.forget_eol_derived();

@@ -53,6 +53,7 @@ use crate::stash::{self, StashEntry};
 use crate::status::{self, WorktreeStatus};
 use crate::tag;
 
+mod asks;
 mod author;
 mod auto_fetch;
 mod build;
@@ -116,6 +117,7 @@ mod walk;
 mod write;
 mod write_order;
 
+use asks::{Coalesce, Lap, Takeover, Turn};
 pub use auto_fetch::OpenFetch;
 pub use carried::{
     Carried, CarriedOutcome, CarriedPass, WORKTREES_INTERVAL_DEFAULT_SECS,

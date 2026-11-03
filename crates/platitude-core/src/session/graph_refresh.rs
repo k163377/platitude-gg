@@ -305,7 +305,7 @@ impl RepoSession {
             && self.status_read.is_idle()
             && self.stash_read.is_idle()
             && self.worktrees_read.is_idle()
-            && self.carried_slot.available_permits() > 0
+            && !self.carried_pass.busy()
             && self.pacing.readings_settled()
             && self.graph_passes.is_idle()
             && self.log_gen.load(Ordering::SeqCst) == generation
@@ -355,14 +355,17 @@ impl RepoSession {
         let Some(workdir) = self.workdir() else {
             return RefreshTask::ready(RefreshOutcome::Unavailable);
         };
-        let (run_cancel, mut run) = self.take_log_run();
+        let (run_cancel, mut run, lap) = self.take_log_run();
         let held = self.graph_passes.enter();
         let s = Arc::clone(self);
         let options = self.log_options();
         let (finished, task) = RefreshTask::pending(Some(run.ask()));
         self.runtime.spawn(async move {
             let _held = held;
-            let outcome = s.run_swap_pass(&workdir, options, &run_cancel, reads).await;
+            let outcome = match lap.start().await {
+                Some(_lap) => s.run_swap_pass(&workdir, options, &run_cancel, reads).await,
+                None => RefreshOutcome::Cancelled,
+            };
             run.answer(outcome);
             if finished.send(outcome).is_err() {
                 tracing::trace!("refresh completion was not observed");
@@ -450,7 +453,7 @@ impl RepoSession {
     /// and nothing else this session reads would say so before the
     /// page's own paced read comes round.
     pub(super) fn read_again(self: &Arc<Self>) {
-        self.read_owed.store(true, Ordering::SeqCst);
+        self.poll_gate.owe();
         drop(self.start_refresh_poll());
     }
 
@@ -466,7 +469,7 @@ impl RepoSession {
     /// `Hub::park_writes_of`) ends after the close, and a read then is
     /// paid for a page that is gone (`write::run_write`).
     pub(super) fn take_the_read_owed(self: &Arc<Self>) {
-        if self.read_owed.load(Ordering::SeqCst) && self.keeps_what_it_reads() {
+        if self.poll_gate.owed() && self.keeps_what_it_reads() {
             drop(self.start_refresh_poll());
         }
     }
@@ -518,16 +521,16 @@ impl RepoSession {
             tracing::trace!("poll skipped: a write is running");
             return Err(RefreshOutcome::WriteBusy);
         }
-        let Ok(permit) = Arc::clone(&self.poll_slot).try_acquire_owned() else {
+        let Some(turn) = self.poll_gate.try_turn() else {
             tracing::trace!("poll skipped: the previous one has not finished");
             return Err(RefreshOutcome::Busy);
         };
         // The reads below answer for anything that landed before this
-        // moment; a write landing inside them sets this again
+        // moment; a write landing inside them owes the next poll
         // ([`Self::read_again`]).
-        let owed = self.read_owed.swap(false, Ordering::SeqCst);
+        let owed = self.poll_gate.take_owed();
         Ok(PollTicket {
-            permit,
+            turn,
             held: self.graph_passes.enter(),
             owed,
         })
@@ -543,7 +546,7 @@ impl RepoSession {
         ticket: PollTicket,
         listings: impl Future<Output = (StashRead, Listed)>,
     ) -> PollRead {
-        let PollTicket { permit, held, .. } = ticket;
+        let PollTicket { turn, held, .. } = ticket;
         // Settled before either read starts: inside the join, the status
         // read could consume the line-ending staleness before the refs
         // read sets it, leaving a withdrawn notice standing. Idempotent —
@@ -561,7 +564,9 @@ impl RepoSession {
         } else {
             RefreshOutcome::Unchanged
         };
-        drop(permit);
+        // Given back without taking what is owed: the caller takes it
+        // through `take_the_read_owed`, which keeps out of a running write.
+        drop(turn);
         PollRead {
             outcome,
             _held: held,
@@ -576,8 +581,12 @@ impl RepoSession {
         let Some(workdir) = self.workdir() else {
             return RefreshOutcome::Cancelled;
         };
-        let (run_cancel, mut run) = self.take_log_run();
+        let (run_cancel, mut run, lap) = self.take_log_run();
         let _held = self.graph_passes.enter();
+        let Some(_lap) = lap.start().await else {
+            run.answer(RefreshOutcome::Cancelled);
+            return RefreshOutcome::Cancelled;
+        };
         let reads = self.pass_reads_listed(&workdir, &run_cancel, stashes).await;
         let options = self.log_options();
         let outcome = self
@@ -590,7 +599,7 @@ impl RepoSession {
 
 /// The poll's single flight, held, and its place among the graph passes.
 pub(super) struct PollTicket {
-    permit: tokio::sync::OwnedSemaphorePermit,
+    turn: super::asks::Turn,
     held: GraphPassHeld,
     /// Whether a write landing in this tree from another session is
     /// answered by this poll ([`RepoSession::read_again`]): it then reads

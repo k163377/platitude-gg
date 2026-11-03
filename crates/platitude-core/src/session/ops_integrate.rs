@@ -15,6 +15,17 @@ use super::*;
 /// session's answer above the new one's.
 static NEXT_PLAN_ASK: AtomicU64 = AtomicU64::new(1);
 
+/// The interactive-rebase plan's two reads (`session::asks`): its rows, a
+/// latest read about the commit right-clicked, and how much of its range
+/// a remote has, a follow read the refs moving asks again.
+#[derive(Default)]
+pub(super) struct PlanReads {
+    pub(super) preview: Latest,
+    pub(super) published: Coalesce,
+    /// The range the last ask named — what the next run reads.
+    pub(super) range: Mutex<String>,
+}
+
 /// Numbers every merge-tool ask, for the log only: a screen stuck on
 /// `loading=true choices=0` may be an ask never accepted, an opening never
 /// finished or a git read never back, and the stages logged in
@@ -154,7 +165,8 @@ impl RepoSession {
     /// already past cancelling from overtaking the one the screen awaits.
     pub fn ask_rebase_plan(self: &Arc<Self>, from: String) {
         let (generation, cancel) = self
-            .plan_read
+            .plan
+            .preview
             .begin_numbered(&self.root_cancel, &NEXT_PLAN_ASK);
         let s = Arc::clone(self);
         self.runtime.spawn(async move {

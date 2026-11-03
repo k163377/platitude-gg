@@ -9,24 +9,34 @@ impl RepoSession {
     /// answers once the configuration has published (the write queue waits
     /// on it after an identity write) with the read that did not land,
     /// empty where it did. `None` where no repository is open.
+    ///
+    /// A follow read whose askers wait (`session::asks`): one read at a
+    /// time, so an older answer never lands after a newer one, and an ask
+    /// is answered by a read that began after it.
     pub fn refresh_author(self: &Arc<Self>) -> Option<tokio::task::JoinHandle<Vec<FollowUp>>> {
         let workdir = self.workdir()?;
+        // On the caller's thread: the place is the ask's moment.
+        let stamp = self.author_read.stamp();
         let s = Arc::clone(self);
         Some(self.runtime.spawn(async move {
-            let cancel = s.root_cancel.clone();
-            match identity::load(&s.executor, &workdir, &cancel).await {
-                Ok(config) => {
-                    s.sink.event(SessionEvent::AuthorLoaded { config });
-                    Vec::new()
-                }
-                Err(e) => {
-                    if !e.is_cancelled() {
-                        s.sink.event(SessionEvent::AuthorUnread);
+            s.author_read
+                .run_from(stamp, || async {
+                    let cancel = s.root_cancel.clone();
+                    match identity::load(&s.executor, &workdir, &cancel).await {
+                        Ok(config) => {
+                            s.sink.event(SessionEvent::AuthorLoaded { config });
+                            Vec::new()
+                        }
+                        Err(e) => {
+                            if !e.is_cancelled() {
+                                s.sink.event(SessionEvent::AuthorUnread);
+                            }
+                            s.fail(FollowUp::Author.label(), e);
+                            vec![FollowUp::Author]
+                        }
                     }
-                    s.fail(FollowUp::Author.label(), e);
-                    vec![FollowUp::Author]
-                }
-            }
+                })
+                .await
         }))
     }
 
@@ -77,13 +87,26 @@ impl RepoSession {
     /// Asks whether an amend pressed now would leave HEAD changing nothing
     /// ([`commit::amend_would_empty`]) — the commit button's to refuse
     /// before git does. A newer ask cancels the one still out.
+    ///
+    /// A failed read still answers, `false`, so the button is not left
+    /// waiting — git refuses an empty amend at the press all the same —
+    /// and the ask is forgotten, so the next status asks again
+    /// (`session::asks`).
     pub fn check_amend(self: &Arc<Self>) {
         self.spawn_read_latest(
             "amend-empties",
-            &self.amend_read,
+            &self.latest.amend,
             |s, workdir, cancel| async move {
-                let empties = commit::amend_would_empty(&s.executor, &workdir, &cancel).await?;
-                Ok(SessionEvent::AmendChecked { empties })
+                match commit::amend_would_empty(&s.executor, &workdir, &cancel).await {
+                    Ok(empties) => Ok(SessionEvent::AmendChecked { empties }),
+                    Err(e) => {
+                        if !e.is_cancelled() {
+                            relock(&s.amend_watch).asked = None;
+                        }
+                        s.fail("amend-empties", e);
+                        Ok(SessionEvent::AmendChecked { empties: false })
+                    }
+                }
             },
         );
     }
@@ -120,7 +143,7 @@ impl RepoSession {
             // An ask still out was about an index that has gone: its answer
             // would land after this one.
             AmendAsk::NothingStaged => {
-                drop(self.amend_read.begin(&self.root_cancel));
+                drop(self.latest.amend.begin(&self.root_cancel));
                 self.sink
                     .event(SessionEvent::AmendChecked { empties: false });
             }

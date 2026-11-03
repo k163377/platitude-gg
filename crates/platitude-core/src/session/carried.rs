@@ -13,7 +13,7 @@
 //! tests read every worktree in one pass instead
 //! ([`RepoSession::refresh_carried`]), one at a time all the same.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -26,6 +26,7 @@ use crate::status::Kinds;
 use crate::worktrees::WorktreeEntry;
 
 use super::StashRead;
+use super::asks::Turn;
 use super::pace::WorktreesPace;
 
 /// One other worktree's uncommitted work, as a row draws it.
@@ -470,8 +471,9 @@ impl Drop for PassOut {
 impl super::RepoSession {
     /// Reads what every other worktree is carrying, one after another, and
     /// asks for the rebuild if any came back different. Answers with the
-    /// pass; `None` where none begins — the repository is not open, a read
-    /// of the worktrees is still out, or the worktrees are off.
+    /// pass; `None` where none begins now — the repository is not open,
+    /// the worktrees are off, or a read of them is out, which then owes
+    /// this pass and runs it as it ends (a follow ask — `session::asks`).
     ///
     /// For an opening, a reading behind the listing while nothing paces,
     /// and the tests; a page on screen reads its worktrees at its pace
@@ -479,12 +481,18 @@ impl super::RepoSession {
     /// same, so a worktree just read is not read again at once.
     pub fn refresh_carried(self: &Arc<Self>) -> Option<CarriedPass> {
         let workdir = self.workdir()?;
-        let Ok(permit) = Arc::clone(&self.carried_slot).try_acquire_owned() else {
-            tracing::trace!("carried read skipped: the previous one has not finished");
+        let Some(turn) = self.carried_pass.ask() else {
+            tracing::trace!("carried read owed to the one under way");
             return None;
         };
-        // After the permit, so at most one ticket is ever out: the pass
-        // the turning-off stops is the one running.
+        self.pass_on_turn(workdir, turn)
+    }
+
+    /// Runs a pass on `turn`, and the one owed to it as it ends.
+    fn pass_on_turn(self: &Arc<Self>, workdir: PathBuf, turn: Turn) -> Option<CarriedPass> {
+        self.carried_pass.take_owed();
+        // After the turn, so at most one ticket is ever out: the pass the
+        // turning-off stops is the one running.
         let ticket = self.other_worktrees.begin(&self.root_cancel)?;
         self.pacing.change(|rules, _| rules.set_passing(true));
         let out = PassOut(Arc::clone(self));
@@ -493,22 +501,37 @@ impl super::RepoSession {
         let (tell, told) = tokio::sync::oneshot::channel();
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
-            let _permit = permit;
-            let _out = out;
-            let outcome = s.pass_over_worktrees(&workdir, &ticket, pane).await;
+            let outcome = {
+                let _out = out;
+                s.pass_over_worktrees(&workdir, &ticket, pane).await
+            };
             if tell.send(outcome).is_err() {
                 tracing::trace!("nobody was waiting on the pass over the other worktrees");
             }
+            s.run_carried_owed(turn);
         });
         Some(CarriedPass { told })
     }
 
-    /// Waits for any read of the other worktrees to end — a pass, or one
-    /// worktree's — the boundary a test waits on before counting their reads or
-    /// turning them off.
-    pub async fn wait_for_carried_pass(&self) {
-        if let Ok(permit) = self.carried_slot.acquire().await {
-            drop(permit);
+    /// Ends a read of the other worktrees, and starts the pass asked for
+    /// while it ran.
+    pub(super) fn run_carried_owed(self: &Arc<Self>, turn: Turn) {
+        if let Some(next) = self.carried_pass.end(turn)
+            && let Some(workdir) = self.workdir()
+        {
+            drop(self.pass_on_turn(workdir, next));
+        }
+    }
+
+    /// Waits for every read of the other worktrees to end — a pass, or one
+    /// worktree's, and the passes owed to them — the boundary a test waits
+    /// on before counting their reads or turning them off.
+    pub async fn wait_for_carried_pass(self: &Arc<Self>) {
+        while let Some(turn) = self.carried_pass.hold().await {
+            if !self.carried_pass.owed() {
+                return;
+            }
+            self.run_carried_owed(turn);
         }
     }
 
@@ -613,7 +636,8 @@ impl super::RepoSession {
             .iter()
             .find(|c| c.key == key)?
             .clone();
-        let permit = Arc::clone(&self.carried_slot).try_acquire_owned().ok()?;
+        // A chance ask: the pace plans a refused read again.
+        let turn = self.carried_pass.try_turn()?;
         let ticket = self.other_worktrees.begin(&self.root_cancel)?;
         let pane = self.pane_read();
         let meter = Arc::new(Meter::default());
@@ -632,7 +656,7 @@ impl super::RepoSession {
                 }
             })
             .await;
-        drop(permit);
+        self.run_carried_owed(turn);
         Some((worktree.path, meter.weighed()))
     }
 
@@ -646,16 +670,18 @@ impl super::RepoSession {
     /// ([`read_one`]), so a turn reads the worktree once; this read is for
     /// the moments that cannot wait for the worktree's turn.
     ///
-    /// The last ask wins (`carried_read` stops the read the pane stepped
-    /// off), and the pane is handed only a reading of the worktree it
-    /// stands on, asked after the one it holds ([`Pane`]). Never hand the
-    /// `carried_read` token to the worktree reads: the pane's next step
+    /// The last ask wins (a latest read, `session::asks`: `latest.carried`
+    /// stops the read the pane stepped off), and the pane is handed only a
+    /// reading of the worktree it stands on, asked after the one it holds
+    /// ([`Pane`]). A read that fails answers nothing here: the worktree's
+    /// next paced read hands the pane its list. Never hand the
+    /// `latest.carried` token to the worktree reads: the pane's next step
     /// would stop them — the row left as it was (`CarriedRead::Unread`) and
     /// the pass ended `Dropped`.
     pub fn read_carried_status(self: &Arc<Self>, path: String, name: String) {
         let (key, number) = self.carried_pane.stand(&path, &name);
         let s = Arc::clone(self);
-        let cancel = self.carried_read.begin(&self.root_cancel);
+        let cancel = self.latest.carried.begin(&self.root_cancel);
         self.runtime.spawn(async move {
             let at = std::path::PathBuf::from(&path);
             let Ok(status) = crate::status::load(&s.executor, &at, &cancel).await else {

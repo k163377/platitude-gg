@@ -238,13 +238,21 @@ impl RepoSession {
                 // it would cost two spawns.
                 let asked = self.merge_tool_wanted.swap(false, Ordering::SeqCst);
                 let merge_tool = if asked || status.conflicted().next().is_some() {
-                    let read = conflict::configured_tool(&self.executor, &workdir, &cancel)
-                        .await
-                        .ok()
-                        .flatten()
-                        .unwrap_or_default();
-                    self.standing.set_merge_tool(read.clone());
-                    read
+                    match conflict::configured_tool(&self.executor, &workdir, &cancel).await {
+                        Ok(read) => {
+                            let read = read.unwrap_or_default();
+                            self.standing.set_merge_tool(read.clone());
+                            read
+                        }
+                        // Not an answer (a follow read, `session::asks`): the
+                        // last name stands and the ask waits for the next tick.
+                        Err(e) => {
+                            if asked && !e.is_cancelled() {
+                                self.merge_tool_wanted.store(true, Ordering::SeqCst);
+                            }
+                            self.standing.merge_tool()
+                        }
+                    }
                 } else {
                     // Repeat the last answer, or a settings dialog left
                     // open would watch its value vanish on the next tick.
