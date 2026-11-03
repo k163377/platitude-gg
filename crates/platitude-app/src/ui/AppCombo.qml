@@ -33,6 +33,42 @@ ComboBox {
     /// The row that wears the push mark; empty marks none (デザイン規約 §リモートを書き留める).
     property string markedRow: ""
 
+    /// The item the list may spread across, wider than the field, to show its rows whole (デザイン規約 §選ぶ欄と打つ欄;
+    /// user decision — ask before changing): a field in the left half of it spreads to the right, one in the right half
+    /// to the left, and no row is cut while the item holds it. Null for a list as wide as the field.
+    property Item spreadWithin: null
+    /// The list's width: the field's, or as wide as its rows need where it may spread, up to the item it spreads in.
+    readonly property real listWidth: combo.spreadWithin === null ? combo.width
+        : Math.min(combo.spreadWithin.width,
+                   Math.max(combo.width, combo.rowsWidth(combo.model, combo.font, combo.markedRow, combo.markStep)))
+    /// How far the push mark stands in from its row's end, past the row's own inset (`spaceXs`): clear of the list's
+    /// floating thumb, since right-set ink on that side would stand under it whenever the list scrolls (デザイン規約
+    /// §QML 実装ルール「その辺に右揃えのインクが立つ」).
+    readonly property real markStep: rows.ScrollBar.vertical.width - Theme.spaceXs
+
+    /// The value cut to fill the box up to the arrow's step (`WordFace.cutToFit`): in its middle, a remote's at its
+    /// end. Worked out again whenever what it reads changes while it is drawn (`recut`), not bound: the ruler that
+    /// agrees with the laid-out text measures the string it is handed, which a binding cannot hand it.
+    property string cutValue: ""
+    readonly property real cutRoom: input.room
+    /// A typed name too long for the box, with nobody typing in it, is shown cut as a picked value is; typing, it
+    /// scrolls whole (user decision — ask before changing; デザイン規約 §選ぶ欄と打つ欄 — the web's `text-overflow:
+    /// ellipsis` on a field not being edited). Only a box that holds a name (`leadMark`).
+    readonly property bool idleCut: !combo.pickOnly && combo.leadMark !== "" && !input.activeFocus
+                                    && input.fitWidth > input.room
+    /// The value is drawn cut, picked or idle.
+    readonly property bool shownCut: input.fitWidth > input.room && (combo.pickOnly || combo.idleCut)
+    /// Automation: the idle cut as drawn, to read where its line stands against the input's.
+    readonly property alias idleLabel: idleWord
+    /// The whole value under a hand on a cut one (デザイン規約 §寸法「名前の天井」— 全文は hover). Under the box, as the
+    /// list comes down, and never over the list.
+    readonly property TipAsk cutTip: TipAsk {
+        target: combo
+        under: true
+        asked: combo.shownCut && fieldHover.hovered && !Hand.away && !combo.popup.visible
+        words: combo.wanted
+    }
+
     /// The kind of name the field holds, as a mark at its left edge that is no part of the value — it cannot be typed
     /// over, selected or pressed (デザイン規約 §ref の種別「名前の印」): the cloud of a remote, the branch of a branch's
     /// name. Empty for none.
@@ -45,7 +81,11 @@ ComboBox {
     /// `textEdited` (not emitted for text set in code). `editText` changing, `activeFocus` and `popup.opened` cannot
     /// tell a person from the reset, which runs before `onModelChanged`.
     property string wanted: ""
-    onWantedChanged: if (!combo.pickOnly && combo.editText !== combo.wanted) combo.editText = combo.wanted
+    onWantedChanged: {
+        if (!combo.pickOnly && combo.editText !== combo.wanted)
+            combo.editText = combo.wanted
+        combo.recut()
+    }
     onActivated: index => {
         if (!combo.pickOnly)
             combo.wanted = combo.textAt(index)
@@ -56,9 +96,56 @@ ComboBox {
             combo.editText = combo.wanted
     })
 
+    /// The width the list needs for its widest row, whole: the word, the push mark and its step where the row wears
+    /// it, the row's air and the card's. Its inputs are arguments, so a binding calling it follows them
+    /// (rules/app-ui.md「メソッドはバインディングが依存を取らない」), and the ruler is handed the rows' face here —
+    /// `Theme.uiFamily` at the field's size, as the rows draw it — rather than by a binding, which can land after the
+    /// binding that calls this. A `FontMetrics` reads a little wider than the laid-out text (`WordFace.cutToFit`),
+    /// which only leaves the widest row a little air.
+    function rowsWidth(model, font_, marked, step) {
+        rowFace.font = Qt.font({ family: Theme.uiFamily, pixelSize: font_.pixelSize })
+        let widest = 0
+        const count = model !== null && model !== undefined && model.length !== undefined ? model.length : 0
+        for (let i = 0; i < count; i++) {
+            const word = String(model[i])
+            const mark = word !== "" && word === marked ? MarkSeat.cell(font_.pixelSize) + step : 0
+            widest = Math.max(widest, rowFace.advanceWidth(word) + mark)
+        }
+        return Math.ceil(widest) + 1 + 4 * Theme.spaceXs
+    }
+    /// Seats the list as it opens: under the field's left edge, spreading right, or under its right edge, spreading
+    /// left — by which half of `spreadWithin` the field stands in — and held inside that item.
+    function placeList() {
+        if (combo.spreadWithin === null) {
+            list.x = 0
+            return
+        }
+        const at = combo.mapToItem(combo.spreadWithin, 0, 0).x
+        const right = at + combo.width / 2 <= combo.spreadWithin.width / 2
+        list.x = right ? Math.min(0, combo.spreadWithin.width - at - list.width)
+                       : Math.max(combo.width - list.width, -at)
+    }
+    /// Cuts the value again (`cutValue`) — only where it is drawn cut: a picked value, or a typed one with nobody
+    /// typing in it. The ruler takes the field's face here rather than by a binding, which can land after the handler
+    /// that calls this.
+    function recut() {
+        if (!combo.pickOnly && !combo.idleCut)
+            return
+        cutRuler.font = combo.font
+        combo.cutValue = WordFace.cutToFit(word => {
+            cutRuler.text = word
+            return cutRuler.advanceWidth
+        }, combo.wanted, input.room, combo.leadMark === "remote")
+    }
+
     editable: !combo.pickOnly
     implicitHeight: Theme.controlHeight
     font.pixelSize: Theme.fontMd
+    onCutRoomChanged: combo.recut()
+    onFontChanged: combo.recut()
+    onLeadMarkChanged: combo.recut()
+    onIdleCutChanged: combo.recut()
+    Component.onCompleted: combo.recut()
 
     // The ground says whether there is anything to type here (デザイン規約 §選ぶ欄と打つ欄).
     background: Rectangle {
@@ -77,19 +164,23 @@ ComboBox {
         readonly property real fitWidth: whole.advanceWidth
         // Picking only, the value is the owner's (ComboBox keeps `editText` only when editable), cut in the middle — a
         // remote's at its end, its head being the remote (デザイン規約 §寸法「upstream 名だけは末尾で切る」): a
-        // read-only `TextInput` too narrow scrolls to the caret and loses the name's head unmarked. The elide's own
-        // arithmetic, not `CutName`: a lone field has no column edge to line up.
-        text: combo.pickOnly ? (input.fitWidth > input.room ? fit.elidedText : combo.wanted) : combo.editText
-        color: combo.enabled ? Theme.textPrimary : Theme.textMuted
+        // read-only `TextInput` too narrow scrolls to the caret and loses the name's head unmarked. Cut to fill the
+        // room up to the arrow's step (`WordFace.cutToFit`); not `CutName`: a lone field has no column edge to line up.
+        text: combo.pickOnly ? (input.fitWidth > input.room ? combo.cutValue : combo.wanted) : combo.editText
+        // Clear while the cut stands in for it (`idleCut`).
+        color: combo.idleCut ? "transparent" : combo.enabled ? Theme.textPrimary : Theme.textMuted
         font: combo.font
         // The plain boxes' inset (`SlimField`), which this field stands beside in the question bar — and the kind's
         // mark after it, a sign on the value (`leadMark`), its seat's air on the frame's side given back (`frameAir`).
         leftPadding: Theme.spaceXs + (combo.leadMark !== "" ? leadIcon.wordCell - combo.frameAir : 0)
         // Stops the word short of the arrow: the control gives way only by the indicator's width, and the arrow's seat
-        // stands `spaceSm` further in, while a `TextInput` does not elide — unstopped, a long name runs under the
-        // arrow. So the inset is that gap plus the word's own inset. No list, the plain inset: no width is given up to
-        // an arrow not drawn. `tst_appcombo` holds it, and that the control gives way by exactly the indicator's width.
-        rightPadding: combo.hasList ? Theme.spaceSm + Theme.spaceXs : Theme.spaceXs
+        // stands its step from the frame (`seat`, `spaceXs`) further in, while a `TextInput` does not elide —
+        // unstopped, a long name runs under the arrow. The word ends `spaceXs` short of the arrow's ink, as the ink
+        // ends `spaceXs` short of the frame (user decision — ask before changing; デザイン規約 §余白「印の側も同じ刻み」):
+        // that step, plus the seat's step, less the air the seat holds left of the ink. No list, the plain inset: no
+        // width is given up to an arrow not drawn. `tst_appcombo` holds both, and that the control gives way by exactly
+        // the indicator's width.
+        rightPadding: combo.hasList ? 2 * Theme.spaceXs - seat.inkLeft : Theme.spaceXs
         verticalAlignment: Text.AlignVCenter
         readOnly: combo.pickOnly
         selectByMouse: !combo.pickOnly
@@ -100,15 +191,8 @@ ComboBox {
         // A typed value longer than the box scrolls to the caret, and unclipped its head is drawn out past the frame
         // (`set-upstream` with an 80-letter name shows it).
         clip: true
-        TextMetrics {
-            id: fit
-            font: input.font
-            text: combo.wanted
-            elide: combo.leadMark === "remote" ? Text.ElideRight : Text.ElideMiddle
-            elideWidth: Math.max(0, input.width - input.leftPadding - input.rightPadding)
-        }
-        // The whole name's width, from a ruler with no cut: `fit` answers about what it drew, so a field sized from it
-        // stays cut.
+        // The whole name's width, from a ruler with no cut: the cut answers about what it drew, so a field sized from
+        // it stays cut.
         TextMetrics {
             id: whole
             font: input.font
@@ -126,6 +210,19 @@ ComboBox {
             width: input.leftPadding - leadGround.inX
             height: Math.min(input.height, combo.height - Theme.radiusSm - input.y) - leadGround.inY
             color: Theme.bgBase
+        }
+        // The typed name, cut, while nobody is typing in it (`idleCut`), on the input's own line; the input's own
+        // text goes clear meanwhile, so no scrolled piece of it is drawn beside.
+        PlainTextLabel {
+            id: idleWord
+            visible: combo.idleCut
+            x: input.leftPadding
+            width: input.room
+            height: input.height
+            text: combo.cutValue
+            color: combo.enabled ? Theme.textPrimary : Theme.textMuted
+            font: input.font
+            verticalAlignment: Text.AlignVCenter
         }
         // In the inset, on the value's line: drawn, not written, so the value starts after it and none of it is text.
         NavIcon {
@@ -176,6 +273,9 @@ ComboBox {
         height: Theme.iconSm
         // Nothing to open, nothing to point at (see `hasList`).
         visible: combo.hasList
+        /// The air the seat holds left of the arrow's ink (the mark is centred in it), which the word's stop takes
+        /// back.
+        readonly property real inkLeft: (seat.width - arrowMark.inkWidth) / 2
         // One ring at a time: here while the card is shut, inside it once it is up.
         readonly property bool waits: combo.loading && !combo.popup.opened
         // Two marks, not one: an animator takes the property it turns, killing the arrow's `rotation` binding for good,
@@ -185,6 +285,7 @@ ComboBox {
             spinning: seat.waits
         }
         NavIcon {
+            id: arrowMark
             anchors.fill: parent
             visible: !seat.waits
             kind: "chevron"
@@ -242,8 +343,10 @@ ComboBox {
         // Written in while it stands: some presses outside never reach the scene to close it (`OutsidePress`).
         readonly property bool inOutsidePress: OutsidePress.counts(list.visible, list.closePolicy)
         y: combo.height
-        width: combo.width
+        width: combo.listWidth
         padding: Theme.spaceXs
+        // A list wider than the field is seated as it opens, and again when its rows widen while it stands.
+        onWidthChanged: if (list.visible) combo.placeList()
         // The default policy reads the field's own press as outside, so a second press could never close the list.
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
         onInOutsidePressChanged: OutsidePress.stand(list, list.inOutsidePress)
@@ -257,6 +360,7 @@ ComboBox {
             }
             if (combo.pickOnly)
                 combo.currentIndex = combo.find(combo.wanted)
+            combo.placeList()
         }
         // Plus the popup's own padding, or the last row is cut.
         implicitHeight: Math.min(contentItem.implicitHeight, Theme.rowHeight * 8) + topPadding + bottomPadding
@@ -303,7 +407,7 @@ ComboBox {
         /// The row holding the value; Qt's highlight is only where the keyboard is (デザイン規約 §選ぶ欄と打つ欄).
         readonly property bool current:
             !row.acts && row.modelData !== "" && row.modelData === (combo.pickOnly ? combo.wanted : combo.editText)
-        width: combo.width - 2 * Theme.spaceXs
+        width: combo.popup.availableWidth
         height: Theme.rowHeight + row.lead
         topPadding: row.lead
         // A menu row's air either side of its word (`AppMenuItem.padding`, デザイン規約 §選ぶ欄と打つ欄), not the
@@ -346,6 +450,9 @@ ComboBox {
                 anchors.rightMargin: mark.visible ? mark.width + mark.anchors.rightMargin : 0
                 text: row.modelData
                 color: Theme.textPrimary
+                // The face `rowsWidth` measures the list in, named here: a popup takes its window's face, not the
+                // field's.
+                font.family: Theme.uiFamily
                 font.pixelSize: Theme.fontMd
                 verticalAlignment: Text.AlignVCenter
                 elide: Text.ElideRight
@@ -364,11 +471,20 @@ ComboBox {
                 width: MarkSeat.cell(rowWord.font.pixelSize)
                 height: Theme.iconSm
                 anchors.right: parent.right
-                // Clear of the list's floating thumb: right-set ink on that side would stand under it whenever the
-                // list scrolls (デザイン規約 §QML 実装ルール「その辺に右揃えのインクが立つ」).
-                anchors.rightMargin: rows.ScrollBar.vertical.width - row.rightPadding
+                // Clear of the list's floating thumb (`markStep`), which the list's width counts.
+                anchors.rightMargin: combo.markStep
                 anchors.verticalCenter: parent.verticalCenter
             }
         }
+    }
+
+    FontMetrics {
+        id: rowFace
+    }
+    TextMetrics {
+        id: cutRuler
+    }
+    HoverHandler {
+        id: fieldHover
     }
 }

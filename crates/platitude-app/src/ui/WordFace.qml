@@ -121,6 +121,40 @@ QtObject {
         return large.tightBoundingRect(first).x * words.font.pixelSize / 1000
     }
 
+    /// `text` cut to fill `room`, each try measured by `measure` (a string's width as the field lays it out): at its
+    /// end, or in its middle, the head given the odd letter — as many letters kept as the room holds, the ellipsis
+    /// included. Not Qt's own elide: its middle cut takes letters off both ends at once and stops up to two letters
+    /// short, a gap before whatever stands at the room's edge (a combo's arrow). The measure is a `TextMetrics`'s, not
+    /// a `FontMetrics.advanceWidth`, which reads wider than the laid-out text (`featurene-box` at Noto Sans JP 14:
+    /// 97 against 92) and cuts a letter early. An empty text has nothing to cut, room or none: a field not laid out
+    /// yet has none, and an ellipsis there would widen the field it is sized by and flip it back (`tst_appcombo`).
+    function cutToFit(measure, text, room, atEnd) {
+        const ellipsis = "…"
+        if (text === "" || measure(text) <= room)
+            return text
+        const fits = (head, tail) => head + tail < text.length
+            && measure(text.slice(0, head) + ellipsis + text.slice(text.length - tail)) <= room
+        if (atEnd) {
+            let kept = 0
+            while (fits(kept + 1, 0))
+                kept++
+            return text.slice(0, kept) + ellipsis
+        }
+        let head = 0
+        let tail = 0
+        for (;;) {
+            if (head <= tail && fits(head + 1, tail))
+                head++
+            else if (fits(head, tail + 1))
+                tail++
+            else if (fits(head + 1, tail))
+                head++
+            else
+                break
+        }
+        return text.slice(0, head) + ellipsis + text.slice(text.length - tail)
+    }
+
     function share(rect) {
         return { y: rect.y / 1000, width: rect.width / 1000, height: rect.height / 1000 }
     }
