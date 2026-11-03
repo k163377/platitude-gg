@@ -16,6 +16,7 @@
 mod board;
 mod cli;
 mod crop;
+mod diff;
 mod page;
 mod sweep;
 mod taken;

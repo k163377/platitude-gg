@@ -1,8 +1,8 @@
-//! `cargo xtask shots <add|crop|prune|open|list|path>`.
+//! `cargo xtask shots <add|crop|diff|prune|open|list|path>`.
 
 use std::path::PathBuf;
 
-use super::{board, crop, sweep, window};
+use super::{board, crop, diff, sweep, window};
 
 const USAGE: &str = "\
 cargo xtask shots <command>
@@ -53,6 +53,19 @@ cargo xtask shots <command>
       where. Put one in front of the reader with `add`, same as any
       other picture.
 
+  diff <before.png> <after.png> [--out <png>]
+      Draw where two pictures of one place differ: the after dimmed to
+      grey, every pixel that came out lighter in green (ink that
+      arrived, on the dark theme), every one that came out darker in
+      red, and a yellow frame round each place where pixels changed. A
+      move of a pixel or two does not show between two pictures side by
+      side — the reader compares the one in front of them with the one
+      they remember — so it goes on the board as a third picture beside
+      them (`add --part`). Both pictures are one size: cut both from the
+      same region first. The difference lands beside the after, named
+      for it, unless --out says where; the line printed counts the
+      changed pixels and names the places.
+
   prune [--seat <letter>]... [--label \"<label>\"]
       Take runs off the board — their pictures and all — and rebuild the
       page. Without --seat it reaches this seat's own runs alone: the
@@ -77,6 +90,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str) {
         Some("add") => add(&args[1..]),
         Some("crop") => crop::run(&args[1..]),
+        Some("diff") => diff::run(&args[1..]),
         Some("prune") => prune(&args[1..]),
         Some("open") => open(&args[1..]),
         Some("list") => {

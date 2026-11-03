@@ -885,7 +885,7 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       carries — work nothing can reach until a takeover grows the tree
       back. Ends with how to read the columns.
 
-  shots <add|crop|prune|open|list|path>
+  shots <add|crop|diff|prune|open|list|path>
       The shot board: pictures land on a page that magnifies them to
       exact whole ratios without smoothing. A chat pane fits a picture to
       its width and cannot zoom it, so a 1440x900 window is unreadable
@@ -905,6 +905,11 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       itself, where there is nothing to zoom with. Both halves matter:
       a fractional ratio has to interpolate, and what a crop is read for
       is a pixel.
+
+      `diff <before.png> <after.png>` draws where two pictures of one
+      place differ — the after in grey, lighter pixels green, darker
+      ones red, each place framed in yellow — for the move of a pixel or
+      two that two pictures side by side do not show.
 
       A before/after goes on with `add --before <png> --after <png>`,
       which puts the two on one view side by side under one magnifier.
