@@ -95,15 +95,16 @@ QtObject {
     }
     /// How long ago `at` was, in the list's one column of times. Within the hour by minutes, within the day by hours,
     /// then by the calendar; a week back and further reads as the date, where a count stops telling days apart. The
-    /// moment in full is the card's and the band's (`whenWords`).
+    /// moment in full is the card's and the band's (`whenWords`). Minutes and hours are written short, the unit's
+    /// letter against the number (`39m`, `11h`), so the narrow menu gives the row's title what it can.
     function ago(at, now) {
         const secs = Math.max(0, now - at)
         if (secs < 60)
             return qsTr("Just now")
         if (secs < 3600)
-            return qsTr("%1 min ago").arg(Math.floor(secs / 60))
+            return qsTr("%1m ago").arg(Math.floor(secs / 60))
         if (secs < 86400)
-            return qsTr("%1 h ago").arg(Math.floor(secs / 3600))
+            return qsTr("%1h ago").arg(Math.floor(secs / 3600))
         const then = new Date(at * 1000)
         const today = new Date(now * 1000)
         const days = Math.round((new Date(today.getFullYear(), today.getMonth(), today.getDate())

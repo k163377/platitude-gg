@@ -196,8 +196,9 @@ Item {
         function test_the_moment_comes_first_then_how_long_ago() {
             const now = 1790000000
             compare(shown.ago(now - 30, now), "Just now")
-            compare(shown.ago(now - 120, now), "2 min ago")
-            compare(shown.whenWords(now - 120, now), Words.stamp(now - 120) + " (2 min ago)")
+            compare(shown.ago(now - 120, now), "2m ago")
+            compare(shown.ago(now - 3 * 3600, now), "3h ago")
+            compare(shown.whenWords(now - 120, now), Words.stamp(now - 120) + " (2m ago)")
         }
 
         function test_the_rows_are_worded_whole() {

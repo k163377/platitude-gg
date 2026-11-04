@@ -195,7 +195,7 @@ Item {
             const titles = found(pane, item => item.pieces !== undefined && item.cutting !== undefined)
             compare(titles.length, 1, "one row")
             verify(titles[0].cutting, "its name cut — never opened out in the list")
-            compare(found(pane, item => item.text === "2 min ago").length, 1, "the row's time stays")
+            compare(found(pane, item => item.text === "2m ago").length, 1, "the row's time stays")
             verify(pane.restOnShown(0))
             tryVerify(() => pane.cardOpen, undefined, "the card opened")
             compare(pane.cardAt, 0)
