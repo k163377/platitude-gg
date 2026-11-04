@@ -197,29 +197,39 @@ Item {
     }
     /// The page as the shot driver reads it for a picture (`AutoShotDriver.pageOwed`), and the one fault injected
     /// there: `PGG_FAULT_OWED_AT_SHOT=<artifact>-<when>` has that picture's readings say a read `fault` is on its way
-    /// at the attempt's first reading (`before`: the page not settled as the picture is called for) or its second
-    /// (`during`: a read landing as the grab answers), and stands a mark in the content (`faultMark`) from the first
-    /// reading until the one after the fault — the readings a careless driver's texture would be drawn in. A saved
-    /// picture with the mark is one the driver should have thrown away, and `cargo xtask shot-check` decodes the
-    /// pictures for it (`xtask::verify::shot_check`). `shown` stands the mark and says no fault: the proof that the
-    /// mark reaches a picture at all.
+    /// at its first reading (`before`: the page not settled as the picture is called for) or at the reading its grab
+    /// answers in (`during`: a read landing as the grab answers), and stands a mark in the content (`faultMark`) from
+    /// the first reading until the one after the fault — the readings a careless driver's texture would be drawn in.
+    /// The grab's reading is the one taken while the attempt is `grabbing` (`AutoShotDriver.Attempt.stage`), not a
+    /// count: the page's own ambient reads can hold the attempt's settling for any number of readings first. `fault`
+    /// comes first in what the reading owes, so the attempt's line starts with it (`waiting=fault` / `held=fault`)
+    /// whatever else the page owes then. A saved picture with the mark is one the driver should have thrown away, and
+    /// `cargo xtask shot-check` decodes the pictures for it (`xtask::verify::shot_check`). `shown` stands the mark and
+    /// says no fault: the proof that the mark reaches a picture at all.
     readonly property string faultArtifact: Harness.faultOwedAtShot.split("-")[0]
     readonly property string faultWhen: Harness.faultOwedAtShot.split("-").slice(1).join("-")
-    property int faultReadings: 0
+    /// Where the injection stands for the faulted picture: `idle` before its first reading, `marked` from it, `owed`
+    /// once the fault was said and `spent` from the reading after (the mark down).
+    property string faultStage: "idle"
     property bool faultMarked: false
     function owedForPicture(artifact) {
         const owed = census.pageMissing()
-        if (artifact !== harness.faultArtifact)
+        if (artifact !== harness.faultArtifact || harness.faultStage === "spent")
             return owed
-        harness.faultReadings++
-        if (harness.faultReadings === 1)
-            harness.faultMarked = true
-        const at = harness.faultWhen === "before" ? 1 : harness.faultWhen === "during" ? 2 : 0
-        if (harness.faultReadings === at)
-            return owed.concat(["fault"])
-        if (at > 0 && harness.faultReadings > at)
+        if (harness.faultStage === "owed") {
+            harness.faultStage = "spent"
             harness.faultMarked = false
-        return owed
+            return owed
+        }
+        const first = harness.faultStage === "idle"
+        harness.faultStage = "marked"
+        harness.faultMarked = true
+        const due = harness.faultWhen === "before" ? first
+                  : harness.faultWhen === "during" && shotDriver[artifact].stage === "grabbing"
+        if (!due)
+            return owed
+        harness.faultStage = "owed"
+        return ["fault"].concat(owed)
     }
     // Inside the content, so the window's picture and the scene's mirror of it draw it; the colour is the one
     // `shot-check` looks for, a hue the theme has nowhere.

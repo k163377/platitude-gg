@@ -45,10 +45,10 @@ Item {
     /// it separates a term stuck over a scene still drawing from one over a scene that stopped.
     property real lastFrameAt: -1
     /// The page's reads still on their way (`PageSettled.missing`), asked of whoever holds the census
-    /// (`WindowHarness`) with the picture the reading is for: at each attempt's start and as its grab answers
-    /// (`Attempt`). The answer's one reading, before the save and the walk — each takes its time under load, and a
-    /// read that began meanwhile would be in a second reading — is both what holds the picture and what its line
-    /// says (`pictured`). Null owes nothing.
+    /// (`WindowHarness`) with the picture the reading is for: at each attempt's start, at every frame its settling
+    /// waits through, and as its grab answers (`Attempt`). The answer's one reading, before the save and the walk —
+    /// each takes its time under load, and a read that began meanwhile would be in a second reading — is both what
+    /// holds the picture and what its line says (`pictured`). Null owes nothing.
     property var pageOwed: null
     function owedNow(artifact) {
         return driver.pageOwed !== null ? driver.pageOwed(artifact) : []
@@ -191,9 +191,10 @@ Item {
     function answered(attempt, number, res) {
         if (number !== attempt.number || attempt.stage !== "grabbing")
             return
-        // The page first, so an attempt's second reading is its answer's whatever the ink says (`shot-check`
-        // counts on that); then the ink — the completion edge often builds the scene, and a `Canvas` has no ink
-        // in its first frame (rules-refs/app-ui.md「`Canvas` は生まれたフレームにインクを持たない」).
+        // The page first, still `grabbing`, so the answer's reading is told by the stage whatever the ink says
+        // (`WindowHarness.owedForPicture` counts on that); then the ink — the completion edge often builds the
+        // scene, and a `Canvas` has no ink in its first frame
+        // (rules-refs/app-ui.md「`Canvas` は生まれたフレームにインクを持たない」).
         const owed = driver.owedNow(attempt.artifact)
         if (driver.held(owed)) {
             driver.say(attempt, "held=" + owed.join(","))

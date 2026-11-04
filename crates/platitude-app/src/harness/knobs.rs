@@ -65,8 +65,8 @@ pub(crate) struct Knobs {
     pub fault_hold_save: String,
     /// `PGG_FAULT_OWED_AT_SHOT` — `<artifact>-<before|during|shown>`:
     /// have that picture's readings of the page say a read is on its way
-    /// at the attempt's first reading (`before`), at its second, as the
-    /// grab answers (`during`), or never (`shown`), with a mark drawn into
+    /// at the picture's first reading (`before`), at the one its grab
+    /// answers in (`during`), or never (`shown`), with a mark drawn into
     /// the content for the readings the fault stands through
     /// (`WindowHarness.owedForPicture`; `xtask::verify::shot_check`).
     pub fault_owed_at_shot: String,
