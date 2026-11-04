@@ -345,6 +345,13 @@ Item {
         delay: 0
         timeout: -1
         padding: Theme.spaceSm
+        // As wide as its words, up to the window between its edges (`seatX`): names are carried in full and wrap rather
+        // than cut. The words take the box's width (`resizeContent`) and hold none of their own. A box wider than the
+        // window is cut to it by the popup on every layout of its words, and a width of the words' own is a second
+        // writer: either loops the words' width.
+        implicitWidth: Math.min(Math.max(implicitBackgroundWidth + leftInset + rightInset,
+                                         implicitContentWidth + leftPadding + rightPadding),
+                                seat.host.width - 2 * Theme.spaceXs)
         // The seat clamps itself: `Popup`'s push-back knows nothing of the target and leaves the hand behind.
         margins: -1
         // The style's policy reads a press on the box — a selection starting — as a press outside the target.
@@ -400,8 +407,6 @@ Item {
             onLinkAsked: href => seat.linkAsked(href)
             pixelSize: Theme.fontMd
             color: Theme.textPrimary
-            // Half the window, as a graph row's card: names are carried in full and wrap rather than cut.
-            width: Math.min(implicitWidth, seat.host.width / 2)
             onPointedChanged: seat.wordPointed = pointed
         }
     }
