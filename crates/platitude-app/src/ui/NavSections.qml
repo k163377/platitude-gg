@@ -174,8 +174,10 @@ ColumnLayout {
         // With no row to ride above, the stand-in takes a row of its own: under the folder that closed over the
         // branch (`pinSeatRow`), else at the head of the list — and the list asks for that much more height, or the
         // row pushed down could not be read. **Not in an empty section**: its 1px of ground is an instruction
-        // (user decision — `NavList`'s `Layout.maximumHeight`).
-        topMargin: headPin.seated && !headPin.seatedUnder && branchList.count > 0 ? Theme.rowHeight : 0
+        // (user decision — `NavList`'s `Layout.maximumHeight`). The model's rows, not the view's `count`: a view with
+        // no size yet applies the rows it holds back inside the refill this margin's write sets off, and says
+        // `countChanged` there — a binding loop that drops the margin's second reading.
+        topMargin: headPin.seated && !headPin.seatedUnder && sections.branchesModel.shownRows > 0 ? Theme.rowHeight : 0
         pinSeatRow: headPin.seatedUnder ? headPin.underRow : -1
         Layout.verticalStretchFactor: sections.sectionPull
         onRefActivated: oidHex => sections.refActivated(oidHex)
