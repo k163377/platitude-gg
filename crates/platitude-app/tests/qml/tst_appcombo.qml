@@ -98,6 +98,17 @@ Control {
             wanted: "main"
             spreadWithin: markRoom
         }
+        /// The same marks in a list past its eight rows, so its thumb stands — the widest row still the marked one.
+        AppCombo {
+            id: markedLong
+            pickOnly: true
+            x: 200
+            width: 30
+            model: ["main", "fork", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11"]
+            markedRow: "fork"
+            wanted: "main"
+            spreadWithin: markRoom
+        }
     }
 
     /// Two boxes holding a typed name too long for them, as the question bar's forms hold one: a list's and a plain
@@ -322,22 +333,60 @@ Control {
             spreadsLeft.x = 130
         }
 
-        /// The widest row wearing the push mark is whole too: the list's width counts the mark's step off the thumb's
-        /// lane, where the row seats it.
-        function test_a_marked_widest_row_is_whole() {
-            markedList.popup.open()
-            tryCompare(markedList.popup, "visible", true)
-            let rows = null
-            for (const child of markedList.popup.contentItem.children)
+        /// The open list's rows.
+        function rowsOf(combo) {
+            for (const child of combo.popup.contentItem.children)
                 if (child.itemAtIndex !== undefined)
-                    rows = child
+                    return child
+            return null
+        }
+        /// The widest row wearing the push mark is whole too, in a list that fits and in one whose thumb stands: the
+        /// list's width counts the mark and its step off the thumb (`AppCombo.markStep`), where the row seats it.
+        function test_a_marked_widest_row_is_whole_data() {
+            return [{ tag: "fits", combo: markedList }, { tag: "scrolls", combo: markedLong }]
+        }
+        function test_a_marked_widest_row_is_whole(data) {
+            data.combo.popup.open()
+            tryCompare(data.combo.popup, "visible", true)
+            const rows = rowsOf(data.combo)
             tryVerify(() => rows.itemAtIndex(1) !== null)
             const word = rows.itemAtIndex(1).contentItem.children[0]
             const mark = rows.itemAtIndex(1).contentItem.children[1]
             compare(word.text, "fork")
             verify(mark.visible, "the row wears the mark")
-            verify(!word.truncated, "the word is whole in " + word.width + " for " + word.implicitWidth)
+            tryVerify(() => !word.truncated, undefined,
+                      "the word is whole in " + word.width + " for " + word.implicitWidth)
+            data.combo.popup.close()
+        }
+
+        /// The push mark ends at its row's inset while the list fits, as a menu row's end column does, and steps clear
+        /// of the floating thumb only while one stands (`AppCombo.markStep`). Its box runs past the baseline, where its
+        /// line's share of a pixel hangs (`NavIcon.footed`).
+        function test_the_push_mark_keeps_clear_of_a_thumb_only_while_one_stands() {
+            markedList.popup.open()
+            tryCompare(markedList.popup, "visible", true)
+            const fits = rowsOf(markedList)
+            tryVerify(() => fits.itemAtIndex(1) !== null)
+            verify(!fits.ScrollBar.vertical.visible, "two rows fit")
+            const row = fits.itemAtIndex(1)
+            const mark = row.contentItem.children[1]
+            verify(mark.visible, "the row wears the mark")
+            compare(mark.x + mark.width, row.contentItem.width, "the mark's seat ends at the row's inset")
+            verify(Math.round(mark.wordBase) < mark.height,
+                   "the baseline's row " + Math.round(mark.wordBase) + " inside the box " + mark.height)
             markedList.popup.close()
+
+            markedLong.popup.open()
+            tryCompare(markedLong.popup, "visible", true)
+            const scrolls = rowsOf(markedLong)
+            tryVerify(() => scrolls.ScrollBar.vertical.visible)
+            compare(markedLong.markStep, scrolls.ScrollBar.vertical.width - Theme.spaceXs, "clear of the thumb")
+            tryVerify(() => scrolls.itemAtIndex(1) !== null)
+            const longRow = scrolls.itemAtIndex(1)
+            const longMark = longRow.contentItem.children[1]
+            compare(longMark.x + longMark.width, longRow.contentItem.width - markedLong.markStep,
+                    "seated off the thumb")
+            markedLong.popup.close()
         }
 
         function test_the_caret_at_the_end_stays_off_the_arrow() {

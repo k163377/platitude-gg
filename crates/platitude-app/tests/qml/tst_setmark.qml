@@ -66,6 +66,21 @@ Item {
         }
     }
     Component {
+        id: footOf
+        // The push mark as a row's end column sets it, at a name's size: its box past the baseline, the baseline on a
+        // whole pixel.
+        NavIcon {
+            x: 8
+            y: 8
+            kind: "push"
+            set: "name"
+            width: wordCell
+            height: Theme.iconMd
+            wordBase: 13
+            tint: "black"
+        }
+    }
+    Component {
         id: namedOf
         // A mark seated in front of its name as a chip sets the two (`CodeChip`): the seat from the head, the name in
         // the code face straight after it.
@@ -378,6 +393,33 @@ Item {
                    data.tag + ": the seat's air either side of " + air + ": " + ink.left + ", " + after)
             // A pixel: the seat stands the ink on a whole one (`NavIcon.shiftX`), and the drawn edges read a hair more.
             fuzzyCompare(ink.left, after, 1.1, data.tag + " in the middle")
+        }
+
+        /// The push mark's base line keeps its full row on the baseline's and hangs what its weight runs past a pixel
+        /// under it, where a round letter's bottom overshoots (`NavIcon.footed`, user decision): at a name's sizes,
+        /// where the line is a pixel and a share — and from the baseline as the letters stand it, on a whole pixel,
+        /// where a box's baseline falls between two.
+        function test_the_push_mark_s_line_stands_its_full_row_on_the_baseline_data() {
+            return [{ tag: "12px", size: 12, base: 13 }, { tag: "13px", size: 13, base: 13 },
+                    { tag: "14px", size: 14, base: 13 }, { tag: "12px on 13.4", size: 12, base: 13.4 },
+                    { tag: "14px on 12.55", size: 14, base: 12.55 }]
+        }
+        function test_the_push_mark_s_line_stands_its_full_row_on_the_baseline(data) {
+            const mark = createTemporaryObject(footOf, root, { size: data.size, wordBase: data.base })
+            tryVerify(() => mark.inked)
+            const picture = grabImage(mark)
+            // A column of the line clear of the shaft and the barbs: a pixel in from its left end, which the seat
+            // stands on a whole pixel (`NavIcon.shiftX`).
+            const x = Math.round(mark.inkLeft) + 1
+            const cover = y => {
+                const c = picture.pixel(x, y)
+                return 1 - (c.r + c.g + c.b) / 3
+            }
+            const base = Math.round(data.base)
+            verify(cover(base - 1) > 0.95, data.tag + ": the baseline's row is the line's, " + cover(base - 1))
+            verify(cover(base) > 0.05 && cover(base) < 0.5,
+                   data.tag + ": its share hangs under the baseline, " + cover(base))
+            verify(cover(base - 2) < 0.05, data.tag + ": none of it over its row, " + cover(base - 2))
         }
 
         /// A mark in front of its name stands in the middle between the seat's head and the name's ink, the first

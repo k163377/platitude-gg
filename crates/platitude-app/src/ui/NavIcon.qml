@@ -72,6 +72,15 @@ InkCanvas {
     /// under the baseline — never on a sign's middle or stopped at the baseline, which would drop the ring under the
     /// names' tall letters or stand the feet on the line (デザイン規約 §アイコンの席).
     readonly property bool lettered: icon.kind === "tree" || icon.kind === "branch"
+    /// Whether a set mark stands on a foot put on whole pixels rather than its top (`shiftY`): `push` as a state after
+    /// a name (the remote pushes go to), whose base line is the one line drawn straight across it, under a point. The
+    /// line's top edge goes down to a whole pixel, so its full row is the baseline's and what its weight runs past a
+    /// pixel (a 1.3px line at 14px) hangs under the baseline, where a round letter's bottom overshoots (user decision —
+    /// ask before changing): that share on top, the line reads lifted off the words beside it. Rounded at its point, at
+    /// a name's sizes (12–14px) the line lands across two rows half lit. Not a mark heading a button's word: `fetch`
+    /// beside it draws the same line and stands by its top. A box drawing a footed mark reaches past the baseline
+    /// (`iconMd`): a canvas draws nothing past its box.
+    readonly property bool footed: icon.kind === "push" && icon.set === "name"
     /// Whether the tag and the house are drawn 1.12x: a mark set beside words only, not one drawn in a box.
     readonly property bool grown: icon.set !== ""
     /// Whether a set mark takes the seat (`MarkSeat`, デザイン規約 §アイコンの席「字の中の席」): a letter of the words,
@@ -149,7 +158,11 @@ InkCanvas {
             // reads as dropped, or lifted.
             return (Math.round(icon.wordBase) + icon.target.middle - icon.inkDown / 2) / icon.unit - icon.inkBox[1]
         }
-        const middle = Math.round(icon.wordBase + icon.target.middle - icon.inkDown / 2)
+        const middle = icon.footed
+            // From the baseline as drawn, on a whole pixel (`lettered` above).
+            ? Math.ceil(Math.round(icon.wordBase) + icon.target.middle + icon.inkDown / 2 - icon.pen)
+              + icon.pen - icon.inkDown
+            : Math.round(icon.wordBase + icon.target.middle - icon.inkDown / 2)
         const top = icon.target.sign ? Math.min(middle, Math.round(icon.wordBase) - icon.inkDown) : middle
         return top / icon.unit - icon.inkBox[1]
     }

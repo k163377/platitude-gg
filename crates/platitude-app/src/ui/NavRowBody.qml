@@ -184,7 +184,9 @@ RowLayout {
         active: body.row.pushesHere
         visible: pushSeat.active
         Layout.preferredWidth: body.stateSeat
-        Layout.preferredHeight: Theme.iconSm
+        // Taller than the badge's box, past the baseline: the mark's foot hangs a share of a pixel under it
+        // (`NavIcon.footed`).
+        Layout.preferredHeight: Theme.iconMd
         // A state after the name, as the badge is (デザイン規約 §アイコンの席「名前の後の状態」).
         sourceComponent: NavIcon {
             kind: "push"
@@ -193,7 +195,7 @@ RowLayout {
             wordBase: nameCell.y + nameCell.nameBase - pushSeat.y
             tint: Theme.accent
             width: body.stateSeat
-            height: Theme.iconSm
+            height: Theme.iconMd
         }
     }
 }

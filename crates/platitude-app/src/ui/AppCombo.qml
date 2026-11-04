@@ -42,9 +42,11 @@ ComboBox {
         : Math.min(combo.spreadWithin.width,
                    Math.max(combo.width, combo.rowsWidth(combo.model, combo.font, combo.markedRow, combo.markStep)))
     /// How far the push mark stands in from its row's end, past the row's own inset (`spaceXs`): clear of the list's
-    /// floating thumb, since right-set ink on that side would stand under it whenever the list scrolls (デザイン規約
-    /// §QML 実装ルール「その辺に右揃えのインクが立つ」).
-    readonly property real markStep: rows.ScrollBar.vertical.width - Theme.spaceXs
+    /// floating thumb while it stands, since right-set ink on that side would stand under it whenever the list scrolls
+    /// (デザイン規約 §QML 実装ルール「その辺に右揃えのインクが立つ」). A list that fits has no thumb, and the mark ends
+    /// at the row's inset, as a menu row's end column does (`AppMenuItem`'s badge).
+    readonly property real markStep: rows.ScrollBar.vertical.visible
+                                     ? rows.ScrollBar.vertical.width - Theme.spaceXs : 0
 
     /// The value cut to fill the box up to the arrow's step (`WordFace.cutToFit`): in its middle, a remote's at its
     /// end. Worked out again whenever what it reads changes while it is drawn (`recut`), not bound: the ruler that
@@ -469,9 +471,10 @@ ComboBox {
                 tint: Theme.accent
                 // The seat of the row's letters (`MarkSeat`, デザイン規約 §アイコンの席 の名指し).
                 width: MarkSeat.cell(rowWord.font.pixelSize)
-                height: Theme.iconSm
+                // Past the baseline: the mark's foot hangs a share of a pixel under it (`NavIcon.footed`).
+                height: Theme.iconMd
                 anchors.right: parent.right
-                // Clear of the list's floating thumb (`markStep`), which the list's width counts.
+                // Clear of the list's floating thumb while it stands (`markStep`), which the list's width counts.
                 anchors.rightMargin: combo.markStep
                 anchors.verticalCenter: parent.verticalCenter
             }
