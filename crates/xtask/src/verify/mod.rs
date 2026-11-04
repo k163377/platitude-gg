@@ -9,6 +9,7 @@ mod coverage;
 mod faults;
 pub(crate) mod git_shim;
 mod look;
+pub(crate) mod loops;
 mod observed;
 mod options;
 mod outcome;

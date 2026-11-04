@@ -47,6 +47,9 @@ pub(super) struct Outcome {
     /// that moved (`settings-git-path stored-missing`,
     /// `super::seed::stored_path_kept`). `None` for every other run.
     pub(super) stored_path_kept: Option<bool>,
+    /// The binding and polish loops QML said (`super::loops`): one that
+    /// nothing allows is a red whatever else the run said.
+    pub(super) loops: Vec<super::loops::Met>,
 }
 
 impl Outcome {
@@ -62,6 +65,12 @@ impl Outcome {
             && self.contract.is_empty()
             && self.held_save_landed.is_none_or(|landed| landed)
             && self.stored_path_kept.is_none_or(|kept| kept)
+            && !self.looped()
+    }
+
+    /// Whether QML said a loop nothing allows.
+    pub(super) fn looped(&self) -> bool {
+        self.loops.iter().any(|met| met.allowed.is_none())
     }
 
     /// Whether the failing writes are what the verdict turns on — the one
@@ -129,6 +138,7 @@ pub(super) fn judge(
         ),
         held_save_landed: super::shim::held_save_landed(&opts.verb, config),
         stored_path_kept: super::seed::stored_path_kept(&opts.verb, &opts.arg, config_dir),
+        loops: super::loops::met(every_line.iter().map(String::as_str)),
     }
 }
 
@@ -269,6 +279,12 @@ pub(super) fn announce(
              mounted at /out."
         );
     }
+    for met in &outcome.loops {
+        println!("  loop: {met}");
+    }
+    if outcome.looped() {
+        println!("  {}", super::loops::MEANING);
+    }
     if passed {
         Ok(())
     } else {
@@ -343,7 +359,39 @@ mod tests {
         contract: Vec::new(),
         held_save_landed: None,
         stored_path_kept: None,
+        loops: Vec::new(),
     };
+
+    /// A loop QML said is a red however well the run went otherwise, and
+    /// one the table allows is said and judged by nothing.
+    #[test]
+    fn a_loop_qml_said_fails_the_run_unless_it_is_allowed() {
+        let opts = super::super::options::parse(&["wip".to_string()]).expect("a line");
+        let dir = crate::temp::root().join("pgg-verify-loop");
+        let said = super::super::child::Ran {
+            err_lines: vec![
+                "qrc:/qt/qml/platitude/ui/NavSections.qml:162:5: QML NavList: Binding loop \
+                 detected for property \"topMargin\":"
+                    .to_string(),
+                "qrc:/qt/qml/platitude/ui/NavSections.qml:178:9".to_string(),
+            ],
+            ..ran(false, Some(0))
+        };
+        let outcome = super::judge(&opts, &said, &dir, &dir, "r1", None);
+        assert_eq!(outcome.loops.len(), 1, "{outcome:?}");
+        let looped = Outcome {
+            loops: outcome.loops,
+            ..WELL
+        };
+        assert!(looped.looped() && !looped.passed());
+        let mut allowed = looped.loops.clone();
+        allowed[0].allowed = Some("a reason");
+        let allowed = Outcome {
+            loops: allowed,
+            ..WELL
+        };
+        assert!(!allowed.looped() && allowed.passed());
+    }
 
     /// The picture is of another state than the one the verb completed on
     /// (`Awaited.pictured`), or the claim its row requires was never read

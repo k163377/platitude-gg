@@ -2,7 +2,7 @@
 
 use super::{
     Came, FAILED, KEPT, LITTER_AGE, MANIFEST, Manifest, Ran, Setup, TESTS, beyond_the_newest,
-    case_names, environment, failed_root, first_break, keep, litter, manifest, outcomes,
+    case_names, environment, failed_root, first_break, judged, keep, litter, manifest, outcomes,
     reported_paths, run_each, short_of, sweep, tests_in, together_verdict, unfinished_in,
 };
 use crate::yard::Yard;
@@ -110,6 +110,49 @@ fn a_red_one_process_run_names_where_it_broke() {
         together_verdict("killed", &short)
             .contains("a finished green, and the log names nothing from b on")
     );
+    // A loop said on stderr while a file was built breaks no case.
+    let green = vec![
+        ("a".to_string(), Came::Green),
+        ("b".to_string(), Came::Green),
+    ];
+    let why = together_verdict("  loop: X.qml: QML Item: Binding loop", &green);
+    assert!(
+        why.contains("every file finished green in the log") && !why.contains("names no file"),
+        "{why}"
+    );
+}
+
+/// A runner that dies while its file is built leaves its reason on
+/// stderr alone, and its red carries the last of it.
+#[test]
+fn a_red_runner_says_the_last_of_its_stderr() {
+    let err: Vec<String> = (0..25).map(|n| format!("line {n}")).collect();
+    let why = judged(
+        "t.qml",
+        exit_status(1),
+        String::new(),
+        &err,
+        "l.txt",
+        "e.txt",
+    )
+    .expect_err("a runner that failed");
+    assert!(why.starts_with("qmltestrunner wrote no log"), "{why}");
+    assert!(
+        why.contains("its last 20 of 25 lines")
+            && why.contains("line 24")
+            && !why.contains("line 4\n"),
+        "{why}"
+    );
+    let quiet = judged(
+        "t.qml",
+        exit_status(1),
+        String::new(),
+        &[],
+        "l.txt",
+        "e.txt",
+    )
+    .expect_err("a runner that failed");
+    assert!(!quiet.contains("stderr"), "{quiet}");
 }
 
 /// The boundary is where the log stops being green, whatever comes
@@ -218,6 +261,92 @@ fn a_log_says_each_file_in_the_order_it_names_them() {
             Came::Red(format!("{hand} never finished"))
         )]
     );
+}
+
+/// A loop QML said under a case is that case's red though every case
+/// passed (`verify::loops`); any other warning is not.
+#[test]
+fn a_loop_said_under_a_case_is_its_files_red() {
+    let root = crate::tree::workspace_root();
+    let test = format!("{TESTS}/tst_navfacts.qml");
+    let looped = "QWARN  : qmltestrunner::NavFacts::test_x() \
+                  file:///C:/w/import/platitude/ui/NavSections.qml:162:5: QML NavList: Binding \
+                  loop detected for property \"topMargin\":";
+    let log = format!(
+        "PASS   : qmltestrunner::NavFacts::initTestCase()\n\
+         {looped}\n\
+         PASS   : qmltestrunner::NavFacts::cleanupTestCase()\n"
+    );
+    assert_eq!(
+        outcomes(&root, std::slice::from_ref(&test), &log),
+        vec![(test.clone(), Came::Red(looped.to_string()))]
+    );
+    let quiet = log.replace(
+        looped,
+        "QWARN  : qmltestrunner::NavFacts::test_x() qrc:/x.qml:1: TypeError: no",
+    );
+    assert_eq!(
+        outcomes(&root, std::slice::from_ref(&test), &quiet),
+        vec![(test, Came::Green)]
+    );
+}
+
+/// A green log is a red for a loop it holds or the stderr beside it holds
+/// (said while the file's items were built, before QtTest's log began).
+#[test]
+fn a_loop_in_the_log_or_on_stderr_turns_a_green_runner_red() {
+    let status = exit_status(0);
+    let log = "PASS   : qmltestrunner::NavFacts::cleanupTestCase()\nTotals: 1 passed\n";
+    let looped = "file:///w/import/platitude/ui/NavSections.qml:162:5: QML NavList: Binding loop \
+                  detected for property \"topMargin\":"
+        .to_string();
+    let quiet = judged(
+        "t.qml",
+        status,
+        log.to_string(),
+        &[],
+        "l.txt",
+        "l.stderr.txt",
+    );
+    assert_eq!(quiet, Ok(log.to_string()));
+    let why = judged(
+        "t.qml",
+        status,
+        log.to_string(),
+        &[
+            "file:///w/X.qml:3: ReferenceError: AppBackend is not defined".to_string(),
+            looped,
+        ],
+        "l.txt",
+        "l.stderr.txt",
+    )
+    .expect_err("a loop said on stderr");
+    assert!(
+        why.contains("loop: NavSections.qml: QML NavList: Binding loop detected")
+            && why.contains("stderr: l.stderr.txt"),
+        "{why}"
+    );
+    let logged = format!(
+        "{log}QWARN  : qmltestrunner::NavFacts::test_x() qrc:/a/B.qml:9:1: QML ListView: \
+         possible QQuickItem::polish() loop\n"
+    );
+    assert!(judged("t.qml", status, logged, &[], "l.txt", "l.stderr.txt").is_err());
+    // A log that fails says the failure, not the loop.
+    let failed = format!("{log}FAIL!  : qmltestrunner::NavFacts::test_x() no\n");
+    let why = judged("t.qml", status, failed, &[], "l.txt", "l.stderr.txt").expect_err("a FAIL!");
+    assert!(why.starts_with("qmltestrunner exited"), "{why}");
+}
+
+#[cfg(windows)]
+fn exit_status(code: u32) -> std::process::ExitStatus {
+    use std::os::windows::process::ExitStatusExt;
+    std::process::ExitStatus::from_raw(code)
+}
+
+#[cfg(unix)]
+fn exit_status(code: u32) -> std::process::ExitStatus {
+    use std::os::unix::process::ExitStatusExt;
+    std::process::ExitStatus::from_raw((code as i32) << 8)
 }
 
 /// [`outcomes`] tells files apart by their cases' names.

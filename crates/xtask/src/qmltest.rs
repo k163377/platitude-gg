@@ -7,8 +7,10 @@
 //! `platitude/ui` with the shipped qmldir, so the runs read the app's
 //! singleton declarations and whatever the tests' closure grows into.
 //!
-//! The runner's `-o` log is the only output that survives: its redirected
-//! output on Windows comes back empty.
+//! The runner's `-o` log holds what its cases said. What Qt said before
+//! the first case started that log — the file's items built and first
+//! bound — is on the runner's stderr alone, which is read off a pipe and
+//! kept beside the log ([`runner`]).
 //!
 //! Two roads: each file in a `qmltestrunner` of its own (the daily and the
 //! pre-merge gates — a process shares Qt's type registration and plugin
@@ -252,6 +254,11 @@ fn together_verdict(said: &str, files: &[(String, Came)]) -> String {
         Some((Some(before), first, _)) => {
             format!("{before} finished green, and the log names nothing from {first} on")
         }
+        // A loop said on stderr while a file was built names no case.
+        None if !files.is_empty() => {
+            "every file finished green in the log, so what failed the run was said beside its cases"
+                .to_string()
+        }
         Some((None, _, _)) | None => "the log names no file at all".to_string(),
     };
     format!(
@@ -367,7 +374,8 @@ fn outcomes(root: &Path, tests: &[String], text: &str) -> Vec<(String, Came)> {
             continue;
         };
         first[at].get_or_insert(n);
-        if line.starts_with("FAIL!") {
+        // A loop QML said under a case is that case's red ([`runner`]).
+        if line.starts_with("FAIL!") || crate::verify::loops::refused(line).is_some() {
             failed[at].get_or_insert(line);
         }
         if function.starts_with("cleanupTestCase(") {
@@ -618,11 +626,14 @@ fn runner_on(path: &OsStr) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("qmltestrunner"))
 }
 
-/// What every runner gets on top of what it inherits: the composed PATH
-/// and the offscreen fonts. The manifest reads it back off a command
-/// built here too.
+/// What every runner gets on top of what it inherits: the composed PATH,
+/// Qt's messages on stderr, and the offscreen fonts. The manifest reads it
+/// back off a command built here too.
 fn given(cmd: &mut Command, setup: &Setup) {
     cmd.env("PATH", setup.path);
+    // A Windows Qt otherwise hands what it says before the log starts to
+    // the debugger's channel, and the pipe ([`runner`]) reads nothing.
+    cmd.env("QT_FORCE_STDERR_LOGGING", "1");
     // Compiled QML belongs to this staging tree, and is removed or retained with its evidence.
     cmd.env(
         "QML_DISK_CACHE_PATH",
@@ -635,9 +646,11 @@ fn given(cmd: &mut Command, setup: &Setup) {
 
 /// One `qmltestrunner` over one test file
 /// under [`QUIET`] and [`WHOLE`], writing `log` in the staging directory and
-/// answering with it. The verdict is the exit code *and* the `FAIL!` lines:
-/// a logger that could not be written leaves a green exit with nothing
-/// behind it. Whatever it comes to goes into `runs`.
+/// answering with it; its stderr goes beside it ([`stderr_of`]). The
+/// verdict is the exit code, the `FAIL!` lines — a logger that could not
+/// be written leaves a green exit with nothing behind it — and the binding
+/// and polish loops either holds ([`judged`]). Whatever it comes to goes
+/// into `runs`.
 fn runner(setup: &Setup, input: &str, log: &str, runs: &mut Vec<Ran>) -> Result<String, String> {
     let at = format!("{}/{log}", setup.work);
     let _ = std::fs::remove_file(setup.root.join(&at));
@@ -651,7 +664,11 @@ fn runner(setup: &Setup, input: &str, log: &str, runs: &mut Vec<Ran>) -> Result<
         .arg(setup.import)
         .args(["-o", &format!("{at},txt")])
         .current_dir(setup.root)
-        .stdin(Stdio::null());
+        .stdin(Stdio::null())
+        // QtTest starts its log with the first case: what Qt says while
+        // the file's items are built and first bound — where a binding
+        // loop is said most — goes to stderr alone.
+        .stderr(Stdio::piped());
     given(&mut cmd, setup);
     let mut ran = Ran {
         input: input.to_string(),
@@ -669,6 +686,20 @@ fn runner(setup: &Setup, input: &str, log: &str, runs: &mut Vec<Ran>) -> Result<
             ));
         }
     };
+    let stderr = child
+        .stderr
+        .take()
+        .map(|pipe| crate::app_out::collect_marking(pipe, std::sync::Arc::default(), |_| false));
+    // Beside the log, so a kept run holds it too; read once the pipe has closed.
+    let err_at = format!("{}/{}", setup.work, stderr_of(log));
+    let said = || {
+        let lines = stderr
+            .and_then(|reader| reader.join().ok())
+            .unwrap_or_default()
+            .lines;
+        let _ = std::fs::write(setup.root.join(&err_at), lines.join("\n"));
+        lines
+    };
     let mut wait = Wait::new(
         format!("qmltestrunner on {input}"),
         Budget::of(QUIET, WHOLE),
@@ -683,25 +714,89 @@ fn runner(setup: &Setup, input: &str, log: &str, runs: &mut Vec<Ran>) -> Result<
         if let Err(expired) = wait.look_again("its exit") {
             let _ = child.kill();
             let _ = child.wait();
+            let err = said();
             ran.ended = format!("killed — {expired}");
             runs.push(ran);
             return Err(format!(
-                "killed — {expired} (a TestCase whose `when` never came true waits forever)"
+                "killed — {expired} (a TestCase whose `when` never came true waits forever){}",
+                tail_of(&err)
             ));
         }
     };
+    let err = said();
     ran.ended = status.to_string();
     runs.push(ran);
     let text = std::fs::read_to_string(setup.root.join(&at)).unwrap_or_default();
-    let refused = text.lines().any(|line| line.starts_with("FAIL!"));
-    if status.success() && !refused {
+    judged(input, status, text, &err, &at, &err_at)
+}
+
+/// The stderr kept beside `log` ([`runner`]).
+fn stderr_of(log: &str) -> String {
+    format!("{}.stderr.txt", log.trim_end_matches(".txt"))
+}
+
+/// How many of a red runner's last stderr lines its red says.
+const STDERR_TAIL: usize = 20;
+
+/// The last of what a runner said on stderr, as the end of its red: a
+/// runner that died while its file was built (a plugin that would not
+/// load, a crash) has nothing in its log, and the file beside it moves
+/// with the evidence. Nothing for a runner that said nothing there.
+fn tail_of(err: &[String]) -> String {
+    if err.is_empty() {
+        return String::new();
+    }
+    let from = err.len().saturating_sub(STDERR_TAIL);
+    let mut tail = if from == 0 {
+        format!("\nstderr ({} line(s)):", err.len())
+    } else {
+        format!("\nstderr (its last {STDERR_TAIL} of {} lines):", err.len())
+    };
+    for line in &err[from..] {
+        tail.push_str("\n  ");
+        tail.push_str(line);
+    }
+    tail
+}
+
+/// What a runner that exited `status` comes to, its log `text` (at `at`)
+/// and its stderr `err` (at `err_at`) read: the log's own red when the
+/// exit or a `FAIL!` line says one, else the loops either holds
+/// (`verify::loops`) — which no case's verdict carries, and which a test
+/// that asked for one with `ignoreWarning` never sees logged.
+fn judged(
+    input: &str,
+    status: std::process::ExitStatus,
+    text: String,
+    err: &[String],
+    at: &str,
+    err_at: &str,
+) -> Result<String, String> {
+    if !status.success() || text.lines().any(|line| line.starts_with("FAIL!")) {
+        let tail = tail_of(err);
+        return Err(if text.is_empty() {
+            format!("qmltestrunner wrote no log and exited {status} (log: {at}){tail}")
+        } else {
+            format!("qmltestrunner exited {status} (log: {at})\n{text}{tail}")
+        });
+    }
+    let loops = crate::verify::loops::met(text.lines().chain(err.iter().map(String::as_str)));
+    for met in loops.iter().filter(|met| met.allowed.is_some()) {
+        println!("qmltest: loop in {input}: {met}");
+    }
+    let looped: Vec<String> = loops
+        .iter()
+        .filter(|met| met.allowed.is_none())
+        .map(|met| format!("  loop: {met}\n    first said: {}", met.first))
+        .collect();
+    if looped.is_empty() {
         return Ok(text);
     }
-    Err(if text.is_empty() {
-        format!("qmltestrunner wrote no log and exited {status} (log: {at})")
-    } else {
-        format!("qmltestrunner exited {status} (log: {at})\n{text}")
-    })
+    Err(format!(
+        "{}\n  {} (log: {at}, stderr: {err_at})",
+        looped.join("\n"),
+        crate::verify::loops::MEANING
+    ))
 }
 
 /// Keeps a red run's staging directory under [`FAILED`] with its
