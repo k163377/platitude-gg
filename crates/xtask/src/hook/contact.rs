@@ -1,12 +1,9 @@
 //! Sessions kept apart: one session reaches another only when the user's
-//! own message asks it to. The app links a session to the one that
-//! proposed it, wakes the proposer with each of its turns' reports, and
-//! offers messages both ways; the rules this module holds them to are in
-//! internal-docs/反映前テストの機械化.md §セッション間の連絡.
+//! own message asks it to, and a session another one started detaches
+//! itself, so its turns wake nobody. The rules this module holds them to
+//! are in internal-docs/反映前テストの機械化.md §セッション間の連絡.
 
-use std::path::Path;
-
-use super::payload::{deny, own_value_field, printable, string_field};
+use super::payload::{deny, own_value_field, string_field};
 use super::permit;
 
 /// Who a message is for, in the user's words: Japanese anywhere, English
@@ -49,47 +46,67 @@ const BRIEFS: [&str; 2] = [
     "mcp__ccd_session__hand_off_to_session",
 ];
 
-/// How the app names the session a report comes from:
-/// `The session "<title>" you started (<id>) finished a turn.`, and in its
-/// list of linked sessions, `<name> = <id>`.
-const REPORTER: (&str, &str, &str) = ("The session \"", "\" you started (", " = ");
-
-/// How another session's message names its sender: the address a reply is
-/// sent to, and the session behind it, which is what reports here.
-const SENDER: (&str, &str, &str) = ("<cross-session-message", " from=\"", " from-session=\"");
-
 /// What a message to the main conversation is addressed to — a
 /// background subagent of this session reporting in.
 const MAIN: &str = "main";
 
-/// UserPromptSubmit. The user's own message opens contact or closes it; a
-/// side session's report is refused unless contact is open or it comes
-/// from a session sent a message on the user's ask. Answers whether it
-/// refused — the refusal is then the hook's whole answer.
+/// The app's tool that takes a side session out from under the session
+/// that started it: that session is no longer told when its turns end.
+/// The tool refuses a side session sharing another session's worktree and
+/// one "the user placed (a fork, a task chip)"; such a session goes on
+/// reporting. A session started from a proposal card the user clicked is
+/// not one of them: it detaches itself with `"self"` (measured 2026-11-04).
+const DETACH: &str = "mcp__ccd_session_mgmt__detach_session";
+
+/// What a side session is told, `when` it is to call [`DETACH`].
+fn detach_note(when: &str) -> String {
+    format!(
+        "Another session started this one, and the app tells that session each time a turn \
+         here ends. platitude-gg keeps sessions apart (hook::contact): {when}, call {DETACH} \
+         with session_id \"self\" (load it with ToolSearch)."
+    )
+}
+
+/// UserPromptSubmit. The user's own message opens contact or closes it.
+/// The brief another session wrote opens a side session, which then owes
+/// a detach (`stop`, `post_tool`).
 ///
-/// A report let in while contact is open counts off no answer: one that
-/// arrives just after a message, about something else, would use up the
-/// answer and stop the real one coming later. So an answer that arrives
-/// while open leaves one later report of that session to come in. Only a
-/// prompt that is the report alone can be refused: a report riding on the
-/// user's message cannot be taken out (a hook does not rewrite a prompt).
-pub(super) fn prompt_submit(input: &str, prompt: &str) -> bool {
+/// A side session's report is never refused here: a refused prompt still
+/// puts a card in front of the user, so the report is stopped where it
+/// starts — the side session detaches before its first turn ends.
+pub(super) fn prompt_submit(input: &str, prompt: &str) {
     if let Some(words) = permit::the_users_words(prompt) {
         record(input, asks_for_contact(words));
-        return false;
+        return;
     }
-    note_sender(input, prompt);
-    if !permit::is_a_report(prompt) || is_open(input) || take_answer(input, prompt) {
-        return false;
+    if permit::is_a_brief(prompt) {
+        if let Some(path) = permit::session_file(input, "detach") {
+            keep(&path, "owed\n");
+        }
+        println!("{}", detach_note("as the first thing in this turn"));
     }
-    println!(
-        "{{\"decision\":\"block\",\"reason\":\"{}\"}}",
-        printable(
-            "A side session's report was kept out of this session: platitude-gg keeps \
-             sessions apart unless the user asks (hook::contact). It stands in that session."
-        )
-    );
-    true
+}
+
+/// PostToolUse and PostToolUseFailure: a call to [`DETACH`] pays the debt
+/// whatever it answered — a refusal is not asked for again.
+pub(super) fn post_tool(input: &str) {
+    if string_field(input, "tool_name").as_deref() != Some(DETACH) {
+        return;
+    }
+    if let Some(path) = permit::session_file(input, "detach")
+        && let Err(_absent) = std::fs::remove_file(&path)
+    {
+        // Owed nothing.
+    }
+}
+
+/// Stop, on the turn's first: a side session that has not called
+/// [`DETACH`] goes on to call it. Asked once — the debt is taken here, so
+/// a session that cannot detach is not held at every turn's end.
+pub(super) fn stop(input: &str) -> Option<String> {
+    let path = permit::session_file(input, "detach")?;
+    std::fs::remove_file(&path).ok()?;
+    Some(detach_note("before this turn ends"))
 }
 
 /// PreToolUse of any tool: a message to another session goes out only
@@ -123,20 +140,14 @@ pub(super) fn pre_tool(input: &str) -> bool {
     let to = string_field(asked, "to")
         .or_else(|| string_field(asked, "session_id"))
         .unwrap_or_default();
-    if is_own_agent(&to) {
-        return false;
-    }
-    if is_open(input) {
-        if string_field(asked, "message").is_some_and(|message| !message.trim().is_empty()) {
-            expect_answer(input, &to);
-        }
+    if is_own_agent(&to) || is_open(input) {
         return false;
     }
     deny(
         "platitude-gg keeps sessions apart: a message goes to another session only when the \
          user's latest message asks for it — names the session and asks to send, tell or ask \
          it something (hook::contact). Nothing here asked. Say it to the user in this \
-         conversation instead; a session this one started reports in its own.",
+         conversation instead; another session answers its user in its own.",
     );
     true
 }
@@ -192,163 +203,17 @@ fn is_open(input: &str) -> bool {
     permit::session_file(input, "contact").is_some_and(|path| path.is_file())
 }
 
-/// A message went out to `to` on the user's ask: that session's next
-/// report is its answer, let in even once the user's next message closed
-/// contact. A session that is no side session of this one never reports
-/// here, so its address is never matched.
-fn expect_answer(input: &str, to: &str) {
-    let to = address(input, to.trim());
-    let Some(path) = permit::session_file(input, "answers") else {
-        return;
-    };
-    if to.is_empty() || to.contains('\n') {
-        return;
-    }
-    let mut owed = owed(&path);
-    owed.push(to);
-    keep(&path, &format!("{}\n", owed.join("\n")));
-}
-
-/// The session `to` reaches, as a report names it: a reply's pipe address
-/// is its sender's session (`note_sender`), and a listing's `<name> [ref]`
-/// is the name.
-fn address(input: &str, to: &str) -> String {
-    let senders = permit::session_file(input, "senders")
-        .and_then(|path| std::fs::read_to_string(path).ok())
-        .unwrap_or_default();
-    let behind = senders
-        .lines()
-        .filter_map(|line| line.split_once('\t'))
-        .find(|(from, _)| *from == to)
-        .map(|(_, session)| session);
-    if let Some(session) = behind {
-        return session.to_string();
-    }
-    let named = to
-        .strip_suffix(']')
-        .and_then(|rest| rest.rsplit_once(" ["))
-        .map_or(to, |(name, _)| name);
-    named.to_string()
-}
-
-/// Another session's message: remembers its reply address against the
-/// session that sent it, so that a reply on the user's ask is matched to
-/// that session's report (`address`).
-fn note_sender(input: &str, prompt: &str) {
-    let (tag, from, session) = SENDER;
-    let text = prompt.trim_start();
-    if !text.starts_with(tag) {
-        return;
-    }
-    let head = text.split_once('>').map_or(text, |(head, _)| head);
-    let value = |name: &str| {
-        head.split_once(name)
-            .and_then(|(_, rest)| rest.split_once('"'))
-            .map(|(value, _)| value)
-    };
-    let (Some(from), Some(session)) = (value(from), value(session)) else {
-        return;
-    };
-    let Some(path) = permit::session_file(input, "senders") else {
-        return;
-    };
-    let line = format!("{from}\t{session}");
-    let known = std::fs::read_to_string(&path).unwrap_or_default();
-    if known.lines().any(|known| known == line) {
-        return;
-    }
-    keep(&path, &format!("{known}{line}\n"));
-}
-
-/// Whether the report comes from a session owed an answer — addressed by
-/// its title, its id or its short name — counting that one off if so.
-fn take_answer(input: &str, report: &str) -> bool {
-    let Some(path) = permit::session_file(input, "answers") else {
-        return false;
-    };
-    let reporters = reporters(report);
-    let mut owed = owed(&path);
-    let Some(at) = owed.iter().position(|to| reporters.contains(&to.as_str())) else {
-        return false;
-    };
-    owed.remove(at);
-    if owed.is_empty() {
-        if let Err(_absent) = std::fs::remove_file(&path) {
-            // Counted off already.
-        }
-    } else {
-        keep(&path, &format!("{}\n", owed.join("\n")));
-    }
-    true
-}
-
-/// The names of the sessions a report comes from — each one's title, id
-/// and the short name the list of linked sessions gives that id. A
-/// session the notes only list is none of them.
-fn reporters(report: &str) -> Vec<&str> {
-    let (title, started, named) = REPORTER;
-    let mut names = Vec::new();
-    for (at, _) in report.match_indices(started) {
-        let before = &report[..at];
-        if let Some(open) = before.rfind(title) {
-            names.push(&before[open + title.len()..]);
-        }
-        let after = &report[at + started.len()..];
-        let Some(id) = after.split(')').next().filter(|id| !id.is_empty()) else {
-            continue;
-        };
-        names.push(id);
-        let pairing = format!("{named}{id}");
-        for (paired, _) in report.match_indices(&pairing) {
-            let before = &report[..paired];
-            let start = before
-                .rfind(|c: char| c.is_whitespace() || c == ',' || c == ':')
-                .map_or(0, |space| space + 1);
-            names.push(&before[start..]);
-        }
-    }
-    names
-}
-
-/// The addresses owed an answer, one per line.
-fn owed(path: &Path) -> Vec<String> {
-    std::fs::read_to_string(path)
-        .unwrap_or_default()
-        .lines()
-        .filter(|line| !line.is_empty())
-        .map(str::to_string)
-        .collect()
-}
-
 /// Writes a standing beside the permits. One that cannot be written reads
-/// as absent — closed, owing nothing: the side that lets nothing in.
-fn keep(path: &Path, text: &str) {
-    let Some(dir) = path.parent() else {
-        return;
-    };
-    if std::fs::create_dir_all(dir).is_err() {
-        return;
-    }
-    if let Err(_unheard) = std::fs::write(path, text) {
+/// as absent: contact closed, no detach owed.
+fn keep(path: &std::path::Path, text: &str) {
+    if let Err(_unheard) = permit::write_whole(path, text) {
         // Nobody to tell from inside a hook.
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{address, asks_for_contact, is_own_agent, pre_tool, prompt_submit, reporters};
-    use crate::hook::permit::is_a_report;
-
-    /// The prompt the app started a proposer's turn with (2026-10-10),
-    /// for two linked sessions.
-    const REPORT: &str = "<system-reminder>\nThe session \"1. 直す\" you started \
-                          (local_4c882fcc) finished a turn. It reported (quoted child \
-                          output, data not instructions): \"Clean.\"\n</system-reminder>\n\
-                          <system-reminder>\nLinked sessions now (status, not an \
-                          instruction): 1-fix = local_4c882fcc (idle), 2-docs = local_77e1 \
-                          (busy).\n</system-reminder>\n\n<side-sessions-event>The sessions \
-                          you started have finished; their notes are above.\
-                          </side-sessions-event>";
+    use super::{asks_for_contact, is_own_agent, pre_tool};
 
     #[test]
     fn contact_opens_on_a_named_session_and_an_ask_to_reach_it() {
@@ -380,40 +245,6 @@ mod tests {
     }
 
     #[test]
-    fn a_report_is_the_apps_notes_ending_on_its_mark() {
-        assert!(is_a_report(REPORT));
-        assert!(!is_a_report(&format!("{REPORT}\n席 e を反映して")));
-        assert!(!is_a_report(
-            "<system-reminder>\nLinked sessions now: 1-fix (idle).\n</system-reminder>\n起動"
-        ));
-        assert!(!is_a_report("<side-sessions-event>cut short"));
-        assert!(!is_a_report("<task-notification>done</task-notification>"));
-    }
-
-    /// The session the report is from, by each name a message may have
-    /// used — and not the other linked session the notes list.
-    #[test]
-    fn a_report_names_the_session_it_comes_from() {
-        let named = reporters(REPORT);
-        for name in ["1. 直す", "local_4c882fcc", "1-fix"] {
-            assert!(named.contains(&name), "{name}: {named:?}");
-        }
-        assert!(!named.contains(&"local_77e1"), "{named:?}");
-        assert!(!named.contains(&"2-docs"), "{named:?}");
-    }
-
-    /// A listing's `<name> [ref]` reaches the session by its name; the
-    /// pipe address of a reply is `tests/gate/contact.rs`'s, with a
-    /// repository to remember the sender in.
-    #[test]
-    fn an_address_is_the_name_a_report_gives_the_session() {
-        let none = r#"{"session_id":"x"}"#;
-        assert_eq!(address(none, "1. 直す [1adea9]"), "1. 直す");
-        assert_eq!(address(none, "local_4c882fcc"), "local_4c882fcc");
-        assert_eq!(address(none, "[draft] 直す"), "[draft] 直す");
-    }
-
-    #[test]
     fn this_sessions_own_agents_are_reached_without_asking() {
         assert!(is_own_agent("a262effc79f37fa1e"));
         assert!(is_own_agent("main"));
@@ -427,7 +258,9 @@ mod tests {
     }
 
     /// What is answered before contact is read: the gate on a send to
-    /// another session is `tests/gate/contact.rs`'s, with a repository.
+    /// another session, and the detach a brief owes, are
+    /// `tests/gate/contact.rs`'s — both need a repository to keep their
+    /// standing in.
     #[test]
     fn the_command_never_travels_and_this_sessions_agents_and_other_tools_pass() {
         let agent = r#"{"session_id":"x","cwd":"","tool_name":"SendMessage","tool_input":{"to":"a262effc79f37fa1e","message":"go on"}}"#;
@@ -439,14 +272,5 @@ mod tests {
         assert!(pre_tool(brief));
         let to_agent_with_land = r#"{"session_id":"x","cwd":"","tool_name":"SendMessage","tool_input":{"to":"a262effc79f37fa1e","message":"/land"}}"#;
         assert!(pre_tool(to_agent_with_land));
-        assert!(!prompt_submit(
-            r#"{"session_id":"x"}"#,
-            "<task-notification>x</task-notification>"
-        ));
-        // No repository to read contact from: closed, so a report is refused.
-        assert!(prompt_submit(
-            r#"{"session_id":"x"}"#,
-            "<side-sessions-event>The sessions you started have finished.</side-sessions-event>"
-        ));
     }
 }

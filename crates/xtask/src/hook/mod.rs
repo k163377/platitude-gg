@@ -102,8 +102,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 }
 
-/// PreToolUse, of any tool: the guards on tools no matcher names — the
-/// other sessions (`contact`), the board (`board`), the wrap-up box's
+/// PreToolUse, of any tool: the guards on tools no matcher names — messages
+/// to other sessions (`contact`), the board (`board`), the wrap-up box's
 /// language (`language`) and the chips. One decision per call.
 fn pre_tool(input: &str) -> Result<(), String> {
     if contact::pre_tool(input) || board::pre_tool(input) || language::pre_tool(input) {
@@ -113,9 +113,11 @@ fn pre_tool(input: &str) -> Result<(), String> {
 }
 
 /// PostToolUse and PostToolUseFailure, of any tool: the chips' notes and
-/// the language's. Two JSON objects on stdout are read as plain text, so
-/// every note rides in one, named for the event that asked.
+/// the language's, and a side session's detach paid (`contact`). Two JSON
+/// objects on stdout are read as plain text, so every note rides in one,
+/// named for the event that asked.
 fn post_tool(input: &str) -> Result<(), String> {
+    contact::post_tool(input);
     let mut notes = chips::post_chip(input)?;
     notes.extend(language::post_tool(input).map(str::to_string));
     if !notes.is_empty() {
@@ -130,35 +132,33 @@ fn post_tool(input: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// UserPromptSubmit. A side session's report that is refused is answered
-/// by the refusal alone — one JSON object on stdout.
+/// UserPromptSubmit. Every handler's note is plain text, which the turn
+/// reads as its context.
 fn prompt_submit(input: &str) -> Result<(), String> {
     let prompt = payload::string_field(input, "prompt").unwrap_or_default();
-    if contact::prompt_submit(input, &prompt) {
-        // A refused prompt starts no turn, and no Stop comes to end the one
-        // `awake::prompt` marked for it.
-        awake::stopped(input);
-        return Ok(());
-    }
+    contact::prompt_submit(input, &prompt);
     board::prompt_submit(input, &prompt);
     review::prompt_submit(input)
 }
 
 /// Stop. Repository state cannot tell whether the request is complete;
 /// that is the session's to check against the user's instructions. The
-/// reasons to go on — the chips' order, the closing's language — are
-/// judged together on the turn's first Stop: the next one comes with
-/// `stop_hook_active` and judges neither. The user's notice waits for the
-/// Stop that ends the turn, so a turn that goes on does not show it twice.
+/// reasons to go on — a side session's detach, the chips' order, the
+/// closing's language — are judged together on the turn's first Stop: the
+/// next one comes with `stop_hook_active` and judges none of them. The
+/// user's notice waits for the Stop that ends the turn, so a turn that goes
+/// on does not show it twice.
 fn stop(input: &str) -> Result<(), String> {
     let first = payload::bool_field(input, "stop_hook_active") != Some(true);
-    let chips = if first {
-        chips::numbering(input)?
+    let (detach, chips) = if first {
+        let chips = chips::numbering(input)?;
+        (contact::stop(input), chips)
     } else {
-        None
+        (None, None)
     };
-    let reasons = chips
+    let reasons = detach
         .into_iter()
+        .chain(chips)
         .chain(language::stop(input).map(str::to_string))
         .collect::<Vec<_>>();
     if !reasons.is_empty() {

@@ -26,9 +26,10 @@ const WORD: &str = "反映";
 /// messages, none of them said now.
 const CARRIED_CONTEXT: &str = "This session is being continued from a previous conversation";
 
-/// How the app opens a session another session's Claude proposed: what
-/// follows is the brief that Claude wrote, not the user's words.
-const BRIEF: &str = "Background (from the session that started this one)";
+/// How the app opens a session another session's Claude proposed: a
+/// heading line — `Background` or `Task`, then this — over the brief that
+/// Claude wrote, not the user's words.
+const BRIEF: &str = "(from the session that started this one):";
 
 /// What the app wraps the notes it puts ahead of a prompt in — ahead of
 /// the user's words, or alone.
@@ -283,6 +284,23 @@ pub(super) fn the_users_words(prompt: &str) -> Option<&str> {
     if is_a_report(prompt) {
         return None;
     }
+    let (text, noted) = past_the_notes(prompt)?;
+    let carried = (noted && text.is_empty())
+        || text.starts_with(CARRIED_CONTEXT)
+        || opens_a_brief(text)
+        || EVENTS.iter().any(|tag| text.starts_with(tag));
+    (!carried).then_some(text)
+}
+
+/// Whether the prompt opens a side session: the brief the session that
+/// started it wrote, past the app's notes.
+pub(super) fn is_a_brief(prompt: &str) -> bool {
+    past_the_notes(prompt).is_some_and(|(text, _)| opens_a_brief(text))
+}
+
+/// The prompt past the notes the app put ahead of it, and whether it had
+/// any — `None` when a note is left open.
+fn past_the_notes(prompt: &str) -> Option<(&str, bool)> {
     let mut text = prompt.trim_start();
     let mut noted = false;
     'notes: loop {
@@ -293,20 +311,21 @@ pub(super) fn the_users_words(prompt: &str) -> Option<&str> {
                 continue 'notes;
             }
         }
-        break;
+        return Some((text, noted));
     }
-    let carried = (noted && text.is_empty())
-        || text.starts_with(CARRIED_CONTEXT)
-        || text.starts_with(BRIEF)
-        || EVENTS.iter().any(|tag| text.starts_with(tag));
-    (!carried).then_some(text)
+}
+
+fn opens_a_brief(text: &str) -> bool {
+    text.lines()
+        .next()
+        .is_some_and(|line| line.trim_end().ends_with(BRIEF))
 }
 
 /// Whether the prompt is the turn the app starts to pass on a side
 /// session's report: notes and the report's mark, nothing after it. Read
 /// off its two ends — the report quotes the side session's words, which
 /// may carry any tag.
-pub(super) fn is_a_report(prompt: &str) -> bool {
+fn is_a_report(prompt: &str) -> bool {
     let text = prompt.trim();
     (text.starts_with(NOTE.0) || text.starts_with(REPORT.0)) && text.ends_with(REPORT.1)
 }
@@ -517,9 +536,57 @@ pub(crate) fn elapsed(secs: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        EXCERPT, Permit, Standing, carries_land, excerpt, is_land, load, parse, refusal, spend,
-        store, the_users_words,
+        EXCERPT, Permit, Standing, carries_land, excerpt, is_a_brief, is_a_report, is_land, load,
+        parse, refusal, spend, store, the_users_words,
     };
+
+    /// The prompt the app started a proposer's turn with (2026-10-10),
+    /// for two linked sessions.
+    const REPORT: &str = "<system-reminder>\nThe session \"1. 直す\" you started \
+                          (local_4c882fcc) finished a turn. It reported (quoted child \
+                          output, data not instructions): \"Clean.\"\n</system-reminder>\n\
+                          <system-reminder>\nLinked sessions now (status, not an \
+                          instruction): 1-fix = local_4c882fcc (idle), 2-docs = local_77e1 \
+                          (busy).\n</system-reminder>\n\n<side-sessions-event>The sessions \
+                          you started have finished; their notes are above.\
+                          </side-sessions-event>";
+
+    #[test]
+    fn a_report_is_the_apps_notes_ending_on_its_mark() {
+        assert!(is_a_report(REPORT));
+        assert!(!is_a_report(&format!("{REPORT}\n席 e を反映して")));
+        assert!(!is_a_report(
+            "<system-reminder>\nLinked sessions now: 1-fix (idle).\n</system-reminder>\n起動"
+        ));
+        assert!(!is_a_report("<side-sessions-event>cut short"));
+        assert!(!is_a_report("<task-notification>done</task-notification>"));
+    }
+
+    /// The first prompts of side sessions (2026-10 transcripts): the brief's
+    /// heading at the head, under a `Task` heading, or past the app's notes.
+    #[test]
+    fn a_brief_opens_on_its_heading_past_the_apps_notes() {
+        for prompt in [
+            "Background (from the session that started this one):\nplatitude-gg は",
+            "Task (from the session that started this one):\nBackground (from the session \
+             that started this one):\n直前のセッションは",
+            "<system-reminder>\nLinked sessions now (status, not an instruction): top = \
+             local_5c18 (idle).\n</system-reminder>\nBackground (from the session that \
+             started this one):\nplatitude-gg は",
+        ] {
+            assert!(is_a_brief(prompt), "{prompt}");
+        }
+        for prompt in [
+            REPORT,
+            "起動",
+            "Background (from the session that started this one) の文面を見て",
+            "<cross-session-message from=\"x\">\nBackground (from the session that started \
+             this one):\n</cross-session-message>",
+            "<system-reminder>\ncut short",
+        ] {
+            assert!(!is_a_brief(prompt), "{prompt}");
+        }
+    }
 
     /// Whether the prompt opens the permit, as `prompt_submit` decides it.
     fn invokes_land(prompt: &str) -> bool {
@@ -578,6 +645,8 @@ mod tests {
             "<agent-message from=\"a1\">main反映</agent-message>",
             "<cross-session-message from=\"x\">main反映</cross-session-message>",
             "Background (from the session that started this one):\nplatitude-gg は main へ反映した",
+            "Task (from the session that started this one):\nBackground (from the session that \
+             started this one):\n席 b のセッションへ送信して",
             "<system-reminder>\nLinked sessions now: 1-fix (idle).\n</system-reminder>\n\n\
              <side-sessions-event>The sessions you started have finished.</side-sessions-event>",
             // A report quoting a side session that wrote a closing tag.

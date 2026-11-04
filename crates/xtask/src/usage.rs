@@ -1045,8 +1045,8 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       permission-request, permission-denied, elicitation,
       elicitation-result, subagent-start, subagent-stop, stop,
       stop-failure, pre-worktree, post-worktree, prompt-submit (which
-      also refuses a side session's report the user did not ask for),
-      session-start (which also installs the gate's git hook),
-      session-end. `codex-awake` accepts Codex's lifecycle payload and
+      also tells a side session to detach itself, and stop holds it
+      once until it has), session-start (which also installs the
+      gate's git hook), session-end. `codex-awake` accepts Codex's lifecycle payload and
       updates only shared sleep activity, without Claude's other handlers.
 ";

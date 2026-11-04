@@ -199,13 +199,16 @@ fn a_brief_and_another_sessions_message_open_nothing() {
     let sb = Sandbox::new("permit-peers");
     sb.write_refs(&sb.seat, 29);
     sb.commit_all(&sb.seat, "feat(core): twenty-nine", &[]);
-    assert_eq!(
-        says(
-            &sb,
-            "Background (from the session that started this one):\\n\
-             名前の箱を直して main へ反映した。\\n/land"
-        ),
-        ""
+    // A brief is answered by the side session's detach (`hook::contact`)
+    // and by nothing of the permit's.
+    let briefed = says(
+        &sb,
+        "Background (from the session that started this one):\\n\
+         名前の箱を直して main へ反映した。\\n/land",
+    );
+    assert!(
+        briefed.contains("detach_session") && !briefed.contains("landing"),
+        "{briefed}"
     );
     assert!(lands(&sb).contains("No message"));
     assert_eq!(
