@@ -36,11 +36,14 @@ QtObject {
         // off the row is off its lines too. What keeps a row open with the hand elsewhere is a hold — its own tip,
         // its own menu.
         graceMs: 0
-        // Nothing opens over a name box or under a menu raised elsewhere: opening moves the rows under both. One
-        // expression over the door — `menuOnRow` is derived from it too, and would be read before it moved.
-        blockedBy: openRow.editKey !== "" ? "edit"
-                 : openRow.menuDoor !== null
-                   && !(openRow.openKey !== "" && openRow.menuDoor.key === openRow.openKey) ? "menu" : ""
+        // Nothing opens over a name box or under a menu raised elsewhere: opening moves the rows under both. A menu
+        // raised on the open row holds back every row but that one (`exempt`), read off the door itself — `menuOnRow`
+        // is derived from it too, and would be read before it moved. Not in the binding: the block takes the open row
+        // down, which empties `openKey` inside the binding's own write — a binding loop. The door's key is in the
+        // reason, so a door that moves to another row while a menu still shows (`RepoPage.menuDoor`) asks again.
+        blockedBy: openRow.editKey !== "" ? "edit" : openRow.menuDoor !== null ? "menu " + openRow.menuDoor.key : ""
+        exempt: target => openRow.editKey === "" && openRow.menuDoor !== null && openRow.openKey !== ""
+                          && openRow.menuDoor.key === openRow.openKey && target.key === openRow.openKey
         onOpenAsked: target => openRow.openKey = target.key
         onCloseAsked: (target, why) => {
             if (openRow.openKey === target.key)
