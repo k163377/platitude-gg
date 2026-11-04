@@ -507,14 +507,34 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "led=false movable=true naming=false",
     },
     // A commit taken back out of the held list. Of two presses on a row
-    // only the second is the row's: `takes=false kept=3` is the plain one
-    // left to the words underneath (a smaller choice would mean the hand
-    // took the drag from the text). `hand=true`: the run enters the row's
-    // function, so an area taken out, disabled or shrunk would still pass.
+    // only the second is the drop hand's: `takes=false kept=3` is the plain
+    // one left to the hands under it, whose click moves the graph and
+    // nothing held (a smaller choice would mean a plain click dropped).
+    // `hand=true`: the run enters the row's function, so an area taken
+    // out, disabled or shrunk would still pass.
     Verb {
         name: "graph-choose-drop",
         when: &[],
         plain: "takes=false kept=3 dropped=true hand=true chosen=2 lit=2",
+    },
+    // A plain click on a held commit finds it on the graph: from out of
+    // sight (`away=true`) it lands in the middle (`first=center`), and a
+    // second click with it on screen moves nothing (`second=in`). What is
+    // held, the row the arrows step from and the commit being read stay.
+    // `hands=true`: the run enters the hands' functions, so a pad that
+    // stopped tapping or an area gone would still pass.
+    Verb {
+        name: "graph-choose-show",
+        when: &[],
+        plain: "away=true first=center second=in chosen=3 current=true read=true hands=true",
+    },
+    // The same click with the stacked diff over the graph: the diff that
+    // stood (`open=true`) closes and the graph comes back with the row on
+    // it, the choice and the commit being read as they were.
+    Verb {
+        name: "graph-choose-show-diff",
+        when: &[],
+        plain: "open=true closed=true graph=true shown=true chosen=3 read=true",
     },
     // The rename gesture's two clicks, at the row and (`graph-reclick-list`)
     // at the card its chip unfolds into. `armed=` and `box=` are read as

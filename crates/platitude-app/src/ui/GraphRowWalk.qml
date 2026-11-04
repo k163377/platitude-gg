@@ -273,6 +273,26 @@ Item {
             walk.view.positionViewAtIndex(row, ListView.Center)
         }
     }
+    /// Brings `row` into the open and touches nothing else — not the selection, not `currentIndex`: a row standing
+    /// whole in the view and clear of the current branch's stand-in stays where it is; one cut by an edge, under the
+    /// stand-in or out of sight is centred (デザイン規約 §複数のコミットを選ぶ). What a click on a held commit asks
+    /// (`RepoPage.showChosen`). -1 is no row.
+    function revealRow(row) {
+        if (row < 0 || walk.rowInTheOpen(row))
+            return
+        walk.view.haltGlide()
+        walk.view.positionViewAtIndex(row, ListView.Center)
+    }
+    /// Whether all of `row` stands in the view, none of it under the band the stand-in covers at the top edge
+    /// (`GraphHeadPin.topBand`, as `keptRows` weighs it). Weighed off the rows' places, not `rowOnScreen`, which counts
+    /// a row the top edge cuts as on screen.
+    function rowInTheOpen(row) {
+        const top = walk.view.originY + row * Theme.graphRowHeight
+        const pin = walk.standIn
+        const covered = pin !== null && pin.aboveAt(walk.view.contentY) ? pin.topBand : 0
+        return top >= walk.view.contentY + covered
+            && top + Theme.graphRowHeight <= walk.view.contentY + walk.view.height
+    }
     Timer {
         id: anchorTimer
         interval: Metrics.anchorDelayMs

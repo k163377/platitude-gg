@@ -4,17 +4,19 @@ import QtQuick
 import platitude.ui
 
 // One commit of a choice, as the right pane lists it: face on the graph's lane, summary cut to one line, and the hash
-// plate. The only press the row takes is a Ctrl one, which drops the commit; its words are fields
-// (デザイン規約 §複数のコミットを選ぶ / §右のペインの字は掴める), and the gaps around them stay as the seat a hand
-// reaches for a value from. **Taking out is all a row does** (user decision — ask before changing): picking is the
-// graph's, and a row that picked, lit or had a menu would look like a second home of the choice; taking out is this
-// list's because it is where what is held is read. No adding, and the last one stays, as on the graph.
+// plate. **A plain click brings the commit's row on screen in the graph; a Ctrl one takes it out of the choice; that
+// is all a row does** (user decision — ask before changing): picking is the graph's, and a row that picked, lit or had
+// a menu would look like a second home of the choice; taking out is this list's because it is where what is held is
+// read, and the click finds a listed commit on the graph without moving what is held. No adding, and the last one
+// stays, as on the graph. The row is a target with words on it (デザイン規約 §複数のコミットを選ぶ / §右のペインの字は
+// 掴める「掴み方は 3 つ」の 3): a press that travels drags over the summary or the hash, from the words or the air
+// around them; one that does not is the click. The hash plate keeps its own click (copy).
 // **The faces are linked by the graph's lane** (user decision — ask before changing): rows alone do not say what two
 // commits are the two ends of. **Summary only, one line** (user decision — ask before changing): a list followed by
 // eye reads best with its rows one height; the rest is in the card. The card is the graph's own on the right pane's
 // seat (`RowHoverHost.chosenSeat`); this row has no hover of its own and reads the pane's hand by geometry
 // (`syncHand`). Headless: `graph-choose-said` (the card), `graph-choose-sweep` (the words), `graph-choose-drop` (the
-// Ctrl press).
+// Ctrl press), `graph-choose-show` (the plain click); the pointer's way through the hands: `tst_chosenrowpress`.
 Item {
     id: commitRow
 
@@ -112,18 +114,23 @@ Item {
 
     signal hoverRequested(var row, bool inside)
     signal copyRequested(string text)
-    /// A Ctrl press takes this commit back out of the choice.
+    /// A Ctrl click takes this commit back out of the choice.
     signal dropRequested(string oidHex)
-    /// Whether a press is the row's own: only a Ctrl one is. A refused press goes on down to the words and the hand
-    /// under them, which keeps a plain drag a drag over the text.
+    /// A plain click: the graph brings this commit's row on screen.
+    signal showRequested(string oidHex)
+    /// Whether a press is the drop hand's: only a Ctrl one is. A refused press goes on down to the hands over the
+    /// words and under them, which keep a travelled press a drag over the text and answer one that stays put here.
     function takesPress(modifiers) {
         return (modifiers & Qt.ControlModifier) !== 0
     }
-    /// The click that follows a press the row took, asked the same question so an entry here cannot skip it. Named so
-    /// a run presses where a hand does (verify-ui §壊れない動詞の実装と反復).
+    /// The click on the row, whichever hand had the press — the drop hand's Ctrl one, or a plain one the words' hands
+    /// let go of unmoved. `modifiers` are the press's: the press chose the hand, and a key going down or up before the
+    /// release changes neither. Named so a run presses where a hand does (verify-ui §壊れない動詞の実装と反復).
     function leftClick(modifiers) {
         if (commitRow.takesPress(modifiers))
             commitRow.dropRequested(commitRow.oid_hex)
+        else
+            commitRow.showRequested(commitRow.oid_hex)
     }
 
     // A reused row is handed another record, lanes and all.
@@ -140,15 +147,26 @@ Item {
         visible: commitRow.lit
     }
 
-    // The hand that drags over the words from the air around them. Declared first so it lies beneath, and a press
-    // reaches it only where no field took one (規約 §右のペインの字は掴める).
+    // The hand that drags over the words from the air around them, and clicks the row where a press stays put.
+    // Declared first so it lies beneath, and a press reaches it only where nothing above took one
+    // (規約 §右のペインの字は掴める).
     SweepPad {
         id: sweepHand
         anchors.fill: parent
         content: block
+        taps: true
+        // Only a press the drop hand refused comes down here — a plain one, whatever is held by the release.
+        onTapped: commitRow.leftClick(Qt.NoModifier)
     }
     /// Automation only: the sweep as a hand makes it, and what it came away with (verify-ui).
     readonly property alias sweep: sweepHand
+    /// Automation only: the hand over the summary, whose functions a run enters for a click on the words.
+    readonly property alias wordsHand: subjectHand
+    /// Automation only: that both hands a plain click goes through stand and answer it, since a run enters their
+    /// functions and would pass with an area gone or a pad that no longer taps.
+    readonly property bool showStands: sweepHand.taps && sweepHand.handStands && subjectHand.enabled
+                                       && subjectHand.width === subjectLine.width
+                                       && subjectHand.height === subjectLine.height
 
     Item {
         id: block
@@ -255,13 +273,23 @@ Item {
             ground: Theme.bgSurface
             groundOverlay: commitRow.lit ? Theme.bgHover : "transparent"
             text: commitRow.subject
+            // The words take no press, which they would keep from the pad below: the hand over them hands a travelled
+            // one down to them and answers one that stays put as the pad does (rules-refs/app-ui.md「右パネルの値は
+            // 掴める字」の ③, for a row that is a target as a whole).
+            grabbable: false
+            RowHand {
+                id: subjectHand
+                field: subjectLine
+                onTaken: sweepHand.dropValues()
+                onTapped: commitRow.leftClick(Qt.NoModifier)
+            }
         }
     }
 
-    // Declared last, so the Ctrl press it takes is taken before the words can select on it; every other press is
-    // refused and goes on down as if this were not here. Deaf to hover, which would take the pointer from the fields
-    // and the row's handler (rules-refs/app-ui.md「行に重ねる面の `HoverHandler` は祖先が持つ」). No `cursorShape`: set
-    // here, the whole row wears the arrow and the words lose their I-beam.
+    // Declared last, so the Ctrl press it takes is taken before the hands under it can sweep or click on it; every
+    // other press is refused and goes on down as if this were not here. Deaf to hover, which would take the pointer
+    // from the fields and the row's handler (rules-refs/app-ui.md「行に重ねる面の `HoverHandler` は祖先が持つ」). No
+    // `cursorShape`: set here, it would stand over the hands' own and the hash plate's.
     MouseArea {
         id: dropHand
         anchors.fill: parent
@@ -269,7 +297,8 @@ Item {
         // The row keeps the drag it is handed (rules-refs/app-ui.md「行は渡されたドラッグを手放さない」).
         preventStealing: true
         onPressed: mouse => { mouse.accepted = commitRow.takesPress(mouse.modifiers) }
-        onClicked: mouse => commitRow.leftClick(mouse.modifiers)
+        // Every press this hand holds was a Ctrl one.
+        onClicked: commitRow.leftClick(Qt.ControlModifier)
     }
     /// Automation only: that the hand stands, since a run enters `leftClick` itself and would pass with the area gone.
     readonly property bool dropStands: dropHand.enabled && dropHand.width === commitRow.width

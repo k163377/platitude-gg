@@ -364,6 +364,7 @@ Rectangle {
     /// Automation only: whether the view still has a move owed to it (`GraphRowWalk.placing`).
     readonly property alias placing: rowWalk.placing
     function jumpToRow(row) { rowWalk.jumpToRow(row) }
+    function revealRow(row) { rowWalk.revealRow(row) }
     function anchorSoon() { rowWalk.anchorSoon() }
     function shiftRows(rows) { rowWalk.shiftRows(rows) }
     function handShift() { return rowWalk.handShift() }

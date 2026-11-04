@@ -387,6 +387,8 @@
 - `graph-choose [<行>:<行>…]` / `graph-choose-range [<最初>:<最後>]`(複数のコミットを持つ選択(規約 §複数のコミットを選ぶ)。`graph-choose` は Ctrl で 1 行ずつ(既定 `1:3:5`)、`-range` は Shift で一掃(既定 `1:5`、2 つ渡す)— 詳細は `AutoActChooseVerbs.qml` の `chooseTimer`、判定は `verify/verbs/graph.rs`)
 - `graph-choose-dbl [<行>:<行>…]`(選択を組み立てる手は選択だけを動かす = 最後の行で Ctrl のまま 2 回押す — 詳細は `AutoActChooseVerbs.qml` の `chosenRowTimer.doubled`、判定は同上)
 - `graph-choose-drop [<行>:<行>…]`(持っているコミットを COMMITS の一覧から Ctrl クリックで外す — 詳細は `AutoActChooseVerbs.qml` の `chosenRowTimer.dropped`、判定は同上)
+- `graph-choose-show [<行>:<行>…] --preset deep`(既定 `40:42:44` = 選んだ後にグラフを流してから押す。COMMITS の一覧の行の素のクリックで、グラフがそのコミットの行を見える所へ送る = 画面外なら中央へ、見えていれば動かない — 詳細は `AutoActChooseVerbs.qml` の `chosenRowTimer.shown`、判定は同上)
+- `graph-choose-show-diff [<パス>]`(引数・押す行は `graph-choose-diff` と同じ。積み重ねの diff が中央に開いている時の同じクリックで、diff が閉じてグラフが戻る — 詳細は `AutoActChooseVerbs.qml` の `chosenRowTimer.shownOverDiff`、判定は同上)
 - `graph-choose-diff [<パス>]`(既定 `src/topic.txt`、押す行は `3:5:6` 固定。和集合のファイル行を開くと選んだコミットの patch が縦に積まれる — 詳細は `AutoActChooseVerbs.qml` の `chosenRowTimer.stacked`、判定は同上)
 - `graph-choose-said` / `graph-choose-sweep`(引数は `graph-choose` と同じ、**`--preset co-authors`**。選択の一覧(COMMITS)の行のカードと、行の字を四隅から掴む手 — 詳細は `AutoActChooseVerbs.qml` の `chosenRowTimer`、判定は同上)
 - `graph-reclick [<行>]` / `graph-rename <行>:<付ける名前>`(グラフ行の「間を空けた 2 回目のクリック」= 改名の所作。`graph-rename` は git まで通す書き込み動詞 — 詳細(preset ごとの行)は `AutoActGraphReclickVerbs.qml` の `reclickGraphTimer`、判定は `verify/verbs/graph.rs`)

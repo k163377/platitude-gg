@@ -319,6 +319,8 @@ graph-choose-drop	ChangeIcon ChosenCommitRow FileRowDelegate GraphRowChips Graph
 graph-choose-range	ChangeIcon ChosenCommitRow FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 graph-choose-said --preset co-authors	AppCardFace ChangeIcon ChosenCommitRow CommitHoverCard FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 graph-choose-said 7:8:11 --preset edges	AppCardFace ChangeIcon ChosenCommitRow CommitHoverCard FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
+graph-choose-show --preset deep	ChosenCommitRow GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
+graph-choose-show-diff	ChangeIcon ChosenCommitRow FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 graph-choose-sweep --preset co-authors	ChangeIcon ChosenCommitRow FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 graph-divider	AppCardFace ChangeIcon CommitHoverCard GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 graph-divider pin --preset deep	GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate

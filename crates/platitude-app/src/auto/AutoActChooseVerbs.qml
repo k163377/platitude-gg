@@ -52,6 +52,17 @@ Item {
             // A commit taken back out of the chosen list with Ctrl (デザイン規約 §複数のコミットを選ぶ). The argument
             // is the rows, as `graph-choose` takes them.
             acts.choose(acts.rowsArg(arg, [1, 3, 5]), false, "drop")
+        } else if (act === "graph-choose-show") {
+            // A plain click on the chosen list's first row finds its commit on the graph (デザイン規約 §複数のコミット
+            // を選ぶ). The argument is the rows, as `graph-choose` takes them: on screen together once the last is
+            // pressed (the choice is counted off the rows' delegates, `AutoActDriver.litRowsTo`), the first far enough
+            // down to be centred, and history enough below them to scroll them all away — the defaults are for
+            // `--preset deep`.
+            acts.choose(acts.rowsArg(arg, [40, 42, 44]), false, "show")
+        } else if (act === "graph-choose-show-diff") {
+            // The same click with the stacked diff over the graph: the diff closes and the graph comes back to the row
+            // (user decision, `RepoPage.showChosen`). The argument and the rows are `graph-choose-diff`'s.
+            acts.choose([3, 5, 6], false, "showdiff")
         } else if (act === "graph-choose-said" || act === "graph-choose-sweep") {
             // A row of the chosen list: its card saying the whole message (`said`), or its words dragged away
             // (`sweep`). The argument is the rows, as `graph-choose` takes them. Run on `--preset co-authors`: every
@@ -78,11 +89,12 @@ Item {
         property var rows: []
         /// Whether the presses after the first sweep a range (Shift) or take one row each (Ctrl).
         property bool sweeps: false
-        /// What `chosenRowTimer` goes on to once the choice stands (`said` / `sweep` / `drop` / `diff` / `dbl`); `""`
-        /// stops at the choice itself.
+        /// What `chosenRowTimer` goes on to once the choice stands (`said` / `sweep` / `drop` / `show` / `showdiff` /
+        /// `diff` / `dbl`); `""` stops at the choice itself.
         property string goesOn: ""
-        /// The file `graph-choose-diff` opens: its argument, `src/topic.txt` by default.
-        readonly property string diffPath: Harness.autoAct !== "graph-choose-diff" ? ""
+        /// The file `graph-choose-diff` and `graph-choose-show-diff` open: the argument, `src/topic.txt` by default.
+        readonly property string diffPath: Harness.autoAct !== "graph-choose-diff"
+                                           && Harness.autoAct !== "graph-choose-show-diff" ? ""
                                          : Harness.autoActArg === "" ? "src/topic.txt" : Harness.autoActArg
         // `readOid`: the commit the plain press landed on, witnessed at it, for the report's `read=`.
         /// The stage the press on the `i`th row is, named by that row: the plain one, then the held ones.
@@ -149,6 +161,8 @@ Item {
                 chosenRowTimer.order = op.goesOn === "dbl" ? ["double_clicked"]
                                      : op.goesOn === "diff" ? ["diff_asked"]
                                      : op.goesOn === "drop" ? ["plain_press", "held_press"]
+                                     : op.goesOn === "show" ? ["scrolled", "air_click", "words_click"]
+                                     : op.goesOn === "showdiff" ? ["diff_asked", "words_click"]
                                      : op.goesOn === "sweep" ? ["swept"] : []
                 chosenRowTimer.start()
                 return
@@ -174,7 +188,7 @@ Item {
         name: "chosen_row"
         // Witnessed at the presses — the drop's: the commit they land on (`dropOid`), what the row said about a press
         // without the modifier (`dropTakes`), and the commits held after the plain press (`dropKept`) — unchanged
-        // means the words underneath kept their press; the double's own answer and the row's (`dblLed`,
+        // means the plain click dropped nothing; the double's own answer and the row's (`dblLed`,
         // `dblMovable`), the report waiting for the reads the clicks set going; and what the sweep came away with
         // (`swept`).
         /// The two clicks, then the double the second is also reported as.
@@ -243,7 +257,7 @@ Item {
                            + " mode=" + (modeRows.length > 0 ? modeRows[0] : "")
                 } })
         }
-        /// Two presses at the row's own functions; only the held second one is the row's, the plain first the words'.
+        /// Two clicks at the row's own function; only the held second one is the drop hand's and takes a commit out.
         function dropped(row) {
             const op = chosenRowTimer
             if (op.at("start")) {
@@ -275,6 +289,92 @@ Item {
                            + " lit=" + chooseTimer.litRows()
                 } })
         }
+        /// The graph scrolled a hundred rows past the choice, as a reader's wheel would take it, then two plain clicks
+        /// on the list's first row — the newest held commit, the graph's highest row of the choice — each entered where
+        /// its hand's handlers enter: the first in the row's air (`SweepPad`), with the row out of the graph's sight,
+        /// the second on the words (`RowHand`), with it on screen. Witnessed at the presses: whether the row was out
+        /// of sight (`showAway`), where the view stood before each (`showFromY` / `showOnY`), how the first left the
+        /// row (`showFirst`, `GraphRowWalk.stepLanding`), and the row the arrows step from and the commit being read
+        /// (`showCurrent` / `showRead`), which neither may move.
+        function shown(row) {
+            const op = chosenRowTimer
+            const target = Math.min(...chooseTimer.rows)
+            if (op.at("start")) {
+                op.input("scrolled", () => {
+                    graphPane.view.positionViewAtIndex(Math.max(...chooseTimer.rows) + 100, ListView.Center)
+                })
+                return
+            }
+            if (op.at("scrolled")) {
+                op.input("air_click", () => {
+                    op.witness("showAway", !graphPane.rowOnScreen(target))
+                    op.witness("showFromY", graphPane.view.contentY)
+                    op.witness("showCurrent", graphPane.view.currentIndex)
+                    op.witness("showRead", page.selectedOid)
+                    const air = row.sweep.airPoints(3)[0]
+                    row.sweep.pressAt(air)
+                    row.sweep.releaseNow()
+                })
+                return
+            }
+            if (op.at("air_click")) {
+                op.input("words_click", () => {
+                    op.witness("showFirst", graphPane.stepLanding(target, op.witnessed("showFromY")))
+                    op.witness("showOnY", graphPane.view.contentY)
+                    row.wordsHand.takeAt(Qt.point(row.wordsHand.width / 2, row.wordsHand.height / 2))
+                    row.wordsHand.releaseNow()
+                })
+                return
+            }
+            op.complete({
+                "name": "chosen_show_landed",
+                "when": () => ({ "page": PageSettled.settled(page) }),
+                "report": () => {
+                    const at = Math.min(...chooseTimer.rows)
+                    const now = detailsPane.chosenRowAt(0)
+                    return "chosen_show away=" + op.witnessed("showAway")
+                           + " first=" + op.witnessed("showFirst")
+                           + " second=" + graphPane.stepLanding(at, op.witnessed("showOnY"))
+                           + " chosen=" + page.chosenCount
+                           + " current=" + (graphPane.view.currentIndex === op.witnessed("showCurrent"))
+                           + " read=" + (page.selectedOid === op.witnessed("showRead"))
+                           + " hands=" + (!!now && now.showStands)
+                           + " row=" + at
+                } })
+        }
+        /// The stack opened over the graph through the page's own opener (as `stacked` opens it), then a plain click
+        /// on the list's first row, entered at the hand over its words. Witnessed at the click: that the diff stood
+        /// (`showDiffOpen`) and the commit being read (`showRead`), which the click may not move.
+        function shownOverDiff(row) {
+            const op = chosenRowTimer
+            if (op.at("start")) {
+                op.input("diff_asked", () => {
+                    if (!page.diffShown)
+                        page.toggleDiff("commit", chooseTimer.diffPath, "")
+                })
+                return
+            }
+            if (op.at("diff_asked")) {
+                if (!Awaited.all("chosen_show_diff_open", { "diff": page.diffShown && diffPane.diffSettled() }))
+                    return
+                op.input("words_click", () => {
+                    op.witness("showDiffOpen", page.diffShown)
+                    op.witness("showRead", page.selectedOid)
+                    row.wordsHand.takeAt(Qt.point(row.wordsHand.width / 2, row.wordsHand.height / 2))
+                    row.wordsHand.releaseNow()
+                })
+                return
+            }
+            op.complete({
+                "name": "chosen_show_diff_landed",
+                "when": () => ({ "page": PageSettled.settled(page) }),
+                "report": () => "chosen_show_diff open=" + op.witnessed("showDiffOpen")
+                                + " closed=" + !page.diffShown
+                                + " graph=" + graphPane.visible
+                                + " shown=" + graphPane.rowOnScreen(Math.min(...chooseTimer.rows))
+                                + " chosen=" + page.chosenCount
+                                + " read=" + (page.selectedOid === op.witnessed("showRead")) })
+        }
         onTriggered: {
             const op = chosenRowTimer
             const goesOn = chooseTimer.goesOn
@@ -291,6 +391,14 @@ Item {
                 return
             if (goesOn === "drop") {
                 op.dropped(row)
+                return
+            }
+            if (goesOn === "show") {
+                op.shown(row)
+                return
+            }
+            if (goesOn === "showdiff") {
+                op.shownOverDiff(row)
                 return
             }
             if (goesOn === "said") {

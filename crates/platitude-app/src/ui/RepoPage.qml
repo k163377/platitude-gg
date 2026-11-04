@@ -3184,6 +3184,16 @@ FocusScope {
     function dropFromChoice(oidHex) {
         page.chooseAlso(oidHex)
     }
+    /// A plain click in that list: the graph brings the commit's row into the open (`GraphRowWalk.revealRow`). The
+    /// choice, the row the arrows step from and the commit being read stay as they are — it finds a commit, it picks
+    /// none. **An open diff closes first and the graph comes back** (user decision — ask before changing): a graph
+    /// moved behind the diff would show the reader nothing until the diff went, as a parent's link closes it too
+    /// (`jumpToRef`). Closed the way its `✕` closes it, so the keyboard goes back to the graph.
+    function showChosen(oidHex) {
+        if (page.diffShown)
+            page.closeDiffToGraph()
+        graphPane.revealRow(graphModel.rowOf(oidHex))
+    }
     /// Reads the rows of the chosen commits again for the list on the right: what it says about them (a subject, a
     /// face) is read off the rows, so it is read again whenever the rows are.
     function refreshChosenRecords() {
@@ -3998,6 +4008,7 @@ FocusScope {
                         onRowHoverRequested: (row, inside) => rowHost.pointRow(row, inside, "chosen")
                         onRowRewritten: row => rowHost.rowGone(row)
                         onCommitDropRequested: oidHex => page.dropFromChoice(oidHex)
+                        onCommitShowRequested: oidHex => page.showChosen(oidHex)
                         stashRef: page.selectedStashRef
                         menuStanding: page.menuStanding
                         // The one commit an amend reaches, and the line the box gives when this is not it

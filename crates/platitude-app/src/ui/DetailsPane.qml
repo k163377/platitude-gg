@@ -23,6 +23,8 @@ ColumnLayout {
     signal rowRewritten(var row)
     /// A held press on a listed commit drops it from the choice, which is the page's.
     signal commitDropRequested(string oidHex)
+    /// A plain click on a listed commit: the graph brings its row on screen.
+    signal commitShowRequested(string oidHex)
     /// The height the two lists divide while a choice is up.
     readonly property real listRoom: Math.max(0, detailsPane.height - 2 * Theme.headerHeight)
     /// Read off the model: the file list below answers to it, and the two must turn over together.
@@ -369,8 +371,8 @@ ColumnLayout {
         onApplyRequested: selector => detailsPane.applyStashRequested(selector)
         onPopRequested: selector => detailsPane.popStashRequested(selector)
     }
-    // A picture of the choice, whose only press drops a commit: picking is the graph's, and a second place to pick
-    // is a second place the choice could disagree with itself.
+    // A picture of the choice, whose presses drop a commit or find it on the graph: picking is the graph's, and a
+    // second place to pick is a second place the choice could disagree with itself.
     AppListView {
         id: chosenList
         visible: detailsPane.choosing
@@ -406,6 +408,7 @@ ColumnLayout {
             onRewritten: row => detailsPane.rowRewritten(row)
             onCopyRequested: text => detailsPane.copyRequested(text)
             onDropRequested: oidHex => detailsPane.commitDropRequested(oidHex)
+            onShowRequested: oidHex => detailsPane.commitShowRequested(oidHex)
         }
     }
     /// Automation only (verify-ui).

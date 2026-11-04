@@ -9,7 +9,8 @@ import platitude.ui
 // It lies under everything the card draws, so a press reaches it only where nothing else took one, and the card's own
 // rows, links and badges keep theirs. Unlike `SweepRoom`, the nearest field wins outright: a card stacks its lines,
 // and demanding a value's columns would kill the padding band (規約 §右のペインの字は掴める). A plain `MouseArea`
-// (rules-refs/app-ui.md「手の実装は素の `MouseArea`」).
+// (rules-refs/app-ui.md「手の実装は素の `MouseArea`」). Under a surface that is itself a target, a press that stays
+// put is that target's click instead (`taps`).
 //
 // Where it goes on a scrolling surface: inside a `Flickable`, the pad lies inside the view (`SettingsDialog`'s
 // chapters) — laid outside, it gets no press at all, the view swallowing whatever its children did not take; the
@@ -21,35 +22,67 @@ Item {
     /// The card's content, walked for fields on every press — a list kept in step with lines that come and go would
     /// leave the one it forgot a dead corner.
     required property Item content
+    /// Whether what the pad lies under is itself a target (`ChosenCommitRow`): a press is then its click until it
+    /// travels past `drag.threshold`, and only then a sweep, anchored where it went down — the words on a target
+    /// (規約 §右のペインの字は掴める「掴み方は 3 つ」の 3, as `RowHand` over one value). Off, the press anchors at once.
+    property bool taps: false
+    /// A press on a pad that `taps`, let go before it travelled.
+    signal tapped()
 
     /// What the gesture is holding: the field it is writing into, and whether it took the gesture at all.
     property Item field: null
     property bool taking: false
+    /// Where the press went down, whether a pad that `taps` is holding one, and whether it has travelled far enough to
+    /// be a sweep. A pad that does not tap starts every press travelled.
+    property point pressFrom: Qt.point(0, 0)
+    property bool pressing: false
+    property bool travelled: false
 
     /// What a run reads back off a sweep (verify-ui): the value it landed on, and whether the keyboard went with the
     /// selection — `Ctrl+C` goes to whatever holds it.
     readonly property string endedOn: pad.field ? pad.field.text : ""
     readonly property bool caretLanded: !!pad.field && pad.field.hasCaret
 
-    /// The three the hand below calls, at points in this item's coordinates — and the three a run enters, so a pad
-    /// never wired up reports nothing (verify-ui §壊れない動詞の実装と反復). The anchor is taken at the press, unlike
-    /// `SweepRoom`'s: the nearest field is already known there.
+    /// The hand below calls these, at points in this item's coordinates — and a run enters them, so a pad never wired
+    /// up reports nothing (verify-ui §壊れない動詞の実装と反復). The anchor is taken at the press, unlike
+    /// `SweepRoom`'s: the nearest field is already known there — on a pad that `taps`, once the press has travelled.
+    /// The press drops the last selection either way: one selection in the window, and a click takes no words.
     function pressAt(position) {
         pad.dropValues()
         pad.field = pad.nearestTo(position)
         pad.taking = !!pad.field
-        if (pad.taking)
+        pad.pressFrom = position
+        pad.pressing = pad.taps
+        pad.travelled = !pad.taps
+        if (pad.taking && pad.travelled)
             pad.field.anchorFrom(pad, position)
-        return pad.taking
+        return pad.taking || pad.taps
     }
     function moveAt(position) {
+        if (!pad.travelled) {
+            // A click with a tremor in it is still a click.
+            if (Math.abs(position.x - pad.pressFrom.x) < hand.drag.threshold
+                    && Math.abs(position.y - pad.pressFrom.y) < hand.drag.threshold)
+                return
+            pad.travelled = true
+            if (pad.taking)
+                pad.field.anchorFrom(pad, pad.pressFrom)
+        }
         if (!pad.taking)
             return
         // One field per gesture (規約 §右のペインの字は掴める): changing half-way would drop the selection just made.
         pad.field.extendFrom(pad, position)
     }
     function releaseNow() {
+        const tap = pad.pressing && !pad.travelled
+        pad.cancelNow()
+        if (tap)
+            pad.tapped()
+    }
+    /// A press taken away (the view took it, the window lost it): neither a sweep going on nor a click.
+    function cancelNow() {
         pad.taking = false
+        pad.pressing = false
     }
 
     /// Clears every selection under this card: one selection in the window, and a sweep clears the board first.
@@ -131,7 +164,8 @@ Item {
     /// functions. The drag stays at the height it started from: a value read out at a height the reader never used
     /// passes while the gesture does not work.
     function sweepAt(position) {
-        if (!pad.pressAt(position))
+        // A pad that `taps` takes a press with no field to anchor on.
+        if (!pad.pressAt(position) || !pad.field)
             return false
         const f = pad.field
         // Toward the words: a field is as wide as the card, so a press level with a short line is usually past its
@@ -188,10 +222,11 @@ Item {
         // take it (rules-refs/app-ui.md「行に重ねる面の `HoverHandler` は祖先が持つ」).
         hoverEnabled: false
         preventStealing: true
-        cursorShape: Qt.IBeamCursor
+        // A target's hand, as `RowHand` wears over a value; words otherwise.
+        cursorShape: pad.taps ? Qt.PointingHandCursor : Qt.IBeamCursor
         onPressed: mouse => { mouse.accepted = pad.pressAt(Qt.point(mouse.x, mouse.y)) }
         onPositionChanged: mouse => { if (hand.pressed) pad.moveAt(Qt.point(mouse.x, mouse.y)) }
         onReleased: pad.releaseNow()
-        onCanceled: pad.releaseNow()
+        onCanceled: pad.cancelNow()
     }
 }
