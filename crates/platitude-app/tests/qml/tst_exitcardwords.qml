@@ -25,6 +25,8 @@ Item {
         property string opEditOid: "80efa6640000000000000000000000000000abcd"
         property bool opMerging: false
         property bool opStepping: true
+        property bool detached: false
+        property string branch: "main"
         property bool opSkipFree: false
         property int conflictCount: 0
     }

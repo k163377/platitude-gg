@@ -238,10 +238,18 @@ Rectangle {
             frameColor: Theme.danger
             holdPresses: Metrics.holdPressesWarned
             // The whole command in git's spelling (§git 用語のコード表記), as the commit button's `commit --amend`: on a
-            // one-row exit the chip is the only thing naming the operation.
+            // one-row exit the chip is the only thing naming the operation. The words read on from the chip as one
+            // sentence and name where it lands, as the commit button above names where it commits
+            // (`WipPane.commitTarget`): nothing done since the merge began survives it (user decision — ask before
+            // changing).
             phraseHead: "merge --abort"
-            // Where it lands: nothing done since the merge began survives it.
-            text: qsTr("Back to before it started")
+            //: Reads on from the `merge --abort` chip; then the branch it lands on, or HEAD when detached, as a chip.
+            text: qsTr("and go back to")
+            phraseTail: opExitCard.worktree.detached ? "HEAD" : opExitCard.worktree.branch
+            // A name's ink (`Words.nameInk`): the branch stood on in its own, a detached `HEAD` plain — the words' over
+            // the fill and while the button waits or cannot be pressed.
+            phraseTailTint: Words.nameInk(abortButton.fg, opExitCard.worktree.detached ? undefined : Theme.textLink)
+            phraseTailMark: opExitCard.worktree.detached ? "" : "branch"
             enabled: opExitCard.repoTab.busyCount === 0
             onHeld: opExitCard.repoTab.resolveOperation("abort")
         }
