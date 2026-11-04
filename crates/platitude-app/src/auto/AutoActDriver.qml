@@ -112,6 +112,17 @@ Item {
         }
         return -1
     }
+    /// How many rows draw themselves chosen, counted to a little past `last` (the last row pressed or stood on) so a
+    /// row lit that should not be is counted too.
+    function litRowsTo(last) {
+        let lit = 0
+        for (let i = 0; i < Math.min(graphModel.rowTotal, last + 3); i++) {
+            const item = graphPane.view.itemAtIndex(i)
+            if (item && item.selected)
+                lit++
+        }
+        return lit
+    }
     /// Whether the window's tip stands clear of its target sideways — beside the row rather than over the rows
     /// above and below it (規約 §hover のツールチップ「行の的は、行の横に立つ」). Read off the instance's drawn seat, not the rule.
     function tipAside(tip) {
@@ -815,6 +826,7 @@ Item {
     AutoActSwitchVerbs { id: switchVerbs; driver: driver }
     AutoActPublishVerbs { id: publishVerbs; driver: driver }
     AutoActGraphRowVerbs { id: graphRowVerbs; driver: driver }
+    AutoActChooseVerbs { id: chooseVerbs; driver: driver }
     AutoActRowMenuVerbs { id: rowMenuVerbs; driver: driver }
     AutoActCardFlowVerbs { id: cardFlowVerbs; driver: driver }
     AutoActHoverHoldVerbs { id: hoverHoldVerbs; driver: driver }
@@ -861,6 +873,7 @@ Item {
             || switchVerbs.run(act, arg)
             || publishVerbs.run(act, arg)
             || graphRowVerbs.run(act, arg)
+            || chooseVerbs.run(act, arg)
             || rowMenuVerbs.run(act, arg)
             || cardFlowVerbs.run(act, arg)
             || hoverHoldVerbs.run(act, arg)
