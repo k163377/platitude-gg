@@ -66,6 +66,10 @@ Item {
     /// The first line's band: the taller of the sentence's line and the chip, each piece of the first line centred in
     /// it. The chip's family and the sentence's differ by OS, so a margin worked out from one alone can go negative.
     readonly property real firstBand: Math.max(opRow.lineHeight, codeLabel.implicitHeight)
+    /// How far the words move up to stand their first line's capitals on the middle of a menu row's band, as a menu
+    /// row's words stand (`AppMenuItem.capsLift`).
+    readonly property real capsLift: -WordFace.capitalDropOf(rowLabel.baselineOffset, rowLabel.font.pixelSize,
+                                                             opRow.lineHeight)
     implicitHeight: opRow.visible ? Theme.rowHeight + rowLabel.implicitHeight - opRow.lineHeight : 0
     Accessible.description: opRow.holdPresses > 0 ? Words.pressToActivate(opRow.holdPresses) : ""
 
@@ -123,7 +127,8 @@ Item {
     }
 
     // `AppMenuItem`'s padding, so the card's rows and a menu's read alike. Hung from the top with the first line
-    // centred in a menu row's band, so a one-line row stands where a menu row's words do.
+    // centred in a menu row's band and lifted to its capitals as a menu row's words are (`capsLift`), so a one-line
+    // row stands where a menu row's words do.
     RowLayout {
         id: opWords
         anchors.left: parent.left
@@ -131,7 +136,7 @@ Item {
         anchors.top: parent.top
         anchors.leftMargin: Theme.spaceXs + opRow.holdIndent
         anchors.rightMargin: Theme.spaceXs
-        anchors.topMargin: (Theme.rowHeight - opRow.firstBand) / 2
+        anchors.topMargin: (Theme.rowHeight - opRow.firstBand) / 2 + opRow.capsLift
         spacing: Theme.spaceSm
         Item {
             id: codeSeat

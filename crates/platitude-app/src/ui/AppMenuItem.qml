@@ -320,8 +320,15 @@ MenuItem {
                  ? (menuItem.holdIndent > 0 ? menuItem.padding + menuItem.holdIndent
                     : menuItem.padding + menuItem.headSeat + Theme.spaceXs)
                : menuItem.padding + menuItem.holdIndent
-    topPadding: 0
-    bottomPadding: 0
+    /// How far the words move up to stand their capitals' middle on the row's middle, not their line box's
+    /// (`WordFace.capitalDrop`, as a band's caption does — `NavHeader.capsLift`; デザイン規約 §メニュー): the UI faces
+    /// keep room over the letters for accents and kanji, so a line box centred in the row stands the words low and the
+    /// air over them reads wider than the air under them — plainest on a card of one row. The content moves whole, its
+    /// row's height kept, so every mark, chip and count set off the words goes with them; the wash and the `>` stay on
+    /// the row.
+    readonly property real capsLift: -WordFace.capitalDrop(itemLabel)
+    topPadding: menuItem.capsLift
+    bottomPadding: -menuItem.capsLift
     // A row this menu is not showing takes no room: the list lays rows out by height, so an invisible row that keeps
     // one leaves a hole.
     implicitHeight: menuItem.present ? Theme.rowHeight : 0
