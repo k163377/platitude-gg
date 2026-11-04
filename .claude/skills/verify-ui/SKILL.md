@@ -31,7 +31,7 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 
 **動詞はまとめて撮る(1 ターンに複数)** — 同じビルドで撮れる動詞は 1 個の複合コマンドに並べて 1 ターンで実行し(2 発目以降は `--no-build`)、PNG の目視も 1 ターンに複数枚まとめて読む。段 2 と重なる時は、commit してから `cargo xtask gate --verb '<動詞と引数>' --verb …` で 1 本にまとめるのが最速(名指した行は段分け表に関わらず両側で回る)。1 動詞ずつ「撮る→見る→直す」を回してよいのは、直前の絵が次の編集を決める時だけ。
 
-**判定には書き込みの失敗も入る** — `write failed` が 1 行でもあれば FAIL(撮れた PNG は「届かなかった状態」のもの)。**`--allow-write-failure` を付けてよいのは「その拒否がこの動詞の見せ物である」時だけ**(対象動詞の全列挙は `cargo xtask` の USAGE が正)。引数の渡し忘れも同じ行に出る(`delete-branch-refused` を引数なしで撃つと `git branch --delete -- ''` が拒まれ、`not merged` の絵は撮れていない)。
+**判定には書き込みの失敗も入る** — `write failed` が 1 行でもあれば FAIL(撮れた PNG は「届かなかった状態」のもの)。**`--allow-write-failure` を付けてよいのは「その拒否がこの動詞の見せ物である」時だけ**(対象動詞の全列挙は `cargo xtask` の USAGE が正)。引数の渡し忘れも同じ行に出る(`delete-branch-refused` を引数なしで撃つと `git branch --delete -- ''` が拒まれ、`not merged` の絵は撮れていない)。**QML のループの警告も判定に入る** — `Binding loop detected` / `possible QQuickItem::polish() loop` が run の行に出れば FAIL(qmltest も同じ。正本は 反映前テストの機械化.md §QML のループ)。
 
 ## 起動 fast path(「rebase して起動」等、起動だけの要求)
 
