@@ -13,12 +13,16 @@ import platitude.ui
 // marks' tints are user decisions too — ask before changing.
 //
 // No word says what kind a thing is — the mark in front of its name does (user decision — ask before changing;
-// デザイン規約 §ref の種別「ref の名前の印」): `as %1, tracking %2`, `Deleted %1 here and on %2`, `Removed %1`,
-// `Force-pushed %1 to %2`, never `as branch …`, which says it twice. What has no name keeps git's words
-// (`Discarded 2 files`, `Left a detached HEAD`). A left menu row opens on the kind's mark and says the verb and the
-// thing's own name — a stash by its message (`Dropped On main: experiment`; the card's sentence keeps
-// `Dropped a stash`) — its names code too, with no mark of their own (user decision: bare, a name sinks into the
-// sentence).
+// デザイン規約 §ref の種別「ref の名前の印」): `as %1, tracking %2`, `%1 deleted both locally and on %2`, `%1 removed`,
+// `%1 force-pushed to %2`, never `as branch …`, which says it twice.
+//
+// **A title opens on the name and says what was done to it after** (user decision — ask before changing): the log is
+// for tracing back what was just thrown away and restoring it, so the name outranks telling the operations apart. A
+// row the narrow left panel cuts at its end loses the doing first, and rows may read alike there (`Detached …`): no
+// word is shortened to tell them apart. What has no name opens on what it was (`2 files discarded`,
+// `Detached HEAD left behind`). A left menu row opens on the kind's mark and names the thing itself — a stash by its
+// message (`On main: experiment dropped`; the card's sentence keeps `Stash dropped`) — its names code too, with no
+// mark of their own (user decision: bare, a name sinks into the sentence).
 QtObject {
     id: shown
 
@@ -131,24 +135,37 @@ QtObject {
         }
         return files
     }
-    /// What the operation did, by git's word for it where git wrote the line. A move made on no branch names none
-    /// (`name` empty): it was a detached HEAD's, said as leaving one is. The kind is the mark's to say
-    /// (デザイン規約 §ref の種別「ref の名前の印」): a tag and a worktree are named with no word for what they are.
+    /// What the operation did to what: the name first, then the doing, by git's word for it where git wrote the line.
+    /// A move made on no branch names none (`name` empty): it was a detached HEAD's, said as leaving one is. The kind
+    /// is the mark's to say (デザイン規約 §ref の種別「ref の名前の印」): a tag and a worktree are named with no word for
+    /// what they are.
     function titleOf(row) {
-        return shown.titleWith(row, row.name, row.remote)
+        return shown.titleWith(row, shown.spokenOf(row), row.remote)
+    }
+    /// What a title calls the thing. The branches one rebase moved come from the model `, `-joined, which no branch
+    /// name holds; a sentence says `a and b`, `a, b and c`, so the names read apart from one another.
+    function spokenOf(row) {
+        const names = shown.movedNames(row)
+        return names.length < 2 ? row.name : shown.namesAnd(names.slice(0, -1).join(", "), names[names.length - 1])
+    }
+    function movedNames(row) {
+        return row.kind === "rebase" ? row.name.split(", ") : [row.name]
+    }
+    function namesAnd(head, last) {
+        return qsTr("%1 and %2").arg(head).arg(last)
     }
     /// The same in a row of the left menu, which opens on the kind's mark: every thing by its own name — a stash by
     /// its message, where a sentence says what it was.
     function listTitleOf(row) {
-        return shown.listTitleWith(row, row.name)
+        return shown.listTitleWith(row, shown.spokenOf(row))
     }
     /// That row's words with `name` written where they say it.
     function listTitleWith(row, name) {
         switch (row.kind) {
         case "dropped-stash":
-            return qsTr("Dropped %1").arg(name)
+            return qsTr("%1 dropped").arg(name)
         case "popped-stash":
-            return qsTr("Popped %1").arg(name)
+            return qsTr("%1 popped").arg(name)
         default:
             return shown.titleWith(row, name, row.remote)
         }
@@ -169,61 +186,64 @@ QtObject {
             : ["deleted-tag", "deleted-remote-tag", "force-pushed-tag"].indexOf(row.kind) >= 0 ? "tag"
             : row.kind === "removed-worktree" ? "tree" : ""
         const marks = Words.marksOf((name, remote) => shown.titleWith(row, name, remote),
-                                    [[row.name, named], [row.remote, row.remote === "" ? "" : "remote"]])
+                                    [[shown.spokenOf(row), named], [row.remote, row.remote === "" ? "" : "remote"]])
         // A remote's branch is one name, `remote/name`, behind the one cloud: the cloud's name runs on over the `/`.
         const branchOver = "/" + row.name
         if (["deleted-remote-branch", "force-pushed"].indexOf(row.kind) >= 0)
             return marks.map(mark => mark[1] === "remote"
                                      && shown.titleOf(row).substr(mark[0] + mark[3], branchOver.length) === branchOver
                                      ? [mark[0], mark[1], mark[2], mark[3] + branchOver.length] : mark)
-        if (named === "" || row.name.indexOf(", ") < 0)
+        const names = shown.movedNames(row)
+        if (names.length < 2)
             return marks
-        // One rebase that moved several branches names them all, `, `-joined: each behind its own mark.
-        let each = []
-        for (const mark of marks)
-            each = each.concat(mark[1] !== named ? [mark]
-                               : Words.listMarks(row.name, row.name, named)
-                                      .map(one => [mark[0] + one[0], named, undefined, one[3]]))
-        return each
+        // One rebase that moved several branches names them all, each behind its own mark. A rebase reaches no remote,
+        // so the names are the title's only mark.
+        const head = names.slice(0, -1).join(", ")
+        const last = names[names.length - 1]
+        const headAt = Words.marksOf(shown.namesAnd, [[head, named], [last, ""]])[0][0]
+        const lastAt = Words.marksOf(shown.namesAnd, [[head, ""], [last, named]])[0][0]
+        return Words.listMarks(head, head, named).map(one => [marks[0][0] + headAt + one[0], named, undefined, one[3]])
+                    .concat([[marks[0][0] + lastAt, named, undefined, last.length]])
     }
     /// That title with `name` and `remote` written where it says them.
     function titleWith(row, name, remote) {
         const files = shown.filesOf(row)
-        const moved = name === "" ? qsTr("a detached HEAD") : name
+        const moved = name === "" ? qsTr("Detached HEAD") : name
         switch (row.kind) {
         case "reset":
-            return qsTr("Reset %1").arg(moved)
+            return qsTr("%1 reset").arg(moved)
         case "amend":
-            return qsTr("Amended %1").arg(moved)
+            return qsTr("%1 amended").arg(moved)
         case "rebase":
-            return qsTr("Rebased %1").arg(moved)
+            return qsTr("%1 rebased").arg(moved)
         case "left-detached":
-            return qsTr("Left a detached HEAD")
+            // git's own words for it: `you are leaving 1 commit behind`.
+            return qsTr("Detached HEAD left behind")
         case "deleted":
         case "deleted-tag":
-            return remote === "" ? qsTr("Deleted %1").arg(name)
-                                 : qsTr("Deleted %1 here and on %2").arg(name).arg(remote)
+            return remote === "" ? qsTr("%1 deleted").arg(name)
+                                 : qsTr("%1 deleted both locally and on %2").arg(name).arg(remote)
         case "discarded":
-            return files === 1 ? qsTr("Discarded 1 file") : qsTr("Discarded %1 files").arg(files)
+            return files === 1 ? qsTr("1 file discarded") : qsTr("%1 files discarded").arg(files)
         case "deleted-untracked":
-            return files === 1 ? qsTr("Deleted 1 untracked file") : qsTr("Deleted %1 untracked files").arg(files)
+            return files === 1 ? qsTr("1 untracked file deleted") : qsTr("%1 untracked files deleted").arg(files)
         case "dropped-stash":
-            return qsTr("Dropped a stash")
+            return qsTr("Stash dropped")
         case "popped-stash":
-            return qsTr("Popped a stash")
+            return qsTr("Stash popped")
         case "removed-worktree":
-            return qsTr("Removed %1").arg(name)
+            return qsTr("%1 removed").arg(name)
         case "deleted-remote-branch":
-            return qsTr("Deleted %1/%2").arg(remote).arg(name)
+            return qsTr("%1/%2 deleted").arg(remote).arg(name)
         case "deleted-remote-tag":
-            return qsTr("Deleted %1 on %2").arg(name).arg(remote)
+            return qsTr("%1 deleted on %2").arg(name).arg(remote)
         case "force-pushed":
-            return qsTr("Force-pushed %1/%2").arg(remote).arg(name)
+            return qsTr("%1/%2 force-pushed").arg(remote).arg(name)
         case "force-pushed-tag":
-            return qsTr("Force-pushed %1 to %2").arg(name).arg(remote)
+            return qsTr("%1 force-pushed to %2").arg(name).arg(remote)
         default:
             // "moved": the branch set somewhere by hand — `branch --force`, the graph's `Move here`.
-            return qsTr("Moved %1").arg(name)
+            return qsTr("%1 moved").arg(name)
         }
     }
     /// What one part took: the commits only its tip reaches, the work a copy holds, the stash by its message, the

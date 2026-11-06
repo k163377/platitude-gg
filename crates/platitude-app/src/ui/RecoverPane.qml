@@ -386,8 +386,9 @@ Rectangle {
         }
     }
 
-    // One operation, in a left menu row's columns: its mark in the seat, what it did where the names begin, when at the
-    // right edge. An inline component has its own ids, so the list's state comes in as properties.
+    // One operation, in a left menu row's columns: its mark in the seat, the name and what was done to it where the
+    // names begin, when at the right edge. An inline component has its own ids, so the list's state comes in as
+    // properties.
     component EntryRow: Rectangle {
         id: row
         /// The entry across reads, and where it stands in the whole list (`shownEntries`).
@@ -490,10 +491,10 @@ Rectangle {
             badged: row.entry.badged
             paired: row.entry.paired
         }
-        // What was done to what, after the seat every left menu row opens with (`NameCell.seatSize`), the names as
-        // code with no mark of their own (`RecoverEntries`), one line cut at the
-        // end (`CodeLine`). The whole of it is the card's and the band's. Every row's words start in one column, a
-        // pair's too (`RecoverMark.pairWidth`).
+        // The name, then what was done to it, after the seat every left menu row opens with (`NameCell.seatSize`), the
+        // names as code with no mark of their own (`RecoverEntries`), one line cut at the end (`CodeLine`): a narrow
+        // panel takes the doing first. The whole of it is the card's and the band's. Every row's words start in one
+        // column, a pair's too (`RecoverMark.pairWidth`).
         CodeLine {
             id: title
             x: Theme.spaceXs + Theme.iconXs + Theme.spaceXs

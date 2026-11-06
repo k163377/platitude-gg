@@ -126,7 +126,7 @@ Item {
         }
 
         function test_nothing_the_hand_does_over_the_list_reaches_the_menu_under_it() {
-            page.recoverEntries = [entry("Reset main")]
+            page.recoverEntries = [entry("main reset")]
             verify(waitForRendering(pane))
             // The band's empty middle — between the seat and the `✕`, wherever the font puts the seat's end — the
             // strip along its foot where the filter runs on, and the ground below the rows.
@@ -168,7 +168,7 @@ Item {
             compare(first.length, 1, "one ring before the first answer")
             verify(first[0] > Theme.headerHeight, "in the list, under the band")
 
-            page.recoverEntries = [entry("Reset main")]
+            page.recoverEntries = [entry("main reset")]
             verify(waitForRendering(pane))
             const again = rings()
             compare(again.length, 1, "one ring over the entries already up")
@@ -189,7 +189,7 @@ Item {
         }
 
         function test_a_rest_on_an_entry_opens_its_card_and_the_row_keeps_its_time() {
-            page.recoverEntries = [entry("Rebased feature/a-branch-name-long-enough-to-be-cut-at-the-time")]
+            page.recoverEntries = [entry("feature/a-branch-name-long-enough-to-be-cut-at-the-time rebased")]
             page.recoverPick = 0
             verify(waitForRendering(pane))
             const titles = found(pane, item => item.pieces !== undefined && item.cutting !== undefined)
@@ -205,7 +205,7 @@ Item {
         function manyEntries(n) {
             const out = []
             for (let i = 0; i < n; i++)
-                out.push(entry("Reset main-" + i))
+                out.push(entry("main-" + i + " reset"))
             return out
         }
         /// The log as `entries`, laid out from the list's first row — its origin moves as rows come and go above what
@@ -280,7 +280,7 @@ Item {
         /// thrown away since (the newest first).
         function withFresh(n, at) {
             const all = manyEntries(n)
-            all.splice(at, 0, entry("Reset fresh"))
+            all.splice(at, 0, entry("fresh reset"))
             return all
         }
         /// The hand into the card that is out, as a hand walks into it to read — once the card stands at its size: it

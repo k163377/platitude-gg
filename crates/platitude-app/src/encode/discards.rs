@@ -259,7 +259,7 @@ mod tests {
 
     #[test]
     fn the_line_is_found_in_any_words_case_folded() {
-        let entry = shown(&["Reset main", "2 commits", "2026-10-02 04:30 (Yesterday)"]);
+        let entry = shown(&["main reset", "2 commits", "2026-10-02 04:30 (Yesterday)"]);
         assert!(shown_matches(&entry, "MAIN"));
         assert!(shown_matches(&entry, "2026-10"));
         assert!(shown_matches(&entry, "yesterday"));
@@ -268,8 +268,8 @@ mod tests {
 
     #[test]
     fn the_line_is_taken_whole_and_blank_leaves_everything_in() {
-        let entry = shown(&["Reset main"]);
-        assert!(!shown_matches(&entry, "main reset"), "not split on spaces");
+        let entry = shown(&["main reset"]);
+        assert!(!shown_matches(&entry, "reset main"), "not split on spaces");
         assert!(shown_matches(&entry, ""));
         assert!(shown_matches(&entry, "   "));
     }

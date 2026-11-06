@@ -8,7 +8,7 @@ import platitude.ui
 Item {
     id: root
     width: 800
-    height: 120
+    height: 180
 
     /// Spends more wall clock than one time slice the window gives the builder of its background items, from inside a
     /// binding: the build of whatever holds that binding stops on it (`tst_ink`).
@@ -42,6 +42,23 @@ Item {
         height: 30
         text: "Deleted feature/login-with-a-longer-name here and on origin"
         marks: [[8, "", undefined, 32], [53, "", undefined, 6]]
+    }
+    // The line opens on the name, as a discard list row does: what was done goes first, then the name's end.
+    CodeLine {
+        id: nameFirst
+        y: 90
+        width: 120
+        height: 30
+        text: "feature/login deleted both locally"
+        marks: [[0, "", undefined, 13]]
+    }
+    CodeLine {
+        id: longNameFirst
+        y: 120
+        width: 90
+        height: 30
+        text: "feature/login-with-a-longer-name deleted"
+        marks: [[0, "", undefined, 32]]
     }
 
     /// The first item under `item` the test holds true of, or null.
@@ -78,6 +95,18 @@ Item {
             const after = root.find(cutInName, item => item.headText !== undefined && item.text === " here and on ")
             verify(!after.visible, "nothing after the cut name")
             verify(!root.find(cutInName, item => item.word === "origin" && item.cutAt !== undefined).visible)
+        }
+
+        function test_a_line_opening_on_its_name_loses_what_was_done_first() {
+            const whole = root.find(nameFirst, item => item.word === "feature/login" && item.cutAt !== undefined)
+            tryVerify(() => whole.width > 0 && nameFirst.cutting, undefined, "the edge falls past the name")
+            verify(!whole.cut, "the name is whole")
+
+            const chip = root.find(longNameFirst, item => item.word === "feature/login-with-a-longer-name"
+                                                          && item.cutAt !== undefined)
+            tryVerify(() => chip.width > 0 && chip.cut, undefined, "a name past the edge is cut in its turn")
+            const after = root.find(longNameFirst, item => item.headText !== undefined && item.text === " deleted")
+            verify(!after.visible, "nothing after the cut name")
         }
     }
 }

@@ -104,7 +104,8 @@ pub(super) fn discards_deep(repo: &mut DemoRepo) -> Result<(), String> {
 }
 
 /// The oldest entry, last in the list: a tag deleted here and on origin at
-/// once, the same object on both sides — one part, its title `here and on`.
+/// once, the same object on both sides — one part, its title `both locally
+/// and on`.
 fn tag_deleted_both(repo: &mut DemoRepo, clock: &Clock) -> Result<(), String> {
     repo.pin_clock(Some(clock.ago(DAY * 420)));
     repo.git(&["tag", "v0.1"])?;

@@ -6,8 +6,8 @@ import platitude.ui
 // the names side by side, each name behind its kind's mark where it has one. Where the column is too narrow it is cut
 // one of two ways (`cutAt`):
 // - `end`: the piece the column's edge falls in cut there with `…` (`CutName` / `CodeChip`, `cutAt: "end"`), nothing
-//   after it — a discard list row, whose own mark says the kind and whose hover card says the rest. What was done stays
-//   readable; the name gives way.
+//   after it — a discard list row, whose own mark says the kind and whose hover card says the rest. Its name stands
+//   first, so what was done gives way before the name does.
 // - `middle`: the names give way in the middle, never the words round them, the longer first down to an even share
 //   (デザイン規約 §メニュー「入りきらない行は名前だけを真ん中で縮める」, a remote's at its end — §寸法) — a pane's line
 //   (`DiffFileNotices`' one-sided conflict), whose whole line a hand on it gets back.
