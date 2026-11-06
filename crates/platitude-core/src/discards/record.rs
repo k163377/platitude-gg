@@ -421,8 +421,9 @@ pub async fn record_stash(
     .await
 }
 
-/// Notes the branches one rebase moved together (`--update-refs`), each
-/// with its old and new tip, so the list tells them as one.
+/// Notes the branches one rebase moved together (as a person's own
+/// `rebase.updateRefs` does), each with its old and new tip, so the list
+/// tells them as one.
 pub async fn record_moves(
     executor: &GitExecutor,
     workdir: &Path,

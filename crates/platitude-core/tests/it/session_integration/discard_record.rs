@@ -655,6 +655,56 @@ async fn two_branches_on_one_tip_one_rebase_moved_both_come_back() {
     session.close_and_wait().await;
 }
 
+/// A rebase moves the current branch alone, a branch standing in the range
+/// staying where it is: git's own line is the entry, of one part that holds
+/// only what the old tip alone reached, and it comes back under its name.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_rebase_of_one_branch_is_one_part_and_comes_back() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "1\n", "c1");
+    repo.git(&["switch", "--quiet", "-c", "base"]);
+    let held = repo.commit_file_id("b.txt", "base\n", "b1");
+    repo.git(&["switch", "--quiet", "-c", "top"]);
+    let tip = repo.commit_file_id("t.txt", "top\n", "t1");
+    repo.git(&["switch", "--quiet", "main"]);
+    repo.commit_file("m.txt", "main\n", "m1");
+    repo.git(&["switch", "--quiet", "top"]);
+    let (sink, session) = opened(&repo).await;
+
+    let id = session
+        .rebase("main".to_string(), RebaseOptions::default())
+        .expect("the rebase is accepted");
+    assert_eq!(write_answer(&sink, id).await, None);
+    assert_eq!(
+        repo.git(&["rev-parse", "base"]),
+        held,
+        "the branch in the range stayed"
+    );
+
+    let found = listed(&repo).await;
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert_eq!(found[0].kind, DiscardKind::Rebase);
+    assert_eq!(found[0].name, "top");
+    assert!(!found[0].restores_by_part(), "{found:#?}");
+    assert_eq!(found[0].lost(), vec![oid(&tip)], "{found:#?}");
+    let restores: Vec<&Restore> = found[0].parts.iter().map(|part| &part.restore).collect();
+    assert!(
+        matches!(
+            restores[..],
+            [Restore::Branch { name, tip: restored, .. }]
+                if name == "top-pgg-restored" && *restored == oid(&tip)
+        ),
+        "{found:#?}"
+    );
+
+    let id = session
+        .restore_discard(found[0].parts.clone())
+        .expect("the restore is accepted");
+    assert_eq!(write_answer(&sink, id).await, None);
+    assert_eq!(repo.git(&["rev-parse", "top-pgg-restored"]), tip);
+    session.close_and_wait().await;
+}
+
 /// A branch deleted is on the record with its upstream, and comes back
 /// under its own name with it.
 #[tokio::test(flavor = "multi_thread")]

@@ -87,7 +87,9 @@ pub enum DiscardKind {
     /// `commit --amend`.
     Amend,
     /// A rebase, interactive or not, and the rebase a pull runs — one entry
-    /// for the branches a rebase moved together (`--update-refs`).
+    /// for the branches a rebase moved together, as a person's own
+    /// `rebase.updateRefs` does; no rebase of the app's asks for it
+    /// (`integrate::RebaseOptions`).
     Rebase,
     /// The branch set somewhere by hand (`branch --force`,
     /// `switch --force-create` — Platitude GG's `Move here`).
