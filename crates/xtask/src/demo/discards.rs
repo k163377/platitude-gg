@@ -103,6 +103,243 @@ pub(super) fn discards_deep(repo: &mut DemoRepo) -> Result<(), String> {
     )
 }
 
+/// The names the ceilings' entries say, long enough to reach what the band
+/// does with a name: cut in its heading, wrapped in its lines.
+const LONG_BRANCH: &str = "feature/platform-migration/oauth-callback-and-session-store-rework";
+const LONG_PUSHED: &str = "feature/platform-migration/retry-the-token-refresh-on-a-flaky-network";
+const LONG_SIDE: &str = "side/platform-migration/notes-for-the-session-store-rework";
+const LONG_REMOTE: &str = "upstream-enterprise-mirror-of-the-platform-team";
+const LONG_TAG: &str = "release/2026.11.06-platform-migration-candidate-with-long-notes";
+/// The folder of the worktree a discard was made in, and of the one removed.
+const LONG_FOLDER: &str = "checkout-of-the-platform-migration-session-store-rework";
+
+/// Every shape the discard log's band reaches its ceiling in, newest first as
+/// `recover-open` picks them: 0 a branch deleted here and on a remote, both
+/// parts long; 1 a long branch pushed over; 2 the reset before that push; 3
+/// a long tag deleted both ways; 4 a long stash message; 5 a worktree removed
+/// from a long path, on a long branch; 6 many files thrown away, some
+/// uncopied; 7 files thrown away in another worktree, so the band says which;
+/// 8 eight branches one rebase moved, under long names; 9 thirty of them.
+pub(super) fn discards_ceilings(repo: &mut DemoRepo) -> Result<(), String> {
+    let clock = Clock::now()?;
+    repo.pin_clock(Some(clock.ago(DAY * 30)));
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.add_origin()?;
+    repo.git(&["push", "--quiet", "origin", "main"])?;
+    let origin = repo.git(&["remote", "get-url", "origin"])?;
+    repo.git(&["remote", "add", LONG_REMOTE, &origin])?;
+
+    repo.pin_clock(Some(clock.ago(DAY * 6)));
+    rebased_stack(repo, "stack", 30)?;
+    repo.pin_clock(Some(clock.ago(DAY * 6 - HOUR)));
+    rebased_stack(repo, "release-train/2026-q4/platform-migration", 8)?;
+    ceilings_of_words(repo, &clock)?;
+    ceilings_of_names(repo, &clock)?;
+    repo.pin_clock(None);
+    Ok(())
+}
+
+/// The entries whose lines run long: another worktree's copy, many files, a
+/// long path, a long stash message.
+fn ceilings_of_words(repo: &mut DemoRepo, clock: &Clock) -> Result<(), String> {
+    repo.pin_clock(Some(clock.ago(DAY * 5)));
+    let elsewhere = repo.root.join(LONG_FOLDER);
+    let elsewhere = elsewhere.to_string_lossy().replace('\\', "/");
+    repo.write("src/app.txt", "app, half done elsewhere\n")?;
+    repo.write("src/lib.txt", "lib, half done elsewhere\n")?;
+    repo.git(&["add", "src/lib.txt"])?;
+    copy_at(
+        repo,
+        Copied {
+            tracked: &["src/app.txt", "src/lib.txt"],
+            operation: "discard",
+            work: &elsewhere,
+            worktree: LONG_FOLDER,
+            ..Copied::default()
+        },
+    )?;
+    repo.git(&["reset", "--quiet", "--hard"])?;
+
+    repo.pin_clock(Some(clock.ago(DAY * 5 - HOUR)));
+    let paths: Vec<String> = (0..120).map(|n| format!("gen/file-{n:03}.txt")).collect();
+    let paths: Vec<&str> = paths.iter().map(String::as_str).collect();
+    for path in &paths {
+        repo.write(path, "generated\n")?;
+    }
+    repo.git(&["add", "gen"])?;
+    let work = repo.work.to_string_lossy().replace('\\', "/");
+    copy_at(
+        repo,
+        Copied {
+            tracked: &paths,
+            not_copied: &["gen/huge-a.bin", "gen/huge-b.bin", "gen/huge-c.bin"],
+            operation: "discard",
+            work: &work,
+            worktree: ".",
+            ..Copied::default()
+        },
+    )?;
+    repo.git(&["reset", "--quiet", "--hard"])?;
+
+    repo.pin_clock(Some(clock.ago(DAY * 4)));
+    let gone = repo.root.join("gone").join(LONG_FOLDER);
+    let gone = gone.to_string_lossy().replace('\\', "/");
+    let head = repo.git(&["rev-parse", "HEAD"])?;
+    note(
+        repo,
+        &head,
+        &format!("remove worktree {gone}"),
+        &[
+            ("Operation", "remove worktree"),
+            ("Worktree-path", &gone),
+            ("Branch", LONG_SIDE),
+        ],
+    )?;
+
+    repo.pin_clock(Some(clock.ago(DAY * 3)));
+    let said = "On main: try the OAuth callback again with the session store behind a flag, \
+                and keep the old cookie path working until every client has moved over to it";
+    repo.write("src/app.txt", "app, a stash\n")?;
+    repo.git(&["stash", "push", "--quiet", "--message", said])?;
+    let entry = repo.git(&["rev-parse", "stash@{0}"])?;
+    repo.git(&["stash", "drop", "--quiet"])?;
+    note(
+        repo,
+        &entry,
+        "stash drop",
+        &[("Operation", "stash drop"), ("Message", said)],
+    )
+}
+
+/// The entries whose names run long: a tag and a branch deleted both ways, a
+/// branch pushed over.
+fn ceilings_of_names(repo: &mut DemoRepo, clock: &Clock) -> Result<(), String> {
+    repo.pin_clock(Some(clock.ago(DAY * 3 - HOUR)));
+    repo.git(&["tag", LONG_TAG])?;
+    let tagged = repo.git(&["rev-parse", "HEAD"])?;
+    repo.git(&["push", "--quiet", LONG_REMOTE, LONG_TAG])?;
+    repo.git(&["tag", "--delete", LONG_TAG])?;
+    repo.git(&[
+        "push",
+        "--quiet",
+        LONG_REMOTE,
+        "--delete",
+        &format!("refs/tags/{LONG_TAG}"),
+    ])?;
+    note(
+        repo,
+        &tagged,
+        "delete tag",
+        &[
+            ("Operation", "delete tag"),
+            ("Tag", LONG_TAG),
+            ("Object", &tagged),
+            ("Remote", LONG_REMOTE),
+        ],
+    )?;
+
+    repo.pin_clock(Some(clock.ago(DAY * 2)));
+    repo.git(&["switch", "--create", LONG_PUSHED])?;
+    repo.commit("src/try.txt", "try v1\n", "feat: try a cache")?;
+    repo.git(&[
+        "push",
+        "--quiet",
+        "--set-upstream",
+        LONG_REMOTE,
+        LONG_PUSHED,
+    ])?;
+    let pushed_over = repo.git(&["rev-parse", "HEAD"])?;
+    repo.git(&["reset", "--quiet", "--hard", "HEAD~1"])?;
+    repo.commit("src/try.txt", "try v2\n", "feat: try a queue instead")?;
+    repo.git(&["push", "--quiet", "--force", LONG_REMOTE, LONG_PUSHED])?;
+    repo.git(&["switch", "main"])?;
+    note(
+        repo,
+        &pushed_over,
+        "force-push",
+        &[
+            ("Operation", "force push"),
+            ("Remote", LONG_REMOTE),
+            ("Branch", LONG_PUSHED),
+        ],
+    )?;
+
+    repo.pin_clock(Some(clock.ago(DAY * 2 - HOUR)));
+    repo.git(&["switch", "--create", LONG_BRANCH])?;
+    repo.commit("src/login.txt", "login v1\n", "feat: add the login form")?;
+    repo.git(&[
+        "push",
+        "--quiet",
+        "--set-upstream",
+        LONG_REMOTE,
+        LONG_BRANCH,
+    ])?;
+    let theirs = repo.git(&["rev-parse", "HEAD"])?;
+    repo.commit("src/login.txt", "login v2\n", "feat: check the password")?;
+    let ours = repo.git(&["rev-parse", "HEAD"])?;
+    repo.git(&["switch", "main"])?;
+    repo.git(&["branch", "--delete", "--force", LONG_BRANCH])?;
+    repo.git(&["push", "--quiet", LONG_REMOTE, "--delete", LONG_BRANCH])?;
+    let upstream = format!("{LONG_REMOTE} {LONG_BRANCH}");
+    note(
+        repo,
+        &ours,
+        "delete branch",
+        &[
+            ("Operation", "delete branch"),
+            ("Branch", LONG_BRANCH),
+            ("Upstream", &upstream),
+            ("Remote", LONG_REMOTE),
+            ("Remote-branch", LONG_BRANCH),
+            ("Remote-tip", &theirs),
+        ],
+    )
+}
+
+/// `count` branches stacked on main, one commit each, moved by one rebase and
+/// on the record as one.
+fn rebased_stack(repo: &mut DemoRepo, prefix: &str, count: u32) -> Result<(), String> {
+    let names: Vec<String> = (1..=count)
+        .map(|n| format!("{prefix}/layer-{n:02}"))
+        .collect();
+    for name in &names {
+        repo.git(&["switch", "--create", name])?;
+        repo.commit(
+            &format!("{name}.txt"),
+            "layer\n",
+            &format!("feat: lay {name}"),
+        )?;
+    }
+    repo.git(&["switch", "main"])?;
+    repo.commit(
+        "src/moved.txt",
+        &format!("{prefix}\n"),
+        "feat: move main on",
+    )?;
+    let tips = |repo: &mut DemoRepo| -> Result<Vec<String>, String> {
+        names
+            .iter()
+            .map(|name| repo.git(&["rev-parse", name]))
+            .collect()
+    };
+    let before = tips(repo)?;
+    let top = names.last().ok_or("a stack of no branches")?;
+    repo.git(&["switch", top])?;
+    repo.git(&["rebase", "--quiet", "--update-refs", "main"])?;
+    repo.git(&["switch", "main"])?;
+    let after = tips(repo)?;
+    let moved: Vec<String> = names
+        .iter()
+        .zip(before.iter().zip(&after))
+        .map(|(name, (old, new))| format!("{name} {old} {new}"))
+        .collect();
+    let mut trailers = vec![("Operation", "rebase")];
+    trailers.extend(moved.iter().map(|one| ("Moved", one.as_str())));
+    let first = before.first().ok_or("a stack of no branches")?;
+    note(repo, first, &format!("rebase {count} branches"), &trailers)
+}
+
 /// The oldest entry, last in the list: a tag deleted here and on origin at
 /// once, the same object on both sides — one part, its title `both locally
 /// and on`.
@@ -420,6 +657,45 @@ fn copy(
     operation: &str,
     moved: Option<&str>,
 ) -> Result<(), String> {
+    // `Worktree:` names the worktree as git does, so a run's copy of the
+    // template reads the work as its own (`template` moves the repository).
+    let work = repo.work.to_string_lossy().replace('\\', "/");
+    copy_at(
+        repo,
+        Copied {
+            tracked,
+            untracked,
+            not_copied: &[],
+            operation,
+            moved,
+            work: &work,
+            worktree: ".",
+        },
+    )
+}
+
+/// What one copy took, and the worktree it says it took it from.
+#[derive(Default)]
+struct Copied<'a> {
+    tracked: &'a [&'a str],
+    untracked: &'a [&'a str],
+    not_copied: &'a [&'a str],
+    operation: &'a str,
+    moved: Option<&'a str>,
+    work: &'a str,
+    worktree: &'a str,
+}
+
+fn copy_at(repo: &mut DemoRepo, copied: Copied<'_>) -> Result<(), String> {
+    let Copied {
+        tracked,
+        untracked,
+        not_copied,
+        operation,
+        moved,
+        work,
+        worktree,
+    } = copied;
     let head = repo.git(&["rev-parse", "HEAD"])?;
     let (working_tree, index) = if tracked.is_empty() {
         let tree = repo.git(&["rev-parse", "HEAD^{tree}"])?;
@@ -441,18 +717,16 @@ fn copy(
     }
     let count = tracked.len() + untracked.len();
     let summary = format!("{operation} {count} paths on main");
-    let work = repo.work.to_string_lossy().replace('\\', "/");
-    // `Worktree:` names the worktree as git does, so a run's copy of the
-    // template reads the work as its own (`template` moves the repository).
     let mut trailers = vec![
         ("Operation", operation),
-        ("Worktree-path", work.as_str()),
-        ("Worktree", "."),
+        ("Worktree-path", work),
+        ("Worktree", worktree),
         ("Branch", "main"),
     ];
     if let Some(moved) = moved {
         trailers.push(("Moved", moved));
     }
+    trailers.extend(not_copied.iter().map(|path| ("Not-copied", *path)));
     let mut args = vec!["commit-tree", working_tree.as_str()];
     for parent in &parents {
         args.extend(["-p", parent.as_str()]);

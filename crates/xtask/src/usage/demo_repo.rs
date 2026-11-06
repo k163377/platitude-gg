@@ -236,6 +236,12 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   record: the only discard log entry past the graph's
                   window, which waits for the graph to walk to it
                   (recover-open far)
+        discards-ceilings
+                  a discard log whose entries reach what the band can hold:
+                  long names, a long stash message and path, many files,
+                  another worktree's entry, eight and thirty branches moved
+                  by one rebase (recover-open, numbered in
+                  xtask::demo::discards)
         replay    300 commits on main and one on base that the fork never
                   saw: the only shape where a rebase stands for seconds,
                   so the screen has one to be photographed during

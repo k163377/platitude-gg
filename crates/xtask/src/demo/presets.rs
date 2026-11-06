@@ -13,7 +13,7 @@ use super::conflict::{
     rebase_empty, rebase_staged, revert_clashes, switch_carry,
 };
 use super::deep::{deep, deep_detached, deep_parked, perf, perf_sequence, replay};
-use super::discards::{discards, discards_deep};
+use super::discards::{discards, discards_ceilings, discards_deep};
 use super::lfs::{lfs, lfs_conflict};
 use super::pictures::{bigpicture, pictures};
 use super::repo::DemoRepo;
@@ -167,6 +167,7 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         "detached" => detached(&mut repo)?,
         "discards" => discards(&mut repo)?,
         "discards-deep" => discards_deep(&mut repo)?,
+        "discards-ceilings" => discards_ceilings(&mut repo)?,
         "rewrite-merge" => rewrite_merge(&mut repo)?,
         "octopus" => octopus(&mut repo)?,
         "octopus-mates" => octopus_mates(&mut repo)?,
