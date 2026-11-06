@@ -690,11 +690,14 @@ recover lit --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowD
 recover-escape --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate
 recover-open 0 --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate
 recover-open 0 --preset discards-deep	GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate
+recover-open 0,short,scroll:8 --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate
 recover-open 11 --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate
 recover-open 11,restore --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate
 recover-open 12 --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate
 recover-open 16,part:1 --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate
+recover-open 18,short --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate
 recover-open 3 --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate
+recover-open 3,filter:Deleted --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate
 recover-open card --preset discards	AppCardFace ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverHoverCard RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate
 recover-open none --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate
 recover-open none,filter:zzz --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate

@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
@@ -50,7 +51,10 @@ Item {
         function toggleRecover() {
             page.recoverOpen = !page.recoverOpen
         }
+        /// The entries pressed since a case cleared this, in order.
+        property var pickPresses: []
         function pickRecover(index) {
+            page.pickPresses = page.pickPresses.concat([index])
             page.recoverPick = page.recoverPick === index ? -1 : index
         }
     }
@@ -228,8 +232,9 @@ Item {
             pane.entryList.positionViewAtBeginning()
             pane.entryList.forceLayout()
         }
-        /// The list scrolled `rows` rows down from its first row.
+        /// The list scrolled `rows` rows down from its first row — its origin read laid out, which a layout owed moves.
         function scrollTo(rows) {
+            pane.entryList.forceLayout()
             pane.entryList.contentY = pane.entryList.originY + rows * Theme.rowHeight
             pane.entryList.forceLayout()
         }
@@ -440,6 +445,296 @@ Item {
             left.splice(2, 1)
             page.recoverEntries = left
             tryVerify(() => !pane.cardOpen, undefined, "the card went with its entry")
+        }
+
+        /// The stand-in's own row, off the rows: whether it stands, for which entry, and at which edge of the list.
+        function pinAt(place, title) {
+            const pin = pane.pickStandIn
+            tryCompare(pane, "pinPlace", place, undefined, "where the stand-in stands")
+            verify(pin.visible, "it stands")
+            compare(pin.entry.listTitle, title, "for the entry picked")
+        }
+        /// The list's y of the stand-in's middle.
+        function pinMiddle() {
+            return pane.pickStandIn.y + Theme.rowHeight / 2
+        }
+
+        /// The row picked scrolled off, its stand-in rides the edge it went out of, whole, and steps aside as the row
+        /// comes back: never two of the same entry on screen.
+        function test_the_picked_row_scrolled_off_stands_in_at_that_edge() {
+            showEntries(manyEntries(30))
+            page.recoverPick = 3
+            pane.entryList.forceLayout()
+            tryVerify(() => pane.pinned.key !== "", undefined, "the pick is weighed")
+            compare(pane.pinPlace, "none", "the row is on screen")
+            verify(!pane.pickStandIn.visible, "so nothing stands in for it")
+
+            scrollTo(3.5)
+            pinAt("top", "main-3 reset")
+            compare(pane.pickStandIn.y, 0, "cut by the edge, it is whole there")
+            scrollTo(10)
+            pinAt("top", "main-3 reset")
+            scrollTo(3)
+            compare(pane.pinPlace, "none", "back on screen, whole")
+            verify(!pane.pickStandIn.visible)
+
+            page.recoverPick = 29
+            scrollTo(0)
+            pinAt("bottom", "main-29 reset")
+            compare(pane.pickStandIn.y + pane.pickStandIn.height, pane.entryList.height, "on the foot of the list")
+            pane.entryList.positionViewAtEnd()
+            pane.entryList.forceLayout()
+            compare(pane.pinPlace, "none", "at the list's end, the row is on screen")
+
+            page.recoverPick = -1
+            tryVerify(() => pane.pinned.key === "", undefined, "the pick is weighed")
+            compare(pane.pinPlace, "none", "nothing picked, nothing stands in")
+        }
+
+        /// A read that moves the picked entry's number, the page moving the pick after it, leaves the stand-in on the
+        /// entry.
+        function test_a_read_above_the_picked_entry_leaves_the_stand_in_on_it() {
+            showEntries(manyEntries(30))
+            page.recoverPick = 3
+            scrollTo(10)
+            pinAt("top", "main-3 reset")
+            page.recoverEntries = withFresh(30, 0)
+            page.recoverPick = 4
+            tryVerify(() => !pane.rowKeep.busy && pane.pinned.at === 4, undefined, "the read is weighed")
+            pinAt("top", "main-3 reset")
+            compare(pane.pinned.row, 4, "its row one further down")
+        }
+
+        /// A filter leaving the picked entry's row out: the stand-in takes a row's height at the list's head, and the
+        /// rows go down by it — the first of them whole under it. The same with a filter that leaves nothing, whose
+        /// line stands under the seat too.
+        function test_a_filter_that_leaves_the_picked_row_out_seats_the_stand_in() {
+            // Rows left over the list's height, the first where it stood: a list too short to scroll, or a first row
+            // gone with the filter, has the view placing the rows anew whatever the seat does.
+            showEntries(withFresh(30, 4))
+            page.recoverPick = 4
+            pane.filterText = "main-"
+            tryVerify(() => pane.pinSeated, undefined, "the row went with the filter")
+            pinAt("seat", "fresh reset")
+            compare(pane.pickStandIn.y, 0)
+            tryVerify(() => rowAt(0) !== null && rowAt(0).mapToItem(pane.entryList, 0, 0).y === Theme.rowHeight,
+                      undefined, "the first row the filter left is under the seat")
+
+            pane.filterText = "zzz"
+            const said = () => found(pane, item => item.text === "No results found")
+            tryVerify(() => said().length === 1, undefined, "the filter left nothing")
+            pinAt("seat", "fresh reset")
+            const line = said()[0].mapToItem(pane.entryList, 0, 0).y
+            verify(line >= pane.pickStandIn.height, "the line stands clear of the seat: " + line)
+
+            pane.filterText = ""
+            tryVerify(() => pane.pinned.row === 4, undefined, "the row is back")
+            pane.entryList.forceLayout()
+            compare(pane.entryList.topMargin, 0, "and the seat gone")
+            compare(pane.entryList.contentY, pane.entryList.originY, "the rows up by the row it took")
+            compare(pane.pinPlace, "none", "with the row on screen")
+        }
+
+        /// The seat opening with no row moving — the entry picked under a filter that already leaves it out, as a run
+        /// does it — takes the rows down by itself all the same.
+        function test_a_seat_opening_over_rows_at_rest_takes_them_down() {
+            showEntries(withFresh(30, 4))
+            pane.filterText = "main-"
+            tryVerify(() => pane.shownEntries.count === 30, undefined, "the filter left the rest")
+            pane.entryList.forceLayout()
+            compare(rowAt(0).mapToItem(pane.entryList, 0, 0).y, 0, "the first row stands at the list's head")
+            page.recoverPick = 4
+            pinAt("seat", "fresh reset")
+            tryVerify(() => rowAt(0).mapToItem(pane.entryList, 0, 0).y === Theme.rowHeight, undefined,
+                      "the row is under the seat")
+        }
+
+        /// The hand on the stand-in is on the stand-in: the row under it neither lights nor asks, and the card that
+        /// opens is the picked entry's. Off it, the hand is on the row again.
+        function test_a_hand_on_the_stand_in_is_not_on_the_row_under_it() {
+            showEntries(manyEntries(30))
+            page.recoverPick = 3
+            scrollTo(10)
+            pinAt("top", "main-3 reset")
+            const under = rowAt(10)
+            verify(under !== null, "a row lies under it")
+
+            mouseMove(pane.entryList, pane.entryList.width / 2, pinMiddle())
+            tryVerify(() => pane.pickStandIn.handOn, undefined, "the hand is on the stand-in")
+            verify(!under.handOn, "not on the row under it")
+            tryVerify(() => pane.cardOpen, undefined, "its card opens after the rest")
+            compare(pane.entryHoverCard.entry.listTitle, "main-3 reset", "the picked entry's")
+
+            // Off the pane first: the card hangs under the stand-in, over the rows the hand would come to.
+            mouseMove(root, root.width - 1, root.height - 1)
+            tryVerify(() => !pane.cardOpen && !pane.pickStandIn.handOn, undefined, "the hand left, and the card went")
+            mouseMove(pane.entryList, pane.entryList.width / 2, 3 * Theme.rowHeight + Theme.rowHeight / 2)
+            tryVerify(() => rowAt(13) !== null && rowAt(13).handOn, undefined, "the hand is on the row it came to")
+        }
+
+        /// The stand-in coming over the row under a still hand takes the hand, and going gives it back — with no row
+        /// moving, so nothing but the stand-in says the hand has something else under it.
+        function test_the_stand_in_coming_and_going_takes_a_still_hand_and_gives_it_back() {
+            showEntries(manyEntries(30))
+            scrollTo(10)
+            mouseMove(pane.entryList, pane.entryList.width / 2, Theme.rowHeight / 2)
+            tryVerify(() => rowAt(10) !== null && rowAt(10).handOn, undefined, "the hand is on the row")
+            page.recoverPick = 3
+            tryVerify(() => pane.pickStandIn.handOn, undefined, "the stand-in came under it")
+            verify(!rowAt(10).handOn, "and the row under the stand-in has lost it")
+            // Off again with a move of its own, so a hold left from its coming cannot answer for its going.
+            mouseMove(pane.entryList, pane.entryList.width / 2 + 2, Theme.rowHeight / 2)
+            tryVerify(() => !pane.hand.stillHeld, undefined, "the hand moved")
+            page.recoverPick = -1
+            tryVerify(() => rowAt(10).handOn, undefined, "the stand-in went: the row has it again")
+            verify(!pane.pickStandIn.handOn)
+            verify(pane.hand.stillHeld, "the row came under a hand that did not move")
+            // waits(paced): a card that must **not** come under the still hand; the rest it would take.
+            wait(Metrics.tipDelayMs * 2)
+            verify(!pane.cardOpen, "so nothing opens until the hand moves")
+        }
+
+        /// The stand-in going from elsewhere is nothing to the hand: the row it is on keeps its card and its rest.
+        function test_the_stand_in_going_from_elsewhere_leaves_the_card_under_the_hand() {
+            showEntries(manyEntries(30))
+            page.recoverPick = 3
+            scrollTo(10)
+            pinAt("top", "main-3 reset")
+            mouseMove(pane.entryList, pane.entryList.width / 2, 5.5 * Theme.rowHeight)
+            tryVerify(() => pane.cardOpen && pane.cardAt === 15, undefined, "the row's card opens after the rest")
+            // No press, which takes a hover card down of itself: the entry put down from the keyboard.
+            page.recoverPick = -1
+            tryCompare(pane, "pinPlace", "none")
+            verify(!pane.hand.stillHeld, "nothing moved under the hand")
+            // waits(paced): a card that must **not** go: the beat a leave starts, twice over.
+            wait(Metrics.hoverKeepMs * 2)
+            verify(pane.cardOpen, "the card stays")
+        }
+
+        /// A read leaves the card on the seat: its entry is still there and still on screen, with no row to its name
+        /// (デザイン規約 §hover のツールチップ「外乱では閉じない」).
+        function test_a_read_leaves_the_card_on_the_seated_stand_in() {
+            showEntries(withFresh(30, 4))
+            page.recoverPick = 4
+            pane.filterText = "main-"
+            tryCompare(pane, "pinPlace", "seat")
+            mouseMove(pane.entryList, pane.entryList.width / 2, Theme.rowHeight / 2)
+            tryVerify(() => pane.cardOpen, undefined, "the seat's card opens after the rest")
+            const more = withFresh(30, 4)
+            more.unshift(entry("main-newer reset"))
+            page.recoverEntries = more
+            page.recoverPick = 5
+            tryVerify(() => !pane.rowKeep.busy, undefined, "the read is weighed")
+            // waits(paced): a card that must **not** go: the beat a leave starts, twice over.
+            wait(Metrics.hoverKeepMs * 2)
+            verify(pane.cardOpen, "the card stays")
+            compare(pane.cardAt, 5, "on its entry, one down the log now")
+        }
+
+        /// A read moves the picked entry's number and the page moves the pick after it, one at a time: the stand-in
+        /// stays on the entry through that, its card up under the hand on it, and the hand's leaving still takes the
+        /// card.
+        function test_a_read_moving_the_picked_number_leaves_the_hand_on_the_stand_in() {
+            showEntries(manyEntries(30))
+            page.recoverPick = 3
+            scrollTo(10)
+            tryCompare(pane, "pinPlace", "top")
+            mouseMove(pane.entryList, pane.entryList.width / 2, Theme.rowHeight / 2)
+            tryVerify(() => pane.cardOpen, undefined, "its card opens after the rest")
+            page.recoverEntries = withFresh(30, 0)
+            page.recoverPick = 4
+            tryVerify(() => !pane.rowKeep.busy, undefined, "the read is weighed")
+            // waits(paced): a card that must **not** go: the beat a leave starts, twice over.
+            wait(Metrics.hoverKeepMs * 2)
+            verify(pane.cardOpen, "the card stays")
+            compare(pane.cardAt, 4, "on its entry")
+            verify(pane.pickStandIn.handOn, "with the hand on the stand-in")
+            mouseMove(root, root.width - 1, root.height - 1)
+            tryVerify(() => !pane.cardOpen, undefined, "the hand gone, the card goes")
+        }
+
+        /// The second click of a double-click is no press of its own: the stand-in gone with the first, it would pick
+        /// the row that came under the hand, and on a row it would put down what the first picked.
+        function test_a_double_click_is_one_press() {
+            showEntries(manyEntries(30))
+            page.recoverPick = 3
+            scrollTo(10)
+            tryCompare(pane, "pinPlace", "top")
+            page.pickPresses = []
+            // A delay, so the stand-in goes between the clicks as it does under a hand.
+            mouseDoubleClickSequence(pane.entryList, pane.entryList.width / 2, Theme.rowHeight / 2, Qt.LeftButton,
+                                     Qt.NoModifier, 10)
+            compare(page.pickPresses, [3], "on the stand-in")
+            compare(page.recoverPick, -1, "the entry put down, and no other picked")
+            page.pickPresses = []
+            mouseDoubleClickSequence(pane.entryList, pane.entryList.width / 2, 2.5 * Theme.rowHeight, Qt.LeftButton,
+                                     Qt.NoModifier, 10)
+            compare(page.pickPresses, [12], "on a row")
+            compare(page.recoverPick, 12, "picked, and left picked")
+        }
+
+        /// A hand that trembles on a press is still a click, not a drag of the list (rules-refs/app-ui.md「行は渡された
+        /// ドラッグを手放さない」).
+        function test_a_hand_that_trembles_on_a_row_still_picks_it() {
+            showEntries(manyEntries(30))
+            scrollTo(10)
+            const from = pane.entryList.contentY
+            const x = pane.entryList.width / 2
+            const y = 2 * Theme.rowHeight + 1
+            mousePress(pane.entryList, x, y)
+            // In steps, as a hand moves: past the drag distance the list takes the press, and still inside the row.
+            for (let i = 1; i <= 7; i++)
+                mouseMove(pane.entryList, x, y + i * 3)
+            mouseRelease(pane.entryList, x, y + 21)
+            compare(page.recoverPick, 12, "the row is picked")
+            compare(pane.entryList.contentY, from, "and the list did not slide")
+        }
+
+        /// A press on the stand-in is a press on the row it stands for — the entry put down — and on nothing under it.
+        function test_a_press_on_the_stand_in_answers_as_its_row_and_only_that() {
+            showEntries(manyEntries(30))
+            page.recoverPick = 3
+            scrollTo(10)
+            pinAt("top", "main-3 reset")
+            page.pickPresses = []
+            mouseClick(pane.entryList, pane.entryList.width / 2, pinMiddle())
+            compare(page.pickPresses, [3], "one press, on the entry it stands for — none on the row under it")
+            compare(page.recoverPick, -1, "the entry is put down")
+            tryCompare(pane, "pinPlace", "none")
+            verify(!pane.pickStandIn.visible)
+            compare(under.presses, 0)
+            // Gone from there, the same place is the row's again.
+            mouseClick(pane.entryList, pane.entryList.width / 2, pinMiddle())
+            compare(page.pickPresses, [3, 10], "the row it stood over answers now")
+        }
+
+        /// The bar stands over the stand-in as it does over the rows: a press on it is the bar's, and the entry stays.
+        function test_a_press_on_the_bar_over_the_stand_in_is_the_bars() {
+            showEntries(manyEntries(30))
+            page.recoverPick = 3
+            scrollTo(10)
+            pinAt("top", "main-3 reset")
+            const bar = pane.entryList.ScrollBar.vertical
+            tryVerify(() => bar.visible, undefined, "the bar stands")
+            page.pickPresses = []
+            const from = pane.entryList.contentY
+            mouseClick(pane.entryList, pane.entryList.width - bar.width / 2, pinMiddle())
+            // The page the press sends glides on after the release, into whatever comes next.
+            tryVerify(() => pane.entryList.contentY < from && !bar.stepping, undefined, "the bar paged the list")
+            compare(page.pickPresses, [], "no press on the entry")
+            compare(page.recoverPick, 3, "it stays picked")
+        }
+
+        /// A wheel over the stand-in scrolls the list under it.
+        function test_a_wheel_over_the_stand_in_scrolls_the_list() {
+            showEntries(manyEntries(30))
+            page.recoverPick = 3
+            scrollTo(10)
+            pinAt("top", "main-3 reset")
+            const from = pane.entryList.contentY
+            mouseWheel(pane.entryList, pane.entryList.width / 2, pinMiddle(), 0, -120)
+            tryVerify(() => pane.entryList.contentY > from && !pane.entryList.moving, undefined, "the rows moved")
+            compare(pane.pinPlace, "top")
         }
     }
 }

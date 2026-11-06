@@ -31,6 +31,8 @@ Item {
     /// its place in the whole list (0 when none is named), `none` picks none, `card` rests a hand on the first entry
     /// the list shows, none picked (the card is in overlay.png), and `restore` / `part:<n>` press the band's `Restore`
     /// for the whole entry / its part n once it is on the graph — a refused press frames the band still standing.
+    /// `short` stands the window at its floor, where the preset's rows overflow the list, and `scroll:<rows>` then
+    /// scrolls the list that far down: what the picked entry's stand-in rides an edge over (`RecoverPane.pickPin`).
     readonly property var looks: Harness.autoActArg === "" ? [] : Harness.autoActArg.split(",")
     readonly property var parts: acts.looks.filter(look => look.startsWith("part:"))
     /// The fold this run asked for, so the sampler knows which width it waits for.
@@ -54,6 +56,10 @@ Item {
     /// How many times the band was told an entry's commits are not on the graph (`RepoPage.recoverReach`, the yellow
     /// `Not loaded on the graph yet`) — never, on a graph that holds them, whatever walks under it.
     property int notLoaded: 0
+    /// The window at its floor, and how many rows down this run scrolls the list (-1 for none).
+    readonly property bool shortWanted: acts.looks.indexOf("short") >= 0
+    readonly property var scrolls: acts.looks.filter(look => look.startsWith("scroll:"))
+    readonly property int scrollRows: acts.scrolls.length > 0 ? Number(acts.scrolls[0].substring("scroll:".length)) : -1
 
     /// Runs `act` if it is this family's and says whether it was; `AutoActDriver` asks each family in turn.
     function run(act, arg) {
@@ -74,9 +80,12 @@ Item {
             page.foldByHand(true)
         if (act === "recover-open" && !page.recoverOpen)
             page.toggleRecover()
-        // The pick, the hand's rest and the band's press are each the stage the frame waits behind.
+        if (acts.shortWanted)
+            page.Window.window.height = Math.ceil(page.Window.window.floorHeight)
+        // The pick, the hand's rest, the band's press and the scroll are each the stage the frame waits behind.
         recoverTimer.order = (acts.pickWanted >= 0 ? ["picked"] : [])
-            .concat(acts.cardWanted ? ["rested"] : acts.restoreWanted ? ["pressed"] : [])
+            .concat(acts.cardWanted ? ["rested"] : acts.restoreWanted ? ["pressed"]
+                    : acts.scrollRows >= 0 ? ["scrolled"] : [])
         recoverTimer.start()
         return true
     }
@@ -89,6 +98,8 @@ Item {
                + " entries=" + page.recoverEntries.length
                // What the filter left, and whether an entry's card is out.
                + " listed=" + sidebarPane.autoRecover.shownEntries.count
+               // Where the picked entry's stand-in stands: its own seat, an edge, or none with its row on screen.
+               + " pin=" + sidebarPane.autoRecover.pinPlace
                + " card=" + sidebarPane.autoRecover.cardOpen
                + " pick=" + page.recoverPick
                // The picked entry drawn on the graph for now.
@@ -132,11 +143,17 @@ Item {
             const past = graph.provisionalWalked && graph.provisionalTipRow < 0
             return { "shown": graph.provisionalOn, "drawn_or_past": drawn || past, "walked": graph.provisionalWalked }
         }
+        /// The list laid out at the floor the run asked for: its rows overflow it.
+        function listShort() {
+            const list = sidebarPane.autoRecover.entryList
+            return acts.shortWanted ? { "overflows": list.contentHeight > list.height } : ({})
+        }
         onTriggered: {
             const op = recoverTimer
-            if (!Awaited.all("recover_ready", {
+            // The window at its floor before the pick: the graph lands on the entry's tip in the height it stands at.
+            if (!Awaited.all("recover_ready", Object.assign({
                     "sized": !(sidebarPane.width <= 0 || sidebarPane.height <= 0),
-                    "fold": acts.foldWanted === (Math.round(sidebarPane.width) === Theme.railWidth) }))
+                    "fold": acts.foldWanted === (Math.round(sidebarPane.width) === Theme.railWidth) }, op.listShort())))
                 return
             // A blink is told by its count once it is over: the seat out, the animation stopped.
             if (acts.blinkWanted && !Awaited.all("recover_blink", { "over": !page.recoverBlinking }))
@@ -178,6 +195,16 @@ Item {
                 op.stop()
                 restoreTimer.start()
                 return
+            }
+            if (acts.scrollRows >= 0 && !op.at("scrolled")) {
+                if (!Awaited.all("recover_scroll", op.pickShown()))
+                    return
+                const list = sidebarPane.autoRecover.entryList
+                if (!op.input("scrolled", () => {
+                    list.contentY = list.clampY(list.originY + acts.scrollRows * Theme.rowHeight)
+                    return true
+                }))
+                    return
             }
             op.complete({ "name": "recover_pick", "when": () => op.pickShown(), "report": () => acts.frameLine() })
         }

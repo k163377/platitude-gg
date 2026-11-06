@@ -8,6 +8,12 @@ import platitude.ui
 // entry is picked at a time, and what it would bring back is told over the graph (`RecoverBand`) — a picked row opens
 // nothing in place: the left panel is too narrow; a rest on an entry opens its card, as a graph row's does
 // (`RecoverHoverCard`). The list's band, filter, rows and rings are user decisions — ask before changing.
+//
+// **The entry picked is always in the list** (user decision — ask before changing): what the graph is showing has a
+// name on screen however the list scrolls. As the current branch's stand-in does (`HeadPinRow`): its row scrolled off,
+// a stand-in rides the edge the row went out of and steps aside once the row is back; a filter that leaves the row out
+// gives the stand-in a seat of its own at the list's head, the rows moving down by it (`topMargin`). It is a row in
+// every way (`pickPin`): it draws, opens its card and answers a press as the row it stands for.
 Rectangle {
     id: pane
 
@@ -36,6 +42,7 @@ Rectangle {
     /// else the reader typed, and the rows moving under the hand are theirs (`HandWatch.rowsMoved`: the card goes,
     /// and the row that came under a still hand opens only once the hand has moved).
     function refilter(read) {
+        Qt.callLater(pane.weighPinned)
         const line = filterField.text
         // Nothing typed leaves every entry in without asking the rule entry by entry.
         const asked = line.trim() !== ""
@@ -53,8 +60,11 @@ Rectangle {
             rowKeep.arriving()
         pane.keepRows(kept)
         // An entry the read took away takes its card with it, the hand inside or not: what it said is gone. Asked of
-        // the rows as now kept — the list lays out the row's going at its next polish.
-        entryKeep.forget(target => !kept.some(shown => "entry:" + shown.key === target.key), "gone")
+        // the rows as now kept — the list lays out the row's going at its next polish — but for a card on the stand-in,
+        // which hangs off no row and stands for as long as its entry does.
+        entryKeep.forget(target => target.row === pickPin
+                                   ? !pane.entries.some(entry => "entry:" + entry.key === target.key)
+                                   : !kept.some(shown => "entry:" + shown.key === target.key), "gone")
         if (read === true)
             rowKeep.arrived()
         else
@@ -108,6 +118,45 @@ Rectangle {
         if (rows.count > kept.length)
             rows.remove(kept.length, rows.count - kept.length)
     }
+    /// The entry picked, as one answer: `{key, at, row}` — its key ("" for none), its number in the whole list, and its
+    /// row's place in the rows the filter leaves (-1 for no row). **Weighed a turn after the pick or the entries move,
+    /// and only here**: the page moves the two one at a time through a read, and a number read against entries it does
+    /// not belong to names another entry. Nothing the stand-in hangs on sees that in between: it would open and shut
+    /// the seat, and hand the stand-in another key under the hand.
+    property var pinned: ({ "key": "", "at": -1, "row": -1 })
+    function weighPinned() {
+        const entry = pane.entries[pane.picked]
+        const key = entry !== undefined ? entry.key : ""
+        const rows = pane.shownEntries
+        let row = -1
+        for (let i = 0; key !== "" && i < rows.count && row < 0; i++) {
+            if (rows.get(i).key === key)
+                row = i
+        }
+        pane.pinned = { "key": key, "at": key !== "" ? pane.picked : -1, "row": row }
+    }
+    onPickedChanged: Qt.callLater(pane.weighPinned)
+    /// That row's top in the list's content — computed, since the view may not have built it (`GraphHeadPin.rowTop`).
+    /// Its place is asked of the whole row: cut by an edge, the row is off it.
+    readonly property real pinRowTop: list.originY + pane.pinned.row * Theme.rowHeight
+    readonly property bool pinRowAbove: pane.pinRowTop < list.contentY
+    readonly property bool pinRowBelow: pane.pinRowTop + Theme.rowHeight > list.contentY + list.height
+    /// A filter left the picked entry's row out: its stand-in takes a row's height at the list's head.
+    readonly property bool pinSeated: pane.pinned.key !== "" && pane.pinned.row < 0
+    /// The seat is open over a list at its head: the rows go down by it, the first of them whole under it. Further down
+    /// the list the stand-in rides the edge, as it does scrolled. Flickable moves the view only for a margin that
+    /// leaves it out of bounds (`QQuickFlickablePrivate::fixup`), which opening never does on a list that overflows.
+    function seatRows() {
+        list.forceLayout()
+        if (list.topMargin > 0 && list.contentY <= list.originY)
+            list.contentY = list.originY - list.topMargin
+    }
+    /// Where the stand-in stands — `seat`, `top`, `bottom`, or `none` while the row itself is on screen or nothing is
+    /// picked.
+    readonly property string pinPlace: pane.pinSeated ? "seat"
+                                     : pane.pinned.key === "" ? "none"
+                                     : pane.pinRowAbove ? "top"
+                                     : pane.pinRowBelow ? "bottom" : "none"
     /// The hand over the list (`HandWatch`), as the left panel keeps one: the rows read their light and their ask
     /// off it by geometry — a row the list's scrolling or a read brought under a still hand lights as the row under
     /// it, and its card waits for the hand to move.
@@ -128,11 +177,13 @@ Rectangle {
         if (pane.visible && !filterField.activeFocus)
             list.forceActiveFocus()
     }
-    /// Automation only: the list, the hand and the card, for a run that moves the first two or puts the hand in the
-    /// third (`tst_recoverpane`, `recover-reread`), and the filter's field, for a caret put in it.
+    /// Automation only: the list, the hand, the card and the stand-in, for a run that moves the first two, puts the
+    /// hand in the third or reads the fourth (`tst_recoverpane`, `recover-reread`), and the filter's field, for a caret
+    /// put in it.
     readonly property alias entryList: list
     readonly property alias hand: paneHand
     readonly property alias entryHoverCard: entryCard
+    readonly property alias pickStandIn: pickPin
     readonly property alias filterBox: filterField
     onEntriesChanged: pane.refilter(true)
     onNowChanged: pane.refilter(true)
@@ -161,6 +212,8 @@ Rectangle {
         const key = "entry:" + row.key
         if (!inside) {
             entryKeep.unpoint(key)
+            // …and whatever the row asked for, which it may stand for no more: the stand-in with its entry gone.
+            entryKeep.unpoint(entryKeep.keyOf(target => target.row === row))
             return
         }
         entryKeep.point({ "key": key, "row": row, "x": pointerX,
@@ -321,7 +374,10 @@ Rectangle {
         // The rows moved under the hand: the reader's wheel and bar (`HandWatch.rowsMoved`) — the hand the rows' tips
         // read too (`TipAsk.hand`). The list put back after a read tells the hand itself (`rowKeep`).
         rowsHand: paneHand
+        shield: pickPin
+        topMargin: pane.pinSeated ? Theme.rowHeight : 0
         onContentYChanged: if (!rowKeep.busy) paneHand.rowsMoved()
+        onTopMarginChanged: pane.seatRows()
         delegate: EntryRow {
             pickedIndex: pane.picked
             page: pane.curPage
@@ -329,6 +385,42 @@ Rectangle {
             now: pane.now
             // By the pane's name: inside the component, `paneHand` is the row's own property.
             paneHand: pane.hand
+        }
+    }
+    // The picked entry's stand-in. On the list's frame, not in its content, where a declared child would scroll with
+    // the rows (`parent`); over the rows, under the bar (`AutoScrollBar`).
+    EntryRow {
+        id: pickPin
+        parent: list
+        // No number in the rows: it is the same entry, wherever its row stands.
+        index: -1
+        key: pane.pinned.key
+        at: pane.pinned.at
+        pickedIndex: pane.pinned.at
+        page: pane.curPage
+        host: pane
+        now: pane.now
+        paneHand: pane.hand
+        visible: pane.pinPlace !== "none"
+        width: list.width
+        y: pane.pinPlace === "bottom" ? list.height - pickPin.height : 0
+        // Takes the place of the row's own handler: a row handed another entry is another row under the hand, where
+        // this is the one stand-in, the hand still on it.
+        onKeyChanged: pickPin.syncHand()
+        // Coming onto the hand or going from under it, what stands under the hand changed with or without the rows
+        // moving: what came there lights, and opens nothing until the hand moves, as a row brought under it
+        // (`HandWatch.rowsMoved`). Elsewhere it is nothing to the hand, and the row the hand is on keeps what it has
+        // out. Going, `handOn` says where the hand last was: its place may have moved already.
+        onVisibleChanged: {
+            if (pickPin.visible ? pane.hand.over(pickPin) : pickPin.handOn)
+                pane.hand.rowsMoved()
+        }
+        // On the side the rows pass under (`HeadPinRow`).
+        Rectangle {
+            width: parent.width
+            y: pane.pinPlace === "bottom" ? 0 : parent.height - height
+            height: Theme.borderWidth
+            color: Theme.borderSubtle
         }
     }
     // The first read, before any entry: a ring in a row's height, then the rows (`AppCombo`).
@@ -344,7 +436,7 @@ Rectangle {
     Label {
         visible: pane.curPage !== null && pane.curPage.recoverAnswered && pane.shownEntries.count === 0
         x: (pane.width - width) / 2
-        y: filterRow.y + filterRow.height + (Theme.rowHeight - height) / 2
+        y: filterRow.y + filterRow.height + list.topMargin + (Theme.rowHeight - height) / 2
         // The words list and search boxes everywhere answer an empty search with (VS Code, Windows, Chrome).
         text: pane.entries.length === 0 ? qsTr("Nothing was thrown away here") : qsTr("No results found")
         font.pixelSize: Theme.fontMd
@@ -437,20 +529,19 @@ Rectangle {
         onYChanged: row.placeMoved()
         function syncHand() {
             const hand = row.paneHand
-            if (hand === null || !hand.known || !row.visible || row.pooled) {
-                row.pointerRowX = -1
-                return
-            }
+            row.pointerRowX = hand === null || !hand.known || !row.visible || row.pooled ? -1 : row.handX(hand.at)
+        }
+        /// Where along the row a place in the window is, or -1 — off the row, off the list, or on what stands over the
+        /// rows (`AppListView.shield`). The stand-in is no row of the list: no view to ask.
+        function handX(at) {
             const view = row.ListView.view
             if (view) {
-                const v = view.mapFromItem(null, hand.at.x, hand.at.y)
-                if (v.x < 0 || v.y < 0 || v.x >= view.width || v.y >= view.height) {
-                    row.pointerRowX = -1
-                    return
-                }
+                const v = view.mapFromItem(null, at.x, at.y)
+                if (v.x < 0 || v.y < 0 || v.x >= view.width || v.y >= view.height || view.shieldAt(at))
+                    return -1
             }
-            const p = row.mapFromItem(null, hand.at.x, hand.at.y)
-            row.pointerRowX = p.x >= 0 && p.y >= 0 && p.x < row.width && p.y < row.height ? p.x : -1
+            const p = row.mapFromItem(null, at.x, at.y)
+            return p.x >= 0 && p.y >= 0 && p.x < row.width && p.y < row.height ? p.x : -1
         }
         function placeMoved() {
             const hand = row.paneHand
@@ -460,9 +551,7 @@ Rectangle {
                 hand.rowsMoved()
                 return
             }
-            const p = row.mapFromItem(null, hand.at.x, hand.at.y)
-            const over = p.x >= 0 && p.y >= 0 && p.x < row.width && p.y < row.height
-            if (over !== (row.pointerRowX >= 0))
+            if ((row.handX(hand.at) >= 0) !== (row.pointerRowX >= 0))
                 hand.rowsMoved()
         }
         // The card opens on a rest, as a graph row's does (規約 §hover のツールチップ「補足は待ってから開く」), and goes
@@ -485,8 +574,15 @@ Rectangle {
         }
         ListView.onReused: row.pooled = false
         onKeyChanged: row.pointerRowX = -1
-        TapHandler {
-            onTapped: row.page.pickRecover(row.at)
+        // Presses only: the hand is the pane's (`syncHand`). Not a `TapHandler`: with one on the stand-in and one on
+        // the row under it, both answer the one press (`tst_recoverpane`). The second click of a double-click is no
+        // press of its own (`onDoubleClicked` connected is what says so to `QQuickMouseArea`): with the stand-in gone
+        // on the first, it would pick the row that came under the hand.
+        MouseArea {
+            anchors.fill: parent
+            preventStealing: true
+            onClicked: row.page.pickRecover(row.at)
+            onDoubleClicked: {}
         }
 
         // The mark of what it took and where, in the seat a left menu row draws its own in (`NameCell`): the left

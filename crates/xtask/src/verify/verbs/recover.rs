@@ -26,6 +26,12 @@ pub(super) const TABLE: &[Verb] = &[
             // A filter that leaves nothing: `No results found` stands
             // where the rows would.
             (Arg::Has("filter:zzz"), "entries=19 listed=0"),
+            // The picked entry stays in the list however it stands: its stand-in takes
+            // a seat of its own under a filter that leaves its row out, and rides the
+            // edge its row went out of (`RecoverPane.pickPin`).
+            (Arg::Has("filter:Deleted"), "pin=seat card=false pick=3"),
+            (Arg::Has("scroll:"), "pin=top card=false pick=0"),
+            (Arg::Has("short"), "pin=bottom card=false pick=18"),
             (Arg::Has("card"), "card=true pick=-1"),
             // Past the graph's window: the press waits for the graph to
             // walk there.
