@@ -11,12 +11,8 @@ Item {
     width: 300
     height: 400
 
-    /// The page's own handler, on the key's way up from whatever in the list holds the keyboard.
+    /// How many Escapes reached the page's own handler.
     property int escapes: 0
-    Keys.onEscapePressed: event => {
-        root.escapes++
-        event.accepted = true
-    }
 
     /// What lies under the list in the left menu — the filter, its fold block, the sections. Anything it hears through
     /// the list is a leak; the strip right of the list leaves some of it bare, for the hand to start from.
@@ -59,13 +55,22 @@ Item {
         }
     }
 
-    RecoverPane {
-        id: pane
-        anchors.left: parent.left
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        width: 260
-        curPage: page
+    /// The page's shape around the list: a focus scope, which catches a keyboard let go in it, with its handler on the
+    /// key's way up (`RepoPage`).
+    FocusScope {
+        anchors.fill: parent
+        Keys.onEscapePressed: event => {
+            root.escapes++
+            event.accepted = true
+        }
+        RecoverPane {
+            id: pane
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: 260
+            curPage: page
+        }
     }
 
     TestCase {
@@ -93,6 +98,7 @@ Item {
             return out.join(",")
         }
         function init() {
+            pane.visible = true
             page.recoverEntries = []
             // The list laid out empty before the case writes its own rows: emptied and filled again with no layout
             // between, the last case's delegates can stay standing.
@@ -116,7 +122,6 @@ Item {
             under.presses = 0
             under.wheels = 0
             root.escapes = 0
-            pane.visible = true
             pane.entryList.focus = false
             pane.filterBox.focus = false
             pane.filterText = ""
@@ -434,6 +439,18 @@ Item {
             verify(!pane.entryList.activeFocus, "the list kept the keyboard off screen")
             pane.visible = true
             verify(!pane.entryList.activeFocus, "the list took the keyboard back by coming on screen")
+        }
+
+        /// The band's `✕` holds the keyboard after its press, as a button does, and goes off screen with the list it
+        /// closed: Space opens nothing again, and the next Escape still climbs to the page.
+        function test_space_after_the_close_opens_nothing() {
+            mouseClick(pane, pane.width - 2, 2)
+            verify(!page.recoverOpen)
+            pane.visible = false
+            keyClick(Qt.Key_Space)
+            verify(!page.recoverOpen, "Space on the hidden close opened the list again")
+            keyClick(Qt.Key_Escape)
+            compare(root.escapes, 1, "Escape went quiet")
         }
 
         /// An entry a read takes out of the log takes its card with it, the hand inside or not: what it said is gone.

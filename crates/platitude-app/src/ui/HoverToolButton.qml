@@ -59,6 +59,14 @@ ToolButton {
         href: hoverToolButtonSelf.tipHref
     }
 
+    // Let go off screen (デザイン規約 §矢印で履歴を辿る「画面から退いたペインはキーボードを手放す」): a press leaves the
+    // keyboard on the button, and Qt keeps active focus on an item it made invisible — a `✕` that took its pane away
+    // would go on hearing Space and Enter, and press again. Net: `tst_recoverpane`.
+    onVisibleChanged: {
+        if (!hoverToolButtonSelf.visible)
+            hoverToolButtonSelf.focus = false
+    }
+
     background: Rectangle {
         implicitWidth: Theme.iconLg
         implicitHeight: Theme.iconLg
