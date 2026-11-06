@@ -587,8 +587,10 @@ Item {
             if (Harness.autoAct === "band-actions-alert" && op.at("start")) {
                 if (!Awaited.all("band_actions_ready", op.terms(false, false)))
                     return
+                // Over again (below), the refusal the first generation drew is on its way or standing.
                 op.input("pushed", () => {
-                    page.pushNow()
+                    if (op.generation() === 1)
+                        page.pushNow()
                 })
                 return
             }
@@ -606,6 +608,12 @@ Item {
                     }
                     return Math.round(window.width) === wanted
                 })
+                return
+            }
+            // A read landing after the window took the width can reword push, which the width is measured off: the
+            // target has moved from under it, and only the next generation can size it again.
+            if (Math.round(window.width) !== op.wanted()) {
+                op.again()
                 return
             }
             if (op.at("sized")) {
