@@ -36,6 +36,17 @@ ListView {
         if (appList.letsGoOffScreen && !appList.visible)
             appList.focus = false
     }
+    /// What stands over these rows and is no row: a stand-in on an edge of the list (`HeadPinRow`, `GraphHeadPin`'s
+    /// press area, `RecoverPane.pickPin`). A row under it is not under the hand — rows read the hand by geometry, and
+    /// the stand-in's own hand is the same pane's.
+    property Item shield: null
+    function shieldAt(scenePoint) {
+        const over = appList.shield
+        if (over === null || !over.visible)
+            return false
+        const p = over.mapFromItem(null, scenePoint.x, scenePoint.y)
+        return p.x >= 0 && p.y >= 0 && p.x < over.width && p.y < over.height
+    }
     /// Automation only: started and drifted without a pointer (a middle button cannot be injected).
     readonly property alias hand: hand
 

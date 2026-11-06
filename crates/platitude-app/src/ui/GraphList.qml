@@ -116,16 +116,6 @@ AppListView {
     /// hover: a row the graph moved under a still hand lights, and opens nothing until the hand moves (デザイン規約
     /// §hover のツールチップ「手が動いていない所へ来た行は開かない」).
     required property HandWatch hand
-    /// What stands over these rows at the hand's place and is not a row: the current branch's stand-in. A row under
-    /// it is not under the hand.
-    property Item shield: null
-    function shieldAt(scenePoint) {
-        const pin = graphList.shield
-        if (pin === null || !pin.visible)
-            return false
-        const p = pin.pressArea.mapFromItem(null, scenePoint.x, scenePoint.y)
-        return p.x >= 0 && p.y >= 0 && p.x < pin.pressArea.width && p.y < pin.pressArea.height
-    }
     /// The box was taken down: the gesture is spent, so the click that took it down is no second click
     /// (`GraphPane.stopNaming`).
     function forgetClicks() {

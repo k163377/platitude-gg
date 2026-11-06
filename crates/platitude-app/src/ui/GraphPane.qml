@@ -459,7 +459,7 @@ Rectangle {
         listKey: graphArea.listKey
         cardKey: graphArea.cardKey
         hand: paneHand
-        shield: headPin
+        shield: headPin.pressArea
         // The arrows are answered here, where the history is walked (規約 §矢印で履歴を辿る). `isAutoRepeat` is the only
         // thing that tells a run apart from a press (`GraphRowWalk.noteStep`). Attached, so they stay at this use site:
         // inside `GraphList` they would need the walk handed in, and the walk already reads the list (`walk.view`). On

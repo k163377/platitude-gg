@@ -281,7 +281,7 @@ Rectangle {
     readonly property alias wordsOpacity: subject.opacity
     /// The chip, sheets and all — what its card stands on, for the headless run.
     readonly property alias chipItem: pinStack
-    /// The area a press lands in — what the rows under the stand-in are shielded by (`GraphList.shieldAt`), as a row's
+    /// The area a press lands in — what the rows under the stand-in are shielded by (`AppListView.shield`), as a row's
     /// own (`GraphRowDelegate.pressArea`).
     readonly property alias pressArea: pinMouse
     /// The boundaries' lines over the row's grounds, for the headless run (PGG_AUTO_ACT=graph-divider).

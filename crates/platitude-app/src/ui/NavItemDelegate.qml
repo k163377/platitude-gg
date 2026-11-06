@@ -329,13 +329,11 @@ Item {
             on = p.x >= 0 && p.y >= 0 && p.x < navRow.width && p.y < navRow.rowHeight
         }
         // Inside the list's own box: a row kept built past its edge (`cacheBuffer`) lies under the band and the next
-        // section, drawn not at all. And not under the stand-in on its edge (`NavList.shieldAt`) — the worktree's file
-        // lists are plain `AppListView`s, with none.
+        // section, drawn not at all. And not under the stand-in on its edge (`AppListView.shieldAt`).
         const view = navRow.ListView.view
         if (on && view) {
             const v = view.mapFromItem(null, hand.at.x, hand.at.y)
-            on = v.x >= 0 && v.y >= 0 && v.x < view.width && v.y < view.height
-                 && !(view.shieldAt !== undefined && view.shieldAt(hand.at))
+            on = v.x >= 0 && v.y >= 0 && v.x < view.width && v.y < view.height && !view.shieldAt(hand.at)
         }
         if (shifted) {
             navRow.slid = navRow.handOn && !on && !hand.disturbed

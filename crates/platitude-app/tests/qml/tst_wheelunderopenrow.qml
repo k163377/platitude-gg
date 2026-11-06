@@ -307,7 +307,7 @@ Item {
             tryVerify(() => under.washLit && !walked.washLit, undefined, "the hand's own move hands it on")
         }
 
-        /// The stand-in on the list's edge stands over a row (`NavList.shield`): the hand on it is not on that row,
+        /// The stand-in on the list's edge stands over a row (`AppListView.shield`): the hand on it is not on that row,
         /// which neither lights nor opens; with the stand-in gone, the hand's move is on the row.
         function test_a_row_under_the_stand_in_is_not_under_the_hand() {
             list.shield = cover

@@ -28,17 +28,6 @@ AppListView {
     property HandWatch paneHand: null
     // The same hand for the tips the rows put out (`TipAsk.hand`).
     rowsHand: navList.paneHand
-    /// What stands over these rows and is not a row: the current branch's stand-in on an edge of the list
-    /// (`HeadPinRow`). A row under it is not under the hand — the rows read the hand by geometry, and the stand-in's
-    /// own hand is the same panel's.
-    property Item shield: null
-    function shieldAt(scenePoint) {
-        const pin = navList.shield
-        if (pin === null || !pin.visible)
-            return false
-        const p = pin.mapFromItem(null, scenePoint.x, scenePoint.y)
-        return p.x >= 0 && p.y >= 0 && p.x < pin.width && p.y < pin.height
-    }
     /// Whether rows open their facts under themselves (`NavRowFacts`), and the section that knows which worktree
     /// has a branch out (`worktreeHolding`). Separate, since the WORKTREES list opens rows but has nothing to ask it.
     property bool offersFacts: false

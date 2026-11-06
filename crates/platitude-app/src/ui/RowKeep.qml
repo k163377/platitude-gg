@@ -65,7 +65,7 @@ QtObject {
         keep.rowAt = keep.noted ? keep.row.mapToItem(null, 0, 0).y : 0
     }
     /// The delegate of these lists under a window place, or null: off the lists, between their rows, under what stands
-    /// over them and is no row (`NavList.shieldAt` — the current branch's stand-in).
+    /// over them and is no row (`AppListView.shieldAt`).
     function rowUnder(at) {
         for (let i = 0; i < keep.views.length; i++) {
             const view = keep.views[i]
@@ -74,7 +74,7 @@ QtObject {
             const p = view.mapFromItem(null, at.x, at.y)
             if (p.x < 0 || p.y < 0 || p.x >= view.width || p.y >= view.height)
                 continue
-            if (view.shieldAt !== undefined && view.shieldAt(at))
+            if (view.shieldAt(at))
                 return null
             const row = view.itemAt(p.x + view.contentX, p.y + view.contentY)
             return row !== null && keep.standing(row) ? row : null
