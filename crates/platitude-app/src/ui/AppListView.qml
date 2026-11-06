@@ -28,6 +28,14 @@ ListView {
     /// the rows read to tell a hand that moved from rows that moved under it (`TipAsk.hand`, found through this). Null
     /// for a list whose pane keeps none.
     property HandWatch rowsHand: null
+    /// For a list that takes the keyboard for itself: gives it up on leaving the screen (デザイン規約 §矢印で履歴を辿る
+    /// 「画面から退いたペインはキーボードを手放す」). Qt keeps active focus on an item it made invisible and keys keep
+    /// arriving; only `focus = false` lets go. Off where a walk lets go for its whole pane (`FileRowWalk`, `DiffRowWalk`).
+    property bool letsGoOffScreen: false
+    onVisibleChanged: {
+        if (appList.letsGoOffScreen && !appList.visible)
+            appList.focus = false
+    }
     /// Automation only: started and drifted without a pointer (a middle button cannot be injected).
     readonly property alias hand: hand
 

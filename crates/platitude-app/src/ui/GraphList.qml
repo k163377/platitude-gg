@@ -35,13 +35,9 @@ AppListView {
     function takeKeyboard() {
         graphList.forceActiveFocus()
     }
-    /// Gives the keyboard up when the pane leaves the screen: Qt keeps active focus on an item it made invisible and
-    /// keys keep arriving (only `focus = false` lets go) — with a diff open over the graph, the arrows would walk the
-    /// selection behind it and so close the diff. A tab switch leaves by the same road.
-    onVisibleChanged: {
-        if (!graphList.visible)
-            graphList.focus = false
-    }
+    // With a diff open over the graph, the arrows would walk the selection behind it and so close the diff. A tab switch
+    // leaves by the same road.
+    letsGoOffScreen: true
     flickDeceleration: 8000
     maximumFlickVelocity: 9000
     // No header band here: this sliver drops the first row so its bottom line meets the neighbouring bands' bottom

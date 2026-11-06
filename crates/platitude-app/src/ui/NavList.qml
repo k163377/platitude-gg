@@ -100,11 +100,8 @@ AppListView {
         if (navList.gestures !== null)
             navList.forceActiveFocus()
     }
-    // Let go off screen (a folded section, the folded rail): Qt keeps active focus on an item it made invisible.
-    onVisibleChanged: {
-        if (!navList.visible)
-            navList.focus = false
-    }
+    // A folded section, the folded rail.
+    letsGoOffScreen: true
     /// The menu key on the left menu (デザイン規約 §メニュー のキーボード): the row clicked last answers as its
     /// right-click does (`NavItemDelegate.rowPressed`), with the menu standing under the left end of the row's own
     /// line. The row comes on screen first, as little as will do; a row a filter or a fold hides opens nothing, and a
