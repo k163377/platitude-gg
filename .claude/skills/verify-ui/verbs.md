@@ -428,7 +428,7 @@
 - `replace-remote-box`(リモートブランチの差し替えの入力欄 — 詳細は `AutoActNavBoxVerbs.qml`)
 - `avatar-rest` / `avatar-hover` / `avatar-tip` / `avatar-assign` / `avatar-badge` / `avatar-settings` / `avatar-row-lit` / `avatar-remove` / `avatar-combo`(アバター一式: 静止 / ペンのバッジ / バッジの文 / 与える / バッジ / 設定一覧 / Remove の hover(赤い側)/ 回数押しで消した後 / 候補の combo — 詳細は `AutoActFindVerbs.qml` / `WindowSettingsActs.qml`、判定は `verify/verbs/identity.rs`)
 - `avatar-enter`(**候補欄の Enter が `Choose avatar…` の扉を開く**(`SettingsAppPane.qml`)。**絵では判定できない** — 詳細は `WindowSettingsActs.qml` の `avatarEnterTimer`、判定は `verify/verbs/identity.rs`)
-- `recover [fold,lit,blink]` / `recover-open [<n>|none][,fold,lit,card,filter:<語>,restore,part:<n>,short,scroll:<行>,<menu|dbl|again>:<tip|passed>,dbl:list]`(破棄記録(`platitude_core::discards`)の席・一覧・帯・カード・復元・選択中の行の固定・仮表示中の行の右クリックとダブルクリックと改名。**`--preset discards`** が全種を持ち(番号は `xtask::demo::discards`)、**`--preset discards-deep`** は窓の外の 1 件 — 引数と報告行は `AutoActRecoverVerbs.qml`、判定は `verify/verbs/recover.rs`)
+- `recover [fold,lit,blink]` / `recover-open [<n>|none][,fold,lit,card,filter:<語>,restore,part:<n>,short,scroll:<行>,<menu|dbl|again>:<tip|passed>,dbl:list,floor]`(破棄記録(`platitude_core::discards`)の席・一覧・帯・カード・復元・選択中の行の固定・仮表示中の行の右クリックとダブルクリックと改名。**`--preset discards`** が全種を持ち(番号は `xtask::demo::discards`)、**`--preset discards-deep`** は窓の外の 1 件、**`--preset discards-ceilings`** は帯の天井(長い名前・枝 8 本と 30 本ほか)、`floor` は窓を床へ下ろしてログを上げ、帯の下のグラフの行数を `graphRows=` で言う — 引数と報告行は `AutoActRecoverVerbs.qml`、判定は `verify/verbs/recover.rs`)
 - `recover-escape --preset discards`(仮表示の Esc: 下りる・読み直しの下でも下りる・キーボードが一覧へ戻る・F5 の下で黄色の `Not loaded` を言わない。**絵では判定できない** — 詳細は `AutoActRecoverVerbs.qml` の `escapeTimer`、判定は `verify/verbs/recover.rs`)
 
 ## 動詞ごとの読み方・仕込み

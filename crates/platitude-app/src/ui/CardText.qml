@@ -49,6 +49,9 @@ Item {
     property real capHeight: 0
     /// The same cap in lines; wins over `capHeight`, 0 = not asked for.
     property int capRows: 0
+    /// A line the cap cuts puts its whole up under the hand, as a cut name does (`cutPointed`): for a line whose rest
+    /// nothing near it says. A card with a way to the whole of it of its own leaves this off (`CommitHoverCard`).
+    property bool tipsCap: false
     /// The mark's ground, opaque over the line it cuts (`AppCardFace` paints `bgElevated`).
     property color ground: Theme.bgElevated
     /// Names in the line that wear their kind's mark in front of them (デザイン規約 §ref の種別「名前の印」):
@@ -250,9 +253,11 @@ Item {
     /// The pointer is on the words. The card ORs this into its `pointerInside` (`AppCard.contentPointed` —
     /// rules-refs/app-ui.md「hover で開くものの 5 つの罠」の (2)).
     readonly property alias pointed: wordHover.hovered
-    /// A hand on a name `holdsNames` cut — what puts the whole line up. One binding over its inputs, since
-    /// `positionAt` is a call.
+    /// A hand on a name `holdsNames` cut, or anywhere on a line `tipsCap` says the cap cut — what puts the whole line
+    /// up. One binding over its inputs, since `positionAt` is a call.
     readonly property bool cutPointed: {
+        if (cardText.tipsCap && cardText.clipped && wordHover.hovered)
+            return true
         const cuts = cardText.held.cuts
         if (cuts.length === 0 || !wordHover.hovered || field.text === "" || field.width <= 0)
             return false
@@ -263,7 +268,8 @@ Item {
         })
     }
     /// The whole line's names behind their marks, for the tip the cut puts up (`TipAsk.marksNow`).
-    readonly property var tipMarks: cardText.held.cuts.length > 0 ? cardText.marks : []
+    readonly property var tipMarks: cardText.held.cuts.length > 0 || (cardText.tipsCap && cardText.clipped)
+                                    ? cardText.marks : []
     /// One line's height: the field is laid out in one font, so its height divides by its line count exactly.
     readonly property real lineHeight: field.lineCount > 0 ? field.contentHeight / field.lineCount : 0
     /// How many whole lines the cap leaves room for. A height taken at its word cuts a line through the waist, with the

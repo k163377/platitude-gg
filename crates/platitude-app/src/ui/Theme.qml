@@ -234,4 +234,12 @@ QtObject {
     // 設定画面: the category rail (デザイン規約 §レイアウト初期値 — not the sidebar's 260). The longest label likely to
     // come (`Keyboard shortcuts`-sized) is in the 120s px; with the row's inner 8 on both sides, 160.
     readonly property int settingsRailWidth: 160
+    // 破棄記録の帯 (デザイン規約 §窓の床; user decision — ask before changing): git puts no ceiling on the branches one
+    // rebase moves, and the band stands over the graph it describes. A one-line heading, the date and five one-line
+    // parts fit in Noto Sans JP, the tallest of the UI's faces; more scroll.
+    readonly property int recoverBandMaxHeight: 164
+    // Its heading's lines at the most: a sentence of two long names at the widths a window usually has.
+    readonly property int recoverBandHeadRows: 2
+    // What the graph keeps under the band at its tallest, in rows, with the window at its floor.
+    readonly property int recoverBandGraphRows: 3
 }

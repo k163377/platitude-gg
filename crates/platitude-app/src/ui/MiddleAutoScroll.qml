@@ -21,7 +21,7 @@ import platitude.ui
 //
 // Placement: `AppListView` holds one; a pane that lays another hand over its rows (graph, diff, log) turns that one
 // off (`AppListView.ownsHand`) and declares its own after the hand it overlays; a bare `Flickable` (the right pane's
-// two blocks, the settings chapters) and a combo card's `ListView` seat one of their own; a text frame
+// two blocks, settings chapters, the discard band) and a combo card's `ListView` seat one of their own; a text frame
 // (`DescriptionBox`, `MessageEditor`'s summary) seats one over the words, standing only while they overflow, and does
 // not hand the drift on to the block it sits in (unlike the wheel's `wheelPastEnd`): the ring is one point on the
 // screen, and a block moving under it would carry frame and ring away from the finger. While a gesture runs, the list's

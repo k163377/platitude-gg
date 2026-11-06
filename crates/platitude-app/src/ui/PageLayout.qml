@@ -67,7 +67,9 @@ QtObject {
     /// name would otherwise run out past the pane's left edge. A seat letter's build fits 300; only a build from a
     /// long-named tree lifts it.
     readonly property real rightMinWidth: Math.max(300, Math.ceil(layout.gitCorner.floorWidth))
-    readonly property int panesMinHeight: 200
+    /// The discard log's band at its tallest and the graph's rows under it: the middle column at this height still
+    /// shows commits under whatever one rebase moved (`RecoverBand`; `recover-open 9,floor`).
+    readonly property int panesMinHeight: Theme.recoverBandMaxHeight + Theme.recoverBandGraphRows * Theme.graphRowHeight
     /// The three panes' floor: their own, and at least the left menu whole — the log dragged up as far as it goes
     /// stops at the menu's last cell, never over it.
     readonly property real panesFloorHeight: Math.max(layout.panesMinHeight, layout.sidebarPane.floorHeight)

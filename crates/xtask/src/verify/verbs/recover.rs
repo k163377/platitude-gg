@@ -64,6 +64,9 @@ pub(super) const TABLE: &[Verb] = &[
             (Arg::Has("scroll:"), "pin=top card=false pick=0"),
             (Arg::Has("short"), "pin=bottom card=false pick=18"),
             (Arg::Has("card"), "card=true pick=-1"),
+            // The band at its tallest in the shortest column the window
+            // allows: the graph keeps its rows under it, read off the view.
+            (Arg::Has("floor"), "graphRows=3 atFloor=true"),
             // Past the graph's window: the press waits for the graph to
             // walk there.
             (Arg::WithPreset("discards-deep"), "reach=false restores=0"),

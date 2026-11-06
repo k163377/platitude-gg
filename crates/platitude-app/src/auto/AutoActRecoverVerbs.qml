@@ -10,7 +10,8 @@ import platitude.ui
 ///
 /// The list reads the reflogs and the record's ref (`refs/pgg/discards`) as it opens, so the fixture is a preset:
 /// `--preset discards` holds every kind of entry under forty commits (numbered in `xtask::demo::discards`),
-/// `--preset discards-deep` one entry past the graph's window. The loading ring and how the card opens are
+/// `--preset discards-deep` one entry past the graph's window, `--preset discards-ceilings` the entries that reach
+/// what the band can hold (numbered in the same place). The loading ring and how the card opens are
 /// `tests/qml/tst_recoverpane.qml`'s, the words `tst_recoverwords.qml`'s.
 // `Item` because `QtObject` has no default property to hold the samplers below.
 Item {
@@ -37,6 +38,8 @@ Item {
     /// nothing, double-clicks it and puts the same two in from its chip's list; `dbl` double-clicks it; `again` clicks
     /// it twice, spaced as a rename's two clicks are, then a dim named row at once. `tip` is the entry's tip, `list` the
     /// same row from its chip's list (`dbl` only), `passed` the first row built that it leaves dim with a name on it.
+    /// `floor` stands the window on its floor with the log up once the entry is on the graph: `graphRows=` is what the
+    /// band at its tallest leaves the graph where the column is at its shortest (`PageLayout.panesMinHeight`).
     readonly property var looks: Harness.autoActArg === "" ? [] : Harness.autoActArg.split(",")
     readonly property var parts: acts.looks.filter(look => look.startsWith("part:"))
     readonly property var hand: {
@@ -101,6 +104,8 @@ Item {
     }
     /// Whether this run rests a hand on the first entry the list shows, so the picture holds its card.
     readonly property bool cardWanted: acts.opens && acts.looks.indexOf("card") >= 0
+    /// Whether this run stands the window on its floor once the entry is on the graph.
+    readonly property bool floorWanted: acts.opens && acts.looks.indexOf("floor") >= 0
     /// The part this run brings back from the picked entry — -1 for all of it — and whether it presses at all.
     readonly property bool restoreWanted: acts.opens && (acts.looks.indexOf("restore") >= 0 || acts.parts.length > 0)
     readonly property int restorePart: acts.parts.length > 0 ? Number(acts.parts[0].substring("part:".length)) : -1
@@ -140,7 +145,7 @@ Item {
         // The pick, the hand's rest, the band's press and the scroll are each the stage the frame waits behind.
         recoverTimer.order = (acts.pickWanted >= 0 ? ["picked"] : [])
             .concat(acts.cardWanted ? ["rested"] : acts.restoreWanted ? ["pressed"]
-                    : acts.scrollRows >= 0 ? ["scrolled"] : [])
+                    : acts.floorWanted ? ["floored"] : acts.scrollRows >= 0 ? ["scrolled"] : [])
             .concat(acts.gesture === "again" ? ["first_click", "second_click"]
                     : acts.gesture !== "" ? [acts.gesture] : [])
         recoverTimer.start()
@@ -180,8 +185,16 @@ Item {
                + " lit=" + page.recoverLit
                // How many times the seat lit since a `blink` began it.
                + " blinks=" + acts.blinks
+               // The rows the graph has room for, and whether the window stands on its floor.
+               + " graphRows=" + Math.floor(view.height / Theme.graphRowHeight)
+               + " atFloor=" + (page.Window.window.height === Math.ceil(page.Window.window.floorHeight))
                + " width=" + Math.round(sidebarPane.width)
                + (acts.gesture === "" ? "" : acts.handLine())
+    }
+    /// The window on its floor with the log up, as `floor` asked.
+    function floorStood() {
+        const window = page.Window.window
+        return { "floor": window.height === Math.ceil(window.floorHeight), "log": page.commandsOpen }
     }
 
     // Waits for the splitter to hand the pane the width the fold asked for and for the list's read, picks the entry
@@ -323,6 +336,21 @@ Item {
                     other.leftClick(Qt.NoModifier)
                     op.witness("quick", acts.driver.graphPane.view.currentIndex === other.index)
                 })
+                return
+            }
+            if (acts.floorWanted) {
+                if (!Awaited.all("recover_pick", op.pickShown()))
+                    return
+                // Asked once the entry stands, so the graph has gone to it before the column shrinks under it.
+                if (op.at("picked") && !op.input("floored", () => {
+                    const window = page.Window.window
+                    window.height = Math.ceil(window.floorHeight)
+                    page.commandsOpen = true
+                    return true
+                }))
+                    return
+                op.complete({ "name": "recover_floor", "when": () => acts.floorStood(),
+                              "report": () => acts.frameLine() })
                 return
             }
             op.complete({ "name": "recover_pick", "when": () => op.pickShown(), "report": () => acts.frameLine() })
