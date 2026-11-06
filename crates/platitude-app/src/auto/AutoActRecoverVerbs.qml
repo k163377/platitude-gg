@@ -5,8 +5,8 @@ import platitude
 import platitude.ui
 
 /// The discard log's seat and its list, put on screen for a picture — an entry picked from it, on the
-/// graph under the band that tells it, the card a rest on an entry opens, and what a press on the band's `Restore`
-/// leaves.
+/// graph under the band that tells it, the card a rest on an entry opens, what a press on the band's `Restore` leaves,
+/// and Esc on an entry on the graph.
 ///
 /// The list reads the reflogs and the record's ref (`refs/pgg/discards`) as it opens, so the fixture is a preset:
 /// `--preset discards` holds every kind of entry under forty commits (numbered in `xtask::demo::discards`),
@@ -51,9 +51,17 @@ Item {
     /// before the dispatch blinks it.
     readonly property bool blinkWanted: acts.ours && acts.looks.indexOf("blink") >= 0
     property int blinks: 0
+    /// How many times the band was told an entry's commits are not on the graph (`RepoPage.recoverReach`, the yellow
+    /// `Not loaded on the graph yet`) — never, on a graph that holds them, whatever walks under it.
+    property int notLoaded: 0
 
     /// Runs `act` if it is this family's and says whether it was; `AutoActDriver` asks each family in turn.
     function run(act, arg) {
+        if (act === "recover-escape") {
+            page.toggleRecover()
+            escapeTimer.start()
+            return true
+        }
         if (act !== "recover" && act !== "recover-open")
             return false
         page.recoverLit = acts.looks.indexOf("lit") >= 0
@@ -180,6 +188,89 @@ Item {
         function onRecoverLitChanged() {
             if (acts.blinkWanted && acts.page.recoverLit)
                 acts.blinks++
+        }
+        function onRecoverReachChanged() {
+            if (acts.page.recoverReach.some(inReach => !inReach))
+                acts.notLoaded++
+        }
+    }
+    // PGG_AUTO_ACT=recover-escape (`--preset discards`): Esc on an entry on the graph, entered at `escapePressed` where
+    // `Keys.onEscapePressed` enters, twice over. First on an entry the graph walked again from nothing under it (F5:
+    // `RepoTab.refreshAll`, whose rows go and come back), with the keyboard on the graph as a press on a row leaves
+    // it — it goes back to the list. Then on another entry with the log reading again, where a press may pick nothing
+    // but the entry still goes down. **The line is the judgment**: the picture is the list up with nothing picked, which
+    // a key that fell through to nobody after a `✕` would also draw. How the key climbs from the list and the filter
+    // to the page is `tst_recoverpane.qml`'s.
+    PageStage {
+        id: escapeTimer
+        name: "recover_escape"
+        order: ["picked", "reloaded", "escaped", "pickedAgain", "escapedReading"]
+        /// The entry is on the graph: its walk answered, its tip's row drawn and taken, the band told.
+        function shown() {
+            return { "walked": page.pageGraph.provisionalWalked, "drawn": page.pageGraph.provisionalTipRow >= 0,
+                     "taken": page.recoverTipPending === "" && acts.driver.cardSettled,
+                     "told": page.recoverReach.length > 0 }
+        }
+        onTriggered: {
+            const op = escapeTimer
+            const graph = page.pageGraph
+            if (op.at("start")) {
+                if (Awaited.all("recover_escape_listed", { "answered": page.recoverAnswered,
+                                                           "listed": page.recoverEntries.length > 12 }))
+                    op.input("picked", () => {
+                        page.pickRecover(12)
+                        return page.recoverPick === 12
+                    })
+            } else if (op.at("picked")) {
+                if (Awaited.all("recover_escape_shown", op.shown()))
+                    op.input("reloaded", () => {
+                        op.witness("resets", graph.resetCount)
+                        driver.repoTab.refreshAll()
+                    })
+            } else if (op.at("reloaded")) {
+                // Its own stream, which took the rows: an older pass landing moves the finish count as well.
+                const reloaded = op.shown()
+                reloaded["streamed"] = graph.resetCount !== op.witnessed("resets") && !graph.loading
+                if (Awaited.all("recover_escape_reloaded", reloaded))
+                    op.input("escaped", () => {
+                        acts.driver.graphPane.takeKeyboard()
+                        op.witness("hand", acts.driver.graphPane.view.activeFocus)
+                        op.witness("took", page.escapePressed())
+                        op.witness("list", sidebarPane.autoRecover.entryList.activeFocus)
+                    })
+            } else if (op.at("escaped")) {
+                if (Awaited.all("recover_escape_down", { "down": !graph.provisionalOn,
+                                                         "settled": PageSettled.settled(page) }))
+                    op.input("pickedAgain", () => {
+                        page.pickRecover(3)
+                        return page.recoverPick === 3
+                    })
+            } else if (op.at("pickedAgain")) {
+                if (Awaited.all("recover_escape_shown_again", op.shown()))
+                    op.input("escapedReading", () => {
+                        page.readDiscards()
+                        op.witness("reading", page.recoverReading)
+                        op.witness("tookReading", page.escapePressed())
+                        // Nothing is left standing: the key falls through, and the list stays up.
+                        op.witness("again", page.escapePressed())
+                    })
+            } else {
+                op.complete({
+                    "name": "recover_escape_done",
+                    "when": () => ({ "down": !page.pageGraph.provisionalOn, "answered": page.recoverAnswered }),
+                    "report": () => "recover_escape hand=" + op.witnessed("hand")
+                                    + " took=" + op.witnessed("took")
+                                    + " list=" + op.witnessed("list")
+                                    + " reading=" + op.witnessed("reading")
+                                    + " tookReading=" + op.witnessed("tookReading")
+                                    + " again=" + op.witnessed("again")
+                                    + " pick=" + page.recoverPick
+                                    + " shown=" + page.pageGraph.provisionalOn
+                                    + " open=" + page.recoverOpen
+                                    + " listKeys=" + sidebarPane.autoRecover.entryList.activeFocus
+                                    + " graphKeys=" + acts.driver.graphPane.view.activeFocus
+                                    + " notLoaded=" + acts.notLoaded })
+            }
         }
     }
     // The card is out once it says it opened.

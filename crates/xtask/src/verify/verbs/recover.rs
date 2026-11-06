@@ -40,4 +40,13 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "shown=true",
     },
+    // Esc on the entry on the graph: down, under a read too, the keyboard back
+    // on the list, and no word that its commits are not loaded while the graph
+    // walked again under it.
+    Verb {
+        name: "recover-escape",
+        when: &[],
+        plain: "recover_escape hand=true took=true list=true reading=true tookReading=true \
+                again=false pick=-1 shown=false open=true listKeys=true graphKeys=false notLoaded=0",
+    },
 ];

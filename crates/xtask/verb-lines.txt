@@ -687,6 +687,7 @@ rebase-plan-run --preset plan	ChangeIcon FileRowDelegate GraphRowChips GraphRowD
 rebase-stops main --preset rebase-clashes	AppCardFace AppMenu AppMenuItem AppMenuSeparator BranchBothDeleteRow BranchDeleteRow BranchPushRow BranchRemoteDeleteRow ChangeIcon GitHubMenu GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefBranchMenu RefRowMenu RefTagMenu RefWorktreeMenu RemoteRowMenu TabItemDelegate WipTallyRow
 recover blink --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 recover lit --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
+recover-escape --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate
 recover-open 0 --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate
 recover-open 0 --preset discards-deep	GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate
 recover-open 11 --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate

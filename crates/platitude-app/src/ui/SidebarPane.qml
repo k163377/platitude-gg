@@ -419,6 +419,10 @@ Rectangle {
     }
     /// Automation: the discard log, whose filter a run types into (PGG_AUTO_ACT=recover-open `filter:`).
     readonly property alias autoRecover: recoverPane
+    /// The keyboard comes to the discard log (`RepoPage.escapePressed`).
+    function takeRecoverKeyboard() {
+        recoverPane.takeKeyboard()
+    }
 
     SectionPeekPopup {
         id: peek

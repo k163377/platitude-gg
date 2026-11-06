@@ -158,7 +158,7 @@ FocusScope {
     /// enabled `StandardKey.Cancel` shortcuts fire neither (`noticeBar.yieldsEscape`, `tests/qml/tst_escape.qml`) —
     /// anything else that wants Escape joins as a key handler. **Topmost first, the marks last** — with nothing else
     /// standing, the mark is what is left (規約 §hover のツールチップ); accepted only when something was taken.
-    /// Headless: `diff-escape` / `plan-escape` / `plan-escape-held`.
+    /// Headless: `diff-escape` / `plan-escape` / `plan-escape-held` / `recover-escape`.
     function escapePressed() {
         // First: a middle-click autoscroll holds the pointer and the view, on whichever surface (`MiddleHand`).
         if (MiddleHand.stop())
@@ -180,6 +180,14 @@ FocusScope {
         // left menu the diff folded comes back with it (`foldForDiff`).
         if (page.diffShown) {
             page.closeDiffToGraph()
+            return true
+        }
+        // The discard log's entry on the graph, the same press as its band's `✕` — under the diff and the plan, which
+        // the band stands aside for (`RecoverBand`), over the log. The keyboard goes back to the list the entry was
+        // picked from (user decision — ask before changing): the graph stops walking what the reader has put away.
+        if (page.recoverPicked !== null) {
+            page.pickRecover(page.recoverPick)
+            sidebarPane.takeRecoverKeyboard()
             return true
         }
         // The log (デザイン規約 §git が言ったことを読む場所), its fourth way out after `>_`, `Clear` and the closing
@@ -2651,9 +2659,10 @@ FocusScope {
     }
     /// A press on an entry picks it, or puts a picked one down. Picking ends a search as its `✕` does: the graph turns
     /// to what the entry would bring back. Not while the log reads again: the rows up are the last read's, and the
-    /// answer would deal the number picked to another entry.
+    /// answer would deal the number picked to another entry. Putting down deals no number (`onRecoverAnsweredChanged`
+    /// leaves it down), so the band's `✕` and Escape go through under a read.
     function pickRecover(index) {
-        if (page.recoverReading)
+        if (page.recoverReading && page.recoverPick !== index)
             return
         page.recoverPick = page.recoverPick === index ? -1 : index
         if (page.recoverPick >= 0)
@@ -2694,12 +2703,14 @@ FocusScope {
     /// land as, dated at the restore — which no window holds back. Nothing whose first commit the graph's window
     /// does not draw is restored: the band offers `Load N more commits` until it does. Empty until the walk
     /// that took the entry has landed (`GraphModel.provisionalWalked`) — before it, an undrawn tip is not yet walked,
-    /// not out of reach. Read again on each `statsChanged` as the graph's rows move — a press on `Load more` walks
-    /// toward it; not a binding, since `graphModel.rowOf` is a slot and no binding follows a slot.
+    /// not out of reach — and while a stream brings the rows back from nothing (`GraphModel.loading`, a Reload's): a
+    /// row not back yet is no further away than it was. Read again on each `statsChanged` as the graph's rows move — a
+    /// press on `Load more` walks toward it; not a binding, since `graphModel.rowOf` is a slot and no binding follows a
+    /// slot. Headless: `recover-escape`'s `notLoaded=`.
     property var recoverReach: []
     function readRecoverReach() {
         const picked = page.recoverPicked
-        if (picked === null || !graphModel.provisionalWalked) {
+        if (picked === null || !graphModel.provisionalWalked || graphModel.loading) {
             page.recoverReach = []
             return
         }

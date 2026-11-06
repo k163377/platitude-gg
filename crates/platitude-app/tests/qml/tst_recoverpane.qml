@@ -4,11 +4,18 @@ import platitude.ui
 
 // The discard log as it stands over the left menu (`RecoverPane`): nothing the hand does over it
 // reaches the menu underneath, its `✕` is the band's whole right end, a ring says the reflogs are being read, an empty
-// answer says so, and a rest on an entry opens its card.
+// answer says so, a rest on an entry opens its card, and the keyboard it takes from the graph walks nothing there.
 Item {
     id: root
     width: 300
     height: 400
+
+    /// The page's own handler, on the key's way up from whatever in the list holds the keyboard.
+    property int escapes: 0
+    Keys.onEscapePressed: event => {
+        root.escapes++
+        event.accepted = true
+    }
 
     /// What lies under the list in the left menu — the filter, its fold block, the sections. Anything it hears through
     /// the list is a leak; the strip right of the list leaves some of it bare, for the hand to start from.
@@ -104,6 +111,11 @@ Item {
             page.recoverOpen = true
             under.presses = 0
             under.wheels = 0
+            root.escapes = 0
+            pane.visible = true
+            pane.entryList.focus = false
+            pane.filterBox.focus = false
+            pane.filterText = ""
         }
 
         /// Every visible item under `item` that `pick` answers for, depth first — not inside a row the list pooled,
@@ -370,6 +382,53 @@ Item {
             mouseMove(pane.entryList, pane.entryList.width / 2 + 2, 2 * Theme.rowHeight + Theme.rowHeight / 2)
             tryVerify(() => pane.cardOpen && pane.cardAt === 2, undefined,
                       "a move asks for the card of the row under it")
+        }
+
+        /// The keyboard the list takes from the graph: the arrows walk nothing there, and move no row of the view.
+        function test_the_keyboard_comes_to_the_list_and_the_arrows_go_nowhere() {
+            showEntries(manyEntries(30))
+            pane.takeKeyboard()
+            verify(pane.entryList.activeFocus, "the list has the keyboard")
+            const y = pane.entryList.contentY
+            const current = pane.entryList.currentIndex
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            compare(pane.entryList.currentIndex, current, "the arrows walked the rows")
+            compare(pane.entryList.contentY, y, "the arrows moved the view")
+        }
+
+        /// A caret in the filter is where the reader is typing: the keyboard is here already.
+        function test_a_caret_in_the_filter_stays_where_it_is() {
+            pane.filterBox.forceActiveFocus()
+            verify(pane.filterBox.activeFocus)
+            pane.takeKeyboard()
+            verify(pane.filterBox.activeFocus, "the caret was taken out of the filter")
+        }
+
+        /// Escape climbs to the page's handler from either place the keyboard can be in the list, so the next one is
+        /// still heard.
+        function test_escape_climbs_to_the_page_from_the_list_and_from_the_filter() {
+            pane.takeKeyboard()
+            keyClick(Qt.Key_Escape)
+            compare(root.escapes, 1, "from the list")
+            pane.filterBox.forceActiveFocus()
+            keyClick(Qt.Key_Escape)
+            compare(root.escapes, 2, "from the filter")
+        }
+
+        /// Off screen — the list shut, the left menu folded — it takes no keyboard, and lets go of what it held: Qt
+        /// keeps active focus on an item it made invisible.
+        function test_a_list_off_screen_takes_no_keyboard_and_lets_go_of_what_it_held() {
+            pane.visible = false
+            pane.takeKeyboard()
+            verify(!pane.entryList.focus, "a list off screen took the keyboard")
+            pane.visible = true
+            pane.takeKeyboard()
+            verify(pane.entryList.activeFocus)
+            pane.visible = false
+            verify(!pane.entryList.activeFocus, "the list kept the keyboard off screen")
+            pane.visible = true
+            verify(!pane.entryList.activeFocus, "the list took the keyboard back by coming on screen")
         }
 
         /// An entry a read takes out of the log takes its card with it, the hand inside or not: what it said is gone.

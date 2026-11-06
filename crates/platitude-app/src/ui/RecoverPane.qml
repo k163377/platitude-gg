@@ -121,11 +121,19 @@ Rectangle {
         hand: paneHand
         views: [list]
     }
+    /// The keyboard comes here as the entry on the graph goes down (`RepoPage.escapePressed`), from wherever it was —
+    /// to the list. A caret in the filter is here already and stays where the reader is typing; off screen (folded,
+    /// `SidebarPane`) nothing moves.
+    function takeKeyboard() {
+        if (pane.visible && !filterField.activeFocus)
+            list.forceActiveFocus()
+    }
     /// Automation only: the list, the hand and the card, for a run that moves the first two or puts the hand in the
-    /// third (`tst_recoverpane`, `recover-reread`).
+    /// third (`tst_recoverpane`, `recover-reread`), and the filter's field, for a caret put in it.
     readonly property alias entryList: list
     readonly property alias hand: paneHand
     readonly property alias entryHoverCard: entryCard
+    readonly property alias filterBox: filterField
     onEntriesChanged: pane.refilter(true)
     onNowChanged: pane.refilter(true)
     Component.onCompleted: pane.refilter(false)
@@ -302,6 +310,11 @@ Rectangle {
         anchors.top: filterRow.bottom
         anchors.bottom: parent.bottom
         model: pane.shownEntries
+        // Nothing here walks the rows, so the arrows go nowhere, as after a press on a left menu row (`NavList`): Qt's
+        // own key navigation would move `currentIndex` and the view and tell nobody.
+        keyNavigationEnabled: false
+        // The list shut, the left menu folded.
+        letsGoOffScreen: true
         // The left menu's docked bar: the list stands in the menu's seat, and its rows' `ago` column is right-aligned
         // ink on that edge (規約 §QML 実装ルール's choice of bar).
         verticalBar: PaneScrollBar {}
