@@ -37,8 +37,9 @@ Item {
     /// while a search is on.
     required property bool matched
     // Dimmed because the search passed this row over, and still as available as any other (デザイン規約 §暗く落とした段)
-    // — and the same while the discard log's entry is on the graph and this row is not one it would bring back: the
-    // other rows give way, the entry's own are drawn as they would stand (`platitude_core::discards`).
+    // — and the same look while the discard log's entry is on the graph and this row is not one it would bring back:
+    // the other rows give way, the entry's own are drawn as they would stand (`platitude_core::discards`). Those are
+    // not as available: a left press reads them, and no menu, move or rename answers (`askMenu`, `doubleClick`).
     // Everything on the row goes down — chips, lanes, the node's face, the message — and the lanes row by row (user
     // decision — ask before changing): a lane through a match stays bright on that row only, so hits show along the
     // line too; lanes left whole would leave only the lines between sparse hits standing out. The steps of brightness
@@ -56,12 +57,14 @@ Item {
         view.model.provisionalRevision
         return !view.model.provisionalAt(rowItem.index)
     }
+    // The discard log's entry is on the graph, whichever row this is.
+    readonly property bool entryOn: {
+        const view = rowItem.ListView.view
+        return !!(view && view.model && view.model.provisionalOn)
+    }
     // This row is one the discard log's entry would bring back: its mark is ringed dashed (`GraphLaneCell`). Ringed at
     // the mark, not boxed with its run: the rows it brings back stand where their dates put them, other rows between.
-    readonly property bool provisionalRow: {
-        const view = rowItem.ListView.view
-        return !!(view && view.model && view.model.provisionalOn) && !rowItem.passedOver
-    }
+    readonly property bool provisionalRow: rowItem.entryOn && !rowItem.passedOver
     // The discard log's entry is a stash dropped, and this is it: drawn as a stash row is. The revision is touched for
     // the same reason.
     readonly property bool asStash: {
@@ -86,8 +89,8 @@ Item {
     // The all-zero id marks the synthetic uncommitted-changes row (the sentinel is core's — `Oid::zero_like`).
     readonly property bool isWip: GitFacts.wipOid(oid_hex)
     // The discard log's entry is a copy of thrown-away work, and this is it: drawn as an uncommitted row is — the ring,
-    // the words — while it stays a commit to every hand. `provisionalRevision` is touched for the
-    // reason `carriedRevision` is below.
+    // the words. A left press reads the commit it is; nothing else takes it (`movable`, `menuShut`).
+    // `provisionalRevision` is touched for the reason `carriedRevision` is below.
     readonly property bool asUncommitted: {
         const view = rowItem.ListView.view
         if (rowItem.isWip || !view || !view.model || !view.model.provisionalOn)
@@ -150,20 +153,22 @@ Item {
     // The chips a double-click can lead to (`primaryChip`).
     readonly property var branchRecords: labelRecords.filter(chip => chip.kind === "branch" || chip.kind === "remote")
     // Whether this row is somewhere HEAD could stand: the worktree row is not a commit, and a stash sits on no
-    // branch's history — a dropped one the log shows neither.
-    readonly property bool movable: !rowItem.isWip && rowItem.stash_ref === "" && !rowItem.asStash
+    // branch's history — a dropped one and a copy of thrown-away work the log shows neither.
+    readonly property bool movable: !rowItem.asUncommitted && rowItem.stash_ref === "" && !rowItem.asStash
     // The commit the worktree is standing on, detached or not — the row number the model settled
     // (`models::graph::head`).
     readonly property bool isHead: rowItem.ListView.view ? rowItem.ListView.view.headRow === rowItem.index : false
     // Where a double-click on this row goes: the branch chip's own first record, so what is on screen is what is moved
-    // to. Null means the row shows no branch, which is the offer to put one there.
+    // to. Null means the row shows no branch, which is the offer to put one there — and on a commit the discard log's
+    // entry draws, whatever names it carries: the offer stands, no move does.
     readonly property var primaryChip:
-        rowItem.movable && rowItem.branchRecords.length > 0 ? rowItem.branchRecords[0] : null
+        rowItem.movable && !rowItem.entryOn && rowItem.branchRecords.length > 0 ? rowItem.branchRecords[0] : null
     // **The name this row draws**: the chip's first record, whatever kind. The spaced second click renames it and a
     // right-click aims the menu's cards at it — one answer, so the row cannot rename one name and offer another.
     // **Not `primaryChip`**: a tag leads nowhere but can still be renamed (デザイン規約 §左メニューの所作), and so can
     // a worktree's folder chip — what its folder is called (`RepoPage.startRename`), with its WORKTREE card and its
     // `worktree remove`, though a folder is no ref to move to. The detached HEAD names nothing, so it answers null.
+    // While the discard log's entry is on the graph neither reaches it (`GraphList.noteClick`, `RepoPage.openRowMenu`).
     readonly property var nameChip:
         rowItem.labelRecords.length > 0 && GitFacts.namedKind(rowItem.labelRecords[0].kind) !== ""
             ? rowItem.labelRecords[0] : null
@@ -613,7 +618,7 @@ Item {
             return false
         // **Another worktree's row opens that worktree in a tab of its own** — the same door as the WORKTREES row
         // (`SidebarRowGestures.activateRow`), and the only place its files can be staged and committed.
-        if (rowItem.carried) {
+        if (rowItem.carried && !rowItem.passedOver) {
             const path = rowItem.ListView.view.model.carriedPath(rowItem.index)
             if (path !== "")
                 rowItem.ListView.view.carriedOpenRequested(path)
@@ -627,7 +632,7 @@ Item {
             return false
         // The gesture was the double-click: the name box comes off its wait even on a row that leads nowhere.
         rowItem.ListView.view.dropRename()
-        if (!rowItem.movable)
+        if (!rowItem.movable || rowItem.passedOver)
             return false
         rowItem.ListView.view.rowSwitchRequested(rowItem.oid_hex, rowItem.primaryChip)
         return true
@@ -642,8 +647,17 @@ Item {
                                           modifiers === undefined ? Qt.NoModifier : modifiers)
     }
 
+    /// Whether a right-click on this row answers with nothing at all while the discard log's entry is on the graph
+    /// (`GraphModel.provisionalMenuShutAt`).
+    function menuShut() {
+        const model = rowItem.ListView.view.model
+        return model.provisionalOn === true && model.provisionalMenuShutAt(rowItem.index)
+    }
     /// A right-click on this row, and the menu key on it (`GraphRowWalk.menuFromKeys`).
     function askMenu() {
+        // Not a press at all: the selection stays on what the right pane is reading of the entry.
+        if (rowItem.menuShut())
+            return
         // **Inside a choice of two the choice stands**: its menu holds what takes the pair, and the page falls back to
         // the one-commit menu where nothing does (デザイン規約 §複数のコミットを選ぶ). The keyboard still comes here.
         const view = rowItem.ListView.view

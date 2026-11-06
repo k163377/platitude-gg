@@ -73,7 +73,7 @@ Item {
     /// A stacked row was double-clicked, clicked once, or right-clicked — the gestures of the graph row under it. The
     /// spaced second click has no signal: its wait is the graph's (`GraphPane.noteRowClick`), card and row being one
     /// target.
-    signal recordActivated(var chip)
+    signal recordActivated(var chip, string oidHex)
     signal recordChosen(string oidHex, int atRow)
     signal recordMenuAsked(string oidHex, var chip)
     /// The name a stacked row opens under itself was pressed: the reader is going to the commit it stands on
@@ -480,7 +480,7 @@ Item {
         // Unfolded from the current branch's stand-in, a press on the card is the pin's (`GraphPane.pinPressed`).
         onStandIn: host.listAnchor !== null && host.listAnchor === host.graphPane.headPin.chipItem
         onStandInPressed: modifiers => host.graphPane.pinPressed(host.refListRow, modifiers)
-        onPicked: chip => host.recordActivated(chip)
+        onPicked: (chip, oidHex) => host.recordActivated(chip, oidHex)
         onChose: host.recordChosen(host.refListOid, host.refListRow)
         // That row's menu, aimed at the pressed name (デザイン規約 §グラフ行の右クリック).
         onMenuAsked: chip => host.recordMenuAsked(host.refListOid, chip)

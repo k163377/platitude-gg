@@ -1574,9 +1574,15 @@ FocusScope {
     /// the list rather than over it, `menuArea` = `refList`), and automation. `chip` is the name it is aimed at; null
     /// aims it at nothing, and left out it is asked of the model (`rowChipAt`). The first level is the same commit
     /// either way — the name only picks which card comes up (デザイン規約 §グラフ行の右クリック).
+    ///
+    /// While the discard log's entry is on the graph, a row it does not draw as a commit has no menu
+    /// (`GraphModel.provisionalMenuShutAt`), and a row it does is aimed at no name: what the graph is showing is the
+    /// commit, and the rows that act on a name would reach past it.
     function openRowMenu(oidHex, chip, onList) {
+        if (graphModel.provisionalMenuShutAt(graphModel.rowOf(oidHex)))
+            return
         page.noteMenuDoor(onList === true ? "refList" : "graph", oidHex)
-        const named = chip === undefined ? page.rowChipAt(oidHex) : chip
+        const named = graphModel.provisionalOn ? null : chip === undefined ? page.rowChipAt(oidHex) : chip
         commitMenuSeat.active = true
         const menu = commitMenuSeat.item
         const kind = named ? GitFacts.namedKind(named.kind) : ""
@@ -1734,7 +1740,9 @@ FocusScope {
     /// remote (`GitFacts.branchOfRef`), the shape `renameRow` takes, as from the left menu. Headless `graph-reclick`
     /// (to the box) / `graph-rename` (through to git) / `graph-reclick-scrolled` (the row scrolled away first).
     function startRename(oidHex, chip) {
-        if (repoTab.state !== "open" || !chip)
+        // An entry of the discard log picked under a second click's wait: the wait ends on a graph that renames nothing
+        // (`GraphList.noteClick`).
+        if (repoTab.state !== "open" || !chip || graphModel.provisionalOn)
             return
         // A worktree's folder chip renames the folder (`startFolderRename`).
         if (GitFacts.namedKind(chip.kind) === "worktree") {
@@ -1892,7 +1900,14 @@ FocusScope {
         tagAgainst: repoTab.defaultRemote
         menuDoor: page.menuDoor
         chosenHand: detailsPane.hand
-        onRecordActivated: chip => page.activateChip(chip)
+        // As the row's own double-click answers (`GraphRowDelegate.doubleClick`): while the discard log's entry is on the
+        // graph no name is moved to, a commit it draws is offered a new one, and the rows it leaves answer nothing.
+        onRecordActivated: (chip, oidHex) => {
+            if (!graphModel.provisionalOn)
+                page.activateChip(chip)
+            else if (!graphModel.provisionalMenuShutAt(graphModel.rowOf(oidHex)))
+                page.rowDoubleClicked(oidHex, null)
+        }
         // A plain click in the card is a click on its row: every name in it is on that one commit.
         onRecordChosen: (oidHex, atRow) => page.activateRow(oidHex, atRow)
         // The note under a cut message: the row's click, then the pane holding the whole message names itself — the
@@ -2658,16 +2673,19 @@ FocusScope {
             page.showRecoverPick()
         }
     }
-    /// A press on an entry picks it, or puts a picked one down. Picking ends a search as its `✕` does: the graph turns
-    /// to what the entry would bring back. Not while the log reads again: the rows up are the last read's, and the
-    /// answer would deal the number picked to another entry. Putting down deals no number (`onRecoverAnsweredChanged`
-    /// leaves it down), so the band's `✕` and Escape go through under a read.
+    /// A press on an entry picks it, or puts a picked one down. Picking ends a search as its `✕` does, and takes down a
+    /// name box a half-typed name kept standing: the graph turns to what the entry would bring back, and renames nothing
+    /// under it. Not while the log reads again: the rows up are the last read's, and the answer would deal the number
+    /// picked to another entry. Putting down deals no number (`onRecoverAnsweredChanged` leaves it down), so the band's
+    /// `✕` and Escape go through under a read.
     function pickRecover(index) {
         if (page.recoverReading && page.recoverPick !== index)
             return
         page.recoverPick = page.recoverPick === index ? -1 : index
-        if (page.recoverPick >= 0)
+        if (page.recoverPick >= 0) {
             graphPane.findCard.dismiss()
+            graphPane.stopNaming()
+        }
         page.showRecoverPick()
     }
     /// The picked entry on the graph, or none: what each part would bring back walks in dashed — a

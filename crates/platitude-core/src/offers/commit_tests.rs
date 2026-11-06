@@ -39,6 +39,25 @@ fn an_ordinary_commit_away_from_head_offers_the_whole_menu() {
 }
 
 #[test]
+fn a_commit_the_discard_log_draws_offers_only_what_adds() {
+    let offers = commit_offers("abc123", "def456").on_provisional();
+    assert_eq!(offers.words(), ["cherry-pick", "branch-here"]);
+    // HEAD's own commit drawn for an entry that took a name off it: the rows
+    // that would rewrite it are as out as anywhere.
+    assert_eq!(
+        commit_offers("abc123", "abc123").on_provisional().words(),
+        ["cherry-pick", "branch-here"]
+    );
+    assert_eq!(
+        commit_menu(true, "main", false, "MERGING", "abc123", "def456", "")
+            .on_provisional()
+            .words(),
+        ["cherry-pick", "branch-here", "standing"],
+        "what stays greys under a standing operation as anywhere"
+    );
+}
+
+#[test]
 fn the_commit_head_stands_on_still_rewrites_but_integrates_nothing() {
     let offers = commit_offers("abc123", "abc123");
     assert!(offers.edit_history, "the newest commit is fair game");

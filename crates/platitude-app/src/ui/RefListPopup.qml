@@ -42,8 +42,9 @@ AppCard {
     /// One was double-clicked: the reader is going there. The whole chip, so its kind travels with it. **A single click
     /// never moves** (user decision — ask before changing): the card stands on the chip's seat, so a click aimed at the
     /// chip lands on a row here, and a click that moved would `switch` whoever pressed the chip twice, spaced — as a
-    /// double-click with a strangely long window.
-    signal picked(var chip)
+    /// double-click with a strangely long window. `oidHex` is the row it stands on, read before the card closes, which
+    /// forgets that row (`RowHoverHost.onClosed`).
+    signal picked(var chip, string oidHex)
     /// One was clicked once, plainly: its row becomes the one being read. The second click and a held click have no
     /// signal here — both go in at the graph's own row (`rowClicks`).
     signal chose(var chip)
@@ -422,8 +423,9 @@ AppCard {
                         refList.rowClicks.dropRowRename()
                     if (refRow.leadsNowhere)
                         return
+                    const oidHex = refList.rowOid
                     refList.close()
-                    refList.picked(refRow.modelData)
+                    refList.picked(refRow.modelData, oidHex)
                 }
                 HoverHandler {
                     id: rowHover

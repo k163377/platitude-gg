@@ -87,7 +87,7 @@ Item {
         walk.view.forceLayout()
         const item = walk.view.itemAtIndex(row)
         // This worktree's own uncommitted row has no menu; another worktree's has (`GraphRowDelegate.askMenu`).
-        if (!item || item.isWip && !item.carried)
+        if (!item || item.isWip && !item.carried || item.menuShut())
             return false
         KeyMenu.ask(item.mapToItem(null, 0, Theme.graphRowHeight), () => item.askMenu())
         return true

@@ -1,6 +1,6 @@
 //! The discard log (`platitude_core::discards`): its seat, the list, an entry on the
-//! graph under the band, the card a rest opens, and what the band's
-//! `Restore` leaves.
+//! graph under the band, the card a rest opens, what the band's `Restore`
+//! leaves, and what the rows answer a hand with while the entry is on the graph.
 
 use super::{Arg, Verb};
 
@@ -18,6 +18,37 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "recover-open",
         when: &[
+            // A right-click and a double-click on a row the entry leaves dim,
+            // from the row and from its chip's list, and on a tip drawn as a
+            // stash or as uncommitted work: nothing opens, nothing moves.
+            (
+                Arg::Has("menu:passed"),
+                "named=true menu=false rows=0 offered= dbl=false box=false stayed=true moved=false",
+            ),
+            (
+                Arg::Is("0,menu:tip"),
+                "menu=false rows=0 offered= dbl=false box=false stayed=true moved=false",
+            ),
+            (
+                Arg::Is("3,menu:tip"),
+                "menu=false rows=0 offered= dbl=false box=false stayed=true moved=false",
+            ),
+            // On a commit it draws, a name on the row all the same: the menu,
+            // with only what adds and none of the name's rows.
+            (
+                Arg::Has("menu:tip"),
+                "named=true menu=true rows=4 offered=Create branch here|cherry-pick|WORKTREE|TAG",
+            ),
+            // Its double-click makes a name; it moves to none.
+            (Arg::Has("dbl:tip"), "named=true dbl=true box=true"),
+            // …and the same from its chip's list.
+            (Arg::Has("dbl:list"), "named=true dbl=- box=true"),
+            // Two spaced clicks wait for no rename, and a quick click on
+            // another row is still read.
+            (
+                Arg::Has("again:tip"),
+                "named=true armed=false quick=true box=false",
+            ),
             // Brought back whole: the entry put down and gone from the
             // list — the band's press, answered.
             (Arg::Is("11,restore"), "restores=1 how=whole refused=false"),

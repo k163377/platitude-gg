@@ -9,6 +9,12 @@ import platitude.ui
 // holds the rows used often — on the row's commit, and on the name the chip draws (or the name pressed in the chip's
 // stacked list): its pull, push and delete table —; the cards under them hold what is used rarely.
 //
+// The discard log's entry on the graph is a display mode of its own (user decision — ask before changing), and only a
+// commit it draws has a menu: this one, aimed at no name and with only what adds
+// (`offers::CommitMenuOffers::on_provisional`) — `Create branch here…`, `cherry-pick`, the WORKTREE and TAG cards'
+// making rows, GITHUB. What the mode can never do has no row; what stays greys as anywhere. A row it leaves dim and a
+// tip it draws as a stash or as uncommitted work have none (`GraphModel.provisionalMenuShutAt`, `RepoPage.openRowMenu`).
+//
 // Nothing here is looked up and nothing is run: answers arrive as plain values, held still from the moment the menu
 // opens until a command it waited for has ended (`CommitMenuState`, デザイン規約 §メニュー), and presses leave as
 // signals for `RepoPage` — which is what lets `tst_commitrowmenu.qml` drive the real menu.
@@ -44,7 +50,8 @@ Item {
     /// Whether a remote already has that commit: the rewrite rows carry a tag and do not ask
     /// (デザイン規約 §回数押し「ローカルの履歴書き換えはクリック」).
     required property bool published
-    /// What these menus offer. `canCherryPick` and `canRevert` only add a commit and so ask less.
+    /// What these menus offer. `canCherryPick` and `canRevert` only add a commit and so ask less; a commit the discard
+    /// log's entry draws takes only the first (`offers::CommitMenuOffers::on_provisional`).
     required property bool canCherryPick
     required property bool canRevert
     required property bool canIntegrate

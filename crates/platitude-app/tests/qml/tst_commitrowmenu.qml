@@ -480,6 +480,10 @@ Item {
             root.aimAt({ canCherryPick: false, canRevert: false })
             verify(!root.row("cherry-pick").offered)
             verify(!root.row("revert").offered)
+
+            root.aimAt({ canRevert: false })
+            verify(root.row("cherry-pick").offered)
+            verify(!root.row("revert").offered)
         }
 
         /// The other card comes up holding only what can still be made here.

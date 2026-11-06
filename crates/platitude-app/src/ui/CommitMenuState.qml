@@ -364,7 +364,8 @@ QtObject {
         const offers = GitFacts.commitMenuOffers(
             menuState.repoTab.state === "open",
             menuState.tree.branch, menuState.tree.detached, menuState.tree.opText,
-            oidHex, menuState.tree.headOid, menuState.menuStashRef)
+            oidHex, menuState.tree.headOid, menuState.menuStashRef,
+            menuState.graphModel.provisionalAt(menuState.graphModel.rowOf(oidHex)))
         if (menuState.menuStashRef !== "") {
             menuState.menuStashCanWrite = offers.includes("stash-write")
             return null

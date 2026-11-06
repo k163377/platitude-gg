@@ -353,7 +353,8 @@ impl GitFacts {
     }
 
     /// What the right-click menu on a commit row may offer, the same way
-    /// (`CommitMenuState.openRowMenu`).
+    /// (`CommitMenuState.openRowMenu`). `provisional`: the row is one the
+    /// discard log's picked entry draws (`GraphModel.provisionalAt`).
     #[qslot]
     #[expect(clippy::too_many_arguments)]
     fn commit_menu_offers(
@@ -365,8 +366,9 @@ impl GitFacts {
         oid_hex: String,
         head_oid: String,
         stash_ref: String,
+        provisional: bool,
     ) -> Vec<String> {
-        platitude_core::offers::commit_menu(
+        let offers = platitude_core::offers::commit_menu(
             open,
             &current_branch,
             detached,
@@ -374,11 +376,13 @@ impl GitFacts {
             &oid_hex,
             &head_oid,
             &stash_ref,
-        )
-        .words()
-        .into_iter()
-        .map(str::to_string)
-        .collect()
+        );
+        let offers = if provisional {
+            offers.on_provisional()
+        } else {
+            offers
+        };
+        offers.words().into_iter().map(str::to_string).collect()
     }
 
     /// What the details pane's message boxes do with the commit on screen,

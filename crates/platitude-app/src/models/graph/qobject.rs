@@ -177,6 +177,13 @@ impl GraphModel {
         usize::try_from(row).is_ok_and(|row| self.provisional_tip_drawn_as(row, "stash"))
     }
 
+    /// Whether a right-click on the row opens nothing while the entry is on
+    /// the graph (`provisional.rs`). Asked as the press lands, so read fresh.
+    #[qslot]
+    fn provisional_menu_shut_at(&self, row: i32) -> bool {
+        usize::try_from(row).map_or(self.provisional_on, |row| self.provisional_menu_shut(row))
+    }
+
     /// Names the refs whose chips to leave undrawn, at most one per kind
     /// (a delete touches at most one of each), and for a worktree going its
     /// chip (`worktree`, the folder's name) or the branch whose mark it is

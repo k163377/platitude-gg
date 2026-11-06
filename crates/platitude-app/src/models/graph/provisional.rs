@@ -117,6 +117,20 @@ impl GraphModel {
                 .is_some_and(|drawn| drawn == look)
     }
 
+    /// Whether a right-click on the row opens nothing while the entry is on
+    /// the graph (user decision — ask before changing): a row it would not
+    /// bring back is there for its place, and a stash-shaped tip's one way
+    /// back is the band's `Restore` — git refuses to pick it (`is a merge`),
+    /// and a name on it would stand on the copy's own merge commit.
+    pub(super) fn provisional_menu_shut(&self, row: usize) -> bool {
+        self.provisional_on
+            && (!self.provisional_row(row)
+                || self
+                    .rows
+                    .get(row)
+                    .is_some_and(|item| self.provisional_looks.contains_key(&item.oid_hex)))
+    }
+
     /// Re-reads where the entry's rows stand, after the rows moved or the
     /// entry did. Answers whether anything the bindings read moved; the
     /// revision moves with every call while an entry is shown, since a walk

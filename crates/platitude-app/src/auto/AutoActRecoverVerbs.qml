@@ -6,7 +6,7 @@ import platitude.ui
 
 /// The discard log's seat and its list, put on screen for a picture — an entry picked from it, on the
 /// graph under the band that tells it, the card a rest on an entry opens, what a press on the band's `Restore` leaves,
-/// and Esc on an entry on the graph.
+/// what the rows answer a hand with while the entry is on the graph, and Esc on it.
 ///
 /// The list reads the reflogs and the record's ref (`refs/pgg/discards`) as it opens, so the fixture is a preset:
 /// `--preset discards` holds every kind of entry under forty commits (numbered in `xtask::demo::discards`),
@@ -33,8 +33,63 @@ Item {
     /// for the whole entry / its part n once it is on the graph — a refused press frames the band still standing.
     /// `short` stands the window at its floor, where the preset's rows overflow the list, and `scroll:<rows>` then
     /// scrolls the list that far down: what the picked entry's stand-in rides an edge over (`RecoverPane.pickPin`).
+    /// `<gesture>:<row>` puts a hand on a row of the entry on the graph: `menu` right-clicks it and, where that opens
+    /// nothing, double-clicks it and puts the same two in from its chip's list; `dbl` double-clicks it; `again` clicks
+    /// it twice, spaced as a rename's two clicks are, then a dim named row at once. `tip` is the entry's tip, `list` the
+    /// same row from its chip's list (`dbl` only), `passed` the first row built that it leaves dim with a name on it.
     readonly property var looks: Harness.autoActArg === "" ? [] : Harness.autoActArg.split(",")
     readonly property var parts: acts.looks.filter(look => look.startsWith("part:"))
+    readonly property var hand: {
+        const named = acts.looks.filter(look => /^(menu|dbl|again):/.test(look))
+        return named.length > 0 ? named[0].split(":") : ["", ""]
+    }
+    readonly property string gesture: acts.hand[0]
+    /// That row as it stands now: null until the graph has built it.
+    function handItem() {
+        const graph = page.pageGraph
+        return acts.hand[1] !== "passed"
+            ? (graph.provisionalTipRow >= 0 ? acts.driver.graphPane.view.itemAtIndex(graph.provisionalTipRow) : null)
+            : acts.passedItem()
+    }
+    /// The first row built that the entry leaves dim with a name on it, null until there is one.
+    function passedItem() {
+        const graph = page.pageGraph
+        const view = acts.driver.graphPane.view
+        for (let row = 0; row < view.count; row++) {
+            const item = view.itemAtIndex(row)
+            if (item !== null && !graph.provisionalAt(row) && item.nameChip !== null)
+                return item
+        }
+        return null
+    }
+    /// What the hand left: whether the row draws a name (what a rename or a menu's card could reach), what its presses
+    /// answered, whether a name box stands — and for a right-click whether a menu does, with which rows, whether the
+    /// selection stayed where the press found it, and whether a move to the row's branch went out. The menu's seat is
+    /// empty on a run no menu ever opened in.
+    function handLine() {
+        const view = acts.driver.graphPane.view
+        const box = " box=" + (view.namingOid !== "")
+        const named = " named=" + recoverTimer.witnessed("named")
+        if (acts.gesture === "again")
+            return named + " armed=" + recoverTimer.witnessed("armed")
+                   + " quick=" + recoverTimer.witnessed("quick") + box
+        if (acts.gesture === "dbl")
+            return named + " dbl=" + recoverTimer.witnessed("dbl") + box
+        const held = driver.commitRowMenu
+        const standing = held !== null && held.showing
+        const words = []
+        for (let i = 0; standing && i < held.menu.count; i++) {
+            const row = held.menu.itemAt(i)
+            if (row && row.present && row.codeColSeat !== undefined)
+                words.push((row.code !== "" ? row.code : row.text).replace("…", ""))
+        }
+        return named + " menu=" + standing
+               + " rows=" + (standing ? held.menu.offeredRows : 0)
+               + " offered=" + words.join("|")
+               + " dbl=" + recoverTimer.witnessed("dbl") + box
+               + " stayed=" + (view.currentIndex === recoverTimer.witnessed("rowBefore"))
+               + " moved=" + (recoverTimer.kept("moved") ? recoverTimer.witnessed("moved") : "-")
+    }
     /// The fold this run asked for, so the sampler knows which width it waits for.
     readonly property bool foldWanted: acts.looks.indexOf("fold") >= 0
     /// The entry this run picks, -1 for none.
@@ -86,6 +141,8 @@ Item {
         recoverTimer.order = (acts.pickWanted >= 0 ? ["picked"] : [])
             .concat(acts.cardWanted ? ["rested"] : acts.restoreWanted ? ["pressed"]
                     : acts.scrollRows >= 0 ? ["scrolled"] : [])
+            .concat(acts.gesture === "again" ? ["first_click", "second_click"]
+                    : acts.gesture !== "" ? [acts.gesture] : [])
         recoverTimer.start()
         return true
     }
@@ -124,6 +181,7 @@ Item {
                // How many times the seat lit since a `blink` began it.
                + " blinks=" + acts.blinks
                + " width=" + Math.round(sidebarPane.width)
+               + (acts.gesture === "" ? "" : acts.handLine())
     }
 
     // Waits for the splitter to hand the pane the width the fold asked for and for the list's read, picks the entry
@@ -205,6 +263,67 @@ Item {
                     return true
                 }))
                     return
+            }
+            if (acts.gesture !== "" && op.at("picked")) {
+                if (!Awaited.all("recover_pick", op.pickShown()))
+                    return
+                const item = acts.handItem()
+                if (!Awaited.all("recover_hand_row", { "built": item !== null }))
+                    return
+                if (acts.gesture === "again") {
+                    op.input("first_click", () => {
+                        op.witness("named", item.nameChip !== null)
+                        item.leftClick(Qt.NoModifier)
+                    })
+                    return
+                }
+                const went = op.input(acts.gesture, () => {
+                    op.witness("named", item.nameChip !== null)
+                    if (acts.gesture === "dbl") {
+                        const fromList = acts.hand[1] === "list"
+                        if (fromList)
+                            driver.refList.picked(item.nameChip, item.oid_hex)
+                        op.witness("dbl", fromList ? "-" : item.doubleClick())
+                        return
+                    }
+                    // Where the keyboard stands, as a right-click finds it: the press may leave it, or not.
+                    op.witness("rowBefore", acts.driver.graphPane.view.currentIndex)
+                    item.askMenu()
+                    const held = driver.commitRowMenu
+                    if (held !== null && held.showing) {
+                        op.witness("dbl", "-")
+                        return
+                    }
+                    op.witness("dbl", item.doubleClick())
+                    // The same two doors from a row of the chip's list, which reach the page past the row's own
+                    // answers (`RefListPopup.rightClick`, `RefListPopup.doubleClick`).
+                    page.openRowMenu(item.oid_hex, item.nameChip, true)
+                    if (item.nameChip !== null)
+                        driver.refList.picked(item.nameChip, item.oid_hex)
+                    // Read where it is set: a run does not wait on a move it should never have sent.
+                    op.witness("moved", page.moveLanding !== "")
+                })
+                if (!went)
+                    return
+            }
+            if (acts.gesture === "again" && op.at("first_click")) {
+                const item = acts.handItem()
+                const other = acts.passedItem()
+                // Inside the double-click window a second click would be half a double-click; and the details the
+                // first click asked for land first.
+                if (!Awaited.all("recover_second_click", { "built": item !== null && other !== null,
+                                                           "window": item !== null && !item.clickGuarded,
+                                                           "details": page.pageDetailsSettled }))
+                    return
+                op.input("second_click", () => {
+                    item.leftClick(Qt.NoModifier)
+                    // Read where it is set: the wait is short and the box is what it turns into.
+                    op.witness("armed", item.renameArmed)
+                    // Inside the window that click opened: only a second click on the same row is half a double-click.
+                    other.leftClick(Qt.NoModifier)
+                    op.witness("quick", acts.driver.graphPane.view.currentIndex === other.index)
+                })
+                return
             }
             op.complete({ "name": "recover_pick", "when": () => op.pickShown(), "report": () => acts.frameLine() })
         }

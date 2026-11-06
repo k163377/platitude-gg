@@ -295,7 +295,8 @@ pub struct CommitMenuOffers {
     /// cherry-pick — it only adds a commit, so it runs detached or not, on
     /// any commit.
     pub cherry_pick: bool,
-    /// revert — as [`Self::cherry_pick`].
+    /// revert — as [`Self::cherry_pick`], but what it undoes has to be in the
+    /// history ([`Self::on_provisional`]).
     pub revert: bool,
     /// merge / rebase with this commit as the far side: needs a current
     /// branch, and a commit other than HEAD's.
@@ -357,6 +358,27 @@ impl CommitMenuOffers {
             words.push("stash-write");
         }
         words
+    }
+
+    /// The same offers on a commit the discard log's picked entry draws on
+    /// the graph, a display mode of its own (user decision — ask before
+    /// changing): what the mode can never do has no row, not a greyed one, and
+    /// what stays greys under [`Self::standing`] as anywhere (デザイン規約
+    /// §メニュー). It can do only what adds and leaves every ref where it is —
+    /// cherry-pick and a new name on the commit. `revert` would undo what the
+    /// branch never had; squash / drop are refused off the branch, and on a
+    /// commit still in it (an entry that took only a name) would rewrite what
+    /// the entry is not about; merge / rebase / reset would take the discard
+    /// back by moving a ref (破棄記録仕様.md「復元は追加の操作」).
+    #[must_use]
+    pub fn on_provisional(self) -> Self {
+        Self {
+            revert: false,
+            integrate: false,
+            edit_history: false,
+            move_branch: false,
+            ..self
+        }
     }
 }
 

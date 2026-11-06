@@ -95,11 +95,13 @@ AppListView {
     }
     /// A row was left-pressed: answers whether it is a press of its own (`ReclickGesture.click`). `chip` is the chip's
     /// first ref, read now (the row may show something else when the wait ends); null where the row draws no ref.
+    /// While the discard log's entry is on the graph no name takes a rename, on a row or in a chip's list.
     function noteClick(oidHex, chip) {
         // While a box stands, a click only takes it down (`RepoPage.activateRow`); arming a rename here would reopen it
         // a beat later. The key still counts, so the next click is an ordinary second one. Mostly the press has taken
-        // the box down already (`GraphPane.stopNaming`); this is for the box a half-typed name keeps standing.
-        const nameable = chip !== null && graphList.namingOid === ""
+        // the box down already (`GraphPane.stopNaming`); this is for the box a half-typed name keeps standing. The same
+        // key under the entry: every row keying "" would take a quick click on another row for a double-click's second.
+        const nameable = chip !== null && graphList.namingOid === "" && !graphList.graphModel.provisionalOn
         return reclick.click(chip === null ? "" : chip.key,
                              nameable ? { "oid": oidHex, "chip": chip } : null)
     }
