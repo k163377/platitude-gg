@@ -44,8 +44,9 @@ Item {
     /// Whether a remote already has that commit: the rewrite rows carry a tag and do not ask
     /// (デザイン規約 §回数押し「ローカルの履歴書き換えはクリック」).
     required property bool published
-    /// What these menus offer. `canSequence` is cherry-pick / revert, which only add a commit and so ask less.
-    required property bool canSequence
+    /// What these menus offer. `canCherryPick` and `canRevert` only add a commit and so ask less.
+    required property bool canCherryPick
+    required property bool canRevert
     required property bool canIntegrate
     required property bool canEditHistory
     required property bool canMoveBranch
@@ -377,7 +378,7 @@ Item {
         AppMenuSeparator {}
         AppMenuItem {
             code: "cherry-pick"
-            offered: rowMenu.canSequence
+            offered: rowMenu.canCherryPick
             blockedReason: rowMenu.startWhy
             onTriggered: rowMenu.cherryPickRequested(rowMenu.oid)
         }
@@ -385,7 +386,7 @@ Item {
         // cherry-pick's pair (copy it here / undo it here).
         AppMenuItem {
             code: "revert"
-            offered: rowMenu.canSequence
+            offered: rowMenu.canRevert
             blockedReason: rowMenu.startWhy
             onTriggered: rowMenu.revertRequested(rowMenu.oid)
         }

@@ -1656,7 +1656,8 @@ FocusScope {
             pullRuns: commitMenuState.menuPullRuns
             pullOut: commitMenuState.menuPullOut
             pullUpstream: commitMenuState.menuPullUpstream
-            canSequence: commitMenuState.menuCanSequence
+            canCherryPick: commitMenuState.menuCanCherryPick
+            canRevert: commitMenuState.menuCanRevert
             canIntegrate: commitMenuState.menuCanIntegrate
             canEditHistory: commitMenuState.menuCanEditHistory
             canMoveBranch: commitMenuState.menuCanMoveBranch

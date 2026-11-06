@@ -292,9 +292,11 @@ pub fn ref_menu(
 /// other flag is the commit menu's.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct CommitMenuOffers {
-    /// cherry-pick / revert — they only add a commit, so they run detached
-    /// or not, on any commit.
-    pub sequence: bool,
+    /// cherry-pick — it only adds a commit, so it runs detached or not, on
+    /// any commit.
+    pub cherry_pick: bool,
+    /// revert — as [`Self::cherry_pick`].
+    pub revert: bool,
     /// merge / rebase with this commit as the far side: needs a current
     /// branch, and a commit other than HEAD's.
     pub integrate: bool,
@@ -330,8 +332,11 @@ impl CommitMenuOffers {
     /// with.
     pub fn words(&self) -> Vec<&'static str> {
         let mut words: Vec<&'static str> = Vec::new();
-        if self.sequence {
-            words.push("sequence");
+        if self.cherry_pick {
+            words.push("cherry-pick");
+        }
+        if self.revert {
+            words.push("revert");
         }
         if self.integrate {
             words.push("integrate");
@@ -372,7 +377,8 @@ pub fn commit_menu(
     let on_branch = open && !detached && !current_branch.is_empty() && commit_row;
     let elsewhere = oid_hex != head_oid;
     CommitMenuOffers {
-        sequence: commit_row,
+        cherry_pick: commit_row,
+        revert: commit_row,
         integrate: on_branch && elsewhere,
         edit_history: on_branch,
         move_branch: on_branch && elsewhere,

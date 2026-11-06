@@ -15,7 +15,8 @@ fn an_ordinary_commit_away_from_head_offers_the_whole_menu() {
     assert_eq!(
         offers,
         CommitMenuOffers {
-            sequence: true,
+            cherry_pick: true,
+            revert: true,
             integrate: true,
             edit_history: true,
             move_branch: true,
@@ -27,7 +28,8 @@ fn an_ordinary_commit_away_from_head_offers_the_whole_menu() {
     assert_eq!(
         offers.words(),
         [
-            "sequence",
+            "cherry-pick",
+            "revert",
             "integrate",
             "edit-history",
             "move-branch",
@@ -48,7 +50,10 @@ fn the_commit_head_stands_on_still_rewrites_but_integrates_nothing() {
 #[test]
 fn detached_keeps_only_the_rows_that_ask_nothing_of_a_branch() {
     let offers = commit_menu(true, "", true, "", "abc123", "def456", "");
-    assert!(offers.sequence, "cherry-pick and revert run detached");
+    assert!(
+        offers.cherry_pick && offers.revert,
+        "cherry-pick and revert run detached"
+    );
     assert!(offers.branch_here, "the way back out of detached");
     assert!(!offers.integrate);
     assert!(!offers.edit_history);
@@ -69,7 +74,8 @@ fn a_standing_operation_greys_the_whole_menu_in_its_seats() {
     assert_eq!(
         offers.words(),
         [
-            "sequence",
+            "cherry-pick",
+            "revert",
             "integrate",
             "edit-history",
             "move-branch",

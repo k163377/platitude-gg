@@ -42,7 +42,8 @@ QtObject {
     // in hand as the menu opens (デザイン規約 §行が読む答えはどこから来るか).
     property bool menuPublished: false
     /// What these menus offer, held still while they stand. The rules are core's (`offers::commit_menu`).
-    property bool menuCanSequence: false
+    property bool menuCanCherryPick: false
+    property bool menuCanRevert: false
     property bool menuCanIntegrate: false
     property bool menuCanEditHistory: false
     property bool menuCanMoveBranch: false
@@ -372,7 +373,8 @@ QtObject {
         menuState.menuHardResetTakes = menuState.tree.hardResetTakes
         menuState.menuHardResetNotCopied = menuState.tree.hardResetNotCopied
         menuState.menuTipHeldElsewhere = menuState.tree.headReachedElsewhere
-        menuState.menuCanSequence = offers.includes("sequence")
+        menuState.menuCanCherryPick = offers.includes("cherry-pick")
+        menuState.menuCanRevert = offers.includes("revert")
         menuState.menuCanIntegrate = offers.includes("integrate")
         menuState.menuCanEditHistory = offers.includes("edit-history")
         menuState.menuCanMoveBranch = offers.includes("move-branch")

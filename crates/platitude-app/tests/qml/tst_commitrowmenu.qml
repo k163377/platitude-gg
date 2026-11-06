@@ -34,7 +34,8 @@ Item {
         oid: "abc123"
         stashRef: ""
         published: false
-        canSequence: true
+        canCherryPick: true
+        canRevert: true
         canIntegrate: true
         canEditHistory: true
         canMoveBranch: true
@@ -130,7 +131,8 @@ Item {
         const all = { "targetKind": "branch", "targetName": "feature/topic-a", "canSwitch": true,
                       "switchAsks": false, "heldLeaf": "", "pullRuns": "here", "pullOut": "",
                       "pullUpstream": "origin/feature/topic-a", "published": false, "canIntegrate": true,
-                      "canSequence": true, "opStanding": false, "hardResetTakes": 0, "hardResetNotCopied": false }
+                      "canCherryPick": true, "canRevert": true, "opStanding": false, "hardResetTakes": 0,
+                      "hardResetNotCopied": false }
         for (const key in fields)
             all[key] = fields[key]
         for (const key in all)
@@ -465,7 +467,7 @@ Item {
             menu.menu.dismiss()
         }
 
-        /// They ask less of the repository than the rest (offers::commit_menu `sequence`).
+        /// They ask less of the repository than the rest (offers::commit_menu `cherry_pick`, `revert`).
         function test_the_rows_that_only_add_a_commit_take_the_row_they_stand_on() {
             root.aimAt({})
             root.row("cherry-pick").triggered()
@@ -475,7 +477,7 @@ Item {
             root.row("revert").triggered()
             compare(root.asked, "revert abc123")
 
-            root.aimAt({ canSequence: false })
+            root.aimAt({ canCherryPick: false, canRevert: false })
             verify(!root.row("cherry-pick").offered)
             verify(!root.row("revert").offered)
         }
