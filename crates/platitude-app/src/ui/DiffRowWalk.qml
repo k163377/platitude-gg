@@ -4,8 +4,8 @@ import QtQuick
 import platitude.ui
 
 // Where the diff's reading position stands, and whether the arrows are this pane's to answer (the arrows' shared rules:
-// 規約 §矢印で履歴を辿る). The one place the view's `contentY` and the keyboard are written from; its visibility is the
-// pane's.
+// 規約 §矢印で履歴を辿る). The one place the keyboard is written from — the wheel, a drag, the middle hand and the
+// kept place send the view's `contentY` too; its visibility is the pane's.
 //
 // Up / Down move the view, one row a press: nothing here follows a selection, so a lit row would bring nothing along.
 // The unit is the wheel's row — a notch sends `Metrics.wheelRows`, a press one — so the same surface is not sent in two
