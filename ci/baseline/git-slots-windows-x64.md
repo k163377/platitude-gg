@@ -151,8 +151,8 @@ A = 背景と elsewhere が `max(1, n/2)`、B = `max(1, n/4)`。巡回 5 秒・�
 
 **結論: 現状のまま**。**どれも製品条件の誤差の中**。製品条件では index が二度と書かれないので
 token も cache も更新されない。効かせるには status のたびに index を書く = 他の worktree の
-`index.lock` を握る側へ戻ることになり、それは巡回が他所の木を読める前提(rules-refs/core.md の
-`--no-optional-locks` の項)を崩す。
+`index.lock` を握る側へ戻ることになり、それは巡回が他所の木を読める前提(`process::executor` の
+`FIXED_ARGS` / `FIXED_ENV` のコメント)を崩す。
 
 ## ペインが立っている worktree の読み
 
