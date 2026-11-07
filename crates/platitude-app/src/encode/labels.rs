@@ -19,7 +19,7 @@ pub(crate) fn pr_set() -> &'static std::collections::HashSet<String> {
 /// name: a field added here goes into both halves of the `Record` impl
 /// (`to_map` and `from_map`, which the round-trip test pins together),
 /// the QML that reads it, and `tst_refstack.qml`'s `chip()`, which spells
-/// every field.
+/// every field but `home` (`RefChip` reads it as `=== true`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Chip {
     pub kind: LabelKind,
