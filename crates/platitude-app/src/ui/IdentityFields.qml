@@ -31,8 +31,8 @@ ColumnLayout {
     property string heldName: AppBackend.identityName
     property string heldEmail: AppBackend.identityEmail
 
-    /// What an empty box stands for: an example for the global pair; a repository's override shows the inherited
-    /// value.
+    /// What an empty box stands for: an example for the global pair; a repository's override says `inherited`, the
+    /// value it falls back to being said under the boxes (`SettingsRepoPane`).
     property string namePlaceholder: qsTr("Ada Lovelace")
     property string emailPlaceholder: qsTr("ada@example.com")
 
