@@ -70,9 +70,9 @@ Item {
         route.attempt()
     }
 
-    /// One reading of what the completion stands on: `{ when, owed, terms }`, or null when it could not be read —
-    /// a `when` or page holds that threw, a breach said at once: the hold would otherwise stand to the ceiling naming
-    /// nothing.
+    /// One reading of what the completion stands on: `{ when, owed, unsized, terms }`, or null when it could not be
+    /// read — a `when` or page holds that threw, a breach said at once: the hold would otherwise stand to the ceiling
+    /// naming nothing.
     function reading() {
         const from = route.completing
         const terms = ({})
