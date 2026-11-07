@@ -137,7 +137,7 @@ async fn discard_hunk(
     assert_eq!(write_answer(sink, id).await, None);
 }
 
-/// Brings back the newest thrown-away work.
+/// Brings back the `nth` newest thrown-away work (0 is the newest).
 async fn restore_newest_work(
     repo: &TestRepo,
     sink: &crate::support::session::CaptureSink,
