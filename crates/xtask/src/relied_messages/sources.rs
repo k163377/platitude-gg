@@ -1,6 +1,6 @@
-//! The trees read: one bare repository the primary checkout keeps under
-//! `target/relied-messages`, fetched from each supplier through git, and one
-//! `git grep` a tree.
+//! The trees read: bare repositories the primary checkout keeps under
+//! `target/relied-messages`, one a supplier ([`Cache`]), fetched through git,
+//! and one `git grep` a tree.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
