@@ -11,9 +11,9 @@ use super::qml_register;
 // WorktreeModel: where the tree stands, as one record — HEAD and what
 // derives from it, the standing operation, and the last status's counts.
 // The one place QML reads HEAD from: other models are told the same report
-// (`hub::sink`) but are not a source. `headOid` comes off the status and
-// answers detached too; `NavSectionModel.headOid` is the tip of the branch
-// HEAD is on, empty while detached. The file list itself is a
+// (`hub::sink`) but are not a source. `headOid` comes off that report
+// (`StateMsg::Head`) and answers detached too; `branchOid` is the tip of the
+// branch HEAD is on, empty while detached. The file list itself is a
 // NavSectionModel.
 // ---------------------------------------------------------------------------
 
