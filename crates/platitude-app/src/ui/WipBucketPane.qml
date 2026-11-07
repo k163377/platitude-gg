@@ -32,7 +32,7 @@ ColumnLayout {
     /// The list itself — the pane walks the buckets through this (choice, automation, the arrow keys).
     readonly property alias list: bucketList
     /// How many rows this bucket shows, and the room they would take — what the pane shares out by
-    /// (`WipPane.roomFor`).
+    /// (`WipPane.shareOut`).
     readonly property int rows: bucketPane.model.shownRows
     readonly property real wants: bucketPane.rows * Theme.rowHeight
     /// The heading's height as the token, not measured: the pane shares room out from it, and measuring an item
