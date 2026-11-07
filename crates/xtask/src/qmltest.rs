@@ -1070,8 +1070,8 @@ fn reported_paths(text: &str) -> Option<(Vec<String>, Vec<String>)> {
 /// Keeps the newest [`KEPT`] runs under [`FAILED`], and takes a staging
 /// directory no run finished with once it is [`LITTER_AGE`] old. Silent: a
 /// directory that will not go is the next sweep's. Each group keeps its
-/// own newest: `together` (what a run of every file in one runner left;
-/// no run writes it now) is never counted with `suite`.
+/// own newest: `together` (what a run of every file in one runner left)
+/// is never counted with `suite`.
 fn sweep(root: &Path) {
     for group in GROUPS {
         let failed = root.join(failed_root()).join(FAILED).join(group);
