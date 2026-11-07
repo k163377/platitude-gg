@@ -16,7 +16,7 @@
 //! `+`, chosen by `?:`, `||` or `??`, handed through `Qt.resolvedUrl`
 //! (`values`) —, and the file that value names on disk is worked out as Qt
 //! works it out (`super::urls`: the string's escapes, the URL, its
-//! resolution, the file). A string naming a `.qml`, `.js` or `.mjs` file
+//! resolution, the file). A string naming a `.qml`, `.js`, `.mjs` or `.qsb` file
 //! loads it too, by whatever route. A directory's `qmldir` adds the files
 //! it names. A module import (`import QtQuick`, `import platitude.ui`)
 //! resolves on the import path instead — what a runner stages there is its
@@ -226,7 +226,8 @@ fn loads(text: &str) -> Result<Vec<Named>, String> {
                 ));
             }
             None => {
-                // A string naming a file of QML or JS, which a load may read by any route.
+                // A string naming a file of QML, JS or a compiled shader, which a load may
+                // read by any route.
                 if k >= past
                     && let Some(value) = string_value(&tokens[k].text)
                     && [".qml", ".js", ".mjs", ".qsb"]
