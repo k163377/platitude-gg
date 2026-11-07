@@ -158,7 +158,7 @@ fn line_of(block: &str) -> Option<Line> {
 /// Counts what the stash-shaped commits hold that the record's own count
 /// cannot see: a copy's untracked files (its third parent) and a dropped
 /// stash's paths, whole (a note stands on the stash, its own diff empty) —
-/// one `log --no-walk` for all of them.
+/// one `log --no-walk` per batch of them.
 async fn counted(
     executor: &GitExecutor,
     workdir: &Path,
