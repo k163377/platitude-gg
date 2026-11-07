@@ -602,7 +602,7 @@ pub fn worktree_rename_refused(name: &str, message: String) -> crate::error::Git
     withheld_about(ReportKind::WorktreeRenameTaken, name, message)
 }
 
-/// The eight rewrites this end turns down before git runs. There is no
+/// The seven rewrites this end turns down before git runs. There is no
 /// command to name, and the screen writes both lines (rules-refs/app-ui.md
 /// 「Rust に文言を置かない」); `message` is only the log's record.
 fn withheld(kind: ReportKind, message: String) -> crate::error::GitError {
