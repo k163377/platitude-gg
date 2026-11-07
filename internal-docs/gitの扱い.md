@@ -142,7 +142,7 @@ Porcelain の入出力を「利用者の体験のために変わりうる」と�
   在処は断った理由の証拠ではない)。名指せなければ `git turned it down — see GIT COMMANDS`。
 - **終了コードで答えるコマンド**(`answers_by_code`)の同じコードが断りでもある時は、断りの語を
   `except_when_it_says` / `except_when` に名指して行に言葉を持たせる(rebase の exit 1・`stash apply` の exit 1・
-  **merge / pull の早送りを塞ぐ作業ツリー**の exit 1)。言葉の無い答えの行を報せやヘッダが指すと、読む人は
+  **merge の早送りを塞ぐ作業ツリー**の exit 1)。言葉の無い答えの行を報せやヘッダが指すと、読む人は
   何も見つけられない。
 
 ## 発行前の釘付け(起きなくした物)
