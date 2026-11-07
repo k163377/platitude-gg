@@ -15,9 +15,9 @@ import platitude.ui
 // A drag past either bound gets the one refusal badge (`GraphColumnDividers`, `RefusalBadge`): the last lane or the
 // window, to the hand both are one "no more". Squeezed until ceiling meets floor, the column has one width: no line,
 // and the badge on hover (`graphColWFixed`). Past the column's edge everything drawn sinks into the row's ground
-// (`LaneDissolve`). The chip column narrows to a name's first 3 characters and a `…`: counted in characters, and
-// three, as a tab title's floor is — both are names told apart by their head. Both dragged widths are remembered in
-// state.toml (`PageLayout.reportLayout`).
+// (`LaneDissolve`). The chip column narrows to a name's first 3 characters and a `…`: counted in characters, as a
+// tab title's floor is (`TabMetrics.titleMinChars`, three at each end of a middle cut). Both dragged widths are
+// remembered in state.toml (`PageLayout.reportLayout`).
 QtObject {
     id: metrics
 
