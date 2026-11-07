@@ -1,8 +1,8 @@
 //! A branch goes out under its full name: beside a tag of the same name
 //! the bare name is ambiguous, which git refuses (`src refspec <name>
-//! matches more than one`), and the tag must not ride along either. Every
-//! door that sends a branch here — the first push's answer, the toolbar's
-//! push, a branch row's — against real git, with a `file://` remote so
+//! matches more than one`), and the tag must not ride along either. The
+//! first push's answer and the toolbar's push (a branch row's plan is
+//! `remote::push`'s unit test) against real git, with a `file://` remote so
 //! nothing leaves the machine (実装計画 §10). A send of a remote-tracking
 //! ref keeps the source its caller names (`remote_integration`'s
 //! replacements).
