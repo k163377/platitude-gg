@@ -1,8 +1,8 @@
 //! What a message or a patch costs on its way into git, measured through
 //! the product's own functions, by the input's size and by how many times
 //! git reads it: a commit (a message, one read), a partial stage of a few
-//! lines and of a whole rewritten file (one read), a partial discard of the
-//! same (one read), and a restore of a few changed lines and of a whole
+//! lines and of a whole rewritten file (one read), a partial discard of
+//! the rewritten file alone (one read), and a restore of a few changed lines and of a whole
 //! rewritten file (its `--check` and its apply: two reads). Each test is
 //! one operation, run in a process of its own so its peaks hold that
 //! operation and nothing else run after it — its setup, the rounds and
