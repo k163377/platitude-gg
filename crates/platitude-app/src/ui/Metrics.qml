@@ -89,7 +89,8 @@ QtObject {
     readonly property int hoverBodyRows: 4
     readonly property int detailsAvatar: 40
     readonly property int anchorDelayMs: 50
-    // Arrow-key stepping settles here before the details load, so a held key loads once. It has to outlast every OS's
+    // A held arrow key's steps settle here before the row is read, so a held key reads where it set off and where it
+    // stopped; a press reads at once (`GraphRowWalk.noteStep`, `FileRowWalk.noteStep`).
     // key-repeat interval (macOS 15ms / X11 25ms / Windows ≈32ms); the first repeat's delay is longer everywhere, so a
     // first press has always settled.
     readonly property int keyStepSettleMs: 150
