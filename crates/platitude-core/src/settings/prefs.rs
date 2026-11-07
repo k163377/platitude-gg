@@ -454,8 +454,8 @@ network_timeout_secs = 9
         );
     }
 
-    /// A number under the floor is the floor, so a file cannot ask for a
-    /// `status` per worktree every second.
+    /// The pair is held to range together — a ceiling written under its
+    /// floor is the floor — and survives a round trip.
     #[test]
     fn the_floors_and_ceilings_survive_the_file_and_a_ceiling_never_sits_under_its_floor() {
         let defaults = defaults_from(
