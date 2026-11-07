@@ -52,7 +52,7 @@ use crate::remote::RemoteBranch;
 /// identity settings (none set, `user.useConfigOnly`) must not stop it.
 const RECORDER: &str = "Platitude GG";
 
-/// How many paths one `ls-files` / `update-index` / `add` takes on its
+/// How many paths one `ls-tree` / `update-index` / `add` takes on its
 /// command line.
 pub(super) const PATHS_PER_CALL: usize = 200;
 
