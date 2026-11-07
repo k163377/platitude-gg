@@ -44,8 +44,8 @@ Rectangle {
     /// Where what changed inside this row falls in the line — runs of layout places (`[{ from, len }, …]`), empty
     /// for nothing (`encode::DiffRow.emph`).
     required property var emph
-    /// The line's small facts under `own` — `{fence, noNewline, side}` — and, on a split row with a line on the
-    /// right, that line's under `pair` (`encode::Marks`).
+    /// The line's small facts under `own` — `{fence, noNewline, side, found, foundNow}` — and, on a split row with
+    /// a line on the right, that line's under `pair` (`encode::Marks`).
     required property var marks
     /// Where the reader's selection falls on this row (`DiffLineItem.sel` — `{whole, runs}`): the whole line, or
     /// runs like `emph` on a row a drag cuts through. `undefined` wherever the plain `Copy` does not take — what is
