@@ -9,7 +9,7 @@ paths:
 
 ## 長さの閾値(コード行)
 
-- **1 ファイル 1000 行 / fn 100 行 — どちらもコード行だけを数える** — **機械化済み: `cargo xtask structure`(check に内蔵)**、fn は clippy(workspace lints + clippy.toml の閾値)。数字の出所は clippy の `too_many_lines`(fn = 100)と、提案中の `too_many_lines_in_file`(ファイル = 既定案 1000・`restriction`)で、**このリポジトリの現在行数から逆算した数字ではない**。`structure` はコード行と「コメント + 空行」の割合を報せる — **「コメントで長い」と「コードで長い」は別の答えを要する**
+- **1 ファイル 1000 行 / fn 100 行 — どちらもコード行だけを数える** — **機械化済み: `cargo xtask structure`(gate の常時ステップ)**、fn は clippy(workspace lints + clippy.toml の閾値)。数字の出所は clippy の `too_many_lines`(fn = 100)と、提案中の `too_many_lines_in_file`(ファイル = 既定案 1000・`restriction`)で、**このリポジトリの現在行数から逆算した数字ではない**。`structure` はコード行と「コメント + 空行」の割合を報せる — **「コメントで長い」と「コードで長い」は別の答えを要する**
 - **これは「設計を問い直す閾値」** — 超えた事実は、そのファイルの設計を人が見る合図。**src / tests も同じ数字**(出荷されるかどうかの差は §分割 の設計規則の側)
 - **追記の手順はこの順**:
   1. **一旦、行数は無視して書く** — 見るのは設計の妥当性と、コメントの簡潔さだけ
