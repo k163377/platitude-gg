@@ -351,8 +351,8 @@ impl RepoSession {
     /// (generations cannot interleave), counting into `totals`.
     ///
     /// A stream may only add to the graph it reset: `generation` must
-    /// match the installed one — not `log_gen`, which moves for passes
-    /// that reach nobody and would cut a stream still on screen. A refused
+    /// match the installed one (`Shared::generation`) — a pass installed
+    /// since has the consumer on a graph of its own. A refused
     /// batch counts nothing.
     fn emit_rows(
         &self,

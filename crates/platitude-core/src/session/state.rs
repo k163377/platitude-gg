@@ -240,11 +240,11 @@ pub(super) struct Shared {
     /// window (`session::published::PublishMarks`).
     pub(super) publish_marks: PublishMarks,
     /// The graph the consumer is on, which `builder`, `applied` and
-    /// `sent_rows` speak in. Not `log_gen`: that is bumped before a pass
-    /// takes this lock and by passes that send nothing (a skipped swap),
-    /// while everything here still belongs to the walk that was shown.
-    /// Copied from `log_gen`, every later chip diff would name a graph the
-    /// consumer is not on, and be dropped.
+    /// `sent_rows` speak in. Not `log_gen`, the counter that hands the
+    /// numbers out: a pass takes one under this lock as it installs (a
+    /// skipped swap takes none), so the two agree while the lock is held,
+    /// and this one moves with the record to the next session
+    /// (`DrawnGraph`).
     pub(super) generation: u64,
     /// Label chips per commit id, derived from the last refs snapshot.
     pub(super) label_map: LabelIndex,
