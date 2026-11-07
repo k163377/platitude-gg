@@ -1,7 +1,7 @@
 # アバターの取り込み縮小: 実測(Windows x64)
 
 仕様は [デザイン規約.md](../../internal-docs/デザイン規約.md) §アバターを与える と
-[.claude/rules-refs/core.md](../../.claude/rules-refs/core.md) の picture 項が正本。
+`crates/platitude-core/src/picture.rs` の冒頭が正本。
 
 **測ったのは使い捨ての probe**(木の外・コミットしない)。環境: Windows 11 / x64 / release / ウォームキャッシュ。
 
