@@ -394,7 +394,7 @@ impl RepoSession {
 
 /// Where the other worktrees stand when they stand on no branch, as
 /// the walk wants them. The walk starts only from `HEAD`, the branches,
-/// the remotes (the tags, the stashes, a merge's incoming): a detached
+/// the remotes (the tags, the stashes, a merge's incoming, a picked discard): a detached
 /// worktree on a commit none of those reach would get no row, and its
 /// WORKTREES row's click and its chip would lead nowhere. Headless:
 /// `nav-jump worktree:1 --preset worktree-detached`.
