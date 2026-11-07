@@ -20,7 +20,7 @@ const YARD: &str = "pgg-tests";
 /// `xtask`'s `temp::place()`, spelled again for the same reason, with
 /// `tree::primary_root`'s walk: the primary checkout's `target/tmp`, found
 /// from the tree this suite was built in, or the container's own temp
-/// folder (`linux::IN_CONTAINER`).
+/// folder (`linux::environment::IN_CONTAINER`).
 fn temp_root() -> PathBuf {
     if std::env::var_os("PGG_IN_CONTAINER").is_some() {
         return std::env::temp_dir();
