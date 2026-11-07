@@ -872,7 +872,8 @@ QtObject {
              + "</span>"
     }
     /// A sentence as rich-text markup with a link on its one word a press can reach (`CardText.markup`), found inside
-    /// the already-spelled sentence that is measured and read back (`HoverToolButton.tip`). Every piece is escaped. The
+    /// the already-spelled sentence that is measured and read back (`FindBar`'s note; a tip's place goes through
+    /// `CardText.place` instead). Every piece is escaped. The
     /// tint rides inside the anchor: a `TextEdit` takes its link colour from the markup only (`CardText`).
     function placeInSentence(sentence, place, href, tint) {
         const seat = sentence.indexOf(place)
