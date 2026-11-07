@@ -45,8 +45,8 @@ impl Record for TagCarrier {
 }
 
 /// Why git would not take a name beside the branches or tags a section
-/// holds (`NavSectionModel::name_clash`): `kind` is `taken`, `folder` or
-/// `case`, and `with` the name in the way (empty for `taken`).
+/// holds (`NavSectionModel::name_clash`): `kind` is `taken`, `holds`,
+/// `under` or `case`, and `with` the name in the way (empty for `taken`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NameClashed {
     pub kind: String,
