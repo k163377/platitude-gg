@@ -166,7 +166,7 @@ QtObject {
     /// amend, so the commit button and the details pane's save say so first (`RepoTab.amendEmpties`).
     readonly property string amendEmpties: qsTr("Amending would leave the last commit empty — what is staged undoes it")
 
-    /// Opening a repository, as the graph's empty state, the tab strip's `+` menu and its accessible name offer it.
+    /// Opening a repository, as the graph's empty state, the ☰ menu and the tab strip's `+`'s accessible name say it.
     readonly property string openRepository: qsTr("Open repository…")
 
     /// Adding a remote, as the sidebar header, the collapsed rail and the publish flow offer it: every door to the same
