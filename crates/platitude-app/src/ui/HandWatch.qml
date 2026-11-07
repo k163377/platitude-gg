@@ -81,10 +81,11 @@ HoverHandler {
     /// the rows read the hand again** (`shifts`): the row now under it asks after that, and its ask is the one kept —
     /// told the other way round, the seat would keep the ask of the row that slid away over the new one.
     /// `disturbed`: the move came of no reader's doing, and what the hand is inside stays (`disturbed`).
-    /// The surfaces that say it: the right pane's file list; another worktree's list (scroll, count, `y`, reread); the
-    /// diff (scroll, the sideways `codeScroll.offset`, the rows laid out again `rowsGen`, count, `y` — a search's
-    /// off-screen hit too); the command log (scroll, a row above growing). A new surface whose rows move under a still
-    /// hand says it too, or a tip stays out over a row that slid away. Fixed by `tst_tipmoves.qml` and `tip-slide`.
+    /// The surfaces that say it: the graph; the left menu; the right pane's file list; another worktree's list (scroll,
+    /// count, `y`, reread); the diff (scroll, the sideways `codeScroll.offset`, the rows laid out again `rowsGen`,
+    /// count, `y` — a search's off-screen hit too); the command log (scroll, a row above growing); the discard log; the
+    /// band's marks. A new surface whose rows move under a still hand says it too, or a tip stays out over a row that
+    /// slid away. Fixed by `tst_tipmoves.qml` and `tip-slide`.
     function rowsMoved(disturbed) {
         const over = watch.present
         if (over) {
