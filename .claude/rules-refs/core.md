@@ -51,7 +51,7 @@
 - **バイト数より確保の個数が効く帯がある** — 個数の削減は計数より WorkingSet に大きく出る(差はヒープ管理領域。計数アロケータには見えない)。`classes=` の**件数**を必ず見る
 - **mimalloc は不採用** — WorkingSet が増え(環境変数で抑えても private が増える)、起動・応答に差なし。数字は [perf-windows-x64.md](../../ci/baseline/perf-windows-x64.md) §アロケータと確保の個数
 - **refs に比例する常駐データは平らな索引 1 本で持つ**: `BTreeMap` は 1 件でも 11 スロットのノード(→ `RemoteTagIndex`)/ `HashMap<K, Vec<V>>` は push 1 回で 4 スロット(→ `LabelIndex`)/ hex 40 字の `String` は 1 行 1 確保。`String` → `Vec<u8>` では 1 バイトも減らない — 減るのは表現を変えた時だけ
-- **メモリ予算の半分は空リポジトリで既に埋まっている**(`--no-open` — ci/baseline/perf-windows-x64.md。Rust ヒープは 1.2MB)。software 描画は fps が予算割れ(GPU −25MB でも)
+- **メモリ予算の半分は窓だけ(リポジトリ無し)で既に埋まっている**(`--no-open` — ci/baseline/perf-windows-x64.md)。software 描画は fps が予算割れ(GPU −25MB でも)
 
 - interactive rebase は `GIT_SEQUENCE_EDITOR` に別実行ファイル `pgg-todo-editor` を差す。**配布物に同梱必須**(本体と同じディレクトリ)
 - **rebase・merge・pull は全部 `--no-autostash`、push は全部 `--no-follow-tags`** — 利用者の `rebase.autoStash` / `merge.autoStash` / `push.followTags` を釘付けで外す(理由と網は `integrate::rebase_command` / `integrate::merge` / `remote::pull` / `remote::push::porcelain_push` のコメント)
