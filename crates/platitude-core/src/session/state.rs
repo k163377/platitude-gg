@@ -198,7 +198,7 @@ pub(super) struct WorktreeRead {
 pub(super) struct WriteRequest {
     pub(super) operation: Operation,
     /// Taken at acceptance and held until the request is done — `None`
-    /// for the lanes that take no place (`session::write_order`). A request
+    /// for the kinds that take no place (`OperationKind::writes_here`). A request
     /// the queue turns away gives it back by being dropped.
     pub(super) place: Option<super::write_order::Place>,
     /// Places in the orders of the other worktrees the write puts
