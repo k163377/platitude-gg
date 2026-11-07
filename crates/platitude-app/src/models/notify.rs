@@ -211,7 +211,7 @@ pub(crate) fn runs_of(rows: impl IntoIterator<Item = usize>) -> Vec<RangeInclusi
 /// runs of their places after; and the rows that stay, as `(before,
 /// after)` pairs in order. A row that stays keeps its delegate — and the
 /// view keeps whatever stands on it (rules-refs/app-ui.md 「外乱では閉じない
-/// — 一覧」).
+/// — グラフと一覧」).
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct Edit {
     pub(crate) gone: Vec<RangeInclusive<usize>>,
