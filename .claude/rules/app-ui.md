@@ -21,7 +21,7 @@ UI の**値**の正本は `Theme.qml` / `Metrics.qml`(なぜその値かは値�
 - **QML モジュールは 2 つ — 製品 `ui/`(`platitude.ui`)と検証ハーネス `auto/`(`platitude.auto`)**。後者は Cargo feature `automation` でしか埋め込まれず(出荷ビルドには入らない)、**製品から `platitude.auto` の型は URL 越しだけ**(`HarnessSeat` に `seats` を渡し `ask()` で取り出す)。**走らせ方は `Harness` singleton が答え、製品は中立な property だけを持つ**。**Rust 側で `PGG_*` を読むのは `harness::knobs` だけ**(例外は `main.rs` の `PGG_LOG`)、core へは値で渡す。どれも**機械化済み: `cargo xtask structure`**
 - **意匠の土台は既存の部品から選ぶ**(一覧は rules-refs の台座の行)。素の `Popup` / `ListView` / `RotationAnimator` / `elide` を新しく書かない — 台座に積んだ罠避けがまるごと落ちる。**3 箇所以上で言う同じ文・語は `Words`**
 - 配線: データは親→子へ property、操作・状態変更は子→親へ signal。タブのモデル群は `RepoPage` が所有しペインへ渡す(ペインはモデルの slot を呼んでよいが、ページ状態は signal で上げて page が変更する)。ウィンドウ横断(タブを開く・settings・identity)は Main まで signal で上げる
-- **メニューは `AppMenu` 系で書く**: 行の可否は開く関数で 1 度だけ決めて `offered` に置き、`offer()` で開き、閉じるのは自分の `dismiss()` 1 発(素の `Menu` を書かない・1 関数で閉じるのは 1 つまで = 機械化済み。各論は rules-refs の `AppMenu` / `offered` の行)
+- **メニューは `AppMenu` 系で書く**: 行の可否は開く関数で 1 度だけ決めて `offered` に置き、`offer()` で開き、閉じるのは自分の `dismiss()` 1 発(素の `Menu` を書かない。1 関数で閉じるのは 1 つまで = 機械化済み。各論は rules-refs の `AppMenu` / `offered` の行)
 - **`onXChanged` は同じ `x` から導かれるバインディングより先に走り、`FontMetrics.advanceWidth()` 等のメソッドはバインディングが依存を取らない** — 測って押し出す値は、元のプロパティを自分で読み直す関数にする(各論は rules-refs)
 
 ## UI 自動化(`PGG_AUTO_ACT` 動詞)の不変条件
