@@ -292,8 +292,8 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "line_endings scope=local state=ready were=false",
     },
-    // The card's avatar list, the one of its four verbs that wants a line:
-    // the other three wait on the state itself. The list is a popup in
+    // The card's avatar list, one of its five verbs with a line (as is
+    // `avatar-enter`); the other three wait on the state itself. The list is a popup in
     // overlay.png, judged as `commit-menu` is. Three popups: the modal
     // card's dimmer, the card, and the list inside it — which a press
     // outside closes, so the frame is the scene's (`yield=true`).
