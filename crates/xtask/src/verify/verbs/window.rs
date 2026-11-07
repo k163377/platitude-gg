@@ -553,7 +553,7 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "band_actions fits=true folded=false deep=true boxed=true even=true find=false",
     },
-    // The fourth badge. A run whose shim never reached PATH reads this
+    // The band's last badge of six. A run whose shim never reached PATH reads this
     // machine's git and wears no badge; `badge=` is the band's own reading,
     // so the whole path from `git --version` to the row is judged.
     Verb {
