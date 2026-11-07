@@ -1,7 +1,8 @@
-//! The one short-lived file this crate has: a temporary index
+//! The one short-lived file this crate keeps of its own: a temporary index
 //! (`GIT_INDEX_FILE`), which git reads and writes by path and no stdin can
 //! stand in for. A message, a patch and a rebase's plan go in on stdin
-//! instead (`process::Input`).
+//! instead (`process::Input`); a reword's message the helper puts down in
+//! git's own rebase folder, which git takes away (`sequencer::run`).
 //!
 //! It lives under `<git_dir>/platitude/` (same filesystem, owner-private,
 //! recognisable if left behind).
