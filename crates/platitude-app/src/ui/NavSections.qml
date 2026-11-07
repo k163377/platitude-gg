@@ -80,7 +80,8 @@ ColumnLayout {
     signal remoteMenuRequested(string name)
     signal addRemoteRequested()
 
-    /// Which band and which list a section name answers to — the pane's smoke hooks reach both through these.
+    /// Which band and which list a section name answers to — the pane and the harness (`NavProbe`) reach both
+    /// through these.
     function headOf(kind) {
         return kind === "branch" ? branchHead
             : kind === "remote" ? remoteHead
@@ -95,7 +96,7 @@ ColumnLayout {
             : kind === "stash" ? stashList
             : kind === "tag" ? tagList : null
     }
-    /// What the filter band holds — the pane's typeFilter writes it, the sections' expansion reads it.
+    /// What the filter band holds — `NavProbe.typeFilter` writes it, the sections' expansion reads it.
     property alias filterText: refFilter.text
     /// Where the ground under the last section begins (PGG_AUTO_ACT=nav-close).
     readonly property real groundTop: ground.y
