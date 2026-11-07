@@ -2445,11 +2445,11 @@ FocusScope {
 
     /// Escape or the header's mark: puts the diff away and hands the arrows to the graph (user decision — ask before
     /// changing): the two ways out aimed at the diff itself leave the keyboard nowhere — what was pressed goes, or
-    /// there was no press at all. The product comes here from `escapePressed` and `DiffPane.onCloseRequested` only.
-    /// Not the file row's second click, a press that lands in a list still on screen with its row lit, which keeps the
-    /// keyboard (`FileRowWalk.qml`); nor the closes the reader did not make — `closeDiff` itself hands nothing
-    /// on, as the graph need not be what is left (handed the focus under the plan, a pane not on screen holds the
-    /// arrows).
+    /// there was no press at all. The product comes here from `escapePressed`, `DiffPane.onCloseRequested` and
+    /// `showChosen` only. Not the file row's second click, a press that lands in a list still on screen with its
+    /// row lit, which keeps the keyboard (`FileRowWalk.qml`); nor the closes the reader did not make — `closeDiff`
+    /// itself hands nothing on, as the graph need not be what is left (handed the focus under the plan, a pane not
+    /// on screen holds the arrows).
     /// Headless: `diff-escape`'s `graph=true` — one active focus, so it is also the list letting go.
     function closeDiffToGraph() {
         page.closeDiff()
