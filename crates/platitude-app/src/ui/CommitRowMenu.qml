@@ -4,8 +4,8 @@ import QtQuick
 import platitude.ui
 
 // The right-click on a graph row: one menu for a commit, another for a stash, a third for another worktree's
-// uncommitted row (デザイン規約 §グラフ行の右クリック) — this worktree's own uncommitted row has none (user decision —
-// ask before changing). The first level
+// uncommitted row (デザイン規約 §グラフ行の右クリック), a fourth inside a choice of two commits — this worktree's own
+// uncommitted row has none (user decision — ask before changing). The first level
 // holds the rows used often — on the row's commit, and on the name the chip draws (or the name pressed in the chip's
 // stacked list): its pull, push and delete table —; the cards under them hold what is used rarely.
 //
