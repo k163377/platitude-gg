@@ -121,5 +121,5 @@ gate の壁時計には乗らない**。run の置き場を除外の内へ移し
   入れ替えた対(QML キャッシュは両側で有効)でも幅 8 で 16.2s → 11.2 / 10.8s
 - QML のキャッシュだけの寄与は、1 run のアプリの CPU 時間で 1.61–2.06s → 1.39–1.67s(直列の 3 対)。verify の run は
   キャッシュを使う(`target/release/qmlcache`)
-- **console 無しの git は採らない**(rules-refs/core.md の `CREATE_NO_WINDOW` の行)。conhost を
-  払わずに済ませる形は P3 の要判断
+- **console 無しの git は採らない**(`process::family` の `win32::CREATE_NO_WINDOW` のコメント)。conhost を
+  払わずに済ませる形は ハング調査.md の要判断
