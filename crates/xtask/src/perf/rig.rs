@@ -186,8 +186,8 @@ impl Claim {
     /// measurement after.
     fn take(primary: &str, rig: &str, commit: &str, exists: bool) -> Result<Self, String> {
         // The session mark carries the pid too: a claim's reason is read
-        // back as `<session> pid <pid>`, and an empty session leaves the
-        // pid unparsed (`seats::standing`).
+        // back as `<session> pid <pid>`, and a claim with no session id is
+        // never taken (`Identity::require_session`).
         // No host: the rig's claim is this process's, not a conversation's.
         let me = Identity {
             session: format!("perf-{}", std::process::id()),
