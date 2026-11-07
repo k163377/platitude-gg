@@ -919,7 +919,7 @@ QtObject {
     readonly property string stand: "\uE000"
     /// Where a sentence written with `stand` in one name's place puts that name — every time it says it — as seats in
     /// the sentence with `word` written there instead: each counts the earlier ones at the word's own length. A
-    /// translation that moves the name moves the seat (`RepoPage.reportMarks`).
+    /// translation that moves the name moves the seat (`reportMarks`).
     function standSeats(sentence, word) {
         const seats = []
         let at = sentence.indexOf(Words.stand)
