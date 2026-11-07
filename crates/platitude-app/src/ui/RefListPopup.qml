@@ -306,8 +306,8 @@ AppCard {
                 // A branch another worktree has out leads to that worktree, as the graph row's double-click does
                 // (`RepoPage.switchToRef`'s `holder`): refused here, only a double-click aimed at the chip would go
                 // nowhere while the same row's words go (`tests/qml/tst_listrowpick.qml`, headless `ref-list-held`).
-                // A worktree's folder row leads nowhere: a folder is no ref (`GraphRowDelegate.nameChip`); making it
-                // lead to its worktree is open, to be decided with the folder's rename (P3-確認事項, the worktree item).
+                // A worktree's folder row leads nowhere: a folder is no ref (`GraphRowDelegate.nameChip`), though it
+                // still has a name to change (`renameable`).
                 readonly property bool leadsNowhere:
                     refRow.modelData.kind === "head" || refRow.modelData.kind === "worktree" || refRow.current
                     || refRow.modelData.kind === "tag"
