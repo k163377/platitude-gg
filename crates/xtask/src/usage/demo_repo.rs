@@ -39,6 +39,9 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         rebase-conflict  a rebase stopped on conflicts, 1 of 2 steps
         rebase-staged    the same rebase, conflict resolved and staged
         rebase-empty     a rebase stopped on a commit that came out empty
+        switch-carry     a move that carries a dirty tree and cannot put it
+                  back: the pop conflicts, so its stash stays beside the
+                  one on main (switch-lands feature/topic-a:2)
         cherry-pick-conflict  a cherry-pick stopped on a conflict
         cherry-pick-quit  the same, let go of with --quit: no operation
                   standing, the same files still unmerged
@@ -231,6 +234,10 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   left there: the only branch whose tip the drawn rows
                   cannot answer for, so its delete row's early answer can
                   only come from git (delete-branch-early-far)
+        perf      deep with a changed file on top: the perf scenario's diff
+        perf-sequence
+                  deep with two revisions of a coloured file on top: the
+                  perf sequence's diffs (perf colour|diff-scroll|sequence)
         discards-deep
                   deep-parked with `parked` deleted onto Platitude GG's
                   record: the only discard log entry past the graph's
@@ -299,6 +306,9 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         carried-conflicted  carried, with a merge stopped on conflicts in
                   the worktree standing where this window stands: its work
                   is there to read and greyed to apply (carried-menu here)
+        carried-clashing  the same worktrees over a clean tree, and a branch
+                  whose one commit lands on the line this one just moved:
+                  the replay stops on conflicts (wip-landing-stopped)
         worktree-detached  one linked worktree, detached, with a commit made
                   in it: the one shape where a worktree stands
                   somewhere no branch, tag or remote reaches (nav-jump)
