@@ -10,7 +10,7 @@
 - **mod.rs から出す型の `pub(super)` は `pub(crate)` と書き写す** — session は crate 直下なので mod.rs の `pub(super)` = `pub(crate)`。移動先で `pub(super)` にすると session 内へ狭まる(逆に mod.rs で private だった型は移動先で `pub(super)` にすると元と同じ範囲)
 - **insta のスナップショットはソースファイル基準の `snapshots/` を見る** — `foo.rs` → `foo/bar.rs` へ動いたテストは置き場(`src/snapshots/` → `src/foo/snapshots/`)とファイル名(モジュールパス)の両方が変わる。中身は不変なので `INSTA_FORCE_UPDATE=1 cargo test` で `source:` 行だけ再生成する
 - **`mod tests` を専用ファイルへ持ち上げる時、複数行文字列リテラルの中身は字下げされていない** — 一律 dedent は fixture を壊す。宣言行だけ下げ、リテラルの行はそのまま移す(`parse/diff/testkit.rs` の `PATCH` が実例)
-- **xtask も mod.rs 方式 — `run` / dispatch は子(`cli.rs` / `run.rs` 等)へ出す** — mod.rs に残るのは `mod`・re-export・共有型・`Command` の static(`budget` / `gate` / `shots` / `verify` / `waits`)。file-parent の `corpus` `docs` `linux` `perf` `structure` `sweep` `usage` は触った時に寄せる
+- **xtask も mod.rs 方式 — `run` / dispatch は子(`cli.rs` / `run.rs` 等)へ出す** — mod.rs に残るのは `mod`・re-export・共有型・`Command` の static(`budget` / `gate` / `shots` / `verify` / `waits`)。file-parent の `awake` `corpus` `docs` `linux` `perf` `qmltest` `shipped` `structure` `sweep` `usage`(と、入れ子の `gate::plan` / `gate::graph` / `verify::verbs` 等)は触った時に寄せる
 - **外部クレートと同名のモジュールを作ったら親の `use` は `self::` で書く** — `settings/toml.rs` があると mod.rs の `use toml::…` は extern prelude と衝突して E0659。子ファイル側は素の `use toml::…` のままでよい
 - **移動だけのコミットは、移動先を決める前に「どの行がどこへ行くか」を機械で突き合わせる** — 元ファイルの全行が行き先ちょうど 1 つに入り、落ちるのは列挙した scaffolding(バナー・共有 `use`・`mod tests` の包み)だけ、と検証してから書き出す
 - **`include_bytes!` / `include_str!` はソースファイル基準** — 1 段深いディレクトリへ動かした項は `../` を足さないと別の場所を読みに行く。移動先に同名のディレクトリが在れば黙って別物を焼き込む
