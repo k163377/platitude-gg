@@ -5,7 +5,7 @@ import "stages.js" as Stages
 import "../../src/auto" as Automation
 
 // A completion asked by a generation its operation has since started over is an old generation's: once the hold
-// passes, the route refuses it without reading the report, and the run ends there (`CompletionRoute.readReport`).
+// passes, the route refuses it without reading the report, and the run ends there (`CompletionRoute.attempt`).
 Item {
     id: root
 

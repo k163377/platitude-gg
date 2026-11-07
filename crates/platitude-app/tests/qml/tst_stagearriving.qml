@@ -5,7 +5,7 @@ import "stages.js" as Stages
 import "../../src/auto" as Automation
 
 // A completion that photographs a read on its way names that read, and only that read is let through: another read
-// still owed holds the completion as it holds any (`StageTimer.complete`'s `arriving`, `CompletionRoute.held`).
+// still owed holds the completion as it holds any (`StageTimer.complete`'s `arriving`, `CompletionRoute.reading`).
 Item {
     id: root
 

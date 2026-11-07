@@ -8,7 +8,7 @@ import platitude.ui
 // what the opening scrolled, never where the reader sent the list.
 //
 // The real list (`NavList`) and rows, in a panel that counts the hand the way the sidebar does
-// (`SidebarPane.handWatch`), on the real open row (`OpenRowSeat`).
+// (`SidebarPane.hand`), on the real open row (`OpenRowSeat`).
 Item {
     id: root
     // Room right of the list, where a row's tip stands (`TipAsk.rowSide`) — not over the hand.
