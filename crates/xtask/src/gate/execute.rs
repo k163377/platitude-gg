@@ -9,7 +9,7 @@ use super::runner::{FAKE_LOG, runner};
 use super::sides::run_sides;
 use super::stamp::{CommitStamp, Store};
 
-/// Runs what is not cached, one thread per side and two groups within a
+/// Runs what is not cached, one thread per side and three groups within a
 /// side (`sides::side`), and stamps the commit when both sides came back
 /// with nothing red. The first red stops both sides ([`Halt`]); under
 /// `keep_going` a group stops at its first red step — its verbs still run

@@ -46,8 +46,8 @@ commands:
       each step is stamped by the object ids of what it reads, so a
       second run of one commit runs nothing and a rebase reruns only
       what main's move touched. The verify-ui verbs of a side share
-      nothing but the release the first of them builds, so they run
-      several at a time; every other step of a side runs one at a time.
+      nothing but the release the first of them builds, so they run several
+      at a time; other steps run one at a time per group, groups side by side.
       The first red stops the run on both sides: nothing more starts,
       what is running is ended (a container step of its own is left to
       finish), and each step kept from running or ended is filed as
