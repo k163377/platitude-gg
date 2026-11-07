@@ -295,10 +295,11 @@ pub struct RepoTab {
     amend_watched: bool,
     /// The most recently finished write: git's message (empty on success)
     /// and a counter QML compares to spot a new one — the bridge carries
-    /// only parameterless signals. Shown raw; what an answer means is the
-    /// group below. The one raw mouth QML still reads (the push flow's
-    /// words); everything else QML reads is classified, and the page's
-    /// `absorbWriteResult` keeps only the UI's sequencing.
+    /// only parameterless signals. Raw; what an answer means is the group
+    /// below. Only a harness verb reads it: the push flow takes git's words
+    /// off its own answer (`writeAnswerError`); everything else QML reads is
+    /// classified, and the page's `absorbWriteResult` keeps only the UI's
+    /// sequencing.
     last_write_error: String,
     /// git stopped part-way through the write in flight. Raised by the
     /// message before that write's answer, which takes it as its own
