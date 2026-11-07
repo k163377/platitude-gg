@@ -246,8 +246,8 @@ pub enum RemoteTagRefreshOutcome {
     Hidden,
     /// Another remote-tag read owns the single-flight slot, and this
     /// request was dropped. Unlike a [`super::ReadFlight`], no repeat is
-    /// owed: no local operation moves what a remote carries under
-    /// `refs/tags/` (a push is branches only), and both askers (an
+    /// owed: a write that moves what a remote carries under `refs/tags/`
+    /// reads it again itself (`session::ops_remote_tags`), and both askers (an
     /// opening, installing the interval) ask the same question of the same
     /// remotes — the read in flight is the answer. Whatever both missed
     /// comes with the next auto fetch tick: the poll reads no remote tags.
