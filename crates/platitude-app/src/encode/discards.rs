@@ -47,7 +47,7 @@ pub struct DiscardPart {
     /// What it comes back with: a branch's upstream (`origin/main`), the
     /// branch a worktree had out; empty otherwise.
     pub with: String,
-    /// How its tip draws on the graph: `commit` | `uncommitted` | `stash`.
+    /// How its tip draws on the graph: `commit` | `uncommitted` | `stash` | `absent`.
     pub look: String,
     /// Its tip, as a row's short id writes one.
     pub tip: String,

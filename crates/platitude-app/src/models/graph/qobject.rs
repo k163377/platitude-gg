@@ -135,7 +135,7 @@ impl GraphModel {
 
     /// Puts the discard log's picked entry on the graph: its parts' tips,
     /// the first the one it lands on, how each draws (`uncommitted` /
-    /// `stash` / empty for a commit), the commits only they reach, and where
+    /// `stash` / `commit` / `absent`), the commits only they reach, and where
     /// a copy on a base made for it draws — `<tip> <base> <commit>`, full
     /// hex (`DiscardModel.tipsAt` / `looksAt` / `lostAt` / `standsAt`).
     #[qslot]

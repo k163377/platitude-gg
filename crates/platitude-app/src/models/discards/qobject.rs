@@ -40,7 +40,7 @@ impl DiscardModel {
     }
 
     /// How each of [`Self::tips_at`]'s tips draws: "commit" | "uncommitted"
-    /// | "stash".
+    /// | "stash" | "absent".
     #[qslot]
     fn looks_at(&self, index: i32) -> Vec<String> {
         self.tips_of(index)
