@@ -2,8 +2,9 @@
 //!
 //! Two roads. A language with a grammar ([`grammar`]) has its file
 //! parsed whole ([`tree`]) — no walk, no budget. Everything below
-//! describes the regex-lexer fallback, for languages no grammar claims
-//! and for a file that has outgrown its grammar ([`tree::reads`]).
+//! describes the regex-lexer fallback, for languages no grammar claims,
+//! a file that has outgrown its grammar ([`tree::reads`]) and every
+//! combined diff, grammar or not (# Conflicts).
 //!
 //! What a hunk's lines mean depends on everything above them, so the file
 //! is walked from line 1 down to each hunk: this side's rows read straight
