@@ -541,10 +541,12 @@ fn minutes_to_interval(minutes: u32) -> Option<std::time::Duration> {
     (minutes > 0).then(|| std::time::Duration::from_secs(u64::from(minutes) * 60))
 }
 
-/// Puts the settings in force on one session — every settings value passes
-/// through here, so none is written but never applied: a key added to the
-/// settings is added here too. The Hub keeps no auto-fetch interval of its
-/// own (it would double `settings.defaults`). `settings.toml` holds no
+/// Puts the settings in force on one session — every value a session runs
+/// by passes through here, so none is written but never applied: a key
+/// added to the settings is added here too (`git_path` and `git_concurrency`
+/// are the application's: `resolve_git`, `Hub::set_git_concurrency`). The
+/// Hub keeps no auto-fetch interval of its own (it would double
+/// `settings.defaults`). `settings.toml` holds no
 /// per-repository value — every tab runs the same numbers, so
 /// `AppBackend.autoFetchMinutes` is the truth for all repositories and the
 /// fetch button's tooltip may name it. What varies per repository is state
