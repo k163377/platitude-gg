@@ -411,7 +411,7 @@ HoverToolButton {
                 kind: actionBtn.kind
                 // A phrase carries the hold's mark itself (`ActionButtonLabel.phraseHoldPresses`): this seat sits at
                 // the row's left edge, apart from the centred phrase. A plain held button keeps it here
-                // (`force-push-hold`, `discard-hunk-go`).
+                // (`discard-hunk-go`; the panel's stacked push keeps it in `stackSeat`, `force-push-hold`).
                 holdPresses: btnLabel.phrased ? 0 : actionBtn.armedPresses
                 besideWord: actionBtn.besideWord
                 holdProgress: actionBtn.holdProgress
