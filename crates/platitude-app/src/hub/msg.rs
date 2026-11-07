@@ -412,7 +412,7 @@ pub enum CommandMsg {
     /// said ahead of this on the same feed: a write's run has returned
     /// before its `SessionEvent::WriteSettled` goes out, and each command
     /// says its start and end from inside that run
-    /// (`process::Executor::execute`). The log's receipt of a write's
+    /// (`process::GitExecutor::execute`). The log's receipt of a write's
     /// records, a write with no command included (`CommandsModel.recorded`).
     Settled { operation: u64 },
 }
