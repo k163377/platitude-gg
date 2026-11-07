@@ -90,8 +90,9 @@ FocusScope {
     /// whole pane but the `>_` band goes to the disabled step, from the press (`SidebarPane.frozen`).
     readonly property bool sidebarFrozen: page.planShown
     /// The other, from where the plan ends: a replay is running (`RepoTab.replaying`) or its run is out and not
-    /// started. Nothing freezes; each door is held and says this line until git answers (`SidebarPane.doorsHeld` /
-    /// `AppMenu.heldReason`) — one line, so the pane and the menus cannot disagree.
+    /// started — and while a worktree's rename is out (`worktreeMoveOut`). Nothing freezes; each door is held and
+    /// says this line until git answers (`SidebarPane.doorsHeld` / `AppMenu.heldReason`) — one line, so the pane
+    /// and the menus cannot disagree.
     readonly property string doorsHeldWhy:
         page.replayRunning || page.planRunOut || page.worktreeMoveOut ? Words.otherCommandRunning : ""
     /// A worktree's rename is out, from the press to its answer (`absorbWorktreeMove`): its answer is waited for by
