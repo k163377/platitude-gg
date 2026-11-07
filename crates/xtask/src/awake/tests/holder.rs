@@ -394,7 +394,7 @@ fn ended(pid: u32) {
 /// The System process's pid: always running, and no Claude's.
 const SYSTEM: u32 = 4;
 
-/// A claim of this revision owned by `pid`, `state` as of now.
+/// A claim of this protocol owned by `pid`, `state` as of now.
 fn claim_of(state: State, pid: u32) -> String {
     format!(
         "r{} {} {pid} {} a 0 - - -",
