@@ -637,7 +637,7 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The picker is the platform's own window and stands in neither
     // photograph (`popups=0`), so the line is the whole evidence. It comes
-    // up beside the repository already open (rules-refs/app-ui.md).
+    // up beside the repository already open (`RepoTab`'s `picker_folder_url`).
     //
     // `beside_worktree=` reads the folder without knowing the machine's paths:
     // whether the picker came up in the folder the worktree sits in. The
