@@ -1,5 +1,6 @@
-//! Remote-facing operations: fetch, the push variants, remote
-//! configuration, and what each remote advertises under `refs/tags/`.
+//! Remote-facing operations: fetch, the push variants and remote
+//! configuration. What each remote advertises under `refs/tags/` is
+//! [`super::ops_remote_tags`].
 
 use super::discard_record::{record_pushed_over, record_token, remote_tip};
 use super::*;
