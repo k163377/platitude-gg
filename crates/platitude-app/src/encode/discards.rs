@@ -57,7 +57,7 @@ pub struct DiscardPart {
     pub lost: i32,
     /// How many paths a copy or a stash holds.
     pub files: i32,
-    /// How many paths were thrown away without a copy (§2.1).
+    /// How many paths were thrown away without a copy (`Part::not_copied`).
     pub not_copied: i32,
     /// For thrown-away work, where the worktree it goes back into is — the
     /// folder `name` gives is not how the repository's own is named; empty
