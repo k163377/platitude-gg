@@ -6,8 +6,8 @@ import platitude.ui
 
 /// HEAD's row card and one event under it, read stage by stage: a run stops at the moment its argument names and
 /// is photographed there, so the moments laid side by side on the board read as the behaviour (verify-ui スキル
-/// §board). The menu's blocker that latches the card (`card-latch`), and the commit that rewrites the row under it
-/// (`card-rewrite`). The hand is the pane's, as it hears it (`HandWatch.stir`).
+/// 「board は上から下へ、載せた順に読む」). The menu's blocker that latches the card (`card-latch`), and the commit
+/// that rewrites the row under it (`card-rewrite`). The hand is the pane's, as it hears it (`HandWatch.stir`).
 // `Item` because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
