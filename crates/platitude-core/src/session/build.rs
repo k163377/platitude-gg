@@ -91,8 +91,9 @@ pub(super) enum Rewrite<'a> {
         upstream: &'a str,
         options: &'a integrate::RebaseOptions,
     },
-    /// `git rebase --interactive`: a plan assembled here, for the edits
-    /// that touch one commit (`squash` / reword / drop).
+    /// `git rebase --interactive`: the rebase screen's plan, or one
+    /// assembled here for the edits that touch one commit (`squash` /
+    /// reword / drop).
     Replay(&'a Replay<'a>),
 }
 
