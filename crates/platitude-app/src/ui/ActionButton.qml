@@ -380,7 +380,7 @@ HoverToolButton {
     /// Control's own is content plus paddings, both answered from the width the row handed over (`wordRoom` →
     /// `folded` → `slack`), and until the row sets a width `setImplicitWidth` writes one — a binding loop at startup.
     /// Asked off that one, the request would also shrink the moment the word went, and a folded button never unfold.
-    /// No size moves: the row hands the same `naturalWidth` as `Layout.preferredWidth`, so nothing reads this one.
+    /// No size moves: the row sets the cell's `width` itself (`TopBar.actionCap`), so nothing reads this one.
     ///
     /// Only where the row lays the cell out: elsewhere it would leave the wording adrift in a box it was never
     /// measured for.
