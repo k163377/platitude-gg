@@ -34,7 +34,7 @@ use super::RefKind;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PullRuns {
     /// `git pull` in this worktree (`remote::pull`): the branch it is on,
-    /// brought in line with its upstream the way git's settings say.
+    /// brought up to its upstream by a fast-forward (`--ff-only --no-rebase`).
     Here,
     /// The row's own branch, one this worktree is not on, fast-forwarded to
     /// its upstream (`remote::fast_forward`).
