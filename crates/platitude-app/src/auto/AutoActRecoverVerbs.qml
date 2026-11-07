@@ -457,7 +457,7 @@ Item {
             "report": () => acts.frameLine() })
     }
     // The restore answered — the write's own count moved — and the list read again after it, the entry put down; the
-    // write's reads behind it are the driver's to wait out before the picture (`AutoActDriver.writeBarrier`). The
+    // write's reads behind it are the completion's to wait out before the picture (`CompletionRoute`). The
     // counts as the press went out are the press's own witnesses (`recoverTimer`).
     PageStage {
         id: restoreTimer
