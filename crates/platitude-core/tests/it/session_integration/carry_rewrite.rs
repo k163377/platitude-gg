@@ -306,11 +306,11 @@ fn reached_the_stash(event: &SessionEvent) -> bool {
         if display.starts_with("git stash push"))
 }
 
-/// The composed plan is a fixed list of ids the helper writes over git's
-/// todo whole, and the carry spawns the replay twice (refused over the
-/// dirty tree, then after a `detect` and a stash) — so a commit typed in
-/// between is not in the list, and a rebase drops what the todo leaves out
-/// without saying so. The pin sits in front of every spawn.
+/// The composed plan is a fixed list of ids put in place of git's own
+/// picks (`sequencer::merge_todo`), and the carry spawns the replay twice
+/// (refused over the dirty tree, then after a `detect` and a stash) — so a
+/// commit typed in between is not in the list, and a rebase drops what the
+/// todo leaves out without saying so. The pin sits in front of every spawn.
 ///
 /// The session is held inside the sink delivery that announces the stash
 /// while the test commits from its own thread
