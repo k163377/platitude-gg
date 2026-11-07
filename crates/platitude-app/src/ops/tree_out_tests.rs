@@ -86,7 +86,7 @@ fn a_press_git_refused_took_no_tree_away() {
     assert_eq!(out.answer(), Some(0), "and the page still has to say it");
 }
 
-// Half a stash (`stash push -- paths`) never empties the tree.
+// A stash of some paths (`stash push -- paths`) can leave the tree dirty.
 #[test]
 fn a_tree_the_press_did_not_empty_settles_it_all_the_same() {
     let mut out = landed();
