@@ -1,4 +1,4 @@
-//! The one shape of configuration read this app makes:
+//! A configuration read by pattern:
 //! `git config -z --get-regexp <pattern>`, and the records it answers with.
 //!
 //! [`ConfigScope`] lives here too: a narrowed read and a targeted write name
