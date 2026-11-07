@@ -9,7 +9,7 @@ paths:
 
 ## git サブプロセス規約
 
-- コマンドは**引数配列**で組み立て、パースは機械可読形式のみ(`--porcelain=v2` / `-z` / `--format=`)。環境は `LC_ALL=C`・`GIT_TERMINAL_PROMPT=0`・`GIT_EDITOR=true`(rebase -i は `GIT_SEQUENCE_EDITOR` = 非対話 helper)、読み取り系ポーリングは `GIT_OPTIONAL_LOCKS=0`。Windows は `CREATE_NO_WINDOW`
+- コマンドは**引数配列**で組み立て、パースは機械可読形式のみ(`--porcelain=v2` / `-z` / `--format=`)。環境は `LC_ALL=C`・`GIT_TERMINAL_PROMPT=0`・`GIT_EDITOR=true`(rebase -i は `GIT_SEQUENCE_EDITOR` = 非対話 helper)・`GIT_OPTIONAL_LOCKS=0`(全コマンド。diff には効かない —— 読みが index を書かない釘の全体は `process::executor` の `FIXED_ARGS` / `FIXED_ENV`)。Windows は `CREATE_NO_WINDOW`
 - 失敗メッセージは stderr 優先・空なら stdout(`git commit` の「nothing to commit」は stdout で exit 1)
 - git の実行も完了待ちも常に UI(Qt)スレッドの外
 - **複合操作は 1 手目が失敗したら止める**(`?`)。**失敗が `Ok` に化ける経路**(`switch` の `CheckoutOutcome::Blocked`・`stash pop` の非ゼロ終了)だけは明示的に判定し、戻せるものは戻す(`session::carry_across`)。失敗後に走ってよいのは読み取りだけ
