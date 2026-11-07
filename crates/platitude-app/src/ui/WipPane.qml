@@ -14,7 +14,7 @@ import platitude.ui
 // `<bucket>:<path>` across the bucket lists, and the row lookups (`rowAt` / `rowFor`, walking each list's
 // `itemAtIndex`) that `RepoPage` (`readOne`) and the automation (`rowAt` / `rowFor` / `chooseOnly` / `pointEol`) call
 // directly. Moving it out only adds wiring to hand the lists and keys back. The EOL card and its seat (`pointEol` /
-// `eolKeep`) stay with it: the card is placed from `rowFor(path)` and the pane's own coordinates.
+// `eolKeep`) stay with it: the card is placed from `rowIn(bucket, path)` and the pane's own coordinates.
 ColumnLayout {
     id: wipPane
 
