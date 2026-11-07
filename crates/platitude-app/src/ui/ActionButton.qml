@@ -228,7 +228,7 @@ HoverToolButton {
 
     /// Whether the press just let go was a plain one, judged before the latch opens — the click follows the release in
     /// the same delivery, when the count is live again. `clickJudged` says there was a press at all: `clicked()` is
-    /// also raised with no press behind it (`TopBar.stashNow` / `fetchNow`, `TabStrip`, `WipBucketHeader`), and that
+    /// also raised with no press behind it (`TopBar.stashNow` / `fetchNow` / `findNow`), and that
     /// one is answered from the live count.
     property bool clickWanted: false
     property bool clickJudged: false
