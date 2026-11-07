@@ -27,7 +27,7 @@ Rectangle {
 
     /// The entry on the graph, as the list words it (`RecoverEntries.entryOf`); null for none.
     property var entry: null
-    /// The moment in full, then how long ago (`RecoverPane.whenWords`).
+    /// The moment in full, then how long ago (`RecoverEntries.whenWords`).
     property string when: ""
     /// Per part, whether what it would bring back is on the graph: a part whose tip the graph has not walked to cannot
     /// come back until it is (`RepoPage.recoverReach`). Empty while the walk that would tell is still out: nothing is
