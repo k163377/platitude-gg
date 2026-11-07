@@ -51,7 +51,7 @@ Item {
         && (dividers.dividerPointed || graphDivider.pressed)
     /// Either line — what a row wearing a highlight ground builds its own copy of the lines on (`GraphRowDelegate`).
     readonly property bool lineWanted: dividers.labelLineWanted || dividers.graphLineWanted
-    /// The divider as drawn, so the hook cannot pass a fixed column that still offers a drag.
+    /// The divider as drawn — standing on a fixed column too, whose hover answers with the badge, not a line.
     readonly property alias graphDividerShown: graphDivider.visible
 
     /// A drag on the graph divider to `px`; the handler and the hook both come through here.
