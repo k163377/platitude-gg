@@ -12,8 +12,10 @@ impl RepoTab {
     /// a commit's signature. Everything else goes, and a field added to
     /// this model belongs here — it is the worktree's, or an answer the
     /// retired sink never delivers (`Hub::let_go_of_session`).
-    /// `write_seq`, `move_ask_seq` and `paced_seq` stay too: the staying
-    /// page reads them as rises (`RepoPage.seenWriteSeq`).
+    /// `write_seq`, `move_ask_seq`, `paced_seq`, the discard log's seqs and
+    /// `restore_how` stay too: the staying page reads them as rises
+    /// (`RepoPage.seenWriteSeq`); so do `amend_watched`, said again to the
+    /// next session, and the `settled` ids the log's receipts are asked after.
     ///
     /// Written out, not `*self = Self::default()`: dropping the value
     /// deletes its QObject, and the next slot call aborts ("No proxy").
