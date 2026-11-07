@@ -160,7 +160,7 @@ Porcelain の入出力を「利用者の体験のために変わりうる」と�
 | rebase・merge・pull の autostash、駆動 rebase の merge 形 | `integrate::rebase_command` / `integrate::merge` / `remote::pull`(退け方は `session::build::carry_across`) |
 | pull の合流の仕方(`--ff-only --no-rebase`。ユーザー決定 2026-10-12) | `remote::pull` |
 | merge / pull を塞ぐ作業ツリーの変更・untracked(断られた時だけ持ち越す。ユーザー決定 2026-10-12) | `session::build::integrate_carrying` |
-| stash の index 復元(`--no-index`) | `stash::pop` / `apply` / `carried_apply` |
+| stash の index 復元(`--no-index`) | `stash::pop` / `apply` / `session::carried_apply` |
 | mergetool の一時ファイル・ツール・GUI | `conflict::tool` |
 | 一時 index の写し(フック・fsmonitor・split index・改行検査) | `discards::record::isolated` |
 | worktree add の進捗(`--quiet`) | `worktrees::add` |
