@@ -646,9 +646,9 @@ const IMAGE_INPUTS: [&str; 2] = ["ci/linux/Dockerfile", "rust-toolchain.toml"];
 fn image_tag(root: &Path, stage: &str) -> Result<String, String> {
     let mut inputs = IMAGE_INPUTS.to_vec();
     if stage != "core" {
-        // Every stage past core is built with the Qt version the tree pins
-        // (runtime inherits it through bare), so the tag has to move when
-        // that does.
+        // Every stage past core but git-build is built with the Qt version
+        // the tree pins (runtime inherits it through bare), so the tag has
+        // to move when that does; git-build's moves with them.
         inputs.push(crate::qt::PIN);
     }
     Ok(format!(
