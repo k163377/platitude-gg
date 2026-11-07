@@ -116,8 +116,8 @@ fn make(template: &Path, preset: &str, name: &str) -> Result<bool, String> {
 }
 
 /// The name a preset's template stands under, beside the runs. Shorter
-/// than a run's name in the common case, because the deepest preset is
-/// built at this name and its paths must fit Windows' limit.
+/// than a run's name in the common case; the preset is built under a
+/// staging name of the run's own ([`make`]) and moved to this one.
 fn leaf(preset: &str, name: &str) -> String {
     let fingerprint = fingerprint();
     if name == "repo" {
