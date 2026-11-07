@@ -17,7 +17,7 @@ import platitude.ui
 AppDialog {
     id: cloneDialog
 
-    /// git is out fetching this clone (`TabsModel.cloning`).
+    /// git is out fetching this clone (`CloneModel.cloning`).
     property bool cloning: false
     /// The folder the clone is made in, as a `file:` URL (the platform dialog's answer). Empty refuses the accept.
     property string parentUrl: ""
