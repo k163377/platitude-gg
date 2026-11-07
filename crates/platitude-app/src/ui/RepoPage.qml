@@ -1559,7 +1559,7 @@ FocusScope {
     /// no row in hand; null where it draws neither a ref nor a worktree's folder. Chips already taken off screen
     /// are filtered as the delegate does, so a gone name puts no card up (デザイン規約 §消す操作は先に画面から消す).
     /// The delegate's own answer, from the model: a "first of each kind" search would aim at a name not on screen.
-    /// The menu reads only `chip.kind` (`GitFacts.refKind`) and `chip.name`, so a chip a run builds by hand needs no
+    /// The menu reads only `chip.kind` (`GitFacts.namedKind`) and `chip.name`, so a chip a run builds by hand needs no
     /// more. Headless: `chip-menu <branch>` / `chip-menu-current` / `list-menu <row>:<card row>`.
     function rowChipAt(oidHex) {
         const row = graphModel.rowOf(oidHex)
