@@ -43,7 +43,7 @@ AppCard {
     /// never moves** (user decision — ask before changing): the card stands on the chip's seat, so a click aimed at the
     /// chip lands on a row here, and a click that moved would `switch` whoever pressed the chip twice, spaced — as a
     /// double-click with a strangely long window. `oidHex` is the row it stands on, read before the card closes, which
-    /// forgets that row (`RowHoverHost.onClosed`).
+    /// forgets that row (`HoverSeat.noteClosed`).
     signal picked(var chip, string oidHex)
     /// One was clicked once, plainly: its row becomes the one being read. The second click and a held click have no
     /// signal here — both go in at the graph's own row (`rowClicks`).
@@ -392,7 +392,7 @@ AppCard {
                 function leftClick(modifiers) {
                     const mods = modifiers === undefined ? Qt.NoModifier : modifiers
                     // The press goes out before the card closes: closing forgets the row it stood on
-                    // (`RowHoverHost.onClosed`), and that row is where the press goes.
+                    // (`HoverSeat.noteClosed`), and that row is where the press goes.
                     if (refList.onStandIn) {
                         refList.standInPressed(mods)
                         refList.close()
