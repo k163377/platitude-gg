@@ -1016,7 +1016,7 @@ fn the_history_tells_each_verdict_and_whose_work_it_stood_on() {
 }
 
 /// Sessions claiming at the same moment start one holder: the claim and
-/// the start happen under the directory's lock.
+/// the reservation of the holder's name happen under the directory's lock.
 #[test]
 fn claims_made_at_once_start_one_holder() {
     let dir = scratch("at-once");
