@@ -566,9 +566,10 @@ FocusScope {
             return
         page.tellRefusal(answer)
     }
-    /// The answer to a push a **ref row** sent — the `push --delete`s, the replace, the pairs that push after a local
-    /// step (`RepoTab.refPushAnswer`, -1 for none). **Its own answer**: read by word, a fetch in the same drain would
-    /// swallow the refusal. The rows a delete took come back through the delete's own owner; this carries only why.
+    /// The answer to a push a **ref row** sent — the `push --delete`s, the replace, the pairs that do something here
+    /// as well as over there (`RepoTab.refPushAnswer`, -1 for none). **Its own answer**: read by word, a fetch in the
+    /// same drain would swallow the refusal. The rows a delete took come back through the delete's own owner; this
+    /// carries only why.
     function absorbRefPushAnswer() {
         const answer = repoTab.refPushAnswer
         if (answer < 0 || !repoTab.writeAnswerFailed(answer))

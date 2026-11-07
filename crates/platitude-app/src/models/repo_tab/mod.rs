@@ -433,8 +433,8 @@ pub struct RepoTab {
     push_answer: i32,
     push_answer_branch: String,
     /// The pushes a ref row sends that are no branch's push — the two
-    /// `push --delete`s, the replace git has no command for, and the two
-    /// pairs that reach over there after doing something here (a branch
+    /// `push --delete`s, the replace git has no command for, and the three
+    /// pairs that do something here as well as over there (a branch
     /// row's own push is `push_out`'s). Owned for the toolbar's reason: in the
     /// group, a fetch in the same drain would take the refusal over
     /// (`drain::fold_into_group`).
