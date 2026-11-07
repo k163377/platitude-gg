@@ -3,9 +3,9 @@ pragma Singleton
 import QtQuick
 
 // Stands in for the app's `GitFacts` under `qmltestrunner`, which registers no Rust type (`cargo xtask qmltest` stages
-// it into the `platitude` module): only the argument-only facts the row delegates read as they are built, so a real
-// `GraphRowDelegate` or `RefListPopup` can stand in a test at all. The rules are Rust's (`models::facts`,
-// `encode::labels`, tested there); a test that leans on an answer here is testing this stand-in, not the app.
+// it into the `platitude` module): only the argument-only facts the row delegates and the discard log's filter read,
+// so a real `GraphRowDelegate`, `RefListPopup` or `RecoverPane` can stand in a test at all. The rules are Rust's
+// (`models::facts`, `encode`, tested there); a test that leans on an answer here is testing this stand-in, not the app.
 QtObject {
     /// `Oid::hex_is_zero`: the uncommitted row's all-zero id; empty is no id at all.
     function wipOid(hex) {
