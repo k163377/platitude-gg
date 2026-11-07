@@ -49,8 +49,9 @@
 //!   `records` reads it).
 //!
 //! A handful of git processes whatever the repository holds: the listing,
-//! the names taken, one walk of every reflog, the walk of what they reach,
-//! and the record.
+//! the names taken, the stash list, one walk of every reflog, the walk of
+//! what they reach, the record, which tips are here, and one look at each
+//! worktree a copy goes back into.
 
 mod copy;
 mod entries;

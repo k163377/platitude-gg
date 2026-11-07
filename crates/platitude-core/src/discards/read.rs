@@ -1,6 +1,7 @@
-//! The reading as a whole: the worktrees, the record and the names
-//! taken side by side, then one walk of every reflog, then one walk of what
-//! they and the record name that no ref reaches.
+//! The reading as a whole: the worktrees, the record, the names taken and
+//! the stash list side by side, then one walk of every reflog, then one walk
+//! of what they and the record name that no ref reaches, then which tips are
+//! here and which worktree each copy goes back into.
 
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, HashMap, HashSet};
