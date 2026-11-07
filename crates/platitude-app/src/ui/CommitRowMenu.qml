@@ -503,7 +503,7 @@ Item {
                 id: hardResetItem
                 code: "--hard"
                 text: qsTr("Discard everything after it")
-                // Two words, as this menu's other notes (`already pushed` / `not merged` / `conflicts stay`): what
+                // Two words, as the notes (`already pushed` / `not merged` here, `OpExitCard`'s `conflicts stay`): what
                 // tells it apart is the *uncommitted* part, and `too` means "besides the commits". Not `worktree`:
                 // the left menu's `WORKTREES` lists git worktrees, so the word would name another thing. No count:
                 // the uncommitted row behind the menu counts from the same status, and `%n … file(s)` would show
