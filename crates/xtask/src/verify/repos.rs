@@ -282,8 +282,8 @@ pub(super) fn seed_merge_tool(
 /// The path a verb needs handed to it, made on the spot; empty for every
 /// other verb.
 ///
-/// The open-refused verbs' subject is a folder no preset can be. Both
-/// sit one level down, so the folder the second try opens at is a real
+/// The open-refused verbs' subject is a folder no preset can be. All
+/// three sit one level down, so the folder the second try opens at is a real
 /// one with the failed pick inside it.
 pub(super) fn folder_for(
     verb: &str,
