@@ -2,8 +2,8 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// The depth a button written on two lines asks of whoever holds it to one (rules-refs/app-ui.md「パネルの右端のボタンの
-// 深さは `TopBar.actionDepth`」). Under a UI face whose two lines are shallower than the word over the mark (macOS) this
+// The depth a button written on two lines asks of whoever holds it to one (`TopBar.actionDepth`, the panel's right
+// end). Under a UI face whose two lines are shallower than the word over the mark (macOS) this
 // figure is the frame's depth, and no desk here has such a face — so the figure is held to the layout it stands for.
 Item {
     id: root
