@@ -60,7 +60,7 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 
 **ダイアログ・メニューの見た目は headless で撮れる**: `WindowShotMirrors.qml` のオーバーレイミラー(`ShaderEffectSource`)が **overlay.png** を app.png と並べて保存する(ロック状態と無関係)。オーバーレイ自体の grabToImage は "no QML engine" で不可、ミラーが唯一の経路。
 
-**白紙の overlay.png は「その時点で何も開いていなかった」の意味**。報告行 `overlay saved=<bool> popups=<n> yield=<bool>` の **`popups=` がオーバーレイ自身が抱えていた数**(メニュー 1 / サブメニューを開けば 2 / モーダルは dimmer を伴って 2 以上)、`yield=` が窓の枠を場面へ返していたか(外の press で閉じるメニュー・リストが立っていたか)。`commit-menu` / `reset-menu` はこの行が must_say — **overlay が主題の動詞には同じ 1 行を足せる**(`verify/verbs.rs`)。「閉じたか」は `Popup.opened` の報告行で読む。
+**白紙の overlay.png は「その時点で何も開いていなかった」の意味**。報告行 `overlay saved=<bool> popups=<n> yield=<bool>` の **`popups=` がオーバーレイ自身が抱えていた数**(メニュー 1 / サブメニューを開けば 2 / モーダルは dimmer を伴って 2 以上)、`yield=` が窓の枠を場面へ返していたか(外の press で閉じるメニュー・リストが立っていたか)。`commit-menu` / `reset-menu` はこの行が must_say — **overlay が主題の動詞には同じ 1 行を足せる**(`verify/verbs/*.rs` —— `commit-menu` の行は `verify/verbs/graph.rs`)。「閉じたか」は `Popup.opened` の報告行で読む。
 
 **絵は試行の単位で撮る** — page の成立 → 元の更新 → grab → 答えの確認を 1 試行とし、待機(ambient の読み・インク)で止まった試行は捨てて page から撮り直す。行は `picture run= artifact= attempt=<n> waiting= / held= / ink= / saved=`(読み方は `AutoShotDriver.qml` の `Attempt`)。
 
