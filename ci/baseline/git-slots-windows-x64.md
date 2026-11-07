@@ -142,7 +142,7 @@ A = 背景と elsewhere が `max(1, n/2)`、B = `max(1, n/4)`。巡回 5 秒・�
 書く変種のため)に対する `status --porcelain=v2 -z --branch -uall` を 5 回。機構を入れる書き込み
 (`update-index --untracked-cache`、初回の status)は錠ありで 1 度だけ行い、その後は製品条件で測る。
 
-| 変種 | min / 中央 [ms](max)|
+| 変種 | min / 中央(max)[ms]|
 |---|---|
 | 製品条件のまま | **372 / 382**(395)|
 | untracked cache on(錠ありの status で 1 度満たしてから)| 365 / 377(407)|
