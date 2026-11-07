@@ -163,8 +163,9 @@ Item {
             repoTab.fetch("")
             fetchedRefListTimer.start()
         } else if (act === "fetch-recover") {
-            // A fetch that cannot land leaves a failure standing; `Main` then fires one that can and reads what the
-            // success takes down by itself. Self-contained on the default preset; the log's own failed row stays.
+            // A fetch that cannot land leaves a failure standing; `WindowAutoActDriver` then fires one that can and
+            // reads what the success takes down by itself. Self-contained on the default preset; the log's own failed
+            // row stays.
             repoTab.fetch("pgg-no-such-remote")
         } else if (act === "fetch-recover-held") {
             // The same recovery over a log panel the reader opened, which the fetch leaves standing
