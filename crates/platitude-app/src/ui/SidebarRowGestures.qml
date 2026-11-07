@@ -4,9 +4,9 @@ import platitude.ui
 
 // The sidebar's row gestures: which row was clicked last, and which one has a name box open in it. Held beside the
 // lists: only one row at a time is either, in whichever section, and both outlive the delegates that show them
-// (デザイン規約 §左メニューの所作). The pane keeps only aliases of `activeKey` / `editKey` / `menuOpen` and one-line
-// forwards (`stopEdit` / `submitEdit` / `beginRename` / `beginBranchAt` / `activateRow`); the lists and the peek take
-// this object as `gestures:`.
+// (デザイン規約 §左メニューの所作). The pane keeps only aliases and readings of what is here (`activeKey` / `editKey` /
+// `openKey` / `menuOpen` …) and one-line forwards (`stopEdit` / `submitEdit` / the `begin*` boxes / `activateRow` …);
+// the lists and the peek take this object as `gestures:`.
 //
 // `import platitude` is load-bearing: `RepoTab` / `NavSectionModel` are Rust-registered types, and without it
 // `RepoPage` loads as "unavailable" and no window comes up.
