@@ -796,7 +796,7 @@ fn holds_periodic(text: &str) -> bool {
     })
 }
 
-/// How many of `lines` show a component the reach holds — the selection
+/// How many of `lines` show a component the change touched — the selection
 /// a gate choosing by what each line shows would make, printed beside
 /// the selection by reach and never used to skip a run
 /// (反映前テストの機械化.md §動詞の絞り込みは比較表示に留める). Counted
