@@ -91,7 +91,7 @@ impl WorktreeStatus {
     ///
     /// `git stash push --staged` cannot take these apart: it writes the
     /// entry, then fails to remove the staged half, leaving the entry
-    /// behind. The UI refuses first on these.
+    /// behind. A UI offering it refuses first on these (`stash::PushOptions`).
     pub fn partially_staged(&self) -> impl Iterator<Item = &StatusItem> {
         self.items.iter().filter(|i| {
             matches!(i, StatusItem::Tracked { staged, unstaged, .. }
