@@ -18,6 +18,8 @@
 #          test named in <why>, or the perf tool's own runs, is the witness.
 #   twin   no gate: <leans on> is the registered line that runs the same path and judges as
 #          much. A twin is registered nowhere (`verbs` refuses a registered one).
+#   host   the host alone, before a merge and in the whole gate: the form needs a git above
+#          the container's minimum. <leans on> is -; <why> starts with git:.
 
 fonts	author-card-open 0 --preset authorship	-	cut= reads whether the author's name fits the card
 fonts	badges --preset conflict	-	narrowed= words= mark= read the band's measured floor
