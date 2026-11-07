@@ -439,10 +439,10 @@ fn interaction_marks(line: &str, found: &mut Reading) {
     }
 }
 
-/// One `key=value` off a line whose keys are whole words: the tables the
-/// runner writes for itself (`perf::display`, `perf::sampler`). Not
-/// [`field`], which finds the key anywhere: `y=` on a line carrying
-/// `primary=false` answers `false`.
+/// One `key=value` off a line whose keys are whole words: the runner's own
+/// tables (`perf::display`, `perf::sampler`) and the harness's event lines
+/// (`perf::interactions`). Not [`field`], which finds the key anywhere:
+/// `y=` on a line carrying `primary=false` answers `false`.
 pub(super) fn token<'a>(line: &'a str, key: &str) -> Option<&'a str> {
     line.split_whitespace()
         .find_map(|word| word.strip_prefix(key))
