@@ -171,7 +171,7 @@ fn launch(command: &str) -> Option<Launch<'_>> {
             .map(|token| unquote(token))
             .collect();
         // Another named package is someone else's binary (xtask, usually);
-        // unnamed, the default members leave the app as the only target.
+        // unnamed, the default members' binaries hold the app's: read as it.
         let package = arguments
             .iter()
             .position(|argument| matches!(*argument, "-p" | "--package"))
