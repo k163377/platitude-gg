@@ -18,7 +18,7 @@ const OPENSSH: &str = "https://github.com/openssh/openssh-portable";
 const VERSION_RS: &str = "crates/platitude-core/src/version.rs";
 const MINIMUM_LINE: &str = "pub const MINIMUM_GIT: (u32, u32) = (";
 
-/// The minimum container's Ubuntu (`linux` reads the same line).
+/// The minimum container's Ubuntu (`versions` reads the same line).
 const DOCKERFILE: &str = "ci/linux/Dockerfile";
 const UBUNTU_ARG: &str = "ARG UBUNTU=";
 
