@@ -362,7 +362,7 @@ QtObject {
     function activateRow(kind, name, full, oidHex) {
         // Held: a switch and the tag row's new-branch box, which write. A worktree row goes through — moving to another
         // worktree writes nothing, and the running write outlives the page that asked for it
-        // (`RepoSession::close`, デザイン規約 §左メニューの所作 の replay の段).
+        // (`RepoSession::close`, デザイン規約 §左メニューの所作「履歴を書き換える write が走っている間は、戸だけ閉じる」).
         if (gestures.held && kind !== "worktree")
             return
         const id = full !== "" ? full : name
