@@ -22,7 +22,7 @@
 - **`--glob=<pattern>` は階層にしか当たらない** — `--glob=refs/stash` は 0 件(`refs/stash*` なら拾う)。素の rev `refs/stash` は stash 無しで `fatal: ambiguous argument`、`--ignore-missing` は間違った oid も黙って捨てる = 安全側と逆。`reachable::command` は `--glob` を採る
 - **`--all` で HEAD は外せない** — `--exclude=<現在のブランチ> --all` でも先端が negative に残る。外したい walk は `--branches --remotes` を並べる
 - `git config <key> <value>` はダッシュ始まりの値もそのまま(`--` は値として保存される)
-- **`config --get-regexp` は低いレベル順・実効値は最後の行** — 1 件目で判定すると system が常に勝つ(Git for Windows は system に `core.autocrlf=true` を書く)。単一キーは `--get`、複数キーは最後の出現で上書き読み。TestRepo が隔離するのは撃つ git だけで、コード側は開発機の system / global を見る
+- **`config --get-regexp` は低いレベル順・実効値は最後の行** — 1 件目で判定すると system が常に勝つ(Git for Windows は system に `core.autocrlf=true` を書く)。単一キーは `--get`、複数キーは最後の出現で上書き読み。テストの executor も system / global を外す(`support::exec::isolated`)ので system が勝つ形はテストに出ない —— 製品は利用者の system / global を見る
 
 - **「そのリポジトリ自身が何を書いているか」は `--local` でしか読めない**(`config::get_regexp_at`)— 実効レベルの `--get-regexp` はどのファイルの record かを言わないので、継承しているだけの値と自分で書いた値が同じ姿で届く。書き戻しの読み直しも `--local` 側で読む
 - **`--local` の書き込みは「今の値を先に読んで、違うキーだけ撃つ」**(`identity::write_local_pair`)— 空欄 = `--unset` だが、`--unset` の「元から無い」と「多値なので触れない」は同じ exit 5(実測 git 2.55。git の doc は 5 と 6 に分かれると書いてあるが分かれない)ので、先に読まないと本物の失敗が無害な答えに化ける。**`--local` は set 側にも明示する** — 素の `git config <key> <value>` / `--unset` も既定でローカルに書くが、読む側と書く側が同じ語を名乗る形にしておく
