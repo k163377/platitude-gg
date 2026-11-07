@@ -1,4 +1,5 @@
-//! Worktree listing: `git worktree list --porcelain -z`.
+//! Worktrees: the listing (`git worktree list --porcelain -z`) and the
+//! writes that add, move and remove one.
 
 use std::path::Path;
 
