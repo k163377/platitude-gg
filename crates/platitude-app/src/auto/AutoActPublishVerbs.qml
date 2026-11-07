@@ -156,7 +156,7 @@ Item {
             pushRetryTimer.start()
         } else if (act === "fetch" || act === "fetch-busy") {
             // `-busy` is the same fetch; what differs is who says the run is over — the band, once it has latched the
-            // ring (`WindowAutoActDriver`).
+            // ring (`WindowBandActs.fetchBusyTimer`).
             repoTab.fetch("")
         } else if (act === "fetch-ref-list") {
             // What a tag says about the remote exists only after a fetch (`ls-remote --tags`), so the two are one verb.
