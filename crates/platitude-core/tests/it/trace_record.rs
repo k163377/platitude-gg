@@ -65,8 +65,8 @@ impl Drop for Daemons {
 }
 
 /// What the repository's scratch folder holds of a record — anything of
-/// the trace's name. The folder keeps other things (a stopped reword's
-/// message, for its `--continue`).
+/// the trace's name. The folder keeps other things (a temporary index,
+/// `scratch::ScratchFile`).
 fn scratch(repo: &Path) -> Vec<String> {
     let Ok(entries) = std::fs::read_dir(repo.join(".git").join("platitude")) else {
         return Vec::new();
