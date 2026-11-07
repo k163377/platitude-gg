@@ -15,9 +15,10 @@ use std::collections::HashSet;
 /// Everything the harness is allowed to say to the app it drives, read
 /// together at startup and never written after.
 ///
-/// The `perf_*` fields exist only with the feature: their one reader is
-/// `harness::perf_probe`. Everything else is in both builds, empty without
-/// it, because the app asks the same questions however it was compiled.
+/// The `perf_*` fields exist only with the feature: their readers are
+/// `harness::perf_probe` and, for `perf_font_walk`, `Harness`. Everything
+/// else is in both builds, empty without it, because the app asks the same
+/// questions however it was compiled.
 #[derive(Default)]
 pub(crate) struct Knobs {
     /// `PGG_AUTO_ACT` — the one operation to run once the repository is
