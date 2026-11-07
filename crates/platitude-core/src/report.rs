@@ -190,9 +190,10 @@ pub enum ReportKind {
     WorktreeRenameTaken,
 
     /// The five shapes a history cannot be rewritten in, found before a
-    /// rebase is spawned ([`crate::sequencer::plan_edit`]). git is never
-    /// asked, so there is no log row; one kind each because the reason is
-    /// the sentence the screen picks (`Words.writeReportedWhy`).
+    /// rebase is spawned ([`crate::sequencer::plan_edit`]; the last,
+    /// [`crate::sequencer::rebase_interactive`]). git is never asked, so
+    /// there is no log row; one kind each because the reason is the
+    /// sentence the screen picks (`Words.writeReportedWhy`).
     ///
     /// A merge inside the range: a plain interactive rebase would flatten it.
     RewriteAcrossMerge,
