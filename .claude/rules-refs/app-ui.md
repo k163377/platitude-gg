@@ -266,6 +266,6 @@
 - **`frameSwapped` を待つなら頼むのは `window.update()`** — verify の offscreen run は software ループで、software / basic ループは `updatePending`(`QQuickWindow::update()` が立てる)が無いと swap も `frameSwapped` もしない。素の `requestUpdate()` は静止した scene では描くだけで何も送らない(threaded ループは毎回 present するので実窓の perf では差が出ない)
 - **効果を待つ要求は拍ごとに撃ち直す**(rules/app-ui.md §UI 自動化)— `update()` でも、窓が見えていない時に取られた要求は swap せずに消える(上の行)/ `RepoSession::restart_log` は後から来た ask に取って代わられ、取られた pass は cancel される(`take_log_run`)/ 故障の注入(`failGraphPass`)は立ったままなので、撃ち直しても同じ故障にしかならない。撃ち直さずに待てるのは完了境界を持つ要求だけ(書き込みの答え・`grabToImage` の callback)
 - **QML テストの待ちも `cargo xtask waits` が見る** — 待ちは `tryCompare` / `tryVerify` の既定 timeout(`wait(ms)` は赤。message だけなら timeout の席は `undefined`)・`waitForRendering` / `waitForItemPolished` の戻り値は `verify()` で読む
-- **見出しの名前の天井は `CardText.holdsNames`**(報せ・質問・リモートのダイアログ・破棄記録の帯とカードの見出し。2 行目とツールチップは切らない。切り方・全文の出し方・コピーは同 property のコメント)
+- **見出しの名前の天井は `CardText.holdsNames`**(報せ・質問・リモートのダイアログ・破棄記録の帯とカードの見出しと、質問の 2 行目。報せの 2 行目とツールチップは切らない。切り方・全文の出し方・コピーは同 property のコメント)
 - **名前の色は `Words.nameInk(地の文の色, 居場所の色)` の 1 か所**(規約 §ref の種別「文の中の名前」。色の優先順は同関数のコメント)。**印の色は `NavIcon.inkBeside(名前の色)`**
 - **`TextMetrics` は 1 つの変更通知で全部を言う** — 書いた `elideWidth` の答えを同じ定規の `advanceWidth` で読むと binding loop(全幅と切った幅は別の `TextMetrics` に置く)。**字の大きさは定規の `font` から読み返さない** —— 自分の `pixelSize` を読む(定規の `font.pixelSize` を読む席は Linux の qmltest でだけ binding loop になる)。例は `AppMenuItem.refCuts` / `seatRoom`・`CardText.seatRoom`
