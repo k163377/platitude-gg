@@ -135,9 +135,8 @@ Rectangle {
         }
         return branchMenu.offerFrom()
     }
-    /// Automation: the panel's two doors, opened at the press's own handler (a press cannot be injected — verify-ui
-    /// verbs.md「press は注入できない」). Each says whether the card came up: a picture cannot tell no card from one
-    /// opened off screen.
+    /// Automation: the panel's two doors, opened at the press's own handler (a press cannot be injected). Each says
+    /// whether the card came up: a picture cannot tell no card from one opened off screen.
     function openStandMenu() { return topBar.pressRepoName() }
     function openStandRepos() { return standMenu.openSub(repoSub) }
     function openStandWorktrees() { return standMenu.openSub(worktreeSub) }

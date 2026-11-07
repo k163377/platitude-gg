@@ -6,7 +6,7 @@ import platitude.ui
 // The unified ⇄ split view toggle on the diff pane's band — the same pair as the file lists' tree ⇄ paths toggle: the
 // lit half is the way the rows are read now (`ViewMarkButton`). Its seat is where the band's air ends, before
 // `Stage file` (`DiffPaneHeader`'s end trio). **On every diff, pictures and binaries included**: a quiet control that
-// comes and goes per file moves everything right of it on the band (規約 §窓の床「誰も頼んでいないものが画面上で動く」).
+// comes and goes per file moves everything right of it on the band.
 // The words are GitHub's PR setting's (`Unified view` / `Split view`). The marks draw the two shapes the rows take
 // (`NavIcon`, after Octicons' `rows` / `columns` on this family's 16 grid). The choice is the machine's, one column by
 // default (`LayoutState.diff_split`); the rows are laid out again in place, the reading position held
