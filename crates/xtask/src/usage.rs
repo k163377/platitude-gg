@@ -773,7 +773,7 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
       to the millisecond, never overtaken: the head lands, the next
       prepares, and the rest wait. For the next, says what the head's
       landing changes among the rule and design documents — a stop
-      (CLAUDE.md, the land / review-points / verify-ui SKILL.md: prepare
+      (CLAUDE.md, the land / review-points / verify-ui / gate SKILL.md: prepare
       nothing), paths to read under .claude/ and internal-docs/, or that
       the diff could not be read — as the land skill's stages go. Every
       write of an entry, and a reading that dates or lets go the head,
