@@ -349,7 +349,7 @@
 - `band-actions-fold`(`--preset longnames`。語を捨てて印だけになった形 — 詳細は同上)
 - `band-actions-alert`(**`--preset longnames` + `--allow-write-failure` が要る**。畳んだ印の角に push の `!` が立った形 — 詳細は同上)
 - `band-actions-stopped`(**`--preset unreachable` + `--allow-write-failure` が要る**。同じ角の `!` を fetch 側で = 止まった fetch の印 — 詳細は同上)
-- `old-git`(最低バージョンを割った git で普通に動いている窓 = 帯の 4 つ目のバッジ — 詳細は `WindowBadgeActs.qml` の `oldGitActTimer`、判定は `verify/verbs/window.rs`)
+- `old-git`(最低バージョンを割った git で普通に動いている窓 = 帯の最後のバッジ(`OLD GIT`) — 詳細は `WindowBadgeActs.qml` の `oldGitActTimer`、判定は `verify/verbs/window.rs`)
 - `old-git-card`(そのバッジを hover で開いたカード — 詳細は同上)
 - `old-git-fold`(黄だけが立った窓を床まで縮めた `…` — 詳細は同上)
 - `no-lfs [<幅>|floor]`(**`--preset lfs` が要る**。Git LFS が要るファイルが在り、git が LFS を走らせられない窓 = 帯の `NO LFS`。`floor` は黄の `…` に畳んだ姿 — 詳細は `WindowBadgeActs.qml` の `noLfsActTimer`、判定は `verify/verbs/window.rs`)
