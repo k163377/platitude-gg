@@ -17,7 +17,7 @@ pub enum Continuation {
     Abort,
     /// Drop the current commit and move to the next one.
     Skip,
-    /// Stop stepping but keep the tree as it is (sequencer ops only).
+    /// Stop stepping but keep the tree as it is — a merge too, losing only its marker.
     Quit,
 }
 
