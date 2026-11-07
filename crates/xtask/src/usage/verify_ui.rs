@@ -122,7 +122,9 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           which refuses a write of its own, without git —,
                           rename-taken, fold-first-commit,
                           drop-last-commit, carried-apply-refused,
-                          band-actions-alert, push
+                          band-actions-alert, band-actions-stopped,
+                          commands-escape, fetch-hover 1|3, fetch-tip-link,
+                          worktree-new-refused, push
                           --preset unreachable, publish-new-go given
                           a URL nothing can reach — that preset cannot
                           stand in for it, since a branch already pushed
