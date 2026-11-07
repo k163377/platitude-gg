@@ -223,8 +223,8 @@ QtObject {
         : Words.worktreeNameMark(gestures.editRefusedWhy, gestures.editWorktreePlace)
 
     function startEdit(kind, key, mode, id, oid, text) {
-        // The one door into the box (the second click and the menu's four `begin*`), so the hold is asked here: a box
-        // opened while the doors are held would take a name nothing can be done with.
+        // The one door into the box (the second click, a tag row's double-click and the menu's four `begin*`), so the
+        // hold is asked here: a box opened while the doors are held would take a name nothing can be done with.
         if (gestures.held)
             return
         gestures.dropWithheld()
