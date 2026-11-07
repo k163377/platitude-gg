@@ -4,8 +4,9 @@
 
 // No `"\` continuation on the opening line (see `demo_repo`).
 pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
-      perf none|details|diff|scroll|scroll-none|font-walk --preset perf checks
-      the performance driver's visible state; offscreen timings are not
+      perf none|details|diff|scroll|scroll-none|font-walk --preset perf (and
+      perf colour|diff-scroll|sequence --preset perf-sequence) checks the
+      performance driver's visible state; offscreen timings are not
       benchmarks.
       Build the app (release), run it headless (offscreen QPA) against a
       repository, fire PGG_AUTO_ACT=<verb> / PGG_AUTO_ACT_ARG=<arg>, and
