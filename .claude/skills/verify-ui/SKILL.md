@@ -64,7 +64,7 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 
 **絵は試行の単位で撮る** — page の成立 → 元の更新 → grab → 答えの確認を 1 試行とし、待機(ambient の読み・インク)で止まった試行は捨てて page から撮り直す。行は `picture run= artifact= attempt=<n> waiting= / held= / ink= / saved=`(読み方は `AutoShotDriver.qml` の `Attempt`)。
 
-**overlay が空でない run は 3 枚目 `scene.png` を出す** —— app.png と overlay.png を**描かれた座標のまま重ねた 1 枚**で、**窓の縁(Windows の窓モードの 1px)が写るのはこの 1 枚だけ**(app.png は本体だけ = Windows では窓より 2px 狭い)。「開いたものは、それを開けたものに対して**どこに**立っているか」(hover の席・カードの密着・メニューの掛かり方)はこれでしか読めない。報告行は `scene saved=<bool>`。**hover の席を見せる時はこの 1 枚を board に出す**。**撮る絵は run が頭で名乗り**(`pictures run= wanted=…`)、**1 枚ごとに `picture run= artifact= saved=<bool>`** — 頼んだ絵が全部 `saved=true` でなければ契約違反(保存の失敗は後の絵で取り消せない)。
+**overlay が空でない run は 3 枚目 `scene.png` を出す** —— app.png と overlay.png を**描かれた座標のまま重ねた 1 枚**で、**窓の縁(Windows の窓モードの 1px)が写るのはこの 1 枚だけ**(app.png は本体だけ = Windows では窓より 2px 狭い)。「開いたものは、それを開けたものに対して**どこに**立っているか」(hover の席・カードの密着・メニューの掛かり方)はこれでしか読めない。報告行は `scene saved=<bool>`。**hover の席を見せる時はこの 1 枚を board に出す**。**撮る絵は run が頭で名乗り**(`pictures run= wanted=…`)、**1 枚ごとに `picture run= artifact= attempt= saved=<bool>`** — 頼んだ絵が全部 `saved=true` でなければ契約違反(保存の失敗は後の絵で取り消せない)。
 
 ## 場面ごとの各論(このディレクトリ。その場面に入る前に読む)
 
