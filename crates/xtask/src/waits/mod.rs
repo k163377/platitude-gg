@@ -22,10 +22,11 @@
 //! - `sampler`, `owner`, `report`, `completion`, `awaited`: the harness's
 //!   stages move, and its runs complete and report, only through its
 //!   operations — a structure no marker lets go ([`stages`]).
-//! - `stage`, `input`, `stale`, `reach`: what an operation's code does,
-//!   read across every call it makes — state kept past the operation's
-//!   API, an input outside a press, a reading carrying a value read before
-//!   it, a reach declared outside the machinery ([`reach`]).
+//! - `stage`, `input`, `read`, `stale`, `reach`: what an operation's code
+//!   does, read across every call it makes — state kept past the
+//!   operation's API, an input outside a press, a reading that does more
+//!   than read, a reading carrying a value read before it, a reach declared
+//!   outside the machinery ([`reach`]).
 //! - `unread`: a file whose lexical reading stopped short — a literal, a
 //!   comment or a template's `${…}` left open, a `/` that reads two ways
 //!   (`crate::lex::Unread`) — a handler the beats proof cannot read as a
