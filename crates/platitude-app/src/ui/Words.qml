@@ -20,8 +20,8 @@ QtObject {
         return qsTr("%1 to activate").arg(Words.pressCount(presses))
     }
 
-    /// The menu-row tag on anything that replays commits a remote already has — the amend-family rows and both
-    /// rebase entries (デザイン規約 §回数押し).
+    /// The menu-row tag on anything that replays commits a remote already has — the rebase entries; the amend-family
+    /// rows say `already pushed` (デザイン規約 §回数押し).
     readonly property string rewritesPushed: qsTr("rewrites pushed commits")
 
     /// Starting a branch where the row stands, from the graph row's menu and the sidebar's ref menu
