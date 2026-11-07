@@ -29,7 +29,7 @@ Item {
     required property var co_authors
     /// The lane segments the cell draws (`{kind, lane, color, dashed}` — `encode::Lanes`).
     required property var geometry
-    /// The chips the row carries (`{kind, name, isHead, hasRemote, hasPr, here, held, locked, remote, key}` —
+    /// The chips the row carries (`{kind, name, isHead, hasRemote, hasPr, here, held, locked, home, remote, key}` —
     /// `encode::Chips`), in the order the front card reads them: HEAD → local → remote → tag.
     required property var labels
     required property string stash_ref
