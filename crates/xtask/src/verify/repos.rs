@@ -453,7 +453,7 @@ fn route_of(verb: &str, arg: &str) -> Result<Route, String> {
         "tab-mark" => Route::Strip(Some("8")),
         "tab-name" => Route::Colliding,
         // The order is the subject; four distinct names make it readable.
-        // The argument names two of them.
+        // The argument names two of them (`tab-drag`) or one (`tab-hold`).
         "tab-drag" | "tab-hold" => Route::Strip(Some("4")),
         // A strip that has to overflow a window at its floor. Twelve:
         // tabs above their own floor divide the run exactly and overflow
