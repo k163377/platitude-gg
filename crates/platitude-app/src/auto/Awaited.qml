@@ -161,7 +161,7 @@ QtObject {
     // ---- Stages ----
 
     /// Each operation's record, by `owner/name` (a second instance under one name — a second page's driver — is
-    /// `name#2`): `{ op, label, gen, live, stage, visited, marks, witnesses }`.
+    /// `name#2`): `{ op, label, gen, live, stage, visited, marks, witnesses, noted }`.
     property var ops: ({})
     /// How many stage lines the run has said: the `seq=` of the next is one more.
     property int stageSeq: 0
