@@ -1,7 +1,7 @@
 //! Publishing the todo-editor helper beside the running test binary.
 
-// Everything below is unix-only: Windows neither reports `ETXTBSY` nor
-// refuses to replace an entry whose file is being executed.
+// Everything below is unix-only: Windows reports no `ETXTBSY`, and there a
+// running helper is locked against replacement outright (`publish_helper`).
 #[cfg(unix)]
 use crate::support::session::publish_helper;
 
