@@ -121,8 +121,8 @@ impl WorktreeStatus {
 }
 
 /// How many entries fall into each bucket, counted in one pass: the
-/// headline shows all five, and `-uall` makes the list as long as the
-/// tree is dirty.
+/// pane reads four and `hard_reset_takes` the fifth, and `-uall` makes
+/// the list as long as the tree is dirty.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Counts {
     pub staged: usize,
