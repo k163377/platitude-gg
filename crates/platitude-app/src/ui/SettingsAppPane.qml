@@ -289,7 +289,7 @@ ColumnLayout {
         gitPathField.text = AppBackend.gitPath
         // One `git --version` for the path shown, on every opening: the file on disk can change with nobody retyping.
         // A path that does not answer is said in red under the box, in words the reader can act on — at startup it
-        // only fell back to PATH's git (`Hub::resolve_git`), since this screen lies past the startup gate.
+        // only fell back to PATH's git (`hub::life::resolve_git`), since this screen lies past the startup gate.
         AppBackend.openGitPathScreen()
         pane.readAuthorChoices()
     }
@@ -379,7 +379,7 @@ ColumnLayout {
     // Which git this app runs (user decision — ask before changing): on a machine with several, the reader picks the
     // one. One box and, under it, what the binary at that path answered. First, because every other chapter decides
     // how often and how much to ask, and this one whom all of it is asked of. Global only: no repository overrides it
-    // yet (P3-確認事項 §app). A run settles its git once, at start (`Hub::resolve_git`). Order (user decision):
+    // yet (P3-確認事項 §app). A run settles its git once, at start (`hub::life::resolve_git`). Order (user decision):
     // help → box and button → the version line (the warning, while a restart is offered) → what a restart costs.
     // Headless: `settings-git-path` / `settings-git-leave`.
     SettingsSection {

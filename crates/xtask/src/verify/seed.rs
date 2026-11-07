@@ -16,7 +16,7 @@ pub(super) fn config(
 ) -> Result<(), String> {
     // A git the store names and the machine lacks. Only a file gets here:
     // the screen asks a path for its version before storing it
-    // (`Hub::resolve_git` falls back to `PATH`; the chapter is the only
+    // (`hub::life::resolve_git` falls back to `PATH`; the chapter is the only
     // place that says so).
     if is_stored_missing(verb, arg) {
         let settings = config_dir.join("settings.toml");
