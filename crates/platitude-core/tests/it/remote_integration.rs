@@ -226,7 +226,7 @@ async fn a_replace_whose_delete_is_refused_leaves_both_names_and_the_tracking() 
     );
 }
 
-/// `Delete both` runs the local half first (`session::delete_branch_everywhere`
+/// `Delete both` runs the local half first (`RepoSession::delete_branch_everywhere`
 /// says why), so a refused lease stops it half-way: the branch is gone here
 /// and the remote keeps theirs. The refusal is the outdated one a push
 /// gives, and so is what follows it: a fetch, after which the commit the
