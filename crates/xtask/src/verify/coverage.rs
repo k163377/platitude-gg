@@ -1,6 +1,7 @@
 //! `cargo xtask verbs` — the registered lines (`gate::lines`) held against
 //! the harness, the judgment tables and the sources, before any gate
-//! chooses off them (verify-ui skill「触った動詞は gate が選ぶ」).
+//! chooses off them (verify-ui skill「gate が回す動詞は登録表
+//! `crates/xtask/verb-lines.txt` の行」).
 //!
 //! What it refuses, each a selection that would be short or a run that
 //! would wait out its ceiling saying nothing:
