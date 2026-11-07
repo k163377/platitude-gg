@@ -12,7 +12,7 @@ paths:
 - コマンドは**引数配列**で組み立て、パースは機械可読形式のみ(`--porcelain=v2` / `-z` / `--format=`)。環境は `LC_ALL=C`・`GIT_TERMINAL_PROMPT=0`・`GIT_EDITOR=true`(rebase -i は `GIT_SEQUENCE_EDITOR` = 非対話 helper)・`GIT_OPTIONAL_LOCKS=0`(全コマンド。diff には効かない —— 読みが index を書かない釘の全体は `process::executor` の `FIXED_ARGS` / `FIXED_ENV`)。Windows は `CREATE_NO_WINDOW`
 - 失敗メッセージは stderr 優先・空なら stdout(`git commit` の「nothing to commit」は stdout で exit 1)
 - git の実行も完了待ちも常に UI(Qt)スレッドの外
-- **複合操作は 1 手目が失敗したら止める**(`?`)。**失敗が `Ok` に化ける経路**(`switch` の `CheckoutOutcome::Blocked`・`stash pop` の非ゼロ終了)だけは明示的に判定し、戻せるものは戻す(`session::carry_across`)。失敗後に走ってよいのは読み取りだけ
+- **複合操作は 1 手目が失敗したら止める**(`?`)。**失敗が `Ok` に化ける経路**(`switch` の `CheckoutOutcome::Blocked`・`stash pop` の非ゼロ終了)だけは明示的に判定し、戻せるものは戻す(`session::build::carry_across`)。失敗後に走ってよいのは読み取りだけ
 - **`&str` をバイト長で切らない**(罠と書き方は rules-refs の同項)
 - **実行の監督はレーンで分ける**(ユーザー決定): **読み取りとネットワーク(fetch / push / ls-remote / clone)はタイムアウト + キャンセル、ローカル書き込みは完走まで待つ**(close も)。分類点は `operation::OperationKind::lane` の exhaustive match 1 箇所。auto fetch は多重起動しない
 - **git プロセスは全部 1 組の実行枠 `process::Slots` を通る**(**枠 = 子プロセス 1 本**)。優先度(`Priority` = 誰が待つか)・ペース(`Pace` = 何が速さを決めるか)・ログ(`Kept`)・キャンセル・書き込み順序は別の概念。背景の読みと外部に paced されるコマンドは全体の 1/4 まで = クリックの枠は常に空く(各論は rules-refs の `Slots` 項)
