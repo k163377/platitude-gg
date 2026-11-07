@@ -433,7 +433,7 @@
 
 ## 動詞ごとの読み方・仕込み
 
-**先端に答えが立つ 3 つ(`merge-branch` / `cherry-pick` / `revert-commit`)は 1 本の報告行を共有する** — `tip_landed follows= onscreen= op= head= selected= row=` で、**合格条件は `follows=` / `onscreen=` に `op=` を足した 3 つ**(`op=merge` / `op=cherry-pick` / `op=revert`)。選択が新しい先端のコミットへ移り、その行が画面に在ることを言う(規約 §履歴を合流させる)。**merge / cherry-pick は `--preset diverged` の `origin/main`**(`--preset basic` は木が汚れていて `git cherry-pick` が落ちる)。**取り込み済みの merge も先端に着くのが正**(`merge-branch v0.1 --preset basic`)。完了の門と罠は `AutoActHistoryVerbs.qml` の `tipLandedTimer`、判定は `verify/verbs/sequencer.rs`。
+**先端に答えが立つ 4 つ(`merge-branch` / `cherry-pick` / `revert-commit` / `pull-go`)は 1 本の報告行を共有する** — `tip_landed follows= onscreen= op= head= selected= row=` で、**合格条件は `follows=` / `onscreen=` に `op=` を足した 3 つ**(`op=merge` / `op=cherry-pick` / `op=revert` / `op=pull`)。選択が新しい先端のコミットへ移り、その行が画面に在ることを言う(規約 §履歴を合流させる)。**merge / cherry-pick は `--preset diverged` の `origin/main`**(`--preset basic` は木が汚れていて `git cherry-pick` が落ちる)。**取り込み済みの merge も先端に着くのが正**(`merge-branch v0.1 --preset basic`)。完了の門と罠は `AutoActHistoryVerbs.qml` の `tipLandedTimer`、判定は `verify/verbs/sequencer.rs`。
 
 **「止まった側」の 4 動詞は 1 本の報告行を共有する** — `cherry-pick-stops` / `revert-stops` / `rebase-stops` / `drop-stops`(merge だけは `merge-stops` = 出口の形が違うので報告行も別)。共有する 1 本は `write_stopped wip= conflicts= error= log= cont= home= stashes= op= files=` で、**合格条件は `wip=true conflicts=true error=false log=false cont=true`**(`rebase-stops` / `drop-stops` は `home=repo` まで、`drop-stops` はさらに `stashes=1`)。**preset は「まだ止まっていない木」でなければならない**・**失敗した run の木は捨てる**。各値の意味・待ち・preset は `AutoActHistoryVerbs.qml` の `opStoppedTimer`、判定は `verify/verbs/sequencer.rs`。
 
