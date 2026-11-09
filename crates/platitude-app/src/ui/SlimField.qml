@@ -11,9 +11,9 @@ TextField {
     /// The frame's colour while the box has the keyboard: the focus ring, or the ref kind's own colour for a box naming
     /// a ref (規約 §ref の種別: 枠 = 種別). A refusal outranks it: the kind says what is typed, the refusal whether it
     /// can be, and the reader has to answer that first. Only two kinds override (`NavNameBox`, `GraphRowChips`): a
-    /// tag's box (new or rename) is `refTag`, a new worktree's branch box that worktree's `success`. The rest keep the
-    /// ring — a local branch's `accent` is the ring's own value, a remote's `textSecondary` is too dark for a focus
-    /// frame, and a stash is no ref.
+    /// tag's box (new or rename) is `refTag`, a worktree's box (a new one's branch, its folder) the worktree's
+    /// `success`. The rest keep the ring — a local branch's `accent` is the ring's own value, a remote's
+    /// `textSecondary` is too dark for a focus frame, and a stash is no ref.
     property color focusTone: Theme.borderFocus
     /// The width at which what is typed stands without scrolling, insets included — for a layout that gives this box
     /// the room it needs (`PublishForm`).

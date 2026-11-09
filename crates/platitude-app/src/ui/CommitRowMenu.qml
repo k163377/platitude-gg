@@ -4,8 +4,8 @@ import QtQuick
 import platitude.ui
 
 // The right-click on a graph row: one menu for a commit, another for a stash, a third for another worktree's
-// uncommitted row (デザイン規約 §グラフ行の右クリック) — this worktree's own uncommitted row has none (user decision —
-// ask before changing). The first level
+// uncommitted row (デザイン規約 §グラフ行の右クリック), a fourth inside a choice of two commits — this worktree's own
+// uncommitted row has none (user decision — ask before changing). The first level
 // holds the rows used often — on the row's commit, and on the name the chip draws (or the name pressed in the chip's
 // stacked list): its pull, push and delete table —; the cards under them hold what is used rarely.
 //
@@ -503,7 +503,7 @@ Item {
                 id: hardResetItem
                 code: "--hard"
                 text: qsTr("Discard everything after it")
-                // Two words, as this menu's other notes (`already pushed` / `not merged` / `conflicts stay`): what
+                // Two words, as the notes (`already pushed` / `not merged` here, `OpExitCard`'s `conflicts stay`): what
                 // tells it apart is the *uncommitted* part, and `too` means "besides the commits". Not `worktree`:
                 // the left menu's `WORKTREES` lists git worktrees, so the word would name another thing. No count:
                 // the uncommitted row behind the menu counts from the same status, and `%n … file(s)` would show

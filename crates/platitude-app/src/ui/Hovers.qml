@@ -5,8 +5,7 @@ import QtQuick
 /// `waiting` (its rest running) or `leaving` (its beat) is deciding — what the hand is on will stand or go in a
 /// moment — and a reading taken then is of a state about to move (`platitude.auto`'s `PageSettled`). Read by
 /// calling: a seat's state is its own property, which no binding on the set hears. Nothing in the product reads it;
-/// a seat is entered and left in constant time, since one stands in every sidebar row's delegate
-/// (`SidebarRowGestures`) and the rows come and go with the scroll.
+/// a seat is entered and left in constant time.
 QtObject {
     id: hovers
 

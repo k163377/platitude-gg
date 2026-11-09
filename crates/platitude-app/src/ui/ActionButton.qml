@@ -228,7 +228,7 @@ HoverToolButton {
 
     /// Whether the press just let go was a plain one, judged before the latch opens — the click follows the release in
     /// the same delivery, when the count is live again. `clickJudged` says there was a press at all: `clicked()` is
-    /// also raised with no press behind it (`TopBar.stashNow` / `fetchNow`, `TabStrip`, `WipBucketHeader`), and that
+    /// also raised with no press behind it (`TopBar.stashNow` / `fetchNow` / `findNow`), and that
     /// one is answered from the live count.
     property bool clickWanted: false
     property bool clickJudged: false
@@ -380,7 +380,7 @@ HoverToolButton {
     /// Control's own is content plus paddings, both answered from the width the row handed over (`wordRoom` →
     /// `folded` → `slack`), and until the row sets a width `setImplicitWidth` writes one — a binding loop at startup.
     /// Asked off that one, the request would also shrink the moment the word went, and a folded button never unfold.
-    /// No size moves: the row hands the same `naturalWidth` as `Layout.preferredWidth`, so nothing reads this one.
+    /// No size moves: the row sets the cell's `width` itself (`TopBar.actionCap`), so nothing reads this one.
     ///
     /// Only where the row lays the cell out: elsewhere it would leave the wording adrift in a box it was never
     /// measured for.
@@ -411,7 +411,7 @@ HoverToolButton {
                 kind: actionBtn.kind
                 // A phrase carries the hold's mark itself (`ActionButtonLabel.phraseHoldPresses`): this seat sits at
                 // the row's left edge, apart from the centred phrase. A plain held button keeps it here
-                // (`force-push-hold`, `discard-hunk-go`).
+                // (`discard-hunk-go`; the panel's stacked push keeps it in `stackSeat`, `force-push-hold`).
                 holdPresses: btnLabel.phrased ? 0 : actionBtn.armedPresses
                 besideWord: actionBtn.besideWord
                 holdProgress: actionBtn.holdProgress

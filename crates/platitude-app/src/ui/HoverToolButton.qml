@@ -5,8 +5,8 @@ import platitude.ui
 // ToolButton wearing the flat hover wash as its `background`, in place of Fusion's ButtonPanel (デザイン規約
 // §QML 実装ルール): Fusion's `ToolButton` puts the panel up on hover / down / checked, and `bgHover` laid over it is no
 // flat wash; laid as a child, the wash would sit over the `contentItem`'s mark. The background keeps the panel's
-// implicit 20, so no button changes size by being flattened. `checked` (the eye's two states) is told by the tint
-// alone (規約 §暗く落とした段).
+// implicit 20, so no button changes size by being flattened. `checked` (the eye's two states) is told by the mark
+// alone, its tint and its shape (規約 §暗く落とした段, `NavHeader`'s `eye-off`).
 //
 // Disabled, it still takes hover (it says `hoverEnabled: true`) and `TipAsk.asked` reads only `tip` and `lit`: a
 // button that cannot be pressed is silenced by an empty `tip` (規約 §無効「ボタンや入力欄の無効はツールチップを持たない」)

@@ -4,9 +4,9 @@ import platitude.ui
 
 // The sidebar's row gestures: which row was clicked last, and which one has a name box open in it. Held beside the
 // lists: only one row at a time is either, in whichever section, and both outlive the delegates that show them
-// (デザイン規約 §左メニューの所作). The pane keeps only aliases of `activeKey` / `editKey` / `menuOpen` and one-line
-// forwards (`stopEdit` / `submitEdit` / `beginRename` / `beginBranchAt` / `activateRow`); the lists and the peek take
-// this object as `gestures:`.
+// (デザイン規約 §左メニューの所作). The pane keeps only aliases and readings of what is here (`activeKey` / `editKey` /
+// `openKey` / `menuOpen` …) and one-line forwards (`stopEdit` / `submitEdit` / the `begin*` boxes / `activateRow` …);
+// the lists and the peek take this object as `gestures:`.
 //
 // `import platitude` is load-bearing: `RepoTab` / `NavSectionModel` are Rust-registered types, and without it
 // `RepoPage` loads as "unavailable" and no window comes up.
@@ -223,8 +223,8 @@ QtObject {
         : Words.worktreeNameMark(gestures.editRefusedWhy, gestures.editWorktreePlace)
 
     function startEdit(kind, key, mode, id, oid, text) {
-        // The one door into the box (the second click and the menu's four `begin*`), so the hold is asked here: a box
-        // opened while the doors are held would take a name nothing can be done with.
+        // The one door into the box (the second click, a tag row's double-click and the menu's four `begin*`), so the
+        // hold is asked here: a box opened while the doors are held would take a name nothing can be done with.
         if (gestures.held)
             return
         gestures.dropWithheld()
@@ -362,7 +362,7 @@ QtObject {
     function activateRow(kind, name, full, oidHex) {
         // Held: a switch and the tag row's new-branch box, which write. A worktree row goes through — moving to another
         // worktree writes nothing, and the running write outlives the page that asked for it
-        // (`RepoSession::close`, デザイン規約 §左メニューの所作 の replay の段).
+        // (`RepoSession::close`, デザイン規約 §左メニューの所作「履歴を書き換える write が走っている間は、戸だけ閉じる」).
         if (gestures.held && kind !== "worktree")
             return
         const id = full !== "" ? full : name

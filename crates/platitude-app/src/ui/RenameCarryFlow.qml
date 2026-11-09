@@ -141,9 +141,9 @@ Item {
 
     // Bindings, since the bar changes with the pick while it stands. `RestoreNone`: letting go happens at the press
     // that walks away, with the bar still on screen (`PublishFlow`). The heading stays plain ink
-    // (`AskBar.plainWords`; user decision — ask before changing), the one question that does: every other question's
-    // colour is fixed as it opens, so its heading says the cost (デザイン規約 §状態), but here the answer in the box
-    // moves the frame and the pill, and a heading moving with them would say it a third time.
+    // (`AskBar.plainWords`; user decision — ask before changing), as only this and `UpstreamFlow`'s unset do: other
+    // questions' colour is fixed as they open, so the heading says the cost (デザイン規約 §状態), but here the answer
+    // in the box moves the frame and the pill, and a heading moving with them would say it a third time.
     Binding {
         target: carryFlow.graphPane
         property: "askPlainWords"

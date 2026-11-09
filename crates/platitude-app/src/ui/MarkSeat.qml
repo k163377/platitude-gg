@@ -8,12 +8,12 @@ import platitude.ui
 // `+` either side, or a stem where that room is thinner (`air`). Every mark takes the same seat whatever its kind, its
 // ink in the seat's middle — in front of a name, the middle between the seat's head and the name's ink
 // (`NavIcon.nameAir`) — and a name's code ground starts at the seat's head: the seat holds the mark's air (`CodeChip` /
-// `NameRun` at 0, `CardText` at its room's head, `AppMenuItem` at `refLead - refCell`). Started half a gap early, the
-// ground's air would stack on the seat's; measured from the ink, the chip's end would move mark by mark. The seat
-// holds the widest ink with its air, so no ink leaves it: a `Canvas` draws nothing past its box. A line of
-// words opens it as those spaces and nothing finer: a space the face has no glyph for sends Qt through every family on
-// the machine at every launch (U+202F in Yu Gothic UI), and rich text folds a U+202F into the space before it, so it
-// is gone. The count is the face's and the size's, read at run time — Yu Gothic UI takes 4
+// `NameRun` at 0, `CardText` at its room's head, `AppMenuItem` at `refLead1` / `refLead2` less `refCell`). Started half
+// a gap early, the ground's air would stack on the seat's; measured from the ink, the chip's end would move mark by
+// mark. The seat holds the widest ink with its air, so no ink leaves it: a `Canvas` draws nothing past its box. A line
+// of words opens it as those spaces and nothing finer: a space the face has no glyph for sends Qt through every family
+// on the machine at every launch (U+202F in Yu Gothic UI), and rich text folds a U+202F into the space before it, so
+// it is gone. The count is the face's and the size's, read at run time — Yu Gothic UI takes 4
 // at every size from 12 to 20px, Linux's Noto Sans CJK JP (a `+` with 0.0375 em either side) 5: a face that sets its
 // advances to whole pixels (FreeType's — Windows' offscreen; Linux keeps fractions) rounds a space narrower or wider,
 // so it can take one more space or one fewer at a size than one that keeps fractions. Out of a line of words (a tab,

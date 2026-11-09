@@ -6,7 +6,7 @@ import QtQuick.Window
 import platitude
 import platitude.ui
 
-// The window's body: the band, the pages, and the mark beside the pointer. `AutoShotDriver.grabApp` grabs this
+// The window's body: the band, the pages, and the mark beside the pointer. `AutoShotDriver.app` grabs this
 // item's subtree, so anything drawn outside it — a surface put straight under the `ApplicationWindow` — is outside
 // every screenshot, and the report line still goes green. Whatever fills the window goes in here, beside
 // `bodyColumn` rather than in it: every child of a Layout is laid out. The one exception is the window's edge

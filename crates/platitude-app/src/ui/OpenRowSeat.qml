@@ -16,7 +16,7 @@ QtObject {
     property string editKey: ""
     /// The panel, which says where the open row's lines are (`openFactsItem`).
     property Item host: null
-    /// Which BRANCHES row has its facts open, by its key. **Written by the seat alone** (`seat`).
+    /// Which row has its facts open, by its key (`NavList.keyOf`). **Written by the seat alone** (`seat`).
     property string openKey: ""
     /// The open row's seat (`HoverSeat`): the rest before a row opens, the beat after the hand leaves it, what holds
     /// it (a menu raised on it, the tip its lines put out) and what closes it (a name box, a menu raised elsewhere, a

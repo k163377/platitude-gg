@@ -263,9 +263,10 @@ Item {
         // for as the hand comes down off the chip opens after the list has gone. Headless: `ref-list-card`, read
         // beside `row-card`.
         blockedBy: host.menuDoor !== null ? "menu" : listSeat.state === "shown" ? "list" : ""
-        // A second click waiting out its window holds hover still (`ReclickGesture.armed`): both seats, since
-        // closing is as much a change as opening (`HoverSeat.frozen`) — a card coming or going then is a change nobody
-        // asked for. Headless `graph-reclick-still` (the card's rest
+        // A second click waiting out its window holds hover still (`ReclickGesture.armed`): both graph seats, this
+        // and `listSeat` (the choice's seat is the right pane's hand), since closing is as much a change as opening
+        // (`HoverSeat.frozen`) — a card coming or going then is a change nobody asked for. Headless
+        // `graph-reclick-still` (the card's rest
         // running under the wait) and `graph-reclick-mark` (the mark, taken inside the wait).
         frozen: host.view.renameWaiting
         onOpenAsked: target => host.openRowCard(target)

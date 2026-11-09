@@ -18,7 +18,7 @@ import platitude.ui
 // block, is the edge with the list.
 //
 // Hand-built `Rectangle` + `MouseArea`, not `HoverToolButton`: that base has no seat for a mark in four colours
-// (wrong / running / open / plain), and a replaced `contentItem` still keeps `ActionButton`'s press-and-release dress.
+// (wrong / running / open / plain), and a replaced `contentItem` still keeps the base's press-and-release dress.
 // Moving it onto the base means opening a four-value port there first.
 Rectangle {
     id: toggle

@@ -14,7 +14,7 @@ import platitude.ui
 // `<bucket>:<path>` across the bucket lists, and the row lookups (`rowAt` / `rowFor`, walking each list's
 // `itemAtIndex`) that `RepoPage` (`readOne`) and the automation (`rowAt` / `rowFor` / `chooseOnly` / `pointEol`) call
 // directly. Moving it out only adds wiring to hand the lists and keys back. The EOL card and its seat (`pointEol` /
-// `eolKeep`) stay with it: the card is placed from `rowFor(path)` and the pane's own coordinates.
+// `eolKeep`) stay with it: the card is placed from `rowIn(bucket, path)` and the pane's own coordinates.
 ColumnLayout {
     id: wipPane
 
@@ -104,7 +104,7 @@ ColumnLayout {
     // **One list per bucket**, conflicts → unstaged → staged, each with its own heading and scroll (user decision — ask
     // before changing): joined into one, 70 unstaged files push the staged ones out of the pane, and the side that
     // makes the commit is off screen. Only rows are shared out — a heading and the hairline between buckets are not
-    // a bucket's to give up. Every bucket keeps two rows besides its heading as the window shrinks (`blockRoom`).
+    // a bucket's to give up. The list keeps two rows besides the headings as the window shrinks (`blockRoom`).
     // **The headings stand at 0 and do not scroll**: with nothing staged the pane would never say where staging goes;
     // after `Stage all` it would lose the heading that says where to take things back, and the next unstage would grow
     // one under the hand; and `Stage all` is about the whole bucket, not the rows it rides with. **The conflicts

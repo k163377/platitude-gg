@@ -362,7 +362,8 @@ ScrollBar {
     /// a full-height bar over a box that fits. Its `active && size < 1` term stays out — the policy above is the whole
     /// answer. "Nowhere to go" is not "not in use": an idle bar is still drawn, only dimmer (below), so a run judges
     /// the paint — `opacity` here, `PaneScrollBar.slabColor` on a pinned bar — never `visible`. Hidden, it also gives
-    /// back its room in `AppListView.barRoom`, which only `GraphHeadPin`'s press area reads, never the ink.
+    /// back its room in `AppListView.barRoom`, which only what lies over the rows reads (`GraphHeadPin`'s press
+    /// area, the text picks), never the ink.
     visible: policy === ScrollBar.AlwaysOn
 
     /// The idle share and the timing: 規約 §スクロールバー / §QML 実装ルール のバーの明るさ.

@@ -86,7 +86,7 @@ Item {
     /// one word, and the card's line tells them apart (`BandStateCard`'s `staleRow`). `danger` either way (規約 §状態
     /// 「今止まっている・失敗した」), so the folded mark turns red too (`tint`): two colours on one word would give a
     /// mark that says nothing but its colour two weights. Outlined, not filled — the fill is `CONFLICTS`', files
-    /// waiting on the reader; this one is only read. Not the window's cut (`Only the first N commits are loaded`): that
+    /// waiting on the reader; this one is only read. Not the window's cut (`Load N more commits (M loaded)`): that
     /// walk ran to the end and stops by design, in `textSecondary`.
     ///
     /// **Said by this badge alone.** In the middle of the column the words would sit over the rows that did arrive; at

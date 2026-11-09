@@ -67,7 +67,7 @@ Item {
             width: parent.width
         }
         // git's words, and the only red on this screen: the gate that reports a git it cannot use draws the line the
-        // same way (Main.qml).
+        // same way (`StartupGate`).
         NoticeLine {
             visible: Words.openFailureQuotesGit(screen.kind)
             text: screen.message

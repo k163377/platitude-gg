@@ -56,7 +56,7 @@ ActionButton {
     /// the line names: the log raises itself on the first pressed failure, and `see GIT COMMANDS` spells the panel's
     /// heading — a name the tip makes pressable (`tipPlace`; 規約 §hover のツールチップ の行き先). `%1` is the log's
     /// name, kept a
-    /// placeholder so the sentence around it can be worded per language (`Words.placeInSentence`). One plural form:
+    /// placeholder so the sentence around it can be worded per language (`CardText.place` finds it). One plural form:
     /// the stop comes at three (`FETCH_FAILURES_BEFORE_STOP`).
     function tipNote() {
         if (fetchButton.stopped)

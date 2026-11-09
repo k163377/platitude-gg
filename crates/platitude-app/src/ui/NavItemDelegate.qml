@@ -525,7 +525,7 @@ Item {
     }
     /// The name as the open row shows it, and what a drag over it came away with — null and empty while the row
     /// is closed (`NameCell.whole`). What `nav-drag-open` reads — not the lines' `SweepPad`: the name is not in the
-    /// lines, so their `factsTook()` answers empty.
+    /// lines, so their `sweptText()` (the probe's `factsTook()`) answers empty.
     readonly property Item nameField: rowLayout.nameWhole
     readonly property string nameTook: navRow.nameField ? navRow.nameField.selected : ""
     readonly property bool nameCaret: !!navRow.nameField && navRow.nameField.hasCaret

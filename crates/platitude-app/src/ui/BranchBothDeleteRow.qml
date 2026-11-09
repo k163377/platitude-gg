@@ -3,7 +3,7 @@ import platitude.ui
 
 // The delete table's third row: the branch and its remote reading together. Two commands, so words and no code
 // (§git 用語のコード表記). The local half runs first; its refusal stops the pair with nothing touched, and a refused
-// lease on the remote half stops it with the local one done (`session::delete_branch_everywhere`). On the first
+// lease on the remote half stops it with the local one done (`RepoSession::delete_branch_everywhere`). On the first
 // level's last group, standing on the BRANCH card's frozen answers (`RefBranchMenu.state`).
 AppMenuItem {
     id: bothDeleteRow

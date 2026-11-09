@@ -91,8 +91,8 @@ MouseArea {
     }
     /// What a press on this strip means, entered by the handler and by `clickAt`. Answers whether it landed on a row.
     /// The modifiers must travel: dropped, Ctrl / Shift become a plain press, which collapses the choice to one commit
-    /// (`RepoPage.pickRow`, デザイン規約 §複数のコミットを選ぶ). Dropped, both OSes still go green — what says it is
-    /// `chosen_drop`'s `kept=`.
+    /// (`RepoPage.pickRow`, デザイン規約 §複数のコミットを選ぶ). Dropped, both OSes still go green — no headless run
+    /// presses this strip with a modifier held.
     function pressLanded(at, modifiers) {
         const row = pan.rowAt(at)
         if (!row)

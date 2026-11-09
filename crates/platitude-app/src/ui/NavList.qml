@@ -471,8 +471,7 @@ AppListView {
     function scrollToEnd() {
         navList.contentY = Math.max(0, navList.contentHeight - navList.height)
     }
-    /// A few rows on (PGG_AUTO_ACT=nav-branch-box:away) — within the view's cache, so the delegate survives and its
-    /// box has to hide by its own rule.
+    /// A few rows on, clamped to the list's end. Nothing calls it (`nav-*-box:away` scrolls through `scrollRowOut`).
     function scrollRows(rows) {
         navList.contentY = Math.min(Math.max(0, navList.contentHeight - navList.height),
                                     navList.contentY + rows * Theme.rowHeight)

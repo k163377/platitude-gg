@@ -21,7 +21,7 @@ ColumnLayout {
     signal rowHoverRequested(var row, bool inside)
     /// …and one was handed another commit (the choice changed under it): the card out on the one before goes.
     signal rowRewritten(var row)
-    /// A held press on a listed commit drops it from the choice, which is the page's.
+    /// A Ctrl click on a listed commit drops it from the choice, which is the page's.
     signal commitDropRequested(string oidHex)
     /// A plain click on a listed commit: the graph brings its row on screen.
     signal commitShowRequested(string oidHex)

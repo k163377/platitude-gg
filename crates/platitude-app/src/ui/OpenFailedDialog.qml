@@ -78,7 +78,7 @@ AppDialog {
             text: Words.openFailureNext(openFailedDialog.kind)
         }
         // git's words, and the only red here: the gate that reports a git it cannot use draws the line the same way
-        // (Main.qml).
+        // (`StartupGate`).
         CardText {
             Layout.fillWidth: true
             visible: Words.openFailureQuotesGit(openFailedDialog.kind)

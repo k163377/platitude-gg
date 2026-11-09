@@ -142,7 +142,7 @@ QtObject {
             return
         }
         const back = at >= 0 && view !== null ? keep.bringBack(view, at) : null
-        // What the hand was reading off the row's pooled delegate comes back onto it (`Tips.dropIn`).
+        // What the hand was reading off the row's pooled delegate comes back onto it (`Tips.takeBack`).
         if (back !== null)
             hand.rowBack(back)
         Tips.settleParked(back === null)

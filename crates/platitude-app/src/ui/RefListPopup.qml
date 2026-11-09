@@ -43,7 +43,7 @@ AppCard {
     /// never moves** (user decision — ask before changing): the card stands on the chip's seat, so a click aimed at the
     /// chip lands on a row here, and a click that moved would `switch` whoever pressed the chip twice, spaced — as a
     /// double-click with a strangely long window. `oidHex` is the row it stands on, read before the card closes, which
-    /// forgets that row (`RowHoverHost.onClosed`).
+    /// forgets that row (`HoverSeat.noteClosed`).
     signal picked(var chip, string oidHex)
     /// One was clicked once, plainly: its row becomes the one being read. The second click and a held click have no
     /// signal here — both go in at the graph's own row (`rowClicks`).
@@ -306,8 +306,8 @@ AppCard {
                 // A branch another worktree has out leads to that worktree, as the graph row's double-click does
                 // (`RepoPage.switchToRef`'s `holder`): refused here, only a double-click aimed at the chip would go
                 // nowhere while the same row's words go (`tests/qml/tst_listrowpick.qml`, headless `ref-list-held`).
-                // A worktree's folder row leads nowhere: a folder is no ref (`GraphRowDelegate.nameChip`); making it
-                // lead to its worktree is open, to be decided with the folder's rename (P3-確認事項, the worktree item).
+                // A worktree's folder row leads nowhere: a folder is no ref (`GraphRowDelegate.nameChip`), though it
+                // still has a name to change (`renameable`).
                 readonly property bool leadsNowhere:
                     refRow.modelData.kind === "head" || refRow.modelData.kind === "worktree" || refRow.current
                     || refRow.modelData.kind === "tag"
@@ -392,7 +392,7 @@ AppCard {
                 function leftClick(modifiers) {
                     const mods = modifiers === undefined ? Qt.NoModifier : modifiers
                     // The press goes out before the card closes: closing forgets the row it stood on
-                    // (`RowHoverHost.onClosed`), and that row is where the press goes.
+                    // (`HoverSeat.noteClosed`), and that row is where the press goes.
                     if (refList.onStandIn) {
                         refList.standInPressed(mods)
                         refList.close()

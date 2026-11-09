@@ -90,8 +90,9 @@ FocusScope {
     /// whole pane but the `>_` band goes to the disabled step, from the press (`SidebarPane.frozen`).
     readonly property bool sidebarFrozen: page.planShown
     /// The other, from where the plan ends: a replay is running (`RepoTab.replaying`) or its run is out and not
-    /// started. Nothing freezes; each door is held and says this line until git answers (`SidebarPane.doorsHeld` /
-    /// `AppMenu.heldReason`) — one line, so the pane and the menus cannot disagree.
+    /// started — and while a worktree's rename is out (`worktreeMoveOut`). Nothing freezes; each door is held and
+    /// says this line until git answers (`SidebarPane.doorsHeld` / `AppMenu.heldReason`) — one line, so the pane
+    /// and the menus cannot disagree.
     readonly property string doorsHeldWhy:
         page.replayRunning || page.planRunOut || page.worktreeMoveOut ? Words.otherCommandRunning : ""
     /// A worktree's rename is out, from the press to its answer (`absorbWorktreeMove`): its answer is waited for by
@@ -565,9 +566,10 @@ FocusScope {
             return
         page.tellRefusal(answer)
     }
-    /// The answer to a push a **ref row** sent — the `push --delete`s, the replace, the pairs that push after a local
-    /// step (`RepoTab.refPushAnswer`, -1 for none). **Its own answer**: read by word, a fetch in the same drain would
-    /// swallow the refusal. The rows a delete took come back through the delete's own owner; this carries only why.
+    /// The answer to a push a **ref row** sent — the `push --delete`s, the replace, the pairs that do something here
+    /// as well as over there (`RepoTab.refPushAnswer`, -1 for none). **Its own answer**: read by word, a fetch in the
+    /// same drain would swallow the refusal. The rows a delete took come back through the delete's own owner; this
+    /// carries only why.
     function absorbRefPushAnswer() {
         const answer = repoTab.refPushAnswer
         if (answer < 0 || !repoTab.writeAnswerFailed(answer))
@@ -1558,7 +1560,7 @@ FocusScope {
     /// no row in hand; null where it draws neither a ref nor a worktree's folder. Chips already taken off screen
     /// are filtered as the delegate does, so a gone name puts no card up (デザイン規約 §消す操作は先に画面から消す).
     /// The delegate's own answer, from the model: a "first of each kind" search would aim at a name not on screen.
-    /// The menu reads only `chip.kind` (`GitFacts.refKind`) and `chip.name`, so a chip a run builds by hand needs no
+    /// The menu reads only `chip.kind` (`GitFacts.namedKind`) and `chip.name`, so a chip a run builds by hand needs no
     /// more. Headless: `chip-menu <branch>` / `chip-menu-current` / `list-menu <row>:<card row>`.
     function rowChipAt(oidHex) {
         const row = graphModel.rowOf(oidHex)
@@ -2444,11 +2446,11 @@ FocusScope {
 
     /// Escape or the header's mark: puts the diff away and hands the arrows to the graph (user decision — ask before
     /// changing): the two ways out aimed at the diff itself leave the keyboard nowhere — what was pressed goes, or
-    /// there was no press at all. The product comes here from `escapePressed` and `DiffPane.onCloseRequested` only.
-    /// Not the file row's second click, a press that lands in a list still on screen with its row lit, which keeps the
-    /// keyboard (`FileRowWalk.qml`); nor the closes the reader did not make — `closeDiff` itself hands nothing
-    /// on, as the graph need not be what is left (handed the focus under the plan, a pane not on screen holds the
-    /// arrows).
+    /// there was no press at all. The product comes here from `escapePressed`, `DiffPane.onCloseRequested` and
+    /// `showChosen` only. Not the file row's second click, a press that lands in a list still on screen with its
+    /// row lit, which keeps the keyboard (`FileRowWalk.qml`); nor the closes the reader did not make — `closeDiff`
+    /// itself hands nothing on, as the graph need not be what is left (handed the focus under the plan, a pane not
+    /// on screen holds the arrows).
     /// Headless: `diff-escape`'s `graph=true` — one active focus, so it is also the list letting go.
     function closeDiffToGraph() {
         page.closeDiff()

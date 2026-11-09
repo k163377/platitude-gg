@@ -270,7 +270,7 @@ AppMenu {
     // (§メニュー「例外は削除行だけ」) — the upstream, not the branch, as code behind its mark. The plain delete's two
     // presses in the plain ink (user decision — ask before changing): what goes is one setting, and `Set upstream…`
     // puts it back (§回数押しの色). The press runs
-    // `unsetUpstreamRequested` → the carrying menu → `RepoTab.unsetUpstream` → `session::unset_upstream`
+    // `unsetUpstreamRequested` → the carrying menu → `RepoTab.unsetUpstream` → `RepoSession::unset_upstream`
     // (`AfterWrite::Config`). Headless: `unset-upstream [chip:]<branch>` reads the row, `unset-upstream-go` presses it
     // through until the list's `upstreamNamed` is empty.
     AppMenuItem {

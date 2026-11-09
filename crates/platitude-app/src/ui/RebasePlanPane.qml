@@ -111,8 +111,9 @@ Rectangle {
                     //: The way out of the plan being composed. What it throws away is the draft on screen.
                     text: qsTr("Discard")
                     // A plain word, not `--abort`: nothing has run, and git would refuse that command here
-                    // (デザイン規約 §git 用語のコード表記「着せるのはコマンドだけ」). One word, naming what goes (user
-                    // decision — ask before changing): the plan holds the graph's seat with no box of its own to close.
+                    // (デザイン規約 §git 用語のコード表記「着せるのはコマンドと名前と git が刷った版だけ」). One word,
+                    // naming what goes (user decision — ask before changing): the plan holds the graph's seat with no
+                    // box of its own to close.
                     // Two states: plain (`borderDefault` frame, `textPrimary` word, a click) while nothing composed
                     // would be lost; `warning` frame and word and a hold once there is. The dressing reads
                     // `armedPresses`, not `discards`: the right pane's boxes can empty under a hand already holding

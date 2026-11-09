@@ -20,8 +20,8 @@ QtObject {
         return qsTr("%1 to activate").arg(Words.pressCount(presses))
     }
 
-    /// The menu-row tag on anything that replays commits a remote already has — the amend-family rows and both
-    /// rebase entries (デザイン規約 §回数押し).
+    /// The menu-row tag on anything that replays commits a remote already has — the rebase entries; the amend-family
+    /// rows say `already pushed` (デザイン規約 §回数押し).
     readonly property string rewritesPushed: qsTr("rewrites pushed commits")
 
     /// Starting a branch where the row stands, from the graph row's menu and the sidebar's ref menu
@@ -166,7 +166,7 @@ QtObject {
     /// amend, so the commit button and the details pane's save say so first (`RepoTab.amendEmpties`).
     readonly property string amendEmpties: qsTr("Amending would leave the last commit empty — what is staged undoes it")
 
-    /// Opening a repository, as the graph's empty state, the tab strip's `+` menu and its accessible name offer it.
+    /// Opening a repository, as the graph's empty state, the ☰ menu and the tab strip's `+`'s accessible name say it.
     readonly property string openRepository: qsTr("Open repository…")
 
     /// Adding a remote, as the sidebar header, the collapsed rail and the publish flow offer it: every door to the same
@@ -872,7 +872,8 @@ QtObject {
              + "</span>"
     }
     /// A sentence as rich-text markup with a link on its one word a press can reach (`CardText.markup`), found inside
-    /// the already-spelled sentence that is measured and read back (`HoverToolButton.tip`). Every piece is escaped. The
+    /// the already-spelled sentence that is measured and read back (`FindBar`'s note; a tip's place goes through
+    /// `CardText.place` instead). Every piece is escaped. The
     /// tint rides inside the anchor: a `TextEdit` takes its link colour from the markup only (`CardText`).
     function placeInSentence(sentence, place, href, tint) {
         const seat = sentence.indexOf(place)
@@ -919,7 +920,7 @@ QtObject {
     readonly property string stand: "\uE000"
     /// Where a sentence written with `stand` in one name's place puts that name — every time it says it — as seats in
     /// the sentence with `word` written there instead: each counts the earlier ones at the word's own length. A
-    /// translation that moves the name moves the seat (`RepoPage.reportMarks`).
+    /// translation that moves the name moves the seat (`reportMarks`).
     function standSeats(sentence, word) {
         const seats = []
         let at = sentence.indexOf(Words.stand)

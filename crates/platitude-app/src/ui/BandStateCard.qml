@@ -7,9 +7,9 @@ import platitude.ui
 
 // The band's state badges, opened out (`BandStateGroup`): one row per badge, in its own shape — the badge's frame and
 // fill as in the band — beside it the one thing its label had no room for (規約 §hover のツールチップ): the operation's
-// way out, the conflicts' count, which of two reasons the identity stands for, the `NO LFS` count, and `OLD GIT`'s
-// two versions. A card, not a tooltip: a tooltip holds one string in one colour, and these badges mean their colour.
-// The sentences are `CardText`, to be taken away.
+// way out, the conflicts' count, which of two reasons the identity stands for, which way the graph is stale, the
+// `NO LFS` count, and `OLD GIT`'s two versions. A card, not a tooltip: a tooltip holds one string in one colour, and
+// these badges mean their colour. The sentences are `CardText`, to be taken away.
 //
 // Owned by the group, not a badge or the mark: a popup parented to something that can be laid out away goes with it.
 AppCard {

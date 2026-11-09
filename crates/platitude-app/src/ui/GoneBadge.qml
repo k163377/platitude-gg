@@ -3,9 +3,10 @@ import platitude.ui
 
 // A branch's remote badge, which on git's `[gone]` keeps its shape and takes the state instead of disappearing — a
 // dropped badge reads as a branch that never tracked anything (デザイン規約 §ref の種別 / §グラフ行のダブルクリック の
-// `[gone]`, user decision). Shared by the row and the current branch's stand-in, so the `!`'s corner and size are one
-// decision. It is for an upstream the other side took away (merged and deleted): a spent local branch is not
-// forgotten. Deleting the remote branch from here takes the upstream off with it, so that never raises this.
+// `[gone]`, user decision). Shared by the left menu's row, the current branch's stand-in and a menu's row
+// (`AppMenuItem`), so the `!`'s corner and size are one decision. It is for an upstream the other side took away
+// (merged and deleted): a spent local branch is not forgotten. Deleting the remote branch from here takes the
+// upstream off with it, so that never raises this.
 Item {
     id: badge
 
