@@ -8,7 +8,8 @@ import platitude.ui
 // thing, so it shows one thing (user decision — ask before changing): the pair, with `Not now` and `Save` at its
 // foot, no `MERGE EDITOR`, no category rail; an identity already set is edited in the settings screen's `Git`
 // (`SettingsDialog`). A card is a question, so it takes the caret as it opens. The owner opens and closes it;
-// "Not now" leaves the app usable, since reading a repository needs no identity.
+// "Not now" leaves the app usable, since reading a repository needs no identity. A dialog, because the identity is
+// git's for every tab, so no one page's bar holds the question (デザイン規約 §可否・警告の出し場所).
 AppDialog {
     id: identityDialog
 

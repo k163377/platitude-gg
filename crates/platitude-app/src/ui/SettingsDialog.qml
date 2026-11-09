@@ -11,7 +11,7 @@ import platitude.ui
 // `SettingsGitPane`), and in `Git` one more level, the groups (`SettingsGroup`: `GLOBAL`, and `REPOSITORY OVERRIDE` =
 // `SettingsRepoPane`). **This screen keeps only the rail and the relaying**: the chapters, the fields and the reads
 // and writes a category makes are its pane's. Chapters are `SettingsSection`, a field's heading `LabeledField`,
-// explanations `HelpText`.
+// explanations `HelpText`. A dialog, because no one page holds the settings (規約 §可否・警告の出し場所).
 //
 // Every word in the chapter column is a field (`CardText`), headings, captions and units included — the column is a
 // sweep surface (規約 §右のペインの字は掴める), and a word that is not a field is a dead spot there: a press on it starts
