@@ -245,6 +245,13 @@ AppListView {
         if (graphList.graphModel.provisionalOn)
             Qt.callLater(graphList.keepToSpan)
     }
+    // The span is measured against the view's height, and bars rising over the list change that with no move of the
+    // view: the discard band itself, standing a layout pass after the pick landed the view (`recover-open 18,short`),
+    // a report or a question, the window going down.
+    onHeightChanged: {
+        if (graphList.graphModel.provisionalOn)
+            Qt.callLater(graphList.keepToSpan)
+    }
     /// One notch, sent — also a run's way in, since a wheel cannot be injected (verify-ui スキル).
     function sendRows(pixels) {
         wheelGlide.sendTo(graphList.clampY(wheelGlide.at - pixels))
