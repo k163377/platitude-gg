@@ -551,7 +551,7 @@ Rectangle {
                 text: diffRow.staged ? qsTr("Unstage hunk") : qsTr("Stage hunk")
                 font.pixelSize: Theme.fontSm
                 tone: !diffRow.underPointer ? Theme.textSecondary
-                      : diffRow.staged ? Theme.diffRemovedFg : Theme.diffAddedFg
+                      : diffRow.staged ? Theme.minusFg : Theme.plusFg
                 enabled: !diffRow.busy
                 onActivated: diffRow.stageHunkRequested(diffRow.hunk)
             }

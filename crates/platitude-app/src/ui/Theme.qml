@@ -146,7 +146,7 @@ QtObject {
     // The WORKTREES green a step up the ramp: Tailwind green 500 over `success`'s 600 (デザイン規約 §ref の種別).
     // CIEDE2000 9.6 from `success`, no narrower than 9.5 under any CVD type (Machado 2009 severity 1.0): over the 8.8
     // floor (§暗く落とした段). One step, not two (user decision — ask before changing): green 400 is too bright.
-    // Two colours come under the floor — `danger` (7.7, type 2) and `diffAddedFg` (6.8), the conflict mark and the
+    // Two colours come under the floor — `danger` (7.7, type 2) and `plusFg` (6.8), the conflict mark and the
     // added file's — and neither appears in a WORKTREES row: never set this in one list with them.
     readonly property color textHereTree: "#22C55E"
     // The tab in front's ground while it stands in a linked worktree: green 950's hue and saturation at 5.5% lightness
@@ -157,7 +157,11 @@ QtObject {
     readonly property color bgHereTree: "#03190C"
 
     // ---- colors: git / diff ----
-    // The line grounds wear their `+` / `−` mark's hue (OKLCH 152° / 22°) at chroma .05 both — not the most that
+    readonly property color plusFg: "#4ADE80"
+    readonly property color minusFg: "#F87171"
+    // `warning`'s amber in a token of its own (デザイン規約 §git / diff 専用).
+    readonly property color modifiedFg: "#D97706"
+    // The line grounds wear the `+` / `−` pair's hue (OKLCH 152° / 22°) at chroma .05 both — not the most that
     // lightness allows: more, and the diff is the one loud thing in the UI. Lightness is the one axis tied to contrast:
     // L 28 added / L 24 removed lifts the rows off the ground and keeps the comment colour (`#94A3B8`) readable on
     // them; the 900 steps drop it to 3.6 / 3.9, lost under the syntax colours, and a darker L 22 gives up the lift
@@ -167,10 +171,8 @@ QtObject {
     // says what changed, and the comment colour on it stays at 4.1 / 5.0.
     // Under type 2 colour blindness added and removed merge: which number column holds a line's number tells them
     // apart (`DiffRowDelegate`).
-    readonly property color diffAddedFg: "#4ADE80"
     readonly property color diffAddedBg: "#14301D"
     readonly property color diffAddedEmphBg: "#144927"
-    readonly property color diffRemovedFg: "#F87171"
     readonly property color diffRemovedBg: "#351515"
     readonly property color diffRemovedEmphBg: "#5B1E1F"
     // The find bar's hits in the rows (`DiffFindBar`): `accent` at a quarter under every hit, so the
@@ -180,10 +182,6 @@ QtObject {
     readonly property color diffFindCurrentBg: "#B31D4ED8"
     readonly property color diffHunkHeaderFg: "#94A3B8"
     readonly property color diffHunkHeaderBg: "#0F172A"
-    readonly property color statusStaged: "#16A34A"
-    readonly property color statusUnstaged: "#D97706"
-    readonly property color statusUntracked: "#64748B"
-    readonly property color statusConflict: "#EF4444"
 
     // ---- colors: commit graph lanes (cycled modulo length) ----
     // Okabe-Ito color-universal-design palette (black swapped for a light gray that survives the dark background).

@@ -1,8 +1,7 @@
 import QtQuick
 import platitude.ui
 
-// Change-kind icon. Kinds take the status tokens, even where the value is the same amber or red
-// (デザイン規約 §git / diff 専用).
+// Change-kind icon. Which colour each kind wears, and why, is デザイン規約 §git / diff 専用.
 NavIcon {
     id: changeIcon
     property string change: ""
@@ -15,11 +14,11 @@ NavIcon {
           : letter === "C" ? "copyicon"
           : letter === "?" ? "plus"
           : "pen"
-    tint: conflict ? Theme.statusConflict
-          : letter === "A" ? Theme.diffAddedFg
-          : letter === "D" ? Theme.diffRemovedFg
+    tint: conflict ? Theme.danger
+          : letter === "A" ? Theme.plusFg
+          : letter === "D" ? Theme.minusFg
           : letter === "R" ? Theme.textLink
           : letter === "C" ? Theme.textSecondary
-          : letter === "?" ? Theme.diffAddedFg
-          : Theme.statusUnstaged
+          : letter === "?" ? Theme.plusFg
+          : Theme.modifiedFg
 }

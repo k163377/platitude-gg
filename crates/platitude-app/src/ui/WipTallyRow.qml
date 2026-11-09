@@ -8,7 +8,7 @@ import platitude.ui
 // The worktree's changes by kind, on the graph's uncommitted row, in the marks of the WIP pane's file rows: that list
 // is what the reader opens next, so the row and the list speak one vocabulary. Conflicts first — what is stopped shows
 // first —, the rest in the file list's order. Counts of files, read from status (`status::Kinds`). Each count wears
-// its mark's kind colour (デザイン規約 §git / diff 専用). Headless: `wip-tally`.
+// its mark's colour (`ChangeIcon`). Headless: `wip-tally`.
 RowLayout {
     id: tallies
 

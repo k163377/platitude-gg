@@ -54,7 +54,7 @@ QtObject {
         return mark === "branch" ? Theme.accent
              : mark === "tree" ? Theme.success
              : mark === "tag" ? (theirs ? Theme.refTagDim : Theme.refTag)
-             : mark === "minus" ? Theme.diffRemovedFg
+             : mark === "minus" ? Theme.minusFg
              : Theme.textSecondary
     }
     /// Where the operation took it (`RecoverMark`): `here`, `theirs` — a remote's alone — or `both` at once.

@@ -36,7 +36,7 @@ Rectangle {
         width: Theme.iconSm
         height: Theme.iconSm
         kind: mark.staged ? "minus" : "plus"
-        tint: mark.staged ? Theme.diffRemovedFg : Theme.diffAddedFg
+        tint: mark.staged ? Theme.minusFg : Theme.plusFg
     }
     MouseArea {
         id: markHover

@@ -153,7 +153,7 @@ Rectangle {
             // On a conflicted file the same `git add` marks it resolved (デザイン規約 §diff の中のステージ).
             text: header.conflicted ? qsTr("Mark resolved")
                   : header.staged ? qsTr("Unstage file") : qsTr("Stage file")
-            tone: header.staged ? Theme.diffRemovedFg : Theme.diffAddedFg
+            tone: header.staged ? Theme.minusFg : Theme.plusFg
             enabled: !header.busy
             tip: header.conflicted ? qsTr("Takes the file as it stands now") : header.staged
                  ? qsTr("Unstage the whole file at once") : qsTr("Stage the whole file at once")

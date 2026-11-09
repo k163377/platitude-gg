@@ -655,7 +655,7 @@ Item {
         onClicked: navRow.stageClicked(navRow.bucket, navRow.full !== "" ? navRow.full : navRow.name)
         contentItem: NavIcon {
             kind: navRow.bucket === "staged" ? "minus" : "plus"
-            tint: navRow.bucket === "staged" ? Theme.diffRemovedFg : Theme.diffAddedFg
+            tint: navRow.bucket === "staged" ? Theme.minusFg : Theme.plusFg
         }
     }
     /// Whether this row's list opens a row's facts under it, and which row is open there — handed down because
