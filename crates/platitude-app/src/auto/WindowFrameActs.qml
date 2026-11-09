@@ -83,9 +83,10 @@ Item {
     // window already standing on it, the height's holds still, folded or not (デザイン規約 §窓の床). `rail` folds,
     // stands on the floor and opens the log: the log comes up as far as the panes let it, over the rail's last cell
     // unless they hold it. `wip` turns the right pane to the worktree first and wants `--preset rebase-conflict`:
-    // `wip=true wipScrolls=true` is the face standing with its exit card below and reachable. Only the forms that ask
-    // for it answer `wip=`; the others land on the default selection, which is the OS's. With no argument only a run
-    // handed a repository waits for it: `--restore` has no page and reports the blank page's floor (`tabs=0`).
+    // `wip=true` is the face standing with its exit card on it, `wipScrolls=` whether the card needs the scroll to be
+    // reached. Only the forms that ask for it answer `wip=`; the others land on the default selection, which is the
+    // OS's. With no argument only a run handed a repository waits for it: `--restore` has no page and reports the blank
+    // page's floor (`tabs=0`).
     //
     // Related floors are read elsewhere: a band carrying a state badge by `badges`'s `bandW=`; the details pane by
     // `details-fit`'s unjudged `overH=` (`--preset edges` row 7 in a window held at the floor — a `--config-dir` whose
@@ -200,7 +201,7 @@ Item {
                           && window.height >= Math.ceil(window.floorHeight)
                           && !(arg === "fold" && window.floorPage.sidebarCollapsed),
                  "log": !logs || window.floorPage.commandsOpen,
-                 "wip": arg !== "wip" || (window.floorPage.wipShown && window.floorPage.wipBlockScrolls),
+                 "wip": arg !== "wip" || window.floorPage.wipShown,
                  "page": PageSettled.windowSettled(window) }
     }
 

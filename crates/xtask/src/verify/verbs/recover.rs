@@ -62,11 +62,16 @@ pub(super) const TABLE: &[Verb] = &[
             // edge its row went out of (`RecoverPane.pickPin`).
             (Arg::Has("filter:Deleted"), "pin=seat card=false pick=3"),
             (Arg::Has("scroll:"), "pin=top card=false pick=0"),
-            (Arg::Has("short"), "pin=bottom card=false pick=18"),
+            // The tip's row whole too: the band stands a layout pass after the
+            // pick landed the view (`GraphList.keepToSpan`).
+            (
+                Arg::Has("short"),
+                "tipShown=true pin=bottom card=false pick=18",
+            ),
             (Arg::Has("card"), "card=true pick=-1"),
-            // The band at its tallest in the shortest column the window
-            // allows: the graph keeps its rows under it, read off the view.
-            (Arg::Has("floor"), "graphRows=3 atFloor=true"),
+            // The window at its floor: the graph keeps its rows under the band
+            // and what stands with it, read off the view.
+            (Arg::Has("floor"), "graphKept=true atFloor=true"),
             // Past the graph's window: the press waits for the graph to
             // walk there.
             (Arg::WithPreset("discards-deep"), "reach=false restores=0"),

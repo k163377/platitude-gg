@@ -271,7 +271,7 @@
 - `divider-refuse`(引数は場所と向き: `graph-max` / `graph-min` / `label-min` / `label-max` / `sidebar-min` / `details-min` / `log-min`(`--preset basic`)/ `desc-max` / `desc-min`(`--preset long`)。窓の中の掴める境界 9 通りの「これ以上無い」 — 詳細は `AutoActDetailsVerbs.qml`)
 - `graph-min --preset co-authors`(グラフ列を床まで縮め、止まった幅を読む — 詳細は `AutoActPaneVerbs.qml`、判定の数はトークン算術 = `verify/verbs/graph.rs` の行)
 - `graph-step`(引数は符号付きの歩数、`--preset basic`。上下矢印で履歴を辿り、視界の落ち方と右の追いつきを読む(規約 §矢印で履歴を辿る)— 詳細は `AutoActStepVerbs.qml` の `graphStepTimer`)
-- `graph-step-edge` / `graph-step-far`(`-far` は `graph-step-far 10 --preset spread`。視界が動く 2 つ = 端へ寄せる / 真ん中へ — 詳細は同上)
+- `graph-step-edge --preset spread` / `graph-step-far 10 --preset spread`(視界が動く 2 つ = 端へ寄せる / 真ん中へ — 詳細は同上)
 - `graph-step-diff`(引数は選択中のコミットが触った、行の在るパス(`basic` の HEAD は `docs/guide.md`)。diff を開いたまま 1 歩 = 矢印が裏のグラフを動かさない — 詳細は同上)
 - `graph-step-named` / `graph-step-dirty`(**対で読む**。名前箱を開いた行は矢印を断り、書きかけのメッセージは断らない — 詳細は同上)
 - `graph-step-hold`(引数は総歩数(既定 6)。矢印を押しっぱなしにした時に詳細を何回読むか — 詳細は `AutoActStepVerbs.qml` の `graphHoldTimer`)
@@ -428,7 +428,7 @@
 - `replace-remote-box`(リモートブランチの差し替えの入力欄 — 詳細は `AutoActNavBoxVerbs.qml`)
 - `avatar-rest` / `avatar-hover` / `avatar-tip` / `avatar-assign` / `avatar-badge` / `avatar-settings` / `avatar-row-lit` / `avatar-remove` / `avatar-combo`(アバター一式: 静止 / ペンのバッジ / バッジの文 / 与える / バッジ / 設定一覧 / Remove の hover(赤い側)/ 回数押しで消した後 / 候補の combo — 詳細は `AutoActFindVerbs.qml` / `WindowSettingsActs.qml`、判定は `verify/verbs/identity.rs`)
 - `avatar-enter`(**候補欄の Enter が `Choose avatar…` の扉を開く**(`SettingsAppPane.qml`)。**絵では判定できない** — 詳細は `WindowSettingsActs.qml` の `avatarEnterTimer`、判定は `verify/verbs/identity.rs`)
-- `recover [fold,lit,blink]` / `recover-open [<n>|none][,fold,lit,card,filter:<語>,restore,part:<n>,short,scroll:<行>,<menu|dbl|again>:<tip|passed>,dbl:list,floor]`(破棄記録(`platitude_core::discards`)の席・一覧・帯・カード・復元・選択中の行の固定・仮表示中の行の右クリックとダブルクリックと改名。**`--preset discards`** が全種を持ち(番号は `xtask::demo::discards`)、**`--preset discards-deep`** は窓の外の 1 件、**`--preset discards-ceilings`** は帯の天井(長い名前・枝 8 本と 30 本ほか)、`floor` は窓を床へ下ろしてログを上げ、帯の下のグラフの行数を `graphRows=` で言う — 引数と報告行は `AutoActRecoverVerbs.qml`、判定は `verify/verbs/recover.rs`)
+- `recover [fold,lit,blink]` / `recover-open [<n>|none][,fold,lit,card,filter:<語>,restore,part:<n>,short,scroll:<行>,<menu|dbl|again>:<tip|passed>,dbl:list,floor[,notice,askform,long]]`(破棄記録(`platitude_core::discards`)の席・一覧・帯・カード・復元・選択中の行の固定・仮表示中の行の右クリックとダブルクリックと改名。**`--preset discards`** が全種を持ち(番号は `xtask::demo::discards`)、**`--preset discards-deep`** は窓の外の 1 件、**`--preset discards-ceilings`** は帯の天井(長い名前・枝 8 本と 30 本ほか)、`floor` は窓を幅も高さも床へ下ろしてログを上げ、`notice` / `askform`(`long` で 49 字の名前)を帯と一緒に立て、グラフの行が残るかを `graphKept=` で言う — 引数と報告行は `AutoActRecoverVerbs.qml`、判定は `verify/verbs/recover.rs`)
 - `recover-escape --preset discards`(仮表示の Esc: 下りる・読み直しの下でも下りる・キーボードが一覧へ戻る・F5 の下で黄色の `Not loaded` を言わない。**絵では判定できない** — 詳細は `AutoActRecoverVerbs.qml` の `escapeTimer`、判定は `verify/verbs/recover.rs`)
 
 ## 動詞ごとの読み方・仕込み

@@ -57,6 +57,7 @@ fonts	hunk-tools notes.txt --preset manyhunks	-	level= caption= read the baselin
 fonts	nav-fold	-	counts= reads where the face puts the folded rail's counts under their marks
 fonts	no-lfs-card floor --preset lfs	-	fitted= deep= read the band's measured fold
 fonts	old-git-fold	-	fitted= mark= read the band's measured floor
+fonts	recover-open 9,floor,notice,askform,long --preset discards-ceilings	-	graphKept= reads whether the rows the face leaves under the band and what stands with it reach three at the window's floor
 fonts	tab-pin	-	crushed= reads the tabs' measured widths
 fonts	tab-pin-go	-	crushed= reads the tabs' measured widths
 fonts	tab-widths	-	cut= reads the tabs' measured widths

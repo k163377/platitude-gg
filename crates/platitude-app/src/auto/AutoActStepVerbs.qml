@@ -33,8 +33,9 @@ Item {
             // holds (`landing=in`); 14 steps or more stop at the end with `refused>0`, which is right — the `must_say`
             // wants `refused=0`, so keep the count inside the history.
             //
-            // `-edge` walks 10 rows off the bottom (`landing=edge`); `-far` sends the view to the end first, then
-            // steps once (`landing=center`). Both ride the 320x240 seed (`verify::seed`) and frame alike. `-far` sets
+            // `-edge` walks 24 rows off the bottom of `--preset spread`, past what a window on its floor holds
+            // (`landing=edge`); `-far` sends the view to the end first, then steps once (`landing=center`). Both ride
+            // the 320x240 seed (`verify::seed`) and frame alike. `-far` sets
             // off from the row its argument names (`graph-step-far 10 --preset spread`): the row it steps onto is
             // centred only where half a view lies above it, which near the tip it never does on a window standing on
             // its floor (`adrift`); under `basic` a view sent to its end still shows the tip, so the shape cannot be
@@ -46,7 +47,7 @@ Item {
             graphStepTimer.away = act === "graph-step-far"
             graphStepTimer.diffPath = act === "graph-step-diff" ? arg : ""
             graphStepTimer.steps = act === "graph-step-named" ? 1 : act === "graph-step-dirty" ? 2
-                                 : act === "graph-step-edge" ? 10 : act === "graph-step-far" ? 1
+                                 : act === "graph-step-edge" ? 24 : act === "graph-step-far" ? 1
                                  : act === "graph-step-diff" ? 1 : arg === "" ? 1 : Number(arg)
             graphStepTimer.start()
         } else if (act === "graph-step-hold") {
@@ -92,9 +93,9 @@ Item {
             // Moves the view (`DiffRowWalk`). Needs the 320x240 seed: no demo diff outgrows a default window,
             // and in the seed — lifted to the floor the folded rail holds — rows lie below the fold, so the plain walk
             // is one row. The argument is the path: `--preset dirty`'s `untracked.txt` (16 rows) is the only diff long
-            // enough, and even in the seed it has five rows of travel — more steps on the plain walk reach the bottom
-            // and lose `atEnd=false`. `-edge` asks for 20, past the bottom, and stops there (no wrap). The top's stop
-            // is the same `clampY` expression and has no verb. The picture is the weakest witness; the line is the
+            // enough to leave travel in the seed, and only a few rows of it — more steps on the plain walk reach the
+            // bottom and lose `atEnd=false`. `-edge` asks for 20, past the bottom, and stops there (no wrap). The top's
+            // stop is the same `clampY` expression and has no verb. The picture is the weakest witness; the line is the
             // verdict.
             page.showWip()
             page.toggleDiff("untracked", arg, "")

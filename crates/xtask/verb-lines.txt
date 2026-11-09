@@ -348,7 +348,7 @@ graph-rename-fit 0::main-renamed-for-the-release-candidate-past-the-reach-of-the
 graph-stale	AppCardFace BandStateCard ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 graph-step-diff docs/guide.md	ChangeIcon DiffLineCell DiffRowDelegate FileRowDelegate NameCell OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 graph-step-dirty	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
-graph-step-edge	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
+graph-step-edge --preset spread	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 graph-step-far 10 --preset spread	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 graph-step-hold	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 graph-step-named	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
@@ -706,6 +706,7 @@ recover-open 6,dbl:list --preset discards	ChangeIcon FileRowDelegate GraphRowChi
 recover-open 6,dbl:tip --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate
 recover-open 6,menu:tip --preset discards	AppCardFace AppMenu AppMenuItem AppMenuSeparator BranchBothDeleteRow BranchDeleteRow BranchPushRow BranchRemoteDeleteRow ChangeIcon FileRowDelegate GitHubMenu GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverMark RefBranchMenu RefRowMenu RefTagMenu RefWorktreeMenu RemoteRowMenu TabItemDelegate
 recover-open 9,floor --preset discards-ceilings	ChangeIcon CommandsPane CommandsTextSelect FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody RecoverMark TabItemDelegate
+recover-open 9,floor,notice,askform,long --preset discards-ceilings	AppCombo CappedLines ChangeIcon CommandsPane CommandsTextSelect FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody PublishForm RecoverMark TabItemDelegate
 recover-open card --preset discards	AppCardFace ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverHoverCard RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate
 recover-open none --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RecoverMark RefRowMenu RemoteRowMenu TabItemDelegate
 recover-open none,filter:zzz --preset discards	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate

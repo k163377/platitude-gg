@@ -38,8 +38,11 @@ Item {
     /// nothing, double-clicks it and puts the same two in from its chip's list; `dbl` double-clicks it; `again` clicks
     /// it twice, spaced as a rename's two clicks are, then a dim named row at once. `tip` is the entry's tip, `list` the
     /// same row from its chip's list (`dbl` only), `passed` the first row built that it leaves dim with a name on it.
-    /// `floor` stands the window on its floor with the log up once the entry is on the graph: `graphRows=` is what the
-    /// band at its tallest leaves the graph where the column is at its shortest (`PageLayout.panesMinHeight`).
+    /// `floor` stands the window on its floor, both ways, with the log up once the entry is on the graph: the shortest
+    /// column there is, and the graph at its narrowest. `notice` and `askform` raise there what can stand with the
+    /// band, the push refused and the first push's question, about a 49-character name with `long`: the stack the floor
+    /// is built on (`PageLayout.panesMinHeight`), each bar giving way inside itself. `graphKept=` is whether the rows
+    /// are left under it.
     readonly property var looks: Harness.autoActArg === "" ? [] : Harness.autoActArg.split(",")
     readonly property var parts: acts.looks.filter(look => look.startsWith("part:"))
     readonly property var hand: {
@@ -160,6 +163,8 @@ Item {
                + " entries=" + page.recoverEntries.length
                // What the filter left, and whether an entry's card is out.
                + " listed=" + sidebarPane.autoRecover.shownEntries.count
+               // Whether the view went to the picked entry: all of its tip's row on screen.
+               + " tipShown=" + (graph.provisionalTipRow >= 0 && view.rowOnScreen(graph.provisionalTipRow))
                // Where the picked entry's stand-in stands: its own seat, an edge, or none with its row on screen.
                + " pin=" + sidebarPane.autoRecover.pinPlace
                + " card=" + sidebarPane.autoRecover.cardOpen
@@ -169,11 +174,9 @@ Item {
                // Whether a part of the picked entry comes back alone too: its band's per-part presses (false for
                // what one rebase moved).
                + " byPart=" + (page.recoverPicked !== null && page.recoverPicked.byPart)
-               // The entry's tip row, and the rows the scroll is held to.
+               // The entry's tip row, the rows the scroll is held to, and where the view stands.
                + " tip=" + graph.provisionalTipRow
                + " span=" + graph.provisionalFirst + "-" + graph.provisionalLast
-               // Whether the view went to the picked entry: its tip's row on screen, and where the view stands.
-               + " tipShown=" + (graph.provisionalTipRow >= 0 && view.rowOnScreen(graph.provisionalTipRow))
                + " y=" + Math.round(view.contentY)
                // Per part, whether what it would bring back is on the graph.
                + " reach=" + page.recoverReach.join("/")
@@ -185,16 +188,22 @@ Item {
                + " lit=" + page.recoverLit
                // How many times the seat lit since a `blink` began it.
                + " blinks=" + acts.blinks
-               // The rows the graph has room for, and whether the window stands on its floor.
+               // The rows the graph has room for, whether they are the ones it keeps, and whether the window stands on
+               // its floor.
                + " graphRows=" + Math.floor(view.height / Theme.graphRowHeight)
-               + " atFloor=" + (page.Window.window.height === Math.ceil(page.Window.window.floorHeight))
+               + " graphKept=" + (view.height >= Theme.graphRowsKept * Theme.graphRowHeight)
+               + " atFloor=" + acts.floorStood()["floor"]
                + " width=" + Math.round(sidebarPane.width)
                + (acts.gesture === "" ? "" : acts.handLine())
     }
-    /// The window on its floor with the log up, as `floor` asked.
+    /// The window on its floor both ways with the log up, and what `floor` raised there all the way down.
     function floorStood() {
         const window = page.Window.window
-        return { "floor": window.height === Math.ceil(window.floorHeight), "log": page.commandsOpen }
+        return { "floor": window.width === Math.ceil(window.floorWidth)
+                          && window.height === Math.ceil(window.floorHeight),
+                 "log": page.commandsOpen,
+                 "notice": acts.looks.indexOf("notice") < 0 || page.noticeCard.settled,
+                 "ask": acts.looks.indexOf("askform") < 0 || acts.driver.graphPane.askCard.settled }
     }
 
     // Waits for the splitter to hand the pane the width the fold asked for and for the list's read, picks the entry
@@ -344,8 +353,15 @@ Item {
                 // Asked once the entry stands, so the graph has gone to it before the column shrinks under it.
                 if (op.at("picked") && !op.input("floored", () => {
                     const window = page.Window.window
+                    window.width = Math.ceil(window.floorWidth)
                     window.height = Math.ceil(window.floorHeight)
                     page.commandsOpen = true
+                    const name = acts.looks.indexOf("long") >= 0 ? "release-train/2026-q4/platform-migration/layer-08"
+                                                                 : "main"
+                    if (acts.looks.indexOf("notice") >= 0)
+                        page.showReport("outdated", "origin", name, "")
+                    if (acts.looks.indexOf("askform") >= 0)
+                        page.startPublishAskFor(name, "")
                     return true
                 }))
                     return

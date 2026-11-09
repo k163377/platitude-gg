@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Layouts
 import platitude
 import platitude.ui
 
@@ -158,6 +159,10 @@ Item {
         if (ask === "floored") {
             acts.toFloor()
             const flick = name === "block" ? detailsPane.messageBlock : wipPane.commitBlock
+            // The floor can leave a block room for all a commit puts in it (`PageLayout.panesMinHeight`) and the pull
+            // gives back what it owes, so the run takes the room away itself: the hand answers a block that overflows,
+            // and this is the one thing here not the product's.
+            flick.Layout.maximumHeight = Theme.messageMaxHeight
             return flick.visible && flick.contentHeight > flick.height + 1
         }
         if (ask === "chose_first" || ask === "chose_last")
