@@ -1,8 +1,9 @@
-//! Claude Code hook handlers (`cargo xtask hook <event>`), wired from
-//! .claude/settings.json: the git, launches, kills, seats, chips, board
+//! Harness hook handlers (`cargo xtask hook <event>`). Claude's settings
+//! wire the git, launches, kills, seats, chips, board
 //! window and other sessions a session touches only when the user asks,
 //! and the language of what the user reads (`language`). Main moves on the
 //! permit the user's own `/land` opens (`permit`), and on that alone.
+//! Codex's hooks share activity and landing prompts (`codex`).
 //!
 //! Each handler reads the hook's JSON payload from stdin and answers on
 //! stdout; printing nothing means "no objection".
@@ -25,6 +26,8 @@ mod awake;
 pub(crate) mod board;
 mod chips;
 mod codex;
+pub(crate) mod codex_land;
+mod codex_transcript;
 mod commit;
 mod contact;
 mod dump;
@@ -48,7 +51,7 @@ mod write;
 pub(crate) static HOOK: crate::command::Command = crate::command::Command {
     id: "hook.event",
     call: "hook <event>",
-    purpose: "the Claude Code hook handler, wired from .claude/settings.json",
+    purpose: "the harness hook handler, wired from Claude and Codex hook settings",
     run_in: crate::command::Where::Either,
     needs: &["the hook payload on stdin — the harness runs this, not a session"],
     permission: crate::command::Permission::Plain,
@@ -62,8 +65,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     std::io::stdin()
         .read_to_string(&mut input)
         .map_err(|e| format!("failed to read hook payload: {e}"))?;
-    if event == "codex-awake" {
-        codex::awake(&input);
+    if matches!(event, "codex-session" | "codex-awake") {
+        codex::run(&input);
         return Ok(());
     }
     // Whether the session is at work (`awake`) is written before any

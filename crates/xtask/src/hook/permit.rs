@@ -80,11 +80,30 @@ struct Permit {
 /// UserPromptSubmit: the user's own message opens or closes the permit;
 /// any other prompt leaves it as it stands.
 pub(super) fn prompt_submit(input: &str, prompt: &str) {
-    let Some(words) = the_users_words(prompt) else {
+    let (Some(cwd), Some(session)) = (
+        string_field(input, "cwd"),
+        string_field(input, "session_id"),
+    ) else {
         return;
     };
-    let Some(path) = permit_path(input) else {
-        return;
+    let _recorded = record_prompt(&cwd, &session, prompt);
+}
+
+pub(super) fn record_prompt(cwd: &str, session: &str, prompt: &str) -> Result<(), String> {
+    record_prompt_at(cwd, session, prompt, crate::land::line::now())
+}
+
+pub(super) fn record_prompt_at(
+    cwd: &str,
+    session: &str,
+    prompt: &str,
+    at: u64,
+) -> Result<(), String> {
+    let Some(words) = the_users_words(prompt) else {
+        return Ok(());
+    };
+    let Some(path) = permit_file(cwd, session) else {
+        return Err("cannot locate landing permit".into());
     };
     let invoked = is_land(words);
     let permit = Permit {
@@ -93,17 +112,15 @@ pub(super) fn prompt_submit(input: &str, prompt: &str) {
         } else {
             Standing::Closed
         },
-        asked_at: now(),
+        asked_at: at / 1000,
         excerpt: excerpt(words),
     };
-    store(&path, &permit);
+    try_store(&path, &permit).map_err(|e| e.to_string())?;
     // The line of landings follows the permit: `/land` takes a place in
     // it, any other message gives the place up (`land::line`).
-    let host = string_field(input, "session_id")
-        .and_then(|session| crate::seats::Identity::current(Some(&session)).host);
+    let host = crate::seats::Identity::current(Some(session)).host;
     if invoked {
-        let cwd = string_field(input, "cwd").unwrap_or_default();
-        crate::land::line::enter(&path, &cwd, host.as_deref(), crate::land::line::now());
+        crate::land::line::enter(&path, cwd, host.as_deref(), at);
     } else {
         crate::land::line::clear(&path, host.as_deref());
     }
@@ -122,6 +139,7 @@ pub(super) fn prompt_submit(input: &str, prompt: &str) {
              work up to the gate and ask the user to type {COMMAND}."
         );
     }
+    Ok(())
 }
 
 /// PreToolUse: whether the landing verb `what` is refused for want of an
@@ -474,6 +492,10 @@ fn parse(line: &str) -> Option<Permit> {
 /// Writes the permit. One that cannot be written reads as absent, and an
 /// absent permit refuses.
 fn store(path: &Path, permit: &Permit) {
+    let _stored = try_store(path, permit);
+}
+
+fn try_store(path: &Path, permit: &Permit) -> std::io::Result<()> {
     let word = match permit.standing {
         Standing::Open => "open",
         Standing::Waiting => "waiting",
@@ -481,9 +503,7 @@ fn store(path: &Path, permit: &Permit) {
         Standing::Closed => "closed",
     };
     let line = format!("{word}{SEP}{}{SEP}{}\n", permit.asked_at, permit.excerpt);
-    if let Err(_unheard) = write_whole(path, &line) {
-        // Nobody to tell from inside a hook.
-    }
+    write_whole(path, &line)
 }
 
 /// Writes `text` to `path` whole: to a sibling first, renamed into place,

@@ -18,8 +18,8 @@ claudeはこの資料を無視して
   `core.md`、`crates/platitude-app/**` では `app-ui.md` も読む。これらは `.claude/rules/` からの
   相対パス。自動で読み込むのは Claude だけ。
 - Claude のフック(`.claude/settings.json`)は Codex では動かない。Claude なら拒否される操作も
-  自動では止まらないため、その規則を自分で守る。`.codex/hooks.json` の活動フックは Claude と
-  Windows のスリープ保持機構を共有する。設定と手動の代替手順は `internal-docs/codex/ハーネス.md`。
+  自動では止まらないため、その規則を自分で守る。`.codex/hooks.json` は Claude とスリープ保持・
+  land の発話許可を共有する。設定と会話記録からの同期は `internal-docs/codex/ハーネス.md`。
 - UI の検証・起動では `.claude/skills/verify-ui/SKILL.md` を使い、動詞表は選んだ操作の項だけを探す。
 - 検査の実行前と作業の完了報告前に `.claude/skills/gate/SKILL.md` を読み、確認の段と gate の時機に従う。
 - レビューだけの依頼や Claude 向けの修正指示書には、`.agents/skills/platitude-claude-review/SKILL.md` を使う。

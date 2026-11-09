@@ -234,6 +234,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     match args.as_slice() {
         ["line"] => {
+            crate::hook::codex_land::sync(&here)?;
             let line = read(&here)?;
             println!("{}", line.say());
             println!("{}", line.mine(&me));
@@ -279,6 +280,7 @@ fn wait(
     }
     let mut unreadable_since: Option<std::time::Instant> = None;
     loop {
+        crate::hook::codex_land::sync(here)?;
         match read(here) {
             Ok(line) => {
                 unreadable_since = None;

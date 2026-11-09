@@ -1,10 +1,13 @@
-//! Codex lifecycle events update only sleep activity. Claude's permission
-//! handlers and conversation-owned seat claims are not invoked here.
+//! Codex lifecycle events share sleep activity and the landing permit.
+//! Seat claims remain conversation-owned throughout those events.
 
 use super::payload::{own_string_field, own_value_field};
 use crate::awake::{Mark, codex::record, digest};
 
-pub(super) fn awake(input: &str) {
+pub(super) fn run(input: &str) {
+    if let Err(error) = super::codex_land::prompt(input) {
+        eprintln!("Codex landing permit: {error}");
+    }
     let (Some(session), Some(cwd), Some(event)) = (
         own_string_field(input, "session_id"),
         own_string_field(input, "cwd"),
@@ -87,6 +90,100 @@ fn activity_name(name: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::{activity_name, asks_person};
+
+    #[test]
+    fn native_prompt_registers_the_owned_seat_and_closes_on_the_next_message() {
+        let yard = crate::yard::Yard::new("codex-land");
+        let root = yard.to_str().unwrap();
+        let git = |args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(["-c", "user.name=test", "-c", "user.email=test@example.test"])
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{out:?}");
+        };
+        git(&["init"]);
+        git(&["commit", "--allow-empty", "-m", "init"]);
+        let seat = yard.join(".claude/worktrees/c");
+        git(&[
+            "worktree",
+            "add",
+            "-b",
+            "worktree-c",
+            seat.to_str().unwrap(),
+        ]);
+        git(&[
+            "worktree",
+            "lock",
+            "--reason",
+            "claude-seat codex-test",
+            seat.to_str().unwrap(),
+        ]);
+        let input = |turn: &str, prompt: &str| {
+            format!(
+                r#"{{"session_id":"codex-test","cwd":"{}","hook_event_name":"UserPromptSubmit","turn_id":"{turn}","prompt":"{prompt}"}}"#,
+                root.replace('\\', "/")
+            )
+        };
+        super::run(&input("first", "/land"));
+        assert!(super::super::permit::is_open(root, "codex-test"));
+        let entry = super::super::permit::kept_file(root, "codex-test", "line").unwrap();
+        let line = std::fs::read_to_string(&entry).unwrap();
+        assert!(line.contains(&seat.to_string_lossy().replace('\\', "/")));
+        super::super::permit::landed(root, "codex-test");
+        super::run(&input("first", "/land"));
+        assert!(!super::super::permit::is_open(root, "codex-test"));
+        super::run(&input("second", "/land"));
+        assert!(super::super::permit::is_open(root, "codex-test"));
+        super::run(&input("third", "continue"));
+        assert!(!super::super::permit::is_open(root, "codex-test"));
+        assert!(!entry.exists());
+        super::run(&input("first", "/land"));
+        let replay_closed = !super::super::permit::is_open(root, "codex-test");
+        let message_time = fallback(&yard, root);
+        assert_eq!((replay_closed, message_time), (true, true));
+    }
+
+    fn fallback(yard: &std::path::Path, root: &str) -> bool {
+        use super::super::{codex_land::sync_from, permit};
+        let sessions = yard.join("sessions");
+        std::fs::create_dir(&sessions).unwrap();
+        let file = sessions.join("rollout-codex-test.jsonl");
+        let at = crate::land::line::now() / 1000 + 2;
+        let write = |turn: &str, prompt: &str, time: u64| {
+            std::fs::write(&file, format!(
+                "{{\"type\":\"session_meta\",\"payload\":{{\"id\":\"codex-test\",\"thread_source\":\"user\"}}}}\n{{\"type\":\"response_item\",\"payload\":{{\"role\":\"user\",\"content\":[{{\"type\":\"input_text\",\"text\":\"{prompt}\"}}],\"internal_chat_message_metadata_passthrough\":{{\"turn_id\":\"{turn}\",\"create_time\":{time},\"content_item_metadata\":[{{\"provenance\":{{\"type\":\"user\"}}}}]}}}}}}\n"
+            )).unwrap();
+        };
+        write("fallback", "/land", at);
+        sync_from(root, "codex-test", &sessions).unwrap();
+        assert!(permit::is_open(root, "codex-test"));
+        let message_time =
+            permit::asked(root, "codex-test").unwrap().millis() == u128::from(at) * 1000;
+        crate::land::line::leave(root, "codex-test", "review decision");
+        let entry = permit::kept_file(root, "codex-test", "line").unwrap();
+        let left = std::fs::read_to_string(&entry).unwrap();
+        sync_from(root, "codex-test", &sessions).unwrap();
+        assert_eq!(std::fs::read_to_string(&entry).unwrap(), left);
+        permit::wait_for_approval(root, "codex-test");
+        sync_from(root, "codex-test", &sessions).unwrap();
+        assert!(!permit::is_open(root, "codex-test"));
+        write("next", "/land", at + 1);
+        sync_from(root, "codex-test", &sessions).unwrap();
+        permit::landed(root, "codex-test");
+        sync_from(root, "codex-test", &sessions).unwrap();
+        assert!(!permit::is_open(root, "codex-test"));
+        write("old", "/land", at - 1);
+        assert!(sync_from(root, "codex-test", &sessions).is_err());
+        write("last", "continue", at + 2);
+        sync_from(root, "codex-test", &sessions).unwrap();
+        assert!(!permit::is_open(root, "codex-test"));
+        assert!(!entry.exists());
+        message_time
+    }
 
     #[test]
     fn shell_children_are_not_attributed_across_codex_chats() {

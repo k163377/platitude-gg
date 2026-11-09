@@ -145,6 +145,7 @@ fn preflight(
     };
     let seat_dir = std::path::Path::new(&trees[seat_at].path);
     phases.target(seat_dir, &branch);
+    crate::hook::codex_land::sync(here)?;
     // A landing that waits moves nothing.
     approval::awaited(here, &listing, &branch)?;
     // The line of landings: only its head lands (`line`).
@@ -243,6 +244,9 @@ fn through(
 /// the user's next message, and that message closes the permit. A session
 /// with no permit on record — a hand run — is not asked.
 fn permit_still_open(here: &str, me: &Identity) -> Result<(), String> {
+    if std::env::var("CODEX_THREAD_ID").ok().as_deref() == Some(&me.session) {
+        crate::hook::codex_land::sync(here)?;
+    }
     if me.session.is_empty() {
         return Ok(());
     }
