@@ -6,17 +6,17 @@ fn words(args: &[&str]) -> Vec<String> {
 
 /// A directory of its own, and a six-by-four picture whose every pixel
 /// tells which one it is.
-fn shot() -> Result<(PathBuf, PathBuf), String> {
-    let dir = crate::verify::claim_dir(&crate::temp::root().join("pgg-crop"), "crop")?;
+fn shot() -> (crate::yard::Yard, PathBuf) {
+    let dir = crate::yard::Yard::new("shots-crop");
     let source = dir.join("app.png");
     let png = png::rgba(6, 4, |x, y| [x as u8 * 40, y as u8 * 60, 7, 255]);
-    std::fs::write(&source, &png).map_err(|e| e.to_string())?;
-    Ok((dir, source))
+    std::fs::write(&source, &png).expect("a picture to cut from");
+    (dir, source)
 }
 
 #[test]
 fn a_crop_holds_the_region_asked_for_with_every_pixel_a_square_block() {
-    let (dir, source) = shot().expect("a picture to cut from");
+    let (dir, source) = shot();
     let out = dir.join("cut.png");
     run(&words(&[
         &source.to_string_lossy(),
@@ -42,30 +42,27 @@ fn a_crop_holds_the_region_asked_for_with_every_pixel_a_square_block() {
             );
         }
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The defaults: three times, beside the picture.
 #[test]
 fn a_crop_nobody_places_lands_beside_the_shot_under_the_region_it_cut() {
-    let (dir, source) = shot().expect("a picture to cut from");
+    let (dir, source) = shot();
     run(&words(&[&source.to_string_lossy(), "--at", "1:0:2:3"])).expect("a region inside");
     let out = dir.join("app-crop-1-0-2x3.png");
     let file = std::fs::read(&out).expect("the crop is beside the shot");
     let crop = png::decode(&file).expect("and it is a picture");
     assert_eq!((crop.width, crop.height), (6, 9));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn a_region_that_is_not_all_inside_the_picture_is_refused_with_its_size() {
-    let (dir, source) = shot().expect("a picture to cut from");
+    let (_dir, source) = shot();
     let outside = run(&words(&[&source.to_string_lossy(), "--at", "4:0:3:1"]));
     assert!(
         outside.is_err_and(|why| why.contains("6x4")),
         "a crop running off the right edge says how wide the picture was"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -99,7 +96,7 @@ fn rect_is_err(text: &str) -> bool {
 /// square overflows a u64.
 #[test]
 fn a_crop_too_big_to_be_looked_at_is_refused_before_it_is_written() {
-    let (dir, source) = shot().expect("a picture to cut from");
+    let (dir, source) = shot();
     for asked in ["5000", &u32::MAX.to_string()] {
         let huge = run(&words(&[
             &source.to_string_lossy(),
@@ -114,7 +111,6 @@ fn a_crop_too_big_to_be_looked_at_is_refused_before_it_is_written() {
         );
         assert!(!dir.join("app-crop-0-0-6x4.png").exists());
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

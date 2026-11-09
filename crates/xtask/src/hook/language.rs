@@ -279,7 +279,8 @@ mod tests {
 
     #[test]
     fn the_note_comes_from_the_record_the_payload_names() {
-        let path = crate::temp::root().join(format!("language-note-{}.jsonl", std::process::id()));
+        let yard = crate::yard::Yard::new("language-note");
+        let path = yard.join("transcript.jsonl");
         std::fs::write(&path, record()).expect("write the record");
         let named = path.display().to_string().replace('\\', "\\\\");
         let payload = |call: &str, extra: &str| {
@@ -290,7 +291,6 @@ mod tests {
         let english_line = post_tool(&payload("toolu_a", ""));
         let japanese_line = post_tool(&payload("toolu_c", ""));
         let subagent = post_tool(&payload("toolu_a", r#","agent_id":"a1""#));
-        std::fs::remove_file(&path).expect("remove the record");
         assert_eq!(english_line, Some(BETWEEN_CALLS));
         assert_eq!(japanese_line, None);
         assert_eq!(subagent, None);
@@ -298,11 +298,11 @@ mod tests {
 
     #[test]
     fn a_tail_starts_at_a_whole_line() {
-        let path = crate::temp::root().join(format!("language-tail-{}.jsonl", std::process::id()));
+        let yard = crate::yard::Yard::new("language-tail");
+        let path = yard.join("transcript.jsonl");
         std::fs::write(&path, "first line\nsecond\nthird\n").expect("write");
         let read = |bytes| tail(&path.display().to_string(), bytes);
         let (cut, on_a_line, whole) = (read(10), read(6), read(1000));
-        std::fs::remove_file(&path).expect("remove");
         assert_eq!(cut.as_deref(), Some("third\n"));
         assert_eq!(on_a_line.as_deref(), Some("third\n"));
         assert_eq!(whole.as_deref(), Some("first line\nsecond\nthird\n"));

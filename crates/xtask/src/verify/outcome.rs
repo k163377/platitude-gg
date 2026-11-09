@@ -367,7 +367,7 @@ mod tests {
     #[test]
     fn a_loop_qml_said_fails_the_run_unless_it_is_allowed() {
         let opts = super::super::options::parse(&["wip".to_string()]).expect("a line");
-        let dir = crate::temp::root().join("pgg-verify-loop");
+        let dir = crate::yard::Yard::new("verify-loop");
         let said = super::super::child::Ran {
             err_lines: vec![
                 "qrc:/qt/qml/platitude/ui/NavSections.qml:162:5: QML NavList: Binding loop \
@@ -421,7 +421,7 @@ mod tests {
             .map(|s| (*s).to_string())
             .collect()
         };
-        let dir = crate::temp::root().join("pgg-verify-claim");
+        let dir = crate::yard::Yard::new("verify-claim");
         let fell = super::super::child::Ran {
             err_lines: said("INFO bench: pictured run=r1 artifact=app name=card_latch holds=false"),
             ..ran(false, Some(0))

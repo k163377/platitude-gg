@@ -58,8 +58,7 @@ mod tests {
 
     #[test]
     fn a_seat_is_entered_by_one_session_for_one_letter() {
-        let root = crate::verify::claim_dir(&crate::temp::root().join("pgg-hook"), "entered")
-            .expect("a directory of its own");
+        let root = crate::yard::Yard::new("seat-entered");
         assert!(!entered(&root, "s1", "a"));
         mark(&root, "s1", "a");
         assert!(entered(&root, "s1", "a"));
@@ -73,7 +72,5 @@ mod tests {
         assert!(!entered(&root, "s1", "b"));
         // A session with no identity writes nowhere.
         assert_eq!(mark_path(&root, "  "), None);
-
-        std::fs::remove_dir_all(&root).ok();
     }
 }

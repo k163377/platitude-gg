@@ -113,12 +113,14 @@ pub(super) fn fresh_shot_dir(verb: &str) -> Result<PathBuf, String> {
 /// The bases under [`crate::temp::root`] a run leaves something in: the
 /// directories `claim_dir` makes — pictures and settings, demo
 /// repositories (`demo::claim_root`), a container run's mount
-/// (`keepsakes::keepsake_dir`), test roots, and [`crate::yard`]'s trees —
-/// and [`LOCKS`], which nothing else clears.
-const RUN_BASES: [&str; 6] = [
+/// (`keepsakes::keepsake_dir`), the links a `shipped` run starts its
+/// consoles from (`shipped::console`), test roots, and [`crate::yard`]'s
+/// trees — and [`LOCKS`], which nothing else clears.
+const RUN_BASES: [&str; 7] = [
     "pgg-verify",
     "pgg-demo",
     "pgg-linux",
+    "pgg-shipped",
     "pgg-census",
     crate::yard::BASE,
     LOCKS,

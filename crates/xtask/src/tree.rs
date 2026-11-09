@@ -49,8 +49,7 @@ mod tests {
 
     #[test]
     fn a_seat_and_its_checkout_name_one_root() {
-        let base = crate::verify::claim_dir(&crate::temp::root().join("pgg-hook"), "roots")
-            .expect("a directory of its own");
+        let base = crate::yard::Yard::new("tree-roots");
         let primary = base.join("platitude-gg");
         let seat = primary.join(".claude/worktrees/a");
         std::fs::create_dir_all(primary.join(".git/worktrees/a")).expect("a primary checkout");
@@ -72,7 +71,5 @@ mod tests {
         // A .git naming a layout this reader does not know.
         std::fs::write(seat.join(".git"), "gitdir: /elsewhere\n").expect("a foreign .git file");
         assert_eq!(named(&seat), None);
-
-        std::fs::remove_dir_all(&base).ok();
     }
 }

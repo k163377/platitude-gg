@@ -136,8 +136,7 @@ mod tests {
     /// the film do not.
     #[test]
     fn a_seat_the_film_stands_in_commits_nothing_of_its_own() {
-        let dir = crate::verify::claim_dir(&crate::temp::root().join("pgg-film"), "guard")
-            .expect("a directory of its own");
+        let dir = crate::yard::Yard::new("hook-film-guard");
         let seat = dir.join(".claude").join("worktrees").join("z");
         init(&seat);
         let scene = seat.join("target").join("film").join("s").join("repo");
@@ -150,7 +149,6 @@ mod tests {
         assert!(filmed_seat("git commit -m x", &seat_cwd).is_some());
         assert_eq!(filmed_seat("git commit -m x", &scene_cwd), None);
         assert_eq!(filmed_seat("git status", &seat_cwd), None);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

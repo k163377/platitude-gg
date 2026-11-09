@@ -284,8 +284,7 @@ mod tests {
     /// A write that fails part way puts back the files written before it.
     #[test]
     fn a_write_that_fails_part_way_leaves_every_file_as_it_was() {
-        let dir = crate::verify::claim_dir(&crate::temp::root().join("pgg-film"), "write-all")
-            .expect("a directory of its own");
+        let dir = crate::yard::Yard::new("film-write-all");
         std::fs::write(dir.join("a.txt"), "old").expect("a file");
         let files = BTreeMap::from([
             ("a.txt", "new".to_string()),
@@ -296,7 +295,6 @@ mod tests {
             std::fs::read_to_string(dir.join("a.txt")).expect("read"),
             "old"
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     fn read(path: &str) -> Result<String, String> {

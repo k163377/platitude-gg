@@ -366,8 +366,7 @@ readonly property string uiFamily: _pickFamily(fontFamilyUi)
     /// nobody declares.
     #[test]
     fn a_sync_that_writes_a_cell_still_says_the_token_the_source_does_not_have() {
-        let root = crate::verify::claim_dir(&crate::temp::root().join("pgg-docs"), "sync")
-            .expect("a directory of its own");
+        let root = crate::yard::Yard::new("docs-sync");
         for (source, text) in SOURCES
             .iter()
             .zip(["readonly property color bgBase: \"#020617\"\n", ""])
@@ -386,7 +385,6 @@ readonly property string uiFamily: _pickFamily(fontFamilyUi)
 
         let after = crate::docs::quote(&root, true).expect("a quote");
         let written = std::fs::read_to_string(&doc).expect("the document, written");
-        std::fs::remove_dir_all(&root).expect("the directory, cleared");
         assert!(written.contains("| `bgBase` | `#020617` |"), "{written}");
         assert_eq!(after.findings.len(), 1, "{:?}", after.findings);
         assert!(

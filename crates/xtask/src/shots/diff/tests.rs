@@ -75,8 +75,7 @@ fn two_sizes_are_refused_by_name() {
 
 #[test]
 fn the_difference_lands_beside_the_after_named_for_it() {
-    let dir = crate::verify::claim_dir(&crate::temp::root().join("pgg-diff"), "diff")
-        .expect("a directory of its own");
+    let dir = crate::yard::Yard::new("shots-diff");
     let before = dir.join("before.png");
     let after = dir.join("app-crop.png");
     std::fs::write(&before, png::rgba(20, 6, |_, _| GROUND)).expect("written");
@@ -93,7 +92,6 @@ fn the_difference_lands_beside_the_after_named_for_it() {
     let file = std::fs::read(dir.join("app-crop-diff.png")).expect("written beside the after");
     let drawn = png::decode(&file).expect("a picture");
     assert_eq!(drawn.pixel(7, 3), LIGHTER);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

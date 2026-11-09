@@ -396,8 +396,7 @@ fn a_bundle_that_moved_is_named_both_ways_with_why_the_extra_stays_out() {
 /// has those, where links can be made.
 #[test]
 fn carried_reads_a_bundles_directories_and_skips_what_is_no_module() {
-    let root = crate::verify::claim_dir(&crate::temp::root().join("pgg-package"), "carried")
-        .expect("a directory of its own");
+    let root = crate::yard::Yard::new("package-carried");
     let contents = root.join("Contents");
     let dirs = [
         "Frameworks/QtCore.framework/Versions/A",
@@ -429,7 +428,6 @@ fn carried_reads_a_bundles_directories_and_skips_what_is_no_module() {
         std::fs::write(contents.join(file), text).expect("a file");
     }
     let read = carried(&root);
-    let _ = std::fs::remove_dir_all(&root);
     assert_eq!(
         read.expect("read"),
         Carried {
@@ -458,8 +456,7 @@ fn carried_reads_a_bundles_directories_and_skips_what_is_no_module() {
 #[cfg(unix)]
 #[test]
 fn a_modules_link_reaches_its_plugin_and_no_linked_directory_is_walked() {
-    let root = crate::verify::claim_dir(&crate::temp::root().join("pgg-package"), "linked")
-        .expect("a directory of its own");
+    let root = crate::yard::Yard::new("package-linked");
     let quick = root.join("Contents/PlugIns/quick");
     let module = root.join("Contents/Resources/qml/QtQuick/Layouts");
     for dir in [&quick, &module] {
@@ -477,7 +474,6 @@ fn a_modules_link_reaches_its_plugin_and_no_linked_directory_is_walked() {
     std::os::unix::fs::symlink("..", module.join("Up")).expect("a link up");
     let through_the_link = std::fs::read_to_string(module.join(plugin));
     let read = carried(&root);
-    let _ = std::fs::remove_dir_all(&root);
     assert_eq!(through_the_link.expect("the link resolves"), "the plugin");
     let read = read.expect("read");
     assert_eq!(read.quick, [plugin]);

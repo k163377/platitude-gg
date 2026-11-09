@@ -102,7 +102,7 @@ pub(super) fn run_as_parent() -> Option<Result<(), String>> {
 /// named `cargo` in a directory of its own, and relays what it said.
 pub(super) fn run_host() -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let dir = crate::verify::claim_dir(crate::temp::root(), "shipped-parents")?;
+    let dir = crate::verify::claim_dir(&crate::temp::root().join("pgg-shipped"), "parents")?;
     let ran = link(&exe, &dir, CARGO_LINK)
         .and_then(|host| link(&exe, &dir, OTHER_LINK).map(|_| host))
         .and_then(|host| {

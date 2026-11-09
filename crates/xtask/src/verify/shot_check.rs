@@ -356,9 +356,7 @@ mod tests {
             "{:?}",
             before.missing(inked)
         );
-        let dir = crate::temp::root().join("pgg-shot-check-test");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("the test's directory");
+        let dir = crate::yard::Yard::new("shot-check-mark");
         std::fs::write(
             dir.join("app.png"),
             crate::png::rgba(2, 1, |x, _| {
@@ -386,7 +384,6 @@ mod tests {
             vec!["scene.png is not on disk".to_string()],
             "the window's picture carries it, the scene's is owed"
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// The mark is the harness's: one colour, spelled in the QML it is

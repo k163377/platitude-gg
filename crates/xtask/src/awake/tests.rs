@@ -13,8 +13,9 @@ use super::{
 /// after what ran in it: a stand-in Claude process (dropped before this,
 /// being made after it) and a holder keep files in it open, so the holder
 /// named there is ended first. One that cannot be taken down fails the
-/// test.
-struct Scratch(std::path::PathBuf);
+/// test. A yard's, so what a killed run leaves goes with the day-old
+/// sweep.
+struct Scratch(crate::yard::Yard);
 
 impl std::ops::Deref for Scratch {
     type Target = std::path::Path;
@@ -52,10 +53,7 @@ fn claim_file(whose: &str) -> String {
 /// The test's own directory, with the desktop app's log left unread: a
 /// holder started there would otherwise read the user's.
 fn scratch(stem: &str) -> Scratch {
-    let dir = Scratch(
-        crate::verify::claim_dir(&crate::temp::root().join("pgg-awake"), stem)
-            .expect("a directory of its own"),
-    );
+    let dir = Scratch(crate::yard::Yard::new(&format!("awake-{stem}")));
     std::fs::write(dir.join(crate::awake::DESKTOP_OFF), "test isolation")
         .expect("no real Desktop logs");
     std::fs::write(dir.join("codex-log.off"), "test isolation").expect("no real Codex logs");
