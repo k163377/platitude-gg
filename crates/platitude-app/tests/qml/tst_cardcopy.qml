@@ -4,8 +4,8 @@ import platitude.ui
 
 // What a copy out of a card's line carries where a name wears its mark in a room the field opens (`CardText.marks`):
 // the words as the sentence reads them and nothing for the mark — not the spaces that make its room (デザイン規約
-// §アイコンの席「コピー」) — and a name the heading cut (`holdsNames`) as it is drawn. Selections are made through the
-// card's own drag, as a hand makes them.
+// §アイコンの席「コピーに印は写さない」) — and a name the heading cut (`holdsNames`) as it is drawn. Selections are
+// made through the card's own drag, as a hand makes them.
 Item {
     id: root
     width: 1400

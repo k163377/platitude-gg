@@ -1,9 +1,10 @@
 //! The walk's answers as they arrive — one function per kind of message
 //! the feed carries — and what the footer is left saying.
 //!
-//! Every arm but `Head` and `Stale` reads `generation` first and drops
-//! what an older stream is still saying: a chunk of a graph this model no
-//! longer shows is rows of other commits.
+//! Every arm but `Head`, `Stale` and `DiscardWalked` (matched by its tip)
+//! reads `generation` first and drops what an older stream is still
+//! saying: a chunk of a graph this model no longer shows is rows of other
+//! commits.
 
 use super::*;
 

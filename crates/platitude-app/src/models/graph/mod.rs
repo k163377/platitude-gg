@@ -92,11 +92,11 @@ pub struct GraphModel {
     /// A press of the tail is out and the wider walk has not landed; the
     /// footer wears the wait (デザイン規約 §進行中・回数押しの定数).
     /// Cleared only by a settled walk (`settle_footer`), a restart
-    /// (`start_walk`) or a failed one (`fail_walk`). A swap pass that
-    /// panics leaves it up and the ring turning: `PassWatch` reports a
-    /// swap pass to the tab (`Told::Operation`, its error row), not to
-    /// this model. Not a lie, but clearing it needs a notice that reaches
-    /// the graph.
+    /// (`start_walk`), a failed one (`fail_walk`) or the tab standing in
+    /// another worktree (`restand`). A swap pass that panics leaves it up
+    /// and the ring turning: `PassWatch` reports a swap pass to the tab
+    /// (`Told::Operation`, its error row), not to this model. Not a lie,
+    /// but clearing it needs a notice that reaches the graph.
     growing: bool,
     /// Completed stream passes (direct + replacements + reloads). QML
     /// watches this edge to re-resolve the selection by oid.

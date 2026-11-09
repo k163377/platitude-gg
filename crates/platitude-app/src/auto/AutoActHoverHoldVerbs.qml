@@ -8,7 +8,7 @@ import platitude.ui
 /// uses — the folded rail's cells, a row's right-click and the menu key, the author row's lines: a section held by its
 /// own rows (`peek-hold`), what stands behind a menu (`menu-block`), and the author row's cards one at a time
 /// (`author-swap`). A run stops at the moment its argument names and is photographed there, so the moments laid side
-/// by side on the board read as the behaviour (verify-ui スキル §board).
+/// by side on the board read as the behaviour (verify-ui スキル「board は上から下へ、載せた順に読む」).
 // `Item` because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts

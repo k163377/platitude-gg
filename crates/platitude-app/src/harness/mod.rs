@@ -5,7 +5,7 @@
 //! driving" from an idle record ([`knobs`]).
 //!
 //! A plain `cargo build --release` is the build without it; every xtask
-//! that drives the app asks for the feature back (`xtask::tree::app_exe`).
+//! that drives the app asks for the feature back (`xtask::app_build::app_exe`).
 
 mod deadline;
 mod faults;

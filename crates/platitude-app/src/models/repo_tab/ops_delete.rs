@@ -122,7 +122,7 @@ impl RepoTab {
 
     /// The remote's copy and then `git tag --delete`, as one queued
     /// write: a lease the remote refuses stops it with nothing touched
-    /// (`session::delete_tag_everywhere`).
+    /// (`RepoSession::delete_tag_everywhere`).
     pub(super) fn tag_delete_everywhere(&mut self, target: RemoteTag, expect: String) {
         let row = target.to_string();
         let tag = target.tag.clone();

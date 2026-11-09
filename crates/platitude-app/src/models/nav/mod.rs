@@ -45,8 +45,8 @@ impl Record for TagCarrier {
 }
 
 /// Why git would not take a name beside the branches or tags a section
-/// holds (`NavSectionModel::name_clash`): `kind` is `taken`, `folder` or
-/// `case`, and `with` the name in the way (empty for `taken`).
+/// holds (`NavSectionModel::name_clash`): `kind` is `taken`, `holds`,
+/// `under` or `case`, and `with` the name in the way (empty for `taken`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NameClashed {
     pub kind: String,
@@ -311,8 +311,9 @@ pub struct NavSectionModel {
     /// since the refs read may already have moved HEAD. Finds the
     /// highlighted row (`Role::IsHead`) and names the sticky stand-in.
     head_name: String,
-    /// That branch's tip — empty while HEAD is detached. Where HEAD
-    /// itself is, branch or not, is `WorktreeModel.headOid`'s answer.
+    /// The commit HEAD is on (`HeadMsg::oid_hex`), detached too; empty
+    /// before the first commit. QML reads where HEAD is from
+    /// `WorktreeModel.headOid`.
     head_oid: String,
     /// What that branch's own row wears, read off the snapshot by name
     /// once both are in hand (`drain::settle_head_marks`).

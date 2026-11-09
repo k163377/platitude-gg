@@ -8,7 +8,7 @@ import platitude.ui
 // what the opening scrolled, never where the reader sent the list.
 //
 // The real list (`NavList`) and rows, in a panel that counts the hand the way the sidebar does
-// (`SidebarPane.handWatch`), on the real open row (`OpenRowSeat`).
+// (`SidebarPane.hand`), on the real open row (`OpenRowSeat`).
 Item {
     id: root
     // Room right of the list, where a row's tip stands (`TipAsk.rowSide`) — not over the hand.
@@ -455,8 +455,8 @@ Item {
             compare(list.contentY, sent, "and the list stays where the reader sent it")
         }
 
-        /// Rows read their hover a turn after the hand moved (`NavItemDelegate.onHandMovesChanged` →
-        /// `Qt.callLater`); a call queued after the move runs after theirs, so waiting on it waits on that read.
+        /// Rows read the hand on the delivery itself (`NavItemDelegate.onHandMovesChanged` → `syncHand`); a call
+        /// queued after the move runs after everything the move reached, so waiting on it waits on that read.
         property int turns: 0
         function turnDone() {
             testCase.turns++

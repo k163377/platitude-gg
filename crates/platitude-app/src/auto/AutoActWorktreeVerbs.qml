@@ -14,7 +14,8 @@ import platitude.ui
 /// The argument is `<kind>:<ref>[=<name>][@graph]` — `kind` is `branch` / `remote` / `tag` / `worktree` (by its
 /// folder) or `commit` (`row:<n>` or an id, graph only); `name` what is typed into the box; `@graph` raises the graph
 /// row's menu instead of the left menu row's. The box can only be typed into on the graph: the left menu's box is
-/// filled as it opens, and nothing opens it holding a name, so a left run stops at the empty box.
+/// filled as it opens, and nothing opens it holding a name, so a left `-box` stops at the empty box and a left
+/// `-new` sends the name through the box's Enter (`SidebarPane.submitEdit`).
 ///
 /// The repositories: `--preset basic` (`branch:feature/topic-a` free, `branch:main` the current branch,
 /// `remote:origin/feature/remote-only` with no local branch — a following one is made, `tag:v0.2` the box alone),

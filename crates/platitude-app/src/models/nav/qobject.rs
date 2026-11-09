@@ -124,10 +124,10 @@ impl NavSectionModel {
 
     /// A stash listing arrived, whether or not it moved anything.
     ///
-    /// Separate from `refs_settled`: a write asks for the stashes only
-    /// after rebuilding the graph (`session::write`), so reading the refs'
-    /// arrival as theirs puts a dropped stash back on screen for the
-    /// rebuild (デザイン規約 §消す操作は先に画面から消す).
+    /// Separate from `refs_settled`: a write reads the stashes beside the
+    /// refs, each listing on a feed of its own (`session::write`), so reading
+    /// the refs' arrival as theirs puts a dropped stash back on screen until
+    /// its listing lands (デザイン規約 §消す操作は先に画面から消す).
     #[qsignal]
     pub(super) fn stashes_settled(&mut self);
 

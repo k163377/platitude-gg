@@ -1,4 +1,4 @@
-//! The signatures, `#[repr(C)]` mirrors and message numbers the three
+//! The signatures, `#[repr(C)]` mirrors and message numbers the two
 //! submodules share through `use super::*` — every `extern` block is here.
 #![expect(
     unsafe_code,

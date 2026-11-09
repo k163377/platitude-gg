@@ -292,8 +292,8 @@ QtObject {
                 "avatar-rest", "avatar-hover", "avatar-tip",
                 "find", "find-next", "find-prev", "find-drop", "find-scroll", "find-hint", "find-hint-key",
                 "find-further", "band-find",
-                // Completed by `WindowAutoActDriver`; some begin here (picker, command failure, recovery), but the
-                // shot waits for the window-level predicate.
+                // Completed by `WindowAutoActDriver` (`open-fetches` by its own sampler, `AutoActFileRowVerbs`); some
+                // begin here (picker, command failure, recovery), but the shot waits for the window-level predicate.
                 "open-fetches",
                 "open-picker", "commands-clear", "fetch-recover", "fetch-recover-held",
                 "clone-dialog", "clone-go", "clone-refused",

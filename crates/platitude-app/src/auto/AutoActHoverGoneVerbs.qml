@@ -8,7 +8,7 @@ import platitude.ui
 /// comes in by — the app's own writes landing and the lists rebuilt from them: a chip's list over a row rewritten or a
 /// chip renamed (`list-reread`), the line-ending card over a warning that changed (`eol-change`), the worktree's rows
 /// read again under the hand (`wip-reread`), and a row's tip over rows that moved under a still hand (`tip-slide`). A
-/// run stops at the moment its argument names (verify-ui スキル §board).
+/// run stops at the moment its argument names (verify-ui スキル「board は上から下へ、載せた順に読む」).
 // `Item` because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts

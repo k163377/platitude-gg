@@ -25,7 +25,7 @@
 //! `drain::settle_write` (no guessing from the order of `writeSeq`); and
 //! the owner is held where what it holds lives (above). `Press` is the
 //! base: an owner that remembers more holds one and adds its own part
-//! (`TreeOut`, `BranchDeleteOut`); `StandIn` and `DiffReread` are other
+//! (`TreeOut`, `BranchDeleteOut`, `PushOut`); `StandIn` and `DiffReread` are other
 //! kinds. QML is left with handing out the picture and saying that an edge
 //! came (`listingDrawn`, `takeStashLanding`, `takeCommitLanding`,
 //! `takeDiffRead`).

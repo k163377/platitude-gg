@@ -118,9 +118,10 @@ Item {
         function litRows() {
             return driver.litRowsTo(Math.max(0, ...chooseTimer.rows))
         }
-        /// Every press is in; four things have to land: the tally, the rows' highlight of it, the pane having
+        /// Every press is in; five things have to land: the tally, the rows' highlight of it, the pane having
         /// answered for this choice — `selectionLoaded`, since a failed read also stops loading and leaves the empty
-        /// list a no-change choice has — and the commit list laid out, since an unlaid-out view measures 0.
+        /// list a no-change choice has — the commit list laid out, since an unlaid-out view measures 0, and the page
+        /// settled.
         function landed() {
             return {
                 "chosen": page.chosenCount === chooseTimer.wanted(),

@@ -1004,7 +1004,7 @@ Item {
                 return
             }
             if (op.at("walked_off")) {
-                // The pointer leaving is answered a beat later (SectionPeekPopup.settle).
+                // The pointer leaving is answered a beat later (`SectionPeekPopup.peekKeeper`, a `HoverSeat`).
                 if (!Awaited.all("nav_reclick_gone", { "gone": sidebarPane.peekKind === "" }))
                     return
                 op.advance("gone")

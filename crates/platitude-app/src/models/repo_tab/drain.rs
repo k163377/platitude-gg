@@ -338,10 +338,11 @@ impl RepoTab {
     /// (app-ui.md: no business logic in QML) and handed to whoever pressed
     /// for it.
     ///
-    /// A press that wrote its id down (`ops::Press`, `ops::StandIn`) is
-    /// handed its answer; only the answers nobody named fold into the
-    /// group. One drain notifies once, so the group can describe only one
-    /// answer — written for all, it would hide the earlier ones.
+    /// A press that wrote its id down with an owner (`ops::Press`) is
+    /// handed its answer; only the answers no owner named fold into the
+    /// group — a delete's rows (`ops::StandIn`) are handed every answer
+    /// beside it. One drain notifies once, so the group can describe only
+    /// one answer — written for all, it would hide the earlier ones.
     pub(super) fn settle_write(
         &mut self,
         id: u64,

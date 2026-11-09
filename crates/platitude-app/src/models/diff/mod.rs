@@ -183,8 +183,8 @@ pub struct DiffModel {
     widest_no: i32,
     /// Lines the pane measures for a first answer to how far sideways the
     /// code may go (`encode::widest_lines`) — lines, not a width: no column
-    /// arithmetic survives the font fallback (rules-refs/app-ui.md
-    /// 「diff は横へ送る」). Empty = nowhere to go.
+    /// arithmetic survives the font fallback (`DiffReach`).
+    /// Empty = nowhere to go.
     widest_lines: Candidates,
     /// Which layout of the rows is on screen: bumped by every
     /// `lay_out_rows`, not by an in-place change (colours, marks) — same

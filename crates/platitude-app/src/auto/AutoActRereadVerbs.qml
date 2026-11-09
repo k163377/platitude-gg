@@ -251,7 +251,7 @@ Item {
     }
 
     // diff-reread. The diff's keeper (`DiffPane.rowKeep`), over the rows the model told row by row
-    // (`DiffModel.layOutKept`).
+    // (`DiffModel::lay_out_kept`).
     PageStage {
         id: diffTimer
         name: "diff_reread"

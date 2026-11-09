@@ -14,9 +14,9 @@ impl GraphModel {
     /// Puts the entry on the graph: `tips` are its parts' tips, the first
     /// the one it lands on; `looks` say how each draws — `uncommitted` for a
     /// copy of thrown-away work, `stash` for a dropped stash, both
-    /// stash-shaped; `commit` for a commit (`encode::look_word`); `lost` are
-    /// the commits only the tips reach (full hex). No tip that is an id
-    /// takes the entry off.
+    /// stash-shaped; `commit` for a commit, `absent` for one this repository
+    /// lacks (`encode::look_word`); `lost` are the commits only the tips
+    /// reach (full hex). No tip that is an id takes the entry off.
     pub(super) fn show_provisional(
         &mut self,
         tips: Vec<String>,

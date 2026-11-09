@@ -270,8 +270,8 @@ Item {
             tagMenuTimer.begin(arg, "remote-refuse")
         } else if (act === "tag-menu" || act === "push-tag"
                    || act === "delete-remote-tag" || act === "delete-tag-both") {
-            // `<tag>[:drift|:remote][:tip]` — `:drift` for the forced push, `:remote` for the delete rows, `:tip` for
-            // the reason a greyed delete row gives.
+            // `<tag>[:drift|:remote|:read][:tip]` — `:drift` for the forced push, `:remote` for the delete rows,
+            // `:read` for every remote's reading, `:tip` for the reason a greyed delete row gives.
             tagMenuTimer.begin(arg,
                                act === "push-tag" ? "push"
                              : act === "delete-remote-tag" ? "remote-delete"
@@ -532,7 +532,7 @@ Item {
         name: "tag_menu"
         order: ["opened"]
         /// The tag, and what must be known before the card is worth photographing: `drift` (a remote has the name on
-        /// another commit) or `remote` (a remote has it at all). Either fetches first.
+        /// another commit), `remote` (a remote has it at all) or `read` (every remote read). Each fetches first.
         property string tag: ""
         property string wants: ""
         /// Which row this run presses, empty for the ones that only stand the card up.

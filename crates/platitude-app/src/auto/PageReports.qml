@@ -7,8 +7,8 @@ import platitude.ui
 /// What the page's own wiring says it did, written out as report lines.
 ///
 /// Each is an edge a later read of the page cannot recover, so the page raises a signal apiece and the line is
-/// written here, where the whole of it stays out of a build. The held delete is the exception: git's refusal is an
-/// answer on the tab, read here the way the card reads it.
+/// written here, where the whole of it stays out of a build. The held delete and the stood-in rows are the exceptions:
+/// git's refusal is an answer on the tab, read here the way the card reads it, and the rows are state the tab keeps.
 // An `Item` only because that is what the driver's children are; it is a sizeless holder.
 Item {
     id: reports

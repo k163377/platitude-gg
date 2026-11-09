@@ -314,8 +314,8 @@ Item {
     WindowStage {
         id: refreshTimer
         name: "settings_refresh"
-        /// The screen opened and the chapter worked; the store's answer is the tally standing still across a swapped
-        /// frame.
+        /// The screen opened and the chapter worked; the store's answer is the tally standing still across a polish
+        /// pass (`StageTimer.still`).
         order: ["opened", "typed"]
         running: Harness.autoAct === "settings-refresh"
         onTriggered: {

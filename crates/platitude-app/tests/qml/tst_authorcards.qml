@@ -190,7 +190,7 @@ Item {
         }
 
         /// Another commit lands with the hand in the card: the card goes, and nothing of the new commit's opens under
-        /// the hand where it stood — the count under it is refused until the hand has walked (`HandWatch.walked`).
+        /// the hand where it stood — the count under it is refused until the hand has walked (`HandWatch.stillHeld`).
         function test_another_commit_landing_takes_the_card_down_and_holds_the_hand() {
             restOnCount()
             // In the card where it stands over the count: once the card has gone, the hand is on the count.

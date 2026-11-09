@@ -1,8 +1,8 @@
 //! What Windows has to be told about the window that Qt has no words
 //! for: square corners, the styles behind Win+Arrow, the maximise
 //! geometry of a frameless window, and the non-client hit test the
-//! merged chrome answers itself. The one place the app speaks Win32
-//! directly, over signatures it declares itself; nothing here runs on
+//! merged chrome answers itself. The one place the app speaks Win32 to a
+//! window, over signatures it declares itself; nothing here runs on
 //! the other platforms. The windows are found by `EnumThreadWindows`:
 //! QML has no door to a window's handle.
 //!

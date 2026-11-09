@@ -2,8 +2,9 @@
 //!
 //! qtbridge has no batch insert, no ranged `dataChanged` and no move, so
 //! all three are spelled out through the proxy API the way
-//! `QListModelBase::push` does it — hence the `unsafe`, the only one under
-//! `models/` besides the row deletion in `graph/stream.rs`.
+//! `QListModelBase::push` does it — hence the `unsafe`, the only one on a
+//! Qt proxy under `models/` besides the row deletion in `graph/stream.rs`
+//! (`app_backend`'s console and signal handlers call the OS).
 //!
 //! The proxy is only ever reached through a shared reference: while a
 //! notification runs, Qt re-enters it through its own pointer (`rowCount`,
@@ -210,7 +211,7 @@ pub(crate) fn runs_of(rows: impl IntoIterator<Item = usize>) -> Vec<RangeInclusi
 /// runs of their places after; and the rows that stay, as `(before,
 /// after)` pairs in order. A row that stays keeps its delegate — and the
 /// view keeps whatever stands on it (rules-refs/app-ui.md 「外乱では閉じない
-/// — 一覧」).
+/// — グラフと一覧」).
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct Edit {
     pub(crate) gone: Vec<RangeInclusive<usize>>,

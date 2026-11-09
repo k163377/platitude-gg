@@ -1,7 +1,7 @@
 //! Fetching a repository that has no tab yet.
 //!
 //! Its own object: a clone runs outside every session, before there is
-//! anything to open. `Main.qml` hands the landed folder to the tab strip,
+//! anything to open. `WindowDialogSeat.qml` hands the landed folder to the tab strip,
 //! so neither object knows the other.
 
 use std::sync::Arc;

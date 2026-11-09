@@ -38,7 +38,7 @@ Item {
                                   && graphModel.finishCount > 0 && branchesModel.refsLoaded
                                   && worktree.loaded
 
-    // Every stage change goes through here (rules/app-ui.md §UI 自動化「段を持つドライバは段が変わるたびに名乗る」).
+    // Every stage change goes through here, and says itself (`perf_stage`).
     // Stage names are hyphenated (`details-frame`) so a `perf_stage` line never contains the `perf_*_frame` events
     // `perf::interactions` finds by substring.
     function enter(next) {

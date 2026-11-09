@@ -105,7 +105,7 @@ Item {
         }
     }
 
-    // The sidebar's rows: a narrower seat and no change marks, so what stands one depth down is another chevron.
+    // The sidebar's rows: no change marks, so what stands one depth down is another chevron.
     Column {
         y: 200
         width: 200

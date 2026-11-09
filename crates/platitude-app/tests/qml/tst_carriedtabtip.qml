@@ -3,8 +3,8 @@ import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
-// The path a tab puts out, when the tab it stands on is taken up and carried (デザイン規約 §hover のツールチップ
-// 「掴んだ手の下は空のまま」). The real tab, carry and the window's tip under a real pointer: hover cannot be injected
+// The path a tab puts out, when the tab it stands on is taken up and carried (デザイン規約 §hover のツールチップ).
+// The real tab, carry and the window's tip under a real pointer: hover cannot be injected
 // into the app (verify-ui スキル).
 //
 // Under a press Qt delivers no hover at all, so to the window the carrying hand stays where it pressed. The ask falling

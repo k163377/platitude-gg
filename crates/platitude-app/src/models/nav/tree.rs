@@ -152,7 +152,7 @@ impl NavSectionModel {
 
     /// Turns the flat sorted name list into an indented tree with a
     /// collapsible folder row per `/` level. Leaves point at source rows;
-    /// the segment shown falls out of the depth (`shown_name`).
+    /// the segment shown starts at the `from` each leaf is given (`shown_name`).
     pub(super) fn build_tree(&self) -> Vec<Arranged> {
         self.build_tree_with(|key, depth| self.folder_expanded(key, depth))
     }

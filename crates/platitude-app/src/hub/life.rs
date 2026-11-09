@@ -90,7 +90,8 @@ impl Hub {
                         }
                     }
                 });
-                // Read by the `quit-save-held` run.
+                // For a person reading a `quit-save-held` run's log: the run itself is
+                // judged by its gitconfig (`xtask::verify::shim::held_save_landed`).
                 crate::harness::said(&format!("writes_joined saves={saves_joined}"));
                 crate::harness::station(crate::harness::Station::RuntimeStopping);
                 rt.shutdown_timeout(std::time::Duration::from_secs(2));

@@ -1221,7 +1221,7 @@ Item {
         }
     }
     // keep-place: read part way down a long diff, then write — the file read again must leave the view on the same
-    // place: the line staged above it goes, and the rows on screen stay where they stand (`DiffModel.layOutKept`, Qt
+    // place: the line staged above it goes, and the rows on screen stay where they stand (`DiffModel::lay_out_kept`, Qt
     // keeping the rows on screen as rows above them go). Waits for `viewLaidOut` (before it the scroll goes nowhere); a
     // laid-out diff with less than `readY` of room is said and completed from `start`, which is why no `order` is
     // declared (rules-refs/app-ui.md「欠けた前提は言って止まる」). `--preset manyhunks`' `notes.txt` only: a diff that

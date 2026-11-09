@@ -1,7 +1,7 @@
 //! Hands the linker the Windows resource with the exe's icon and the name
 //! the shell shows for it (without it, `platitude-gg.exe`), and the binary
 //! the commit it is built from (`models::build_id`); builds the C++ of the
-//! preview's image provider (`preview_images`).
+//! preview's image provider (`preview_images`, its decoder `preview_decode`).
 //!
 //! `assets/platitude.res` is checked in compiled: the resource compiler
 //! comes only with the Windows SDK. `assets/platitude.rc` says how to
@@ -26,8 +26,9 @@ fn main() {
     build_image_provider();
 }
 
-/// The preview's image provider (`src/preview_images.rs`): the C++ class
-/// its bridge generates, against Qt Quick.
+/// The preview's image provider (`src/preview_images.rs`) and the device it
+/// streams a picture through (`src/preview_decode.rs`): the C++ classes
+/// their bridges generate, against Qt Quick.
 fn build_image_provider() {
     cxx_qt_build::CxxQtBuilder::new()
         .qt_module("Quick")

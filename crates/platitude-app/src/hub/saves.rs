@@ -1,11 +1,12 @@
 //! The configuration writes the application itself asks for — the
-//! identity screens' — held from the ask until git has answered, by
-//! something that outlives the screen that asked.
+//! identity screens' and the line-ending field's — held from the ask until
+//! git has answered, by something that outlives the screen that asked.
 //!
-//! A save is spawned against a path (`models::repo_config`, `AppBackend`),
-//! outside any session: the settings screen offers every repository in the
-//! strip, and only the tab in front has a session. Unheld, the window
-//! could close with `git config` half way through its pair. So the hub
+//! A save is spawned against a path (`models::repo_config`,
+//! `models::line_endings`, `AppBackend`), outside any session: the settings
+//! screen offers every repository in the strip, and only the tab in front
+//! has a session. Unheld, the window could close with `git config` half way
+//! through its pair. So the hub
 //! holds them (`Hub::spawn_save`), the quit gate counts them
 //! (`Hub::writes_settled`) and the shutdown joins them (`Hub::shutdown`),
 //! as a session's local write is. The quit road is netted headless by

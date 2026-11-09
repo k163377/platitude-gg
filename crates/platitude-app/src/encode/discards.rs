@@ -47,7 +47,7 @@ pub struct DiscardPart {
     /// What it comes back with: a branch's upstream (`origin/main`), the
     /// branch a worktree had out; empty otherwise.
     pub with: String,
-    /// How its tip draws on the graph: `commit` | `uncommitted` | `stash`.
+    /// How its tip draws on the graph: `commit` | `uncommitted` | `stash` | `absent`.
     pub look: String,
     /// Its tip, as a row's short id writes one.
     pub tip: String,
@@ -57,7 +57,7 @@ pub struct DiscardPart {
     pub lost: i32,
     /// How many paths a copy or a stash holds.
     pub files: i32,
-    /// How many paths were thrown away without a copy (§2.1).
+    /// How many paths were thrown away without a copy (`Part::not_copied`).
     pub not_copied: i32,
     /// For thrown-away work, where the worktree it goes back into is — the
     /// folder `name` gives is not how the repository's own is named; empty

@@ -107,7 +107,8 @@ TestCase {
     }
 
     // The page's shape, twice: panes swap in a stack and the one going off screen lets the keyboard go
-    // (as `GraphList.onVisibleChanged` does); under them is a plain item in one, a focus scope in the other.
+    // (as `GraphList` does, `AppListView.letsGoOffScreen`); under them is a plain item in one, a focus scope in
+    // the other.
     property int plainFired: 0
     property int scopeFired: 0
     Item {
