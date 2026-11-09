@@ -402,6 +402,31 @@ fn a_verb_stamped_while_it_queued_does_not_earn_the_block_its_no_build() {
     );
 }
 
+/// The container's records check reuses the release its verbs built:
+/// `bare`, which builds no app and stands between them in the plan, does
+/// not cut the block (`gate::sides::against_the_build`).
+#[test]
+fn the_containers_records_check_reuses_the_build_with_bare_in_the_plan() {
+    let sb = Sandbox::new("records-linux-reuse");
+    sb.write_pane(&sb.seat, 4);
+    sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
+    sb.gate_ok(&sb.seat, &["--whole"]);
+    sb.ran().holds(&[
+        "verify-linux stash --preset basic",
+        "records-check-linux",
+        "bare",
+    ]);
+    let told = sb.told_not_to_build();
+    assert!(
+        told.contains("records-check-linux"),
+        "the container's records check built the release again: {told:?}"
+    );
+    assert!(
+        !told.contains("verify-linux stash --preset basic"),
+        "nothing built the container's release: {told:?}"
+    );
+}
+
 #[test]
 fn a_pseudo_run_off_main_is_reused_after_the_rebase() {
     let sb = Sandbox::new("pseudo");

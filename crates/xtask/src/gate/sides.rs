@@ -1,5 +1,5 @@
 //! Both sides of a run at once, and within a side three groups side by
-//! side: the checks, the built app with its blocks of verbs, and the steps
+//! side: the checks, the built app with its block of verbs, and the steps
 //! beside both.
 
 use std::path::Path;
@@ -218,8 +218,9 @@ fn side(ground: &Ground<'_>, steps: &[&Required], from: usize, jobs: usize) -> V
     })
 }
 
-/// A chain — the checks group, or the steps beside both chains — one at a
-/// time, stopping at the first red.
+/// A chain — the checks group, the steps beside both chains, or what the
+/// built-app group runs after its block — one at a time, stopping at the
+/// first red.
 fn in_order(ground: &Ground<'_>, steps: &[(usize, &Required)]) -> Vec<String> {
     for (n, (index, required)) in steps.iter().enumerate() {
         if let Err(why) = run_one(ground, *index, required, false) {
@@ -250,41 +251,26 @@ fn not_run(ground: &Ground<'_>, ids: impl IntoIterator<Item = String>) {
     }
 }
 
-/// The built-app group: each run of verbs as one block ([`verbs`]) and
-/// the steps between them as they come, stopping after a block with a
-/// red in it or at a red step — `bare` after a red verb would be reading
-/// a build the verbs have already answered for.
+/// The built-app group: every step that builds and drives the app as one
+/// block ([`verbs`]), wherever the plan puts it, then the steps that only
+/// read what the block built (`bare`) as a chain ([`in_order`]). Cut by a
+/// step between them, the block would be two, and the first uncached step
+/// of the second would build the release again. After a block with a red
+/// in it the chain is not run: `bare` after a red verb would be reading a
+/// build the verbs have already answered for.
 fn against_the_build(
     ground: &Ground<'_>,
     steps: &[(usize, &Required)],
     jobs: usize,
 ) -> Vec<String> {
-    let mut at = 0;
-    while at < steps.len() {
-        if steps[at].1.step.builds_app {
-            let end = steps[at..]
-                .iter()
-                .position(|(_, r)| !r.step.builds_app)
-                .map_or(steps.len(), |n| at + n);
-            let failures = verbs(ground, &steps[at..end], jobs);
-            if !failures.is_empty() {
-                not_run(ground, steps[end..].iter().map(|(_, r)| r.step.id.clone()));
-                return failures;
-            }
-            at = end;
-            continue;
-        }
-        let (index, required) = steps[at];
-        if let Err(why) = run_one(ground, index, required, false) {
-            not_run(
-                ground,
-                steps[at + 1..].iter().map(|(_, r)| r.step.id.clone()),
-            );
-            return vec![why];
-        }
-        at += 1;
+    let (block, after): (Vec<_>, Vec<_>) =
+        steps.iter().copied().partition(|(_, r)| r.step.builds_app);
+    let failures = verbs(ground, &block, jobs);
+    if !failures.is_empty() {
+        not_run(ground, after.iter().map(|(_, r)| r.step.id.clone()));
+        return failures;
     }
-    Vec::new()
+    in_order(ground, &after)
 }
 
 /// One side's verbs: the first uncached one runs alone and builds the
