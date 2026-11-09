@@ -41,6 +41,7 @@ Item {
         function init() {
             bar.open = false
             bar.yieldsEscape = false
+            bar.room = Infinity
             acknowledged.clear()
             elsewhere.forceActiveFocus()
             // Fully shut first: a case reading the height mid-animation would read the previous one.
@@ -469,6 +470,55 @@ Item {
 
         function pillMiddle() {
             return bar.pill.mapToItem(bar, Qt.point(0, bar.pill.height / 2)).y
+        }
+        /// The first item under `item` that `is` answers true for, null for none.
+        function under(item, is) {
+            for (const child of item.children) {
+                if (is(child))
+                    return child
+                const found = under(child, is)
+                if (found !== null)
+                    return found
+            }
+            return null
+        }
+
+        /// Other words in a standing bar start at their first line, wherever the reader had scrolled the last ones to:
+        /// the heading is what says what the report is about.
+        function test_new_words_open_at_their_first_line() {
+            dress("worktree-locked", "", "topic", root.longReason)
+            tryVerify(() => bar.settled && bar.openHeight > bar.leastHeight + 10)
+            bar.room = bar.leastHeight
+            const view = under(bar, item => item.contentY !== undefined && item.contentHeight !== undefined)
+            tryVerify(() => bar.settled && bar.wordsScroll && view.contentHeight > view.height + 10)
+            view.contentY = 10
+            compare(view.contentY, 10)
+            dress("worktree-locked", "", "parked", root.longReason)
+            tryCompare(view, "contentY", 0, undefined, "the new report's first line")
+        }
+
+        /// A column short of room hands the bar less room (`NoticeBar.room`, デザイン規約 §窓の床): it comes down to
+        /// it and the words scroll inside, never cut, down to a line of the heading beside the `OK`, which keeps the
+        /// bar's middle. The least is the same whatever the bar says: the window's floor is built on it.
+        function test_a_short_column_scrolls_the_words_and_keeps_the_ok() {
+            dress("worktree-locked", "", "topic", "on a stick")
+            tryVerify(() => bar.settled)
+            const least = bar.leastHeight
+            // The heading and two lines of the reason at the least, taller than the room handed below.
+            dress("worktree-locked", "", "topic", root.longReason)
+            tryVerify(() => bar.settled && bar.openHeight > least + 10)
+            compare(bar.leastHeight, least, "the least does not move with the words")
+
+            bar.room = least + 10
+            tryVerify(() => bar.settled && bar.wordsScroll && bar.openHeight >= least && bar.openHeight <= least + 10,
+                      undefined, "down to the room it has, in whole lines")
+            verify(!bar.wordsCut, "the rest a scroll away, not cut")
+            bar.room = 0
+            tryCompare(bar, "openHeight", least, undefined, "down to its least")
+            fuzzyCompare(pillMiddle(), bar.height / 2, 1, "the OK still on the middle")
+            bar.room = Infinity
+            tryVerify(() => bar.settled && !bar.wordsScroll && bar.openHeight > least + 10, undefined,
+                      "whole again with the room back")
         }
 
         /// The pill and the key walk the same body (`dismiss`), which is what a headless run presses — and neither

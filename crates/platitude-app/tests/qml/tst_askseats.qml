@@ -63,6 +63,7 @@ Control {
         function init() {
             bar.open = false
             tryVerify(() => bar.shut)
+            bar.room = Infinity
             bar.width = root.width
             bar.code = "stash"
             bar.label = root.shortHeading
@@ -308,9 +309,58 @@ Control {
             compare(bar.detailLine.held.cuts.length, 1, "the name is cut: " + bar.detailLine.held.text)
         }
 
+        /// The words' air is the sweep's (`SweepPad`, under the columns): a press between the heading and the line
+        /// under it reaches the pad while nothing of the words is a scroll away — the lines' view takes no press then.
+        function test_a_press_in_the_words_air_reaches_the_sweep() {
+            bar.detail = "The cherry-pick ends here."
+            bar.form = null
+            bar.open = true
+            tryVerify(() => bar.settled)
+            const heading = edges(bar.heading)
+            const line = edges(bar.detailLine)
+            const x = heading.left + 4
+            const y = (heading.bottom + line.top) / 2
+            verify(line.top - heading.bottom >= 2, "air between the two: " + heading.bottom + " to " + line.top)
+            mousePress(bar, x, y)
+            verify(bar.pad.taking, "the pad took the press in the words' air")
+            mouseRelease(bar, x, y)
+        }
+
         /// The pill's tip opens under the pill: over it stand the heading and the ✕ (`TipAsk.under`).
         function test_the_pills_tip_opens_under_it() {
             verify(bar.pill.pillTip.under)
+        }
+
+        /// A column short of room hands the question less room (`AskBar.room`, デザイン規約 §窓の床): the heading and
+        /// the line under it scroll inside it, down to a line of the heading, while the form, the pill and the ✕ keep
+        /// their seats whole — at the graph's floor, the pill on its own line. What the window's floor keeps for it
+        /// is the same whatever it says.
+        function test_a_short_column_scrolls_the_words_and_keeps_the_form() {
+            const least = bar.floorHeight
+            bar.width = 335
+            bar.label = root.longHeading
+            bar.detail = "origin/feature/new-thing does not exist yet; this makes it."
+            bar.form = publishForm
+            bar.open = true
+            // The heading wraps at this width, so the words ask for more than a line of it.
+            tryVerify(() => bar.settled && bar.formItem !== null && bar.openHeight > least)
+            compare(bar.floorHeight, least, "the floor's least does not move with the words")
+            verify(!bar.wordsScroll, "with the room it asks for, nothing is a scroll away")
+
+            bar.room = 0
+            tryVerify(() => bar.settled && bar.openHeight <= bar.floorHeight, undefined,
+                      "down to what the floor keeps for it")
+            verify(bar.wordsScroll, "the rest of the words a scroll away")
+            const pill = edges(bar.pill)
+            const field = edges(bar.formItem.branchField)
+            const close = edges(bar.closeButton)
+            compare(pill.bottom + Theme.spaceMd, bar.height, "the pill whole at the foot")
+            verify(field.bottom <= pill.top, "the form whole over it: " + field.bottom + " against " + pill.top)
+            verify(close.top >= 0 && close.bottom <= field.top, "the ✕ whole over the form")
+
+            bar.room = Infinity
+            tryVerify(() => bar.settled && !bar.wordsScroll && bar.openHeight > least, undefined,
+                      "whole again with the room back")
         }
     }
 }

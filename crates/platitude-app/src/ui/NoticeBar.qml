@@ -58,8 +58,18 @@ Rectangle {
         bar.acknowledged()
     }
 
+    /// The most the bar may stand at: what its column leaves it with the graph's rows kept and what else stands there
+    /// at its least (`RepoPage`, デザイン規約 §窓の床). Past it the words scroll, a line of them at the least; the `OK`
+    /// stays on the bar's middle.
+    property real room: Infinity
+    /// The bar at its least — a line of the heading beside the `OK` — which the column and the window's floor keep for
+    /// it (`PageLayout.panesMinHeight`), whatever words it holds (`lineRuler`).
+    readonly property real leastHeight: Math.ceil(2 * Theme.spaceMd
+                                                  + Math.max(lineRuler.setLineHeight, Theme.controlHeight))
+    /// What the window's floor keeps for it: its least, the same whatever it says.
+    readonly property real floorHeight: bar.leastHeight
     /// The height the words ask for, and the two edges a run photographs on (as `AskBar.settled` / `shut`). It grows
-    /// by the wrapped line, and a run shoots that as `AskBar.openHeight` says.
+    /// by the wrapped line up to `room`, and a run shoots that as `AskBar.openHeight` says.
     readonly property real openHeight: bar.open ? noticeRow.implicitHeight + 2 * Theme.spaceMd : 0
     readonly property bool settled: bar.openHeight > 0 && bar.implicitHeight === bar.openHeight
     readonly property bool shut: !bar.open && bar.implicitHeight === 0
@@ -67,6 +77,8 @@ Rectangle {
     /// same height (`tests/qml/tst_reportdress.qml`). The heading is a `CardText` that wraps; only a name in it is cut,
     /// at the name ceiling (`holdsNames`).
     readonly property bool wordsCut: detailWord.truncated
+    /// Automation: whether some of the words are a scroll away (`room`) — kept, not cut.
+    readonly property alias wordsScroll: wordLines.scrolls
     /// Automation: whether the heading's first mark found its word, and where that word stands against the heading.
     readonly property alias markSeat: headingWord.firstMarkSeat
     readonly property bool markShown: headingWord.firstMarkSeat.width > 0 || headingWord.firstMarkSeat.height > 0
@@ -96,6 +108,25 @@ Rectangle {
              : Theme.borderSubtle
     }
 
+    // A line of the heading with a name on it, never shown: a name is set in git's face beside the words' and stands
+    // the line taller than words alone, so a field's own line moves with what it says (`CardText.lineHeight`). What a
+    // line stands at whatever the bar holds — the least the column and the window's floor keep — is read here
+    // (`CardText.setLineHeight`).
+    CardText {
+        id: lineRuler
+        visible: false
+        text: "main"
+        marks: [[0, "branch", Theme.textLink, 4]]
+        holdsNames: true
+        pixelSize: Theme.fontMd
+        weight: Theme.fontWeightStrong
+    }
+
+    // Other words start at their first line, wherever the last ones were scrolled to: the heading says what it is
+    // about.
+    onLabelChanged: wordLines.toTop()
+    onDetailChanged: wordLines.toTop()
+
     // Opening hands the pill the focus — a tick later, or the gesture still being delivered takes it back (`AskBar`).
     onOpenChanged: {
         // First, ahead of the height binding (`travelling`).
@@ -113,8 +144,19 @@ Rectangle {
         anchors.top: parent.top
         anchors.margins: Theme.spaceMd
         spacing: Theme.spaceMd
-        ColumnLayout {
+        // A column short of room scrolls them rather than cut them (`room`).
+        CappedLines {
+            id: wordLines
             Layout.fillWidth: true
+            // Whole lines of the heading, down: a line cut through its waist under the first reads as a stray mark, and
+            // a part of one past the room would come off the graph. One beside the `OK` at the least, on its middle.
+            // No line measured yet (the ruler is still being made), no cap: an unbounded room over a 0 is no number.
+            cap: {
+                const line = lineRuler.setLineHeight
+                const left = Math.floor(bar.room - 2 * Theme.spaceMd)
+                return line > 0 ? Math.max(1, Math.floor(left / line)) * line : Infinity
+            }
+            gap: noticeRow.spacing
             spacing: Theme.spaceXs
             // **Wrapped, never cut** (デザイン規約 §答えの要らない報せ): the heading names a branch and a remote — a name
             // alone is cut at the name ceiling, given back whole under the hand (`holdsNames`). A `CardText`, since
@@ -131,10 +173,9 @@ Rectangle {
                 pixelSize: Theme.fontMd
                 weight: Theme.fontWeightStrong
             }
-            // Wrapped, never cut: nothing caps the height (デザイン規約 §答えの要らない報せ). A line can carry somebody's
-            // own words (a lock's reason) and run long; the bar grows by the words and the middle of the page goes down
-            // by as much — a cap on the lines would be cutting again. Plain text: a `<` in those words is a character,
-            // not markup.
+            // Wrapped, never cut (デザイン規約 §答えの要らない報せ). A line can carry somebody's own words (a lock's
+            // reason) and run long; the bar grows by the words and the middle of the page goes down by as much, up to
+            // what the column has, past which they scroll. Plain text: a `<` in those words is a character, not markup.
             PlainTextLabel {
                 id: detailWord
                 Layout.fillWidth: true

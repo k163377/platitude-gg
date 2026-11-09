@@ -3029,6 +3029,8 @@ FocusScope {
         rightPane: rightPane
         commandsSeat: commandsSeat
         graphPane: graphPane
+        noticeBar: noticeBar
+        recoverBand: recoverBand
         wipPane: wipPane
         detailsPane: detailsPane
         gitCorner: gitCorner
@@ -3809,7 +3811,13 @@ FocusScope {
                 // inside the graph it would be silent while a diff is open, and over both it would cover what it is
                 // about. The bar pushes the middle down, never covers it; with a question standing in the graph
                 // (`GraphPane`'s `AskBar`), the report stands above it, an order the nesting gives.
+                //
+                // Whatever stands over the graph leaves it its rows (`PageLayout.graphKeptHeight`), each bar giving way
+                // inside itself down to its least: the discard band first, then the report, and the question last —
+                // the one bar that waits on an answer (デザイン規約 §窓の床). Each is handed what the column leaves it
+                // with those after it standing as they are and those before it at their least.
                 ColumnLayout {
+                    id: centreColumn
                     SplitView.fillWidth: true
                     // The graph's columns once both have given all they can, held up to a side pane's width so the
                     // middle never reads as the thinnest of the three (`PageLayout.centreMinWidth`).
@@ -3824,6 +3832,8 @@ FocusScope {
                         // takes the focus as it opens) and stands until answered — a report is only read. The two can
                         // stand at once: `startRowAsk` leaves a standing report up. Headless: `ask-over-notice`.
                         yieldsEscape: graphPane.asking
+                        room: centreColumn.height - pageLayout.graphKeptHeight - graphPane.askHeight
+                                 - (recoverBand.visible ? recoverBand.leastHeight : 0)
                         onAcknowledged: page.hideNotice()
                         // The place its line names, gone to as a tooltip's is.
                         onLinkAsked: href => page.tipLinkAsked(href)
@@ -3831,6 +3841,7 @@ FocusScope {
                     // The discard log's entry on the graph, named over it with what it would bring back and the press
                     // that does — over the graph alone, which is what it describes (`RecoverBand`).
                     RecoverBand {
+                        id: recoverBand
                         Layout.fillWidth: true
                         visible: page.recoverPicked !== null && !page.planShown && !page.diffShown
                         entry: page.recoverPicked
@@ -3840,6 +3851,7 @@ FocusScope {
                         canWalkFurther: graphModel.truncated && !graphModel.growing
                         step: graphModel.windowStep
                         busy: repoTab.busyCount > 0 || page.recoverAwaits
+                        room: centreColumn.height - noticeBar.height - graphPane.askHeight - pageLayout.graphKeptHeight
                         onRestoreAsked: part => page.restoreRecover(part)
                         onDismissed: page.pickRecover(page.recoverPick)
                         onFurtherAsked: graphModel.growWindow()
@@ -3856,6 +3868,9 @@ FocusScope {
 
                         GraphPane {
                             id: graphPane
+                            askRoom: centreColumn.height - pageLayout.graphKeptHeight
+                                        - (noticeBar.open ? noticeBar.leastHeight : 0)
+                                        - (recoverBand.visible ? recoverBand.leastHeight : 0)
                             graphModel: graphModel
                             worktree: worktree
                             blank: page.blank

@@ -272,6 +272,15 @@ Item {
                                     ? cardText.marks : []
     /// One line's height: the field is laid out in one font, so its height divides by its line count exactly.
     readonly property real lineHeight: field.lineCount > 0 ? field.contentHeight / field.lineCount : 0
+    /// One line of these words, unwrapped: it holds still whatever width the field is laid out at. `lineHeight`
+    /// divides two figures the field answers apart, and while a width moves (0 as an item is made) it can read many
+    /// lines' height for one — for an owner that keeps room by a line it may not be showing. Laid out by `Text`:
+    /// words that set a name are rich text, the field's own engine; plain words may file the leading under a line
+    /// apart from the field, so an owner measures by a line that sets a name (`NoticeBar.floorHeight`,
+    /// `RecoverBand.floorHeight`).
+    readonly property real setLineHeight: ruler.implicitHeight
+    /// The lines the words wrap to, the cap's or not.
+    readonly property alias lineCount: field.lineCount
     /// How many whole lines the cap leaves room for. A height taken at its word cuts a line through the waist, with the
     /// mark on a baseline of its own; rounded down, the field ends the way an elide does. At least one line, or a cap
     /// shorter than a line leaves a blank strip with a mark.

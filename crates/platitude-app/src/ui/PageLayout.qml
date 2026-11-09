@@ -22,6 +22,9 @@ QtObject {
     /// The log's seat in the vertical split. The height is the seat's even while the log is down.
     required property Item commandsSeat
     required property GraphPane graphPane
+    /// The two bars over the graph besides its question, whose least the middle column keeps (`panesMinHeight`).
+    required property NoticeBar noticeBar
+    required property RecoverBand recoverBand
     required property WipPane wipPane
     required property DetailsPane detailsPane
     /// Its line is the right pane's other floor.
@@ -67,9 +70,16 @@ QtObject {
     /// name would otherwise run out past the pane's left edge. A seat letter's build fits 300; only a build from a
     /// long-named tree lifts it.
     readonly property real rightMinWidth: Math.max(300, Math.ceil(layout.gitCorner.floorWidth))
-    /// The discard log's band at its tallest and the graph's rows under it: the middle column at this height still
-    /// shows commits under whatever one rebase moved (`RecoverBand`; `recover-open 9,floor`).
-    readonly property int panesMinHeight: Theme.recoverBandMaxHeight + Theme.recoverBandGraphRows * Theme.graphRowHeight
+    /// What the graph keeps under whatever stands over it: the bars give way before it does (`RepoPage`'s
+    /// `centreColumn`).
+    readonly property real graphKeptHeight: Theme.graphRowsKept * Theme.graphRowHeight
+    /// The middle column at its least still shows those rows under the report, the discard log's band and a question
+    /// with a form all standing at once, each down to its least (デザイン規約 §窓の床). Read off the bars themselves,
+    /// so the face each platform sets them in decides it rather than a number taken in one face. The same whatever
+    /// stands, as the floor's height is: each bar answers the least of its tallest form (`NoticeBar.floorHeight`,
+    /// `RecoverBand.floorHeight`, `AskBar.floorHeight`). Whole pixels, as the window's floor is.
+    readonly property int panesMinHeight: Math.ceil(layout.noticeBar.floorHeight + layout.recoverBand.floorHeight
+                                                     + layout.graphPane.askFloorHeight + layout.graphKeptHeight)
     /// The three panes' floor: their own, and at least the left menu whole — the log dragged up as far as it goes
     /// stops at the menu's last cell, never over it.
     readonly property real panesFloorHeight: Math.max(layout.panesMinHeight, layout.sidebarPane.floorHeight)

@@ -76,6 +76,7 @@ Item {
             band.entry = null
             band.reach = []
             band.canWalkFurther = false
+            band.room = Theme.recoverBandMaxHeight
         }
 
         function test_lines_that_fit_take_their_own_height() {
@@ -89,6 +90,35 @@ Item {
             tryVerify(() => overflowing() && band.height === Theme.recoverBandMaxHeight,
                       undefined, "the band at the ceiling: " + band.height)
             verify(partsView().clip)
+        }
+        function test_a_shorter_column_takes_only_what_it_needs_off_the_lines() {
+            show(entry("Rebased thirty", 30, false), 800)
+            tryVerify(() => overflowing() && band.height === Theme.recoverBandMaxHeight)
+            band.room = 120
+            tryVerify(() => band.height === 120, undefined, "the band at the room it has: " + band.height)
+            band.room = 500
+            tryVerify(() => band.height === Theme.recoverBandMaxHeight, undefined, "never past its ceiling")
+        }
+        function test_a_column_with_no_room_leaves_one_line_of_each_kind() {
+            const long = "Rebased " + "stack/layer-with-a-long-name, ".repeat(40)
+            show(entry(long, 30, false), 800)
+            const heading = under(band, item => item.lineHeight !== undefined && item.text === long)
+            tryVerify(() => overflowing() && heading.height === Theme.recoverBandHeadRows * heading.lineHeight)
+            band.room = 0
+            tryVerify(() => heading.height === heading.lineHeight, undefined, "the heading down to its first line")
+            tryVerify(() => partsView().height > 0 && partsView().height < 2 * partWords().lineHeight,
+                      undefined, "the parts down to a line: " + partsView().height)
+            verify(partsView().ScrollBar.vertical.visible, "the rest a scroll away")
+            // The margins, the heading's line and the date's over the press standing on the middle of the parts' line:
+            // the face's numbers, whichever face this machine has.
+            const date = under(band, item => item.lineHeight !== undefined && item.text === band.when)
+            const least = 2 * Theme.spaceSm + heading.height + Theme.spaceXs + date.height + Theme.spaceXs
+                          + (Theme.controlHeight + date.lineHeight) / 2
+            tryVerify(() => Math.abs(band.height - least) <= 1,
+                      undefined, "the band at its least: " + band.height + " against " + least)
+            band.room = Theme.recoverBandMaxHeight
+            tryVerify(() => heading.height === Theme.recoverBandHeadRows * heading.lineHeight
+                      && band.height === Theme.recoverBandMaxHeight, undefined, "all back as the room comes back")
         }
         function test_the_heading_and_the_controls_stay_as_the_lines_scroll() {
             show(entry("Rebased thirty", 30, false), 800)
@@ -165,6 +195,55 @@ Item {
             tryVerify(() => reachWords.visible && overflowing()
                       && topOf(reachWords) === topOf(partsView()) + partsView().height + Theme.spaceXs)
             verify(band.height <= Theme.recoverBandMaxHeight)
+        }
+        /// The line saying the press cannot be had stands under the parts, and the press on the middle of both: a
+        /// column short of room still gets the band down to exactly the room it has, the parts giving up what the line
+        /// takes.
+        function test_a_band_with_the_not_loaded_line_comes_down_to_its_room() {
+            show(entry("Rebased thirty", 30, false), 800)
+            band.reach = band.parts.map(() => false)
+            tryVerify(() => overflowing() && band.height === Theme.recoverBandMaxHeight && band.leastHeight > 0)
+            // Just over its least, where the press stands on the middle of a parts' line shorter than itself.
+            const room = band.leastHeight + 6
+            band.room = room
+            tryCompare(band, "height", room, undefined, "the band at the room it has")
+        }
+        /// At its least the band keeps one line of the parts, and a part's line sets the name it brings back as in
+        /// git's face beside the words — the least is that line, not one of words alone.
+        function test_the_least_keeps_a_line_of_parts_that_set_a_name() {
+            const named = entry("Rebased thirty", 30, false)
+            named.parts = named.parts.map(part => Object.assign({}, part, {
+                restoreMarks: [[3, "branch", Theme.accent, part.restore.length - 3]] }))
+            show(named, 800)
+            tryVerify(() => overflowing() && partWords().lineHeight > 0)
+            band.room = 0
+            tryVerify(() => partsView().height > 0 && partsView().height < 2 * partWords().lineHeight)
+            verify(partsView().height >= partWords().lineHeight - 0.5,
+                   "a whole line of a part: " + partsView().height + " against " + partWords().lineHeight)
+        }
+        /// The way further stands beside the words where both fit on one line, on their baseline, and under them where
+        /// they do not, its word starting where theirs do — the words never wrap beside it.
+        function test_the_way_further_goes_under_words_it_would_crowd() {
+            show(entry("Rebased two", 2, false), 800)
+            band.step = 500
+            band.canWalkFurther = true
+            band.reach = band.parts.map(() => false)
+            const words = under(band, item => item.lineHeight !== undefined
+                                               && item.text === qsTr("Not loaded on the graph yet"))
+            const press = under(band, item => item.font !== undefined && item.text === Words.loadFurther(500))
+            tryVerify(() => words.visible && press.visible && press.height > 0 && words.lineHeight > 0)
+            tryVerify(() => Math.abs(topOf(press) + press.baselineOffset - topOf(words) - words.baselineOffset) <= 1,
+                      undefined, "beside the words, on their baseline")
+            compare(words.height, words.lineHeight, "the words on one line")
+
+            band.width = 336
+            // A line's pitch under the words, as the lines over them are apart: its box would open the lines apart.
+            tryVerify(() => Math.abs(topOf(press) + press.baselineOffset - topOf(words) - words.baselineOffset
+                                     - words.lineHeight - Theme.spaceXs) <= 1,
+                      undefined, "under the words, a line's pitch on")
+            compare(words.height, words.lineHeight, "the words still on one line")
+            fuzzyCompare(press.mapToItem(band, Qt.point(press.leftPadding, 0)).x,
+                         words.mapToItem(band, Qt.point(0, 0)).x, 1, "its word starts where theirs do")
         }
         function test_a_parts_press_stands_on_its_words_baseline_on_one_line() {
             show(entry("Reset main", 2, true), 800)

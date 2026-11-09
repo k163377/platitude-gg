@@ -15,11 +15,14 @@ import platitude.ui
 // one `Restore` (`byPart`); a single commit of theirs is a cherry-pick from the rows shown on the graph.
 //
 // One rebase can move any number of branches, and the band describes a graph it must not take the place of: it stands
-// at `Theme.recoverBandMaxHeight` at the most, whatever the window, and the window's floor leaves the graph its rows
-// under that (`PageLayout.panesMinHeight`). Past it the lines scroll; the heading and the date stay put, a list whose
-// heading has scrolled away no longer saying what it lists (`DetailsMessageBlock`), and so do the controls. The heading
-// is cut at `Theme.recoverBandHeadRows`, its whole under the hand: past those it is a rebase's branches, each said on a
-// line of its own below, or long names in a graph at its narrowest.
+// at `Theme.recoverBandMaxHeight` at the most, whatever the window, and leaves the graph its rows. Past it the lines
+// scroll (`CappedLines`); the heading and the date stay put, a list whose heading has scrolled away no longer saying
+// what it lists (`DetailsMessageBlock`), and so do the controls. The heading is cut at `Theme.recoverBandHeadRows`, its
+// whole under the hand: past those it is a rebase's branches, each said on a line of its own below, or long names in a
+// graph at its narrowest. A report and a question stand in the same column (`room`), and what they leave short comes
+// off the band first, down to one line of each kind (user decision — ask before changing), then off their own words
+// (`NoticeBar.room`, `AskBar.room`) — never off the graph's rows, which the window's floor holds with all three
+// at their least (`leastHeight`, `floorHeight`; `PageLayout.panesMinHeight`).
 //
 // The band, its lines and its presses are user decisions — ask before changing.
 Rectangle {
@@ -38,6 +41,9 @@ Rectangle {
     property int step: 0
     /// A write is out: the presses wait for it.
     property bool busy: false
+    /// What its column has for it with everything else there standing and the graph's rows kept
+    /// (`Theme.graphRowsKept`).
+    property real room: Theme.recoverBandMaxHeight
 
     /// The press that brings it back — every part, or the one `part` (-1 for all).
     signal restoreAsked(int part)
@@ -53,13 +59,49 @@ Rectangle {
     /// Every part can be pressed: the walk has told, and all of it is on the graph.
     readonly property bool allInReach: band.parts.length > 0 && band.reach.length === band.parts.length
                                        && !band.outOfReach
-    /// What the ceiling leaves the parts' lines under everything that stays put, a line at the least: only a graph at
-    /// its narrowest, wrapping all of that at once, comes near it.
-    readonly property real partsRoom: Math.max(
-        Theme.fontSmLine,
-        Theme.recoverBandMaxHeight - 2 * Theme.spaceSm
-        - heading.implicitHeight - Theme.spaceXs - whenLine.implicitHeight - Theme.spaceXs
-        - (band.outOfReach ? Theme.spaceXs + reachRow.implicitHeight : 0))
+    readonly property real ceiling: Math.min(Theme.recoverBandMaxHeight, band.room)
+    /// The line saying the press cannot be had, with its gap, where it stands: under the parts, among the lines the
+    /// press stands on the middle of (`lines`).
+    readonly property real reachRoom: band.outOfReach ? Theme.spaceXs + reachRow.implicitHeight : 0
+    /// A line of the parts at the least: one that sets the name it brings back as (`lineRuler`).
+    readonly property real partLine: lineRuler.setLineHeight
+    /// What stands over and under the parts' lines however few they are, with the heading at `rows` lines: the band's
+    /// margins, the date, and the line saying the press cannot be had.
+    function aroundParts(rows) {
+        return 2 * Theme.spaceSm + rows * heading.lineHeight + Theme.spaceXs + whenLine.implicitHeight + Theme.spaceXs
+               + band.reachRoom
+    }
+    /// The heading's lines: as many as still leave a line of the parts, one where they do not.
+    readonly property int headRows: band.ceiling >= band.leastOf(Theme.recoverBandHeadRows * heading.lineHeight,
+                                                                 whenLine.implicitHeight, band.partLine,
+                                                                 band.reachRoom)
+                                    ? Theme.recoverBandHeadRows : 1
+    /// What the ceiling leaves the parts' lines, a line at the least. The press stands on the middle of the parts and
+    /// the line under them (`controls`): on lines shorter than it, it reaches past them by half the difference, so
+    /// each pixel off the band takes two off the parts.
+    readonly property real partsRoom: {
+        const left = band.ceiling - band.aroundParts(Math.min(band.headRows, heading.lineCount))
+        return Math.max(band.partLine, left + band.reachRoom >= Theme.controlHeight
+                                       ? left : 2 * left + band.reachRoom - Theme.controlHeight)
+    }
+    /// The band at its least: a line of the heading, the date at `dateHeight`, a line of the parts and `reach` under
+    /// them (the line saying the press cannot be had, where it stands), with the press on the middle of those lines
+    /// (`controls`). In whole pixels, up: the press stands on a whole one, and a least under the band's own would come
+    /// off the graph.
+    function leastOf(headLine, dateHeight, partLine, reach) {
+        const lines = partLine + reach
+        return Math.ceil(2 * Theme.spaceSm + headLine + Theme.spaceXs + dateHeight + Theme.spaceXs
+                         + Math.max(lines, (lines + Theme.controlHeight) / 2))
+    }
+    /// The least as it stands: what the column keeps for it while what stands with it gives way (`RepoPage`).
+    readonly property real leastHeight: band.leastOf(heading.lineHeight, whenLine.implicitHeight, band.partLine,
+                                                     band.reachRoom)
+    /// The least the window's floor holds for it, whatever entry is on the graph: its lines read off lines that set a
+    /// name (`headRuler`, `lineRuler`), the date on one, every part on the graph (`PageLayout.panesMinHeight`). Past
+    /// that the graph gives up rows: an entry the graph has not walked to stands its line saying so, and another
+    /// worktree's entry its date with the worktree's name, which can wrap where the graph is at its narrowest.
+    readonly property real floorHeight: band.leastOf(headRuler.setLineHeight, lineRuler.setLineHeight,
+                                                     band.partLine, 0)
     /// The entry across reads: a read makes a new object of the one on the graph (`RecoverEntries.entries`), and a
     /// reader's place in its lines stays through that.
     readonly property string entryKey: band.entry === null ? "" : band.entry.key
@@ -77,10 +119,7 @@ Rectangle {
     color: Theme.bgElevated
     // Another entry's lines start at their top: the band stays standing from pick to pick. The bar's step in flight
     // goes with the lines it was sending (rules-refs/app-ui.md「ホイールの 1 ノッチは送られる、跳ばない」).
-    onEntryKeyChanged: {
-        partsBar.stepGlide.halt()
-        partsView.contentY = 0
-    }
+    onEntryKeyChanged: partsSeat.toTop()
 
     RowLayout {
         id: bandRow
@@ -105,7 +144,7 @@ Rectangle {
                 marks: band.entry === null ? [] : band.entry.titleMarks
                 // A heading: a long name is cut at the name ceiling, whole under the hand (デザイン規約 §寸法「名前の天井」).
                 holdsNames: true
-                capRows: Theme.recoverBandHeadRows
+                capRows: band.headRows
                 tipsCap: true
                 color: Theme.textPrimary
                 pixelSize: Theme.fontMd
@@ -127,108 +166,77 @@ Rectangle {
                 id: lines
                 Layout.fillWidth: true
                 spacing: Theme.spaceXs
-                Item {
+                // One line a part, a list's pitch apart: its mark in the left panel's tint, what it took, and what the
+                // press makes of it — and, where the parts come back alone, the press for that one. The bar stands in
+                // the gap before the press, where a part's own press is not.
+                CappedLines {
                     id: partsSeat
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(partsColumn.implicitHeight, band.partsRoom)
-                    Flickable {
-                        id: partsView
-                        anchors.fill: parent
-                        // The floating bar stands in the gap before the press rather than over the line ends, where a
-                        // part's own press is, and the words keep their width as it comes and goes: a width that moved
-                        // with it could wrap it away again (規約 §QML 実装ルール のバーの選び方).
-                        anchors.rightMargin: -bandRow.spacing
-                        contentWidth: partsSeat.width
-                        contentHeight: partsColumn.implicitHeight
-                        // The content is narrower than the view by that gap, which would let a hand drag it sideways.
-                        flickableDirection: Flickable.VerticalFlick
-                        // Only while something is cut off: a press's wash reaches past the line it stands on, into the
-                        // lines' spacing, and past the first and the last there is nothing to take it off.
-                        clip: partsBar.visible
-                        boundsBehavior: Flickable.StopAtBounds
-                        ScrollBar.vertical: AutoScrollBar {
-                            id: partsBar
-                        }
-                        // On the view's own frame, not in its content, which travels with the scroll.
-                        MiddleAutoScroll {
-                            parent: partsView
-                            anchors.fill: parent
-                            visible: partsBar.visible
-                            onDrifted: dy => partsView.contentY =
-                                Math.max(0, Math.min(partsView.contentY + dy,
-                                                     partsView.contentHeight - partsView.height))
-                        }
-                        ColumnLayout {
-                            id: partsColumn
-                            width: partsSeat.width
+                    cap: band.partsRoom
+                    gap: bandRow.spacing
+                    spacing: Theme.spaceXs
+                    Repeater {
+                        model: band.parts
+                        delegate: RowLayout {
+                            id: partLine
+                            required property var modelData
+                            required property int index
+                            Layout.fillWidth: true
                             spacing: Theme.spaceXs
-                            // One line a part, a list's pitch apart: its mark in the left panel's tint, what it took,
-                            // and what the press makes of it — and, where the parts come back alone, the press for that
-                            // one.
-                            Repeater {
-                                model: band.parts
-                                delegate: RowLayout {
-                                    id: partLine
-                                    required property var modelData
-                                    required property int index
-                                    Layout.fillWidth: true
-                                    spacing: Theme.spaceXs
-                                    // The head of the line's words, on their capitals' middle (デザイン規約 §アイコンの席
-                                    // の文頭記号) — the words' top is the row's (they are its tallest item).
-                                    RecoverMark {
-                                        Layout.preferredWidth: implicitWidth
-                                        Layout.preferredHeight: implicitHeight
-                                        Layout.alignment: Qt.AlignTop
-                                        Layout.topMargin: Math.round(partText.baselineOffset
-                                                                     - WordFace.capitalMiddle(partText.pixelSize)
-                                                                     - implicitHeight / 2)
-                                        size: partText.pixelSize
-                                        kind: partLine.modelData.mark
-                                        tint: partLine.modelData.tint
-                                        badged: partLine.modelData.badged
-                                    }
-                                    // Wrapped, never cut at the name ceiling (user decision — ask before changing):
-                                    // the line says what the press brings back as, down to the name's tail, and the
-                                    // band's ceiling answers for how tall that gets.
-                                    CardText {
-                                        id: partText
-                                        Layout.fillWidth: true
-                                        text: band.partWords(partLine.modelData.text, partLine.modelData.restore)
-                                        // The restore half's names, seated after what the part took.
-                                        marks: {
-                                            const lead = Words.standSeats(
-                                                band.partWords(partLine.modelData.text, Words.stand),
-                                                partLine.modelData.restore)
-                                            return lead.length === 0 ? []
-                                                 : partLine.modelData.restoreMarks
-                                                       .map(mark => [mark[0] + lead[0], mark[1], mark[2], mark[3]])
-                                        }
-                                        color: Theme.textPrimary
-                                        pixelSize: Theme.fontSm
-                                    }
-                                    // The words' own height, the press on the middle of their lines, its word on theirs
-                                    // in whole pixels where they are one line: a button's height would open the lines
-                                    // apart, and centred on the line its word stands under the line's by half the
-                                    // leading a field files under its line (2〜3px on macOS). The seat is centred in the
-                                    // row as the words are, so its top is theirs.
-                                    Item {
-                                        visible: band.byPart
-                                        Layout.preferredWidth: partRestore.implicitWidth
-                                        Layout.preferredHeight: partText.implicitHeight
-                                        HoverToolButton {
-                                            id: partRestore
-                                            y: Math.round(partText.baselineOffset - partRestore.baselineOffset
-                                                          + (partText.implicitHeight - partText.lineHeight) / 2)
-                                            // Down to the wash's own height (`HoverToolButton`), which the lines'
-                                            // spacing holds.
-                                            topPadding: 0
-                                            bottomPadding: 0
-                                            enabled: band.reach[partLine.index] === true && !band.busy
-                                            text: qsTr("Restore")
-                                            font.pixelSize: Theme.fontSm
-                                            onClicked: band.restoreAsked(partLine.index)
-                                        }
-                                    }
+                            // The head of the line's words, on their capitals' middle (デザイン規約 §アイコンの席 の
+                            // 文頭記号) — the words' top is the row's (they are its tallest item).
+                            RecoverMark {
+                                Layout.preferredWidth: implicitWidth
+                                Layout.preferredHeight: implicitHeight
+                                Layout.alignment: Qt.AlignTop
+                                Layout.topMargin: Math.round(partText.baselineOffset
+                                                             - WordFace.capitalMiddle(partText.pixelSize)
+                                                             - implicitHeight / 2)
+                                size: partText.pixelSize
+                                kind: partLine.modelData.mark
+                                tint: partLine.modelData.tint
+                                badged: partLine.modelData.badged
+                            }
+                            // Wrapped, never cut at the name ceiling (user decision — ask before changing): the line
+                            // says what the press brings back as, down to the name's tail, and the band's ceiling
+                            // answers for how tall that gets.
+                            CardText {
+                                id: partText
+                                Layout.fillWidth: true
+                                text: band.partWords(partLine.modelData.text, partLine.modelData.restore)
+                                // The restore half's names, seated after what the part took.
+                                marks: {
+                                    const lead = Words.standSeats(
+                                        band.partWords(partLine.modelData.text, Words.stand),
+                                        partLine.modelData.restore)
+                                    return lead.length === 0 ? []
+                                         : partLine.modelData.restoreMarks
+                                               .map(mark => [mark[0] + lead[0], mark[1], mark[2], mark[3]])
+                                }
+                                color: Theme.textPrimary
+                                pixelSize: Theme.fontSm
+                            }
+                            // The words' own height, the press on the middle of their lines, its word on theirs in
+                            // whole pixels where they are one line: a button's height would open the lines apart, and
+                            // centred on the line its word stands under the line's by half the leading a field files
+                            // under its line (2〜3px on macOS). The seat is centred in the row as the words are, so
+                            // its top is theirs.
+                            Item {
+                                visible: band.byPart
+                                Layout.preferredWidth: partRestore.implicitWidth
+                                Layout.preferredHeight: partText.implicitHeight
+                                HoverToolButton {
+                                    id: partRestore
+                                    y: Math.round(partText.baselineOffset - partRestore.baselineOffset
+                                                  + (partText.implicitHeight - partText.lineHeight) / 2)
+                                    // Down to the wash's own height (`HoverToolButton`), which the lines' spacing
+                                    // holds.
+                                    topPadding: 0
+                                    bottomPadding: 0
+                                    enabled: band.reach[partLine.index] === true && !band.busy
+                                    text: qsTr("Restore")
+                                    font.pixelSize: Theme.fontSm
+                                    onClicked: band.restoreAsked(partLine.index)
                                 }
                             }
                         }
@@ -236,16 +244,22 @@ Rectangle {
                 }
                 // Not yet on the graph: the press waits, and the way there is offered in the words the graph's own end
                 // offers it with (`GraphTailFooter`). Out of the scroll: it says why the press is dead. The press
-                // stands right after the words; a graph too narrow for both wraps the words rather than push the band's
-                // controls off its column.
-                RowLayout {
+                // stands right after the words; where the two do not fit on one line it goes under them, its word
+                // starting where theirs do, and the words keep a line of their own rather than wrap beside a press
+                // that stands on one (user decision — ask before changing).
+                GridLayout {
                     id: reachRow
+                    /// The words and the press do not fit on one line: the press stands under the words.
+                    readonly property bool pressUnder: band.canWalkFurther
+                        && reachWords.implicitWidth + reachRow.columnSpacing + walkFurther.implicitWidth > lines.width
                     visible: band.outOfReach
                     Layout.fillWidth: true
                     Layout.maximumWidth: implicitWidth
-                    spacing: Theme.spaceSm
-                    // On one baseline in whole pixels, as a part's press is: both hang from the top and the one whose
-                    // word stands higher drops to the other's.
+                    columns: reachRow.pressUnder ? 1 : 2
+                    columnSpacing: Theme.spaceSm
+                    rowSpacing: Theme.spaceXs
+                    // On one line, on one baseline in whole pixels, as a part's press is: both hang from the top and
+                    // the one whose word stands higher drops to the other's.
                     CardText {
                         id: reachWords
                         Layout.fillWidth: true
@@ -253,22 +267,38 @@ Rectangle {
                         color: Theme.warning
                         pixelSize: Theme.fontSm
                         Layout.alignment: Qt.AlignTop
-                        Layout.topMargin: walkFurther.visible
+                        Layout.topMargin: band.canWalkFurther && !reachRow.pressUnder
                                           ? Math.max(0, Math.round(walkFurther.baselineOffset
                                                                    - reachWords.baselineOffset))
                                           : 0
                     }
-                    HoverToolButton {
-                        id: walkFurther
-                        Layout.alignment: Qt.AlignTop
-                        Layout.topMargin: Math.max(0, Math.round(reachWords.baselineOffset
-                                                                 - walkFurther.baselineOffset))
+                    // Beside the words, the press's own height on their baseline. Under them, a line of theirs: the
+                    // seat is a line of the words tall, the press's word on that line's baseline and its wash reaching
+                    // into the lines' spacing, as a part's press does — the press's box a line apart would open the
+                    // lines apart. Its word starts where theirs do; its wash reaches into the band's margin.
+                    Item {
                         visible: band.canWalkFurther
-                        // The step is a count: said as a number, the button's words stay the app's whatever the band
-                        // hands it (a tool button leaves its words to the style, which guesses their format).
-                        text: Words.loadFurther(Number(band.step))
-                        font.pixelSize: Theme.fontSm
-                        onClicked: band.furtherAsked()
+                        Layout.alignment: Qt.AlignTop | Qt.AlignLeft
+                        Layout.preferredWidth: walkFurther.implicitWidth
+                        // The words' own height, a line of theirs where the press stands under them (they have the
+                        // row to themselves): their `lineHeight` can read many lines' height for one while a width
+                        // moves.
+                        Layout.preferredHeight: reachRow.pressUnder ? reachWords.implicitHeight
+                                                                    : walkFurther.implicitHeight
+                        Layout.topMargin: reachRow.pressUnder
+                                          ? 0 : Math.max(0, Math.round(reachWords.baselineOffset
+                                                                       - walkFurther.baselineOffset))
+                        Layout.leftMargin: reachRow.pressUnder ? -walkFurther.leftPadding : 0
+                        HoverToolButton {
+                            id: walkFurther
+                            y: reachRow.pressUnder ? Math.round(reachWords.baselineOffset - walkFurther.baselineOffset)
+                                                   : 0
+                            // The step is a count: said as a number, the button's words stay the app's whatever the
+                            // band hands it (a tool button leaves its words to the style, which guesses their format).
+                            text: Words.loadFurther(Number(band.step))
+                            font.pixelSize: Theme.fontSm
+                            onClicked: band.furtherAsked()
+                        }
                     }
                 }
             }
@@ -302,6 +332,26 @@ Rectangle {
                 onClicked: band.dismissed()
             }
         }
+    }
+    // A line of the heading and one of the small words, each with a name on it, never shown: a name is set in git's
+    // face beside the words' and stands the line taller than words alone, so a field's own line moves with what it
+    // says (`CardText.lineHeight`). What the band stands at the least whatever entry it shows is read here
+    // (`floorHeight`, `CardText.setLineHeight`).
+    CardText {
+        id: headRuler
+        visible: false
+        text: "main"
+        marks: [[0, "branch", Theme.textLink, 4]]
+        holdsNames: true
+        pixelSize: Theme.fontMd
+        weight: Theme.fontWeightStrong
+    }
+    CardText {
+        id: lineRuler
+        visible: false
+        text: "main"
+        marks: [[0, "branch", Theme.textLink, 4]]
+        pixelSize: Theme.fontSm
     }
     // The mode's own underline, as the plan's head draws it.
     Rectangle {

@@ -316,6 +316,12 @@ Rectangle {
     readonly property alias askForm: askBar.formItem
     /// The bar itself — automation-only exposure, like `view`.
     readonly property alias askCard: askBar
+    /// What the question takes off the list: the band over this pane gives way to it (`RecoverBand.room`).
+    readonly property real askHeight: askBar.height
+    /// The most the question may stand at, which the page works out with the graph's rows kept (`AskBar.room`).
+    property alias askRoom: askBar.room
+    /// The least the window's floor keeps for a question (`AskBar.floorHeight`).
+    readonly property real askFloorHeight: askBar.floorHeight
     /// Whether a question is standing in this pane — **product-facing**, unlike the bar above: the report bar over the
     /// middle of the page reads it to know Escape is not its own (`RepoPage`).
     readonly property alias asking: askBar.open

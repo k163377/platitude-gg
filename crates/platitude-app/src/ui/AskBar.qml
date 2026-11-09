@@ -96,6 +96,8 @@ Rectangle {
     readonly property alias pill: acceptPill
     readonly property alias pillWord: wordSeat
     readonly property alias closeButton: dismissButton
+    /// …and whether the heading and the line under it are partly a scroll away (`room`).
+    readonly property alias wordsScroll: askLines.scrolls
     /// What the question needs to have an answer at all (a chooser, a name box), declared by whoever raises it; the
     /// bar seats it under the words. Null where the pill alone answers.
     ///
@@ -168,6 +170,10 @@ Rectangle {
     /// (デザイン規約 §状態), so this is off unless a flow asks — and put down as each question is dressed
     /// (`GraphPane.startAsking`).
     property bool plainWords: false
+    // Another question's words start at their first line, wherever the last ones were scrolled to: the heading's line
+    // is the one a short column always keeps (デザイン規約 §立っている質問は 1 か所で聞く).
+    onLabelChanged: askLines.toTop()
+    onDetailChanged: askLines.toTop()
     // Closing blanks the hold: a fill left standing would carry on into whatever is asked next.
     //
     // Opening hands the pill the focus a tick later: the gesture that raised it is still being delivered (a
@@ -194,6 +200,20 @@ Rectangle {
 
     clip: true
     color: Theme.bgElevated
+    /// The most the bar may stand at: what its column leaves it with the graph's rows kept and what else stands there
+    /// at its least (`RepoPage`, デザイン規約 §窓の床). Past it the heading and the line under it scroll, a line of them
+    /// at the least; the form, the pill and the ✕ stay where they are.
+    property real room: Infinity
+    /// The heading's one line with the code chip on it, the two on one baseline (`headingRow`), whatever the question
+    /// says: a chip's height is its face's, and the line's is read off a line that sets a name (`lineRuler`).
+    readonly property real chipLine: Math.max(
+        lineRuler.setLineHeight + Math.max(0, Math.round(askCode.baselineOffset - lineRuler.baselineOffset)),
+        askCode.implicitHeight + Math.max(0, Math.round(lineRuler.baselineOffset - askCode.baselineOffset)))
+    /// The least the window's floor keeps for a question, whichever stands: a line of its words with a chip on it, a
+    /// form's row of boxes (`controlHeight`, as every form's are) and the pill on a line of its own under them, as the
+    /// graph at its least stands it (`PageLayout.panesMinHeight`).
+    readonly property real floorHeight: Math.ceil(2 * Theme.spaceMd + bar.chipLine + 2 * Theme.spaceXs
+                                                  + Theme.controlHeight + Theme.spaceSm + Theme.controlHeight)
     /// The height the words ask for, kept apart from the animated one so automation can tell a bar all the way down
     /// from one on its way — `label` is set a whole opening ahead of any of it being on screen (a shot taken on
     /// `label` shows a red line and no words).
@@ -228,6 +248,19 @@ Rectangle {
     }
     BandRule {
         color: bar.tone
+    }
+    // A line of the heading with a name on it, never shown: a name is set in git's face beside the words' and stands
+    // the line taller than words alone, so a field's own line moves with what it says (`CardText.lineHeight`). What a
+    // line stands at whatever the question says — the least the column and the window's floor keep — is read here
+    // (`CardText.setLineHeight`).
+    CardText {
+        id: lineRuler
+        visible: false
+        text: "main"
+        marks: [[0, "branch", Theme.textLink, 4]]
+        holdsNames: true
+        pixelSize: Theme.fontMd
+        weight: Theme.fontWeightStrong
     }
     // The question's words can be swept from the air around them (規約 §右のペインの字は掴める). Under the columns, so
     // the pill, the ✕ and the form keep every press they had. Its content is the words' column (`askWords`), so the
@@ -299,6 +332,18 @@ Rectangle {
         /// That row's height: down to the heading's foot or the pill's, whichever is lower.
         readonly property real rowHeight: Math.max(askColumns.rowHeadingY + headingRow.implicitHeight,
                                                    askColumns.rowPillY + acceptPill.height)
+        /// What the heading and the line under it may stand at: `room` less the form and a pill under the words, in
+        /// whole lines of the heading, down — a line cut through its waist under the first reads
+        /// as a stray mark, and a part of one past the room comes off the graph. A line at the least. No line
+        /// measured yet (the ruler is still being made), no cap: an unbounded room over a 0 is no number.
+        readonly property real headingLine: bar.code === "" ? lineRuler.setLineHeight : bar.chipLine
+        readonly property real linesCap: {
+            const line = askColumns.headingLine
+            const left = Math.floor(bar.room - 2 * Theme.spaceMd
+                                    - (askColumns.pillUnder ? Theme.spaceSm + acceptPill.height : 0)
+                                    - (bar.form !== null ? 2 * Theme.spaceXs + formLoader.implicitHeight : 0))
+            return line > 0 ? Math.max(1, Math.floor(left / line)) * line : Infinity
+        }
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
@@ -319,62 +364,74 @@ Rectangle {
             anchors.top: parent.top
             anchors.topMargin: askColumns.oneRow ? askColumns.rowHeadingY : 0
             spacing: Theme.spaceXs
-            // `push main where?` reads as one sentence, so the chip takes the heading's weight.
-            RowLayout {
-                id: headingRow
+            // The heading and the line under it, which a column short of room scrolls rather than cut (`room`). The
+            // bar stands in the gap before the right column, or in the bar's own margin where the words take the
+            // whole width.
+            CappedLines {
+                id: askLines
                 Layout.fillWidth: true
-                Layout.rightMargin: askColumns.pillUnder ? Theme.iconSm + Theme.spaceMd : 0
+                cap: askColumns.linesCap
+                gap: Theme.spaceMd
                 spacing: Theme.spaceXs
-                // The chip stands on the heading's first line, where the sentence starts: floated beside the middle of
-                // a wrapped heading it reads as a word of its own, not part of the sentence. Both hang
-                // from the top and the one whose word stands higher drops to the other's baseline, in whole pixels.
-                // Centred on the line, the chip's word stands under the heading's by half the leading a field files
-                // under its line (2〜3px on macOS); on the row's `Qt.AlignBaseline` the two faces' depths leave the
-                // heading on a half pixel (rules-refs/app-ui.md「その組は自分だけの `RowLayout` に入れる」).
-                CodeChip {
-                    id: askCode
-                    Layout.alignment: Qt.AlignTop
-                    Layout.topMargin: Math.max(0, Math.round(askWord.baselineOffset - askCode.baselineOffset))
-                    visible: bar.code !== ""
-                    word: bar.code
-                    tint: bar.tone
-                    weight: Theme.fontWeightStrong
-                }
-                // A field (the pad above), wrapped, never cut but for a name past the name ceiling, given back whole
-                // under the hand: the bar grows by the line and the list goes down with it (デザイン規約
-                // §立っている質問は 1 か所で聞く). The name is cut in its middle (user decision — ask before changing),
-                // a remote's at its end (`CardText.holdsNames`, デザイン規約 §寸法): a question names a branch, a remote
-                // or a worktree's folder — names only this window shows — and with the tail gone the reader cannot tell
-                // what the question is about.
-                CardText {
-                    id: askWord
-                    text: bar.label
-                    marks: bar.headingMarks
-                    holdsNames: true
-                    color: bar.headingInk
-                    pixelSize: Theme.fontMd
-                    weight: Theme.fontWeightStrong
+                // `push main where?` reads as one sentence, so the chip takes the heading's weight.
+                RowLayout {
+                    id: headingRow
                     Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignTop
-                    // The other half, **only where a chip stands**: an invisible chip still has a baseline, and read
-                    // unguarded it would drop every question git has no one word for.
-                    Layout.topMargin: bar.code === ""
-                                      ? 0 : Math.max(0, Math.round(askCode.baselineOffset - askWord.baselineOffset))
+                    Layout.rightMargin: askColumns.pillUnder ? Theme.iconSm + Theme.spaceMd : 0
+                    spacing: Theme.spaceXs
+                    // The chip stands on the heading's first line, where the sentence starts: floated beside the
+                    // middle of a wrapped heading it reads as a word of its own, not part of the sentence. Both hang
+                    // from the top and the one whose word stands higher drops to the other's baseline, in whole
+                    // pixels. Centred on the line, the chip's word stands under the heading's by half the leading a
+                    // field files under its line (2〜3px on macOS); on the row's `Qt.AlignBaseline` the two faces'
+                    // depths leave the heading on a half pixel (rules-refs/app-ui.md「その組は自分だけの `RowLayout`
+                    // に入れる」).
+                    CodeChip {
+                        id: askCode
+                        Layout.alignment: Qt.AlignTop
+                        Layout.topMargin: Math.max(0, Math.round(askWord.baselineOffset - askCode.baselineOffset))
+                        visible: bar.code !== ""
+                        word: bar.code
+                        tint: bar.tone
+                        weight: Theme.fontWeightStrong
+                    }
+                    // A field (the pad above), wrapped, never cut but for a name past the name ceiling, given back
+                    // whole under the hand: the bar grows by the line and the list goes down with it (デザイン規約
+                    // §立っている質問は 1 か所で聞く). The name is cut in its middle (user decision — ask before
+                    // changing), a remote's at its end (`CardText.holdsNames`, デザイン規約 §寸法): a question names a
+                    // branch, a remote or a worktree's folder — names only this window shows — and with the tail gone
+                    // the reader cannot tell what the question is about.
+                    CardText {
+                        id: askWord
+                        text: bar.label
+                        marks: bar.headingMarks
+                        holdsNames: true
+                        color: bar.headingInk
+                        pixelSize: Theme.fontMd
+                        weight: Theme.fontWeightStrong
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignTop
+                        // The other half, **only where a chip stands**: an invisible chip still has a baseline, and
+                        // read unguarded it would drop every question git has no one word for.
+                        Layout.topMargin: bar.code === "" ? 0
+                                          : Math.max(0, Math.round(askCode.baselineOffset - askWord.baselineOffset))
+                    }
                 }
-            }
-            // **Hidden when empty**, not merely empty: an empty `CardText` still stands a line high, a blank band under
-            // the heading (`RenameCarryFlow`'s question); a layout skips what is not visible, spacing and all.
-            // Its names cut at the name ceiling as the heading's are, the whole line under the hand (user decision —
-            // ask before changing): a name of a hundred letters otherwise breaks over three lines at its dashes.
-            CardText {
-                id: detailWord
-                text: bar.detail
-                marks: bar.detailMarks
-                holdsNames: true
-                visible: bar.detail !== ""
-                color: Theme.textSecondary
-                pixelSize: Theme.fontSm
-                Layout.fillWidth: true
+                // **Hidden when empty**, not merely empty: an empty `CardText` still stands a line high, a blank band
+                // under the heading (`RenameCarryFlow`'s question); a layout skips what is not visible, spacing and
+                // all. Its names cut at the name ceiling as the heading's are, the whole line under the hand (user
+                // decision — ask before changing): a name of a hundred letters otherwise breaks over three lines at
+                // its dashes.
+                CardText {
+                    id: detailWord
+                    text: bar.detail
+                    marks: bar.detailMarks
+                    holdsNames: true
+                    visible: bar.detail !== ""
+                    color: Theme.textSecondary
+                    pixelSize: Theme.fontSm
+                    Layout.fillWidth: true
+                }
             }
             // Unloaded only as the next question is dressed (`form`). Its boxes stand `controlHeight` tall, the pill's
             // height (`PublishForm`, `UpstreamForm`, `RenameCarryForm`). Hidden with no form, as the line above is: an
