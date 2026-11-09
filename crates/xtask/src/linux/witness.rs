@@ -42,8 +42,12 @@ const SESSION: &str = "wslcsession.exe";
 
 /// The directory under [`crate::temp::root`] the witnesses stand in. No sweep
 /// reads it (`verify::sweep_yesterdays_runs`): what bounds it is
-/// [`forget_all_but_the_newest`].
+/// [`forget_all_but_the_newest`] and [`forget_what_gone_takers_left`].
 const BASE: &str = "pgg-engine";
+
+/// What a taker's process listing is written to before the witness it is
+/// for has a name: `asking-<pid>.txt` beside the witnesses.
+const ASKING: (&str, &str) = ("asking-", ".txt");
 
 /// How many witnesses of each kind — taken by a failing line, taken by
 /// hand — stand at once: each holds a process's memory.
@@ -182,7 +186,7 @@ fn take(account: &str, by_hand: bool) -> Result<Taken, String> {
     let base = crate::temp::root().join(BASE);
     std::fs::create_dir_all(&base).map_err(|e| format!("{}: {e}", base.display()))?;
     let now = crate::note::now_secs();
-    let asking = base.join(format!("asking-{}.txt", std::process::id()));
+    let asking = base.join(format!("{}{}{}", ASKING.0, std::process::id(), ASKING.1));
     let processes = said_by(powershell(PROCESSES_SCRIPT), &asking);
     let _ = std::fs::remove_file(&asking);
     let session = processes.as_deref().ok().and_then(session_of);
@@ -243,6 +247,7 @@ fn take(account: &str, by_hand: bool) -> Result<Taken, String> {
     };
     wrote(WHOLE, &README.replace("{LOOK}", &look));
     forget_all_but_the_newest(&base);
+    forget_what_gone_takers_left(&base);
     Ok(Taken::Now(dir, look))
 }
 
@@ -393,9 +398,32 @@ fn forget_all_but_the_newest(base: &Path) {
     }
 }
 
+/// Takes away the listings ([`ASKING`]) a taker ended in the middle of one
+/// left behind: each names its taker, and one whose taker no longer runs
+/// is nobody's. A pid handed out again keeps its file, the safe way round.
+fn forget_what_gone_takers_left(base: &Path) {
+    let Ok(entries) = std::fs::read_dir(base) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let gone = entry
+            .file_name()
+            .to_str()
+            .and_then(|name| name.strip_prefix(ASKING.0)?.strip_suffix(ASKING.1))
+            .and_then(|pid| pid.parse::<u32>().ok())
+            .is_some_and(|taker| !crate::subprocess::process_exists(taker));
+        if gone {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Session, claimed, forget_all_but_the_newest, named, session_of, vm_of};
+    use super::{
+        ASKING, Session, claimed, forget_all_but_the_newest, forget_what_gone_takers_left, named,
+        session_of, vm_of,
+    };
 
     /// Lines as the listing writes them: a process whose start and
     /// command line a user may not read, and the relay of a VM that is
@@ -544,6 +572,26 @@ vmmemwslc-cli-someone|41576|33780|20261004050704|976|59|
         for dir in lines.iter().chain(&by_hand).chain([&other]) {
             assert!(dir.exists(), "{} was taken", dir.display());
         }
+    }
+
+    /// A listing whose taker is gone goes; this run's own, and anything
+    /// else beside the witnesses, stays.
+    #[test]
+    fn a_listing_a_gone_taker_left_goes_and_a_running_ones_stays() {
+        let yard = crate::yard::Yard::new("witness-asking");
+        let listing = |pid: u32| yard.join(format!("{}{pid}{}", ASKING.0, ASKING.1));
+        let gone = listing(crate::subprocess::NO_SUCH_PID);
+        let running = listing(std::process::id());
+        let other = yard.join(format!("{}notes{}", ASKING.0, ASKING.1));
+        for file in [&gone, &running, &other] {
+            std::fs::write(file, "x").expect("a file beside the witnesses");
+        }
+
+        forget_what_gone_takers_left(&yard);
+
+        assert!(!gone.exists(), "a gone taker's listing stayed");
+        assert!(running.exists(), "a running taker's listing was taken");
+        assert!(other.exists(), "a file naming no taker was taken");
     }
 
     /// Sets `dir`'s own time `minutes` back, so the order is the test's
