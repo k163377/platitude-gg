@@ -41,11 +41,12 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "github_choice opened=true",
     },
     // The selected lines of a commit's file, on the remote that has the
-    // commit.
+    // commit. The drag takes both lines of row 1's file, so the row says
+    // them as a run.
     Verb {
         name: "diff-github",
         when: &[],
-        plain: "diff_github opened=true leads=[lines@origin] others=[]",
+        plain: "diff_github opened=true leads=[lines@origin] others=[] says=Copy link to lines 1–2 at %1 on %2",
     },
     // The left menu's rows offer what a graph row's chip does, on the
     // commit the ref points at: `feature/login` is origin's alone,

@@ -5,8 +5,9 @@ import platitude.ui
 // ---- links to GitHub's pages (デザイン規約 §GitHub のページへのリンク) ----
 // Which GitHub remotes have what a menu stands on, and the address of its page on each — worked out as the menu opens
 // and handed to its GITHUB card (`GitHubMenu.standOn`), so every entrance offers a thing on the same remotes in the
-// same order. Each answer is a list of links, `{kind, preferred, holders[, lines]}`: `holders` are the remotes that
-// have the thing as `{remote, url, name}` in name order, `name` what the link points at as that remote calls it.
+// same order. Each answer is a list of links, `{kind, preferred, holders[, first, last]}`: `holders` are the remotes
+// that have the thing as `{remote, url, name}` in name order, `name` what the link points at as that remote calls it;
+// `first` and `last` are a `lines` link's first and last line numbers.
 //
 // A `QtObject`: it holds no child (rules-refs/structure.md「切り出した非表示のホストは `Item` にする」).
 QtObject {
@@ -127,7 +128,8 @@ QtObject {
             "preferred": links.repoTab.defaultRemote,
             // The lines' numbers, said in the sentence; the name is the commit whose file they are
             // (`GitHubMenu.sentenceFor`).
-            "lines": last > first ? first + "–" + last : String(first),
+            "first": first,
+            "last": last,
             "holders": links.holding(hubs, heldHex).map(h => ({
                 "remote": h.remote,
                 "url": GitFacts.githubLinesLink(h.repo, atHex, path, first, last),

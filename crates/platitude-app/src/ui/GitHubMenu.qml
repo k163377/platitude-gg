@@ -33,21 +33,20 @@ AppMenu {
     /// A link on its way to the clipboard; the page owns the clipboard.
     signal copyRequested(string text)
 
-    /// Stands the card on `links` — `{kind, holders, preferred, lines}` each, `holders` the remotes that have it as
-    /// `{remote, url, name}` in name order, `name` what the link points at as that remote calls it, `lines` the lines'
-    /// numbers of a `lines` link — leading each with its `preferred` where that is among them. A link no remote has
-    /// has no row.
+    /// Stands the card on `links` as `GitHubLinks` answers them, leading each with its `preferred` where that is among
+    /// its holders. A link no remote has has no row.
     function standOn(links) {
         const leads = []
         const others = []
         for (let i = 0; i < links.length; i++) {
             const link = links[i]
             const lead = GitFacts.linkLead(link.preferred, link.holders.map(h => h.remote))
+            const sentence = githubMenu.sentenceFor(link.kind, link.first, link.last)
             for (let j = 0; j < link.holders.length; j++) {
                 const holder = link.holders[j]
                 const row = {
                     "kind": link.kind,
-                    "sentence": githubMenu.sentenceFor(link.kind, link.lines),
+                    "sentence": sentence,
                     "name": holder.name,
                     // A ref's name wears its kind's mark, a repository its remote's; a commit's id and a pair of
                     // them wear none (デザイン規約 §ref の種別「ref の名前の印」).
@@ -72,8 +71,9 @@ AppMenu {
     /// ask before changing), but for a pair, for lines and for a file, which a commit's id alone does not say. One
     /// English sentence, not the remote set bare after the name. The name is said again because the clipboard shows
     /// nothing: which commit's or which name's page it is must be read off the row — a commit by its 8-character id,
-    /// a pair as git's range (older first), a branch by its name on that remote, a tag by its name.
-    function sentenceFor(kind, lines) {
+    /// a pair as git's range (older first), a branch by its name on that remote, a tag by its name. Lines are said by
+    /// their numbers, `first` alone or `first`–`last` (`GitHubLinks`).
+    function sentenceFor(kind, first, last) {
         switch (kind) {
         //: "Copy link to 1c57829b on ☁origin" — a commit, a branch or a tag, then the remote.
         case "commit":
@@ -81,11 +81,13 @@ AppMenu {
         case "tag": return qsTr("Copy link to %1 on %2")
         //: The two commits as git's range: "Copy link to comparison c0b4c03b..5f7336af on ☁origin".
         case "compare": return qsTr("Copy link to comparison %1 on %2")
-        //: The lines' numbers (%3, one or a run), the commit and the remote: "Copy link to lines 1–2 at 5f7336af on
-        //: ☁origin".
         case "lines":
-            return (lines.indexOf("–") >= 0 ? qsTr("Copy link to lines %3 at %1 on %2")
-                                            : qsTr("Copy link to line %3 at %1 on %2")).replace("%3", lines)
+            if (last > first)
+                //: The first and last lines' numbers (%3, %4), the commit and the remote: "Copy link to lines 1–2 at
+                //: 5f7336af on ☁origin".
+                return qsTr("Copy link to lines %3–%4 at %1 on %2").replace("%3", first).replace("%4", last)
+            //: One line's number (%3), the commit and the remote: "Copy link to line 7 at 5f7336af on ☁origin".
+            return qsTr("Copy link to line %3 at %1 on %2").replace("%3", first)
         //: A changed file as it stands in a commit: "Copy link to file at 5f7336af on ☁origin".
         case "file": return qsTr("Copy link to file at %1 on %2")
         //: A remote's repository, the remote alone: "Copy link to ☁origin".

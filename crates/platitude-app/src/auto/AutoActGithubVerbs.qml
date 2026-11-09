@@ -325,8 +325,11 @@ Item {
                 const span = diffPane.diffModel.selectionLines()
                 const lines = span === undefined ? "none"
                                                  : (span.newer ? "new " : "old ") + span.first + "-" + span.last
-                return ["diff_github_menu open=" + diffRowMenu.showing + " lines=" + lines]
-                       .concat(acts.standLines("diff_github", diffRowMenu.githubCard))
+                // `says=`: the leading rows' sentences, which carry the lines' numbers from the link to the row
+                // (`GitHubLinks.ofLines` → `GitHubMenu.standOn`); last, being words.
+                const stood = acts.standLines("diff_github", diffRowMenu.githubCard)
+                stood[0] += " says=" + diffRowMenu.githubCard.leads.map(row => row.sentence).join("|")
+                return ["diff_github_menu open=" + diffRowMenu.showing + " lines=" + lines].concat(stood)
             } })
         }
     }
