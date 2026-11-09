@@ -171,7 +171,7 @@ QtObject {
             // The row's own line, through the three handlers a right press reaches there in order
             // (`NavItemDelegate.itemMouse`): the press and release answer nothing for it, the click raises the menu.
             const open = probe.listOf(kind).itemAtIndex(row)
-            open.linePressed(Qt.RightButton, open.width / 2, open.lineHeight / 2)
+            open.linePressed(Qt.RightButton, Qt.point(open.width / 2, open.lineHeight / 2))
             open.lineReleased()
             open.lineClicked(Qt.RightButton, Qt.NoModifier)
             return

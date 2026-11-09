@@ -605,8 +605,8 @@ Item {
                 page.autoReplayHeld = true
                 // Hover cannot be injected (offscreen's hand sits at the window's corner), so the run places the hand
                 // the ring reads (`Main.holdWaitHand`): over the rewritten pane, clear of row text a ring would hide.
-                const seat = graphPane.mapToItem(null, graphPane.width / 6, graphPane.height / 3)
-                page.Window.window.holdWaitHand(seat.x, seat.y)
+                page.Window.window.holdWaitHand(
+                    graphPane.mapToItem(null, Qt.point(graphPane.width / 6, graphPane.height / 3)))
                 op.witness("edge", op.line())
             })
         }

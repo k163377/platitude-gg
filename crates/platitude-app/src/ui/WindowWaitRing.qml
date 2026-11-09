@@ -26,14 +26,14 @@ Item {
     readonly property bool handKnown: waitSeat.handStandIn.x >= 0 || waitSeat.hand.known
     readonly property point handAt: waitSeat.handStandIn.x >= 0
                                     ? waitSeat.handStandIn
-                                    : waitSeat.mapFromItem(null, waitSeat.hand.at.x, waitSeat.hand.at.y)
+                                    : waitSeat.mapFromItem(null, waitSeat.hand.at)
     /// The ring's own `spinning`: `visible` read from another file is stale (as with `RefusalBadge`).
     readonly property bool ringShown: waitRing.spinning
 
-    /// Automation (`PGG_AUTO_ACT=replay-running`): stands a hand at scene `x, y` and leaves it there. A function, so
+    /// Automation (`PGG_AUTO_ACT=replay-running`): stands a hand at a scene point and leaves it there. A function, so
     /// the map runs once against the geometry it is looking at (rules/app-ui.md: a method takes no binding dependency).
-    function holdWaitHand(x, y) {
-        waitSeat.handStandIn = waitSeat.mapFromItem(null, x, y)
+    function holdWaitHand(position) {
+        waitSeat.handStandIn = waitSeat.mapFromItem(null, position)
     }
 
     WaitRing {

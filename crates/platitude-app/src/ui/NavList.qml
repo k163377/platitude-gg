@@ -283,16 +283,20 @@ AppListView {
         row.rowPressed(Qt.RightButton, Qt.NoModifier)
         return true
     }
+    /// Where the smoke hooks' hand goes down on a row, in the row's coordinates: on its own line, at x 0 — left of the
+    /// name in every section, seated or not (`NavRowBody.seated`).
+    function runPressAt() {
+        return Qt.point(0, Theme.rowHeight / 2)
+    }
     /// Smoke hook (PGG_AUTO_ACT=nav-drag-open): press a closed row's line and drag along it to the far side, through
     /// the row's own handlers (verify-ui implement.md「注入はハンドラ本体そのものへ入れる」). False as `clickRow`.
     function dragRow(index) {
         const row = navList.itemAtIndex(index)
         if (!row)
             return false
-        const line = Theme.rowHeight / 2
-        // x 0 is left of the name in every section, seated or not (`NavRowBody.seated`).
-        row.linePressed(Qt.LeftButton, 0, line)
-        row.lineDragged(row.width, line)
+        const from = navList.runPressAt()
+        row.linePressed(Qt.LeftButton, from)
+        row.lineDragged(Qt.point(row.width, from.y))
         row.lineReleased()
         row.lineClicked(Qt.LeftButton, Qt.NoModifier)
         return true
@@ -305,7 +309,7 @@ AppListView {
         const row = navList.itemAtIndex(index)
         if (!row)
             return false
-        row.linePressed(Qt.LeftButton, 0, Theme.rowHeight / 2)
+        row.linePressed(Qt.LeftButton, navList.runPressAt())
         return true
     }
     function releaseRow(index) {
@@ -318,7 +322,7 @@ AppListView {
     }
     function rowPoint(index) {
         const row = navList.itemAtIndex(index)
-        return row ? row.mapToItem(null, 0, Theme.rowHeight / 2) : null
+        return row ? row.mapToItem(null, navList.runPressAt()) : null
     }
     /// What a drag over the open row's name took, and whether the keyboard went with it (PGG_AUTO_ACT=nav-drag-open).
     function rowNameTook(index) {

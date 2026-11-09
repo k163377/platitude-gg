@@ -191,8 +191,8 @@ ApplicationWindow {
     }
 
     /// Automation (`PGG_AUTO_ACT=replay-running`), on the window because the harness calls it here.
-    function holdWaitHand(x, y) {
-        body.waitRing.holdWaitHand(x, y)
+    function holdWaitHand(position) {
+        body.waitRing.holdWaitHand(position)
     }
     readonly property bool waitRingShown: body.waitRing.ringShown
 

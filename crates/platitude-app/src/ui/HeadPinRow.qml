@@ -104,7 +104,7 @@ Rectangle {
         const hand = headPin.paneHand
         let on = hand !== null && hand.known && headPin.visible
         if (on) {
-            const p = headPin.mapFromItem(null, hand.at.x, hand.at.y)
+            const p = headPin.mapFromItem(null, hand.at)
             on = p.x >= 0 && p.y >= 0 && p.x < headPin.width && p.y < headPin.height
         }
         headPin.slid = shifted === true && headPin.handOn && !on
@@ -289,7 +289,7 @@ Rectangle {
     onLitChanged: {
         if (headPin.lit)
             headPin.askFacts(headPin.handOn ? headPin.paneHand.at
-                                            : headPin.mapToItem(null, headPin.width / 2, Theme.rowHeight / 2))
+                                            : headPin.mapToItem(null, Qt.point(headPin.width / 2, Theme.rowHeight / 2)))
         else
             headPin.dropFacts()
     }
@@ -323,31 +323,32 @@ Rectangle {
         color: Theme.borderSubtle
     }
     /// A press that starts to move goes for the words: the facts open now, not after the rest, and the drag carries
-    /// into the name — the row's own handlers (`NavItemDelegate.linePressed`), but for the release.
-    function linePressed(x, y) {
-        headRowMouse.pressFrom = Qt.point(x, y)
+    /// into the name — the row's own handlers (`NavItemDelegate.linePressed`), but for the release. Points are in this
+    /// row's coordinates.
+    function linePressed(position) {
+        headRowMouse.pressFrom = position
         headRowMouse.handedOn = false
         if (pinFacts.item !== null)
             pinFacts.item.dropSweep()
         if (headPin.nameField !== null)
             headPin.nameField.deselect()
     }
-    function lineDragged(x, y) {
+    function lineDragged(position) {
         if (!headPin.opensFacts || !headRowMouse.pressed)
             return
         if (!headRowMouse.handedOn
-                && Math.abs(x - headRowMouse.pressFrom.x) < Qt.styleHints.startDragDistance
-                && Math.abs(y - headRowMouse.pressFrom.y) < Qt.styleHints.startDragDistance)
+                && Math.abs(position.x - headRowMouse.pressFrom.x) < Qt.styleHints.startDragDistance
+                && Math.abs(position.y - headRowMouse.pressFrom.y) < Qt.styleHints.startDragDistance)
             return
         if (!headRowMouse.handedOn) {
             if (!headPin.factsOpen)
-                headPin.askFacts(headPin.mapToItem(null, x, y), true)
+                headPin.askFacts(headPin.mapToItem(null, position), true)
             if (headPin.nameField === null)
                 return
             headPin.nameField.anchorFrom(headPin, headRowMouse.pressFrom)
             headRowMouse.handedOn = true
         }
-        headPin.nameField.extendFrom(headPin, Qt.point(x, y))
+        headPin.nameField.extendFrom(headPin, position)
     }
     /// A drag that took the name away is not a click — the reader was copying (`NavRowFacts.handClicked`).
     function lineClicked() {
@@ -365,8 +366,8 @@ Rectangle {
         property bool handedOn: false
         // One line each into the stand-in's own functions, which runs enter
         // (verify-ui implement.md「注入はハンドラ本体そのものへ入れる」). No release handler: `lineDragged` reads `pressed`.
-        onPressed: mouse => headPin.linePressed(mouse.x, mouse.y)
-        onPositionChanged: mouse => headPin.lineDragged(mouse.x, mouse.y)
+        onPressed: mouse => headPin.linePressed(Qt.point(mouse.x, mouse.y))
+        onPositionChanged: mouse => headPin.lineDragged(Qt.point(mouse.x, mouse.y))
         onClicked: headPin.lineClicked()
     }
 }

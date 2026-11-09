@@ -45,7 +45,7 @@ MouseArea {
         pan.pressX = mouse.x
         pan.startGX = pan.columns.graphX
         pan.panning = false
-        pan.pressOnRow = pan.pressLanded(mouse, mouse.modifiers)
+        pan.pressOnRow = pan.pressLanded(Qt.point(mouse.x, mouse.y), mouse.modifiers)
     }
     onPositionChanged: mouse => {
         if (!pan.pressed)
@@ -57,29 +57,28 @@ MouseArea {
     }
     /// Automation (PGG_AUTO_ACT=graph-reclick-lanes): a press at a point in this strip's own frame, entering the
     /// handler's own body (`pressLanded`) so the point-to-row mapping is proven too. False where no row is hit.
-    function clickAt(x, y, modifiers) {
-        return pan.pressLanded({ "x": x, "y": y },
-                               modifiers === undefined ? Qt.NoModifier : modifiers)
+    function clickAt(position, modifiers) {
+        return pan.pressLanded(position, modifiers === undefined ? Qt.NoModifier : modifiers)
     }
-    /// The row a press on this strip landed on, or null. Mapped: this strip starts at the pane's top and the list below
+    /// The row a point of this strip is on, or null. Mapped: this strip starts at the pane's top and the list below
     /// the ask bar, so unmapped a standing question makes every press land rows lower.
-    function rowAt(mouse) {
-        const p = pan.mapToItem(pan.view, mouse.x, mouse.y)
+    function rowAt(position) {
+        const p = pan.mapToItem(pan.view, position)
         const idx = pan.view.indexAt(pan.columns.labelW + 1, pan.view.contentY + p.y)
         return idx < 0 ? null : pan.view.itemAtIndex(idx)
     }
-    /// Whether `at` (this strip's frame) is on the name box a row holds open.
-    function onNameBox(at) {
-        const row = pan.rowAt(at)
+    /// Whether a point of this strip is on the name box a row holds open.
+    function onNameBox(position) {
+        const row = pan.rowAt(position)
         if (!row || !row.naming)
             return false
-        const p = pan.mapToItem(row, at.x, at.y)
+        const p = pan.mapToItem(row, position)
         return p.x >= row.nameBoxX && p.x < row.nameBoxX + row.nameBoxWidth
     }
     // Handed straight to the row, which alone decides what a click and a second click mean (`GraphRowDelegate`) — a
     // partial copy here silently loses gestures on every repository wide enough to raise this strip.
     onDoubleClicked: mouse => {
-        const row = pan.rowAt(mouse)
+        const row = pan.rowAt(Qt.point(mouse.x, mouse.y))
         if (row)
             row.doubleClick(mouse.modifiers)
     }
@@ -87,27 +86,27 @@ MouseArea {
     onReleased: mouse => {
         if (pan.panning || pan.pressOnRow)
             return
-        pan.tailPressed(mouse)
+        pan.tailPressed(Qt.point(mouse.x, mouse.y))
     }
-    /// What a press on this strip means, entered by the handler and by `clickAt`. Answers whether it landed on a row.
-    /// The modifiers must travel: dropped, Ctrl / Shift become a plain press, which collapses the choice to one commit
-    /// (`RepoPage.pickRow`, デザイン規約 §複数のコミットを選ぶ). Dropped, both OSes still go green — no headless run
-    /// presses this strip with a modifier held.
-    function pressLanded(at, modifiers) {
-        const row = pan.rowAt(at)
+    /// What a press at a point of this strip means, entered by the handler and by `clickAt`. Answers whether it
+    /// landed on a row. The modifiers must travel: dropped, Ctrl / Shift become a plain press, which collapses the
+    /// choice to one commit (`RepoPage.pickRow`, デザイン規約 §複数のコミットを選ぶ). Dropped, both OSes still go
+    /// green — no headless run presses this strip with a modifier held.
+    function pressLanded(position, modifiers) {
+        const row = pan.rowAt(position)
         if (!row)
             return false
         row.leftClick(modifiers)
         return true
     }
-    /// A press under the last row, handed to the footer, which decides what it means (`GraphTailFooter.loadMore`).
-    /// While the lanes overflow this strip covers the middle column, so without the hand-off the cut has a column that
-    /// does nothing when pressed.
-    function tailPressed(at) {
+    /// A press at a point of this strip under the last row, handed to the footer, which decides what it means
+    /// (`GraphTailFooter.loadMore`). While the lanes overflow this strip covers the middle column, so without the
+    /// hand-off the cut has a column that does nothing when pressed.
+    function tailPressed(position) {
         const tail = pan.view.footerItem
         if (tail === null)
             return false
-        const p = pan.mapToItem(tail, at.x, at.y)
+        const p = pan.mapToItem(tail, position)
         if (p.x < 0 || p.y < 0 || p.x > tail.width || p.y > tail.height)
             return false
         return tail.loadMore()

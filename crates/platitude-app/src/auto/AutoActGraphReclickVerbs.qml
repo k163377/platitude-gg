@@ -171,13 +171,13 @@ Item {
         /// the row's own area both hand it to the row (`GraphLanePan.pressLanded`); past them it is the box's, or
         /// nothing's.
         function landsAt(item, x) {
-            const y = item.height / 2
+            const at = Qt.point(x, item.height / 2)
             const strip = graphPane.lanePan
-            if (strip.visible && strip.contains(strip.mapFromItem(item, x, y)))
+            if (strip.visible && strip.contains(strip.mapFromItem(item, at)))
                 return "row"
-            if (item.pressArea.contains(item.pressArea.mapFromItem(item, x, y)))
+            if (item.pressArea.contains(item.pressArea.mapFromItem(item, at)))
                 return "row"
-            return x >= item.nameBoxX && x < item.nameBoxX + item.nameBoxWidth ? "box" : "none"
+            return at.x >= item.nameBoxX && at.x < item.nameBoxX + item.nameBoxWidth ? "box" : "none"
         }
         /// Two places within half a pixel.
         function near(a, b) {
@@ -326,7 +326,8 @@ Item {
         property int row: 0
         /// A click in the strip's own frame, over `item`'s row — the strip works out which row that is.
         function strike(item) {
-            return graphPane.lanePan.clickAt(1, item.mapToItem(graphPane, 0, item.height / 2).y)
+            const strip = graphPane.lanePan
+            return strip.clickAt(Qt.point(1, item.mapToItem(strip, Qt.point(0, item.height / 2)).y))
         }
         onTriggered: {
             const item = graphPane.view.itemAtIndex(laneClickTimer.row)

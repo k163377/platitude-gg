@@ -325,14 +325,14 @@ Item {
         const hand = navRow.paneHand
         let on = hand.known && navRow.visible && !navRow.pooled
         if (on) {
-            const p = navRow.mapFromItem(null, hand.at.x, hand.at.y)
+            const p = navRow.mapFromItem(null, hand.at)
             on = p.x >= 0 && p.y >= 0 && p.x < navRow.width && p.y < navRow.rowHeight
         }
         // Inside the list's own box: a row kept built past its edge (`cacheBuffer`) lies under the band and the next
         // section, drawn not at all. And not under the stand-in on its edge (`AppListView.shieldAt`).
         const view = navRow.ListView.view
         if (on && view) {
-            const v = view.mapFromItem(null, hand.at.x, hand.at.y)
+            const v = view.mapFromItem(null, hand.at)
             on = v.x >= 0 && v.y >= 0 && v.x < view.width && v.y < view.height && !view.shieldAt(hand.at)
         }
         if (shifted) {
@@ -516,8 +516,8 @@ Item {
         property point pressFrom: Qt.point(0, 0)
         property bool pressing: false
         property bool handedOn: false
-        onPressed: mouse => navRow.linePressed(mouse.button, mouse.x, mouse.y)
-        onPositionChanged: mouse => navRow.lineDragged(mouse.x, mouse.y)
+        onPressed: mouse => navRow.linePressed(mouse.button, Qt.point(mouse.x, mouse.y))
+        onPositionChanged: mouse => navRow.lineDragged(Qt.point(mouse.x, mouse.y))
         onReleased: navRow.lineReleased()
         onCanceled: navRow.lineReleased()
         onClicked: mouse => navRow.lineClicked(mouse.button, mouse.modifiers)
@@ -536,12 +536,12 @@ Item {
     /// click; one that moves is going for the name, so the row opens **now** — a press that moved counts as the hover
     /// having begun, with no rest (`tipDelayMs`) waited for — and the drag carries on into the name. What an open row
     /// shows (branch, worktree, upstream names) is there to be taken away; a drag sets nothing off
-    /// (規約 §hover のツールチップ「hover が出した字は選べて、コピーできる」).
-    function linePressed(button, x, y) {
+    /// (規約 §hover のツールチップ「hover が出した字は選べて、コピーできる」). Points are in this row's coordinates.
+    function linePressed(button, position) {
         if (button !== Qt.LeftButton)
             return
         navRow.takePress()
-        itemMouse.pressFrom = Qt.point(x, y)
+        itemMouse.pressFrom = position
         itemMouse.pressing = true
         itemMouse.handedOn = false
         // One selection in the window: a press here drops the last one, so a click that takes no words is read as a
@@ -568,18 +568,18 @@ Item {
         if (navRow.reclick)
             navRow.reclick.hear()
     }
-    function lineDragged(x, y) {
+    function lineDragged(position) {
         if (!navRow.expands || !itemMouse.pressing)
             return
         // A click with a tremor in it is still a click.
         if (!itemMouse.handedOn
-                && Math.abs(x - itemMouse.pressFrom.x) < Qt.styleHints.startDragDistance
-                && Math.abs(y - itemMouse.pressFrom.y) < Qt.styleHints.startDragDistance)
+                && Math.abs(position.x - itemMouse.pressFrom.x) < Qt.styleHints.startDragDistance
+                && Math.abs(position.y - itemMouse.pressFrom.y) < Qt.styleHints.startDragDistance)
             return
         if (!itemMouse.handedOn) {
             // The rest is what this press is skipping — the reader has already chosen this row.
             if (!navRow.factsOpen)
-                navRow.askFacts(navRow.mapToItem(null, x, y), true)
+                navRow.askFacts(navRow.mapToItem(null, position), true)
             // Refused (a box is open, a menu is standing): there is no field to sweep, and the press stays a press.
             if (navRow.nameField === null)
                 return
@@ -587,7 +587,7 @@ Item {
             navRow.nameField.anchorFrom(navRow, itemMouse.pressFrom)
             itemMouse.handedOn = true
         }
-        navRow.nameField.extendFrom(navRow, Qt.point(x, y))
+        navRow.nameField.extendFrom(navRow, position)
     }
     function lineReleased() {
         itemMouse.pressing = false
@@ -830,7 +830,7 @@ Item {
     // seat counts the rest for it as for a hand.
     onTipPointedAtChanged: {
         if (navRow.tipPointedAt)
-            navRow.askFacts(navRow.mapToItem(null, navRow.width / 2, Theme.rowHeight / 2))
+            navRow.askFacts(navRow.mapToItem(null, Qt.point(navRow.width / 2, Theme.rowHeight / 2)))
         else if (navRow.expands)
             navRow.factsAsked(false, Qt.point(0, 0), false)
     }
