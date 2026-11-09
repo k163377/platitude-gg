@@ -356,30 +356,25 @@ impl DiffModel {
     pub(super) fn line_span(&self) -> Option<LineSpan> {
         let rows = self.span()?;
         let old_column = self.split && self.sel_side != RIGHT;
-        let mut taken = (i32::MAX, 0);
-        let mut removed = (i32::MAX, 0);
+        let mut taken = None;
+        let mut removed = None;
         for row in rows {
             let Some(item) = self.lines.get(row) else {
                 continue;
             };
             if self.wash_of(self.sel_side, row) != Wash::None && !self.edge_only(row) {
                 let no = if old_column { item.old_no } else { item.new_no };
-                if no > 0 {
-                    taken = (taken.0.min(no), taken.1.max(no));
-                }
+                take_in(&mut taken, no);
             }
-            if self.kind_of(0, row) == "del" && item.old_no > 0 {
-                removed = (removed.0.min(item.old_no), removed.1.max(item.old_no));
+            if self.kind_of(0, row) == "del" {
+                take_in(&mut removed, item.old_no);
             }
         }
-        let (newer, (first, last)) = if taken.1 > 0 {
-            (!old_column, taken)
-        } else if removed.1 > 0 {
-            (false, removed)
-        } else {
-            return None;
-        };
-        Some(LineSpan { newer, first, last })
+        match (taken, removed) {
+            (Some(lines), _) => Some(LineSpan::new(!old_column, lines)),
+            (None, Some(lines)) => Some(LineSpan::new(false, lines)),
+            (None, None) => None,
+        }
     }
 
     /// Whether the selection only touches the edge of this end row — ends
@@ -421,4 +416,17 @@ impl DiffModel {
         }
         out
     }
+}
+
+/// Widens `lines` to take in line `no` of a file — a row's number for one
+/// side, numbered from 1; `-1` where that side has no line, which takes in
+/// nothing.
+fn take_in(lines: &mut Option<RangeInclusive<u32>>, no: i32) {
+    let Some(no) = u32::try_from(no).ok().filter(|&no| no > 0) else {
+        return;
+    };
+    *lines = Some(match lines.take() {
+        Some(had) => (*had.start()).min(no)..=(*had.end()).max(no),
+        None => no..=no,
+    });
 }

@@ -11,6 +11,8 @@
 //! Only github.com: an enterprise host is indistinguishable by its name
 //! from any other forge.
 
+use std::ops::RangeInclusive;
+
 use crate::oid::Oid;
 
 /// The repository's page on GitHub (`https://github.com/<owner>/<repo>`)
@@ -101,11 +103,13 @@ pub fn file(repo: &str, at: &Oid, path: &str) -> String {
     format!("{repo}/blob/{}/{}", at.to_hex(), path_part(path))
 }
 
-/// Lines `first..=last` of `path` as it stands in commit `at` — GitHub's
-/// permalink, which a GitHub comment unfolds into the lines themselves. A
-/// file GitHub draws rendered (Markdown and the rest of its markup, a
-/// notebook, a table) has no line numbers unless asked for its source.
-pub fn lines(repo: &str, at: &Oid, path: &str, first: u32, last: u32) -> String {
+/// A run of the lines of `path` (`lines`, numbered from 1) as it stands in
+/// commit `at` — GitHub's permalink, which a GitHub comment unfolds into
+/// the lines themselves. A file GitHub draws rendered (Markdown and the rest of its
+/// markup, a notebook, a table) has no line numbers unless asked for its
+/// source.
+pub fn lines(repo: &str, at: &Oid, path: &str, lines: RangeInclusive<u32>) -> String {
+    let (first, last) = lines.into_inner();
     let anchor = if last > first {
         format!("L{first}-L{last}")
     } else {
@@ -330,11 +334,11 @@ mod tests {
             format!("{REPO}/compare/{}..{}", "a".repeat(40), "b".repeat(40))
         );
         assert_eq!(
-            lines(REPO, &oid('c'), "src/main.rs", 10, 20),
+            lines(REPO, &oid('c'), "src/main.rs", 10..=20),
             format!("{REPO}/blob/{}/src/main.rs#L10-L20", "c".repeat(40))
         );
         assert_eq!(
-            lines(REPO, &oid('c'), "src/main.rs", 7, 7),
+            lines(REPO, &oid('c'), "src/main.rs", 7..=7),
             format!("{REPO}/blob/{}/src/main.rs#L7", "c".repeat(40))
         );
         assert_eq!(
@@ -355,7 +359,7 @@ mod tests {
             format!("{REPO}/tree/%E6%97%A5%E6%9C%AC")
         );
         assert_eq!(
-            lines(REPO, &oid('c'), "docs/a b.txt", 1, 1),
+            lines(REPO, &oid('c'), "docs/a b.txt", 1..=1),
             format!("{REPO}/blob/{}/docs/a%20b.txt#L1", "c".repeat(40))
         );
     }
@@ -363,29 +367,29 @@ mod tests {
     #[test]
     fn a_file_drawn_rendered_is_asked_for_its_source() {
         assert_eq!(
-            lines(REPO, &oid('c'), "docs/README.MD", 3, 4),
+            lines(REPO, &oid('c'), "docs/README.MD", 3..=4),
             format!(
                 "{REPO}/blob/{}/docs/README.MD?plain=1#L3-L4",
                 "c".repeat(40)
             )
         );
         assert_eq!(
-            lines(REPO, &oid('c'), "md/main.rs", 3, 3),
+            lines(REPO, &oid('c'), "md/main.rs", 3..=3),
             format!("{REPO}/blob/{}/md/main.rs#L3", "c".repeat(40)),
             "a folder's name is not an extension"
         );
         assert_eq!(
-            lines(REPO, &oid('c'), "Makefile", 3, 3),
+            lines(REPO, &oid('c'), "Makefile", 3..=3),
             format!("{REPO}/blob/{}/Makefile#L3", "c".repeat(40))
         );
         for path in ["docs/a.mdx", "guide.rst.txt", "map.geojson", "flow.mmd"] {
             assert!(
-                lines(REPO, &oid('c'), path, 1, 1).ends_with("?plain=1#L1"),
+                lines(REPO, &oid('c'), path, 1..=1).ends_with("?plain=1#L1"),
                 "{path}"
             );
         }
         assert!(
-            lines(REPO, &oid('c'), "notes.txt", 1, 1).ends_with(".txt#L1"),
+            lines(REPO, &oid('c'), "notes.txt", 1..=1).ends_with(".txt#L1"),
             "a plain .txt is lines"
         );
     }

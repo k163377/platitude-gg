@@ -1,3 +1,4 @@
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -149,6 +150,21 @@ pub struct LineSpan {
     pub newer: bool,
     pub first: i32,
     pub last: i32,
+}
+
+impl LineSpan {
+    /// `lines` of the new file (`newer`) or the old one, spelled as the
+    /// record's two ends.
+    fn new(newer: bool, lines: RangeInclusive<u32>) -> Self {
+        let (first, last) = lines.into_inner();
+        // The numbers were read off a row's `i32`.
+        let no = |no: u32| i32::try_from(no).unwrap_or(i32::MAX);
+        Self {
+            newer,
+            first: no(first),
+            last: no(last),
+        }
+    }
 }
 
 impl Record for LineSpan {

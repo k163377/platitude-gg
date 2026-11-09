@@ -676,3 +676,24 @@ fn a_row_the_selection_only_touches_the_edge_of_is_not_linked() {
         "the row above only reached at its end"
     );
 }
+
+/// The old file's lines 11 and 12 removed: hunk / ctx / del / del / ctx on
+/// rows 0..4.
+#[test]
+fn removed_lines_alone_link_the_old_files_first_to_last() {
+    let mut model = model(
+        "\
+--- a/f
++++ b/f
+@@ -10,4 +20,2 @@
+ fn main() {
+-    let a = 1;
+-    let b = 2;
+ }
+",
+        false,
+    );
+    model.start_select(0, source(2, 0));
+    model.drag_select(0, source(3, 99));
+    assert_eq!(model.line_span(), span(false, 11, 12));
+}

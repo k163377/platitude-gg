@@ -7,6 +7,8 @@
 //! call, and a call one argument short leaves the single line
 //! `Error: Insufficient arguments` and kills the calling function there.
 
+use std::ops::RangeInclusive;
+
 use qtbridge::qobject;
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
@@ -498,8 +500,8 @@ impl GitFacts {
             .unwrap_or_default()
     }
 
-    /// Lines `first..=last` of `path` in commit `oid`; `""` for an id that
-    /// is none or a line that is not one (numbered from 1).
+    /// Lines `first..=last` of `path` in commit `oid` (`file_lines`); `""`
+    /// for an id that is none or a line that is not one.
     #[qslot]
     fn github_lines_link(
         &self,
@@ -509,17 +511,13 @@ impl GitFacts {
         first: i32,
         last: i32,
     ) -> String {
-        let (Ok(oid), Ok(first), Ok(last)) = (
+        let (Ok(oid), Some(lines)) = (
             platitude_core::Oid::from_hex_str(oid.trim()),
-            u32::try_from(first),
-            u32::try_from(last),
+            file_lines(first, last),
         ) else {
             return String::new();
         };
-        if first == 0 {
-            return String::new();
-        }
-        platitude_core::web_link::lines(&repo, &oid, &path, first, last.max(first))
+        platitude_core::web_link::lines(&repo, &oid, &path, lines)
     }
 
     /// Which of the remotes holding something a menu leads with — the
@@ -694,6 +692,15 @@ fn names(remote_names: &[String]) -> impl Iterator<Item = &str> {
     remote_names.iter().map(String::as_str)
 }
 
+/// The lines of a file QML names by its first and last line numbers,
+/// numbered from 1; `None` where `first` is no line or `last` is negative.
+/// A `last` before `first` — `0` among them — is `first`.
+fn file_lines(first: i32, last: i32) -> Option<RangeInclusive<u32>> {
+    let first = u32::try_from(first).ok().filter(|&first| first > 0)?;
+    let last = u32::try_from(last).ok()?;
+    Some(first..=last.max(first))
+}
+
 /// Where a link to one side of a diff points (`GitFacts.githubSideAt`):
 /// the commit whose file it is (`at`) and the commit a remote has to have
 /// for the page to be there (`held`).
@@ -720,3 +727,23 @@ impl Record for LinkAt {
 }
 
 qml_register!(GitFacts, "GitFacts", singleton = true);
+
+#[cfg(test)]
+mod tests {
+    use super::file_lines;
+
+    #[test]
+    fn the_lines_named_start_at_line_one_and_run_forward() {
+        assert_eq!(file_lines(7, 7), Some(7..=7));
+        assert_eq!(file_lines(10, 20), Some(10..=20));
+        assert_eq!(
+            file_lines(10, 3),
+            Some(10..=10),
+            "a last before the first is the first"
+        );
+        assert_eq!(file_lines(3, 0), Some(3..=3), "as is a last of 0");
+        assert_eq!(file_lines(0, 3), None, "there is no line 0");
+        assert_eq!(file_lines(-1, 3), None);
+        assert_eq!(file_lines(3, -1), None);
+    }
+}
