@@ -359,7 +359,7 @@ async fn a_replace_whose_delete_is_refused_leaves_both_names() {
 }
 
 /// `Delete both` of a tag runs the remote half first
-/// (`session::delete_tag_everywhere`): a refused lease leaves the name
+/// (`RepoSession::delete_tag_everywhere`): a refused lease leaves the name
 /// here as well as there. Leased to what is there, both go.
 #[tokio::test(flavor = "multi_thread")]
 async fn delete_both_of_a_tag_refused_by_the_lease_touches_nothing() {

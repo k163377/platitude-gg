@@ -28,7 +28,8 @@ use super::*;
 /// from the repository as it was *before* the write.
 ///
 /// `A` is what a pass answers its callers with (`Reread`, `StashRead`,
-/// `WorktreeRead`; a `bool` where nothing but "it landed" is wanted).
+/// `WorktreeRead`, the author reads' `Vec<FollowUp>`; the default `bool`
+/// where nothing but "it landed" is wanted).
 pub(super) struct ReadFlight<A = bool> {
     /// One pass at a time. tokio hands it on in the order it was asked
     /// for, so no caller is passed over; which pass answers whom is the

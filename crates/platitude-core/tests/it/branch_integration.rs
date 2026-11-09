@@ -83,7 +83,7 @@ async fn unmerged_branch_needs_the_forced_delete() {
 /// change. Our side is pinned elsewhere: the refusals' wording in
 /// `branch::tests`, the carry in `session_integration::carry_move`, each
 /// mode's command line in
-/// `branch::tests::a_reset_names_its_mode_and_the_revision_and_nothing_more`.
+/// `branch::tests::a_reset_names_its_mode_and_the_revision_with_no_path_after`.
 mod periodic {
     use super::*;
 

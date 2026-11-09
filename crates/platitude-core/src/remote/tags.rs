@@ -82,7 +82,7 @@ pub async fn list_tags(
 ///
 /// A lease the remote has left, and a name it holds on another commit,
 /// read as outdated; what puts them right is reading the remote's tags
-/// again, not a fetch, which the session does (`session::push_tag`). A
+/// again, not a fetch, which the session does (`RepoSession::push_tag`). A
 /// far-side rule (`[remote rejected]`) reads as a report, as for a branch
 /// (`super::refusal::tag_refusal`, デザイン規約 §答えの要らない報せ) —
 /// `--porcelain` is what makes either readable.

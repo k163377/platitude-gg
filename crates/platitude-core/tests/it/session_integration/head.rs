@@ -147,7 +147,6 @@ async fn the_read_after_a_write_reports_head_even_where_it_stayed() {
     session.close_and_wait().await;
 }
 
-/// A consumer woken for an unchanged record would be woken for nothing.
 /// A file named `HEAD` at the top of the worktree is not HEAD: git reads a
 /// rev no `--` follows as a path too, and stops a name that is both as
 /// ambiguous — here the walk that starts at HEAD and the amend check that
@@ -176,6 +175,7 @@ async fn a_file_named_head_is_not_taken_for_it() {
     session.close_and_wait().await;
 }
 
+/// A consumer woken for an unchanged record would be woken for nothing.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_quiet_tick_reports_nothing_of_head() {
     let mut repo = TestRepo::init();

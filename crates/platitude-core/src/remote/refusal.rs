@@ -93,7 +93,7 @@ pub(super) fn refusal(
 /// The same reading for a tag: a lease the remote has left, as for a
 /// branch, and a plain push onto a name the remote holds on another commit
 /// (`already exists`) — both answered by reading the remote's tags again
-/// (`session::push_tag`), which a fetch does not do (`--prune` keeps the
+/// (`RepoSession::push_tag`), which a fetch does not do (`--prune` keeps the
 /// local tag, `--prune-tags` exits 1).
 pub(super) fn tag_refusal(
     command: String,

@@ -215,8 +215,9 @@ impl RepoSession {
     /// alone would let a reopened tab read between another session's
     /// rebase steps and offer to abort a rebase still being done.
     ///
-    /// Network lanes take no place in the tree's order, so this session's
-    /// own write still says a push or a fetch is out.
+    /// A push and the fetches take no place in the tree's order
+    /// ([`OperationKind::writes_here`]), so this session's own write still
+    /// says one is out.
     pub(super) fn tree_write(&self) -> Option<Operation> {
         match self.write_order() {
             Some(order) => order.running().or_else(|| self.running_write()),

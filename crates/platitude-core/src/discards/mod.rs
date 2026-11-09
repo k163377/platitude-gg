@@ -48,9 +48,10 @@
 //!   worktrees removed, remote tips overwritten (`record` writes it,
 //!   `records` reads it).
 //!
-//! A handful of git processes whatever the repository holds: the listing,
-//! the names taken, one walk of every reflog, the walk of what they reach,
-//! and the record.
+//! A handful of git processes whatever the repository holds — the listing,
+//! the names taken, the stash list, one walk of every reflog, the walk of
+//! what they reach, the record, which tips are here — and one more for each
+//! worktree a copy goes back into.
 
 mod copy;
 mod entries;

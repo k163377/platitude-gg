@@ -260,8 +260,8 @@ pub struct HeadState {
 
 impl HeadState {
     /// From a read's branch and commit; detached is a commit with no
-    /// branch. The single constructor for the reads compared in one record
-    /// (`session::standing`).
+    /// branch. The constructor for the reads compared in one record
+    /// (`session::standing`), but for [`head_in`]'s attached HEAD.
     pub fn of(branch: Option<String>, oid: Option<Oid>) -> Self {
         Self {
             detached: branch.is_none() && oid.is_some(),

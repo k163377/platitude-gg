@@ -225,7 +225,8 @@ fn not_a_stop(said: &str, trace: &Trace) -> bool {
 /// its first checkout would overwrite. A stop git gives no cause for is
 /// left as git left it, for the band to carry.
 ///
-/// The last two stop the replay before it begins, with nothing to put back.
+/// The last stops the replay before it begins, with nothing to put back —
+/// as a lock does where it is met at the first checkout.
 fn refused_by(said: &str, trace: &Trace) -> Option<report::ReportKind> {
     if crate::relied_messages::PREPARE_HOOK_FAILED.found_in(said)
         || trace.hook_failed(&crate::commit::COMMIT_HOOKS)

@@ -101,8 +101,8 @@ pub struct RepoSession {
     /// near its hunks. Self-invalidating by the source text's hash.
     pub(super) lex_cache: Mutex<Option<crate::highlight::LexCache>>,
     /// Where the repository stands, as the reads left it — HEAD and what
-    /// derives from it, the dirty tree, the merge's sides, the rebase stop
-    /// and the merge tool; the one record of each. Its stamps keep a read
+    /// derives from it, the dirty tree, the merge's sides, the merge tool
+    /// and the push counts; the one record of each. Its stamps keep a read
     /// that looked before a write from overwriting the write's own read
     /// (`session::standing`).
     pub(super) standing: Standing,

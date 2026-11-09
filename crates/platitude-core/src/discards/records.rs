@@ -80,11 +80,11 @@ pub(super) struct Read {
     pub(super) restored_parts: HashSet<(Oid, usize)>,
 }
 
-/// Reads the record: one `log -g` of its reflog, and one count of what the
-/// stash-shaped values hold apart from their first parent where they have
-/// untracked files or are a stash a note stands on (`--shortstat` counts
-/// the first parent's side alone). A repository with no record reads none
-/// (`--ignore-missing`).
+/// Reads the record: one `log -g` of its reflog, and a count (`counted`, a
+/// batch at a time) of what the stash-shaped values hold apart from their
+/// first parent where they have untracked files or are a stash a note
+/// stands on (`--shortstat` counts the first parent's side alone). A
+/// repository with no record reads none (`--ignore-missing`).
 pub(super) async fn read(
     executor: &GitExecutor,
     workdir: &Path,
@@ -158,7 +158,7 @@ fn line_of(block: &str) -> Option<Line> {
 /// Counts what the stash-shaped commits hold that the record's own count
 /// cannot see: a copy's untracked files (its third parent) and a dropped
 /// stash's paths, whole (a note stands on the stash, its own diff empty) —
-/// one `log --no-walk` for all of them.
+/// one `log --no-walk` per batch of them.
 async fn counted(
     executor: &GitExecutor,
     workdir: &Path,

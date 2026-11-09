@@ -513,10 +513,10 @@ pub enum SessionEvent {
         kind: OperationKind,
         failed: Vec<FollowUp>,
     },
-    /// A git subprocess was spawned (command log). Only what the user
-    /// asked for, unless background reads were switched on — plus the
-    /// fetches nobody asked for that git said no to, which arrive when
-    /// they end (`process::Kept`).
+    /// A git command was asked for (command log) — told at the ask, before
+    /// its slot and its spawn. Only what the user asked for, unless
+    /// background reads were switched on — plus the fetches nobody asked
+    /// for that git said no to, which arrive when they end (`process::Kept`).
     CommandStarted {
         id: u64,
         /// The command as a log line shows it.
@@ -524,7 +524,7 @@ pub enum SessionEvent {
         /// The same command with the always-applied configuration and
         /// environment spelled out, for copying.
         full: String,
-        /// Wall clock at the spawn, milliseconds since the epoch.
+        /// Wall clock at the ask, milliseconds since the epoch.
         at_ms: i64,
         /// Whether the reader asked for it. A row nobody asked for raises
         /// no panel and reddens no mark

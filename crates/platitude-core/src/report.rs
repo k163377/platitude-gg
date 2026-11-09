@@ -38,7 +38,7 @@ pub enum ReportKind {
     /// tag — moved or went over there since the screen read it, so nothing
     /// pinned to that reading was sent. Caught up with as
     /// [`Self::Outdated`] is: a fetch for a branch, that remote's tags read
-    /// again for a tag (`session::push_tag`).
+    /// again for a tag (`RepoSession::push_tag`).
     Moved,
     /// The same refusal for a delete.
     MovedDelete,
@@ -190,9 +190,10 @@ pub enum ReportKind {
     WorktreeRenameTaken,
 
     /// The five shapes a history cannot be rewritten in, found before a
-    /// rebase is spawned ([`crate::sequencer::plan_edit`]). git is never
-    /// asked, so there is no log row; one kind each because the reason is
-    /// the sentence the screen picks (`Words.writeReportedWhy`).
+    /// rebase is spawned ([`crate::sequencer::plan_edit`]; the last,
+    /// [`crate::sequencer::rebase_interactive`]). git is never asked, so
+    /// there is no log row; one kind each because the reason is the
+    /// sentence the screen picks (`Words.writeReportedWhy`).
     ///
     /// A merge inside the range: a plain interactive rebase would flatten it.
     RewriteAcrossMerge,
@@ -602,7 +603,7 @@ pub fn worktree_rename_refused(name: &str, message: String) -> crate::error::Git
     withheld_about(ReportKind::WorktreeRenameTaken, name, message)
 }
 
-/// The eight rewrites this end turns down before git runs. There is no
+/// The seven rewrites this end turns down before git runs. There is no
 /// command to name, and the screen writes both lines (rules-refs/app-ui.md
 /// 「Rust に文言を置かない」); `message` is only the log's record.
 fn withheld(kind: ReportKind, message: String) -> crate::error::GitError {

@@ -91,7 +91,8 @@ impl WorktreeStatus {
     ///
     /// `git stash push --staged` cannot take these apart: it writes the
     /// entry, then fails to remove the staged half, leaving the entry
-    /// behind. The UI refuses first on these.
+    /// behind. A UI that offered it would have to turn these down first
+    /// (`stash::PushOptions`).
     pub fn partially_staged(&self) -> impl Iterator<Item = &StatusItem> {
         self.items.iter().filter(|i| {
             matches!(i, StatusItem::Tracked { staged, unstaged, .. }
@@ -121,8 +122,8 @@ impl WorktreeStatus {
 }
 
 /// How many entries fall into each bucket, counted in one pass: the
-/// headline shows all five, and `-uall` makes the list as long as the
-/// tree is dirty.
+/// pane reads four and `hard_reset_takes` the fifth, and `-uall` makes
+/// the list as long as the tree is dirty.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Counts {
     pub staged: usize,

@@ -77,7 +77,7 @@ mod periodic {
     /// git reads the operation's staged result as a dirty index and never
     /// names the operation, in both rebases alike. The classifier would carry
     /// it through a stash, so the session guards on the operation itself
-    /// (`session::build::carry_across_rewrite`).
+    /// (`session::build::Carried::under_standing`).
     #[tokio::test]
     #[ignore = "git's refusal text under a standing operation: not worth the pre-merge run"]
     async fn a_rebase_under_a_standing_operation_is_refused_as_a_dirty_tree() {

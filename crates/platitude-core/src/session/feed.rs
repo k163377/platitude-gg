@@ -36,13 +36,13 @@ pub(super) struct CommandFeed {
     next_id: AtomicU64,
     record_background: std::sync::atomic::AtomicBool,
     /// Invocations worth a row only if git says no
-    /// ([`Kept::UnaskedUnlessItFails`]), held from the spawn until the end
+    /// ([`Kept::UnaskedUnlessItFails`]), held from the ask until the end
     /// decides; every end removes its entry.
     held: Mutex<HashMap<u64, Held>>,
 }
 
 /// What a held invocation needs to become a row after the fact: the line
-/// cannot be rebuilt at the end, and the clock is the spawn's.
+/// cannot be rebuilt at the end, and the clock is the ask's.
 struct Held {
     display: String,
     full: String,
@@ -133,7 +133,7 @@ impl crate::process::CommandObserver for CommandFeed {
                 return;
             }
             // Start first, so the log builds the row it would have built
-            // at the spawn.
+            // at the ask.
             self.sink.event(SessionEvent::CommandStarted {
                 id,
                 display: held.display,
