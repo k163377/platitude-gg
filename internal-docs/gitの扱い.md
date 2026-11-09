@@ -40,7 +40,7 @@ UI・エラー文言は `version.rs` の `minimum_string()`、対応判定は `G
 
 git が見つからず実行できない場合は、git を導入するまでリポジトリを操作できない。
 設定した実行ファイルが起動時に答えなければ、`PATH` の git へフォールバックする
-(`Hub::resolve_git`)。設定画面では版が返ったパスだけを再起動の候補にでき、下限未満も候補に含める。
+(`hub::life::resolve_git`)。設定画面では版が返ったパスだけを再起動の候補にでき、下限未満も候補に含める。
 
 Git-LFS とマージツール本体は別途導入する物で、git の最低版だけでは存在を保証しない。
 submodule と LFS は存在表示まで([実装計画.md](実装計画.md) §14 Post-MVPバックログ)。
@@ -142,7 +142,7 @@ Porcelain の入出力を「利用者の体験のために変わりうる」と�
   在処は断った理由の証拠ではない)。名指せなければ `git turned it down — see GIT COMMANDS`。
 - **終了コードで答えるコマンド**(`answers_by_code`)の同じコードが断りでもある時は、断りの語を
   `except_when_it_says` / `except_when` に名指して行に言葉を持たせる(rebase の exit 1・`stash apply` の exit 1・
-  **merge / pull の早送りを塞ぐ作業ツリー**の exit 1)。言葉の無い答えの行を報せやヘッダが指すと、読む人は
+  **merge の早送りを塞ぐ作業ツリー**の exit 1)。言葉の無い答えの行を報せやヘッダが指すと、読む人は
   何も見つけられない。
 
 ## 発行前の釘付け(起きなくした物)
@@ -160,7 +160,7 @@ Porcelain の入出力を「利用者の体験のために変わりうる」と�
 | rebase・merge・pull の autostash、駆動 rebase の merge 形 | `integrate::rebase_command` / `integrate::merge` / `remote::pull`(退け方は `session::build::carry_across`) |
 | pull の合流の仕方(`--ff-only --no-rebase`。ユーザー決定 2026-10-12) | `remote::pull` |
 | merge / pull を塞ぐ作業ツリーの変更・untracked(断られた時だけ持ち越す。ユーザー決定 2026-10-12) | `session::build::integrate_carrying` |
-| stash の index 復元(`--no-index`) | `stash::pop` / `apply` / `carried_apply` |
+| stash の index 復元(`--no-index`) | `stash::pop` / `apply` / `session::carried_apply` |
 | mergetool の一時ファイル・ツール・GUI | `conflict::tool` |
 | 一時 index の写し(フック・fsmonitor・split index・改行検査) | `discards::record::isolated` |
 | worktree add の進捗(`--quiet`) | `worktrees::add` |
