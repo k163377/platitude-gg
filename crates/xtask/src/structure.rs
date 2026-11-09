@@ -18,7 +18,7 @@
 //!   the baseline follows it down; it may not grow.
 //! * **neither** — the backstop applies as written.
 //!
-//! Seven other questions of how the tree is divided are counted here too:
+//! Eight other questions of how the tree is divided are counted here too:
 //! the product's QML may not name a harness type ([`modules`]), the app's
 //! Rust may not look a `PGG_*` variable up outside the module that owns
 //! them ([`env`]), the product's QML closes no popup but its own
@@ -26,9 +26,10 @@
 //! window's worktree ([`wiprow`]), every text box the product declares
 //! hands its right-click and its menu key to the product's menu
 //! ([`textboxes`]), the repository's words are drawn by `PlainTextLabel`
-//! and never by a label guessing its format ([`labels`]), and the core
+//! and never by a label guessing its format ([`labels`]), the core
 //! matches git's words only against the messages of its table
-//! ([`relied_messages`]).
+//! ([`relied_messages`]), and the tooling stands its throwaway trees only
+//! where a sweep reaches them ([`throwaway`]).
 //!
 //! The fn half of the same § is left to clippy's `too_many_lines`.
 
@@ -38,6 +39,7 @@ mod modules;
 mod popups;
 mod relied_messages;
 mod textboxes;
+mod throwaway;
 mod wiprow;
 
 use std::collections::BTreeMap;
@@ -128,11 +130,13 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let (styled_boxes, text_boxes) = textboxes::check(&root)?;
     let (guessed_formats, label_files) = labels::check(&root)?;
     let (stray_messages, word_readers) = relied_messages::check(&root)?;
+    let (unswept, tooling_files) = throwaway::check(&root)?;
     let boundary_broken = crossed.len() + looked_up.len();
     let closing_for_others = closed_for.len();
     let menus_kept = styled_boxes.len();
     let formats_guessed = guessed_formats.len();
     let messages_strayed = stray_messages.len();
+    let trees_unswept = unswept.len();
     failures.extend(crossed);
     failures.extend(looked_up);
     failures.extend(closed_for);
@@ -140,6 +144,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     failures.extend(styled_boxes);
     failures.extend(guessed_formats);
     failures.extend(stray_messages);
+    failures.extend(unswept);
 
     for failure in &failures {
         println!("structure: {failure}");
@@ -156,7 +161,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
              {qml_files} QML files asking the graph which row is this window's, \
              {text_boxes} text boxes handing their menu and their key to the product's, \
              {label_files} product files drawing input with PlainTextLabel alone, \
-             {word_readers} core functions reading git's words through the table — PASS",
+             {word_readers} core functions reading git's words through the table, \
+             {tooling_files} tooling files standing their throwaway trees where a sweep reads \
+             — PASS",
             counted.len(),
             comment_share(physical, code),
             ledgered.len()
@@ -187,6 +194,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
             "{formats_guessed} line(s) drawing input with a label that guesses its format, or \
              naming a format outside the parts that draw markup ({})",
             labels::RULE
+        ))
+    } else if trees_unswept == failures.len() {
+        Err(format!(
+            "{trees_unswept} spelling(s) standing a tree under the throwaway folder where no \
+             sweep reads it, or excusing one that is gone (`structure::throwaway`)"
         ))
     } else {
         Err(format!(

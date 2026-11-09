@@ -29,7 +29,9 @@ pub use coverage::run as verbs;
 pub(crate) use faults::run as wedge_check;
 pub(crate) use look::look_into;
 pub(crate) use options::{canonical_line, suite_words};
-pub(crate) use ownership::{ResourceClaim, claim_dir, claim_resource, keep, sweep_yesterdays_runs};
+pub(crate) use ownership::{
+    RUN_BASES, ResourceClaim, claim_dir, claim_resource, keep, sweep_yesterdays_runs,
+};
 pub(crate) use records_check::{lines as records_lines, run as records_check};
 pub use run::run;
 pub(crate) use shot_check::{lines as shot_lines, run as shot_check};

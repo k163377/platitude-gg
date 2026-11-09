@@ -115,8 +115,9 @@ pub(super) fn fresh_shot_dir(verb: &str) -> Result<PathBuf, String> {
 /// repositories (`demo::claim_root`), a container run's mount
 /// (`keepsakes::keepsake_dir`), the links a `shipped` run starts its
 /// consoles from (`shipped::console`), test roots, and [`crate::yard`]'s
-/// trees — and [`LOCKS`], which nothing else clears.
-const RUN_BASES: [&str; 7] = [
+/// trees — and [`LOCKS`], which nothing else clears. What the tooling
+/// spells under the folder is held to these by `structure::throwaway`.
+pub(crate) const RUN_BASES: [&str; 7] = [
     "pgg-verify",
     "pgg-demo",
     "pgg-linux",
