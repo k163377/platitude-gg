@@ -14,7 +14,7 @@ claudeはこの資料を無視して
   Claude Cloud session の本文を読めなかった場合は、その事実を返信で人間へ報告する。
 - 編集前に `git status --short --branch` と対象範囲の差分を読む。同じ作業中に読んだ情報は再利用し、
   元の情報が変わった時に読み直す。
-- `crates/**` では `.claude/rules/code.md` と `structure.md`、`crates/platitude-core/**` では
+- `crates/**` では `.claude/rules/code.md`(`spike/**` でも)と `structure.md`、`crates/platitude-core/**` では
   `core.md`、`crates/platitude-app/**` では `app-ui.md` も読む。これらは `.claude/rules/` からの
   相対パス。自動で読み込むのは Claude だけ。
 - Claude のフック(`.claude/settings.json`)は Codex では動かない。Claude なら拒否される操作も
