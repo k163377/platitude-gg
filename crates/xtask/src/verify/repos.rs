@@ -282,8 +282,8 @@ pub(super) fn seed_merge_tool(
 /// The path a verb needs handed to it, made on the spot; empty for every
 /// other verb.
 ///
-/// The open-refused verbs' subject is a folder no preset can be. Both
-/// sit one level down, so the folder the second try opens at is a real
+/// The open-refused verbs' subject is a folder no preset can be. All
+/// three sit one level down, so the folder the second try opens at is a real
 /// one with the failed pick inside it.
 pub(super) fn folder_for(
     verb: &str,
@@ -453,7 +453,7 @@ fn route_of(verb: &str, arg: &str) -> Result<Route, String> {
         "tab-mark" => Route::Strip(Some("8")),
         "tab-name" => Route::Colliding,
         // The order is the subject; four distinct names make it readable.
-        // The argument names two of them.
+        // The argument names two of them (`tab-drag`) or one (`tab-hold`).
         "tab-drag" | "tab-hold" => Route::Strip(Some("4")),
         // A strip that has to overflow a window at its floor. Twelve:
         // tabs above their own floor divide the run exactly and overflow

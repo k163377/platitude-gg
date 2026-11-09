@@ -50,7 +50,7 @@ fn named(args: &[String]) -> Result<(std::path::PathBuf, Option<String>), String
 /// user's to settle, and their next `/land` puts the seat back at the end
 /// (`line::leave`). A refusal ahead of the turn — a dirty seat, a branch
 /// checked out nowhere — is the session's to put right and land again;
-/// a branch with nothing to land ends its place too (`landing`).
+/// a branch with nothing to land ends its place too (`preflight`).
 fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     let (root, branch) = named(args)?;
     phases.target(&root, "");

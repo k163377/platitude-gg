@@ -233,8 +233,8 @@ const DISPLAY_CLASS: &str = "public class PerfDisplay : System.Windows.Forms.Nat
 ///
 /// The window handle is resolved once and held: `MainWindowHandle`
 /// enumerates every top-level window, and `Refresh()` (which the counters
-/// need) throws the cached one away — asking per tick would sweep the
-/// desktop twice a tick.
+/// need) throws the cached one away — a tick asks it once, to see whether
+/// the window went, and every other use reads the held handle.
 ///
 /// The window is raised without taking focus (`SWP_NOMOVE | SWP_NOSIZE |
 /// SWP_NOACTIVATE`) when it appears and, while it is not in front, on every

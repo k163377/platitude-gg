@@ -18,8 +18,8 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-/// What every application invocation carries (`process::executor`):
-/// spelled again here because xtask depends on std alone.
+/// What every application invocation carries (`process::executor`) less its
+/// `i18n.*Encoding` pins: spelled again here because xtask depends on std alone.
 const FIXED_ARGS: [&str; 9] = [
     "-c",
     "color.ui=false",

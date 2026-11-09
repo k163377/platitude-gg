@@ -445,7 +445,7 @@ fn record_of_a_wedge() -> [String; 7] {
     ]
 }
 
-/// Three runs stopped on purpose, selected by [`record_of_a_wedge`]
+/// Four runs stopped on purpose, selected by [`record_of_a_wedge`]
 /// alone: each is a held run paid in wall clock, and nothing outside
 /// those files can stop a stopped run from being readable.
 ///
@@ -796,7 +796,7 @@ fn holds_periodic(text: &str) -> bool {
     })
 }
 
-/// How many of `lines` show a component the reach holds — the selection
+/// How many of `lines` show a component the change touched — the selection
 /// a gate choosing by what each line shows would make, printed beside
 /// the selection by reach and never used to skip a run
 /// (反映前テストの機械化.md §動詞の絞り込みは比較表示に留める). Counted

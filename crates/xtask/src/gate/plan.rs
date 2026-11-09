@@ -777,8 +777,8 @@ struct Reading<'a> {
 
 /// What the verb selection counted beside the steps it made.
 struct Counted {
-    /// The selected lines that show a reached component
-    /// (`steps::lines_showing_the_reach`).
+    /// The selected lines that show a component the change touched
+    /// (`steps::lines_showing_the_change`).
     by_shown: usize,
     /// Selected lines left to the whole gate.
     left: usize,

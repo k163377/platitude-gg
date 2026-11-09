@@ -376,7 +376,7 @@ pub(super) const TABLE: &[Verb] = &[
         name: "op-exit-lands",
         // `quit` keeps HEAD, the index and the tree as git left them (the
         // one answer that stops stepping and keeps the tree, デザイン規約
-        // §操作の終わり), so what it lands on is the fixture's: over
+        // §進行中の操作から出る), so what it lands on is the fixture's: over
         // `rebase-staged` the staged change stays, the worktree row with
         // it and the reader on it. HEAD is on no branch (`home=` is the
         // folder). No clean-tree form: `rebase --quit` from a stop on an

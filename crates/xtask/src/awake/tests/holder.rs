@@ -394,7 +394,7 @@ fn ended(pid: u32) {
 /// The System process's pid: always running, and no Claude's.
 const SYSTEM: u32 = 4;
 
-/// A claim of this revision owned by `pid`, `state` as of now.
+/// A claim of this protocol owned by `pid`, `state` as of now.
 fn claim_of(state: State, pid: u32) -> String {
     format!(
         "r{} {} {pid} {} a 0 - - -",
@@ -1016,7 +1016,7 @@ fn the_history_tells_each_verdict_and_whose_work_it_stood_on() {
 }
 
 /// Sessions claiming at the same moment start one holder: the claim and
-/// the start happen under the directory's lock.
+/// the reservation of the holder's name happen under the directory's lock.
 #[test]
 fn claims_made_at_once_start_one_holder() {
     let dir = scratch("at-once");

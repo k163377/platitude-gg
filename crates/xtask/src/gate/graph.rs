@@ -1295,7 +1295,7 @@ fn split_top_level(text: &str) -> Vec<String> {
 /// Repointing a binding changes what the reader gets without touching what
 /// it named before, so the reader is owed by the binding's file as well;
 /// but a `pub use` line passes no data, so a product file that file reads
-/// elsewhere is not handed on through it (`Graph::hands_on`, and read
+/// elsewhere is not handed on through it (`Graph::walk`, and read
 /// back in `Graph::inputs`). A crate root is a binding like any other:
 /// nothing reads it for code ([`complaints`]).
 #[derive(Default)]

@@ -294,7 +294,7 @@ impl Kind {
 /// The torn blocks of one document.
 ///
 /// The walk carries one question: is a list still open over an indented
-/// line. A list opens on a bullet at any indent and only a column-0 block
+/// line. A list opens on a column-0 bullet and only a column-0 block
 /// closes it — a table or heading indented inside a list is part of it,
 /// and letting one close the list would call every sound bullet under it
 /// an orphan. A column-0 line with no blank above is a lazy continuation

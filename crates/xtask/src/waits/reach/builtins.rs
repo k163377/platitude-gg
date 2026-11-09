@@ -302,7 +302,8 @@ pub(super) fn global(
 }
 
 /// How `object.method` calls back a function it is handed: with the
-/// elements of its first argument, for `Array.from`.
+/// elements of its first argument, for `Array.from`; with what nothing
+/// says, for `JSON`'s reviver and replacer.
 pub(super) fn global_calls_back(object: &str, method: &str) -> Option<CallsBack> {
     match (object, method) {
         ("Array", "from") => Some(back(1, Given::Elements, Some(2))),

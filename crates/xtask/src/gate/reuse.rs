@@ -8,9 +8,11 @@
 //! commit's tree would not be describing.
 //!
 //! Only what outlives the build is kept — the edges, their reverse, the
-//! modules, and the paths that resolved nowhere; the rest of [`Graph`] is
-//! scaffolding resolution uses. The round trip is tested against the real
-//! tree's graph, so a field that stops being scaffolding is caught.
+//! modules, the bindings, the reads as data and of the tests alone, the
+//! systems a module is compiled on, and the paths that resolved nowhere;
+//! the rest of [`Graph`] is scaffolding resolution uses. The round trip is
+//! tested against the real tree's graph, so a field that stops being
+//! scaffolding is caught.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

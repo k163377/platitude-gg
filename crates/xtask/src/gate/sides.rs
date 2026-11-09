@@ -1,5 +1,6 @@
-//! Both sides of a run at once, and within a side the checks group
-//! and the built-app group with its blocks of verbs.
+//! Both sides of a run at once, and within a side three groups side by
+//! side: the checks, the built app with its blocks of verbs, and the steps
+//! beside both.
 
 use std::path::Path;
 use std::time::Duration;

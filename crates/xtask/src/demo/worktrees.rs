@@ -245,7 +245,7 @@ pub(super) fn worktrees(repo: &mut DemoRepo) -> Result<(), String> {
 /// one shape in which a REMOTES row opens on all three of its lines — the
 /// reading's own name, the branch measured against it, and the worktree
 /// holding that branch (デザイン規約 §左メニューの所作). No other preset
-/// has both a remote and a second worktree. The commit made in the
+/// holds a branch that tracks a remote in a second worktree. The commit made in the
 /// worktree gives the line a count; a branch level with its reading draws none.
 pub(super) fn tracked_elsewhere(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(

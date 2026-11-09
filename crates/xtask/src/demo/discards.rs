@@ -1,7 +1,7 @@
 //! The presets the discard log is drawn from (`platitude_core::discards`): one of
 //! every move git's own reflogs keep that takes commits off a tip, and one
 //! of every line Platitude GG's own record holds — written here in the
-//! record's own shape (§2), since xtask runs none of the application.
+//! record's own shape (`discards::record`), since xtask runs none of the application.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -377,7 +377,7 @@ fn moves(repo: &mut DemoRepo, clock: &Clock) -> Result<(), String> {
     repo.git(&["switch", "main"])?;
 
     // Two commits a reset takes off main, with work in the tree it throws
-    // away too: copied first, the move it goes with on the copy (§2).
+    // away too: copied first, the move it goes with on the copy (`discards::record`).
     repo.pin_clock(Some(clock.ago(DAY * 300)));
     repo.commit("src/session.txt", "session v1\n", "feat: store sessions")?;
     repo.commit(
@@ -646,7 +646,7 @@ fn the_rest(repo: &mut DemoRepo, clock: &Clock) -> Result<(), String> {
     Ok(())
 }
 
-/// A copy of the work at `tracked` and `untracked` (§2.1): the stash shape
+/// A copy of the work at `tracked` and `untracked` (`discards::copy`): the stash shape
 /// `stash create` writes for the tracked side — the index and the working
 /// tree — and the untracked files' own commit, made again under the
 /// record's message and identity.
@@ -755,7 +755,7 @@ fn untracked_commit(repo: &mut DemoRepo, paths: &[&str]) -> Result<String, Strin
     )
 }
 
-/// A note (§2): a commit on what was taken, its tree, carrying what to put
+/// A note (`discards::record`): a commit on what was taken, its tree, carrying what to put
 /// back in its trailers.
 fn note(
     repo: &mut DemoRepo,
@@ -793,7 +793,7 @@ fn message(summary: &str, trailers: &[(&str, &str)]) -> String {
     format!("{summary}\n\n{}", lines.join("\n"))
 }
 
-/// git as the record's writer: its own identity, with no email (§2).
+/// git as the record's writer: its own identity, with no email (`discards::record::RECORDER`).
 fn recorder(repo: &mut DemoRepo, args: &[&str]) -> Result<String, String> {
     let work = repo.work.clone();
     let mut cmd = repo.command(&work, args);

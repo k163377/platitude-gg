@@ -543,7 +543,7 @@ impl Program {
             return Value::Global(name.to_string());
         }
         if name.chars().next().is_some_and(char::is_uppercase) {
-            // A singleton of the product's (`PageSettled`, `Tips`).
+            // A singleton of the product's (`Tips`, `Theme`).
             return Value::Product(Some(name.to_string()));
         }
         if d >= self.harness || name == "parent" {

@@ -122,8 +122,8 @@ pub(super) fn judge(
             .iter()
             .chain(out_lines.iter())
             .any(|l| l.contains("write_contract ")),
-        // ASCII only, and so readable on both sides: a Windows Qt writes
-        // its log lines in the local code page (verify-ui skill).
+        // A `tracing` line (the app's `claim_store`), so UTF-8 on both
+        // sides; only Qt's own lines come in a Windows code page (verify-ui skill).
         store_refused: !super::child::stages_a_held_store(&opts.verb)
             && err_lines
                 .iter()

@@ -186,8 +186,8 @@ impl Claim {
     /// measurement after.
     fn take(primary: &str, rig: &str, commit: &str, exists: bool) -> Result<Self, String> {
         // The session mark carries the pid too: a claim's reason is read
-        // back as `<session> pid <pid>`, and an empty session leaves the
-        // pid unparsed (`seats::standing`).
+        // back as `<session> pid <pid>`, and a claim with no session id is
+        // never taken (`Identity::require_session`).
         // No host: the rig's claim is this process's, not a conversation's.
         let me = Identity {
             session: format!("perf-{}", std::process::id()),
@@ -288,7 +288,7 @@ fn shelve(fresh: &Path, exe: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// The shelf entries past the newest `keep`, oldest first by their exe's
+/// The shelf entries past the newest `keep`, newest first by their exe's
 /// time (std cannot set a directory's on Windows); an entry with no exe
 /// is older than any that has one. An unreadable shelf has nothing to
 /// take off.

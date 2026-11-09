@@ -6,10 +6,10 @@
 //! VM's `/proc/meminfo` what Linux thinks the whole VM uses — memory is
 //! not namespaced, so a sum over the engine's `stats` is no substitute.
 //!
-//! Long-lived children sample and are killed when the command ends; a
-//! process per tick would cost more than it reads. Their rows are kept
-//! under `target/footprint/<run>/` and swept by nothing — they are the
-//! evidence the summary is checked against.
+//! Long-lived children sample and are killed a settle window ([`SETTLE`], or
+//! `--settle`) after the command ends; a process per tick would cost more
+//! than it reads. Their rows are kept under `target/footprint/<run>/` and
+//! swept by nothing — they are the evidence the summary is checked against.
 
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
@@ -104,7 +104,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 }
 
-/// The samplers, held for as long as the command runs.
+/// The samplers, held from before the command starts to the end of the
+/// settle window after it.
 struct Watching {
     children: Vec<Child>,
 }
@@ -190,8 +191,8 @@ const OURS: &str = "platitude-gg,cargo,rustc,xtask,git,link,wslc,wslcsession,doc
 /// rather than ending the watch.
 fn host_side(to: &Path) -> Result<Child, String> {
     // waits(measured): the gap between two readings. It is the sampling
-    // rate, nothing waits on it, and what ends the loop is the command
-    // ending (`Watching::stop`).
+    // rate, nothing waits on it, and what ends the loop is `Watching::stop`,
+    // the settle window after the command ends.
     let pause = format!("Start-Sleep -Seconds {}", EVERY.as_secs());
     let script = format!(
         "$out = '{}'\n\

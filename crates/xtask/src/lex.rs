@@ -832,10 +832,9 @@ mod tests {
         assert_eq!(kept, "a: 'x'     ");
     }
 
-    /// A literal is one token of its own text, a template's pieces one each with the code between them cut as
-    /// code; a comment is none; the lines are the file's.
-    /// A statement's head is read where the ignored rule needs it: under a bare condition or an `else`, on the
-    /// condition's own line, after a line that ended on a value — and not where a line goes on.
+    /// A statement's head is read where the ignored rule needs it: under a bare condition or an
+    /// `else`, on the condition's own line, after a line that ended on a value — and not where a
+    /// line goes on.
     #[test]
     fn a_statement_begins_after_a_condition_an_else_or_a_line_that_ended_on_a_value() {
         let heads = |text: &str| {
@@ -856,6 +855,8 @@ mod tests {
         assert!(!heads("f(a) go()"));
     }
 
+    /// A literal is one token of its own text, a template's pieces one each with the code
+    /// between them cut as code; a comment is none; the lines are the file's.
     #[test]
     fn tokens_are_names_numbers_operators_and_literals_with_their_lines() {
         let text =

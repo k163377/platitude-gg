@@ -21,7 +21,7 @@
 //! there, gone, or not known because the engine could not be asked.
 //!
 //! **An engine that gives no answer is not an answer.** Everything short
-//! that is asked of it goes through [`put`]: to its end or to a ceiling,
+//! this module asks of it goes through [`put`]: to its end or to a ceiling,
 //! and a command that exited non-zero, could not be started or ran out
 //! of time comes back as that — with what was asked, when, for how long
 //! and what it said — never as "the object is not there". What the

@@ -553,7 +553,7 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "band_actions fits=true folded=false deep=true boxed=true even=true find=false",
     },
-    // The fourth badge. A run whose shim never reached PATH reads this
+    // The band's last badge of six. A run whose shim never reached PATH reads this
     // machine's git and wears no badge; `badge=` is the band's own reading,
     // so the whole path from `git --version` to the row is judged.
     Verb {
@@ -637,7 +637,7 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The picker is the platform's own window and stands in neither
     // photograph (`popups=0`), so the line is the whole evidence. It comes
-    // up beside the repository already open (rules-refs/app-ui.md).
+    // up beside the repository already open (`RepoTab`'s `picker_folder_url`).
     //
     // `beside_worktree=` reads the folder without knowing the machine's paths:
     // whether the picker came up in the folder the worktree sits in. The

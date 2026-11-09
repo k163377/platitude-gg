@@ -1,6 +1,6 @@
-//! The trees read: one bare repository the primary checkout keeps under
-//! `target/relied-messages`, fetched from each supplier through git, and one
-//! `git grep` a tree.
+//! The trees read: bare repositories under the primary checkout's
+//! `target/relied-messages` (the temp folder's, in the container), one a
+//! supplier ([`Cache`]), fetched through git, and one `git grep` a tree.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -18,7 +18,7 @@ const OPENSSH: &str = "https://github.com/openssh/openssh-portable";
 const VERSION_RS: &str = "crates/platitude-core/src/version.rs";
 const MINIMUM_LINE: &str = "pub const MINIMUM_GIT: (u32, u32) = (";
 
-/// The minimum container's Ubuntu (`linux` reads the same line).
+/// The minimum container's Ubuntu (`versions` reads the same line).
 const DOCKERFILE: &str = "ci/linux/Dockerfile";
 const UBUNTU_ARG: &str = "ARG UBUNTU=";
 

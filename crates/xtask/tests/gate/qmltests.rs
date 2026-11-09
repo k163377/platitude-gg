@@ -223,12 +223,6 @@ fn a_change_at_each_boundary_of_a_qml_test_run_owes_it_and_runs_it() {
     }
 }
 
-/// What no run reads plans no QML test by itself, and leaves the green
-/// the branch's own reach still asks for: a file only the runner's tests
-/// read, the product's Rust (a stub stands in for the app's module), and
-/// the tests' prose. A comment in the runner's Rust is planned and keeps
-/// the stamp; a comment in a test is part of the text the runner reads
-/// for its cases, and runs both again.
 /// A helper a test imports by a single-quoted path spelled across lines
 /// with a comment in it — an import Qt takes as it takes the double-quoted
 /// one-line spelling — and what that helper imports in turn are what a
@@ -280,6 +274,12 @@ fn a_helper_imported_in_any_spelling_owes_the_qml_tests_until_they_run_again() {
     }
 }
 
+/// What no run reads plans no QML test by itself, and leaves the green
+/// the branch's own reach still asks for: a file only the runner's tests
+/// read, the product's Rust (a stub stands in for the app's module), and
+/// the tests' prose. A comment in the runner's Rust is planned and keeps
+/// the stamp; a comment in a test is part of the text the runner reads
+/// for its cases, and runs both again.
 #[test]
 fn what_a_qml_test_run_does_not_read_keeps_its_green() {
     let (sb, _) = with_the_qml_runner("qmltest-unread");

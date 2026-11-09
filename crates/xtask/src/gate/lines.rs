@@ -203,7 +203,7 @@ impl Shown {
         &self.core
     }
 
-    /// What `line` shows: the core and what its subjects bring up. Empty
+    /// What `line` shows: the core and what its subjects bring up. `None`
     /// for a line the table does not hold.
     pub(crate) fn of(&self, line: &str) -> Option<&BTreeSet<String>> {
         self.lines.get(line)
