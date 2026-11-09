@@ -31,11 +31,11 @@ MouseArea {
         divider.pointedInto(divider.containsMouse)
         // Entering does not always bring a move with it.
         if (divider.containsMouse)
-            divider.pointedAt(divider.mapToItem(null, divider.mouseX, divider.mouseY))
+            divider.pointedAt(divider.mapToItem(null, Qt.point(divider.mouseX, divider.mouseY)))
     }
     onPositionChanged: mouse => {
-        divider.pointedAt(divider.mapToItem(null, mouse.x, mouse.y))
+        divider.pointedAt(divider.mapToItem(null, Qt.point(mouse.x, mouse.y)))
         if (divider.pressed)
-            divider.dragged(divider.mapToItem(divider.frame, mouse.x, 0).x)
+            divider.dragged(divider.mapToItem(divider.frame, Qt.point(mouse.x, 0)).x)
     }
 }

@@ -975,7 +975,8 @@ Item {
                 })
                 op.input("away", () => {
                     op.witness("stood", detailsPane.saveRowShown)
-                    page.Window.window.caretHand.pressedAt(detailsPane.mapToItem(null, detailsPane.width / 2, 2))
+                    page.Window.window.caretHand.pressedAt(
+                        detailsPane.mapToItem(null, Qt.point(detailsPane.width / 2, 2)))
                 })
                 op.complete({ "name": "reword_away", "when": () => ({}),
                               "report": () => "message_away stood=" + op.witnessed("stood")

@@ -46,7 +46,7 @@ Item {
         /// A point of row `i`'s hash, in the root's coordinates.
         function hashPoint(i, fx) {
             const f = card.rowAt(i).field
-            return f.mapToItem(root, f.width * fx, f.height / 2)
+            return f.mapToItem(root, Qt.point(f.width * fx, f.height / 2))
         }
 
         function test_a_a_click_goes_to_that_row_and_shuts_the_card() {
@@ -60,7 +60,7 @@ Item {
         // The row is the target, air included: a press beside the hash is still that row's.
         function test_b_a_click_beside_the_hash_is_the_row_s() {
             const row = card.rowAt(2)
-            const p = row.mapToItem(root, row.width - 2, row.height / 2)
+            const p = row.mapToItem(root, Qt.point(row.width - 2, row.height / 2))
             mouseClick(root, p.x, p.y)
             compare(root.picked, card.parents[2])
         }

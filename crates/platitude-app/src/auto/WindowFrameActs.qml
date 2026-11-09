@@ -49,7 +49,7 @@ Item {
             // margin that misses is what this looks for. The maximised window as it was read before it was put back
             // (`fillLine`) is kept, and is the run's line.
             if (op.at("filled")) {
-                const at = mainUi.mapToItem(null, 0, 0)
+                const at = mainUi.mapToItem(null, Qt.point(0, 0))
                 if (!Awaited.all("window_fill_report_ready", {
                         "placed": at.x === 0 && at.y === 0,
                         "filled": mainUi.width === window.width && mainUi.height === window.height,
@@ -67,7 +67,7 @@ Item {
     }
     /// The maximised window: whether its contents reach the four edges, in scene coordinates.
     function fillLine() {
-        const at = mainUi.mapToItem(null, 0, 0)
+        const at = mainUi.mapToItem(null, Qt.point(0, 0))
         return "window_fill fills=" + (at.x === 0 && at.y === 0
                                        && mainUi.width === window.width
                                        && mainUi.height === window.height)

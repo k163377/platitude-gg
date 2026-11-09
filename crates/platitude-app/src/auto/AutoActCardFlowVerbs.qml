@@ -98,7 +98,7 @@ Item {
             const row = graphPane.view.itemAtIndex(graphModel.headRow)
             if (row === null)
                 return
-            let next = row.mapToItem(null, row.width / 2, row.height / 2)
+            let next = row.mapToItem(null, Qt.point(row.width / 2, row.height / 2))
             if (next.x === graphPane.hand.at.x && next.y === graphPane.hand.at.y)
                 next = Qt.point(next.x + 2, next.y)
             graphPane.hand.stir(next)
@@ -118,7 +118,7 @@ Item {
                     return
                 op.input("stirred", () => {
                     op.witness("oid", row.oid_hex)
-                    graphPane.hand.stir(row.mapToItem(null, row.width / 2, row.height / 2))
+                    graphPane.hand.stir(row.mapToItem(null, Qt.point(row.width / 2, row.height / 2)))
                 })
                 return
             }
@@ -214,7 +214,7 @@ Item {
                     return
                 op.input("stirred", () => {
                     op.witness("headBefore", graphModel.oidAt(graphModel.headRow))
-                    graphPane.hand.stir(row.mapToItem(null, row.width / 2, row.height / 2))
+                    graphPane.hand.stir(row.mapToItem(null, Qt.point(row.width / 2, row.height / 2)))
                 })
                 return
             }

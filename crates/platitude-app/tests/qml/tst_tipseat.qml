@@ -198,7 +198,7 @@ Item {
         /// How far the box's middle stands off `x`, in the window.
         function boxOff(x) {
             const ground = root.box.background
-            return Math.abs(ground.mapToItem(root, ground.width / 2, 0).x - x)
+            return Math.abs(ground.mapToItem(root, Qt.point(ground.width / 2, 0)).x - x)
         }
         /// Rests the hand on `row` at `across` (a share of its width) and answers the box's seat in the row's terms.
         /// The box comes out at the previous words' size and takes its own a frame later, so the seat is read once the
@@ -357,7 +357,7 @@ Item {
             tryVerify(() => box.visible && box.parent === wideTyped, undefined, "the refusal puts its box out")
             verify(box.width < wideTyped.width, "a box narrower than its field, so where it stands across is asked")
             const ground = box.background
-            const corner = ground.mapToItem(root, 0, 0)
+            const corner = ground.mapToItem(root, Qt.point(0, 0))
             verify(Math.abs(corner.x - wideTyped.x) <= 1,
                    "from the field's left edge, not the hand at the corner: " + corner.x + " for " + wideTyped.x)
             verify(Math.abs(corner.y + ground.height - wideTyped.y) <= 1,
@@ -435,7 +435,7 @@ Item {
             mouseMove(root, 150, middleOf(rowA))
             tryVerify(() => box.visible && box.parent === rowA, undefined, "the row's box is out")
             shows.clear()
-            menu.popup(root, 150, middleOf(rowA))
+            menu.popup(root, Qt.point(150, middleOf(rowA)))
             tryVerify(() => menu.opened && !box.visible && !onA.hovered, undefined,
                       "the menu over the hand took it down")
             menu.dismiss()

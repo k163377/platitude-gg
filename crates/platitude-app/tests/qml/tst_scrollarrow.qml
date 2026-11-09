@@ -298,7 +298,7 @@ Item {
                 compare(arrows.length, 2)
                 const lit = () => slab ? Qt.colorEqual(bar.slabColor, Theme.borderDefault) : bar.opacity === 1
                 const idle = () => slab ? Qt.colorEqual(bar.slabColor, bar.idleColor) : bar.opacity < 1
-                const atRows = bar.mapToItem(root, -20, bar.height / 2)
+                const atRows = bar.mapToItem(root, Qt.point(-20, bar.height / 2))
                 // Out first: a reset that moved the view while the hand was in it left the bar lit until it leaves.
                 mouseMove(root, root.width - 1, 300)
                 tryVerify(() => !bar.inArea)
@@ -353,7 +353,7 @@ Item {
             const bar = codeScroll.children[0].children.filter(c => c.orientation === Qt.Horizontal)[0]
             mouseMove(diffPane, 20, 20)
             tryVerify(() => bar.visible && bar.inArea && !bar.used, undefined, "in the pane, the bar rests")
-            const at = bar.mapToItem(root, bar.width / 2, bar.height / 2)
+            const at = bar.mapToItem(root, Qt.point(bar.width / 2, bar.height / 2))
             mouseMove(root, at.x, at.y)
             tryVerify(() => bar.underHand, undefined, "the hand is on the bar")
             verify(bar.opacity < 1, "rising, not at once")
@@ -518,7 +518,7 @@ Item {
         function test_dragging_the_thumb_takes_a_pinned_box_over() {
             desc.resetForNewMessage()
             const thumb = desc.bar.contentItem
-            const at = thumb.mapToItem(desc.bar, thumb.width / 2, thumb.height / 2)
+            const at = thumb.mapToItem(desc.bar, Qt.point(thumb.width / 2, thumb.height / 2))
             mouseDrag(desc.bar, at.x, at.y, 0, 20)
             verify(desc.textAt > 0, "the thumb moved the text")
         }

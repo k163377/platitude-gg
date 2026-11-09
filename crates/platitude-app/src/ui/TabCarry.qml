@@ -47,7 +47,7 @@ Item {
         if (!tab)
             return
         carry.heldSceneX = sceneX
-        const want = carry.view.contentItem.mapFromItem(null, sceneX, 0).x - carry.heldGrabX
+        const want = carry.view.contentItem.mapFromItem(null, Qt.point(sceneX, 0)).x - carry.heldGrabX
         const runFrom = carry.view.contentX
         const runTo = carry.view.contentX + carry.view.width - tab.width
         carry.heldPush = want < runFrom ? want - runFrom : Math.max(0, want - runTo)

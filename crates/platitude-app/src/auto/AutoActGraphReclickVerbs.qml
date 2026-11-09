@@ -203,8 +203,8 @@ Item {
             // Three presses along the row, asked of what takes them: left of the box, on it — on its part under the
             // lane strip where the strip stands over it — and past it.
             const strip = graphPane.lanePan
-            const underL = strip.visible ? Math.max(boxX, strip.mapToItem(item, 0, 0).x) : 0
-            const underR = strip.visible ? Math.min(right, strip.mapToItem(item, strip.width, 0).x) : 0
+            const underL = strip.visible ? Math.max(boxX, strip.mapToItem(item, Qt.point(0, 0)).x) : 0
+            const underR = strip.visible ? Math.min(right, strip.mapToItem(item, Qt.point(strip.width, 0)).x) : 0
             const onBox = underR - underL > 2 ? (underL + underR) / 2 : boxX + item.nameBoxWidth / 2
             const probes = [boxX / 2, onBox, (right + item.width) / 2]
             return "graph_rename_fit row=" + reclickGraphTimer.row
@@ -379,7 +379,7 @@ Item {
         // Witnessed at each click back on the row, as the row reads it then: `pane` after the press on the pane,
         // `stepped` after the steps, `armed` at the click that names.
         function press(item) {
-            page.Window.window.caretHand.pressedAt(item.mapToItem(null, 2, item.height / 2))
+            page.Window.window.caretHand.pressedAt(item.mapToItem(null, Qt.point(2, item.height / 2)))
             item.leftClick(Qt.NoModifier)
         }
         onTriggered: {
@@ -411,7 +411,7 @@ Item {
                 op.input("first_click", () => op.press(item))
             } else if (op.at("first_click")) {
                 op.input("pane_press", () => page.Window.window.caretHand.pressedAt(
-                             detailsPane.mapToItem(null, detailsPane.width / 2, detailsPane.height / 2)))
+                             detailsPane.mapToItem(null, Qt.point(detailsPane.width / 2, detailsPane.height / 2))))
             } else if (op.at("pane_press")) {
                 // A beat after: the gesture settles an input once it is through (`ReclickGesture.settle`).
                 op.input("back_click", () => {

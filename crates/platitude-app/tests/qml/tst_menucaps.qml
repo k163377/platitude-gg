@@ -50,7 +50,7 @@ Item {
 
         /// How far below `middle` the capitals of `label`'s first line have their middle, in `row`'s y.
         function capitalsOff(row, label, middle) {
-            const base = label.mapToItem(row, 0, label.baselineOffset).y
+            const base = label.mapToItem(row, Qt.point(0, label.baselineOffset)).y
             return base - WordFace.capitalMiddle(label.font.pixelSize) - middle
         }
 

@@ -44,7 +44,7 @@ ListView {
         const over = appList.shield
         if (over === null || !over.visible)
             return false
-        const p = over.mapFromItem(null, scenePoint.x, scenePoint.y)
+        const p = over.mapFromItem(null, scenePoint)
         return p.x >= 0 && p.y >= 0 && p.x < over.width && p.y < over.height
     }
     /// Automation only: started and drifted without a pointer (a middle button cannot be injected).

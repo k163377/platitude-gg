@@ -63,14 +63,14 @@ Item {
     }
     /// Where a hand on `item`'s middle stands, in the window.
     function middleOf(item) {
-        return item.mapToItem(null, item.width / 2, Math.min(item.height, Theme.rowHeight) / 2)
+        return item.mapToItem(null, Qt.point(item.width / 2, Math.min(item.height, Theme.rowHeight) / 2))
     }
     /// Whether the delegate `row` still stands for its row with its top where it was in the window (`at`) — not
     /// pooled, and not destroyed with a row the read took out: a witness keeps the reference, which outlives its
     /// object and answers no method once it is gone.
     function standsAt(row, at) {
         return row !== null && typeof row.mapToItem === "function" && row.pooled !== true
-            && Math.abs(row.mapToItem(null, 0, 0).y - at) < 1
+            && Math.abs(row.mapToItem(null, Qt.point(0, 0)).y - at) < 1
     }
 
     // nav-reread. The open row's seat (`OpenRowSeat`) and the panel's keeper (`SidebarPane.rowKeep`).
@@ -123,11 +123,11 @@ Item {
                 // stays on it.
                 op.input("into_lines", () => {
                     if (row.factsItem.height > 0)
-                        acts.sidebar.hand.stir(row.factsItem.mapToItem(null, row.factsItem.width / 2,
-                                                                       row.factsItem.height / 2))
+                        acts.sidebar.hand.stir(row.factsItem.mapToItem(null, Qt.point(row.factsItem.width / 2,
+                                                                                      row.factsItem.height / 2)))
                 })
                 op.input("written", () => {
-                    op.witness("rowAt", row.mapToItem(null, 0, 0).y)
+                    op.witness("rowAt", row.mapToItem(null, Qt.point(0, 0)).y)
                     op.witness("readsBefore", op.reads)
                     const head = acts.graphModel.headRowOid
                     if (op.how === "gone") {
@@ -205,7 +205,7 @@ Item {
                 op.input("made", () => {
                     op.witness("atBefore", pane.cardAt)
                     const card = pane.entryHoverCard
-                    op.witness("cardAt", card.contentItem.mapToItem(null, 0, 0))
+                    op.witness("cardAt", card.contentItem.mapToItem(null, Qt.point(0, 0)))
                     if (op.how === "inside") {
                         // The hand inside the card, which the list no longer hears.
                         card.contentPointed = true
@@ -239,7 +239,7 @@ Item {
                                  "page": PageSettled.settled(acts.page) }),
                 "report": () => {
                     const log = recoverTimer.pane
-                    const at = log.entryHoverCard.contentItem.mapToItem(null, 0, 0)
+                    const at = log.entryHoverCard.contentItem.mapToItem(null, Qt.point(0, 0))
                     const was = op.witnessed("cardAt")
                     return "recover_reread how=" + op.how
                            + " card=" + log.cardOpen
@@ -323,11 +323,11 @@ Item {
             if (op.at("pointed")) {
                 const row = op.witnessed("row")
                 // The row the hand is on laid out and standing, before the write moves the rows under it.
-                if (!op.still("diff_reread_stood", row.mapToItem(null, 0, 0).y))
+                if (!op.still("diff_reread_stood", row.mapToItem(null, Qt.point(0, 0)).y))
                     return
                 // A failed save over the file is said with the stage.
                 op.input("written", () => {
-                    op.witness("rowAt", row.mapToItem(null, 0, 0).y)
+                    op.witness("rowAt", row.mapToItem(null, Qt.point(0, 0)).y)
                     op.witness("readsBefore", op.reads)
                     const why = Harness.writeFile(acts.repoTab.repoPath + "/notes.txt", op.notes(op.how))
                     acts.repoTab.pollNow()

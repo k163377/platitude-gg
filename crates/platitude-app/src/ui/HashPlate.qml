@@ -113,7 +113,7 @@ ColumnLayout {
     readonly property real unrollInset: Theme.borderWidth + Theme.spaceXs
     /// The arrow's box in `item`'s coordinates: a mark and no target, outside the card (automation reads its edge).
     function arrowBox(item) {
-        const at = arrowSeat.mapToItem(item, 0, 0)
+        const at = arrowSeat.mapToItem(item, Qt.point(0, 0))
         return Qt.rect(at.x, at.y, arrowSeat.width, arrowSeat.height)
     }
     /// Every parent, cut evenly from whole down to `cutDigits`; past that the tail goes to `+N`. Two always stand. Each
@@ -149,16 +149,16 @@ ColumnLayout {
         const drawn = !!link && link.visible
         const comma = plate.parentsShown > 1 && plate.linkAt(0) ? plate.linkAt(0).comma : null
         return {
-            hash: shaText.mapToItem(item, 0, shaText.baselineOffset).y,
-            parent: drawn ? link.field.mapToItem(item, 0, link.field.baselineOffset).y : -1,
-            comma: comma && comma.visible ? comma.mapToItem(item, 0, comma.baselineOffset).y : -1,
-            count: moreLabel.visible ? moreLabel.mapToItem(item, 0, moreLabel.baselineOffset).y : -1,
+            hash: shaText.mapToItem(item, Qt.point(0, shaText.baselineOffset)).y,
+            parent: drawn ? link.field.mapToItem(item, Qt.point(0, link.field.baselineOffset)).y : -1,
+            comma: comma && comma.visible ? comma.mapToItem(item, Qt.point(0, comma.baselineOffset)).y : -1,
+            count: moreLabel.visible ? moreLabel.mapToItem(item, Qt.point(0, moreLabel.baselineOffset)).y : -1,
             countSize: moreLabel.font.pixelSize
         }
     }
     /// The line in `item`'s coordinates.
     function parentLineRect(item) {
-        const at = parentLine.mapToItem(item, 0, 0)
+        const at = parentLine.mapToItem(item, Qt.point(0, 0))
         return Qt.rect(at.x, at.y, parentLine.width, parentLine.height)
     }
     /// Where the parents' card opens: across, the line's span (its right end is a single parent's seat); down, the
@@ -168,12 +168,12 @@ ColumnLayout {
         const link = plate.linkAt(0)
         if (!link)
             return line
-        const hash = link.field.mapToItem(item, 0, 0)
+        const hash = link.field.mapToItem(item, Qt.point(0, 0))
         return Qt.rect(line.x, hash.y, line.width, link.field.height)
     }
     /// The line's left edge in `item`'s x, and its width as laid out.
     function parentLineLeft(item) {
-        return parentLine.mapToItem(item, 0, 0).x
+        return parentLine.mapToItem(item, Qt.point(0, 0)).x
     }
     readonly property real parentLineWidth: parentLine.width
 
@@ -212,7 +212,7 @@ ColumnLayout {
     }
     /// Where this plate begins, in `item`'s x.
     function leftEdge(item) {
-        return plate.mapToItem(item, 0, 0).x
+        return plate.mapToItem(item, Qt.point(0, 0)).x
     }
     /// `"parent"` is the first parent's link, the one every commit but a root has.
     function fieldFor(which) {

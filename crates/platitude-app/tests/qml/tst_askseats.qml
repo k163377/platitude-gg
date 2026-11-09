@@ -71,7 +71,7 @@ Control {
 
         /// Left, top, right and bottom of `item` in the bar's own coordinates.
         function edges(item) {
-            const p = item.mapToItem(bar, 0, 0)
+            const p = item.mapToItem(bar, Qt.point(0, 0))
             return { left: p.x, top: p.y, right: p.x + item.width, bottom: p.y + item.height }
         }
 
@@ -134,10 +134,10 @@ Control {
 
         /// Where the heading's first line and the pill's word stand, in the bar's own y.
         function headingBase() {
-            return bar.headingWords.mapToItem(bar, 0, bar.headingWords.baselineOffset).y
+            return bar.headingWords.mapToItem(bar, Qt.point(0, bar.headingWords.baselineOffset)).y
         }
         function pillBase() {
-            return bar.pillWord.mapToItem(bar, 0, bar.pillWord.base).y
+            return bar.pillWord.mapToItem(bar, Qt.point(0, bar.pillWord.base)).y
         }
 
         /// A heading alone, on one line in the two columns: the three on one row, the heading on the pill's word's

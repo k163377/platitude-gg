@@ -229,7 +229,7 @@ Rectangle {
         entryCard.key = key
         entryCard.entry = Qt.binding(() => pane.entryOf(key, -1))
         entryCard.when = Qt.binding(() => pane.words.whenWords(entryCard.entry.at, pane.now))
-        const at = row.mapToItem(pane, pointerX, row.height)
+        const at = row.mapToItem(pane, Qt.point(pointerX, row.height))
         entryCard.x = at.x
         entryCard.y = at.y
         entryCard.open()
@@ -536,11 +536,11 @@ Rectangle {
         function handX(at) {
             const view = row.ListView.view
             if (view) {
-                const v = view.mapFromItem(null, at.x, at.y)
+                const v = view.mapFromItem(null, at)
                 if (v.x < 0 || v.y < 0 || v.x >= view.width || v.y >= view.height || view.shieldAt(at))
                     return -1
             }
-            const p = row.mapFromItem(null, at.x, at.y)
+            const p = row.mapFromItem(null, at)
             return p.x >= 0 && p.y >= 0 && p.x < row.width && p.y < row.height ? p.x : -1
         }
         function placeMoved() {

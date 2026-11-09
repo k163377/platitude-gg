@@ -78,7 +78,7 @@ Item {
     function restDividerPointer(inside, y) {
         dividers.dividerPointed = inside
         if (inside)
-            dividers.dividerPoint = graphDivider.mapToItem(null, graphDivider.width / 2, y)
+            dividers.dividerPoint = graphDivider.mapToItem(null, Qt.point(graphDivider.width / 2, y))
     }
     /// Automation: a drag carried past one of the four bounds (`PGG_AUTO_ACT=divider-refuse`, whose argument names
     /// which), walking the road the handler walks.
@@ -89,7 +89,7 @@ Item {
                                              : dividers.columns.labelColWMin - over
             dividers.labelPointed = true
             dividers.labelHeld = true
-            dividers.labelPoint = dividers.mapToItem(null, lx, dividers.height / 2)
+            dividers.labelPoint = dividers.mapToItem(null, Qt.point(lx, dividers.height / 2))
             dividers.dragLabelTo(lx)
             return
         }
@@ -98,7 +98,7 @@ Item {
                                             : dividers.columns.graphColWMax + over)
         dividers.dividerPointed = true
         dividers.dividerHeld = true
-        dividers.dividerPoint = dividers.mapToItem(null, px, dividers.height / 2)
+        dividers.dividerPoint = dividers.mapToItem(null, Qt.point(px, dividers.height / 2))
         dividers.dragDividerTo(px)
     }
 

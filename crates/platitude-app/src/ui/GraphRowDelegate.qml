@@ -485,7 +485,7 @@ Item {
         if (view && view.keepingRows)
             return
         if (view) {
-            const top = rowItem.mapToItem(view, 0, 0).y
+            const top = rowItem.mapToItem(view, Qt.point(0, 0)).y
             if (top + rowItem.height <= 0 || top >= view.height)
                 return
         }
@@ -497,7 +497,7 @@ Item {
             hand.rowsMoved(disturbed)
             return
         }
-        const p = rowItem.mapFromItem(null, hand.at.x, hand.at.y)
+        const p = rowItem.mapFromItem(null, hand.at)
         const over = p.x >= 0 && p.y >= 0 && p.x < rowItem.width && p.y < rowItem.height
         if (over !== (rowItem.pointerRowX >= 0))
             hand.rowsMoved(disturbed)
@@ -511,12 +511,12 @@ Item {
         }
         // Inside the list's own box: a row kept built past its edge (`cacheBuffer`) lies under the pane's margins
         // and the footer, where it is drawn not at all.
-        const v = view.mapFromItem(null, hand.at.x, hand.at.y)
+        const v = view.mapFromItem(null, hand.at)
         if (v.x < 0 || v.y < 0 || v.x >= view.width || v.y >= view.height) {
             rowItem.pointerRowX = -1
             return
         }
-        const p = rowMouse.mapFromItem(null, hand.at.x, hand.at.y)
+        const p = rowMouse.mapFromItem(null, hand.at)
         rowItem.pointerRowX = rowMouse.containmentMask.contains(p) ? p.x : -1
     }
     /// Which half of the row a point along it falls in: `chip`, `row`, or `""` for neither.

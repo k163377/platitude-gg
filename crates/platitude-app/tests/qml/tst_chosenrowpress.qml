@@ -66,20 +66,20 @@ Item {
             return null
         }
         /// A point of `item` in the root's coordinates, in whole pixels, as a pointer delivers them.
-        function inRoot(item, x, y) {
-            const p = item.mapToItem(root, x, y)
+        function inRoot(item, position) {
+            const p = item.mapToItem(root, position)
             return Qt.point(Math.round(p.x), Math.round(p.y))
         }
         /// On the summary's words, `x` along them.
         function onWords(x) {
             const words = field(root.record.subject)
-            return inRoot(words, x, words.height / 2)
+            return inRoot(words, Qt.point(x, words.height / 2))
         }
         /// The row's air under the summary: below its box, above the row's foot.
         function underWords(x) {
             const words = field(root.record.subject)
-            const foot = words.mapToItem(row(), 0, words.height).y
-            return inRoot(row(), words.mapToItem(row(), x, 0).x, (foot + row().height) / 2)
+            const foot = words.mapToItem(row(), Qt.point(0, words.height)).y
+            return inRoot(row(), Qt.point(words.mapToItem(row(), Qt.point(x, 0)).x, (foot + row().height) / 2))
         }
 
         function initTestCase() {
@@ -110,7 +110,7 @@ Item {
             const below = underWords(20)
             verify(below.y > onWords(20).y, "the point is under the words")
             mouseClick(root, below.x, below.y)
-            const left = inRoot(row(), 1, row().height / 2)
+            const left = inRoot(row(), Qt.point(1, row().height / 2))
             mouseClick(root, left.x, left.y)
             compare(root.shows, 2, "a click anywhere in the row's air is the row's")
             compare(root.drops, 0)
@@ -191,7 +191,7 @@ Item {
 
         function test_a_click_on_the_hash_copies_it_and_finds_nothing() {
             const hash = field(root.record.sha8)
-            const p = inRoot(hash, hash.width / 2, hash.height / 2)
+            const p = inRoot(hash, Qt.point(hash.width / 2, hash.height / 2))
             mouseClick(root, p.x, p.y)
             compare(root.copies, 1, "the plate keeps its own click")
             compare(root.copied, root.record.oid)

@@ -171,7 +171,7 @@ Control {
     /// the last rows with ink count by how much of them it covers. Off the rounded corners; a row past either edge, for
     /// ink hanging out, and no further: the next line of a text stands there.
     function clearance(picture, ground) {
-        const at = ground.mapToItem(root, 0, 0)
+        const at = ground.mapToItem(root, Qt.point(0, 0))
         const left = Math.ceil(at.x) + Theme.radiusSm
         const right = Math.floor(at.x + ground.width) - Theme.radiusSm
         const rows = []
@@ -224,8 +224,8 @@ Control {
             tryVerify(() => pushButton.width > 0 && phraseButton.width > 0 && chips.count === 3
                             && chips.itemAt(0).width > 0)
             const reach = ground => {
-                const baseline = ground.parent.mapToItem(root, 0, ground.wordBaseline).y
-                const top = ground.mapToItem(root, 0, 0).y
+                const baseline = ground.parent.mapToItem(root, Qt.point(0, ground.wordBaseline)).y
+                const top = ground.mapToItem(root, Qt.point(0, 0)).y
                 return { over: baseline - top, under: top + ground.height - baseline }
             }
             const chip = root.groundOf(chips.itemAt(0))

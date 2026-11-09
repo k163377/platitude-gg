@@ -96,8 +96,8 @@ Item {
     /// Automation: where the name and the count sit on the page, in `item`'s y (-1 for one not drawn).
     function baselines(item) {
         return {
-            name: names.visible ? names.mapToItem(item, 0, names.baselineOffset).y : -1,
-            count: countLabel.visible ? countLabel.mapToItem(item, 0, countLabel.baselineOffset).y : -1,
+            name: names.visible ? names.mapToItem(item, Qt.point(0, names.baselineOffset)).y : -1,
+            count: countLabel.visible ? countLabel.mapToItem(item, Qt.point(0, countLabel.baselineOffset)).y : -1,
             countSize: countLabel.font.pixelSize
         }
     }
@@ -133,7 +133,7 @@ Item {
     /// Automation: the drawn face's middle in `item`'s y (-1 for none), for a run to hold against the date's
     /// capitals' middle.
     function faceMiddle(item) {
-        return line.visible && face.visible ? face.mapToItem(item, 0, Theme.iconMd / 2).y : -1
+        return line.visible && face.visible ? face.mapToItem(item, Qt.point(0, Theme.iconMd / 2)).y : -1
     }
 
     // What is drawn, and all the rule and the hover reach: folded, only the face and the count.

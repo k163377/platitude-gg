@@ -17,10 +17,10 @@ SlimField {
     required property Item seat
     /// Where the box is drawn (`NavList.boxLayer`); null keeps it in its seat, for a floating panel.
     property Item drawnIn: null
-    /// The list's rows in that layer, and the list's own top and height — so the box scrolls with its row and
-    /// leaves with it (`NavList`).
-    property real rowsX: 0
-    property real rowsY: 0
+    /// In that layer: across, where this row's columns begin; down, where the list's rows begin, scrolled — the row's
+    /// own `y` is added here. Then the list's own top and height — so the box scrolls with its row and leaves with it
+    /// (`NavList`).
+    property point rowsAt: Qt.point(0, 0)
     property real rowsTop: 0
     property real rowsHeight: 0
     /// Whether this row is being typed into, for what ("branch" / "tag" / "worktree" / "rename"), and with what — held
@@ -45,7 +45,7 @@ SlimField {
     signal submitted(string text)
     signal cancelled()
 
-    readonly property real rowTop: box.rowsY + box.row.y
+    readonly property real rowTop: box.rowsAt.y + box.row.y
     readonly property bool rowInView: box.rowTop >= box.rowsTop
         && box.rowTop + box.row.height <= box.rowsTop + box.rowsHeight
     /// What the box opened holding, latched: a right edge that walks under the caret cannot be aimed at
@@ -72,8 +72,8 @@ SlimField {
     readonly property bool out: box.drawnIn !== null
     parent: box.out ? box.drawnIn : box.seat
     visible: box.editing && (!box.out || box.rowInView)
-    x: box.out ? box.rowsX + box.seat.x : 0
-    y: (box.out ? box.rowsY + box.row.y : 0) + (box.row.height - box.height) / 2
+    x: box.out ? box.rowsAt.x + box.seat.x : 0
+    y: (box.out ? box.rowsAt.y + box.row.y : 0) + (box.row.height - box.height) / 2
     // At least the seat, at most the window's edge less the cards' cap (デザイン規約 §メニュー). `x` is a window
     // coordinate: the left menu begins at the window's left edge.
     width: !box.out ? box.seat.width

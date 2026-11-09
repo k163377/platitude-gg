@@ -54,7 +54,7 @@ Item {
         /// The middle of the drawn name's `n`th character, in the root's coordinates.
         function nameCharAt(card, n) {
             const r = card.charRect(card.markRoomAt(0) + card.markRooms[0] + n)
-            return card.mapToItem(root, r.x + r.width / 2, r.y + r.height / 2)
+            return card.mapToItem(root, Qt.point(r.x + r.width / 2, r.y + r.height / 2))
         }
 
         function test_a_name_past_the_ceiling_is_cut_in_the_middle() {
@@ -84,7 +84,8 @@ Item {
             tryVerify(() => held.tip.shown, undefined, "the tip is up")
             compare(shared.box.text, root.sentence(root.longName), "the whole line")
 
-            const off = held.mapToItem(root, held.charRect(2).x, held.charRect(2).y + held.charRect(2).height / 2)
+            const third = held.charRect(2)
+            const off = held.mapToItem(root, Qt.point(third.x, third.y + third.height / 2))
             mouseMove(root, off.x, off.y)
             tryVerify(() => !held.cutPointed, undefined, "the words round the name put nothing up")
             mouseMove(root, root.width - 1, root.height - 1)

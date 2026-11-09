@@ -68,7 +68,7 @@ AppMenu {
         if (rightClick)
             return fieldMenu.offer()
         const caret = box.cursorRectangle
-        return KeyMenu.ask(box.mapToItem(null, caret.x, caret.y + caret.height), () => fieldMenu.offer())
+        return KeyMenu.ask(box.mapToItem(null, Qt.point(caret.x, caret.y + caret.height)), () => fieldMenu.offer())
     }
 
     /// Automation: the rows on the table, in order, as the words they show — the ones that can be pressed only, when

@@ -54,9 +54,9 @@ Item {
         if (!chrome.window.captionMerged || chrome.topBar.grabRunItem === null)
             return
         const run = chrome.topBar.grabRunItem
-        const at = run.mapToItem(null, 0, 0)
+        const at = run.mapToItem(null, Qt.point(0, 0))
         const gap = chrome.topBar.seamRunItem
-        const gapAt = gap.mapToItem(null, 0, 0)
+        const gapAt = gap.mapToItem(null, Qt.point(0, 0))
         chrome.sentStrip = Math.round(at.x) + "-" + Math.round(at.x + run.width)
         AppBackend.setCaptionStrips(at.x, at.x + run.width,
                                     gapAt.x, gapAt.x + gap.width,

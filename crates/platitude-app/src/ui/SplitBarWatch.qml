@@ -43,17 +43,17 @@ Item {
     /// Settles the refusal for the hand's scene point; the `PointHandler` and the automation hook both come through
     /// here. Pushed on each point, not bound: `mapToItem` is a method, so a binding over it would freeze
     /// (rules/app-ui.md「メソッドはバインディングが依存を取らない」).
-    function settleSplitRefusal(sceneX, sceneY) {
+    function settleSplitRefusal(scenePoint) {
         const bar = watch.heldSplit
         if (!bar) {
             overlay.refuses = false
             return
         }
-        const mid = bar.mapToItem(null, bar.width / 2, bar.height / 2)
-        const gap = bar.sideways ? sceneX - mid.x : sceneY - mid.y
+        const mid = bar.mapToItem(null, Qt.point(bar.width / 2, bar.height / 2))
+        const gap = bar.sideways ? scenePoint.x - mid.x : scenePoint.y - mid.y
         // Scene coordinates (`SplitRefusalOverlay.at`): the overlay maps into itself in `pointFor`, so mapping here
         // too would put the badge a TopBar's height above the hand.
-        overlay.at = Qt.point(sceneX, sceneY)
+        overlay.at = scenePoint
         // Past the bar by more than its width: the pointer sits somewhere inside the bar it grabbed, and SplitView
         // carries the bar at that offset for as long as the layout lets it.
         overlay.refuses = Math.abs(gap) > Theme.splitterWidth
@@ -67,19 +67,19 @@ Item {
         if (wanted.length === 0)
             return false
         // Left to right: the sidebar's bar first, the details pane's last.
-        wanted.sort((a, b) => a.mapToItem(null, 0, 0).x - b.mapToItem(null, 0, 0).x)
+        wanted.sort((a, b) => a.mapToItem(null, Qt.point(0, 0)).x - b.mapToItem(null, Qt.point(0, 0)).x)
         const bar = which === "details-min" ? wanted[wanted.length - 1] : wanted[0]
         watch.heldSplit = bar
-        const mid = bar.mapToItem(null, bar.width / 2, bar.height / 2)
+        const mid = bar.mapToItem(null, Qt.point(bar.width / 2, bar.height / 2))
         const over = 4 * Theme.splitterWidth
         // Into the pane that has no more to give: the sidebar and the log from their own side, the details pane from
         // the left.
         if (which === "details-min")
-            watch.settleSplitRefusal(mid.x + over, mid.y)
+            watch.settleSplitRefusal(Qt.point(mid.x + over, mid.y))
         else if (which === "sidebar-min")
-            watch.settleSplitRefusal(mid.x - over, mid.y)
+            watch.settleSplitRefusal(Qt.point(mid.x - over, mid.y))
         else
-            watch.settleSplitRefusal(mid.x, mid.y + over)
+            watch.settleSplitRefusal(Qt.point(mid.x, mid.y + over))
         return true
     }
 
@@ -107,6 +107,6 @@ Item {
     SplitRefusalOverlay {
         id: overlay
         refusalSource: watch.refusalSource
-        onPointMoved: (sceneX, sceneY) => watch.settleSplitRefusal(sceneX, sceneY)
+        onPointMoved: scenePoint => watch.settleSplitRefusal(scenePoint)
     }
 }

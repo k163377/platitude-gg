@@ -116,7 +116,7 @@ Item {
                 if (root.refuse)
                     return
                 root.menuKey = row.rowKey
-                const at = panel.mapFromItem(null, hand.at.x, hand.at.y)
+                const at = panel.mapFromItem(null, hand.at)
                 menu.x = at.x
                 menu.y = at.y
                 menu.open()

@@ -120,8 +120,8 @@ AppCard {
             const [row, word, line] = pairs[i]
             if (!row.visible)
                 continue
-            const wordBase = word.mapToItem(rows, 0, word.baselineOffset).y
-            const lineBase = line.mapToItem(rows, 0, line.charRect(0).y + sentenceFace.ascent).y
+            const wordBase = word.mapToItem(rows, Qt.point(0, word.baselineOffset)).y
+            const lineBase = line.mapToItem(rows, Qt.point(0, line.charRect(0).y + sentenceFace.ascent)).y
             off = Math.max(off, Math.abs(wordBase - lineBase))
         }
         return off

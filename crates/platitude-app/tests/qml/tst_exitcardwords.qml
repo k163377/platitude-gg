@@ -67,10 +67,10 @@ Item {
             return null
         }
         function footOf(item) {
-            return item.mapToItem(card, 0, item.height).y
+            return item.mapToItem(card, Qt.point(0, item.height)).y
         }
         function topOf(item) {
-            return item.mapToItem(card, 0, 0).y
+            return item.mapToItem(card, Qt.point(0, 0)).y
         }
         function row(code) {
             const found = find(card, item => item.code === code)

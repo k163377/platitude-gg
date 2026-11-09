@@ -71,7 +71,7 @@ Item {
             return true
         if (!object.visible)
             return false
-        const point = object.mapToItem(view.contentItem, object.width / 2, object.height / 2)
+        const point = object.mapToItem(view.contentItem, Qt.point(object.width / 2, object.height / 2))
         if (view.itemAtIndex(view.indexAt(point.x, point.y)) !== object)
             return false
         const box = object.mapToItem(view, 0, 0, object.width, object.height)

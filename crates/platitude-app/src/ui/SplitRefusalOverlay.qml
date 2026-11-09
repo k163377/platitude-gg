@@ -19,19 +19,19 @@ Item {
     /// What is drawn — the one badge's own `shown` (`RefusalBadge`, on why not its `visible`).
     readonly property alias shown: refusalBadge.shown
 
-    /// The hand, every time it moves; `SplitBarWatch.settleSplitRefusal` settles what it means.
-    signal pointMoved(real sceneX, real sceneY)
+    /// The hand's scene point, every time it moves; `SplitBarWatch.settleSplitRefusal` settles what it means.
+    signal pointMoved(point scenePoint)
 
     anchors.fill: parent
     z: 50
 
     /// Where the badge goes, given the refusing point: out of the scene and into this sheet (`RefusalBadge.at`).
     function pointFor(scene) {
-        return scene === null ? Qt.point(0, 0) : overlay.mapFromItem(null, scene.x, scene.y)
+        return scene === null ? Qt.point(0, 0) : overlay.mapFromItem(null, scene)
     }
 
     PointHandler {
-        onPointChanged: overlay.pointMoved(point.scenePosition.x, point.scenePosition.y)
+        onPointChanged: overlay.pointMoved(point.scenePosition)
         onActiveChanged: if (!active) overlay.refuses = false
     }
 

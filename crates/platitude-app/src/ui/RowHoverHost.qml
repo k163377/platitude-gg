@@ -356,7 +356,7 @@ Item {
         rowCard.authorTime = row.author_time
         rowCard.mates = row.co_authors
         // Under the pointer: a row is pane-wide.
-        const at = row.mapToItem(host, row.pointerX, row.height)
+        const at = row.mapToItem(host, Qt.point(row.pointerX, row.height))
         rowCard.x = at.x
         rowCard.y = at.y
         // A graph row shows the whole subject, so its card glances at the body and offers the rest; a choice's row
@@ -390,7 +390,7 @@ Item {
         // Seated on the stack as the reader saw it, every sheet drawn: `listKey`, already this chip's, has taken the
         // sheets down by now, and the stack stands on its right edge and rises by half its fan (`RefChipStack.lift`),
         // so its corner has moved since.
-        const now = anchor.mapToItem(host, 0, 0)
+        const now = anchor.mapToItem(host, Qt.point(0, 0))
         const at = Qt.point(now.x + anchor.width - anchor.stackedWidth, now.y + anchor.lift - anchor.stackedLift)
         // The chip's names as they stand now, not as they stood at the ask: an ask kept behind a menu opens after the
         // chip may have changed.

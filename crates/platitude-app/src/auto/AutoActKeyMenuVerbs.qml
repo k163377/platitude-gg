@@ -153,7 +153,7 @@ Item {
                 // (`Main.keyMenuAsked`): the window's origin for one with no place, the pointer's point for xcb's —
                 // here the middle of the list.
                 view.Window.window.keyMenuAsked(rest === "request" ? Qt.point(0, 0)
-                                                : view.mapToItem(null, view.width / 2, view.height / 2))
+                                                : view.mapToItem(null, Qt.point(view.width / 2, view.height / 2)))
             }
         } else if (surface === "files") {
             acts.wipPane.menuFromKeys()
@@ -172,24 +172,24 @@ Item {
             const view = acts.graphPane.view
             menu = acts.driver.commitMenu
             const item = view.itemAtIndex(view.currentIndex)
-            foot = item ? item.mapToItem(null, 0, Theme.graphRowHeight) : null
+            foot = item ? item.mapToItem(null, Qt.point(0, Theme.graphRowHeight)) : null
         } else if (surface === "files") {
             menu = acts.driver.fileMenu
             const row = acts.wipPane.rowIn("unstaged", rest)
-            foot = row ? row.mapToItem(null, 0, Theme.rowHeight) : null
+            foot = row ? row.mapToItem(null, Qt.point(0, Theme.rowHeight)) : null
         } else if (surface === "diff") {
             menu = acts.driver.diffRowMenu.menu
             // The drag ended on its last row, past the line's end: the foot of that row, wherever along it.
             const item = acts.diffPane.view.itemAtIndex(keyMenuTimer.witnessed("lastRow"))
-            foot = item ? item.mapToItem(null, 0, item.height) : null
+            foot = item ? item.mapToItem(null, Qt.point(0, item.height)) : null
         } else if (surface === "nav") {
             const list = acts.navList(rest)
             menu = acts.driver.refMenu
             const item = list.itemAtIndex(acts.navIndex(rest))
-            foot = item ? item.mapToItem(null, 0, item.lineHeight) : null
+            foot = item ? item.mapToItem(null, Qt.point(0, item.lineHeight)) : null
         }
         const opened = menu !== null && menu.visible
-        const at = opened ? menu.parent.mapToItem(null, menu.x, menu.y) : null
+        const at = opened ? menu.parent.mapToItem(null, Qt.point(menu.x, menu.y)) : null
         // The diff's x is the end's place along the line, read off the layout; only its row is the run's to know, and
         // that the card stands right of the row's head.
         const under = opened && foot !== null && Math.abs(at.y - foot.y) <= 1

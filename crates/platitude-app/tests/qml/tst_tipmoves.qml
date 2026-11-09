@@ -218,14 +218,14 @@ Item {
             // at rest.
             let last = ""
             tryVerify(() => {
-                const p = seat.box.contentItem.mapToItem(root, 0, 0)
+                const p = seat.box.contentItem.mapToItem(root, Qt.point(0, 0))
                 const now = [p.x, p.y, seat.box.contentItem.width, seat.box.contentItem.height].join(",")
                 const stood = seat.box.contentItem.width > 0 && now === last
                 last = now
                 return stood
             }, undefined, "the box stands at its size")
-            const at = seat.box.contentItem.mapToItem(root, 0, 0)
-            const inside = seat.box.contentItem.mapToItem(root, 2, seat.box.contentItem.height / 2)
+            const at = seat.box.contentItem.mapToItem(root, Qt.point(0, 0))
+            const inside = seat.box.contentItem.mapToItem(root, Qt.point(2, seat.box.contentItem.height / 2))
             mouseMove(root, inside.x, inside.y)
             tryVerify(() => seat.pointed, undefined, "the hand is in the box")
 
@@ -233,7 +233,7 @@ Item {
             list.contentY = 48
             root.reading = false
             verify(seat.box.visible, "the box stays")
-            compare(seat.box.contentItem.mapToItem(root, 0, 0), at, "where it stood")
+            compare(seat.box.contentItem.mapToItem(root, Qt.point(0, 0)), at, "where it stood")
             // waits(paced): a box that must **not** go: the beat a leave starts, twice over.
             wait(Metrics.hoverKeepMs * 2)
             compare(root.tipSays(), "row 1", "saying what it said")
@@ -256,16 +256,16 @@ Item {
             tryVerify(() => root.tipSays() === "item 52", undefined, "the hand resting on item 52 brings its tip")
             let last = ""
             tryVerify(() => {
-                const p = seat.box.contentItem.mapToItem(root, 0, 0)
+                const p = seat.box.contentItem.mapToItem(root, Qt.point(0, 0))
                 const now = [p.x, p.y, seat.box.contentItem.width, seat.box.contentItem.height].join(",")
                 const stood = seat.box.contentItem.width > 0 && now === last
                 last = now
                 return stood
             }, undefined, "the box stands at its size")
-            const inside = seat.box.contentItem.mapToItem(root, 2, seat.box.contentItem.height / 2)
+            const inside = seat.box.contentItem.mapToItem(root, Qt.point(2, seat.box.contentItem.height / 2))
             mouseMove(root, inside.x, inside.y)
             tryVerify(() => seat.pointed, undefined, "the hand is in the box")
-            return seat.box.contentItem.mapToItem(root, 0, 0)
+            return seat.box.contentItem.mapToItem(root, Qt.point(0, 0))
         }
 
         /// A read writing forty rows in between the top of the read list and the hand's `item 52`, which lands at 92:
@@ -295,7 +295,7 @@ Item {
             tryVerify(() => !root.readKeep.busy, undefined, "the read is weighed")
             verify(seat.box.visible, "the box stays")
             compare(root.tipSays(), "item 52", "saying what it said")
-            compare(seat.box.contentItem.mapToItem(root, 0, 0), at, "where it stood")
+            compare(seat.box.contentItem.mapToItem(root, Qt.point(0, 0)), at, "where it stood")
         }
 
         /// …saying what its row said, though the view goes on to use the pooled delegate for another row and hands it
@@ -323,7 +323,7 @@ Item {
             tryVerify(() => !root.readKeep.busy, undefined, "the read is weighed")
             verify(seat.box.visible, "the box stays")
             compare(root.tipSays(), "item 52", "saying what its row said")
-            compare(seat.box.contentItem.mapToItem(root, 0, 0), at, "where it stood")
+            compare(seat.box.contentItem.mapToItem(root, Qt.point(0, 0)), at, "where it stood")
         }
 
         /// …and, the row stood again, the row's own ask takes the box back on (`TipSeat.takeBack`): the box says the
@@ -342,7 +342,7 @@ Item {
             let closes = 0
             const closed = () => { closes++ }
             seat.box.closed.connect(closed)
-            const on = row.mapToItem(readList, 100, 12)
+            const on = row.mapToItem(readList, Qt.point(100, 12))
             mouseMove(readList, on.x, on.y)
             mouseMove(readList, on.x + 2, on.y)
             tryVerify(() => row.ask.asked, undefined, "the hand is back on the row")
@@ -389,7 +389,7 @@ Item {
         function test_a_box_behind_a_menu_goes_as_the_menu_stands_and_the_menus_own_row_asks() {
             mouseMove(still, 100, 20)
             tryVerify(() => root.tipSays() === "still", undefined, "the fixed target's tip is out")
-            menu.popup(root, 20, 200)
+            menu.popup(root, Qt.point(20, 200))
             verify(menu.visible, "a menu stands")
             verify(!seat.box.visible, "what was out went the moment it stood")
 
@@ -407,8 +407,8 @@ Item {
             const row = fileList.itemAtIndex(0)
             mouseMove(row, 60, 12)
             tryVerify(() => seat.box.visible, undefined, "the hand resting on the commit's file row brings its path")
-            const at = row.mapToItem(root, 60, 12)
-            menu.popup(root, at.x, at.y)
+            const at = row.mapToItem(root, Qt.point(60, 12))
+            menu.popup(root, at)
             verify(!seat.box.visible, "the box goes the moment the menu stands")
             menu.close()
             // waits(paced): the subject is a box that must **not** come back under the still hand: its rest, twice
@@ -423,7 +423,7 @@ Item {
             typedBox.refused = true
             tryVerify(() => seat.box.visible && seat.box.text === "A branch called that already exists",
                       undefined, "the refusal is out")
-            menu.popup(root, 20, 200)
+            menu.popup(root, Qt.point(20, 200))
             verify(menu.visible)
             verify(seat.box.visible, "no hover opened it, and the menu standing takes nothing of it")
             menu.close()

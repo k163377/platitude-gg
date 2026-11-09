@@ -410,7 +410,7 @@ Item {
         }
         /// The row the pane's hand is over now, in the list's own numbering.
         function rowUnderHand() {
-            const p = list.mapFromItem(null, paneHand.at.x, paneHand.at.y)
+            const p = list.mapFromItem(null, paneHand.at)
             return list.indexAt(p.x, p.y + list.contentY)
         }
 
@@ -461,7 +461,7 @@ Item {
         function test_a_list_drawn_over_a_still_hand_keeps_it() {
             const row = list.itemAtIndex(3)
             const chip = row.chipItem
-            const at = chip.mapToItem(list, chip.width / 2, chip.height / 2)
+            const at = chip.mapToItem(list, Qt.point(chip.width / 2, chip.height / 2))
             mouseMove(list, at.x, at.y)
             tryVerify(() => host.listPopup.opened, undefined, "the chip asked for its list")
             compare(host.listKey, "chip:" + root.oid(3) + ":row")
@@ -910,7 +910,7 @@ Item {
         function test_a_stacked_chips_list_is_seated_on_the_stack_as_it_was_drawn() {
             const stack = list.itemAtIndex(6).chipItem
             verify(stack.fanW > 0 && stack.lift > 0, "the chip stacks its names: " + stack.fanW + ", " + stack.lift)
-            const drawn = stack.mapToItem(host, 0, 0)
+            const drawn = stack.mapToItem(host, Qt.point(0, 0))
             ontoBareStretch(6)
             const card = host.listPopup
             compare(card.x, drawn.x - Theme.spaceXs - card.padding, "seated on the stack's left edge as drawn")

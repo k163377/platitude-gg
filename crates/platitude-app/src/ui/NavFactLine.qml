@@ -43,7 +43,7 @@ RowLayout {
     /// The middle of the words in another item's coordinates, where a run puts the press it cannot make with a hand
     /// (PGG_AUTO_ACT=nav-follow).
     function wordsMiddle(item) {
-        return line.mapToItem(item, words.x + line.wordsWidth / 2, words.y + words.height / 2)
+        return line.mapToItem(item, Qt.point(words.x + line.wordsWidth / 2, words.y + words.height / 2))
     }
 
     spacing: Theme.spaceXs

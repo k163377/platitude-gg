@@ -257,9 +257,9 @@ Control {
             for (const box of [typedName, plainName]) {
                 verify(box.idleCut, "nobody is typing in it, so it is cut")
                 verify(box.idleLabel.text.indexOf("…") > 0, "in its middle: " + box.idleLabel.text)
-                const line = box.idleLabel.mapToItem(box, 0, box.idleLabel.baselineOffset).y
+                const line = box.idleLabel.mapToItem(box, Qt.point(0, box.idleLabel.baselineOffset)).y
                 const field = box.contentItem === undefined || box.contentItem === null
-                    ? box.baselineOffset : box.contentItem.mapToItem(box, 0, box.contentItem.baselineOffset).y
+                    ? box.baselineOffset : box.contentItem.mapToItem(box, Qt.point(0, box.contentItem.baselineOffset)).y
                 fuzzyCompare(line, field, 0.5, "the cut name stands on the field's own line: "
                              + (box === typedName ? "the list's box" : "the plain box"))
             }

@@ -43,7 +43,7 @@ Item {
         }
 
         function footOf(item) {
-            return item.mapToItem(bar, 0, item.height).y
+            return item.mapToItem(bar, Qt.point(0, item.height)).y
         }
 
         function test_the_form_stands_inside_the_bar_that_carries_it() {

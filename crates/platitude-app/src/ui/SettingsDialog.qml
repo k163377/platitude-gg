@@ -209,7 +209,7 @@ AppDialog {
         const item = gitPane.unsavedIdentityItem()
         if (!item)
             return
-        const at = item.mapToItem(chapterCol, 0, 0).y
+        const at = item.mapToItem(chapterCol, Qt.point(0, 0)).y
         chapters.contentY = Math.max(0, Math.min(at - Theme.spaceXl,
                                                  chapterCol.implicitHeight - chapters.height))
     }

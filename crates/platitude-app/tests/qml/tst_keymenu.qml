@@ -49,7 +49,7 @@ Item {
                 return false
             list.asked++
             const item = list.itemAtIndex(list.currentIndex)
-            KeyMenu.ask(item.mapToItem(null, 0, item.height), () => menu.offer())
+            KeyMenu.ask(item.mapToItem(null, Qt.point(0, item.height)), () => menu.offer())
             return true
         }
         Keys.onMenuPressed: event => event.accepted = list.menuFromKeys()
@@ -93,7 +93,7 @@ Item {
             Application.styleHints.contextMenuTrigger = trigger
         }
         function standsAt() {
-            return menu.parent.mapToItem(null, menu.x, menu.y)
+            return menu.parent.mapToItem(null, Qt.point(menu.x, menu.y))
         }
         function seatOf(editor) {
             for (let i = 0; i < editor.children.length; i++)
@@ -115,7 +115,7 @@ Item {
             tryCompare(menu, "opened", true)
             compare(list.asked, 1)
             const row = list.itemAtIndex(2)
-            compare(standsAt(), row.mapToItem(null, 0, row.height), "under the current row's left end")
+            compare(standsAt(), row.mapToItem(null, Qt.point(0, row.height)), "under the current row's left end")
         }
 
         // Linux raises a right-click's request at the press, Windows at the release.
@@ -131,7 +131,7 @@ Item {
             mouseClick(list, 50, 60, Qt.RightButton)
             // The right-click made a request, which nothing above the ground took, naming where it landed.
             tryVerify(() => root.requests.length === 1)
-            compare(root.requests[0], list.mapToItem(null, 50, 60))
+            compare(root.requests[0], list.mapToItem(null, Qt.point(50, 60)))
             compare(list.asked, 0, "a placed request is not the keyboard's")
             verify(!menu.visible)
         }

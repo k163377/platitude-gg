@@ -148,7 +148,7 @@ Item {
 
     /// Automation: where the plain word's baseline stands, in `item`'s y (`ActionButton.wordBase`).
     function wordBase(item) {
-        return headText.mapToItem(item, 0, headText.baselineOffset).y
+        return headText.mapToItem(item, Qt.point(0, headText.baselineOffset)).y
     }
     /// The word's baseline in this label's y, as a property so a binding follows it: the seat beside the word stands
     /// its mark on it (`ActionButtonSeat.wordBase`).

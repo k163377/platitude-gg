@@ -354,8 +354,9 @@ Control {
             for (const badge of badges) {
                 const word = firstWord(badge)
                 verify(word !== null, "the badge draws a word")
-                compare(word.mapToItem(group, 0, word.baselineOffset).y, line, "on the band's line: " + word.text)
-                const top = badge.mapToItem(group, 0, 0).y
+                compare(word.mapToItem(group, Qt.point(0, word.baselineOffset)).y, line,
+                        "on the band's line: " + word.text)
+                const top = badge.mapToItem(group, Qt.point(0, 0)).y
                 compare(top, Math.round(top), "the box on whole pixels: " + word.text)
                 const over = line - witness.capRows - (top + Theme.borderWidth)
                 const under = top + badge.height - Theme.borderWidth - line
@@ -368,7 +369,7 @@ Control {
         /// frame the cell's depth lies along the band's top and bottom edges (`BandStateGroup.foldedDepth`).
         /// Read against the second measurer, not the group's `foldedDepth`.
         function test_the_folded_mark_keeps_the_badges_box_clear_of_the_bands_edges() {
-            const standing = badgesStanding()[0].mapToItem(group, 0, 0).y
+            const standing = badgesStanding()[0].mapToItem(group, Qt.point(0, 0)).y
             group.windowAtFloor = true
             verify(group.stateMarkShown)
             for (const endCell of [false, true]) {
@@ -376,7 +377,7 @@ Control {
                 const frame = markFrame()
                 verify(frame !== null, "the folded mark draws its frame (end cell: " + endCell + ")")
                 compare(frame.height, witness.depth, "a badge's depth (end cell: " + endCell + ")")
-                compare(frame.mapToItem(group, 0, 0).y, standing,
+                compare(frame.mapToItem(group, Qt.point(0, 0)).y, standing,
                         "where the badges stood (end cell: " + endCell + ")")
                 verify(frame.height < group.height, "clear of the band's edges")
                 verify(group.markDeep, "and the run's reading agrees")

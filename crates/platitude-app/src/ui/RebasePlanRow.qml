@@ -104,7 +104,7 @@ Item {
             }
             if (!rowArea.dragging)
                 return
-            const yInList = planRow.mapToItem(planRow.list.contentItem, 0, mouse.y).y
+            const yInList = planRow.mapToItem(planRow.list.contentItem, Qt.point(0, mouse.y)).y
             const target = Math.max(0, Math.min(planRow.list.count - 1, Math.floor(yInList / planRow.height)))
             if (target !== planRow.index)
                 planRow.list.moveRequested(planRow.index, target)

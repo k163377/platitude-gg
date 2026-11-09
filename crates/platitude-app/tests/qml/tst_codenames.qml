@@ -241,24 +241,24 @@ Control {
     /// Where a row's code name's word starts, in the row's x.
     function codeNameStart(row) {
         const named = root.find(row, item => item.word === row.codeName && item.markRoom !== undefined)
-        return named.mapToItem(row, named.markRoom, 0).x
+        return named.mapToItem(row, Qt.point(named.markRoom, 0)).x
     }
     /// Where a sentence row's first name starts, in the row's x.
     function sentenceNameStart(row) {
         const words = root.find(row, item => item.text === row.refWords && item.textFormat === Text.RichText)
-        return words.mapToItem(row, row.refLead1, 0).x
+        return words.mapToItem(row, Qt.point(row.refLead1, 0)).x
     }
     /// Where the middle of a row's `kind` mark's ink stands, in the row's x.
     function markAxis(row, kind) {
         const mark = root.find(row, item => item.inkLeft !== undefined && item.visible && item.kind === kind)
-        return mark.mapToItem(row, mark.inkLeft + mark.inkWidth / 2, 0).x
+        return mark.mapToItem(row, Qt.point(mark.inkLeft + mark.inkWidth / 2, 0)).x
     }
     function groundOf(item) {
         return root.find(item, child => child.radius !== undefined && child.size !== undefined && child.visible)
     }
     /// Where `item`'s ground starts against `item`'s own head.
     function groundStart(item) {
-        return root.groundOf(item).mapToItem(item, 0, 0).x
+        return root.groundOf(item).mapToItem(item, Qt.point(0, 0)).x
     }
     /// Where a name's ink ends as drawn, in `item`'s x, read off `picture` — outside every metric the code reads: back
     /// from `from` (an x on the ground past the ink) along the `band` of rows the name stands in, to the last column
@@ -266,7 +266,7 @@ Control {
     /// own edges are not read off it: offscreen, a rectangle is drawn out to whole pixels
     /// (`QSGSoftwareInternalRectangleNode::setRect`), which a window does not do.
     function drawnInkEnd(picture, item, from, band) {
-        const at = item.mapToItem(root, from, band.y)
+        const at = item.mapToItem(root, Qt.point(from, band.y))
         const top = Math.round(at.y)
         const bottom = Math.round(at.y + band.height)
         const columns = []
@@ -280,7 +280,7 @@ Control {
         const peak = Math.max(...columns.map(column => column[1]))
         for (const [x, brightest] of columns) {
             if (brightest > ground + 2)
-                return item.mapFromItem(root, x + (brightest - ground) / (peak - ground), 0).x
+                return item.mapFromItem(root, Qt.point(x + (brightest - ground) / (peak - ground), 0)).x
         }
         return NaN
     }
@@ -298,9 +298,9 @@ Control {
     function sentenceAir(row, picture) {
         const ground = root.groundOf(row)
         const mark = root.find(row, item => item.inkLeft !== undefined && item.visible && item.kind === row.refMark)
-        const from = ground.mapToItem(row, 0, 0).x
+        const from = ground.mapToItem(row, Qt.point(0, 0)).x
         const right = from + ground.width
-        return { before: mark.mapToItem(row, mark.inkLeft, 0).x - from,
+        return { before: mark.mapToItem(row, Qt.point(mark.inkLeft, 0)).x - from,
                  after: right - root.drawnInkEnd(picture, row, right - 1, { y: 0, height: row.height }) }
     }
     /// The same for a `NameRun`.

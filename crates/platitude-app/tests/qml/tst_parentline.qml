@@ -129,11 +129,11 @@ Control {
             plate.parentRoom = plate.lineWidth(3, 3, 5)
             laidOut()
             const second = plate.linkAt(1).face
-            const p = second.mapToItem(root, second.width / 2, second.height / 2)
+            const p = second.mapToItem(root, Qt.point(second.width / 2, second.height / 2))
             mouseClick(root, p.x, p.y)
             compare(root.visited, root.eight[1], "the second link is the second parent's")
             const first = plate.linkAt(0).face
-            const q = first.mapToItem(root, first.width / 2, first.height / 2)
+            const q = first.mapToItem(root, Qt.point(first.width / 2, first.height / 2))
             mouseClick(root, q.x, q.y)
             compare(root.visited, root.eight[0])
         }

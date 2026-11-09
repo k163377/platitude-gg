@@ -52,8 +52,8 @@ Control {
             tryVerify(() => run.width >= run.naturalWidth, undefined, "the run is laid out at its own width")
             compare(name.cutting, false, "the folder's name is whole")
             const words = under(row, child => child.text === "platitude-gg")
-            const wordsEnd = words.mapToItem(row, words.width, 0).x
-            verify(run.mapToItem(row, 0, 0).x >= wordsEnd, "the run starts past the words")
+            const wordsEnd = words.mapToItem(row, Qt.point(words.width, 0)).x
+            verify(run.mapToItem(row, Qt.point(0, 0)).x >= wordsEnd, "the run starts past the words")
             compare(under(menu.itemAt(1), child => child.floorWidth !== undefined), null,
                     "a row with no worktree builds no run")
             menu.dismiss()

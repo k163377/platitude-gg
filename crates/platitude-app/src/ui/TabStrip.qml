@@ -177,7 +177,7 @@ Item {
             return false
         tabStrip.pressTab(index, tab.tab_id, Qt.LeftButton)
         tabCarry.takeTab(index, tab.width / 2)
-        tabCarry.carryTab(index, tabs.mapToItem(null, tabs.width + tab.width, 0).x)
+        tabCarry.carryTab(index, tabs.mapToItem(null, Qt.point(tabs.width + tab.width, 0)).x)
         return true
     }
 

@@ -68,13 +68,13 @@ Item {
         // Inside the list's own box: a row kept built past its edge lies under the pane's other parts.
         const view = commitRow.ListView.view
         if (view) {
-            const v = view.mapFromItem(null, hand.at.x, hand.at.y)
+            const v = view.mapFromItem(null, hand.at)
             if (v.x < 0 || v.y < 0 || v.x >= view.width || v.y >= view.height) {
                 commitRow.pointerRowX = -1
                 return
             }
         }
-        const p = commitRow.mapFromItem(null, hand.at.x, hand.at.y)
+        const p = commitRow.mapFromItem(null, hand.at)
         commitRow.pointerRowX = p.x >= 0 && p.y >= 0 && p.x < commitRow.width && p.y < commitRow.height ? p.x : -1
     }
     function placeMoved() {
@@ -86,7 +86,7 @@ Item {
             hand.rowsMoved()
             return
         }
-        const p = commitRow.mapFromItem(null, hand.at.x, hand.at.y)
+        const p = commitRow.mapFromItem(null, hand.at)
         const over = p.x >= 0 && p.y >= 0 && p.x < commitRow.width && p.y < commitRow.height
         if (over !== (commitRow.pointerRowX >= 0))
             hand.rowsMoved()

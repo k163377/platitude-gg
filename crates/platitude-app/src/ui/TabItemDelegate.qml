@@ -159,7 +159,7 @@ Rectangle {
             if (mouse.button !== Qt.LeftButton)
                 return
             tabItem.tabPressed(mouse.button)
-            tabMouse.pressSceneX = tabMouse.mapToItem(null, mouse.x, 0).x
+            tabMouse.pressSceneX = tabMouse.mapToItem(null, Qt.point(mouse.x, 0)).x
             tabMouse.grabX = mouse.x
             tabMouse.carrying = false
         }
@@ -169,7 +169,7 @@ Rectangle {
                 return
             // The pointer's true scene x even while this item rides the `Translate` it is moving (measured in a
             // throwaway qmltestrunner scene; no headless verb reaches a real pointer).
-            const sceneX = tabMouse.mapToItem(null, mouse.x, 0).x
+            const sceneX = tabMouse.mapToItem(null, Qt.point(mouse.x, 0)).x
             if (!tabMouse.carrying) {
                 // The platform's own threshold, the one the view would have stolen the press at (`TabStrip`): below
                 // it the hand is holding still. `drag.threshold` equals `Qt.styleHints.startDragDistance` with no

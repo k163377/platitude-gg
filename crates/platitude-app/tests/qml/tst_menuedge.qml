@@ -49,7 +49,7 @@ Item {
         }
         /// How many pixels of `shot` over the row `row`, from scene x `from` up to `to`, `inked` says are ink.
         function inkIn(shot, row, from, to, inked) {
-            const top = Math.ceil(row.mapToItem(root, 0, 0).y)
+            const top = Math.ceil(row.mapToItem(root, Qt.point(0, 0)).y)
             let found = 0
             for (let y = top; y < top + Math.floor(row.height); y++)
                 for (let x = Math.max(0, Math.floor(from)); x < Math.floor(to); x++)
@@ -67,8 +67,8 @@ Item {
             const mark = markOf(heading)
             verify(mark !== null)
             tryVerify(() => mark.inked)
-            const edge = heading.mapToItem(root, 0, 0).x
-            const inkStart = mark.mapToItem(root, mark.inkLeft, 0).x
+            const edge = heading.mapToItem(root, Qt.point(0, 0)).x
+            const inkStart = mark.mapToItem(root, Qt.point(mark.inkLeft, 0)).x
             verify(inkStart > edge - 0.01, "the mark's ink starts inside the row: " + inkStart + " >= " + edge)
             const shot = grabImage(root)
             const red = c => c.r - Math.max(c.g, c.b) > 0.25
@@ -81,7 +81,7 @@ Item {
             tryVerify(() => menu.opened)
             mouseClick(held)
             tryVerify(() => held.holdProgress > 0)
-            const edge = held.mapToItem(root, 0, 0).x
+            const edge = held.mapToItem(root, Qt.point(0, 0)).x
             const amber = c => c.r > 0.5 && c.g > 0.25 && c.b < 0.2
             verify(inkIn(grabImage(root), held, edge - Theme.spaceSm, edge, amber) > 0,
                    "the fill runs past the row's side")

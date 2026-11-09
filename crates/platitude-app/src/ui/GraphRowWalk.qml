@@ -89,7 +89,7 @@ Item {
         // This worktree's own uncommitted row has no menu; another worktree's has (`GraphRowDelegate.askMenu`).
         if (!item || item.isWip && !item.carried || item.menuShut())
             return false
-        KeyMenu.ask(item.mapToItem(null, 0, Theme.graphRowHeight), () => item.askMenu())
+        KeyMenu.ask(item.mapToItem(null, Qt.point(0, Theme.graphRowHeight)), () => item.askMenu())
         return true
     }
     /// For the runs: how the last step left `row` in the viewport, given `wasY` from before it — `in` (the view never
@@ -222,7 +222,7 @@ Item {
     function noteHand() {
         const hand = walk.view.hand
         if (hand.known) {
-            const p = walk.view.contentItem.mapFromItem(null, hand.at.x, hand.at.y)
+            const p = walk.view.contentItem.mapFromItem(null, hand.at)
             walk.handRow = walk.view.indexAt(p.x, p.y)
             walk.handOid = walk.handRow >= 0 ? walk.graphModel.oidAt(walk.handRow) : ""
         } else {

@@ -107,9 +107,9 @@ Item {
         function handOn(item) {
             if (listRereadTimer.on === "pin") {
                 const front = item.chipItem
-                return front.mapToItem(null, front.width / 2, front.height / 2)
+                return front.mapToItem(null, Qt.point(front.width / 2, front.height / 2))
             }
-            return item.mapToItem(null, item.labelsW / 2, item.height / 2)
+            return item.mapToItem(null, Qt.point(item.labelsW / 2, item.height / 2))
         }
         /// A branch made on HEAD's commit, through the driver's door for a write.
         function pressBranch() {
@@ -437,7 +437,8 @@ Item {
                     return
                 // The pane's hand on the row, as it hears a hand (`HandWatch.stir`): the row's own ask brings the card.
                 op.input("stirred", () => {
-                    wipPane.hand.stir(op.witness("handAt", row.mapToItem(null, row.width / 2, row.height / 2)))
+                    wipPane.hand.stir(op.witness("handAt",
+                                                 row.mapToItem(null, Qt.point(row.width / 2, row.height / 2))))
                 })
                 return
             }
@@ -591,7 +592,7 @@ Item {
                     op.witness("folderAt", folderAt)
                     const rowAt = op.witness("rowAt", folderAt + 2)
                     const row = op.view.itemAtIndex(rowAt)
-                    pane.hand.stir(row.mapToItem(null, row.width / 2, row.height / 2))
+                    pane.hand.stir(row.mapToItem(null, Qt.point(row.width / 2, row.height / 2)))
                     pane.pointedTipRow = rowAt
                 })
                 return
@@ -607,7 +608,7 @@ Item {
                         if (held) {
                             const row = op.view.itemAtIndex(op.witnessed("rowAt"))
                             if (row) {
-                                const centre = row.mapToItem(null, row.width / 2, row.height / 2)
+                                const centre = row.mapToItem(null, Qt.point(row.width / 2, row.height / 2))
                                 pane.hand.stir(Qt.point(centre.x + (pane.hand.at.x === centre.x ? 1 : 0), centre.y))
                             }
                         }

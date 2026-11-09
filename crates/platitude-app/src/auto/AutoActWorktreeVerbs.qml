@@ -113,7 +113,7 @@ Item {
         /// Puts the menu just raised where a hand's right-click would have (as `AutoActNavVerbs.standMenuOn`).
         function standMenuOn(row) {
             const menu = worktreeTimer.menu()
-            const p = row.mapToItem(menu.parent, row.width * 0.35, row.height * 0.6)
+            const p = row.mapToItem(menu.parent, Qt.point(row.width * 0.35, row.height * 0.6))
             menu.x = p.x
             menu.y = p.y
         }

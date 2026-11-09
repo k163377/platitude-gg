@@ -62,7 +62,7 @@ QtObject {
         else if (keep.row !== null && !keep.standing(keep.row))
             keep.row = null
         keep.noted = keep.row !== null
-        keep.rowAt = keep.noted ? keep.row.mapToItem(null, 0, 0).y : 0
+        keep.rowAt = keep.noted ? keep.row.mapToItem(null, Qt.point(0, 0)).y : 0
     }
     /// The delegate of these lists under a window place, or null: off the lists, between their rows, under what stands
     /// over them and is no row (`AppListView.shieldAt`).
@@ -71,7 +71,7 @@ QtObject {
             const view = keep.views[i]
             if (view === null || view === undefined || !view.visible)
                 continue
-            const p = view.mapFromItem(null, at.x, at.y)
+            const p = view.mapFromItem(null, at)
             if (p.x < 0 || p.y < 0 || p.x >= view.width || p.y >= view.height)
                 continue
             if (view.shieldAt(at))
@@ -181,7 +181,7 @@ QtObject {
         view.forceLayout()
         const row = view.itemAtIndex(at)
         if (row !== null) {
-            view.contentY = view.clampY(view.contentY + row.mapToItem(null, 0, 0).y - keep.rowAt)
+            view.contentY = view.clampY(view.contentY + row.mapToItem(null, Qt.point(0, 0)).y - keep.rowAt)
             view.forceLayout()
         }
         keep.keeping = false
@@ -192,7 +192,7 @@ QtObject {
     /// standing for the row now — the rows under it read it again.
     function putBack(view, row, rebuilt) {
         const hand = keep.hand
-        const moved = row.mapToItem(null, 0, 0).y - keep.rowAt
+        const moved = row.mapToItem(null, Qt.point(0, 0)).y - keep.rowAt
         if (Math.abs(moved) >= 1) {
             const from = view.contentY
             keep.keeping = true

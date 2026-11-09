@@ -184,9 +184,9 @@ Control {
             const side = root.find(bareRow, item => item.word === "side/branch" && item.markRoom !== undefined)
             compare(side.mark, "branch", "the far column's branch behind its mark")
             verify(Qt.colorEqual(side.tint, Theme.textSecondary), "a step down with the column")
-            verify(chip.mapToItem(bareRow, chip.width, 0).x < side.mapToItem(bareRow, 0, 0).x,
+            verify(chip.mapToItem(bareRow, Qt.point(chip.width, 0)).x < side.mapToItem(bareRow, Qt.point(0, 0)).x,
                    "the name ahead of the far column")
-            fuzzyCompare(side.mapToItem(bareRow, side.width, 0).x, bareRow.width - bareRow.rightPadding, 1,
+            fuzzyCompare(side.mapToItem(bareRow, Qt.point(side.width, 0)).x, bareRow.width - bareRow.rightPadding, 1,
                          "the far column at the row's end")
             compare(bareRow.Accessible.name, root.farName)
             const marks = bareRow.tipMarks

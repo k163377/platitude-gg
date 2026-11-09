@@ -143,7 +143,7 @@ Item {
         }
         /// Where each turning ring stands, down the pane.
         function rings() {
-            return found(pane, item => item.kind === "spinner").map(ring => ring.mapToItem(pane, 0, 0).y)
+            return found(pane, item => item.kind === "spinner").map(ring => ring.mapToItem(pane, Qt.point(0, 0)).y)
         }
 
         function test_nothing_the_hand_does_over_the_list_reaches_the_menu_under_it() {
@@ -203,7 +203,7 @@ Item {
         function test_an_empty_answer_says_nothing_was_thrown_away() {
             tryVerify(() => found(pane, item => item.text === "Nothing was thrown away here").length === 1)
             const said = found(pane, item => item.text === "Nothing was thrown away here")
-            const at = said[0].mapToItem(pane, 0, 0)
+            const at = said[0].mapToItem(pane, Qt.point(0, 0))
             verify(at.y > 2 * Theme.headerHeight, "in the list, under the filter")
             // Not a row: no seat's indent, centred across the list.
             fuzzyCompare(at.x + said[0].width / 2, pane.width / 2, 1)
@@ -312,13 +312,14 @@ Item {
             const card = pane.entryHoverCard
             let last = ""
             tryVerify(() => {
-                const at = card.contentItem.mapToItem(root, 0, 0)
+                const at = card.contentItem.mapToItem(root, Qt.point(0, 0))
                 const now = [at.x, at.y, card.contentItem.width, card.contentItem.height].join(",")
                 const stood = card.opened && card.contentItem.width > 0 && now === last
                 last = now
                 return stood
             }, undefined, "the card stands at its size")
-            const at = card.contentItem.mapToItem(root, card.contentItem.width / 2, card.contentItem.height / 2)
+            const at = card.contentItem.mapToItem(root, Qt.point(card.contentItem.width / 2,
+                                                                 card.contentItem.height / 2))
             mouseMove(root, at.x, at.y)
             tryVerify(() => card.pointerInside, undefined, "the hand is in the card")
         }
@@ -346,11 +347,11 @@ Item {
             scrollTo(3)
             restOnRow(6)
             const row = rowAt(6)
-            const at = row.mapToItem(pane, 0, 0).y
+            const at = row.mapToItem(pane, Qt.point(0, 0)).y
             const from = pane.entryList.contentY
             page.recoverEntries = withFresh(30, 4)
             tryVerify(() => !pane.rowKeep.busy, undefined, "the read is weighed")
-            compare(row.mapToItem(pane, 0, 0).y, at, "the row stands where it stood")
+            compare(row.mapToItem(pane, Qt.point(0, 0)).y, at, "the row stands where it stood")
             compare(pane.entryList.contentY, from + Theme.rowHeight, "the list went down by the entry written in")
             verify(pane.cardOpen && pane.cardAt === 7, "the card stays on its entry")
             verify(!pane.hand.stillHeld, "nothing moved under the hand")
@@ -364,7 +365,7 @@ Item {
             intoCard()
             const card = pane.entryHoverCard
             // Where it is drawn, the window's own push back from its edge included (`Popup.margins`).
-            const at = card.contentItem.mapToItem(root, 0, 0)
+            const at = card.contentItem.mapToItem(root, Qt.point(0, 0))
             const wide = card.width
             page.recoverEntries = withFresh(5, 0)
             tryVerify(() => !pane.rowKeep.busy, undefined, "the read is weighed")
@@ -373,7 +374,7 @@ Item {
             wait(Metrics.hoverKeepMs * 2)
             verify(pane.cardOpen, "the card the hand is in stays")
             compare(card.width, wide, "as wide, saying the same")
-            compare(card.contentItem.mapToItem(root, 0, 0), at, "where it stood")
+            compare(card.contentItem.mapToItem(root, Qt.point(0, 0)), at, "where it stood")
             compare(pane.cardAt, 3, "of its entry")
         }
 
@@ -534,14 +535,15 @@ Item {
             tryVerify(() => pane.pinSeated, undefined, "the row went with the filter")
             pinAt("seat", "fresh reset")
             compare(pane.pickStandIn.y, 0)
-            tryVerify(() => rowAt(0) !== null && rowAt(0).mapToItem(pane.entryList, 0, 0).y === Theme.rowHeight,
+            tryVerify(() => rowAt(0) !== null
+                            && rowAt(0).mapToItem(pane.entryList, Qt.point(0, 0)).y === Theme.rowHeight,
                       undefined, "the first row the filter left is under the seat")
 
             pane.filterText = "zzz"
             const said = () => found(pane, item => item.text === "No results found")
             tryVerify(() => said().length === 1, undefined, "the filter left nothing")
             pinAt("seat", "fresh reset")
-            const line = said()[0].mapToItem(pane.entryList, 0, 0).y
+            const line = said()[0].mapToItem(pane.entryList, Qt.point(0, 0)).y
             verify(line >= pane.pickStandIn.height, "the line stands clear of the seat: " + line)
 
             pane.filterText = ""
@@ -559,10 +561,10 @@ Item {
             pane.filterText = "main-"
             tryVerify(() => pane.shownEntries.count === 30, undefined, "the filter left the rest")
             pane.entryList.forceLayout()
-            compare(rowAt(0).mapToItem(pane.entryList, 0, 0).y, 0, "the first row stands at the list's head")
+            compare(rowAt(0).mapToItem(pane.entryList, Qt.point(0, 0)).y, 0, "the first row stands at the list's head")
             page.recoverPick = 4
             pinAt("seat", "fresh reset")
-            tryVerify(() => rowAt(0).mapToItem(pane.entryList, 0, 0).y === Theme.rowHeight, undefined,
+            tryVerify(() => rowAt(0).mapToItem(pane.entryList, Qt.point(0, 0)).y === Theme.rowHeight, undefined,
                       "the row is under the seat")
         }
 

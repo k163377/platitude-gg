@@ -48,8 +48,8 @@ Rectangle {
     /// Automation: how far apart the caption and the path stand, baseline to baseline. A label and a field of one face
     /// are two boxes where the face has leading (`LineText`), and centred each on its own they read as two lines.
     function captionApart() {
-        return Math.abs(captionWord.mapToItem(header, 0, captionWord.baselineOffset).y
-                        - titleField.mapToItem(header, 0, titleField.baselineOffset).y)
+        return Math.abs(captionWord.mapToItem(header, Qt.point(0, captionWord.baselineOffset)).y
+                        - titleField.mapToItem(header, Qt.point(0, titleField.baselineOffset)).y)
     }
 
     implicitHeight: Theme.headerHeight

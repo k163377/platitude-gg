@@ -88,7 +88,7 @@ QtObject {
             parentKeep.refuse()
             return
         }
-        const at = row.mapToItem(cards.host, line.x + line.width, line.y)
+        const at = row.mapToItem(cards.host, Qt.point(line.x + line.width, line.y))
         parentCard.parents = row.plate.parents
         parentCard.x = Math.round(at.x - parentCard.hashWidth - parentCard.hashInset)
         parentCard.y = Math.round(at.y + line.height / 2 - parentCard.firstMiddle)
@@ -109,7 +109,7 @@ QtObject {
             mateKeep.refuse()
             return
         }
-        const p = cards.block.valueRow.mapToItem(cards.host, at.x, at.y)
+        const p = cards.block.valueRow.mapToItem(cards.host, at)
         mateCard.records = records
         cards.takeRoom()
         mateCard.maxWidth = cards.rightStop - cards.leftStop
@@ -123,7 +123,7 @@ QtObject {
             authorKeep.refuse()
             return
         }
-        const p = cards.block.valueRow.mapToItem(cards.host, at.x, at.y)
+        const p = cards.block.valueRow.mapToItem(cards.host, at)
         cards.takeRoom()
         authorCard.maxWidth = cards.rightStop - cards.leftStop
         cards.authorAnchorX = p.x
@@ -136,7 +136,7 @@ QtObject {
     function takeRoom() {
         // `spaceXxl` short of the window on the far side, like every floating card (`AppMenu.roomForRows` /
         // `RefListPopup.chipRoom`), and the pane's own inset on the near side.
-        cards.leftStop = Theme.spaceXxl - cards.host.mapToItem(null, 0, 0).x
+        cards.leftStop = Theme.spaceXxl - cards.host.mapToItem(null, Qt.point(0, 0)).x
         cards.rightStop = cards.host.width - 2 * Theme.spaceXs
     }
     /// Where a card of that width sits: at the anchor, backed out of the pane when the row cannot hold it — the seat

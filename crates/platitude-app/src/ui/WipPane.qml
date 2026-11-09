@@ -248,7 +248,8 @@ ColumnLayout {
             const item = list.itemAtIndex(at)
             if (!item)
                 return false
-            KeyMenu.ask(item.mapToItem(null, 0, Theme.rowHeight), () => item.rowPressed(Qt.RightButton, Qt.NoModifier))
+            KeyMenu.ask(item.mapToItem(null, Qt.point(0, Theme.rowHeight)),
+                        () => item.rowPressed(Qt.RightButton, Qt.NoModifier))
             return true
         }
         return false
@@ -432,7 +433,7 @@ ColumnLayout {
         }
         wipPane.pointedEolBucket = bucket
         wipPane.modelOf(bucket).pointEol(path)
-        const at = row.mapToItem(wipPane, 0, row.height)
+        const at = row.mapToItem(wipPane, Qt.point(0, row.height))
         eolCard.path = path
         eolCard.notice = wipPane.pointedEolText
         eolCard.x = at.x + Theme.spaceMd
@@ -523,7 +524,7 @@ ColumnLayout {
             ? qsTr("1 staged file may have line-ending problems")
             : qsTr("%1 staged files may have line-ending problems").arg(wipPane.worktree.eolStagedCount)
         // Above the button: it is pinned to the pane's bottom edge, so under it is off the window.
-        const at = commitBlock.commitSeat.mapToItem(wipPane, 0, 0)
+        const at = commitBlock.commitSeat.mapToItem(wipPane, Qt.point(0, 0))
         eolCard.x = at.x
         eolCard.anchorY = at.y
         eolCard.above = true

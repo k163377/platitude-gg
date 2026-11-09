@@ -62,25 +62,28 @@ Item {
     /// a coordinate looked up under another name falls through to "no screen" silently.
     ///
     /// Takes the list so `tst_windowshape` can hold it against a desktop this machine does not have.
-    function screenHolding(x, y, screens) {
-        if (x === shape.unplaced || y === shape.unplaced)
+    function screenHolding(corner, screens) {
+        if (!shape.placed(corner))
             return null
         for (let i = 0; i < screens.length; i++) {
             const s = screens[i]
-            if (x >= s.virtualX && x < s.virtualX + s.width
-                    && y >= s.virtualY && y < s.virtualY + s.height)
+            if (corner.x >= s.virtualX && corner.x < s.virtualX + s.width
+                    && corner.y >= s.virtualY && corner.y < s.virtualY + s.height)
                 return s
         }
         return null
+    }
+    /// Whether a saved top-left corner was saved at all: either axis `unplaced` is no place.
+    function placed(corner) {
+        return corner.x !== shape.unplaced && corner.y !== shape.unplaced
     }
 
     // Restores the saved size and place, assigned: from here on the window manager and the user own them. An
     // unsaved position stays unset so the platform places the window.
     function applySavedWindow() {
-        const x = AppBackend.startWindowX()
-        const y = AppBackend.startWindowY()
+        const corner = Qt.point(AppBackend.startWindowX(), AppBackend.startWindowY())
         // `Screen` is only the fallback ([`screenHolding`]).
-        const home = shape.screenHolding(x, y, Qt.application.screens)
+        const home = shape.screenHolding(corner, Qt.application.screens)
         const roomW = home !== null ? home.width : Screen.width
         const roomH = home !== null ? home.height : Screen.height
         // Over the floor already: `settleTimer` measures the slop from this, and a maximise comes back to it.
@@ -94,9 +97,9 @@ Item {
         shape.window.height = wantHeight
         shape.askedWidth = wantWidth
         shape.askedHeight = wantHeight
-        if (x !== shape.unplaced && y !== shape.unplaced) {
-            shape.window.x = x
-            shape.window.y = y
+        if (shape.placed(corner)) {
+            shape.window.x = corner.x
+            shape.window.y = corner.y
         }
         // The frame has to fit, and it is wider than the window says, which `insideScreen` cannot see: the platform
         // side moves the window back and says whether it had to. Before the maximise, since the shape standing then

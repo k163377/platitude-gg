@@ -83,7 +83,7 @@ Rectangle {
             pin.pointerX = -1
             return
         }
-        const p = pinMouse.mapFromItem(null, hand.at.x, hand.at.y)
+        const p = pinMouse.mapFromItem(null, hand.at)
         pin.pointerX = p.x >= 0 && p.y >= 0 && p.x < pinMouse.width && p.y < pinMouse.height ? p.x : -1
     }
     /// The commit the stand-in stands for — HEAD's row's, as the model last drew it (`models::graph::head`), empty

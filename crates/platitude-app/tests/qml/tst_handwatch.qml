@@ -136,7 +136,7 @@ Item {
             menu.offerHere()
             tryVerify(() => menu.opened)
             const row = menu.itemAt(0)
-            const on = row.mapToItem(root, row.width / 2, row.height / 2)
+            const on = row.mapToItem(root, Qt.point(row.width / 2, row.height / 2))
             const x = Math.round(on.x)
             const y = Math.round(on.y)
             menu.dismiss()

@@ -69,7 +69,7 @@ Item {
         /// A quarter into the character after boundary `i` of the words, in the hand's coordinates, `dy` off the
         /// line's middle. Whole pixels, as a pointer delivers them.
         function handPoint(i, dy) {
-            const p = words.mapToItem(hand, (i + 0.25) * glyph.advanceWidth, words.height / 2 + dy)
+            const p = words.mapToItem(hand, Qt.point((i + 0.25) * glyph.advanceWidth, words.height / 2 + dy))
             return Qt.point(Math.round(p.x), Math.round(p.y))
         }
         function inRoot(p) {
@@ -144,8 +144,8 @@ Item {
             const w = glyph.advanceWidth
             // Where the words end, in the line's coordinates (`LineText.tailSlack`).
             const end = cut.width - cut.tailSlack
-            const past = cut.mapToItem(root, end + 2, cut.height / 2)
-            const back = cut.mapToItem(root, end - 3.75 * w, cut.height / 2 + 7)
+            const past = cut.mapToItem(root, Qt.point(end + 2, cut.height / 2))
+            const back = cut.mapToItem(root, Qt.point(end - 3.75 * w, cut.height / 2 + 7))
             cut.anchorFrom(root, past)
             cut.extendFrom(root, back)
             compare(cut.selected, "mnop")

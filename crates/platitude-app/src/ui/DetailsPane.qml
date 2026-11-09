@@ -111,7 +111,7 @@ ColumnLayout {
         const item = fileList.itemAtIndex(at)
         if (!item)
             return false
-        KeyMenu.ask(item.mapToItem(null, 0, Theme.rowHeight), () => item.askMenu())
+        KeyMenu.ask(item.mapToItem(null, Qt.point(0, Theme.rowHeight)), () => item.askMenu())
         return true
     }
     function avatarClicked() {

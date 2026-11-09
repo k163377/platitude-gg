@@ -175,8 +175,8 @@ Item {
     /// Where the date line's drawn words end, in `item`'s x: the credit's stretch, or the date where nobody is
     /// credited.
     function dateWordsEnd(item) {
-        return coBlock.visible ? coBlock.mapToItem(item, coBlock.stretchWidth, 0).x
-                               : detailsDate.mapToItem(item, detailsDate.width, 0).x
+        return coBlock.visible ? coBlock.mapToItem(item, Qt.point(coBlock.stretchWidth, 0)).x
+                               : detailsDate.mapToItem(item, Qt.point(detailsDate.width, 0)).x
     }
     // ---- one baseline per line (user decision — ask before changing) ----
     // The name and the commit's hash on the first; the date, the credit and the parent line (hashes, `, `, `+N`) on
@@ -206,9 +206,9 @@ Item {
         const plate = hashPlate.baselines(null)
         const mates = coBlock.baselines(null)
         return {
-            name: authorLabel.mapToItem(null, 0, authorLabel.baselineOffset).y,
+            name: authorLabel.mapToItem(null, Qt.point(0, authorLabel.baselineOffset)).y,
             hash: plate.hash,
-            date: detailsDate.mapToItem(null, 0, detailsDate.baselineOffset).y,
+            date: detailsDate.mapToItem(null, Qt.point(0, detailsDate.baselineOffset)).y,
             dateSize: detailsDate.pixelSize,
             face: coBlock.faceMiddle(null),
             mate: mates.name,
@@ -226,7 +226,7 @@ Item {
     /// Automation (verify-ui `details-parents`): the plate, and where the date line's words end in the row's x.
     readonly property alias plate: hashPlate
     function dateLineEnd() {
-        return dateLine.mapToItem(authorRow, 0, 0).x + authorRow.dateNeed - dateLine.spacing
+        return dateLine.mapToItem(authorRow, Qt.point(0, 0)).x + authorRow.dateNeed - dateLine.spacing
     }
     // ---- what a sweep over this row needs to know (`SweepRoom`) ------
     //
@@ -344,7 +344,7 @@ Item {
     // come back (`DetailsAuthorCards`).
     onMatesPointedChanged: {
         if (authorRow.matesPointed)
-            authorRow.openMateRequested(coBlock.mapToItem(authorRow, 0, coBlock.height))
+            authorRow.openMateRequested(coBlock.mapToItem(authorRow, Qt.point(0, coBlock.height)))
         else
             authorRow.settleMateRequested()
     }
@@ -356,7 +356,7 @@ Item {
     }
     onAuthorPointedChanged: {
         if (authorRow.authorPointed)
-            authorRow.openAuthorRequested(authorLabel.mapToItem(authorRow, 0, authorLabel.height))
+            authorRow.openAuthorRequested(authorLabel.mapToItem(authorRow, Qt.point(0, authorLabel.height)))
         else
             authorRow.settleAuthorRequested()
     }

@@ -468,7 +468,7 @@ Item {
         }
 
         function pillMiddle() {
-            return bar.pill.mapToItem(bar, 0, bar.pill.height / 2).y
+            return bar.pill.mapToItem(bar, Qt.point(0, bar.pill.height / 2)).y
         }
 
         /// The pill and the key walk the same body (`dismiss`), which is what a headless run presses — and neither

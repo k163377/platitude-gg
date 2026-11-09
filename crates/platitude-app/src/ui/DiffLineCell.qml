@@ -55,7 +55,7 @@ Item {
     /// The line's right edge in `frame`'s coordinates, asked of the placed item (`DiffPane.codeInkRight`); 0 for a
     /// heading.
     function inkRightIn(frame) {
-        return cell.banded ? 0 : codeLine.mapToItem(frame, codeLine.implicitWidth, 0).x
+        return cell.banded ? 0 : codeLine.mapToItem(frame, Qt.point(codeLine.implicitWidth, 0)).x
     }
 
     clip: true

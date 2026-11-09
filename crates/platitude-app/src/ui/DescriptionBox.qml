@@ -143,8 +143,8 @@ Rectangle {
         box.pullTo(down ? box.ceiling + over : box.restHeight - over)
         // Written after the pull, off `boxHeight` (the anchored grip only moves on the next layout): written before,
         // it leaves the badge at the corner the grip has since left.
-        box.gripPoint = box.mapToItem(null, box.width - gripMark.width / 2, box.boxHeight - gripMark.height / 2
-        + (down ? over : -over))
+        box.gripPoint = box.mapToItem(null, Qt.point(box.width - gripMark.width / 2,
+                                                     box.boxHeight - gripMark.height / 2 + (down ? over : -over)))
     }
     // The badge is the page's (`RepoPage`): a refused hand is outside this box, and a badge parented here is
     // composited under the author card and the file list.
@@ -335,7 +335,7 @@ Rectangle {
             function contains(point: point): bool {
                 if (point.x < 0 || point.y < 0 || point.x > grip.width || point.y > grip.height)
                     return false
-                return !textBar.visible || !textBar.contains(grip.mapToItem(textBar, point.x, point.y))
+                return !textBar.visible || !textBar.contains(grip.mapToItem(textBar, point))
             }
         }
         hoverEnabled: true
@@ -344,16 +344,16 @@ Rectangle {
         property real fromY: 0
         property real fromHeight: 0
         onPressed: mouse => {
-            grip.fromY = mapToItem(box.parent, 0, mouse.y).y
+            grip.fromY = mapToItem(box.parent, Qt.point(0, mouse.y)).y
             grip.fromHeight = box.boxHeight
             // The last drag's answer is not this one's (it would show the badge a frame early).
             box.askedPast = false
         }
         onPositionChanged: mouse => {
-            box.gripPoint = grip.mapToItem(null, mouse.x, mouse.y)
+            box.gripPoint = grip.mapToItem(null, Qt.point(mouse.x, mouse.y))
             if (!grip.pressed)
                 return
-            box.pullTo(grip.fromHeight + mapToItem(box.parent, 0, mouse.y).y - grip.fromY)
+            box.pullTo(grip.fromHeight + mapToItem(box.parent, Qt.point(0, mouse.y)).y - grip.fromY)
         }
         NavIcon {
             id: gripMark

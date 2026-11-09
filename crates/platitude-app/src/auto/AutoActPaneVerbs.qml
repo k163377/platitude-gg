@@ -321,8 +321,8 @@ Item {
                     // the pane's hand (`HandWatch.stir`), over the stand-in's words, which the stand-in reads it off.
                     if (!op.input("moved", () => {
                             const pin = graphPane.headPin
-                            const words = pin.mapToItem(null, pin.labelWidth + pin.graphColWidth + Theme.spaceLg,
-                                                        pin.rowMidY)
+                            const words = pin.mapToItem(
+                                null, Qt.point(pin.labelWidth + pin.graphColWidth + Theme.spaceLg, pin.rowMidY))
                             graphPane.hand.stir(words)
                         }))
                         return
@@ -443,7 +443,7 @@ Item {
                 if (!Awaited.all("graph_divider_row_page", { "page": PageSettled.settled(page) }))
                     return
                 op.input("rested", () => {
-                    graphPane.restDividerPointer(true, below.mapToItem(graphPane, 0, below.height / 2).y)
+                    graphPane.restDividerPointer(true, below.mapToItem(graphPane, Qt.point(0, below.height / 2)).y)
                 })
                 return
             }

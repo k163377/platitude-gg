@@ -54,16 +54,13 @@ Item {
         /// took the press.
         function under(item, x, y) {
             let at = item
-            let px = x
-            let py = y
+            let p = Qt.point(x, y)
             let out = ""
             for (let depth = 0; depth < 12; depth++) {
-                const kid = at.childAt(px, py)
+                const kid = at.childAt(p.x, p.y)
                 if (!kid)
                     break
-                const p = kid.mapFromItem(at, px, py)
-                px = p.x
-                py = p.y
+                p = kid.mapFromItem(at, p)
                 at = kid
                 out += " > " + kid + "[" + Math.round(kid.x) + "," + Math.round(kid.y)
                        + " " + Math.round(kid.width) + "x" + Math.round(kid.height) + "]"

@@ -187,8 +187,8 @@ Item {
             x += pick.ruler.xOf(Math.min(end.place, pick.ruler.length)) - pick.codeX
         }
         const right = pick.split && end.side === 0 ? pick.divider : pick.width
-        const foot = item.mapToItem(null, 0, item.height)
-        return Qt.point(pick.mapToItem(null, Math.max(start, Math.min(x, right)), 0).x, foot.y)
+        const foot = item.mapToItem(null, Qt.point(0, item.height))
+        return Qt.point(pick.mapToItem(null, Qt.point(Math.max(start, Math.min(x, right)), 0)).x, foot.y)
     }
     /// Not a hunk heading: the press there belongs to its two words (デザイン規約 §diff の中身をコピーする).
     function takesPress(row) {

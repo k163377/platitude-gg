@@ -110,7 +110,7 @@ HoverHandler {
     /// answered for the row the hand is on now — lifted first, the ask of the row it has just left would open.
     function stir(scenePoint) {
         const gone = scenePoint === undefined || scenePoint === null || scenePoint.x < 0
-        const next = gone ? Qt.point(-1, -1) : Qt.point(scenePoint.x, scenePoint.y)
+        const next = gone ? Qt.point(-1, -1) : scenePoint
         if (next.x === watch.at.x && next.y === watch.at.y)
             return
         watch.at = next
@@ -164,7 +164,7 @@ HoverHandler {
     function over(item) {
         if (!watch.known || item === null || item === undefined)
             return false
-        const p = item.mapFromItem(null, watch.at.x, watch.at.y)
+        const p = item.mapFromItem(null, watch.at)
         return p.x >= 0 && p.y >= 0 && p.x < item.width && p.y < item.height
     }
     /// Where the hand is heard now: on this surface, else on the one that counts as it (`alsoOver`), else nowhere.

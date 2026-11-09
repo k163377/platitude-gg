@@ -33,8 +33,8 @@ Item {
     /// short on.
     function coverOf(front) {
         const face = refList.background
-        const card = face.mapToItem(null, 0, 0)
-        const chip = front.mapToItem(null, 0, 0)
+        const card = face.mapToItem(null, Qt.point(0, 0))
+        const chip = front.mapToItem(null, Qt.point(0, 0))
         const over = Math.round(chip.x + front.width - (card.x + face.width))
         const left = Math.round(card.x - chip.x)
         const top = Math.round(card.y - chip.y)
@@ -499,7 +499,7 @@ Item {
                 // (`HandWatch.stir`), which the stand-in reads it off, so the press below has a hand to hold still.
                 op.input("pointed", () => {
                     const front = pin.chipItem.chipItem
-                    graphPane.hand.stir(front.mapToItem(null, front.width / 2, front.height / 2))
+                    graphPane.hand.stir(front.mapToItem(null, Qt.point(front.width / 2, front.height / 2)))
                 })
                 return
             }
@@ -805,14 +805,14 @@ Item {
         // (`heldAfter`, `settlingAfter`).
         function boxOf() {
             const face = refList.background
-            const at = face.mapToItem(null, 0, 0)
+            const at = face.mapToItem(null, Qt.point(0, 0))
             return Math.round(at.x) + "," + Math.round(at.y)
                    + " " + Math.round(face.width) + "x" + Math.round(face.height)
         }
         /// Where the hand is along `item` — the middle of the stretch its chip's card will leave bare, left of where
         /// the card is placed (`RowHoverHost.openRefList`); -1 where the chip leaves none.
         function bareX(item) {
-            const room = item.chipItem.mapToItem(item, 0, 0).x - Theme.spaceXs - Theme.borderWidth
+            const room = item.chipItem.mapToItem(item, Qt.point(0, 0)).x - Theme.spaceXs - Theme.borderWidth
             return room >= 2 * Theme.spaceXs ? Math.floor(room / 2) : -1
         }
         /// The row or stand-in called `which`, or null while it is not laid out.
@@ -827,8 +827,8 @@ Item {
         }
         function coveredAt(item, x) {
             const face = refList.background
-            const card = face.mapToItem(null, 0, 0)
-            const hand = item.mapToItem(null, x, leaveTimer.handY(item))
+            const card = face.mapToItem(null, Qt.point(0, 0))
+            const hand = item.mapToItem(null, Qt.point(x, leaveTimer.handY(item)))
             return hand.x >= card.x && hand.x < card.x + face.width
                    && hand.y >= card.y && hand.y < card.y + face.height
         }

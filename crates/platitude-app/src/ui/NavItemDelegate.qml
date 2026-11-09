@@ -69,11 +69,11 @@ Item {
     /// The sidebar hands its own down, which its stand-in row reads too (`HeadPinRow`).
     property int rowInset: Theme.spaceXs + Theme.iconSm - Theme.iconXs
     property int nestStep: Theme.iconSm / 2
-    /// The layer an open name box is drawn in, and where this row's list sits in it (`NavList`), so the box follows
-    /// its row through a scroll. No layer: the box stays in its seat.
+    /// The layer an open name box is drawn in, and where this row's list sits in it (`NavList`): where its rows begin,
+    /// scrolled, and the list's own top and height — so the box follows its row through a scroll. No layer: the box
+    /// stays in its seat.
     property Item boxLayer: null
-    property real boxRowsX: 0
-    property real boxRowsY: 0
+    property point boxRowsAt: Qt.point(0, 0)
     property real boxRowsTop: 0
     property real boxRowsHeight: 0
     // Shows the hover stage/unstage affordance (WIP view).
@@ -218,8 +218,7 @@ Item {
             seat: rowLayout.boxSeat
             drawnIn: navRow.boxLayer
             // Where the row's columns begin; the box adds the seat's place itself.
-            rowsX: navRow.boxRowsX + rowLayout.x
-            rowsY: navRow.boxRowsY
+            rowsAt: Qt.point(navRow.boxRowsAt.x + rowLayout.x, navRow.boxRowsAt.y)
             rowsTop: navRow.boxRowsTop
             rowsHeight: navRow.boxRowsHeight
             editing: navRow.editing

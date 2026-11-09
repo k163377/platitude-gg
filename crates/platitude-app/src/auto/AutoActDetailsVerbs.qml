@@ -669,11 +669,11 @@ Item {
             const card = detailsPane.authorCards.parentCard
             const arrow = plate.arrowBox(null)
             const field = parentsCardTimer.rowBuilt(0).field
-            const hash = field.mapToItem(null, 0, 0)
+            const hash = field.mapToItem(null, Qt.point(0, 0))
             const line = plate.parentLineRect(null)
             const dx = hash.x + field.width - (line.x + line.width)
             const dy = hash.y - parentsCardTimer.witnessed("seatY")
-            const gap = card.contentItem.mapToItem(null, 0, 0).x - card.padding - (arrow.x + arrow.width)
+            const gap = card.contentItem.mapToItem(null, Qt.point(0, 0)).x - card.padding - (arrow.x + arrow.width)
             let bare = !plate.moreStands
             for (let i = 0; i < plate.parents.length; i++) {
                 const link = plate.linkAt(i)
@@ -710,7 +710,7 @@ Item {
                 op.input("card_asked", () => {
                     // The first hash's row of pixels before the card comes out: the card's first hash has to stand
                     // on it.
-                    op.witness("seatY", plate.linkAt(0).field.mapToItem(null, 0, 0).y)
+                    op.witness("seatY", plate.linkAt(0).field.mapToItem(null, Qt.point(0, 0)).y)
                     // And the plate's width: the name beside it must not move as the card comes out.
                     op.witness("plateWidth", plate.width)
                     row.showParents(true)

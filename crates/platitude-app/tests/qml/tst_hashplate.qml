@@ -45,7 +45,7 @@ Item {
         /// A point of the row's value, in the root's coordinates.
         function pointIn(which, fx) {
             const f = plate.fieldFor(which)
-            return f.mapToItem(root, f.width * fx, f.height / 2)
+            return f.mapToItem(root, Qt.point(f.width * fx, f.height / 2))
         }
 
         // First in the file on purpose: the answer stands until the pointer leaves the plate, and this platform
@@ -69,7 +69,7 @@ Item {
         // The mark and the digits are one target, so the press answers the same on both.
         function test_b_click_on_the_mark_copies_the_whole_hash() {
             const f = plate.fieldFor("hash")
-            const p = f.mapToItem(root, f.width + Theme.spaceXs + Theme.iconMd / 2, f.height / 2)
+            const p = f.mapToItem(root, Qt.point(f.width + Theme.spaceXs + Theme.iconMd / 2, f.height / 2))
             mouseClick(root, p.x, p.y)
             compare(root.copies, 1, "a click on the mark is the plate's")
             compare(root.copied, plate.fullSha)

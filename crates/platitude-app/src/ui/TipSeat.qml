@@ -58,12 +58,11 @@ Item {
     readonly property bool pointed: seat.groundPointed || seat.wordPointed
 
     /// Where the box was opened beside, in `host` coordinates. Frozen when it comes out: a seat that followed the
-    /// pointer would slide from under the hand walking into it.
-    property real anchorX: 0
+    /// pointer would slide from under the hand walking into it. Its x is read once `anchorKnown`; its y only by a box
+    /// beside its target (`current.beside`), and only once `anchorDown` — a run's stand-in has no height, so those
+    /// runs seat the box at the target's top.
+    property point anchor: Qt.point(0, 0)
     property bool anchorKnown: false
-    /// The same for y, read only by a box beside its target (`current.beside`). Separate because a run's stand-in
-    /// has no height; those runs seat the box at the target's top.
-    property real anchorY: 0
     property bool anchorDown: false
 
     // ---- what the targets ask ----------------------------------------------------------------------------------
@@ -184,7 +183,7 @@ Item {
     // The hand reached the box: a hold; letting go starts the beat.
     onPointedChanged: {
         if (seat.pointed && box.background !== null)
-            seat.readAt = box.background.mapToItem(seat.host, 0, 0)
+            seat.readAt = box.background.mapToItem(seat.host, Qt.point(0, 0))
         machine.hold("inside", seat.pointed)
         seat.cover()
     }
@@ -224,7 +223,7 @@ Item {
     /// and the anchor, and is read against the target's place again each time a box comes out.
     function targetAt() {
         const at = box.parent
-        return at !== null ? at.mapToItem(seat.host, 0, 0) : Qt.point(0, 0)
+        return at !== null ? at.mapToItem(seat.host, Qt.point(0, 0)) : Qt.point(0, 0)
     }
     /// Beside the hand (the target's middle when there is none), inside the window. A box at least as wide as its
     /// target sits on the target's left edge instead, so neighbouring tabs' boxes do not open at the same x
@@ -248,7 +247,7 @@ Item {
         // A field's refusal starts where the field does, whatever its length.
         if (ask.typed)
             return Math.max(edge, Math.min(p.x, room)) - p.x
-        const mid = seat.anchorKnown ? seat.anchorX : p.x + at.width / 2
+        const mid = seat.anchorKnown ? seat.anchor.x : p.x + at.width / 2
         const want = box.implicitWidth >= at.width ? p.x : mid - box.implicitWidth / 2
         return Math.max(edge, Math.min(want, room)) - p.x
     }
@@ -266,7 +265,7 @@ Item {
             return leftSeat
         if (rightSeat <= last)
             return rightSeat
-        const hand = seat.anchorKnown ? seat.anchorX : p.x + at.width / 2
+        const hand = seat.anchorKnown ? seat.anchor.x : p.x + at.width / 2
         const handLeft = hand - edge - width
         const handRight = hand + edge
         const goesLeft = firstLeft ? handLeft >= edge : handRight > last
@@ -288,7 +287,7 @@ Item {
         // (`handAcross`), so a headless picture does not show the hand's seat (`tst_tipseat.qml`'s beside cases do).
         if (ask.beside) {
             const last = seat.host.height - box.implicitHeight - Theme.spaceXs
-            const want = seat.anchorDown ? seat.anchorY - box.implicitHeight / 2 : p.y
+            const want = seat.anchorDown ? seat.anchor.y - box.implicitHeight / 2 : p.y
             return Math.max(Theme.spaceXs, Math.min(want, last)) - p.y
         }
         // A row's box: on the row's own band, centred on it — the rows either side keep all but the box's overhang.
@@ -326,16 +325,14 @@ Item {
         if (seat.handAcross >= 0) {
             seat.anchorKnown = true
             seat.anchorDown = false
-            seat.anchorX = seat.targetAt().x + ask.target.width * seat.handAcross
+            const top = seat.targetAt()
+            seat.anchor = Qt.point(top.x + ask.target.width * seat.handAcross, top.y)
             return
         }
         seat.anchorKnown = seat.hand.known
         seat.anchorDown = seat.anchorKnown
-        if (seat.anchorKnown) {
-            const at = seat.host.mapFromItem(null, seat.hand.at.x, seat.hand.at.y)
-            seat.anchorX = at.x
-            seat.anchorY = at.y
-        }
+        if (seat.anchorKnown)
+            seat.anchor = seat.host.mapFromItem(null, seat.hand.at)
     }
 
     // ---- the box ------------------------------------------------------------------------------------------------

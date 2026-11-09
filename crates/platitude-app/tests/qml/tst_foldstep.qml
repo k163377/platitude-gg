@@ -185,7 +185,7 @@ Item {
         /// Where a mark's box stands across the scene: its middle, and its right edge taken off the middle — a
         /// chevron is drawn turned, and a turned item's own origin is no longer its left.
         function middleOf(mark) {
-            return mark.mapToItem(root, mark.width / 2, mark.height / 2).x
+            return mark.mapToItem(root, Qt.point(mark.width / 2, mark.height / 2)).x
         }
         function rightOf(mark) {
             return middleOf(mark) + mark.width / 2
@@ -196,7 +196,7 @@ Item {
             verify(mark !== null, "the row shows its mark")
             const name = nameOf(row, text)
             verify(name !== null, "the row shows its name")
-            return name.mapToItem(root, 0, 0).x - rightOf(mark)
+            return name.mapToItem(root, Qt.point(0, 0)).x - rightOf(mark)
         }
 
         function test_one_fold_down_starts_under_the_chevrons_middle_data() {

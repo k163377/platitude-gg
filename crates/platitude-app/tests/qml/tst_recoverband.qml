@@ -62,7 +62,7 @@ Item {
             return under(partsView(), item => item.lineHeight !== undefined)
         }
         function topOf(item) {
-            return item.mapToItem(band, 0, 0).y
+            return item.mapToItem(band, Qt.point(0, 0)).y
         }
         function middleOf(item) {
             return topOf(item) + item.height / 2

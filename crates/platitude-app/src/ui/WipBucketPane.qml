@@ -52,7 +52,7 @@ ColumnLayout {
         const hand = bucketPane.paneHand
         if (hand === null || !hand.known || !hand.over(bucketList))
             return null
-        const p = bucketList.contentItem.mapFromItem(null, hand.at.x, hand.at.y)
+        const p = bucketList.contentItem.mapFromItem(null, hand.at)
         return bucketList.itemAt(p.x, p.y)
     }
     /// A built row of this list the hand lights (`NavItemDelegate.handOn`) — read before the rows' places are weighed

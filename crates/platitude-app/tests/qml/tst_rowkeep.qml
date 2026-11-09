@@ -127,7 +127,7 @@ Item {
             root.shifted = []
             // The hand parked off the lists.
             mouseMove(root, root.width / 2, root.height - 2)
-            tryVerify(() => hand.known && !list.contains(list.mapFromItem(root, hand.at.x, hand.at.y)))
+            tryVerify(() => hand.known && !list.contains(list.mapFromItem(root, hand.at)))
         }
         function fill(n) {
             for (let i = 0; i < n; i++)
@@ -147,7 +147,7 @@ Item {
         function handOn(name) {
             const row = rowNamed(name)
             verify(row !== null, name + " is built")
-            const at = row.mapToItem(root, row.width / 2, row.height / 2)
+            const at = row.mapToItem(root, Qt.point(row.width / 2, row.height / 2))
             mouseMove(root, at.x, at.y)
             tryVerify(() => hand.over(row), undefined, "the hand is on " + name)
             root.shifted = []
@@ -178,10 +178,10 @@ Item {
             list.contentY = 10 * Theme.rowHeight
             list.forceLayout()
             const row = handOn("row 13")
-            const at = row.mapToItem(root, 0, 0).y
+            const at = row.mapToItem(root, Qt.point(0, 0)).y
             read(() => rows.insert(0, { "name": "new" }))
             verify(hand.over(row), "the same row is under the hand")
-            compare(row.mapToItem(root, 0, 0).y, at, "where it stood")
+            compare(row.mapToItem(root, Qt.point(0, 0)).y, at, "where it stood")
             compare(root.shifted.length, 0, "and nothing moved under the hand")
         }
 
@@ -237,21 +237,21 @@ Item {
             list.contentY = 10 * Theme.rowHeight
             list.forceLayout()
             const row = handOn("row 13")
-            const at = row.mapToItem(root, 0, 0).y
+            const at = row.mapToItem(root, Qt.point(0, 0)).y
             read(() => {
                 band.height = Theme.rowHeight
             })
-            compare(row.mapToItem(root, 0, 0).y, at, "the row stands where it stood")
+            compare(row.mapToItem(root, Qt.point(0, 0)).y, at, "the row stands where it stood")
             compare(root.shifted.length, 0, "nothing moved under the hand")
         }
 
         function test_with_no_hand_over_the_rows_the_read_moves_them_as_it_does() {
             fill(5)
             const row = rowNamed("row 2")
-            const at = row.mapToItem(root, 0, 0).y
+            const at = row.mapToItem(root, Qt.point(0, 0)).y
             read(() => rows.insert(0, { "name": "new" }))
             list.forceLayout()
-            compare(row.mapToItem(root, 0, 0).y, at + Theme.rowHeight, "the row went down with the row above")
+            compare(row.mapToItem(root, Qt.point(0, 0)).y, at + Theme.rowHeight, "the row went down with the row above")
             compare(root.shifted.length, 0, "and no hand was told")
         }
 
@@ -274,7 +274,7 @@ Item {
             list.contentY = 50 * Theme.rowHeight
             list.forceLayout()
             handOn("row 55")
-            const at = rowNamed("row 55").mapToItem(root, 0, 0).y
+            const at = rowNamed("row 55").mapToItem(root, Qt.point(0, 0)).y
             // Forty rows written in between the top of the screen and the hand's: the hand's row goes past the view's
             // cache — and the view lays the read out before the keeper's turn comes, pooling its delegate.
             keep.arriving()
@@ -285,7 +285,7 @@ Item {
             tryVerify(() => !keep.busy, undefined, "the read is weighed")
             const row = rowNamed("row 55")
             verify(row !== null, "the row is built")
-            compare(row.mapToItem(root, 0, 0).y, at, "under the hand")
+            compare(row.mapToItem(root, Qt.point(0, 0)).y, at, "under the hand")
             verify(hand.over(row))
             compare(root.shifted.length, 0, "and nothing moved under the hand")
         }
@@ -297,7 +297,7 @@ Item {
             list.contentY = 50 * Theme.rowHeight
             list.forceLayout()
             const kept = handOn("row 55")
-            const at = kept.mapToItem(root, 0, 0).y
+            const at = kept.mapToItem(root, Qt.point(0, 0)).y
             keep.arriving()
             for (let i = 0; i < 40; i++)
                 rows.insert(52, { "name": "new " + i })
@@ -314,7 +314,7 @@ Item {
             tryVerify(() => !keep.busy, undefined, "the reads are weighed")
             const row = rowNamed("row 55")
             verify(row !== null, "the row is built")
-            compare(row.mapToItem(root, 0, 0).y, at, "under the hand")
+            compare(row.mapToItem(root, Qt.point(0, 0)).y, at, "under the hand")
         }
 
         /// The model tells a read from its arriving to its rows being in (`RowKeep.telling` — what a row asks of the
@@ -338,7 +338,7 @@ Item {
             tryVerify(() => upper.count === 3 && lower.count === 3 && lower.itemAtIndex(1) !== null
                       && lower.y === 3 * Theme.rowHeight, undefined, "the column is laid out")
             const row = lower.itemAtIndex(1)
-            const at = row.mapToItem(root, row.width / 2, row.height / 2)
+            const at = row.mapToItem(root, Qt.point(row.width / 2, row.height / 2))
             mouseMove(root, at.x, at.y)
             tryVerify(() => hand.over(row), undefined, "the hand is on the lower list's row")
             root.shifted = []

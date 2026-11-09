@@ -222,7 +222,7 @@ Rectangle {
         }
         if (!panePointer.hovered)
             return
-        const at = diffPane.mapToItem(diffList, panePointer.point.position.x, panePointer.point.position.y)
+        const at = diffPane.mapToItem(diffList, panePointer.point.position)
         const row = at.y >= 0 && at.y <= diffList.height
                   ? diffList.itemAt(at.x + diffList.contentX, at.y + diffList.contentY)
                   : null

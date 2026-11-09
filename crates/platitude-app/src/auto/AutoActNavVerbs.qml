@@ -250,7 +250,7 @@ Item {
     /// Puts a menu a verb just raised where a hand's right-click would have: headless, the pointer never leaves the
     /// screen's origin, and `popup()` opens there (rules-refs/app-ui.md「ヘッドレスの窓には手が乗っている」).
     function standMenuOn(menu, row) {
-        const p = row.mapToItem(menu.parent, row.width * 0.35, row.height * 0.6)
+        const p = row.mapToItem(menu.parent, Qt.point(row.width * 0.35, row.height * 0.6))
         menu.x = p.x
         menu.y = p.y
     }
@@ -1112,8 +1112,8 @@ Item {
                 if (!Awaited.all("elsewhere_window", { "window": !list.rowGuarded(op.row) }))
                     return
                 op.input("pane_press", () => {
-                    page.Window.window.caretHand.pressedAt(detailsPane.mapToItem(null, detailsPane.width / 2,
-                                                                                 detailsPane.height / 2))
+                    page.Window.window.caretHand.pressedAt(
+                        detailsPane.mapToItem(null, Qt.point(detailsPane.width / 2, detailsPane.height / 2)))
                 })
                 return
             }

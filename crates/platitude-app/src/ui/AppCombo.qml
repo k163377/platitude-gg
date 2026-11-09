@@ -122,7 +122,7 @@ ComboBox {
             list.x = 0
             return
         }
-        const at = combo.mapToItem(combo.spreadWithin, 0, 0).x
+        const at = combo.mapToItem(combo.spreadWithin, Qt.point(0, 0)).x
         const right = at + combo.width / 2 <= combo.spreadWithin.width / 2
         list.x = right ? Math.min(0, combo.spreadWithin.width - at - list.width)
                        : Math.max(combo.width - list.width, -at)

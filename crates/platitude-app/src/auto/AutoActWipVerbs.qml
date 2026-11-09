@@ -644,7 +644,8 @@ Item {
                             // Through the menu key's door (`GraphRowWalk.menuFromKeys`), which stands the menu at the
                             // row: a run has no pointer, and `popup()` would put it in the window's corner.
                             if (item !== null)
-                                KeyMenu.ask(item.mapToItem(null, 0, Theme.graphRowHeight), () => item.askMenu())
+                                KeyMenu.ask(item.mapToItem(null, Qt.point(0, Theme.graphRowHeight)),
+                                            () => item.askMenu())
                         }
                         return driver.carriedMenu.visible
                     }))
@@ -1048,7 +1049,7 @@ Item {
             if (list === null)
                 return null
             const hand = eolWalkTimer.witnessed("handAt")
-            const p = list.mapFromItem(null, hand.x, hand.y)
+            const p = list.mapFromItem(null, hand)
             return list.itemAt(p.x, p.y + list.contentY)
         }
         /// The run's line at the stage it stopped at, read off the rows as they stand; `tremor=` / `tremor_card=` are
@@ -1078,7 +1079,8 @@ Item {
                 if (!Awaited.all("eol_walk_card", { "card": wipPane.eolCardOpen, "row": row !== null }))
                     return
                 op.input("scrolled", () => {
-                    wipPane.hand.stir(op.witness("handAt", row.mapToItem(null, row.width / 2, row.height / 2)))
+                    wipPane.hand.stir(op.witness("handAt",
+                                                 row.mapToItem(null, Qt.point(row.width / 2, row.height / 2))))
                     op.unstagedList().contentY += op.stay ? 1 : Theme.rowHeight
                 })
                 return

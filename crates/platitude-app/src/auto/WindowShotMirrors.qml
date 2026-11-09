@@ -66,7 +66,7 @@ Item {
             }
             function seat(source) {
                 const item = source.sourceItem
-                const at = sceneShot.mapFromItem(item, 0, 0)
+                const at = sceneShot.mapFromItem(item, Qt.point(0, 0))
                 source.x = at.x
                 source.y = at.y
                 source.width = item.width

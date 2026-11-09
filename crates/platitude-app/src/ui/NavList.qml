@@ -48,9 +48,9 @@ AppListView {
     /// None without gestures (no box ever opens); settable to keep the box in its seat.
     property Item boxLayer:
         navList.gestures && navList.parent ? navList.parent.parent : null
-    /// Where this list's rows begin in that layer.
-    readonly property real boxRowsX: (navList.parent ? navList.parent.x : 0) + navList.x
-    readonly property real boxRowsTop: (navList.parent ? navList.parent.y : 0) + navList.y
+    /// Where this list stands in that layer: its top-left, before the rows scroll.
+    readonly property point boxListAt: Qt.point((navList.parent ? navList.parent.x : 0) + navList.x,
+                                                (navList.parent ? navList.parent.y : 0) + navList.y)
     /// Where a row's ink begins and how far each fold steps it in, so names begin in the column the section heading
     /// sets its mark in: the band's seat is `iconSm`, a row's `iconXs` (6 in all). The stand-in reads these too.
     /// One row shape for every list that folds (user decision — ask before changing): a commit's CHANGES, the WIP
@@ -112,7 +112,8 @@ AppListView {
         const item = navList.itemAtIndex(row)
         if (!item)
             return false
-        KeyMenu.ask(item.mapToItem(null, 0, item.lineHeight), () => item.rowPressed(Qt.RightButton, Qt.NoModifier))
+        KeyMenu.ask(item.mapToItem(null, Qt.point(0, item.lineHeight)),
+                    () => item.rowPressed(Qt.RightButton, Qt.NoModifier))
         return true
     }
     // The menu key; Windows' Shift+F10 comes through the window (`Main.keyMenuAsked`).
@@ -440,7 +441,7 @@ AppListView {
         if (row === null)
             return "none"
         const lines = row.factsItem
-        const at = lines ? lines.mapToItem(row, 0, 0) : null
+        const at = lines ? lines.mapToItem(row, Qt.point(0, 0)) : null
         return Math.round(row.y) + "+" + Math.round(row.height) + " line=" + Math.round(row.lineHeight)
              + " lines=" + (at ? Math.round(at.y) + "+" + Math.round(lines.height) : "none")
              + " view=" + Math.round(navList.contentY) + "+" + Math.round(navList.height)
@@ -520,9 +521,8 @@ AppListView {
         pinSeat: navList.pinSeatRow >= 0 && navList.pinSeatRow === row.index ? Theme.rowHeight : 0
         // So a scroll carries the box with its row.
         boxLayer: navList.boxLayer
-        boxRowsX: navList.boxRowsX
-        boxRowsY: navList.boxRowsTop - navList.contentY
-        boxRowsTop: navList.boxRowsTop
+        boxRowsAt: Qt.point(navList.boxListAt.x, navList.boxListAt.y - navList.contentY)
+        boxRowsTop: navList.boxListAt.y
         boxRowsHeight: navList.height
         kindHint: navList.kindHint
         remoteNames: navList.remoteNames

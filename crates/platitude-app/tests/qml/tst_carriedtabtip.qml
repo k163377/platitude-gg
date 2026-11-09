@@ -143,7 +143,7 @@ Item {
         /// How far the box's middle stands off `x`, in the window.
         function boxOff(x) {
             const ground = shared.box.background
-            return Math.abs(ground.mapToItem(root, ground.width / 2, 0).x - x)
+            return Math.abs(ground.mapToItem(root, Qt.point(ground.width / 2, 0)).x - x)
         }
 
         /// Pressed where the hand rests and carried twenty frames of `step` pixels to the right, and left held
@@ -214,7 +214,7 @@ Item {
             const tab = tabs.itemAtIndex(0)
             tipOnFirstTab()
             const box = shared.box.contentItem
-            const into = box.mapToItem(root, box.width / 2, box.height / 2)
+            const into = box.mapToItem(root, Qt.point(box.width / 2, box.height / 2))
             verify(into.y > tab.height, "the box stands below the strip, off the tab")
             mouseMove(root, into.x, into.y)
             tryVerify(() => shared.pointed && shared.box.visible, undefined,

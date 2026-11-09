@@ -183,7 +183,7 @@ Item {
             // waits(paced): a card that must **not** come back for a move on the name; the beat, twice over.
             wait(Metrics.hoverKeepMs * 2)
             verify(!cards.authorCardOpen, "not put back for a move on the name")
-            mouseMove(root, root.width + 10, name.mapToItem(root, 0, name.height / 2).y)
+            mouseMove(root, root.width + 10, name.mapToItem(root, Qt.point(0, name.height / 2)).y)
             tryVerify(() => !hand.known && !row.authorPointed, undefined, "the hand is out of the window")
             mouseMove(name, name.width / 2, name.height / 2)
             tryVerify(() => cards.authorCardOpen, undefined, "back on the name, the card unfolds again")

@@ -2108,7 +2108,7 @@ FocusScope {
     /// Automation: whether the centre stands under the report, not behind it — a picture cannot tell. In page
     /// coordinates, so it holds for graph and diff alike.
     readonly property bool noticeClears:
-        centreStack.mapToItem(page, 0, 0).y >= noticeBar.mapToItem(page, 0, noticeBar.height).y
+        centreStack.mapToItem(page, Qt.point(0, 0)).y >= noticeBar.mapToItem(page, Qt.point(0, noticeBar.height)).y
 
     property int seenWriteSeq: 0
     /// Whether the open file was already re-read for this notify's answers: a drain can bring several that moved it,
