@@ -122,6 +122,7 @@ fn main() {
     qrc::embed!("ui/AvatarAssignRow.qml");
     qrc::embed!("ui/AvatarButton.qml");
     qrc::embed!("ui/AvatarRemovals.qml");
+    qrc::embed!("ui/CappedLines.qml");
     qrc::embed!("ui/ChangeIcon.qml");
     qrc::embed!("ui/ClipboardHelper.qml");
     qrc::embed!("ui/BandFetchButton.qml");
