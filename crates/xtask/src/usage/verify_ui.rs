@@ -80,12 +80,15 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           drives, and the one a short ceiling cannot make
                           on its own: a ceiling that outruns a completion
                           here loses to it on a busier machine
-        --fault-owed-at-shot <artifact>-<before|during|shown>
+        --fault-owed-at-shot <artifact>-<before|during|shown>[-<read>]
                           have that picture's readings of the page say a
                           read is on its way — at its first reading
                           (before the grab), at the one its grab answers in,
                           or never — with a mark drawn into the content
-                          while the injected read stands.
+                          while the injected read stands. It goes by
+                          `fault`, or by the name given after before or
+                          during: one of the page's own (`records`) is
+                          waited out only as the page's read of that name.
                           What `shot-check` drives: the picture must be
                           taken again from its source, without the mark
         --fault-stall-look

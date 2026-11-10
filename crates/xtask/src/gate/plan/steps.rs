@@ -525,7 +525,7 @@ fn shot_inputs(g: &Graph) -> Vec<String> {
     inputs.into_iter().collect()
 }
 
-/// Six runs with a read landed in a picture on purpose, owed by what they
+/// The runs with a read landed in a picture on purpose, owed by what they
 /// pass through ([`shot_inputs`]): the check reached as code, the
 /// harness's Rust half moved, or the app's QML — the reach every verb is
 /// owed by. Host only: the pictures come off the disk the same way on

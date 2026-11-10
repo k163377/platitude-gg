@@ -64,12 +64,13 @@ pub(crate) struct Knobs {
     /// one (`PGG_AUTO_ACT=quit-save-held`, `xtask::verify::child`). Empty:
     /// no save is held.
     pub fault_hold_save: String,
-    /// `PGG_FAULT_OWED_AT_SHOT` — `<artifact>-<before|during|shown>`:
+    /// `PGG_FAULT_OWED_AT_SHOT` — `<artifact>-<before|during|shown>[-<read>]`:
     /// have that picture's readings of the page say a read is on its way
     /// at the picture's first reading (`before`), at the one its grab
     /// answers in (`during`), or never (`shown`), with a mark drawn into
-    /// the content for the readings the fault stands through
-    /// (`WindowHarness.owedForPicture`; `xtask::verify::shot_check`).
+    /// the content for the readings the fault stands through. The read
+    /// goes by `fault`, or by the name given third, after `before` or
+    /// `during` (`WindowHarness.owedForPicture`; `xtask::verify::shot_check`).
     pub fault_owed_at_shot: String,
     /// `PGG_FAULT_HOLD_RECORDS` — hold the command log's records back from
     /// the first row a reader asked for, until the run lets them through:

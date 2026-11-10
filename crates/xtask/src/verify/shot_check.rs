@@ -12,6 +12,13 @@
 //! the saved pictures are decoded: the mark in one is a texture the
 //! attempt should have thrown away. Two cases stand the mark and inject
 //! nothing, so that a mark never reaching a picture would be seen too.
+//!
+//! The injected read goes by `fault`, a name the page has none of, which
+//! a picture waits out because the check runs. One case injects it under
+//! a name of the page's own (`records`): that picture is taken again only
+//! while the harness waits out the page's read of that name
+//! (`WindowHarness.ambientTerms`), and with the name out of that list the
+//! run fails on a picture taken of a page still arriving.
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -34,7 +41,8 @@ const PICTURES: [&str; 3] = ["app", "overlay", "scene"];
 
 /// One run with a read injected into one picture's readings.
 struct Case {
-    /// `PGG_FAULT_OWED_AT_SHOT`'s value: the picture, and when.
+    /// `PGG_FAULT_OWED_AT_SHOT`'s value: the picture, when, and — for the
+    /// case that injects under a name of the page's — the read's name.
     fault: &'static str,
     /// Must all appear in what the run printed: the attempts' own lines
     /// (`AutoShotDriver.say`).
@@ -126,7 +134,10 @@ fn carries_the_mark(image: &crate::png::Image) -> bool {
 }
 
 /// The read before the window's grab, as it answers, and never; the same
-/// three for the scene, whose source is a mirror's texture.
+/// three for the scene, whose source is a mirror's texture; and the
+/// command log's receipt landing as the scene's grab answers — the page's
+/// own read a write settling after the completion owes, under its own
+/// name.
 const CASES: &[Case] = &[
     Case {
         fault: "app-before",
@@ -170,6 +181,13 @@ const CASES: &[Case] = &[
         forbids: &["waiting=fault", "held=fault"],
         saved_later: false,
         marked: &["scene"],
+    },
+    Case {
+        fault: "scene-during-records",
+        wants: &["artifact=scene attempt=1 held=records"],
+        forbids: &[],
+        saved_later: true,
+        marked: &[],
     },
 ];
 
@@ -277,27 +295,31 @@ mod tests {
 
     /// Each case names a picture and one of the three moments, and wants the lines that moment leaves: a read
     /// before the grab holds the first attempt; one as it answers discards it, so a later attempt saves; none leaves
-    /// the mark in the picture.
+    /// the mark in the picture. The lines say the read by the name it was injected under.
     #[test]
     fn every_case_wants_the_lines_its_moment_leaves() {
         for case in CASES {
-            let (artifact, when) = case.fault.split_once('-').expect(case.fault);
+            let mut parts = case.fault.split('-');
+            let artifact = parts.next().expect(case.fault);
+            let when = parts.next().expect(case.fault);
+            let read = parts.next().unwrap_or("fault");
+            assert_eq!(parts.next(), None, "{}", case.fault);
             assert!(PICTURES.contains(&artifact), "{}", case.fault);
             assert_eq!(case.artifact(), artifact);
             match when {
                 "before" => {
                     assert!(
                         case.wants
-                            .contains(&&*format!("artifact={artifact} attempt=1 waiting=fault"))
+                            .contains(&&*format!("artifact={artifact} attempt=1 waiting={read}"))
                     );
-                    assert!(case.forbids.contains(&"held=fault"));
+                    assert!(case.forbids.contains(&&*format!("held={read}")));
                     assert!(!case.saved_later);
                     assert!(case.marked.is_empty());
                 }
                 "during" => {
                     assert!(
                         case.wants
-                            .contains(&&*format!("artifact={artifact} attempt=1 held=fault"))
+                            .contains(&&*format!("artifact={artifact} attempt=1 held={read}"))
                     );
                     assert!(case.saved_later);
                     assert!(case.marked.is_empty());
@@ -318,6 +340,12 @@ mod tests {
         assert!(
             CASES.iter().any(|case| case.fault.starts_with("scene-")),
             "a mirror's texture is the one that can go stale"
+        );
+        assert!(
+            CASES
+                .iter()
+                .any(|case| case.fault.ends_with("-during-records")),
+            "the page's own read a picture waits out is injected under its own name"
         );
     }
 

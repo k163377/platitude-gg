@@ -167,16 +167,22 @@ Item {
             harness.letRecordsThrough("after-completion")
         }
     }
-    /// The page's reads a picture waits out, never named by the verb: what the product does unasked, and can owe
-    /// again after the completion's hold has passed it — `placing` (the view re-centring after
-    /// `Metrics.anchorDelayMs`), `readings` (the pacer's reads of other worktrees) and `records` (the command log's
-    /// receipt for a write settling after the completion — the fetch a tab makes as it opens ends when git ends it,
-    /// and the tab's feed can be drained ahead of the log's, the order `xtask::verify::records_check` forces on a
-    /// run's own write). A receipt that never comes holds the picture to the watchdog, which names it
-    /// (`page missing=records`). `fault` is the read a check injects into a picture's readings (`owedForPicture`),
-    /// ambient like the three.
-    readonly property var ambientTerms: Harness.faultOwedAtShot === "" ? ["placing", "readings", "records"]
-                                                                        : ["placing", "readings", "records", "fault"]
+    /// The page's reads a picture waits out, never named by the verb. Each can be owed again after the completion's
+    /// hold has passed it: `placing` (the view re-centring after `Metrics.anchorDelayMs`), `readings` (the pacer's
+    /// reads of other worktrees) and `records` (the command log's receipt for a write that settles after the
+    /// completion: a fetch nobody pressed, a tab's on opening or the interval's, or the run's own where its verb
+    /// completes with the write still out — `arriving`).
+    ///
+    /// `records` is owed where the tab has heard of a settle and the log has not taken its receipt: the two travel on
+    /// feeds of their own, and no contract of theirs rules that order out (`xtask::verify::records_check` forces it on
+    /// a run's own write). A receipt that never comes holds the picture to the watchdog, which names it
+    /// (`page missing=records`).
+    ///
+    /// `fault` is the read a check injects into a picture's readings under no name of the page's (`faultRead`),
+    /// waited out while that check runs. A read injected under one of the page's own names is waited out only as the
+    /// page's own is: `shot-check`'s `records` case goes red with that name out of this list.
+    readonly property var ambientTerms: harness.faultRead !== "fault" ? ["placing", "readings", "records"]
+                                                                       : ["placing", "readings", "records", "fault"]
     /// The frame the completion waits out, -1 while no completion is settling.
     property int settlingFrom: -1
     function settle() {
@@ -200,18 +206,23 @@ Item {
             && owed.every(term => harness.ambientTerms.indexOf(term) >= 0 || Awaited.expects(term))
     }
     /// The page as the shot driver reads it for a picture (`AutoShotDriver.pageOwed`), and the one fault injected
-    /// there: `PGG_FAULT_OWED_AT_SHOT=<artifact>-<when>` has that picture's readings say a read `fault` is on its way
-    /// at its first reading (`before`: the page not settled as the picture is called for) or at the reading its grab
-    /// answers in (`during`: a read landing as the grab answers), and stands a mark in the content (`faultMark`) from
-    /// the first reading until the one after the fault — the readings a careless driver's texture would be drawn in.
-    /// The grab's reading is the one taken while the attempt is `grabbing` (`AutoShotDriver.Attempt.stage`), not a
-    /// count: the page's own ambient reads can hold the attempt's settling for any number of readings first. `fault`
-    /// comes first in what the reading owes, so the attempt's line starts with it (`waiting=fault` / `held=fault`)
-    /// whatever else the page owes then. A saved picture with the mark is one the driver should have thrown away, and
-    /// `cargo xtask shot-check` decodes the pictures for it (`xtask::verify::shot_check`). `shown` stands the mark and
-    /// says no fault: the proof that the mark reaches a picture at all.
+    /// there: `PGG_FAULT_OWED_AT_SHOT=<artifact>-<when>[-<read>]` has that picture's readings say a read is on its
+    /// way at its first reading (`before`: the page not settled as the picture is called for) or at the reading its
+    /// grab answers in (`during`: a read landing as the grab answers), and stands a mark in the content (`faultMark`)
+    /// from the first reading until the one after the fault — the readings a careless driver's texture would be drawn
+    /// in. The grab's reading is the one taken while the attempt is `grabbing` (`AutoShotDriver.Attempt.stage`), not a
+    /// count: the page's own ambient reads can hold the attempt's settling for any number of readings first. The
+    /// injected read comes first in what the reading owes, so the attempt's line starts with it (`waiting=fault` /
+    /// `held=fault`) whatever else the page owes then. A saved picture with the mark is one the driver should have
+    /// thrown away, and `cargo xtask shot-check` decodes the pictures for it (`xtask::verify::shot_check`). `shown`
+    /// stands the mark and says no fault: the proof that the mark reaches a picture at all.
     readonly property string faultArtifact: Harness.faultOwedAtShot.split("-")[0]
-    readonly property string faultWhen: Harness.faultOwedAtShot.split("-").slice(1).join("-")
+    readonly property string faultWhen: Harness.faultOwedAtShot.split("-")[1] || ""
+    /// The name the injected read goes by: empty with the knob unset; `fault` where the value names none — a name the
+    /// page has none of, so the picture's wait for it is the check's own (`ambientTerms`); or the page's own read the
+    /// value names third, which the picture waits out, or does not, exactly as it would the page's.
+    readonly property string faultRead: Harness.faultOwedAtShot === "" ? ""
+                                        : Harness.faultOwedAtShot.split("-")[2] || "fault"
     /// Where the injection stands for the faulted picture: `idle` before its first reading, `marked` from it, `owed`
     /// once the fault was said and `spent` from the reading after (the mark down).
     property string faultStage: "idle"
@@ -233,7 +244,7 @@ Item {
         if (!due)
             return owed
         harness.faultStage = "owed"
-        return ["fault"].concat(owed)
+        return [harness.faultRead].concat(owed)
     }
     // Inside the content, so the window's picture and the scene's mirror of it draw it; the colour is the one
     // `shot-check` looks for, a hue the theme has nowhere.

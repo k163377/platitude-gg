@@ -74,9 +74,9 @@ pub(super) struct Options {
     /// save go, so that run stands until the ceiling.
     pub(super) fault_hold_save: String,
     /// Have one picture's readings of the page say a read is on its way
-    /// (`PGG_FAULT_OWED_AT_SHOT=<artifact>-<when>`), so the picture taken
-    /// again can be read from outside: driven by `shot-check`
-    /// (`super::shot_check`).
+    /// (`PGG_FAULT_OWED_AT_SHOT=<artifact>-<when>[-<read>]`), so the
+    /// picture taken again can be read from outside: driven by
+    /// `shot-check` (`super::shot_check`).
     pub(super) fault_owed_at_shot: String,
     /// Hold the command log's records back from the write's first asked
     /// command until a wait stands on them alone (`PGG_FAULT_HOLD_RECORDS`):
@@ -320,7 +320,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             }
             "--fault-owed-at-shot" => {
                 let asked = it.next().ok_or(
-                    "--fault-owed-at-shot needs <artifact>-<before|during|shown> (e.g. app-during)",
+                    "--fault-owed-at-shot needs <artifact>-<before|during|shown>[-<read>] (e.g. app-during)",
                 )?;
                 owed_at_shot(asked)?;
                 opts.fault_owed_at_shot = asked.clone();
@@ -390,29 +390,43 @@ fn name_the_verb(opts: &mut Options, positional: &[&str]) -> Result<(), String> 
     Ok(())
 }
 
-/// `<artifact>-<when>` as `PGG_FAULT_OWED_AT_SHOT` is read
-/// (`WindowHarness.owedForPicture`): one of the three pictures, and the
-/// reading the injected read lands in — anything else would run as
-/// `shown` without saying so.
+/// `PGG_FAULT_OWED_AT_SHOT` as it is read (`WindowHarness.owedForPicture`):
+/// one of the three pictures and the reading the injected read lands in,
+/// and after `before` or `during` the name that read goes by. The harness
+/// splits the value and asks nothing of its parts, so one refused here
+/// would run as another injection, or as none, without saying so: a
+/// picture it has none of injects nothing, a moment it has none of stands
+/// the mark as `shown` does, and an empty name, a fourth part and a name
+/// beside `shown` — which injects no read to go by one — are dropped. The
+/// name itself is free: what a picture makes of it is
+/// `WindowHarness.faultRead`'s to say.
 fn owed_at_shot(asked: &str) -> Result<(), String> {
-    match asked.split_once('-') {
-        Some((artifact, when))
-            if ["app", "overlay", "scene"].contains(&artifact)
-                && ["before", "during", "shown"].contains(&when) =>
-        {
-            Ok(())
+    let pictures = ["app", "overlay", "scene"];
+    let parts: Vec<&str> = asked.split('-').collect();
+    let fits = match parts.as_slice() {
+        [artifact, when] => {
+            pictures.contains(artifact) && ["before", "during", "shown"].contains(when)
         }
-        _ => Err(format!(
-            "--fault-owed-at-shot takes <app|overlay|scene>-<before|during|shown>; got {asked:?}"
-        )),
+        [artifact, when, read] => {
+            pictures.contains(artifact) && ["before", "during"].contains(when) && !read.is_empty()
+        }
+        _ => false,
+    };
+    if fits {
+        return Ok(());
     }
+    Err(format!(
+        "--fault-owed-at-shot takes <app|overlay|scene>-<before|during|shown>, and a read's name after \
+         before or during (scene-during-records); got {asked:?}"
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::{parse, suite_words};
 
-    /// The injected read names one of the three pictures at one of its three moments, or the run is refused.
+    /// The injected read names one of the three pictures at one of its three moments, and where it is injected —
+    /// before the grab or as it answers — may go by a name of its own; any other value refuses the run.
     #[test]
     fn the_injected_read_is_one_of_the_pictures_at_one_of_its_moments() {
         let line = |fault: &str| {
@@ -429,12 +443,27 @@ mod tests {
             "app-during"
         );
         assert!(line("scene-shown").is_ok());
+        // `wipRow`: the page's names are not all small letters (`PageSettled.missing`).
+        for named in [
+            "scene-during-records",
+            "app-before-records",
+            "overlay-during-wipRow",
+        ] {
+            assert_eq!(
+                line(named)
+                    .expect("a picture, a moment and the read's name")
+                    .fault_owed_at_shot,
+                named
+            );
+        }
         for wrong in [
             "app-durng",
             "window-during",
             "during",
             "app-",
-            "app-during-twice",
+            "app-during-",
+            "app-during-records-twice",
+            "scene-shown-records",
         ] {
             assert!(
                 line(wrong).is_err_and(|why| why.contains("--fault-owed-at-shot takes")),
