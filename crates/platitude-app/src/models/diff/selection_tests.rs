@@ -484,6 +484,71 @@ fn a_place_on_the_right_side_is_a_byte_of_the_line_on_the_right() {
     assert_eq!(model.source_line(1, 0), None);
 }
 
+/// Which line of the patches each column of a row draws
+/// (`DiffLineItem::location`): a side names one only where it holds one —
+/// no heading does, nor an empty seat, nor the right of a row read as one
+/// column.
+#[test]
+fn a_row_names_a_line_only_on_the_sides_that_hold_one() {
+    use platitude_core::parse::diff::DiffLineLocation;
+
+    use super::RIGHT;
+
+    // Two removed against one added, then another file's added line with
+    // nothing across from it.
+    const PATCH: &str = "\
+diff --git a/f b/f
+--- a/f
++++ b/f
+@@ -1,3 +1,2 @@
+-one
+-two
++uno
+ same
+diff --git a/g b/g
+--- a/g
++++ b/g
+@@ -1,1 +1,2 @@
+ kept
++new
+";
+    let at = |patch, hunk, line| Some(DiffLineLocation { patch, hunk, line });
+    let sides = |model: &DiffModel| -> Vec<_> {
+        model
+            .lines
+            .iter()
+            .map(|row| (row.location(0), row.location(RIGHT)))
+            .collect()
+    };
+    assert_eq!(
+        sides(&split_model(PATCH)),
+        [
+            (None, None),
+            (at(0, 0, 0), at(0, 0, 2)),
+            (at(0, 0, 1), None),
+            (at(0, 0, 3), at(0, 0, 3)),
+            (None, None),
+            (at(1, 0, 0), at(1, 0, 0)),
+            (None, at(1, 0, 1)),
+        ],
+        "heading, one|uno, two|seat, same, heading, kept, seat|new"
+    );
+    assert_eq!(
+        sides(&model(PATCH, false)),
+        [
+            (None, None),
+            (at(0, 0, 0), None),
+            (at(0, 0, 1), None),
+            (at(0, 0, 2), None),
+            (at(0, 0, 3), None),
+            (None, None),
+            (at(1, 0, 0), None),
+            (at(1, 0, 1), None),
+        ],
+        "one column: every line a row of its own, nothing on the right"
+    );
+}
+
 #[test]
 fn the_same_place_is_a_byte_of_each_side_s_own_line() {
     // Row 1 holds `x\t日` on the left, whose tab stands at column 1 and

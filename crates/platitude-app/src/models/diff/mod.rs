@@ -66,8 +66,9 @@ pub struct DiffLineItem {
     hunk: i32,
     line: i32,
     /// Which of the read's patches `hunk` / `line` count within (-1 for
-    /// none) — hunks restart at zero in each. The copy reads the row's
-    /// source text back through all three (`selection`).
+    /// none) — hunks restart at zero in each. The copy and the find bar
+    /// reach the row's line through all three, read as one place
+    /// (`location`).
     patch: i32,
     /// What the reader's selection covers on this row ([`Washed`]). None
     /// on every row the plain `Copy` does not take — what is washed is
@@ -86,6 +87,35 @@ pub struct DiffLineItem {
     /// The right side's wash. A selection is of one column, so at most one
     /// of `sel` / `pair_sel` is set.
     pair_sel: Optional<Washed>,
+}
+
+/// The column of a row that is the new side of a split row; every other
+/// number is the row's own line (`selection`'s columns). Read by the row's
+/// place, the selection and the find bar's marks.
+const RIGHT: i32 = 1;
+
+impl DiffLineItem {
+    /// The line this row draws in column `side` (`selection`'s columns),
+    /// as its place in the parsed diff — none for a row that is no line of
+    /// the file (a hunk's header, a commit's band, the binary note) and for
+    /// a side with nothing on it. The one reading of the signed roles QML
+    /// is handed, -1 for none.
+    ///
+    /// A place in the patches is neither this row's number on screen nor
+    /// the find bar's id for the line (`find::LineIds`): each is a count of
+    /// its own, and none stands in for another.
+    fn location(&self, side: i32) -> Option<DiffLineLocation> {
+        let line = if side == RIGHT {
+            self.pair_line
+        } else {
+            self.line
+        };
+        Some(DiffLineLocation {
+            patch: usize::try_from(self.patch).ok()?,
+            hunk: usize::try_from(self.hunk).ok()?,
+            line: usize::try_from(line).ok()?,
+        })
+    }
 }
 
 impl platitude_core::mem::Footprint for DiffLineItem {

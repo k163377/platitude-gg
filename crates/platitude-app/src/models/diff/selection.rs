@@ -36,25 +36,11 @@ enum Wash {
     Part(Range<usize>),
 }
 
-/// The new side of a split row (the find bar's marks read it too, `find`).
-pub(super) const RIGHT: i32 = 1;
-
 impl DiffModel {
     /// The source line (the file's own bytes) column `side` of row `row`
     /// draws.
     pub(super) fn source_line(&self, side: i32, row: usize) -> Option<&str> {
-        let item = self.lines.get(row)?;
-        let line = if side == RIGHT {
-            item.pair_line
-        } else {
-            item.line
-        };
-        // The row carries its place as QML's signed roles, -1 for none.
-        let location = DiffLineLocation {
-            patch: usize::try_from(item.patch).ok()?,
-            hunk: usize::try_from(item.hunk).ok()?,
-            line: usize::try_from(line).ok()?,
-        };
+        let location = self.lines.get(row)?.location(side)?;
         Some(&location.line_in(self.shown.as_ref()?)?.text)
     }
 

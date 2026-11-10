@@ -126,14 +126,18 @@ fn rows_laid_out_again_keep_the_place_unless_it_is_past_their_end() {
 
 #[test]
 fn lines_are_counted_through_every_hunk_of_every_patch() {
+    // `diff --git` is what starts a patch: without it the second file's
+    // `---` / `+++` read as lines of the hunk above.
     let mut m = model(
         "\
+diff --git a/f b/f
 --- a/f
 +++ b/f
 @@ -1,1 +1,1 @@
  a
 @@ -3,1 +3,1 @@
  b
+diff --git a/g b/g
 --- a/g
 +++ b/g
 @@ -1,1 +1,1 @@
@@ -143,6 +147,7 @@ fn lines_are_counted_through_every_hunk_of_every_patch() {
 ",
         false,
     );
+    assert_eq!(m.shown.as_deref().map(|patches| patches.len()), Some(2));
     let (text, options) = plain("target");
     m.set_find_query(text, options);
     let row = m.find_from_row(0);
@@ -208,6 +213,40 @@ fn a_split_row_wears_a_hit_in_the_column_whose_line_it_is() {
             String::new(),
             String::new()
         )]
+    );
+}
+
+/// Side by side a line's id, its row and its place in its hunk are three
+/// numbers: `uno` is the patch's third line (id 2) and stands on row 1,
+/// across from `one`; `two` is its second (id 1) and stands on row 2, an
+/// empty seat across. Each hit is worn on the row and the side its line
+/// stands on.
+#[test]
+fn a_hit_is_worn_where_its_line_stands_not_on_the_row_its_id_counts() {
+    let mut m = split_model(
+        "\
+--- a/f
++++ b/f
+@@ -1,3 +1,2 @@
+-one
+-two
++uno
+ same
+",
+    );
+    let (text, options) = plain("uno");
+    m.set_find_query(text, options);
+    assert_eq!(m.find_from_row(0), 1);
+    assert_eq!(
+        worn(&m),
+        [(1, String::new(), String::new(), "0:3".into(), "0:3".into())]
+    );
+    let (text, options) = plain("two");
+    m.set_find_query(text, options);
+    assert_eq!(m.find_from_row(0), 2);
+    assert_eq!(
+        worn(&m),
+        [(2, "0:3".into(), "0:3".into(), String::new(), String::new())]
     );
 }
 

@@ -8,13 +8,47 @@ use std::ops::Range;
 
 use platitude_core::textfind::{self, Hit, Options, Query};
 
-use super::selection::RIGHT;
 use super::*;
 
 /// Where each line stands on screen, by core's line id: its row and its
 /// column (0 the row's own line, `RIGHT` the new side of a split row). A
 /// context line read on both sides of a split row stands in two places.
 type Places = Vec<Vec<(usize, i32)>>;
+
+/// Core's ids for the lines of the patches (`textfind::hits_in`): a line's
+/// place counted through every hunk of every patch. A count of its own —
+/// neither a row on screen nor a line's place in its hunk
+/// ([`DiffLineLocation`]) — reached from a location here and from nowhere
+/// else.
+struct LineIds {
+    /// The ids of each hunk's lines, by patch and by hunk in it.
+    hunks: Vec<Vec<Range<usize>>>,
+    /// How many lines the patches hold: one past the last id.
+    count: usize,
+}
+
+impl LineIds {
+    fn of(patches: &[FilePatch]) -> Self {
+        let mut hunks = Vec::with_capacity(patches.len());
+        let mut count = 0;
+        for patch in patches {
+            let mut ids = Vec::with_capacity(patch.hunks.len());
+            for hunk in &patch.hunks {
+                let first = count;
+                count += hunk.lines.len();
+                ids.push(first..count);
+            }
+            hunks.push(ids);
+        }
+        Self { hunks, count }
+    }
+
+    /// The id of the line `at` names — none where it names no line of the
+    /// patches.
+    fn id(&self, at: DiffLineLocation) -> Option<usize> {
+        self.hunks.get(at.patch)?.get(at.hunk)?.clone().nth(at.line)
+    }
+}
 
 impl DiffModel {
     /// A new query, or none (empty text), searched at once over the rows
@@ -94,36 +128,20 @@ impl DiffModel {
         self.find_row
     }
 
-    /// Where each line of the patches stands (`textfind::hits_in` counts
-    /// the lines through every hunk of every patch, and so does this).
+    /// Where each line of the patches stands: every row's two columns,
+    /// filed under the id of the line each draws (`DiffLineItem::location`
+    /// says which line, [`LineIds`] its id).
     fn places(&self) -> Places {
         let Some(patches) = self.shown.as_deref() else {
             return Places::new();
         };
-        let mut base = Vec::with_capacity(patches.len());
-        let mut count = 0;
-        for patch in patches {
-            let mut hunks = Vec::with_capacity(patch.hunks.len());
-            for hunk in &patch.hunks {
-                hunks.push(count);
-                count += hunk.lines.len();
-            }
-            base.push(hunks);
-        }
-        let mut places = vec![Vec::new(); count];
+        let ids = LineIds::of(patches);
+        let mut places = vec![Vec::new(); ids.count];
         for (row, item) in self.lines.iter().enumerate() {
-            let hunk_base = usize::try_from(item.patch)
-                .ok()
-                .and_then(|p| base.get(p))
-                .and_then(|hunks| usize::try_from(item.hunk).ok().and_then(|h| hunks.get(h)));
-            let Some(&hunk_base) = hunk_base else {
-                continue;
-            };
-            for (line, col) in [(item.line, 0), (item.pair_line, RIGHT)] {
-                if let Ok(line) = usize::try_from(line)
-                    && let Some(found) = places.get_mut(hunk_base + line)
-                {
-                    found.push((row, col));
+            for side in [0, RIGHT] {
+                let id = item.location(side).and_then(|at| ids.id(at));
+                if let Some(found) = id.and_then(|id| places.get_mut(id)) {
+                    found.push((row, side));
                 }
             }
         }
