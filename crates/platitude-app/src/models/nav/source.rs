@@ -217,12 +217,12 @@ impl Source {
         }
     }
 
-    /// Where `remote` carries `name` when that is not where this
-    /// repository has the tag; empty when the two agree, when that remote
-    /// does not carry the name, or before the remotes are read. Read off
+    /// Where the remote carries the tag when that is not where this
+    /// repository has it; empty when the two agree, when that remote does
+    /// not carry the name, or before the remotes are read. Read off
     /// `tag_drifts`: no sidebar row is the remote's reading of a name that
     /// is here too.
-    pub(super) fn tag_drift(&self, name: &str, remote: &str) -> String {
+    pub(super) fn tag_drift(&self, target: platitude_core::remote::RemoteTagRef<'_>) -> String {
         let Self::Tags(snapshot) = self else {
             return String::new();
         };
@@ -231,8 +231,8 @@ impl Source {
             .binary_search_by(|d| {
                 d.name
                     .as_str()
-                    .cmp(name)
-                    .then(d.remote.as_str().cmp(remote))
+                    .cmp(target.tag)
+                    .then(d.remote.as_str().cmp(target.remote))
             })
             .map_or_else(
                 |_| String::new(),

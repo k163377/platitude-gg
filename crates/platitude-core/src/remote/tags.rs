@@ -31,6 +31,24 @@ impl RemoteTag {
     pub fn tag_ref(&self) -> String {
         format!("refs/tags/{}", self.tag)
     }
+
+    /// The pair lent, the form a read is asked in ([`RemoteTagRef`]).
+    pub fn as_ref(&self) -> RemoteTagRef<'_> {
+        RemoteTagRef {
+            remote: &self.remote,
+            tag: &self.tag,
+        }
+    }
+}
+
+/// A [`RemoteTag`] lent: the same two names, borrowed from whoever holds
+/// them. What a read of what is known about the tag is asked with — a
+/// read keeps neither name, so no `String` is made to ask it. A write
+/// outlives its caller on the queue and takes the owned pair.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RemoteTagRef<'a> {
+    pub remote: &'a str,
+    pub tag: &'a str,
 }
 
 /// `<remote>/<tag>`, the key the page's row for it goes by — written from

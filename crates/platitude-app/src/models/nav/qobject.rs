@@ -574,7 +574,10 @@ impl NavSectionModel {
         if name.is_empty() || remote.is_empty() {
             return String::new();
         }
-        self.all.tag_drift(&name, &remote)
+        self.all.tag_drift(platitude_core::remote::RemoteTagRef {
+            remote: &remote,
+            tag: &name,
+        })
     }
 
     /// Whether the reading of this tag standing on `oid` (hex) stands

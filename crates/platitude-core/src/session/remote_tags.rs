@@ -2,6 +2,7 @@
 //! refs joins read it back out of.
 
 use super::*;
+use crate::remote::RemoteTagRef;
 
 /// What the remotes last said they carry under `refs/tags/`: for each tag
 /// name, every commit some remote has it on and what is known about it
@@ -224,11 +225,11 @@ impl RemoteTagIndex {
         }
     }
 
-    /// Where `remote` has this name; `None` where it does not carry it.
-    pub(crate) fn commit_on(&self, name: &str, remote: &str) -> Option<Oid> {
-        self.run_of(name)
+    /// Where the remote has the tag; `None` where it does not carry it.
+    pub(crate) fn commit_on(&self, target: RemoteTagRef<'_>) -> Option<Oid> {
+        self.run_of(target.tag)
             .iter()
-            .find(|e| e.remotes.iter().any(|c| c.remote.as_str() == remote))
+            .find(|e| e.remotes.iter().any(|c| c.remote.as_str() == target.remote))
             .map(|e| e.commit)
     }
 
@@ -361,5 +362,40 @@ mod tests {
                 .filter(|(_, _, _, remote)| remote.as_str() != "mirror"),
         );
         assert!(without_mirror.entries[0].annotated());
+    }
+
+    /// A name the remotes hold apart has one answer per remote, and the
+    /// pair's two halves are not interchangeable: with a tag named like a
+    /// remote on a remote named like a tag, the swapped pair is another
+    /// question with an answer of its own.
+    #[test]
+    fn a_commit_is_asked_of_the_remote_and_the_tag_together() {
+        let reading = |tag: &str, commit: u8, remote: &str| {
+            (
+                crate::Name::from(tag),
+                oid(commit),
+                false,
+                crate::Name::from(remote),
+            )
+        };
+        let index = RemoteTagIndex::build(
+            [
+                reading("v1", 2, "origin"),
+                reading("v1", 3, "fork"),
+                reading("fork", 4, "v1"),
+            ]
+            .into_iter(),
+        );
+        // The pair a write is queued with, lent to the read.
+        let far = crate::remote::RemoteTag {
+            remote: "fork".to_string(),
+            tag: "v1".to_string(),
+        };
+        assert_eq!(index.commit_on(far.as_ref()), Some(oid(3)));
+        let on = |remote, tag| index.commit_on(RemoteTagRef { remote, tag });
+        assert_eq!(on("origin", "v1"), Some(oid(2)));
+        assert_eq!(on("v1", "fork"), Some(oid(4)), "the halves swapped");
+        assert_eq!(on("mirror", "v1"), None, "a remote without the name");
+        assert_eq!(on("origin", "fork"), None, "a name that remote lacks");
     }
 }

@@ -38,6 +38,7 @@ fn a_drifted_tag_answers_for_the_remote_the_push_would_go_to() {
             Vec::new(),
             vec![tag("v1.0", true, true), tag("v2.0", true, true)],
             vec![
+                drift("origin", "v1.0", "e"),
                 drift("v1.0", "mirror", "c"),
                 drift("v1.0", "origin", "b"),
                 drift("v2.0", "mirror", "d"),
@@ -46,6 +47,11 @@ fn a_drifted_tag_answers_for_the_remote_the_push_would_go_to() {
     );
     model.arrange();
 
+    assert_eq!(
+        model.remote_tag_drift("origin".into(), "v1.0".into()),
+        oid("e").to_hex(),
+        "a tag named like a remote on a remote named like a tag: the pair swapped is another one"
+    );
     assert_eq!(
         model.remote_tag_drift("v1.0".into(), "origin".into()),
         oid("b").to_hex(),

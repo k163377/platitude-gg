@@ -2,7 +2,7 @@
 //! refs, and the rows it lists them as.
 
 use super::*;
-use crate::remote::{PushStanding, Upstream};
+use crate::remote::{PushStanding, RemoteTagRef, Upstream};
 
 /// Sidebar-ready refs snapshot (sorted).
 ///
@@ -178,9 +178,10 @@ impl RefsSnapshot {
             aim
         };
         let elsewhere = |remote: &str| {
+            let target = RemoteTagRef { remote, tag: short };
             here.and_then(|oid| {
                 self.remote_tags
-                    .commit_on(short, remote)
+                    .commit_on(target)
                     .filter(|there| *there != oid)
             })
         };
