@@ -557,11 +557,13 @@ Item {
     // `replay-running`: the screen while git is out — the step badge, the doors held down, the ring beside the hand,
     // and the worktree's row the replay stands up (`replayRow`, the one read this asks for). The count ticks on the
     // page's own clock (`Metrics.opProgressMs`), so a build whose tick never reaches the badge waits out the watchdog.
-    // Then the face is held (`RepoPage.autoReplayHeld`, the latch `doors-held` takes): the write answers before the
-    // reads it invalidated, so a picture taken at the edge could show a screen the replay had already left. The line is
-    // read at that edge, the face held: the step badge and the operation are git's, which the replay moves on from.
-    // No `order`: a replay seen counting and gone before its row stood ends the run on saying so, rather than wait out
-    // the watchdog.
+    // With the row up, one press holds the face (`RepoPage.autoReplayHeld`, the latch `doors-held` takes) and reads
+    // the line (`edge`): the step badge and the operation are git's, which the replay moves on from. The completion
+    // follows with git still out, on that row rather than on the page settling — a page waited for need not settle
+    // before git is done, and the picture would then be of the screen the replay left. The latch keeps the ring and
+    // the doors should git answer before the picture: its answer reaches the page ahead of the reads it invalidated.
+    // No `order`: a replay seen counting and gone before its completion moves ends the run on saying so, rather than
+    // wait out the watchdog.
     PageStage {
         id: replayRunningTimer
         name: "replay_running"
@@ -577,12 +579,6 @@ Item {
         }
         onTriggered: {
             const op = replayRunningTimer
-            if (op.at("held")) {
-                // The face held; the picture waits for the page under it.
-                op.complete({ "name": "replay_running_settled", "when": () => ({ "page": PageSettled.settled(page) }),
-                              "report": () => op.witnessed("edge") })
-                return
-            }
             // Queued is not out: git writes nothing to count until it is actually replaying.
             const counting = repoTab.replaying && worktree.opSteps !== 0 && worktree.opStep !== 0
             if (op.at("start")) {
@@ -591,8 +587,14 @@ Item {
                 op.advance("counting")
             }
             if (!repoTab.replaying) {
-                op.complete({ "name": "replay_running_row", "when": () => ({ "ended": !repoTab.replaying }),
-                              "report": () => "replay_running_missed the replay ended before its worktree row stood" })
+                op.complete({ "name": "replay_running_missed", "when": () => ({ "ended": !repoTab.replaying }),
+                              "report": () => "replay_running_missed the replay ended before its completion" })
+                return
+            }
+            if (op.at("held")) {
+                op.complete({ "name": "replay_running_held",
+                              "when": () => Object.assign({ "out": repoTab.replaying }, acts.replayRow()),
+                              "report": () => op.witnessed("edge"), "arriving": ["*"] })
                 return
             }
             if (op.at("counting") && !op.input("row_asked", () => acts.askReplayRow()))
