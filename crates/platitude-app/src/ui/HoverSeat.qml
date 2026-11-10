@@ -85,18 +85,20 @@ QtObject {
     /// still goes: a blocker, a held bar, a target retired or displaced, the card closing by itself, the owner's
     /// `takeDown`.
     property bool frozen: false
+    /// What is out is not hover's (a typed refusal's tip): neither a held bar nor a press takes it down (`barHeld`,
+    /// `pressHolds`).
+    property bool ignoresGrab: false
+    /// …and for an ask made while a bar or a press holds: a function of the target, true where it may come out all the
+    /// same.
+    property var grabExempt: null
     /// A scroll bar is held outside the card (`Hand.heldBar`): the targets are sliding from under a hand Qt no longer
     /// hears (デザイン規約 §hover のツールチップ「スクロールバーを掴んだら、hover で開いたものは閉じる」). The card's own bar
-    /// is the hand reading the card. `ignoresBar` is for what hover did not open (a typed refusal's tip). A wait being
-    /// counted goes too, its ask with it. Let go, only targets whose hover Qt changed ask again: a row under a hand
-    /// that stayed still does not put its tip out again.
-    property bool ignoresBar: false
-    readonly property bool barHeld: Hand.heldBar !== null && !seat.ignoresBar && !seat.holdsBar(Hand.heldBar)
-    /// …and for an ask made while the bar is held: a function of the target, true where it may come out all the same.
-    property var barExempt: null
+    /// is the hand reading the card. A wait being counted goes too, its ask with it. Let go, only targets whose hover
+    /// Qt changed ask again: a row under a hand that stayed still does not put its tip out again.
+    readonly property bool barHeld: Hand.heldBar !== null && !seat.ignoresGrab && !seat.holdsBar(Hand.heldBar)
     function barBlocks(target) {
         return Hand.heldBar !== null && !seat.holdsBar(Hand.heldBar)
-            && !(seat.barExempt !== null && target !== null && seat.barExempt(target) === true)
+            && !(seat.grabExempt !== null && target !== null && seat.grabExempt(target) === true)
     }
     /// The hand holds a press, or let one go and has not moved since (`Hand.holdsHover`): Qt tells no hover while a
     /// press holds its grab, and at the release hands it to whatever stands under the hand — a hand that did not walk
@@ -105,7 +107,7 @@ QtObject {
     /// `QApplication::notify`). A press on a target that opens it (`press`) is no hover, and goes through.
     readonly property bool pressHolds: Hand.holdsHover
     function pressHoldsBack(target) {
-        return Hand.holdsHover && !(seat.barExempt !== null && target !== null && seat.barExempt(target) === true)
+        return Hand.holdsHover && !(seat.grabExempt !== null && target !== null && seat.grabExempt(target) === true)
     }
     /// …and the press became a drag (`Hand.dragging`): what is out goes, as for a held bar — the hand has left where
     /// hover last heard it. `dragExempt` is a seat whose own target the drag sweeps (the left panel's open row).
@@ -425,14 +427,14 @@ QtObject {
             seat.resume()
             return
         }
-        if (seat.waiting && !seat.ignoresBar) {
+        if (seat.waiting && !seat.ignoresGrab) {
             const kept = seat.pointed ? seat.keep(seat.target) : null
             seat.rest.stop()
             seat.idle()
             seat.pending = kept
         }
     }
-    onPressDraggingChanged: if (seat.pressDragging && !seat.ignoresBar && !seat.dragExempt) seat.displace("drag")
+    onPressDraggingChanged: if (seat.pressDragging && !seat.ignoresGrab && !seat.dragExempt) seat.displace("drag")
     onBarHeldChanged: {
         if (!seat.barHeld)
             return

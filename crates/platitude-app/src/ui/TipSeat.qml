@@ -173,9 +173,9 @@ Item {
         hand: seat.hand
         restMs: Metrics.tipDelayMs
         graceMs: Metrics.hoverKeepMs
-        // What hover did not open is not the bar's to close, nor to keep from coming out.
-        ignoresBar: machine.target !== null && machine.target.typed
-        barExempt: ask => ask.typed
+        // What hover did not open is not a held bar's or a press's to close, nor to keep from coming out.
+        ignoresGrab: machine.target !== null && machine.target.typed
+        grabExempt: ask => ask.typed
         // Behind a menu standing in the window nothing comes out, and what is out goes the moment it stands (デザイン規約
         // §メニュー「メニューが立っている間、その裏の hover は引っ込む」) — but for a menu's own rows, which are not behind
         // it, and a refusal of what is typed, which no hover opened.
