@@ -72,10 +72,18 @@ QtObject {
         return ["commit", "amend", "op-exit-go"].indexOf(act) >= 0
     }
 
-    /// Whether the page hands this verb's completion to somebody else (its own sampler, or the window). **Every new
-    /// window-level verb goes in here**: left out, the page completes the run the moment it claims the verb, and the
-    /// shot runs ahead of the verb — a green picture of nothing. A verb done in one tick (`tab-drag`, `tab-hold`)
-    /// passes by chance without it, so a pass is no proof the entry is there.
+    /// Whether the page hands this verb's completion to somebody else (its own sampler, or the window).
+    ///
+    /// **A page verb that completes from a sampler of its own goes in here** (or says so from its `run()`,
+    /// `AutoActDriver.deferCompletion`): left out, the page completes the run as the dispatch ends
+    /// (`AutoActDriver.dispatchFinished`), and the shot runs ahead of the verb — a green picture of nothing. A sampler
+    /// done within a tick passes by chance without it, so a pass is no proof the entry is there.
+    ///
+    /// **So does every verb the window answers** but `perf`, which the page never dispatches — held by
+    /// `cargo xtask verbs`. The page dispatches the window's verbs too: it completes one itself where a family of its
+    /// own also takes it (`worktree-add`) or `isWriteAct` names it (the write barrier), and leaves the rest alone only
+    /// because no family knows them — the line a misspelling gets (`auto_act unknown=`, `AutoActDriver.runAutoAct`),
+    /// which stops being the answer once the verb joins a family or the write list.
     function defersCompletion(act) {
         return ["publish", "publish-taken", "publish-tip", "publish-remotes", "publish-add",
                 "publish-go", "publish-enter", "publish-new-go", "publish-dismiss",
@@ -310,6 +318,8 @@ QtObject {
                 "ops-branch-folder", "ops-branch-pick", "ops-worktree-pick", "ops-repo-pick",
                 "tab-mark", "tab-name", "tab-drag", "tab-hold", "tab-edge", "tab-carry",
                 "tab-pin", "tab-pin-go", "tab-open-go", "tab-open-moved-on",
+                "carried-open", "worktree-stand", "worktree-draft", "worktree-rename-stand", "worktree-tip",
+                "worktree-kept",
                 "window-fill", "solo", "gate-sweep", "window-floor",
                 "badges", "badges-hover", "badges-hover-early", "badges-all", "badges-all-hover",
                 "graph-stale", "graph-stopped", "no-lfs", "no-lfs-card",
@@ -321,7 +331,7 @@ QtObject {
                 "force-push-hold", "fetch-busy", "fetch-fail", "fetch-hover", "fetch-resume", "fetch-tip",
                 "stash-state",
                 "settings-tools", "settings-tools-loading", "settings-tools-enter", "settings-hand",
-                "settings-switch", "settings-sweep",
+                "settings-switch", "settings-sweep", "settings-escape", "settings-leave",
                 "settings-repo", "settings-repo-pick", "settings-eol", "settings-git-path",
                 "settings-git-leave", "settings-processes", "settings-refresh", "settings-refresh-leave",
                 "avatar-settings", "avatar-combo", "avatar-row-lit", "avatar-remove",

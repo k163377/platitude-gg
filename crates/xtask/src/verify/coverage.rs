@@ -15,7 +15,10 @@
 //!   state no gate puts the app in, whose runs pass on the picture alone;
 //! - a row naming what is no component, or what every line shows;
 //! - the tier table disagreeing with the lines (`gate::tiers`);
-//! - a harness file nothing loads — a branch no verb reaches.
+//! - a harness file nothing loads — a branch no verb reaches;
+//! - a verb the window answers that the page's completion ledger does not
+//!   defer (`AutoActCompletion.defersCompletion`) — the page completes it
+//!   ahead of the window as soon as a page family or `isWriteAct` takes it.
 //!
 //! Both sides are read from the tree: the names the harness compares
 //! `PGG_AUTO_ACT` against, and each line's first word — not the skill's
@@ -24,7 +27,7 @@
 //! can be reached through a list (the file-row family), and the narrower
 //! reading would turn every gate red over how the harness spells one.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use crate::gate::{Composition, Lines, Tiers};
@@ -32,6 +35,15 @@ use crate::gate::{Composition, Lines, Tiers};
 /// Where the harness answers a verb by name. Nothing outside this
 /// directory reads `PGG_AUTO_ACT`'s value as a verb.
 const HARNESS: &str = "crates/platitude-app/src/auto/";
+
+/// The file whose `defersCompletion` names the verbs the page leaves to
+/// someone else to complete.
+const LEDGER: &str = "crates/platitude-app/src/auto/AutoActCompletion.qml";
+
+/// The stem every file of the window's half of the harness starts with:
+/// `WindowAutoActDriver`, the `Window*Acts` it builds, and the parts they
+/// stand on (`WindowHarness`, `WindowStage`, …).
+const WINDOW_STEM: &str = "Window";
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let root = crate::tree::workspace_root();
@@ -109,6 +121,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
             .map(|row| format!("no registered line reaches the judgment row {row} — its runs would pass on the picture alone: register a line that puts the app in that state, or take the row out")),
     );
     complaints.extend(unreached_harness_files(&harness));
+    complaints.extend(undeferred_window_verbs(&harness));
     if complaints.is_empty() {
         return Ok(());
     }
@@ -349,9 +362,112 @@ fn names_type(text: &str, stem: &str) -> bool {
     })
 }
 
+/// Every verb the window answers has to be one the page defers: the page
+/// dispatches every run it claims, the window's verbs too, and completes a
+/// verb that is not deferred itself — at the dispatch if one of its families
+/// takes the verb, at the write barrier if `isWriteAct` names it. Only a
+/// verb neither reaches is passed on (`auto_act unknown=`), so a gap here
+/// is silent until the verb moves into a page family or onto the write
+/// list, and then the shot runs ahead of the window's verb.
+///
+/// Refused as well where the check would hold nothing: a window file read
+/// short, no window verb read at all, or a ledger it cannot read.
+fn undeferred_window_verbs(harness: &Harness) -> Vec<String> {
+    let mut out: Vec<String> = harness
+        .window_unread
+        .iter()
+        .map(|stop| {
+            format!(
+                "{stop}, so the verbs past it are not known and none of them is held \
+                 against `defersCompletion`"
+            )
+        })
+        .collect();
+    let deferred = match &harness.deferred {
+        Ok(deferred) => deferred,
+        Err(why) => {
+            out.push(format!(
+                "{LEDGER}: {why} — the window's verbs cannot be held against it"
+            ));
+            return out;
+        }
+    };
+    if harness.window_verbs.is_empty() {
+        out.push(format!(
+            "no `{WINDOW_STEM}*` file under {HARNESS} compares `autoAct` against a verb — \
+             the window's half is not read where this expects it, so nothing is held \
+             against `defersCompletion`"
+        ));
+    }
+    out.extend(
+        harness
+            .window_verbs
+            .iter()
+            .filter(|(verb, _)| !deferred.contains(*verb))
+            .map(|(verb, file)| {
+                format!(
+                    "{file} answers `{verb}`, which `defersCompletion` ({LEDGER}) does not \
+                     name — the page would complete it ahead of the window once a page family \
+                     or `isWriteAct` takes it: add it to the list"
+                )
+            }),
+    );
+    out
+}
+
+/// One QML text with its comments blanked, a comparison or a list entry in
+/// a comment answering nothing. `Err` names the line the reading stopped
+/// at: what stands past it is not known.
+fn code_of(text: &str) -> Result<String, String> {
+    let (code, unread) = crate::lex::blanked(text, crate::lex::Lang::Qml, true);
+    match unread {
+        None => Ok(code),
+        Some(unread) => {
+            let line = text.chars().take(unread.at).filter(|c| *c == '\n').count() + 1;
+            Err(format!("read short at line {line} ({})", unread.what))
+        }
+    }
+}
+
+/// The names one window file compares `autoAct` (or a local `act`)
+/// against, read off its code.
+fn window_verbs_in(text: &str) -> Result<BTreeSet<String>, String> {
+    Ok(verbs_in(&code_of(text)?))
+}
+
+/// The names `defersCompletion` lists, read off the code from its head to
+/// the `.indexOf(` that closes its list.
+fn deferred_in(text: &str) -> Result<BTreeSet<String>, String> {
+    let code = code_of(text)?;
+    let missing = || {
+        "holds no `defersCompletion` list this can read (from its head to the `.indexOf(` \
+         that ends it)"
+            .to_string()
+    };
+    let head = code
+        .find("function defersCompletion(")
+        .ok_or_else(missing)?;
+    let body = &code[head..];
+    let end = body.find(".indexOf(").ok_or_else(missing)?;
+    Ok(words_in(&body[..end]))
+}
+
+/// Whether `file` is one of the window's half of the harness.
+fn is_window_file(file: &str) -> bool {
+    crate::gate::stem_of(file).starts_with(WINDOW_STEM)
+}
+
 struct Harness {
     /// Names a dispatch asks for outright.
     answered: BTreeSet<String>,
+    /// The names the window's files compare `autoAct` (or a local `act`)
+    /// against, each with the first file that does.
+    window_verbs: BTreeMap<String, String>,
+    /// The window's files read short, each with where it stopped.
+    window_unread: Vec<String>,
+    /// What [`LEDGER`]'s `defersCompletion` names, or why it cannot be
+    /// read.
+    deferred: Result<BTreeSet<String>, String>,
     /// Every kebab-case word in the harness, lists
     /// (`AutoActDriver.fileRowActs`) and completion tables included.
     mentioned: BTreeSet<String>,
@@ -365,6 +481,9 @@ struct Harness {
 fn harness(root: &Path) -> Result<Harness, String> {
     let mut harness = Harness {
         answered: BTreeSet::new(),
+        window_verbs: BTreeMap::new(),
+        window_unread: Vec::new(),
+        deferred: Err("is not among the harness's files".to_string()),
         mentioned: BTreeSet::new(),
         files: Vec::new(),
         mentions: Vec::new(),
@@ -376,6 +495,22 @@ fn harness(root: &Path) -> Result<Harness, String> {
         harness.mentions.push((file.clone(), text.clone()));
         if !file.starts_with(HARNESS) {
             continue;
+        }
+        if file == LEDGER {
+            harness.deferred = deferred_in(&text);
+        }
+        if is_window_file(&file) {
+            match window_verbs_in(&text) {
+                Ok(verbs) => {
+                    for verb in verbs {
+                        harness
+                            .window_verbs
+                            .entry(verb)
+                            .or_insert_with(|| file.clone());
+                    }
+                }
+                Err(why) => harness.window_unread.push(format!("{file} is {why}")),
+            }
         }
         harness.files.push(file);
         harness.answered.extend(verbs_in(&text));
@@ -392,6 +527,9 @@ fn harness(root: &Path) -> Result<Harness, String> {
     // A name a driver writes into its own `act` is a stage of one verb,
     // not a verb (`settled.act = "diff-find-step-moved"`).
     harness.answered.retain(|verb| !assigned.contains(verb));
+    harness
+        .window_verbs
+        .retain(|verb, _| !assigned.contains(verb));
     Ok(harness)
 }
 
@@ -472,7 +610,118 @@ fn is_verb(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_verb, stages_in, verbs_in, words_in};
+    use std::collections::BTreeSet;
+
+    use super::{
+        deferred_in, is_verb, is_window_file, stages_in, undeferred_window_verbs, verbs_in,
+        window_verbs_in, words_in,
+    };
+
+    /// Read past the list's end, the next function's names would count as
+    /// deferred; read with its comments, a name the list only talks about
+    /// would.
+    #[test]
+    fn the_ledger_is_read_from_its_head_to_the_end_of_its_list() {
+        let text = r#"
+            function isWriteAct(act) {
+                return ["commit"].indexOf(act) >= 0
+            }
+            function defersCompletion(act) {
+                return ["publish", "tab-drag",
+                        // "said-only" is no entry
+                        "worktree-add"].indexOf(act) >= 0
+            }
+            function owesStatus(act) {
+                return ["amend"].indexOf(act) >= 0
+            }
+        "#;
+        assert_eq!(
+            deferred_in(text).map(|set| set.into_iter().collect::<Vec<_>>()),
+            Ok(vec![
+                "publish".to_string(),
+                "tab-drag".to_string(),
+                "worktree-add".to_string()
+            ])
+        );
+        assert!(deferred_in("function isWriteAct(act) {}").is_err());
+    }
+
+    /// A comparison in a comment answers nothing; a local `act` compared
+    /// is the window's verb as much as `Harness.autoAct` is.
+    #[test]
+    fn a_window_file_answers_what_its_code_compares() {
+        let text = r#"
+            // running: Harness.autoAct === "said-only"
+            running: Harness.autoAct === "tab-drag"
+            function openOn(act) { return act === "clone-go" }
+        "#;
+        assert_eq!(
+            window_verbs_in(text).map(|set| set.into_iter().collect::<Vec<_>>()),
+            Ok(vec!["clone-go".to_string(), "tab-drag".to_string()])
+        );
+        let short = window_verbs_in("running: Harness.autoAct === \"tab-drag\"\n/* open");
+        assert!(short.is_err_and(|why| why.contains("line 2")));
+    }
+
+    #[test]
+    fn the_window_files_are_the_ones_named_for_it() {
+        assert!(is_window_file(
+            "crates/platitude-app/src/auto/WindowTabActs.qml"
+        ));
+        assert!(is_window_file(
+            "crates/platitude-app/src/auto/WindowStage.qml"
+        ));
+        assert!(!is_window_file(
+            "crates/platitude-app/src/auto/AutoActDriver.qml"
+        ));
+        assert!(!is_window_file(
+            "crates/platitude-app/src/auto/PageWindowProbe.qml"
+        ));
+    }
+
+    fn holding(window_verbs: &[(&str, &str)], deferred: &[&str]) -> super::Harness {
+        super::Harness {
+            answered: BTreeSet::new(),
+            window_verbs: window_verbs
+                .iter()
+                .map(|(verb, file)| (verb.to_string(), file.to_string()))
+                .collect(),
+            window_unread: Vec::new(),
+            deferred: Ok(deferred.iter().map(|verb| verb.to_string()).collect()),
+            mentioned: BTreeSet::new(),
+            files: Vec::new(),
+            mentions: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_window_verb_off_the_ledger_is_named_with_its_file() {
+        let harness = holding(
+            &[
+                ("tab-drag", "WindowTabActs.qml"),
+                ("band", "WindowBandActs.qml"),
+            ],
+            &["band"],
+        );
+        let out = undeferred_window_verbs(&harness);
+        assert_eq!(out.len(), 1, "{out:?}");
+        assert!(out[0].starts_with("WindowTabActs.qml answers `tab-drag`"));
+        assert!(undeferred_window_verbs(&holding(&[("band", "W.qml")], &["band"])).is_empty());
+    }
+
+    /// Each a reading that would hold nothing, and pass for it.
+    #[test]
+    fn a_check_that_holds_nothing_is_refused() {
+        assert_eq!(undeferred_window_verbs(&holding(&[], &["band"])).len(), 1);
+        let mut short = holding(&[("band", "W.qml")], &["band"]);
+        short
+            .window_unread
+            .push("W2.qml is read short at line 3".to_string());
+        assert_eq!(undeferred_window_verbs(&short).len(), 1);
+        let mut no_ledger = holding(&[("band", "W.qml")], &[]);
+        no_ledger.deferred = Err("holds no list".to_string());
+        assert_eq!(undeferred_window_verbs(&no_ledger).len(), 1);
+    }
 
     /// Missed, a verb dispatched only this way would drop out of the count
     /// of answered verbs.

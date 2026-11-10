@@ -231,10 +231,9 @@ fn always_steps() -> Vec<Step> {
                 crate::relied_messages::LEDGER,
             ],
         ),
-        // Fails on a registered line no verb answers (the app would ignore
-        // the name and the run wait out its ceiling silently), on a verb
-        // or a judgment row no line reaches, and on a row that names what
-        // is no component (`verify::coverage`).
+        // Fails where the registered lines, the judgment tables and the
+        // harness's sources disagree — what it refuses is listed at the top
+        // of `verify::coverage`.
         step("verbs", Side::Host, true, xtask(&["verbs"]), &["crates"]),
         step(
             "fmt",

@@ -898,8 +898,8 @@ Item {
             || branchPushVerbs.run(act, arg)
             || githubVerbs.run(act, arg)
         if (!known && !driver.completionDeferred && !driver.writeExpected) {
-            // A misspelling: window verbs are in the completion ledger, so a verb known to neither is
-            // nobody's. Left to the watchdog.
+            // Nobody's: no family took it, and every other verb the window answers (`perf` left above) is on the
+            // completion ledger (`cargo xtask verbs` holds it there) — a misspelling, left to the watchdog.
             Harness.report("auto_act unknown=" + act)
             return false
         }

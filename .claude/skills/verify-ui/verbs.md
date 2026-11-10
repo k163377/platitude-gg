@@ -448,7 +448,7 @@
 
 **判定する所は報告行に隣り合わせで並べる** — `must_say` は 1 本の文字列の**部分一致**なので、間に別の読みが挟まると同じ run が落ちる。
 
-**新しい window 側の動詞を足したら `AutoActCompletion.defersCompletion` の一覧にも足す**(implement.md §壊れない動詞の実装と反復)。**報告の前の最後の待ちに `"page": PageSettled.windowSettled(window)` を入れる** — 完了のターンに page が settled でなければ `complete … page=arriving:` で FAIL(共通の保持は報告の後なので、報告の値は保持では直らない)。**入れ忘れは「たまに落ちる」として出る** — **失敗した run のログは `auto_act ran=` と `auto_act complete=` が同じマイクロ秒に並び、報告行が 1 本も無い**。緑が続いても入れ忘れていないことにはならない。
+**新しい window 側の動詞を足したら `AutoActCompletion.defersCompletion` の一覧にも足す**(抜けは `cargo xtask verbs` が言う。機械が見ないのはページの sampler で完了する動詞の側 — implement.md §壊れない動詞の実装と反復)。**報告の前の最後の待ちに `"page": PageSettled.windowSettled(window)` を入れる** — 完了のターンに page が settled でなければ `complete … page=arriving:` で FAIL(共通の保持は報告の後なので、報告の値は保持では直らない)。**入れ忘れは「たまに落ちる」として出る** — **失敗した run のログは `auto_act ran=` と `auto_act complete=` が同じマイクロ秒に並び、報告行が 1 本も無い**。緑が続いても入れ忘れていないことにはならない。
 
 - `corner wip|<行>`(**右下の git バージョンが隅を譲るか**。**省略はエラー**。**`--preset basic` と `--preset long` を対で読む**(片側だけでは「常に出る」「常に出ない」と見分けが付かない)— 詳細は `AutoActDetailsVerbs.qml` の `cornerTimer`、判定は `verify/verbs/panes.rs`)
 - `open-again [<パス>]`(**既に開いているリポジトリを開き直す形**。引数なし(`--preset basic --preset stashes`)と git の綴りを渡す形を対で読み、本題は後者 — 詳細は `WindowTabActs.qml` の `openAgainTimer`)
