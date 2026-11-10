@@ -19,8 +19,15 @@ QtObject {
     property var treeAtAsk: null
     /// What the rows are read off, set by the door that stands them: the worktree's `reading` — or, for a menu raised
     /// under a command, `treeAtAsk`. Handed to `GitFacts` as it is, never built here. Null before the first door, not
-    /// bound: nothing reads it outside a door, and a binding would build the record on every status drain.
+    /// bound: a binding would build the record on every status drain.
     property var tree: null
+    /// The branch the rows name — `merge` into it, `rebase` it onto the row, `reset` it here, `pull` into it — off the
+    /// same tree, so a menu raised under a replay names the branch the rebase was asked on, not the detached HEAD it
+    /// passes through (デザイン規約 §メニュー). Written with `tree` by `openRowMenu`, and by `standAgain` only off a
+    /// reading on a branch: one on none (a rewrite stopped part-way) takes away every row that names it — each wants
+    /// HEAD on a branch (`offers::commit_menu`, `offers::pull_row`) — and those rows grey still naming the branch they
+    /// opened on. Empty before the first door, when no row is drawn.
+    property string menuBranch: ""
     required property GraphModel graphModel
     /// Which worktree has a branch checked out — what the `switch` row needs beyond the commit's own rules.
     required property NavSectionModel worktreesModel
@@ -290,6 +297,7 @@ QtObject {
     function openRowMenu(oidHex) {
         menuState.menu.releaseShape()
         menuState.tree = menuState.treeAtAsk !== null ? menuState.treeAtAsk : menuState.worktree.reading
+        menuState.menuBranch = menuState.tree.branch
         const facts = menuState.standRow(oidHex, oidHex)
         if (facts === null) {
             menuState.menu.offerStash()
@@ -331,6 +339,8 @@ QtObject {
         }
         menu.holdShape()
         menuState.tree = menuState.worktree.reading
+        if (menuState.tree.branch !== "")
+            menuState.menuBranch = menuState.tree.branch
         const facts = menuState.standRow(menuState.menuOid, aimAt)
         if (facts !== null)
             menu.standCards(facts, aimAt)

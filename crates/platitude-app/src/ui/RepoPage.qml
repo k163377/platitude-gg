@@ -1647,7 +1647,7 @@ FocusScope {
             runningWhy: page.runningWhy
             onWaitEnded: commitMenuState.standAgain()
             onCopyRequested: text => clipboard.copy(text)
-            branch: worktree.branch
+            branch: commitMenuState.menuBranch
             oid: commitMenuState.menuOid
             stashRef: commitMenuState.menuStashRef
             published: commitMenuState.menuPublished

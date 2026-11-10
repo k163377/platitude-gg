@@ -41,7 +41,8 @@ Item {
     /// another branch on HEAD's own commit gets no merge that would do nothing.
     readonly property string integrateRef:
         rowMenu.targetName !== "" && rowMenu.targetKind !== "worktree" ? rowMenu.targetName : rowMenu.oid
-    /// The branch every one of these rows makes its sentence about (規約 §履歴を合流させる).
+    /// The branch every one of these rows makes its sentence about (規約 §履歴を合流させる), off the tree the rows
+    /// stand on (`CommitMenuState.menuBranch`).
     required property string branch
 
     /// The commit the menu was opened on, and the stash it is ("" on an ordinary commit).
@@ -479,10 +480,10 @@ Item {
             titleCode: "reset"
             //: Follows the `reset` chip: "reset main here".
             titleSentence: qsTr("%1 here")
-            // Never shown without a branch (`canMoveBranch`, offers::commit_menu); the fallback only keeps the
-            // sentence whole.
-            titleRef: rowMenu.branch !== "" ? rowMenu.branch : qsTr("the branch")
-            titleRefMark: rowMenu.branch !== "" ? "branch" : ""
+            // Never offered without a branch: the card and its name stand on one tree as the menu opens, and a reading
+            // on none greys the card still naming the branch (`CommitMenuState.menuBranch`, offers::commit_menu).
+            titleRef: rowMenu.branch
+            titleRefMark: "branch"
             applies: rowMenu.canMoveBranch
             AppMenuItem {
                 code: "--soft"
