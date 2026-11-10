@@ -7,8 +7,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use super::{Run, Shot, sweep};
 use crate::seats::{SEATS, worktree_root};
 
-/// Tabs and newlines are stripped from every value written (`one_line`),
-/// so the format has no escape rules — xtask has no JSON library.
+/// Every value `write_run` writes goes through `one_line`, which folds
+/// tabs and newlines into spaces, so the format has no escape rules —
+/// xtask has no JSON library.
 const SEP: char = '\t';
 
 /// `.shots/` beside the primary checkout's `.git`: `--git-common-dir`
@@ -145,17 +146,14 @@ fn record_with(
     let stem = format!("{at}-{seat}-{}", slug(&label));
     let mut run = Run {
         label,
-        verb: one_line(verb),
+        verb: verb.to_string(),
         seat,
         at,
         side_by_side,
         shots: Vec::new(),
     };
     for (n, png) in pngs.iter().enumerate() {
-        let from = png
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "shot.png".to_string());
+        let from = picture_name(png);
         let (width, height) = png_size(png)?;
         let name = format!("{stem}-{n}-{from}");
         std::fs::copy(png, img.join(&name))
@@ -173,6 +171,15 @@ fn record_with(
     // board holds one picture too many rather than none.
     sweep::supersede(&board, &run, &stem)?;
     sweep::rebuild(&board)
+}
+
+/// A picture's own name, which the run file says and the copy on the
+/// board is named after: on one line before either, so the two stay one
+/// name (`write_run` would fold the one it writes and not the copy's).
+fn picture_name(png: &Path) -> String {
+    png.file_name()
+        .map(|name| one_line(&name.to_string_lossy()))
+        .unwrap_or_else(|| "shot.png".to_string())
 }
 
 /// Every picture in a directory, onto the board under one name — how a
@@ -234,7 +241,7 @@ fn write_run(runs: &Path, stem: &str, run: &Run) -> Result<(), String> {
         ("verb", run.verb.as_str()),
         ("seat", run.seat.as_str()),
     ] {
-        text.push_str(&format!("{key}{SEP}{value}\n"));
+        text.push_str(&format!("{key}{SEP}{}\n", one_line(value)));
     }
     text.push_str(&format!("at{SEP}{}\n", run.at));
     if run.side_by_side {
@@ -244,7 +251,11 @@ fn write_run(runs: &Path, stem: &str, run: &Run) -> Result<(), String> {
     for shot in &run.shots {
         text.push_str(&format!(
             "shot{SEP}{}{SEP}{}{SEP}{}{SEP}{}{SEP}{}\n",
-            shot.file, shot.from, shot.width, shot.height, shot.caption
+            one_line(&shot.file),
+            one_line(&shot.from),
+            shot.width,
+            shot.height,
+            one_line(&shot.caption)
         ));
     }
     let final_path = runs.join(format!("{stem}.tsv"));

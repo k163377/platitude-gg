@@ -1,8 +1,8 @@
 //! `board`'s own tests, in a file of their own (structure.md §分割).
 
 use super::{
-    NEEDS_A_NAME, Run, Shot, load_runs, not_a_seat, one_line, parse_run, slug, write_run,
-    written_label,
+    NEEDS_A_NAME, Run, Shot, load_runs, not_a_seat, one_line, parse_run, picture_name, slug,
+    write_run, written_label,
 };
 
 /// Held where the name is typed: once the pictures are on the board,
@@ -105,6 +105,52 @@ fn a_slug_keeps_to_ascii() {
 #[test]
 fn a_value_never_carries_a_separator() {
     assert_eq!(one_line("two\tlines\nhere"), "two lines here");
+}
+
+/// A verb, a `--part` word and a picture's own name are values written
+/// too: the format has no escapes, so a newline in one would be read back
+/// as a line of its own and a tab as a cell.
+#[test]
+fn no_value_written_can_write_a_line_of_its_own() {
+    let runs = crate::yard::Yard::new("shots-one-line");
+    let run = |verb: &str, from: &str, caption: &str| Run {
+        label: "x".to_string(),
+        verb: verb.to_string(),
+        seat: "a".to_string(),
+        at: 1,
+        side_by_side: true,
+        shots: vec![Shot {
+            file: "img/x.png".to_string(),
+            from: from.to_string(),
+            caption: caption.to_string(),
+            width: 1,
+            height: 1,
+        }],
+    };
+    let another = "before\nlabel\tanother";
+    write_run(&runs, "1-a-x", &run(another, "app.png", "")).expect("written");
+    let back = load_runs(&runs);
+    assert_eq!(back[0].label, "x", "the verb wrote the run's name");
+    assert_eq!(back[0].verb, "before label another");
+    write_run(&runs, "1-a-x", &run("wip", "app.png", another)).expect("written");
+    let back = load_runs(&runs);
+    assert_eq!(back[0].label, "x", "the caption wrote the run's name");
+    assert_eq!(back[0].shots[0].caption, "before label another");
+    write_run(&runs, "1-a-x", &run("wip", "app\t1.png", "")).expect("written");
+    let back = load_runs(&runs);
+    assert_eq!(back.len(), 1, "a tab in the name split the shot's cells");
+    assert_eq!(back[0].shots[0].from, "app 1.png");
+}
+
+/// The name the run file says is the name the copy is made under, so
+/// it is on one line before either.
+#[test]
+fn a_picture_is_named_on_one_line_before_it_is_copied() {
+    assert_eq!(
+        picture_name(std::path::Path::new("shots/app\t1.png")),
+        "app 1.png"
+    );
+    assert_eq!(picture_name(std::path::Path::new("..")), "shot.png");
 }
 
 /// The reading order, whatever order the directory lists the files in.
