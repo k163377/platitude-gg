@@ -808,9 +808,17 @@ Item {
                                                    + " needs=" + Math.round(gitCorner.roomNeeded) })
         }
     }
-    // The message has to be in the box, and the box laid out with it, before there is a ceiling to pull on. The
-    // layout runs after the pull, so it is read once a polish pass begun after the pull has run: in the same breath
-    // the list still reports its old height.
+    // The message has to be in the box, and the box laid out with it, before there is a ceiling to pull on. In the
+    // details pane the row's commit arrives after the press that chose it, and its file list after that — the list
+    // is what a pull borrows from (`DetailsPane.bottomRoomSettled`). A pull before the commit is put back by the swap
+    // (`DescriptionBox.resetForNewMessage`): a grow run would report a box that never moved, and with the grip held
+    // the refusal stays up over it. The layout runs after the pull, so it is read once a polish pass begun after the
+    // pull has run: in the same breath the list still reports its old height.
+    //
+    // A refused pull completes once the box stands at the end the hand ran past (`stops`): the refusal is up in the
+    // pull's own breath (`DescriptionBox.pullTo`), so it stands just as well over a pull that never landed. `stops=`
+    // says it in the line. A box with no grip has no end to stand at: that run completes at once, its line saying
+    // `line=false` (rules-refs/app-ui.md「欠けた前提は言って止まる」).
     //
     // `keeps=` says what the box borrowed room from (the author card / the commit button) is still on screen — the
     // picture cannot, because the overflow draws over the window's own footer. `grip=` stays out of must_say: a run
@@ -832,6 +840,17 @@ Item {
         /// Which end the grip is carried past (`divider-refuse`), or empty for the ordinary pull. With the grip in
         /// hand the box answers (規約 §掴める境界は答える).
         property string refuse: ""
+        /// Whether the box is laid out at the end a refused pull ran past: past the ceiling, at the bound itself — the
+        /// list down to its two-row floor, or the box at its own text — and past the rest, with no pull standing (the
+        /// `cap` witnessed before the press).
+        function stops() {
+            const op = descGrowTimer
+            const laidOut = Math.round(op.pane.descHeight) === Math.round(op.pane.descCap)
+            if (op.refuse === "desc-min")
+                return laidOut && op.pane.descCap === op.witnessed("cap")
+            return laidOut && (op.pane.descListRows === 2
+                               || Math.round(op.pane.descHeight) === Math.round(op.pane.descWants))
+        }
         /// What the box did with the pull, read as it stands.
         function line() {
             const op = descGrowTimer
@@ -841,6 +860,7 @@ Item {
                        + " case=" + op.refuse
                        + " box=" + Math.round(op.pane.descHeight)
                        + " wants=" + Math.round(op.pane.descWants)
+                       + " stops=" + op.stops()
             return "description_grow keeps=" + op.pane.descKeeps
                    + " pane=" + op.paneName
                    + " grip=" + op.pane.descGrips
@@ -854,10 +874,16 @@ Item {
             if (op.at("start")) {
                 if (!Awaited.all("desc_grow_ready", {
                     "sized": !(op.pane.width <= 0 || op.pane.height <= 0),
-                    "cap": !(op.pane.descCap <= 0) }))
+                    "cap": !(op.pane.descCap <= 0),
+                    "card": op.paneName !== "details" || driver.cardSettled && detailsPane.bottomRoomSettled }))
+                    return
+                if (!op.still("desc_grow_box", Math.round(op.pane.descHeight) + "/" + Math.round(op.pane.descWants)
+                                               + "/" + op.pane.descGrips))
                     return
                 op.input("pulled", () => {
                     if (op.refuse !== "") {
+                        op.witness("cap", op.pane.descCap)
+                        op.witness("grips", op.pane.descGrips)
                         op.pane.pullDescriptionPast(op.refuse === "desc-max")
                         return
                     }
@@ -871,7 +897,8 @@ Item {
                 return
             op.complete({
                 "name": "desc_grow_settle_ready",
-                "when": () => ({ "page": PageSettled.settled(page), "refused": op.refuse === "" || page.refusalShown }),
+                "when": () => ({ "page": PageSettled.settled(page), "refused": op.refuse === "" || page.refusalShown,
+                                 "stops": op.refuse === "" || !op.witnessed("grips") || op.stops() }),
                 "report": () => op.line() })
         }
     }

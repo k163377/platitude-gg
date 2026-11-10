@@ -315,7 +315,8 @@ ColumnLayout {
     readonly property real bottomRoom: detailsPane.height - fileList.y
         - Math.max(0, Math.min(fileList.height, fileList.originY + fileList.contentHeight - fileList.contentY))
     /// Whether that measurement is about this commit yet: a list still being read leaves the whole edge bare, the
-    /// same number an empty pane gives. Automation only (`PGG_AUTO_ACT=corner`) — a binding re-evaluates when the list
+    /// same number an empty pane gives. Automation only (`PGG_AUTO_ACT=corner`, and the description box's pulls, whose
+    /// bound is what the list lends — `AutoActDetailsVerbs` `desc_grow`) — a binding re-evaluates when the list
     /// arrives, a photograph does not.
     readonly property bool bottomRoomSettled: !detailsPane.details.loading
         && (fileList.count === 0 || fileList.contentHeight > 0)
