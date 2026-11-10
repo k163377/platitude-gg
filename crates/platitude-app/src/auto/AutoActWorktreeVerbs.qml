@@ -393,7 +393,7 @@ Item {
     /// (locked: no box, the reason names the folder, not the lock's own sentence). The worktree this tab stands in is
     /// `worktree-rename-stand`'s (`WindowTabActs`).
     /// The worktree as the run found it — its folder's whole path, and the commit it stands on — are witnesses (`full`,
-    /// `oid`): the rename takes the folder's row away.
+    /// `oid`): the rename takes away the worktree's row under its old folder name.
     PageStage {
         id: renameTimer
         name: "worktree_rename"

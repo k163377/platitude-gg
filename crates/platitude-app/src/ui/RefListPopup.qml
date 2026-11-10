@@ -49,8 +49,8 @@ AppCard {
     /// signal here — both go in at the graph's own row (`rowClicks`).
     signal chose(var chip)
     /// One was right-clicked: the graph row's menu is asked for, aimed at that record (デザイン規約 §グラフ行の右クリック).
-    /// Every row has it, those leading nowhere included: a tag deletes fine, a worktree's folder has its WORKTREE
-    /// card, and a marker naming no ref aims it at nothing (`RepoPage.openRowMenu`).
+    /// Every row has it, those leading nowhere included: a tag deletes fine, the row of a worktree with no branch has
+    /// its WORKTREE card, and a marker naming no ref aims it at nothing (`RepoPage.openRowMenu`).
     signal menuAsked(var chip)
     /// The name a row opens under itself was pressed (`RefChip.mateFollowed`). `to` is a `NavFacts.place` on another
     /// row, so the card closes with the press.

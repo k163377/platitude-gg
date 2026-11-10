@@ -166,8 +166,9 @@ Item {
     // **The name this row draws**: the chip's first record, whatever kind. The spaced second click renames it and a
     // right-click aims the menu's cards at it — one answer, so the row cannot rename one name and offer another.
     // **Not `primaryChip`**: a tag leads nowhere but can still be renamed (デザイン規約 §左メニューの所作), and so can
-    // a worktree's folder chip — what its folder is called (`RepoPage.startRename`), with its WORKTREE card and its
-    // `worktree remove`, though a folder is no ref to move to. The detached HEAD names nothing, so it answers null.
+    // the chip of a worktree with no branch, named by its folder — what that folder is called (`RepoPage.startRename`),
+    // with its WORKTREE card and its `worktree remove`, though its folder is no ref to move to. The detached HEAD names
+    // nothing, so it answers null.
     // While the discard log's entry is on the graph neither reaches it (`GraphList.noteClick`, `RepoPage.openRowMenu`).
     readonly property var nameChip:
         rowItem.labelRecords.length > 0 && GitFacts.namedKind(rowItem.labelRecords[0].kind) !== ""

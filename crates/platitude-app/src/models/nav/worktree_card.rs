@@ -260,10 +260,11 @@ impl NavSectionModel {
         }
     }
 
-    /// The path of the worktree called `name` standing on `head` — what a
-    /// folder's chip on the graph names, which carries only the folder:
-    /// two worktrees of one name under different parents sit on different
-    /// commits, or are the one chip. Empty where none does.
+    /// The path of the worktree called `name` standing on `head` — what the
+    /// chip of a worktree with no branch names on the graph, which carries
+    /// only its folder's name: two worktrees of one name under different
+    /// parents sit on different commits, or are the one chip. Empty where
+    /// none does.
     pub(super) fn worktree_standing(&self, name: &str, head: &str) -> String {
         self.worktree_rows()
             .into_iter()

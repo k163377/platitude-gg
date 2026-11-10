@@ -30,7 +30,8 @@ QtObject {
     function refKind(kind) {
         return kind === "branch" || kind === "remote" || kind === "tag" ? kind : ""
     }
-    /// `encode::named_kind_word`: `refKind`, and `worktree` for a worktree's folder chip.
+    /// `encode::named_kind_word`: `refKind`, and `worktree` for the chip of a worktree with no branch (named by its
+    /// folder).
     function namedKind(kind) {
         return kind === "worktree" ? "worktree" : refKind(kind)
     }

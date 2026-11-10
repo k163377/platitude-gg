@@ -85,8 +85,9 @@ pub fn kind_from_word(word: &str) -> Option<LabelKind> {
 ///
 /// The double-click doors do not read this: each picks its own kinds
 /// (`GraphRowDelegate.branchRecords`, `RefListPopup`'s `leadsNowhere`),
-/// so a folder chip is no door whatever this answers. The worktree's
-/// `""` keeps a folder row of a chip's list from choosing its commit on a
+/// so the chip of a worktree with no branch (named by its folder) is no
+/// door whatever this answers. The `""` for `worktree` keeps that
+/// worktree's row in a chip's stacked list from choosing its commit on a
 /// plain click (`RefListPopup`'s `nameable`); its menu and its rename go
 /// by `named_kind_word`.
 pub fn ref_kind_word(word: &str) -> &'static str {

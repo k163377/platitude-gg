@@ -152,7 +152,8 @@ QtObject {
     }
 
     /// The other worktree the menu's name leads to: the one holding the branch (a remote row through the local
-    /// branch of the same name), or the worktree a folder's chip names — unless this tab stands in it. Empty for none.
+    /// branch of the same name), or the worktree with no branch whose chip, named by its folder, the menu is aimed at
+    /// — unless this tab stands in it. Empty for none.
     function worktreeLeadingFrom(kind, name) {
         if (kind === "branch")
             return menuState.worktreesModel.worktreeHolding(name)
@@ -165,9 +166,10 @@ QtObject {
 
     /// What the cards at the foot stand on, aimed at the menu's name — each emptied where that name is another's
     /// kind, so that card holds only what can still be made here. The BRANCH card stands where its branch points,
-    /// `aimAt` (`aimedAt`). The WORKTREE card stands on the worktree a folder's chip names, or on the one holding the
-    /// chip's local branch — not a remote chip's, which only leads there (`RefRowMenu.offerOn`) — and on what its
-    /// making rows would make (`askWorktreeRows`). Read here, where the models are.
+    /// `aimAt` (`aimedAt`). The WORKTREE card stands on the worktree with no branch whose chip, named by its folder,
+    /// the menu is aimed at, or on the one holding the chip's local branch — not a remote chip's, which only leads
+    /// there (`RefRowMenu.offerOn`) — and on what its making rows would make (`askWorktreeRows`). Read here, where the
+    /// models are.
     function cardFacts(oidHex, aimAt) {
         const kind = menuState.menu.targetKind
         const branchy = kind === "branch" || kind === "remote"

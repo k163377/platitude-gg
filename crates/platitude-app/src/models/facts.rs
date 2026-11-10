@@ -75,10 +75,11 @@ impl GitFacts {
     }
 
     /// What a right-click on a chip of that word aims the menu at, and what a
-    /// spaced second click renames: the ref kinds, and `worktree` for a
-    /// worktree's folder chip — a worktree has a menu (its WORKTREE card) and
-    /// a folder to rename (`worktree_rename`), where it is no ref to switch to
-    /// (`ref_kind`). `""` for the detached HEAD.
+    /// spaced second click renames: the ref kinds, and `worktree` for the
+    /// chip of a worktree with no branch (named by its folder) — a worktree
+    /// has a menu (its WORKTREE card) and a folder to rename
+    /// (`worktree_rename`), where it is no ref to switch to (`ref_kind`). `""`
+    /// for the detached HEAD.
     #[qslot]
     fn named_kind(&self, kind: String) -> String {
         crate::encode::named_kind_word(&kind).to_string()

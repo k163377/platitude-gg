@@ -427,8 +427,8 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "list-menu",
         // On `worktrees` only rows naming a worktree are pressed — row 1
-        // stacks a branch another worktree holds (`1:0`) over a worktree's
-        // folder (`1:1`), and both bring up the WORKTREE card. A line
+        // stacks a branch another worktree holds (`1:0`) over a worktree
+        // with no branch (`1:1`), and both bring up the WORKTREE card. A line
         // pressing that preset's tag (row 3) needs a row of its own above
         // this one.
         when: &[

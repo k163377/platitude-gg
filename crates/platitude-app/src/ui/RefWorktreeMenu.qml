@@ -14,12 +14,12 @@ import platitude.ui
 // divider parts making from removing. The two making rows repeat the first level's `Create branch here…` → `switch`
 // pair in a new worktree: make one and go, then go to one that is there. `worktree add` joins for a
 // branch the row names (`offers::worktree_rows`); `worktree remove` when the target names a worktree (a WORKTREES row,
-// the folder chip of a worktree with no branch, a branch another worktree holds — then the holder's worktree), never
-// the repository's own worktree, which git never removes.
+// the chip naming a worktree with no branch by its folder, a branch another worktree holds — then the holder's
+// worktree), never the repository's own worktree, which git never removes.
 //
-// Its doors — the WORKTREES rows, a commit row with a folder chip, the rows and chips of a branch another worktree
-// holds — all reach this one card through `RefRowMenu` and `CommitRowMenu`. A new door carries this card too: rows
-// written per door would come to disagree.
+// Its doors — the WORKTREES rows, a commit row with the chip of a worktree with no branch, the rows and chips of a
+// branch another worktree holds — all reach this one card through `RefRowMenu` and `CommitRowMenu`. A new door carries
+// this card too: rows written per door would come to disagree.
 //
 // It reads no model and runs no write: the carrying menu hands it what it read — the worktree the row names
 // (`NavSectionModel.worktreeFacts`) and where a new one would go (`NavSectionModel.newWorktreeFor`) — and runs the

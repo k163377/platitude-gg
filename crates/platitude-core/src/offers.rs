@@ -32,7 +32,8 @@ pub use pull::{PullOffer, PullOut, PullRuns, pull_row};
 
 /// The kind of ref a menu row stands on, in the words the chip records
 /// carry (`branch` / `remote` / `tag` / `stash`), and `worktree` for a
-/// worktree on no branch (its WORKTREES row, or its folder's chip).
+/// worktree on no branch (its WORKTREES row, or its chip on the graph,
+/// named by its folder).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RefKind {
     Branch,

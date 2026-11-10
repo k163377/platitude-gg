@@ -5,7 +5,7 @@ import platitude.ui
 
 // A double-click on a row of the card a chip unfolds into goes where that row leads (デザイン規約 §グラフ行のダブルクリック
 // 「カードの行も、行の上と同じ所作で答える」): a branch another worktree holds goes to that worktree, as the graph row's
-// double-click does; the current branch, a tag and the two markers (the detached HEAD, a worktree's folder) go
+// double-click does; the current branch, a tag and the two markers (the detached HEAD, a worktree with no branch) go
 // nowhere. In at the row's own `doubleClick`, where a row takes or turns away the press: `mouseDoubleClickSequence`
 // does not reach a `TapHandler` (`tst_tapmodifiers`).
 Item {

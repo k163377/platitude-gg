@@ -1588,7 +1588,8 @@ FocusScope {
         commitMenuSeat.active = true
         const menu = commitMenuSeat.item
         const kind = named ? GitFacts.namedKind(named.kind) : ""
-        // A folder's chip carries only the folder: the worktree is the one of that name standing on this commit.
+        // The chip of a worktree with no branch carries only its folder's name: the worktree is the one of that name
+        // standing on this commit.
         const target = kind === "" ? ""
                      : kind === "worktree" ? worktreesModel.worktreeAt(named.name, oidHex) : named.name
         menu.targetKind = target === "" ? "" : kind
@@ -1746,7 +1747,7 @@ FocusScope {
         // (`GraphList.noteClick`).
         if (repoTab.state !== "open" || !chip || graphModel.provisionalOn)
             return
-        // A worktree's folder chip renames the folder (`startFolderRename`).
+        // The chip of a worktree with no branch renames the worktree's folder (`startFolderRename`).
         if (GitFacts.namedKind(chip.kind) === "worktree") {
             page.startFolderRename(oidHex, chip)
             return
@@ -1765,10 +1766,10 @@ FocusScope {
         if (row >= 0)
             graphPane.showRowSoon(row)
     }
-    /// The folder chip of a worktree on no branch: the box opens on its folder's name (`Worktree name`), or — where git
-    /// would keep the folder — says why on the chip instead, or does nothing on the repository's own worktree
-    /// (`GitFacts.worktreeRename`, デザイン規約 §グラフ行のダブルクリック). The chip carries the folder; which worktree
-    /// it is, is told by the commit it stands on (`NavSectionModel.worktreeAt`).
+    /// The chip of a worktree on no branch, named by its folder: the box opens on the folder's name (`Worktree name`),
+    /// or — where git would keep the folder — says why on the chip instead, or does nothing on the repository's own
+    /// worktree (`GitFacts.worktreeRename`, デザイン規約 §グラフ行のダブルクリック). The chip carries the folder; which
+    /// worktree it is, is told by the commit it stands on (`NavSectionModel.worktreeAt`).
     function startFolderRename(oidHex, chip) {
         const facts = worktreesModel.worktreeFacts(worktreesModel.worktreeAt(chip.name, oidHex))
         if (facts === undefined || page.doorsHeldWhy !== "")

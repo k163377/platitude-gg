@@ -611,8 +611,8 @@ Item {
                     "ready": !(page.pageTab.state !== "open" || page.pageTab.standing
                         || !page.pageWorktree.loaded || page.pageGraph.finishCount === 0) }))
                     return
-                // The folder's row is the press's answer: a folder not listed yet stands nothing, and is asked again.
-                // The last row of that name is the one stood in, kept as `from`.
+                // The worktree's row, named by its folder, is the press's answer: a worktree not listed yet stands
+                // nothing, and is asked again. The last row of that name is the one stood in, kept as `from`.
                 op.input("stood_in", () => {
                     let found = false
                     let from = ""

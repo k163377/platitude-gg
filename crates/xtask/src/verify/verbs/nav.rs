@@ -355,9 +355,10 @@ pub(super) const TABLE: &[Verb] = &[
                 presses=2 cut=false says=This tab is showing this worktree",
     },
     // The same card from the graph: the row the worktree stands on, its
-    // menu aimed at the worktree's folder chip (`detached`) or at the
-    // branch chip of the worktree that has it out (`topic`). `:go` presses
-    // it, and the worktree leaves the list as from the sidebar.
+    // menu aimed at the chip of the worktree with no branch, named by its
+    // folder (`detached`), or at the branch chip of the worktree that has
+    // it out (`topic`). `:go` presses it, and the worktree leaves the list
+    // as from the sidebar.
     Verb {
         name: "worktree-graph",
         when: &[

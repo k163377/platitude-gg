@@ -31,8 +31,8 @@ Item {
     property string runningWhy: ""
 
     /// The name this menu is aimed at: the one the chip draws, or the one pressed in the chip's stacked list. `kind`
-    /// is `branch` / `remote` / `tag`, or `worktree` for a worktree's folder chip — its name then the worktree's path —
-    /// and empty on a row that draws neither (デザイン規約 §グラフ行の右クリック).
+    /// is `branch` / `remote` / `tag`, or `worktree` for the chip of a worktree with no branch (named by its folder) —
+    /// its name then the worktree's path — and empty on a row that draws neither (デザイン規約 §グラフ行の右クリック).
     property string targetKind: ""
     property string targetName: ""
     /// What merge / rebase are handed: the name where the row draws one — a merge by name says so in the commit it

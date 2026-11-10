@@ -376,8 +376,9 @@ impl NavSectionModel {
         self.has_place_for_worktrees()
     }
 
-    /// The path of the worktree a folder's chip names: `name` standing on
-    /// `head` (`worktree_standing`); empty where none does.
+    /// The path of the worktree with no branch that a chip on the graph
+    /// names by its folder: `name` standing on `head` (`worktree_standing`);
+    /// empty where none does.
     #[qslot]
     fn worktree_at(&self, name: String, head: String) -> String {
         self.worktree_standing(&name, &head)
