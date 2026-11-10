@@ -37,8 +37,8 @@ Item {
     /// The node's centre and the co-author badge's — one set for the punch and the ink. GraphColumnMetrics.graphColWMin
     /// mirrors this geometry: move one, move both.
     readonly property real nodeMidX: Metrics.laneInset + laneCell.nodeLane * Metrics.laneW + Metrics.laneW / 2
-    readonly property real badgeCX: laneCell.nodeMidX + Metrics.nodeIcon / 2 - 2 * Theme.borderWidth
-    readonly property real badgeCY: Theme.graphRowHeight / 2 + Metrics.nodeIcon / 2
+    readonly property point badgeCentre: Qt.point(laneCell.nodeMidX + Metrics.nodeIcon / 2 - 2 * Theme.borderWidth,
+                                                  Theme.graphRowHeight / 2 + Metrics.nodeIcon / 2)
 
     onGeometryChanged: ink.requestPaint()
     onNodeLaneChanged: laneCell.repaintNode()
@@ -101,13 +101,13 @@ Item {
             // `loadImage` is asynchronous: paint again once the face arrives.
             onImageLoaded: requestPaint()
             /// The ring the uncommitted row's mark is, at the lanes' weight and dash: also what rings a mark the
-            /// discard log's entry would bring back.
-            function dashedRing(ctx, cx, cy, radius) {
+            /// discard log's entry would bring back. `centre` is a point of the canvas, as in `face`.
+            function dashedRing(ctx, centre, radius) {
                 ctx.strokeStyle = Theme.textSecondary
                 ctx.lineWidth = Metrics.laneStroke
                 ctx.setLineDash(Metrics.laneDash)
                 ctx.beginPath()
-                ctx.arc(cx, cy, radius, 0, 2 * Math.PI)
+                ctx.arc(centre.x, centre.y, radius, 0, 2 * Math.PI)
                 ctx.stroke()
                 ctx.setLineDash([])
             }
@@ -115,24 +115,27 @@ Item {
             /// and the badge so the two cannot drift apart. `ringed` puts it inside the dashed ring the uncommitted
             /// row's mark is (`dashedRing`, where the WIP row draws it), a hair clear of it, in place of its rim: a
             /// ring drawn on the rim falls half on the face and blurs into a light picture's edge.
-            function face(ctx, cx, cy, outer, code, url, ringed) {
+            ///
+            /// `centre` is a point of the canvas, taken whole and handed on whole; the 2D context is where it is
+            /// read as an x and a y.
+            function face(ctx, centre, outer, code, url, ringed) {
                 const radius = ringed === true ? outer - 2 * Theme.borderWidth - Metrics.laneStroke / 2 : outer
                 ctx.save()
                 ctx.beginPath()
-                ctx.arc(cx, cy, radius, 0, 2 * Math.PI)
+                ctx.arc(centre.x, centre.y, radius, 0, 2 * Math.PI)
                 ctx.clip()
                 if (url !== "") {
                     if (ink.isImageLoaded(url)) {
-                        ctx.drawImage(url, cx - radius, cy - radius, 2 * radius, 2 * radius)
+                        ctx.drawImage(url, centre.x - radius, centre.y - radius, 2 * radius, 2 * radius)
                     }
                 } else {
                     ctx.fillStyle = Theme.bgElevated
-                    ctx.fillRect(cx - radius, cy - radius, 2 * radius, 2 * radius)
+                    ctx.fillRect(centre.x - radius, centre.y - radius, 2 * radius, 2 * radius)
                     ctx.fillStyle = Theme.graphLane[(code >> 15) & 0x7]
                     const inner = 2 * radius * Metrics.identiconFill
                     const cell = inner / 5
-                    const ox = cx - inner / 2
-                    const oy = cy - inner / 2
+                    const ox = centre.x - inner / 2
+                    const oy = centre.y - inner / 2
                     for (let row = 0; row < 5; row++) {
                         for (let col = 0; col < 3; col++) {
                             if ((code >> (row * 3 + col)) & 1) {
@@ -145,13 +148,13 @@ Item {
                 }
                 ctx.restore()
                 if (ringed === true) {
-                    ink.dashedRing(ctx, cx, cy, outer - Theme.borderWidth)
+                    ink.dashedRing(ctx, centre, outer - Theme.borderWidth)
                     return
                 }
                 ctx.strokeStyle = Theme.borderStrong
                 ctx.lineWidth = Theme.borderWidth
                 ctx.beginPath()
-                ctx.arc(cx, cy, radius, 0, 2 * Math.PI)
+                ctx.arc(centre.x, centre.y, radius, 0, 2 * Math.PI)
                 ctx.stroke()
             }
             onPaint: {
@@ -191,10 +194,12 @@ Item {
                 }
                 ctx.setLineDash([])
                 ctx.lineDashOffset = 0
+                // The node's centre, built once a paint: every ring and face standing on the node is handed this one.
+                const node = Qt.point(nodeX, midY)
                 // The WIP row: a dashed, empty node, at the lanes' alpha.
                 const r = Metrics.nodeIcon / 2
                 if (laneCell.isWip) {
-                    ink.dashedRing(ctx, nodeX, midY, r - 1)
+                    ink.dashedRing(ctx, node, r - 1)
                     // Restore before returning: the context outlives the paint, and a kept save hands this alpha to
                     // the next row painted here.
                     ctx.restore()
@@ -218,7 +223,7 @@ Item {
                     ctx.stroke()
                     // A stash the discard log would bring back wears the ring a stash has none of.
                     if (laneCell.provisional)
-                        ink.dashedRing(ctx, nodeX, midY, r - 1)
+                        ink.dashedRing(ctx, node, r - 1)
                     // Restore before returning, as above.
                     ctx.restore()
                     return
@@ -231,31 +236,31 @@ Item {
                 // lower right in `iconSm` (規約 §co-author の表示). Only the first: the faces fanned out sideways covered
                 // the subject column.
                 const shared = laneCell.mateFace !== 0
-                const ax = shared ? laneCell.nodeMidX - Theme.borderWidth : laneCell.nodeMidX
-                const ay = shared ? midY - Theme.borderWidth : midY
+                const author = shared ? Qt.point(node.x - Theme.borderWidth, node.y - Theme.borderWidth) : node
                 // Dimmed darker, not see-through: the disc is punched out of the lanes first, or they would run across
                 // the face.
                 if (laneCell.dimmed) {
                     ctx.globalCompositeOperation = "destination-out"
                     ctx.beginPath()
-                    ctx.arc(ax, ay, r + Theme.borderWidth / 2, 0, 2 * Math.PI)
+                    ctx.arc(author.x, author.y, r + Theme.borderWidth / 2, 0, 2 * Math.PI)
                     ctx.fill()
                     ctx.globalCompositeOperation = "source-over"
                     ctx.globalAlpha = Metrics.dimFade
                 }
-                ink.face(ctx, ax, ay, r, laneCell.avatar, laneCell.avatarUrl, laneCell.provisional)
+                ink.face(ctx, author, r, laneCell.avatar, laneCell.avatarUrl, laneCell.provisional)
                 if (shared) {
                     const br = Theme.iconSm / 2
+                    const badge = laneCell.badgeCentre
                     // Punched out of the face and lanes beneath, at full alpha even on a dimmed row — a dimmed eraser
                     // leaves the author's face showing through the badge.
                     ctx.save()
                     ctx.globalAlpha = 1
                     ctx.globalCompositeOperation = "destination-out"
                     ctx.beginPath()
-                    ctx.arc(laneCell.badgeCX, laneCell.badgeCY, br + Theme.borderWidth, 0, 2 * Math.PI)
+                    ctx.arc(badge.x, badge.y, br + Theme.borderWidth, 0, 2 * Math.PI)
                     ctx.fill()
                     ctx.restore()
-                    ink.face(ctx, laneCell.badgeCX, laneCell.badgeCY, br, laneCell.mateFace, "")
+                    ink.face(ctx, badge, br, laneCell.mateFace, "")
                 }
                 ctx.restore()
             }
