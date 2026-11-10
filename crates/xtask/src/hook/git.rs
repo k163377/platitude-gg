@@ -34,7 +34,7 @@ pub(super) fn pre_git(input: &str) -> Result<bool, String> {
 /// answers to the gate at all; a session spelling either is stepping
 /// around the pre-merge tests.
 fn gate_control_change_denied(command: &str) -> bool {
-    let names = [crate::gate::hooks::SKIP, crate::gate::hooks::SESSION];
+    let names = [crate::gate::hooks::SKIP, crate::gate::hooks::CLAUDE_SESSION];
     let Some(name) = names.into_iter().find(|name| command.contains(name)) else {
         return false;
     };
@@ -45,7 +45,7 @@ fn gate_control_change_denied(command: &str) -> bool {
          way) and require a passing stamp for main. If validation appears incorrect, stop \
          and report the validation error to the user.",
         crate::gate::hooks::SKIP,
-        crate::gate::hooks::SESSION
+        crate::gate::hooks::CLAUDE_SESSION
     ));
     true
 }

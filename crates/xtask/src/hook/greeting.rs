@@ -18,14 +18,14 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
     }
     // A session's environment must carry the mark; without it the gate
     // silently holds nothing (gate::hooks).
-    if std::env::var_os(crate::gate::hooks::SESSION).is_none_or(|mark| mark.is_empty()) {
+    if std::env::var_os(crate::gate::hooks::CLAUDE_SESSION).is_none_or(|mark| mark.is_empty()) {
         println!(
             "The gate cannot tell this session's git from the user's: {} is not in this \
              environment, so refs/heads/main is open to any git this session runs. Say so \
              and leave main alone — the name the gate reads is in \
              crates/xtask/src/gate/hooks.rs, and it is the whole of what holds main to the \
              pre-merge tests.",
-            crate::gate::hooks::SESSION
+            crate::gate::hooks::CLAUDE_SESSION
         );
     }
     let seats = seat_report(&cwd).unwrap_or_default();

@@ -4,7 +4,7 @@
 //! `reference-transaction` is the one hook every ref update passes
 //! through, and a non-zero exit in its `prepared` state aborts the update,
 //! so one checked-in script (`.githooks/`) guards main against every road a
-//! session can take and none of the user's ([`SESSION`]); the verdict stays
+//! session can take and none of the user's ([`CLAUDE_SESSION`]); the verdict stays
 //! here, where it can be tested. Passing through every update, it is also
 //! where whose a branch is gets written down ([`maker`]), for that
 //! session's landing to clear (`land::leftovers`); the app's git creates
@@ -37,7 +37,7 @@ pub(crate) const SKIP: &str = "PGG_GATE_SKIP";
 /// and so in every git a session starts: it tells a session's ref update
 /// from the user's. The pre-shell hook refuses a session's command that
 /// spells it, as it does one spelling [`SKIP`].
-pub(crate) const SESSION: &str = "CLAUDECODE";
+pub(crate) const CLAUDE_SESSION: &str = "CLAUDECODE";
 
 const HOOKS_DIR: &str = ".githooks";
 const HOOK: &str = "reference-transaction";
@@ -196,11 +196,11 @@ fn write_executable(path: &Path, text: &str) -> Result<(), String> {
 /// on main. The refusal reason is what git shows the person whose command
 /// was stopped.
 pub(crate) fn verdict(dir: &Path, old: &str, new: &str) -> Result<(), String> {
-    // A git without `SESSION` is the user's own — their terminal, their
+    // A git without `CLAUDE_SESSION` is the user's own — their terminal, their
     // IDE, a window they are clicking in — and their main is theirs to
     // move, rewinds included. The script asks this before it needs cargo;
     // here it is asked again for the hand-run `gate verdict` and the tests.
-    if std::env::var_os(SESSION).is_none_or(|mark| mark.is_empty()) {
+    if std::env::var_os(CLAUDE_SESSION).is_none_or(|mark| mark.is_empty()) {
         return Ok(());
     }
     if std::env::var(SKIP).is_ok_and(|v| v == "1") {
@@ -308,20 +308,23 @@ mod tests {
         assert_eq!(maker(&common, branch), by("session-3", Made::Created));
     }
 
-    /// The script reads the mark itself, spelled as `SESSION` does, ahead of
+    /// The script reads the mark itself, spelled as `CLAUDE_SESSION` does, ahead of
     /// its cargo guard.
     #[test]
     fn the_hook_script_reads_the_same_session_mark() {
         let script = include_str!("../../../../.githooks/reference-transaction");
-        let mark = script
-            .find(super::SESSION)
-            .unwrap_or_else(|| panic!("the hook script has to read {} itself", super::SESSION));
+        let mark = script.find(super::CLAUDE_SESSION).unwrap_or_else(|| {
+            panic!(
+                "the hook script has to read {} itself",
+                super::CLAUDE_SESSION
+            )
+        });
         let cargo = script.find("command -v cargo").expect("the cargo guard");
         assert!(
             mark < cargo,
             "a git without {} has to be past the hook before cargo is asked for — an IDE's \
              has no cargo on PATH, and the guard below fails closed",
-            super::SESSION
+            super::CLAUDE_SESSION
         );
     }
 }
