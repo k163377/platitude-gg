@@ -24,8 +24,11 @@ pub(super) struct Outcome {
     pub(super) contract_broken: bool,
     /// Whether the app was refused the settings it was handed, for a verb
     /// that did not stage that itself ([`super::child`]). A run's config
-    /// directory is its own, so this is two runs given one — judged the
-    /// moment it is said, not at the ceiling.
+    /// directory is its own, so this is two runs given one — a red whatever
+    /// else the run said. Read off the run's lines once it has ended, like
+    /// every other reading here: the line does not end the run, and an app
+    /// standing at the "already running" gate goes on until it ends itself
+    /// — at its watchdog, for a verb that waits on a repository.
     pub(super) store_refused: bool,
     /// What a verb whose failure the camera cannot see has to be caught
     /// saying (`super::verbs::must_say`).
@@ -505,18 +508,41 @@ mod tests {
         );
     }
 
-    /// Waiting out the watchdog to discover it would cost the whole
-    /// ceiling and say only that the verb never finished.
+    /// The refusal does not end the run: the app goes on to its watchdog,
+    /// and the line is read off what the run said by then — a red of its
+    /// own beside the watchdog's, which says only that the verb never
+    /// finished.
     #[test]
-    fn a_run_refused_its_own_settings_fails_where_it_stands() {
-        let refused = Outcome {
-            store_refused: true,
-            ..WELL
+    fn a_run_refused_its_own_settings_is_read_off_its_lines_once_it_ends() {
+        let refused_then_ran_out = |verb: &str| {
+            let opts = super::super::options::parse(&[verb.to_string()]).expect("a line");
+            let dir = crate::yard::Yard::new("verify-store");
+            let said = super::super::child::Ran {
+                err_lines: vec![
+                    "WARN platitude_app: another platitude-gg is using these settings store=x"
+                        .to_string(),
+                    format!("qml: auto-act watchdog expired verb={verb}"),
+                ],
+                ..ran(false, Some(0))
+            };
+            super::judge(&opts, &said, &dir, &dir, "r1", None)
         };
-        assert!(!refused.passed());
+        let refused = refused_then_ran_out("wip");
         assert!(
-            !refused.watchdog_expired,
-            "the point is that this is said before the watchdog gets there"
+            refused.store_refused && refused.watchdog_expired && !refused.passed(),
+            "{refused:?}"
+        );
+        assert!(
+            !Outcome {
+                store_refused: true,
+                ..WELL
+            }
+            .passed(),
+            "and a red by itself, however well the rest of the run went"
+        );
+        assert!(
+            !refused_then_ran_out("solo").store_refused,
+            "a verb that holds the settings itself is refused them on purpose"
         );
     }
 
