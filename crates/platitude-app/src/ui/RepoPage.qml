@@ -679,8 +679,8 @@ FocusScope {
         // §状態, §回数押し) and the command on the question's line are core's (offers::leaving_undoes / leave_code).
         page.startRowAsk(worktree.headOid, page.leaveHeading, page.leaveDetail,
                          worktree.leaveUndoes, "", retry, worktree.leaveUndoes, "", null,
-                         worktree.leaveCode, local, local === worktree.branch ? Theme.textLink : Theme.textPrimary,
-                         "branch")
+                         worktree.leaveCode, local,
+                         GitFacts.isCurrent(worktree.standing, local) ? Theme.textLink : Theme.textPrimary, "branch")
     }
 
     // ---- what a chip leads to --------------------------------------
@@ -765,7 +765,8 @@ FocusScope {
             false,
             qsTr("Move"),
             function () { page.switchTo("force", local, local, remoteRef) },
-            true, "", null, "", local, local === worktree.branch ? Theme.textLink : Theme.textPrimary, "branch",
+            true, "", null, "", local,
+            GitFacts.isCurrent(worktree.standing, local) ? Theme.textLink : Theme.textPrimary, "branch",
             { detail: Words.marksOf(name => Words.losesCommits(name, lost), [[local, "branch"]]) })
         page.moveBranchAsked(local)
     }
@@ -946,7 +947,7 @@ FocusScope {
         repoTab: repoTab
         remotesModel: remotesModel
         graphPane: graphPane
-        headBranch: worktree.branch
+        worktree: worktree
         onAskRequested: (oidHex, label, accept, run, form) =>
             page.startRowAsk(oidHex, label, "", false, accept, run, false, "", form, "")
     }
@@ -1888,7 +1889,6 @@ FocusScope {
     RowHoverHost {
         id: rowHost
         graphPane: graphPane
-        currentBranch: worktree.branch
         branchesModel: branchesModel
         remotesModel: remotesModel
         tagsModel: tagsModel
@@ -3925,7 +3925,8 @@ FocusScope {
                             // own two words the way its rows do (`WipBucketPane`).
                             sideOurs: page.wipWritable ? worktree.sideOurs : ""
                             sideTheirs: page.wipWritable ? worktree.sideTheirs : ""
-                            currentBranch: page.wipWritable ? worktree.branch : ""
+                            sideOursCurrent: page.wipWritable && worktree.sideOursCurrent
+                            sideTheirsCurrent: page.wipWritable && worktree.sideTheirsCurrent
                             sideColorOurs: page.sideColorOurs
                             sideColorTheirs: page.sideColorTheirs
                             busy: page.diffSettling

@@ -408,7 +408,7 @@ Item {
         // the worktree's own branch's blue, any other's plain ink (デザイン規約 §ref の種別).
         publishFlow.askRequested(
             oidHex, qsTr("%1 where?"), publishFlow.answerPublish, publishForm, "push", branch,
-            branch === publishFlow.worktree.branch ? Theme.textLink : Theme.textPrimary)
+            GitFacts.isCurrent(publishFlow.worktree.standing, branch) ? Theme.textLink : Theme.textPrimary)
         // After the bar is up: raising it resets what the bindings above own, and an unchanged binding does not push
         // back — an assignment under a live `Binding` wins and kills that binding's hold for good (turning `when` back
         // restores nothing), so armed first, `askAnswerable` / `askHold` / `askNeutral` would stand dead.

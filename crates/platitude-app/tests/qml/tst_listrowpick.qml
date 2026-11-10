@@ -16,15 +16,14 @@ Item {
     property var picked: []
 
     /// A record of `kind`, every field spelled out as `encode::chips_of` hands it.
-    function record(kind, name, held) {
-        return { "kind": kind, "name": name, "isHead": false, "hasRemote": false, "hasPr": false, "here": true,
-                 "held": held, "locked": false, "remote": "", "key": kind + ":" + name }
+    function record(kind, name, held, head) {
+        return { "kind": kind, "name": name, "isHead": head === true, "hasRemote": false, "hasPr": false,
+                 "here": true, "held": held, "locked": false, "remote": "", "key": kind + ":" + name }
     }
 
     RefListPopup {
         id: card
         chipRoom: 300
-        currentBranch: "main"
         onPicked: chip => root.picked = root.picked.concat([chip.key])
     }
 
@@ -43,9 +42,9 @@ Item {
         }
 
         function test_each_row_goes_where_it_leads() {
-            card.records = [root.record("branch", "main", false), root.record("branch", "topic", true),
+            card.records = [root.record("branch", "main", false, true), root.record("branch", "topic", true),
                             root.record("worktree", "topic-twin", false), root.record("branch", "side", false),
-                            root.record("tag", "v1.0", false), root.record("head", "HEAD", false)]
+                            root.record("tag", "v1.0", false), root.record("head", "HEAD", false, true)]
             for (let i = 0; i < card.records.length; i++)
                 doubleClickRow(i)
             compare(root.picked, ["branch:topic", "branch:side"])

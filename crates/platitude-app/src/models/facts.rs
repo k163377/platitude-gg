@@ -422,6 +422,15 @@ impl GitFacts {
         platitude_core::offers::move_landed(&landing, &tree, &landing_oid)
     }
 
+    /// Whether `name` is the branch HEAD is on — the name a question draws
+    /// in the current branch's colour (デザイン規約 §ref の種別). The two
+    /// sides of a conflict ask the model instead
+    /// (`WorktreeModel.sideOursCurrent`), a chip its own record (`isHead`).
+    #[qslot]
+    fn is_current(&self, tree: One<TreeStanding>, name: String) -> bool {
+        tree.is_current(&name)
+    }
+
     /// The folder name a clone of `url` would land in, offered before
     /// anybody types one; `""` where the URL carries none, which leaves the
     /// accept button refusing.

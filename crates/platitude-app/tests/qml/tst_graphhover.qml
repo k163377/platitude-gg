@@ -282,7 +282,6 @@ Item {
     RowHoverHost {
         id: host
         graphPane: pane
-        currentBranch: "main"
         // The stacked rows' second lines: none, every branch standing alone.
         branchesModel: QtObject {
             function upstreamGoneOf(name) { return "" }

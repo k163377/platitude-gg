@@ -28,8 +28,10 @@ ColumnLayout {
     required property string conflictChange
     required property string sideOurs
     required property string sideTheirs
-    /// The branch stood on (`DiffPane.currentBranch`): a side that is it is said in the current branch's colour.
-    required property string currentBranch
+    /// Whether each side is the branch stood on (`DiffPane.sideOursCurrent`): that side is said in the current branch's
+    /// colour.
+    required property bool oursCurrent
+    required property bool theirsCurrent
     /// Whether the two sides are being told apart by colour, and the two colours themselves (`DiffPane.sidesTold`).
     required property bool sidesTold
     required property var oursColor
@@ -58,8 +60,8 @@ ColumnLayout {
     signal linkAsked(string href)
 
     /// A side's own colour: the current branch's where it is the branch stood on, none for any other.
-    function sideTint(side) {
-        return side !== "" && side === notices.currentBranch ? Theme.textLink : undefined
+    function sideTint(current) {
+        return current ? Theme.textLink : undefined
     }
 
     spacing: 0
@@ -79,8 +81,8 @@ ColumnLayout {
         cutAt: "middle"
         text: Words.conflict(notices.conflictChange, notices.sideOurs, notices.sideTheirs)
         marks: Words.marksOf((ours, theirs) => Words.conflict(notices.conflictChange, ours, theirs),
-                             [[notices.sideOurs, "branch", notices.sideTint(notices.sideOurs)],
-                              [notices.sideTheirs, "branch", notices.sideTint(notices.sideTheirs)]])
+                             [[notices.sideOurs, "branch", notices.sideTint(notices.oursCurrent)],
+                              [notices.sideTheirs, "branch", notices.sideTint(notices.theirsCurrent)]])
         color: Theme.textSecondary
     }
     // -- which branch each colour is, only while the rows are told apart by colour. The rebase swap is already sorted
@@ -96,8 +98,8 @@ ColumnLayout {
         theirsName: Words.theirSide(notices.sideTheirs)
         oursIsBranch: notices.sideOurs !== ""
         theirsIsBranch: notices.sideTheirs !== ""
-        oursTint: notices.sideTint(notices.sideOurs)
-        theirsTint: notices.sideTint(notices.sideTheirs)
+        oursTint: notices.sideTint(notices.oursCurrent)
+        theirsTint: notices.sideTint(notices.theirsCurrent)
         oursColor: notices.oursColor
         theirsColor: notices.theirsColor
         nameCap: notices.nameCap

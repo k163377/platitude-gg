@@ -19,8 +19,6 @@ Item {
     /// The graph pane: its list (`view`), its hand (`hand`), the current branch's stand-in (`headPin`) and the click
     /// doors the list's rows go through. `var`, so a test can hand in a stand-in.
     required property var graphPane
-    /// The branch the worktree is on; that one leads nowhere.
-    required property string currentBranch
     /// The sections `mateOf` asks.
     required property var branchesModel
     required property var remotesModel
@@ -474,7 +472,6 @@ Item {
     // ---- the popups ------------------------------------------------------------------------------------------------
     RefListPopup {
         id: refList
-        currentBranch: host.currentBranch
         // A click here is answered by the graph row the card stands on (`RefListPopup.rowClicks`).
         rowClicks: host.graphPane
         rowOid: host.refListOid

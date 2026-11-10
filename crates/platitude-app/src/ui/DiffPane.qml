@@ -22,9 +22,10 @@ Rectangle {
     property string conflictChange: ""
     property string sideOurs: ""
     property string sideTheirs: ""
-    /// The branch this worktree stands on, which a side named after it says in its own colour (デザイン規約 §ref の種別
-    /// 「現在のブランチは、名前が出る場所すべてで `textLink`」); empty on none.
-    property string currentBranch: ""
+    /// Whether each side is the branch this worktree stands on, which that side says in its own colour (デザイン規約
+    /// §ref の種別「現在のブランチは、名前が出る場所すべてで `textLink`」; `WorktreeModel.sideOursCurrent`).
+    property bool sideOursCurrent: false
+    property bool sideTheirsCurrent: false
     /// Each side's colour as an index into `Theme.graphLane` — the branch's own lane colour where it has one, and
     /// always two different ones (`encode::conflict_side_colors`).
     property int sideColorOurs: -1
@@ -538,7 +539,8 @@ Rectangle {
             conflictChange: diffPane.conflictChange
             sideOurs: diffPane.sideOurs
             sideTheirs: diffPane.sideTheirs
-            currentBranch: diffPane.currentBranch
+            oursCurrent: diffPane.sideOursCurrent
+            theirsCurrent: diffPane.sideTheirsCurrent
             sidesTold: diffPane.sidesTold
             oursColor: diffPane.sideColor("ours")
             theirsColor: diffPane.sideColor("theirs")

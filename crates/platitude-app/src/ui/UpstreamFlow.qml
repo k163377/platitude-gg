@@ -25,6 +25,9 @@ Item {
     /// The one bar this question stands in, and whose pill it dresses while it stands (`RepoPage.startRowAsk` raises
     /// it).
     required property GraphPane graphPane
+    /// Where the worktree stands: the heading names the branch in `textLink` where it is the one HEAD is on
+    /// (デザイン規約 §ref の種別; `GitFacts.isCurrent`).
+    required property WorktreeModel worktree
 
     /// Raise the standing question with this form in it; the page owns the bar.
     signal askRequested(string oidHex, string label, string accept, var run, var form)
@@ -44,9 +47,6 @@ Item {
     /// Whether the branch has an upstream to take off — a remote reading, a branch here, or a gone one — which an
     /// emptied name asks to do.
     property bool unsettable: false
-    /// The branch the worktree is on: the heading names the branch in `textLink` where it is this one (デザイン規約
-    /// §ref の種別).
-    property string headBranch: ""
     /// The name box emptied on a branch with an upstream: the question turns into taking it off — its heading and
     /// pill change, and the line goes (the word `upstream` says what taking it off changes); typing again turns it
     /// back. One of the two ways off, beside the card's `Unset upstream` row (user decision — ask before changing);
@@ -184,7 +184,8 @@ Item {
     Binding {
         target: upstreamFlow.graphPane
         property: "askLabelRefTint"
-        value: upstreamFlow.branch === upstreamFlow.headBranch ? Theme.textLink : Theme.textPrimary
+        value: GitFacts.isCurrent(upstreamFlow.worktree.standing, upstreamFlow.branch) ? Theme.textLink
+                                                                                        : Theme.textPrimary
         when: upstreamFlow.asking
         restoreMode: Binding.RestoreNone
     }

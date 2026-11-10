@@ -37,8 +37,6 @@ AppCard {
     /// card — `{mark, markTint, text, tone, ahead, behind}` — or null. Set as the card opens
     /// (`RowHoverHost.openRefList`): the card is measured in that turn, so a later fact would have no room.
     property var mates: []
-    /// The branch the worktree is on; that one leads nowhere.
-    property string currentBranch: ""
     /// One was double-clicked: the reader is going there. The whole chip, so its kind travels with it. **A single click
     /// never moves** (user decision — ask before changing): the card stands on the chip's seat, so a click aimed at the
     /// chip lands on a row here, and a click that moved would `switch` whoever pressed the chip twice, spaced — as a
@@ -297,10 +295,10 @@ AppCard {
                 /// do not, mixed under a hand walking down, read as a list that sometimes stops answering. A
                 /// `textMuted` one included: the exception to 規約 §無効.
                 readonly property bool lit: rowHover.hovered || refRow.pointedAt
-                // The reader is already there: only the move comes off, the colour stays (§ref の種別). A tag leads
-                // nowhere too: moving onto one would detach HEAD (`offers::SwitchAction::None`).
-                readonly property bool current:
-                    refRow.modelData.kind === "branch" && refRow.modelData.name === refList.currentBranch
+                // The reader is already there: only the move comes off, the colour stays (§ref の種別) — both off the
+                // chip's own `isHead`, so the row cannot lead nowhere in one colour and somewhere in another. A tag
+                // leads nowhere too: moving onto one would detach HEAD (`offers::SwitchAction::None`).
+                readonly property bool current: refRow.modelData.kind === "branch" && refRow.modelData.isHead
                 // The two markers (a detached HEAD, a worktree with no branch here) name no ref. Only the move comes
                 // off: the chip keeps its colour, or the detached HEAD would be amber on the row and grey in its card.
                 // A branch another worktree has out leads to that worktree, as the graph row's double-click does
