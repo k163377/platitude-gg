@@ -165,7 +165,7 @@ ComboBox {
         readonly property real room: input.width - input.leftPadding - input.rightPadding
         readonly property real fitWidth: whole.advanceWidth
         // Picking only, the value is the owner's (ComboBox keeps `editText` only when editable), cut in the middle — a
-        // remote's at its end, its head being the remote (デザイン規約 §寸法「upstream 名だけは末尾で切る」): a
+        // remote's at its end, its head being the remote (デザイン規約 §寸法「upstream 名(remote-tracking 名)だけは末尾で切る」): a
         // read-only `TextInput` too narrow scrolls to the caret and loses the name's head unmarked. Cut to fill the
         // room up to the arrow's step (`WordFace.cutToFit`); not `CutName`: a lone field has no column edge to line up.
         text: combo.pickOnly ? (input.fitWidth > input.room ? combo.cutValue : combo.wanted) : combo.editText

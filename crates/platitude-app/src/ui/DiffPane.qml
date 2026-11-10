@@ -23,7 +23,7 @@ Rectangle {
     property string sideOurs: ""
     property string sideTheirs: ""
     /// The branch this worktree stands on, which a side named after it says in its own colour (デザイン規約 §ref の種別
-    /// 「現在のブランチは、名前が出る場所すべてで textLink」); empty on none.
+    /// 「現在のブランチは、名前が出る場所すべてで `textLink`」); empty on none.
     property string currentBranch: ""
     /// Each side's colour as an index into `Theme.graphLane` — the branch's own lane colour where it has one, and
     /// always two different ones (`encode::conflict_side_colors`).
@@ -524,7 +524,7 @@ Rectangle {
             onNextRequested: diffPane.findNext()
             onPreviousRequested: diffPane.findPrevious()
             // Closed by its `✕` or Escape: the keyboard goes back to the rows (the graph's rule, §矢印で履歴を辿る
-            // 「閉じる所作がグラフへ返している」).
+            // 「閉じる所作が返している」).
             onDismissed: rowWalk.handArrived()
         }
         // What the pane says about the file itself, and the picture that stands in for one no rows can show.

@@ -6,7 +6,7 @@ import platitude.ui
 
 // The tab in front always stands in the strip: while its row is scrolled off the run, this stand-in rides the edge the
 // row went out of, and steps aside once the row is whole on screen (user decision — ask before changing). The same
-// shape as `HeadPinRow` and `GraphHeadPin` (規約 §タブの所作「今居るタブは…縁に残る」). **It is that tab itself**: the
+// shape as `HeadPinRow` and `GraphHeadPin` (規約 §タブの所作「今居るタブは、帯を横へ流しても縁に残る」). **It is that tab itself**: the
 // ground, the underline, the name in `fontWeightStrong` and the `✕` of the tab in front, at that tab's drawn width
 // (`seatWidth`).
 //

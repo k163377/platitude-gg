@@ -468,9 +468,9 @@ Control {
             fuzzyCompare(chipOf(root.farName).width, chipOf(root.farName + "-too").width, 0.5, "an even share")
         }
 
-        /// A remote's name gives way at its end, its head — the remote — kept (デザイン規約 §寸法「upstream 名だけは
-        /// 末尾で切る」): in a menu's sentence, at a row's end, in a heading held at the ceiling. A branch's, in the
-        /// middle.
+        /// A remote's name gives way at its end, its head — the remote — kept
+        /// (デザイン規約 §寸法「upstream 名(remote-tracking 名)だけは末尾で切る」): in a menu's sentence, at a row's end, in a
+        /// heading held at the ceiling. A branch's, in the middle.
         function test_a_remotes_name_gives_way_at_its_end() {
             tryVerify(() => remoteSentenceRow.refCut)
             const sentence = remoteSentenceRow.refShown2

@@ -435,7 +435,7 @@ Rectangle {
         // which commit it is. Too narrow a window for the card's minimum: the minimum wins (`FindBar.implicitWidth`) —
         // a tool that cannot be used is worse.
         maxWidth: graphArea.width - graphArea.subjectTextX - Theme.spaceXs - anchors.rightMargin
-        // Closing hands the arrows back to the graph (規約 §矢印で履歴を辿る「閉じる所作がグラフへ返している」).
+        // Closing hands the arrows back to the graph (規約 §矢印で履歴を辿る「閉じる所作が返している」).
         onDismissed: {
             findBar.runFind()
             graphList.takeKeyboard()

@@ -4,7 +4,7 @@ import platitude.ui
 // The BRANCH card: the branch's upstream set and taken off (デザイン規約 §メニュー の入れ子). The rows a branch is used
 // through often — sent to its remote (`BranchPushRow`, beside `pull`) and the delete table, local / remote / both
 // (`BranchDeleteRow` / `BranchRemoteDeleteRow` / `BranchBothDeleteRow`, the last group) — stand on the level above,
-// reading this card's frozen answers (`state`) (規約 §メニュー「第 1 階層か入れ子かは使う頻度で決める」). Every entrance
+// reading this card's frozen answers (`state`) (規約 §メニュー「第 1 階層か入れ子かは、使う頻度で決める」). Every entrance
 // carries this card nested, so those answers are in hand as the menu opens, whether or not the card is ever opened.
 //
 // The delete table is a fixed table (user decision — ask before changing): a row that cannot be done right now stays,

@@ -138,7 +138,7 @@ AppDialog {
         // Which remote is origin (both keys: `remote::OriginMarks`). Not on the first remote's add form: every push
         // goes there anyway. The words put `origin` first and the role in a parenthesised phrase (user decision — ask
         // before changing): `origin` is far better known than `default remote`, so the words stay even where a
-        // remote is called `origin`; a phrase, not a name, so §タイポグラフィ「丸括弧に名前を入れない」 does not apply.
+        // remote is called `origin`; a phrase, not a name (§タイポグラフィ「丸括弧に入るのは『数』か『添え書きの句』だけ —— 名前は入れない」).
         // The line under it says only what the push side loses — `checkout.defaultRemote` only answers a `switch`
         // git refused as ambiguous. One mark only (one value per key): it moves by marking another, and only this box
         // takes it off. A mark from the global config cannot be taken off here (git has no local "unset"), so the

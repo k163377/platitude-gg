@@ -572,8 +572,8 @@ pub(super) const TABLE: &[Verb] = &[
     // The band folded with nothing red standing in it: a mark that never
     // came up frames as a band with room to spare, and three dots' colour
     // is not for a cropped screenshot to settle. `tint=` names which rule
-    // painted it (デザイン規約「色は最も重い状態が決める」); a red mark over a
-    // lone warning is that rule failing silently. `fitted=true` and
+    // painted it (デザイン規約 §ウィンドウの縁「色は最も重い状態」); a red mark
+    // over a lone warning is that rule failing silently. `fitted=true` and
     // `deep=true` as in `badges`' `floor`.
     Verb {
         name: "old-git-fold",

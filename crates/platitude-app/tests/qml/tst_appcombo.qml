@@ -411,8 +411,8 @@ Control {
             compare(picked.wanted, root.longName, "while the value itself is untouched")
         }
 
-        /// A remote's name gives way at its end, its head — the remote — kept (デザイン規約 §寸法「upstream 名だけは
-        /// 末尾で切る」).
+        /// A remote's name gives way at its end, its head — the remote — kept
+        /// (デザイン規約 §寸法「upstream 名(remote-tracking 名)だけは末尾で切る」).
         function test_a_picked_remote_is_cut_at_its_end() {
             const shown = pickedRemote.contentItem.text
             verify(shown.endsWith("…"), "cut at the end: " + shown)

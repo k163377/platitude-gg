@@ -474,7 +474,7 @@ Item {
         // (user decision — ask before changing): merge / rebase bring the clicked row into the current branch,
         // while a pull moves the branch itself, so the subject differs; in this seat it sits in the same place in every
         // menu (規約 §メニュー). The sentence names the branch that moves (user decision — ask before changing), though
-        // a row's own name is usually left to the row (規約 §メニュー「行が自分で示しているものは行に任せる」): one row,
+        // a row's own name is usually left to the row (規約 §メニュー「行が自分で示しているもの(右クリックした行のコミット)は行に任せる」): one row,
         // in one seat, moves the current branch on its upstream's row and the row's own branch elsewhere, so the words
         // alone would not say which moves before the press. Shaped as `merge` into <current> is. In the name's own
         // colour (規約 §ref の種別「文の中の名前」): the current branch `textLink`, another local branch white; a greyed

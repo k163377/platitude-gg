@@ -49,7 +49,7 @@ SlimField {
     readonly property bool rowInView: box.rowTop >= box.rowsTop
         && box.rowTop + box.row.height <= box.rowsTop + box.rowsHeight
     /// What the box opened holding, latched: a right edge that walks under the caret cannot be aimed at
-    /// (rules/app-ui.md「測って押し出す値は…」). The box wants room for that and for the placeholder whole.
+    /// (rules/app-ui.md「測って押し出す値は、元のプロパティを自分で読み直す関数にする」). The box wants room for that and for the placeholder whole.
     property string inkText: ""
     readonly property real wantWidth:
         Math.ceil(Math.max(ink.implicitWidth, placeholderInk.implicitWidth)) + box.leftPadding + box.rightPadding

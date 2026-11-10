@@ -46,7 +46,7 @@ Flickable {
     /// commit button go, and the exit card stands in the button's seat (user decision — ask before changing). Its rows
     /// are the way on there, and a commit of one's own would drop what the stopped commit carries — a rebase's author
     /// and message, a pick's message (measured). **Hidden, not dimmed**: the card has taken the button's part, the one
-    /// exception to 規約 §無効「押せない物は押せないように見せる」. Keeping the boxes filled with the stopped commit's
+    /// exception to 規約 §無効「押せないものは押せないように見せる」. Keeping the boxes filled with the stopped commit's
     /// message (GitKraken, Tower, VS Code) is the road not taken; GitHub Desktop hides them too. Typed words survive
     /// the hiding. The edit step keeps them: amending is what it stops for (as every product with an `edit` step of its
     /// own keeps the commit boxes and Amend). A merge keeps them too: its `--continue` is the commit this button makes

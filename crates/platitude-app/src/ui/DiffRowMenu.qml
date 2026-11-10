@@ -9,7 +9,7 @@ import platitude.ui
 // side's whole lines — they have no wash, so nothing on screen points at part of one. Each row only where it has
 // something to take.
 //
-// `Copy` is one word: the selection shows what it takes (デザイン規約 §メニュー「行が自分で示しているものは行に任せる」);
+// `Copy` is one word: the selection shows what it takes (デザイン規約 §メニュー「行が自分で示しているもの(右クリックした行のコミット)は行に任せる」);
 // `Copy path` / `Copy full hash` name their object because their rows point at nothing. `removed`, not `deleted`
 // (GitKraken's): in this app delete is the word of the operations that take things away. The count is the noun's
 // number, as `Copy path` / `Copy paths`. The GITHUB card under them stands on a commit's file only. Ctrl+C is the

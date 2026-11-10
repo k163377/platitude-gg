@@ -27,7 +27,7 @@ paths:
 - Rust: ディレクトリ化は **mod.rs 方式(既存踏襲)**。mod.rs は mod 宣言・re-export・共有型のみ。`#[cfg(test)]` は対象と同じファイルへ付いて行く(テストだけ巨大なら同ディレクトリの `#[cfg(test)]` 専用ファイルへ)
 - **クレート root(lib.rs / main.rs / tests/it/main.rs)は宣言と再エクスポートだけ** — root は全モジュールへ dispatch し、そこにヘルパがあると全モジュールが root を読む = gate の依存木でどの変更も全体へ届くハブになる。**機械化済み: 毎回の `cargo xtask gate`(`gate::graph::complaints` — 走らせる前に拒む)と `cargo test -p xtask`(同じ関数)** — 置き場は責務名のモジュール(`tree` / `subprocess`、core は `model`)
 - QML: **1 ファイル = 1 コンポーネント**(Qt の指針。ファイル名がそのまま型名で、粒度は qmldir と型システムが決める)。子コンポーネント切り出し(ui/ フラット・登録 2 箇所は app-ui.md)。inline `component` は 2 ファイル目が使う時か親が閾値を超えた時に独立ファイル化
-- Qt: `#[qobject]` ブロック(`qproperty!` / `#[qsignal]` / `#[qslot]`)は QMetaInfo の一貫性で **1 型 1 ファイルから動かせない** — スロット本体を素の `impl` へ委譲して痩せさせる(委譲化は移動と別コミット)。それでも割れない分は §長さの閾値 の「分割不能と決めたファイルは理由を書く」へ
+- Qt: `#[qobject]` ブロック(`qproperty!` / `#[qsignal]` / `#[qslot]`)は QMetaInfo の一貫性で **1 型 1 ファイルから動かせない** — スロット本体を素の `impl` へ委譲して痩せさせる(委譲化は移動と別コミット)。それでも割れない分は §長さの閾値 の「分割不能と決めたファイルは理由をそのファイルの冒頭コメントに書く」へ
 
 ## 共通化
 

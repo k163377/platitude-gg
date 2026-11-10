@@ -728,9 +728,9 @@ Item {
         property int sawRows: -1
     }
     // The write out and nothing moved: busy up and HEAD unmoved, as busy alone outlasts the write's answer. Read on
-    // the tab's notify (rules-refs/app-ui.md「一瞬だけ立つ状態は…」): the whole window can pass within one turn of
-    // the loop, which a sampler beat would miss. Heard while `halfDuringTimer` runs: from before the press, which
-    // witnessed HEAD as the write found it, to the completion, whose report reads the latch.
+    // the tab's notify (rules-refs/app-ui.md「一瞬だけ立つ状態は signal で観測して latch する」): the whole window can
+    // pass within one turn of the loop, which a sampler beat would miss. Heard while `halfDuringTimer` runs: from
+    // before the press, which witnessed HEAD as the write found it, to the completion, whose report reads the latch.
     Connections {
         target: acts.repoTab
         enabled: halfWatch.duringOnly && !halfWatch.caught && halfDuringTimer.running

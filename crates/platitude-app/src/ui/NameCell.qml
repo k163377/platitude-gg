@@ -74,7 +74,7 @@ RowLayout {
     /// off its name by a different gap in one list (`tests/qml/tst_foldstep.qml`).
     readonly property int seatSize: Theme.iconXs
     /// Where the name itself is drawn — the lines a row opens read their voice off it, and it knows whether the name
-    /// was cut (`NavRowFacts`, rules/app-ui.md「測って押し出す値は…」).
+    /// was cut (`NavRowFacts`, rules/app-ui.md「測って押し出す値は、元のプロパティを自分で読み直す関数にする」).
     readonly property Item nameInk: newName
     /// Where the name's baseline runs, in the cell's y: a mark set beside the name from outside the cell stands on
     /// it (`NavRowBody`'s remote and push marks).

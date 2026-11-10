@@ -16,8 +16,9 @@ import platitude.ui
 //
 // The mark is what parts the two names — without it the run reads as the repository's name carrying on — so the run
 // is dropped whole rather than drawn without it (`floorWidth`, `TabShare.splitName`): the mark takes its width first,
-// the name the rest. Not in parentheses (デザイン規約 §タイポグラフィ「丸括弧に名前を入れない」). The step before the mark is
-// the holder's (`gap`); no margin is written either side of the mark, and no `step − the mark's air` is worked out.
+// the name the rest. Not in parentheses (デザイン規約 §タイポグラフィ「丸括弧に入るのは『数』か『添え書きの句』だけ —— 名前は入れない」).
+// The step before the mark is the holder's (`gap`); no margin is written either side of the mark, and no
+// `step − the mark's air` is worked out.
 //
 // Given a width, not asking for one: a tab hands it the cap's leftover after the name, and it cuts its name to it
 // (`CutName`).

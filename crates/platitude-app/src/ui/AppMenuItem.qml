@@ -51,7 +51,7 @@ MenuItem {
     property string refSentence: ""
     property string refName: ""
     /// That name's own colour: `textLink` for the current branch, which is what these sentences mostly name
-    /// (デザイン規約 §ref の種別「現在のブランチは、名前が出る場所すべてで textLink」); `textPrimary` for any other.
+    /// (デザイン規約 §ref の種別「現在のブランチは、名前が出る場所すべてで `textLink`」); `textPrimary` for any other.
     property color refTint: Theme.textLink
     /// The mark that name wears in front of it — its kind's `NavIcon` (デザイン規約 §ref の種別「名前の印」), a sign on
     /// the name. Empty for none.
@@ -124,7 +124,8 @@ MenuItem {
     /// A name ending the row's words, as code behind its kind's mark — a worktree's folder (`RefRowMenu`'s `Open`), the
     /// branch a delete row deletes — or bare where the card's title wears the mark (`TopBar`'s `WORKTREE` card). Data,
     /// not words: it bids at most `labelColW`, or the name ceiling where it is the row's one name (`textNames`), and
-    /// gives way past it — in the middle, or a remote's at its end (デザイン規約 §寸法「upstream 名だけは末尾で切る」).
+    /// gives way past it — in the middle, or a remote's at its end
+    /// (デザイン規約 §寸法「upstream 名(remote-tracking 名)だけは末尾で切る」).
     property string nameMark: ""
     property string codeName: ""
     readonly property bool codesName: menuItem.codeName !== ""
@@ -389,7 +390,7 @@ MenuItem {
     readonly property color refColor2: Words.nameInk(menuItem.wordColor, menuItem.refTint2)
     readonly property color codeNameColor: Words.nameInk(menuItem.wordColor, undefined)
     /// The room the sentence is drawn in: where it is narrower than the sentence, its names give way — in the middle,
-    /// a remote's at its end (デザイン規約 §寸法「upstream 名だけは末尾で切る」) — never the words round them (a
+    /// a remote's at its end (デザイン規約 §寸法「upstream 名(remote-tracking 名)だけは末尾で切る」) — never the words round them (a
     /// `from ☁origin` cut off reads as nothing), and never with a cut mark in another colour than the name it cuts. -1
     /// while the row has not been laid out.
     readonly property real refRoom: menuItem.width > 0
