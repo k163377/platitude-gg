@@ -23,6 +23,12 @@ pub(super) fn pre_git(input: &str) -> Result<bool, String> {
     if guarded_git_denied(input, &command, &cwd) {
         return Ok(true);
     }
+    // The first guarded git can go through (an approved rebase, a merge in
+    // a seat) with a write of main standing after it in the line.
+    if let Some(reason) = main_write_refusal(&command, &cwd) {
+        deny(&reason);
+        return Ok(true);
+    }
     // The user's own ask for a commit in the primary checkout rides the command.
     if !command.contains(MAIN_APPROVAL_FLAG) && primary_commit_denied(&command, &cwd) {
         return Ok(true);
@@ -32,10 +38,15 @@ pub(super) fn pre_git(input: &str) -> Result<bool, String> {
 
 /// The gate's skip flag and session mark decide whether refs/heads/main
 /// answers to the gate at all; a session spelling either is stepping
-/// around the pre-merge tests.
+/// around the pre-merge tests. Windows reads environment names without
+/// case, so neither does this.
 fn gate_control_change_denied(command: &str) -> bool {
     let names = [crate::gate::hooks::SKIP, crate::gate::hooks::CLAUDE_SESSION];
-    let Some(name) = names.into_iter().find(|name| command.contains(name)) else {
+    let line = command.to_ascii_lowercase();
+    let Some(name) = names
+        .into_iter()
+        .find(|name| line.contains(&name.to_ascii_lowercase()))
+    else {
         return false;
     };
     deny(&format!(
@@ -69,27 +80,43 @@ fn guarded_git_denied(input: &str, command: &str, cwd: &str) -> bool {
         deny(&guarded.offence.reason(guarded.what));
         return true;
     }
-    let dir = guarded.dir.unwrap_or(cwd);
-    // Only this repository: a throwaway one (.claude/rules/code.md:
-    // measure git in one) is on main as often as not and rebases freely.
-    let (Some(session_repo), Some(target_repo)) = (common_git_dir(cwd), common_git_dir(dir)) else {
-        return false;
-    };
-    if !session_repo.eq_ignore_ascii_case(&target_repo) {
-        return false;
-    }
-    if guarded.offence.only_from_main()
-        && git_query(dir, &["rev-parse", "--abbrev-ref", "HEAD"]).as_deref() != Some("main")
-    {
+    if !reaches(&guarded, cwd) {
         return false;
     }
     // A repository with no roster has no letters: a throwaway may carry a
     // `worktree-c` of its own.
-    if guarded.offence == Offence::DeletesASeatsBranch && !keeps_seats(dir) {
+    if guarded.offence == Offence::DeletesASeatsBranch && !keeps_seats(guarded.dir.unwrap_or(cwd)) {
         return false;
     }
     deny(&guarded.offence.reason(guarded.what));
     true
+}
+
+/// The refusal for a git in `command` that writes main — this repository's
+/// own, or a remote's through a refspec, which no git hook sees — wherever
+/// in the line it stands: the guard past a first guarded git that went
+/// through.
+pub(super) fn main_write_refusal(command: &str, cwd: &str) -> Option<String> {
+    guarded_calls(command)
+        .into_iter()
+        .find(|guarded| {
+            matches!(guarded.offence, Offence::WritesMain { .. }) && reaches(guarded, cwd)
+        })
+        .map(|guarded| guarded.offence.reason(guarded.what))
+}
+
+/// Whether the call acts on the repository the session sits in — a
+/// throwaway one (.claude/rules/code.md: measure git in one) is on main as
+/// often as not and rebases freely — and, for an offence that reaches main
+/// only while it is checked out, whether it is.
+fn reaches(guarded: &GuardedGit<'_>, cwd: &str) -> bool {
+    let dir = guarded.dir.unwrap_or(cwd);
+    let (Some(session_repo), Some(target_repo)) = (common_git_dir(cwd), common_git_dir(dir)) else {
+        return false;
+    };
+    session_repo.eq_ignore_ascii_case(&target_repo)
+        && (!guarded.offence.only_from_main()
+            || git_query(dir, &["rev-parse", "--abbrev-ref", "HEAD"]).as_deref() == Some("main"))
 }
 
 /// Whether the repository `dir` sits in keeps a seat roster at all.
@@ -276,13 +303,21 @@ fn only_tends_the_line(lands: &[Option<&str>]) -> bool {
         })
 }
 
-/// The first guarded git invocation in `command`, if any. Git that names
-/// main as a source (`git log main`, `git switch main`) only reads it.
+/// The first guarded git invocation in `command`, if any — the one Claude's
+/// guard answers for.
 fn guarded_call(command: &str) -> Option<GuardedGit<'_>> {
+    guarded_calls(command).into_iter().next()
+}
+
+/// Every guarded git invocation in `command`, in the line's order, a
+/// landing first. Git that names main as a source (`git log main`, `git
+/// switch main`) only reads it.
+fn guarded_calls(command: &str) -> Vec<GuardedGit<'_>> {
     let tokens: Vec<&str> = command.split_whitespace().collect();
+    let mut found = Vec::new();
     let lands = xtask_verb_args(&tokens, "land");
     if !lands.is_empty() && !only_tends_the_line(&lands) {
-        return Some(GuardedGit {
+        found.push(GuardedGit {
             dir: None,
             offence: Offence::Landing,
             what: "`cargo xtask land`",
@@ -362,7 +397,7 @@ fn guarded_call(command: &str) -> Option<GuardedGit<'_>> {
             _ => None,
         };
         if let Some((what, offence)) = guarded {
-            return Some(GuardedGit {
+            found.push(GuardedGit {
                 dir: dir.or(cd_dir),
                 offence,
                 what,
@@ -370,7 +405,7 @@ fn guarded_call(command: &str) -> Option<GuardedGit<'_>> {
             });
         }
     }
-    None
+    found
 }
 
 /// Whether a refspec's destination — the half after the colon — is main.

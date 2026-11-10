@@ -20,6 +20,32 @@ fn pre_shell(sb: &Sandbox, dir: &Path, session: &str, command: &str) -> String {
     )
 }
 
+/// Claude's guard answers for every git in the line that writes main, not
+/// only the first git it holds back: a refspec writing a remote's main
+/// passes no git hook. Windows reads environment names without case, so
+/// the gate's names are refused however the line spells them.
+#[test]
+fn claude_is_refused_main_wherever_the_line_writes_it() {
+    let sb = Sandbox::new("shell-claude-main");
+    for command in [
+        "git merge --ff-only worktree-b && git push origin HEAD:main",
+        "PGG_ALLOW_REBASE=1 git rebase main && git push origin HEAD:main",
+    ] {
+        let answer = pre_shell(&sb, &sb.seat, "claude", command);
+        assert!(
+            answer.contains("would write refs/heads/main"),
+            "{command}: {answer}"
+        );
+    }
+    for command in [
+        "$env:pgg_gate_skip='1'; git reset --hard HEAD~1",
+        "$env:claudecode=''",
+    ] {
+        let answer = pre_shell(&sb, &sb.seat, "claude", command);
+        assert!(answer.contains("answers to the gate"), "{command}: {answer}");
+    }
+}
+
 #[test]
 fn a_wait_asked_again_is_held_where_the_work_it_waits_on_is_not() {
     let sb = Sandbox::new("shell-repeat");
