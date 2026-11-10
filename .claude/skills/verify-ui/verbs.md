@@ -295,7 +295,7 @@
 
 ### 一覧(続き)
 
-**段落側に仕込みがある動詞は、引数・preset を §動詞ごとの読み方・仕込み で動詞名 Grep** して読む(報告行の読み方と罠は各行末のドライバのコメント):
+**段落側に仕込みがある動詞は、引数・preset を §動詞ごとの読み方・仕込み で動詞名 Grep** して読む:
 
 - `tab-widths`(帯の run の配り方。引数は**到達する状態**(`ample` 既定 / `short`)。must_say — 詳細は `WindowTabActs.qml` の `tabWidthActTimer`)
 - `tab-mark`(タブの hover と `✕` の出方。引数は手を置くタブ — 詳細は `WindowTabActs.qml` の `tabMarkActTimer`)
@@ -465,7 +465,7 @@
 
 **設定 / 画面状態の永続化は 2 回の実行で読む**: `state`(引数 `change` で畳み・右ペイン幅・グラフのチップ列 / レーン列の幅・コマンドログ・auto fetch 間隔・初期ロード数を動かしてから申告する / `minimize` で最大化 → 申告 → 最小化 → 申告)。同じ `--config-dir` を渡した 2 回目に `--restore` を足し、報告行が両方で一致すれば往復している — 詳細は `WindowFrameActs.qml`。
 
-**開いたまま止める撮影用の引数・preset**(読み方・待ち・罠は各ドライバのコメント): `settings-tools` / `settings-tools-loading`(設定ダイアログの Merge editor 候補一覧を実際に開いて止める。前者は settled 側、後者は実際の loading=true edge を latch する側。引数なし — `WindowSettingsActs.qml`)/ `file-menu` / `file-menu-untracked` / `file-menu-staged` / `file-menu-conflict`(引数はパス。conflict は種別の文言を `conflict_kind` として報告する。`--preset conflict-kinds` に 4 種が揃っている — `AutoActFileRowVerbs.qml`)/ `ref-list-card` と `row-card`(引数は行番号。同じ行・同じ preset で対で読む — `AutoActGraphRowVerbs.qml`)/ `signature-tip`(引数は行番号。`E` は `--preset errsig` の行 0 だけが持ち、gpg バイナリが要る)/ `stash-tip`(引数は行番号か `older` = HEAD の行の 1 つ下。`older` は stash を持たない preset と組む(`--preset co-authors`))/ `path-tip`(引数は `wip`(既定)か行番号、または `carried:<worktree 名>`(`--preset carried` と組む))/ `author-card` / `author-card-open`(引数は行番号。`--preset authorship` が 4 状態を行 0〜3 に並べる — 以上 4 つは `AutoActTipVerbs.qml`)/ `details-fit`(引数は行。省くとページが自分で開いた行のまま測る。壁は `--preset edges` の行 7)/ `details-grow` / `details-grow-squeeze` / `wip-grow` / `wip-grow-squeeze`(引数は詳細ペインが行番号・commit 欄は打ち込む本文(省略時は xtask が長い本文を入れる)。**PNG は必ず目視する** — 以上 2 組は `AutoActDetailsVerbs.qml`)/ `replace-remote-box`(引数 `<remote>/<old>:<入れておく名前>`。既にリモートに在る名前を渡せば拒否された枠が撮れる — `AutoActNavBoxVerbs.qml`)
+**開いたまま止める撮影用の引数・preset**: `settings-tools` / `settings-tools-loading`(設定ダイアログの Merge editor 候補一覧を実際に開いて止める。前者は settled 側、後者は実際の loading=true edge を latch する側。引数なし — `WindowSettingsActs.qml`)/ `file-menu` / `file-menu-untracked` / `file-menu-staged` / `file-menu-conflict`(引数はパス。conflict は種別の文言を `conflict_kind` として報告する。`--preset conflict-kinds` に 4 種が揃っている — `AutoActFileRowVerbs.qml`)/ `ref-list-card` と `row-card`(引数は行番号。同じ行・同じ preset で対で読む — `AutoActGraphRowVerbs.qml`)/ `signature-tip`(引数は行番号。`E` は `--preset errsig` の行 0 だけが持ち、gpg バイナリが要る)/ `stash-tip`(引数は行番号か `older` = HEAD の行の 1 つ下。`older` は stash を持たない preset と組む(`--preset co-authors`))/ `path-tip`(引数は `wip`(既定)か行番号、または `carried:<worktree 名>`(`--preset carried` と組む))/ `author-card` / `author-card-open`(引数は行番号。`--preset authorship` が 4 状態を行 0〜3 に並べる — 以上 4 つは `AutoActTipVerbs.qml`)/ `details-fit`(引数は行。省くとページが自分で開いた行のまま測る。壁は `--preset edges` の行 7)/ `details-grow` / `details-grow-squeeze` / `wip-grow` / `wip-grow-squeeze`(引数は詳細ペインが行番号・commit 欄は打ち込む本文(省略時は xtask が長い本文を入れる)。**PNG は必ず目視する** — 以上 2 組は `AutoActDetailsVerbs.qml`)/ `replace-remote-box`(引数 `<remote>/<old>:<入れておく名前>`。既にリモートに在る名前を渡せば拒否された枠が撮れる — `AutoActNavBoxVerbs.qml`)
 
 **アバターは `avatar-*`**(**引数は取り込む画像のパス**。保管庫は実行ごとに空なので、見るものはまず入れる。**`avatar-assign` とカードの 4 つ(`avatar-settings` / `avatar-row-lit` / `avatar-remove` / `avatar-combo`)は引数を省くと xtask が画像を作って渡す**。**パスを手で渡す run は `gate --verb` に乗らない**(パスは OS ごとに別物)。**引数を取らない `avatar-tip` / `avatar-rest` / `avatar-hover` はそのまま乗る** — 詳細は `AutoActFindVerbs.qml` / `WindowSettingsActs.qml` と `verify/repos.rs`)。
 
