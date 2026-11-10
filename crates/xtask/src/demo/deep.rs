@@ -219,8 +219,17 @@ const REPLAY_BLOB_MARK: u64 = 100_000;
 /// The mark of the one commit the fork never saw.
 const REPLAY_BASE_MARK: u64 = 1_000;
 
+/// The step `replay-stop`'s base commit collides with: late enough that a
+/// menu raised as the replay shows mid-way is up long before it.
+const REPLAY_STOP_AT: u64 = 250;
+
 /// One commit with its own blob at its own path: a replay drops a commit
-/// whose diff is empty, and distinct paths collide over nothing.
+/// whose diff is empty, and distinct paths collide over nothing. The blob
+/// says its path, unless `body` says otherwise.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one fast-import commit, each argument a field of it"
+)]
 fn replay_commit(
     stream: &mut String,
     on: &str,
@@ -228,10 +237,11 @@ fn replay_commit(
     from: Option<u64>,
     when: u64,
     path: &str,
+    body: Option<&str>,
     msg: &str,
 ) {
     let blob = REPLAY_BLOB_MARK + mark;
-    let body = format!("{path}\n");
+    let body = body.map_or_else(|| format!("{path}\n"), str::to_string);
     stream.push_str(&format!(
         "blob\nmark :{blob}\ndata {}\n{body}\n",
         body.len()
@@ -258,6 +268,26 @@ fn replay_commit(
 /// The only preset whose rebase is still running when photographed
 /// (`replay-running`); every other one is already stopped or over.
 pub(super) fn replay(repo: &mut DemoRepo) -> Result<(), String> {
+    replay_lines(repo, "base.txt", None)
+}
+
+/// [`replay`] with a base that adds the file step [`REPLAY_STOP_AT`] adds,
+/// otherwise: the rewrite runs for seconds and then stops on that
+/// conflict, HEAD detached part-way (`menu-wait replay-stop`).
+pub(super) fn replay_stop(repo: &mut DemoRepo) -> Result<(), String> {
+    replay_lines(
+        repo,
+        &format!("n/{REPLAY_STOP_AT:04}.txt"),
+        Some("the base's own\n"),
+    )
+}
+
+/// `main`'s [`REPLAY_COMMITS`] and `base`'s one commit at `base_path`.
+fn replay_lines(
+    repo: &mut DemoRepo,
+    base_path: &str,
+    base_body: Option<&str>,
+) -> Result<(), String> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|e| e.to_string())?
@@ -271,6 +301,7 @@ pub(super) fn replay(repo: &mut DemoRepo) -> Result<(), String> {
         None,
         first,
         "notes.txt",
+        None,
         "docs: the note both lines start from",
     );
     for n in 1..=REPLAY_COMMITS {
@@ -281,6 +312,7 @@ pub(super) fn replay(repo: &mut DemoRepo) -> Result<(), String> {
             Some(n),
             first + n * DEEP_STEP_SECS,
             &format!("n/{n:04}.txt"),
+            None,
             &format!("feat: step {n}"),
         );
     }
@@ -292,7 +324,8 @@ pub(super) fn replay(repo: &mut DemoRepo) -> Result<(), String> {
         REPLAY_BASE_MARK,
         Some(1),
         first + (REPLAY_COMMITS + 1) * DEEP_STEP_SECS,
-        "base.txt",
+        base_path,
+        base_body,
         "chore: the base moves on without them",
     );
     repo.git_stdin(&["fast-import", "--quiet"], &stream)?;

@@ -253,6 +253,10 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   saw: the only shape where a rebase stands for seconds,
                   so the screen has one to be photographed during
                   (replay-running)
+        replay-stop
+                  replay with a base that adds step 250's file otherwise:
+                  the rebase runs for seconds, then stops on that conflict
+                  with HEAD detached (menu-wait replay-stop)
         edges     every string at both ends of what git allows, in Japanese
         long      a message, a commit and a working tree that all run past
                   the pane they are shown in (80 files, 60-odd unstaged)

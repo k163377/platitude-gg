@@ -12,7 +12,7 @@ use super::conflict::{
     conflict_staged, conflict_typed, drop_collides, drop_stops, rebase_clashes, rebase_conflict,
     rebase_empty, rebase_staged, revert_clashes, switch_carry,
 };
-use super::deep::{deep, deep_detached, deep_parked, perf, perf_sequence, replay};
+use super::deep::{deep, deep_detached, deep_parked, perf, perf_sequence, replay, replay_stop};
 use super::discards::{discards, discards_ceilings, discards_deep};
 use super::lfs::{lfs, lfs_conflict};
 use super::pictures::{bigpicture, pictures};
@@ -192,6 +192,7 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         "deep-detached" => deep_detached(&mut repo)?,
         "deep-parked" => deep_parked(&mut repo)?,
         "replay" => replay(&mut repo)?,
+        "replay-stop" => replay_stop(&mut repo)?,
         "edges" => edges(&mut repo)?,
         "long" => long(&mut repo)?,
         "spread" => spread(&mut repo)?,

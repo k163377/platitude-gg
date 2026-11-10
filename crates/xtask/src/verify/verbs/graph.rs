@@ -129,13 +129,29 @@ pub(super) const TABLE: &[Verb] = &[
     // its left menu row — the menu stands again on the selector that entry
     // answers to once the pop is read. Raised mid-rebase (`replay`), it
     // answers the commit's line: the rows stand on the tree as it was
-    // asked, not on the rewrite's detached HEAD.
+    // asked, not on the rewrite's detached HEAD — and so does the branch
+    // they name, `named=main` where the detached HEAD names none. Stood
+    // again on the replay stopped part-way (`replay-stop`, and the left
+    // menu's `base` row in `replay-stop-ref`), the rows that name the
+    // branch grey and keep its name: the stop's HEAD is on none.
     Verb {
         name: "menu-wait",
         when: &[
             (
                 Arg::OneOf(&["stash", "stash-ref"]),
                 "menu_wait stage=after same=true held=none open=true was=stash@{1} selector=stash@{0}",
+            ),
+            (
+                Arg::Is("replay"),
+                "menu_wait stage=during same=true held=all open=true named=main",
+            ),
+            (
+                Arg::Is("replay-stop"),
+                "menu_wait stage=after same=true held=all open=true named=main",
+            ),
+            (
+                Arg::Is("replay-stop-ref"),
+                "menu_wait stage=after same=true held=2/5 open=true named=main",
             ),
             (
                 Arg::Is("after"),

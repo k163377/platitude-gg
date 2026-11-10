@@ -375,24 +375,39 @@ Item {
     // (`RefRowMenu.standAgain`).
     // `menu-wait replay`, over `--preset replay`: the plain form's line with a rebase out instead of the commit, the
     // menu raised once the rewrite shows mid-way, and photographed once its worktree row stands too (`replayRow`).
+    // `named=` is the branch the `reset` card's title names — as the rebase was asked, not the detached HEAD's none
+    // (`CommitMenuState.menuBranch`): drawn words, which no row count says.
+    // `menu-wait replay-stop`, over `--preset replay-stop`: the same menu raised mid-replay, stood again once the
+    // replay has stopped on its conflict — HEAD detached, so the rows that name the branch are taken away and grey,
+    // still naming the branch they opened on (`CommitMenuState.standAgain`). `menu-wait replay-stop-ref` is the same
+    // over the left menu's `base` row, whose `rebase` row names it (`RefRowMenu.standAgain`).
     PageStage {
         id: menuWaitTimer
         name: "menu_wait"
-        /// `""`, `after`, `stash`, `stash-ref` or `replay`, as above.
+        /// `""`, `after`, `stash`, `stash-ref`, `replay`, `replay-stop` or `replay-stop-ref`, as above.
         property string mode: ""
+        /// A form that puts the rebase out rather than the commit.
+        readonly property bool replays: menuWaitTimer.mode.startsWith("replay")
         // Witnessed by the press that puts the write in: `oid`, the row the menu is raised on; `idleRows`, the rows it
         // offered with nothing running; for the stash forms `raisedOn`, the selector it went up on again.
         /// The level the menu opens as: a stash's graph row has its own, and the left menu is another.
         readonly property var level: menuWaitTimer.mode === "stash" ? acts.stashMenu
-                                   : menuWaitTimer.mode === "stash-ref" ? refMenu : commitMenu
+                                   : menuWaitTimer.mode === "stash-ref" || menuWaitTimer.mode === "replay-stop-ref"
+                                     ? refMenu : commitMenu
         /// The selector the stash's menu acts on.
         readonly property string selector: menuWaitTimer.mode === "stash-ref" ? refRowMenu.refId
                                                                               : commitMenuState.menuStashRef
+        /// The branch the menu's rows name: the `reset` card's title, or on the left menu the `rebase` row's.
+        function named() {
+            return menuWaitTimer.mode === "replay-stop-ref" ? refRebaseItem.refName : resetMenu.titleRef
+        }
         /// The row's own right-click (`GraphRowDelegate.askMenu`) on `oid`'s row, or the left menu's door. False while
         /// the row has no delegate to answer.
         function raise(oid) {
             if (menuWaitTimer.mode === "stash-ref")
                 return page.openRefMenu("stash", stashesModel.nameAt(1), stashesModel.fullAt(1), oid, true)
+            if (menuWaitTimer.mode === "replay-stop-ref")
+                return page.openRefMenu("branch", "base", "base", branchesModel.oidOfName("base"))
             const item = graphPane.view.itemAtIndex(graphModel.rowOf(oid))
             if (item === null)
                 return false
@@ -428,6 +443,7 @@ Item {
                    + " held=" + menuWaitTimer.held()
                    + " open=" + level.visible
                    + (was !== "" ? " was=" + was + " selector=" + menuWaitTimer.selector : "")
+                   + (menuWaitTimer.replays ? " named=" + menuWaitTimer.named() : "")
                    + " rows=" + level.offeredRows + " busy=" + repoTab.busyCount
         }
         /// A write that landed before `what` left no moment to photograph, and says so rather than wait out the
@@ -455,8 +471,8 @@ Item {
             menuWaitTimer.witness("raisedOn", menuWaitTimer.selector)
             return true
         }
-        /// The row's menu counted with nothing running and put down, then the write pressed under it: `replay`'s
-        /// rebase, or the commit. False while the row has no delegate to answer.
+        /// The row's menu counted with nothing running and put down, then the write pressed under it: the replay
+        /// forms' rebase, or the commit. False while the row has no delegate to answer.
         function pressUnder() {
             // The row under HEAD's where there is one, as `commit-menu` takes; HEAD's own over a single commit.
             const below = graphModel.oidAt(graphModel.rowOf(worktree.headOid) + 1)
@@ -464,9 +480,9 @@ Item {
             if (!menuWaitTimer.raise(oid))
                 return false
             menuWaitTimer.witness("oid", oid)
-            menuWaitTimer.witness("idleRows", commitMenu.offeredRows)
-            commitMenu.dismiss()
-            if (menuWaitTimer.mode === "replay") {
+            menuWaitTimer.witness("idleRows", menuWaitTimer.level.offeredRows)
+            menuWaitTimer.level.dismiss()
+            if (menuWaitTimer.replays) {
                 return driver.pressWrite("rebase", () => {
                     // `--preset replay`'s other line: three hundred steps, replayed for seconds.
                     repoTab.rebase("base", "")
@@ -509,8 +525,8 @@ Item {
                 }
                 if (!Awaited.all("menu_wait_out", {
                     "out": repoTab.busyCount !== 0,
-                    "down": !commitMenu.visible,
-                    "rewriting": op.mode !== "replay" || worktree.opText !== "" }))
+                    "down": !op.level.visible,
+                    "rewriting": !op.replays || worktree.opText !== "" }))
                     return
                 op.input("raised", () => op.raise(op.witnessed("oid")))
                 return
@@ -545,8 +561,8 @@ Item {
                               "report": () => op.line("during"), "arriving": ["*"] })
                 return
             }
-            // `after` and the stash forms: the menu's own word that it stood again. The write's settle reaches the tab
-            // a drain before the models it was read into are through (`RepoTab::settling`).
+            // `after`, the stash forms and the replay's stop: the menu's own word that it stood again. The write's settle
+            // reaches the tab a drain before the models it was read into are through (`RepoTab::settling`).
             op.complete({
                 "name": "menu_wait_up",
                 "when": () => ({ "written": driver.wroteAndSettled(), "stood": !op.level.waiting }),
