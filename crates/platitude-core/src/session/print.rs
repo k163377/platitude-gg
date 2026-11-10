@@ -245,6 +245,7 @@ mod tests {
             ("stash_ref", Box::new(|r| r.stash_ref = "stash@{0}".into())),
             ("published", Box::new(|r| r.published = true)),
             ("parents", Box::new(|r| r.parents = Box::from([oid('c')]))),
+            ("provisional", Box::new(|r| r.provisional = true)),
             (
                 "carried",
                 Box::new(|r| {
