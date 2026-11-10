@@ -161,7 +161,8 @@ pub(super) fn rebuild(board: &Path) -> Result<PathBuf, String> {
 }
 
 /// Deletes the pictures nothing points at — left by a run file deleted
-/// by hand, or a `record` that failed after copying. Answers how many
+/// by hand, a `record` that failed after copying, or a sweep stopped
+/// partway (`take`). Answers how many
 /// went. A picture that will not delete is skipped: this runs on the way
 /// past every rebuild and must not fail the command actually asked for.
 fn collect_orphans(board: &Path) -> usize {
@@ -240,14 +241,16 @@ fn read_run(path: &Path) -> Option<Run> {
     parse_run(&std::fs::read_to_string(path).ok()?)
 }
 
-/// Pictures first, then the file that named them: interrupted between,
-/// this leaves orphans `collect_orphans` sweeps, not a run pointing at
-/// pictures that are gone.
+/// The file that names the pictures first, then the pictures: stopped
+/// between — interrupted, or a picture that will not delete — this leaves
+/// pictures nothing names, which `collect_orphans` takes on a later
+/// rebuild once they delete, not a run pointing at pictures that are gone.
 fn take(board: &Path, run: &Run, path: &Path) -> Result<(), String> {
+    remove(path)?;
     for shot in &run.shots {
         remove(&board.join(&shot.file))?;
     }
-    remove(path)
+    Ok(())
 }
 
 /// A file already gone is done: another seat may have swept it a moment

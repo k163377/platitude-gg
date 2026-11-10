@@ -1,8 +1,8 @@
 //! `sweep`'s own tests, in a file of their own (structure.md §分割).
 
 use super::{
-    Duration, GRACE, Run, Scope, Whose, collectable, pictures_named_in, referenced_pictures,
-    replaced,
+    Duration, GRACE, Run, Scope, Whose, collectable, pictures_named_in, read_run,
+    referenced_pictures, replaced, take,
 };
 use std::collections::BTreeSet;
 
@@ -92,6 +92,40 @@ fn a_reference_is_read_out_of_any_line_that_names_one() {
         vec!["img/b.png".to_string(), "img/c.png".to_string()]
     );
     assert!(pictures_named_in("label\tno pictures here\n").is_empty());
+}
+
+/// A picture that will not go stops the sweep where it stands, and what
+/// it leaves is pictures nothing names — never a run naming one already
+/// gone.
+#[test]
+fn a_sweep_stopped_by_a_picture_leaves_no_run_naming_what_went() {
+    let board = crate::yard::Yard::new("sweep-take");
+    let (runs, img) = (board.join("runs"), board.join("img"));
+    for dir in [&runs, &img] {
+        std::fs::create_dir_all(dir).expect("the board's directories");
+    }
+    std::fs::write(img.join("gone.png"), b"png").expect("a picture that deletes");
+    // A directory with something in it: `remove_file` refuses it on
+    // every OS.
+    let stuck = img.join("stuck.png");
+    std::fs::create_dir_all(&stuck).expect("a picture that will not delete");
+    std::fs::write(stuck.join("inside"), b"x").expect("something in it");
+    let path = runs.join("1-a-x.tsv");
+    std::fs::write(
+        &path,
+        "label\tx\nseat\ta\nat\t1\n\
+         shot\timg/gone.png\tapp.png\t1\t1\nshot\timg/stuck.png\tapp.png\t1\t1\n",
+    )
+    .expect("a run file");
+    let run = read_run(&path).expect("a whole run");
+    assert!(
+        take(&board, &run, &path).is_err(),
+        "a picture that will not go is said"
+    );
+    assert!(
+        !path.exists(),
+        "the run file went before its pictures, so none of them is named while gone"
+    );
 }
 
 /// `collect_orphans` runs on every rebuild, including the first.
