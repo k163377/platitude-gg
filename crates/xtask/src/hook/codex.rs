@@ -1,12 +1,18 @@
-//! Codex lifecycle events share sleep activity and the landing permit.
+//! Codex lifecycle events share sleep activity and the landing permit, and
+//! a shell line that writes main by hand or takes its git out from under
+//! the gate is refused (`codex_git`).
 //! Seat claims remain conversation-owned throughout those events.
 
-use super::payload::{own_string_field, own_value_field};
+use super::payload::{deny, own_string_field, own_value_field};
 use crate::awake::{Mark, codex::record, digest};
 
 pub(super) fn run(input: &str) {
     if let Err(error) = super::codex_land::prompt(input) {
         eprintln!("Codex landing permit: {error}");
+    }
+    let refused = super::codex_git::refusal(input);
+    if let Some(reason) = &refused {
+        deny(reason);
     }
     let (Some(session), Some(cwd), Some(event)) = (
         own_string_field(input, "session_id"),
@@ -35,7 +41,8 @@ pub(super) fn run(input: &str) {
         "UserPromptSubmit" => marks.push(Mark::Prompt),
         "PreToolUse" => {
             marks.push(Mark::Working);
-            if let Some(id) = id.as_deref() {
+            // A refused call never runs, and no PostToolUse would close it.
+            if let Some(id) = id.as_deref().filter(|_| refused.is_none()) {
                 marks.push(Mark::ToolStart {
                     id,
                     name,

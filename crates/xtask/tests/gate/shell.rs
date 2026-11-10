@@ -1,10 +1,77 @@
-//! The shell guards from the outside: what `hook pre-shell` answers a
-//! line, through the binary the harness runs and against a repository
-//! laid out like this one.
+//! The shell guards from the outside: what `hook pre-shell` (Claude's) and
+//! `hook codex-session` (Codex's) answer a line, through the binary the
+//! harness runs and against a repository laid out like this one.
 
 use std::path::Path;
 
 use crate::support::Sandbox;
+
+/// What Codex's PreToolUse hook prints for `command` in `dir` — as Codex
+/// hands every shell line over, a `Bash` call — on `event`.
+fn codex(sb: &Sandbox, dir: &Path, event: &str, command: &str) -> String {
+    sb.hook(
+        "codex-session",
+        &format!(
+            "{{\"session_id\":\"thread-1\",\"cwd\":\"{}\",\"hook_event_name\":\"{event}\",\
+             \"turn_id\":\"turn-1\",\"tool_name\":\"Bash\",\"tool_use_id\":\"call-1\",\
+             \"tool_input\":{{\"command\":\"{command}\"}}}}",
+            dir.display().to_string().replace('\\', "/")
+        ),
+    )
+}
+
+/// The git hook does not see a refspec writing a remote's main, nor a line
+/// that takes the thread id off the git it runs: Codex's own hook refuses
+/// both, and lets a push of a branch of its own through.
+#[test]
+fn codex_is_refused_a_hand_written_main_and_a_line_that_unmarks_its_git() {
+    let sb = Sandbox::new("shell-codex");
+    let refused = |command: &str| {
+        let answer = codex(&sb, &sb.seat, "PreToolUse", command);
+        assert!(
+            answer.contains("\"permissionDecision\":\"deny\""),
+            "{command}: {answer}"
+        );
+        answer
+    };
+    for command in [
+        "git push origin worktree-a:main",
+        // Wherever in the line it stands.
+        "git rebase main && git push --force origin HEAD:refs/heads/main",
+        "git update-ref refs/heads/main worktree-a",
+    ] {
+        assert!(
+            refused(command).contains("would write refs/heads/main"),
+            "{command}"
+        );
+    }
+    for command in [
+        "CODEX_THREAD_ID= git merge --ff-only worktree-a",
+        "PGG_GATE_SKIP=1 git commit -m x",
+    ] {
+        assert!(
+            refused(command).contains("answers to the gate"),
+            "{command}"
+        );
+    }
+    for command in [
+        "git push origin worktree-a",
+        "git log main",
+        "echo $CODEX_THREAD_ID",
+    ] {
+        assert_eq!(codex(&sb, &sb.seat, "PreToolUse", command), "", "{command}");
+    }
+    // Only before the call: the line has run by the time PostToolUse asks.
+    assert_eq!(
+        codex(
+            &sb,
+            &sb.seat,
+            "PostToolUse",
+            "git push origin worktree-a:main"
+        ),
+        ""
+    );
+}
 
 /// What `hook pre-shell` prints for `command`, typed in `dir` by
 /// `session`; empty is no objection.
@@ -42,7 +109,10 @@ fn claude_is_refused_main_wherever_the_line_writes_it() {
         "$env:claudecode=''",
     ] {
         let answer = pre_shell(&sb, &sb.seat, "claude", command);
-        assert!(answer.contains("answers to the gate"), "{command}: {answer}");
+        assert!(
+            answer.contains("answers to the gate"),
+            "{command}: {answer}"
+        );
     }
 }
 

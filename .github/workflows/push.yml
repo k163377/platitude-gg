@@ -1,9 +1,13 @@
-# What a push to main owes CI: the one OS no desk here has. A commit
-# reaches main only through land's gate, which ran it on Windows and in the
-# Linux container (反映前テストの機械化.md §land), so a push asks macOS
-# alone — clippy and the tests (ci.yml), and the verify-ui lines whose
-# verdict the fonts decide (shots.yml, the `fonts` tier). What the gate's
-# selection let through is the whole test's (whole.yml, weekly).
+# What a push to main owes CI: the one OS no desk here has. A session's
+# git — Claude Code's or Codex's — moves main only onto a commit land's
+# gate ran on Windows and in the Linux container, and the session's own
+# hook refuses a refspec writing a remote's main (反映前テストの機械化.md
+# §git hook), so a push asks macOS alone — clippy and the tests (ci.yml),
+# and the verify-ui lines whose verdict the fonts decide (shots.yml, the
+# `fonts` tier). The user's own git answers to no gate: a commit they put
+# on main by hand ran on no desk, and this run and the whole test are all
+# it gets. What the gate's selection let through is the whole test's
+# (whole.yml, weekly).
 name: Push check (macOS)
 
 # A push that is Markdown alone starts nothing, as it selects no test in

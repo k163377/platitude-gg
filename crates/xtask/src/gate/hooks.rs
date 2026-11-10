@@ -29,8 +29,9 @@ use std::path::{Path, PathBuf};
 use super::stamp::Store;
 use crate::subprocess::git_query;
 
-/// The user's own way past the gate, by name. Claude's pre-shell hook
-/// refuses a command that spells it.
+/// The user's own way past the gate, by name. Claude's pre-shell hook and
+/// Codex's PreToolUse (`hook::codex_git`) refuse a session's command that
+/// spells it.
 pub(crate) const SKIP: &str = "PGG_GATE_SKIP";
 
 /// The mark Claude Code leaves in the environment of everything it runs,
@@ -41,7 +42,8 @@ pub(crate) const CLAUDE_SESSION: &str = "CLAUDECODE";
 
 /// Codex leaves no mark of its own; the thread id it puts in every shell
 /// it runs (the chat a seat is claimed by, `seats::claim`) is what tells
-/// its git from the user's.
+/// its git from the user's. A Codex chat reads it to find its seat, so
+/// only a line that sets or removes it is refused (`hook::codex_git`).
 pub(crate) const CODEX_SESSION: &str = "CODEX_THREAD_ID";
 
 /// Either mark, non-empty, makes a git a session's ([`a_sessions_git`]).

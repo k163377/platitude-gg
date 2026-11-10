@@ -3,7 +3,8 @@
 //! window and other sessions a session touches only when the user asks,
 //! and the language of what the user reads (`language`). Main moves on the
 //! permit the user's own `/land` opens (`permit`), and on that alone.
-//! Codex's hooks share activity and landing prompts (`codex`).
+//! Codex's hooks share activity and landing prompts (`codex`), and refuse
+//! the git that writes main by hand or takes the gate off (`codex_git`).
 //!
 //! Each handler reads the hook's JSON payload from stdin and answers on
 //! stdout; printing nothing means "no objection".
@@ -26,6 +27,7 @@ mod awake;
 pub(crate) mod board;
 mod chips;
 mod codex;
+mod codex_git;
 pub(crate) mod codex_land;
 mod codex_transcript;
 mod commit;

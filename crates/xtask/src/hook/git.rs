@@ -94,8 +94,8 @@ fn guarded_git_denied(input: &str, command: &str, cwd: &str) -> bool {
 
 /// The refusal for a git in `command` that writes main — this repository's
 /// own, or a remote's through a refspec, which no git hook sees — wherever
-/// in the line it stands: the guard past a first guarded git that went
-/// through.
+/// in the line it stands: Codex's whole guard on git (`codex_git`), and
+/// Claude's past a first guarded git that went through.
 pub(super) fn main_write_refusal(command: &str, cwd: &str) -> Option<String> {
     guarded_calls(command)
         .into_iter()
