@@ -4,7 +4,17 @@ use super::*;
 /// a time.
 fn offers_on(kind: RefKind, full: &str) -> RefMenuOffers {
     ref_menu(
-        kind, full, "abc123", true, "main", false, "", 0, "", "", false, false, "origin", "here",
+        kind,
+        full,
+        "abc123",
+        true,
+        &TreeStanding::on("main"),
+        "",
+        "",
+        false,
+        false,
+        "origin",
+        "here",
     )
 }
 
@@ -15,10 +25,7 @@ fn a_branch_someone_else_is_not_on_offers_everything() {
         "feat",
         "abc123",
         true,
-        "main",
-        false,
-        "",
-        0,
+        &TreeStanding::on("main"),
         "",
         "origin/feat",
         false,
@@ -69,10 +76,7 @@ fn only_a_branch_with_an_upstream_has_one_to_take_off() {
             "feat",
             "abc123",
             true,
-            "main",
-            false,
-            "",
-            0,
+            &TreeStanding::on("main"),
             "",
             "",
             false,
@@ -108,10 +112,7 @@ fn the_current_branch_and_a_held_one_take_their_upstream_off_too() {
         "main",
         "abc123",
         true,
-        "main",
-        false,
-        "",
-        0,
+        &TreeStanding::on("main"),
         "",
         "origin/main",
         false,
@@ -128,10 +129,7 @@ fn the_current_branch_and_a_held_one_take_their_upstream_off_too() {
         "feat",
         "abc123",
         true,
-        "main",
-        false,
-        "",
-        0,
+        &TreeStanding::on("main"),
         "C:/work/topic",
         "origin/feat",
         false,
@@ -167,10 +165,7 @@ fn there_is_nothing_to_be_measured_against_without_a_remote() {
         "feat",
         "abc123",
         true,
-        "main",
-        false,
-        "",
-        0,
+        &TreeStanding::on("main"),
         "",
         "",
         false,
@@ -198,10 +193,7 @@ fn a_branch_out_in_another_worktree_keeps_switch_and_asks_nothing() {
         "feat",
         "abc123",
         true,
-        "main",
-        false,
-        "",
-        0,
+        &TreeStanding::on("main"),
         "C:/work/other",
         "",
         false,
@@ -223,10 +215,13 @@ fn a_branch_out_in_another_worktree_asks_nothing_while_an_operation_stands() {
     // and wears no `!` (`SwitchAction::OpenHolder`).
     for (op, conflicts) in [("CHERRY-PICKING", 0), ("REBASE 1/3", 2), ("", 1)] {
         for (kind, full) in [(RefKind::Branch, "feat"), (RefKind::Remote, "origin/feat")] {
+            let tree = TreeStanding {
+                conflict_count: conflicts,
+                ..TreeStanding::on("main").standing(op)
+            };
             let asks = |held: &str| {
                 ref_menu(
-                    kind, full, "abc123", true, "main", false, op, conflicts, held, "", false,
-                    false, "origin", "here",
+                    kind, full, "abc123", true, &tree, held, "", false, false, "origin", "here",
                 )
                 .switch_asks
             };
@@ -251,10 +246,7 @@ fn a_remote_rows_delete_ignores_who_holds_the_local_branch() {
         "origin/feat",
         "abc123",
         true,
-        "main",
-        false,
-        "",
-        0,
+        &TreeStanding::on("main"),
         "C:/work/other",
         "",
         false,
@@ -279,10 +271,7 @@ fn a_drifted_reading_keeps_the_local_delete_and_loses_the_remote_one() {
         "feat",
         "abc123",
         true,
-        "main",
-        false,
-        "",
-        0,
+        &TreeStanding::on("main"),
         "",
         "origin/feat",
         true,
@@ -306,10 +295,11 @@ fn a_standing_operation_asks_and_greys_new_history_but_not_deletes() {
             "feat",
             "abc123",
             true,
-            if detached { "" } else { "main" },
-            detached,
-            if detached { "REBASE 1/3" } else { "MERGING" },
-            0,
+            &if detached {
+                TreeStanding::detached().standing("REBASE 1/3")
+            } else {
+                TreeStanding::on("main").standing("MERGING")
+            },
             "",
             "",
             false,
@@ -352,10 +342,10 @@ fn conflicts_alone_make_the_move_ask() {
         "feat",
         "abc123",
         true,
-        "main",
-        false,
-        "",
-        2,
+        &TreeStanding {
+            conflict_count: 2,
+            ..TreeStanding::on("main")
+        },
         "",
         "",
         false,
@@ -374,10 +364,7 @@ fn detached_or_unborn_has_no_branch_to_integrate_into() {
         "feat",
         "abc123",
         true,
-        "",
-        true,
-        "",
-        0,
+        &TreeStanding::detached(),
         "",
         "",
         false,
@@ -392,10 +379,7 @@ fn detached_or_unborn_has_no_branch_to_integrate_into() {
         "feat",
         "abc123",
         true,
-        "",
-        false,
-        "",
-        0,
+        &TreeStanding::default(),
         "",
         "",
         false,
@@ -422,10 +406,7 @@ fn tag_offers(sides: &str, default_remote: &str) -> RefMenuOffers {
         "v1.0",
         "abc123",
         true,
-        "main",
-        false,
-        "",
-        0,
+        &TreeStanding::on("main"),
         "",
         "",
         false,
@@ -440,11 +421,7 @@ fn only_a_tag_is_pushed_from_this_menu_and_only_with_a_remote_to_send_it_to() {
     assert!(tag_offers("here", "origin").push_tag);
     for kind in [RefKind::Branch, RefKind::Remote, RefKind::Stash] {
         assert!(
-            !ref_menu(
-                kind, "feat", "abc123", true, "main", false, "", 0, "", "", false, false, "origin",
-                "here"
-            )
-            .push_tag,
+            !offers_on(kind, "feat").push_tag,
             "a branch goes out through the toolbar; a stash goes nowhere"
         );
     }
@@ -503,10 +480,7 @@ fn a_tag_the_remote_has_elsewhere_loses_both_rows_that_reach_it() {
         "v1.0",
         "abc123",
         true,
-        "main",
-        false,
-        "",
-        0,
+        &TreeStanding::on("main"),
         "",
         "",
         true,
@@ -550,10 +524,10 @@ fn a_stopped_operation_does_not_hold_a_tag_back() {
         "v1.0",
         "abc123",
         true,
-        "main",
-        false,
-        "REBASING",
-        3,
+        &TreeStanding {
+            conflict_count: 3,
+            ..TreeStanding::on("main").standing("REBASING")
+        },
         "",
         "",
         false,

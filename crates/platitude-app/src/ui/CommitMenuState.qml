@@ -17,9 +17,10 @@ QtObject {
     /// The worktree as it stood when the command the menus wait for was asked (`RepoPage.treeAtAsk`); null while
     /// nothing is out.
     property var treeAtAsk: null
-    /// What the rows are read off, set by the door that stands them: the worktree — or, for a menu raised under a
-    /// command, `treeAtAsk`.
-    property var tree: menuState.worktree
+    /// What the rows are read off, set by the door that stands them: the worktree's `reading` — or, for a menu raised
+    /// under a command, `treeAtAsk`. Handed to `GitFacts` as it is, never built here. Null before the first door, not
+    /// bound: nothing reads it outside a door, and a binding would build the record on every status drain.
+    property var tree: null
     required property GraphModel graphModel
     /// Which worktree has a branch checked out — what the `switch` row needs beyond the commit's own rules.
     required property NavSectionModel worktreesModel
@@ -88,7 +89,7 @@ QtObject {
         const offers = GitFacts.worktreeOffers(
             kind, name, oidHex,
             menuState.repoTab.state === "open",
-            menuState.tree.branch,
+            menuState.tree,
             held,
             stoppedHere,
             kind === "remote" && menuState.branchesModel.oidOfName(local) !== "")
@@ -132,8 +133,7 @@ QtObject {
         const offers = GitFacts.refMenuOffers(
             kind, name, oidHex,
             menuState.repoTab.state === "open",
-            menuState.tree.branch, menuState.tree.detached,
-            menuState.tree.opText, menuState.tree.conflictCount,
+            menuState.tree,
             // No drift: the rows that reach a remote are the delete table's, on the BRANCH card's answers.
             held, "", false, false, menuState.repoTab.defaultRemote, "")
         menuState.menuCanSwitch = offers.includes("switch")
@@ -143,9 +143,7 @@ QtObject {
         menuState.menuHeldHome = held !== "" && menuState.worktreesModel.worktreeHome(held)
         menuState.menuPullUpstream = menuState.branchesModel.upstreamOf(name)
         const pull = GitFacts.pullRow(
-            kind, name, menuState.repoTab.state === "open",
-            menuState.tree.branch, menuState.tree.detached, menuState.tree.opText,
-            menuState.tree.upstream, menuState.tree.pullBlocked,
+            kind, name, menuState.repoTab.state === "open", menuState.tree,
             held, menuState.menuPullUpstream, menuState.branchesModel.aheadOf(name))
         menuState.menuPullRuns = pull.length > 0 ? pull[0] : ""
         menuState.menuPullOut = pull.length > 1 ? pull[1].replace("out-", "") : ""
@@ -214,8 +212,7 @@ QtObject {
                 oidHex, menuState.branchesModel.upstreamOidOf(full), menuState.tree.headOid),
             "offers": GitFacts.refMenuOffers(
                 kind, full, oidHex, open,
-                menuState.tree.branch, menuState.tree.detached,
-                menuState.tree.opText, menuState.tree.conflictCount,
+                menuState.tree,
                 held, counterpart, drifted, upstream !== "", menuState.repoTab.defaultRemote, "")
         }
     }
@@ -241,8 +238,7 @@ QtObject {
             "offers": GitFacts.refMenuOffers(
                 kind, full, oidHex,
                 menuState.repoTab.state === "open",
-                menuState.tree.branch, menuState.tree.detached,
-                menuState.tree.opText, menuState.tree.conflictCount,
+                menuState.tree,
                 "", "", menu.heldBack !== "", false, menu.pushRemote, sides)
         }
     }
@@ -270,7 +266,7 @@ QtObject {
     function openCarriedMenu(path, name) {
         const menu = menuState.menu
         menu.releaseShape()
-        menuState.tree = menuState.treeAtAsk !== null ? menuState.treeAtAsk : menuState.worktree
+        menuState.tree = menuState.treeAtAsk !== null ? menuState.treeAtAsk : menuState.worktree.reading
         menu.carriedPath = path
         menu.carriedName = name
         menu.carriedHome = menuState.graphModel.carriedHome(menuState.graphModel.carriedRowOf(path))
@@ -293,7 +289,7 @@ QtObject {
 
     function openRowMenu(oidHex) {
         menuState.menu.releaseShape()
-        menuState.tree = menuState.treeAtAsk !== null ? menuState.treeAtAsk : menuState.worktree
+        menuState.tree = menuState.treeAtAsk !== null ? menuState.treeAtAsk : menuState.worktree.reading
         const facts = menuState.standRow(oidHex, oidHex)
         if (facts === null) {
             menuState.menu.offerStash()
@@ -322,7 +318,7 @@ QtObject {
                 return
             }
             menu.holdShape()
-            menuState.tree = menuState.worktree
+            menuState.tree = menuState.worktree.reading
             menuState.standCarried()
             return
         }
@@ -334,7 +330,7 @@ QtObject {
             return
         }
         menu.holdShape()
-        menuState.tree = menuState.worktree
+        menuState.tree = menuState.worktree.reading
         const facts = menuState.standRow(menuState.menuOid, aimAt)
         if (facts !== null)
             menu.standCards(facts, aimAt)
@@ -364,9 +360,7 @@ QtObject {
         // No running command is asked about: the menu waits for one with its rows greyed (`AppMenu.runningWhy`), so it
         // has one shape whenever it is opened.
         const offers = GitFacts.commitMenuOffers(
-            menuState.repoTab.state === "open",
-            menuState.tree.branch, menuState.tree.detached, menuState.tree.opText,
-            oidHex, menuState.tree.headOid, menuState.menuStashRef,
+            menuState.repoTab.state === "open", menuState.tree, oidHex, menuState.menuStashRef,
             menuState.graphModel.provisionalAt(menuState.graphModel.rowOf(oidHex)))
         if (menuState.menuStashRef !== "") {
             menuState.menuStashCanWrite = offers.includes("stash-write")

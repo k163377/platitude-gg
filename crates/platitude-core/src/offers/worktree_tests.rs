@@ -9,10 +9,7 @@ fn worktree_row(holder: &str) -> RefMenuOffers {
         "C:/work/topic",
         "abc123",
         true,
-        "main",
-        false,
-        "",
-        0,
+        &TreeStanding::on("main"),
         holder,
         "",
         false,
@@ -76,7 +73,16 @@ fn the_kind_word_is_the_chips() {
 /// The two rows that make a worktree, asked of an idle repository on `main`
 /// with no worktree holding anything.
 fn making(kind: Option<RefKind>, full: &str) -> WorktreeOffers {
-    worktree_rows(kind, full, "abc123", true, "main", "", false, false)
+    worktree_rows(
+        kind,
+        full,
+        "abc123",
+        true,
+        &TreeStanding::on("main"),
+        "",
+        false,
+        false,
+    )
 }
 
 #[test]
@@ -105,7 +111,7 @@ fn a_branch_already_out_greys_its_worktree_add() {
         "feature/topic-a",
         "abc123",
         true,
-        "main",
+        &TreeStanding::on("main"),
         "C:/work/topic",
         false,
         false,
@@ -128,7 +134,7 @@ fn a_branch_a_stopped_operation_here_holds_greys_its_worktree_add() {
         "feature/clash",
         "abc123",
         true,
-        "",
+        &TreeStanding::detached().standing("REBASING"),
         "",
         true,
         false,
@@ -147,7 +153,7 @@ fn a_detached_tree_holds_no_branch() {
         "main",
         "abc123",
         true,
-        "",
+        &TreeStanding::detached(),
         "",
         false,
         false,
@@ -168,7 +174,7 @@ fn a_remote_branch_makes_its_local_one_only_where_there_is_none() {
         "origin/feature/login",
         "abc123",
         true,
-        "main",
+        &TreeStanding::on("main"),
         "",
         false,
         true,
@@ -180,13 +186,14 @@ fn a_remote_branch_makes_its_local_one_only_where_there_is_none() {
 /// here is touched. A stash, a closed tab and a row with no commit do.
 #[test]
 fn only_a_closed_tab_or_no_commit_keeps_a_worktree_from_being_made() {
+    let main = TreeStanding::on("main");
     assert!(
-        worktree_rows(None, "", "abc123", false, "main", "", false, false)
+        worktree_rows(None, "", "abc123", false, &main, "", false, false)
             .words()
             .is_empty()
     );
     assert!(
-        worktree_rows(None, "", "", true, "main", "", false, false)
+        worktree_rows(None, "", "", true, &main, "", false, false)
             .words()
             .is_empty()
     );
@@ -196,7 +203,7 @@ fn only_a_closed_tab_or_no_commit_keeps_a_worktree_from_being_made() {
             "stash@{0}",
             "abc123",
             true,
-            "main",
+            &main,
             "",
             false,
             false

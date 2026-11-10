@@ -21,9 +21,10 @@ Item {
     /// The worktree as it stood when the command the menus wait for was asked (`RepoPage.treeAtAsk`); null while
     /// nothing is out.
     property var treeAtAsk: null
-    /// What the rows are read off, set by the door that stands them: the worktree — or, for a menu raised under a
-    /// command, `treeAtAsk`.
-    property var tree: refRowMenu.worktree
+    /// What the rows are read off, set by the door that stands them: the worktree's `reading` — or, for a menu raised
+    /// under a command, `treeAtAsk`. Handed to `GitFacts` as it is, never built here. Null before the first door, as
+    /// `CommitMenuState.tree`.
+    property var tree: null
     /// Answers the `rebase` row's note off the drawn rows (`rebasePublished`).
     required property GraphModel graphModel
     /// Both read for the branch card (`branchFacts`); `switch` also asks `worktreesModel` who holds the branch.
@@ -195,8 +196,7 @@ Item {
                 oidHex, refRowMenu.branchesModel.upstreamOidOf(full), refRowMenu.tree.headOid),
             "offers": GitFacts.refMenuOffers(
                 kind, full, oidHex, open,
-                refRowMenu.tree.branch, refRowMenu.tree.detached,
-                refRowMenu.tree.opText, refRowMenu.tree.conflictCount,
+                refRowMenu.tree,
                 held, counterpart, drifted, upstream !== "", refRowMenu.repoTab.defaultRemote, "")
         }
     }
@@ -241,8 +241,7 @@ Item {
             "offers": GitFacts.refMenuOffers(
                 kind, full, oidHex,
                 refRowMenu.repoTab.state === "open",
-                refRowMenu.tree.branch, refRowMenu.tree.detached,
-                refRowMenu.tree.opText, refRowMenu.tree.conflictCount,
+                refRowMenu.tree,
                 "", "", menu.heldBack !== "", false, menu.pushRemote, sides)
         }
     }
@@ -259,7 +258,7 @@ Item {
         const stoppedHere = stopped !== undefined && stopped.here
         const offers = GitFacts.worktreeOffers(
             kind, full, oidHex, refRowMenu.repoTab.state === "open",
-            refRowMenu.tree.branch, kind === "branch" || kind === "remote" ? held : "", stoppedHere,
+            refRowMenu.tree, kind === "branch" || kind === "remote" ? held : "", stoppedHere,
             kind === "remote" && refRowMenu.branchesModel.oidOfName(local) !== "")
         const checkout = offers.includes("checkout-branch") ? "branch"
                        : offers.includes("checkout-track") ? "track" : ""
@@ -299,7 +298,7 @@ Item {
         }
         for (let i = 0; i < refRowMenu.levels.length; i++)
             refRowMenu.levels[i].releaseShape()
-        refRowMenu.tree = refRowMenu.treeAtAsk !== null ? refRowMenu.treeAtAsk : refRowMenu.worktree
+        refRowMenu.tree = refRowMenu.treeAtAsk !== null ? refRowMenu.treeAtAsk : refRowMenu.worktree.reading
         refRowMenu.standOn(kind, name, full, oidHex, worktreePath, aim)
         // The same links the graph row's menu offers on the commit the ref points at and its name; only as the menu
         // opens, as there (`CommitRowMenu.standGithub`).
@@ -324,7 +323,7 @@ Item {
         }
         for (let i = 0; i < refRowMenu.levels.length; i++)
             refRowMenu.levels[i].holdShape()
-        refRowMenu.tree = refRowMenu.worktree
+        refRowMenu.tree = refRowMenu.worktree.reading
         refRowMenu.standOn(refRowMenu.kind, refRowMenu.refName, full, oidHex, refRowMenu.openedFor,
                            refRowMenu.openedAim)
     }
@@ -374,8 +373,7 @@ Item {
         const offers = GitFacts.refMenuOffers(
             kind, full, oidHex,
             refRowMenu.repoTab.state === "open",
-            refRowMenu.tree.branch, refRowMenu.tree.detached,
-            refRowMenu.tree.opText, refRowMenu.tree.conflictCount,
+            refRowMenu.tree,
             // No drift: the remote rows are the delete table's, on the BRANCH card's answers (`RefBranchMenu`).
             held, "", false, false, refRowMenu.repoTab.defaultRemote, "")
         refRowMenu.canSwitch = offers.includes("switch")
@@ -389,9 +387,7 @@ Item {
         // The tree's own comparison for `git pull`, the row's branch's for its fast-forward (offers::pull_row).
         refRowMenu.pullUpstream = refRowMenu.branchesModel.upstreamOf(full)
         const pull = GitFacts.pullRow(
-            kind, full, refRowMenu.repoTab.state === "open",
-            refRowMenu.tree.branch, refRowMenu.tree.detached, refRowMenu.tree.opText,
-            refRowMenu.tree.upstream, refRowMenu.tree.pullBlocked,
+            kind, full, refRowMenu.repoTab.state === "open", refRowMenu.tree,
             held, refRowMenu.pullUpstream, refRowMenu.branchesModel.aheadOf(full))
         refRowMenu.pullRuns = pull.length > 0 ? pull[0] : ""
         refRowMenu.pullOut = pull.length > 1 ? pull[1].replace("out-", "") : ""

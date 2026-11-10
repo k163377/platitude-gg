@@ -111,22 +111,14 @@ FocusScope {
     /// rows on (`CommitMenuState.tree`, `RefRowMenu.tree`, `FileRowMenu.tree`). A replay's poll reads straight through
     /// the rewrite — a detached HEAD, `REBASING` partway — and rows standing on that are not the rows the menu has with
     /// nothing running (デザイン規約 §メニュー). Null while nothing is out: a menu standing again reads the worktree.
+    /// The model's `reading` kept in a `var` property is what the property held then: kept in a JS variable, it would
+    /// read what the property holds now (`encode::wire_qml`).
     property var treeAtAsk: null
     onRunningWhyChanged: {
         if (page.runningWhy === "")
             page.treeAtAsk = null
         else if (page.treeAtAsk === null)
-            page.treeAtAsk = page.treeNow()
-    }
-    /// What the menus read of the worktree, copied out.
-    function treeNow() {
-        return {
-            "branch": worktree.branch, "detached": worktree.detached, "opText": worktree.opText,
-            "conflictCount": worktree.conflictCount, "headOid": worktree.headOid, "upstream": worktree.upstream,
-            "pullBlocked": worktree.pullBlocked, "hardResetTakes": worktree.hardResetTakes,
-            "hardResetNotCopied": worktree.hardResetNotCopied, "headReachedElsewhere": worktree.headReachedElsewhere,
-            "stashStanding": worktree.stashStanding, "unborn": worktree.unborn, "notCopied": worktree.notCopied
-        }
+            page.treeAtAsk = worktree.reading
     }
     /// A press landed away from whatever held the keyboard (Main's `FocusRelease`), at `scenePos` — `null` for a press
     /// with no place of its own (the headless run's door). The left menu's name box goes unasked
@@ -622,7 +614,7 @@ FocusScope {
     property string moveLanding: ""
     function absorbMoveLanding() {
         if (page.moveLanding !== ""
-                && GitFacts.moveLanded(page.moveLanding, worktree.branch,
+                && GitFacts.moveLanded(page.moveLanding, worktree.standing,
                                        branchesModel.oidOfName(page.moveLanding)))
             page.moveLanding = ""
     }
@@ -727,7 +719,7 @@ FocusScope {
         // Which move the lookups add up to is core's rule (offers::switch_action); a remote row's holder is asked of
         // the local branch it lands on.
         const local = kind === "remote" ? remotesModel.localNameFor(name) : name
-        const action = GitFacts.switchAction(kind, local, worktree.branch,
+        const action = GitFacts.switchAction(kind, local, worktree.standing,
                                              worktreesModel.worktreeHolding(local),
                                              branchesModel.oidOfName(local))
         // Before the leave question: no put-down clears the holder road, so undoing a rebase first would spend the
@@ -1967,8 +1959,7 @@ FocusScope {
     // save button's phrase is `commit --amend` alone (core's `RepoSession::reword` still replays a commit under HEAD,
     // but nothing in the UI hands it one).
     readonly property string messageEdit: GitFacts.messageEdit(
-        !page.blank && repoTab.state === "open", detailsModel.shaHex, worktree.headOid,
-        page.selectedStashRef, worktree.opText, worktree.opEditing)
+        !page.blank && repoTab.state === "open", worktree.standing, detailsModel.shaHex, page.selectedStashRef)
 
     // Asked on every selection and read only when the answer names the commit on screen — verifying runs gpg or
     // ssh-keygen and lands after the details. A signature changes only with the hash, so nothing asks twice.

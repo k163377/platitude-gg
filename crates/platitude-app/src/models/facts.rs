@@ -9,11 +9,12 @@
 
 use std::ops::RangeInclusive;
 
+use platitude_core::offers::TreeStanding;
 use qtbridge::qobject;
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::qml_register;
-use crate::encode::{Chips, Fields, Mates, Optional, Record, field};
+use crate::encode::{Chips, Fields, Mates, One, Optional, Record, field};
 
 /// The singleton every QML file can ask a rule of without wiring a model
 /// through.
@@ -118,9 +119,10 @@ impl GitFacts {
     /// The two rows that make a worktree (`offers::worktree_rows`), as
     /// words: `here`, then `checkout-branch` / `checkout-track`, then
     /// `out-current` / `out-held` / `out-stopped`. `kind` is the row's
-    /// word, empty on a commit row that draws no name; `local_exists`
-    /// whether a remote row's local branch is there; `stopped_here`
-    /// whether a rebase or bisect stopped in this tree holds the branch.
+    /// word, empty on a commit row that draws no name; `tree` the menu's
+    /// `WorktreeModel.reading` (as `refMenuOffers`); `local_exists` whether
+    /// a remote row's local branch is there; `stopped_here` whether a
+    /// rebase or bisect stopped in this tree holds the branch.
     #[qslot]
     #[expect(clippy::too_many_arguments)]
     fn worktree_offers(
@@ -129,7 +131,7 @@ impl GitFacts {
         full: String,
         oid_hex: String,
         open: bool,
-        current_branch: String,
+        tree: One<TreeStanding>,
         held_by_worktree: String,
         stopped_here: bool,
         local_exists: bool,
@@ -139,7 +141,7 @@ impl GitFacts {
             &full,
             &oid_hex,
             open,
-            &current_branch,
+            &tree,
             &held_by_worktree,
             stopped_here,
             local_exists,
@@ -272,6 +274,15 @@ impl GitFacts {
     /// What the right-click menu on a ref may offer, as the words
     /// `RefRowMenu.offerOn` reads — asked once as the menu opens
     /// (app-ui.md「メニューは `AppMenu` 系で書く」).
+    ///
+    /// `tree` is the model's own record handed on as it was read:
+    /// `WorktreeModel.reading` as the menu stood on it — the model's, or the
+    /// one kept while a command is out (`RepoPage.treeAtAsk`) —, or
+    /// `WorktreeModel.standing` where a binding or a press reads the tree as
+    /// it is; this slot reads the standing's part of either. QML builds
+    /// none: a map short of a field reads as the default tree (no HEAD,
+    /// nothing standing) with only a warning in the log (`encode::One`).
+    /// Every slot here that takes a `tree` takes it so.
     #[qslot]
     #[expect(clippy::too_many_arguments)]
     fn ref_menu_offers(
@@ -280,10 +291,7 @@ impl GitFacts {
         full: String,
         oid_hex: String,
         open: bool,
-        current_branch: String,
-        detached: bool,
-        op_text: String,
-        conflict_count: i32,
+        tree: One<TreeStanding>,
         held_by_worktree: String,
         remote_counterpart: String,
         remote_drifted: bool,
@@ -299,10 +307,7 @@ impl GitFacts {
             &full,
             &oid_hex,
             open,
-            &current_branch,
-            detached,
-            &op_text,
-            conflict_count,
+            &tree,
             &held_by_worktree,
             &remote_counterpart,
             remote_drifted,
@@ -326,11 +331,7 @@ impl GitFacts {
         kind: String,
         full: String,
         open: bool,
-        current_branch: String,
-        detached: bool,
-        op_text: String,
-        current_upstream: String,
-        current_diverged: bool,
+        tree: One<TreeStanding>,
         held_by_worktree: String,
         row_upstream: String,
         row_ahead: i32,
@@ -342,11 +343,7 @@ impl GitFacts {
             kind,
             &full,
             open,
-            &current_branch,
-            detached,
-            &op_text,
-            &current_upstream,
-            current_diverged,
+            &tree,
             &held_by_worktree,
             &row_upstream,
             row_ahead,
@@ -359,27 +356,15 @@ impl GitFacts {
     /// (`CommitMenuState.openRowMenu`). `provisional`: the row is one the
     /// discard log's picked entry draws (`GraphModel.provisionalAt`).
     #[qslot]
-    #[expect(clippy::too_many_arguments)]
     fn commit_menu_offers(
         &self,
         open: bool,
-        current_branch: String,
-        detached: bool,
-        op_text: String,
+        tree: One<TreeStanding>,
         oid_hex: String,
-        head_oid: String,
         stash_ref: String,
         provisional: bool,
     ) -> Vec<String> {
-        let offers = platitude_core::offers::commit_menu(
-            open,
-            &current_branch,
-            detached,
-            &op_text,
-            &oid_hex,
-            &head_oid,
-            &stash_ref,
-        );
+        let offers = platitude_core::offers::commit_menu(open, &tree, &oid_hex, &stash_ref);
         let offers = if provisional {
             offers.on_provisional()
         } else {
@@ -393,23 +378,21 @@ impl GitFacts {
     /// lands, `stash` / `not-head` / `standing` where it does not, `""` with
     /// no message on screen. Asked as a live binding, not at open: the
     /// boxes stay open while HEAD moves, and must stop taking typing then.
-    // The parameters mirror the core rule one-for-one; a struct between the
-    // two would be a shape QML cannot see.
+    // The binding follows `tree` through the model's property
+    // (`WorktreeModel.standing`, one notification for every field), so the
+    // answer moves with HEAD and the operation; `open` is the page's and
+    // stays apart.
     #[qslot]
     fn message_edit(
         &self,
         open: bool,
+        tree: One<TreeStanding>,
         oid_hex: String,
-        head_oid: String,
         stash_ref: String,
-        op_text: String,
-        editing: bool,
     ) -> String {
-        platitude_core::offers::message_edit(
-            open, &oid_hex, &head_oid, &stash_ref, &op_text, editing,
-        )
-        .as_str()
-        .to_string()
+        platitude_core::offers::message_edit(open, &tree, &oid_hex, &stash_ref)
+            .as_str()
+            .to_string()
     }
 
     /// The move a press on a ref adds up to, in the word
@@ -422,27 +405,21 @@ impl GitFacts {
         &self,
         kind: String,
         local: String,
-        current_branch: String,
+        tree: One<TreeStanding>,
         held_by_worktree: String,
         local_oid: String,
     ) -> String {
-        platitude_core::offers::switch_action(
-            &kind,
-            &local,
-            &current_branch,
-            &held_by_worktree,
-            &local_oid,
-        )
-        .as_str()
-        .to_string()
+        platitude_core::offers::switch_action(&kind, &local, &tree, &held_by_worktree, &local_oid)
+            .as_str()
+            .to_string()
     }
 
     /// Whether the move a press already sent has reached the screen —
     /// `RepoPage` holds the next press until it has, so a double press
     /// sends one command.
     #[qslot]
-    fn move_landed(&self, landing: String, current_branch: String, landing_oid: String) -> bool {
-        platitude_core::offers::move_landed(&landing, &current_branch, &landing_oid)
+    fn move_landed(&self, landing: String, tree: One<TreeStanding>, landing_oid: String) -> bool {
+        platitude_core::offers::move_landed(&landing, &tree, &landing_oid)
     }
 
     /// The folder name a clone of `url` would land in, offered before

@@ -28,7 +28,7 @@
 //! reads: the tree's own comparison with its upstream, and the row's own
 //! branch's.
 
-use super::RefKind;
+use super::{RefKind, TreeStanding};
 
 /// What the `pull` row runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,13 +99,11 @@ impl PullOffer {
     }
 }
 
-/// The rule. `kind`, `full`, `open`, `current_branch`, `detached`,
-/// `op_text` and `held_by_worktree` read as in [`super::ref_menu`];
-/// `current_upstream` is what the tree's branch tracks
-/// (`WorktreeModel.upstream`) and `current_diverged` whether the two have
-/// both moved (`WorktreeModel.pullBlocked`); `row_upstream` and `row_ahead`
-/// are the row's own branch's upstream and how many commits it has that
-/// the upstream lacks, as of the last fetch.
+/// The rule. `kind`, `full`, `open`, `tree` and `held_by_worktree` read as
+/// in [`super::ref_menu`] — the tree's own comparison is
+/// [`TreeStanding::upstream`] and [`TreeStanding::diverged`];
+/// `row_upstream` and `row_ahead` are the row's own branch's upstream and
+/// how many commits it has that the upstream lacks, as of the last fetch.
 ///
 /// - **`git pull` on the two ends of the tree's own comparison**: the
 ///   branch it is on and the remote-tracking ref that branch is measured
@@ -122,16 +120,11 @@ impl PullOffer {
 /// information`). The fast-forward aside needs an upstream on a remote:
 /// `row_upstream` is the remote reading only (`BranchItem.upstream`), so a
 /// branch tracking one here (`branch.<n>.remote = .`) has no row.
-#[expect(clippy::too_many_arguments)]
 pub fn pull_row(
     kind: RefKind,
     full: &str,
     open: bool,
-    current_branch: &str,
-    detached: bool,
-    op_text: &str,
-    current_upstream: &str,
-    current_diverged: bool,
+    tree: &TreeStanding,
     held_by_worktree: &str,
     row_upstream: &str,
     row_ahead: i32,
@@ -139,27 +132,26 @@ pub fn pull_row(
     if !open || full.is_empty() {
         return None;
     }
-    let standing = !op_text.is_empty();
-    let tree_end = !detached
-        && !current_branch.is_empty()
-        && !current_upstream.is_empty()
+    let standing = tree.op_standing();
+    let tree_end = tree.on_branch()
+        && !tree.upstream.is_empty()
         && match kind {
-            RefKind::Branch => full == current_branch,
-            RefKind::Remote => full == current_upstream,
+            RefKind::Branch => tree.is_current(full),
+            RefKind::Remote => full == tree.upstream,
             RefKind::Tag | RefKind::Stash | RefKind::Worktree => false,
         };
     if tree_end {
         let out = if standing {
             Some(PullOut::Standing)
         } else {
-            current_diverged.then_some(PullOut::Diverged)
+            tree.diverged.then_some(PullOut::Diverged)
         };
         return Some(PullOffer {
             runs: PullRuns::Here,
             out,
         });
     }
-    if kind != RefKind::Branch || full == current_branch || row_upstream.is_empty() {
+    if kind != RefKind::Branch || tree.is_current(full) || row_upstream.is_empty() {
         return None;
     }
     // The holder first: nothing done here lifts it. The operation is
@@ -184,19 +176,22 @@ pub fn pull_row(
 mod tests {
     use super::*;
 
-    /// An idle, open repository on `main`, tracking `origin/main` and level
-    /// with it; `feat` tracks `origin/feat`. The cases bend one input at a
-    /// time.
+    /// An idle tree on `main`, tracking `origin/main` and level with it.
+    fn tree() -> TreeStanding {
+        TreeStanding {
+            upstream: "origin/main".into(),
+            ..TreeStanding::on("main")
+        }
+    }
+
+    /// The row on that tree in an open tab; `feat` tracks `origin/feat`.
+    /// The cases bend one input at a time.
     fn on(kind: RefKind, full: &str) -> Option<PullOffer> {
         pull_row(
             kind,
             full,
             true,
-            "main",
-            false,
-            "",
-            "origin/main",
-            false,
+            &tree(),
             "",
             if kind == RefKind::Branch {
                 "origin/feat"
@@ -242,19 +237,7 @@ mod tests {
                 out: None
             })
         );
-        let untracked = pull_row(
-            RefKind::Branch,
-            "scratch",
-            true,
-            "main",
-            false,
-            "",
-            "origin/main",
-            false,
-            "",
-            "",
-            0,
-        );
+        let untracked = pull_row(RefKind::Branch, "scratch", true, &tree(), "", "", 0);
         assert_eq!(untracked, None, "no upstream is nowhere to pull from");
     }
 
@@ -265,11 +248,7 @@ mod tests {
                 RefKind::Branch,
                 full,
                 true,
-                "main",
-                false,
-                "",
-                "",
-                false,
+                &TreeStanding::on("main"),
                 "",
                 row_upstream,
                 0,
@@ -296,11 +275,7 @@ mod tests {
                 kind,
                 full,
                 true,
-                "",
-                true,
-                "",
-                "",
-                false,
+                &TreeStanding::detached(),
                 "",
                 row_upstream,
                 0,
@@ -321,19 +296,7 @@ mod tests {
             (RefKind::Remote, "origin/main"),
             (RefKind::Branch, "feat"),
         ] {
-            let offer = pull_row(
-                kind,
-                full,
-                false,
-                "main",
-                false,
-                "",
-                "origin/main",
-                false,
-                "",
-                "origin/feat",
-                0,
-            );
+            let offer = pull_row(kind, full, false, &tree(), "", "origin/feat", 0);
             assert_eq!(offer, None, "{full}");
         }
     }
@@ -341,15 +304,19 @@ mod tests {
     #[test]
     fn a_standing_operation_greys_every_row_the_pull_stands_on() {
         let standing = |kind: RefKind, full: &str, detached: bool, diverged: bool, ahead: i32| {
+            let tree = if detached {
+                TreeStanding::detached().standing("REBASE 1/3")
+            } else {
+                TreeStanding {
+                    diverged,
+                    ..tree().standing("MERGING")
+                }
+            };
             pull_row(
                 kind,
                 full,
                 true,
-                if detached { "" } else { "main" },
-                detached,
-                if detached { "REBASE 1/3" } else { "MERGING" },
-                if detached { "" } else { "origin/main" },
-                diverged,
+                &tree,
                 "",
                 &if kind == RefKind::Branch {
                     format!("origin/{full}")
@@ -398,20 +365,12 @@ mod tests {
 
     #[test]
     fn the_tree_diverged_greys_git_pull_on_both_ends() {
+        let diverged = TreeStanding {
+            diverged: true,
+            ..tree()
+        };
         for (kind, full) in [(RefKind::Branch, "main"), (RefKind::Remote, "origin/main")] {
-            let offer = pull_row(
-                kind,
-                full,
-                true,
-                "main",
-                false,
-                "",
-                "origin/main",
-                true,
-                "",
-                "",
-                0,
-            );
+            let offer = pull_row(kind, full, true, &diverged, "", "", 0);
             assert_eq!(
                 offer,
                 Some(PullOffer {
@@ -425,11 +384,7 @@ mod tests {
             RefKind::Branch,
             "feat",
             true,
-            "main",
-            false,
-            "",
-            "origin/main",
-            true,
+            &diverged,
             "",
             "origin/feat",
             0,
@@ -448,11 +403,7 @@ mod tests {
                 RefKind::Branch,
                 "feat",
                 true,
-                "main",
-                false,
-                "",
-                "origin/main",
-                false,
+                &tree(),
                 held,
                 "origin/feat",
                 ahead,
@@ -484,11 +435,7 @@ mod tests {
                 RefKind::Branch,
                 "feat",
                 true,
-                "main",
-                false,
-                "MERGING",
-                "origin/main",
-                false,
+                &tree().standing("MERGING"),
                 "C:/work/other",
                 "origin/feat",
                 0,
@@ -502,11 +449,7 @@ mod tests {
                 RefKind::Branch,
                 "feat",
                 true,
-                "main",
-                false,
-                "",
-                "origin/main",
-                false,
+                &tree(),
                 "C:/work/other",
                 "origin/feat",
                 0,

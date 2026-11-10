@@ -4,6 +4,8 @@
 //! and a caret lands from a click nobody aimed, so the question is "is
 //! this the commit a stray keystroke may reach".
 
+use super::TreeStanding;
+
 /// What the details pane does with the message boxes: take typing, or
 /// refuse it and say why.
 ///
@@ -42,11 +44,10 @@ impl MessageEdit {
 /// Whether the boxes take typing, and what stands in the way when they
 /// do not.
 ///
-/// `oid_hex` is the commit on screen, `head_oid` the one HEAD is on (an
-/// id: detached has no branch to ask), `stash_ref` the reflog selector
-/// when that row is a stash (`""` otherwise), and `op_text` the standing
-/// operation's own word — `""` exactly when nothing stands
-/// (`WorktreeModel.op_text`).
+/// `open` is the tab-lifecycle gate, `tree` where the worktree stands —
+/// HEAD asked by its commit: detached has no branch to ask —, `oid_hex`
+/// the commit on screen, and `stash_ref` the reflog selector when that row
+/// is a stash (`""` otherwise).
 ///
 /// **Only HEAD's own commit** (user decision — ask before changing). The
 /// boxes are a surface a click drops a caret on, so whatever they accept
@@ -58,8 +59,8 @@ impl MessageEdit {
 /// **Nothing while an operation stands**, since git refuses the amend
 /// there (`You are in the middle of a merge -- cannot amend`; mid-rebase
 /// `Committing is not possible because you have unmerged files`) — except
-/// an interactive rebase stopped at an `edit` step (`editing`,
-/// [`crate::integrate::RebaseStop`]), where git takes the amend.
+/// an interactive rebase stopped at an `edit` step
+/// ([`TreeStanding::op_editing`]), where git takes the amend.
 ///
 /// **The exemption is HEAD's, and nothing narrower.** Holding it to the
 /// commit the stop began on refuses the second amend: the first moves
@@ -72,11 +73,9 @@ impl MessageEdit {
 /// HEAD, unlike the menu's rewrite rows, which need a branch.
 pub fn message_edit(
     open: bool,
+    tree: &TreeStanding,
     oid_hex: &str,
-    head_oid: &str,
     stash_ref: &str,
-    op_text: &str,
-    editing: bool,
 ) -> MessageEdit {
     if !open || oid_hex.is_empty() {
         return MessageEdit::Nothing;
@@ -85,10 +84,11 @@ pub fn message_edit(
     if !stash_ref.is_empty() {
         return MessageEdit::Stash;
     }
-    if !op_text.is_empty() && !(editing && oid_hex == head_oid) {
+    let at_head = tree.is_head(oid_hex);
+    if tree.op_standing() && !(tree.op_editing && at_head) {
         return MessageEdit::Standing;
     }
-    if oid_hex != head_oid {
+    if !at_head {
         return MessageEdit::NotHead;
     }
     MessageEdit::Amend
@@ -101,9 +101,22 @@ mod tests {
     const HEAD: &str = "abc123";
     const OLDER: &str = "def456";
 
-    /// The same open tab, `oid` on screen, no edit stop.
+    /// The same open tab on a tree at `HEAD`, `oid` on screen, no edit stop.
     fn edit(oid: &str, stash_ref: &str, op_text: &str) -> MessageEdit {
-        message_edit(true, oid, HEAD, stash_ref, op_text, false)
+        let tree = TreeStanding {
+            head_oid: HEAD.into(),
+            ..TreeStanding::on("main")
+        };
+        message_edit(true, &tree.standing(op_text), oid, stash_ref)
+    }
+
+    /// The tree a rebase stopped at `head`: at an `edit` step or not.
+    fn rebasing_at(head: &str, editing: bool) -> TreeStanding {
+        TreeStanding {
+            head_oid: head.into(),
+            op_editing: editing,
+            ..TreeStanding::detached().standing("REBASING")
+        }
     }
 
     #[test]
@@ -125,31 +138,26 @@ mod tests {
 
     #[test]
     fn an_edit_stop_opens_heads_commit_and_nothing_else() {
+        let stop = rebasing_at(HEAD, true);
+        assert_eq!(message_edit(true, &stop, HEAD, ""), MessageEdit::Amend);
+        assert_eq!(message_edit(true, &stop, OLDER, ""), MessageEdit::Standing);
         assert_eq!(
-            message_edit(true, HEAD, HEAD, "", "REBASING", true),
-            MessageEdit::Amend
-        );
-        assert_eq!(
-            message_edit(true, OLDER, HEAD, "", "REBASING", true),
-            MessageEdit::Standing
-        );
-        assert_eq!(
-            message_edit(true, HEAD, HEAD, "stash@{0}", "REBASING", true),
+            message_edit(true, &stop, HEAD, "stash@{0}"),
             MessageEdit::Stash
         );
     }
 
     /// Binds the second amend: the first moves HEAD off the id the stop
-    /// began on. `editing` is the whole exemption, so a rebase stopped for
+    /// began on. `op_editing` is the whole exemption, so a rebase stopped for
     /// any other reason keeps the refusal.
     #[test]
     fn an_edit_stop_opens_whatever_head_moved_onto() {
         assert_eq!(
-            message_edit(true, OLDER, OLDER, "", "REBASING", true),
+            message_edit(true, &rebasing_at(OLDER, true), OLDER, ""),
             MessageEdit::Amend
         );
         assert_eq!(
-            message_edit(true, HEAD, HEAD, "", "REBASING", false),
+            message_edit(true, &rebasing_at(HEAD, false), HEAD, ""),
             MessageEdit::Standing
         );
     }
@@ -165,7 +173,7 @@ mod tests {
     fn an_empty_pane_refuses_without_a_reason() {
         assert_eq!(edit("", "", ""), MessageEdit::Nothing);
         assert_eq!(
-            message_edit(false, HEAD, HEAD, "", "", false),
+            message_edit(false, &TreeStanding::on("main"), HEAD, ""),
             MessageEdit::Nothing
         );
         assert_eq!(edit("", "", "").as_str(), "");

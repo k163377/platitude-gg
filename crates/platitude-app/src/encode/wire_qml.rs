@@ -132,6 +132,21 @@ impl WireProbe {
         &self.listed
     }
 
+    // `one` built as it is read, the way a model hands out a record of its
+    // fields (`WorktreeModel.reading`).
+    qproperty!("oneRead", Read = one_read, Notify = changed);
+
+    fn one_read(&self) -> One<Sample> {
+        self.one.clone()
+    }
+
+    /// `one` moved on from Rust, as a model's drain moves its fields.
+    #[qslot]
+    fn move_one(&mut self, word: String) {
+        self.one = One::new(Sample::new(&word, 0, false));
+        self.changed();
+    }
+
     /// Everything a write could have changed, as one line.
     #[qslot]
     fn state(&self) -> String {
@@ -252,6 +267,7 @@ QtObject {
     property WireProbe probe: WireProbe {}
     property WireRows rows: WireRows {}
     property int rolesSeen: 0
+    property var keptRead: null
     property Instantiator roles: Instantiator {
         model: root.rows
         delegate: QtObject {
@@ -343,6 +359,20 @@ QtObject {
         say("slot-nested-missing-field-default", broken.name === "" && broken.inner.length === 0
             && broken.one.word === "", broken)
 
+        // A record kept across a change of the model: kept in a JS variable, the property's read is a
+        // reference to it; kept in a `var` property it is what the property held then, and a slot reads it so.
+        root.keptRead = probe.oneRead
+        const keptLocal = probe.oneRead
+        const answer = probe.echoOne(probe.oneRead)
+        probe.moveOne("later")
+        say("property-one-moved", probe.oneRead.word === "later", probe.oneRead)
+        say("property-one-kept-in-a-var-property-stays", root.keptRead.word === "main", root.keptRead)
+        say("property-one-kept-in-a-variable-reads-the-property-now", keptLocal.word === "later", keptLocal)
+        say("slot-one-answer-kept-in-a-variable-stays", answer.word === "main", answer)
+        const handedBack = probe.echoOne(root.keptRead)
+        say("property-one-kept-in-a-var-property-reads-in-a-slot", handedBack.word === "main"
+            && handedBack.count === 3 && handedBack.on === true, handedBack)
+
         Qt.callLater(root.finish)
     }
 
@@ -354,7 +384,7 @@ QtObject {
 "#;
 
 /// How many lines [`CHECKS`] says.
-const CHECKED: usize = 26;
+const CHECKED: usize = 31;
 
 /// One write of `VALUE` to `PROPERTY`, said before and after: what the
 /// write threw, if anything, and what the object holds once it is done.

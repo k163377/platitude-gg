@@ -22,6 +22,7 @@
 mod message;
 mod moves;
 mod pull;
+mod tree;
 
 pub use message::{MessageEdit, message_edit};
 pub use moves::{
@@ -29,6 +30,7 @@ pub use moves::{
     switch_action,
 };
 pub use pull::{PullOffer, PullOut, PullRuns, pull_row};
+pub use tree::TreeStanding;
 
 /// The kind of ref a menu row stands on, in the words the chip records
 /// carry (`branch` / `remote` / `tag` / `stash`), and `worktree` for a
@@ -211,10 +213,9 @@ impl RefMenuOffers {
 ///
 /// `full` is the row's display name as the chip wears it (`feat`,
 /// `origin/feat`), not [`crate::refs::RefEntry::name`]'s spelling. `open`
-/// is the tab-lifecycle gate (as [`crate::remote::push_standing`] holds
-/// it); `op_text` is the operation badge, empty exactly when nothing is
-/// standing (bisect counts); `held_by_worktree` is the path of the other
-/// worktree holding this row's branch, empty when none does;
+/// is the tab-lifecycle gate; `tree` is where the worktree stands;
+/// `held_by_worktree` is the path of the other worktree holding this row's
+/// branch, empty when none does;
 /// `remote_counterpart` is the remote reading a local branch carries;
 /// `remote_drifted` says that reading stands on another commit
 /// ([`crate::session::BranchItem::upstream_drifted`] /
@@ -230,10 +231,7 @@ pub fn ref_menu(
     full: &str,
     oid_hex: &str,
     open: bool,
-    current_branch: &str,
-    detached: bool,
-    op_text: &str,
-    conflict_count: i32,
+    tree: &TreeStanding,
     held_by_worktree: &str,
     remote_counterpart: &str,
     remote_drifted: bool,
@@ -242,9 +240,9 @@ pub fn ref_menu(
     tag_sides: &str,
 ) -> RefMenuOffers {
     let branchy = matches!(kind, RefKind::Branch | RefKind::Remote);
-    let op_standing = !op_text.is_empty();
     let held = !held_by_worktree.is_empty();
-    let on_current_branch = kind == RefKind::Branch && full == current_branch;
+    let current = tree.is_current(full);
+    let on_current_branch = kind == RefKind::Branch && current;
     // Only a tag has sides; every other row's local half is simply there.
     let sides = (kind == RefKind::Tag)
         .then(|| TagSides::from_word(tag_sides))
@@ -257,19 +255,15 @@ pub fn ref_menu(
     RefMenuOffers {
         // A worktree leads to itself — unless the tab already stands
         // in it, which is when the caller hands no holder.
-        switch_to: (branchy && full != current_branch) || (kind == RefKind::Worktree && held),
-        switch_asks: !held && (op_standing || conflict_count > 0),
+        switch_to: (branchy && !current) || (kind == RefKind::Worktree && held),
+        switch_asks: !held && (tree.op_standing() || tree.conflict_count > 0),
         branch_here: kind != RefKind::Stash && !oid_hex.is_empty(),
-        integrate_from: open
-            && !detached
-            && !current_branch.is_empty()
-            && !full.is_empty()
-            && full != current_branch,
-        standing: op_standing,
+        integrate_from: open && tree.on_branch() && !full.is_empty() && !current,
+        standing: tree.op_standing(),
         // A worktree's own delete is the WORKTREE card's
         // ([`worktree_card`]).
         delete: kind != RefKind::Worktree
-            && !(kind == RefKind::Branch && (full == current_branch || held))
+            && !(kind == RefKind::Branch && (current || held))
             // A remote-only tag leaves `tag --delete` nothing to name.
             && tag_here,
         delete_remote: !remote_counterpart.is_empty() && !remote_drifted,
@@ -383,22 +377,18 @@ impl CommitMenuOffers {
     }
 }
 
-/// The offers themselves. `stash_ref` is the stash selector (`""` on an
-/// ordinary commit) and routes between the two menus; `head_oid` is the
-/// commit HEAD is on. The other inputs read as in [`ref_menu`].
+/// The offers themselves. `oid_hex` is the row's commit; `stash_ref` is the
+/// stash selector (`""` on an ordinary commit) and routes between the two
+/// menus. `open` and `tree` read as in [`ref_menu`].
 pub fn commit_menu(
     open: bool,
-    current_branch: &str,
-    detached: bool,
-    op_text: &str,
+    tree: &TreeStanding,
     oid_hex: &str,
-    head_oid: &str,
     stash_ref: &str,
 ) -> CommitMenuOffers {
-    let op_standing = !op_text.is_empty();
     let commit_row = !oid_hex.is_empty() && stash_ref.is_empty();
-    let on_branch = open && !detached && !current_branch.is_empty() && commit_row;
-    let elsewhere = oid_hex != head_oid;
+    let on_branch = open && tree.on_branch() && commit_row;
+    let elsewhere = !tree.is_head(oid_hex);
     CommitMenuOffers {
         cherry_pick: commit_row,
         revert: commit_row,
@@ -406,7 +396,7 @@ pub fn commit_menu(
         edit_history: on_branch,
         move_branch: on_branch && elsewhere,
         branch_here: open && commit_row,
-        standing: op_standing && commit_row,
+        standing: tree.op_standing() && commit_row,
         stash_write: !stash_ref.is_empty(),
     }
 }
@@ -581,7 +571,8 @@ impl WorktreeOffers {
 }
 
 /// The rule. `kind` is the row's (`None` on a commit row that draws no
-/// name); `held_by_worktree` the worktree holding the row's branch, a remote
+/// name); `open` and `tree` read as in [`ref_menu`];
+/// `held_by_worktree` the worktree holding the row's branch, a remote
 /// row's through the local branch of its name, as in [`ref_menu`];
 /// `stopped_here` whether a rebase or bisect stopped in this tree holds the
 /// row's branch; `local_exists` whether a remote row's local branch is
@@ -599,7 +590,7 @@ pub fn worktree_rows(
     full: &str,
     oid_hex: &str,
     open: bool,
-    current_branch: &str,
+    tree: &TreeStanding,
     held_by_worktree: &str,
     stopped_here: bool,
     local_exists: bool,
@@ -612,7 +603,7 @@ pub fn worktree_rows(
     }
     .filter(|_| open && !full.is_empty());
     let checkout_out = match checkout {
-        Some(WorktreeCheckout::Branch) if full == current_branch => Some(WorktreeAddOut::Current),
+        Some(WorktreeCheckout::Branch) if tree.is_current(full) => Some(WorktreeAddOut::Current),
         Some(WorktreeCheckout::Branch) if held => Some(WorktreeAddOut::Held),
         Some(WorktreeCheckout::Branch) if stopped_here => Some(WorktreeAddOut::Stopped),
         _ => None,

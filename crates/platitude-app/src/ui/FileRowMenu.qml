@@ -19,9 +19,9 @@ Item {
     /// The worktree as it stood when the command the menus wait for was asked (`RepoPage.treeAtAsk`); null while
     /// nothing is out.
     property var treeAtAsk: null
-    /// What the rows are read off, set by the door that stands them: the worktree — or, for a menu raised under a
-    /// command, `treeAtAsk`.
-    property var tree: fileRowMenu.worktree
+    /// What the rows are read off, set by the door that stands them: the worktree's `reading` — or, for a menu raised
+    /// under a command, `treeAtAsk`. Null before the first door, as `CommitMenuState.tree`.
+    property var tree: null
     /// Which rows are chosen (`chosenRows()` skips folder rows, which nothing here acts on).
     required property WipPane wipPane
 
@@ -61,7 +61,7 @@ Item {
         fileMenu.releaseShape()
         fileRowMenu.bucket = bucket
         fileRowMenu.path = path
-        fileRowMenu.tree = fileRowMenu.treeAtAsk !== null ? fileRowMenu.treeAtAsk : fileRowMenu.worktree
+        fileRowMenu.tree = fileRowMenu.treeAtAsk !== null ? fileRowMenu.treeAtAsk : fileRowMenu.worktree.reading
         fileRowMenu.standOn()
         fileMenu.offer()
         fileRowMenu.offered(bucket)
@@ -84,7 +84,7 @@ Item {
             return
         }
         fileMenu.holdShape()
-        fileRowMenu.tree = fileRowMenu.worktree
+        fileRowMenu.tree = fileRowMenu.worktree.reading
         fileRowMenu.standOn()
     }
 

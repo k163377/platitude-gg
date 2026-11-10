@@ -341,6 +341,26 @@ impl WorktreeModel {
     qproperty!("opEditOid", Member = op_edit_oid, Notify = changed);
     qproperty!("treeRevision", Member = tree_revision, Notify = changed);
     qproperty!("wipRowStands", Member = wip_row_stands, Notify = changed);
+    // The fields above the menus read, as one value (`encode::TreeReading`)
+    // — built as it is read, from the fields, and behind a getter: a value
+    // QML wrote would not reach Rust (`encode::wire_qml`). Kept in a `var`
+    // property, a read is what the property held then
+    // (`RepoPage.treeAtAsk`). Read as a menu opens, never by a binding: it
+    // carries `notCopied`, as long as the pending files a discard cannot
+    // copy.
+    qproperty!("reading", Read = reading, Notify = changed);
+
+    fn reading(&self) -> crate::encode::Reading {
+        crate::encode::Reading::new(self.tree_reading())
+    }
+
+    // The part of it core's rules read, and no list: what a binding that
+    // follows the tree reads (`RepoPage.messageEdit`), and a press on a ref.
+    qproperty!("standing", Read = standing, Notify = changed);
+
+    fn standing(&self) -> crate::encode::Standing {
+        crate::encode::Standing::new(self.tree_standing())
+    }
 
     // Said for every status drained, whether or not a row moved — the one
     // to wait on for "the status was read" (`NavSectionModel.changed` is
@@ -385,6 +405,33 @@ impl WorktreeModel {
 }
 
 impl WorktreeModel {
+    /// Where the tree stands, as core's rules read it.
+    fn tree_standing(&self) -> platitude_core::offers::TreeStanding {
+        platitude_core::offers::TreeStanding {
+            branch: self.branch.clone(),
+            detached: self.detached,
+            head_oid: self.head_oid.clone(),
+            op_text: self.op_text.clone(),
+            op_editing: self.op_editing,
+            conflict_count: self.conflict_count,
+            upstream: self.upstream.clone(),
+            diverged: self.pull_blocked,
+        }
+    }
+
+    /// That, and what the menus' rows draw beside it.
+    fn tree_reading(&self) -> crate::encode::TreeReading {
+        crate::encode::TreeReading {
+            standing: self.tree_standing(),
+            unborn: self.unborn,
+            hard_reset_takes: self.hard_reset_takes,
+            hard_reset_not_copied: self.hard_reset_not_copied,
+            head_reached_elsewhere: self.head_reached_elsewhere,
+            stash_standing: self.stash_standing.clone(),
+            not_copied: self.not_copied.clone(),
+        }
+    }
+
     /// Back to before the first read, for [`WorktreeModel::restand`]:
     /// every field but the tab and the two feeds — a field added to this
     /// model belongs here too.
@@ -1171,5 +1218,51 @@ mod tests {
         model.forget_the_worktree();
         ticked(&mut model, 1, 2, 4);
         assert_eq!((model.op_step, model.op_steps), (2, 4));
+    }
+
+    /// Each field lands in its own seat of the records: a value apart per
+    /// field, and every flag up, so two swapped seats cannot pass.
+    #[test]
+    fn the_records_carry_each_field_in_its_own_seat() {
+        let model = WorktreeModel {
+            branch: "feature/日本語".into(),
+            detached: true,
+            head_oid: ROOT.into(),
+            op_text: "REBASING".into(),
+            op_editing: true,
+            conflict_count: 2,
+            upstream: "origin/feature/日本語".into(),
+            pull_blocked: true,
+            unborn: true,
+            hard_reset_takes: 3,
+            hard_reset_not_copied: true,
+            head_reached_elsewhere: true,
+            stash_standing: "conflicts".into(),
+            not_copied: vec!["big.psd".into()],
+            ..WorktreeModel::default()
+        };
+        let standing = platitude_core::offers::TreeStanding {
+            branch: "feature/日本語".into(),
+            detached: true,
+            head_oid: ROOT.into(),
+            op_text: "REBASING".into(),
+            op_editing: true,
+            conflict_count: 2,
+            upstream: "origin/feature/日本語".into(),
+            diverged: true,
+        };
+        assert_eq!(*model.standing(), standing);
+        assert_eq!(
+            *model.reading(),
+            crate::encode::TreeReading {
+                standing,
+                unborn: true,
+                hard_reset_takes: 3,
+                hard_reset_not_copied: true,
+                head_reached_elsewhere: true,
+                stash_standing: "conflicts".into(),
+                not_copied: vec!["big.psd".into()],
+            }
+        );
     }
 }

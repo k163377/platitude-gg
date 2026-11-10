@@ -9,33 +9,34 @@ use crate::status::Counts;
 #[test]
 fn switch_lands_where_the_kind_and_the_local_branch_say() {
     use SwitchAction::*;
-    assert_eq!(switch_action("branch", "main", "main", "", ""), None);
-    assert_eq!(switch_action("branch", "feat", "main", "", ""), Switch);
+    let main = TreeStanding::on("main");
+    assert_eq!(switch_action("branch", "main", &main, "", ""), None);
+    assert_eq!(switch_action("branch", "feat", &main, "", ""), Switch);
     assert_eq!(
-        switch_action("branch", "feat", "main", "C:/work/other", ""),
+        switch_action("branch", "feat", &main, "C:/work/other", ""),
         OpenHolder
     );
-    assert_eq!(switch_action("remote", "feat", "main", "", ""), Materialize);
+    assert_eq!(switch_action("remote", "feat", &main, "", ""), Materialize);
     assert_eq!(
-        switch_action("remote", "feat", "main", "", "abc123"),
+        switch_action("remote", "feat", &main, "", "abc123"),
         MoveBranch
     );
     assert_eq!(
-        switch_action("remote", "feat", "main", "C:/work/other", "abc123"),
+        switch_action("remote", "feat", &main, "C:/work/other", "abc123"),
         OpenHolder
     );
     // Landing the current branch on its remote ref is the one move that
     // is not a no-op for a remote: git answers what it would cost.
     assert_eq!(
-        switch_action("remote", "main", "main", "", "abc123"),
+        switch_action("remote", "main", &main, "", "abc123"),
         MoveBranch
     );
     // A tag could only detach HEAD, and the two markers name no branch.
-    assert_eq!(switch_action("tag", "v1.0", "main", "", ""), None);
-    assert_eq!(switch_action("head", "", "main", "", ""), None);
-    assert_eq!(switch_action("worktree", "rig", "main", "", ""), None);
+    assert_eq!(switch_action("tag", "v1.0", &main, "", ""), None);
+    assert_eq!(switch_action("head", "", &main, "", ""), None);
+    assert_eq!(switch_action("worktree", "rig", &main, "", ""), None);
     assert_eq!(
-        switch_action("", "", "", "", ""),
+        switch_action("", "", &TreeStanding::detached(), "", ""),
         None,
         "detached on nothing"
     );
@@ -43,13 +44,15 @@ fn switch_lands_where_the_kind_and_the_local_branch_say() {
 
 #[test]
 fn a_move_has_landed_only_once_head_and_the_listing_both_say_so() {
+    let feat = TreeStanding::on("feat");
+    let main = TreeStanding::on("main");
     // The gap the guard exists for: status has HEAD on the new branch,
     // and the listing has no commit for it yet.
-    assert!(!move_landed("feat", "feat", ""));
-    assert!(!move_landed("feat", "main", "abc123"));
-    assert!(move_landed("feat", "feat", "abc123"));
-    assert!(!move_landed("", "", ""));
-    assert!(!move_landed("", "main", "abc123"));
+    assert!(!move_landed("feat", &feat, ""));
+    assert!(!move_landed("feat", &main, "abc123"));
+    assert!(move_landed("feat", &feat, "abc123"));
+    assert!(!move_landed("", &TreeStanding::detached(), ""));
+    assert!(!move_landed("", &main, "abc123"));
 }
 
 #[test]

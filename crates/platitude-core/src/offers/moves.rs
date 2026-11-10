@@ -2,6 +2,7 @@
 //! leaving a stopped operation undoes. Apart from the menus: the two
 //! share nothing but the repository state they read.
 
+use super::TreeStanding;
 use crate::integrate::InProgress;
 use crate::opstate::OpState;
 use crate::status::Counts;
@@ -49,19 +50,19 @@ impl SwitchAction {
 /// The action itself. `kind` is the word the chip goes out under
 /// (`branch` / `remote` — every other kind moves nothing); `local` the
 /// local branch the move lands on (for `remote`, the remote ref's local
-/// name); `held_by_worktree` the other worktree holding that local
-/// branch, empty when none does; `local_oid` that branch's commit, empty
-/// when no such branch exists.
+/// name); `tree` where the worktree stands; `held_by_worktree` the other
+/// worktree holding that local branch, empty when none does; `local_oid`
+/// that branch's commit, empty when no such branch exists.
 pub fn switch_action(
     kind: &str,
     local: &str,
-    current_branch: &str,
+    tree: &TreeStanding,
     held_by_worktree: &str,
     local_oid: &str,
 ) -> SwitchAction {
     match kind {
         "branch" => {
-            if local == current_branch {
+            if tree.is_current(local) {
                 SwitchAction::None
             } else if !held_by_worktree.is_empty() {
                 SwitchAction::OpenHolder
@@ -83,15 +84,16 @@ pub fn switch_action(
 }
 
 /// Whether a move already sent has reached the screen: HEAD stands on
-/// the branch it was landing on, and the ref listing has that branch.
-/// `landing` empty is "none is on its way", which has landed nothing.
+/// the branch it was landing on (`tree`), and the ref listing has that
+/// branch (`landing_oid`, its commit). `landing` empty is "none is on its
+/// way", which has landed nothing: no empty name is current.
 ///
 /// **Both halves, because they arrive apart**: status comes back long
 /// before a large ref listing, and a second press read in between still
 /// sees no local branch and sends a second `switch --create`, which git
 /// refuses.
-pub fn move_landed(landing: &str, current_branch: &str, landing_oid: &str) -> bool {
-    !landing.is_empty() && landing == current_branch && !landing_oid.is_empty()
+pub fn move_landed(landing: &str, tree: &TreeStanding, landing_oid: &str) -> bool {
+    tree.is_current(landing) && !landing_oid.is_empty()
 }
 
 /// Whether a move has to clear the way before it can run. git refuses
