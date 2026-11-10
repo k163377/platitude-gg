@@ -369,7 +369,8 @@ impl RepoSession {
         )
     }
 
-    /// Hands conflicted paths to `git mergetool` (empty = all of them).
+    /// Hands conflicted paths to `git mergetool` (empty does nothing —
+    /// `conflict::mergetool`).
     /// Holds the write lock for as long as the user keeps the tool open.
     pub fn mergetool(self: &Arc<Self>, paths: Vec<String>) -> Option<OperationId> {
         self.write(

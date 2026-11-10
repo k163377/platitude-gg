@@ -23,12 +23,14 @@ const MERGETOOL_ARGS: [&str; 2] = ["-c", "mergetool.writeToTemp=true"];
 /// with none configured this refuses. Empty `paths` does nothing — bare
 /// `git mergetool` walks every conflict while holding the write queue.
 ///
-/// Runs until the person is done; cancelling the session stops it. The
-/// tool must not need a console (no terminal tools such as vimdiff); a
-/// windowed tool or a script that writes `$MERGED` both work. git does not
-/// trust a user-defined `cmd` tool's exit code: it compares the file's
-/// mtime with the backup's, so a tool closed without saving is a failure
-/// and the conflict markers come back.
+/// Runs until the person is done. The session runs it as a local write
+/// (`Lane::Local`), on a token nothing cancels: closing the session leaves
+/// it running, and quitting waits for the tool to close. The tool must not
+/// need a console (no terminal tools such as vimdiff); a windowed tool or
+/// a script that writes `$MERGED` both work. git does not trust a
+/// user-defined `cmd` tool's exit code: it compares the file's mtime with
+/// the backup's, so a tool closed without saving is a failure and the
+/// conflict markers come back.
 pub async fn mergetool(
     executor: &GitExecutor,
     workdir: &Path,
