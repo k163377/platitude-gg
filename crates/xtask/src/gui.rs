@@ -110,11 +110,17 @@ pub fn launch(args: &[String]) -> Result<(), String> {
         .env("PATH", &path)
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    // The window's git is the user's and does not answer to the gate on
-    // main (gate::hooks) — true only of a window nothing drives, so the
+    // The window's git is the user's: it does not answer to the gate on
+    // main, and a branch it makes is nobody's in the hook's ledger
+    // (gate::hooks) — true only of a window nothing drives, so the
     // automation knobs go first.
     crate::app_env::clear_automation(&mut command);
-    command.env_remove(crate::gate::hooks::SESSION);
+    for name in crate::gate::hooks::SESSION_MARKS
+        .into_iter()
+        .chain(crate::gate::hooks::MAKER_IDS)
+    {
+        command.env_remove(name);
+    }
     let mut child = command
         .spawn()
         .map_err(|e| format!("failed to start {}: {e}", exe.display()))?;

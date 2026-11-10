@@ -4,7 +4,7 @@
 //! `reference-transaction` is the one hook every ref update passes
 //! through, and a non-zero exit in its `prepared` state aborts the update,
 //! so one checked-in script (`.githooks/`) guards main against every road a
-//! session can take and none of the user's ([`CLAUDE_SESSION`]); the verdict stays
+//! session can take and none of the user's ([`SESSION_MARKS`]); the verdict stays
 //! here, where it can be tested. Passing through every update, it is also
 //! where whose a branch is gets written down ([`maker`]), for that
 //! session's landing to clear (`land::leftovers`); the app's git creates
@@ -29,15 +29,37 @@ use std::path::{Path, PathBuf};
 use super::stamp::Store;
 use crate::subprocess::git_query;
 
-/// The user's own way past the gate, by name. The pre-shell hook
-/// refuses a session's command that spells it.
+/// The user's own way past the gate, by name. Claude's pre-shell hook
+/// refuses a command that spells it.
 pub(crate) const SKIP: &str = "PGG_GATE_SKIP";
 
 /// The mark Claude Code leaves in the environment of everything it runs,
-/// and so in every git a session starts: it tells a session's ref update
-/// from the user's. The pre-shell hook refuses a session's command that
-/// spells it, as it does one spelling [`SKIP`].
+/// and so in every git a Claude session starts: it tells that session's
+/// ref update from the user's. Claude's pre-shell hook refuses a command
+/// that spells it, as it does one spelling [`SKIP`].
 pub(crate) const CLAUDE_SESSION: &str = "CLAUDECODE";
+
+/// Codex leaves no mark of its own; the thread id it puts in every shell
+/// it runs (the chat a seat is claimed by, `seats::claim`) is what tells
+/// its git from the user's.
+pub(crate) const CODEX_SESSION: &str = "CODEX_THREAD_ID";
+
+/// Either mark, non-empty, makes a git a session's ([`a_sessions_git`]).
+/// The hook script spells the same check itself.
+pub(crate) const SESSION_MARKS: [&str; 2] = [CLAUDE_SESSION, CODEX_SESSION];
+
+/// The ids the hook writes a branch's maker down by ([`maker`]), Claude's
+/// ahead of Codex's — Codex's is its mark. The hook script spells the same
+/// pair.
+pub(crate) const MAKER_IDS: [&str; 2] = ["CLAUDE_CODE_SESSION_ID", CODEX_SESSION];
+
+/// Whether this process is a session's — Claude Code's or Codex's — by
+/// [`SESSION_MARKS`].
+pub(crate) fn a_sessions_git() -> bool {
+    SESSION_MARKS
+        .iter()
+        .any(|mark| std::env::var_os(mark).is_some_and(|value| !value.is_empty()))
+}
 
 const HOOKS_DIR: &str = ".githooks";
 const HOOK: &str = "reference-transaction";
@@ -196,11 +218,12 @@ fn write_executable(path: &Path, text: &str) -> Result<(), String> {
 /// on main. The refusal reason is what git shows the person whose command
 /// was stopped.
 pub(crate) fn verdict(dir: &Path, old: &str, new: &str) -> Result<(), String> {
-    // A git without `CLAUDE_SESSION` is the user's own — their terminal, their
-    // IDE, a window they are clicking in — and their main is theirs to
-    // move, rewinds included. The script asks this before it needs cargo;
-    // here it is asked again for the hand-run `gate verdict` and the tests.
-    if std::env::var_os(CLAUDE_SESSION).is_none_or(|mark| mark.is_empty()) {
+    // A git without a session's mark is the user's own — their terminal,
+    // their IDE, a window they are clicking in — and their main is theirs
+    // to move, rewinds included. The script asks this before it needs
+    // cargo; here it is asked again for the hand-run `gate verdict` and the
+    // tests.
+    if !a_sessions_git() {
         return Ok(());
     }
     if std::env::var(SKIP).is_ok_and(|v| v == "1") {
@@ -271,6 +294,9 @@ mod tests {
         let script = include_str!("../../../../.githooks/reference-transaction");
         let spelled = format!("made=\"$(dirname \"$0\")/../{}\"", super::MADE);
         assert!(script.contains(&spelled), "{spelled}");
+        let [claude, codex] = super::MAKER_IDS;
+        let ids = format!("id=\"${{{claude}:-${codex}}}\"");
+        assert!(script.contains(&ids), "{ids}");
         // The installed copy stands in `pgg-gate/hooks`, so `..` is the
         // `pgg-gate` that `maker` joins.
         let common = crate::yard::Yard::new("hooks-creator");
@@ -308,23 +334,24 @@ mod tests {
         assert_eq!(maker(&common, branch), by("session-3", Made::Created));
     }
 
-    /// The script reads the mark itself, spelled as `CLAUDE_SESSION` does, ahead of
-    /// its cargo guard.
+    /// The script lets a git through on every mark `SESSION_MARKS` names
+    /// being empty, as `a_sessions_git` does, ahead of its cargo guard.
     #[test]
-    fn the_hook_script_reads_the_same_session_mark() {
+    fn the_hook_script_reads_the_same_session_marks() {
         let script = include_str!("../../../../.githooks/reference-transaction");
-        let mark = script.find(super::CLAUDE_SESSION).unwrap_or_else(|| {
-            panic!(
-                "the hook script has to read {} itself",
-                super::CLAUDE_SESSION
-            )
-        });
+        let marks: String = super::SESSION_MARKS
+            .iter()
+            .map(|mark| format!("${mark}"))
+            .collect();
+        let check = format!("[ -n \"{marks}\" ] || exit 0");
+        let at = script
+            .find(&check)
+            .unwrap_or_else(|| panic!("the hook script has to read the marks itself: {check}"));
         let cargo = script.find("command -v cargo").expect("the cargo guard");
         assert!(
-            mark < cargo,
-            "a git without {} has to be past the hook before cargo is asked for — an IDE's \
-             has no cargo on PATH, and the guard below fails closed",
-            super::CLAUDE_SESSION
+            at < cargo,
+            "a git without a session's mark has to be past the hook before cargo is asked for \
+             — an IDE's has no cargo on PATH, and the guard below fails closed"
         );
     }
 }

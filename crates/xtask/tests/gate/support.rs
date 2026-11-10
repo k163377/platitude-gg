@@ -164,7 +164,9 @@ impl Sandbox {
             .env("CLAUDECODE", "1")
             // Which session a sandbox's git is, a test says: the hook writes
             // down whose a branch is, and the session running this suite
-            // would lend its own id to every branch made here.
+            // would lend its own id to every branch made here. Codex's id
+            // is a session's mark besides, which a git a test runs as the
+            // user's must not carry.
             .env_remove("CLAUDE_CODE_SESSION_ID")
             .env_remove("CODEX_THREAD_ID")
             // The desktop app's session settles a claim as surely as the

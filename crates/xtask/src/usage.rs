@@ -54,7 +54,7 @@ commands:
       halted, owed again by the next run. A commit whose every step is green is
       stamped, and the reference-transaction hook lets a session's git
       move main onto stamped commits only — a git the user runs carries
-      no CLAUDECODE mark, and the hook does not answer for it. A
+      no session's mark (gate::hooks), and the hook does not answer for it. A
       component no registered line shows stops the gate by name: name
       it on the row of the line whose run brings it up
       (crates/xtask/verb-lines.txt), and the gate passes it from then

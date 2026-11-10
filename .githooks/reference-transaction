@@ -15,8 +15,8 @@ case "$1" in prepared | committed) ;; *) exit 0 ;; esac
 # deletion of the loose file (measured) — so a branch is created only when
 # it was not there before the transaction, and goes only when it is not
 # there after. A creation by a git with no session id (the user's own, the
-# app's) leaves the branch nobody's. Kept whatever the `CLAUDECODE` mark
-# below says.
+# app's) leaves the branch nobody's. Kept whatever the session marks below
+# say.
 made="$(dirname "$0")/../made"
 id="${CLAUDE_CODE_SESSION_ID:-$CODEX_THREAD_ID}"
 case "$id" in *[!A-Za-z0-9_-]*) id="" ;; esac
@@ -45,11 +45,12 @@ while read -r old new ref; do
   esac
 done
 [ "$1" = prepared ] && [ -n "$main_new" ] || exit 0
-# Without Claude Code's mark it is the user's git, and their main is theirs
-# to move. Asked ahead of the cargo guard below, which fails closed where
-# cargo is not on PATH (an IDE's git); the verdict reads the same mark
-# (crates/xtask/src/gate/hooks.rs).
-[ -n "$CLAUDECODE" ] || exit 0
+# Without a session's mark it is the user's git, and their main is theirs
+# to move: Claude Code leaves `CLAUDECODE` in everything it runs, Codex its
+# thread id. Asked ahead of the cargo guard below, which fails closed where
+# cargo is not on PATH (an IDE's git); the verdict reads the same marks
+# (crates/xtask/src/gate/hooks.rs `SESSION_MARKS`).
+[ -n "$CLAUDECODE$CODEX_THREAD_ID" ] || exit 0
 here="$(dirname "$0")"
 tree="$(cat "$here/tree" 2>/dev/null)"
 if [ -z "$tree" ] || ! cd "$tree"; then

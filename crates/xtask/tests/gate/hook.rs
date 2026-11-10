@@ -58,7 +58,8 @@ fn main_moves_only_onto_a_gated_commit_whatever_moves_it() {
     assert_eq!(sb.main_sha(), tip);
 }
 
-/// Without the session mark (`CLAUDECODE`) main moves with no stamp and
+/// Without a session's mark (`CLAUDECODE`, `CODEX_THREAD_ID`, which the
+/// sandbox leaves out) main moves with no stamp and
 /// no skip flag: that git is the user's, and an IDE's has no cargo on
 /// PATH to reach a verdict with.
 #[test]
@@ -87,6 +88,36 @@ fn the_users_own_git_moves_main_with_no_stamp() {
     )
     .expect("the user rewinds their own main");
     assert_eq!(sb.main_sha(), main_before);
+}
+
+/// Codex leaves no `CLAUDECODE` mark, only its thread id: that git is a
+/// session's, and main answers to the gate for it as for Claude's.
+#[test]
+fn a_codex_sessions_git_moves_main_only_onto_a_gated_commit() {
+    let sb = Sandbox::new("codex-main");
+    let codex = [("CLAUDECODE", ""), ("CODEX_THREAD_ID", "thread-1")];
+    sb.write_refs(&sb.seat, 6);
+    let tip = sb.commit_all(&sb.seat, "feat(core): six", &codex);
+    let main_before = sb.main_sha();
+    let merge = sb.git(&sb.repo, &["merge", "--ff-only", "worktree-a"], &codex);
+    assert!(
+        merge.as_ref().is_err_and(|e| e.contains("no gate stamp")),
+        "{merge:?}"
+    );
+    sb.write(&sb.repo, "internal-docs/notes.md", "# notes\n\ncodex\n");
+    sb.git_ok(&sb.repo, &["add", "-A"]);
+    let direct = sb.git(&sb.repo, &["commit", "-q", "-m", "docs: codex"], &codex);
+    assert!(
+        direct.as_ref().is_err_and(|e| e.contains("no gate stamp")),
+        "{direct:?}"
+    );
+    assert_eq!(sb.main_sha(), main_before, "main did not move");
+    sb.git_ok(&sb.repo, &["reset", "-q", "--hard", "HEAD"]);
+
+    sb.gate_ok(&sb.seat, &[]);
+    sb.git(&sb.repo, &["merge", "--ff-only", "worktree-a"], &codex)
+        .expect("a gated commit is main's to take");
+    assert_eq!(sb.main_sha(), tip);
 }
 
 #[test]
