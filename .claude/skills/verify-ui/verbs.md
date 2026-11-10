@@ -8,9 +8,7 @@
 
 - `details-failure --preset perf`: 実在しないOIDの詳細を要求し、失敗の表示を撮る — 詳細は `AutoActDetailsVerbs.qml`
 
-- `perf none|details|diff|scroll|scroll-none|font-walk --preset perf`: 性能ドライバーの表示契約(性能値は `cargo xtask perf` の実測)— 詳細は `verify/verbs/graph.rs` の `perf` 行と `PagePerfDriver.qml` / `WindowPerfDriver.qml`
-
-- `perf colour|diff-scroll|sequence --preset perf-sequence`: 固定Kotlin diffの最終色付け、可視diffスクロール、2 OIDを2周する表示契約 — 詳細は同上
+- `perf none|details|diff|scroll|scroll-none|font-walk --preset perf` / `perf colour|diff-scroll|sequence --preset perf-sequence`: 性能ドライバーの表示契約(性能値は `cargo xtask perf` の実測)。後者は固定Kotlin diffの最終色付け、可視diffスクロール、2 OIDを2周する表示契約 — 詳細は `verify/verbs/graph.rs` の `perf` 行と `PagePerfDriver.qml` / `WindowPerfDriver.qml`
 
 - `commit`(引数はメッセージ。省略時は `chore: commit from the headless run`): commit して HEAD の行へ着地する — 詳細は `AutoActWipVerbs.qml`
 - `amend`(同じく引数はメッセージ。省略時は `--no-edit`。`--preset marker` も撃つ): amend して着地する — 詳細は `AutoActWipVerbs.qml`
@@ -18,7 +16,7 @@
 - `amend-tip --preset undone`: amend が HEAD を空にする時の commit ボタンの拒否とツールチップ — 詳細は `AutoActWipVerbs.qml`
 - `edit-message-refused <要約を 1 語> --preset undone`: `amend-tip` の詳細ペイン版(保存ボタンの拒否)— 詳細は `AutoActHistoryVerbs.qml`
 - `amend-reset-author --preset authorship`(引数は `amend` と同じ): HEAD の author を identity で取り上げる amend — 詳細は `AutoActWipVerbs.qml`
-- `stash-file` / `switch` / `switch-remote` / `squash` / `edit-message` / `edit-message-leave`(`switch` を止まった木・conflict の残る木で撃つと watchdog まで待つ — その 2 つは `switch-stopped` / `switch-conflicted`)— 詳細は `AutoActWipVerbs.qml` / `AutoActSwitchVerbs.qml` / `AutoActHistoryVerbs.qml`
+- `stash-file` / `switch` / `switch-remote` / `edit-message` / `edit-message-leave`(`switch` を止まった木・conflict の残る木で撃つと watchdog まで待つ — その 2 つは `switch-stopped` / `switch-conflicted`)— 詳細は `AutoActWipVerbs.qml` / `AutoActSwitchVerbs.qml` / `AutoActHistoryVerbs.qml`
 - `switch-remote-twice origin/feature/remote-only`: リモートにしか無いブランチのチップの連打を門が止めること(判定は報告行だけ)— 詳細は `AutoActSwitchVerbs.qml`
 - `stash` [`named`]: ツールバーの `stash` で木ごと退避する — 詳細は `AutoActWipVerbs.qml`
 - `stash-lands --preset conflict-staged`: 作業ツリーの行に立ったまま `stash` を押した時の読み手の着地 — 詳細は `AutoActWipVerbs.qml` / `AutoActLandings.qml`
@@ -295,17 +293,14 @@
 
 ### 一覧(続き)
 
-**段落側に仕込みがある動詞は、引数・preset を §動詞ごとの読み方・仕込み で動詞名 Grep** して読む:
+**段落側に仕込みがある動詞(`band-actions*` / `old-git*` / `no-lfs*` / `avatar-*`)は、引数・preset を §動詞ごとの読み方・仕込み で動詞名 Grep** して読む:
 
-- `tab-widths`(帯の run の配り方。引数は**到達する状態**(`ample` 既定 / `short`)。must_say — 詳細は `WindowTabActs.qml` の `tabWidthActTimer`)
-- `tab-mark`(タブの hover と `✕` の出方。引数は手を置くタブ — 詳細は `WindowTabActs.qml` の `tabMarkActTimer`)
-- `tab-name`(同名リポジトリが並んだ時のタブ名と、hover のフルパス。引数はどのタブを指すか。must_say — 詳細は `WindowTabActs.qml` の `tabNameActTimer`)
-- `tab-drag`(タブを掴んで並べ替えた後の順。引数 `<from>:<to>` — 詳細は `WindowTabActs.qml` の `tabDragTimer`)
-- `tab-hold`(掴んだまま = 席から外れて描かれているタブ。引数はどのタブか — 詳細は `WindowTabActs.qml` の `tabHoldTimer`)
-- `tab-edge`(掴んだタブを帯の端へ押し当てて、列の方を流す。引数はどのタブか — 詳細は `WindowTabActs.qml` の `tabEdgeTimer`)
-- `tab-pin`(今居るタブが run の外へ出ている間、縁に立つ張り付きタブ。引数はどのタブを前に出すか。must_say — 詳細は `WindowTabPinActs.qml` の `tabPinTimer`)
-- `tab-pin-go`(その張り付きタブを押して、帯を本物の席まで流す。must_say — 詳細は `WindowTabPinActs.qml` の `tabPinGoTimer`)
-- `tab-open-go`(同じ staging に 13 個目のリポジトリを開いて、帯がその席まで流れる。引数は開くリポジトリ = 省略で xtask が建てる。must_say — 詳細は `WindowTabPinActs.qml` の `tabOpenGoTimer`)
+- `tab-widths [ample|short]` / `tab-mark [<タブ>]`(**タブの幅と `✕`**。xtask が長さの違う名前でリポジトリを建てる。`tab-widths` は帯の run の配り方で、引数は**到達する状態**(`ample` 既定 / `short`。枚数ではない)、報告行の `widths=` を形で読む(must_say)。`tab-mark` はタブの hover と `✕` の出方で、引数は手を置くタブ(既定 1)— 詳細は `WindowTabActs.qml` の `tabWidthActTimer` / `tabMarkActTimer`、仕込みは `verify/repos.rs`、判定は `verify/verbs/window.rs`)
+- `tab-name [<タブ>]`(同名リポジトリが並んだ時のタブ名と、hover のフルパス。xtask が同じ根の下に 5 つ建てる。引数はどのタブを指すか。must_say — 詳細は `WindowTabActs.qml` の `tabNameActTimer`、仕込みは `verify/repos.rs`、判定は `verify/verbs/window.rs`)
+- `tab-drag [<from>:<to>]` / `tab-hold [<タブ>]`(**タブの並べ替えは対でしか意味を成さない**。xtask が 4 つ建てる。`tab-drag` はタブを掴んで並べ替えた後の順で、両向き撃つ(既定 `3:1` が左・`0:3` が右)。`tab-hold` は掴んだまま = 席から外れて描かれているタブで、引数はどのタブか — 詳細は `WindowTabActs.qml` の `tabDragTimer` / `tabHoldTimer`、判定は `verify/verbs/window.rs`)
+- `tab-edge [<タブ>]`(**帯が横スクロールしている時の並べ替え** = 掴んだタブを帯の端へ押し当てて、列の方を流す。xtask が 12 枚建てて窓を床に落とす。引数はどのタブか。**判定は報告行** — 詳細は `WindowTabActs.qml` の `tabEdgeTimer`、判定は `verify/verbs/window.rs`)
+- `tab-pin [<タブ>]` / `tab-pin-go [<タブ>]`(今居るタブが run の外へ出ている間、縁に立つ張り付きタブ / それを押して、帯を本物の席まで流す側。staging は `tab-edge` と同じ 12 枚 + 床、引数は前に出すタブ(既定 0 = 張り付きタブは左の縁)。must_say — 詳細は `WindowTabPinActs.qml` の `tabPinTimer` / `tabPinGoTimer`、判定は `verify/verbs/window.rs`)
+- `tab-open-go [<パス>]`(`tab-pin` と同じ staging(前は 0 番固定)に 13 個目のリポジトリを開いて、帯がその席まで流れる。引数は開くリポジトリ = 省略で xtask が建てて渡す。must_say — 詳細は `WindowTabPinActs.qml` の `tabOpenGoTimer`、判定は `verify/verbs/window.rs`)
 - `tab-open-moved-on`(`tab-open-go` の到着の後に窓のどこかを押し、窓を広げてから床へ戻す = 押下で頼みが終わり、帯は動かず代役が立つ。must_say — 詳細は `WindowTabPinActs.qml` の `tabMovedOnTimer`)
 - `carried-open --preset carried`(**preset 必須**。別の worktree の未コミット行をダブルクリックして、このタブをその worktree に立たせる = タブは増えない(規約 §タブの所作)— 詳細は `WindowTabActs.qml` の `carriedOpenTimer`)
 - `worktree-stand [行番号] --preset worktrees`(WORKTREES の行をダブルクリックして、このタブをその worktree に立たせる。引数はセクションの行番号(既定 `1`)— 詳細は `WindowTabActs.qml` の `worktreeStandTimer`)
@@ -317,24 +312,22 @@
 - `carried-stand <worktree 名> --preset carried`(同じペインを、まだ何も読んでいない状態で。preset・引数は `carried-read` と同じ — 詳細は `AutoActWipVerbs.qml` の `carriedStandTimer`)
 - `carried-menu <worktree 名> --preset carried`(別の worktree の未コミット行の右クリック(規約 §別の worktree を読む)。preset・引数は `carried-read` と同じ、`here --preset carried-conflicted` は灰の形。絵は scene.png — 詳細は `AutoActWipVerbs.qml` の `carriedMenuTimer`)
 - `carried-apply <worktree 名> --preset carried` / `carried-apply-refused <worktree 名> --preset carried --allow-write-failure`(そのメニューの `Apply changes to this worktree` を押す / git が断る形 — 詳細は同上)
-- `wip-landing --preset carried`(**既定の着地が乗るのはこの窓の作業ツリー行を持つ pass だけ**。preset 必須。must_say — 詳細は `WindowBadgeActs.qml` の `wipLandingTimer`)
-- `wip-landing-stopped --preset carried-clashing`(同じ主張を、止まった操作が負う着地で。preset 必須。must_say — 詳細は `AutoActHistoryVerbs.qml`)
-- `tab-carry`(タブ切替が何を連れて行き何を捨てるか。must_say — 詳細は `WindowTabActs.qml` の `tabCarryTimer`)
-- `corner <ペイン>`(右下の git バージョン表示の譲り方。引数必須。報告行 `git_corner` — 詳細は `AutoActDetailsVerbs.qml` の `cornerTimer`)
-- `open-again`(開いているリポジトリをもう一度開く — そのまま既存タブへ。詳細は `WindowTabActs.qml` の `openAgainTimer`)
-- `identity`(identity 未設定の質問ダイアログ — 詳細は `WindowDialogActs.qml` の `identityTimer`)
-- `identity-half`(半分だけ保存された identity から続ける — 詳細は同上)
-- `identity-tip`(半端 save の後の帯の状態カード。overlay.png 側。must_say — 詳細は `WindowDialogActs.qml` の `identityTipTimer`)
-- `solo`(2 個目の起動が断られる報告。must_say `solo blocked=true` — 詳細は `WindowTabActs.qml` の `soloActTimer`)
-- `band`(タブ行がタイトルバーを兼ねる帯 — 数字で読む。報告行 `band`。チップや行を見せたい時は、その行を待つ動詞(`nav-jump` / `ref-list` / `row-card`)で撮る — 詳細は `WindowBandActs.qml` の `bandActTimer`)
-- `app-menu` / `app-menu-reclick`(☰ を 1 回押して立てたまま / 2 回押して閉じる。**対で読む**。must_say — 詳細は `WindowBandActs.qml` の `appMenuActTimer`)
+- `wip-landing --preset carried`(**既定の着地が乗るのはこの窓の作業ツリー行を持つ pass だけ**。preset 必須 — pass の順は run が決めるので、preset を替えると watchdog まで無言。must_say — 詳細は `WindowBadgeActs.qml` の `wipLandingTimer`、判定は `verify/verbs/window.rs`)
+- `wip-landing-stopped --preset carried-clashing`(同じ主張を、止まった操作が負う着地で。preset 必須(理由は `wip-landing` と同じ)。must_say — 詳細は `AutoActHistoryVerbs.qml` の `stoppedLandingTimer`、判定は `verify/verbs/window.rs`)
+- `tab-carry --preset basic --preset stashes`(タブ切替が何を連れて行き何を捨てるか。タブが 2 つ要る。must_say — 詳細は `WindowTabActs.qml` の `tabCarryTimer`、判定は `verify/verbs/window.rs`)
+- `corner wip|<行>`(右下の git バージョン表示が隅を譲るか。**省略はエラー**。**`--preset basic` と `--preset long` を対で読む**(片側だけでは「常に出る」「常に出ない」と見分けが付かない)。報告行 `git_corner` — 詳細は `AutoActDetailsVerbs.qml` の `cornerTimer`、判定は `verify/verbs/panes.rs`)
+- `open-again [<パス>]`(開いているリポジトリをもう一度開く — そのまま既存タブへ。引数なし(`--preset basic --preset stashes`)と git の綴りを渡す形を対で読み、本題は後者 — 詳細は `WindowTabActs.qml` の `openAgainTimer`)
+- `identity [<name>|<email>]` / `identity-half` / `identity-tip`(identity 未設定の質問ダイアログ / 半分だけ保存された identity から続ける / 半端 save の後の帯の状態カード(overlay.png 側。must_say)。既定の値は `Ada Lovelace|ada@example.com`。**書き込みが demo リポジトリの外 = 人の git 設定へ出る**のはこの系列だけ(隔離は全動詞共通 — linux.md §Linux(コンテナ)での動確「どの run も自分の gitconfig で立つ」)— 詳細は `WindowDialogActs.qml` の `identityTimer` / `identityTipTimer`、仕込みは `verify/shim.rs`、判定は `verify/verbs/identity.rs`)
+- `solo`(2 つ目のプロセスが出す窓 = 2 個目の起動が断られる報告。xtask が `--config-dir` の `lock` を握ってから起動する。must_say `solo blocked=true` — 詳細は `WindowTabActs.qml` の `soloActTimer`、判定は `verify/verbs/panes.rs`)
+- `band`(タブ行がタイトルバーを兼ねる帯 — 掴めるかは絵に出ないので数字で読む。報告行 `band`。`--system-title-bar` を付けると兼ねない側(mac / Linux)の形。チップや行を見せたい時は、その行を待つ動詞(`nav-jump` / `ref-list` / `row-card`)で撮る — 詳細は `WindowBandActs.qml` の `bandActTimer`)
+- `app-menu` / `app-menu-reclick`(☰ を 1 回押して立てたまま / 2 回押して閉じる。**対で読む**。引数なし。must_say — 詳細は `WindowBandActs.qml` の `appMenuActTimer`、判定は `verify/verbs/window.rs`)
 - `ops-panel [<幅>]`(**操作パネルが立った姿** = 状態の表を撮る動詞。preset は登録表の行(`panel` / `longnames` / `worktrees`)。must_say と絵の主張 `ops_panel` — 詳細は `WindowBandActs.qml` の `opsPanelTimer`)
 - `ops-stand` / `ops-stand-repos` / `ops-stand-worktrees [<絞り込み>]`(リポジトリ名のカードとその段。`repos` は**タブが 2 枚要る**(`--preset panel --preset stashes`)— 詳細は `WindowBandActs.qml` の `opsDoorTimer`)
 - `ops-branch` / `ops-branch-folder <フォルダ>`(ブランチ名のカード = 左メニューの BRANCHES と同じ木。後者はそのフォルダのカードまで開く。**`--preset panel`** — 詳細は同上)
 - `ops-branch-pick <ブランチ>` / `ops-worktree-pick <フォルダ名>` / `ops-repo-pick`(**カードの行を押した先**。`ops-branch-pick rig --preset panel` / `ops-worktree-pick a --preset panel` / `ops-repo-pick --preset panel --preset stashes` — 詳細は `WindowOpsActs.qml`)
-- `window-fill`(最大化が四隅まで届く報告。must_say `fills=true` — 詳細は `WindowFrameActs.qml` の `fillActTimer`)
-- `window-floor`(窓の床 = これ以上小さくできない大きさ。must_say — 詳細は `WindowFrameActs.qml` の `floorActTimer`)
-- `details-fit`(詳細ペインの列が収まる報告。must_say `details_fit fills=true fits=true` — 詳細は `AutoActDetailsVerbs.qml` の `detailsFitTimer`)
+- `window-fill`(最大化した窓の中身が四隅まで届く報告。**絵では読めない**。must_say `fills=true` — 詳細は `WindowFrameActs.qml` の `fillActTimer`、判定は `verify/verbs/window.rs`)
+- `window-floor [fold|log|wip|rail]`(窓の床 = これ以上小さくできない大きさの 5 形(規約 §窓の床)。`wip` は `--preset rebase-conflict`。must_say — 詳細は `WindowFrameActs.qml` の `floorActTimer`、判定は `verify/verbs/window.rs`)
+- `details-fit [<行>]`(詳細ペインの列が収まる報告。引数を省くとページが自分で開いた行のまま測る。壁は `--preset edges` の行 7。must_say `details_fit fills=true fits=true` — 詳細は `AutoActDetailsVerbs.qml` の `detailsFitTimer`)
 - `details-parents <行>[:<幅>|:min]`(作者行の親の行が部屋に収まる形(`HashPlate.qml`)。**`--preset octopus`**(行 0 = 8 親・行 8 = 2 親)と **`--preset stashes`**(行 0)— 詳細は `AutoActDetailsVerbs.qml` の `detailsParentsTimer`、判定は `verify/verbs/panes.rs`)
 - `details-align <行>[:<幅>|:min]`(作者行の 2 行がそれぞれ 1 本のベースラインに載ること。登録表の行は `0` / `16:min --preset octopus-mates` と `7 --preset edges` — 詳細は `AutoActDetailsVerbs.qml` の `detailsAlignTimer`)
 - `details-parents-card <行>[:<幅>|:min]` / `details-parents-go <行>[:<幅>|:min]`(`+N` に手を置いて開く親の一覧カード / その 2 行目を押す。**`+N` が立つ形でないと開かない**(`--preset octopus` 行 0)— 詳細は `AutoActDetailsVerbs.qml` の `parentsCardTimer`)
@@ -355,7 +348,7 @@
 - `no-lfs [<幅>|floor]`(**`--preset lfs` が要る**。Git LFS が要るファイルが在り、git が LFS を走らせられない窓 = 帯の `NO LFS`。`floor` は黄の `…` に畳んだ姿 — 詳細は `WindowBadgeActs.qml` の `noLfsActTimer`、判定は `verify/verbs/window.rs`)
 - `no-lfs-card [<幅>|floor]`(**`--preset lfs`**。そのバッジを hover で開いたカード — 詳細は同上)
 - `badges-all [<幅>[:<タブ本数>]]` / `badges-all-hover`(**`--preset lfs-conflict` が要る**。引数は `badges` と同じ。帯の 6 つが全部立った形とそのカード — 詳細は `WindowBadgeActs.qml` の `badgesActTimer`、判定は `verify/verbs/window.rs`)
-- `state`(設定・画面状態の永続化。`--config-dir` を渡した 2 回目に `--restore` — 詳細は `WindowFrameActs.qml` の `stateActTimer`)
+- `state [change|minimize]`(設定・画面状態の永続化を 2 回の実行で読む。`change` は畳み・右ペイン幅・グラフのチップ列 / レーン列の幅・コマンドログ・auto fetch 間隔・初期ロード数を動かしてから申告する / `minimize` は最大化 → 申告 → 最小化 → 申告。同じ `--config-dir` を渡した 2 回目に `--restore` を足し、報告行が両方で一致すれば往復している — 詳細は `WindowFrameActs.qml` の `stateActTimer`)
 - `settings-git`(設定画面の `Git` の分類 — `GLOBAL` の IDENTITY / MERGE EDITOR の 2 章と、その下の `REPOSITORY OVERRIDE` 群。引数なし。`Application` の側は `settings <分>`)
 - `rename-taken <名前>`(**`--preset reflock` + `--allow-write-failure` が要る**。箱が知り得ない理由で git が断る名前を本当に submit した時の箱と報せバー。撃ち方: `rename-taken held --preset reflock --allow-write-failure` — 詳細は `AutoActNavBoxVerbs.qml` の `rename-taken` の枝と `renameTakenTimer`、判定は `verify/verbs/nav.rs`)
 - `switch-conflicted-go <ブランチ>[:<stash の本数>]`(**`--preset cherry-pick-quit` が要る**。unmerged な index の上で switch した時の質問バーに答えた着地。**対の `switch-conflicted` と組で撃つ**(`switch-conflicted feature/clash` と `switch-conflicted-go feature/clash:1`)。`switch-conflicted main` は今のブランチを押す形で、質問は立たない(`pressed=false bar=false`)— 詳細は `AutoActSwitchVerbs.qml` の `switch-stopped` の枝、組で読む理由は `verify/verbs/switch.rs`)
@@ -368,17 +361,17 @@
 - `settings-refresh-leave [<床>:<天井>:<他の worktree の床>:<他の worktree の天井>]`(`REFRESH` の章の欄を確定しないまま設定画面を出る。空の部分は空にした欄 — 詳細は `WindowSettingsActs.qml` の `refreshLeaveTimer`、判定は同上)
 - `settings-git-path [<絶対パス>|stored-missing|in-use|other]`(`Application` の `GIT EXECUTABLE` 章 — 撃つ git のパスと、その先が答えた版。`other` は `--other-git <版>` と組、古い版の絵は `--old-git` で持ち込む — 詳細(キーワード・存在しないパスの綴り方)は `WindowSettingsActs.qml` の `gitPathTimer`、判定は `verify/verbs/identity.rs`)
 - `settings-git-leave`(引数なし。差し出している git を置いて設定画面を出ようとする — 詳細は `WindowSettingsActs.qml` の `gitLeaveTimer`、判定は同上)
-- `settings-tools` / `settings-tools-loading`(設定画面の `Git` の Merge editor 候補一覧を開いたまま。後者は loading の edge を latch する側 — 詳細は `WindowSettingsActs.qml` の `toolsTimer`)
+- `settings-tools` / `settings-tools-loading`(設定画面の `Git` の Merge editor 候補一覧を実際に開いたまま止める。前者は settled 側、後者は実際の loading=true の edge を latch する側。引数なし — 詳細は `WindowSettingsActs.qml` の `toolsTimer`)
 - `settings-hand chapters|tools`(設定画面の 2 面の中クリックの手 = `middle-hand` の設定画面の側。`tools` は **`--preset mergetools` 必須** — 詳細は `WindowSettingsActs.qml` の `handTimer`、判定は `verify/verbs/panes.rs`)
 - `settings-tools-enter`(その欄の Enter を一覧の両側で 1 run に撃つ(規約 §選ぶ欄と打つ欄)— 詳細は `WindowSettingsActs.qml` の `toolEnterTimer`、判定は `verify/verbs/identity.rs`)
 - `settings-repo [<タブ番号>]` / `settings-repo-pick [<タブ番号>]`(**`--preset basic --preset stashes` でタブ 2 本**。設定画面の `Git` の分類 = この画面で一番背の高い姿。引数は帯の何番目のタブを選ぶか(省略で前に居るタブ)、`-pick` は更に一覧を下ろす — 詳細は `WindowSettingsActs.qml` の `repoSettingsTimer`、判定は `verify/verbs/identity.rs`)
-- `file-menu` / `file-menu-untracked` / `file-menu-staged` / `file-menu-conflict`(ファイル行の右クリック、バケツ別。引数はパス(`--preset dirty`、conflict は `both.txt --preset conflict-kinds`)— 詳細は `AutoActFileRowVerbs.qml` の `file-menu` の枝と `menuLine`、判定は `verify/verbs/panes.rs`)
+- `file-menu` / `file-menu-untracked` / `file-menu-staged` / `file-menu-conflict`(ファイル行の右クリック、バケツ別。引数はパス(`--preset dirty`、conflict は `both.txt --preset conflict-kinds` — 4 種が揃っていて、種別の文言を `conflict_kind` として報告する)— 詳細は `AutoActFileRowVerbs.qml` の `file-menu` の枝と `menuLine`、判定は `verify/verbs/panes.rs`)
 - `amend-author`(**`--preset authorship`**。amend の著者引き継ぎ表示 — 詳細は `AutoActWipVerbs.qml` の `amendAuthorTimer`、判定は `verify/verbs/panes.rs`)
 - `stash-menu`(stash 行の右クリック)
 - `name-box <行番号>[:<チップ列の幅>]`(グラフ行の名前入力欄を開いたまま止める。幅 `0` は列の床 — 詳細は `AutoActPaneVerbs.qml` の `name-box` の枝)
 - `menu-hover [<行番号>]`(コミット行メニューを開いてから、その行の hover カードを頼む。**`row-card` と対で読む** — 詳細は `AutoActRowMenuVerbs.qml` の `menuHoverTimer`、判定は `verify/verbs/graph.rs`)
 - `menu-list behind|under|own|swap`(チップの重なり一覧と、立っているメニュー(規約 §メニュー)。**`behind` は `ref-list` と対で読む** — 詳細は `AutoActRowMenuVerbs.qml` の `menuListTimer`、判定は `verify/verbs/graph.rs`)
-- `ref-list [<行>]` / `ref-list-card [<行>]`(チップ列の展開と、行カードとの対読み。引数を省くと HEAD の行 — 詳細は `AutoActGraphRowVerbs.qml` の `ref-list` の枝と `coverOf`、判定は `verify/verbs/graph.rs`)
+- `ref-list [<行>]` / `ref-list-card [<行>]`(チップ列の展開と、行カードとの対読み — `ref-list-card` は `row-card` と同じ行・同じ preset で対で読む。引数を省くと HEAD の行 — 詳細は `AutoActGraphRowVerbs.qml` の `ref-list` の枝と `coverOf`、判定は `verify/verbs/graph.rs`)
 - `graph-head-list [click]`(**`--preset deep`**。HEAD の張り付き行のチップを hover で展開した姿。`click` はカードの 1 行目を押すところまで — 詳細は `AutoActGraphRowVerbs.qml` の `headListTimer`、判定は `verify/verbs/graph.rs`)
 - `ref-list-lit <行>[:<カードの行>]`(本番は `0:1 --preset tags`。一覧の行に手を止めた姿 — 詳細は `AutoActGraphRowVerbs.qml` の `listLitTimer`、判定は同上)
 - `ref-list-choose <行>[:<カードの行>]`(既定 `1:0`、`--preset tags`。一覧の行を Ctrl 付きでクリックした姿(規約 §複数のコミットを選ぶ)— 詳細は `AutoActGraphRowVerbs.qml` の `ref-list-choose` の枝と `listChooseTimer`、判定は同上)
@@ -404,28 +397,28 @@
 
 - `fetch-ref-list <行>[:<タグ名>]`(`--preset tags`。`<行>:<タグ名>` は `--preset tagremotes`。fetch を撃ってから行のチップを展開し、基準のリモートと別のコミットに立つタグの段を読む — 詳細は `AutoActPublishVerbs.qml` の `fetchedRefListTimer`、判定は `verify/verbs/graph.rs`)
 - `signature <行> --preset signed`(詳細ペインの名前の右肩に立つ印。**引数は印を持つコミットの行**(行 0 は作業ツリー = `signature 1` が最新のコミット)— 詳細は `AutoActTipVerbs.qml` の `signatureTimer`)
-- `signature-tip <行> --preset errsig`(署名のツールチップ。**他の preset では FAIL** — 詳細は `AutoActTipVerbs.qml`、判定は `verify/verbs/identity.rs`)
-- `stash-tip <行>|older`(読み取り専用になった summary 箱のツールチップ。stash の行でも HEAD より古いコミットの行でも同じ動詞 — 詳細は `AutoActTipVerbs.qml`)
+- `signature-tip <行> --preset errsig`(署名のツールチップ。`E` は `--preset errsig` の行 0 だけが持ち、gpg バイナリが要る。**他の preset では FAIL** — 詳細は `AutoActTipVerbs.qml`、判定は `verify/verbs/identity.rs`)
+- `stash-tip <行>|older`(読み取り専用になった summary 箱のツールチップ。stash の行でも HEAD より古いコミットの行でも同じ動詞。`older` は HEAD の行の 1 つ下で、stash を持たない preset と組む(`--preset co-authors`)— 詳細は `AutoActTipVerbs.qml`)
 - `field-menu [empty|typed|selected|readonly]`(**欄の右クリックメニュー**(`FieldMenu`)を summary 箱の状態ごとに。前の 3 つはコミット箱、`readonly` は HEAD の 1 つ下の行の summary。判定は報告行の `live=` — 詳細は `AutoActDetailsVerbs.qml` の `fieldMenuTimer`、判定は `verify/verbs/panes.rs`)
 - `key-menu <面>[:…]`(**キーボードから開く右クリックメニュー**(規約 §メニュー のキーボード・`KeyMenu`)。面は `graph` / `graph:request` / `graph:pointer`(**開かないのが正**)/ `files:<path>`(`--preset dirty`)/ `diff:<path>`(`notes.txt --preset manyhunks`)/ `nav:<kind>:<name>` — 詳細は `AutoActKeyMenuVerbs.qml`、判定は `verify/verbs/panes.rs`)
-- `path-tip [<面>][-tree][@<行>]`(ファイル行の hover が出すフルパスのツールチップ。`-tree` はツリーのフォルダ連鎖行。`--preset longpaths` で省略された行を、席の絵は `wip@2 --preset dirty` で撮る — 詳細は `AutoActTipVerbs.qml` の `pathTipTimer`、判定は `verify/verbs/nav.rs`)
+- `path-tip [<面>][-tree][@<行>]`(ファイル行の hover が出すフルパスのツールチップ。面は `wip`(既定)か行番号、または `carried:<worktree 名>`(`--preset carried` と組む)。`-tree` はツリーのフォルダ連鎖行。`--preset longpaths` で省略された行を、席の絵は `wip@2 --preset dirty` で撮る — 詳細は `AutoActTipVerbs.qml` の `pathTipTimer`、判定は `verify/verbs/nav.rs`)
 - `tip-copy`(**ツールチップの字が持ち帰れる欄であること**。引数なし・`--preset longpaths`。**写真では判定できない** — 詳細は `AutoActTipVerbs.qml` の `tipCopyTimer`、判定は `verify/verbs/nav.rs`)
 - `tip-sweep`(**ツールチップの字を「言葉の周りの帯」から掴めること**(規約 §hover のツールチップ)。仕込みは `tip-copy` と同じ — 詳細は `AutoActTipVerbs.qml` の `tipSweepTimer`、判定は `verify/verbs/nav.rs`)
 - `card-sweep [<行>]`(**hover カードの字を「行の間・padding・短い行の脇」から掴めること**(規約 §hover のツールチップ)。引数は `row-card` と同じグラフ行で既定は 1 — 詳細は `AutoActGraphRowVerbs.qml` の `cardSweepTimer`、判定は `verify/verbs/graph.rs`)
-- `author-card` / `author-card-open`(author 名の平常時とカード。`--preset authorship` — 詳細は `AutoActTipVerbs.qml`、判定は `verify/verbs/panes.rs`)
+- `author-card <行>` / `author-card-open <行>`(author 名の平常時とカード。`--preset authorship` が 4 状態を行 0〜3 に並べる — 詳細は `AutoActTipVerbs.qml`、判定は `verify/verbs/panes.rs`)
 - `co-authors <行>[:<幅>|:min]` / `co-authors-open <行>`(日付行の credit 表示とカード(規約 §co-author の表示)。`--preset co-authors`、最小幅で畳む形は `0:min` / `8:min --preset octopus-mates`。幅は `details-parents` と同じ指し方。名前が欠片になっていないことは絵で見る — 詳細は `AutoActTipVerbs.qml` の `coAuthorTimer`、判定は `verify/verbs/panes.rs`)
 - `details-select-away <先の値>+<次の値>[:<行>]`(**選択は窓に 1 つ**(規約 §右のペインの字は掴める)。例 `author+hash` / `date+mate --preset co-authors`。**写真では答えられない** — 詳細は `AutoActDetailsVerbs.qml` の `detailsSelectTimer`、判定は `verify/verbs/panes.rs`)
 - `details-sweep <値>[:<行>]`(**値の範囲選択を「判定の無い余白」から取れること**(規約 §右のペインの字は掴める)。値は `author` / `date` / `mate` / `hash` / `parent`(`mate` は `--preset co-authors`・他は `--preset authorship`)— 詳細は `AutoActDetailsVerbs.qml` の `detailsSweepTimer`、判定は `verify/verbs/panes.rs`)
 - `details-hand [<行>]`(**ハッシュの板の所作 —— 単クリックはフルハッシュのコピー・ドラッグは画面の 8 桁の選択**(規約 §右のペインの字は掴める)。`--preset authorship`。**写真では 1 つも答えられない** — 詳細は `AutoActDetailsVerbs.qml` の `detailsHandTimer`、判定は `verify/verbs/panes.rs`)
 - `hash-tip [<行>]` / `hash-tip-counting [<行>]`(**コピーの答えは板の 1 語**(規約 §hover のツールチップ)。`--preset authorship`。後者は tip が出る前に押す順 — 詳細は `AutoActDetailsVerbs.qml` の `hashTipTimer`、判定は `verify/verbs/panes.rs`)
 - `details-select <値>[:<行>]`(**右パネルの値がドラッグで掴める欄であること**(規約 §右のペインの字は掴める)。値と preset は `details-sweep` と同じ、切れた欄は `mate:7 --preset edges`。**写真では判定できない** — 詳細は `AutoActDetailsVerbs.qml` の `detailsSelectTimer`、判定は `verify/verbs/panes.rs`)
-- `row-card <行>`(グラフ行の hover カード — 詳細は `AutoActGraphRowVerbs.qml` の `rowCardTimer`、判定は `verify/verbs/graph.rs`)
+- `row-card <行>`(グラフ行の hover カード。`ref-list-card` と同じ行・同じ preset で対で読む — 詳細は `AutoActGraphRowVerbs.qml` の `rowCardTimer`、判定は `verify/verbs/graph.rs`)
 - `row-card-return [<行>]`(**カードへ降りた手が同じ行へ戻る往復**。既定は行 1。横跳びそのものは実窓でしか見えない — 詳細は `AutoActGraphRowVerbs.qml` の `cardReturnTimer`、判定は `verify/verbs/graph.rs`)
 - `card-message 7 --preset edges` / `card-message-esc 7 --preset edges`(カードが**切ったメッセージの下に出す 1 行を押す** / 同じ歩きを Escape まで。**切るメッセージを持つのはこの preset のこの行だけ**(他は watchdog まで無言)— 詳細は `AutoActGraphRowVerbs.qml` の `cardMessageTimer`、判定は `verify/verbs/graph.rs`)
 - `card-note-lit 7 --preset edges`(**同じ 1 行に手を止めた姿**。休息側の `row-card 7` と対で読む — 詳細は `AutoActGraphRowVerbs.qml` の `cardNoteTimer`、判定は `verify/verbs/graph.rs`)
-- `details-grow` / `details-grow-squeeze` / `wip-grow` / `wip-grow-squeeze`(description 枠の grip — 詳細は `AutoActDetailsVerbs.qml` の `descGrowTimer`、判定は `verify/verbs/panes.rs`)
+- `details-grow` / `details-grow-squeeze` / `wip-grow` / `wip-grow-squeeze`(description 枠の grip。引数は詳細ペインが行番号・commit 欄は打ち込む本文(省略時は xtask が長い本文を入れる)。**PNG は必ず目視する** — 詳細は `AutoActDetailsVerbs.qml` の `descGrowTimer`、判定は `verify/verbs/panes.rs`)
 - `nav-rename`(左メニューの改名入力欄 — 詳細は `AutoActNavBoxVerbs.qml`)
-- `replace-remote-box`(リモートブランチの差し替えの入力欄 — 詳細は `AutoActNavBoxVerbs.qml`)
+- `replace-remote-box <remote>/<old>:<入れておく名前>`(リモートブランチの差し替えの入力欄。既にリモートに在る名前を渡せば拒否された枠が撮れる — 詳細は `AutoActNavBoxVerbs.qml`)
 - `avatar-rest` / `avatar-hover` / `avatar-tip` / `avatar-assign` / `avatar-badge` / `avatar-settings` / `avatar-row-lit` / `avatar-remove` / `avatar-combo`(アバター一式: 静止 / ペンのバッジ / バッジの文 / 与える / バッジ / 設定一覧 / Remove の hover(赤い側)/ 回数押しで消した後 / 候補の combo — 詳細は `AutoActFindVerbs.qml` / `WindowSettingsActs.qml`、判定は `verify/verbs/identity.rs`)
 - `avatar-enter`(**候補欄の Enter が `Choose avatar…` の扉を開く**(`SettingsAppPane.qml`)。**絵では判定できない** — 詳細は `WindowSettingsActs.qml` の `avatarEnterTimer`、判定は `verify/verbs/identity.rs`)
 - `recover [fold,lit,blink]` / `recover-open [<n>|none][,fold,lit,card,filter:<語>,restore,part:<n>,short,scroll:<行>,<menu|dbl|again>:<tip|passed>,dbl:list,floor[,notice,askform,long]]`(破棄記録(`platitude_core::discards`)の席・一覧・帯・カード・復元・選択中の行の固定・仮表示中の行の右クリックとダブルクリックと改名。**`--preset discards`** が全種を持ち(番号は `xtask::demo::discards`)、**`--preset discards-deep`** は窓の外の 1 件、**`--preset discards-ceilings`** は帯の天井(長い名前・枝 8 本と 30 本ほか)、`floor` は窓を幅も高さも床へ下ろしてログを上げ、`notice` / `askform`(`long` で 49 字の名前)を帯と一緒に立て、グラフの行が残るかを `graphKept=` で言う — 引数と報告行は `AutoActRecoverVerbs.qml`、判定は `verify/verbs/recover.rs`)
@@ -437,35 +430,13 @@
 
 **「止まった側」の 4 動詞は 1 本の報告行を共有する** — `cherry-pick-stops` / `revert-stops` / `rebase-stops` / `drop-stops`(merge だけは `merge-stops` = 出口の形が違うので報告行も別)。共有する 1 本は `write_stopped wip= conflicts= error= log= cont= home= stashes= op= files=` で、**合格条件は `wip=true conflicts=true error=false log=false cont=true`**(`rebase-stops` / `drop-stops` は `home=repo` まで、`drop-stops` はさらに `stashes=1`)。**preset は「まだ止まっていない木」でなければならない**・**失敗した run の木は捨てる**。各値の意味・待ち・preset は `AutoActHistoryVerbs.qml` の `opStoppedTimer`、判定は `verify/verbs/sequencer.rs`。
 
-- `tab-widths [ample|short]` / `tab-mark [<タブ>]`(**タブの幅と `✕`**。xtask が長さの違う名前でリポジトリを建てる。`tab-widths` の引数は**到達する状態**(枚数ではない)で、報告行の `widths=` を形で読む。`tab-mark` の引数は手を置くタブ(既定 1)— 詳細は `WindowTabActs.qml` の `tabWidthActTimer` / `tabMarkActTimer`、仕込みは `verify/repos.rs`、判定は `verify/verbs/window.rs`)
-- `tab-name [<タブ>]`(**同名リポジトリのタブ名と hover**。xtask が同じ根の下に 5 つ建てる — 詳細は `WindowTabActs.qml` の `tabNameActTimer`、仕込みは `verify/repos.rs`、判定は `verify/verbs/window.rs`)
-- `tab-drag [<from>:<to>]` / `tab-hold [<タブ>]`(**タブの並べ替えは対でしか意味を成さない**。xtask が 4 つ建てる。`tab-drag` は両向き撃つ(既定 `3:1` が左・`0:3` が右)— 詳細は `WindowTabActs.qml` の `tabDragTimer` / `tabHoldTimer`、判定は `verify/verbs/window.rs`)
-- **作業ツリー行への 2 つの着地は `wip-landing --preset carried` / `wip-landing-stopped --preset carried-clashing`**(着地が乗るのはこの窓の行を持つ pass だけ、を既定選択と操作停止後の 2 経路で。pass の順は run が決めるので、preset を替えると watchdog まで無言 — 詳細は `WindowBadgeActs.qml` の `wipLandingTimer` / `AutoActHistoryVerbs.qml` の `stoppedLandingTimer`、判定は `verify/verbs/window.rs`)
-- `tab-carry --preset basic --preset stashes`(**タブ切替が何を連れて行き何を捨てるか**。タブが 2 つ要る — 詳細は `WindowTabActs.qml` の `tabCarryTimer`、判定は `verify/verbs/window.rs`)
-- `tab-edge [<タブ>]`(**帯が横スクロールしている時の並べ替え**。xtask が 12 枚建てて窓を床に落とす。**判定は報告行** — 詳細は `WindowTabActs.qml` の `tabEdgeTimer`、判定は `verify/verbs/window.rs`)
-- `tab-pin [<タブ>]` / `tab-pin-go [<タブ>]`(**今居るタブの張り付きタブ**と、それを押して帯が流れる側。staging は `tab-edge` と同じ 12 枚 + 床、引数は前に出すタブ(既定 0 = 張り付きタブは左の縁)— 詳細は `WindowTabPinActs.qml`、判定は `verify/verbs/window.rs`)
-- `tab-open-go [<パス>]`(**開いた時に帯がその席へ流れる**。staging は `tab-pin` と同じで前は 0 番固定。引数を省くと xtask が 13 個目を建てて渡す — 詳細は `WindowTabPinActs.qml` の `tabOpenGoTimer`、判定は `verify/verbs/window.rs`)
-
 **判定する所は報告行に隣り合わせで並べる** — `must_say` は 1 本の文字列の**部分一致**なので、間に別の読みが挟まると同じ run が落ちる。
 
 **新しい window 側の動詞を足したら `AutoActCompletion.defersCompletion` の一覧にも足す**(抜けは `cargo xtask verbs` が言う。機械が見ないのはページの sampler で完了する動詞の側 — implement.md §壊れない動詞の実装と反復)。**報告の前の最後の待ちに `"page": PageSettled.windowSettled(window)` を入れる** — 完了のターンに page が settled でなければ `complete … page=arriving:` で FAIL(共通の保持は報告の後なので、報告の値は保持では直らない)。**入れ忘れは「たまに落ちる」として出る** — **失敗した run のログは `auto_act ran=` と `auto_act complete=` が同じマイクロ秒に並び、報告行が 1 本も無い**。緑が続いても入れ忘れていないことにはならない。
 
-- `corner wip|<行>`(**右下の git バージョンが隅を譲るか**。**省略はエラー**。**`--preset basic` と `--preset long` を対で読む**(片側だけでは「常に出る」「常に出ない」と見分けが付かない)— 詳細は `AutoActDetailsVerbs.qml` の `cornerTimer`、判定は `verify/verbs/panes.rs`)
-- `open-again [<パス>]`(**既に開いているリポジトリを開き直す形**。引数なし(`--preset basic --preset stashes`)と git の綴りを渡す形を対で読み、本題は後者 — 詳細は `WindowTabActs.qml` の `openAgainTimer`)
-- `identity [<name>|<email>]` / `identity-half` / `identity-tip`(identity の画面と、半端 save の印。既定の値は `Ada Lovelace|ada@example.com`。**書き込みが demo リポジトリの外 = 人の git 設定へ出る**のはこの系列だけ(隔離は全動詞共通 — linux.md §Linux(コンテナ)での動確「どの run も自分の gitconfig で立つ」)— 詳細は `WindowDialogActs.qml` の `identityTimer` / `identityTipTimer`、仕込みは `verify/shim.rs`、判定は `verify/verbs/identity.rs`)
-- `solo`(**2 つ目のプロセスが出す窓**。xtask が `--config-dir` の `lock` を握ってから起動する — 詳細は `WindowTabActs.qml` の `soloActTimer`、判定は `verify/verbs/panes.rs`)
-- `band`(**タブ行がタイトルバーを兼ねる帯の形**。掴めるかは絵に出ないので報告行で読む。`--system-title-bar` を付けると兼ねない側(mac / Linux)の形 — 詳細は `WindowBandActs.qml` の `bandActTimer`)
-- `app-menu` / `app-menu-reclick`(**☰ の開け閉めの対**。引数なし — 詳細は `WindowBandActs.qml` の `appMenuActTimer`、判定は `verify/verbs/window.rs`)
-- `window-fill`(**最大化した窓の中身が四隅まで届いているか**。**絵では読めない** — 詳細は `WindowFrameActs.qml` の `fillActTimer`、判定は `verify/verbs/window.rs`)
-- `window-floor [fold|log|wip|rail]`(**窓がこれ以上小さくならないこと**の 5 形(規約 §窓の床)。`wip` は `--preset rebase-conflict` — 詳細は `WindowFrameActs.qml` の `floorActTimer`、判定は `verify/verbs/window.rs`)
-
 **操作パネルの 4 つのボタンが縮む形は `band-actions-none` / `band-actions` / `band-actions-fold` / `band-actions-alert` の 4 つ**(規約 §操作パネル)。**引数は「形」で渡す** — どの pixel でどの形になるかは入っているフォントの問いなので、幅はパネル自身の計算が名乗る(`band-actions` だけは数値でその幅も指せる)。**`--preset longnames`** を当てる(名前が短いと床でも語が残り、縮んだ形に届かない)。`-alert` はさらに `--allow-write-failure` — 詳細は `WindowBandActs.qml`、判定の理由は `verify/verbs/window.rs`。
 
 **最低バージョンを割った git(`old-git` / `old-git-card` / `old-git-fold`)と LFS の無い git(`no-lfs` / `no-lfs-card`、`--preset lfs`)は本物を建てる** — xtask が自分自身の exe を git の名前で子の PATH の先頭に置き、`--version` / `git lfs` にだけ答えて残りは本物の git へ素通しする(アプリは普通に動いたまま)。**動詞名で自動**、他の動詞には `--old-git <版>` / `--no-lfs` で着せる。`old-git` / `no-lfs` の引数は幅か `floor` — 詳細は `WindowBadgeActs.qml` と `verify/git_shim.rs` / `verify/run.rs`。
-
-**設定 / 画面状態の永続化は 2 回の実行で読む**: `state`(引数 `change` で畳み・右ペイン幅・グラフのチップ列 / レーン列の幅・コマンドログ・auto fetch 間隔・初期ロード数を動かしてから申告する / `minimize` で最大化 → 申告 → 最小化 → 申告)。同じ `--config-dir` を渡した 2 回目に `--restore` を足し、報告行が両方で一致すれば往復している — 詳細は `WindowFrameActs.qml`。
-
-**開いたまま止める撮影用の引数・preset**: `settings-tools` / `settings-tools-loading`(設定ダイアログの Merge editor 候補一覧を実際に開いて止める。前者は settled 側、後者は実際の loading=true edge を latch する側。引数なし — `WindowSettingsActs.qml`)/ `file-menu` / `file-menu-untracked` / `file-menu-staged` / `file-menu-conflict`(引数はパス。conflict は種別の文言を `conflict_kind` として報告する。`--preset conflict-kinds` に 4 種が揃っている — `AutoActFileRowVerbs.qml`)/ `ref-list-card` と `row-card`(引数は行番号。同じ行・同じ preset で対で読む — `AutoActGraphRowVerbs.qml`)/ `signature-tip`(引数は行番号。`E` は `--preset errsig` の行 0 だけが持ち、gpg バイナリが要る)/ `stash-tip`(引数は行番号か `older` = HEAD の行の 1 つ下。`older` は stash を持たない preset と組む(`--preset co-authors`))/ `path-tip`(引数は `wip`(既定)か行番号、または `carried:<worktree 名>`(`--preset carried` と組む))/ `author-card` / `author-card-open`(引数は行番号。`--preset authorship` が 4 状態を行 0〜3 に並べる — 以上 4 つは `AutoActTipVerbs.qml`)/ `details-fit`(引数は行。省くとページが自分で開いた行のまま測る。壁は `--preset edges` の行 7)/ `details-grow` / `details-grow-squeeze` / `wip-grow` / `wip-grow-squeeze`(引数は詳細ペインが行番号・commit 欄は打ち込む本文(省略時は xtask が長い本文を入れる)。**PNG は必ず目視する** — 以上 2 組は `AutoActDetailsVerbs.qml`)/ `replace-remote-box`(引数 `<remote>/<old>:<入れておく名前>`。既にリモートに在る名前を渡せば拒否された枠が撮れる — `AutoActNavBoxVerbs.qml`)
 
 **アバターは `avatar-*`**(**引数は取り込む画像のパス**。保管庫は実行ごとに空なので、見るものはまず入れる。**`avatar-assign` とカードの 4 つ(`avatar-settings` / `avatar-row-lit` / `avatar-remove` / `avatar-combo`)は引数を省くと xtask が画像を作って渡す**。**パスを手で渡す run は `gate --verb` に乗らない**(パスは OS ごとに別物)。**引数を取らない `avatar-tip` / `avatar-rest` / `avatar-hover` はそのまま乗る** — 詳細は `AutoActFindVerbs.qml` / `WindowSettingsActs.qml` と `verify/repos.rs`)。
 
