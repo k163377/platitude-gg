@@ -167,19 +167,23 @@ Item {
             harness.letRecordsThrough("after-completion")
         }
     }
-    /// The page's reads a picture waits out, never named by the verb: the two the product's own timers drive —
-    /// `placing` (the view re-centring after `Metrics.anchorDelayMs`) and `readings` (the pacer's reads of other
-    /// worktrees) — which can be owed again after the completion's hold has passed them. `fault` is the read a check
-    /// injects into a picture's readings (`owedForPicture`), ambient like the two.
-    readonly property var ambientTerms: Harness.faultOwedAtShot === "" ? ["placing", "readings"]
-                                                                        : ["placing", "readings", "fault"]
+    /// The page's reads a picture waits out, never named by the verb: what the product does unasked, and can owe
+    /// again after the completion's hold has passed it — `placing` (the view re-centring after
+    /// `Metrics.anchorDelayMs`), `readings` (the pacer's reads of other worktrees) and `records` (the command log's
+    /// receipt for a write settling after the completion — the fetch a tab makes as it opens ends when git ends it,
+    /// and the tab's feed can be drained ahead of the log's, the order `xtask::verify::records_check` forces on a
+    /// run's own write). A receipt that never comes holds the picture to the watchdog, which names it
+    /// (`page missing=records`). `fault` is the read a check injects into a picture's readings (`owedForPicture`),
+    /// ambient like the three.
+    readonly property var ambientTerms: Harness.faultOwedAtShot === "" ? ["placing", "readings", "records"]
+                                                                        : ["placing", "readings", "records", "fault"]
     /// The frame the completion waits out, -1 while no completion is settling.
     property int settlingFrom: -1
     function settle() {
         if (Awaited.frames <= harness.settlingFrom)
             return
-        // The frame swapped. The page may owe an ambient read again (the pacer's, the re-centring), which the
-        // picture waits out as the completion did; anything else owed is the picture's to say
+        // The frame swapped. The page may owe an ambient read again (the pacer's, the re-centring, a late receipt),
+        // which the picture waits out as the completion did; anything else owed is the picture's to say
         // (`WindowCensus.reportAt`).
         if (harness.holdsPicture(census.pageMissing())) {
             harness.settlingFrom = Awaited.frames
