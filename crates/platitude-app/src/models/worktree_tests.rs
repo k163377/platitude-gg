@@ -456,6 +456,48 @@ fn a_new_worktree_counts_its_stamps_from_the_start() {
     assert_eq!((model.op_step, model.op_steps), (2, 4));
 }
 
+/// A status naming the stopped operation's two sides.
+fn with_sides(msg: StateMsg, ours: &str, theirs: &str) -> StateMsg {
+    let StateMsg::Status(mut status) = msg else {
+        panic!("a status message");
+    };
+    status.sides = platitude_core::conflict::Sides {
+        ours: ours.to_string(),
+        theirs: theirs.to_string(),
+    };
+    StateMsg::Status(status)
+}
+
+/// The side named for the branch HEAD is on is current, whichever side
+/// it is; detached, neither is — a rebase names the branch it is onto.
+#[test]
+fn a_side_is_current_where_head_is_on_its_branch() {
+    let currents = |model: &WorktreeModel| (model.side_ours_current, model.side_theirs_current);
+    let mut model = WorktreeModel::default();
+    model.absorb(vec![
+        head(ROOT, 1),
+        with_sides(status(Vec::new()), "main", "feat"),
+    ]);
+    assert_eq!(currents(&model), (true, false));
+    model.absorb(vec![with_sides(status(Vec::new()), "feat", "main")]);
+    assert_eq!(currents(&model), (false, true));
+    model.absorb(vec![StateMsg::Head(HeadMsg {
+        oid_hex: NEXT.to_string(),
+        branch: String::new(),
+        detached: true,
+        seq: 2,
+    })]);
+    assert_eq!(currents(&model), (false, false), "detached, no branch is");
+    model.absorb(vec![with_sides(status(Vec::new()), "", "")]);
+    assert_eq!(currents(&model), (false, false), "no name is no branch");
+    model.absorb(vec![
+        head(ROOT, 3),
+        with_sides(status(Vec::new()), "main", "feat"),
+    ]);
+    model.forget_the_worktree();
+    assert_eq!(currents(&model), (false, false));
+}
+
 /// Each field lands in its own seat of the records: a value apart per
 /// field, and every flag up, so two swapped seats cannot pass.
 #[test]
@@ -466,6 +508,7 @@ fn the_records_carry_each_field_in_its_own_seat() {
         head_oid: ROOT.into(),
         op_text: "REBASING".into(),
         op_editing: true,
+        moves_blocked: true,
         conflict_count: 2,
         upstream: "origin/feature/日本語".into(),
         pull_blocked: true,
@@ -483,7 +526,7 @@ fn the_records_carry_each_field_in_its_own_seat() {
         head_oid: ROOT.into(),
         op_text: "REBASING".into(),
         op_editing: true,
-        conflict_count: 2,
+        moves_blocked: true,
         upstream: "origin/feature/日本語".into(),
         diverged: true,
     };
@@ -492,6 +535,7 @@ fn the_records_carry_each_field_in_its_own_seat() {
         *model.reading(),
         crate::encode::TreeReading {
             standing,
+            conflict_count: 2,
             unborn: true,
             hard_reset_takes: 3,
             hard_reset_not_copied: true,

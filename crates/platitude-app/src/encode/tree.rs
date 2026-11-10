@@ -17,6 +17,10 @@ use super::wire::{Fields, One, Record, field};
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TreeReading {
     pub standing: TreeStanding,
+    /// Unmerged paths here, which the carried work's apply row greys on
+    /// (`CommitMenuState.standCarried`); core's rules read the move's gate
+    /// instead ([`TreeStanding::moves_blocked`]).
+    pub conflict_count: i32,
     pub unborn: bool,
     pub hard_reset_takes: i32,
     pub hard_reset_not_copied: bool,
@@ -38,7 +42,7 @@ fn put_standing(fields: Fields, standing: &TreeStanding) -> Fields {
         .put("headOid", &standing.head_oid)
         .put("opText", &standing.op_text)
         .put("opEditing", &standing.op_editing)
-        .put("conflictCount", &standing.conflict_count)
+        .put("movesBlocked", &standing.moves_blocked)
         .put("upstream", &standing.upstream)
         .put("pullBlocked", &standing.diverged)
 }
@@ -50,7 +54,7 @@ fn read_standing(map: &QVariantMap) -> Result<TreeStanding, ()> {
         head_oid: field(map, "headOid")?,
         op_text: field(map, "opText")?,
         op_editing: field(map, "opEditing")?,
-        conflict_count: field(map, "conflictCount")?,
+        moves_blocked: field(map, "movesBlocked")?,
         upstream: field(map, "upstream")?,
         diverged: field(map, "pullBlocked")?,
     })
@@ -71,6 +75,7 @@ impl Record for TreeStanding {
 impl Record for TreeReading {
     fn to_map(&self) -> QVariantMap {
         put_standing(Fields::new(), &self.standing)
+            .put("conflictCount", &self.conflict_count)
             .put("unborn", &self.unborn)
             .put("hardResetTakes", &self.hard_reset_takes)
             .put("hardResetNotCopied", &self.hard_reset_not_copied)
@@ -83,6 +88,7 @@ impl Record for TreeReading {
     fn from_map(map: &QVariantMap) -> Result<Self, ()> {
         Ok(Self {
             standing: read_standing(map)?,
+            conflict_count: field(map, "conflictCount")?,
             unborn: field(map, "unborn")?,
             hard_reset_takes: field(map, "hardResetTakes")?,
             hard_reset_not_copied: field(map, "hardResetNotCopied")?,
@@ -106,10 +112,11 @@ mod tests {
                 head_oid: "abc123".into(),
                 op_text: "MERGING".into(),
                 op_editing: true,
-                conflict_count: 2,
+                moves_blocked: true,
                 upstream: "origin/feature/日本語".into(),
                 diverged: true,
             },
+            conflict_count: 2,
             unborn: true,
             hard_reset_takes: 3,
             hard_reset_not_copied: true,

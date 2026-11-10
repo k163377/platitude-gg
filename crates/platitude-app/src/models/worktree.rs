@@ -158,6 +158,11 @@ pub struct WorktreeModel {
     /// are "theirs"). Empty where git left nothing to name a side by.
     side_ours: String,
     side_theirs: String,
+    /// Whether each side is the branch HEAD is on, the name a row draws in
+    /// its own colour (`FileRowMenu`; `TreeStanding::is_current`). Off HEAD
+    /// and the status together (`settle`).
+    side_ours_current: bool,
+    side_theirs_current: bool,
     /// The merge tool git would launch, for the menu row to name. Empty
     /// with none configured — the row becomes the way to set one. Display
     /// only: `conflict::mergetool` resolves the tool itself at launch.
@@ -202,7 +207,8 @@ pub struct WorktreeModel {
     stash_standing: String,
     /// Whether a move has to clear the way first — an operation standing
     /// or unmerged paths (`platitude_core::offers::moves_blocked`). What
-    /// `RepoPage.standsInTheWay` reads, less the consent already given.
+    /// `RepoPage.standsInTheWay` reads, less the consent already given, and
+    /// the switch row's `!` through the standing (`TreeStanding::moves_blocked`).
     moves_blocked: bool,
     /// Whether putting the standing operation down costs anything, and
     /// the command the blocked-move question opens with — `rebase --abort`
@@ -314,6 +320,16 @@ impl WorktreeModel {
     qproperty!("opBody", Member = op_body, Notify = changed);
     qproperty!("sideOurs", Member = side_ours, Notify = changed);
     qproperty!("sideTheirs", Member = side_theirs, Notify = changed);
+    qproperty!(
+        "sideOursCurrent",
+        Member = side_ours_current,
+        Notify = changed
+    );
+    qproperty!(
+        "sideTheirsCurrent",
+        Member = side_theirs_current,
+        Notify = changed
+    );
     qproperty!("mergeTool", Member = merge_tool, Notify = changed);
     qproperty!(
         "eolStagedCount",
@@ -413,7 +429,7 @@ impl WorktreeModel {
             head_oid: self.head_oid.clone(),
             op_text: self.op_text.clone(),
             op_editing: self.op_editing,
-            conflict_count: self.conflict_count,
+            moves_blocked: self.moves_blocked,
             upstream: self.upstream.clone(),
             diverged: self.pull_blocked,
         }
@@ -423,6 +439,7 @@ impl WorktreeModel {
     fn tree_reading(&self) -> crate::encode::TreeReading {
         crate::encode::TreeReading {
             standing: self.tree_standing(),
+            conflict_count: self.conflict_count,
             unborn: self.unborn,
             hard_reset_takes: self.hard_reset_takes,
             hard_reset_not_copied: self.hard_reset_not_copied,
@@ -488,6 +505,8 @@ impl WorktreeModel {
         self.op_body = String::new();
         self.side_ours = String::new();
         self.side_theirs = String::new();
+        self.side_ours_current = false;
+        self.side_theirs_current = false;
         self.merge_tool = String::new();
         self.eol_staged_count = 0;
         self.lfs_needed = 0;
@@ -681,6 +700,9 @@ impl WorktreeModel {
             self.push_ahead = 0;
             self.push_behind = 0;
         }
+        let standing = self.tree_standing();
+        self.side_ours_current = standing.is_current(&self.side_ours);
+        self.side_theirs_current = standing.is_current(&self.side_theirs);
     }
 
     /// The badge, dropped where a read that looked later is already on

@@ -22,8 +22,11 @@ pub struct TreeStanding {
     /// The standing rebase stopped on purpose at an `edit` step
     /// ([`crate::integrate::RebaseStop`]).
     pub op_editing: bool,
-    /// Unmerged paths in the index.
-    pub conflict_count: i32,
+    /// A move has to clear the way first ([`super::moves_blocked`],
+    /// `WorktreeModel.movesBlocked`): what a press on a ref raises the
+    /// question on, read off the last status. Not [`Self::op_standing`]: the
+    /// badge a replay's faster tick puts up can stand ahead of that status.
+    pub moves_blocked: bool,
     /// What the branch tracks, empty where it tracks nothing
     /// (`WorktreeModel.upstream`).
     pub upstream: String,
@@ -77,10 +80,12 @@ impl TreeStanding {
         }
     }
 
-    /// The same tree with `op_text` standing.
+    /// The same tree with `op_text` standing, holding moves back as an
+    /// operation does.
     pub(crate) fn standing(self, op_text: &str) -> Self {
         Self {
             op_text: op_text.into(),
+            moves_blocked: true,
             ..self
         }
     }

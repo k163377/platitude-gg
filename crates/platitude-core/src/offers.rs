@@ -111,8 +111,9 @@ pub struct RefMenuOffers {
     /// offer — the row leads to that worktree ([`SwitchAction::OpenHolder`]).
     pub switch_to: bool,
     /// That move asks first: an operation or unmerged files to clear (the
-    /// `!` in the row's mark seat). A branch another worktree holds
-    /// asks nothing and wears no mark (デザイン規約 §進行中の操作から出る).
+    /// `!` in the row's mark seat), read off the answer the press itself
+    /// reads ([`TreeStanding::moves_blocked`]). A branch another worktree
+    /// holds asks nothing and wears no mark (デザイン規約 §進行中の操作から出る).
     pub switch_asks: bool,
     /// A new branch on this row's commit — any ref but a stash, the
     /// current branch and a detached HEAD included
@@ -256,7 +257,7 @@ pub fn ref_menu(
         // A worktree leads to itself — unless the tab already stands
         // in it, which is when the caller hands no holder.
         switch_to: (branchy && !current) || (kind == RefKind::Worktree && held),
-        switch_asks: !held && (tree.op_standing() || tree.conflict_count > 0),
+        switch_asks: !held && tree.moves_blocked,
         branch_here: kind != RefKind::Stash && !oid_hex.is_empty(),
         integrate_from: open && tree.on_branch() && !full.is_empty() && !current,
         standing: tree.op_standing(),

@@ -210,28 +210,32 @@ fn a_branch_out_in_another_worktree_keeps_switch_and_asks_nothing() {
 }
 
 #[test]
-fn a_branch_out_in_another_worktree_asks_nothing_while_an_operation_stands() {
+fn a_branch_out_in_another_worktree_asks_nothing_while_moves_are_blocked() {
     // The press opens that worktree and leaves the stopped operation alone
     // and wears no `!` (`SwitchAction::OpenHolder`).
-    for (op, conflicts) in [("CHERRY-PICKING", 0), ("REBASE 1/3", 2), ("", 1)] {
+    let main = TreeStanding::on("main");
+    for (blocker, tree) in [
+        ("a cherry-pick", main.clone().standing("CHERRY-PICKING")),
+        ("a rebase", main.clone().standing("REBASE 1/3")),
+        (
+            "unmerged paths alone",
+            TreeStanding {
+                moves_blocked: true,
+                ..main
+            },
+        ),
+    ] {
         for (kind, full) in [(RefKind::Branch, "feat"), (RefKind::Remote, "origin/feat")] {
-            let tree = TreeStanding {
-                conflict_count: conflicts,
-                ..TreeStanding::on("main").standing(op)
-            };
             let asks = |held: &str| {
                 ref_menu(
                     kind, full, "abc123", true, &tree, held, "", false, false, "origin", "here",
                 )
                 .switch_asks
             };
-            assert!(
-                asks(""),
-                "{full} with {op:?} / {conflicts}: a plain row asks"
-            );
+            assert!(asks(""), "{full} under {blocker}: a plain row asks");
             assert!(
                 !asks("C:/work/other"),
-                "{full} with {op:?} / {conflicts}: a held row leads to its worktree instead"
+                "{full} under {blocker}: a held row leads to its worktree instead"
             );
         }
     }
@@ -335,15 +339,16 @@ fn a_standing_operation_asks_and_greys_new_history_but_not_deletes() {
     );
 }
 
+/// Unmerged paths with no operation standing (what `--quit` leaves).
 #[test]
-fn conflicts_alone_make_the_move_ask() {
+fn a_blocked_move_asks_with_no_operation_standing() {
     let offers = ref_menu(
         RefKind::Branch,
         "feat",
         "abc123",
         true,
         &TreeStanding {
-            conflict_count: 2,
+            moves_blocked: true,
             ..TreeStanding::on("main")
         },
         "",
@@ -354,7 +359,43 @@ fn conflicts_alone_make_the_move_ask() {
         "here",
     );
     assert!(offers.switch_asks);
+    assert!(!offers.standing, "nothing to grey the new history rows for");
     assert!(offers.branch_here, "conflicts gate moves, not new branches");
+}
+
+/// The `!` is what the press does (`RepoPage.standsInTheWay`): a badge a
+/// replay's tick put up ahead of the status asks nothing until the status
+/// says the move is blocked.
+#[test]
+fn the_mark_follows_the_blocked_move_and_not_the_badge() {
+    let under_the_badge = |moves_blocked: bool| {
+        ref_menu(
+            RefKind::Branch,
+            "feat",
+            "abc123",
+            true,
+            &TreeStanding {
+                moves_blocked,
+                ..TreeStanding::detached().standing("REBASING")
+            },
+            "",
+            "",
+            false,
+            false,
+            "origin",
+            "here",
+        )
+    };
+    let ticked = under_the_badge(false);
+    assert!(!ticked.switch_asks, "the press would not ask yet");
+    assert!(
+        ticked.standing,
+        "the badge still greys the new history rows"
+    );
+    assert!(
+        under_the_badge(true).switch_asks,
+        "the status has caught up"
+    );
 }
 
 #[test]
@@ -524,10 +565,7 @@ fn a_stopped_operation_does_not_hold_a_tag_back() {
         "v1.0",
         "abc123",
         true,
-        &TreeStanding {
-            conflict_count: 3,
-            ..TreeStanding::on("main").standing("REBASING")
-        },
+        &TreeStanding::on("main").standing("REBASING"),
         "",
         "",
         false,
