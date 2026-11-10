@@ -36,6 +36,9 @@ QtObject {
         // off the row is off its lines too. What keeps a row open with the hand elsewhere is a hold — its own tip,
         // its own menu.
         graceMs: 0
+        // A drag on a row's name sweeps into the lines it opens (`NavItemDelegate.lineDragged`); a drag anywhere else
+        // has the hand off the panel, and the open row with it.
+        dragExempt: true
         // Nothing opens over a name box or under a menu raised elsewhere: opening moves the rows under both. A menu
         // raised on the open row holds back every row but that one (`exempt`), read off the door itself — `menuOnRow`
         // is derived from it too, and would be read before it moved. Not in the binding: the block takes the open row
@@ -56,12 +59,14 @@ QtObject {
     /// the key (delegates are recycled — a pooled one still says the key it last showed); or the section's model still
     /// holding the name on show (`model` / `name`, where the row hands them over — the stand-in has none).
     function openFacts(key, at, row, now, model, name) {
+        // `now` twice: a press going for the words skips the rest, and is the reader's own, which the hold a press
+        // puts on hover does not hold back (`HoverSeat.point`).
         openRow.seat.point({
             "key": key, "at": at, "row": row,
             "alive": () => (row !== undefined && row !== null && row.visible && row.pooled !== true
                             && (row.factsKey !== undefined ? row.factsKey : row.rowKey) === key)
                           || (model !== undefined && model !== null && model.rowOfName(name) >= 0)
-        }, now === true)
+        }, now === true, now === true)
     }
     /// The section's rows changed (`NavSectionModel.changed` — a read, or the reader's filter, fold or delete): the row
     /// is open only while the model still shows it — a name gone takes the lines down, held or not. A row still

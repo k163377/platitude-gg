@@ -179,6 +179,14 @@ ApplicationWindow {
                 root.curPage.releasePressedAway(scenePos)
         }
         onPressedAnywhere: root.pressLandedAnywhere()
+        tellsHand: true
+    }
+    // The hand over the window, for the move that lets a press's held hover go (`Hand.heard`).
+    Connections {
+        target: body.hand
+        function onMoved(at) {
+            Hand.heard(at)
+        }
     }
     /// A press landed, whatever it was on; a run enters the same road. What the window put up for the reader stands
     /// until their next press (デザイン規約 §hover のツールチップ).

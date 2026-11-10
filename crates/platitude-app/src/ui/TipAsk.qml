@@ -93,6 +93,18 @@ QtObject {
         if (ask.seat !== null)
             ask.seat.drop(ask)
     }
+    /// The target answered a click in the box's words (`HashPlate`'s `Copied!`): the box comes out with them now — no
+    /// rest, and past the hold a press puts on hover (`HoverSeat.press`): the answer is to the click, and a wait would
+    /// leave it unsaid (デザイン規約 §hover のツールチップ「押した結果は、その的の 1 語が答える」). Only while the ask
+    /// stands (`live`): a box nothing points at would stand with nothing to take it down.
+    function answer() {
+        if (!ask.live)
+            return
+        if (ask.seat === null)
+            ask.seat = Tips.seatFor(ask.target)
+        if (ask.seat !== null)
+            ask.seat.answer(ask)
+    }
 
     onLiveChanged: {
         if (ask.live) {

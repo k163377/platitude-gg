@@ -1,7 +1,8 @@
 import QtQuick
 
 /// Hands focus back to the window whenever a press lands outside the focused editor — QML never drops a text input's
-/// focus on its own.
+/// focus on its own. The window's one also tells `Hand` of every press it hears, for the hold a press puts on hover
+/// (`tellsHand`).
 ///
 /// Topmost, and a `PointHandler` (rules-refs/app-ui.md「画面全体の入力観測は最前面オーバーレイ + `PointHandler`」): lower
 /// down it misses presses a row's MouseArea takes, and a TapHandler would swallow the press.
@@ -18,6 +19,9 @@ Item {
     /// Where the keyboard goes when a caret is walked away from — the page, so its Escape handler stays on the key's
     /// way up (keys climb parents only; `tests/qml/tst_escape.qml`). Null falls back to the content item.
     property var home: null
+    /// This watcher tells `Hand` of the presses it hears — the window's does: the window's hand (`WindowBody.hand`)
+    /// is what tells the move that lets them go, and it does not hear a dialog's face.
+    property bool tellsHand: false
 
     /// The press that took the caret away, at `scenePos` (scene coordinates). What stands open only while holding the
     /// keyboard closes on it — the left menu's name box, which nothing else closes, and the graph's empty boxes. The
@@ -70,6 +74,21 @@ Item {
     PointHandler {
         id: hand
         acceptedButtons: Qt.AllButtons
-        onActiveChanged: if (active) watcher.pressedAt(point.scenePressPosition)
+        onActiveChanged: {
+            if (hand.active) {
+                if (watcher.tellsHand)
+                    Hand.pressBegan(hand.point.scenePressPosition)
+                watcher.pressedAt(hand.point.scenePressPosition)
+            } else if (watcher.tellsHand) {
+                Hand.pressEnded()
+            }
+        }
+        // A passive grab hears the point while whatever the press landed on holds the exclusive one.
+        onTranslationChanged: {
+            const far = Qt.styleHints.startDragDistance
+            if (hand.active && watcher.tellsHand)
+                Hand.pressMoved(hand.point.scenePosition,
+                                Math.abs(hand.translation.x) >= far || Math.abs(hand.translation.y) >= far)
+        }
     }
 }

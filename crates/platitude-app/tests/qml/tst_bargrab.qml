@@ -8,7 +8,7 @@ import platitude.ui
 //
 // Only a real pointer answers this: Qt delivers no hover at all while a bar holds the grab, so the rows keep what they
 // had as they slide from under the hand, and a row the list reuses under the pointer takes the hover afresh
-// (rules-refs/app-ui.md「バーを掴んでいる間、窓に hover は届かない」). Nothing a headless run injects goes through that.
+// (rules-refs/app-ui.md「押下が掴んでいる間、窓に hover は届かない」). Nothing a headless run injects goes through that.
 Item {
     id: root
     width: 400

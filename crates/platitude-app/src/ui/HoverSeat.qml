@@ -20,11 +20,13 @@ import platitude.ui
 /// operation: what is out goes as a dismissal, and the ask is kept for the walk that lifts the latch; `exempt` names
 /// the targets it does not hold back), `frozen` (what the hand does changes nothing, in every state: a rest or a beat
 /// that runs out under it is answered at the thaw — what goes for a reason of its own still goes), a scroll bar held
-/// outside the card (`Hand.heldBar`, which also drops the ask), and the hand standing still while the rows moved under
-/// it (`HandWatch.stillHeld`). A target the reader put down — any operation of theirs that took it down with the rows
-/// where they were (the card closing by itself, the owner's `takeDown`, a blocker) — is not put back under the same
-/// still hand: Qt hands the target its hover again the moment the popup is gone (`latchedKey`). A reread is no
-/// dismissal (below). **What lifts the hold is the hand's own move**, for every seat (`HandWatch.stillHeld`). **What
+/// outside the card (`Hand.heldBar`, which also drops the ask), a press the window holds and the hand not yet moved
+/// after it (`Hand.holdsHover`, which keeps the ask; a drag takes down what is out too), and the hand standing still
+/// while the rows moved under it (`HandWatch.stillHeld`). A target the reader put down — any operation of theirs that
+/// took it down with the rows where they were (the card closing by itself, the owner's `takeDown`, a blocker)
+/// — is not put back under the same still hand: Qt hands the target its hover again the moment the popup is gone
+/// (`latchedKey`). A reread is no dismissal (below). **What lifts the hold is the hand's own move**, for every seat
+/// (`HandWatch.stillHeld`). **What
 /// lifts a latch is the seat's kind**: any move for one that rests — the rest is the judgement, as Qt's tooltips wake
 /// on the mouse's own moves (2px and a pause is a hand's own hover); for one that opens at once (`expands`), the hand
 /// off its target — as a Qt Quick tooltip a press hid returns only when its item's hover changes
@@ -96,6 +98,19 @@ QtObject {
         return Hand.heldBar !== null && !seat.holdsBar(Hand.heldBar)
             && !(seat.barExempt !== null && target !== null && seat.barExempt(target) === true)
     }
+    /// The hand holds a press, or let one go and has not moved since (`Hand.holdsHover`): Qt tells no hover while a
+    /// press holds its grab, and at the release hands it to whatever stands under the hand — a hand that did not walk
+    /// there as far as hover heard. The rest being counted stops, and an ask is kept for the hand's own next move after
+    /// the release, then waits its rest as any ask (as Qt's tooltips wake on a move with no button down,
+    /// `QApplication::notify`). A press on a target that opens it (`press`) is no hover, and goes through.
+    readonly property bool pressHolds: Hand.holdsHover
+    function pressHoldsBack(target) {
+        return Hand.holdsHover && !(seat.barExempt !== null && target !== null && seat.barExempt(target) === true)
+    }
+    /// …and the press became a drag (`Hand.dragging`): what is out goes, as for a held bar — the hand has left where
+    /// hover last heard it. `dragExempt` is a seat whose own target the drag sweeps (the left panel's open row).
+    readonly property bool pressDragging: Hand.dragging
+    property bool dragExempt: false
     /// The display opens the moment the hand is on its target (規約 §hover のツールチップ「展開は即時に開く」: the rail's peek, the band's
     /// state card, a chip's list, the author cards). No rest judges the hand, so a tremor after a click, an Escape or a
     /// menu that took it down would put it straight back: a dismissal lifts with the hand off the target alone, never
@@ -140,10 +155,15 @@ QtObject {
     /// the beat (`hoverKeepMs`) is shorter than the rest (`tipDelayMs`), so asked again it would fall and come back,
     /// at the row's new `pointerX`, a jump sideways. Only while it is out; once closed, it opens as any ask does.
     /// Headless: `row-card-return` (`moved=` is a guard).
-    function point(target, immediate) {
+    ///
+    /// `pressed`: the ask is the reader's press going for what the target opens — no hover, so the hold a press puts on
+    /// hover (`pressHolds`) does not keep it (`press`, the left panel's sweep into a row's lines).
+    function point(target, immediate, pressed) {
         const now = immediate === true
+        const again = seat.shown && target.key === seat.targetKey
         if (seat.frozen || seat.latchedKey === target.key
-                || (seat.stillHeld && !(seat.shown && target.key === seat.targetKey))
+                || (seat.stillHeld && !again)
+                || (pressed !== true && seat.pressHoldsBack(target) && !again)
                 || seat.blocks(target)
                 || (seat.shown && seat.held && target.key !== seat.targetKey)) {
             seat.pending = { "target": target, "immediate": now }
@@ -187,7 +207,7 @@ QtObject {
     function press(target) {
         if (seat.latchedKey === target.key)
             seat.latchedKey = ""
-        seat.point(target, true)
+        seat.point(target, true, true)
     }
     /// The hand left `key`'s trigger area. A key that is not the current target's is a leave from somewhere else and
     /// changes nothing (the target the hand came onto may have asked first).
@@ -337,6 +357,7 @@ QtObject {
     function resume() {
         if (seat.pending === null || seat.frozen || seat.stillHeld || seat.blocks(seat.pending.target)
                 || seat.latchedKey === seat.pending.target.key || seat.barBlocks(seat.pending.target)
+                || seat.pressHoldsBack(seat.pending.target)
                 || (seat.shown && seat.held && seat.pending.target.key !== seat.targetKey))
             return
         const kept = seat.pending
@@ -399,6 +420,19 @@ QtObject {
         seat.resume()
     }
     onStillHeldChanged: if (!seat.stillHeld) seat.resume()
+    onPressHoldsChanged: {
+        if (!seat.pressHolds) {
+            seat.resume()
+            return
+        }
+        if (seat.waiting && !seat.ignoresBar) {
+            const kept = seat.pointed ? seat.keep(seat.target) : null
+            seat.rest.stop()
+            seat.idle()
+            seat.pending = kept
+        }
+    }
+    onPressDraggingChanged: if (seat.pressDragging && !seat.ignoresBar && !seat.dragExempt) seat.displace("drag")
     onBarHeldChanged: {
         if (!seat.barHeld)
             return

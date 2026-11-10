@@ -91,6 +91,13 @@ Item {
         else
             machine.unpoint(a.key)
     }
+    /// A target answered a click in the box's words (`TipAsk.answer`): out now, as a press opens what its trigger owns
+    /// (`HoverSeat.press`). A refusal of what is typed standing keeps the box, as against any ask.
+    function answer(a) {
+        if (machine.target !== null && machine.target !== a && machine.target.typed)
+            return
+        machine.press(a)
+    }
     /// The target is going (a delegate destroyed): as `drop`.
     function forget(a) {
         seat.drop(a)

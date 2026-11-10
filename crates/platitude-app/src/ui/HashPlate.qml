@@ -232,6 +232,8 @@ ColumnLayout {
     function copyFullNow() {
         plate.copyRequested(plate.fullSha)
         hashCopy.copied = true
+        // The answer comes out with the click, whatever the rest had counted (`TipAsk.answer`).
+        copyTip.answer()
     }
     function goToParentNow(index) {
         if (index < plate.parents.length)
