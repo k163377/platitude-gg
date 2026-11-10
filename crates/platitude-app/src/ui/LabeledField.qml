@@ -8,7 +8,7 @@ import platitude.ui
 // side is the explanation (`HelpText`), and a caption in the note's ink would leave nothing to tell the two apart. Same
 // step as a chapter heading in `Font.Normal`, no capitals and no rule (`SettingsSection`). A chapter whose heading
 // already names its one box needs no caption (`LINE ENDINGS` / `MERGE EDITOR` / `GIT EXECUTABLE`); any other box
-// wears one, alone in its chapter or not (`Interval`, `At once`, the identity's `Name` / `Email address`).
+// wears one, alone in its chapter or not (`Interval`, `In parallel`, the identity's `Name` / `Email address`).
 ColumnLayout {
     id: field
 
