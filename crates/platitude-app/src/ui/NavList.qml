@@ -476,11 +476,6 @@ AppListView {
     function scrollToEnd() {
         navList.contentY = Math.max(0, navList.contentHeight - navList.height)
     }
-    /// A few rows on, clamped to the list's end. Nothing calls it (`nav-*-box:away` scrolls through `scrollRowOut`).
-    function scrollRows(rows) {
-        navList.contentY = Math.min(Math.max(0, navList.contentHeight - navList.height),
-                                    navList.contentY + rows * Theme.rowHeight)
-    }
     /// The row at `index` scrolled just out of the view's top, from where it stands (PGG_AUTO_ACT=nav-*-box:away):
     /// answers whether the list is long enough for that — a list the view holds whole moves nothing, and the row
     /// stays in sight whatever is asked.
