@@ -16,11 +16,14 @@
 //! **One pool, with a reserve for the click** ([`Limits`]). Commands paced
 //! elsewhere ([`Pace::Elsewhere`]) can sit for minutes at a remote or a
 //! passphrase prompt, and background reads come in bursts; both share
-//! what the reserve leaves, so however many are running or stalled, a
-//! click finds a slot. A background command overtaken by
-//! [`OVERTAKEN_LIMIT`] interactive ones is served next. Not two pools
-//! (`n` here plus `n` elsewhere, `2n` in all): the setting reads "N git
-//! processes in all, background a part of them".
+//! what the reserve leaves, so from two slots up, however many are
+//! running or stalled, a click finds a slot. One slot has no reserve:
+//! everything takes turns, and a click waits behind whatever holds it.
+//! Limits narrowed under running commands bind as those end
+//! ([`Slots::set_limits`]), and a click can wait for them meanwhile. A
+//! background command overtaken by [`OVERTAKEN_LIMIT`] interactive ones is
+//! served next. Not two pools (`n` here plus `n` elsewhere, `2n` in all):
+//! the setting reads "N git processes in all, background a part of them".
 //!
 //! **Waiting ends on the token and leaves nothing behind** —
 //! [`super::GitExecutor::execute`] selects on the command's token, the
@@ -123,8 +126,9 @@ impl Limits {
     /// **A quarter, because opening a diff is three commands at once**
     /// (`diff-tree`, `check-attr`, `rev-parse` → `cat-file`): a reserve
     /// under three queues the head of that chain behind the session's own
-    /// reads. At a half the reserve reaches three only at eight slots; at a
-    /// quarter, from four up (ci/baseline/git-slots-windows-x64.md).
+    /// reads. At a half the reserve reaches three only from five slots up;
+    /// at a quarter, from four up — the default's floor
+    /// (ci/baseline/git-slots-windows-x64.md).
     #[must_use]
     pub fn of(asked: u32) -> Self {
         let total = concurrency(asked) as usize;

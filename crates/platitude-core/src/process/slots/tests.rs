@@ -186,6 +186,73 @@ async fn what_is_paced_elsewhere_and_what_nobody_waits_on_share_the_slots_outsid
     assert_eq!(report.queued_background, 1);
 }
 
+/// The reserve's promise at every size it is made for: from two slots up,
+/// with the shared part full and more queued behind it — which of the
+/// kinds that share it (paced elsewhere, in the background, both) holds and
+/// which waits turns with the size — and those overtaken past
+/// [`OVERTAKEN_LIMIT`], a click still finds a slot.
+///
+/// **Outside a runtime**: inside one the whole loop is one task poll, and
+/// tokio's coop budget answers `Pending` to a grant already sent once the
+/// task has taken its 128 receipts — this loop takes more.
+#[test]
+fn from_two_slots_up_a_click_finds_a_slot_however_full_the_shared_part_is() {
+    const SHARED: [(Priority, Pace); 3] = [
+        (Priority::Interactive, Pace::Elsewhere),
+        (Priority::Background, Pace::Here),
+        (Priority::Background, Pace::Elsewhere),
+    ];
+    for (turn, asked) in (2..=MAX_CONCURRENCY).enumerate() {
+        let limits = Limits::of(asked);
+        let slots = Arc::new(Slots::new(limits));
+        let mut asks: Vec<Ask> = (0..limits.shared() + SHARED.len())
+            .map(|nth| {
+                let (priority, pace) = SHARED[(turn + nth) % SHARED.len()];
+                ask(&slots, priority, pace)
+            })
+            .collect();
+        let _held: Vec<Slot> = asks.iter_mut().filter_map(granted).collect();
+        let report = slots.report();
+        assert_eq!(
+            report.running,
+            limits.shared(),
+            "{asked} slots: the shared part is full"
+        );
+        assert_eq!(
+            report.queued_interactive + report.queued_background,
+            SHARED.len(),
+            "{asked} slots: and more wait for it"
+        );
+
+        for nth in 0..=OVERTAKEN_LIMIT {
+            let mut click = ask(&slots, Priority::Interactive, Pace::Here);
+            assert!(
+                granted(&mut click).is_some(),
+                "{asked} slots: click {nth} finds a slot"
+            );
+        }
+    }
+}
+
+/// One slot has no reserve ([`Limits::of`]): a click waits its turn behind
+/// whatever holds it — here a fetch at its remote.
+#[test]
+fn on_one_slot_a_click_waits_its_turn_behind_a_fetch() {
+    let slots = Arc::new(Slots::new(Limits::of(1)));
+    let mut fetch = ask(&slots, Priority::Interactive, Pace::Elsewhere);
+    let fetching = granted(&mut fetch).expect("the fetch takes the one slot");
+    let mut click = ask(&slots, Priority::Interactive, Pace::Here);
+    assert!(
+        granted(&mut click).is_none(),
+        "the click waits for the fetch"
+    );
+    drop(fetching);
+    assert!(
+        granted(&mut click).is_some(),
+        "and runs once its slot is back"
+    );
+}
+
 #[tokio::test]
 async fn wider_limits_admit_what_is_waiting_and_narrower_ones_admit_nothing_more() {
     let slots = slots(1, 0);
