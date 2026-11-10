@@ -10,9 +10,9 @@ import platitude.ui
 // a sweep from there running on as the last row: nowhere in the frame does a press do nothing. Two exceptions only: a
 // hunk heading (its press is its two words', `takesPress`) and the gutter (numbers and the `+`, outside the column).
 // A drag takes the new side, unchanged and added lines; a removed line is taken whole from the menu (`DiffRowMenu`) —
-// as one column; as two, the column pressed is the file. A drag past the frame sends the diff after it (rows up and
-// down, text sideways) along the one path each already has. A re-read drops the selection (`DiffModel` lays out new
-// rows on every partial stage).
+// as one column; as two, the column pressed is the file. A drag near the frame's edge sends the diff after it (rows up
+// and down, text sideways) the way a browser sends a selection (the edge, below), along the one path each already has.
+// A re-read drops the selection (`DiffModel` lays out new rows on every partial stage).
 //
 // It covers the code: it starts after the first gutter, whose `+` keeps taking presses (`gutterW`), and stops short of
 // the list's bar, which is drawn over the rows (`barRoom`, rules-refs/app-ui.md「一覧の上に面を重ねたら」). Side by
@@ -48,7 +48,8 @@ Item {
     /// the hit and the wash cannot disagree.
     required property var ruler
 
-    /// A drag has reached past the frame and wants the rows (and the text) sent after it.
+    /// A drag has reached an edge's belt and wants the rows (and the text) sent after it, by this many pixels (the
+    /// edge, below).
     signal scrollWanted(real dy, real dx)
     /// A right-click landed on the text; the selection is already what it should act on.
     signal menuWanted()
@@ -64,6 +65,12 @@ Item {
     property int side: 0
     /// Where the hand was last seen, in this item's coordinates, for the edge below.
     property point handPosition: Qt.point(0, 0)
+    /// Whether the drag has taken text yet — left the place it was pressed at, which the two below hold. Only then
+    /// does the edge below send: a browser starts its selection's autoscroll the same way, so a click on the last row
+    /// in sight, most of which is the edge's belt, leaves the rows where they are.
+    property bool selecting: false
+    property int fromRow: -1
+    property int fromAt: 0
 
     // ---- columns ---------------------------------------------------------------------------------------------------
     /// The hairline between the two columns, in this item's coordinates (the first gutter is left of this item).
@@ -115,10 +122,15 @@ Item {
     function pressText(side, row, at) {
         pick.side = side
         pick.diffModel.beginSelect(side, row, at)
+        pick.selecting = false
+        pick.fromRow = row
+        pick.fromAt = at
         pick.dragging = true
     }
     function dragText(row, at) {
         pick.diffModel.extendSelect(pick.side, row, at)
+        if (row !== pick.fromRow || at !== pick.fromAt)
+            pick.selecting = true
     }
     /// The button is up. A press that never moved is cleared, which keeps `selActive` honest.
     function releaseText() {
@@ -290,20 +302,21 @@ Item {
     }
 
     // ---- the edge ----------------------------------------------------------------------------------------------
-    /// How far past the frame the hand has reached, on each axis; zero inside, which stops the ticker below.
-    readonly property real pastY: pick.handPosition.y < 0 ? pick.handPosition.y
-                                  : pick.handPosition.y > pick.height ? pick.handPosition.y - pick.height : 0
-    readonly property real pastX: pick.handPosition.x < 0 ? pick.handPosition.x
-                                  : pick.handPosition.x > pick.width ? pick.handPosition.x - pick.width : 0
-    // A drag past the frame carries the diff after it at the middle-click hand's gain, re-reading the row on every
+    /// What one tick of the ticker below sends the rows and the text, on each axis: the browser's selection autoscroll
+    /// (`Metrics.selectSent`), from a belt inside each edge of the frame — a frame against the screen's edge, which the
+    /// hand cannot get past, still sends. Zero between the belts, which stops the ticker.
+    readonly property real sentY: Metrics.selectSent(pick.handPosition.y, pick.height, edge.interval)
+    readonly property real sentX: Metrics.selectSent(pick.handPosition.x, pick.width, edge.interval)
+    // A drag that has taken text carries the diff after it while the hand is in a belt, re-reading the row on every
     // step: the rows move under a pointer standing still.
     Timer {
-        running: pick.dragging && (pick.pastY !== 0 || pick.pastX !== 0)
+        id: edge
+        running: pick.dragging && pick.selecting && (pick.sentY !== 0 || pick.sentX !== 0)
         // A frame, the same tick `MiddleAutoScroll` drifts on.
         interval: 16
         repeat: true
         onTriggered: {
-            pick.scrollWanted(pick.pastY * Metrics.middleScrollGain, pick.pastX * Metrics.middleScrollGain)
+            pick.scrollWanted(pick.sentY, pick.sentX)
             const at = pick.handPosition
             const row = pick.rowAt(at.y)
             if (row >= 0)

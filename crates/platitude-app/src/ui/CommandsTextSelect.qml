@@ -27,7 +27,7 @@ Item {
     /// (`CommandRowDelegate`), so hit and wash cannot disagree.
     required property var ruler
 
-    /// A drag has reached past the frame and wants the rows sent after it.
+    /// A drag has reached the edge's belt and wants the rows sent after it, by this many pixels (the edge, below).
     signal scrollWanted(real dy)
 
     x: pick.view.x
@@ -47,6 +47,12 @@ Item {
     property bool dragging: false
     /// Where the hand was last seen, in this item's coordinates (the edge ticker below re-reads it).
     property point handPosition: Qt.point(0, 0)
+    /// Whether the drag has taken text yet — left the place it was pressed at, which the two below hold. Only then
+    /// does the edge below send: a browser starts its selection's autoscroll the same way, so a click on the last row
+    /// in sight, most of which is the edge's belt, leaves the rows where they are.
+    property bool selecting: false
+    property int fromRow: -1
+    property int fromAt: 0
 
     // ---- what the hand does ------------------------------------------------------------------------------------
     /// A press at a point (own coordinates): true where the text took it, false where it goes down to the list —
@@ -72,10 +78,15 @@ Item {
     }
     function pressText(row, at) {
         pick.commandsModel.beginSelect(row, at)
+        pick.selecting = false
+        pick.fromRow = row
+        pick.fromAt = at
         pick.dragging = true
     }
     function dragText(row, at) {
         pick.commandsModel.extendSelect(row, at)
+        if (row !== pick.fromRow || at !== pick.fromAt)
+            pick.selecting = true
     }
     /// An empty selection is cleared, so a plain click takes down the previous drag's wash.
     function releaseText() {
@@ -165,18 +176,20 @@ Item {
     }
 
     // ---- the edge ----------------------------------------------------------------------------------------------
-    /// How far past the frame the hand is; zero inside, which stops the ticker.
-    readonly property real pastY: pick.handPosition.y < 0 ? pick.handPosition.y
-                                  : pick.handPosition.y > pick.height ? pick.handPosition.y - pick.height : 0
-    // A drag past the frame scrolls the log at the middle-click hand's speed, and re-reads the row every step: the
+    /// What one tick of the ticker below sends the rows: the browser's selection autoscroll (`Metrics.selectSent`),
+    /// from a belt inside the frame's top and bottom — the log stands on the window's foot, and a window against the
+    /// screen's foot leaves the hand no room past it. Zero between the belts, which stops the ticker.
+    readonly property real sentY: Metrics.selectSent(pick.handPosition.y, pick.height, edge.interval)
+    // A drag that has taken text scrolls the log while the hand is in a belt, and re-reads the row every step: the
     // rows move under a still pointer without any mouse event.
     Timer {
-        running: pick.dragging && pick.pastY !== 0
+        id: edge
+        running: pick.dragging && pick.selecting && pick.sentY !== 0
         // One frame, the tick every drift in the app uses.
         interval: 16
         repeat: true
         onTriggered: {
-            pick.scrollWanted(pick.pastY * Metrics.middleScrollGain)
+            pick.scrollWanted(pick.sentY)
             const row = pick.rowAt(pick.handPosition.y)
             if (row >= 0)
                 pick.dragText(row, pick.byteAt(row, pick.handPosition))

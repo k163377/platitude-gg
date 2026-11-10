@@ -67,6 +67,14 @@ QtObject {
     // The pad around the anchor where the hand is holding still — without it a pixel of drift is a speed. Per axis,
     // so a hand going straight down does not creep sideways.
     readonly property int middleScrollDeadZone: 15
+    // The two below are a drag of text sending its frame, read through `selectSent` — the browser's selection
+    // autoscroll, not the middle-click hand's curve: a frame against the screen's edge leaves the hand no room past it.
+    //
+    // How far inside a frame's edge the sending starts. Chromium's own (`layout_box.cc`: `kAutoscrollBeltSize`).
+    readonly property int selectScrollBelt: 20
+    // Pixels per millisecond per pixel past the belt's line: Chromium sends a selection that whole distance every
+    // frame (`LayoutBox::Autoscroll`), sixty frames a second.
+    readonly property real selectScrollGain: 0.06
     // How long a wheel notch takes to land, so the eye can follow the rows across. Chromium's own
     // (`scroll_offset_animation_curve.cc`: 9 frames / 60); `WheelGlide` draws its ease-in-out.
     readonly property int wheelGlideMs: 150
@@ -118,5 +126,14 @@ QtObject {
         if (off <= metrics.middleScrollDeadZone)
             return 0
         return Math.sign(away) * Math.pow(off, metrics.middleScrollCurve) * metrics.middleScrollGain * ms
+    }
+    /// How far a drag of text standing `at` along one axis of a frame `length` long sends the frame in `ms`
+    /// milliseconds (デザイン規約 §右のペインの字は掴める): from the belt inside either edge, the distance past the
+    /// belt's line. Signed toward that edge, zero between the belts. The diff's and the log's text
+    /// (`DiffTextSelect`, `CommandsTextSelect`).
+    function selectSent(at, length, ms) {
+        const belt = metrics.selectScrollBelt
+        const past = at < belt ? at - belt : at > length - belt ? at - (length - belt) : 0
+        return past * metrics.selectScrollGain * ms
     }
 }
