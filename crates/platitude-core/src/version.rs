@@ -173,10 +173,16 @@ use crate::process::{GitCommand, GitExecutor};
 ///   `--force-remove`, `--`; `update-ref`: `--create-reflog` (2.6), `-m`,
 ///   `<ref> <new>`, `--end-of-options <ref> <new> ""` (create-only CAS).
 /// - `worktree`: `list --porcelain -z` (`-z` 2.36), `remove -- <path>`
-///   (2.17), `add --quiet [-b <name>] [--track] [--detach] -- <path>
-///   <start>` (`OPT__QUIET` in v2.43.0, passed on to the checkout's `reset`).
+///   and `move -- <worktree> <new-path>` (both 2.17), `add --quiet
+///   [-b <name>] [--track] [--detach] -- <path> <start>` (`OPT__QUIET` in
+///   v2.43.0, passed on to the checkout's `reset`).
 ///   `worktree_add` tests the branch-before-directory check and the
 ///   option-like branch name trap; the app rejects both before writing.
+///   `worktree_move` tests git's refusals (a lock, the main worktree,
+///   checked-out submodules, a folder that is gone, a path another
+///   worktree still lists); git moves into a directory already at
+///   `<new-path>` (v2.43.0 `builtin/worktree.c`), which the app turns down
+///   before writing.
 ///
 /// Pretty formats: `%H %h %P %T %an %ae %at %aI %cn %ce %ct %cI %B %s`
 /// `%gd %gD %gs %G? %GS %GK %xNN`; `%(trailers:...)` with `key=`,
