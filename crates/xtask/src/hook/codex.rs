@@ -21,6 +21,11 @@ pub(super) fn run(input: &str) {
     ) else {
         return;
     };
+    if event == "SessionStart"
+        && let Err(error) = crate::gate::hooks::install(std::path::Path::new(&cwd))
+    {
+        eprintln!("The gate's git hook could not be installed: {error}");
+    }
     let agent = own_string_field(input, "agent_id");
     if matches!(event.as_str(), "SubagentStart" | "SubagentStop") && agent.is_none() {
         return;
@@ -97,6 +102,37 @@ fn activity_name(name: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::{activity_name, asks_person};
+
+    #[test]
+    fn session_start_installs_the_git_hook_in_a_fresh_clone() {
+        let yard = crate::yard::Yard::new("codex-install");
+        let root = yard.to_str().unwrap();
+        let git = |args: &[&str]| crate::subprocess::git_query(root, args);
+        assert!(git(&["init"]).is_some());
+        std::fs::create_dir_all(yard.join(".githooks")).unwrap();
+        std::fs::write(
+            yard.join(".githooks/reference-transaction"),
+            include_str!("../../../../.githooks/reference-transaction"),
+        )
+        .unwrap();
+        assert!(git(&["config", "--get", "core.hooksPath"]).is_none());
+        let input = format!(
+            r#"{{"session_id":"codex-install-test","cwd":"{}","hook_event_name":"SessionStart"}}"#,
+            root.replace('\\', "/")
+        );
+        super::run(&input);
+        let installed = git(&["config", "--get", "core.hooksPath"]).unwrap();
+        assert!(
+            std::path::Path::new(&installed)
+                .join("reference-transaction")
+                .is_file()
+        );
+        super::run(&input);
+        assert_eq!(
+            git(&["config", "--get", "core.hooksPath"]).as_deref(),
+            Some(installed.as_str())
+        );
+    }
 
     #[test]
     fn native_prompt_registers_the_owned_seat_and_closes_on_the_next_message() {

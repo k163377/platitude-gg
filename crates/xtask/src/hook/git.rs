@@ -17,6 +17,10 @@ pub(super) fn pre_git(input: &str) -> Result<bool, String> {
         return Ok(false);
     };
     let cwd = string_field(input, "cwd").unwrap_or_default();
+    if let Some(reason) = super::hooks_path::refusal(&command) {
+        deny(&reason);
+        return Ok(true);
+    }
     if gate_control_change_denied(&command) {
         return Ok(true);
     }

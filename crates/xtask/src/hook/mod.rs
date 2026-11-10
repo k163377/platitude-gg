@@ -35,6 +35,7 @@ mod contact;
 mod dump;
 mod git;
 mod greeting;
+mod hooks_path;
 mod kill;
 mod language;
 mod launch;

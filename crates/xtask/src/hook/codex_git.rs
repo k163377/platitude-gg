@@ -23,7 +23,9 @@ pub(super) fn refusal(input: &str) -> Option<String> {
     }
     let command = string_field(own_value_field(input, "tool_input")?, "command")?;
     let cwd = own_string_field(input, "cwd").unwrap_or_default();
-    gate_control_refusal(&command).or_else(|| super::git::main_write_refusal(&command, &cwd))
+    super::hooks_path::refusal(&command)
+        .or_else(|| gate_control_refusal(&command))
+        .or_else(|| super::git::main_write_refusal(&command, &cwd))
 }
 
 /// The gate's skip flag, spelled at all, and a line that sets or removes
