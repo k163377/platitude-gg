@@ -139,12 +139,14 @@ Rectangle {
     /// `desc-min`).
     function pullPast(down) {
         const over = 4 * Theme.splitterWidth
+        const want = down ? box.ceiling + over : box.restHeight - over
+        // The hand stands where a drag asking for `want` leaves it: on the grip's middle as a box that tall would put
+        // it, written before the pull as the drag writes it. Not off `boxHeight`: the box takes the pull on the next
+        // layout, so read after the pull it is still the height before, and the badge would stand at the corner the
+        // grip leaves.
+        box.gripPoint = box.mapToItem(null, Qt.point(box.width - gripMark.width / 2, want - gripMark.height / 2))
         box.gripHeld = true
-        box.pullTo(down ? box.ceiling + over : box.restHeight - over)
-        // Written after the pull, off `boxHeight` (the anchored grip only moves on the next layout): written before,
-        // it leaves the badge at the corner the grip has since left.
-        box.gripPoint = box.mapToItem(null, Qt.point(box.width - gripMark.width / 2,
-                                                     box.boxHeight - gripMark.height / 2 + (down ? over : -over)))
+        box.pullTo(want)
     }
     // The badge is the page's (`RepoPage`): a refused hand is outside this box, and a badge parented here is
     // composited under the author card and the file list.
