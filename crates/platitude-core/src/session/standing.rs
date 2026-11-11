@@ -227,7 +227,6 @@ impl Standing {
     }
 
     /// HEAD as it stands; `None` until a read has reported one.
-    #[cfg(test)]
     pub(super) fn head(&self) -> Option<HeadState> {
         self.lock().head.clone()
     }

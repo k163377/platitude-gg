@@ -278,3 +278,49 @@ async fn a_plan_opens_with_the_count_a_remote_already_has() {
     assert_eq!(again, 2);
     session.close_and_wait().await;
 }
+
+/// A HEAD the status read brings is on the chips at once — the branch it
+/// moved to bold and first on its commit — not a refs read later: the
+/// rows say the HEAD the rest of the window already does
+/// (`LabelIndex::marked_by`).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_head_the_status_read_brings_is_on_the_chips_before_the_refs_read() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "0\n", "root");
+    repo.git(&["branch", "zz-two"]);
+    let (sink, session) = opened(&repo).await;
+    sink.opening_settled(&session).await;
+
+    repo.git(&["switch", "-q", "zz-two"]);
+    session.refresh_status();
+    let (at, chips) = sink
+        .wait_for("the chips to say the branch HEAD moved to", |evs| {
+            evs.iter().enumerate().find_map(|(at, e)| match e {
+                SessionEvent::LabelsChanged { rows, .. } => rows.iter().find_map(|(_, labels)| {
+                    labels
+                        .first()
+                        .is_some_and(|first| first.is_head && first.text.as_str() == "zz-two")
+                        .then(|| (at, labels.clone()))
+                }),
+                _ => None,
+            })
+        })
+        .await;
+    let drawn: Vec<String> = chips
+        .iter()
+        .map(|label| format!("{}{}", if label.is_head { "*" } else { "" }, label.text))
+        .collect();
+    assert_eq!(drawn, ["*zz-two", "main"]);
+    let listed_on_two = sink.events.lock().unwrap()[..at].iter().any(|e| match e {
+        SessionEvent::RefsLoaded { snapshot, .. } => snapshot
+            .locals
+            .iter()
+            .any(|branch| branch.is_head && branch.short == "zz-two"),
+        _ => false,
+    });
+    assert!(
+        !listed_on_two,
+        "no refs read had listed the branch as HEAD's: the status read's HEAD put it there"
+    );
+    session.close_and_wait().await;
+}

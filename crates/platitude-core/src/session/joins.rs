@@ -167,12 +167,18 @@ impl<'a> RefJoins<'a> {
 /// when both sides point at the same commit: a drifted tag stands on both
 /// rows with no cloud on either, while the sidebar keeps the wider reading
 /// (`build_snapshot`; デザイン規約「雲が答えている問いは、グラフとサイドバーで違う」).
+///
+/// HEAD's marks are `head`'s ([`LabelIndex::marked_from`]), not the
+/// listing's `%(HEAD)`: a listing that marks no ref (a HEAD on no branch,
+/// or a branch with no commits) is told its HEAD by a second process, which
+/// may have seen HEAD move since.
 pub(super) fn build_label_map(
     refs: &[RefEntry],
     head: &HeadState,
     remote_tags: &RemoteTagIndex,
     joins: &RefJoins<'_>,
 ) -> LabelIndex {
+    let marks = HeadMarks::of(head);
     let mut pairs: Vec<(Oid, RefLabel)> = Vec::with_capacity(refs.len());
     for r in refs {
         if r.kind == RefKind::RemoteBranch && joins.folded.contains(r.name.as_str()) {
@@ -194,7 +200,7 @@ pub(super) fn build_label_map(
                 text: r.short.clone(),
                 kind,
                 has_remote,
-                is_head: r.is_head,
+                is_head: r.kind == RefKind::LocalBranch && marks.on_branch(&r.short),
                 here: r.kind != RefKind::RemoteBranch,
                 remote: String::new(),
                 held_elsewhere: joins.held_elsewhere(r),
@@ -235,21 +241,7 @@ pub(super) fn build_label_map(
     if head.detached
         && let Some(oid) = head.oid
     {
-        pairs.push((
-            oid,
-            RefLabel {
-                text: crate::Name::const_new("HEAD"),
-                kind: LabelKind::Head,
-                has_remote: false,
-                is_head: true,
-                here: true,
-                remote: String::new(),
-                // This window's own worktree, which the holders never carry.
-                held_elsewhere: false,
-                locked: false,
-                main: false,
-            },
-        ));
+        pairs.push((oid, RefLabel::detached_head()));
     }
     // Worktrees on no branch only: one with a branch is said by that
     // branch's chip (`held_elsewhere`), and this session's own is the
@@ -272,7 +264,7 @@ pub(super) fn build_label_map(
             },
         ));
     }
-    LabelIndex::from_pairs(pairs)
+    LabelIndex::marked_from(pairs, head)
 }
 
 /// Fingerprint of which paths status reported, in which state — not

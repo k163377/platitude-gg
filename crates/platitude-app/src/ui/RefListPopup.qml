@@ -296,8 +296,10 @@ AppCard {
                 /// `textMuted` one included: the exception to 規約 §無効.
                 readonly property bool lit: rowHover.hovered || refRow.pointedAt
                 // The reader is already there: only the move comes off, the colour stays (§ref の種別) — both off the
-                // chip's own `isHead`, so the row cannot lead nowhere in one colour and somewhere in another. A tag
-                // leads nowhere too: moving onto one would detach HEAD (`offers::SwitchAction::None`).
+                // chip's own `isHead`, so the row cannot lead nowhere in one colour and somewhere in another. That is
+                // HEAD as the first read to see it has it (`LabelIndex::marked_by` in core), so a switch made outside
+                // reaches the list with the status read. A tag leads nowhere too: moving onto one would detach HEAD
+                // (`offers::SwitchAction::None`).
                 readonly property bool current: refRow.modelData.kind === "branch" && refRow.modelData.isHead
                 // The two markers (a detached HEAD, a worktree with no branch here) name no ref. Only the move comes
                 // off: the chip keeps its colour, or the detached HEAD would be amber on the row and grey in its card.

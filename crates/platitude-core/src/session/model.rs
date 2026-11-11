@@ -93,9 +93,94 @@ pub(crate) struct LabelIndex {
     commits: Vec<(Oid, u32, u32)>,
     /// Every chip, grouped by commit and in the order they are drawn.
     labels: Vec<RefLabel>,
+    /// The HEAD the chips are marked by ([`Self::marked_by`]).
+    marks: HeadMarks,
+}
+
+/// Where a HEAD puts its marks on the chips: on its branch's chip, or —
+/// on no branch — on a chip of its own on its commit.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub(crate) struct HeadMarks {
+    branch: Option<String>,
+    detached_at: Option<Oid>,
+}
+
+impl HeadMarks {
+    pub(crate) fn of(head: &HeadState) -> Self {
+        Self {
+            branch: head.branch.clone().filter(|_| !head.detached),
+            detached_at: head.oid.filter(|_| head.detached),
+        }
+    }
+
+    /// Whether the local branch `name` is the one HEAD is on.
+    pub(crate) fn on_branch(&self, name: &str) -> bool {
+        self.branch.as_deref() == Some(name)
+    }
+}
+
+impl RefLabel {
+    /// The chip a HEAD on no branch wears on its commit: this window's own
+    /// worktree, which the holders never carry.
+    pub(crate) fn detached_head() -> Self {
+        Self {
+            text: crate::Name::const_new("HEAD"),
+            kind: LabelKind::Head,
+            has_remote: false,
+            is_head: true,
+            here: true,
+            remote: String::new(),
+            held_elsewhere: false,
+            locked: false,
+            main: false,
+        }
+    }
 }
 
 impl LabelIndex {
+    /// [`Self::from_pairs`] for chips whose HEAD marks `head` put.
+    pub(crate) fn marked_from(pairs: Vec<(Oid, RefLabel)>, head: &HeadState) -> Self {
+        Self {
+            marks: HeadMarks::of(head),
+            ..Self::from_pairs(pairs)
+        }
+    }
+
+    /// Whether these chips wear `head`'s marks.
+    pub(crate) fn marked_as(&self, head: &HeadState) -> bool {
+        self.marks == HeadMarks::of(head)
+    }
+
+    /// The same chips with HEAD's marks where `head` puts them: the
+    /// current branch's chip bold and first on its commit, or the chip of
+    /// a HEAD on no branch on its commit. The refs listing's `%(HEAD)` and
+    /// the status read's `# branch.head` say different HEADs for as long as
+    /// one has landed and the other has not; the chips say the one record
+    /// (`Standing::head`), as the sidebar's current branch and the HEAD
+    /// row's pin do, whichever read brought it.
+    pub(crate) fn marked_by(&self, head: &HeadState) -> Self {
+        let marks = HeadMarks::of(head);
+        let mut pairs: Vec<(Oid, RefLabel)> = Vec::with_capacity(self.labels.len() + 1);
+        for (oid, first, count) in &self.commits {
+            for label in self.run(*first, *count) {
+                if label.kind == LabelKind::Head {
+                    continue;
+                }
+                let mut label = label.clone();
+                label.is_head =
+                    label.kind == LabelKind::LocalBranch && marks.on_branch(label.text.as_str());
+                pairs.push((*oid, label));
+            }
+        }
+        if let Some(oid) = marks.detached_at {
+            pairs.push((oid, RefLabel::detached_head()));
+        }
+        Self {
+            marks,
+            ..Self::from_pairs(pairs)
+        }
+    }
+
     /// Sorts loose `(commit, chip)` pairs into the run, each commit's chips
     /// in the order the row draws them: the current branch (or the detached
     /// HEAD marker) first, then by `LabelKind` — locals, remotes, worktree
@@ -121,7 +206,11 @@ impl LabelIndex {
             labels.push(label);
         }
         commits.shrink_to_fit();
-        Self { commits, labels }
+        Self {
+            commits,
+            labels,
+            marks: HeadMarks::default(),
+        }
     }
 
     /// The chips on one commit. `tags` is the TAGS band's eye: off, a
@@ -177,7 +266,9 @@ impl LabelIndex {
 
 impl crate::mem::Footprint for LabelIndex {
     fn heap_bytes(&self) -> usize {
-        self.commits.capacity() * size_of::<(Oid, u32, u32)>() + self.labels.heap_bytes()
+        self.commits.capacity() * size_of::<(Oid, u32, u32)>()
+            + self.labels.heap_bytes()
+            + self.marks.branch.as_ref().map_or(0, String::capacity)
     }
 }
 

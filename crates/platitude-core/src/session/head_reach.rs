@@ -45,12 +45,17 @@ impl RepoSession {
         }
     }
 
+    /// Tells the consumer where HEAD is, and puts the chips' HEAD marks
+    /// where it moved to ([`Self::remark_chips`]) — whichever read moved it.
     fn report_head(&self, offer: HeadOffer, head: &HeadState) {
         if let HeadOffer::Settled { seq } | HeadOffer::Moved { seq } = offer {
             self.sink.event(SessionEvent::HeadObserved {
                 head: head.clone(),
                 seq,
             });
+        }
+        if let HeadOffer::Moved { .. } = offer {
+            self.remark_chips();
         }
     }
 

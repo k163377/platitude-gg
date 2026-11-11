@@ -43,7 +43,37 @@ impl RepoSession {
         let Some(mut shared) = self.store_shared() else {
             return;
         };
-        shared.label_map = label_map;
+        self.install_labels(&mut shared, label_map, tags);
+    }
+
+    /// Puts the held chips' HEAD marks where the record now says, once a
+    /// read has moved it ([`RepoSession::report_head`]): the status read's
+    /// HEAD often lands ahead of the refs read that lists the chips, and
+    /// the rows' chips say the HEAD the rest of the window already does.
+    pub(super) fn remark_chips(&self) {
+        let tags = self.tags_shown();
+        let Some(mut shared) = self.store_shared() else {
+            return;
+        };
+        if self
+            .standing
+            .head()
+            .is_none_or(|record| shared.label_map.marked_as(&record))
+        {
+            return;
+        }
+        let label_map = std::mem::take(&mut shared.label_map);
+        self.install_labels(&mut shared, label_map, tags);
+    }
+
+    /// [`Self::apply_refs`] under the lock taken. The chips wear the HEAD
+    /// record's marks (`LabelIndex::marked_by`), read here: a record moved
+    /// while the map was built is the one sent.
+    fn install_labels(&self, shared: &mut Shared, label_map: LabelIndex, tags: bool) {
+        shared.label_map = match self.standing.head() {
+            Some(record) if !label_map.marked_as(&record) => label_map.marked_by(&record),
+            _ => label_map,
+        };
 
         let mut fresh: HashMap<u32, Vec<RefLabel>> = HashMap::new();
         for (oid, labels) in shared.label_map.commits(tags) {

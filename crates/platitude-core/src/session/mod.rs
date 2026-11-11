@@ -135,7 +135,7 @@ pub use graph_refresh::{
 pub use joins::same_path_key;
 use latest::Latest;
 use leaving::{Leaving, LeavingRef, Walked};
-pub(crate) use model::LabelIndex;
+pub(crate) use model::{HeadMarks, LabelIndex};
 pub use model::{LabelKind, LogOptions, LogRow, RefLabel, RelaidRow};
 pub use open::{DrawnGraph, FirstPass};
 pub use pace::{

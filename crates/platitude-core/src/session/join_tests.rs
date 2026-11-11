@@ -923,3 +923,67 @@ fn refs_join_at_scale() {
         labels.len(),
     );
 }
+
+/// The chips wear the HEAD the record names, whichever read brought it:
+/// the branch HEAD moved to is bold and first on its commit, the one it
+/// left is neither, and a HEAD on no branch gets a chip of its own
+/// (`LabelIndex::marked_by`).
+#[test]
+fn the_chips_wear_the_head_the_record_names() {
+    let mut main = branch("main", oid(1));
+    main.is_head = true;
+    let refs = vec![main, branch("zz-two", oid(1)), branch("aside", oid(2))];
+    let remote_tags = index_of("origin", Vec::new());
+    let held = held_by_nobody();
+    let joins = RefJoins::new(&refs, &held);
+    let on_main = head_at(oid(1));
+    let map = build_label_map(&refs, &on_main, &remote_tags, &joins);
+    // The current branch starred, in the order the row draws them.
+    let drawn = |map: &LabelIndex, at: u8| -> Vec<String> {
+        map.labels_of(&oid(at), true)
+            .iter()
+            .map(|label| format!("{}{}", if label.is_head { "*" } else { "" }, label.text))
+            .collect()
+    };
+    assert!(map.marked_as(&on_main));
+    assert_eq!(drawn(&map, 1), ["*main", "zz-two"]);
+
+    let on_two = HeadState {
+        branch: Some("zz-two".to_string()),
+        ..head_at(oid(1))
+    };
+    assert!(!map.marked_as(&on_two));
+    // A listing that marks no ref, told its HEAD by a later process that
+    // saw HEAD on a branch: the chips wear what they are said to wear.
+    let unmarked: Vec<RefEntry> = refs
+        .iter()
+        .cloned()
+        .map(|r| RefEntry {
+            is_head: false,
+            ..r
+        })
+        .collect();
+    let told = build_label_map(&unmarked, &on_two, &remote_tags, &joins);
+    assert!(told.marked_as(&on_two));
+    assert_eq!(drawn(&told, 1), ["*zz-two", "main"]);
+
+    let moved = map.marked_by(&on_two);
+    assert!(moved.marked_as(&on_two));
+    assert_eq!(drawn(&moved, 1), ["*zz-two", "main"]);
+    assert_eq!(drawn(&moved, 2), ["aside"]);
+
+    let detached = HeadState {
+        branch: None,
+        oid: Some(oid(2)),
+        detached: true,
+        held: None,
+    };
+    let off = moved.marked_by(&detached);
+    assert_eq!(drawn(&off, 1), ["main", "zz-two"]);
+    assert_eq!(drawn(&off, 2), ["*HEAD", "aside"]);
+    assert_eq!(
+        drawn(&off.marked_by(&on_main), 2),
+        ["aside"],
+        "back on a branch, the HEAD's own chip goes"
+    );
+}
