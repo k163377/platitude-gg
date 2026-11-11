@@ -54,14 +54,17 @@ async fn a_silent_walk_lets_the_write_settle_and_lands_after() {
 
     // The walk behind the commit lands with its row (two commits) while
     // the mark is up, and that landing takes it down. Other walks go up and
-    // down beside it: every walk is silent at once here.
+    // down beside it: every walk is silent at once here. The marks are read
+    // from the opening on: `opened` waits for no walk, and a walk of the
+    // opening still out as the commit lands walks its row too, under a mark
+    // put up before the commit.
     let (marks, landed) = sink
         .wait_for("the silent walk landed and its mark came down", |evs| {
-            let tail = &evs[from..];
-            let landed = tail
-                .iter()
-                .position(|e| pass_of(e).is_some_and(|pass| pass.total == 2))?;
-            let marks: Vec<(usize, bool)> = tail
+            let landed = from
+                + evs[from..]
+                    .iter()
+                    .position(|e| pass_of(e).is_some_and(|pass| pass.total == 2))?;
+            let marks: Vec<(usize, bool)> = evs
                 .iter()
                 .enumerate()
                 .filter_map(|(at, e)| match e {
