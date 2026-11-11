@@ -28,7 +28,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use cxx_qt::CxxQtType;
 use cxx_qt::casting::Upcast;
-use cxx_qt_lib::{QByteArray, QImage, qint64};
+use cxx_qt_lib::{QByteArray, QImage, QSize, qint64};
 use tokio::sync::mpsc::Receiver;
 use tokio_util::sync::CancellationToken;
 
@@ -41,6 +41,8 @@ mod qobject {
         type QByteArray = cxx_qt_lib::QByteArray;
         include!("cxx-qt-lib/qtypes.h");
         type qint64 = cxx_qt_lib::qint64;
+        include!("cxx-qt-lib/qsize.h");
+        type QSize = cxx_qt_lib::QSize;
 
         include!(<QtGui/QImageReader>);
         /// Qt's image reader, over one device.
@@ -59,6 +61,15 @@ mod qobject {
 
         /// The image the device holds; null where it cannot be read.
         fn read(self: Pin<&mut QImageReader>) -> QImage;
+
+        /// The picture's own size, invalid where its format does not say
+        /// it. A drawing's reader loads the drawing from the device to tell
+        /// it (`qsvgiohandler.cpp`), and draws that one on `read`.
+        fn size(self: &QImageReader) -> QSize;
+
+        /// The size `read` gives the picture: a drawing is drawn at it.
+        #[rust_name = "set_scaled_size"]
+        fn setScaledSize(self: Pin<&mut QImageReader>, size: &QSize);
     }
 
     extern "C++Qt" {
@@ -233,6 +244,24 @@ pub fn streams(name: &[u8]) -> bool {
     matches!(name, b"png" | b"jpeg" | b"gif" | b"svg" | b"svgz")
 }
 
+/// Whether Qt's reader of the format named draws the picture rather than
+/// decoding stored pixels: it can be drawn at any size, crisp.
+fn draws(name: &[u8]) -> bool {
+    matches!(name, b"svg" | b"svgz")
+}
+
+/// `bytes` already read whole, decoded as [`decode`] decodes a stream of
+/// them — a drawing at `drawn_at` times its own size.
+pub fn decode_whole(bytes: Vec<u8>, hint: Option<&str>, drawn_at: f64) -> Option<QImage> {
+    let (to, chunks) = tokio::sync::mpsc::channel(1);
+    // A fresh channel of one has room for the one chunk; the sender dropped
+    // after it is the read's end.
+    to.try_send(bytes).ok()?;
+    drop(to);
+    let whole = Arc::new(AtomicBool::new(true));
+    decode(chunks, whole, hint, &CancellationToken::new(), drawn_at)
+}
+
 /// The picture the read sends, decoded as its chunks arrive: as `hint` (a
 /// name Qt's readers know) where the bytes agree, else as the format they
 /// say, else, where no reader knows them, as `hint`; `None` where that
@@ -245,11 +274,17 @@ pub fn streams(name: &[u8]) -> bool {
 /// The read is stopped through `stop` before its chunks are let go, so a
 /// read the decoder leaves ends stopped, not broken off. Runs on the
 /// calling thread, which waits on the read — never one of Qt's.
+///
+/// A drawing (SVG) is drawn at `drawn_at` times its own size, so a screen
+/// of that many pixels to its own draws it crisp, as Qt's reader of a file
+/// draws one (`QQuickImageProviderWithOptions::loadSize`); a picture of
+/// pixels is decoded as it is, whatever `drawn_at` says.
 pub fn decode(
     chunks: Receiver<Vec<u8>>,
     whole: Arc<AtomicBool>,
     hint: Option<&str>,
     stop: &CancellationToken,
+    drawn_at: f64,
 ) -> Option<QImage> {
     let stream = qobject::new_picture_stream();
     // Dropped ahead of `stream`, whose chunks go with it.
@@ -277,6 +312,15 @@ pub fn decode(
     };
     if !streams(reader.format().as_slice()) {
         return None;
+    }
+    if drawn_at != 1.0 && draws(reader.format().as_slice()) {
+        let own = reader.size();
+        if own.is_valid() {
+            let scaled = |side: i32| (f64::from(side) * drawn_at).round() as i32;
+            reader
+                .pin_mut()
+                .set_scaled_size(&QSize::new(scaled(own.width()), scaled(own.height())));
+        }
     }
     let image = reader.pin_mut().read();
     if image.is_null() {
@@ -391,9 +435,20 @@ mod tests {
             }
             told.store(ended_whole, Ordering::Release);
         });
-        let image = super::decode(chunks, whole, hint, &CancellationToken::new());
+        let image = super::decode(chunks, whole, hint, &CancellationToken::new(), 1.0);
         sender.join().expect("the sender");
         image
+    }
+
+    /// A drawing of 3 × 2 whose `<svg` stands past the bytes Qt's reader
+    /// peeks at.
+    fn drawing() -> Vec<u8> {
+        let mut bytes = b"<?xml version=\"1.0\"?>\n<!--".to_vec();
+        bytes.resize(bytes.len() + 5000, b' ');
+        bytes.extend_from_slice(
+            b"-->\n<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"3\" height=\"2\"/>\n",
+        );
+        bytes
     }
 
     /// A picture streamed in pieces is the one its bytes make read whole —
@@ -444,7 +499,13 @@ mod tests {
             }
         });
         let stop = CancellationToken::new();
-        let image = super::decode(chunks, Arc::new(AtomicBool::new(false)), Some("png"), &stop);
+        let image = super::decode(
+            chunks,
+            Arc::new(AtomicBool::new(false)),
+            Some("png"),
+            &stop,
+            1.0,
+        );
         sender.join().expect("the sender");
         assert_eq!(image, Some(whole));
         assert!(stop.is_cancelled(), "the read is stopped");
@@ -455,14 +516,38 @@ mod tests {
     /// says, and are no picture with no name.
     #[test]
     fn bytes_that_do_not_tell_their_format_are_read_as_their_name_says() {
-        let mut bytes = b"<?xml version=\"1.0\"?>\n<!--".to_vec();
-        bytes.resize(bytes.len() + 5000, b' ');
-        bytes.extend_from_slice(
-            b"-->\n<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"3\" height=\"2\"/>\n",
-        );
+        let bytes = drawing();
         let drawn = streamed(&bytes, 4096, true, Some("svg")).expect("the drawing");
         assert_eq!((drawn.width(), drawn.height()), (3, 2));
         assert_eq!(streamed(&bytes, 4096, true, None), None);
+    }
+
+    /// A drawing asked for at twice its size is drawn at it, streamed or
+    /// read whole; a picture of pixels is decoded as it is.
+    #[test]
+    fn a_drawing_is_drawn_at_the_size_asked_and_pixels_stay_as_they_are() {
+        let size = |image: Option<QImage>| image.map(|image| (image.width(), image.height()));
+        let (to, chunks) = tokio::sync::mpsc::channel(4);
+        for piece in drawing().chunks(4096) {
+            to.try_send(piece.to_vec()).expect("room for every piece");
+        }
+        drop(to);
+        let whole = Arc::new(AtomicBool::new(true));
+        let streamed_drawing =
+            super::decode(chunks, whole, Some("svg"), &CancellationToken::new(), 2.0);
+        assert_eq!(size(streamed_drawing), Some((6, 4)));
+        assert_eq!(
+            size(super::decode_whole(drawing(), Some("svg"), 2.0)),
+            Some((6, 4))
+        );
+        assert_eq!(
+            size(super::decode_whole(drawing(), Some("svg"), 1.0)),
+            Some((3, 2))
+        );
+        assert_eq!(
+            size(super::decode_whole(png(30, 20), Some("png"), 2.0)),
+            Some((30, 20))
+        );
     }
 
     /// Bytes of a format whose reader does not read in order are no

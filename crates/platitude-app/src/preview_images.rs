@@ -193,13 +193,15 @@ impl qobject::PreviewImageProvider {
         let answer = Answer {
             thread: Some(response.qt_thread()),
         };
+        let asked = String::from(id);
+        let (id, drawn_at) = drawn_at(&asked);
         // Told on the response's own thread, behind this return — after Qt
         // has heard of the response, which has to see `finished`.
-        let stop = match picture(&String::from(id)) {
+        let stop = match picture(id) {
             Some(Held {
                 picture,
                 reader: Some(reader),
-            }) => Some(draw(&reader, picture, answer)),
+            }) => Some(draw(&reader, picture, drawn_at, answer)),
             _ => None,
         };
         response.pin_mut().rust_mut().stop = stop;
@@ -273,7 +275,12 @@ const CHUNKS_IN_FLIGHT: usize = 4;
 /// The thread is none of Qt's and runs no event loop: an animated SVG's
 /// renderer cannot start its timer there, and Qt says so once per drawing
 /// (`qsvgrenderer.cpp`) — the picture is its first frame either way.
-fn draw(reader: &PictureReader, picture: PictureBlob, answer: Answer) -> CancellationToken {
+fn draw(
+    reader: &PictureReader,
+    picture: PictureBlob,
+    drawn_at: f64,
+    answer: Answer,
+) -> CancellationToken {
     let (reader, stop) = reader.scoped();
     let stopped = stop.clone();
     // Past the stand-down the answer goes untold, which tells of no picture.
@@ -288,12 +295,12 @@ fn draw(reader: &PictureReader, picture: PictureBlob, answer: Answer) -> Cancell
             let streamed = match format
                 .is_none_or(|format| crate::preview_decode::streams(qt_name(format).as_bytes()))
             {
-                true => stream(&reader, picture.clone(), format),
+                true => stream(&reader, picture.clone(), format, drawn_at),
                 false => None,
             };
             let image = streamed.or_else(|| match stopped.is_cancelled() {
                 true => None,
-                false => read_whole(&reader, picture),
+                false => read_whole(&reader, picture, drawn_at),
             });
             answer.tell(image.map(for_texture));
         });
@@ -312,6 +319,7 @@ fn stream(
     reader: &PictureReader,
     picture: PictureBlob,
     format: Option<ImageFormat>,
+    drawn_at: f64,
 ) -> Option<QImage> {
     let (reader, stop) = reader.scoped();
     let (to, chunks) = tokio::sync::mpsc::channel(CHUNKS_IN_FLIGHT);
@@ -321,7 +329,7 @@ fn stream(
         Ok(()) => told.store(true, Ordering::Release),
         Err(error) => tracing::debug!(%error, "preview picture not streamed"),
     });
-    crate::preview_decode::decode(chunks, whole, format.map(qt_name), &stop)
+    crate::preview_decode::decode(chunks, whole, format.map(qt_name), &stop, drawn_at)
 }
 
 /// The drawings under way, each on a thread of its own, and whether more
@@ -385,7 +393,7 @@ pub fn stand_down() {
 /// `picture`'s bytes read whole and decoded from memory, on the calling
 /// thread, which waits on the read: the side's compressed bytes are held
 /// until decoded (ci/baseline/preview-pictures-windows-x64.md).
-fn read_whole(reader: &PictureReader, picture: PictureBlob) -> Option<QImage> {
+fn read_whole(reader: &PictureReader, picture: PictureBlob, drawn_at: f64) -> Option<QImage> {
     let format = picture.format();
     let (said, heard) = std::sync::mpsc::channel();
     reader.read(picture, move |read| {
@@ -393,6 +401,12 @@ fn read_whole(reader: &PictureReader, picture: PictureBlob) -> Option<QImage> {
         said.send(read).ok();
     });
     match heard.recv() {
+        // A drawing drawn at its scale, as the stream draws it; a drawing that
+        // will not draw so is read as anything else is.
+        Ok(Ok(bytes)) if drawn_at != 1.0 && format.is_some_and(ImageFormat::is_vector) => {
+            crate::preview_decode::decode_whole(bytes.clone(), format.map(qt_name), drawn_at)
+                .or_else(|| decode(&bytes, format))
+        }
         Ok(Ok(bytes)) => decode(&bytes, format),
         Ok(Err(error)) => {
             tracing::debug!(%error, "preview picture not read");
@@ -526,9 +540,31 @@ pub fn hold(tab: i32, picture: PictureBlob, reader: Option<PictureReader>) -> St
     id
 }
 
-/// The URL an `Image` reads the picture held under `id` at.
+/// The URL an `Image` reads the picture held under `id` at. An `Image` may
+/// add `@<scale>` to it: a drawing is then drawn at that many times its own
+/// size ([`drawn_at`]).
 pub fn url(id: &str) -> String {
     format!("image://{PROVIDER}/{id}")
+}
+
+/// The id an `Image` asked for, and how many times its own size a drawing
+/// is drawn at: what follows an `@` (`ImagePreviewCell.drawnAt`, the
+/// screen's pixels to its own times the zoom it is shown at — Qt hands a
+/// provider the screen's ratio only with a size asked, which a first read
+/// cannot name), else 1. The size Qt asks for is not read.
+/// A scale that is no number, or under 1, is 1.
+fn drawn_at(asked: &str) -> (&str, f64) {
+    match asked.split_once('@') {
+        Some((id, scale)) => (
+            id,
+            scale
+                .parse::<f64>()
+                .ok()
+                .filter(|scale| scale.is_finite() && *scale >= 1.0)
+                .unwrap_or(1.0),
+        ),
+        None => (asked, 1.0),
+    }
 }
 
 /// Lets the picture `id` go: an `Image` that asks for it after this gets
@@ -674,6 +710,17 @@ mod tests {
         assert_eq!(super::for_texture(opaque).cache_key(), key, "left alone");
     }
 
+    /// An `Image` asks for a held id with the scale its drawing is drawn at
+    /// after an `@`; none, or one that is no scale, is 1.
+    #[test]
+    fn an_asked_id_says_the_scale_its_drawing_is_drawn_at() {
+        assert_eq!(super::drawn_at("t1-5"), ("t1-5", 1.0));
+        assert_eq!(super::drawn_at("t1-5@2"), ("t1-5", 2.0));
+        assert_eq!(super::drawn_at("t1-5@1.5"), ("t1-5", 1.5));
+        assert_eq!(super::drawn_at("t1-5@x"), ("t1-5", 1.0));
+        assert_eq!(super::drawn_at("t1-5@0.5"), ("t1-5", 1.0));
+    }
+
     /// Every hold is a new id, so a re-read is a new URL; a tab let go of
     /// takes its own pictures and no other tab's — `t1-` is not `t12-`'s
     /// start.
@@ -762,7 +809,7 @@ mod tests {
             CancellationToken::new(),
         );
         let picture = PictureBlob::new(oids[0], 70, "logo.png");
-        let image = super::stream(&reader, picture, Some(ImageFormat::Png));
+        let image = super::stream(&reader, picture, Some(ImageFormat::Png), 1.0);
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(
             image.map(|image| (image.width(), image.height())),
