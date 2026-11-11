@@ -1,7 +1,8 @@
 //! Harness hook handlers (`cargo xtask hook <event>`). Claude's settings
-//! wire the git, launches, kills, seats, chips, board
-//! window and other sessions a session touches only when the user asks,
-//! and the language of what the user reads (`language`). Main moves on the
+//! wire the git, launches, kills, seats, chips and board window a session
+//! touches only when the user asks, a side session's detach and the land
+//! command kept out of what reaches another session (`contact`), and the
+//! language of what the user reads (`language`). Main moves on the
 //! permit the user's own `/land` opens (`permit`), and on that alone.
 //! Codex's hooks share activity and landing prompts (`codex`), and refuse
 //! the git that writes main by hand or takes the gate off (`codex_git`).
@@ -108,9 +109,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 }
 
-/// PreToolUse, of any tool: the guards on tools no matcher names — messages
-/// to other sessions (`contact`), the board (`board`), the wrap-up box's
-/// language (`language`) and the chips. One decision per call.
+/// PreToolUse, of any tool: the guards on tools no matcher names — the land
+/// command carried to another session (`contact`), the board (`board`), the
+/// wrap-up box's language (`language`) and the chips. One decision per call.
 fn pre_tool(input: &str) -> Result<(), String> {
     if contact::pre_tool(input) || board::pre_tool(input) || language::pre_tool(input) {
         return Ok(());
