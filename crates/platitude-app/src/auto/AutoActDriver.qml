@@ -850,6 +850,7 @@ Item {
     AutoActRecoverVerbs { id: recoverVerbs; driver: driver }
     AutoActBranchPushVerbs { id: branchPushVerbs; driver: driver }
     AutoActGithubVerbs { id: githubVerbs; driver: driver }
+    AutoActSilenceVerbs { id: silenceVerbs; driver: driver }
 
     /// The dispatch, pressed as `act`'s input: the family that knows the verb presses it and starts what waits for
     /// it. Answers whether the run goes on from here — a verb no family and no ledger knows is nobody's, and is left
@@ -897,6 +898,7 @@ Item {
             || recoverVerbs.run(act, arg)
             || branchPushVerbs.run(act, arg)
             || githubVerbs.run(act, arg)
+            || silenceVerbs.run(act, arg)
         if (!known && !driver.completionDeferred && !driver.writeExpected) {
             // Nobody's: no family took it, and every other verb the window answers (`perf` left above) is on the
             // completion ledger (`cargo xtask verbs` holds it there) — a misspelling, left to the watchdog.

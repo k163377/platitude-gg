@@ -100,7 +100,7 @@ pub(super) struct Options {
     /// this machine has.
     pub(super) old_git: String,
     /// Run the app against a git that answers one subcommand late
-    /// (`<subcommand>:<ms>[:quiet]`, `git_shim`): the order a slow read
+    /// (`<subcommand>:<ms>[:quiet|:head=<word>]`, `git_shim`): the order a slow read
     /// gives by chance, made the run's own, for a verb whose completion
     /// is held against it. Empty: git as it is. No registered line spells
     /// it — a diagnostic run.
@@ -340,9 +340,9 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             }
             "--no-lfs" => opts.no_lfs = true,
             "--slow-git" => {
-                let asked = it
-                    .next()
-                    .ok_or("--slow-git needs <subcommand>:<ms>[:quiet] (status:1500:quiet)")?;
+                let asked = it.next().ok_or(
+                    "--slow-git needs <subcommand>:<ms>[:quiet|:head=<word>] (status:1500:quiet)",
+                )?;
                 super::git_shim::Slow::parse(asked)?;
                 opts.slow_git = asked.clone();
             }

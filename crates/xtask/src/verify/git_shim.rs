@@ -19,56 +19,100 @@ pub(super) const OTHER_GIT: &str = "PGG_OTHER_GIT";
 /// answers late, and by how much ([`Slow`]).
 pub(super) const SHIM_SLOW: &str = "PGG_SHIM_SLOW";
 
-/// One subcommand of git answered late: `<subcommand>:<ms>[:quiet]`.
+/// One subcommand of git answered late: `<subcommand>:<ms>[:quiet|:head=<word>]`.
 /// `quiet` leaves the subcommand alone while the repository has a rebase
 /// under way — so a status read during a rebase lands at its own pace and
 /// the one after it lands late, the order a verb completing on the
-/// answer alone photographs by chance (`AutoActPlanVerbs`).
+/// answer alone photographs by chance (`AutoActPlanVerbs`). `head=<word>`
+/// answers late only while the subject of the commit `HEAD` stands on
+/// holds `<word>`: the opening's reads land at their own pace, however
+/// many it makes, and the ones behind the commit a verb makes with that
+/// word are the ones that wait.
+///
+/// `walk` names the graph's walk alone — `log` with the `--date-order` the
+/// session's walk asks for (`platitude_core::session::walk`), and no other
+/// `log` the app runs (a commit's details, the amend check).
 pub(crate) struct Slow {
     pub(super) subcommand: String,
     pub(super) ms: u64,
     pub(super) quiet: bool,
+    pub(super) head: Option<String>,
 }
 
 impl Slow {
     pub(crate) fn parse(asked: &str) -> Result<Slow, String> {
+        let form =
+            || format!("--slow-git takes <subcommand>:<ms>[:quiet|:head=<word>]; got {asked:?}");
         let mut parts = asked.split(':');
         let subcommand = parts
             .next()
             .filter(|sub| !sub.is_empty())
-            .ok_or_else(|| format!("--slow-git takes <subcommand>:<ms>[:quiet]; got {asked:?}"))?;
+            .ok_or_else(form)?;
         let ms = parts
             .next()
             .and_then(|ms| ms.parse::<u64>().ok())
-            .ok_or_else(|| format!("--slow-git takes <subcommand>:<ms>[:quiet]; got {asked:?}"))?;
-        let quiet = match parts.next() {
-            None => false,
-            Some("quiet") => true,
-            Some(other) => {
-                return Err(format!(
-                    "--slow-git: the third part is `quiet` or nothing; got {other:?}"
-                ));
-            }
+            .ok_or_else(form)?;
+        let (quiet, head) = match parts.next() {
+            None => (false, None),
+            Some("quiet") => (true, None),
+            Some(other) => match other.strip_prefix("head=").filter(|word| !word.is_empty()) {
+                Some(word) => (false, Some(word.to_string())),
+                None => {
+                    return Err(format!(
+                        "--slow-git: the third part is `quiet`, `head=<word>` or nothing; got \
+                         {other:?}"
+                    ));
+                }
+            },
         };
         if parts.next().is_some() {
-            return Err(format!(
-                "--slow-git takes <subcommand>:<ms>[:quiet]; got {asked:?}"
-            ));
+            return Err(form());
         }
         Ok(Slow {
             subcommand: subcommand.to_string(),
             ms,
             quiet,
+            head,
         })
     }
 
-    /// Whether this call of git is the one to answer late.
-    fn delays(&self, args: &[OsString]) -> bool {
-        if subcommand(args).is_none_or(|sub| *sub != *self.subcommand) {
+    /// Whether this call of git is the one to answer late; `real` is the
+    /// git behind this copy, which says what `HEAD` stands on.
+    fn delays(&self, args: &[OsString], real: &std::ffi::OsStr) -> bool {
+        if !self.names(args) {
             return false;
         }
-        !(self.quiet && rebase_under_way(&repository_of(args)))
+        let repo = repository_of(args);
+        if self.quiet && rebase_under_way(&repo) {
+            return false;
+        }
+        self.head
+            .as_deref()
+            .is_none_or(|word| head_subject(real, &repo).contains(word))
     }
+
+    /// Whether `args` is a call of the subcommand this answers late.
+    fn names(&self, args: &[OsString]) -> bool {
+        let Some(sub) = subcommand(args) else {
+            return false;
+        };
+        if self.subcommand == "walk" {
+            return sub == "log" && args.iter().any(|arg| arg == "--date-order");
+        }
+        *sub == *self.subcommand
+    }
+}
+
+/// The subject of the commit `HEAD` stands on in `repo`, empty where git
+/// cannot say (an unborn branch).
+fn head_subject(real: &std::ffi::OsStr, repo: &Path) -> String {
+    Command::new(real)
+        .arg("-C")
+        .arg(repo)
+        .args(["log", "-1", "--format=%s", "HEAD", "--"])
+        .output()
+        .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
+        .unwrap_or_default()
 }
 
 /// The repository a git call works in: `-C <dir>`, else the working
@@ -126,7 +170,7 @@ pub fn git_shim() -> Option<ExitCode> {
         return Some(ExitCode::from(1));
     }
     if let Some(slow) = slow
-        && slow.delays(&args)
+        && slow.delays(&args, &real)
     {
         // waits(timed): the one subcommand answers no sooner than asked (--slow-git) — the order
         // a slow read gives by chance, made the run's own; git's answer is the product's real time

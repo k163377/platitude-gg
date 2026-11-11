@@ -200,10 +200,15 @@ Item {
         shotDriver.finish()
     }
     /// Whether a picture waits for the page: an ambient read is owed, and nothing else the verb did not name
-    /// (`Awaited.expects`).
+    /// (`Awaited.expects`). An ambient read the completion named in its `arriving` by name — not through `*` — is
+    /// the verb's subject and photographed on its way: `walk-silent`'s `readings`, which the walk it holds never
+    /// lets settle.
     function holdsPicture(owed) {
-        return owed.some(term => harness.ambientTerms.indexOf(term) >= 0)
-            && owed.every(term => harness.ambientTerms.indexOf(term) >= 0 || Awaited.expects(term))
+        const from = completionRoute.completing
+        const named = from !== null ? from.arriving : []
+        const waited = owed.filter(term => named.indexOf(term) < 0)
+        return waited.some(term => harness.ambientTerms.indexOf(term) >= 0)
+            && waited.every(term => harness.ambientTerms.indexOf(term) >= 0 || Awaited.expects(term))
     }
     /// The page as the shot driver reads it for a picture (`AutoShotDriver.pageOwed`), and the one fault injected
     /// there: `PGG_FAULT_OWED_AT_SHOT=<artifact>-<when>[-<read>]` has that picture's readings say a read is on its

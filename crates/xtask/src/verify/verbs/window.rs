@@ -49,6 +49,22 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "quit_lock dialog=true window=true escape=false vetoes=2 landed=true",
     },
+    // The close asked over a commit git has answered, its reading held by a
+    // walk git says nothing in: the gate lets the window go (`ready=true`,
+    // no dialog) with the reading still out (`reading=true`) — the reads
+    // behind a write stop with a close, so they hold nothing open.
+    Verb {
+        name: "walk-silent-quit",
+        when: &[],
+        plain: "silent_quit ready=true dialog=false window=true busy=false reading=true",
+    },
+    // The band's card over a walk told silent: the one badge for the graph
+    // behind the repository, with the line that names git as the reason.
+    Verb {
+        name: "walk-silent-card",
+        when: &[],
+        plain: "silent_card badge=true silent=true card=true rows=stale",
+    },
     // The same close over a save the application itself asked for (the
     // identity the dialog took), held by the run until shutdown joins it.
     // `held=1` is the save standing at the hold when the close landed,

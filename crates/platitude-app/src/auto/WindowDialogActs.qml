@@ -393,6 +393,104 @@ Item {
         }
     }
 
+    // PGG_AUTO_ACT=walk-silent-quit (`--preset dirty`, its git held as `walk-silent`'s): the close pressed once git has
+    // answered a commit and the walk its reading asked for is held (`AutoActSilenceVerbs`) — no git writing, the
+    // reading still out. `busy=false reading=true` is that state under the photograph.
+    WindowStage {
+        id: silentQuitTimer
+        name: "silent_quit"
+        order: ["committed", "closed"]
+        running: Harness.autoAct === "walk-silent-quit"
+        onTriggered: {
+            const op = silentQuitTimer
+            const page = window.curPage
+            const tab = page !== null ? page.pageTab : null
+            if (op.at("start")) {
+                if (!Awaited.all("silent_quit_ready", { "ready": !(page === null),
+                                                        "open": tab !== null && tab.state === "open",
+                                                        "page": page !== null && PageSettled.settled(page) }))
+                    return
+                op.input("committed", () => {
+                    op.witness("seqBefore", tab.writeSeq)
+                    tab.commit("chore: commit under a silent walk", "", false, false)
+                })
+                return
+            }
+            if (op.at("committed")) {
+                if (!Awaited.all("silent_quit_answered", {
+                    "ready": !(page === null),
+                    "answered": tab !== null && tab.writeSeq > op.witnessed("seqBefore") && tab.busyCount === 0,
+                    "reading": tab !== null && tab.settling }))
+                    return
+                // The gate asked first, as the close asks it (`WindowQuitGate`): where it would let the window go, the
+                // close is not pressed — the run would end with it, unphotographed — and `ready=true` says so.
+                op.input("closed", () => {
+                    if (!op.witness("ready", AppBackend.readyToQuit()))
+                        window.close()
+                })
+                return
+            }
+            op.complete({
+                "name": "silent_quit_dialog",
+                "when": () => ({ "ready": !(window.curPage === null),
+                                 "dialog": op.witnessed("ready") || quitWaitDialog.opened }),
+                "report": () => "silent_quit ready=" + op.witnessed("ready")
+                    + " dialog=" + quitWaitDialog.opened
+                    + " window=" + window.visible
+                    + " busy=" + (window.curPage.pageTab.busyCount !== 0)
+                    + " reading=" + window.curPage.pageTab.settling,
+                "arriving": ["*", "readings"] })
+        }
+    }
+
+    // PGG_AUTO_ACT=walk-silent-card (`--preset dirty`, its git held as `walk-silent`'s): the same commit, the walk
+    // behind it held past its silence budget (`RepoSession::walk_went_silent`), and the band's `STALE GRAPH` card
+    // opened the way `graph-stale` opens it — the pointer on the badge until the card stands. The budget is the
+    // product's own, so the run spends it in real time.
+    WindowStage {
+        id: silentCardTimer
+        name: "silent_card"
+        order: ["committed", "silent", "pointed"]
+        running: Harness.autoAct === "walk-silent-card"
+        onTriggered: {
+            const op = silentCardTimer
+            const page = window.curPage
+            const tab = page !== null ? page.pageTab : null
+            if (op.at("start")) {
+                if (!Awaited.all("silent_card_ready", { "ready": !(page === null),
+                                                        "open": tab !== null && tab.state === "open",
+                                                        "page": page !== null && PageSettled.settled(page) }))
+                    return
+                op.input("committed", () => {
+                    tab.commit("chore: commit under a silent walk", "", false, false)
+                })
+                return
+            }
+            if (op.at("committed")) {
+                if (!Awaited.all("silent_card_badge", { "ready": !(page === null),
+                                                        "silent": page !== null && page.pageGraph.silent,
+                                                        "badge": topBar.staleBadgeShown }))
+                    return
+                op.advance("silent", () => "silent_card step=silent")
+            }
+            if (op.at("silent")) {
+                if (!op.input("pointed", () => {
+                        topBar.statePointedAt = true
+                        return topBar.stateCardOpen
+                    }))
+                    return
+            }
+            op.complete({
+                "name": "silent_card_open",
+                "when": () => ({ "badge": topBar.staleBadgeShown, "card": topBar.stateCardOpen }),
+                "report": () => "silent_card badge=" + topBar.staleBadgeShown
+                    + " silent=" + (window.curPage !== null && window.curPage.pageGraph.silent)
+                    + " card=" + topBar.stateCardOpen
+                    + " rows=" + topBar.stateCardRows,
+                "arriving": ["*", "readings"] })
+        }
+    }
+
     // PGG_AUTO_ACT=quit-waits / quit-locked: the close while git is still writing — the commit is held by the sleeping
     // pre-commit hook of `--preset slowhook`, so the gate turns the close away and stands the wait dialog up.
     // `quit-waits` photographs that — the loading shape with no buttons, the dialog in overlay.png and its seat over

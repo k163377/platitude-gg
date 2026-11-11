@@ -160,6 +160,31 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "menu_wait stage=during same=true held=all open=true",
     },
+    // A commit whose graph walk git says nothing in. Inside the silence
+    // budget the menu still waits on the reading behind the commit
+    // (`held=all`, `reading=true`); past it the walk is told silent, the
+    // reading answers without it and the menu stands live over the old
+    // graph with the band's mark up (`after`); and a git that answers after
+    // all lands the walk and takes the mark down (`landed`). `running=false`
+    // throughout: the walk is a read nobody asked for, so the log shows no
+    // row for it.
+    Verb {
+        name: "walk-silent",
+        when: &[
+            (
+                Arg::Is("after"),
+                "walk_silent menu=true held=none why=false busy=0 reading=false running=false \
+                 silent=true stale=true",
+            ),
+            (
+                Arg::Is("landed"),
+                "walk_silent menu=true held=none why=false busy=0 reading=false running=false \
+                 silent=false stale=false",
+            ),
+        ],
+        plain: "walk_silent menu=true held=all why=true busy=0 reading=true running=false \
+                silent=false stale=false",
+    },
     // The delete that menu offers on its first level, run to git's answer.
     // The menu stays up for a refusal (the plain delete's `onHeld` in
     // `BranchDeleteRow`), so what is judged is the menu going once none

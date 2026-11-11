@@ -337,6 +337,8 @@
 - `badges-hover-early <幅>[:<タブ本数>]`(同じカードを、帯が群を置く前にポインタを降ろして開く形。引数・preset は `badges-hover` と同じ — 詳細は `WindowBadgeActs.qml` の `Component.onCompleted`、判定は同上)
 - `graph-stale`(引数なし・preset は何でもよい。帯の `STALE GRAPH` = 行は全部立っているのに全部古い形を、カードを開いた姿まで — 詳細は `WindowBadgeActs.qml` の `staleActTimer`、判定は `verify/verbs/window.rs`)
 - `graph-stopped`(引数なし。同じバッジのもう半分 = walk が途中で止まって行が足りない形 — 詳細は同上)
+- `walk-silent` / `walk-silent after` / `walk-silent landed`(`--preset dirty`。黙る git は動詞が立てる): コミットの後の読み直しで git log が答えない時のメニューとログ — 予算の内・黙ったと告げた後・後から着いた後 — 詳細は `AutoActSilenceVerbs.qml`
+- `walk-silent-quit` / `walk-silent-card`(`--preset dirty`。同じ git): 同じ状態で窓を閉じようとした時の門の答えと、帯の `STALE GRAPH` のカード — 詳細は `WindowDialogActs.qml`
 - `band-actions-none`(`--preset longnames`。操作パネルの 4 つのボタンが 1 つも語を譲っていない形 — `band-actions*` の 5 動詞の詳細は `WindowBandActs.qml` の `actionsActTimer`、判定は `verify/verbs/window.rs`)
 - `band-actions [<幅>]`(`--preset longnames`。語を残したまま最も狭いセル — 詳細は同上)
 - `band-actions-fold`(`--preset longnames`。語を捨てて印だけになった形 — 詳細は同上)

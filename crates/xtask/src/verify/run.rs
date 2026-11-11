@@ -25,6 +25,19 @@ const OLD_GIT_VERBS: [&str; 5] = [
 /// stands only where git cannot run it.
 const NO_LFS_VERBS: [&str; 4] = ["no-lfs", "no-lfs-card", "badges-all", "badges-all-hover"];
 
+/// Likewise a git whose graph walk says nothing behind the commit the verb
+/// makes (its subject says `silent` — `AutoActSilenceVerbs`), so the line is
+/// just `verify-ui walk-silent …`: held past the run, or, for
+/// `walk-silent landed`, past the product's silence budget
+/// (`platitude_core::session::walk_silence`) and then let through.
+fn silent_walk_for(verb: &str, arg: &str) -> &'static str {
+    match (verb, arg) {
+        ("walk-silent", "landed") => "walk:45000:head=silent",
+        ("walk-silent" | "walk-silent-quit" | "walk-silent-card", _) => "walk:3600000:head=silent",
+        _ => "",
+    }
+}
+
 /// Which gits a run is staged with.
 struct Gits<'a> {
     /// What the staged copy answers `--version` with (`--old-git` on
@@ -55,7 +68,10 @@ fn gits_for<'a>(
         asked => asked,
     };
     let no_lfs = opts.no_lfs || NO_LFS_VERBS.contains(&opts.verb.as_str());
-    let slow = opts.slow_git.as_str();
+    let slow = match opts.slow_git.as_str() {
+        "" => silent_walk_for(&opts.verb, &opts.arg),
+        asked => asked,
+    };
     let on_path = !old_git.is_empty() || no_lfs || !slow.is_empty();
     if on_path && !opts.other_git.is_empty() {
         return Err(

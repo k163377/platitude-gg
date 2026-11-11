@@ -105,6 +105,8 @@ QtObject {
                 "merge-commit",
                 // Framed with the commit still out (or once it has landed), the menu raised under it.
                 "menu-wait",
+                // Framed with git's answer in and the reading behind it held by a silent walk.
+                "walk-silent",
                 // The menu goes up once the answer that dresses its drop row is in (`AutoActHistoryVerbs.dropTimer`):
                 // the bare one ends on it, the pressing one behind the write barrier it starts after the press.
                 "drop-commit", "drop-commit-go",
@@ -310,6 +312,9 @@ QtObject {
                 // Deferred though both commit: `quit-waits` photographs before the held write's answer, and
                 // `quit-locked` waits the landing out in its own sampler.
                 "quit-waits", "quit-locked",
+                // The same close over a commit git has answered, its reading held by a silent walk; and the band's
+                // card once that walk is told silent.
+                "walk-silent-quit", "walk-silent-card",
                 // The same over a save the hub holds: photographed while held; the exit that joins it comes after.
                 "quit-save-held",
                 "open-fail-tab-bare", "open-fail-tab-log", "open-fail-sweep", "identity",

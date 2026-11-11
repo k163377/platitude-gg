@@ -157,15 +157,21 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           else to the real one — a desk's Git for Windows
                           carries LFS. Implied by no-lfs, no-lfs-card and
                           badges-all(-hover); goes with --old-git.
-        --slow-git <sub>:<ms>[:quiet]
+        --slow-git <sub>:<ms>[:quiet|:head=<word>]
                           run the app against a git that answers the one
                           subcommand <sub> <ms> later and passes everything
                           to the real one: the order a slow read gives by
                           chance, made the run's own (status:1500:quiet —
                           `quiet` leaves a status read while a rebase is
-                          under way at its own speed). A diagnostic, not a
+                          under way at its own speed; head=<word> answers
+                          late only while HEAD's subject holds <word>).
+                          <sub> `walk` is the graph's walk alone
+                          (walk:3600000:head=silent — the opening's walks
+                          land, the ones behind a commit whose subject says
+                          `silent` say nothing). A diagnostic, not a
                           registered line (反映前テストの機械化.md
-                          §検証時点).
+                          §検証時点) — except as the verbs walk-silent,
+                          walk-silent-quit and walk-silent-card imply it.
         --other-git <ver> stand a second git beside the pictures, answering
                           <ver>, and tell the app where it is — a git that
                           answers and is *not* the one the run is on, which
