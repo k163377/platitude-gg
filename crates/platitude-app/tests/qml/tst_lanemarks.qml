@@ -30,7 +30,7 @@ Item {
     readonly property var ownLane: [{ "kind": "into", "lane": root.lane, "color": 0, "dashed": false },
                                     { "kind": "out", "lane": root.lane, "color": 0, "dashed": false }]
     /// The application's own icon: opaque across its middle, clear only along its edge and at its corners.
-    readonly property string picture: Qt.resolvedUrl("../../assets/icon-64.png")
+    readonly property string picture: heldPicture.source
 
     /// The cell's canvas — the one `InkCanvas` under it.
     function inkOf(cell) {
@@ -104,6 +104,19 @@ Item {
     width: 200
     height: 60
 
+    // The picture, decoded on the test's own thread into Qt's pixmap cache and held there while this stands: a cell's
+    // `loadImage` finds it ready, so no wait stands on Qt's pixmap reader thread (rules-refs/app-ui.md
+    // 「`Canvas.loadImage` の答えを QML テストの待ちに入れない」). A local file's `Image` loads synchronously.
+    Image {
+        id: heldPicture
+        source: Qt.resolvedUrl("../../assets/icon-64.png")
+        visible: false
+    }
+    SignalSpy {
+        id: paints
+        signalName: "painted"
+    }
+
     Component {
         id: fixture
         GraphLaneCell {
@@ -127,12 +140,18 @@ Item {
         name: "LaneMarks"
         when: windowShown
 
-        /// A cell built with everything it draws set, once its first paint — the whole picture — is in.
-        function inkWith(props) {
+        /// A cell built with everything it draws set: its canvas, the moment the cell is made.
+        function canvasWith(props) {
             const cell = createTemporaryObject(fixture, root, props === undefined ? {} : props)
             verify(cell !== null)
             const ink = root.inkOf(cell)
             verify(ink !== null, "the cell draws on an InkCanvas")
+            return ink
+        }
+
+        /// The same, once its first paint — the whole picture — is in.
+        function inkWith(props) {
+            const ink = canvasWith(props)
             tryVerify(function () { return ink.inked }, undefined, "the first paint")
             return ink
         }
@@ -159,11 +178,37 @@ Item {
 
         /// An assigned picture is drawn over the face's whole disc: the icon is opaque across its middle, so a picture
         /// drawn anywhere else leaves part of that middle clear. Read two pixels inside the rim, clear of its
-        /// antialiasing.
+        /// antialiasing. The picture is ready as the cell is made (`heldPicture`), so the first paint is the answer: a
+        /// canvas asking the reader thread instead can never be ready that same moment, its answer being a posted
+        /// event.
         function test_an_assigned_picture_fills_its_face() {
+            const ink = canvasWith({ "avatarUrl": root.picture })
+            verify(ink.isImageLoaded(root.picture),
+                   "the picture ready in Qt's cache as the cell is made (the held copy's status " + heldPicture.status
+                   + ")")
+            tryVerify(function () { return ink.inked }, undefined, "the first paint")
+            verify(root.opaqueAcross(ink, root.node, root.r - 2), "the picture across the face's middle")
+        }
+
+        /// A picture that comes after the cell's paint is drawn as it comes: the canvas paints again on `imageLoaded`.
+        /// The arrival is staged by hand, the reader thread's answer being no wait a run can hold (`heldPicture`): the
+        /// picture let go of and a paint without it, then the picture taken back from Qt's cache — ready at once, which
+        /// sends no signal of its own — and `imageLoaded` sent. Only the canvas's own handler asks for the paint after.
+        function test_a_picture_that_comes_late_is_painted_as_it_comes() {
             const ink = inkWith({ "avatarUrl": root.picture })
-            tryVerify(function () { return root.opaqueAcross(ink, root.node, root.r - 2) }, undefined,
-                      "the picture across the face's middle")
+            paints.target = ink
+            paints.clear()
+            ink.unloadImage(root.picture)
+            ink.requestPaint()
+            tryVerify(function () { return paints.count > 0 }, undefined, "a paint with the picture away")
+            verify(!root.opaqueAcross(ink, root.node, root.r - 2), "the face's middle clear while the picture is away")
+            const away = paints.count
+            ink.loadImage(root.picture)
+            verify(ink.isImageLoaded(root.picture), "the picture back from Qt's cache at once")
+            ink.imageLoaded()
+            tryVerify(function () { return paints.count > away }, undefined, "the paint the picture's arrival asks for")
+            verify(root.opaqueAcross(ink, root.node, root.r - 2), "the picture across the face's middle")
+            paints.target = null
         }
 
         /// The uncommitted row: a ring a pixel inside the node's room, and nothing in it.
