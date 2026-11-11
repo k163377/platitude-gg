@@ -129,14 +129,21 @@ pub(super) const TABLE: &[Verb] = &[
     // its left menu row — the menu stands again on the selector that entry
     // answers to once the pop is read. Raised mid-rebase (`replay`), it
     // answers the commit's line: the rows stand on the tree as it was
-    // asked, not on the rewrite's detached HEAD — and so does the branch
-    // they name, `named=main` where the detached HEAD names none. Stood
-    // again on the replay stopped part-way (`replay-stop`, and the left
-    // menu's `base` row in `replay-stop-ref`), the rows that name the
-    // branch grey and keep its name: the stop's HEAD is on none.
+    // asked, not on the rewrite's detached HEAD — and the branch they name
+    // is the one the rebase holds while HEAD is on none, `named=main`.
+    // Stood again on the replay stopped part-way (`replay-stop`, and the
+    // left menu's `base` row in `replay-stop-ref`), the rows that name the
+    // branch grey, still naming the one the stopped rebase holds. Raised on
+    // a worktree's conflicted file while the merge editor has it
+    // (`conflict`), the conflict rows name the merge's two sides in the
+    // colours they wear with nothing running — `main` the branch stood on.
     Verb {
         name: "menu-wait",
         when: &[
+            (
+                Arg::Is("conflict"),
+                "menu_wait stage=during same=true held=all open=true ours=main theirs=feature/clash lit=ours",
+            ),
             (
                 Arg::OneOf(&["stash", "stash-ref"]),
                 "menu_wait stage=after same=true held=none open=true was=stash@{1} selector=stash@{0}",

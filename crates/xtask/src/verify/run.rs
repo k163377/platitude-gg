@@ -254,7 +254,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
     // Written after the claim above, so a repository this run was handed
     // is owned before it is added to.
-    seed_merge_tool(&opts.verb, &repos, &path)?;
+    seed_merge_tool(&opts.verb, &opts.arg, &repos, &path)?;
 
     // The build's PATH: the git shim below goes onto the child's PATH
     // only, so the build never sees it.

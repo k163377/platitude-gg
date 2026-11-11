@@ -216,9 +216,12 @@ const SEEDED_TOOL: &str = "demo-editor";
 /// waited on. `sleep` works on all three OSes because git runs `cmd`
 /// through its own shell (Git for Windows' `sh` on Windows).
 ///
-/// The picture is taken after the tool exits (`AutoActDriver.writeBarrier`
-/// and `treeBarrier`), so the length buys only a wait a person watching
-/// can see, and every run pays it.
+/// `open-mergetool`'s picture is taken after the tool exits
+/// (`AutoActDriver.writeBarrier` and `treeBarrier`), where the length buys
+/// only a wait a person watching can see; `menu-wait conflict`'s while it
+/// sleeps, where it holds the write across the beats that raise the menu
+/// and photograph it — the two seconds `--preset slowhook`'s hook holds.
+/// Every run pays it.
 const TOOL_CMD: &str = "sleep 2";
 
 /// Names a tool in the repository's own config, for the verbs whose
@@ -231,22 +234,24 @@ const TOOL_CMD: &str = "sleep 2";
 /// every machine.
 ///
 /// The settings verbs get the command only: `merge.guitool` would land in
-/// the dialog field they photograph. `open-mergetool` also needs
-/// `merge.guitool` (without it `conflict::configured_tool` has no answer
-/// and the menu row opens the settings instead) and `trustExitCode`
-/// (without it git asks a closed stdin whether the merge went well and
-/// calls the file failed).
+/// the dialog field they photograph. The two that launch it —
+/// `open-mergetool`, and `menu-wait conflict` with a menu up meanwhile —
+/// also need `merge.guitool` (without it `conflict::configured_tool` has
+/// no answer and the menu row opens the settings instead) and
+/// `trustExitCode` (without it git asks a closed stdin whether the merge
+/// went well and calls the file failed).
 ///
 /// A `--repo` of one's own is written to as well: the run owns it for its
 /// length (`claim_resource`), and a merge tool named in it is overwritten.
 pub(super) fn seed_merge_tool(
     verb: &str,
+    arg: &str,
     repos: &[PathBuf],
     path: &std::ffi::OsStr,
 ) -> Result<(), String> {
-    let launched = match verb {
-        "settings-tools" | "settings-tools-loading" => false,
-        "open-mergetool" => true,
+    let launched = match (verb, arg) {
+        ("settings-tools" | "settings-tools-loading", _) => false,
+        ("open-mergetool", _) | ("menu-wait", "conflict") => true,
         _ => return Ok(()),
     };
     let mut keys = vec![(format!("mergetool.{SEEDED_TOOL}.cmd"), TOOL_CMD.to_string())];

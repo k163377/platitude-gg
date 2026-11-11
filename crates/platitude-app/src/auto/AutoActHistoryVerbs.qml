@@ -27,6 +27,8 @@ Item {
     readonly property var graphPane: driver.graphPane
     readonly property var detailsPane: driver.detailsPane
     readonly property var wipPane: driver.wipPane
+    readonly property var fileRowMenu: driver.fileRowMenu
+    readonly property var fileMenu: driver.fileMenu
     readonly property var commitMenuState: driver.commitMenuState
     readonly property var commitMenu: driver.commitMenu
     readonly property var stashMenu: driver.stashMenu
@@ -375,25 +377,35 @@ Item {
     // (`RefRowMenu.standAgain`).
     // `menu-wait replay`, over `--preset replay`: the plain form's line with a rebase out instead of the commit, the
     // menu raised once the rewrite shows mid-way, and photographed once its worktree row stands too (`replayRow`).
-    // `named=` is the branch the `reset` card's title names — as the rebase was asked, not the detached HEAD's none
-    // (`CommitMenuState.menuBranch`): drawn words, which no row count says.
+    // `named=` is the branch the `reset` card's title names — the one the rebase holds while HEAD is on none, read off
+    // the tree as it is (`WorktreeModel.heldBranch`): drawn words, which no row count says.
     // `menu-wait replay-stop`, over `--preset replay-stop`: the same menu raised mid-replay, stood again once the
     // replay has stopped on its conflict — HEAD detached, so the rows that name the branch are taken away and grey,
-    // still naming the branch they opened on (`CommitMenuState.standAgain`). `menu-wait replay-stop-ref` is the same
-    // over the left menu's `base` row, whose `rebase` row names it (`RefRowMenu.standAgain`).
+    // naming the branch the stopped rebase still holds (`CommitMenuState.standAgain`). `menu-wait replay-stop-ref` is
+    // the same over the left menu's `base` row, whose `rebase` row names it (`RefRowMenu.standAgain`).
+    // `menu-wait conflict`, over `--preset conflict-kinds`: the plain form's line on the worktree's `both.txt` row,
+    // whose menu is raised while that file is out to the merge editor — the run seeds a tool that sleeps, and git
+    // holds the write queue until it exits (`verify::repos::seed_merge_tool`). `ours=` / `theirs=` are the names the
+    // two conflict rows draw and `lit=` the one tinted as the branch stood on (`WorktreeModel.sideOurs` /
+    // `sideOursCurrent`; `refTint`, which the wait's greyed rows ink muted): the same words and tints as the menu has
+    // with nothing running.
     PageStage {
         id: menuWaitTimer
         name: "menu_wait"
-        /// `""`, `after`, `stash`, `stash-ref`, `replay`, `replay-stop` or `replay-stop-ref`, as above.
+        /// `""`, `after`, `stash`, `stash-ref`, `replay`, `replay-stop`, `replay-stop-ref` or `conflict`, as above.
         property string mode: ""
         /// A form that puts the rebase out rather than the commit.
         readonly property bool replays: menuWaitTimer.mode.startsWith("replay")
-        // Witnessed by the press that puts the write in: `oid`, the row the menu is raised on; `idleRows`, the rows it
-        // offered with nothing running; for the stash forms `raisedOn`, the selector it went up on again.
-        /// The level the menu opens as: a stash's graph row has its own, and the left menu is another.
+        /// The worktree row the conflict form raises its menu on, and hands to the merge editor.
+        readonly property string conflicted: "both.txt"
+        // Witnessed by the press that puts the write in: `row`, the row the menu is raised on — a commit's oid, or the
+        // conflict form's path; `idleRows`, the rows it offered with nothing running; for the stash forms `raisedOn`,
+        // the selector it went up on again.
+        /// The level the menu opens as: a stash's graph row has its own, the left menu is another, and a worktree
+        /// file's row another.
         readonly property var level: menuWaitTimer.mode === "stash" ? acts.stashMenu
                                    : menuWaitTimer.mode === "stash-ref" || menuWaitTimer.mode === "replay-stop-ref"
-                                     ? refMenu : commitMenu
+                                     ? refMenu : menuWaitTimer.mode === "conflict" ? fileMenu : commitMenu
         /// The selector the stash's menu acts on.
         readonly property string selector: menuWaitTimer.mode === "stash-ref" ? refRowMenu.refId
                                                                               : commitMenuState.menuStashRef
@@ -401,30 +413,45 @@ Item {
         function named() {
             return menuWaitTimer.mode === "replay-stop-ref" ? refRebaseItem.refName : resetMenu.titleRef
         }
-        /// The row's own right-click (`GraphRowDelegate.askMenu`) on `oid`'s row, or the left menu's door. False while
+        /// What the two conflict rows name, and which of them is tinted as the current branch.
+        function sides() {
+            const oursLit = Qt.colorEqual(fileRowMenu.keepItem.refTint, Theme.textLink)
+            const theirsLit = Qt.colorEqual(fileRowMenu.takeItem.refTint, Theme.textLink)
+            return " ours=" + fileRowMenu.keepItem.refName + " theirs=" + fileRowMenu.takeItem.refName
+                   + " lit=" + (oursLit && theirsLit ? "both" : oursLit ? "ours" : theirsLit ? "theirs" : "none")
+        }
+        /// The row's own right-click (`GraphRowDelegate.askMenu`) on the commit `row`, the left menu's door, or the
+        /// right-click on the worktree's row of the conflicted file `row` (`NavItemDelegate.rowPressed`). False while
         /// the row has no delegate to answer.
-        function raise(oid) {
+        function raise(row) {
             if (menuWaitTimer.mode === "stash-ref")
-                return page.openRefMenu("stash", stashesModel.nameAt(1), stashesModel.fullAt(1), oid, true)
+                return page.openRefMenu("stash", stashesModel.nameAt(1), stashesModel.fullAt(1), row, true)
             if (menuWaitTimer.mode === "replay-stop-ref")
                 return page.openRefMenu("branch", "base", "base", branchesModel.oidOfName("base"))
-            const item = graphPane.view.itemAtIndex(graphModel.rowOf(oid))
+            if (menuWaitTimer.mode === "conflict") {
+                const file = wipPane.rowIn("conflicts", row)
+                if (file === null)
+                    return false
+                file.rowPressed(Qt.RightButton, Qt.NoModifier)
+                return menuWaitTimer.level.visible
+            }
+            const item = graphPane.view.itemAtIndex(graphModel.rowOf(row))
             if (item === null)
                 return false
             item.askMenu()
             return menuWaitTimer.level.visible
         }
         /// The rows that start git — every row on show but the cards' titles, which stay live while the rows inside
-        /// say why — and how many of them grey. A row greyed for a reason of its own (`blockedReason`: the delete
-        /// table's row on the branch the tree is on) greys whether or not anything runs, so it is not one the wait
-        /// holds.
+        /// say why, and a row that reads the screen alone (`AppMenuItem.startsCommand`: `Copy path`) — and how many of
+        /// them grey. A row greyed for a reason of its own (`blockedReason`: the delete table's row on the branch the
+        /// tree is on) greys whether or not anything runs, so it is not one the wait holds.
         function held() {
             const level = menuWaitTimer.level
             let rows = 0
             let greyed = 0
             for (let i = 0; i < level.count; i++) {
                 const row = level.itemAt(i)
-                if (!row || !row.present || row.codeColSeat === undefined || row.subMenu)
+                if (!row || !row.present || row.codeColSeat === undefined || row.subMenu || !row.startsCommand)
                     continue
                 if (row.blockedReason !== "" && !row.withdrawn)
                     continue
@@ -444,6 +471,7 @@ Item {
                    + " open=" + level.visible
                    + (was !== "" ? " was=" + was + " selector=" + menuWaitTimer.selector : "")
                    + (menuWaitTimer.replays ? " named=" + menuWaitTimer.named() : "")
+                   + (menuWaitTimer.mode === "conflict" ? menuWaitTimer.sides() : "")
                    + " rows=" + level.offeredRows + " busy=" + repoTab.busyCount
         }
         /// A write that landed before `what` left no moment to photograph, and says so rather than wait out the
@@ -459,7 +487,7 @@ Item {
             const oid = stashesModel.oidOfName(stashesModel.nameAt(1))
             if (!menuWaitTimer.raise(oid))
                 return false
-            menuWaitTimer.witness("oid", oid)
+            menuWaitTimer.witness("row", oid)
             menuWaitTimer.witness("idleRows", menuWaitTimer.level.offeredRows)
             menuWaitTimer.level.dismiss()
             const popped = stashesModel.fullAt(0)
@@ -472,14 +500,28 @@ Item {
             return true
         }
         /// The row's menu counted with nothing running and put down, then the write pressed under it: the replay
-        /// forms' rebase, or the commit. False while the row has no delegate to answer.
+        /// forms' rebase, the conflict form's merge editor on the file the menu chose, or the commit. False while the
+        /// row has no delegate to answer.
         function pressUnder() {
+            if (menuWaitTimer.mode === "conflict") {
+                if (!menuWaitTimer.raise(menuWaitTimer.conflicted))
+                    return false
+                menuWaitTimer.witness("row", menuWaitTimer.conflicted)
+                menuWaitTimer.witness("idleRows", menuWaitTimer.level.offeredRows)
+                menuWaitTimer.level.dismiss()
+                return driver.pressWrite("mergetool", () => {
+                    // Counted before the press, as `open-mergetool` counts: with nothing handed over no write goes.
+                    const handed = fileRowMenu.chosenConflicts().length
+                    fileRowMenu.openInMergeTool()
+                    return handed > 0
+                })
+            }
             // The row under HEAD's where there is one, as `commit-menu` takes; HEAD's own over a single commit.
             const below = graphModel.oidAt(graphModel.rowOf(worktree.headOid) + 1)
             const oid = below !== "" ? below : worktree.headOid
             if (!menuWaitTimer.raise(oid))
                 return false
-            menuWaitTimer.witness("oid", oid)
+            menuWaitTimer.witness("row", oid)
             menuWaitTimer.witness("idleRows", menuWaitTimer.level.offeredRows)
             menuWaitTimer.level.dismiss()
             if (menuWaitTimer.replays) {
@@ -528,12 +570,12 @@ Item {
                     "down": !op.level.visible,
                     "rewriting": !op.replays || worktree.opText !== "" }))
                     return
-                op.input("raised", () => op.raise(op.witnessed("oid")))
+                op.input("raised", () => op.raise(op.witnessed("row")))
                 return
             }
-            if (op.mode === "") {
+            if (op.mode === "" || op.mode === "conflict") {
                 // The menu stands over the write still out; the reads the press invalidated (the selected commit's
-                // own, the lists' rows) land under the hook's sleep, and the picture is of them landed.
+                // own, the lists' rows) land under the hook's or the tool's sleep, and the picture is of them landed.
                 if (landed) {
                     op.complete({ "name": "menu_wait_during", "when": () => ({ "landed": driver.wroteAndSettled() }),
                                   "report": () => op.missed("its reads could settle under the menu"),
@@ -542,7 +584,7 @@ Item {
                 }
                 op.complete({
                     "name": "menu_wait_during",
-                    "when": () => ({ "menu": commitMenu.visible, "details": page.pageDetailsSettled,
+                    "when": () => ({ "menu": op.level.visible, "details": page.pageDetailsSettled,
                                      "rows": PageSettled.rowsBuilt(page) }),
                     "report": () => op.line("during"), "arriving": ["*"] })
                 return
