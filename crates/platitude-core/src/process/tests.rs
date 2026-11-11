@@ -63,6 +63,7 @@ async fn timeout_kills_the_child() {
         &mut family,
         None,
         Some(Duration::from_millis(300)),
+        None,
         &cancel,
         &mut Stdout::new(&mut Out::Streamed(&mut |_| {}), false),
     )
@@ -85,6 +86,7 @@ async fn cancellation_kills_the_child() {
     let outcome = run_child(
         &mut child,
         &mut family,
+        None,
         None,
         None,
         &cancel,
@@ -189,6 +191,7 @@ async fn a_send_failing_past_part_of_the_input_ends_the_child_with_stdin_open() 
             &mut family,
             Some(&input),
             None,
+            None,
             &CancellationToken::new(),
             &mut Stdout::new(&mut Out::Streamed(&mut |_| {}), false),
         ),
@@ -228,6 +231,7 @@ async fn a_cancel_past_part_of_the_input_ends_the_child_with_stdin_open() {
             &mut child,
             &mut family,
             Some(&input),
+            None,
             None,
             &cancel,
             &mut Stdout::new(
@@ -289,6 +293,7 @@ async fn a_deadline_past_part_of_the_input_ends_the_child_with_stdin_open() {
         &mut family,
         Some(&input),
         Some(budget),
+        None,
         &cancel,
         &mut on_stdout,
     );
@@ -346,6 +351,7 @@ async fn an_input_past_the_width_widens_the_stdin_and_one_within_it_does_not() {
                 &mut child,
                 &mut family,
                 Some(&input),
+                None,
                 None,
                 &CancellationToken::new(),
                 &mut Stdout::new(&mut Out::Streamed(&mut |_| {}), false),

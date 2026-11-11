@@ -10,8 +10,8 @@
 //! less often.
 //!
 //! The work is the future [`Meter::over`] drives and the children spawned
-//! from inside it. A task it spawns is outside: a task-local does not
-//! cross into another task.
+//! from inside it. A task it spawns is outside — a task-local does not
+//! cross into another task — unless the task's future is [`carried`] in.
 
 use std::future::Future;
 use std::sync::Arc;
@@ -55,17 +55,46 @@ impl Meter {
         (self.children() > 0).then(|| self.spent())
     }
 
-    fn charge(&self, lived: Duration) {
+    fn charge(&self, lived: Duration, child: bool) {
         let nanos = u64::try_from(lived.as_nanos()).unwrap_or(u64::MAX);
         self.nanos.fetch_add(nanos, Ordering::SeqCst);
-        self.children.fetch_add(1, Ordering::SeqCst);
+        if child {
+            self.children.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+}
+
+/// `work`, charged to the metered work this is called from, if any — for a
+/// task that work spawns and owns. A child it spawns is charged as its run
+/// ends, or as it is told silent ([`charge_so_far`]).
+pub(crate) fn carried<F: Future>(work: F) -> impl Future<Output = F::Output> {
+    let meter = METER.try_with(Arc::clone).ok();
+    async move {
+        match meter {
+            Some(meter) => meter.over(work).await,
+            None => work.await,
+        }
     }
 }
 
 /// Charges one child's life to the work it was spawned from, if any is
-/// being metered.
-pub(super) fn charge(lived: Duration) {
-    if METER.try_with(|meter| meter.charge(lived)).is_err() {
+/// being metered — less what [`charge_so_far`] charged of it already.
+pub(super) fn charge(lived: Duration, so_far: Option<Duration>) {
+    let rest = lived.saturating_sub(so_far.unwrap_or_default());
+    if METER
+        .try_with(|meter| meter.charge(rest, so_far.is_none()))
+        .is_err()
+    {
+        tracing::trace!("git child outside any metered work");
+    }
+}
+
+/// Charges a child still running the life it has lived so far, counting
+/// it — for a run told silent, whose waiter goes on and weighs its work
+/// before the run ends (`session::walk_silence`). Its end charges the rest
+/// ([`charge`]).
+pub(super) fn charge_so_far(lived: Duration) {
+    if METER.try_with(|meter| meter.charge(lived, true)).is_err() {
         tracing::trace!("git child outside any metered work");
     }
 }
@@ -122,5 +151,61 @@ mod tests {
             })
             .await;
         assert_eq!(meter.children(), 0);
+    }
+
+    /// A run told silent is charged as far as it has lived at the telling —
+    /// a waiter that goes on then weighs it — and only the rest at its end,
+    /// counted once. A budget of nothing tells before git can have ended.
+    #[tokio::test]
+    async fn a_run_told_silent_is_charged_at_the_telling_and_once() {
+        let executor = GitExecutor::new();
+        let cancel = CancellationToken::new();
+        let meter = Arc::new(Meter::default());
+        let at_the_telling = std::sync::Mutex::new(None);
+        let tell = || {
+            *at_the_telling.lock().unwrap() = Some((meter.children(), meter.spent()));
+        };
+        meter
+            .over(
+                executor.run_streaming_watched(
+                    GitCommand::new()
+                        .args(["--version"])
+                        .silent_after(Duration::ZERO),
+                    &cancel,
+                    &mut |_| {},
+                    Some(&tell),
+                ),
+            )
+            .await
+            .expect("git answers its version");
+        let (children, spent) = at_the_telling
+            .into_inner()
+            .unwrap()
+            .expect("told before the run ended");
+        assert_eq!(children, 1, "counted at the telling");
+        assert!(spent > Duration::ZERO, "and charged its life so far");
+        assert_eq!(meter.children(), 1, "counted once");
+        assert!(meter.spent() >= spent, "the rest added at the end");
+    }
+
+    #[tokio::test]
+    async fn a_task_spawned_carried_is_inside_it() {
+        let executor = GitExecutor::new();
+        let meter = Arc::new(Meter::default());
+        meter
+            .over(async {
+                let executor = executor.clone();
+                tokio::spawn(carried(async move {
+                    let cancel = CancellationToken::new();
+                    executor
+                        .run(GitCommand::new().args(["--version"]), &cancel)
+                        .await
+                        .expect("git answers its version");
+                }))
+                .await
+                .expect("the spawned read");
+            })
+            .await;
+        assert_eq!(meter.children(), 1);
     }
 }

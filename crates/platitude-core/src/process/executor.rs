@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 
-use super::child::{ChildOutcome, Out, Stdout, run_child};
+use super::child::{ChildOutcome, Hush, Out, Stdout, run_child};
 use super::command::{
     CommandEnd, CommandObserver, GitCommand, GitOutput, Kept, TimeBudget, shell_quote,
 };
@@ -27,10 +27,11 @@ use crate::operation::OperationId;
 mod tests;
 
 /// Default time budget, which is to say for reads: streaming log walks and
-/// `mergetool` opt out ([`GitCommand::no_timeout`]), network commands set
-/// their own, and the write queue's local lane lifts it
-/// (`operation::Lane::Local`) — killing git mid-write loses what it was
-/// writing.
+/// `mergetool` opt out ([`GitCommand::no_timeout`]) — the walk is watched
+/// for silence over the same span instead ([`GitCommand::silent_after`],
+/// `session::walk_silence`) —, network commands set their own, and the
+/// write queue's local lane lifts it (`operation::Lane::Local`) — killing
+/// git mid-write loses what it was writing.
 ///
 /// Counted from the spawn: a budget that counted the slot wait would kill
 /// a healthy git for the queue in front of it.
@@ -395,9 +396,24 @@ impl GitExecutor {
         cancel: &CancellationToken,
         on_stdout: &mut (dyn FnMut(&[u8]) + Send),
     ) -> Result<GitOutput, GitError> {
+        self.run_streaming_watched(cmd, cancel, on_stdout, None)
+            .await
+    }
+
+    /// [`Self::run_streaming`], with `on_stall` told once where git prints
+    /// nothing for the command's silence budget
+    /// ([`GitCommand::silent_after`]). The run goes on: only the token ends
+    /// it, or git.
+    pub async fn run_streaming_watched(
+        &self,
+        cmd: GitCommand,
+        cancel: &CancellationToken,
+        on_stdout: &mut (dyn FnMut(&[u8]) + Send),
+        on_stall: Option<&(dyn Fn() + Sync)>,
+    ) -> Result<GitOutput, GitError> {
         let described = cmd.describe();
         let out = self
-            .execute(&cmd, cancel, &mut Out::Streamed(on_stdout), None)
+            .execute(&cmd, cancel, &mut Out::Streamed(on_stdout), None, on_stall)
             .await?;
         if out.code != 0 {
             return Err(GitError::Failed {
@@ -423,7 +439,7 @@ impl GitExecutor {
     ) -> Result<GitOutput, GitError> {
         let described = cmd.describe();
         let out = self
-            .execute(&cmd, cancel, &mut Out::Piped(to), None)
+            .execute(&cmd, cancel, &mut Out::Piped(to), None, None)
             .await?;
         if out.code != 0 {
             return Err(GitError::Failed {
@@ -443,7 +459,7 @@ impl GitExecutor {
     ) -> Result<GitOutput, GitError> {
         let mut stdout = Vec::new();
         let mut out = self
-            .execute(cmd, cancel, &mut Out::Kept(&mut stdout), lead)
+            .execute(cmd, cancel, &mut Out::Kept(&mut stdout), lead, None)
             .await?;
         out.stdout = stdout;
         Ok(out)
@@ -557,6 +573,7 @@ impl GitExecutor {
         cancel: &CancellationToken,
         out: &mut Out<'_>,
         mut lead: Option<&mut Lead>,
+        stalled: Option<&(dyn Fn() + Sync)>,
     ) -> Result<GitOutput, GitError> {
         let described = cmd.describe();
         let asked = Instant::now();
@@ -606,6 +623,7 @@ impl GitExecutor {
             waited: asked.elapsed(),
             budget,
             report: &report,
+            stall: stalled,
         };
         // When the first spawn started: the row's time is the whole ask's.
         let mut first: Option<Instant> = None;
@@ -712,18 +730,37 @@ impl GitExecutor {
         let spawned = started.elapsed();
 
         let mut stdout = Stdout::new(out, cmd.logs_stdout);
+        // A run told silent is weighed as far as it has lived, before its
+        // waiter goes on to weigh the work (`meter::charge_so_far`).
+        let so_far = std::sync::OnceLock::new();
+        let tell_weighed = row.stall.map(|stall| {
+            let so_far = &so_far;
+            move || {
+                let lived = started.elapsed();
+                super::meter::charge_so_far(lived);
+                if so_far.set(lived).is_err() {
+                    tracing::trace!("a run told silent twice");
+                }
+                stall();
+            }
+        });
+        let hush = cmd
+            .silence
+            .zip(tell_weighed.as_ref())
+            .map(|(after, tell)| Hush { after, tell });
         let outcome = run_child(
             &mut child,
             &mut family,
             cmd.input.as_ref(),
             row.budget,
+            hush,
             cancel,
             &mut stdout,
         )
         .await;
         let (printed, kept) = stdout.ended();
         // Reaped (or killed) whichever way it ended: the life is spent.
-        super::meter::charge(started.elapsed());
+        super::meter::charge(started.elapsed(), so_far.get().copied());
         let outcome = outcome.map_err(|source| {
             (row.report)(
                 CommandEnd::Failed,
@@ -911,6 +948,9 @@ struct Row<'r> {
     waited: Duration,
     budget: Option<Duration>,
     report: &'r (dyn Fn(CommandEnd, Duration, Duration, &str) + Sync),
+    /// The caller, told where git goes silent past its budget
+    /// (`GitCommand::silent_after`).
+    stall: Option<&'r (dyn Fn() + Sync)>,
 }
 
 /// One spawn's end, to answer with or to ask once more over.

@@ -181,6 +181,9 @@ pub struct GitCommand {
     pub(super) traced: bool,
     /// Which share of the slots it waits for ([`super::slots`]).
     pub(super) pace: Pace,
+    /// How long git may print nothing before the run is said to have
+    /// stalled ([`Self::silent_after`]).
+    pub(super) silence: Option<Duration>,
 }
 
 impl GitCommand {
@@ -197,6 +200,7 @@ impl GitCommand {
             logs_stdout: false,
             traced: false,
             pace: Pace::Here,
+            silence: None,
         }
     }
 
@@ -318,6 +322,18 @@ impl GitCommand {
     /// Removes the time budget; the command is bounded only by cancellation.
     pub fn no_timeout(mut self) -> Self {
         self.timeout = TimeBudget::Never;
+        self
+    }
+
+    /// Tells the caller when git has printed nothing on stdout for `quiet` —
+    /// from the spawn, or from the last thing it printed — and lets it run
+    /// on. Told once a spawn — a run asked once more (`config_unread`) can be
+    /// told again — to the hook `GitExecutor::run_streaming_watched` is
+    /// handed; a run with no hook watches nothing. For a command with no
+    /// time budget whose silence the screen has to answer for. The command
+    /// log is not told: git has said nothing a row could show.
+    pub fn silent_after(mut self, quiet: Duration) -> Self {
+        self.silence = Some(quiet);
         self
     }
 

@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::process::{Child, ChildStdin, ChildStdout};
+use tokio::process::{Child, ChildStdin};
 use tokio_util::sync::CancellationToken;
 
 use super::command::Input;
@@ -15,6 +15,57 @@ use super::family::Family;
 const STDERR_CAP: usize = 256 * 1024;
 
 const STDOUT_CHUNK: usize = 64 * 1024;
+
+/// Where a run says it has stalled (`GitCommand::silent_after`): how long
+/// git may print nothing, and who hears of it — once, the run going on.
+pub(super) struct Hush<'h> {
+    pub(super) after: Duration,
+    pub(super) tell: &'h (dyn Fn() + Sync),
+}
+
+/// When git last printed — its spawn until it has — on the runtime's clock,
+/// so a paused test clock drives the watch.
+struct Heard(std::sync::Mutex<tokio::time::Instant>);
+
+impl Heard {
+    fn now() -> Self {
+        Self(std::sync::Mutex::new(tokio::time::Instant::now()))
+    }
+
+    fn at(&self) -> tokio::time::Instant {
+        *self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn mark(&self) {
+        *self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = tokio::time::Instant::now();
+    }
+}
+
+/// Watches `heard` and tells `hush` once git has been silent for its
+/// budget; never ends, so it stands beside the run until the run does. A
+/// budget already spent is told on the first poll, without a timer.
+async fn watch_silence(hush: Option<Hush<'_>>, heard: &Heard) -> Never {
+    if let Some(hush) = hush {
+        loop {
+            let due = heard.at() + hush.after;
+            if due <= tokio::time::Instant::now() {
+                (hush.tell)();
+                break;
+            }
+            tokio::time::sleep_until(due).await;
+        }
+    }
+    std::future::pending().await
+}
+
+/// What a future that never ends answers.
+enum Never {}
 
 /// Where a run's stdout goes.
 pub(super) enum Out<'a> {
@@ -81,14 +132,19 @@ impl<'s, 'a> Stdout<'s, 'a> {
     }
 
     /// Hands on all of `pipe`, chunk by chunk, to its end; a broken pipe
-    /// where the receiver is gone.
-    async fn pump(&mut self, pipe: &mut ChildStdout) -> std::io::Result<()> {
+    /// where the receiver is gone. Each chunk read is marked in `heard`.
+    async fn pump(
+        &mut self,
+        pipe: &mut (impl tokio::io::AsyncRead + Unpin),
+        heard: &Heard,
+    ) -> std::io::Result<()> {
         let mut buf = vec![0u8; STDOUT_CHUNK];
         loop {
             let n = pipe.read(&mut buf).await?;
             if n == 0 {
                 return Ok(());
             }
+            heard.mark();
             let chunk = &buf[..n];
             if let Some(log) = self.log.as_mut() {
                 log.extend_from_slice(chunk);
@@ -137,9 +193,11 @@ pub(super) async fn run_child(
     family: &mut Family,
     input: Option<&Input>,
     timeout: Option<Duration>,
+    hush: Option<Hush<'_>>,
     cancel: &CancellationToken,
     stdout: &mut Stdout<'_, '_>,
 ) -> std::io::Result<ChildOutcome> {
+    let heard = Heard::now();
     let mut stdin_pipe = child.stdin.take();
     if let (Some(pipe), Some(input)) = (&stdin_pipe, input) {
         widen(pipe, input.bytes().len());
@@ -174,7 +232,7 @@ pub(super) async fn run_child(
         };
         let stdout_fut = async {
             match stdout_pipe.as_mut() {
-                Some(pipe) => stdout.pump(pipe).await,
+                Some(pipe) => stdout.pump(pipe, &heard).await,
                 None => Ok(()),
             }
         };
@@ -223,6 +281,10 @@ pub(super) async fn run_child(
             stop(child, family, stdin_pipe.take()).await?;
             Ok(ChildOutcome::TimedOut)
         }
+        // Tells and stays: a stalled run is said, never ended, here. Before
+        // the run's own end, so a silence due at the poll the run ends in
+        // is told, and a budget of nothing is told before git can answer.
+        never = watch_silence(hush, &heard) => match never {},
         res = work => {
             match res {
                 Ok(outcome) => {
@@ -341,4 +403,116 @@ async fn send(pipe: &mut ChildStdin, bytes: &[u8]) -> std::io::Result<()> {
 #[mry::mry(skip_args(ChildStdin))]
 pub(super) async fn finish(pipe: &mut ChildStdin) -> std::io::Result<()> {
     pipe.flush().await
+}
+
+#[cfg(test)]
+mod silence_tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+
+    use tokio::io::AsyncWriteExt;
+
+    use super::{Heard, Hush, Out, Stdout, watch_silence};
+    use crate::wait::poll_once;
+
+    /// A budget of nothing is told on the first poll, before any timer
+    /// could fire — before the run beside it can have ended. Heard off a
+    /// millisecond's edge: a timer there waits for the next one.
+    #[tokio::test(start_paused = true)]
+    async fn a_spent_budget_is_told_on_the_first_poll() {
+        tokio::time::advance(Duration::from_micros(500)).await;
+        let heard = Heard::now();
+        let told = AtomicUsize::new(0);
+        let tell = || {
+            told.fetch_add(1, Ordering::SeqCst);
+        };
+        let hush = Hush {
+            after: Duration::ZERO,
+            tell: &tell,
+        };
+        let mut watch = std::pin::pin!(watch_silence(Some(hush), &heard));
+        assert!(poll_once(&mut watch).is_pending(), "it stays");
+        assert_eq!(told.load(Ordering::SeqCst), 1);
+    }
+
+    /// Each chunk the pump hands on puts the watch back: a pipe that speaks
+    /// every six seconds is never told about its ten, and is told ten after
+    /// it stops. The pump and the watch are polled by hand between the
+    /// clock's moves, so each chunk is read at the time it was written.
+    #[tokio::test(start_paused = true)]
+    async fn each_chunk_pumped_puts_the_watch_back() {
+        let (mut git, mut pipe) = tokio::io::duplex(64);
+        let heard = Heard::now();
+        let told = AtomicUsize::new(0);
+        let tell = || {
+            told.fetch_add(1, Ordering::SeqCst);
+        };
+        let hush = Hush {
+            after: Duration::from_secs(10),
+            tell: &tell,
+        };
+        let mut reader = |_: &[u8]| {};
+        let mut out = Out::Streamed(&mut reader);
+        let mut stdout = Stdout::new(&mut out, false);
+        let mut watch = std::pin::pin!(watch_silence(Some(hush), &heard));
+        let mut pump = std::pin::pin!(stdout.pump(&mut pipe, &heard));
+        assert!(poll_once(&mut watch).is_pending());
+        assert!(poll_once(&mut pump).is_pending(), "nothing printed yet");
+        for _ in 0..3 {
+            tokio::time::advance(Duration::from_secs(6)).await;
+            git.write_all(b"line\n").await.expect("the pipe has room");
+            assert!(
+                poll_once(&mut pump).is_pending(),
+                "read, and waiting for more"
+            );
+            assert!(poll_once(&mut watch).is_pending());
+            assert_eq!(told.load(Ordering::SeqCst), 0, "six from the last line");
+        }
+        tokio::time::advance(Duration::from_secs(6)).await;
+        assert!(poll_once(&mut watch).is_pending());
+        assert_eq!(told.load(Ordering::SeqCst), 0, "six from the last line");
+        // Past the ten seconds, not onto them (the test below).
+        tokio::time::advance(Duration::from_secs(5)).await;
+        assert!(poll_once(&mut watch).is_pending(), "it stays");
+        assert_eq!(told.load(Ordering::SeqCst), 1, "eleven from the last line");
+    }
+
+    /// The watch counts from what was heard last, not from where it began,
+    /// tells once, and stays. The clock is moved by hand; each move yields,
+    /// so the watch — polled first, in the same task — answers to the time
+    /// moved to before the script reads it.
+    #[tokio::test(start_paused = true)]
+    async fn the_watch_counts_from_the_last_line_and_tells_once() {
+        let heard = Heard::now();
+        let told = AtomicUsize::new(0);
+        let tell = || {
+            told.fetch_add(1, Ordering::SeqCst);
+        };
+        let hush = Hush {
+            after: Duration::from_secs(10),
+            tell: &tell,
+        };
+        let watch = watch_silence(Some(hush), &heard);
+        let script = async {
+            tokio::time::advance(Duration::from_secs(6)).await;
+            heard.mark();
+            tokio::time::advance(Duration::from_secs(6)).await;
+            assert_eq!(
+                told.load(Ordering::SeqCst),
+                0,
+                "twelve seconds from the start, six from the last line"
+            );
+            // Past the ten seconds, not onto them: a timer fires on the
+            // millisecond after its deadline.
+            tokio::time::advance(Duration::from_secs(5)).await;
+            assert_eq!(told.load(Ordering::SeqCst), 1, "eleven from the last line");
+            tokio::time::advance(Duration::from_secs(60)).await;
+            assert_eq!(told.load(Ordering::SeqCst), 1, "once");
+        };
+        tokio::select! {
+            biased;
+            never = watch => match never {},
+            () = script => {}
+        }
+    }
 }
