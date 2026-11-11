@@ -109,6 +109,9 @@ fn shoot(
         .arg(&shots)
         .args(["--no-board", "--watchdog-ms"])
         .arg(ceiling_ms(scene).to_string());
+    if !scene.slow_git.is_empty() {
+        command.arg("--slow-git").arg(&scene.slow_git);
+    }
     if !build {
         command.arg("--no-build");
     }

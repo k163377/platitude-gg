@@ -41,6 +41,11 @@ pub(super) struct Scene {
     /// How often a frame is grabbed, in milliseconds, besides the frame
     /// every act takes at once.
     pub(super) tick: u32,
+    /// One subcommand of the window's git answered late, as verify-ui's
+    /// `--slow-git` takes it (`<subcommand>:<ms>[:quiet]`); empty for none.
+    /// A heavy repository's wait, on the demo's: what a change to how long
+    /// the reader waits is filmed with, on both sides alike.
+    pub(super) slow_git: String,
     pub(super) captions: Vec<String>,
     pub(super) steps: Vec<Step>,
 }
@@ -106,6 +111,7 @@ pub(super) fn parse(text: &str) -> Result<Scene, String> {
         views: Vec::new(),
         scale: 1,
         tick: 80,
+        slow_git: String::new(),
         captions: Vec::new(),
         steps: Vec::new(),
     };
@@ -147,6 +153,10 @@ pub(super) fn parse(text: &str) -> Result<Scene, String> {
             "view" => scene.views.push(four(rest).map_err(at)?),
             "scale" => scene.scale = positive(rest).map_err(at)?,
             "tick" => scene.tick = positive(rest).map_err(at)?,
+            "slowgit" => {
+                crate::verify::git_shim::Slow::parse(rest).map_err(at)?;
+                scene.slow_git = rest.to_string();
+            }
             "cap" if !rest.is_empty() => {
                 scene.steps.push(Step::Caption(scene.captions.len()));
                 scene.captions.push(rest.to_string());
@@ -359,6 +369,24 @@ git:commit --allow-empty -q -m more1
         assert!(parse("repo deep\ncap -\ncap x\n").is_err());
         assert!(parse("view 0 0 10 10\ncap -\ncap x\n").is_err());
         assert!(parse("repo deep\nview 0 0 10 10\ncap -\n").is_err());
+    }
+
+    /// The late git is said as verify-ui's `--slow-git` takes it, and a slip
+    /// stops the scene before the build.
+    #[test]
+    fn a_late_git_is_handed_on_as_verify_ui_takes_it() {
+        let with = |line: &str| {
+            parse(&format!(
+                "repo deep\n{line}\nview 0 0 10 10\ncap -\ncap x\n"
+            ))
+        };
+        assert_eq!(
+            with("slowgit add:1500").expect("parses").slow_git,
+            "add:1500"
+        );
+        assert!(with("slowgit add").is_err());
+        assert!(with("slowgit").is_err());
+        assert_eq!(parse(SCENE).expect("parses").slow_git, "");
     }
 
     /// Every verb a scene may write is one the component plays.
