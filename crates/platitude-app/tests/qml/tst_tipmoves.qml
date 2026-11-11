@@ -208,6 +208,26 @@ Item {
                       "the hand's own move: the row under it asks, after the rest")
         }
 
+        /// A press answered in the box's words (`TipAsk.answer` — `HashPlate`'s `Copied!`) on a row the rows brought
+        /// under a still hand: out at the press, as on a row the hand walked to — the press is the reader's own act —
+        /// and down once the hand leaves it.
+        function test_an_answer_on_a_row_that_arrived_under_a_still_hand_comes_out_at_the_press() {
+            mouseMove(list, 100, 36)
+            tryVerify(() => root.tipSays() === "row 1", undefined, "the hand resting on row 1 brings its tip")
+            list.contentY = 48
+            verify(!seat.box.visible, "the rows moving take the box down")
+            const row = list.itemAtIndex(3)
+            // Qt hands its hover to what arrived under a still pointer on a frame after the move is drawn.
+            tryVerify(() => row.tip.asked, undefined, "Qt says the hand is on row 3")
+            verify(!row.tip.live, "held back by the still hand")
+
+            row.tip.answer()
+            compare(root.tipSays(), "row 3", "the answer is out at the press, no hand's move and no rest")
+
+            mouseMove(root, root.width - 2, root.height - 2)
+            tryVerify(() => !seat.box.visible, undefined, "and goes as the hand leaves the row")
+        }
+
         /// A read that moves the rows from under the hand reading a row's box leaves the box where it stands: off its
         /// row, which would take it from under the hand (`TipSeat.park`, デザイン規約 §hover のツールチップ「外乱では閉じ
         /// ない」). It says what it said, and goes once the hand leaves it.

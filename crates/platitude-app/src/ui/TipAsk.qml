@@ -95,9 +95,13 @@ QtObject {
     }
     /// The target answered a click in the box's words (`HashPlate`'s `Copied!`): the box comes out with them now — no
     /// rest, and past the hold a press puts on hover (`HoverSeat.press`): the answer is to the click, and a wait would
-    /// leave it unsaid (デザイン規約 §hover のツールチップ「押した結果は、その的の 1 語が答える」). Only while the ask
-    /// stands (`live`): a box nothing points at would stand with nothing to take it down.
+    /// leave it unsaid (デザイン規約 §hover のツールチップ「押した結果は、その的の 1 語が答える」). A target the rows
+    /// brought under a still hand answers too: the press is the reader's own act on it, and lifts that hold
+    /// (`HandWatch.pressedHere`). Only while the ask stands (`live`): a box nothing points at would stand with nothing
+    /// to take it down.
     function answer() {
+        if (ask.asked && ask.handStill)
+            ask.hand.pressedHere()
         if (!ask.live)
             return
         if (ask.seat === null)

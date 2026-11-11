@@ -133,6 +133,12 @@ HoverHandler {
             watch.stillHeld = false
         watch.moved(next)
     }
+    /// The reader pressed what the rows brought under the still hand (`TipAsk.answer`): it is the reader's own now, as
+    /// the hand's own move would have made it, and the hold lifts. Nothing else opens off this: a press holds hover
+    /// back until the hand moves after it (`Hand.holdsHover`).
+    function pressedHere() {
+        watch.stillHeld = false
+    }
     /// A popup has the hand no more (`OutsidePress.handLeft`) — the hand walked out, or the popup went from under it.
     /// Qt hands the hover to what the hand is on before it takes it from the popup — a popup gone included, on the next
     /// hover it delivers — so a hand still over this surface has been heard by now, whether it walked back or the popup
