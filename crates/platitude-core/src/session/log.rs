@@ -1,6 +1,7 @@
 //! The log -> graph pipeline: options, the direct and swap passes, and
 //! the background refreshes. What one pass reads is [`super::walk`].
 
+use super::graph_refresh::{PassAnswer, PassStart};
 use super::rows::LogTotals;
 use super::*;
 
@@ -86,22 +87,23 @@ impl RepoSession {
         };
         let grown = options.limit;
 
-        let (run_cancel, mut run, lap) = self.take_log_run();
-        let held = self.graph_passes.enter();
+        let (pass, _) = self.take_pass(true);
 
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
-            let _held = held;
-            let Some(_lap) = lap.start().await else {
-                run.answer(RefreshOutcome::Cancelled);
+            let PassStart { token, lap, answer } = pass;
+            let Some(_lap) = lap.start(|| answer.answer(RefreshOutcome::Silent)).await else {
+                answer.answer(RefreshOutcome::Cancelled);
                 return;
             };
             // Only a failure leaves the press unanswered: a swap pass
             // reports a failed walk to the tab (`run_swap_pass` -> `fail`),
             // not the graph. Put the window back and take the ordinary
             // route, which does answer the graph.
-            let outcome = s.run_swap_pass(&workdir, options, &run_cancel, None).await;
-            run.answer(outcome);
+            let outcome = s
+                .run_swap_pass(&workdir, options, &token, None, &answer)
+                .await;
+            answer.answer(outcome);
             if outcome == RefreshOutcome::Failed {
                 // Only if the window is still this press's: the failure can
                 // arrive after somebody else set a window of their own.
@@ -128,6 +130,52 @@ impl RepoSession {
         if self.graph_stale.swap(stale, Ordering::SeqCst) != stale {
             self.sink.event(SessionEvent::LogStale { stale });
         }
+    }
+
+    /// The graph's walk has gone silent, or a pass has answered since
+    /// ([`SessionEvent::LogSilent`]); said on the turn only. Put down only
+    /// where a pass answers for the graph — landed, or failed and told as
+    /// such — never where one starts: a Reload over a silent walk keeps the
+    /// mark up until its own walk answers, instead of taking it down and
+    /// putting it back a budget later.
+    pub(super) fn tell_graph_silent(&self, silent: bool) {
+        if self.graph_silent.swap(silent, Ordering::SeqCst) != silent {
+            self.sink.event(SessionEvent::LogSilent { silent });
+        }
+    }
+
+    /// A walk of `answer`'s pass has landed: the graph on screen is the
+    /// repository's, so neither mark stands — an earlier failure's, nor a
+    /// silent walk's.
+    pub(super) fn tell_graph_landed(&self, answer: &PassAnswer) {
+        self.tell_graph_stale(false);
+        self.walk_answered(answer);
+    }
+
+    /// A walk of `answer`'s pass has answered, landed or failed: git is not
+    /// silent there, for the band or for the asks behind it
+    /// (`asks::Takeover::spoke`) — a second walk under the same pass is
+    /// watched afresh.
+    pub(super) fn walk_answered(&self, answer: &PassAnswer) {
+        self.log_run.spoke(answer.number);
+        self.tell_graph_silent(false);
+    }
+
+    /// The walk behind `answer` has printed nothing for its silence budget
+    /// (`walk::walk_silence`). Whoever waits on the pass is answered now, as
+    /// not landed ([`RefreshOutcome::Silent`]) — a write's settling, a
+    /// poll's single flight, the passes a fetch waits out, and the asks
+    /// from behind the screen waiting behind it; an ask from the screen
+    /// takes the pass over whatever the streak (`asks::Takeover`); and the
+    /// band says so. The walk runs on: if git answers it lands as any pass
+    /// does, and that clears the band.
+    ///
+    /// Told on the walk's own task, from the executor's watch, once a spawn.
+    pub(super) fn walk_went_silent(&self, answer: &PassAnswer) {
+        tracing::warn!("the graph walk has printed nothing for its silence budget; left running");
+        self.log_run.went_silent(answer.number);
+        self.tell_graph_silent(true);
+        answer.answer(RefreshOutcome::Silent);
     }
 
     /// What a pass reads before it can walk, taken concurrently: no answer
@@ -213,51 +261,56 @@ impl RepoSession {
             return;
         };
 
-        let (run_cancel, mut run, lap) = self.take_log_run();
-        let held = self.graph_passes.enter();
+        let (pass, _) = self.take_pass(true);
 
         let s = Arc::clone(self);
         let options = self.log_options();
         self.runtime.spawn(async move {
-            let _held = held;
-            let Some(_lap) = lap.start().await else {
-                run.answer(RefreshOutcome::Cancelled);
+            let PassStart { token, lap, answer } = pass;
+            let Some(_lap) = lap.start(|| answer.answer(RefreshOutcome::Silent)).await else {
+                answer.answer(RefreshOutcome::Cancelled);
                 return;
             };
-            // The last pass answers for the ask.
+            // The last pass answers for the ask — or the first walk to go
+            // silent (`PassAnswer`).
             let outcome = if options.include_tags {
                 let fast = LogOptions {
                     include_tags: false,
                     ..options
                 };
-                let reads = s.pass_reads(&workdir, &run_cancel).await.ok();
+                let reads = s.pass_reads(&workdir, &token).await.ok();
                 match s
-                    .run_direct_pass(&workdir, fast, &run_cancel, reads.clone())
+                    .run_direct_pass(&workdir, fast, &token, reads.clone(), &answer)
                     .await
                 {
                     RefreshOutcome::Changed => {
-                        s.run_swap_pass(&workdir, options, &run_cancel, reads).await
+                        s.run_swap_pass(&workdir, options, &token, reads, &answer)
+                            .await
                     }
                     stopped => stopped,
                 }
             } else {
-                s.run_direct_pass(&workdir, options, &run_cancel, None)
+                s.run_direct_pass(&workdir, options, &token, None, &answer)
                     .await
             };
-            run.answer(outcome);
+            answer.answer(outcome);
         });
     }
 
     /// Takes the log stream over: a fresh token for this pass, the one it
-    /// displaces stopped or waited out ([`Lap::start`] below), and the
-    /// numbered ask it answers as ([`GraphRun`]) — a displaced pass's
-    /// caller waits for the later number ([`RepoSession::graph_answer`]).
+    /// displaces stopped or waited out ([`Lap::start`]), the numbered ask it
+    /// answers as (`graph_refresh::GraphRun`) — a displaced pass's caller waits for the
+    /// later number ([`RepoSession::graph_answer`]) — and its place among
+    /// the passes still walking, all bound into the one answer the pass owes
+    /// ([`PassAnswer`]); and the boundary a caller waits on for that answer.
     ///
     /// Call on the caller's thread before spawning the pass: call order
     /// decides which pass owns the graph, and spawn order does not follow
     /// it. This token alone decides ownership: `log_gen` is taken in spawn
     /// order, and judging by both can make each pass stand down, leaving
-    /// Reload with no answer.
+    /// Reload with no answer. Its place is taken here too: registered from
+    /// inside the task, the boundary could read "idle" for a pass not
+    /// started yet.
     ///
     /// The number and the handover are taken under one lock: otherwise two
     /// racing asks could number in one order and take the stream in the
@@ -267,12 +320,18 @@ impl RepoSession {
     /// A follow ask taken over (`session::asks`): the pass starts with
     /// [`Lap::start`], which waits for the pass under way to land where
     /// stopping it would make too many stopped in a row — a stream of asks
-    /// on a slow machine still lands a picture.
-    pub(super) fn take_log_run(&self) -> (CancellationToken, GraphRun, Lap) {
+    /// on a slow machine still lands a picture. `asked` where the ask is
+    /// the screen's own: it stops a pass gone silent whatever the streak,
+    /// and an ask from behind the screen left behind one is answered
+    /// `Silent` where it waits (`asks::Takeover::take`).
+    pub(super) fn take_pass(&self, asked: bool) -> (PassStart, RefreshTask) {
         let (lap, run) = self
             .log_run
-            .take(&self.root_cancel, || self.graph_passes.ask());
-        (lap.token(), run, lap)
+            .take(&self.root_cancel, asked, || self.graph_passes.ask());
+        let held = self.graph_passes.enter();
+        let (answer, task) = PassAnswer::owed(run, lap.number(), held);
+        let token = lap.token();
+        (PassStart { token, lap, answer }, task)
     }
 
     /// Streams one pass straight to the UI (chunked, resets the graph).
@@ -284,6 +343,7 @@ impl RepoSession {
         options: LogOptions,
         cancel: &CancellationToken,
         reads: Option<PassReads>,
+        answer: &PassAnswer,
     ) -> RefreshOutcome {
         let mut watch = PassWatch::operation(self);
         // Before the lock, because reading them can go to git.
@@ -337,7 +397,7 @@ impl RepoSession {
             (Some(error), _) => Err(error),
             (None, Err(error)) => Err(error),
             (None, Ok(inputs)) => {
-                self.stream_log(workdir, generation, options, cancel, inputs)
+                self.stream_log(workdir, generation, options, cancel, inputs, answer)
                     .await
             }
         };
@@ -368,7 +428,7 @@ impl RepoSession {
                     if shared.generation == generation {
                         shared.sent_footer = Some(footer);
                         shared.walked.footer = Some(footer);
-                        self.leaving_walked();
+                        self.leaving_walked(answer.ask);
                     }
                     self.sink.event(SessionEvent::LogFinished {
                         generation,
@@ -378,6 +438,7 @@ impl RepoSession {
                         truncated: footer.truncated,
                     });
                 }
+                self.tell_graph_landed(answer);
                 // A stream cannot leave rows out as it goes, so a delete
                 // that is out takes its commits off the finished graph.
                 if self.deletes_out() {
@@ -393,6 +454,7 @@ impl RepoSession {
                         generation,
                         error: error.to_string(),
                     });
+                    self.walk_answered(answer);
                 }
                 // A cancelled pass says nothing on purpose: whoever
                 // cancelled it is the one drawing now.
@@ -415,12 +477,13 @@ impl RepoSession {
         cancel: &CancellationToken,
         into: Building<'_>,
         inputs: Result<WalkInputs, GitError>,
+        answer: &PassAnswer,
     ) -> Result<LogTotals, GitError> {
         match (self.pass_fault(PassStep::Swapping), inputs) {
             (Some(error), _) => Err(error),
             (None, Err(error)) => Err(error),
             (None, Ok(inputs)) => {
-                self.collect_log(workdir, options, cancel, into, inputs)
+                self.collect_log(workdir, options, cancel, into, inputs, answer)
                     .await
             }
         }
@@ -435,6 +498,7 @@ impl RepoSession {
         options: LogOptions,
         cancel: &CancellationToken,
         reads: Option<PassReads>,
+        answer: &PassAnswer,
     ) -> RefreshOutcome {
         // Superseded before it began: skip the walk, the most expensive
         // read in the app. One half of closing a baseline; the other is
@@ -471,6 +535,7 @@ impl RepoSession {
                     out: &mut rows,
                 },
                 inputs,
+                answer,
             )
             .await;
         let walked = match result {
@@ -490,6 +555,7 @@ impl RepoSession {
                 // repository's: the band says so (`STALE GRAPH`), and git's
                 // words go where every read's do.
                 self.tell_graph_stale(true);
+                self.walk_answered(answer);
                 self.fail("log", error);
                 return RefreshOutcome::Failed;
             }
@@ -540,7 +606,7 @@ impl RepoSession {
             shared.publish_marks = marks;
             shared.applied = applied;
             shared.walked = record;
-            self.leaving_walked();
+            self.leaving_walked(answer.ask);
             if unchanged {
                 // The UI already shows exactly this; swapping would only
                 // reset the view. The generation stays: nothing was sent,
@@ -548,8 +614,8 @@ impl RepoSession {
                 // not compare equal.
                 tracing::debug!(total, "graph rebuild unchanged; swap skipped");
                 // A walk that found the screen current clears an earlier
-                // failure's mark.
-                self.tell_graph_stale(false);
+                // failure's mark, and a silent walk's.
+                self.tell_graph_landed(answer);
                 watch.answered();
                 return RefreshOutcome::Unchanged;
             }
@@ -566,7 +632,7 @@ impl RepoSession {
                 walked: footer.walked,
                 truncated: footer.truncated,
             });
-            self.tell_graph_stale(false);
+            self.tell_graph_landed(answer);
         }
         watch.answered();
         RefreshOutcome::Changed

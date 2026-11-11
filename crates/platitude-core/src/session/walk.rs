@@ -2,6 +2,7 @@
 //! and buffered readers themselves, what they send as they go, and what a
 //! walk that stopped means.
 
+use super::graph_refresh::PassAnswer;
 use super::rows::{LogTotals, Sifter, StreamItem, wip_row};
 use super::*;
 
@@ -86,6 +87,7 @@ impl RepoSession {
         options: LogOptions,
         cancel: &CancellationToken,
         inputs: WalkInputs,
+        answer: &PassAnswer,
     ) -> Result<LogTotals, GitError> {
         let WalkInputs {
             head_tip,
@@ -147,26 +149,37 @@ impl RepoSession {
 
         let result = self
             .executor
-            .run_streaming(cmd, cancel, &mut |bytes| {
-                if parse_error.is_some() {
-                    return;
-                }
-                if let Err(e) = parser.feed(bytes, &mut pending) {
-                    parse_error = Some(e.to_string());
-                    cancel.cancel();
-                    return;
-                }
-                let threshold = if first_sent {
-                    CHUNK_ROWS
-                } else {
-                    FIRST_CHUNK_ROWS
-                };
-                if pending.len() >= threshold {
-                    let items = sifter.take(&mut pending);
-                    first_sent = true;
-                    self.emit_rows(generation, &items, parser.pool(), &mut totals, &mut carried);
-                }
-            })
+            .run_streaming_watched(
+                cmd,
+                cancel,
+                &mut |bytes| {
+                    if parse_error.is_some() {
+                        return;
+                    }
+                    if let Err(e) = parser.feed(bytes, &mut pending) {
+                        parse_error = Some(e.to_string());
+                        cancel.cancel();
+                        return;
+                    }
+                    let threshold = if first_sent {
+                        CHUNK_ROWS
+                    } else {
+                        FIRST_CHUNK_ROWS
+                    };
+                    if pending.len() >= threshold {
+                        let items = sifter.take(&mut pending);
+                        first_sent = true;
+                        self.emit_rows(
+                            generation,
+                            &items,
+                            parser.pool(),
+                            &mut totals,
+                            &mut carried,
+                        );
+                    }
+                },
+                Some(&|| self.walk_went_silent(answer)),
+            )
             .await;
 
         if let Err(e) = result {
@@ -193,6 +206,7 @@ impl RepoSession {
         cancel: &CancellationToken,
         into: Building<'_>,
         inputs: WalkInputs,
+        answer: &PassAnswer,
     ) -> Result<LogTotals, GitError> {
         let Building {
             builder,
@@ -249,24 +263,29 @@ impl RepoSession {
 
         let result = self
             .executor
-            .run_streaming(cmd, cancel, &mut |bytes| {
-                if parse_error.is_some() {
-                    return;
-                }
-                if let Err(e) = parser.feed(bytes, &mut pending) {
-                    parse_error = Some(e.to_string());
-                    cancel.cancel();
-                    return;
-                }
-                for item in &sifter.take(&mut pending) {
-                    for row in carried.take_for(item, builder) {
+            .run_streaming_watched(
+                cmd,
+                cancel,
+                &mut |bytes| {
+                    if parse_error.is_some() {
+                        return;
+                    }
+                    if let Err(e) = parser.feed(bytes, &mut pending) {
+                        parse_error = Some(e.to_string());
+                        cancel.cancel();
+                        return;
+                    }
+                    for item in &sifter.take(&mut pending) {
+                        for row in carried.take_for(item, builder) {
+                            out.push(row);
+                        }
+                        let row = item.row(parser.pool(), builder, marks);
+                        totals.note_row(&item.meta.oid, row.published);
                         out.push(row);
                     }
-                    let row = item.row(parser.pool(), builder, marks);
-                    totals.note_row(&item.meta.oid, row.published);
-                    out.push(row);
-                }
-            })
+                },
+                Some(&|| self.walk_went_silent(answer)),
+            )
             .await;
         if let Err(e) = result {
             return Err(map_walk_error(e, parse_error));
@@ -418,6 +437,16 @@ fn detached_oids(standing: &super::joins::WorktreeHolders) -> Vec<Oid> {
 /// A stash may vanish between the listing and the walk, so the oids that
 /// join it are asked for with `--ignore-missing` — and so may a worktree,
 /// which is listed by a read of its own.
+///
+/// No time budget: a walk's length follows the history's, and where the
+/// repository has no commit-graph `--date-order` orders all of it before
+/// its first line (`revision.c` streams a topo-ordered walk only on
+/// generation numbers) — killed, a healthy walk of a large repository
+/// would never land, and a graph left stale is walked again only when a
+/// ref moves, a fetch runs or the reader reloads. A walk
+/// git says nothing in for [`walk_silence`] is told about instead and left
+/// running ([`RepoSession::walk_went_silent`]); only its token ends it — a
+/// newer ask, or the session closing.
 fn walk_command(
     workdir: &std::path::Path,
     options: LogOptions,
@@ -430,7 +459,8 @@ fn walk_command(
         .cwd(workdir)
         .args(["log", "-z", "--date-order", LOG_FORMAT_ARG])
         .args(["HEAD", "--branches", "--remotes"])
-        .no_timeout();
+        .no_timeout()
+        .silent_after(walk_silence());
     if options.include_tags {
         cmd = cmd.arg("--tags");
     }
@@ -459,6 +489,15 @@ fn walk_command(
         }
     }
     cmd.arg("--")
+}
+
+/// How long a walk's git may print nothing before the screen says it is not
+/// answering: the budget every other read is killed at
+/// ([`crate::process::DEFAULT_TIMEOUT`]), so "has not answered" means the
+/// same time whichever read it is — the walk alone runs on past it.
+#[mry::mry]
+pub fn walk_silence() -> std::time::Duration {
+    crate::process::DEFAULT_TIMEOUT
 }
 
 /// What a walk that stopped means: with a parse error, the cancel was the

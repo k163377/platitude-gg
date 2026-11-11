@@ -35,6 +35,7 @@ mod query;
 mod rebuild;
 mod refresh_reads;
 mod settlement;
+mod silent_walk;
 mod standing_op;
 mod standing_reads;
 mod stream;

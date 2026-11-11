@@ -155,7 +155,7 @@ pub(crate) fn pass_hooks() -> Option<Arc<dyn PassHooks>> {
 /// not meet the fault (`GraphModel.failGraphPass`).
 ///
 /// An ask is not a pass: a read that moved asks for a rebuild, which
-/// stops the pass it displaces or waits it out (`take_log_run`), and a
+/// stops the pass it displaces or waits it out (`take_pass`), and a
 /// rebuild of the same picture says nothing, so nothing on screen tells
 /// the harness QML its ask was lost or a later pass took the picture down.
 /// Nor can the QML ask again on its beat: each ask takes the pass before

@@ -11,11 +11,14 @@ import platitude.ui
 // Windows, `app_backend/console.rs`; a signal elsewhere, `app_backend/signals.rs`) goes `AppBackend.exitRequested` →
 // `root.close()`, so every way out reaches `Main.onClosing`, which asks `AppBackend.readyToQuit()`
 // (= `Hub::writes_settled`: the open tabs' `local_writes_pending`, the `parked_writes` closed tabs left behind and the
-// settings screen's saves, `hub::saves`). The gate, the dialog and the yield are this one part. The harness's
-// `Qt.quit()` comes through close as well: an automated run is let through only after `finishAutoAct` (`yields`), and
-// writes after that are guarded by the `take_write_join` join in `Hub::shutdown`.
+// settings screen's saves, `hub::saves`). A write counts until git has answered it, not through the reads behind it
+// (user decision): those stop with the close, so a graph walk git says nothing in holds no window open
+// (`session::write::git_answered`). The gate, the dialog and the yield are this one part. The harness's `Qt.quit()`
+// comes through close as well: an automated run is let through only after `finishAutoAct` (`yields`), and writes
+// after that are guarded by the `take_write_join` join in `Hub::shutdown`.
 // `readyToQuit` is a slot that reads hidden state, the recorded exception: only events and timers call it. A qproperty
-// cannot work — a write a closed tab left behind has no drain to notify it. Headless: `quit-waits` / `quit-locked`.
+// cannot work — a write a closed tab left behind has no drain to notify it. Headless: `quit-waits` / `quit-locked` /
+// `walk-silent-quit`.
 //
 // The user must `anchors.fill` it over the window: the dialog sizes off its parent (the `WindowDialogSeat` trap).
 Item {

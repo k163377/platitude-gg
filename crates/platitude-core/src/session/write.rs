@@ -289,10 +289,8 @@ impl RepoSession {
         // it was put back at the answer (`session::leaving`).
         self.leaving_done(operation.id);
         *relock(&self.write_running) = None;
-        // The quit gate counts by lane; the tree is told by kind.
-        if operation.lane == Lane::Local {
-            self.local_writes.fetch_sub(1, Ordering::SeqCst);
-        }
+        // The quit gate let go of it at git's answer (`git_answered`); the
+        // tree is told by kind.
         if operation.kind.writes_here() {
             self.tell_the_tree();
         }
@@ -308,6 +306,16 @@ impl RepoSession {
         // ([`RepoSession::take_the_read_owed`]). Any lane — a push owes it
         // as a commit does.
         self.take_the_read_owed();
+    }
+
+    /// git has answered a write, or it never ran: the quit gate stops
+    /// counting it (`local_writes`, by lane). The reads behind it are left
+    /// out on purpose — a close stops them, so a quit has nothing of theirs
+    /// to wait for, and a walk gone silent would hold the window for good.
+    fn git_answered(&self, lane: Lane) {
+        if lane == Lane::Local {
+            self.local_writes.fetch_sub(1, Ordering::SeqCst);
+        }
     }
 
     async fn run_write(self: &Arc<Self>, request: WriteRequest) {
@@ -335,6 +343,7 @@ impl RepoSession {
             // a caller holding it waits for them. Every entry point sits
             // behind an open repository, so reaching here is a bug.
             tracing::debug!(?operation, "write refused: no repository is open");
+            self.git_answered(lane);
             let fence = self.standing.fence();
             self.sink.event(SessionEvent::WriteStarted { id, kind });
             self.sink.event(SessionEvent::WriteFinished {
@@ -369,6 +378,7 @@ impl RepoSession {
         // Every command the task spawns names the write it runs under, so
         // a compound write is several rows under one id in the log.
         let result = run(exec.under(id), info, cancel).await;
+        self.git_answered(lane);
         // From here only reads begun after the write speak for the
         // repository; a poll begun under it lands stale (`Standing::fence`).
         // The fence's numbers travel with the write's answer, for a
@@ -449,9 +459,10 @@ impl RepoSession {
     }
 
     /// The reads behind a write that has answered, waited for to the
-    /// last. Answers those that did not land, for the caller to name under
-    /// the write's id (the failures themselves are on the error surface
-    /// under no id).
+    /// last — but a walk gone silent, which answers as not landed and walks
+    /// on ([`RefreshOutcome::Silent`]). Answers those that did not land,
+    /// for the caller to name under the write's id (the failures themselves
+    /// are on the error surface under no id).
     async fn settle_after(
         self: &Arc<Self>,
         operation: Operation,
@@ -541,7 +552,15 @@ impl RepoSession {
         if after == AfterWrite::Refs && !walk {
             self.wait_for_graph_passes().await;
             walk = self.graph_stale.load(Ordering::SeqCst);
+            // A walk gone silent beside it is not waited out, nor walked
+            // over — that would stop it while the streak lasts: the graph
+            // has not landed.
+            if !walk && self.graph_silent.load(Ordering::SeqCst) {
+                note_failed(&mut failed, FollowUp::Graph);
+            }
         }
+        // Every walk asked for from here on began after the write landed.
+        let walked_from = self.graph_passes.next_ask();
         if walk {
             let reads = match self.workdir() {
                 Some(workdir) => {
@@ -588,7 +607,7 @@ impl RepoSession {
         // A landed delete whose walk did not land stands on in the graph
         // until one does (`session::leaving`).
         if rebuild_graph && failed.contains(&FollowUp::Graph) {
-            self.leaving_unwalked(operation.id);
+            self.leaving_unwalked(operation.id, walked_from);
         }
         failed
     }

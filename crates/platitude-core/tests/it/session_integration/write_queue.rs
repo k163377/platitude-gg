@@ -211,6 +211,48 @@ async fn marking_the_conflicts_resolved_leaves_the_rest_of_the_tree_alone() {
     session.close_and_wait().await;
 }
 
+/// The count the quit gate reads lets a write go at git's answer, not
+/// after the reads behind it: those stop with a close, so none of them is
+/// worth the window held open (`write::git_answered`). Read from inside the
+/// sink call that tells the answer — the moment those reads begin.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_quit_gate_lets_a_write_go_at_its_answer() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("root.txt", "0\n", "root");
+    repo.write_file("new.txt", "content\n");
+    repo.git(&["add", "new.txt"]);
+
+    let (sink, session) = opened(&repo).await;
+    let (counted, at_answer) = tokio::sync::oneshot::channel();
+    let watched = std::sync::Arc::clone(&session);
+    sink.hook_once(
+        |e| {
+            matches!(
+                e,
+                SessionEvent::WriteFinished {
+                    kind: OperationKind::Commit,
+                    ..
+                }
+            )
+        },
+        move || {
+            counted
+                .send(watched.local_writes_pending())
+                .expect("the test waits for the count");
+        },
+    );
+    session.commit("answered".into(), CommitOptions::default());
+    assert_eq!(
+        bounded("the count at the commit's answer", at_answer)
+            .await
+            .expect("the hook ran"),
+        0,
+        "counted out at git's answer, the reads behind it still ahead"
+    );
+    assert_eq!(write_result(&sink, OperationKind::Commit).await, None);
+    session.close_and_wait().await;
+}
+
 /// A close loses nothing the queue was already asked for. The running
 /// commit outlives it: the token is the write's own and no budget binds
 /// the local lane (`operation::Lane::Local`), because a commit killed

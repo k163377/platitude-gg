@@ -160,16 +160,22 @@ impl Drop for PassWatch<'_> {
         let told = &self.told;
         let session = self.session;
         let reported = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match told {
-            Told::Stream(generation) => session.sink.event(SessionEvent::LogFailed {
-                generation: *generation,
-                // Empty: the words are the band's (`BandStateCard`,
-                // rules-refs/app-ui.md「Rust に文言を置かない」).
-                error: String::new(),
-            }),
+            Told::Stream(generation) => {
+                session.sink.event(SessionEvent::LogFailed {
+                    generation: *generation,
+                    // Empty: the words are the band's (`BandStateCard`,
+                    // rules-refs/app-ui.md「Rust に文言を置かない」).
+                    error: String::new(),
+                });
+                // Failed, so not silent: the band says which.
+                session.tell_graph_silent(false);
+            }
             Told::Operation => {
                 // The graph left standing is whole but stale
-                // (`SessionEvent::LogStale`).
+                // (`SessionEvent::LogStale`) — said before the silent mark
+                // goes, so the band's badge never drops between the two.
                 session.tell_graph_stale(true);
+                session.tell_graph_silent(false);
                 session.fail(
                     "log",
                     GitError::UnexpectedOutput {

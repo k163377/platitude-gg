@@ -58,6 +58,9 @@ impl GraphModel {
                 // No generation check: the session says this of whatever
                 // graph is standing (`log::tell_graph_stale`).
                 GraphMsg::Stale { stale } => self.stale = stale,
+                // The same: about whatever graph is standing
+                // (`log::tell_graph_silent`).
+                GraphMsg::Silent { silent } => self.silent = silent,
             }
             changed = true;
         }

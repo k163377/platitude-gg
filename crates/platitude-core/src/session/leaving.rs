@@ -47,9 +47,11 @@ pub(super) struct Leaving {
     tips: Vec<Oid>,
     /// Landed, and the walk behind it did not: git has let the names go,
     /// but the record (`Shared::walked`) still holds what only they held.
-    /// Stands until a walk lands ([`RepoSession::leaving_walked`]), or the
-    /// next laying-out would draw those commits back.
-    unwalked: bool,
+    /// Stands until a walk asked for from this ask's number on lands
+    /// ([`RepoSession::leaving_walked`]) — one asked for before may have
+    /// read the names, and a walk gone silent lands late — or the next
+    /// laying-out would draw those commits back.
+    unwalked: Option<u64>,
 }
 
 /// A name a delete takes away, as the menu offering it has it.
@@ -421,7 +423,7 @@ impl RepoSession {
             worktrees: pending.worktrees,
             stashes: pending.stashes,
             tips: pending.tips,
-            unwalked: false,
+            unwalked: None,
         });
     }
 
@@ -443,20 +445,25 @@ impl RepoSession {
     }
 
     /// The delete under `write` landed and the walk behind it did not: it
-    /// stands until one does ([`Leaving::unwalked`]).
-    pub(super) fn leaving_unwalked(&self, write: OperationId) {
-        for delete in relock(&self.leaving)
-            .iter_mut()
-            .filter(|delete| delete.write == write)
-        {
-            delete.unwalked = true;
+    /// stands until one asked for from `from` on does
+    /// ([`Leaving::unwalked`]) — unless one has landed already: a walk
+    /// gone silent lands on its own time.
+    pub(super) fn leaving_unwalked(&self, write: OperationId, from: u64) {
+        let mut leaving = relock(&self.leaving);
+        if self.walk_landed.load(Ordering::SeqCst) >= from {
+            return;
+        }
+        for delete in leaving.iter_mut().filter(|delete| delete.write == write) {
+            delete.unwalked = Some(from);
         }
     }
 
-    /// A walk landed, begun after every delete that landed unwalked: the
-    /// record it leaves holds none of their commits.
-    pub(super) fn leaving_walked(&self) {
-        relock(&self.leaving).retain(|delete| !delete.unwalked);
+    /// The walk asked for as `ask` landed: the record it leaves holds none
+    /// of the commits of a delete that landed before that ask.
+    pub(super) fn leaving_walked(&self, ask: u64) {
+        let mut leaving = relock(&self.leaving);
+        self.walk_landed.fetch_max(ask, Ordering::SeqCst);
+        leaving.retain(|delete| delete.unwalked.is_none_or(|from| ask < from));
     }
 
     /// The write under `write` is over. Where it landed, the walk behind it
@@ -466,7 +473,7 @@ impl RepoSession {
     pub(super) fn leaving_done(&self, write: OperationId) -> bool {
         let mut leaving = relock(&self.leaving);
         let before = leaving.len();
-        leaving.retain(|delete| delete.write != write || delete.unwalked);
+        leaving.retain(|delete| delete.write != write || delete.unwalked.is_some());
         leaving.len() != before
     }
 

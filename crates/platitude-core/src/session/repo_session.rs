@@ -38,7 +38,7 @@ pub struct RepoSession {
     pub(super) shared: Arc<Mutex<Shared>>,
     pub(super) log_options: Mutex<LogOptions>,
     /// Numbers installs, for ordering only; ownership is `log_run`'s
-    /// (`RepoSession::take_log_run`).
+    /// (`RepoSession::take_pass`).
     pub(super) log_gen: AtomicU64,
     /// The pass that owns the graph — the one decider of who owns it, in
     /// call order — and where the next pass starts from.
@@ -71,6 +71,9 @@ pub struct RepoSession {
     /// ([`SessionEvent::LogStale`]), so a quiet pass can say "current
     /// again" without every quiet pass saying something.
     pub(super) graph_stale: std::sync::atomic::AtomicBool,
+    /// Whether the graph's walk has gone silent and no pass has answered
+    /// since ([`SessionEvent::LogSilent`]) — held for the same reason.
+    pub(super) graph_silent: std::sync::atomic::AtomicBool,
     /// Which diff read is the current one: bumped by every
     /// [`RepoSession::load_diff`] and checked wherever a read would hand
     /// something over. Bumping it cancels the passed read's git.
@@ -169,9 +172,10 @@ pub struct RepoSession {
     /// this one out again, so the sidebar can tell "the same" by pointer
     /// instead of rebuilding every section on the Qt thread.
     pub(super) last_snapshot: Mutex<Option<Arc<RefsSnapshot>>>,
-    /// Local writes handed to the queue and not yet done with — the ones
-    /// a close waits out ([`Lane::Local`]). What the application's quit
-    /// gate reads: zero on every open session is the moment the window
+    /// Local writes handed to the queue whose git has not answered yet —
+    /// the ones a close lets run out ([`Lane::Local`]); the reads behind
+    /// them are not counted (`write::git_answered`). What the application's
+    /// quit gate reads: zero on every open session is the moment the window
     /// may go.
     pub(super) local_writes: std::sync::atomic::AtomicUsize,
     /// The write loop's own task. Handed to the application on the way
@@ -236,6 +240,9 @@ pub struct RepoSession {
     /// deletes whose answers only this one hears. Taken after the graph's
     /// lock where both are held.
     pub(super) leaving: Mutex<Vec<Leaving>>,
+    /// The newest ask whose walk landed ([`RepoSession::leaving_walked`]):
+    /// read and written under `leaving`'s lock.
+    pub(super) walk_landed: std::sync::atomic::AtomicU64,
     /// Set by the close, before it gives anything back
     /// ([`RepoSession::keeps_what_it_reads`]). Reads already in flight
     /// answer after it, and what they answer with is dropped.
@@ -519,10 +526,10 @@ impl RepoSession {
         *relock(&self.eol_baselines) = HashMap::new();
     }
 
-    /// How many local writes are queued or running — the ones
-    /// [`RepoSession::close`] waits out (network writes die with the
-    /// session). Zero is the moment nothing here would outlast a
-    /// shutdown.
+    /// How many local writes are queued or have git still running — the
+    /// ones [`RepoSession::close`] lets run out (network writes die with
+    /// the session). Zero is the moment no git writing here would outlast a
+    /// shutdown; the reads behind an answered write stop with the close.
     pub fn local_writes_pending(&self) -> usize {
         self.local_writes.load(Ordering::SeqCst)
     }

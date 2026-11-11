@@ -93,9 +93,15 @@ Item {
     /// the foot (the window's cut line) they are off screen at opening, the first chunk being 512 rows. One state, one
     /// place — the band is always in view, and git's words go in the badge's card. `failed` is one state whether part
     /// of the walk arrived or none of it. Headless: `graph-stale` / `graph-stopped` (`WindowBadgeActs`).
+    ///
+    /// They disagree too where git has said nothing: the walk that would bring the graph up to date has printed nothing
+    /// for its silence budget and runs on (`silent`, `RepoSession::walk_went_silent`) — the rows on screen are the ones
+    /// read before it, or what it streamed so far where it began on an empty graph (an opening, a Reload). The card says
+    /// so in its own line; the two above keep theirs. The walk landing takes the badge down.
     readonly property bool staleBadgeShown: stateGroup.curPage !== null
                                             && (stateGroup.curPage.pageGraph.failed
-                                                || stateGroup.curPage.pageGraph.stale)
+                                                || stateGroup.curPage.pageGraph.stale
+                                                || stateGroup.curPage.pageGraph.silent)
     /// Pending files need Git LFS and git cannot run it here (`WorktreeModel.lfsNeeded`; what counts and when it is
     /// asked again: `platitude_core::lfs`, `session/lfs.rs`). `warning`'s outline: the app is saying it, and nothing
     /// has happened yet (規約 §状態). Not pressable and no road out, as `OLD GIT`: installing is work outside this
@@ -511,6 +517,7 @@ Item {
         lfsShown: stateGroup.lfsBadgeShown
         lfsNeeded: stateGroup.stateWorktree !== null ? stateGroup.stateWorktree.lfsNeeded : 0
         staleStopped: stateGroup.curPage !== null && stateGroup.curPage.pageGraph.failed
+        staleSilent: stateGroup.curPage !== null && stateGroup.curPage.pageGraph.silent
         staleWhy: stateGroup.curPage !== null ? stateGroup.curPage.pageGraph.error : ""
         onIdentityRequested: stateGroup.identityEditRequested()
     }

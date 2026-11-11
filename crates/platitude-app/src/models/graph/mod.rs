@@ -182,6 +182,11 @@ pub struct GraphModel {
     /// `STALE GRAPH` stands for this and `failed` alike; the card's line
     /// says which.
     stale: bool,
+    /// The walk that would bring this graph up to date has printed nothing
+    /// for its silence budget and runs on (`SessionEvent::LogSilent`) —
+    /// the third reason `STALE GRAPH` stands, and the one the card puts
+    /// first: git is the reason.
+    silent: bool,
     started_at: Option<Instant>,
     feed: Option<Arc<Feed<GraphMsg>>>,
     tab_id: i32,

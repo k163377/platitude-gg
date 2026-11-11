@@ -14,7 +14,7 @@ paths:
 - git の実行も完了待ちも常に UI(Qt)スレッドの外
 - **複合操作は 1 手目が失敗したら止める**(`?`)。**失敗が `Ok` に化ける経路**(`switch` の `CheckoutOutcome::Blocked`・`stash pop` の非ゼロ終了)だけは明示的に判定し、戻せるものは戻す(`session::build::carry_across`)。失敗後に走ってよいのは読み取りだけ
 - **`&str` をバイト長で切らない**(罠と書き方は rules-refs の同項)
-- **実行の監督はレーンで分ける**(ユーザー決定): **読み取りとネットワーク(fetch / push / ls-remote / clone)はタイムアウト + キャンセル、ローカル書き込みは完走まで待つ**(close も)。分類点は `operation::OperationKind::lane` の exhaustive match 1 箇所。auto fetch は多重起動しない
+- **実行の監督はレーンで分ける**(ユーザー決定): **読み取りとネットワーク(fetch / push / ls-remote / clone)はタイムアウト + キャンセル、ローカル書き込みは完走まで待つ**(close も)。例外はグラフの walk: 殺さず、予算だけ黙ったら待ち手を放して帯に出す(`walk_silence`)。分類点は `operation::OperationKind::lane` の exhaustive match 1 箇所。auto fetch は多重起動しない
 - **git プロセスは全部 1 組の実行枠 `process::Slots` を通る**(**枠 = 子プロセス 1 本**)。優先度(`Priority` = 誰が待つか)・ペース(`Pace` = 何が速さを決めるか)・ログ(`Kept`)・キャンセル・書き込み順序は別の概念。背景の読みと外部に paced されるコマンドは `max(1, n/4)` 本まで = 枠 2 以上ならクリックはそれらに待たされない(設定を下げた直後は走っている分が終わるまで除く。枠 1 は予約が無く全部が順番。各論は rules-refs の `Slots` 項)
 - **新しいオプションは最低 git バージョンで確認してから使う** — 手順と確認記録への参照先は [gitの扱い.md](../../internal-docs/gitの扱い.md)
 

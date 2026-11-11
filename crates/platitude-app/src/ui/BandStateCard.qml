@@ -37,6 +37,10 @@ AppCard {
     /// True: the walk stopped part-way and rows are missing; false: every row is drawn but out of date. True wins
     /// where both hold — it is the heavier, and the one with words to show.
     property bool staleStopped: false
+    /// The walk that would bring the graph up to date has printed nothing for its silence budget and runs on
+    /// (`GraphModel.silent`). Wins over both above: it says why, and the rows under it are whatever was read before it
+    /// or so far.
+    property bool staleSilent: false
     /// What was said about the walk that gave up, where anybody said anything (`GraphModel.error`).
     property string staleWhy: ""
 
@@ -332,11 +336,15 @@ AppCard {
             }
             CardText {
                 id: staleLine
-                text: !stateCard.staleStopped
-                      ? qsTr("The latest history is not being shown")
-                      : stateCard.staleWhy !== ""
-                        ? stateCard.staleWhy
-                        : qsTr("Only part of the history could be read")
+                // The silent walk's line says the cause and what it costs, and sends the reader nowhere: git has
+                // said nothing, so the command log has nothing to read.
+                text: stateCard.staleSilent
+                      ? qsTr("git is not answering, so the latest history is not being shown")
+                      : !stateCard.staleStopped
+                        ? qsTr("The latest history is not being shown")
+                        : stateCard.staleWhy !== ""
+                          ? stateCard.staleWhy
+                          : qsTr("Only part of the history could be read")
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
                 Layout.alignment: Qt.AlignTop

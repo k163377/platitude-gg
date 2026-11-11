@@ -85,6 +85,7 @@ impl GraphModel {
     // One badge stands for both (`BandStateGroup.staleBadgeShown`).
     qproperty!("failed", Member = failed, Notify = stats_changed);
     qproperty!("stale", Member = stale, Notify = stats_changed);
+    qproperty!("silent", Member = silent, Notify = stats_changed);
     // The discard log's picked entry on the graph (`provisional.rs`): whether
     // one is shown, the first and last of the rows it would bring back and
     // its old tip's row (-1 for none loaded), and the revision a delegate
@@ -232,6 +233,12 @@ impl GraphModel {
         // The discard log's entry was the old session's to walk: the new one
         // walks without it, and every row would read as passed over.
         self.drop_provisional();
+        // So were the band's marks: the new session starts with neither
+        // and says only a change (`log::tell_graph_stale` /
+        // `tell_graph_silent`), and the old one's last word may be among
+        // the reads the swap dropped.
+        self.stale = false;
+        self.silent = false;
         self.stats_changed();
     }
 

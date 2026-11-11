@@ -403,9 +403,10 @@ impl Hub {
 
     /// Whether every write git was asked for is done: open tabs' local
     /// writes, the parked writes of closed tabs, and the saves
-    /// (`hub::saves`). The quit gate (`WindowQuitGate`) keeps the window
-    /// until this is true, so the join in [`Hub::shutdown`] normally waits
-    /// for nothing.
+    /// (`hub::saves`). A write is done at git's answer; the reads behind it
+    /// stop with the close (`RepoSession::local_writes_pending`). The quit
+    /// gate (`WindowQuitGate`) keeps the window until this is true, so the
+    /// join in [`Hub::shutdown`] waits for no git that is writing.
     pub fn writes_settled(&mut self) -> bool {
         self.parked_writes.retain(|write| !write.is_finished());
         self.parked_writes.is_empty()

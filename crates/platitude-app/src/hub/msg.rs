@@ -359,6 +359,11 @@ pub enum GraphMsg {
     Stale {
         stale: bool,
     },
+    /// The graph's walk has gone silent, or a pass has answered since
+    /// (see [`SessionEvent::LogSilent`]). No generation, as `Stale`.
+    Silent {
+        silent: bool,
+    },
     /// The walk that put the discard log's entry on the graph has landed
     /// (see [`SessionEvent::DiscardWalked`]): the entry's first tip, full
     /// hex, empty for the walk that took one off.

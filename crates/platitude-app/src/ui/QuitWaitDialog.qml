@@ -4,8 +4,9 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-// The window was asked to close while git is still writing: the close waits for local writes to settle
-// (`RepoSession::close`) and says so here. A dialog, because the subject is the window itself
+// The window was asked to close while git is still writing: the close waits for git to answer the local writes
+// (`RepoSession::close`; the reads behind them are not waited for — `WindowQuitGate`) and says so here. A dialog,
+// because the subject is the window itself
 // (デザイン規約 §可否・警告の出し場所).
 //
 // **A loading mode, not a question** (user decision — ask before changing): no button, no Escape, and modal — a press

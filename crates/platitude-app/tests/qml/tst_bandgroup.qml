@@ -35,6 +35,7 @@ Control {
         id: graph
         property bool failed: false
         property bool stale: false
+        property bool silent: false
     }
     readonly property QtObject tab: QtObject {
         id: tab
@@ -107,6 +108,7 @@ Control {
             worktree.lfsNeeded = 0
             graph.failed = false
             graph.stale = false
+            graph.silent = false
             // The hand off the group and no menu standing, for the case that hovers.
             mouseMove(root, root.width - 1, root.height - 1)
             if (menu.visible)
@@ -316,8 +318,11 @@ Control {
             verify(group.staleBadgeShown, "a graph that has gone out of date says so")
             graph.stale = false
             graph.failed = true
-            verify(group.staleBadgeShown, "and so does a walk that gave up part-way — one badge, two ways in")
+            verify(group.staleBadgeShown, "and so does a walk that gave up part-way — the same badge")
             graph.failed = false
+            graph.silent = true
+            verify(group.staleBadgeShown, "and a walk git has said nothing in past its budget — the same badge")
+            graph.silent = false
             verify(!group.staleBadgeShown)
 
             worktree.hasConflicts = false

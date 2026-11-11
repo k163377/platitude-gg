@@ -80,8 +80,9 @@ impl Hub {
             }
             if let Some(rt) = hub.runtime.take() {
                 // Waited out: `kill_on_drop` would end git mid-write.
-                // Normally already over — the window does not close while
-                // one is pending (`Hub::writes_settled`).
+                // Normally git has answered and only the reads behind the
+                // last write are left, which the close above stops — the
+                // window does not close while git writes (`Hub::writes_settled`).
                 crate::harness::station(crate::harness::Station::WritesJoining);
                 rt.block_on(async {
                     for write in writes {

@@ -128,7 +128,7 @@ use diff_reads::{DiffEpoch, Rereads};
 pub use event::SessionEvent;
 use feed::CommandFeed;
 pub use feed::Recording;
-use graph_refresh::{GraphPasses, GraphRun};
+use graph_refresh::GraphPasses;
 pub use graph_refresh::{
     RefreshOutcome, RefreshTask, RemoteTagRefreshOutcome, RemoteTagRefreshTask,
 };
@@ -161,6 +161,11 @@ use state::{
     AutoFetch, ConfigStamp, Derived, EndingContext, Footer, OpenFetchState, Operation, Reread,
     Shared, StashListings, StashRead, WorktreeRead, WriteRequest,
 };
+/// The integration tests' mock of [`walk_silence`] (mry builds it into
+/// debug builds only); the function is public so they can lock it.
+#[cfg(debug_assertions)]
+pub use walk::mock_walk_silence;
+pub use walk::walk_silence;
 use walk::{Building, WalkInputs};
 use write_order::WriteOrder;
 

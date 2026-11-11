@@ -49,6 +49,15 @@ pub enum SessionEvent {
     LogStale {
         stale: bool,
     },
+    /// Whether the graph's walk has printed nothing for its silence budget
+    /// and no pass has answered for the graph since
+    /// (`RepoSession::walk_went_silent`): what is drawn is not the
+    /// repository's latest, and git is the reason. The walk runs on;
+    /// `false` comes with the next pass to answer, landed or failed. Sent
+    /// on the turn only, as [`SessionEvent::LogStale`].
+    LogSilent {
+        silent: bool,
+    },
     /// A background rebuild replaces the whole graph in one step. One
     /// event on purpose: split, a consumer draining between the messages
     /// paints an empty model for a frame (a white flash).
