@@ -10,6 +10,19 @@ fn head_on(branch: &str, oid_hex: &str, seq: u64) -> StateMsg {
         oid_hex: oid_hex.to_string(),
         branch: branch.to_string(),
         detached: false,
+        held: String::new(),
+        seq,
+    })
+}
+
+/// HEAD on no branch at `oid_hex`, with `held` the branch an operation
+/// keeps to the worktree ("" for none).
+fn head_detached(oid_hex: &str, held: &str, seq: u64) -> StateMsg {
+    StateMsg::Head(HeadMsg {
+        oid_hex: oid_hex.to_string(),
+        branch: String::new(),
+        detached: true,
+        held: held.to_string(),
         seq,
     })
 }
@@ -134,14 +147,31 @@ fn a_branch_with_no_commits_is_unborn_once_head_has_been_read() {
 #[test]
 fn detached_names_no_branch_tip() {
     let mut model = WorktreeModel::default();
-    model.absorb(vec![StateMsg::Head(HeadMsg {
-        oid_hex: ROOT.to_string(),
-        branch: String::new(),
-        detached: true,
-        seq: 1,
-    })]);
+    model.absorb(vec![head_detached(ROOT, "", 1)]);
     assert_eq!(model.head_oid, ROOT);
     assert_eq!(model.branch_oid, "");
+}
+
+/// The branch the menus name as the current one: HEAD's own, or while HEAD
+/// is on none the one a rebase or bisect keeps to the worktree — and none
+/// where nothing does, or once the tab stands elsewhere.
+#[test]
+fn the_held_branch_is_heads_own_or_the_one_an_operation_keeps() {
+    let mut model = WorktreeModel::default();
+    model.absorb(vec![head(ROOT, 1)]);
+    assert_eq!(model.held_branch, "main");
+    model.absorb(vec![head_detached(NEXT, "main", 2)]);
+    assert_eq!(
+        (model.branch.as_str(), model.held_branch.as_str()),
+        ("", "main"),
+        "a replay's detached HEAD still holds the branch it rewrites"
+    );
+    model.absorb(vec![head_detached(NEXT, "", 3)]);
+    assert_eq!(model.held_branch, "", "`rebase --quit` takes it away");
+    model.absorb(vec![head_on("trunk", ROOT, 4)]);
+    assert_eq!(model.held_branch, "trunk", "a rename outside is named anew");
+    model.forget_the_worktree();
+    assert_eq!(model.held_branch, "");
 }
 
 #[test]
@@ -481,12 +511,7 @@ fn a_side_is_current_where_head_is_on_its_branch() {
     assert_eq!(currents(&model), (true, false));
     model.absorb(vec![with_sides(status(Vec::new()), "feat", "main")]);
     assert_eq!(currents(&model), (false, true));
-    model.absorb(vec![StateMsg::Head(HeadMsg {
-        oid_hex: NEXT.to_string(),
-        branch: String::new(),
-        detached: true,
-        seq: 2,
-    })]);
+    model.absorb(vec![head_detached(NEXT, "", 2)]);
     assert_eq!(currents(&model), (false, false), "detached, no branch is");
     model.absorb(vec![with_sides(status(Vec::new()), "", "")]);
     assert_eq!(currents(&model), (false, false), "no name is no branch");

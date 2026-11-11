@@ -29,6 +29,16 @@ pub struct WorktreeModel {
     /// Commit HEAD is on, branch or not (empty before the first commit).
     head_oid: String,
     detached: bool,
+    /// The branch this worktree holds: the one HEAD is on, or while HEAD
+    /// is on none the one its rebase or bisect keeps to it — the branch
+    /// git itself still counts as this worktree's (`HeadState::held`).
+    /// What the menus' rows name as the current branch (`merge` into it,
+    /// `rebase` it, `reset` it, `pull` into it), read off the tree as it
+    /// is: a branch renamed outside is named anew under a menu still up
+    /// (デザイン規約 §hover「中身が残っていれば字だけ替え」), and a replay's
+    /// detached HEAD still names the branch it rewrites. Empty only where
+    /// HEAD is on none and nothing holds one. Off HEAD alone (`take_head`).
+    held_branch: String,
     /// A branch with no commits yet: HEAD is known and names none.
     unborn: bool,
     /// The tip of the branch HEAD is on — `head_oid` on a branch, empty
@@ -269,6 +279,7 @@ impl WorktreeModel {
     qproperty!("branch", Member = branch, Notify = changed);
     qproperty!("headOid", Member = head_oid, Notify = changed);
     qproperty!("detached", Member = detached, Notify = changed);
+    qproperty!("heldBranch", Member = held_branch, Notify = changed);
     qproperty!("unborn", Member = unborn, Notify = changed);
     qproperty!("branchOid", Member = branch_oid, Notify = changed);
     qproperty!("headSeq", Member = head_seq, Notify = changed);
@@ -462,6 +473,7 @@ impl WorktreeModel {
         self.branch = String::new();
         self.head_oid = String::new();
         self.detached = false;
+        self.held_branch = String::new();
         self.unborn = false;
         self.branch_oid = String::new();
         self.head_seq = 0;
@@ -562,6 +574,11 @@ impl WorktreeModel {
 
     fn take_head(&mut self, head: HeadMsg) {
         self.head_oid = head.oid_hex;
+        self.held_branch = if head.branch.is_empty() {
+            head.held
+        } else {
+            head.branch.clone()
+        };
         self.branch = head.branch;
         self.detached = head.detached;
         self.head_seq = i32::try_from(head.seq).unwrap_or(i32::MAX);

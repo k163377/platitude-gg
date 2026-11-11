@@ -25,9 +25,6 @@ Item {
     /// under a command, `treeAtAsk`. Handed to `GitFacts` as it is, never built here. Null before the first door, as
     /// `CommitMenuState.tree`.
     property var tree: null
-    /// The branch the merge / rebase / pull rows name, written with `tree` — and kept by `standAgain` off a reading on
-    /// no branch, as `CommitMenuState.menuBranch` is.
-    property string namedBranch: ""
     /// Answers the `rebase` row's note off the drawn rows (`rebasePublished`).
     required property GraphModel graphModel
     /// Both read for the branch card (`branchFacts`); `switch` also asks `worktreesModel` who holds the branch.
@@ -302,7 +299,6 @@ Item {
         for (let i = 0; i < refRowMenu.levels.length; i++)
             refRowMenu.levels[i].releaseShape()
         refRowMenu.tree = refRowMenu.treeAtAsk !== null ? refRowMenu.treeAtAsk : refRowMenu.worktree.reading
-        refRowMenu.namedBranch = refRowMenu.tree.branch
         refRowMenu.standOn(kind, name, full, oidHex, worktreePath, aim)
         // The same links the graph row's menu offers on the commit the ref points at and its name; only as the menu
         // opens, as there (`CommitRowMenu.standGithub`).
@@ -328,8 +324,6 @@ Item {
         for (let i = 0; i < refRowMenu.levels.length; i++)
             refRowMenu.levels[i].holdShape()
         refRowMenu.tree = refRowMenu.worktree.reading
-        if (refRowMenu.tree.branch !== "")
-            refRowMenu.namedBranch = refRowMenu.tree.branch
         refRowMenu.standOn(refRowMenu.kind, refRowMenu.refName, full, oidHex, refRowMenu.openedFor,
                            refRowMenu.openedAim)
     }
@@ -450,7 +444,9 @@ Item {
             id: refMergeItem
             code: "merge"
             refSentence: Words.intoBranch
-            refName: refRowMenu.namedBranch
+            // The branch the worktree holds, off the tree as it is (`WorktreeModel.heldBranch`) — the rebase and pull
+            // rows below too.
+            refName: refRowMenu.worktree.heldBranch
             refMark: "branch"
             offered: refRowMenu.integrateOffered
             blockedReason: refRowMenu.startWhy
@@ -461,7 +457,7 @@ Item {
             code: "rebase"
             //: Follows the `rebase` chip: "rebase main onto it".
             refSentence: qsTr("%1 onto it")
-            refName: refRowMenu.namedBranch
+            refName: refRowMenu.worktree.heldBranch
             refMark: "branch"
             // A tag stays put under a rebase onto it: git peels it to its commit, and the rebase moves the current
             // branch alone (デザイン規約 §履歴を合流させる「既定のフラグ」).
@@ -485,7 +481,7 @@ Item {
             id: refPullItem
             code: "pull"
             refSentence: Words.intoBranch
-            refName: refRowMenu.pullRuns === "aside" ? refRowMenu.refId : refRowMenu.namedBranch
+            refName: refRowMenu.pullRuns === "aside" ? refRowMenu.refId : refRowMenu.worktree.heldBranch
             refTint: refRowMenu.pullRuns === "aside" ? Theme.textPrimary : Theme.textLink
             refMark: "branch"
             offered: refRowMenu.pullRuns !== ""

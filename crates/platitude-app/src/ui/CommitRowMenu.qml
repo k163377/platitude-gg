@@ -41,8 +41,8 @@ Item {
     /// another branch on HEAD's own commit gets no merge that would do nothing.
     readonly property string integrateRef:
         rowMenu.targetName !== "" && rowMenu.targetKind !== "worktree" ? rowMenu.targetName : rowMenu.oid
-    /// The branch every one of these rows makes its sentence about (規約 §履歴を合流させる), off the tree the rows
-    /// stand on (`CommitMenuState.menuBranch`).
+    /// The branch every one of these rows makes its sentence about (規約 §履歴を合流させる): the one the worktree
+    /// holds, off the tree as it is (`WorktreeModel.heldBranch`).
     required property string branch
 
     /// The commit the menu was opened on, and the stash it is ("" on an ordinary commit).
@@ -480,8 +480,9 @@ Item {
             titleCode: "reset"
             //: Follows the `reset` chip: "reset main here".
             titleSentence: qsTr("%1 here")
-            // Never offered without a branch: the card and its name stand on one tree as the menu opens, and a reading
-            // on none greys the card still naming the branch (`CommitMenuState.menuBranch`, offers::commit_menu).
+            // Offered only on a branch (offers::commit_menu), and named off the tree as it is: a replay's detached
+            // HEAD still holds the branch it rewrites (`WorktreeModel.heldBranch`). No stand-in word fills an empty
+            // one.
             titleRef: rowMenu.branch
             titleRefMark: "branch"
             applies: rowMenu.canMoveBranch

@@ -52,6 +52,8 @@ Item {
 
     /// Automation: handles into these rows (the same exposure `GraphPane.view` is).
     readonly property alias menu: fileMenu
+    readonly property alias keepItem: fileKeepItem
+    readonly property alias takeItem: fileTakeItem
     readonly property alias stashItem: fileStashItem
     readonly property alias discardItem: fileDiscardItem
 
@@ -177,8 +179,10 @@ Item {
         // Named by branch — during a rebase `--ours` / `--theirs` swap over (デザイン規約 §conflict の ours / theirs).
         // Plain clicks: a conflicted file has no settled version to lose.
         // Each side's branch behind its mark (デザイン規約 §ref の種別「名前の印」), plain — the branch stood on in its
-        // own (§ref の種別「現在のブランチは、名前が出る場所すべてで」; `WorktreeModel.sideOursCurrent`).
+        // own (§ref の種別「現在のブランチは、名前が出る場所すべてで」; `WorktreeModel.sideOursCurrent`). Off the tree
+        // as it is, under a menu still up too (デザイン規約 §hover「中身が残っていれば字だけ替え」).
         AppMenuItem {
+            id: fileKeepItem
             refSentence: fileRowMenu.worktree.sideOurs !== "" ? qsTr("Keep %1's version") : ""
             refName: fileRowMenu.worktree.sideOurs
             refTint: fileRowMenu.worktree.sideOursCurrent ? Theme.textLink : Theme.textPrimary
@@ -190,6 +194,7 @@ Item {
             onTriggered: fileRowMenu.takeSideNow("ours")
         }
         AppMenuItem {
+            id: fileTakeItem
             refSentence: fileRowMenu.worktree.sideTheirs !== "" ? qsTr("Take %1's version") : ""
             refName: fileRowMenu.worktree.sideTheirs
             refTint: fileRowMenu.worktree.sideTheirsCurrent ? Theme.textLink : Theme.textPrimary
