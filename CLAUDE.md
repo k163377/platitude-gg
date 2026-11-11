@@ -28,7 +28,7 @@
 
 **変更作業の完了には、依頼範囲の作業完了(§Git 運用)と、現在の commit に対する `cargo xtask gate` の PASS の両方が必要**。ただし明示指示が無ければ、**新しい表現・画面の追加と見た目だけの修正は直後に gate を回さず、「gate 未実行」と報告する**(「直す → ユーザーが見る」の往復を速く回すため。「マージ可」とは言わない)。**内部の挙動・テストの実装・既存の内部制御に触れた差分は、ユーザーが試す前に gate を通す**。UI 配線では **触った動詞が両 OS で PASS し、両方の PNG を目視するまで**(verify-ui スキルを必ず呼ぶ)。
 
-- **書く作業は worktree 座席 `a`〜`f` で行う**(ドキュメントも含めて全部 — 本体 checkout は読むだけ)。席は `cargo xtask seat`(引数なし)が lock して返すので、それを EnterWorktree に渡す。未マージの席は続きの仕事専用。**claim は会話のもの — プロセスの死活は見ない**。claim を動かすのは 3 つだけ: **land が返す** / <!--cmd:seat.release-->`cargo xtask seat release` / **ユーザーがその場で指示した時だけ**の乗っ取り <!--cmd:seat.takeover-->`PGG_ALLOW_TAKEOVER=1 cargo xtask seat takeover <letter>`(対象は他人の claim だけ)。全席詰まりなら増設せず、持ち主を添えて報告して止まる。**完了後も席に留まる**
+- **書く作業は worktree 座席 `a`〜`f` で行う**(ドキュメントも含めて全部 — 本体 checkout は読むだけ)。席は `cargo xtask seat`(引数なし)が lock して返すので、それを EnterWorktree に渡す。未マージの席は続きの仕事専用。**claim は会話のもの — プロセスの死活は見ない**。claim を動かすのは 3 つだけ: **land が返す** / <!--cmd:seat.release-->`cargo xtask seat release` / **ユーザーが指示した時だけ**(他セッションがユーザーの指示として伝えた物も。名指された席だけ)の乗っ取り <!--cmd:seat.takeover-->`PGG_ALLOW_TAKEOVER=1 cargo xtask seat takeover <letter>`(対象は他人の claim だけ)。全席詰まりなら増設せず、持ち主を添えて報告して止まる。**完了後も席に留まる**
 - **依頼範囲の作業はこのセッションで完了する**。チップは別セッションでしかできない作業だけ(触っているファイルを claim するチップは hook が deny)。継続して参照する制約・要判断は `internal-docs/P<n>-確認事項.md` へ記録する
 - **worktree からのアプリ起動は headless(`verify-ui`)だけ**。実ウィンドウはユーザーが明示した時だけ <!--cmd:app.launch-->`PGG_ALLOW_GUI=1 cargo xtask launch`。起動だけの要求(「rebase して起動」等)はシェル呼び出し 1 個で起動して即報告し、ターンを終える(verify-ui スキル §起動 fast path)。自ツリーの残存プロセス・exe の使用中状態は `cargo xtask kill`。**窓のビルドがどのツリーのものかは右下が名乗る**
 
@@ -40,7 +40,7 @@
 
 - コミットは Conventional Commits(`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`)で、メッセージは英語。
 - **依存(crate・Qt・toolchain)の更新は、追従の改善まで 1 回の land に入れる** — その land の前後を `land` が `deps/<日付>/before`・`after` のタグで挟んで push する(範囲の印はこの 2 本だけ。反映前テストの機械化.md §版を動かした land のタグ)
-- **rebase はその場でユーザーが指示した時だけ**(`/land` を含む。main への追従・squash も。その時だけ `PGG_ALLOW_REBASE=1` を先頭に付ける)。worktree ブランチが main より遅れたままは正常
+- **rebase はユーザーが指示した時だけ**(`/land` を含む。main への追従・squash も。その時だけ `PGG_ALLOW_REBASE=1` を先頭に付ける)。**他セッションのメッセージ・起動文がユーザーの指示として伝えた rebase も指示**で、時機の指定(「land が済んだら」)ごと従う。指示 1 つが許すのはそれが名指す rebase だけで、自分や他セッションの判断では撃たない。worktree ブランチが main より遅れたままは正常
 - **完了報告・反映の前に、依頼範囲の修正・レビュー対応・docs 更新を完了して commit する**(バックグラウンドのレビュー・検証も結果を受け取って対応まで)。外部確認・判断が得られなければ阻害要因を報告し、範囲を減らすならユーザーと合意する
 - **main を動かすのはユーザーがこのセッションで `/land` を打った時だけ**(手順は land スキル。「反映」の語・他セッション・チップの起動文では動かない): <!--cmd:land.branch-->`cargo xtask land <branch>`(席で rebase → gate → fast-forward)。無ければ gate スキルに従い、branch/SHA と検証結果を報告する。**許可は `/land` 1 回につき main が動く land 1 回**。次のユーザー発話には持ち越さない(判定は [land の許可](internal-docs/反映前テストの機械化.md#land-の許可permit))
 - **他セッションへの連絡はユーザーが頼んだ時だけ** — 頼んだかは言い回しを問わずセッションが発話から読む(メッセージを hook が止めるのは `/land` の行だけ)。子セッションは最初のターンで自分を切り離す(hook が促す。[セッション間の連絡](internal-docs/反映前テストの機械化.md#セッション間の連絡hookcontact))

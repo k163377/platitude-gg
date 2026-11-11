@@ -27,7 +27,7 @@ pub(crate) static TAKEOVER: command::Command = command::Command {
     call: "seat takeover <letter>",
     purpose: "move a letter to this session whoever holds it, tree and board as they stand",
     run_in: Where::Either,
-    needs: &["the user's instruction, in so many words, to take that letter over"],
+    needs: &["the user's instruction to take that letter over"],
     permission: Permission::Escape(crate::hook::approval::TAKEOVER_APPROVAL_FLAG),
 };
 

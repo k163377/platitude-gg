@@ -274,9 +274,11 @@ pub(super) fn pre_takeover(input: &str) -> Result<bool, String> {
     }
     deny(&format!(
         "`cargo xtask seat takeover` moves a seat away from the session that holds it, and a \
-         letter changes hands only on the user's word (CLAUDE.md ビルド・テスト). If the \
-         user asked for this letter in so many words, run the same command with {}=1 in \
-         front of it; otherwise `cargo xtask seat` hands out a free letter, and when none is \
+         letter changes hands only on the user's word (CLAUDE.md ビルド・テスト): said in \
+         this session, or passed on as the user's by another session's message or brief. \
+         A takeover this session or another one settles on by itself is nobody's word. If \
+         the user asked for this letter, run the same command with {}=1 in front of it; \
+         otherwise `cargo xtask seat` hands out a free letter, and when none is \
          free, stop and tell the user what stands in the way (`cargo xtask seats`).",
         super::approval::TAKEOVER_APPROVAL_FLAG
     ));

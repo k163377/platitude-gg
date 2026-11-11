@@ -8,10 +8,10 @@ use super::permit;
 use crate::subprocess::common_git_dir;
 use crate::subprocess::git_query;
 
-/// PreToolUse(Bash|PowerShell): the git held until the user asks for it in
-/// so many words (CLAUDE.md Git 運用), any commit from the primary
-/// checkout, and a commit in a seat the film verb stands in. Answers
-/// whether it refused, so the guard after it stays quiet when it did.
+/// PreToolUse(Bash|PowerShell): the git held until the user asks for it
+/// (CLAUDE.md Git 運用), any commit from the primary checkout, and a commit
+/// in a seat the film verb stands in. Answers whether it refused, so the
+/// guard after it stays quiet when it did.
 pub(super) fn pre_git(input: &str) -> Result<bool, String> {
     let Some(command) = string_field(input, "command") else {
         return Ok(false);
@@ -282,13 +282,17 @@ impl Offence {
             ),
             Offence::Rebase => format!(
                 "{what} rewrites the branch under the session, and a rebase runs \
-                 only when the user asks for it in so many words (CLAUDE.md Git \
-                 運用). A branch behind main is a seat's normal resting state \
-                 — leave it and report what is on the \
-                 branch. A merged seat starts over with `git reset --hard main`, \
-                 which is not a rebase and needs nothing. If the user did ask \
-                 for this one, run the same command again with \
-                 {REBASE_APPROVAL_FLAG}=1 in front of it."
+                 only on the user's instruction (CLAUDE.md Git 運用), said in \
+                 this session or passed on as the user's by another session's \
+                 message or brief. One instruction covers the rebase it names, \
+                 run at the time it names if it names one; a rebase this \
+                 session or another one settles on by itself is nobody's \
+                 instruction. A branch behind main is a seat's normal resting \
+                 state — leave it and report what is on the branch. A merged \
+                 seat starts over with `git reset --hard main`, which is not a \
+                 rebase and needs nothing. If the user did ask for this one, run \
+                 the same command again with {REBASE_APPROVAL_FLAG}=1 in front \
+                 of it."
             ),
         }
     }
