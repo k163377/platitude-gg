@@ -446,7 +446,11 @@ fn detached_oids(standing: &super::joins::WorktreeHolders) -> Vec<Oid> {
 /// ref moves, a fetch runs or the reader reloads. A walk
 /// git says nothing in for [`walk_silence`] is told about instead and left
 /// running ([`RepoSession::walk_went_silent`]); only its token ends it — a
-/// newer ask, or the session closing.
+/// newer ask, or the session closing. Its git slot stays held the while
+/// (`process::Slots`): with one slot, or as many tabs on dead storage as
+/// there are slots, every tab's git waits behind such walks, and the walks
+/// among them are not told silent, the watch counting from the spawn —
+/// rare, and accepted (user decision).
 fn walk_command(
     workdir: &std::path::Path,
     options: LogOptions,

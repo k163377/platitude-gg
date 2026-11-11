@@ -712,3 +712,29 @@ pub(super) struct PollRead {
     pub(super) outcome: RefreshOutcome,
     _held: GraphPassHeld,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A pass answered `Silent` leaves the passes still walking at once —
+    /// a fetch's settling waits them out (`RepoSession::wait_for_graph_passes`),
+    /// and must not wait on a walk git says nothing in. Any other answer
+    /// leaves them only as the answer goes with the pass's task; neither
+    /// leaves twice.
+    #[test]
+    fn only_a_silent_answer_lets_the_pass_go_before_its_task() {
+        let passes = Arc::new(GraphPasses::default());
+        let (answer, _task) = PassAnswer::owed(passes.ask(), 1, passes.enter());
+        answer.answer(RefreshOutcome::Changed);
+        assert!(!passes.is_idle(), "its task still holds its place");
+        drop(answer);
+        assert!(passes.is_idle());
+
+        let (answer, _task) = PassAnswer::owed(passes.ask(), 2, passes.enter());
+        answer.answer(RefreshOutcome::Silent);
+        assert!(passes.is_idle(), "nobody waits on a silent walk");
+        drop(answer);
+        assert!(passes.is_idle(), "and its task's end leaves nothing more");
+    }
+}
