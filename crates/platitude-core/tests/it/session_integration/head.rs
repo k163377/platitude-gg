@@ -5,6 +5,7 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
+use crate::support::integrate::conflicting_branches;
 use crate::support::remote::origin_and_clone;
 use crate::support::session::{open_unawaited, opened, write_result};
 use crate::support::wait::bounded;
@@ -172,6 +173,46 @@ async fn a_file_named_head_is_not_taken_for_it() {
     )
     .await;
     assert!(outcome.landed(), "the graph walks from HEAD: {outcome:?}");
+    session.close_and_wait().await;
+}
+
+/// While HEAD is on no branch, the record names the branch an operation
+/// keeps to the worktree: a rebase stopped on a conflict holds the branch
+/// it rewrites, as `git branch` lists it (`(no branch, rebasing main)`).
+/// `rebase --quit` from a terminal leaves HEAD where it stands and takes
+/// the branch away — a change the consumer hears as a move, though no
+/// commit moved.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_head_on_no_branch_names_the_branch_its_rebase_holds() {
+    let mut repo = conflicting_branches();
+    repo.git_expect_failure(&["rebase", "side"]);
+    let (sink, session) = opened(&repo).await;
+    sink.opening_settled(&session).await;
+    let held = |evs: &[SessionEvent]| {
+        evs.iter().rev().find_map(|e| match e {
+            SessionEvent::HeadObserved { head, .. } => Some((head.detached, head.held.clone())),
+            _ => None,
+        })
+    };
+    assert_eq!(
+        held(&sink.events.lock().unwrap()),
+        Some((true, Some("main".to_string()))),
+        "the stopped rebase holds main"
+    );
+
+    repo.git(&["rebase", "--quit"]);
+    let outcome = bounded("the tracked poll", session.refresh_poll_tracked().outcome()).await;
+    assert!(outcome.landed(), "the poll read the tree: {outcome:?}");
+    let after = sink
+        .wait_for("HEAD reported holding nothing", |evs| {
+            held(evs).filter(|(_, branch)| branch.is_none())
+        })
+        .await;
+    assert_eq!(
+        after,
+        (true, None),
+        "HEAD stayed detached, holding no branch"
+    );
     session.close_and_wait().await;
 }
 

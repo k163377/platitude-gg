@@ -257,7 +257,7 @@ impl Footprint for crate::session::TagDrift {
 
 impl Footprint for crate::refs::HeadState {
     fn heap_bytes(&self) -> usize {
-        self.branch.heap_bytes()
+        self.branch.heap_bytes() + self.held.heap_bytes()
     }
 }
 

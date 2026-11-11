@@ -256,18 +256,40 @@ pub struct HeadState {
     /// Commit HEAD resolves to; `None` for an unborn branch (empty repo).
     pub oid: Option<Oid>,
     pub detached: bool,
+    /// While HEAD is on no branch, the one a rebase or bisect standing here
+    /// keeps to the worktree (`worktrees::held_at`) — the branch git itself
+    /// still counts as this worktree's. `None` on a branch, and where no
+    /// operation holds one. Filled by the session ([`Self::with_held_at`]).
+    /// Part of the record's equality, so a record whose only change is this
+    /// one counts as moved: `rebase --quit` leaves HEAD where it was and
+    /// takes the branch away.
+    pub held: Option<String>,
 }
 
 impl HeadState {
     /// From a read's branch and commit; detached is a commit with no
     /// branch. The constructor for the reads compared in one record
-    /// (`session::standing`), but for [`head_in`]'s attached HEAD.
+    /// (`session::standing`), but for [`head_in`]'s attached HEAD. Holds
+    /// nothing until [`Self::with_held_at`] reads it.
     pub fn of(branch: Option<String>, oid: Option<Oid>) -> Self {
         Self {
             detached: branch.is_none() && oid.is_some(),
             branch,
             oid,
+            held: None,
         }
+    }
+
+    /// With [`Self::held`] read off the worktree's own git directory —
+    /// plain file reads, and only while detached.
+    #[must_use]
+    pub fn with_held_at(mut self, git_dir: &Path) -> Self {
+        self.held = if self.detached {
+            crate::worktrees::held_at(git_dir).map(|held| held.branch)
+        } else {
+            None
+        };
+        self
     }
 }
 
@@ -279,6 +301,7 @@ pub fn head_in(refs: &[RefEntry]) -> Option<HeadState> {
         branch: Some(on.short.to_string()),
         oid: Some(on.commit_oid()),
         detached: false,
+        held: None,
     })
 }
 

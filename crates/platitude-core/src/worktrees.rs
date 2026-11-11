@@ -180,17 +180,24 @@ pub async fn load(
     Ok(entries)
 }
 
-/// The branch a rebase or bisect standing in the worktree at `path` is
-/// about, read off the files git keeps for it: `rebase-merge/head-name` /
-/// `rebase-apply/head-name` (a full ref), and `BISECT_START` beside
-/// `BISECT_LOG` (a short name, or a commit where the bisect started
-/// detached). What git's own `is_shared_symref` reads before refusing the
-/// branch to any other worktree — the listing only says `detached`.
+/// [`held_at`] for the worktree at `path`. `None` also where its git
+/// directory cannot be found.
+fn held_by_operation(path: &Path) -> Option<Held> {
+    held_at(&crate::repo::git_dir_of(path)?)
+}
+
+/// The branch a rebase or bisect standing in the worktree whose own git
+/// directory is `git_dir` is about, read off the files git keeps for it:
+/// `rebase-merge/head-name` / `rebase-apply/head-name` (a full ref), and
+/// `BISECT_START` beside `BISECT_LOG` (a short name, or a commit where the
+/// bisect started detached). What git's own `is_shared_symref` reads before
+/// refusing the branch to any other worktree — the listing only says
+/// `detached` — and what `git branch` lists HEAD as (`(no branch, rebasing
+/// main)`).
 ///
 /// Plain file reads, a few per detached worktree: no git process. `None`
-/// where nothing stands, or the worktree's git directory cannot be found.
-fn held_by_operation(path: &Path) -> Option<Held> {
-    let git_dir = crate::repo::git_dir_of(path)?;
+/// where nothing stands.
+pub fn held_at(git_dir: &Path) -> Option<Held> {
     let read = |name: &str| {
         std::fs::read_to_string(git_dir.join(name))
             .ok()

@@ -54,6 +54,7 @@ fn head_at(commit: Oid) -> HeadState {
         branch: Some("main".to_string()),
         oid: Some(commit),
         detached: false,
+        held: None,
     }
 }
 
