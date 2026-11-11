@@ -21,6 +21,7 @@ Item {
         FormField {
             id: typing
             width: root.width
+            placeholder: "Ada Lovelace"
         }
         FormField {
             id: choosing
@@ -59,6 +60,13 @@ Item {
             tc.plainAccepted = 0
             tc.typingAccepted = 0
             tc.picks = 0
+        }
+
+        /// The words the empty box shows are what a screen reader is told the box wants. Qt tells it a plain box's
+        /// `placeholderText`, which a form box leaves empty to draw its own (only while a reader is active, so the
+        /// plain box is no control here).
+        function test_the_placeholder_is_what_a_screen_reader_is_told_the_box_wants() {
+            compare(typing.Accessible.description, "Ada Lovelace")
         }
 
         function test_a_plain_box_takes_a_space() {

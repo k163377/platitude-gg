@@ -275,6 +275,8 @@ Rectangle {
             color: !area.readOnly && box.focused ? Theme.textPrimary : Theme.textSecondary
             background: null
             padding: 0
+            // What a screen reader says the box wants: Qt takes it from `placeholderText`, left empty here.
+            Accessible.description: box.placeholder
             // The style's own size formula (Fusion's TextArea.qml) with this box's placeholder in it: a standing
             // message that wraps grows the text as the style's placeholder did, and the view scrolls it.
             implicitWidth: Math.max(contentWidth + leftPadding + rightPadding,

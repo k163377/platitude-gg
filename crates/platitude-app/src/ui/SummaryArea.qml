@@ -27,6 +27,8 @@ TextArea {
     color: Theme.textPrimary
     background: null
     padding: 0
+    // What a screen reader says the box wants: Qt takes it from `placeholderText`, left empty here.
+    Accessible.description: summary.placeholder
 
     // Return is the one keystroke that inserts a newline.
     Keys.onReturnPressed: (event) => { event.accepted = true }

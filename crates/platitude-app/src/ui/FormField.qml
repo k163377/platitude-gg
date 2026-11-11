@@ -32,6 +32,8 @@ TextField {
     rightPadding: Theme.spaceXs
     topPadding: 0
     bottomPadding: 0
+    // What a screen reader says the box wants: Qt takes it from `placeholderText`, left empty here.
+    Accessible.description: form.placeholder
     background: Rectangle {
         color: Theme.bgBase
         radius: Theme.radiusSm
