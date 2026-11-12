@@ -209,6 +209,9 @@ QtObject {
                 // The write barrier is behind these: the commands that clear the way and the
                 // move they carry only start once the question standing in the graph has been answered.
                 "switch-stopped-go", "switch-conflicted-go", "delete-branch-early", "delete-branch-early-far",
+                // The way cleared under the question by a write pressed from its own sampler, which reads the bar past
+                // that write and the landing it brings.
+                "switch-cleared",
                 // Ends on its own sampler: the row off the list, the write behind it settled, the rows held away.
                 "delete-gone",
                 // The list must be up before a row is pressed, and the menu before the report; one sampler owns it all.

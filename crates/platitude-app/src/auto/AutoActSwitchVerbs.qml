@@ -26,6 +26,7 @@ Item {
     readonly property var refSwitchItem: driver.refSwitchItem
     readonly property var upstreamFlow: driver.upstreamFlow
     readonly property var writeBarrier: driver.barrierWrite
+    readonly property var wipPane: driver.wipPane
 
     /// Runs `act` if it is this family's and says whether it was; each verb belongs to one family (`AutoActDriver`).
     function run(act, arg) {
@@ -91,6 +92,19 @@ Item {
             switchStoppedTimer.order = switchStoppedTimer.go ? ["stopped", "answered"] : []
             switchStoppedTimer.pressed = page.switchToRef("branch", arg.split(":")[0]) !== false
             switchStoppedTimer.start()
+        } else if (act === "switch-cleared") {
+            // The question a blocked move raised, the way cleared under it by a press of this window that does not walk
+            // away from it, and the same bar asking the plain switch (`LeaveFlow`). `<branch>:resolve --preset
+            // cherry-pick-quit` marks the unmerged index resolved and the uncommitted row stays; `<branch>:abort
+            // --preset rebase-conflict` holds the exit card's `--abort` to its end, the tree empties and the page lands
+            // on HEAD by itself (`RepoPage.activateRow`'s `followsTree`) — the bar has to stand past that landing.
+            const want = arg.split(":")
+            switchClearedTimer.how = want.length > 1 ? want[1] : ""
+            switchClearedTimer.order = ["asked", "cleared"]
+            // The exit card is the uncommitted face's: the run reads from it, as a hand reaches it.
+            page.showWip()
+            switchClearedTimer.pressed = page.switchToRef("branch", want[0]) !== false
+            switchClearedTimer.start()
         } else if (act === "switch-remote") {
             page.switchToRef("remote", arg)
         } else if (act === "switch-remote-twice") {
@@ -458,6 +472,52 @@ Item {
                 return
             op.stop()
             switchStoppedLandedTimer.start()
+        }
+    }
+    // The way cleared under the standing question from this window (`switch-cleared`): the bar as it stands once
+    // nothing is in the way, read past the write and past the landing an emptied tree makes.
+    PageStage {
+        id: switchClearedTimer
+        name: "switch_cleared"
+        /// `resolve` (the bucket's `Mark all resolved`) or `abort` (the exit card's `--abort`).
+        property string how: ""
+        /// The press's own answer (`switchToRef`): false is a press turned away, which raised no bar.
+        property bool pressed: false
+        function line() {
+            return "switch_cleared bar=" + graphPane.askCard.open
+                   + " code=" + graphPane.askCode
+                   + " neutral=" + graphPane.askNeutral
+                   + " hold=" + graphPane.askHold
+                   + " op=" + worktree.opCommand
+                   + " detail=" + graphPane.askDetail
+        }
+        onTriggered: {
+            const op = switchClearedTimer
+            if (op.at("start")) {
+                if (!Awaited.all("switch_cleared_asked", { "asked": op.pressed && graphPane.askCard.settled }))
+                    return
+                // The bar as the move raised it, before the way clears.
+                if (!op.advance("asked", () => op.line()))
+                    return
+            }
+            if (op.at("asked")) {
+                if (!op.input("cleared", () => driver.pressWrite("switch-cleared", () => {
+                        if (op.how === "abort")
+                            return wipPane.completeOpExit("--abort")
+                        repoTab.stageConflicted()
+                        return true
+                    })))
+                    return
+            }
+            op.complete({
+                "name": "switch_cleared_ready",
+                "when": () => ({
+                    "written": driver.wroteAndSettled(),
+                    "clear": !worktree.movesBlocked,
+                    "landed": !page.pageLanding && (op.how !== "abort" || !worktree.wipRowStands),
+                    "bar": !graphPane.askCard.open || graphPane.askCard.settled,
+                    "page": PageSettled.settled(page) }),
+                "report": () => op.line() })
         }
     }
     // Where the answer put the reader: past the write's answer, and the stash count waited for (`switch-lands`).

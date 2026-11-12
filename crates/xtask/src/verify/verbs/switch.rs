@@ -195,4 +195,19 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "switch_stopped_landed branch=feature/clash op= conflicts=0 stashes=1 wanted=1 log=false",
     },
+    // The way cleared under the standing question from this window: the
+    // bar stands and asks the plain switch, its line naming what went.
+    // `:abort --preset rebase-conflict` empties the tree, so the page lands
+    // on HEAD by itself first — a landing that took the question down
+    // reads `bar=false`, and one that left the stash words reads
+    // `code=stash`. `:resolve --preset cherry-pick-quit` keeps the
+    // uncommitted row and has no operation to name.
+    Verb {
+        name: "switch-cleared",
+        when: &[(
+            Arg::IsOn("main:abort", "rebase-conflict"),
+            "switch_cleared bar=true code=switch neutral=true hold=false op= detail=The rebase has ended.",
+        )],
+        plain: "switch_cleared bar=true code=switch neutral=true hold=false op= detail=No conflicts are left.",
+    },
 ];
