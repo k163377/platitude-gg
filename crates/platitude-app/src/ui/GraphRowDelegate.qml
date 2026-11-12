@@ -224,7 +224,7 @@ Item {
             anchors.top: parent.top
             anchors.bottom: parent.bottom
             width: Metrics.laneStroke
-            color: rowItem.ListView.view && rowItem.ListView.view.askDanger ? Theme.danger : Theme.warning
+            color: rowItem.ListView.view ? rowItem.ListView.view.askTone : Theme.warning
         }
     }
     // The column boundaries' lines again, over the grounds above and under the ink below (`GraphDividerLines`): the

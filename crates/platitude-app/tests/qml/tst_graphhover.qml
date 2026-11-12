@@ -178,7 +178,7 @@ Item {
             property string namingRefusedWhy: ""
             property string namingRefusedMark: ""
             property string askOid: ""
-            property bool askDanger: false
+            property color askTone: Theme.warning
             property bool findOn: false
             property var chosenOids: ({})
             property int chosenCount: 0

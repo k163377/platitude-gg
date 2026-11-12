@@ -139,9 +139,9 @@ AppListView {
     /// The rows a reread wrote are being laid out where the view does not take them back (`GraphRowWalk.shiftRows`):
     /// a row that moves now moved as the reread's, and what the hand is inside stays (`HandWatch.rowsMoved`).
     property bool rereading: false
-    // Which row the standing question is about, and in which tone; the words are on the bar.
+    // Which row the standing question is about, and the bar's tone it wears (`AskBar.tone`); the words are on the bar.
     property string askOid: ""
-    property bool askDanger: false
+    property color askTone: Theme.warning
     // Rows dim while a search is on; written by the pane, which owns the find card.
     property bool findOn: false
     // The row the worktree stands on writes its message in the branch's blue, as its stand-in does (`GraphHeadPin`),

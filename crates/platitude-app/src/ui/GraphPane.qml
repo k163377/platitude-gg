@@ -273,7 +273,6 @@ Rectangle {
         askBar.hold = hold
         askBar.plainHold = false
         askBar.tip = tip
-        graphList.askDanger = danger
         graphList.askOid = oidHex === undefined ? "" : oidHex
         // Last of all: dressed, then raised — so nothing on a bar the reader can see is ever written (`AskBar.open`).
         askBar.open = true
@@ -457,6 +456,7 @@ Rectangle {
         }
         graphModel: graphArea.graphModel
         worktree: graphArea.worktree
+        askTone: askBar.tone
         columns: metrics
         dividers: columnDividers
         findOn: findBar.findOn
