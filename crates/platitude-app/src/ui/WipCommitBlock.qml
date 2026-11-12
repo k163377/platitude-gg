@@ -297,8 +297,12 @@ Flickable {
                 // (`WipPane.pressCommit`) reads this. Nor before the
                 // identity's read has landed: `identityReady` starts true so the band stays quiet meanwhile — nor
                 // after it failed, which is an answer too (`identityUnread`; git's words are in the command log's error
-                // line, and the button comes back at the next read that lands).
-                enabled: !block.composeHidden && block.repoTab.busyCount === 0
+                // line, and the button comes back at the next read that lands). Nor while `commitWaits` holds:
+                // another write is out — queued ones too, whose work it would carry — **or a stage or unstage
+                // press stands** (`stagingUnseen`): the rows move at the press, ahead of git, and are the press's
+                // word until the status after it is drawn — git's own then, and what Commit records
+                // (デザイン規約 §バケツごとの一覧と、ペインの分け方).
+                enabled: !block.composeHidden && !block.repoTab.commitWaits
                          && block.repoTab.identityRead && !block.repoTab.identityUnread
                          && block.repoTab.identityReady
                          && block.worktree.conflictCount === 0 && !block.amendEmpties
@@ -314,7 +318,12 @@ Flickable {
                 readonly property TipAsk commitTip: TipAsk {
                     target: commitButton
                     asked: (commitHover.containsMouse || block.commitPointedAt) && !commitButton.enabled
-                    words: !block.repoTab.identityRead
+                    // The button's own waits first — a later reason would name something the press is not waiting
+                    // on: a stage press standing (`Words.stagingWait`, git running or not), then another write
+                    // out, queued ones too (`commitWaits`).
+                    words: block.repoTab.stagingUnseen
+                           ? Words.stagingWait
+                           : block.repoTab.commitWaits || !block.repoTab.identityRead
                            ? Words.otherCommandRunning
                            : block.repoTab.identityUnread
                            ? qsTr("The name and email for commits could not be read")

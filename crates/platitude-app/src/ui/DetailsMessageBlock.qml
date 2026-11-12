@@ -22,6 +22,7 @@ Flickable {
     required property bool busy
     required property bool published
     required property bool amendEmpties
+    required property bool amendWaits
     required property bool intoPlan
     required property bool messageDirty
     required property string signatureKind
@@ -200,9 +201,12 @@ Flickable {
                 busy: block.busy
                 canSave: msgEditor.subjectText.trim() !== ""
                 // The save is `commit --amend`, which takes what is staged too: one that would leave HEAD changing
-                // nothing is git's to refuse, so it is refused first, as the commit button refuses it. A plan's
-                // reword runs nothing here.
-                refusedWhy: block.amendEmpties && !block.intoPlan ? Words.amendEmpties : ""
+                // nothing is git's to refuse, so it is refused first, as the commit button refuses it — and none goes
+                // while a stage press stands, whose rows are not yet git's (`amendWaits`). A plan's reword runs
+                // nothing here.
+                refusedWhy: block.intoPlan ? ""
+                            : block.amendWaits ? Words.stagingWait
+                            : block.amendEmpties ? Words.amendEmpties : ""
                 pointedAt: block.savePointedAt
                 committerFace: block.committerFace
                 committerFaceUrl: block.committerFaceUrl

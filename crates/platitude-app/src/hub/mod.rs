@@ -38,7 +38,7 @@ mod saves;
 mod sink;
 mod tabs;
 #[cfg(test)]
-mod testkit;
+pub(crate) mod testkit;
 
 pub use feed::{Feed, Feeds, attach_feed, attached};
 pub use msg::{
@@ -46,7 +46,10 @@ pub use msg::{
     OpenMsg, PlanMsg, RefsMsg, StashList, StateMsg, StatusMsg, TabMsg, WorktreeList,
 };
 pub use prefs::AvatarUrls;
-pub use tabs::{from_session, listing_applied, stand_in, with_session};
+pub use tabs::{
+    from_session, listing_applied, stage_ahead, stand_in, status_drawn, status_picture,
+    with_session,
+};
 
 /// The commit message typed into a tab and not committed yet — the one
 /// thing that survives `Hub::release_tab`, since no repository can be
@@ -93,6 +96,11 @@ struct Tab {
     /// outlives the page drawing it. Reset with the session
     /// (`Hub::release_tab`).
     stand_in: crate::ops::StandIn,
+    /// The file rows a stage or unstage moved ahead of git, and the statuses
+    /// each of the four readers has drawn (`ops::StageAhead`). Held here so
+    /// each reader can ask as it draws, in a drain of its own. Reset with the
+    /// session.
+    stage_ahead: crate::ops::StageAhead,
 }
 
 /// Application-wide state living on the Qt main thread.

@@ -1405,6 +1405,26 @@ FocusScope {
         page.syncGone()
     }
 
+    // ---- what the window is already showing as staged ------------------
+    //
+    // **A stage moves its rows at the press** (デザイン規約 §バケツごとの一覧と、ペインの分け方): the rows, the buckets'
+    // counts and the Commit button's file count move on the press's turn, and git runs behind it. **Which rows, and for
+    // how long, is `ops::StageAhead`'s** (per tab in the hub); each move of what it holds moves `RepoTab.stagingSeq`,
+    // and the three lists and the counts draw the statuses they hold again on that turn. The diff open on a moved file
+    // follows on that turn, or once the status after the presses is drawn where it lands on what git writes
+    // (`followEmptySide`).
+    readonly property int stagingSeq: repoTab.stagingSeq
+    onStagingSeqChanged: page.restage()
+    function restage() {
+        conflictsModel.restage()
+        unstagedModel.restage()
+        stagedModel.restage()
+        worktree.restage()
+        // A press that moved no row moves no list: the neighbour is noted here too (`noteDiffNeighbour`).
+        page.noteDiffNeighbour()
+        page.followEmptySide()
+    }
+
     /// Automation: holds a row taken away before git answers, for its picture — asked before the press, since a demo
     /// repository answers before the grab (verify-ui スキル §壊れない動詞の実装と反復). Held by withholding
     /// `listingDrawn`, the news the owner puts the rows down on.
@@ -2336,16 +2356,26 @@ FocusScope {
                                                    diffModel.fingerprint)
     }
     // ---- what the reader lands on when a side runs out ---------------
-    /// The open file's neighbour under the same heading, as `<bucket>:<path>` (`NavSectionModel.besidePath`). Noted
-    /// while the file is still there (on every `changed` of the list, only while `holdsPath` says so): by the time the
-    /// write answers the file has moved, and the place it left is gone from the list. **Asked of the model**
-    /// (`besidePath` / `holdsPath` / `bucketOf`), never by walking the view: a `ListView` holds no off-screen rows, and
-    /// the neighbour would come back null.
+    /// The open file's neighbour under the same heading, as `<bucket>:<path>` (`NavSectionModel.besidePath`, which
+    /// passes over the files a stage press still reaches). Noted while the file is still there (on every `changed` of
+    /// the list and every move of the presses, `restage`, only while `stillHere` says so): once the file has gone, the
+    /// place it left is gone from the list. **Asked of the model** (`besidePath` / `holdsPath` / `bucketOf`), never by
+    /// walking the view: a `ListView` holds no off-screen rows, and the neighbour would come back null.
     property string diffNeighbour: ""
     function noteDiffNeighbour() {
-        if (!page.diffShown || page.diffKind === "commit" || !page.wipUnstaged.holdsPath(page.diffKind, page.diffPath))
+        if (!page.diffShown || page.diffKind === "commit" || !page.stillHere(page.diffKind, page.diffPath))
             return
         page.diffNeighbour = page.wipUnstaged.besidePath(page.diffKind, page.diffPath)
+    }
+    /// Whether `bucket` still holds `path` for the pane's purposes: on the list, and reached by no stage press standing
+    /// — a row the press could not move ahead of git (`ops::stage_ahead`'s `moved`: a file on both sides, a staged
+    /// rename, a conflict, the rows `Stage all` leaves to the status) leaves its side with the status after it, so
+    /// the pane walks on as one would have at that status. A gitlink may stay where it is (its own changes stay
+    /// unstaged), which `StageAhead::reaches` handles: the pane waits on it for the status. Read off `repoTab`, not a
+    /// binding: `restage` runs in
+    /// `onStagingSeqChanged`, ahead of the bindings the same notify moves (rules-refs/app-ui.md の `onXChanged` の行).
+    function stillHere(bucket, path) {
+        return page.wipUnstaged.holdsPath(bucket, path) && !(page.wipWritable && repoTab.pressReaches(bucket, path))
     }
     /// The open file's side has run out (staged, unstaged, discarded, committed), so the pane moves
     /// (デザイン規約 §diff の中のステージ; user decision — ask before changing): the side's next file under the same
@@ -2354,23 +2384,36 @@ FocusScope {
     /// reason to stand gone. Both ways (staged → unstaged too). "Next" is the right panel's order, untracked inside
     /// the unstaged heading (`NavItem.group`), so an untracked file can be the neighbour.
     ///
-    /// Driven by the file list's `changed`, once `holdsPath` turns false (the guard below; there is no close-when-empty
-    /// path), not by the re-read coming back empty: that read runs beside the status (`load_diff` / `publish_status`)
-    /// and can land before the list has moved — asking the list from before the write for the next file, it opens the
-    /// emptied side again and stops — and some sides never read empty (an untracked file staged whole, a picture).
-    /// A file empty from the start stays in the list, so opening it closes nothing. Headless: `diff-follow`.
+    /// Driven by the file list's `changed`, once the file is no longer there (the guard below; there is no
+    /// close-when-empty path), not by the re-read coming back empty: that read runs beside the status (`load_diff` /
+    /// `publish_status`) and can land before the list has moved — asking the list from before the write for the next
+    /// file, it opens the emptied side again and stops — and some sides never read empty (an untracked file staged
+    /// whole, a picture). A file empty from the start stays in the list, so opening it closes nothing.
+    /// Headless: `diff-follow`.
+    ///
+    /// **A stage press takes the file off its side at the press** (デザイン規約 §バケツごとの一覧と、ペインの分け方),
+    /// ahead of git — moved there, or reached and left to the status (`stillHere`) — and the pane follows on that
+    /// turn where what it lands on is git's already: the neighbour, which no press reaches. The file's own new side
+    /// holds nothing of it until git has run, so landing there waits for the status after the press that reaches the
+    /// file (`pressReaches`; `stagingSeq` moves as that press is let go, `restage`) — that press only: a file taken by
+    /// an outside change while another file's press stands lands at once. So the pane lands where moving at every
+    /// status does: the file and its neighbour gone in one status (`Stage all`, chosen rows) take it to the file's own
+    /// new side, and files pressed one by one walk it on to the last one's. A press git refuses puts the rows back and
+    /// leaves the pane on the neighbour it moved to. Headless: `diff-walk`, `stage-ahead`.
     function followEmptySide() {
-        if (!page.diffShown || page.diffKind === "commit" || page.wipUnstaged.holdsPath(page.diffKind, page.diffPath))
+        if (!page.diffShown || page.diffKind === "commit" || page.stillHere(page.diffKind, page.diffPath))
             return
         const cut = page.diffNeighbour.indexOf(":")
         if (cut > 0) {
             const bucket = page.diffNeighbour.substring(0, cut)
             const path = page.diffNeighbour.substring(cut + 1)
-            if (page.wipUnstaged.holdsPath(bucket, path)) {
+            if (page.stillHere(bucket, path)) {
                 page.openDiff(bucket, path, page.wipUnstaged.origOf(path))
                 return
             }
         }
+        if (page.wipWritable && repoTab.pressReaches(page.diffKind, page.diffPath))
+            return
         const moved = page.wipUnstaged.bucketOf(page.diffPath)
         if (moved !== "") {
             page.openDiff(moved, page.diffPath, page.wipUnstaged.origOf(page.diffPath))
@@ -2387,7 +2430,15 @@ FocusScope {
     /// (`absorbWriteResult`).
     property bool diffAwaits: false
     readonly property bool diffSettling:
-        page.diffAwaits || repoTab.busyCount > 0 || diffModel.loading
+        page.diffAwaits || repoTab.busyCount > 0 || diffModel.loading || page.diffMoving
+    /// The open file has left the side it was read on at a stage press (`stillHere`) and the pane has not moved off it:
+    /// it waits there for the status after that press, to land on the file's own new side (`followEmptySide`). Its
+    /// rows are of a side the press has emptied, so its marks wait until the pane lands — past git's answer, where the
+    /// row's own mark takes a press again (`WipPane.stageOpen`). Read again as the presses move (`stagingSeq`): the
+    /// models' answers raise no notify.
+    readonly property bool diffMoving:
+        page.stagingSeq >= 0 && page.diffShown && page.diffKind !== "commit" && page.wipWritable
+        && !page.stillHere(page.diffKind, page.diffPath)
     /// The tree moved, so the open file is stale — whoever moved it. With only the diff's own writes asking for a
     /// read, a line staged and then taken back with the file row's `−` would stay gone from both sides; moved by
     /// another window or a terminal, the old rows' `+` would be refused by git (the fingerprint). The callers already
@@ -3667,7 +3718,8 @@ FocusScope {
     /// answer (this window) or by `pollDiff` (anyone else).
     property int seenTreeRev: -1
     // **The tree was read** — heard from the worktree model, not the list, which says `changed` only when its rows
-    // differ: a status that moved no row is exactly the one this has to hear about.
+    // differ: a status that moved no row is exactly the one this has to hear about. Also said where the counts were
+    // drawn again with the stage presses in them (`restage`): no read, so `treeRevision` does not move.
     Connections {
         target: worktree
         function onChanged() {
@@ -4069,6 +4121,7 @@ FocusScope {
                         // Only HEAD's own commit is saved, and only over something staged can that empty it.
                         amendEmpties: page.messageEdit === "amend" && worktree.stagedCount > 0
                                       && repoTab.amendEmpties
+                        amendWaits: page.messageEdit === "amend" && repoTab.stagingUnseen
                         signatureKind: page.selectedSignatureKind
                         signatureCode: page.selectedSignatureCode
                         signatureSigner: page.selectedSignatureSigner

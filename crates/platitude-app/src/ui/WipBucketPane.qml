@@ -42,6 +42,9 @@ ColumnLayout {
     /// this list sees are the read's, which the pane tells the hand.
     readonly property bool kept: bucketPane.pane.rowKeep.busy
 
+    /// Automation: this bucket's whole-bucket button as drawn (`WipBucketHeader.moveAllLive`, `moveAllSays`).
+    readonly property bool moveAllLive: bucketHead.moveAllLive
+    readonly property bool moveAllSays: bucketHead.moveAllSays
     /// Automation: press this bucket's whole-bucket button where a hand presses it (`WipBucketHeader.moveAll`).
     function moveAll() {
         return bucketHead.moveAll()
@@ -154,6 +157,7 @@ ColumnLayout {
             }
             onFolderClicked: key => bucketPane.model.toggleFolder(key)
             stagePeer: bucketPane.pane.stagePeerOf(bucket, fullName)
+            stageOpen: bucketPane.pane.stageOpen(fullName)
             onStageHovered: (bucket, path, on) => {
                 if (on)
                     bucketPane.pane.showStageTools(bucket, path)

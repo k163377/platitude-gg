@@ -11,24 +11,57 @@ impl NavSectionModel {
     }
 
     /// Where the reader lands when `path` leaves `bucket`: the next file
-    /// under the same heading, else the previous. Empty when the heading
-    /// holds nothing else or the path is not in it — the caller asks while
-    /// it still is (`RepoPage.noteDiffNeighbour`). The answer carries its
-    /// bucket: untracked files sit under the unstaged heading
+    /// under the same heading, else the previous, passing over the rows
+    /// `going` names by bucket and path — ones a stage press standing
+    /// reaches, which leave with the status after it
+    /// (`StageAhead::reaches`), as one would have at that status. Empty when
+    /// the heading holds nothing else or the path is not in it — the caller
+    /// asks while it still is (`RepoPage.noteDiffNeighbour`). The answer
+    /// carries its bucket: untracked files sit under the unstaged heading
     /// (`NavItem.group`).
-    pub(super) fn beside(&self, bucket: &str, path: &str) -> String {
+    pub(super) fn beside(
+        &self,
+        bucket: &str,
+        path: &str,
+        going: impl Fn(&str, &str) -> bool,
+    ) -> String {
         let rows: Vec<Row> = self.rows().collect();
         let Some(at) = rows.iter().position(|row| self.is(*row, bucket, path)) else {
             return String::new();
         };
         let group = self.field(rows[at], Role::Group).as_str().to_string();
-        let under = |row: &&Row| self.field(**row, Role::Group).as_str() == group;
+        let under = |row: &&Row| {
+            self.field(**row, Role::Group).as_str() == group
+                && !going(
+                    self.field(**row, Role::Bucket).as_str(),
+                    self.field(**row, Role::Full).as_str(),
+                )
+        };
         rows[at + 1..]
             .iter()
             .find(under)
             .or_else(|| rows[..at].iter().rev().find(under))
             .map(|row| self.keyed(*row))
             .unwrap_or_default()
+    }
+
+    /// [`Self::beside`], passing over the rows a stage press standing
+    /// reaches (`StageAhead::reaches`) — in a list of this window's own tree
+    /// only: another worktree's rows are none of the presses'. A tab the hub
+    /// does not hold has no press standing over it.
+    pub(super) fn beside_past_presses(&self, bucket: &str, path: &str) -> String {
+        if crate::ops::Reader::of_run(&self.run).is_some() {
+            let mut answer = None;
+            crate::hub::stage_ahead(self.tab_id, |ahead| {
+                answer = Some(self.beside(bucket, path, |row_bucket, row| {
+                    ahead.reaches(row_bucket, row)
+                }));
+            });
+            if let Some(answer) = answer {
+                return answer;
+            }
+        }
+        self.beside(bucket, path, |_, _| false)
     }
 
     /// The file row on screen at `at` as `<bucket>:<path>`; empty for a

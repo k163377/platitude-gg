@@ -27,6 +27,10 @@ Rectangle {
     /// §アイコンの席「大文字だけの見出しの語」); its count goes with it.
     readonly property real capsLift: -WordFace.capitalDrop(bucketCaption)
 
+    /// Automation: whether the whole-bucket button takes a press, and whether it has words for the hand, as drawn — a
+    /// whole bucket's press out holds both down and silent (`stage-all`).
+    readonly property bool moveAllLive: moveAllButton.visible && moveAllButton.enabled
+    readonly property bool moveAllSays: moveAllButton.tip !== ""
     /// Automation: presses the whole-bucket button. Answers whether it went — a disabled one asks for no write, and a
     /// run counting it as a press would wait for one.
     function moveAll() {
@@ -92,8 +96,10 @@ Rectangle {
             // Gives its seat to the tool's wait (規約 §conflict を外部ツールへ渡す); a press then would only queue
             // behind the tool.
             visible: !bucketHeader.waitingForTool
-            // The heading stands even when empty, so the button says it cannot move anything (§無効).
-            enabled: bucketHeader.count > 0
+            // The heading stands even when empty, so the button says it cannot move anything (§無効). A whole bucket's
+            // press waits for git's answer before another (`RepoTab.stagingAllOut` — the rows it moved wait the same
+            // way, `WipPane.stageOpen`).
+            enabled: bucketHeader.count > 0 && !bucketHeader.repoTab.stagingAllOut
             // `git add` is a different act on a conflicted file, so the row's word carried up to the bucket
             // (規約 §diff の中のステージ).
             text: bucketHeader.section === "staged"
@@ -105,7 +111,10 @@ Rectangle {
             // As in NavHeader: a `ToolButton`'s own height is taller than the `rowHeight` band, and the whole row then
             // sinks through the band's floor.
             implicitHeight: Theme.iconLg
-            tip: bucketHeader.section === "staged"
+            // Disabled, it carries no tooltip (§無効): `HoverToolButton` asks for one whatever its state.
+            tip: !moveAllButton.enabled
+                 ? ""
+                 : bucketHeader.section === "staged"
                  ? qsTr("Unstage everything")
                  : bucketHeader.section === "conflicts"
                  ? qsTr("Tell git every conflict has been dealt with")

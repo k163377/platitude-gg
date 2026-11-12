@@ -110,6 +110,10 @@ pub enum TabMsg {
     /// read the settle does not wait for — the tip's reach — may land
     /// after.
     ReadsDrained,
+    /// Pushed by the hub when a status reader drew and a stage press was let
+    /// go with it (`ops::StageAhead::take_notice`): the tab reads the presses
+    /// again — its Commit button waits on them (`ops_stage::read_writes_out`).
+    PressLetGo,
     /// A branch move would take `lost` commits off the branch and was not
     /// made.
     MoveNeedsAsk {

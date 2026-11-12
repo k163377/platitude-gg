@@ -97,10 +97,13 @@ impl NavSectionModel {
     #[qsignal]
     pub(super) fn changed(&mut self);
 
-    /// A read is about to move this list's rows (`drain`): what moves on
-    /// screen from here to `rows_arrived` is the read's, no reader's doing
+    /// A read is about to move this list's rows (`drain`) — or the stage
+    /// presses are, drawing the status again ahead of git in place of the
+    /// status a press brings (`restage`): what moves on screen from here to
+    /// `rows_arrived` moves as an arrival does, not as the reader's doing
     /// (デザイン規約 §hover のツールチップ「外乱では閉じない」). Not said
-    /// for what the reader moves — a filter, a fold, the tree toggle.
+    /// for what the reader moves in the list itself — a filter, a fold, the
+    /// tree toggle.
     #[qsignal]
     pub(super) fn rows_arriving(&mut self);
 
@@ -174,6 +177,7 @@ impl NavSectionModel {
     #[qslot]
     fn restand(&mut self) {
         self.take(Source::Waiting);
+        self.staged_from = None;
         self.eol_marks = Arc::default();
         self.carried_at = String::new();
         self.carried_name = String::new();
@@ -184,6 +188,18 @@ impl NavSectionModel {
     #[qslot]
     fn drain(&mut self) {
         self.take_feeds();
+    }
+
+    /// The stage presses out over this tree moved (`RepoTab.stagingSeq`): a
+    /// press moved rows at once, or git's answer put them back. Draws the
+    /// status this list holds again, on the same turn — a status read's own
+    /// moves, said the same way (`rows_arriving` … `rows_arrived`), as that is
+    /// what they stand in for (デザイン規約 §バケツごとの一覧と、ペインの分け方).
+    #[qslot]
+    fn restage(&mut self) {
+        if self.restage_files() {
+            self.show_arrival();
+        }
     }
 
     /// Shows a row as already gone: the name the page has just asked git
@@ -809,12 +825,14 @@ impl NavSectionModel {
         self.holds(&bucket, &path)
     }
 
-    /// The row beside `path` under the same heading, as `<bucket>:<path>`
-    /// (see [`Self::beside`]). What the diff pane reads next when the file
-    /// it is on leaves the side being read.
+    /// The row beside `path` under the same heading, as `<bucket>:<path>`,
+    /// past the rows a stage press still reaches (see
+    /// [`Self::beside_past_presses`]): where the page moves the open diff
+    /// when its file leaves the side it was read on
+    /// (`RepoPage.followEmptySide`).
     #[qslot]
     fn beside_path(&self, bucket: String, path: String) -> String {
-        self.beside(&bucket, &path)
+        self.beside_past_presses(&bucket, &path)
     }
 
     /// The file row the arrows land on, `way` steps from `path` in `bucket`

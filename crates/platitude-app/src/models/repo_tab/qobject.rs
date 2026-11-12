@@ -123,6 +123,26 @@ impl RepoTab {
         Member = gone_worktree_branch,
         Notify = changed
     );
+    // The file rows a stage moved ahead of git (デザイン規約 §バケツごとの
+    // 一覧と、ペインの分け方): `stagingSeq` moves whenever they or what they
+    // hold back move; when they go back is `ops::StageAhead`'s.
+    qproperty!("stagingSeq", Member = staging_seq, Notify = changed);
+    qproperty!("stagingAllOut", Member = staging_all_out, Notify = changed);
+    // The paths whose rows' marks wait for git's answer; `stagingAllOut`
+    // stands for every row (`ops::StageAhead::moving_paths`).
+    qproperty!(
+        "stagingMovingPaths",
+        Member = staging_moving,
+        Notify = changed
+    );
+    qproperty!(
+        "commitWaits",
+        Member = commit_waits,
+        Notify = commit_waits_changed
+    );
+    // A stage or unstage press the screen has not caught up with — Commit
+    // waits on it (`ops::StageAhead::unseen`).
+    qproperty!("stagingUnseen", Member = staging_unseen, Notify = changed);
     qproperty!("authorName", Member = author_name, Notify = changed);
     qproperty!("authorEmail", Member = author_email, Notify = changed);
     qproperty!("authorAvatar", Member = author_avatar, Notify = changed);
@@ -310,6 +330,13 @@ impl RepoTab {
     /// its own bookkeeping.
     #[qsignal]
     pub(super) fn settling_changed(&mut self);
+
+    /// `commitWaits` moved. Its own, for `settling`'s reason: a write
+    /// counts out from the slot that asks for it (`ask_session`) and a press
+    /// stands from the slot that pressed (`pressed_ahead`), and `changed`
+    /// there would run every reader of this tab before the slot is done.
+    #[qsignal]
+    pub(super) fn commit_waits_changed(&mut self);
 
     /// The worktree this tab stands in would not open, and the repository has
     /// its own to stand in instead (`Hub::home_worktree`); the strip moves the
@@ -577,24 +604,34 @@ impl RepoTab {
     #[qslot]
     fn restand(&mut self) {
         let was_settling = self.settling;
+        let waiting = self.commit_waits;
         self.forget_the_worktree();
         self.changed();
         if was_settling {
             self.settling_changed();
         }
+        if self.commit_waits != waiting {
+            self.commit_waits_changed();
+        }
     }
 
-    /// A write the page had another model ask for in this same turn
-    /// (`DiscardModel.restoreAt`), counted out from its acceptance as the
-    /// tab's own are (`ask_session`): queued behind another write, it
-    /// would otherwise only count from its start.
+    /// A write the page had another model ask for in this same turn, counted
+    /// out from its acceptance (`counted_out`): queued behind another write,
+    /// it would otherwise only count from its start.
     #[qslot]
     fn count_write(&mut self, id: i32) {
-        if let Ok(id) = u64::try_from(id)
-            && id > 0
-            && self.unsettle(id)
-        {
+        let Ok(id) = u64::try_from(id) else {
+            return;
+        };
+        if id == 0 {
+            return;
+        }
+        let waiting = self.commit_waits;
+        if self.counted_out(id) {
             self.settling_changed();
+        }
+        if self.commit_waits != waiting {
+            self.commit_waits_changed();
         }
     }
 
@@ -702,26 +739,31 @@ impl RepoTab {
     // The session serializes these and reports progress through
     // `busyCount`. Paths arrive one per call (see `pending_paths`).
 
+    // Whole files staged or unstaged move their rows at the press
+    // (`ops_stage::move_paths`); the notify is what has the page draw them.
+
     #[qslot]
     fn stage_path(&mut self, path: String) {
-        self.ask_session(|s| s.stage_paths(vec![path]));
+        self.press_told(|tab| tab.move_paths(crate::ops::Side::Stage, vec![path]));
     }
 
     #[qslot]
     fn unstage_path(&mut self, path: String) {
-        self.ask_session(|s| s.unstage_paths(vec![path]));
+        self.press_told(|tab| tab.move_paths(crate::ops::Side::Unstage, vec![path]));
     }
 
     /// The same two over the gathered set: one git command however many
     /// rows were chosen (デザイン規約 §バケツごとの一覧と、ペインの分け方).
     #[qslot]
     fn stage_paths(&mut self) {
-        self.drain_paths(|s, paths| s.stage_paths(paths));
+        let paths = std::mem::take(&mut self.pending_paths);
+        self.press_told(|tab| tab.move_paths(crate::ops::Side::Stage, paths));
     }
 
     #[qslot]
     fn unstage_paths(&mut self) {
-        self.drain_paths(|s, paths| s.unstage_paths(paths));
+        let paths = std::mem::take(&mut self.pending_paths);
+        self.press_told(|tab| tab.move_paths(crate::ops::Side::Unstage, paths));
     }
 
     /// Opens a set of paths for the next write, filled one per call by
@@ -757,12 +799,21 @@ impl RepoTab {
 
     #[qslot]
     fn stage_all(&mut self) {
-        self.ask_session(|s| s.stage_all());
+        self.press_told(|tab| tab.move_all(crate::ops::Side::Stage));
     }
 
     #[qslot]
     fn unstage_all(&mut self) {
-        self.ask_session(|s| s.unstage_all());
+        self.press_told(|tab| tab.move_all(crate::ops::Side::Unstage));
+    }
+
+    /// Whether a stage press standing reaches `path`'s row in `bucket`
+    /// (`StageAhead::reaches`): that row leaves its side with the status
+    /// after the press, and the open diff walks on past it
+    /// (`RepoPage.stillHere`).
+    #[qslot]
+    fn press_reaches(&self, bucket: String, path: String) -> bool {
+        crate::hub::stage_ahead(self.tab_id, |ahead| ahead.reaches(&bucket, &path))
     }
 
     /// `git add` over every conflicted path — the conflicted bucket's
@@ -813,6 +864,9 @@ impl RepoTab {
     ///
     /// `reset_author` only means anything on an amend: it puts the current
     /// identity on a commit written under another one.
+    ///
+    /// Not while a stage or unstage press stands (`commitWaits`;
+    /// `commit_from_fields` is the belt).
     #[qslot]
     fn commit(&mut self, subject: String, body: String, amend: bool, reset_author: bool) {
         self.commit_from_fields(subject, body, amend, reset_author);
@@ -1359,15 +1413,10 @@ impl RepoTab {
         self.ask_session(|s| s.drop_commit(oid));
     }
 
-    /// Replaces one commit's message. HEAD is amended; anything older is
-    /// replayed, which rewrites every commit after it.
+    /// Replaces one commit's message (`reword_from_fields`).
     #[qslot]
     fn reword_commit(&mut self, oid: String, subject: String, body: String) {
-        let message = platitude_core::commit::join_message(&subject, &body);
-        if message.is_empty() {
-            return;
-        }
-        self.ask_session(|s| s.reword(oid, message));
+        self.reword_from_fields(oid, subject, body);
     }
 
     #[qslot]

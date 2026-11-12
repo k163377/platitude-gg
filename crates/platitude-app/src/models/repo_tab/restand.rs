@@ -94,9 +94,17 @@ impl RepoTab {
         // The retired sink never delivers the settles still owed.
         self.unsettled.clear();
         self.settling = false;
+        // Nor the answers the stage presses wait for: they went with the
+        // session (`ops::StageAhead::session_gone`). The lists draw the next
+        // session's status as it lands; nothing here has them draw again.
+        self.outstanding.clear();
+        self.staging_all_out = false;
+        self.staging_moving = Vec::new();
+        self.staging_unseen = false;
         // Last, the one thing this leaves standing: one command in flight
         // until the new session says where it is (`RepoTab::standing`).
         self.busy_count = 1;
+        self.commit_waits = true;
         self.standing = true;
     }
 }

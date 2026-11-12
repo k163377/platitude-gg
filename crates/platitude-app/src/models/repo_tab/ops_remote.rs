@@ -13,7 +13,14 @@ impl RepoTab {
     /// The press writes down its id (`ops::TreeOut`): the reading that
     /// finds the tree empty comes long after the answer, when only the
     /// press can say whose doing it was.
+    ///
+    /// **Not while a stage or unstage press stands**
+    /// ([`Self::staging_turns_away`]).
     pub(super) fn stash_push(&mut self, message: String) {
+        if self.staging_turns_away("stash") {
+            self.stash_out.asked(None);
+            return;
+        }
         let options = platitude_core::stash::PushOptions {
             include_untracked: true,
             keep_index: false,

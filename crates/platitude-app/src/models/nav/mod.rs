@@ -353,10 +353,17 @@ pub struct NavSectionModel {
     /// When the last listing this section applied looked at the
     /// repository (`session::Standing::stamp`) — measured against a
     /// write's `reads_from`, which tells a listing that saw the write from
-    /// one in flight as it ended. A session's own count: the tab stood in
-    /// another worktree counts from the start again, and this holds the old
-    /// session's number until the new one's first listing lands.
+    /// one in flight as it ended. A file list's is its status's. A session's
+    /// own count: the tab stood in another worktree counts from the start
+    /// again, and this holds the old session's number until the new one's
+    /// first listing lands.
     looked: u64,
+    /// File sections of this window's tree: the status as git last reported
+    /// it, while the rows on screen are drawn with stage presses still out
+    /// over it (`ops::StageAhead`) — kept to draw again when those move.
+    /// `None` while the rows are that status itself, which `all` then holds:
+    /// a second copy would cost a whole status.
+    staged_from: Option<StatusBase>,
     /// File sections only: tree vs flat-path display. The page's
     /// restore (`PageLayout.applySavedLayout` → `set_tree_view`) is the
     /// sole writer: an `attach_*` that set it would overwrite the restore,
@@ -401,4 +408,11 @@ pub struct NavSectionModel {
     stash_feed: Option<Arc<Feed<crate::hub::StashList>>>,
     worktrees_feed: Option<Arc<Feed<crate::hub::WorktreeList>>>,
     tab_id: i32,
+}
+
+/// A status as git reported it, with the line-ending marks that came with it
+/// (`NavSectionModel::staged_from`).
+struct StatusBase {
+    status: platitude_core::status::WorktreeStatus,
+    marks: Arc<Vec<platitude_core::session::EolMark>>,
 }

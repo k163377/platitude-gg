@@ -1,6 +1,16 @@
 //! Staging and discarding a chosen set of rows.
+//!
+//! Whole files staged or unstaged move their rows at the press, ahead of git
+//! (デザイン規約 §バケツごとの一覧と、ペインの分け方): the press writes its id
+//! down with the hub's `ops::StageAhead`, git's answer is handed to it by id
+//! (`RepoTab::write_answered`, beside the rest of a write's bookkeeping), and
+//! the page has the lists and the counts draw again whenever what it holds
+//! moves (`staging_seq`). When the moved rows go back or are let go of is the
+//! owner's (tested in `ops::stage_ahead_tests`); this file is the wiring.
 
 use platitude_core::stage::DiscardSide;
+
+use crate::ops::{Reach, Side};
 
 use super::*;
 
@@ -27,20 +37,52 @@ fn chosen_row(key: &str) -> Option<(String, DiscardSide)> {
 }
 
 impl RepoTab {
-    /// `send` returns the id its ask was given, which the door keeps for
-    /// whoever waits on that write ([`RepoTab::ask_session`]).
-    pub(super) fn drain_paths(
-        &mut self,
-        send: impl FnOnce(
-            &std::sync::Arc<platitude_core::session::RepoSession>,
-            Vec<String>,
-        ) -> Option<platitude_core::OperationId>,
-    ) {
-        let paths = std::mem::take(&mut self.pending_paths);
+    /// Stages or unstages whole files, moving their rows at once. Answers
+    /// whether anything QML reads moved — the caller says so.
+    pub(super) fn move_paths(&mut self, side: Side, paths: Vec<String>) -> bool {
         if paths.is_empty() {
-            return;
+            return false;
         }
-        self.ask_session(move |s| send(s, paths));
+        let reach = Reach::Paths(paths.iter().cloned().collect());
+        let asked = self.ask_session(move |s| match side {
+            Side::Stage => s.stage_paths(paths),
+            Side::Unstage => s.unstage_paths(paths),
+        });
+        self.pressed_ahead(side, reach, asked)
+    }
+
+    /// The same for a bucket's `Stage all` / `Unstage all`.
+    pub(super) fn move_all(&mut self, side: Side) -> bool {
+        let asked = self.ask_session(|s| match side {
+            Side::Stage => s.stage_all(),
+            Side::Unstage => s.unstage_all(),
+        });
+        self.pressed_ahead(side, Reach::All, asked)
+    }
+
+    /// A stage press made from a slot (`press` asks the door and writes the
+    /// press down), told the way the slot's readers hear it: the rows on
+    /// `changed`, the Commit button's wait on its own notify
+    /// (`commit_waits_changed`) — which the door may have said already in
+    /// the same turn, for the write it counted out (`ask_session`).
+    pub(super) fn press_told(&mut self, press: impl FnOnce(&mut Self) -> bool) {
+        let waiting = self.commit_waits;
+        if press(self) {
+            self.changed();
+        }
+        if self.commit_waits != waiting {
+            self.commit_waits_changed();
+        }
+    }
+
+    /// The press, written down with the hub under the id the door gave it;
+    /// answers whether anything QML reads moved — a press taken always does.
+    /// No notify of its own: the slot that pressed tells what moved, the
+    /// rows on its `changed` and the Commit button's wait on its own
+    /// (`commit_waits_changed`).
+    pub(super) fn pressed_ahead(&mut self, side: Side, reach: Reach, asked: Option<u64>) -> bool {
+        let taken = crate::hub::stage_ahead(self.tab_id, |ahead| ahead.asked(side, reach, asked));
+        self.read_writes_out(taken)
     }
 
     /// Fills `discard_count` / `discard_only` from the gathered rows,
@@ -69,15 +111,17 @@ impl RepoTab {
     /// Discards the gathered rows (destructive); core sorts them into
     /// commands (`RepoSession::discard_chosen`).
     pub(super) fn discard_chosen_rows(&mut self) {
-        self.drain_paths(|s, keys| {
-            let chosen: Vec<(String, DiscardSide)> =
-                keys.iter().filter_map(|key| chosen_row(key)).collect();
-            // Conflicted rows only: no ask, so no id — a waiting reader
-            // must not expect an answer.
-            (!chosen.is_empty())
-                .then(|| s.discard_chosen(chosen))
-                .flatten()
-        });
+        let keys = std::mem::take(&mut self.pending_paths);
+        let chosen: Vec<(String, DiscardSide)> =
+            keys.iter().filter_map(|key| chosen_row(key)).collect();
+        // Conflicted rows only: nothing goes to git, said to a watch armed
+        // for it as the door says a write it turns down (`ask_session`) — a
+        // waiting reader must not expect an answer.
+        if chosen.is_empty() {
+            self.write_watch.asked(None);
+            return;
+        }
+        self.ask_session(move |s| s.discard_chosen(chosen));
     }
 
     /// Answers whether a write went out: the pane arms a wait only the

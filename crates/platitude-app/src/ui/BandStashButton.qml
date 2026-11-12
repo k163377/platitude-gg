@@ -36,13 +36,21 @@ ActionButton {
     faceColor: Theme.bgSurface
     // No `!`, hold or ring (header). Down while a rebase plan is composed (its run button is the one
     // write), and while the pane reads another worktree — a press would set aside *this* window's changes
-    // (`RepoPage.wipWritable`).
+    // (`RepoPage.wipWritable`). Down too while a stage or unstage press stands, as the commit button is
+    // (`Words.stagingWait`): what it sets aside is the index git holds, not yet the one on screen.
     enabled: stashButton.mode === "ready" && stashButton.curPage.pageTab.busyCount === 0
+             && !stashButton.curPage.pageTab.stagingUnseen
              && !stashButton.curPage.planShown && stashButton.curPage.wipWritable
     tip: {
-        // Silent where the band already says why — no tab, or another git command running —, emptied by hand: a
-        // disabled control still opens its ToolTip (rules-refs/app-ui.md「押せないボタンを黙らせる」).
-        if (stashButton.mode === "closed" || stashButton.curPage.pageTab.busyCount > 0)
+        // Silent where the band already says why, emptied by hand: a disabled control still opens its ToolTip
+        // (rules-refs/app-ui.md「押せないボタンを黙らせる」). No tab: nothing to set aside.
+        if (stashButton.mode === "closed")
+            return ""
+        // Not said anywhere else: the rows look moved already (`Words.stagingWait`, git running or not).
+        if (stashButton.curPage.pageTab.stagingUnseen)
+            return Words.stagingWait
+        // Another git command running: the band says it.
+        if (stashButton.curPage.pageTab.busyCount > 0)
             return ""
         // The freeze names itself: a tree that could be stashed looks no different while a plan stands over it.
         if (stashButton.curPage.planShown)

@@ -83,6 +83,13 @@ Item {
     /// The pointer is on another chosen row's stage affordance, and this row goes with it: what one press moves is
     /// seen before it is pressed (`WipPane.stagePeerOf`).
     property bool stagePeer: false
+    /// Whether the stage affordance takes a press now: not while git has yet to answer a press that reaches this row —
+    /// one that moved it, one that left it to the status, or a whole bucket's (`WipPane.stageOpen`). The mark is drawn
+    /// disabled and says nothing (デザイン規約 §バケツごとの一覧と、ペインの分け方, §無効).
+    property bool stageOpen: true
+    /// Automation: the stage mark as drawn, for a run to read whether it takes a press (`stage-held`,
+    /// `stage-refused`) — the wiring from `stageOpen` down, which the pane's own answer cannot show.
+    readonly property alias stageMark: stageButton
     /// What each side of a conflict is called. **The two swap over during a rebase**, so they come from the model
     /// (`WorktreeModel.sideOurs` / `sideTheirs`); empty where git left nothing to name a side by.
     property string sideOurs: ""
@@ -646,15 +653,18 @@ Item {
         onHoveredChanged: navRow.stageHovered(
             navRow.bucket, navRow.full !== "" ? navRow.full : navRow.name,
             stageButton.hovered)
+        enabled: navRow.stageOpen
         // On a conflicted row `git add` tells git the conflict is dealt with, and the word says so
         // (デザイン規約 §diff の中のステージ).
-        tip: navRow.bucket === "conflicts" ? qsTr("Mark resolved")
+        tip: !navRow.stageOpen ? ""
+             : navRow.bucket === "conflicts" ? qsTr("Mark resolved")
              : navRow.bucket === "staged" ? qsTr("Unstage file")
                                           : qsTr("Stage file")
         onClicked: navRow.stageClicked(navRow.bucket, navRow.full !== "" ? navRow.full : navRow.name)
         contentItem: NavIcon {
             kind: navRow.bucket === "staged" ? "minus" : "plus"
-            tint: navRow.bucket === "staged" ? Theme.minusFg : Theme.plusFg
+            tint: !navRow.stageOpen ? Theme.textMuted
+                  : navRow.bucket === "staged" ? Theme.minusFg : Theme.plusFg
         }
     }
     /// Whether this row's list opens a row's facts under it, and which row is open there — handed down because

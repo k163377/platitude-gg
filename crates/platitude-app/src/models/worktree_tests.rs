@@ -570,3 +570,117 @@ fn the_records_carry_each_field_in_its_own_seat() {
         }
     );
 }
+
+/// A file changed on one side and an untracked one, as git reports them
+/// before any press, the status having looked at `looked`.
+fn pending_at(looked: u64) -> StateMsg {
+    let StateMsg::Status(mut status) = status(vec![
+        StatusItem::Tracked {
+            staged: '.',
+            unstaged: 'M',
+            path: "b.txt".to_string(),
+            orig_path: None,
+        },
+        StatusItem::Untracked {
+            path: "u.txt".to_string(),
+        },
+    ]) else {
+        panic!("a status message");
+    };
+    status.looked = looked;
+    StateMsg::Status(status)
+}
+
+fn counted(model: &WorktreeModel) -> (i32, i32, i32) {
+    (
+        model.staged_count,
+        model.unstaged_count,
+        model.untracked_count,
+    )
+}
+
+/// The counts — the Commit button's file count among them — follow the rows
+/// the lists draw: a press out over the status moves them on the turn it
+/// moves the rows (`restage` → `tally`), and refused it takes them back. A
+/// whole bucket's press, which asks the disk nothing: the hub here has no
+/// session to ask.
+#[test]
+fn the_counts_follow_a_press_drawn_over_the_status() {
+    let tab = crate::hub::testkit::installed_tab();
+    let mut model = WorktreeModel {
+        tab_id: tab,
+        ..WorktreeModel::default()
+    };
+    model.absorb(vec![head(ROOT, 1), pending_at(1)]);
+    assert_eq!(counted(&model), (0, 1, 1));
+
+    crate::hub::stage_ahead(tab, |ahead| {
+        ahead.asked(crate::ops::Side::Stage, crate::ops::Reach::All, Some(7))
+    });
+    assert!(model.tally(), "the press moved the counts");
+    assert_eq!(counted(&model), (2, 0, 0));
+
+    crate::hub::stage_ahead(tab, |ahead| ahead.answered(7, true, 0));
+    assert!(model.tally(), "refused, they come back");
+    assert_eq!(counted(&model), (0, 1, 1));
+}
+
+/// The status the counts take is one of the four drawings a landed press
+/// waits for (`ops::Reader::Counts`): let go once it, too, has looked past
+/// the write.
+#[test]
+fn the_counts_reading_is_one_a_landed_press_waits_for() {
+    use crate::ops::Reader;
+    let tab = crate::hub::testkit::installed_tab();
+    let mut model = WorktreeModel {
+        tab_id: tab,
+        ..WorktreeModel::default()
+    };
+    crate::hub::stage_ahead(tab, |ahead| {
+        ahead.asked(crate::ops::Side::Stage, crate::ops::Reach::All, Some(7))
+    });
+    crate::hub::stage_ahead(tab, |ahead| ahead.answered(7, false, 41));
+    for reader in [Reader::Conflicts, Reader::Unstaged, Reader::Staged] {
+        crate::hub::status_drawn(tab, reader, 42);
+    }
+    assert!(crate::hub::stage_ahead(tab, |ahead| ahead.unseen()));
+    model.absorb(vec![head(ROOT, 1), pending_at(42)]);
+    assert!(
+        !crate::hub::stage_ahead(tab, |ahead| ahead.unseen()),
+        "let go on the counts' own drawing"
+    );
+}
+
+/// A press drawn over the status settles what the tree's offers read off the
+/// counts on the press's own turn, as the status after it would
+/// (`restage` → `settle`) — `--skip`'s freedom among them
+/// (`offers::skip_is_free`): a step holding one staged addition is not free
+/// to leave out, and once that addition is drawn unstaged it is. A drawing
+/// reads nothing: the tree's read count stays where the status left it.
+#[test]
+fn a_press_drawn_over_the_status_settles_the_offers_and_reads_nothing() {
+    let tab = crate::hub::testkit::installed_tab();
+    let mut model = WorktreeModel {
+        tab_id: tab,
+        ..WorktreeModel::default()
+    };
+    model.absorb(vec![
+        head(ROOT, 1),
+        status(vec![StatusItem::Tracked {
+            staged: 'A',
+            unstaged: '.',
+            path: "new.txt".to_string(),
+            orig_path: None,
+        }]),
+    ]);
+    assert!(!model.op_skip_free, "the step's addition would be lost");
+    let read = model.tree_revision;
+
+    crate::hub::stage_ahead(tab, |ahead| {
+        ahead.asked(crate::ops::Side::Unstage, crate::ops::Reach::All, Some(7))
+    });
+    model.restage();
+    assert_eq!(counted(&model), (0, 0, 1), "drawn back untracked");
+    assert!(model.op_skip_free, "settled off the drawn counts");
+    assert_eq!(model.tree_revision, read, "a drawing is no read");
+}

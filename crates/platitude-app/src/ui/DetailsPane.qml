@@ -56,6 +56,9 @@ ColumnLayout {
     /// Saving — an amend, which takes what is staged too — would leave HEAD changing nothing (`RepoTab.amendEmpties`):
     /// the save row refuses first, as git would.
     property bool amendEmpties: false
+    /// Saving is an amend of HEAD, which takes what is staged too, while a stage or unstage press stands
+    /// (`RepoTab.stagingUnseen`): the save row waits, as the commit button does (`Words.stagingWait`).
+    property bool amendWaits: false
     // What git makes of the signature: "" (unsigned, or not answered yet), "verified", "signed" or "bad".
     // `signatureCode` is git's `%G?`, for the tooltip: an unjudged signature has one of five reasons.
     property string signatureKind: ""
@@ -446,6 +449,7 @@ ColumnLayout {
         busy: detailsPane.busy
         published: detailsPane.published
         amendEmpties: detailsPane.amendEmpties
+        amendWaits: detailsPane.amendWaits
         intoPlan: detailsPane.intoPlan
         messageDirty: detailsPane.messageDirty
         signatureKind: detailsPane.signatureKind

@@ -134,6 +134,7 @@ impl Hub {
                 sink: None,
                 drafts: HashMap::new(),
                 stand_in: crate::ops::StandIn::default(),
+                stage_ahead: crate::ops::StageAhead::default(),
             },
         );
         Some(id)
@@ -329,6 +330,10 @@ impl Hub {
         // and the readings carry this session's stamps
         // (`ops::StandIn::session_gone`).
         tab.stand_in.session_gone();
+        // The same for the file rows a stage moved: no answer of this
+        // session's is coming, and the next one's status is the truth
+        // (`ops::StageAhead::session_gone`).
+        tab.stage_ahead.session_gone();
         self.park_writes_of(&session);
         true
     }
@@ -538,6 +543,85 @@ pub fn stand_in(tab_id: i32, f: impl FnOnce(&mut crate::ops::StandIn)) -> crate:
     .unwrap_or_default()
 }
 
+/// Moves a tab's stage presses along and answers with what `f` says — the
+/// default for a tab this hub does not have (`ops::StageAhead`).
+///
+/// The borrow is over before this returns, as in [`stand_in`].
+pub fn stage_ahead<R: Default>(tab_id: i32, f: impl FnOnce(&mut crate::ops::StageAhead) -> R) -> R {
+    Hub::with(|hub| match hub.tabs.get_mut(&tab_id) {
+        Some(tab) => f(&mut tab.stage_ahead),
+        None => R::default(),
+    })
+    .unwrap_or_default()
+}
+
+/// [`stage_ahead`] for a status reader, which is not the tab: where a press
+/// was let go with it (`ops::StageAhead::take_notice`), the tab is told on its
+/// own feed (`TabMsg::PressLetGo`) — the reader cannot reach it, and the
+/// tab's Commit button waits on the presses.
+fn stage_ahead_drawing<R: Default>(
+    tab_id: i32,
+    f: impl FnOnce(&mut crate::ops::StageAhead) -> R,
+) -> R {
+    Hub::with(|hub| match hub.tabs.get_mut(&tab_id) {
+        Some(tab) => {
+            let answer = f(&mut tab.stage_ahead);
+            if tab.stage_ahead.take_notice() {
+                tab.feeds.tab.push(TabMsg::PressLetGo);
+            }
+            answer
+        }
+        None => R::default(),
+    })
+    .unwrap_or_default()
+}
+
+/// One of a tab's status readers has drawn a status that looked at `looked`
+/// (`ops::StageAhead::drawn`).
+pub fn status_drawn(tab_id: i32, reader: crate::ops::Reader, looked: u64) {
+    stage_ahead_drawing(tab_id, |ahead| ahead.drawn(reader, looked));
+}
+
+/// A status a reader holds, drawn with the stage presses still out over it
+/// (`ops::StageAhead::picture`); `None` where they move nothing in it.
+///
+/// Whether a row's path is a directory is the disk's to say (a gitlink stays
+/// where it is): read from this tab's worktree, once a path while presses are
+/// out, for the rows a press of rows reaches — a whole bucket's asks nothing
+/// (`ops::stage_ahead::picture_of`) — so a status with none costs no lookup.
+pub fn status_picture(
+    tab_id: i32,
+    looked: u64,
+    base: &platitude_core::status::WorktreeStatus,
+    marks: &[platitude_core::session::EolMark],
+) -> Option<crate::ops::Picture> {
+    if !stage_ahead(tab_id, |ahead| ahead.unseen()) {
+        return None;
+    }
+    // A picture lets no press go: only a drawing does (`status_drawn`).
+    let workdir = from_session(tab_id, |s| s.workdir()).flatten();
+    stage_ahead(tab_id, |ahead| {
+        ahead.picture(looked, base, marks, |path| {
+            directory_in(workdir.as_deref(), path)
+        })
+    })
+}
+
+/// Whether `path` is a directory in `workdir`, as a row's press asks it
+/// (`status_picture`) — once a path while presses are out, on the press's
+/// own turn: a press of chosen rows pays one look per row (the order of the
+/// cost is in ci/baseline/code-costs-windows-x64.md). With no worktree to
+/// look in every path counts as one,
+/// so a press of rows leaves its tracked rows to the status rather than
+/// guess (untracked rows and a whole bucket's press ask no disk, and move
+/// all the same).
+fn directory_in(workdir: Option<&std::path::Path>, path: &str) -> bool {
+    match workdir {
+        Some(workdir) => std::fs::symlink_metadata(workdir.join(path)).is_ok_and(|m| m.is_dir()),
+        None => true,
+    }
+}
+
 fn minutes_to_interval(minutes: u32) -> Option<std::time::Duration> {
     (minutes > 0).then(|| std::time::Duration::from_secs(u64::from(minutes) * 60))
 }
@@ -570,7 +654,7 @@ mod tests {
     use platitude_core::Oid;
     use platitude_core::preview::PictureBlob;
 
-    use super::super::testkit::hub;
+    use super::super::testkit::bare;
 
     /// A picture to hold, by an object nothing reads here.
     fn picture() -> PictureBlob {
@@ -583,7 +667,7 @@ mod tests {
     /// of nothing another tab holds.
     #[test]
     fn closing_a_tab_lets_go_of_its_pictures() {
-        let mut hub = hub(900);
+        let mut hub = bare(900);
         let repo = PathBuf::from("repo");
         let closed = hub.reserve_tab(repo.clone(), repo.clone()).expect("a tab");
         let open = hub.reserve_tab(repo.clone(), repo).expect("a tab");
@@ -604,7 +688,7 @@ mod tests {
     /// page; another tab's stay.
     #[test]
     fn releasing_a_tab_lets_go_of_its_pictures() {
-        let mut hub = hub(950);
+        let mut hub = bare(950);
         let repo = PathBuf::from("repo");
         let released = hub.open_tab(repo.clone(), repo.clone()).expect("a tab");
         let open = hub.open_tab(repo.clone(), repo).expect("a tab");
@@ -618,5 +702,68 @@ mod tests {
 
         hub.release_tab(open);
         assert!(!crate::preview_images::is_held(&kept));
+    }
+
+    /// A row's path is a directory where the disk says so — a gitlink's
+    /// folder, not a file or a path gone — and every path is one with no
+    /// worktree to look in.
+    #[test]
+    fn a_directory_is_the_disks_to_say_and_every_path_with_no_worktree() {
+        let dir = crate::temp::root().join(format!("pgg-stage-dirs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("nested")).expect("a folder");
+        std::fs::write(dir.join("file.txt"), "x\n").expect("a file");
+
+        assert!(directory_in(Some(&dir), "nested"));
+        assert!(!directory_in(Some(&dir), "file.txt"));
+        assert!(!directory_in(Some(&dir), "gone.txt"), "nothing there");
+        assert!(directory_in(None, "file.txt"), "no worktree: counted one");
+
+        std::fs::remove_dir_all(&dir).expect("clean up");
+    }
+
+    /// With no worktree to look in, a press of rows leaves its tracked rows
+    /// to the status — and moves an untracked one, which asks no disk.
+    #[test]
+    fn with_no_worktree_a_press_of_rows_moves_only_what_asks_no_disk() {
+        use crate::ops::{Reach, Side};
+        use platitude_core::status::{StatusItem, WorktreeStatus};
+
+        let tab = super::super::testkit::installed_tab();
+        let paths = ["b.txt", "u.txt"].map(String::from).into_iter().collect();
+        assert!(stage_ahead(tab, |ahead| ahead.asked(
+            Side::Stage,
+            Reach::Paths(paths),
+            Some(7)
+        )));
+        let base = WorktreeStatus {
+            items: vec![
+                StatusItem::Tracked {
+                    staged: '.',
+                    unstaged: 'M',
+                    path: "b.txt".to_string(),
+                    orig_path: None,
+                },
+                StatusItem::Untracked {
+                    path: "u.txt".to_string(),
+                },
+            ],
+            ..WorktreeStatus::default()
+        };
+
+        let picture = status_picture(tab, 0, &base, &[]).expect("the untracked row moved");
+        assert_eq!(
+            picture.status.items[0], base.items[0],
+            "the tracked row waits"
+        );
+        assert_eq!(
+            picture.status.items[1],
+            StatusItem::Tracked {
+                staged: 'A',
+                unstaged: '.',
+                path: "u.txt".to_string(),
+                orig_path: None,
+            }
+        );
     }
 }

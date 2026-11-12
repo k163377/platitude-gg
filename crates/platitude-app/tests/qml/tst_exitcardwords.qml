@@ -13,6 +13,7 @@ Item {
     readonly property QtObject tab: QtObject {
         id: tab
         property int busyCount: 0
+        property bool stagingUnseen: false
         function resolveOperation(how) {}
     }
     readonly property QtObject tree: QtObject {

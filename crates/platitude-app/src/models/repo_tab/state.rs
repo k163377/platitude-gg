@@ -50,6 +50,12 @@ impl Default for RepoTab {
             gone_worktree: String::new(),
             gone_worktree_chip: String::new(),
             gone_worktree_branch: String::new(),
+            staging_seq: 0,
+            staging_all_out: false,
+            staging_moving: Vec::new(),
+            staging_unseen: false,
+            outstanding: Vec::new(),
+            commit_waits: false,
             signature_wanted: String::new(),
             author_name: String::new(),
             author_email: String::new(),
@@ -156,6 +162,11 @@ impl RepoTab {
     /// Every waiter on a write keys on this id (`RepoPage.pendingPopId`,
     /// `ops::StandIn`, `write_watch`); the watch takes it inside this
     /// call, the only moment the id is anybody's in particular.
+    ///
+    /// Says what moved, each on its own notify (`settling_changed`,
+    /// `commit_waits_changed`): `settling`, and the writes out the Commit
+    /// button waits on (`commit_waits`) — a queued write counts from
+    /// here.
     pub(super) fn ask_session(
         &mut self,
         f: impl FnOnce(
@@ -166,14 +177,80 @@ impl RepoTab {
             .flatten()
             .map(platitude_core::OperationId::as_u64);
         self.write_watch.asked(asked);
-        // From here, not from its start: a write queued behind another
-        // starts only once that one has settled.
-        if let Some(id) = asked
-            && self.unsettle(id)
-        {
-            self.settling_changed();
+        if let Some(id) = asked {
+            // From here, not from its start: a write queued behind another
+            // starts only once that one has settled.
+            if self.unsettle(id) {
+                self.settling_changed();
+            }
+            let waiting = self.commit_waits;
+            self.write_out(id);
+            if self.commit_waits != waiting {
+                self.commit_waits_changed();
+            }
         }
         asked
+    }
+
+    /// A write is out — accepted at this tab's door, or seen starting where it
+    /// was asked elsewhere (`TabMsg::WriteState`) — until its answer
+    /// (`write_answered`): the Commit button waits on it
+    /// (`read_writes_out`).
+    pub(super) fn write_out(&mut self, id: u64) {
+        if !self.outstanding.contains(&id) {
+            self.outstanding.push(id);
+        }
+        self.read_writes_out(false);
+    }
+
+    /// git's answer to any write: no longer out for the Commit button, and
+    /// handed to the stage presses by id — refused, a press's rows come back
+    /// within this drain, so its one notify tells the refusal about rows
+    /// already back on screen; landed, they stay where they went.
+    ///
+    /// No notify of its own: this runs inside the drain (`take_feed`).
+    pub(super) fn write_answered(&mut self, id: u64, failed: bool, reads_from: u64) {
+        self.outstanding.retain(|out| *out != id);
+        let moved =
+            crate::hub::stage_ahead(self.tab_id, |ahead| ahead.answered(id, failed, reads_from));
+        self.read_writes_out(moved);
+    }
+
+    /// Copies what the stage presses hold into the plain members bindings
+    /// read, moving `staging_seq` where `moved` says the rows did, where a
+    /// press no longer out lets its rows' marks go, or where the screen has
+    /// caught up with the last press standing (`unseen` — the open diff
+    /// follows then, `RepoPage.followEmptySide`); and whether the Commit
+    /// button waits — on a write out, a press standing or the stand
+    /// (`commit_waits`). Answers whether anything QML reads moved.
+    pub(super) fn read_writes_out(&mut self, moved: bool) -> bool {
+        let (all_out, moving, unseen) = crate::hub::stage_ahead(self.tab_id, |ahead| {
+            (ahead.all_out(), ahead.moving_paths(), ahead.unseen())
+        });
+        let waits = !self.outstanding.is_empty() || unseen || self.standing;
+        let staged = moved
+            || all_out != self.staging_all_out
+            || moving != self.staging_moving
+            || unseen != self.staging_unseen;
+        let shifted = staged || waits != self.commit_waits;
+        if staged {
+            self.staging_seq = self.staging_seq.wrapping_add(1);
+        }
+        self.staging_all_out = all_out;
+        self.staging_moving = moving;
+        self.staging_unseen = unseen;
+        self.commit_waits = waits;
+        shifted
+    }
+
+    /// A write another model asked for in this same turn
+    /// (`DiscardModel.restoreAt`), counted out from its acceptance as the
+    /// tab's own are (`ask_session`): settling, and out for the Commit
+    /// button. Says whether the tab was settled before (`unsettle`).
+    pub(super) fn counted_out(&mut self, id: u64) -> bool {
+        let was_settled = self.unsettle(id);
+        self.write_out(id);
+        was_settled
     }
 
     /// Counts a write of this tab's out until what it left has been read
@@ -196,6 +273,7 @@ impl RepoTab {
         }
         self.standing = false;
         self.busy_count = (self.busy_count - 1).max(0);
+        self.read_writes_out(false);
     }
 
     /// The page has put a status on screen beside HEAD report `seen`;
@@ -338,12 +416,30 @@ impl RepoTab {
         });
     }
 
+    /// Whether a write that takes the index whole — a commit, the details
+    /// pane's amend of HEAD, a stash, the stopped operation's `--continue` —
+    /// is turned away here: a stage or unstage press stands
+    /// (`StageAhead::unseen`), so the rows on screen are the press's word
+    /// until the status after it is drawn, and git would take its own index.
+    /// Their buttons wait then (`stagingUnseen`, `Words.stagingWait`); this
+    /// is the belt under them.
+    pub(super) fn staging_turns_away(&self, what: &str) -> bool {
+        let stands = crate::hub::stage_ahead(self.tab_id, |ahead| ahead.unseen());
+        if stands {
+            tracing::info!(what, "turned away: a stage press is still standing");
+        }
+        stands
+    }
+
     /// The commit slot's two fields, joined and optioned for core.
     ///
     /// The press records the id it was accepted under in the same breath:
     /// the answer cannot say whose press it was, and only its own answer
     /// empties the editor — and only its own tree read, taken after that
     /// answer, lands the page (`ops::TreeOut`).
+    ///
+    /// **Not while a stage or unstage press stands**
+    /// ([`Self::staging_turns_away`]).
     pub(super) fn commit_from_fields(
         &mut self,
         subject: String,
@@ -351,6 +447,10 @@ impl RepoTab {
         amend: bool,
         reset_author: bool,
     ) {
+        if self.staging_turns_away("commit") {
+            self.commit_out.asked(None);
+            return;
+        }
         let message = platitude_core::commit::join_message(&subject, &body);
         let options = platitude_core::commit::CommitOptions {
             amend,
@@ -363,6 +463,24 @@ impl RepoTab {
         };
         let asked = self.ask_session(|s| s.commit(message, options));
         self.commit_out.asked(asked);
+    }
+
+    /// The details pane's save of a commit's message: HEAD is amended,
+    /// anything older replayed. Every message the pane saves is HEAD's
+    /// (`RepoPage.messageEdit` takes typing on HEAD alone), and the amend
+    /// takes what is staged too.
+    ///
+    /// **Not while a stage or unstage press stands**
+    /// ([`Self::staging_turns_away`]).
+    pub(super) fn reword_from_fields(&mut self, oid: String, subject: String, body: String) {
+        if self.staging_turns_away("amend") {
+            return;
+        }
+        let message = platitude_core::commit::join_message(&subject, &body);
+        if message.is_empty() {
+            return;
+        }
+        self.ask_session(|s| s.reword(oid, message));
     }
 
     /// The add slot's mode word, turned into what core stands the new worktree

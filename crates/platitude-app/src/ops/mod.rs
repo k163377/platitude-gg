@@ -14,9 +14,12 @@
 //! `hub::stand_in`), because a page is taken down behind the tab in front
 //! (`Main.qml`) while the rows stay gone. They end with the session
 //! ([`StandIn::session_gone`]), not the operation, since what a session
-//! numbered goes with it. What one page's own boxes wait on is that page's
-//! ([`Press`], [`TreeOut`], kept on the tab model the boxes belong to): a
-//! page that went away has nothing left to empty or walk anybody off.
+//! numbered goes with it. The file rows a stage moved are the hub's too
+//! ([`StageAhead`] — `hub::stage_ahead`), for another reason: four models
+//! draw them, each asking as it draws in a drain of its own. What one page's
+//! own boxes wait on is that page's ([`Press`], [`TreeOut`], kept on the tab
+//! model the boxes belong to): a page that went away has nothing left to
+//! empty or walk anybody off.
 //!
 //! Bringing one more operation here takes three steps that only work
 //! together: the slot that asks for the write records what is pending
@@ -25,8 +28,8 @@
 //! `drain::settle_write` (no guessing from the order of `writeSeq`); and
 //! the owner is held where what it holds lives (above). `Press` is the
 //! base: an owner that remembers more holds one and adds its own part
-//! (`TreeOut`, `BranchDeleteOut`, `PushOut`); `StandIn` and `DiffReread` are other
-//! kinds. QML is left with handing out the picture and saying that an edge
+//! (`TreeOut`, `BranchDeleteOut`, `PushOut`); `StandIn`, `StageAhead` and
+//! `DiffReread` are other kinds. QML is left with handing out the picture and saying that an edge
 //! came (`listingDrawn`, `takeStashLanding`, `takeCommitLanding`,
 //! `takeDiffRead`).
 
@@ -42,6 +45,9 @@ mod press_tests;
 mod push_out;
 #[cfg(test)]
 mod push_out_tests;
+mod stage_ahead;
+#[cfg(test)]
+mod stage_ahead_tests;
 mod stand_in;
 #[cfg(test)]
 mod stand_in_tests;
@@ -53,5 +59,6 @@ pub use branch_delete_out::BranchDeleteOut;
 pub use diff_reread::DiffReread;
 pub use press::Press;
 pub use push_out::PushOut;
+pub use stage_ahead::{Picture, Reach, Reader, Side, StageAhead};
 pub use stand_in::{Row, Rows, StandIn};
 pub use tree_out::TreeOut;

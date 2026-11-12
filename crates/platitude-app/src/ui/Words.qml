@@ -186,9 +186,17 @@ QtObject {
     /// its way out names what goes (`RebasePlanPane` — `Discard`).
     readonly property string cancel: qsTr("Cancel")
 
-    /// Why a menu row is out while a git command runs (`AppMenuItem.blockedWhy`, デザイン規約 §無効). Not "git": the
-    /// row under the pointer wears a git command of its own on its chip, and `running` is what tells the two apart.
+    /// Why a menu row, or the commit button, is out while a git command runs (`AppMenuItem.blockedWhy`,
+    /// `WipCommitBlock`'s tip; デザイン規約 §無効). Not "git": the row under the pointer wears a git command of its own
+    /// on its chip, and `running` is what tells the two apart.
     readonly property string otherCommandRunning: qsTr("Wait for the running command")
+    /// Why a write that takes the index whole — the commit button, the details pane's amend of HEAD, the stopped
+    /// operation's `--continue`, the toolbar's `stash` — waits while a stage or unstage press stands
+    /// (`RepoTab.stagingUnseen`; user decision — ask before changing): the rows show the press's word, not git's, until
+    /// the status after it is drawn (デザイン規約 §バケツごとの一覧と、ペインの分け方). Said for that whole stretch, the
+    /// `git add` running included: staging is the press and the screen catching up with it, so it is the reason even
+    /// where a running command would otherwise be (`otherCommandRunning`).
+    readonly property string stagingWait: qsTr("Wait for staging to finish")
 
     /// Why every holder of a tag wears the warning when the remotes carry it on different commits and the remote this
     /// window acts on is not among them: no reading is the right one (`differsFrom` has nobody to name). Said where

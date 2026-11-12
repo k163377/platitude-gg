@@ -598,7 +598,9 @@ ColumnLayout {
                             wipPane.pointedEolLines, wipPane.pointedEolScope, wipPane.pointedEolExt)
         : ""
     /// Whether a row should put its mark out because the pointer is on the mark of another row that would move with it.
-    /// Only rows on the same side answer: `+` stages what is not staged, `−` takes back what is.
+    /// Only rows on the same side answer: `+` stages what is not staged, `−` takes back what is. A row waiting for git
+    /// moves with no press, and a press on a waiting mark moves nothing (`stageTargets`, `moveStage`): neither puts
+    /// a peer's mark out.
     function stagePeerOf(bucket, path) {
         const key = bucket + ":" + path
         if (wipPane.stageHotKey === "")
@@ -606,29 +608,50 @@ ColumnLayout {
         // The pointed row answers too: a real pointer already shows its mark, and this is how a headless run does.
         if (wipPane.stageHotKey === key)
             return true
-        if (!wipPane.isChosen(bucket, path))
+        if (!wipPane.isChosen(bucket, path) || !wipPane.stageOpen(path))
             return false
         const cut = wipPane.stageHotKey.indexOf(":")
         const hotBucket = wipPane.stageHotKey.substring(0, cut)
-        if (!wipPane.isChosen(hotBucket, wipPane.stageHotKey.substring(cut + 1)))
+        const hotPath = wipPane.stageHotKey.substring(cut + 1)
+        if (!wipPane.isChosen(hotBucket, hotPath) || !wipPane.stageOpen(hotPath))
             return false
         return (hotBucket === "staged") === (bucket === "staged")
     }
     /// The highlighted rows that would move with a press on `bucket`'s side — the whole of what one press takes. A row
-    /// that was not highlighted takes only itself.
+    /// that was not highlighted takes only itself. **A row still waiting for git's answer to an earlier press stays
+    /// out** (`stageOpen`).
     function stageTargets(bucket, path) {
         if (!wipPane.isChosen(bucket, path))
             return [path]
         const out = []
         const rows = wipPane.chosenRows()
         for (let i = 0; i < rows.length; i++)
-            if ((rows[i].bucket === "staged") === (bucket === "staged"))
+            if ((rows[i].bucket === "staged") === (bucket === "staged") && wipPane.stageOpen(rows[i].fullName))
                 out.push(rows[i].fullName)
         return out.length > 0 ? out : [path]
+    }
+    /// Whether a row's `+` / `−` takes a press now. **A row moves at the press, ahead of git** (デザイン規約
+    /// §バケツごとの一覧と、ペインの分け方), and **waits there until git has answered for it**
+    /// (`RepoTab.stagingMovingPaths`, every row while a whole bucket's press is out — `stagingAllOut`): a press back
+    /// meanwhile would queue a second write behind the first for every click, and the queue runs a status read between
+    /// each two.
+    function stageOpen(path) {
+        return !wipPane.repoTab.stagingAllOut && wipPane.movingPaths[path] !== true
+    }
+    /// `RepoTab.stagingMovingPaths` as a set, built once per notify of the tab (`changed`, which carries it) rather
+    /// than searched once per row.
+    readonly property var movingPaths: {
+        const out = ({})
+        const paths = wipPane.repoTab.stagingMovingPaths
+        for (let i = 0; i < paths.length; i++)
+            out[paths[i]] = true
+        return out
     }
     /// A press on a row's `+` / `−`: every lit row that can go the same way moves with it, in one git command
     /// (デザイン規約 §バケツごとの一覧と、ペインの分け方). Headless `stage-many`.
     function moveStage(bucket, path) {
+        if (!wipPane.stageOpen(path))
+            return
         const paths = wipPane.stageTargets(bucket, path)
         if (paths.length === 1) {
             if (bucket === "staged")

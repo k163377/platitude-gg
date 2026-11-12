@@ -10,10 +10,14 @@ impl RepoTab {
             return;
         };
         let was_settling = self.settling;
+        let waiting = self.commit_waits;
         self.absorb(feed.drain());
         self.changed();
         if self.settling != was_settling {
             self.settling_changed();
+        }
+        if self.commit_waits != waiting {
+            self.commit_waits_changed();
         }
     }
 
@@ -236,15 +240,17 @@ impl RepoTab {
                 } => {
                     if running {
                         self.busy_count += 1;
-                        // Counted already where this tab asked for it
-                        // (`ask_session`); a write asked elsewhere — a
-                        // restore off the discard record — counts here.
+                        // Counted already where this tab or another model
+                        // asked for it (`ask_session`, `counted_out`); a write
+                        // nobody here asked for — the paced fetch — counts
+                        // here.
                         self.unsettle(id);
                         self.replaying = kind.replays_history();
                         self.busy_op = kind.label().to_string();
                         // Whatever the last write left standing, this one
                         // has not stopped yet.
                         self.last_write_stopped = false;
+                        self.write_out(id);
                     } else {
                         self.settle_write(id, kind, error, report, head_seq, reads_from);
                     }
@@ -280,6 +286,9 @@ impl RepoTab {
                 }
                 // A write asked for since keeps the tab settling.
                 TabMsg::ReadsDrained => self.settling = !self.unsettled.is_empty(),
+                TabMsg::PressLetGo => {
+                    self.read_writes_out(false);
+                }
             }
         }
     }
@@ -384,6 +393,11 @@ impl RepoTab {
         // `reads_from` is what the listings that remove them for good
         // are measured against (`ops_delete::delete_answered`).
         self.delete_answered(id, !landed, reads_from);
+        // The same for the file rows a stage moved, and the Commit button
+        // waiting on them (`ops_stage::write_answered`). Not an owner's answer: what the
+        // answer says is still the group's to tell (`fold_into_group` — the
+        // refusal's words, the open diff read again).
+        self.write_answered(id, !landed, reads_from);
         // Stopped part-way answers with the worktree: there is no
         // commit at the tip to go to (`last_write_stopped`, raised by
         // the message before this one). `FastForward` (the pull of a

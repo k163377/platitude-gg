@@ -17,6 +17,11 @@ Rectangle {
     readonly property real holdIndent: Theme.iconMd
     /// Whether leaving the stopped commit out costs nothing — core's rule (`offers::skip_is_free`).
     readonly property bool skipIsFree: opExitCard.worktree.opSkipFree
+    /// `--continue` waits on a stage or unstage press standing (`RepoTab.stagingUnseen`): the step's commit is the
+    /// index git holds, not yet the one on screen. The one reason the row says (`Words.stagingWait`, git running or
+    /// not) — the conflicted rows say theirs, so not while one stands.
+    readonly property bool continueWaits:
+        opExitCard.repoTab.stagingUnseen && opExitCard.worktree.conflictCount === 0
     readonly property real codeColW: {
         let widest = 0
         for (let i = 0; i < opExitCol.children.length; i++) {
@@ -162,9 +167,11 @@ Rectangle {
             code: "--continue"
             text: qsTr("Carry on with what is staged")
             visible: !opExitCard.worktree.opMerging
-            // Dim only while a conflict remains: git refuses then, and the commit button dims for the same reason.
+            // Dim while a conflict remains: git refuses then, and the commit button dims for the same reason. Dim
+            // too while a stage or unstage press stands, as the commit button does (`continueWaits`).
             enabled: opExitCard.repoTab.busyCount === 0
-                     && opExitCard.worktree.conflictCount === 0
+                     && opExitCard.worktree.conflictCount === 0 && !opExitCard.continueWaits
+            blockedWhy: opExitCard.continueWaits ? Words.stagingWait : ""
             onPicked: opExitCard.repoTab.resolveOperation("continue")
         }
         // A merge steps through nothing: no commit to leave out, and nowhere to stop stepping.

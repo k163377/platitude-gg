@@ -244,7 +244,9 @@ pub struct WorktreeModel {
     /// are per file: a second hunk staged out of a file already on both
     /// sides moves none of them. This window's own press is re-read at its
     /// answer (`ops::DiffReread`); one made elsewhere, by the page's tick on
-    /// the open file (`RepoPage.pollDiff`).
+    /// the open file (`RepoPage.pollDiff`). Counted off the status git
+    /// reported, never off the stage presses drawn over it: the tree has not
+    /// moved until git has moved it.
     tree_revision: i32,
     /// Whether this status leaves the synthetic worktree row at the
     /// head of the graph (`platitude_core::graph::wip_row_stands`). The
@@ -256,8 +258,17 @@ pub struct WorktreeModel {
     seen_counts: Option<(i32, i32, i32, i32)>,
     /// The counts of the last status, kept for the answers derived from
     /// them and from HEAD together (`settle`): a HEAD report can land
-    /// between two statuses, and the stash standing has to follow it.
+    /// between two statuses, and the stash standing has to follow it. Drawn
+    /// with the stage presses still out over it, as the lists draw their
+    /// rows (`tally`).
     counts: platitude_core::status::Counts,
+    /// The last status as git reported it, its line-ending marks and when it
+    /// looked: what the counts are drawn from, with the stage presses out over
+    /// it (`ops::StageAhead`), and drawn from again as those move
+    /// (`restage`).
+    status: platitude_core::status::WorktreeStatus,
+    status_marks: Arc<Vec<platitude_core::session::EolMark>>,
+    status_looked: u64,
     /// The last status's standing operation, kept for the same reason.
     op_state: platitude_core::opstate::OpState,
     feed: Option<Arc<Feed<StateMsg>>>,
@@ -391,7 +402,9 @@ impl WorktreeModel {
 
     // Said for every status drained, whether or not a row moved — the one
     // to wait on for "the status was read" (`NavSectionModel.changed` is
-    // said only when its rows change).
+    // said only when its rows change) — and where the counts are drawn
+    // again with the stage presses in them (`restage`), which reads
+    // nothing: a read is told apart by `tree_revision` moving.
     #[qsignal]
     fn changed(&mut self);
 
@@ -413,6 +426,17 @@ impl WorktreeModel {
     fn restand(&mut self) {
         self.forget_the_worktree();
         self.changed();
+    }
+
+    /// The stage presses out over this tree moved (`RepoTab.stagingSeq`):
+    /// the counts — the Commit button's file count among them — follow the
+    /// rows the lists now draw, on the same turn.
+    #[qslot]
+    fn restage(&mut self) {
+        if self.loaded && self.tally() {
+            self.settle();
+            self.changed();
+        }
     }
 
     #[qslot]
@@ -540,6 +564,9 @@ impl WorktreeModel {
         self.wip_row_stands = false;
         self.seen_counts = None;
         self.counts = platitude_core::status::Counts::default();
+        self.status = platitude_core::status::WorktreeStatus::default();
+        self.status_marks = Arc::default();
+        self.status_looked = 0;
         self.op_state = platitude_core::opstate::OpState::default();
         // Each session counts its stamps from the start.
         self.badge_looked = 0;
@@ -606,16 +633,7 @@ impl WorktreeModel {
         self.loaded = true;
         self.side_theirs = sides.theirs;
         self.merge_tool = merge_tool;
-        self.eol_staged_count =
-            i32::try_from(eol_marks.iter().filter(|m| m.staged).count()).unwrap_or(i32::MAX);
         self.lfs_needed = i32::try_from(lfs_needed).unwrap_or(i32::MAX);
-        // A set, not a scan: both lists can run to every pending file.
-        let refused: HashSet<&str> = not_copied.iter().map(String::as_str).collect();
-        self.hard_reset_not_copied = !refused.is_empty()
-            && status.items.iter().any(|item| {
-                !matches!(item, platitude_core::status::StatusItem::Untracked { .. })
-                    && refused.contains(item.path())
-            });
         self.not_copied = not_copied.as_ref().clone();
         // HEAD is not read off here — it has its own message, ahead of
         // this one (`StateMsg::Head`). Kept: which report and branch the
@@ -629,34 +647,38 @@ impl WorktreeModel {
         self.status_behind = status.behind;
         self.push_remote = push_remote;
         self.status_push_track = push_track;
-        self.has_conflicts = status.has_conflicts();
-        let kinds = platitude_core::status::Kinds::of(&status);
-        self.wip_added = kinds.added as i32;
-        self.wip_modified = kinds.modified as i32;
-        self.wip_deleted = kinds.deleted as i32;
-        self.wip_renamed = kinds.renamed as i32;
-        self.wip_copied = kinds.copied as i32;
-        let counts = platitude_core::status::Counts::of(&status);
-        self.staged_count = counts.staged as i32;
-        self.unstaged_count = counts.unstaged as i32;
-        self.untracked_count = counts.untracked as i32;
-        self.conflict_count = counts.conflicted as i32;
-        self.hard_reset_takes = counts.hard_reset_takes() as i32;
-        self.counts = counts;
         self.wip_row_stands = platitude_core::graph::wip_row_stands(&status, &op_state);
         self.op_state = op_state;
         self.op_editing = stop.editing;
         self.op_edit_oid = stop.oid;
+        // Off git's own status: a press drawn over it has moved nothing yet
+        // (`tree_revision`).
+        let reported = platitude_core::status::Counts::of(&status);
         let tally = (
-            self.staged_count,
-            self.unstaged_count,
-            self.untracked_count,
-            self.conflict_count,
+            reported.staged as i32,
+            reported.unstaged as i32,
+            reported.untracked as i32,
+            reported.conflicted as i32,
         );
         if self.seen_counts != Some(tally) {
             self.seen_counts = Some(tally);
             self.tree_revision += 1;
         }
+        self.status = status;
+        self.status_marks = eol_marks;
+        self.status_looked = looked;
+        if crate::harness::memprobe::enabled() {
+            // A copy beside each bucket list's (`nav-*-all`): the counts draw
+            // from it as the presses move (`restage`).
+            crate::harness::memprobe::note_bytes(
+                "worktree-status",
+                self.tab_id,
+                platitude_core::mem::Footprint::heap_bytes(&self.status),
+                self.status.items.len(),
+            );
+        }
+        crate::hub::status_drawn(self.tab_id, crate::ops::Reader::Counts, looked);
+        self.tally();
         // The badge goes to whichever read looked last (`badge_looked`). Only
         // the badge: `op_state` and the stop above stay this status's, so
         // after a tick that looked later they can stand behind it until the
@@ -669,6 +691,68 @@ impl WorktreeModel {
                 None => (0, 0),
             };
         }
+    }
+
+    /// Counts the rows the lists draw — the status git reported, with the
+    /// stage presses still out over it (`hub::status_picture`) — into the
+    /// counts, the kinds and the staged line-ending marks. Answers whether any
+    /// of them moved; what derives from them with HEAD is `settle`'s.
+    fn tally(&mut self) -> bool {
+        use platitude_core::status::{Counts, Kinds, StatusItem};
+        let picture = crate::hub::status_picture(
+            self.tab_id,
+            self.status_looked,
+            &self.status,
+            &self.status_marks,
+        );
+        let (status, marks) = match &picture {
+            Some(picture) => (&picture.status, picture.marks.as_slice()),
+            None => (&self.status, self.status_marks.as_slice()),
+        };
+        let eol_staged =
+            i32::try_from(marks.iter().filter(|m| m.staged).count()).unwrap_or(i32::MAX);
+        // A set, not a scan: both lists can run to every pending file.
+        let refused: HashSet<&str> = self.not_copied.iter().map(String::as_str).collect();
+        let not_copied = !refused.is_empty()
+            && status.items.iter().any(|item| {
+                !matches!(item, StatusItem::Untracked { .. }) && refused.contains(item.path())
+            });
+        let conflicts = status.has_conflicts();
+        let kinds = Kinds::of(status);
+        let counts = Counts::of(status);
+        let before = self.tallied();
+        self.eol_staged_count = eol_staged;
+        self.hard_reset_not_copied = not_copied;
+        self.has_conflicts = conflicts;
+        self.wip_added = kinds.added as i32;
+        self.wip_modified = kinds.modified as i32;
+        self.wip_deleted = kinds.deleted as i32;
+        self.wip_renamed = kinds.renamed as i32;
+        self.wip_copied = kinds.copied as i32;
+        self.staged_count = counts.staged as i32;
+        self.unstaged_count = counts.unstaged as i32;
+        self.untracked_count = counts.untracked as i32;
+        self.conflict_count = counts.conflicted as i32;
+        self.hard_reset_takes = counts.hard_reset_takes() as i32;
+        self.counts = counts;
+        before != self.tallied()
+    }
+
+    /// What `tally` writes, as one value to tell a move by.
+    fn tallied(&self) -> (platitude_core::status::Counts, [i32; 6], bool, bool) {
+        (
+            self.counts,
+            [
+                self.wip_added,
+                self.wip_modified,
+                self.wip_deleted,
+                self.wip_renamed,
+                self.wip_copied,
+                self.eol_staged_count,
+            ],
+            self.hard_reset_not_copied,
+            self.has_conflicts,
+        )
     }
 
     /// The answers derived from HEAD and the last status together —

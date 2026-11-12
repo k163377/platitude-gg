@@ -61,17 +61,7 @@ impl NavSectionModel {
                 arrived |= self.settle_head_marks() || head_moved;
             }
         }
-        if let Some(feed) = self.status_feed.clone()
-            && let Some(StatusMsg {
-                status, eol_marks, ..
-            }) = feed.drain().pop()
-        {
-            // The marks can move on their own — a line-ending answer
-            // arrives after the status it is about.
-            let marked = self.eol_marks != eol_marks;
-            self.eol_marks = eol_marks;
-            arrived |= self.take(Source::files(status)) || marked;
-        }
+        arrived |= self.take_status_feed();
         if let Some(feed) = self.carried_feed.clone()
             && let Some(CarriedStatusMsg { at, name, status }) = feed.drain().pop()
         {
@@ -131,11 +121,98 @@ impl NavSectionModel {
         }
     }
 
+    /// The newest status of this window's tree, for a bucket list: noted as
+    /// this reader's drawing (`ops::StageAhead::drawn`) and put on screen.
+    /// Answers whether the rows or their marks moved.
+    fn take_status_feed(&mut self) -> bool {
+        let Some(feed) = self.status_feed.clone() else {
+            return false;
+        };
+        let Some(StatusMsg {
+            status,
+            eol_marks,
+            looked,
+            ..
+        }) = feed.drain().pop()
+        else {
+            return false;
+        };
+        self.looked = looked;
+        if let Some(reader) = crate::ops::Reader::of_run(&self.run) {
+            crate::hub::status_drawn(self.tab_id, reader, looked);
+        }
+        self.draw_status(status, eol_marks)
+    }
+
+    /// Puts `base` — a status as git reported it — on screen with the stage
+    /// presses still out over it (`ops::StageAhead`), and answers whether
+    /// the rows or their line-ending marks moved. The marks can move on their
+    /// own: a line-ending answer arrives after the status it is about.
+    fn draw_status(
+        &mut self,
+        base: platitude_core::status::WorktreeStatus,
+        marks: Arc<Vec<platitude_core::session::EolMark>>,
+    ) -> bool {
+        match crate::hub::status_picture(self.tab_id, self.looked, &base, &marks) {
+            Some(picture) => {
+                self.staged_from = Some(StatusBase {
+                    status: base,
+                    marks,
+                });
+                self.show_marks(Arc::new(picture.marks)) | self.take(Source::files(picture.status))
+            }
+            None => {
+                self.staged_from = None;
+                self.show_marks(marks) | self.take(Source::files(base))
+            }
+        }
+    }
+
+    /// Draws the status this list holds again with the stage presses as they
+    /// stand now — a press moved rows, or an answer put them back
+    /// (`restage`). Answers whether the rows moved; nothing for a list
+    /// holding no status of this window's tree.
+    pub(super) fn restage_files(&mut self) -> bool {
+        if crate::ops::Reader::of_run(&self.run).is_none() {
+            return false;
+        }
+        if let Some(base) = self.staged_from.take() {
+            return self.draw_status(base.status, base.marks);
+        }
+        // The rows on screen are the status itself, so that is the one to
+        // draw the presses over; it moves aside only where they move a row.
+        let Source::Files { status, .. } = &self.all else {
+            return false;
+        };
+        let Some(picture) =
+            crate::hub::status_picture(self.tab_id, self.looked, status, &self.eol_marks)
+        else {
+            return false;
+        };
+        let Source::Files { status, .. } = std::mem::take(&mut self.all) else {
+            return false;
+        };
+        self.staged_from = Some(StatusBase {
+            status,
+            marks: Arc::clone(&self.eol_marks),
+        });
+        self.show_marks(Arc::new(picture.marks));
+        self.take(Source::files(picture.status));
+        true
+    }
+
+    /// Answers whether the marks moved.
+    fn show_marks(&mut self, marks: Arc<Vec<platitude_core::session::EolMark>>) -> bool {
+        let marked = self.eol_marks != marks;
+        self.eol_marks = marks;
+        marked
+    }
+
     /// Lays out the rows a read brought, its moves said apart from the
     /// reader's (`rows_arriving` … `rows_arrived`). `total` is settled by
     /// the arrange — the one place that knows how many rows are shown as
     /// gone.
-    fn show_arrival(&mut self) {
+    pub(super) fn show_arrival(&mut self) {
         self.rows_arriving();
         self.reshape();
         self.changed();
@@ -201,3 +278,7 @@ impl NavSectionModel {
         moved
     }
 }
+
+#[cfg(test)]
+#[path = "staging_tests.rs"]
+mod staging_tests;

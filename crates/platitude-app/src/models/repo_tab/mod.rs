@@ -48,6 +48,8 @@ mod drain_report_tests;
 #[cfg(test)]
 mod drain_signature_tests;
 #[cfg(test)]
+mod drain_staging_tests;
+#[cfg(test)]
 mod drain_tests;
 mod ops_config;
 mod ops_conflict;
@@ -196,6 +198,33 @@ pub struct RepoTab {
     /// is on one (`ops::Row::WorktreeChip` / `WorktreeBranch`).
     gone_worktree_chip: String,
     gone_worktree_branch: String,
+    /// Moves whenever the file rows a stage or unstage moved ahead of git
+    /// move, or what they hold back does (`ops::StageAhead`, held by the hub
+    /// per tab): the page has the lists and the counts draw again on it
+    /// (`RepoPage.restage`).
+    staging_seq: i32,
+    /// A whole bucket's stage or unstage press is still waiting for git's
+    /// answer (`Stage all` / `Unstage all` wait on that), and the paths the
+    /// others still out name, whose rows' marks wait. Copies of the hub's, for
+    /// bindings: a property is read where a slot would be asked once per row.
+    staging_all_out: bool,
+    staging_moving: Vec<String>,
+    /// A copy of `StageAhead::unseen`: a stage or unstage press stands that
+    /// the screen has not caught up with — Commit waits, and says why.
+    staging_unseen: bool,
+    /// The writes this tab knows to be out, by id — accepted at its own door
+    /// (`ask_session`) or at another model's in the same turn (`counted_out`,
+    /// a restore off the discard record), or seen starting where nobody here
+    /// asked (`TabMsg::WriteState`: the paced fetch) — until git's answer:
+    /// queued ones too, which `busy_count` does not count until they start.
+    outstanding: Vec<u64>,
+    /// Whether the Commit button waits: on a write out (`outstanding` — one
+    /// queued would be committed with its work in it, which no row on screen
+    /// showed), on a stage or unstage press the screen has not caught up
+    /// with (`StageAhead::unseen` — until then the rows are the press's
+    /// word, not git's, landed or not), and on a tab still standing in
+    /// another worktree.
+    commit_waits: bool,
     /// The commit the standing `checkSignature` is about — the question,
     /// where `signature_oid` and its three are the answer.
     ///

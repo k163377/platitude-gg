@@ -39,6 +39,9 @@ Item {
     /// The row's work is out (the tab is busy): the full fill waits on it past the floor, with the ring in the mark's
     /// seat (デザイン規約 §回数押し).
     property bool waiting: false
+    /// Why the row cannot be pressed, said on hover; empty where its reason shows elsewhere — the band's running
+    /// command, the conflicted rows — and a disabled row keeps quiet (デザイン規約 §無効).
+    property string blockedWhy: ""
 
     /// Run, whichever gesture this row takes.
     signal picked()
@@ -231,5 +234,10 @@ Item {
         holdPresses: opRow.holdPresses
         waiting: opRow.waiting
         onFinished: opRow.picked()
+    }
+    readonly property TipAsk blockedTip: TipAsk {
+        target: opRow
+        asked: rowHover.containsMouse && !opRow.enabled && opRow.blockedWhy !== ""
+        words: opRow.blockedWhy
     }
 }
