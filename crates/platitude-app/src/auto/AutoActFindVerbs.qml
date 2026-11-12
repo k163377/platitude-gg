@@ -140,17 +140,10 @@ Item {
             findDropSettled.restart()
         } else if (act === "commands" || act === "commands-select" || act === "commands-copy"
                    || act === "commands-sweep") {
-            // Stage and unstage so the log has something in it.
-            repoTab.stageAll()
-            repoTab.unstageAll()
+            // Stage and unstage so the log has something in it (`commandsFillTimer`).
+            page.showWip()
             page.toggleCommands()
-            if (act === "commands-sweep") {
-                commandsSweepTimer.start()
-            } else if (act !== "commands") {
-                commandsPickTimer.order = act === "commands-copy" ? ["stashed", "picked", "copied"]
-                                                                  : ["stashed", "picked"]
-                commandsPickTimer.start()
-            }
+            commandsFillTimer.start()
         } else if (act === "commands-fail" || act === "commands-clear" || act === "commands-fail-shut"
                    || act === "commands-escape") {
             // A real refusal in git's own words, which raises the panel by itself. `commands-fail-shut fold` folds the
@@ -499,6 +492,44 @@ Item {
                                 + " mark=" + page.commandsMarkColor })
         }
     }
+    // PGG_AUTO_ACT=commands / commands-select / commands-copy / commands-sweep: the log filled as a hand fills it — the
+    // unstaged heading's `Stage all`, then, once that press is through and the status after it drawn, the staged
+    // heading's `Unstage all` (`WipPane.moveBucket`, the bands themselves: one a standing press holds down takes no
+    // press). `commands` is pictured once both are in.
+    PageStage {
+        id: commandsFillTimer
+        name: "commands_fill"
+        order: ["staged", "unstaged"]
+        onTriggered: {
+            const op = commandsFillTimer
+            if (op.at("start")) {
+                // Pressed until the band takes it: it is not there before the rows are, nor live while the opening
+                // fetch runs.
+                op.input("staged", () => driver.pressWrite("stage-all", () => wipPane.moveBucket("unstaged")))
+                return
+            }
+            if (!Awaited.all("commands_fill_through", { "written": driver.wroteAndSettled(),
+                                                        "drawn": !repoTab.stagingUnseen }))
+                return
+            if (op.at("staged")) {
+                op.input("unstaged", () => driver.pressWrite("unstage-all", () => wipPane.moveBucket("staged")))
+                return
+            }
+            const act = Harness.autoAct
+            if (act === "commands") {
+                op.complete({ "when": () => ({ "page": PageSettled.settled(page) }),
+                              "report": () => "commands_filled rows=" + page.pageCommands.rowsHeld() })
+                return
+            }
+            op.stop()
+            if (act === "commands-sweep") {
+                commandsSweepTimer.start()
+                return
+            }
+            commandsPickTimer.order = act === "commands-copy" ? ["stashed", "picked", "copied"] : ["stashed", "picked"]
+            commandsPickTimer.start()
+        }
+    }
     // PGG_AUTO_ACT=commands-select / commands-copy: a drag from the head of the first row to the end of the last —
     // all three columns and more than one row — then, for `-copy`, Ctrl+C. The picture after the press is the one
     // before it, so the report line is the whole judgment. **`perRow=` is the claim**: one clipboard
@@ -509,10 +540,10 @@ Item {
     // picture's point is the wash filling the gaps between the columns too, and `rows=` / `washed=` (rows built, rows
     // wearing the wash) are diagnosis. Neither needs `--allow-write-failure`.
     //
-    // Behind the write barrier, which holds the first write asked after it: the two writes that fill the log are
-    // still queued when this starts. The stash is pressed once their rows are in and nothing runs — the queue serves
-    // it after them — and the barrier armed for it holds it in turn. Everything is read in the branch that acts
-    // (rules/app-ui.md §UI 自動化).
+    // Started once the two writes that fill the log are through (`commandsFillTimer`). The stash goes in once the
+    // band's own `stash` would take a press (`TopBar.stashLive` — down while a stage press stands,
+    // `Words.stagingWait`): the slot behind it, with a message of two paragraphs no box can type, and the watch armed
+    // for it holds it in turn. Everything is read in the branch that acts (rules/app-ui.md §UI 自動化).
     //
     // `rows`, witnessed at the drag: the rows the drag spans, read off the model — the panel's `(N)` is the view's, a
     // frame behind in the tick a press lands in.
@@ -523,6 +554,7 @@ Item {
             const op = commandsPickTimer
             // Two rows: the write barrier alone can let a tick through while an opening read is the only row.
             if (!Awaited.all("commands_pick", { "written": driver.wroteAndSettled(),
+                                                "stashable": !op.at("start") || page.pageBand.stashLive,
                                                 "shown": page.commandsShown,
                                                 "idle": !page.pageCommands.running,
                                                 "rows": page.pageCommands.rowsHeld() >= 2 }))

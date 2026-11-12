@@ -25,15 +25,19 @@ const OLD_GIT_VERBS: [&str; 5] = [
 /// stands only where git cannot run it.
 const NO_LFS_VERBS: [&str; 4] = ["no-lfs", "no-lfs-card", "badges-all", "badges-all-hover"];
 
-/// Likewise a git whose graph walk says nothing behind the commit the verb
-/// makes (its subject says `silent` — `AutoActSilenceVerbs`), so the line is
-/// just `verify-ui walk-silent …`: held past the run, or, for
-/// `walk-silent landed`, past the product's silence budget
-/// (`platitude_core::session::walk_silence`) and then let through.
-fn silent_walk_for(verb: &str, arg: &str) -> &'static str {
+/// Likewise the late git a verb is about, so its line is just the verb: a
+/// graph walk that says nothing behind the commit the verb makes (its
+/// subject says `silent` — `AutoActSilenceVerbs`), held past the run, or,
+/// for `walk-silent landed`, past the product's silence budget
+/// (`platitude_core::session::walk_silence`) and then let through; and the
+/// `git add` of `stage-held`, held until the app is on its way out — past
+/// the pictures, before the exit joins the write — so the run photographs
+/// what stands while a stage press is out (`AutoActFileRowVerbs`).
+fn slow_git_for(verb: &str, arg: &str) -> &'static str {
     match (verb, arg) {
         ("walk-silent", "landed") => "walk:45000:head=silent",
         ("walk-silent" | "walk-silent-quit" | "walk-silent-card", _) => "walk:3600000:head=silent",
+        ("stage-held" | "stage-held-amend", _) => "add:3600000:until=writes-joining",
         _ => "",
     }
 }
@@ -69,7 +73,7 @@ fn gits_for<'a>(
     };
     let no_lfs = opts.no_lfs || NO_LFS_VERBS.contains(&opts.verb.as_str());
     let slow = match opts.slow_git.as_str() {
-        "" => silent_walk_for(&opts.verb, &opts.arg),
+        "" => slow_git_for(&opts.verb, &opts.arg),
         asked => asked,
     };
     let on_path = !old_git.is_empty() || no_lfs || !slow.is_empty();
@@ -407,6 +411,21 @@ fn gitconfig_home(
 
 #[cfg(test)]
 mod tests {
+    /// The held `git add` is let go where the held save is: the station
+    /// the exit joins its writes at, spelled once (`super::child`).
+    #[test]
+    fn a_held_add_is_let_go_where_the_exit_joins_its_writes() {
+        for verb in ["stage-held", "stage-held-amend"] {
+            let asked = super::slow_git_for(verb, "b.txt");
+            let slow = super::super::git_shim::Slow::parse(asked).expect("a hold the shim reads");
+            assert_eq!(slow.subcommand, "add");
+            assert_eq!(
+                slow.until.as_deref(),
+                Some(super::super::child::WRITES_JOINING)
+            );
+        }
+    }
+
     #[test]
     fn the_gitconfig_leaves_the_mount_inside_a_container() {
         let shot_dir = std::path::Path::new("/out/shots-1");

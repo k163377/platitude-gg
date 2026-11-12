@@ -172,6 +172,13 @@ pub(super) fn last_station(shot_dir: &Path) -> Option<String> {
     read_trail(shot_dir).ok()?.pop().map(|(_, station)| station)
 }
 
+/// Whether the run's app has reached `station` by its trail — what a git
+/// held until the app is on its way out reads (`super::git_shim`, the
+/// `until=` hold). No trail yet is not there yet.
+pub(super) fn reached(shot_dir: &Path, station: &str) -> bool {
+    read_trail(shot_dir).is_ok_and(|marks| marks.iter().any(|(_, at)| at == station))
+}
+
 /// The trail as (seconds, station) in the order reached; a read error is
 /// kept apart from an empty file. A line that does not parse is dropped:
 /// the writer can be stopped between the write and the newline, so the
@@ -403,7 +410,7 @@ mod tests {
 
     use super::{
         Counted, TRAIL_FILE, account, at_a_ceiling, clear_any_account, held_in, last_station,
-        stopped_in, trail,
+        reached, stopped_in, trail,
     };
     use crate::yard::Yard;
 
@@ -688,6 +695,26 @@ mod tests {
 
         assert!(said.contains("starting 0.0s > event-loop 0.3s"), "{said}");
         assert!(!said.contains("0.9"), "{said}");
+    }
+
+    /// A station is reached on its own line, whole: one whose name only
+    /// begins another's is not, nor one cut off mid-write.
+    #[test]
+    fn a_station_is_reached_on_its_own_whole_line() {
+        let dir = lanes("trail-reached");
+        assert!(!reached(&dir, "writes-joining"), "no trail yet");
+        std::fs::write(
+            dir.join("stations.txt"),
+            "0.0s event-loop\n3.6s writes-joining-late\n3.7s writes-joi",
+        )
+        .expect("a trail");
+        assert!(!reached(&dir, "writes-joining"));
+        std::fs::write(
+            dir.join("stations.txt"),
+            "0.0s event-loop\n3.6s writes-joining\n",
+        )
+        .expect("a trail");
+        assert!(reached(&dir, "writes-joining"));
     }
 
     #[test]

@@ -19,7 +19,8 @@ pub(super) const OTHER_GIT: &str = "PGG_OTHER_GIT";
 /// answers late, and by how much ([`Slow`]).
 pub(super) const SHIM_SLOW: &str = "PGG_SHIM_SLOW";
 
-/// One subcommand of git answered late: `<subcommand>:<ms>[:quiet|:head=<word>]`.
+/// One subcommand of git answered late:
+/// `<subcommand>:<ms>[:quiet|:head=<word>|:until=<station>]`.
 /// `quiet` leaves the subcommand alone while the repository has a rebase
 /// under way — so a status read during a rebase lands at its own pace and
 /// the one after it lands late, the order a verb completing on the
@@ -27,7 +28,14 @@ pub(super) const SHIM_SLOW: &str = "PGG_SHIM_SLOW";
 /// answers late only while the subject of the commit `HEAD` stands on
 /// holds `<word>`: the opening's reads land at their own pace, however
 /// many it makes, and the ones behind the commit a verb makes with that
-/// word are the ones that wait.
+/// word are the ones that wait. `until=<station>` holds it no further
+/// than the app's own way out: let go as soon as the app reaches
+/// `<station>` by its trail (`super::wedge::reached`; the app writes it
+/// only under a watchdog, `platitude_app::harness::deadline`, so a run with
+/// none holds to the ceiling), `<ms>` being only the ceiling. A write held
+/// past the run takes this: the app joins its writes on the way out
+/// (`Hub::shutdown`, `writes-joining`), so one held by the clock alone
+/// would hold the exit with it.
 ///
 /// `walk` names the graph's walk alone — `log` with the `--date-order` the
 /// session's walk asks for (`platitude_core::session::walk`), and no other
@@ -37,12 +45,17 @@ pub(crate) struct Slow {
     pub(super) ms: u64,
     pub(super) quiet: bool,
     pub(super) head: Option<String>,
+    pub(super) until: Option<String>,
 }
 
 impl Slow {
     pub(crate) fn parse(asked: &str) -> Result<Slow, String> {
-        let form =
-            || format!("--slow-git takes <subcommand>:<ms>[:quiet|:head=<word>]; got {asked:?}");
+        let form = || {
+            format!(
+                "--slow-git takes <subcommand>:<ms>[:quiet|:head=<word>|:until=<station>]; got \
+                 {asked:?}"
+            )
+        };
         let mut parts = asked.split(':');
         let subcommand = parts
             .next()
@@ -52,18 +65,27 @@ impl Slow {
             .next()
             .and_then(|ms| ms.parse::<u64>().ok())
             .ok_or_else(form)?;
-        let (quiet, head) = match parts.next() {
-            None => (false, None),
-            Some("quiet") => (true, None),
-            Some(other) => match other.strip_prefix("head=").filter(|word| !word.is_empty()) {
-                Some(word) => (false, Some(word.to_string())),
-                None => {
-                    return Err(format!(
-                        "--slow-git: the third part is `quiet`, `head=<word>` or nothing; got \
-                         {other:?}"
-                    ));
+        let (quiet, head, until) = match parts.next() {
+            None => (false, None, None),
+            Some("quiet") => (true, None, None),
+            Some(other) => {
+                let named = |key: &str| {
+                    other
+                        .strip_prefix(key)
+                        .filter(|word| !word.is_empty())
+                        .map(str::to_string)
+                };
+                match (named("head="), named("until=")) {
+                    (Some(word), _) => (false, Some(word), None),
+                    (None, Some(station)) => (false, None, Some(station)),
+                    (None, None) => {
+                        return Err(format!(
+                            "--slow-git: the third part is `quiet`, `head=<word>`, \
+                             `until=<station>` or nothing; got {other:?}"
+                        ));
+                    }
                 }
-            },
+            }
         };
         if parts.next().is_some() {
             return Err(form());
@@ -73,7 +95,36 @@ impl Slow {
             ms,
             quiet,
             head,
+            until,
         })
+    }
+
+    /// Holds this call: until the app's trail names the station, where
+    /// one is given, no longer than the ceiling either way.
+    fn hold(&self) {
+        let ceiling = std::time::Duration::from_millis(self.ms);
+        let Some(station) = &self.until else {
+            // waits(timed): the one subcommand answers no sooner than asked (--slow-git) — the order
+            // a slow read gives by chance, made the run's own; git's answer is the product's real time
+            std::thread::sleep(ceiling);
+            return;
+        };
+        let shot_dir = std::env::var_os("PGG_SHOT_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_default();
+        // The trail is a file the app appends to, which announces nothing: looked at again until
+        // it names the station. A run that never gets there is let through at the ceiling, and
+        // the run's own watchdog is what names it.
+        let mut wait = crate::wait::Wait::new(
+            "the held git",
+            crate::wait::Budget::whole(ceiling),
+            crate::wait::LOOK_AGAIN,
+        );
+        while !super::wedge::reached(&shot_dir, station) {
+            if wait.look_again(station).is_err() {
+                return;
+            }
+        }
     }
 
     /// Whether this call of git is the one to answer late; `real` is the
@@ -172,9 +223,7 @@ pub fn git_shim() -> Option<ExitCode> {
     if let Some(slow) = slow
         && slow.delays(&args, &real)
     {
-        // waits(timed): the one subcommand answers no sooner than asked (--slow-git) — the order
-        // a slow read gives by chance, made the run's own; git's answer is the product's real time
-        std::thread::sleep(std::time::Duration::from_millis(slow.ms));
+        slow.hold();
     }
     // Stdio inherited: the app reads this output as git's.
     let status = Command::new(&real).args(&args).status();
@@ -202,4 +251,22 @@ fn subcommand(args: &[OsString]) -> Option<&OsString> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Slow;
+
+    #[test]
+    fn a_hold_until_a_station_parses_and_stands_alone() {
+        let slow = Slow::parse("add:3600000:until=writes-joining").expect("parses");
+        assert_eq!(slow.subcommand, "add");
+        assert_eq!(slow.until.as_deref(), Some("writes-joining"));
+        assert!(slow.head.is_none() && !slow.quiet);
+        assert!(Slow::parse("add:10:until=").is_err(), "a station is named");
+        assert!(
+            Slow::parse("add:10:until=x:quiet").is_err(),
+            "one third part"
+        );
+    }
 }

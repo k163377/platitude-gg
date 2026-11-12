@@ -594,24 +594,149 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "line_run staged=3 want=3",
     },
     // A bucket emptied from its own heading keeps that heading, both ways
-    // round, so both headings are read back whichever way was pressed.
+    // round, so both headings are read back whichever way was pressed. On
+    // `--preset dirty`, on the press's own turn (`pressed_*`), the rows the
+    // row alone decides have moved — what is left is `c.txt`, changed on
+    // both sides, and for the staged bucket a staged rename besides, by the
+    // counts and by the bucket's own list alike — Commit waits on the
+    // status (the app's `StageAhead::unseen`), which no longer holds it at
+    // the end, and while the press is out both bands are down and silent
+    // and every row's mark waits (`pressed_bands`, `pressed_marks_open`);
+    // at the end the emptied band is down for having nothing to move, the
+    // other live (`bands=`). With `b.txt`'s diff open, the pane stays on it
+    // until that status is drawn — its neighbour `c.txt` is left to that
+    // status — then lands where one status emptying the side takes it:
+    // `b.txt`'s staged side, `c.txt` gone from its own too.
     Verb {
         name: "stage-all",
-        when: &[],
+        when: &[
+            (
+                Arg::IsOn("b.txt", "dirty"),
+                "wip_heads from=unstaged unstaged=true staged=true conflicts=false pressed_left=1 \
+                 pressed_rows=1 pressed_unseen=true \
+                 pressed_bands=unstaged:false/false,staged:false/false pressed_marks_open=false \
+                 unseen=false bands=unstaged:false/false,staged:true/true unstaged_count=0 \
+                 staged_count=5 conflict_count=0 diff=staged:b.txt",
+            ),
+            (
+                Arg::WithPreset("dirty"),
+                "wip_heads from=unstaged unstaged=true staged=true conflicts=false pressed_left=1 \
+                 pressed_rows=1 pressed_unseen=true \
+                 pressed_bands=unstaged:false/false,staged:false/false pressed_marks_open=false \
+                 unseen=false bands=unstaged:false/false,staged:true/true",
+            ),
+        ],
         plain: "wip_heads from=unstaged unstaged=true staged=true",
     },
     Verb {
         name: "unstage-all",
-        when: &[],
+        when: &[(
+            Arg::WithPreset("dirty"),
+            "wip_heads from=staged unstaged=true staged=true conflicts=false pressed_left=2 \
+             pressed_rows=2 pressed_unseen=true \
+             pressed_bands=unstaged:false/false,staged:false/false pressed_marks_open=false \
+             unseen=false bands=unstaged:true/true,staged:false/false",
+        )],
         plain: "wip_heads from=staged unstaged=true staged=true",
+    },
+    // A row's `+` moves it at the press, ahead of git (the app's
+    // `ops::StageAhead`), read in the lists themselves: on the press's own
+    // turn, before any answer can be drained — the row staged, its own mark
+    // and Commit waiting — and once the status after the write is drawn
+    // (`shot_*`): still staged, its mark button and Commit live, nothing
+    // out. On `b.txt` the file's open diff has gone on to the next file on
+    // the press's own turn — the neighbour, which the press leaves alone —
+    // and stays there (`RepoPage.followEmptySide`).
+    Verb {
+        name: "stage-ahead",
+        when: &[(
+            Arg::IsOn("b.txt", "dirty"),
+            "stage_ahead pressed_staged=true pressed_unstaged=false pressed_out=true \
+             pressed_mark_open=false pressed_commit_open=false shot_staged=true \
+             shot_unstaged=false shot_out=false shot_mark_open=true shot_commit_open=true \
+             shot_mark_button=true pressed_diff=unstaged:c.txt shot_diff=unstaged:c.txt \
+             counts=3>4/4",
+        )],
+        plain: "stage_ahead pressed_staged=true pressed_unstaged=false pressed_out=true \
+                pressed_mark_open=false pressed_commit_open=false shot_staged=true \
+                shot_unstaged=false shot_out=false shot_mark_open=true shot_commit_open=true \
+                shot_mark_button=true",
+    },
+    // Stage presses outrunning git land the open diff where moving at every
+    // status would (`RepoPage.followEmptySide`). Every press is out at once
+    // (`out=`: pressed on one turn, before any answer). Pressed one by one,
+    // the pane walks on at each press — past `c.txt`, on both sides and left
+    // to the status — to the last file's staged side; `b.txt` and its
+    // neighbour pressed as one, it waits on `b.txt` and lands on its staged
+    // side.
+    Verb {
+        name: "diff-walk",
+        when: &[
+            (
+                Arg::IsOn("apart", "dirty"),
+                "diff_walk form=apart out=3 \
+                 walk=unstaged:c.txt>untracked:untracked.txt>untracked:untracked.txt \
+                 landed=staged:untracked.txt",
+            ),
+            (
+                Arg::IsOn("together", "dirty"),
+                "diff_walk form=together out=2 walk=unstaged:b.txt landed=staged:b.txt",
+            ),
+        ],
+        plain: "diff_walk form=",
+    },
+    // …with its `git add` held past the run (`verify-ui` gives this verb
+    // `--slow-git`): the moved row's mark, out under the hand, down in the
+    // muted ink with no tip, the band's `stash` down with a tip to give,
+    // and Commit down saying why — the staging, though a summary is in the
+    // box.
+    Verb {
+        name: "stage-held",
+        when: &[],
+        plain: "stage_held pressed_staged=true pressed_unstaged=false pressed_out=true \
+                pressed_mark_open=false pressed_commit_open=false held_mark_button=false \
+                held_mark_muted=true held_mark_tip=false \
+                stash_live=false stash_tip=true commit_open=false why=Wait for staging to finish",
+    },
+    // …and HEAD's message edited in the details pane after the press: its
+    // Save (`commit --amend`) waits the same way, in the same words.
+    Verb {
+        name: "stage-held-amend",
+        when: &[],
+        plain: "stage_held pressed_staged=true pressed_unstaged=false pressed_out=true \
+                pressed_mark_open=false pressed_commit_open=false held_mark_button=false \
+                held_mark_muted=true held_mark_tip=false \
+                stash_live=false stash_tip=true save_enabled=false save_tip=true \
+                why=Wait for staging to finish",
+    },
+    // …and refused by another git's lock, Commit pressed on the press's own
+    // turn: it takes no press — the other rows' marks stay live — and once
+    // the refusal is in, the row is back with its mark and Commit live, the
+    // bar says nothing was staged, and no commit ran, read outside the tab's
+    // books (the `git add` the lock turned down in the log, no `git commit`
+    // there, HEAD where it stood).
+    Verb {
+        name: "stage-refused",
+        when: &[],
+        plain: "stage_refused pressed_staged=true pressed_unstaged=false pressed_out=true \
+                pressed_mark_open=false pressed_commit_open=false commit_pressed=false \
+                others_mark_open=true add_logged=true commit_ran=false head_kept=true \
+                back_staged=false back_unstaged=true back_out=false back_mark_open=true \
+                back_commit_open=true back_mark_button=true said=Nothing was staged",
     },
     // The conflicted heading stands only while git has something
     // unmerged, so resolving the whole bucket takes it away. `staged=`
     // says where the files went — `git add --all` would have emptied the
-    // unstaged bucket with them.
+    // unstaged bucket with them. A resolve moves nothing ahead of git: no
+    // press stands for it (`pressed_unseen=false`), and every conflict is
+    // still there on the press's turn.
     Verb {
         name: "resolve-all",
-        when: &[],
+        when: &[(
+            Arg::WithPreset("conflict-kinds"),
+            "wip_heads from=conflicts unstaged=true staged=true conflicts=false pressed_left=4 \
+             pressed_rows=4 pressed_unseen=false",
+        )],
         plain: "wip_heads from=conflicts unstaged=true staged=true conflicts=false",
     },
     // The line-ending card held by the hand inside it, and a line of its

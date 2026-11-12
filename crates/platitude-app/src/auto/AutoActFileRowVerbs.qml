@@ -4,8 +4,9 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The file rows of the worktree: the menu a row opens, the whole-bucket moves, and the reads an opening
-/// fires.
+/// The file rows of the worktree: the menu a row opens, the whole-bucket moves, a row's own stage press ahead of git
+/// and what waits on it (`stageAheadTimer`), where the open diff lands as presses outrun git (`walkTimer`), and the
+/// reads an opening fires.
 // `Item` because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
@@ -23,6 +24,8 @@ Item {
     readonly property var fileRowMenu: driver.fileRowMenu
     readonly property var fileMenu: driver.fileMenu
     readonly property var fileDiscardItem: driver.fileDiscardItem
+    readonly property var diffPane: driver.diffPane
+    readonly property var detailsPane: driver.detailsPane
 
     /// Runs `act` if it is one of this family's, and says whether it was.
     function run(act, arg) {
@@ -30,6 +33,15 @@ Item {
             page.showWip()
             bucketAllTimer.from = act === "stage-all" ? "unstaged" : act === "unstage-all" ? "staged" : "conflicts"
             bucketAllTimer.start()
+        } else if (acts.aheadOrders[act] !== undefined) {
+            page.showWip()
+            // A summary in the box, so all the Commit button can wait on is the staging (`WipCommitBlock`).
+            wipPane.setMessage("feat: commit what was staged ahead", "")
+            stageAheadTimer.order = acts.aheadOrders[act]
+            stageAheadTimer.start()
+        } else if (act === "diff-walk") {
+            page.showWip()
+            walkTimer.start()
         } else if (driver.fileRowActs.indexOf(act) >= 0) {
             page.showWip()
             fileRowsTimer.start()
@@ -45,10 +57,24 @@ Item {
     // bound to nothing would still be counted by the condition that asks for it. The picture alone cannot judge it.
     // `stage-all` / `unstage-all` run on `--preset dirty`; `resolve-all` on `--preset conflict-kinds`, where one
     // `git add` settles every kind, the two with only one side left included.
+    //
+    // Witnessed on the press's own turn (`pressed_*`): what is left in the bucket — the rows moved at the press but
+    // those only the status decides (on `--preset dirty`: `c.txt`, changed on both sides, and for the staged bucket a
+    // staged rename besides) — by the counts (`pressed_left`) and by the rows the bucket's own list draws
+    // (`pressed_rows`), whether Commit waits on the status (`RepoTab.stagingUnseen`;
+    // デザイン規約 §バケツごとの一覧と、ペインの分け方), and how the bands and the first row's mark stand while the
+    // press is out — both bands down and silent, every mark waiting (`pressed_bands`, `pressed_marks_open`;
+    // `RepoTab.stagingAllOut`). A conflict's resolve moves nothing ahead of git (`pressed_unseen=false`). The bands are
+    // read again at the end (`bands=`): the emptied one down for having nothing to move, the other live.
+    //
+    // `<verb> <path>` opens that file's diff on the bucket's own side first. `stage-all b.txt` (`--preset dirty`): the
+    // pane stays on `b.txt` until the status after the press is drawn (`RepoPage.followEmptySide`): its neighbour
+    // `c.txt` is left to the status, and the press still reaches it. At that status `c.txt` has gone from the side
+    // too, and the pane lands on `b.txt`'s staged side (`diff=`), as one status emptying the side takes it.
     PageStage {
         id: bucketAllTimer
         name: "bucket_all"
-        order: ["pressed"]
+        order: ["opened", "pressed"]
         /// Which bucket is being emptied.
         property string from: ""
         /// What is left in that bucket, by the model's counts.
@@ -60,12 +86,35 @@ Item {
                    : worktree.unstagedCount + worktree.untrackedCount
         }
         onTriggered: {
+            const path = Harness.autoActArg
             if (bucketAllTimer.at("start")) {
                 // The heading exists once the list has laid its sections out: a polish pass after the rows arrive.
                 if (!Awaited.all("bucket_all_heading", { "heading": wipPane.rowAt(0) !== null }))
                     return
-                bucketAllTimer.input("pressed", () => driver.pressWrite("bucket:" + bucketAllTimer.from,
-                                                                        () => wipPane.moveBucket(bucketAllTimer.from)))
+                bucketAllTimer.input("opened", () => {
+                    if (path !== "")
+                        page.openDiff(bucketAllTimer.from, path, "")
+                    return true
+                })
+                return
+            }
+            if (bucketAllTimer.at("opened")) {
+                if (path !== "" && !Awaited.all("bucket_all_diff", { "open": page.diffKey === bucketAllTimer.from
+                                                                                 + ":" + path,
+                                                                     "rows": diffPane.view.count > 0,
+                                                                     "settled": !page.diffSettling }))
+                    return
+                bucketAllTimer.input("pressed", () => driver.pressWrite("bucket:" + bucketAllTimer.from, () => {
+                    const went = wipPane.moveBucket(bucketAllTimer.from)
+                    const first = wipPane.rowAt(0)
+                    bucketAllTimer.witness("pressed", "pressed_left=" + bucketAllTimer.left()
+                                                      + " pressed_rows=" + acts.rowsIn(bucketAllTimer.from)
+                                                      + " pressed_unseen=" + repoTab.stagingUnseen
+                                                      + " pressed_bands=" + acts.bandsLine()
+                                                      + " pressed_marks_open="
+                                                      + (first === null ? "none" : first.stageOpen))
+                    return went
+                }))
                 return
             }
             // Counts first: the headings are the list's, and trail the model's counts. Headings first and together in
@@ -73,16 +122,369 @@ Item {
             // the whole bucket takes its heading off (`WipPane`).
             bucketAllTimer.complete({
                 "name": "bucket_all_emptied",
-                "when": () => ({ "written": driver.wroteAndSettled(), "emptied": bucketAllTimer.left() === 0 }),
+                // Commit waiting on no status any more is part of the end: the status after the write is drawn.
+                "when": () => ({ "written": driver.wroteAndSettled(), "emptied": bucketAllTimer.left() === 0,
+                                 "shown": !repoTab.stagingUnseen,
+                                 "followed": Harness.autoActArg === ""
+                                             || page.diffKey !== bucketAllTimer.from + ":" + Harness.autoActArg,
+                                 "diff": Harness.autoActArg === "" || !page.diffSettling,
+                                 "page": PageSettled.settled(page) }),
                 "report": () => "wip_heads from=" + bucketAllTimer.from
                                 + " unstaged=" + wipPane.bucketHeaded("unstaged")
                                 + " staged=" + wipPane.bucketHeaded("staged")
                                 + " conflicts=" + wipPane.bucketHeaded("conflicts")
+                                + " " + bucketAllTimer.witnessed("pressed")
+                                + " unseen=" + repoTab.stagingUnseen
+                                + " bands=" + acts.bandsLine()
                                 + " unstaged_count=" + (worktree.unstagedCount + worktree.untrackedCount)
                                 + " staged_count=" + worktree.stagedCount
-                                + " conflict_count=" + worktree.conflictCount })
+                                + " conflict_count=" + worktree.conflictCount
+                                + (Harness.autoActArg === "" ? "" : " diff=" + page.diffKey) })
         }
     }
+    // A row's `+` moves the row at the press, ahead of git (デザイン規約 §バケツごとの一覧と、ペインの分け方). Each of these
+    // reads the press's own turn (`pressed_*` — no answer can have been drained by then): the row in STAGED, its own
+    // mark waiting, Commit waiting too (the rows are the press's word until the status after it).
+    //
+    // `stage-ahead <path>` (`--preset dirty`, a file changed on one side — `b.txt`): the file's diff is opened first,
+    // and on the press's turn the pane is on the next file already (`pressed_diff=`, `RepoPage.followEmptySide`: the
+    // neighbour, which the press leaves alone, reads as it is). The run ends once git has answered and the status
+    // after it is drawn (`shot_*`): the row stays staged, its mark and Commit are live, the diff still on that file.
+    // How long git takes is not this run's: what stands while the press is out is `stage-held`'s.
+    //
+    // `stage-held <path>` (`--preset dirty`; `xtask verify-ui` holds this verb's `git add` past the run): the press
+    // stands for the picture — the moved row in STAGED, its mark under the hand down, in the muted ink and silent
+    // (`held_mark_*`, read while shown — the mark is out only under the hand, `NavItemDelegate.stageButton`), the
+    // band's `stash` down with a tip to give (`stash_live=`, `stash_tip=`; its words are `tst_stagingwaits.qml`'s),
+    // and Commit down with its tip saying why (`why=`, `Words.stagingWait`; a summary is in the box, so nothing else
+    // holds it).
+    // `stage-held-amend <path>`: the same press, then HEAD's message edited in the details pane, whose Save waits the
+    // same way (`RepoPage`'s `amendWaits`) — the hand's order: the WIP pane's row first, HEAD's row after. Both
+    // photograph the page with the press's status still owed (`arriving`), and move on from the write unanswered, said
+    // out loud (`AutoActDriver.letWriteGo`).
+    //
+    // `stage-refused <path>` (`--preset stage-lock`, whose `git add` meets another git's lock): Commit, pressed on the
+    // press's own turn, takes no press (`WipPane.pressCommit`) — the other rows' marks stay live — and once the
+    // refusal is in, the row is back (`back_*`), no commit ran (the log, HEAD) and Commit can be pressed again.
+    // `add_logged=` is the `git add` the lock turned down, in the log: a press that never reached git is no pass. Ends
+    // behind the bar the refusal brings down (`AutoActDriver.barrierNotice`).
+    PageStage {
+        id: stageAheadTimer
+        name: "stage_ahead"
+        onTriggered: {
+            const op = stageAheadTimer
+            const path = Harness.autoActArg
+            const act = Harness.autoAct
+            if (op.at("start")) {
+                if (!Awaited.all("stage_ahead_ready", { "row": acts.rowNamed(path) !== null,
+                                                         "identity": repoTab.identityRead && repoTab.identityReady }))
+                    return
+                op.input("opened", () => {
+                    if (act === "stage-ahead")
+                        page.openDiff("unstaged", path, "")
+                    return true
+                })
+                return
+            }
+            if (op.at("opened")) {
+                if (act === "stage-ahead" && !Awaited.all("stage_ahead_diff", {
+                        "open": page.diffKey === "unstaged:" + path, "rows": diffPane.view.count > 0,
+                        "settled": !page.diffSettling }))
+                    return
+                op.input("pressed", () => acts.pressAhead(path))
+                return
+            }
+            if (act === "stage-refused") {
+                driver.barrierNotice.start()
+                op.stop()
+                return
+            }
+            if (act === "stage-ahead") {
+                op.complete({
+                    "name": "stage_ahead_landed",
+                    "when": () => ({ "written": driver.wroteAndSettled(),
+                                     "staged": wipPane.rowIn("staged", Harness.autoActArg) !== null,
+                                     "diff": !page.diffSettling && diffPane.view.count > 0,
+                                     "page": PageSettled.settled(page) }),
+                    "report": () => "stage_ahead " + op.witnessed("pressed")
+                                    + " " + acts.aheadLine(Harness.autoActArg, "shot")
+                                    + " " + acts.markLine(Harness.autoActArg, "shot")
+                                    + " pressed_diff=" + op.witnessed("diff")
+                                    + " shot_diff=" + page.diffKey
+                                    + " counts=" + op.witnessed("counted") + "/" + worktree.stagedCount
+                })
+                return
+            }
+            // `stage-held` / `stage-held-amend`, the `git add` held: each beat waits for what it reads to stand.
+            if (op.at("pressed")) {
+                // The moved row's delegate in STAGED, the hand put on it so its mark is out.
+                if (!Awaited.all("stage_held_row", { "row": wipPane.rowIn("staged", path) !== null,
+                                                     "out": repoTab.stagingMovingPaths.indexOf(path) >= 0 }))
+                    return
+                op.input("let", () => {
+                    wipPane.showStageTools("staged", path)
+                    driver.letWriteGo()
+                })
+                return
+            }
+            const amend = act === "stage-held-amend"
+            if (op.at("let")) {
+                // The mark as drawn under the hand while the press is out: down, in the muted ink, and silent.
+                const row = wipPane.rowIn("staged", path)
+                if (!Awaited.all("stage_held_mark", { "shown": row !== null && row.stageMark.visible }))
+                    return
+                const ink = row.stageMark.contentItem.tint
+                op.witness("held", "held_mark_button=" + row.stageMark.enabled
+                                   + " held_mark_muted=" + Qt.colorEqual(ink, Theme.textMuted)
+                                   + " held_mark_tip=" + (row.stageMark.tip !== ""))
+                // The hand goes on to what it reads next.
+                if (amend)
+                    op.input("amending", () => {
+                        wipPane.stageHotKey = ""
+                        page.jumpToRef(worktree.headOid)
+                    })
+                else
+                    op.input("pointed", () => {
+                        wipPane.stageHotKey = ""
+                        wipPane.pointAtCommit = true
+                    })
+                return
+            }
+            if (op.at("amending")) {
+                // HEAD's message in the box, read-only until it has arrived (`AutoActHistoryVerbs.rewordTimer`).
+                if (!Awaited.all("stage_held_head", { "card": driver.cardSettled,
+                                                       "edit": page.messageEdit === "amend" }))
+                    return
+                op.input("pointed", () => {
+                    detailsPane.setMessageText("feat: a summary saved while staging stands", "")
+                    detailsPane.savePointedAt = true
+                })
+                return
+            }
+            op.complete({
+                "name": "stage_held_tip",
+                "when": () => ({ "tip": Tips.box.visible, "staging": repoTab.stagingUnseen,
+                                 "save": Harness.autoAct !== "stage-held-amend" || detailsPane.saveRowShown,
+                                 "rows": PageSettled.rowsBuilt(page) }),
+                "report": () => "stage_held " + op.witnessed("pressed")
+                                + " " + op.witnessed("held")
+                                + " stash_live=" + page.pageBand.stashLive
+                                + " stash_tip=" + page.pageBand.stashTipShown
+                                + (Harness.autoAct === "stage-held-amend"
+                                   ? " save_enabled=" + detailsPane.saveEnabled
+                                     + " save_tip=" + detailsPane.saveTip.shown
+                                   : " commit_open=" + wipPane.commitBlock.commitEnabled)
+                                + " why=" + Tips.box.text,
+                "arriving": ["staging"]
+            })
+        }
+    }
+    // `diff-walk apart|together` (`--preset dirty`): where the open diff lands when stage presses outrun git — the same
+    // file it would land on moving at every status (`RepoPage.followEmptySide`; デザイン規約 §バケツごとの一覧と、
+    // ペインの分け方). `b.txt`'s unstaged diff is opened first, then the presses go in as one input, so no answer can be
+    // drained between them (`Feed::wake` posts the drain): every one of them is out at once (`out=`). `apart`: the
+    // row of the file the pane is on pressed three times over — `b.txt`, then `c.txt` (on both sides: left to the
+    // status, and counted gone while the press reaches it), then `untracked.txt` — and the pane after each press
+    // (`walk=`) has walked on to the next file, then waits for its own new side (`landed=staged:untracked.txt`).
+    // `together`: `b.txt` and its neighbour `c.txt` chosen and pressed as one, so the pane waits on `b.txt`
+    // (`walk=unstaged:b.txt`) and lands on its staged side once the status is drawn (`landed=staged:b.txt`). Each
+    // press after the first moves on from the one before without waiting it out, said out loud
+    // (`AutoActDriver.letWriteGo`); the run ends on the last one's status.
+    PageStage {
+        id: walkTimer
+        name: "diff_walk"
+        order: ["opened", "pressed"]
+        /// How many presses each form makes.
+        function pressesOf(form) {
+            return form === "together" ? 1 : 3
+        }
+        /// Presses the `+` of the file the pane is on — with its neighbour chosen too, for `together` — and answers
+        /// where the pane stands on that press's own turn, or null where that mark takes no press. Pressed where the
+        /// mark's click goes (`WipPane.moveStage`, through the same `stageOpen`): the presses share one turn, and the
+        /// list lays its rows out again only a polish after each, so no delegate stands for the next file yet.
+        function pressUnder(first) {
+            const bucket = page.diffKind
+            const path = page.diffPath
+            if (!wipPane.stageOpen(path))
+                return null
+            if (!first)
+                driver.letWriteGo()
+            const went = driver.pressWrite("diff-walk", () => {
+                if (Harness.autoActArg === "together") {
+                    wipPane.chooseOnly("unstaged", "b.txt")
+                    wipPane.applyClick("unstaged", "c.txt", Qt.ControlModifier)
+                }
+                wipPane.moveStage(bucket, path)
+                return true
+            })
+            return went ? page.diffKey : null
+        }
+        onTriggered: {
+            const op = walkTimer
+            if (op.at("start")) {
+                if (!Awaited.all("diff_walk_rows", { "row": acts.rowNamed("untracked.txt") !== null }))
+                    return
+                op.input("opened", () => page.openDiff("unstaged", "b.txt", ""))
+                return
+            }
+            if (op.at("opened")) {
+                if (!Awaited.all("diff_walk_open", { "open": page.diffKey === "unstaged:b.txt",
+                                                     "rows": diffPane.view.count > 0,
+                                                     "settled": !page.diffSettling }))
+                    return
+                op.input("pressed", () => {
+                    const walk = []
+                    for (let i = 0; i < walkTimer.pressesOf(Harness.autoActArg); i++) {
+                        const at = walkTimer.pressUnder(i === 0)
+                        // Nothing went in yet: pressed again on the next beat. Past the first, a mark under the
+                        // pane that takes no press is the product's to answer for, said in the walk.
+                        if (at === null && i === 0)
+                            return false
+                        if (at === null)
+                            break
+                        walk.push(at)
+                    }
+                    op.witness("walk", walk.join(">"))
+                    op.witness("out", repoTab.stagingMovingPaths.length)
+                    return true
+                })
+                return
+            }
+            op.complete({
+                "name": "diff_walk_landed",
+                "when": () => ({ "written": driver.wroteAndSettled(),
+                                 "diff": page.diffShown && !page.diffSettling && diffPane.view.count > 0,
+                                 "page": PageSettled.settled(page) }),
+                "report": () => "diff_walk form=" + Harness.autoActArg
+                                + " out=" + op.witnessed("out")
+                                + " walk=" + op.witnessed("walk")
+                                + " landed=" + page.diffKey })
+        }
+    }
+    /// The stages each of the `stage-ahead` verbs goes through, by verb.
+    readonly property var aheadOrders: ({
+        "stage-ahead": ["opened", "pressed"],
+        "stage-refused": ["opened", "pressed"],
+        "stage-held": ["opened", "pressed", "let", "pointed"],
+        "stage-held-amend": ["opened", "pressed", "let", "amending", "pointed"]
+    })
+    /// The press of the `stage-ahead` verbs: the row's own `+`, and — for `stage-refused` — Commit on the same turn.
+    /// What the screen shows is read here, on the press's own turn, before any answer can be drained (`Feed::wake`
+    /// posts the drain): that is the claim that the rows moved at the press.
+    function pressAhead(path) {
+        const act = Harness.autoAct
+        const went = driver.pressWrite("stage-ahead", () => {
+            const row = acts.rowNamed(path)
+            if (row === null)
+                return false
+            const before = worktree.stagedCount
+            row.stageClicked(row.bucket, row.fullName)
+            // The rows as the press left them, Commit's included, before Commit is pressed.
+            const shown = acts.aheadLine(path, "pressed")
+            stageAheadTimer.witness("counted", before + ">" + worktree.stagedCount)
+            stageAheadTimer.witness("head", worktree.headOid)
+            // Commit waits; the other rows' marks do not — another row's own button, as drawn
+            // (`NavItemDelegate.stageMark`).
+            const committed = act === "stage-refused"
+                ? " commit_pressed=" + wipPane.pressCommit()
+                  + " others_mark_open=" + acts.otherMarkOpen(path)
+                : ""
+            stageAheadTimer.witness("pressed", shown + committed)
+            // Apart, at the line's end with the other words that name a file (`shot_diff=`, `counts=`).
+            stageAheadTimer.witness("diff", page.diffKey)
+            return true
+        })
+        if (!went)
+            return false
+        if (act !== "stage-refused")
+            return true
+        driver.reportAtCompletion(() => "stage_refused " + stageAheadTimer.witnessed("pressed")
+            // Outside the tab's books: git was asked, no commit ran, and HEAD stands where it was.
+            + " add_logged=" + (acts.loggedAt("add") >= 0)
+            + " commit_ran=" + (acts.loggedAt("commit") >= 0)
+            + " head_kept=" + (worktree.headOid === stageAheadTimer.witnessed("head"))
+            + " " + acts.aheadLine(Harness.autoActArg, "back")
+            + " " + acts.markLine(Harness.autoActArg, "back")
+            + " said=" + page.noticeCard.label
+            + " counts=" + stageAheadTimer.witnessed("counted") + "/" + worktree.stagedCount)
+        return true
+    }
+    /// Where `path`'s row stands and what waits on it, as the lists and the pane have it now, each word led by `at`:
+    /// which list draws the row (`listed`), whether a press is out, whether the pane takes a press on its mark
+    /// (`WipPane.stageOpen`, readable on the press's own turn, before the moved row's delegate is born), and Commit.
+    function aheadLine(path, at) {
+        return at + "_staged=" + acts.listed("staged", path)
+               + " " + at + "_unstaged=" + acts.listed("unstaged", path)
+               + " " + at + "_out=" + (repoTab.stagingAllOut || repoTab.stagingMovingPaths.length > 0)
+               + " " + at + "_mark_open=" + wipPane.stageOpen(path)
+               + " " + at + "_commit_open=" + wipPane.commitBlock.commitEnabled
+    }
+    /// The row's own mark button as drawn — read once the lists have settled, when the row's delegate stands.
+    function markLine(path, at) {
+        const row = acts.rowNamed(path)
+        return at + "_mark_button=" + (row === null ? "none" : row.stageMark.enabled)
+    }
+    /// Whether the list that draws `bucket` holds `path`'s row: that list's own model (`rowOfFileIn`), not the whole
+    /// status a model keeps beside its rows. Untracked rows are drawn in the unstaged list.
+    function listed(bucket, path) {
+        const standing = wipPane.bucketPanes
+        for (let i = 0; i < standing.length; i++) {
+            const pane = standing[i]
+            if (pane.section !== (bucket === "staged" ? "staged" : "unstaged"))
+                continue
+            return bucket === "staged"
+                   ? pane.model.rowOfFileIn("staged", path) >= 0
+                   : pane.model.rowOfFileIn("unstaged", path) >= 0 || pane.model.rowOfFileIn("untracked", path) >= 0
+        }
+        return false
+    }
+    /// Each heading's whole-bucket button as drawn, led by its section: whether it takes a press, then whether it has
+    /// words for the hand (`WipBucketPane.moveAllLive` / `moveAllSays`).
+    function bandsLine() {
+        const out = []
+        const standing = wipPane.bucketPanes
+        for (let i = 0; i < standing.length; i++)
+            if (standing[i].headed)
+                out.push(standing[i].section + ":" + standing[i].moveAllLive + "/" + standing[i].moveAllSays)
+        return out.join(",")
+    }
+    /// How many rows the list drawing `bucket` shows (`WipBucketPane.rows`); -1 where no list draws it.
+    function rowsIn(bucket) {
+        const standing = wipPane.bucketPanes
+        for (let i = 0; i < standing.length; i++)
+            if (standing[i].section === bucket)
+                return standing[i].rows
+        return -1
+    }
+    /// Whether the first other file row's mark takes a press, as its button is drawn.
+    function otherMarkOpen(path) {
+        const standing = wipPane.bucketPanes
+        for (let i = 0; i < standing.length; i++) {
+            for (let at = 0; at < standing[i].rows; at++) {
+                const row = standing[i].list.itemAtIndex(at)
+                if (row && row.fullName !== path && row.stageMark)
+                    return row.stageMark.enabled
+            }
+        }
+        return "none"
+    }
+    /// The first row of the command log that ran `git <words>` (`-c` pairs aside), or -1 — what git was asked,
+    /// outside the tab's own books.
+    function loggedAt(words) {
+        const log = page.pageCommands
+        const want = words.split(" ")
+        for (let row = 0; row < log.rowsHeld(); row++) {
+            // `git`, then any `-c <key>=<value>` pairs, then the subcommand.
+            const said = log.columnText(row, 2).split(" ")
+            let at = 1
+            while (said[at] === "-c")
+                at += 2
+            if (said.slice(at, at + want.length).join(" ") === words)
+                return row
+        }
+        return -1
+    }
+
     /// The file-row acts, run once the rows they name are walkable — the press of `fileRowsTimer`'s dispatch. Each line
     /// is read where the gesture stands as it is said here, and kept as that press's witness (`lines`): a `-go` form's
     /// own press takes the chosen rows, and the menu's words with them, before any completion reads the report.

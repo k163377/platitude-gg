@@ -383,7 +383,8 @@ twin	rename-taken --allow-write-failure	rename-taken held --preset reflock --all
 twin	replace-remote origin/main:main-2	replace-remote origin/main:renamed	The two plain lines differ only in the new name and take the same askReplaceRemote branch (no ref-specific logic).
 twin	row-card	row-card 7 --preset edges	Arg "" is row 0 = basic's worktree row. The product never opens a card there (GraphRowDelegate.qml partAt answers "" for isWip)
 twin	row-card 5 --preset carried --scroll-to top	row-card 7 --preset edges	A card the product never opens (another worktree's row, P3-確認事項.md), and run-dependently a real commit's card instead; the judgement passes either way.
-twin	stage-all	stage-all --preset dirty	Same slot, completion and must_say as stage-all --preset dirty.
+twin	stage-all	stage-all b.txt --preset dirty	Same slot and completion; the plain line's must_say opens the b.txt one's, which also says what moved ahead, what waited and where the open diff lands.
+twin	stage-all --preset dirty	stage-all b.txt --preset dirty	The same bucket press on the same preset, read on the same turns; the b.txt one opens that file's diff first and says where it lands besides (diff=).
 twin	stash-pop-row	stash-pop-row --preset stashes	On basic the worktree row already leads before the pop, so top=wip does not discriminate
 twin	switch feature/topic-a	dbl-local feature/topic-a	Same preset, arg, completion (write barrier) and judgement as dbl-local, which enters one step higher (activateChip->switchToRef->switchTo) and so covers this whole path.
 twin	switch-remote origin/feature/remote-only	switch-remote-twice origin/feature/remote-only	Same run as dbl-remote (activateChip only wraps switchToRef); switch-remote-twice makes the same first press on the same arg/preset and is judged at the later landing.

@@ -57,7 +57,7 @@ w:9000
 | `view <x> <y> <幅> <高さ>` | コマに写す範囲(窓の座標)。複数書くと横に並ぶ |
 | `scale <n>` | 整数倍に補間なしで拡大(1px の主張に) |
 | `tick <ms>` | 何もしていない間のコマの間隔(既定 80)。手を動かした瞬間は別に 1 コマ撮る |
-| `slowgit <sub>:<ms>[:quiet]` | 窓の git の 1 つのサブコマンドを遅らせる(verify-ui の `--slow-git` と同じ形)。重いリポジトリの待ちを demo の repo で撮る —— 両側に同じ値で効く |
+| `slowgit <sub>:<ms>[:quiet\|:head=<語>\|:until=<駅>]` | 窓の git の 1 つのサブコマンドを遅らせる(verify-ui の `--slow-git` と同じ形)。重いリポジトリの待ちを demo の repo で撮る —— 両側に同じ値で効く |
 | `cap <字幕>` | ここからの字幕。**`-` で始まる字幕は段取り** —— そのコマは焼く時に落ち、各側の時計はその後の最初のコマから数える。台本は字幕で始める |
 
 手の動き(座標は窓の座標):
@@ -67,6 +67,7 @@ w:9000
 | `w:ms` | 待つ |
 | `m:x,y` / `g:x0,y0,x1,y1,ms` | 動かす / 滑らせる |
 | `l:x,y` / `r:x,y` | 左 / 右クリック |
+| `lc:<修飾>,x,y` | 修飾(ctrl shift alt)を押したまま左クリック(行を足して点灯する等) |
 | `d:x,y` / `u:x,y` | 左ボタンを押す / 離す(間の `m` / `g` はボタンを運ぶ = ドラッグ。押している間の手は橙) |
 | `wh:n` / `wr:d` | ホイールを n 段 / 角度 d |
 | `k:<キー>` / `kc:<修飾>,<キー>` | キー(esc menu enter up down left right tab f f2 f10 space delete backspace home end pageup pagedown)/ 修飾付き(ctrl shift alt) |

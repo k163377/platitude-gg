@@ -45,6 +45,10 @@ import platitude.ui
 /// arriving. Asked by the write's own receipt, never by a row: a write runs any number of commands, none included
 /// (`CommandsModel.recorded`).
 ///
+/// So is the status after a stage press (`staging`, `RepoTab.stagingUnseen`): the rows move at the press, and until
+/// every list has drawn a status taken after git answered, what they show is the press's word — git's answer and
+/// that status land on turns of their own, after every other term here has settled.
+///
 /// A tab still at the picker, or one whose path was refused, is done: nothing is coming, and answering no would hold
 /// the run until the watchdog. So the tab's state `""` (before its feed is attached; then `"loading"`, `"open"`, or
 /// `"error"` for a refused open) answers settled too: a window's verb that completes without waiting for the page and
@@ -89,6 +93,8 @@ QtObject {
             owed.push("diff")
         if (!pageSettled.recorded(page))
             owed.push("records")
+        if (page.pageTab.stagingUnseen)
+            owed.push("staging")
         if (!graph.failed && !graph.stale) {
             // The session's own reads, asked of core (`GraphModel.readingsSettled` → `harness::settlement`): a swap
             // pass raises no `loading`, and another worktree's row lands without moving this page's `wipRow`, so no

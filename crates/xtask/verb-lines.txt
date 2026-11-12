@@ -215,6 +215,8 @@ diff-step untracked.txt --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate N
 diff-step-edge untracked.txt --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 diff-sweep b.txt --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 diff-tick conflicts:shared.txt --preset conflict-typed	ChangeIcon DiffLineCell DiffRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
+diff-walk apart --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate NameCell NavItemDelegate NavRowBody TabItemDelegate
+diff-walk together --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody TabItemDelegate
 discard-file-go b.txt --preset dirty	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 discard-hunk-go b.txt --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 discard-many c.txt --preset dirty	AppCardFace AppMenu AppMenuItem AppMenuSeparator ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
@@ -844,7 +846,10 @@ split-copy notes.txt --preset manyhunks	ChangeIcon DiffLineCell DiffRowDelegate 
 split-tools notes.txt --preset manyhunks	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 squash	AppCardFace AppMenu AppMenuItem AppMenuSeparator BranchBothDeleteRow BranchDeleteRow BranchPushRow BranchRemoteDeleteRow ChangeIcon FileRowDelegate GitHubMenu GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefBranchMenu RefRowMenu RefTagMenu RefWorktreeMenu RemoteRowMenu TabItemDelegate WipTallyRow
 squash row:1 --preset squash-hooked --allow-write-failure	AppCardFace AppMenu AppMenuItem AppMenuSeparator BranchBothDeleteRow BranchDeleteRow BranchPushRow BranchRemoteDeleteRow ChangeIcon FileRowDelegate GitHubMenu GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefBranchMenu RefRowMenu RefTagMenu RefWorktreeMenu RemoteRowMenu TabItemDelegate
-stage-all --preset dirty	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
+stage-ahead b.txt --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
+stage-all b.txt --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
+stage-held b.txt --preset dirty	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody TabItemDelegate WipTallyRow
+stage-held-amend b.txt --preset dirty	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody TabItemDelegate WipTallyRow
 stage-hunk b.txt --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 stage-hunk build.sh --preset modes	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 stage-line b.txt --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
@@ -852,6 +857,7 @@ stage-line b.txt --preset stage-lock --allow-write-failure	ChangeIcon DiffLineCe
 stage-line untracked:vendor/loose.txt --preset embedded	ChangeIcon NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 stage-many c.txt --preset dirty	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 stage-many-go c.txt --preset dirty	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
+stage-refused b.txt --preset stage-lock --allow-write-failure	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 stale-part unstaged:b.txt --preset dirty --allow-write-failure	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 stash	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 stash named	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate

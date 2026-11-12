@@ -42,7 +42,8 @@ pub(super) struct Scene {
     /// every act takes at once.
     pub(super) tick: u32,
     /// One subcommand of the window's git answered late, as verify-ui's
-    /// `--slow-git` takes it (`<subcommand>:<ms>[:quiet]`); empty for none.
+    /// `--slow-git` takes it (`<subcommand>:<ms>[:quiet|:head=<word>|:until=<station>]`,
+    /// read by the shim's own parser as the scene is); empty for none.
     /// A heavy repository's wait, on the demo's: what a change to how long
     /// the reader waits is filmed with, on both sides alike.
     pub(super) slow_git: String,
@@ -88,6 +89,7 @@ const ACTS: &[(&str, Option<usize>)] = &[
     ("wr", Some(1)),
     ("k", None),
     ("kc", None),
+    ("lc", None),
     ("t", None),
     ("fw", None),
     ("cp", None),
@@ -207,6 +209,18 @@ fn act(line: &str) -> Result<String, String> {
                 ));
             }
         },
+        ("lc", None) => {
+            let parts: Vec<&str> = arg.split(',').collect();
+            if parts.len() != 3
+                || !MODIFIERS.contains(&parts[0])
+                || parts[1..].iter().any(|n| n.parse::<i64>().is_err())
+            {
+                return Err(format!(
+                    "`lc:` takes a modifier ({}) and two integers",
+                    MODIFIERS.join(" ")
+                ));
+            }
+        }
         ("fw" | "cp", None) => {
             let parts: Vec<&str> = arg.split('|').collect();
             if parts.len() < 2 || parts[0].is_empty() || (verb == "cp" && parts.len() != 2) {
@@ -352,12 +366,16 @@ git:commit --allow-empty -q -m more1
                 "repo deep\nview 0 0 10 10\ncap -\ncap x\n{step}\n"
             ))
         };
-        assert!(with("m:1,2").is_ok());
+        for right in ["m:1,2", "lc:ctrl,1,2", "lc:shift,1,2", "lc:alt,1,2"] {
+            assert!(with(right).is_ok(), "{right}");
+        }
         for wrong in [
             "m:1",
             "m:1,x",
             "k:nokey",
             "kc:meta,esc",
+            "lc:ctrl,1",
+            "lc:meta,1,2",
             "cp:only",
             "zz:1",
             "t:a;b",

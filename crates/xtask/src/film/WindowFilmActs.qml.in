@@ -189,6 +189,12 @@ Item {
         } else if (verb === "k") {
             ev.keyClick(acts.keyOf(arg), Qt.NoModifier, -1)
             acts.shootSoon()
+        } else if (verb === "lc") {
+            // A left click with a modifier held: Ctrl to light one more row, Shift to light a run.
+            const at = arg.split(",")
+            acts.moveTo(Number(at[1]), Number(at[2]))
+            ev.mouseClick(acts.window.contentItem, Number(at[1]), Number(at[2]), Qt.LeftButton, acts.modOf(at[0]), -1)
+            acts.shootSoon()
         } else if (verb === "kc") {
             const two = arg.split(",")
             ev.keyClick(acts.keyOf(two[1]), acts.modOf(two[0]), -1)

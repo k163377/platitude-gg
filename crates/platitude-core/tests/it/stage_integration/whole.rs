@@ -185,6 +185,95 @@ async fn discard_chosen_leaves_a_staged_copys_source_alone() {
 /// (`-- --ignored ::periodic::`).
 mod periodic {
     use super::*;
+    use platitude_core::status::StatusItem;
+
+    /// Each row's two letters (`??` for an untracked file), by path.
+    async fn letters(repo: &TestRepo) -> Vec<(String, String)> {
+        let (exec, cancel) = env();
+        let status = platitude_core::status::load(&exec, &repo.path, &cancel)
+            .await
+            .expect("status");
+        let mut out: Vec<(String, String)> = status
+            .items
+            .iter()
+            .map(|item| match item {
+                StatusItem::Tracked {
+                    staged,
+                    unstaged,
+                    path,
+                    ..
+                } => (path.clone(), format!("{staged}{unstaged}")),
+                StatusItem::Untracked { path } => (path.clone(), "??".to_string()),
+                StatusItem::Unmerged { path, .. } => (path.clone(), "UU".to_string()),
+            })
+            .collect();
+        out.sort();
+        out
+    }
+
+    fn rows(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs
+            .iter()
+            .map(|(path, letters)| ((*path).to_string(), (*letters).to_string()))
+            .collect()
+    }
+
+    /// What a press draws ahead of git, as git then lists the row (the app's
+    /// `ops::stage_ahead` `moved`): a change on one side keeps its letter
+    /// and swaps sides, an untracked file comes in as an addition, an
+    /// intent-to-add is staged as one, an addition unstaged goes back
+    /// untracked — and none of them leaves the list.
+    #[tokio::test]
+    #[ignore = "git's own add and restore --staged: not worth the pre-merge run"]
+    async fn a_one_sided_row_keeps_its_letter_across_the_sides() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("edited.txt", "one\n", "root");
+        repo.commit_file("gone.txt", "two\n", "second");
+        repo.write_file("edited.txt", "one, edited\n");
+        std::fs::remove_file(repo.path.join("gone.txt")).expect("remove a file");
+        repo.write_file("intent.txt", "later\n");
+        repo.git(&["add", "-N", "--", "intent.txt"]);
+        repo.write_file("new.txt", "fresh\n");
+        let (exec, cancel) = env();
+        let all: Vec<String> = ["edited.txt", "gone.txt", "intent.txt", "new.txt"]
+            .map(String::from)
+            .to_vec();
+        assert_eq!(
+            letters(&repo).await,
+            rows(&[
+                ("edited.txt", ".M"),
+                ("gone.txt", ".D"),
+                ("intent.txt", ".A"),
+                ("new.txt", "??")
+            ])
+        );
+
+        stage::stage_paths(&exec, &repo.path, &all, &cancel)
+            .await
+            .expect("stage");
+        assert_eq!(
+            letters(&repo).await,
+            rows(&[
+                ("edited.txt", "M."),
+                ("gone.txt", "D."),
+                ("intent.txt", "A."),
+                ("new.txt", "A.")
+            ])
+        );
+
+        stage::unstage_paths(&exec, &repo.path, &all, &cancel)
+            .await
+            .expect("unstage");
+        assert_eq!(
+            letters(&repo).await,
+            rows(&[
+                ("edited.txt", ".M"),
+                ("gone.txt", ".D"),
+                ("intent.txt", "??"),
+                ("new.txt", "??")
+            ])
+        );
+    }
 
     #[tokio::test]
     #[ignore = "git's own add and restore --staged: not worth the pre-merge run"]

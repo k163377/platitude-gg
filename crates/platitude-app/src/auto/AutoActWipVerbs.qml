@@ -46,7 +46,9 @@ Item {
             repoTab.stageAll()
             wipPane.setMessage(arg === "" ? "chore: commit from the headless run" : arg, "")
             acts.claimLanding()
-            page.commitNow()
+            // Commit waits on the staging (`commitAfterStage`); the commit's answer completes the run, which defers
+            // its completion (`AutoActCompletion.defersCompletion`).
+            commitAfterStage.start()
         } else if (act === "commit-refused" || act === "notice-over-diff") {
             // Against a `pre-commit` hook that says no (`--preset hooked`): its words come down as a report
             // (デザイン規約 §答えの要らない報せ). `notice-over-diff` has a diff open in the middle, the one
@@ -55,8 +57,7 @@ Item {
             wipPane.setMessage("chore: something the hook will not have", "")
             if (act === "notice-over-diff")
                 page.openDiff("staged", arg, "")
-            page.commitNow()
-            driver.barrierNotice.start()
+            commitAfterStage.start()
         } else if (act === "stale-part") {
             // A stale part: the diff marks' own press with a fingerprint the bytes cannot match, answered by a report
             // (デザイン規約 §答えの要らない報せ). The argument is `<バケツ>:<パス>`. No git runs, yet the refused write is
@@ -335,11 +336,10 @@ Item {
         }
         return true
     }
-    /// The editor's own answer, latched off its edge (`RepoPage.commitAnswered`). Not the write barrier: the press is
-    /// two writes, staging then commit, and the barrier takes whichever answers first. `empty=` / `amend=` are read
-    /// off the pane at the answer — the boxes let go and the amend row with them — kept as witnesses of the write
-    /// barrier this starts, and said by the completion it makes. Heard once, on the run of a verb that presses the
-    /// editor's commit.
+    /// The editor's own answer, latched off its edge (`RepoPage.commitAnswered`): the run's end is the commit's answer
+    /// and the status it asks for, which this barrier owes. `empty=` / `amend=` are read off the pane at the answer —
+    /// the boxes let go and the amend row with them — kept as witnesses of the write barrier this starts, and said by
+    /// the completion it makes. Heard once, on the run of a verb that presses the editor's commit.
     Connections {
         target: acts.page
         enabled: commitAnswer.armed
@@ -356,6 +356,29 @@ Item {
             driver.reportAtCompletion(() => "commit_answered landed=" + driver.barrierWrite.witnessed("landed")
                                       + " empty=" + driver.barrierWrite.witnessed("emptied")
                                       + " amend=" + driver.barrierWrite.witnessed("amend"))
+        }
+    }
+    // `commit` / `commit-refused` / `notice-over-diff`: the whole tree staged, then Commit pressed once it takes a
+    // press — Commit waits while a stage press stands, until the status after it is drawn (デザイン規約
+    // §バケツごとの一覧と、ペインの分け方), as a hand pressing it would. The staging is through by then, so the watch
+    // is armed again for the commit (`pressWrite`). The commit's answer completes `commit` (`commitAnswer`); the bar a
+    // refusal brings down completes the other two.
+    PageStage {
+        id: commitAfterStage
+        name: "commit_after_stage"
+        order: ["committed"]
+        onTriggered: {
+            const op = commitAfterStage
+            if (op.at("start")) {
+                if (!Awaited.all("commit_after_stage", { "staged": driver.wroteAndSettled(),
+                                                         "open": wipPane.commitBlock.commitEnabled }))
+                    return
+                op.input("committed", () => driver.pressWrite("commit", () => wipPane.pressCommit()))
+                return
+            }
+            if (Harness.autoAct !== "commit")
+                driver.barrierNotice.start()
+            op.stop()
         }
     }
     readonly property QtObject commitAnswer: QtObject {

@@ -42,7 +42,8 @@ QtObject {
                 "rebase-onto", "revert-commit", "op-exit-go", "op-exit-lands", "stage-hunk",
                 "stage-line", "keep-place", "code-shrink", "discard-hunk-go", "line-back", "diff-follow",
                 "line-run",
-                "stage-all", "unstage-all", "resolve-all",
+                "stage-all", "unstage-all", "resolve-all", "stage-ahead", "stage-held", "stage-held-amend",
+                "stage-refused", "diff-walk",
                 "push", "push-outdated", "tag-refused", "push-branch-go", "unset-upstream-go",
                 "force-push", "push-retry", "fetch", "fetch-ref-list",
                 "commands", "commands-select", "commands-copy", "commands-sweep",
@@ -113,6 +114,14 @@ QtObject {
                 "code-send", "code-grow", "code-shrink", "code-swap",
                 "line-back", "diff-follow", "line-run",
                 "stage-all", "unstage-all", "resolve-all",
+                // Pictured once the status after the press is drawn, with the press held and the tip up, or behind
+                // the bar the refusal brings down (`AutoActFileRowVerbs.stageAheadTimer`).
+                "stage-ahead", "stage-held", "stage-held-amend", "stage-refused",
+                // Pictured where the open diff lands once the last press's status is drawn
+                // (`AutoActFileRowVerbs.walkTimer`).
+                "diff-walk",
+                // The log filled band by band before it is read (`AutoActFindVerbs.commandsFillTimer`).
+                "commands",
                 // The write answers before the listing that lets the stood-in rows go is asked for; the write
                 // barrier would call the middle of the operation its end.
                 "delete-stood-down",
@@ -175,8 +184,8 @@ QtObject {
                 // The card has to be up before the row it came for can be read; the second waits for the line under
                 // the pointer as well.
                 "pull-menu", "pull-blocked",
-                // The press is two writes (the staging, then the commit), so the write barrier answers on the first;
-                // these wait for the editor's own answer (`RepoPage.commitAnswered`).
+                // These end on the editor's own answer and the status it asks for (`RepoPage.commitAnswered`);
+                // `commit`'s press is made once its staging is through (`AutoActWipVerbs.commitAfterStage`).
                 "commit", "amend",
                 // The bar these wait for comes down after the write's own answer.
                 "commit-refused", "notice-over-diff", "push-outdated", "stale-part",

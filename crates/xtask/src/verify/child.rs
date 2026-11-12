@@ -240,7 +240,7 @@ fn fault_knobs(cmd: &mut Command, opts: &Options) {
     // The save hold: where a run asked for it, and unasked for
     // `HELD_SAVE_VERB` (`super::verbs::window`).
     let hold_save = if opts.fault_hold_save.is_empty() && opts.verb == HELD_SAVE_VERB {
-        HELD_SAVE_STATION
+        WRITES_JOINING
     } else {
         opts.fault_hold_save.as_str()
     };
@@ -361,10 +361,12 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
 const HELD_WIP_ROW_VERBS: &[&str] = &["wip-landing", "wip-landing-stopped"];
 
 /// The verb whose subject is the exit waiting on a held configuration
-/// save, and the station the save is held until: where `Hub::shutdown`
-/// starts joining the writes still out, so the join lets it go.
+/// save.
 pub(super) const HELD_SAVE_VERB: &str = "quit-save-held";
-const HELD_SAVE_STATION: &str = "writes-joining";
+/// The station a write held for its run is let go at: where
+/// `Hub::shutdown` starts joining the writes still out, so the join lets it
+/// go — the held save, and the held `git add` (`super::run::slow_git_for`).
+pub(super) const WRITES_JOINING: &str = "writes-joining";
 
 /// Whether this verb's subject is a second process finding the settings
 /// held. Every other run's config directory is its own, so a taken store

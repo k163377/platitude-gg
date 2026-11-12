@@ -352,6 +352,15 @@ Item {
             verify(Automation.PageSettled.settled(page))
         }
 
+        // A stage press's rows are its word until every list has drawn a status taken after git answered.
+        function test_a_stage_press_owes_the_status_after_it() {
+            verify(Automation.PageSettled.settled(page))
+            page.pageTab.stagingUnseen = true
+            compare(Automation.PageSettled.missing(page), ["staging"])
+            page.pageTab.stagingUnseen = false
+            verify(Automation.PageSettled.settled(page))
+        }
+
         // A seat resting before it opens something under the hand, or beating before it takes it down, is a decision
         // on its way (`hover:<key>`, the key spelled safe for the line).
         function test_a_hover_decision_on_its_way_is_owed() {

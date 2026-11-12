@@ -375,12 +375,14 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "answered=true took=true",
     },
     // A commit git wrote, and its boxes let go. git answers before the
-    // reading that redraws the pane (`session::write::run_write`), and the
-    // press is two writes (stage, then commit), so the barrier may answer
-    // for the first. `empty=true`: the answer found the editor that sent
-    // it among what the notify carried (`ops::Press`) — a property would
-    // be rewritten by the fetch behind it. `amend=false` for both verbs:
-    // `amend` turns the row on first, and it goes down with the boxes.
+    // reading that redraws the pane (`session::write::run_write`), so the
+    // run ends on the editor's own answer and the status it asks for;
+    // `commit`'s press is made once the staging it does first is through
+    // (the app's `AutoActWipVerbs.commitAfterStage`). `empty=true`: the answer found
+    // the editor that sent it among what the notify carried (`ops::Press`)
+    // — a property would be rewritten by the fetch behind it. `amend=false`
+    // for both verbs: `amend` turns the row on first, and it goes down with
+    // the boxes.
     Verb {
         name: "commit",
         when: &[],
