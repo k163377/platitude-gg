@@ -215,9 +215,11 @@ FocusScope {
             page.closeDiff()
     }
 
+    /// The right pane is the uncommitted changes. The question bar stands over the graph, not here, so this going down
+    /// by itself — the tree emptied, outside or by a commit or stash — leaves a standing question up, saying the tree
+    /// as it now is (`LeaveFlow`); the presses that leave it put the question down themselves (`activateRow`,
+    /// `jumpToRef`).
     property bool wipShown: false
-    // The ask bar goes off screen with the pane, and nothing off screen may be answered.
-    onWipShownChanged: if (!page.wipShown) page.stopRowAsk()
     // Selected stash row's reflog selector ("" = not a stash).
     property string selectedStashRef: ""
     function showWip() {
@@ -328,7 +330,7 @@ FocusScope {
         page.selectedOid = ""
         if (headRow >= 0) {
             graphPane.setCurrentRow(headRow)
-            page.activateRow(graphModel.oidAt(headRow), headRow)
+            page.activateRow(graphModel.oidAt(headRow), headRow, true)
             return
         }
         // The worktree is gone from the listing (removed, pruned, or bare): fall back to the opening default.
@@ -2911,6 +2913,9 @@ FocusScope {
         page.pendingWipSelect = false
         page.rewordRow = -1
         page.planRunOut = false
+        // A standing question was asked of the tree left — the leave question would read the arriving one's tree and
+        // say what never happened in it — and the tab walks away from it.
+        page.stopRowAsk()
         // The discard log's entry was walked by that session (`GraphModel.restand` takes it off the rows), and an open
         // list is that worktree's reading: it reads again once the worktree arrived at has settled (`standSettled`).
         page.recoverPick = -1
@@ -3228,11 +3233,11 @@ FocusScope {
         page.settleChoice(next)
     }
     /// The one place the set and its tally are written together, so a count and a highlight cannot disagree. **A
-    /// choice back down to one commit is that commit being read** (`activateRow`).
-    function settleChoice(next) {
+    /// choice back down to one commit is that commit being read** (`activateRow`, with `followsTree` as it is).
+    function settleChoice(next, followsTree) {
         const ids = Object.keys(next)
         if (ids.length === 1) {
-            page.activateRow(ids[0])
+            page.activateRow(ids[0], -1, followsTree)
             return
         }
         page.chosenOids = next
@@ -3277,7 +3282,7 @@ FocusScope {
         const next = ({})
         for (const oidHex of kept)
             next[oidHex] = true
-        page.settleChoice(next)
+        page.settleChoice(next, true)
     }
 
     // The commit the viewport is measured against between passes, so the rows a reader is on can be put back under them
@@ -3390,7 +3395,8 @@ FocusScope {
         const asked = page.pendingHeadAsked
         page.pendingHeadAsked = false
         graphPane.setCurrentRow(row)
-        page.activateRow(graphModel.oidAt(row))
+        // A landing this window's write asked for answers a press; one a tree emptied elsewhere follows the tree.
+        page.activateRow(graphModel.oidAt(row), row, !asked)
         if (asked)
             graphPane.showRowSoon(row)
     }
@@ -3429,7 +3435,7 @@ FocusScope {
         const oidHex = graphModel.oidAt(page.selectedRow)
         if (oidHex !== "" && !GitFacts.wipOid(oidHex)) {
             graphPane.setCurrentRow(page.selectedRow)
-            page.activateRow(oidHex)
+            page.activateRow(oidHex, page.selectedRow, true)
             return
         }
         page.selectedOid = ""
@@ -3455,7 +3461,10 @@ FocusScope {
 
     /// `atRow`: the row, for callers that already know it (a click does); -1 asks the model (`GraphModel.rowOf`, a
     /// binary search of its index), which a landing named only by its commit — the arrows, the search — has to do.
-    function activateRow(oidHex, atRow) {
+    /// `followsTree`: the landing follows the tree — it emptied, the commit being read went, a pass took commits off the
+    /// choice — rather than anything pressed in this window, so a standing question stays up and says the tree as it
+    /// now is (`LeaveFlow`).
+    function activateRow(oidHex, atRow, followsTree) {
         // The history moved — by the arrows, the search, a menu or a click: a rename's second click is not one across
         // it (`Hand.acted`; a click's own landing is taken by its target). `jumpToRef` is the other road.
         Hand.acted()
@@ -3465,7 +3474,8 @@ FocusScope {
         page.pendingWipSelect = false
         // Clicking anywhere is the way out of the name box and of a standing row question.
         graphPane.stopNaming()
-        page.stopRowAsk()
+        if (followsTree !== true)
+            page.stopRowAsk()
         // The right pane's mark is about the commit it was raised over, and every road to another commit comes through
         // here, keyboard ones included — the one road that keeps it raises it again (`onMessageAsked`).
         detailsPane.dropAttention()
@@ -3541,7 +3551,8 @@ FocusScope {
         }
         graphPane.setCurrentRow(row)
         graphPane.anchorSoon()
-        page.activateRow(graphModel.oidAt(row), row)
+        // Nobody pressed for it: the opening, or the tree gone from under what was being read.
+        page.activateRow(graphModel.oidAt(row), row, true)
     }
     // Each finished pass bumps finishCount: re-resolve the selection by oid, since row numbers may have shifted. Only a
     // streaming restart bumps resetCount — the one case where the viewport lost its position and needs re-anchoring;
@@ -4218,6 +4229,10 @@ FocusScope {
         page.chooseOnly(oidHex)
         // Details resolve even outside the window.
         page.rewordRow = -1
+        // A jump off the uncommitted changes puts a standing question down; one from a commit to another leaves it up
+        // (a row's click puts it down either way — `activateRow`).
+        if (page.wipShown)
+            page.stopRowAsk()
         page.wipShown = false
         // The row travels with the oid: `followVanishedCommit` reads `selectedRow`, and a stale one lands on whatever
         // now stands at the previous selection's row.
