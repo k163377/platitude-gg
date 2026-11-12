@@ -281,8 +281,14 @@ Rectangle {
     /// something to send.
     property alias askAnswerable: askBar.answerable
     /// Whether it is asking for information, how it is answered, and what it says while it stands — these change
-    /// under a publish question as the remote answers what the typed name means.
+    /// under a question as it stands: a publish question as the remote answers what the typed name means, the leave
+    /// question as the tree clears the way (`PublishFlow`, `LeaveFlow`).
     property alias askNeutral: askBar.neutral
+    /// Whether answering throws work in hand away, and the row the question is about — both move under a question
+    /// about the tree as the tree moves (`LeaveFlow`). The marked row wears the bar's tone, whatever sets it
+    /// (`GraphList.askTone`).
+    property alias askDanger: askBar.danger
+    property alias askOid: graphList.askOid
     property alias askHold: askBar.hold
     /// That hold is the plain delete's two presses (`AskBar.plainHold`); put down as each question is dressed.
     property alias askPlainHold: askBar.plainHold
@@ -291,17 +297,20 @@ Rectangle {
     /// empty for `askCode`; one answered from a chooser writes the picked answer's word here (`RenameCarryFlow`).
     property alias askAccept: askBar.accept
     /// The command the pill answers with, and whether the far side could be read at all — both move under a publish
-    /// question as the remote answers, because what would run depends on what is over there.
+    /// question as the remote answers, because what would run depends on what is over there; the command moves under
+    /// the leave question as the tree does (`LeaveFlow`).
     property alias askCode: askBar.code
     property alias askAlert: askBar.alert
     /// Whether the heading is in the plain ink — for the question whose colour follows what is picked in it, and the
     /// plain delete's (`AskBar.plainWords`).
     property alias askPlainWords: askBar.plainWords
     /// The heading, for a question that turns into another while it stands (`UpstreamFlow`: an emptied name asks to
-    /// take the upstream off). Plain words only — a heading with a name in its own colour is `startAsking`'s.
+    /// take the upstream off; `LeaveFlow`: the way cleared asks the plain switch) — the words as drawn, any name in
+    /// them filled in.
     property alias askLabel: askBar.label
     /// …and a name in it in its own colour while it stands (`AskBar.labelSentence` / `labelRef` / `labelRefTint`);
-    /// `startAsking` dresses all three for each question.
+    /// `startAsking` dresses all three for each question, and a question that turns binds the sentence and the tint
+    /// beside `askLabel`.
     property alias askLabelSentence: askBar.labelSentence
     property alias askLabelRef: askBar.labelRef
     property alias askLabelRefTint: askBar.labelRefTint

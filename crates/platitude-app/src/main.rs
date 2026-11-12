@@ -233,6 +233,7 @@ fn main() {
     qrc::embed!("ui/ImagePreviewCell.qml");
     qrc::embed!("ui/LabeledField.qml");
     qrc::embed!("ui/LaneDissolve.qml");
+    qrc::embed!("ui/LeaveFlow.qml");
     qrc::embed!("ui/LineEndingField.qml");
     qrc::embed!("ui/MessageActionsRow.qml");
     qrc::embed!("ui/MessageEditor.qml");

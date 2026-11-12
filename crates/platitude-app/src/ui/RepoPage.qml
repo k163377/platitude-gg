@@ -625,7 +625,7 @@ FocusScope {
         page.moveLocal = local
         page.moveStart = start === undefined ? "" : start
         if (page.standsInTheWay(leaving)) {
-            page.askLeaveOperation(local, function () { page.runSwitch(true) })
+            leaveFlow.startAsk(local, function (leave) { page.switchTo(kind, target, local, start, leave) })
             return
         }
         page.runSwitch(leaving === true)
@@ -655,32 +655,15 @@ FocusScope {
     function standsInTheWay(leaving) {
         return leaving !== true && worktree.movesBlocked
     }
-    // Either heading reads on from its chip (`rebase --abort` / `stash`) as one sentence and names where the move
-    // lands. What the stash takes is every uncommitted change, untracked files too (`session::build::leave_operation`).
-    // Conflicts are named while any stand: git's own stash refuses an unmerged file, so they are what the reader would
-    // not expect to go in. The stash question's second line only says the standing operation ends; with nothing
-    // standing its heading is the whole question (user decision — ask before changing).
-    readonly property string leaveHeading:
-        //: Read on from the `rebase --abort` chip at its head; %1 is the branch the move lands on.
-        worktree.leaveUndoes ? qsTr("and switch to %1?")
-        //: Read on from the `stash` chip at its head; %1 is the branch the move lands on.
-        : worktree.conflictCount > 0 ? qsTr("all uncommitted changes including conflicts and switch to %1?")
-        //: Read on from the `stash` chip at its head; %1 is the branch the move lands on.
-        : qsTr("all uncommitted changes and switch to %1?")
-    readonly property string leaveDetail:
-        worktree.leaveUndoes ? qsTr("Nothing it did since it started is kept.")
-        : worktree.opCommand === "" ? ""
-        //: %1 is the standing operation in git's own spelling, e.g. cherry-pick.
-        : qsTr("The %1 ends here.").arg(worktree.opCommand)
-    /// `local`: the branch the move lands on.
-    function askLeaveOperation(local, retry) {
-        // Marked on HEAD's row — a rebase runs detached, so that is the only name the tree has for where it is
-        // (デザイン規約 §立っている質問は 1 か所で聞く). Whether leaving undoes work in hand (`danger` and a hold —
-        // §状態, §回数押し) and the command on the question's line are core's (offers::leaving_undoes / leave_code).
-        page.startRowAsk(worktree.headOid, page.leaveHeading, page.leaveDetail,
-                         worktree.leaveUndoes, "", retry, worktree.leaveUndoes, "", null,
-                         worktree.leaveCode, local,
-                         GitFacts.isCurrent(worktree.standing, local) ? Theme.textLink : Theme.textPrimary, "branch")
+    // The question and its words, following the tree while it stands. Raised by `switchToRef` and `switchTo` with the
+    // move to send again, leaving what stands in its way or not as the bar's answer says (`LeaveFlow.startAsk`).
+    LeaveFlow {
+        id: leaveFlow
+        worktree: worktree
+        graphPane: graphPane
+        // The hold is the danger's: only a leave that undoes work is held.
+        onAskRequested: (oidHex, label, detail, danger, run, code, refName, refTint) =>
+            page.startRowAsk(oidHex, label, detail, danger, "", run, danger, "", null, code, refName, refTint, "branch")
     }
 
     // ---- what a chip leads to --------------------------------------
@@ -736,7 +719,7 @@ FocusScope {
         // Ahead of the branches below: the one that lands on an existing local branch asks git what the move would
         // cost before it moves, and that read is worth nothing while an operation is standing.
         if (page.standsInTheWay(leaving)) {
-            page.askLeaveOperation(local, function () { page.switchToRef(kind, name, true) })
+            leaveFlow.startAsk(local, function (leave) { page.switchToRef(kind, name, leave) })
             return true
         }
         if (action === "switch")
@@ -911,6 +894,7 @@ FocusScope {
         publishFlow.publishAsking = false
         upstreamFlow.asking = false
         renameCarryFlow.asking = false
+        leaveFlow.asking = false
         page.rowAskRun = run
         graphPane.startAsking(oidHex, label, detail, acceptText, danger, hold, tip, form, code, refName, refTint,
                               refMark, marks)
@@ -920,6 +904,7 @@ FocusScope {
         publishFlow.publishAsking = false
         upstreamFlow.asking = false
         renameCarryFlow.asking = false
+        leaveFlow.asking = false
         graphPane.stopAsking()
     }
     function answerRowAsk() {

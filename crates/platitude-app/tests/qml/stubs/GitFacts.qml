@@ -3,8 +3,9 @@ pragma Singleton
 import QtQuick
 
 // Stands in for the app's `GitFacts` under `qmltestrunner`, which registers no Rust type (`cargo xtask qmltest` stages
-// it into the `platitude` module): only the argument-only facts the row delegates and the discard log's filter read,
-// so a real `GraphRowDelegate`, `RefListPopup` or `RecoverPane` can stand in a test at all. The rules are Rust's
+// it into the `platitude` module): only the argument-only facts the row delegates, the discard log's filter and the
+// leave question read, so a real `GraphRowDelegate`, `RefListPopup`, `RecoverPane` or `LeaveFlow` can stand in a test
+// at all. The rules are Rust's
 // (`models::facts`, `encode`, tested there); a test that leans on an answer here is testing this stand-in, not the app.
 QtObject {
     /// `Oid::hex_is_zero`: the uncommitted row's all-zero id; empty is no id at all.
@@ -25,6 +26,10 @@ QtObject {
                 out.push(chip)
         }
         return out
+    }
+    /// `TreeStanding::is_current`: whether `name` is the branch HEAD is on — none while HEAD is on no branch.
+    function isCurrent(tree, name) {
+        return tree.branch !== "" && name === tree.branch
     }
     /// `encode::ref_kind_word`: the ref a chip's word names, `""` for the two markers.
     function refKind(kind) {
