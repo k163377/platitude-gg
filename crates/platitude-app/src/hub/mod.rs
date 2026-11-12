@@ -37,6 +37,8 @@ mod prefs;
 mod saves;
 mod sink;
 mod tabs;
+#[cfg(test)]
+mod testkit;
 
 pub use feed::{Feed, Feeds, attach_feed, attached};
 pub use msg::{
