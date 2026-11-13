@@ -20,6 +20,8 @@ Item {
     /// The size the window was asked for, which the slop is measured from.
     property int askedWidth: 0
     property int askedHeight: 0
+    /// The saved monitor's device name, from [`applySavedWindow`] for [`settleSavedWindow`]; empty for none.
+    property string savedScreen: ""
 
     /// Lifts a windowed window standing under its floor (maximised and minimised are the platform's to size): a floor
     /// that rises grows the window — unfolding the left list on a window at its floor is the case, and fold → shrink →
@@ -80,13 +82,21 @@ Item {
 
     // Restores the saved size and place, assigned: from here on the window manager and the user own them. An
     // unsaved position stays unset so the platform places the window.
+    //
+    // In two steps, either side of the strip's start (`Main`). The size and place go on first, so the page built next
+    // is laid out for the window it stands in rather than the default one. The floor is a page's to say, so the frame
+    // is fitted and the window maximised after ([`settleSavedWindow`]): the page a restored tab brings, or the blank
+    // one, is up by then, and where its floor is over the saved shape it has lifted it in between (`holdFloor`), the
+    // window still windowed. A run that asks for its folders has no page yet at the second step — git places them
+    // later — and is lifted by `holdFloor` alone, with no fit after it.
     function applySavedWindow() {
         const corner = Qt.point(AppBackend.startWindowX(), AppBackend.startWindowY())
         // `Screen` is only the fallback ([`screenHolding`]).
         const home = shape.screenHolding(corner, Qt.application.screens)
+        shape.savedScreen = home !== null ? home.name : ""
         const roomW = home !== null ? home.width : Screen.width
         const roomH = home !== null ? home.height : Screen.height
-        // Over the floor already: `settleTimer` measures the slop from this, and a maximise comes back to it.
+        // Over the floor as far as it is known: the band's alone, with no page up yet.
         const wantWidth = Math.max(
             shape.insideScreen(AppBackend.startWindowWidth(), roomW),
             Math.ceil(shape.window.floorWidth))
@@ -101,11 +111,16 @@ Item {
             shape.window.x = corner.x
             shape.window.y = corner.y
         }
+    }
+
+    /// The second step of [`applySavedWindow`], once the strip has started: the shape standing now is the one
+    /// `settleTimer` measures the slop from and a maximise comes back to — over the floor of whichever page is up.
+    function settleSavedWindow() {
         // The frame has to fit, and it is wider than the window says, which `insideScreen` cannot see: the platform
         // side moves the window back and says whether it had to. Before the maximise, since the shape standing then
         // is what a restore comes back to. Named, so a window placed elsewhere is pulled back to the saved monitor;
         // an empty name fits it to the nearest (first run, unplugged monitor).
-        const moved = AppBackend.fitWindowToScreen(home !== null ? home.name : "")
+        const moved = AppBackend.fitWindowToScreen(shape.savedScreen)
         if (AppBackend.startWindowMaximized()) {
             // Through the platform, so it keeps the shape to restore (`WindowChrome.toggleMaximized`).
             if (shape.window.captionMerged)

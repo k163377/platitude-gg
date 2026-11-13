@@ -31,12 +31,26 @@ Item {
     readonly property alias hand: hand
     readonly property alias waitRing: waitRingSeat
 
+    /// The strip has been given what it starts with — the saved tabs, or a run's own (`Main`). Before that, no tab
+    /// in front is not yet "nothing open".
+    property bool tabsStarted: false
+    /// The strip has started and waits on no folder (`TabsModel.opening`).
+    readonly property bool stripAtRest: mainUi.tabsStarted && !mainUi.tabsModel.opening
+    /// Whether the blank page may stand: from the first moment the strip is at rest. Before it, a blank page would be
+    /// built whole only to be taken down a turn later, under the page of the tab that was on its way — a start that
+    /// opens a tab would pay for two pages and keep the first one's memory as the process's high-water mark.
+    /// Latched: a folder asked for later (the picker, with no tab open) leaves the blank page standing while git
+    /// places it.
+    property bool blankDue: false
+
     // ---- the floor the window may not be dragged under --------------------
     // Measured here, where both halves (band and page) are; the window adds its edge and applies it
     // (`Main.floorWidth` / `WindowShape.holdFloor`).
     /// The page the floor is read off: the blank page with no tab open (same panes, same minimums). Never `curPage`
-    /// alone: with no tab it is null, and only that window would shrink to the band's floor. Headless:
-    /// `window-floor --restore` (`tabs=0` answers `pageW=821`; `floorW=` adds the edge, 823 on Windows).
+    /// alone: with no tab it is null, and only that window would shrink to the band's floor. Null while the strip is
+    /// starting (`blankDue`) and between a tab switch's two steps (`RepoPageStack.curPage`); the floor rises with the
+    /// page that arrives (`Main.onFloorWidthChanged`).
+    /// Headless: `window-floor --restore` (`tabs=0` answers `pageW=821`; `floorW=` adds the edge, 823 on Windows).
     readonly property var floorPage: mainUi.curPage !== null ? mainUi.curPage : blankPage.item
     readonly property real floorWidth:
         Math.max(topBar.floorWidth, mainUi.floorPage !== null ? mainUi.floorPage.floorWidth : 0)
@@ -47,6 +61,8 @@ Item {
         // `bodyColumn`'s rows other than the page: the chrome's two rows and the bottom edge's line.
         Theme.toolbarHeight + Theme.opsBarHeight + Theme.borderWidth
         + (mainUi.floorPage !== null ? mainUi.floorPage.floorHeight : 0)
+
+    onStripAtRestChanged: if (mainUi.stripAtRest) mainUi.blankDue = true
 
     // Where the pointer is. On the parent of all content: the one place a window-wide handler leaves the rows'
     // hover alone (`HandWatch`) — a `HoverHandler` takes hover over its item's whole area but does not kill that item's
@@ -92,13 +108,15 @@ Item {
         }
         // No divider under the chrome: the panel closes itself with its own hairline (`TopBar`'s header).
 
-        // Nothing open: the blank page.
+        // Nothing open: the blank page (`blankDue` says from when). The seat is in the column whenever no tab is in
+        // front, built or not: with nothing here to take the height, the column would share it out between the band
+        // and the foot line and stand the band down the window.
         Loader {
             id: blankPage
             Layout.fillWidth: true
             Layout.fillHeight: true
-            active: mainUi.tabsModel.currentIndex < 0
-            visible: active
+            active: mainUi.blankDue && mainUi.tabsModel.currentIndex < 0
+            visible: mainUi.tabsModel.currentIndex < 0
             sourceComponent: Component {
                 RepoPage {
                     index: -1

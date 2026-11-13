@@ -123,9 +123,9 @@ Item {
                 return
             }
             if (op.at("start") || op.at("shaped")) {
-                // Asked of a real page: until a tab opens, `window.floorPage` is the blank one, lost when the real page
-                // arrives (`WindowBody.floorPage`). Its tree read too, or the face stands at four zeroes and
-                // `wipScrolls=` answers for an empty pane.
+                // Asked of a real page: until a tab opens, `window.floorPage` is null — or, in a window that stood with
+                // none, the blank one, lost when the real page arrives (`WindowBody.floorPage`). Its tree read too, or
+                // the face stands at four zeroes and `wipScrolls=` answers for an empty pane.
                 const shaped = op.at("shaped")
                 if (!Awaited.all("window_floor_page", {
                         "floorPage": floorPage !== null,

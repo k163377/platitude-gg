@@ -399,6 +399,12 @@ ApplicationWindow {
             if (!root.tabsClaimed)
                 tabsModel.restoreTabs()
         }
+        // After the strip has its tabs, or its asks out: only now does no tab mean nothing open
+        // (`WindowBody.blankDue`), and the saved shape is settled once whichever page that brings is up
+        // (`WindowShape.applySavedWindow`).
+        body.tabsStarted = true
+        if (!AppBackend.alreadyRunning)
+            windowShape.settleSavedWindow()
         if (acts !== null)
             acts.begin()
     }
