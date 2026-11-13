@@ -20,6 +20,8 @@ Item {
         records: [Object.assign({}, noChip, { name: root.payload })]
     }
     ActionButtonLabel { id: action; y: 180; text: root.payload }
+    // A phrase's words are built only for a label that says one (`ActionButtonLabel.phraseSeat`).
+    ActionButtonLabel { id: phrase; y: 200; width: 900; text: root.payload; phraseHead: "commit" }
     AppCombo { id: combo; y: 240; width: 900; model: [root.payload] }
     CommandRowDelegate {
         id: command
@@ -85,6 +87,13 @@ Item {
 
         function test_action_name_keeps_tags() {
             checkSpelling(action, root.payload)
+        }
+
+        function test_action_phrase_keeps_tags() {
+            // The phrase's own words among them, past the two the plain label holds.
+            verify(fieldsWithText(phrase, root.payload).length > fieldsWithText(action, root.payload).length,
+                   "the phrase's words carry the text")
+            checkSpelling(phrase, root.payload)
         }
 
         function test_command_output_keeps_tags() {

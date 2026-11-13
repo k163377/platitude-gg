@@ -27,7 +27,7 @@ Item {
     /// The whole wording's width, off a hidden label with typed dashes — what a band-laid button folds against
     /// (`ActionButton.foldWidth`): a word there is drawn whole or not at all (`ActionButton.folded`). Not off what is
     /// drawn: the head and the drawn flag change width with the fold, and reading them back is a ring.
-    readonly property real wantWidth: btnLabel.phrased ? phraseRow.implicitWidth
+    readonly property real wantWidth: btnLabel.phrased ? phraseSeat.implicitWidth
         : Math.min(wanted.implicitWidth, btnLabel.wordCeiling)
     /// What the chip is drawn round and the `!` stands past: the ink. Not the shared box, which would leave a tail
     /// with no word in it.
@@ -102,49 +102,11 @@ Item {
     /// Stands in for the pointer on that mark (hover cannot be injected).
     property bool phraseSignaturePointedAt: false
     /// Whether that line is on screen — the tooltip's own visible, so a cut binding cannot read as green.
-    readonly property bool phraseSignatureTipShown: phraseAvatar.signatureTipShown
+    readonly property bool phraseSignatureTipShown: phraseSeat.item !== null && phraseSeat.item.signatureTipShown
     readonly property bool phrased: btnLabel.phraseHead !== ""
     /// The width this cell was given, not the phrase's own: a request for the full width is a floor the pane cannot go
     /// under, and the column would grow with the branch name (`details-fit`). No ring: nothing here feeds it back.
     readonly property real phraseRoom: btnLabel.phrased ? btnLabel.width : 0
-    // What gives when the phrase is short of room, in this order (user decision — ask before changing): `+N`, then the
-    // app's words, then the ref. `+N` first: the one part whose loss leaves where the commit lands unchanged. The count
-    // stands apart on the fixed side — the phrase's one number, almost free to keep — as do the command's chip, `by`,
-    // the face and the signature mark (each its own fixed length) and the note (`%n already pushed`: a count and set
-    // words, nothing to grow). The ref is cut in the middle, since branch names differ at the tail (`feature/…-a` /
-    // `feature/…-b`). A remote-tracking name is to be cut at the end, keeping its remote — no phrase shows one today,
-    // and the phrase's chips keep `CodeChip.cutAt`'s default (`middle`), so a phrase that adds one sets it. Nothing
-    // is cut before the phrase has taken the frame's whole width.
-    /// The parts that never give, each with its following gap — per part, since a `Row` charges a gap only for a
-    /// visible child.
-    readonly property real phraseFixed:
-        (btnLabel.phraseHoldPresses > 0 ? phraseHoldSeat.width + phraseRow.spacing : 0)
-        + (phraseAlert.visible ? phraseAlert.width + phraseRow.spacing : 0)
-        + headChip.implicitWidth + phraseRow.spacing
-        + (countWord.visible ? countWord.implicitWidth + phraseRow.spacing : 0)
-        + (noteWord.visible ? noteWord.implicitWidth + phraseRow.spacing : 0)
-        + (btnLabel.phraseFace >= 0 ? byWord.implicitWidth + phraseAvatar.width + 2 * phraseRow.spacing : 0)
-    readonly property real phraseFree: Math.max(0, btnLabel.phraseRoom - btnLabel.phraseFixed)
-    /// The ref gets what the weaker two do not need, down to a floor: elided past it a branch name says nothing.
-    readonly property real tailCap:
-        btnLabel.phraseRoom <= 0 ? 0 : Math.max(Theme.buttonMinWidth,
-                                                btnLabel.phraseFree - btnLabel.midCap - btnLabel.mateRoom)
-    /// The floor for anything that gives: a cut leaves a `…` behind (user decision — ask before changing). A part gone
-    /// in silence reaches the reader as a sentence that never said it; words and `+N` alike keep one mark's width
-    /// (`by <face> …` says there are more names).
-    readonly property real cutMark: ellipsis.implicitWidth
-    readonly property real midCap:
-        btnLabel.phraseRoom <= 0 || btnLabel.text === "" ? 0
-        : Math.max(btnLabel.cutMark, Math.min(midWords.implicitWidth,
-                                              btnLabel.phraseFree - tailWord.wantWidth - btnLabel.mateRoom
-                                              - phraseRow.spacing))
-    readonly property bool mateFits:
-        btnLabel.phraseFree - tailWord.wantWidth - midWords.implicitWidth
-        >= mateFull.implicitWidth + phraseRow.spacing
-    readonly property string mateWord: qsTr("+%1").arg(btnLabel.phraseMates)
-    readonly property real mateRoom:
-        btnLabel.phraseMates <= 0 ? 0
-        : (btnLabel.mateFits ? mateFull.implicitWidth : btnLabel.cutMark) + phraseRow.spacing
 
     /// Automation: where the plain word's baseline stands, in `item`'s y (`ActionButton.wordBase`).
     function wordBase(item) {
@@ -154,10 +116,10 @@ Item {
     /// its mark on it (`ActionButtonSeat.wordBase`).
     readonly property real headBase: headText.y + headText.baselineOffset
 
-    implicitWidth: btnLabel.phrased ? phraseRow.implicitWidth
+    implicitWidth: btnLabel.phrased ? phraseSeat.implicitWidth
                    : btnLabel.folded ? 0
                    : btnLabel.headRun + (btnLabel.splitFlag ? flagRow.width : 0)
-    implicitHeight: btnLabel.phrased ? phraseRow.implicitHeight
+    implicitHeight: btnLabel.phrased ? phraseSeat.implicitHeight
                     : btnLabel.lineBox > 0 ? btnLabel.lineBox : headText.implicitHeight
     Layout.maximumWidth: btnLabel.phrased ? Number.POSITIVE_INFINITY : btnLabel.wordCeiling
     // Its own width, not the shared box's (the button's `slack` holds the rest), so the chip and the mark measured off
@@ -188,22 +150,6 @@ Item {
         font.wordSpacing: btnLabel.code ? -Theme.spaceXs : 0
         font.pixelSize: btnLabel.fontSize
     }
-    // Rulers for the cut mark and the whole `+N`: both are read to work out who gives, so neither can be an item whose
-    // width that answer sets.
-    Label {
-        id: ellipsis
-        visible: false
-        text: "…"
-        font.family: Theme.uiFamily
-        font.pixelSize: btnLabel.fontSize
-    }
-    PlainTextLabel {
-        id: mateFull
-        visible: false
-        text: btnLabel.mateWord
-        font.family: Theme.uiFamily
-        font.pixelSize: btnLabel.fontSize
-    }
     // The plain word's line, which `lineBox` is a box for.
     Label {
         id: lineRef
@@ -212,141 +158,207 @@ Item {
         font.family: Theme.uiFamily
         font.pixelSize: btnLabel.fontSize
     }
-    // The chips hang their ground half a gap past their glyphs, so the row's gaps are plain word spacing.
-    Row {
-        id: phraseRow
-        visible: btnLabel.phrased
-        // Centred here: `centred`'s spacers cannot centre a cell that fills the row.
+    // The phrase, built only for a label that says one: its chips, face and marks outweigh the rest of a label, few
+    // buttons say a phrase, and every button builds two labels (`ActionButton`'s row and its stack) — built always,
+    // each would hold a phrase's parts unseen. Centred here: `centred`'s spacers cannot centre a cell that fills the
+    // row; the loader takes the row's own size.
+    Loader {
+        id: phraseSeat
+        active: btnLabel.phrased
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.spaceXs
-        // The hold mark is a letter of the phrase (デザイン規約 §アイコンの席 の名指し): as tall as the plain words'
-        // capitals and on the middle they are drawn to (`lineRef`, centred in the row as each word is), in the middle
-        // of the seat of their letters, the button's side given back — the padding already parts the mark from the
-        // frame (`MarkSeat.leadWidth` / `leadX`).
-        Item {
-            id: phraseHoldSeat
-            visible: btnLabel.phraseHoldPresses > 0
-            width: MarkSeat.leadWidth(btnLabel.fontSize, phraseRow.spacing,
-                                      headChip.word !== "" && !btnLabel.alert ? Theme.spaceXs / 2 : 0)
-            height: phraseHold.height
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.verticalCenterOffset: WordFace.drawnCapitalDrop(lineRef)
-            HoldIcon {
-                id: phraseHold
-                x: MarkSeat.leadX(btnLabel.fontSize, phraseHold.width)
-                size: btnLabel.fontSize
-                progress: btnLabel.phraseHoldProgress
-                presses: btnLabel.phraseHoldPresses
-                tint: btnLabel.phraseHoldTint
-                off: btnLabel.phraseHoldOff
+        // The chips hang their ground half a gap past their glyphs, so the row's gaps are plain word spacing.
+        sourceComponent: Row {
+            id: phraseRow
+
+            readonly property bool signatureTipShown: phraseAvatar.signatureTipShown
+            // What gives when the phrase is short of room, in this order (user decision — ask before changing): `+N`,
+            // then the app's words, then the ref. `+N` first: the one part whose loss leaves where the commit lands
+            // unchanged. The count stands apart on the fixed side — the phrase's one number, almost free to keep — as
+            // do the command's chip, `by`, the face and the signature mark (each its own fixed length) and the note
+            // (`%n already pushed`: a count and set words, nothing to grow). The ref is cut in the middle, since branch
+            // names differ at the tail (`feature/…-a` / `feature/…-b`). A remote-tracking name is to be cut at the end,
+            // keeping its remote — no phrase shows one today, and the phrase's chips keep `CodeChip.cutAt`'s default
+            // (`middle`), so a phrase that adds one sets it. Nothing is cut before the phrase has taken the frame's
+            // whole width.
+            /// The parts that never give, each with its following gap — per part, since a `Row` charges a gap only for
+            /// a visible child.
+            readonly property real phraseFixed:
+                (btnLabel.phraseHoldPresses > 0 ? phraseHoldSeat.width + phraseRow.spacing : 0)
+                + (phraseAlert.visible ? phraseAlert.width + phraseRow.spacing : 0)
+                + headChip.implicitWidth + phraseRow.spacing
+                + (countWord.visible ? countWord.implicitWidth + phraseRow.spacing : 0)
+                + (noteWord.visible ? noteWord.implicitWidth + phraseRow.spacing : 0)
+                + (btnLabel.phraseFace >= 0 ? byWord.implicitWidth + phraseAvatar.width + 2 * phraseRow.spacing : 0)
+            readonly property real phraseFree: Math.max(0, btnLabel.phraseRoom - phraseRow.phraseFixed)
+            /// The ref gets what the weaker two do not need, down to a floor: elided past it a branch name says
+            /// nothing.
+            readonly property real tailCap:
+                btnLabel.phraseRoom <= 0 ? 0 : Math.max(Theme.buttonMinWidth,
+                                                        phraseRow.phraseFree - phraseRow.midCap - phraseRow.mateRoom)
+            /// The floor for anything that gives: a cut leaves a `…` behind (user decision — ask before changing). A
+            /// part gone in silence reaches the reader as a sentence that never said it; words and `+N` alike keep one
+            /// mark's width (`by <face> …` says there are more names).
+            readonly property real cutMark: ellipsis.implicitWidth
+            readonly property real midCap:
+                btnLabel.phraseRoom <= 0 || btnLabel.text === "" ? 0
+                : Math.max(phraseRow.cutMark, Math.min(midWords.implicitWidth,
+                                                      phraseRow.phraseFree - tailWord.wantWidth - phraseRow.mateRoom
+                                                      - phraseRow.spacing))
+            readonly property bool mateFits:
+                phraseRow.phraseFree - tailWord.wantWidth - midWords.implicitWidth
+                >= mateFull.implicitWidth + phraseRow.spacing
+            readonly property string mateWord: qsTr("+%1").arg(btnLabel.phraseMates)
+            readonly property real mateRoom:
+                btnLabel.phraseMates <= 0 ? 0
+                : (phraseRow.mateFits ? mateFull.implicitWidth : phraseRow.cutMark) + phraseRow.spacing
+
+            spacing: Theme.spaceXs
+            // Rulers for the cut mark and the whole `+N`: both are read to work out who gives, so neither can be an
+            // item whose width that answer sets.
+            Label {
+                id: ellipsis
+                visible: false
+                text: "…"
+                font.family: Theme.uiFamily
+                font.pixelSize: btnLabel.fontSize
             }
-        }
-        // A phrase's `!` stands at its left end as the button's icon: inside, it would split the sentence, and the
-        // right end is the face's corner, where the signature mark stands (デザイン規約 §git 用語のコード表記「`!` の席」);
-        // on the right end's shoulder it would sit by the signature tick and read as one mark, `✓!` (user decision).
-        // It heads the words (デザイン規約 §アイコンの席 の文頭記号), on the plain words' line.
-        NavIcon {
-            id: phraseAlert
-            visible: btnLabel.alert
-            kind: "bang"
-            set: "lead"
-            size: btnLabel.fontSize
-            wordBase: lineRef.baselineOffset
-            tint: btnLabel.alertTone
-            width: Theme.iconSm
-            height: lineRef.height
-            anchors.verticalCenter: parent.verticalCenter
-        }
-        CodeChip {
-            id: headChip
-            word: btnLabel.phraseHead
-            tint: btnLabel.tint
-            size: btnLabel.fontSize
-            buttonWord: true
-            anchors.verticalCenter: parent.verticalCenter
-        }
-        // Invisible when empty: a `Row` charges a gap for a visible child of no width.
-        PlainTextLabel {
-            id: countWord
-            visible: btnLabel.phraseCount !== ""
-            text: btnLabel.phraseCount
-            color: btnLabel.tint
-            font.family: Theme.uiFamily
-            font.pixelSize: btnLabel.fontSize
-            anchors.verticalCenter: parent.verticalCenter
-        }
-        PlainTextLabel {
-            id: midWords
-            visible: btnLabel.midCap > 0
-            width: Math.min(implicitWidth, btnLabel.midCap)
-            elide: Text.ElideRight
-            text: btnLabel.text
-            color: btnLabel.tint
-            font.family: Theme.uiFamily
-            font.pixelSize: btnLabel.fontSize
-            anchors.verticalCenter: parent.verticalCenter
-        }
-        PlainTextLabel {
-            id: noteWord
-            visible: btnLabel.phraseNote !== ""
-            text: btnLabel.phraseNote
-            color: btnLabel.phraseNoteTint
-            font.family: Theme.uiFamily
-            font.pixelSize: Theme.fontSm
-            anchors.verticalCenter: parent.verticalCenter
-        }
-        // Capped (`tailCap`): the one part of unbounded length — git takes a branch name of any length. The mark on the
-        // chip's own ground, so mark and name give way as one (`CodeChip.mark`).
-        CodeChip {
-            id: tailWord
-            word: btnLabel.phraseTail
-            tint: btnLabel.phraseTailTint
-            mark: btnLabel.phraseTailMark
-            size: btnLabel.fontSize
-            buttonWord: true
-            cap: btnLabel.tailCap
-            anchors.verticalCenter: parent.verticalCenter
-        }
-        Label {
-            id: byWord
-            visible: btnLabel.phraseFace >= 0
-            text: qsTr("by")
-            color: btnLabel.tint
-            font.family: Theme.uiFamily
-            font.pixelSize: btnLabel.fontSize
-            anchors.verticalCenter: parent.verticalCenter
-        }
-        // No address, so nothing here is pressable — no pen, no tooltip, only the signature mark: a button holds one
-        // target, the phrase. `iconLg`, the graph's node step beside a `fontMd` subject.
-        AvatarButton {
-            id: phraseAvatar
-            visible: btnLabel.phraseFace >= 0
-            face: btnLabel.phraseFace
-            faceUrl: btnLabel.phraseFaceUrl
-            signatureKind: btnLabel.phraseSignature
-            signatureTip: btnLabel.phraseSignatureTip
-            signaturePointedAt: btnLabel.phraseSignaturePointedAt
-            // A small face drops its badge a step too, so the badge keeps its share of the face (`AvatarButton`).
-            badgeInk: Theme.iconXs
-            // Clear of the round face's corner, its ink's top right a pixel short of the frame beside it: how far out
-            // it may stand is the neighbour's to say (`AvatarButton.badgeTopOut`).
-            badgeTopOut: Theme.spaceXs - Theme.borderWidth
-            badgeRightOut: Theme.spaceXs - Theme.borderWidth
-            width: Theme.iconLg
-            height: Theme.iconLg
-            // A picture beside words, on their capitals' middle (デザイン規約 §アイコンの席).
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.verticalCenterOffset: WordFace.capitalDrop(lineRef)
-        }
-        PlainTextLabel {
-            id: mateCount
-            visible: btnLabel.phraseMates > 0
-            text: btnLabel.mateFits ? btnLabel.mateWord : ellipsis.text
-            color: btnLabel.tint
-            font.family: Theme.uiFamily
-            font.pixelSize: btnLabel.fontSize
-            anchors.verticalCenter: parent.verticalCenter
+            PlainTextLabel {
+                id: mateFull
+                visible: false
+                text: phraseRow.mateWord
+                font.family: Theme.uiFamily
+                font.pixelSize: btnLabel.fontSize
+            }
+            // The hold mark is a letter of the phrase (デザイン規約 §アイコンの席 の名指し): as tall as the plain
+            // words' capitals and on the middle they are drawn to (`lineRef`, centred in the row as each word is), in
+            // the middle of the seat of their letters, the button's side given back — the padding already parts the
+            // mark from the frame (`MarkSeat.leadWidth` / `leadX`).
+            Item {
+                id: phraseHoldSeat
+                visible: btnLabel.phraseHoldPresses > 0
+                width: MarkSeat.leadWidth(btnLabel.fontSize, phraseRow.spacing,
+                                          headChip.word !== "" && !btnLabel.alert ? Theme.spaceXs / 2 : 0)
+                height: phraseHold.height
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.verticalCenterOffset: WordFace.drawnCapitalDrop(lineRef)
+                HoldIcon {
+                    id: phraseHold
+                    x: MarkSeat.leadX(btnLabel.fontSize, phraseHold.width)
+                    size: btnLabel.fontSize
+                    progress: btnLabel.phraseHoldProgress
+                    presses: btnLabel.phraseHoldPresses
+                    tint: btnLabel.phraseHoldTint
+                    off: btnLabel.phraseHoldOff
+                }
+            }
+            // A phrase's `!` stands at its left end as the button's icon: inside, it would split the sentence, and the
+            // right end is the face's corner, where the signature mark stands
+            // (デザイン規約 §git 用語のコード表記「`!` の席」); on the right end's shoulder it would sit by the
+            // signature tick and read as one mark, `✓!` (user decision). It heads the words
+            // (デザイン規約 §アイコンの席 の文頭記号), on the plain words' line.
+            NavIcon {
+                id: phraseAlert
+                visible: btnLabel.alert
+                kind: "bang"
+                set: "lead"
+                size: btnLabel.fontSize
+                wordBase: lineRef.baselineOffset
+                tint: btnLabel.alertTone
+                width: Theme.iconSm
+                height: lineRef.height
+                anchors.verticalCenter: parent.verticalCenter
+            }
+            CodeChip {
+                id: headChip
+                word: btnLabel.phraseHead
+                tint: btnLabel.tint
+                size: btnLabel.fontSize
+                buttonWord: true
+                anchors.verticalCenter: parent.verticalCenter
+            }
+            // Invisible when empty: a `Row` charges a gap for a visible child of no width.
+            PlainTextLabel {
+                id: countWord
+                visible: btnLabel.phraseCount !== ""
+                text: btnLabel.phraseCount
+                color: btnLabel.tint
+                font.family: Theme.uiFamily
+                font.pixelSize: btnLabel.fontSize
+                anchors.verticalCenter: parent.verticalCenter
+            }
+            PlainTextLabel {
+                id: midWords
+                visible: phraseRow.midCap > 0
+                width: Math.min(implicitWidth, phraseRow.midCap)
+                elide: Text.ElideRight
+                text: btnLabel.text
+                color: btnLabel.tint
+                font.family: Theme.uiFamily
+                font.pixelSize: btnLabel.fontSize
+                anchors.verticalCenter: parent.verticalCenter
+            }
+            PlainTextLabel {
+                id: noteWord
+                visible: btnLabel.phraseNote !== ""
+                text: btnLabel.phraseNote
+                color: btnLabel.phraseNoteTint
+                font.family: Theme.uiFamily
+                font.pixelSize: Theme.fontSm
+                anchors.verticalCenter: parent.verticalCenter
+            }
+            // Capped (`tailCap`): the one part of unbounded length — git takes a branch name of any length. The mark on
+            // the chip's own ground, so mark and name give way as one (`CodeChip.mark`).
+            CodeChip {
+                id: tailWord
+                word: btnLabel.phraseTail
+                tint: btnLabel.phraseTailTint
+                mark: btnLabel.phraseTailMark
+                size: btnLabel.fontSize
+                buttonWord: true
+                cap: phraseRow.tailCap
+                anchors.verticalCenter: parent.verticalCenter
+            }
+            Label {
+                id: byWord
+                visible: btnLabel.phraseFace >= 0
+                text: qsTr("by")
+                color: btnLabel.tint
+                font.family: Theme.uiFamily
+                font.pixelSize: btnLabel.fontSize
+                anchors.verticalCenter: parent.verticalCenter
+            }
+            // No address, so nothing here is pressable — no pen, no tooltip, only the signature mark: a button holds
+            // one target, the phrase. `iconLg`, the graph's node step beside a `fontMd` subject.
+            AvatarButton {
+                id: phraseAvatar
+                visible: btnLabel.phraseFace >= 0
+                face: btnLabel.phraseFace
+                faceUrl: btnLabel.phraseFaceUrl
+                signatureKind: btnLabel.phraseSignature
+                signatureTip: btnLabel.phraseSignatureTip
+                signaturePointedAt: btnLabel.phraseSignaturePointedAt
+                // A small face drops its badge a step too, so the badge keeps its share of the face (`AvatarButton`).
+                badgeInk: Theme.iconXs
+                // Clear of the round face's corner, its ink's top right a pixel short of the frame beside it: how far
+                // out it may stand is the neighbour's to say (`AvatarButton.badgeTopOut`).
+                badgeTopOut: Theme.spaceXs - Theme.borderWidth
+                badgeRightOut: Theme.spaceXs - Theme.borderWidth
+                width: Theme.iconLg
+                height: Theme.iconLg
+                // A picture beside words, on their capitals' middle (デザイン規約 §アイコンの席).
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.verticalCenterOffset: WordFace.capitalDrop(lineRef)
+            }
+            PlainTextLabel {
+                id: mateCount
+                visible: btnLabel.phraseMates > 0
+                text: phraseRow.mateFits ? phraseRow.mateWord : ellipsis.text
+                color: btnLabel.tint
+                font.family: Theme.uiFamily
+                font.pixelSize: btnLabel.fontSize
+                anchors.verticalCenter: parent.verticalCenter
+            }
         }
     }
     PlainTextLabel {
