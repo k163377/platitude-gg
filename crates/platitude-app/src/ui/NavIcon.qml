@@ -22,16 +22,7 @@ InkCanvas {
     readonly property var reaches: icon.reachesOf(icon.kind)
     /// Whether the drawing is moved to stand its ink in the middle of the box. Only the resize corner is not.
     readonly property bool centred: icon.kind !== "grip"
-    /// GitHub's mark as Octicons draws it (`mark-github-16`, MIT, © GitHub Inc. — used under GitHub's logo terms:
-    /// unaltered, in white or grey, to point at GitHub), and the share of its 16-grid it is drawn at here.
-    readonly property string githubMark: "M6.766 11.328c-2.063-.25-3.516-1.734-3.516-3.656 0-.781.281-1.625.75-2.188"
-        + "-.203-.515-.172-1.609.063-2.062.625-.078 1.468.25 1.968.703.594-.187 1.219-.281 1.985-.281.765 0 1.39.094 "
-        + "1.953.265.484-.437 1.344-.765 1.969-.687.218.422.25 1.515.046 2.047.5.593.766 1.39.766 2.203 0 1.922-1.453 "
-        + "3.375-3.547 3.64.531.344.89 1.094.89 1.954v1.625c0 .468.391.734.86.547C13.781 14.359 16 11.53 16 8.03 16 "
-        + "3.61 12.406 0 7.984 0 3.563 0 0 3.61 0 8.031a7.88 7.88 0 0 0 5.172 7.422c.422.156.828-.125.828-.547v-1.25"
-        + "c-.219.094-.5.156-.75.156-1.031 0-1.64-.562-2.078-1.609-.172-.422-.36-.672-.719-.719-.187-.015-.25-.093"
-        + "-.25-.187 0-.188.313-.328.625-.328.453 0 .844.281 1.25.86.313.452.64.655 1.031.655s.641-.14 1-.5c.266-.265"
-        + ".47-.5.657-.656"
+    /// The share of its 16-grid GitHub's mark is drawn at (`githubMark`).
     readonly property real githubScale: 0.75
     /// Set beside words (デザイン規約 §アイコンの席): the mark is drawn as a letter of the words' face rather than to its
     /// box — its size, its line and where it stands all come off the words. Empty for a mark that stands alone, drawn
@@ -188,6 +179,19 @@ InkCanvas {
                                      : Math.round(icon.set === "sign" ? icon.inkAcross + 2 * icon.wordAir
                                                                       : icon.inkAcross)
 
+    /// GitHub's mark as Octicons draws it (`mark-github-16`, MIT, © GitHub Inc. — used under GitHub's logo terms:
+    /// unaltered, in white or grey, to point at GitHub). A function, read by the one kind that draws it: as a
+    /// property, every mark of every kind would hold the path.
+    function githubMark() {
+        return "M6.766 11.328c-2.063-.25-3.516-1.734-3.516-3.656 0-.781.281-1.625.75-2.188"
+        + "-.203-.515-.172-1.609.063-2.062.625-.078 1.468.25 1.968.703.594-.187 1.219-.281 1.985-.281.765 0 1.39.094 "
+        + "1.953.265.484-.437 1.344-.765 1.969-.687.218.422.25 1.515.046 2.047.5.593.766 1.39.766 2.203 0 1.922-1.453 "
+        + "3.375-3.547 3.64.531.344.89 1.094.89 1.954v1.625c0 .468.391.734.86.547C13.781 14.359 16 11.53 16 8.03 16 "
+        + "3.61 12.406 0 7.984 0 3.563 0 0 3.61 0 8.031a7.88 7.88 0 0 0 5.172 7.422c.422.156.828-.125.828-.547v-1.25"
+        + "c-.219.094-.5.156-.75.156-1.031 0-1.64-.562-2.078-1.609-.172-.422-.36-.672-.719-.719-.187-.015-.25-.093"
+        + "-.25-.187 0-.188.313-.328.625-.328.453 0 .844.281 1.25.86.313.452.64.655 1.031.655s.641-.14 1-.5c.266-.265"
+        + ".47-.5.657-.656"
+    }
     /// Each kind's `reaches`, drawn the way this mark is (`grown`). **A kind added to the drawing needs its list here
     /// too**: one with none counts as filling its box (`inkAt`) and is never moved to its middle.
     function reachesOf(kind) {
@@ -526,7 +530,7 @@ InkCanvas {
             ctx.save()
             ctx.translate(2 * s, (8 - 15.5 * icon.githubScale / 2) * s)
             ctx.scale(icon.githubScale * s, icon.githubScale * s)
-            ctx.path = icon.githubMark
+            ctx.path = icon.githubMark()
             ctx.fill()
             ctx.restore()
         } else if (icon.kind === "home") {
