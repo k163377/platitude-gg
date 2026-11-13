@@ -4,6 +4,19 @@ import platitude.ui
 
 /// Each model change must reach a frame before the next action.
 /// The animation duration is a sampling window.
+///
+/// **The frame that answers a change is the first one whose scene graph synchronised after it** (`PerfFrameWait`).
+/// A swapped frame alone says no such thing: on the threaded render loop `frameSwapped` is queued from the render
+/// thread, and the first to arrive after a request is as a rule a frame that was already on its way.
+///
+/// **An operation starts on a page that owes nothing** (`owed`): timed from a page still arriving, it is timed
+/// against that page's own reads, and one operation's leftovers are the next one's load. `PGG_PERF_BACK_TO_BACK`
+/// asks for exactly that load instead. What no term here sees is a colouring the product goes on with for a diff
+/// already closed: a file the product colours is measured as a `coloured` case, which stays until the colours land.
+///
+/// **Two frames are timed for each input**: the one that first shows it taken (`askFeedback` — the row selected,
+/// the pane up and waiting), which the operation budget is read against
+/// (internal-docs/メモリと操作応答の改善計画.md §2), and the one with the answer in it (`note`), its completion.
 Item {
     id: driver
 
@@ -25,8 +38,17 @@ Item {
     property string stage: "opening"
     property string wantedOid: ""
     property real actionStart: 0
-    property int frameBefore: 0
-    property int frames: 0
+    /// What the idle stage goes on to once the page owes nothing (`resume`), and whether the first operation has
+    /// been reached.
+    property string resumeWith: ""
+    property bool begun: false
+    /// The feedback frame being waited for: the measurement it becomes, and the state it has to show.
+    property string feedbackKind: ""
+    property var feedbackShown: null
+    // The stage's frame and the input's feedback frame, waited for side by side. Property values, not bare children
+    // (rules-refs/app-ui.md, the `QtObject` parts the collector takes).
+    readonly property PerfFrameWait stageFrame: PerfFrameWait { id: stageFrame }
+    readonly property PerfFrameWait feedbackFrame: PerfFrameWait { id: feedbackFrame }
     property bool sawDetails: false
     property bool sawDiff: false
     property bool scrollValid: true
@@ -57,19 +79,96 @@ Item {
         graphPane.view.forceLayout()
         if (page.diffShown)
             diffPane.view.forceLayout()
-        driver.frameBefore = driver.frames
+        driver.stageFrame.ask()
         driver.enter(next)
         // `update()`, not `requestUpdate()`: a bare request over a still offscreen scene swaps no frame
         // (rules-refs/app-ui.md「`frameSwapped` を待つなら頼むのは `window.update()`」).
         page.Window.window.update()
     }
 
-    function tick() {
+    /// What the next operation still waits on, by name: every read the page owes (`PageSettled.missing`), and any
+    /// git of the application's still running beside them (`Harness.gitInFlight`). Both answer for work already
+    /// asked for — work a timer or a debounce has yet to ask for is not in either. A back-to-back run waits for the
+    /// page to be ready before its first operation, and on nothing after.
+    function owed() {
+        if (PerfProbe.backToBack)
+            return driver.begun || driver.ready ? [] : ["ready"]
+        const terms = PageSettled.missing(page)
+        if (!driver.ready)
+            terms.push("ready")
+        if (Harness.gitInFlight() > 0)
+            terms.push("git")
+        return terms
+    }
+    function idleThen(what) {
+        driver.resumeWith = what
+        driver.enter("idle")
+        driver.tick(false)
+    }
+    function resume() {
+        const what = driver.resumeWith
+        driver.resumeWith = ""
+        if (what === "choose") {
+            // The first is the page's own: everything it opened with is in.
+            if (!driver.begun && !PerfProbe.backToBack)
+                Harness.report("perf_first_idle clock_ms=" + PerfProbe.clockMs())
+            driver.begun = true
+            driver.choose()
+        } else if (what === "open") {
+            driver.openFile()
+        } else if (what === "scroll") {
+            driver.beginScroll()
+        } else if (what === "diff-scroll") {
+            driver.beginDiffScroll()
+        } else {
+            driver.fail("resume-unknown:" + what)
+        }
+    }
+
+    /// Asks for the frame that shows `shown` — the state the input just made, which has to stand at once: the
+    /// operation's first answer is immediate by design (実装計画 §9), and a run in which it is not has no feedback
+    /// frame to time.
+    function askFeedback(kind, shown) {
+        if (!shown()) {
+            driver.fail("input-not-shown-at-once")
+            return false
+        }
+        driver.feedbackKind = kind
+        driver.feedbackShown = shown
+        driver.feedbackFrame.ask()
+        page.Window.window.update()
+        return true
+    }
+    /// Ends the run where a completion's frame arrived with the input's feedback frame still untimed, and answers
+    /// whether the run goes on. Both waits are asked of the same passes, feedback first, so this holds an invariant.
+    function requireFeedback() {
+        if (driver.feedbackKind === "")
+            return true
+        driver.fail("completion-frame-before-feedback")
+        return false
+    }
+
+    /// Moves the stage on where its condition holds. `onBeat`: called from the sampler's beat, a turn of its own —
+    /// an idle run puts its next input in only there. From a model's signal the page is still inside the drain that
+    /// settled it, and an input put in then is timed with the rest of that drain. A back-to-back run asks for no
+    /// such stillness, and goes on where the condition is first seen.
+    function tick(onBeat) {
+        const still = onBeat === true || PerfProbe.backToBack
         if (driver.stage === "opening" && (graphModel.rowTotal > 0 || driver.ready) && driver.graphVisible)
             driver.waitFrame("graph-frame")
-        else if (driver.stage === "ready" && driver.ready)
-            driver.choose()
-        else if (driver.stage === "details" && !detailsModel.loading && detailsModel.shaHex === driver.wantedOid)
+        else if (driver.stage === "idle") {
+            // Only on the turn an input could go in: `owed` borrows the hub for `gitInFlight`, and a model's signal
+            // is a drain of its own that it would be read inside.
+            if (still) {
+                const owed = driver.owed()
+                Awaited.note("perf_idle waiting=" + (owed.length === 0 ? "nothing" : owed.join(",")))
+                if (owed.length === 0)
+                    driver.resume()
+            }
+        } else if (driver.stage === "click-guard") {
+            if (still)
+                driver.choose()
+        } else if (driver.stage === "details" && !detailsModel.loading && detailsModel.shaHex === driver.wantedOid)
             driver.waitFrame("details-frame")
         else if (driver.stage === "diff" && !diffModel.loading && diffModel.title === driver.wantedPath
                  && diffModel.fingerprint !== "" && page.diffShown)
@@ -85,8 +184,11 @@ Item {
                 && !diffModel.loading && diffModel.fingerprint === driver.wantedFingerprint
     }
 
-    function note(point) {
+    /// One timed frame, from the input (`actionStart`) to now. `asked_ms` is where in that stretch the frame was
+    /// asked for — the state it shows was there — and `passed_over` how many frames went by without it.
+    function note(point, wait) {
         driver.measurement(point + " elapsed_ms=" + (PerfProbe.clockMs() - driver.actionStart)
+                       + " asked_ms=" + (wait.askedAt - driver.actionStart) + " passed_over=" + wait.passedOver
                        + " case=" + driver.caseName + " operation=" + driver.operation
                        + " oid=" + driver.wantedOid + " rows_gen=" + diffModel.rowsGen
                        + " fingerprint=" + diffModel.fingerprint)
@@ -130,22 +232,47 @@ Item {
             driver.fail("selection-delegate-missing")
             return
         }
+        // A click the product would take for the second half of a double-click selects nothing: it is put in once
+        // that window has closed (`tick`).
+        if (driver.secondHalf(item)) {
+            if (driver.stage !== "click-guard")
+                driver.enter("click-guard")
+            return
+        }
         driver.enter("details")
+        Harness.report("perf_selection mode=" + PerfProbe.selection + " oid=" + driver.wantedOid
+                       + " case=" + driver.caseName + " operation=" + driver.operation)
         driver.actionStart = PerfProbe.clockMs()
         page.releasePressedAway(null)
         item.leftClick(Qt.NoModifier)
-        Harness.report("perf_selection mode=" + PerfProbe.selection + " oid=" + driver.wantedOid
-                       + " case=" + driver.caseName + " operation=" + driver.operation)
-        driver.tick()
+        // The row lit (`GraphRowDelegate.selected` follows the view's current row) and the page holding the commit:
+        // the second is what the click made, since the first row can be the view's current one before any click.
+        if (driver.askFeedback("perf_details_feedback", () => graphPane.view.currentIndex === row
+                                                              && page.selectedOid === driver.wantedOid))
+            driver.tick(false)
+    }
+
+    /// Whether a click on `item` now is one the product drops as the second half of a double-click: inside the
+    /// window the last click opened, on the same target (`ReclickGesture.doubleGuard`). Rows with no name all
+    /// answer to one key (`GraphList.noteClick`), so two of them clicked in a row are that target twice. The
+    /// gesture's other reason to drop a click, a hush, is not waited out — it ends the run as feedback never shown.
+    function secondHalf(item) {
+        const view = graphPane.view
+        return view.clickGuarded && (item.nameChip === null ? "" : item.nameChip.key) === view.clickedKey
     }
 
     function afterDetails() {
-        driver.sawDetails = true
-        driver.note("perf_details_frame")
-        if (!PerfProbe.withDiff) {
-            driver.afterInteraction()
+        if (!driver.requireFeedback())
             return
-        }
+        driver.sawDetails = true
+        driver.note("perf_details_frame", driver.stageFrame)
+        if (PerfProbe.withDiff)
+            driver.idleThen("open")
+        else
+            driver.afterInteraction()
+    }
+
+    function openFile() {
         let file = 0
         const caseFile = PerfProbe.caseField(driver.operation, 2)
         if (caseFile !== "") {
@@ -163,10 +290,12 @@ Item {
         }
         driver.enter("diff")
         driver.wantedPath = detailsModel.filePathAt(file)
+        const origPath = detailsModel.fileOrigPathAt(file)
+        Harness.report("perf_file path=" + driver.wantedPath)
         driver.actionStart = PerfProbe.clockMs()
-        Harness.report("perf_file path=" + detailsModel.filePathAt(file))
-        page.openDiff("commit", detailsModel.filePathAt(file), detailsModel.fileOrigPathAt(file))
-        driver.tick()
+        page.openDiff("commit", driver.wantedPath, origPath)
+        if (driver.askFeedback("perf_diff_feedback", () => page.diffShown && page.diffPath === driver.wantedPath))
+            driver.tick(false)
     }
 
     function afterInteraction() {
@@ -185,7 +314,7 @@ Item {
             if (returning)
                 driver.waitFrame("scroll-frame")
             else
-                driver.beginScroll()
+                driver.idleThen("scroll")
         } else {
             driver.finish()
         }
@@ -203,7 +332,7 @@ Item {
             // A still offscreen scene swaps no further frame, and this diff's frame was already seen: wait for one
             // only if the viewport moved.
             if (diffPane.view.contentY === before)
-                driver.beginDiffScroll()
+                driver.idleThen("diff-scroll")
             else
                 driver.waitFrame("diff-scroll-frame")
         } else {
@@ -268,20 +397,24 @@ Item {
             PerfProbe.frame()
             return
         }
-        if (!driver.stage.endsWith("-frame"))
-            return
-        if (driver.frames <= driver.frameBefore) {
-            page.Window.window.update()
-            return
+        if (driver.feedbackFrame.swapped()) {
+            if (!driver.feedbackShown()) {
+                driver.fail("feedback-gone-before-its-frame")
+                return
+            }
+            driver.note(driver.feedbackKind, driver.feedbackFrame)
+            driver.feedbackKind = ""
         }
+        if (!driver.stage.endsWith("-frame") || !driver.stageFrame.swapped())
+            return
         if (driver.stage === "graph-frame") {
             if (!driver.graphVisible) {
                 driver.fail("first-graph-hidden")
                 return
             }
-            Harness.report("perf_graph_frame clock_ms=" + PerfProbe.clockMs() + " visible=true")
-            driver.enter("ready")
-            driver.tick()
+            Harness.report("perf_graph_frame clock_ms=" + PerfProbe.clockMs() + " visible=true passed_over="
+                           + driver.stageFrame.passedOver)
+            driver.idleThen("choose")
         } else if (driver.stage === "none-frame") {
             if (graphPane.view.currentIndex >= 0)
                 driver.fail("none-retained-current-row")
@@ -290,12 +423,14 @@ Item {
         } else if (driver.stage === "details-frame") {
             driver.afterDetails()
         } else if (driver.stage === "diff-frame") {
+            if (!driver.requireFeedback())
+                return
             driver.sawDiff = true
             driver.wantedFingerprint = diffModel.fingerprint
-            driver.note("perf_diff_frame")
+            driver.note("perf_diff_frame", driver.stageFrame)
             if (driver.wantsColour) {
                 driver.enter("colour")
-                driver.tick()
+                driver.tick(false)
             } else {
                 driver.afterDiff()
             }
@@ -304,12 +439,12 @@ Item {
                 driver.fail("colour-frame-changed-target")
                 return
             }
-            driver.note("perf_colour_frame")
+            driver.note("perf_colour_frame", driver.stageFrame)
             driver.afterDiff()
         } else if (driver.stage === "next-frame") {
-            driver.choose()
+            driver.idleThen("choose")
         } else if (driver.stage === "diff-scroll-frame") {
-            driver.beginDiffScroll()
+            driver.idleThen("diff-scroll")
         } else if (driver.stage === "diff-end-frame") {
             const view = diffPane.view
             const row = view.indexAt(view.width / 2, view.contentY + view.height / 2)
@@ -321,7 +456,7 @@ Item {
                            + " operation=" + driver.operation + " row=" + row)
             driver.afterInteraction()
         } else if (driver.stage === "scroll-frame") {
-            driver.beginScroll()
+            driver.idleThen("scroll")
         } else if (driver.stage === "scroll-end-frame") {
             const view = graphPane.view
             const row = view.indexAt(view.width / 2, view.contentY + view.height / 2)
@@ -337,31 +472,39 @@ Item {
 
     Connections {
         target: driver.graphModel
-        function onStatsChanged() { driver.tick() }
+        function onStatsChanged() { driver.tick(false) }
     }
     Connections {
         target: driver.branchesModel
-        function onChanged() { driver.tick() }
+        function onChanged() { driver.tick(false) }
     }
     Connections {
         target: driver.worktree
-        function onChanged() { driver.tick() }
+        function onChanged() { driver.tick(false) }
     }
     Connections {
         target: driver.repoTab
-        function onChanged() { driver.tick() }
+        function onChanged() { driver.tick(false) }
     }
     Connections {
         target: driver.detailsModel
-        function onChanged() { driver.tick() }
+        function onChanged() { driver.tick(false) }
     }
     Connections {
         target: driver.diffModel
-        function onChanged() { driver.tick() }
+        function onChanged() { driver.tick(false) }
     }
     Connections {
         target: driver.page.Window.window
-        function onFrameSwapped() { driver.frames++; driver.frame() }
+        function onAfterAnimating() {
+            driver.stageFrame.passed()
+            driver.feedbackFrame.passed()
+        }
+        function onAfterSynchronizing() {
+            driver.stageFrame.synced()
+            driver.feedbackFrame.synced()
+        }
+        function onFrameSwapped() { driver.frame() }
     }
 
     NumberAnimation {
@@ -405,20 +548,21 @@ Item {
     }
 
     // Re-reads the predicates on the beat — `tick()` reads inputs no signal here is wired to (the pane's size and
-    // visibility, the page's diff) — and re-asks for a frame each beat, since a request taken while the window was
-    // not visible swaps nothing. Off over a scroll: the animation's end moves that stage on.
+    // visibility, the page's diff, what the page and its git still owe) — and re-asks for a frame each beat, since a
+    // request taken while the window was not visible swaps nothing. Off over a scroll: the animation's end moves
+    // that stage on.
     SampleTimer {
         running: driver.stage !== "finished" && driver.stage !== "failed" && !driver.stage.endsWith("scrolling")
         onTriggered: {
-            driver.tick()
-            if (driver.stage.endsWith("-frame") && driver.frames <= driver.frameBefore)
+            driver.tick(true)
+            if (driver.stageFrame.step !== "" || driver.feedbackFrame.step !== "")
                 driver.page.Window.window.update()
         }
     }
 
     Component.onCompleted: {
         driver.enter(driver.stage)
-        driver.tick()
+        driver.tick(false)
     }
-    onReadyChanged: driver.tick()
+    onReadyChanged: driver.tick(false)
 }

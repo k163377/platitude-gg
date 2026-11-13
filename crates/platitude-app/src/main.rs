@@ -569,6 +569,7 @@ fn embed_harness_qml() {
     qrc::embed!("auto/PageReports.qml");
     qrc::embed!("auto/PageSettled.qml");
     qrc::embed!("auto/PageStage.qml");
+    qrc::embed!("auto/PerfFrameWait.qml");
     qrc::embed!("auto/StageTimer.qml");
     qrc::embed!("auto/TabProbe.qml");
     qrc::embed!("auto/WindowAutoActDriver.qml");

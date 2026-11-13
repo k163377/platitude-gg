@@ -60,6 +60,7 @@ pub(super) fn compare(mut opts: Options) -> Result<(), String> {
     // sample warms its own binary right before it is measured: no shelf
     // switch borrows the other binary's warm cache.
     let mut expected = None;
+    let mut methods = std::collections::BTreeMap::new();
     for (step, variant) in order(blocks).iter().enumerate() {
         let (commit, qt) = if *variant == "A" { &a } else { &b };
         opts.at = commit.clone();
@@ -84,6 +85,13 @@ pub(super) fn compare(mut opts: Options) -> Result<(), String> {
             ));
         }
         expected = Some(signature);
+        methods.insert(
+            *variant,
+            std::fs::read_to_string(output.join("method.txt")).map_err(|e| e.to_string())?,
+        );
+    }
+    if let Some(note) = methods_apart(methods.get("A"), methods.get("B")) {
+        println!("{note}");
     }
     println!(
         "A/B complete: {} (ABBA, {} samples per variant; compare matching cache/platform/case rows)",
@@ -92,6 +100,23 @@ pub(super) fn compare(mut opts: Options) -> Result<(), String> {
     );
     Ok(())
 }
+
+/// What to say when the two sides measure differently (`Reading::method`):
+/// a commit from before a change to the driver against one after it. Not a
+/// refusal — the working set and the scroll rate are the same quantity on
+/// both sides.
+fn methods_apart(a: Option<&String>, b: Option<&String>) -> Option<String> {
+    let (a, b) = (a?, b?);
+    (a != b).then(|| {
+        format!(
+            "A and B do not measure the same way (A: {a}; B: {b}): their startup and frame \
+             times are not of one kind — compare the working set and the scroll rate only"
+        )
+    })
+}
+
+/// A build that says no method, in `method.txt`.
+const NO_METHOD: &str = "not said";
 
 fn freeze_corpus(opts: &mut Options, found: super::corpus::Corpus) -> Result<(), String> {
     if let Some(complaint) = super::corpus::mismatch(&found, &opts.corpus) {
@@ -186,7 +211,13 @@ pub(super) fn save(output: &Path, opts: &Options, kept: &[Reading]) -> Result<()
                 reading.os_peak_working_set.map(|v| v as f64),
                 "bytes",
             ),
+            (
+                "job-commit-peak",
+                reading.job_peak_commit.map(|v| v as f64),
+                "bytes",
+            ),
             ("startup", reading.startup_ms.map(|v| v as f64), "ms"),
+            ("first-idle", reading.idle_ms.map(|v| v as f64), "ms"),
             ("graph-fps", reading.fps, "fps"),
         ] {
             if let Some(value) = value {
@@ -254,6 +285,20 @@ pub(super) fn save(output: &Path, opts: &Options, kept: &[Reading]) -> Result<()
             }
         }
     }
+    save_method_and_graphics(output, kept)
+}
+
+/// What a comparison reads of each side beside its numbers: the graphics
+/// stack it holds the two to (`comparison_identity`), and the measuring
+/// method it says of them (`methods_apart`).
+fn save_method_and_graphics(output: &Path, kept: &[Reading]) -> Result<(), String> {
+    std::fs::write(
+        output.join("method.txt"),
+        kept.first()
+            .and_then(|r| r.method.as_deref())
+            .unwrap_or(NO_METHOD),
+    )
+    .map_err(|e| e.to_string())?;
     std::fs::write(
         output.join("graphics.txt"),
         kept.first()
@@ -286,6 +331,19 @@ mod tests {
         freeze_corpus(&mut opts, found.clone()).unwrap();
         assert_eq!(opts.corpus, "actual");
         freeze_corpus(&mut opts, found).unwrap();
+    }
+
+    #[test]
+    fn two_sides_that_measure_differently_are_said_so() {
+        let synced = "frames=synced start=idle".to_string();
+        let silent = NO_METHOD.to_string();
+        assert!(methods_apart(Some(&synced), Some(&synced)).is_none());
+        assert!(methods_apart(Some(&synced), None).is_none());
+        let note = methods_apart(Some(&silent), Some(&synced)).expect("two methods");
+        assert!(
+            note.contains("not said") && note.contains("frames=synced"),
+            "{note}"
+        );
     }
 
     #[test]

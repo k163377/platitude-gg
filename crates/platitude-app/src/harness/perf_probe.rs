@@ -21,6 +21,7 @@ pub struct PerfProbe {
     cycles: u32,
     completion: String,
     diff_scroll: bool,
+    back_to_back: bool,
     scroll_surface: String,
     scroll_case: String,
     scroll_operation: i32,
@@ -51,6 +52,7 @@ impl Default for PerfProbe {
             cycles: knobs.perf_cycles.max(1),
             completion: knobs.perf_completion.clone(),
             diff_scroll: knobs.perf_diff_scroll,
+            back_to_back: knobs.perf_back_to_back,
             scroll_surface: "graph".into(),
             scroll_case: "default".into(),
             scroll_operation: 0,
@@ -75,6 +77,7 @@ impl PerfProbe {
     qproperty!("withDiff", Member = with_diff, Constant);
     qproperty!("verifying", Member = verifying, Constant);
     qproperty!("diffScroll", Member = diff_scroll, Constant);
+    qproperty!("backToBack", Member = back_to_back, Constant);
 
     #[qslot]
     fn operation_count(&self) -> i32 {

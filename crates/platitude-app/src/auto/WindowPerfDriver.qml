@@ -169,6 +169,11 @@ Item {
     }
 
     Component.onCompleted: {
+        // What this build's timed frames and starts are, for the reader of its numbers (xtask `Reading::method`).
+        // Said from here, which every run of the verb has, rather than beside the waits in `PagePerfDriver`: a run
+        // that opens no page times no operation, and would otherwise read as a build that cannot say.
+        if (Harness.autoPerf)
+            Harness.report("perf_method frames=synced start=" + (PerfProbe.backToBack ? "back-to-back" : "idle"))
         driver.reportDisplay("begin")
         driver.begin()
     }

@@ -34,6 +34,7 @@ pub(super) fn report(opts: &Options, kept: &[Reading], context: &Context<'_>) {
         return;
     }
     memory(opts, kept, context);
+    method(kept, opts);
     timings(kept, opts.software);
     scroll(kept, context, opts.software);
     interaction(kept, opts.software);
@@ -197,6 +198,20 @@ fn memory(opts: &Options, kept: &[Reading], context: &Context<'_>) {
         );
     }
     println!("  private     : {}", spread(&private));
+    let with_children: Vec<f64> = kept
+        .iter()
+        .filter_map(|r| r.job_peak_commit)
+        .map(mb)
+        .collect();
+    if !with_children.is_empty() {
+        println!(
+            "  with its git: {} MiB committed at the most (the process and every child it ran, \
+             at once — the job object's high-water mark, which the kernel keeps as it happens; the \
+             lines above are this process alone, read on the sampler's beat, so what is between the \
+             two is not the children's share)",
+            spread(&with_children)
+        );
+    }
     if cfg!(target_os = "linux") {
         println!("  Linux private column is VmData; Windows is committed Private Bytes.");
     }
@@ -318,13 +333,60 @@ fn timings(kept: &[Reading], software: bool) {
             spread(&graphs)
         );
     }
+    for line in walk_lines(kept) {
+        println!("{line}");
+    }
+    let idle: Vec<f64> = kept.iter().filter_map(|r| r.idle_ms).map(f).collect();
+    if !idle.is_empty() {
+        println!(
+            "  to idle     : {} ms (the page owes nothing and no git of the application's is \
+             running; the first operation starts here)",
+            spread(&idle)
+        );
+    }
+}
+
+/// The opening walk, as the two sides timed it. Core's is the walk; the
+/// model's first rows say when this thread got to them, which is 0 where
+/// one drain took the stream's start and its first rows together.
+fn walk_lines(kept: &[Reading]) -> Vec<String> {
+    let mut lines = Vec::new();
+    let walks: Vec<f64> = kept.iter().filter_map(|r| r.total_ms).map(f).collect();
+    if !walks.is_empty() {
+        lines.push(format!(
+            "  walk        : {} ms (the opening stream, as core timed it)",
+            spread(&walks)
+        ));
+    }
     let firsts: Vec<f64> = kept
         .iter()
         .filter_map(|r| r.first_chunk_ms)
         .map(f)
         .collect();
     if !firsts.is_empty() {
-        println!("  of which walk: {} ms", spread(&firsts));
+        lines.push(format!(
+            "  first rows  : {} ms after the stream's start reached the model (0 where one drain \
+             took both — the model's wait, not the walk's length)",
+            spread(&firsts)
+        ));
+    }
+    lines
+}
+
+/// What the kept runs' timed frames and starts mean, said once: a number
+/// from a build that timed the first swapped frame is not one from a build
+/// that timed the synchronised one (`Reading::method`).
+fn method(kept: &[Reading], opts: &Options) {
+    if !opts.open || !opts.harness {
+        return;
+    }
+    match kept.first().and_then(|r| r.method.as_deref()) {
+        Some(said) => println!("  method      : {said}"),
+        None => println!(
+            "  method      : not said by this build — each timed frame is the first swapped after \
+             its request, which can be one the change is not in, and operations follow each other \
+             back to back"
+        ),
     }
 }
 
@@ -371,16 +433,31 @@ fn scroll(kept: &[Reading], context: &Context<'_>, software: bool) {
     }
 }
 
-/// One row selection and one diff, timed from the click to the frame
-/// that answered it.
+/// One row selection and one diff, each timed from the input to the frame
+/// that first shows it taken (feedback), through the read and the rows, to
+/// the frame that answered it (completion) — one operation after the other.
 fn interaction(kept: &[Reading], software: bool) {
+    let shown: Vec<f64> = kept
+        .iter()
+        .flat_map(|r| r.details_feedback_ms.iter().copied())
+        .collect();
+    if !shown.is_empty() {
+        println!(
+            "  details feedback: {} ms (input to the frame that shows the row selected{})",
+            spread(&shown),
+            not_the_display(software)
+        );
+    }
     let details: Vec<f64> = kept
         .iter()
         .flat_map(|r| r.details_ms.clone())
         .map(f)
         .collect();
     if !details.is_empty() {
-        println!("  details data: {} ms (request to drain)", spread(&details));
+        println!(
+            "  details data    : {} ms (request to drain)",
+            spread(&details)
+        );
     }
     let applied: Vec<f64> = kept
         .iter()
@@ -389,7 +466,7 @@ fn interaction(kept: &[Reading], software: bool) {
         .collect();
     if !applied.is_empty() {
         println!(
-            "  details rows: {} ms (request to the rows being in the model)",
+            "  details rows    : {} ms (request to the rows being in the model)",
             spread(&applied)
         );
     }
@@ -399,14 +476,28 @@ fn interaction(kept: &[Reading], software: bool) {
         .collect();
     if !rendered.is_empty() {
         println!(
-            "  details frame: {} ms (handler to frame; excludes OS input delivery{})",
+            "  details frame   : {} ms (input to the frame with the answer; excludes OS input delivery{})",
             spread(&rendered),
+            not_the_display(software)
+        );
+    }
+    let waiting: Vec<f64> = kept
+        .iter()
+        .flat_map(|r| r.diff_feedback_ms.iter().copied())
+        .collect();
+    if !waiting.is_empty() {
+        println!(
+            "  diff feedback   : {} ms (input to the frame that shows the pane up and waiting{})",
+            spread(&waiting),
             not_the_display(software)
         );
     }
     let read: Vec<f64> = kept.iter().flat_map(|r| r.diff_ms.clone()).map(f).collect();
     if !read.is_empty() {
-        println!("  diff data   : {} ms (request to drain)", spread(&read));
+        println!(
+            "  diff data       : {} ms (request to drain)",
+            spread(&read)
+        );
     }
     let laid: Vec<f64> = kept
         .iter()
@@ -415,7 +506,7 @@ fn interaction(kept: &[Reading], software: bool) {
         .collect();
     if !laid.is_empty() {
         println!(
-            "  diff rows   : {} ms (request to the rows being in the model)",
+            "  diff rows       : {} ms (request to the rows being in the model)",
             spread(&laid)
         );
     }
@@ -425,7 +516,7 @@ fn interaction(kept: &[Reading], software: bool) {
         .collect();
     if !diff.is_empty() {
         println!(
-            "  diff frame  : {} ms (raw diff; highlighting may follow{})",
+            "  diff frame      : {} ms (raw diff; highlighting may follow{})",
             spread(&diff),
             not_the_display(software)
         );
@@ -564,9 +655,39 @@ fn median(sorted: &[f64]) -> f64 {
 mod tests {
     use super::{
         Options, Reading, attribution_lines, count_spread, font_walk_lines, median, spread,
+        walk_lines,
     };
     use crate::perf::attribution::{Attribution, Heap};
     use crate::perf::fonts::{FontWalk, Tick};
+
+    /// The walk is core's number; the model's first rows are said as the
+    /// model's, on a line of their own.
+    #[test]
+    fn the_walk_and_the_models_first_rows_are_two_lines() {
+        let kept = [
+            Reading {
+                total_ms: Some(200),
+                first_chunk_ms: Some(0),
+                ..Reading::default()
+            },
+            Reading {
+                total_ms: Some(236),
+                first_chunk_ms: Some(64),
+                ..Reading::default()
+            },
+        ];
+        let lines = walk_lines(&kept);
+        assert_eq!(lines.len(), 2, "{lines:?}");
+        assert!(
+            lines[0].starts_with("  walk        : 200.0–236.0 ms"),
+            "{lines:?}"
+        );
+        assert!(
+            lines[1].starts_with("  first rows  : 0.0–64.0 ms"),
+            "{lines:?}"
+        );
+        assert!(walk_lines(&[Reading::default()]).is_empty());
+    }
 
     /// Options as an invocation's flags parse, so a test names the mode
     /// the reader names (`--no-scroll`).

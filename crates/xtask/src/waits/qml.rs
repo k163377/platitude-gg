@@ -168,9 +168,9 @@ const FRAME_KEEPERS: [&str; 5] = [
 
 /// Whether `line` counts frames or polish passes of its own —
 /// `frameSwapped`, `framesSwapped`, the window's `frameCounter`, its
-/// `afterAnimating`, `Awaited`'s `polishes` — outside the files that keep
-/// the count for everyone: a layout wait written again, in place of
-/// `StageTimer.still` / `laidOutSince`.
+/// `afterAnimating` and `afterSynchronizing`, `Awaited`'s `polishes` —
+/// outside the files that keep the count for everyone: a layout wait
+/// written again, in place of `StageTimer.still` / `laidOutSince`.
 fn counts_frames(file: &str, line: &str) -> bool {
     let name = file.rsplit(['/', '\\']).next().unwrap_or(file);
     !FRAME_KEEPERS.contains(&name)
@@ -181,6 +181,8 @@ fn counts_frames(file: &str, line: &str) -> bool {
             "frameCounter",
             "afterAnimating",
             "onAfterAnimating",
+            "afterSynchronizing",
+            "onAfterSynchronizing",
             "polishes",
         ]
         .iter()

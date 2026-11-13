@@ -221,6 +221,109 @@ fn a_diff_is_two_numbers_and_a_run_holding_one_of_them_is_not_a_measurement() {
     assert_eq!(reading.diff_ms, vec![60]);
 }
 
+/// A later pass over the same window is another walk.
+#[test]
+fn the_opening_walk_keeps_its_own_numbers() {
+    let mut found = Reading::default();
+    for line in [
+        "INFO graph first chunk first_chunk_ms=64",
+        "INFO graph stream finished total=2000 elapsed_ms=234 truncated=true",
+        "INFO graph first chunk first_chunk_ms=0",
+        "INFO graph replaced in place total=2000 elapsed_ms=12 truncated=true",
+    ] {
+        absorb(line, &mut found);
+    }
+    assert_eq!(
+        (found.first_chunk_ms, found.total_ms),
+        (Some(64), Some(234))
+    );
+}
+
+/// A build that says none is read as it was built.
+#[test]
+fn a_build_that_says_its_method_owes_what_the_method_promises() {
+    let opts = options(&["--repo", ".", "--no-scroll"]);
+    let mut reading = unselected_reading();
+    for line in [
+        "perf_selection mode=first oid=abc",
+        "details request round trip elapsed_ms=50",
+        "perf_details_frame elapsed_ms=75",
+        "diff request round trip elapsed_ms=60",
+        "perf_diff_frame elapsed_ms=110",
+        "perf_complete selection=first details=true diff=true graph=false scrolled=false",
+    ] {
+        absorb(line, &mut reading);
+    }
+    assert!(missing(&reading, &opts).is_ok());
+    absorb(
+        "INFO bench: perf_method frames=synced start=idle",
+        &mut reading,
+    );
+    assert!(reading.frames_synced() && reading.starts_idle());
+    let owed = missing(&reading, &opts).expect_err("the method's own lines are missing");
+    for gap in [
+        "perf_details_feedback",
+        "perf_diff_feedback",
+        "perf_first_idle",
+    ] {
+        assert!(owed.contains(gap), "{owed}");
+    }
+    absorb("perf_details_feedback elapsed_ms=9", &mut reading);
+    absorb("perf_diff_feedback elapsed_ms=8", &mut reading);
+    reading.idle_ms = Some(2_300);
+    assert!(missing(&reading, &opts).is_ok());
+    assert_eq!(reading.details_feedback_ms, vec![9.0]);
+    let chained = options(&["--repo", ".", "--no-scroll", "--back-to-back"]);
+    assert!(
+        missing(&reading, &chained)
+            .expect_err("a run that started idle")
+            .contains("the start the run asked for")
+    );
+}
+
+/// One feedback frame for each completion, and before it: a run whose two
+/// sides do not line up is owed the method's promise, out either way.
+#[test]
+fn a_feedback_frame_and_its_completion_are_read_in_step() {
+    let opts = options(&["--repo", ".", "--no-scroll"]);
+    let timed = || {
+        let mut reading = unselected_reading();
+        for line in [
+            "perf_selection mode=first oid=abc",
+            "details request round trip elapsed_ms=50",
+            "perf_details_feedback elapsed_ms=9",
+            "perf_details_frame elapsed_ms=75",
+            "diff request round trip elapsed_ms=60",
+            "perf_diff_feedback elapsed_ms=8",
+            "perf_diff_frame elapsed_ms=110",
+            "perf_complete selection=first details=true diff=true graph=false scrolled=false",
+            "INFO bench: perf_method frames=synced start=idle",
+        ] {
+            absorb(line, &mut reading);
+        }
+        reading.idle_ms = Some(2_300);
+        reading
+    };
+    assert!(missing(&timed(), &opts).is_ok());
+    // The answer came first.
+    let mut after = timed();
+    after.details_feedback_ms = vec![90.0];
+    assert!(
+        missing(&after, &opts)
+            .expect_err("a feedback frame after the answer")
+            .contains("one feedback frame before each completion's")
+    );
+    // A second operation was answered, with no feedback said for it: read
+    // in pairs, its answer would be weighed against the first's feedback.
+    let mut unpaired = timed();
+    unpaired.diff_frame_ms.push(120.0);
+    assert!(
+        missing(&unpaired, &opts)
+            .expect_err("a completion with no feedback of its own")
+            .contains("one feedback frame before each completion's")
+    );
+}
+
 #[test]
 fn contradictory_or_empty_scenarios_are_rejected() {
     for args in [

@@ -173,6 +173,7 @@ fn run_options(opts: Options) -> Result<(), String> {
         }
     }
     one_graphics_stack(&kept)?;
+    one_method(&kept)?;
     unmoved_corpus(&opts, corpus.as_ref())?;
     if opts.cache == "warm" {
         warmth::note(&root, &warmed);
@@ -318,7 +319,7 @@ fn build_in(
 /// that drove less would have left cold (`warmth`).
 fn scenario(opts: &Options) -> String {
     format!(
-        "{}/{}/{}/{}/{}/{}/{}/{}/{}/{}",
+        "{}/{}/{}/{}/{}/{}/{}/{}/{}/{}/{}",
         opts.selection,
         opts.diff,
         opts.scroll,
@@ -330,7 +331,8 @@ fn scenario(opts: &Options) -> String {
             .replace('\t', "/"),
         opts.cycles,
         opts.completion,
-        opts.diff_scroll
+        opts.diff_scroll,
+        opts.back_to_back
     )
 }
 
@@ -503,6 +505,23 @@ fn one_graphics_stack(kept: &[Reading]) -> Result<(), String> {
     ))
 }
 
+/// One exe says one method (`Reading::method`), so kept runs that
+/// disagree lost the line somewhere: their frame times are not of one
+/// kind, and the report would print them as one.
+fn one_method(kept: &[Reading]) -> Result<(), String> {
+    let Some(first) = kept.first() else {
+        return Ok(());
+    };
+    let Some(odd) = kept.iter().find(|run| run.method != first.method) else {
+        return Ok(());
+    };
+    Err(format!(
+        "the kept runs did not all say the same measuring method, so their frame times are not \
+         of one kind.\n  {:?}\n  {:?}",
+        first.method, odd.method
+    ))
+}
+
 fn unmoved_corpus(opts: &Options, before: Option<&corpus::Corpus>) -> Result<(), String> {
     let Some(before) = before.filter(|_| opts.open) else {
         return Ok(());
@@ -563,7 +582,22 @@ fn guard_the_window(root: &std::path::Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::sampler::Limits;
-    use super::{Reading, frames_delivered, one_graphics_stack};
+    use super::{Reading, frames_delivered, one_graphics_stack, one_method};
+
+    /// A run that lost the line is one whose frames nobody can name.
+    #[test]
+    fn kept_runs_that_say_different_methods_are_not_a_reading() {
+        let said = |method: Option<&str>| Reading {
+            method: method.map(str::to_string),
+            ..Reading::default()
+        };
+        let synced = Some("frames=synced start=idle");
+        assert!(one_method(&[]).is_ok());
+        assert!(one_method(&[said(synced), said(synced)]).is_ok());
+        assert!(one_method(&[said(None), said(None)]).is_ok());
+        let complaint = one_method(&[said(synced), said(None)]).expect_err("two methods");
+        assert!(complaint.contains("frames=synced"), "{complaint}");
+    }
 
     fn drew(lines: &[&str]) -> Reading {
         Reading {

@@ -41,6 +41,11 @@ pub(super) struct Options {
     pub(super) cycles: u32,
     pub(super) completion: String,
     pub(super) diff_scroll: bool,
+    /// Start each operation the frame after the last one ended
+    /// (`--back-to-back`): the page under its own leftover work. Off,
+    /// every operation starts on a page that owes nothing
+    /// (`PagePerfDriver.owed`).
+    pub(super) back_to_back: bool,
     pub(super) cache: String,
     pub(super) cold_prepare: String,
     pub(super) compare: String,
@@ -140,6 +145,7 @@ fn defaults() -> Options {
         cycles: 1,
         completion: "raw".into(),
         diff_scroll: false,
+        back_to_back: false,
         cache: "warm".into(),
         cold_prepare: String::new(),
         compare: String::new(),
@@ -216,6 +222,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             "--cycles" => opts.cycles = value()?.parse().map_err(|_| "--cycles takes a number")?,
             "--completion" => opts.completion = value()?,
             "--diff-scroll" => opts.diff_scroll = true,
+            "--back-to-back" => opts.back_to_back = true,
             "--cache" => opts.cache = value()?,
             "--cold-prepare" => opts.cold_prepare = value()?,
             "--compare" => opts.compare = value()?,
@@ -268,6 +275,7 @@ fn shipped(opts: &mut Options) -> Result<(), String> {
             (!opts.file.is_empty(), "--file"),
             (opts.breakdown, "--breakdown"),
             (opts.trace_frames, "--trace-frames"),
+            (opts.back_to_back, "--back-to-back"),
         ] {
             if asked {
                 return Err(format!(
@@ -337,6 +345,11 @@ fn settle(mut opts: Options) -> Result<Options, String> {
         && (!opts.harness || !opts.open || !opts.diff || opts.selection == "none")
     {
         return Err("cases, colour completion and diff scroll require the harness, repository, selection and diff".into());
+    }
+    if opts.back_to_back && (!opts.open || opts.selection == "none") {
+        return Err(
+            "--back-to-back is about operations following each other; it needs a repository and a selection".into(),
+        );
     }
     if !opts.cases.is_empty() && (!opts.oid.is_empty() || !opts.file.is_empty()) {
         return Err(
@@ -521,6 +534,27 @@ mod tests {
                 .contains("under a day")
         );
         assert!(options(&["--repo", "C:/r", "--settle-ms", "8000"]).is_ok());
+    }
+
+    /// Idle unless asked, and asked only where operations are driven.
+    #[test]
+    fn operations_start_idle_unless_a_run_asks_for_them_back_to_back() {
+        assert!(!options(&["--repo", "C:/r"]).unwrap().back_to_back);
+        assert!(
+            options(&["--repo", "C:/r", "--back-to-back"])
+                .unwrap()
+                .back_to_back
+        );
+        for refused in [
+            vec!["--no-open", "--back-to-back"],
+            vec!["--repo", "C:/r", "--no-select", "--back-to-back"],
+            vec!["--repo", "C:/r", "--shipped", "--back-to-back"],
+        ] {
+            assert!(
+                options(&refused).unwrap_err().contains("--back-to-back"),
+                "{refused:?}"
+            );
+        }
     }
 
     #[test]

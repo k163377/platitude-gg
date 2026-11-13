@@ -130,6 +130,22 @@ impl Harness {
         Hub::with(|hub| i32::try_from(hub.sessions().len()).unwrap_or(i32::MAX)).unwrap_or(0)
     }
 
+    /// How many git processes the application has alive or waiting for a
+    /// slot, every tab's told (`platitude_core::process::Slots::report`):
+    /// the page's own reads say when a page has stopped arriving, and this
+    /// says whether anything else of the application's is still running
+    /// beside it — a poll, a pass no page term waits on — when a
+    /// measurement is about to start an operation (`PagePerfDriver.owed`).
+    #[qslot]
+    fn git_in_flight(&self) -> i32 {
+        Hub::with(|hub| {
+            let slots = hub.executor().slots().report();
+            let told = slots.running + slots.queued_interactive + slots.queued_background;
+            i32::try_from(told).unwrap_or(i32::MAX)
+        })
+        .unwrap_or(0)
+    }
+
     /// How many configuration saves stand at the hold a run asked for
     /// (`PGG_FAULT_HOLD_SAVE`): the proof a close lands on a save that is
     /// out (`WindowDialogActs`, `quit-save-held`).

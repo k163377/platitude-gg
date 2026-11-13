@@ -2,7 +2,9 @@
 //!
 //! The two sections that grow with the app — demo presets and verify-ui
 //! verbs — have files of their own, so neither pushes the other over the
-//! length ceiling.
+//! length ceiling. What stayed is at that ceiling itself, so the next
+//! command or flag this file gains takes a section out with it; the
+//! commands are what divide next, a file to a stage of the work.
 
 mod demo_repo;
 mod verify_ui;
@@ -546,14 +548,14 @@ const TAIL: &str = "  replay [--tier <fonts|premerge|whole>] [--line '<verify-ui
         --cycles <n>      repeat the case list; needs two distinct OIDs
         --completion <s>  raw (default) or final coloured frame
         --diff-scroll     separately measure each visible overflowing diff
+        --back-to-back    start each operation where the last one left the page
+                          (default: on a page that owes nothing, no git running)
         --cache <s>       warm (default), first (--runs 1), or cold
-        --cold-prepare <exe>
-                          explicit cache preparation; receives repo and binary
+        --cold-prepare <exe>  cache preparation; receives repo and binary
         --compare <rev>   ABBA against --at; --runs counts blocks (two samples each)
         --no-diff         select and show details without opening a diff
         --output <path>   new directory for metadata and raw per-run logs
-        --trace-frames    diagnostic app-clock frame series in app.log;
-                          flushed after scrolling, diagnostic only
+        --trace-frames    diagnostic app-clock frames in app.log, flushed after scrolling
         --no-open         start with no repository at all — the window and
                           nothing in it. Subtracting this from a run that
                           opened an empty repository leaves the cost of

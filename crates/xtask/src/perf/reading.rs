@@ -15,6 +15,11 @@ pub(super) struct Reading {
     pub(super) peak_working_set: u64,
     pub(super) os_peak_working_set: Option<u64>,
     pub(super) peak_private: u64,
+    /// The most the process and the git it ran had committed at once
+    /// (`sampler::Sample::job_peak_commit`): what the application costs the
+    /// machine at its worst moment, where the two lines above are the
+    /// process alone.
+    pub(super) job_peak_commit: Option<u64>,
     /// What the process still held after `--settle-ms`, or 0 where the
     /// run was not asked to wait; the peak minus this is what it let go
     /// of once idle. The working set alone: the budget is read against it
@@ -29,8 +34,23 @@ pub(super) struct Reading {
     /// so it is the one startup number a build with no harness also
     /// answers (`Options::harness`).
     pub(super) graph_ms: Option<u64>,
+    /// Process start to the page owing nothing and no git of the
+    /// application's running (`perf_first_idle`): where the first
+    /// operation starts. Said only by a run whose operations start idle.
+    pub(super) idle_ms: Option<u64>,
+    /// The opening stream's two numbers, the first of each kept: a later
+    /// pass over the same window is another walk. `first_chunk_ms` is the
+    /// model's — from the stream's start reaching it to its first rows, 0
+    /// where one drain took both — and `total_ms` is the walk as core
+    /// timed it.
     pub(super) first_chunk_ms: Option<u64>,
     pub(super) total_ms: Option<u64>,
+    /// What the build said its timed frames and its starts mean
+    /// (`perf_method frames=… start=…`), verbatim after the name. A build
+    /// that says nothing timed the first frame swapped after each request
+    /// — which can be one the change is not in — and ran its operations
+    /// back to back.
+    pub(super) method: Option<String>,
     pub(super) fps: Option<f64>,
     /// Frame intervals the scroll bench measured over 16.7ms: a fixed
     /// stutter threshold, so screens of any rate answer the same question.
@@ -40,6 +60,12 @@ pub(super) struct Reading {
     /// signals are out — so the wait divides into the read, this, and the
     /// painting the frame below ends.
     pub(super) details_applied_ms: Vec<u64>,
+    /// The input to the frame that first shows it taken (the row
+    /// selected, the pane up and waiting), and below it the frame with the
+    /// answer in it: feedback and completion
+    /// (internal-docs/メモリと操作応答の改善計画.md §2).
+    pub(super) details_feedback_ms: Vec<f64>,
+    pub(super) diff_feedback_ms: Vec<f64>,
     pub(super) details_frame_ms: Vec<f64>,
     /// The file's own round trip. The frame below is the whole wait, so
     /// the two split the longest wait into the read and the drawing.
@@ -134,6 +160,9 @@ pub(super) fn read_app(
                 }
                 if found.graph_ms.is_none() && graph_finished(&line) {
                     found.graph_ms = Some(started.elapsed().as_millis() as u64);
+                }
+                if found.idle_ms.is_none() && line.contains("perf_first_idle") {
+                    found.idle_ms = Some(started.elapsed().as_millis() as u64);
                 }
                 // On the parent's clock, like the two above: the sampler
                 // the walk is weighed against runs on it.
@@ -275,6 +304,7 @@ fn scenario_gaps(reading: &Reading, opts: &Options) -> Vec<&'static str> {
     if opts.select && (reading.details_ms.is_empty() || reading.details_frame_ms.is_empty()) {
         gaps.push("the interaction (data and rendered frame)");
     }
+    gaps.extend(method_gaps(reading, opts));
     if !opts.select && (!reading.details_ms.is_empty() || !reading.details_frame_ms.is_empty()) {
         gaps.push("an actually unselected page");
     }
@@ -294,6 +324,70 @@ fn scenario_gaps(reading: &Reading, opts: &Options) -> Vec<&'static str> {
         && (reading.traced_frames == 0 || reading.frame_count != Some(reading.traced_frames))
     {
         gaps.push("the complete timestamped frame trace");
+    }
+    gaps
+}
+
+impl Reading {
+    /// Whether the build timed the frame synchronised after each change
+    /// (`method`).
+    pub(super) fn frames_synced(&self) -> bool {
+        self.said("frames=synced")
+    }
+
+    /// Whether the build started each operation on an idle page.
+    pub(super) fn starts_idle(&self) -> bool {
+        self.said("start=idle")
+    }
+
+    fn said(&self, word: &str) -> bool {
+        self.method
+            .as_deref()
+            .is_some_and(|said| said.split_whitespace().any(|w| w == word))
+    }
+}
+
+/// What a build that says its method (`Reading::method`) owes on top of
+/// the numbers every build takes: the feedback frame of each input it
+/// timed, the idle page its first operation started on, and the start the
+/// run asked for. A build that says no method is read as it was built —
+/// the report says which it was.
+fn method_gaps(reading: &Reading, opts: &Options) -> Vec<&'static str> {
+    let mut gaps = Vec::new();
+    if reading.method.is_none() {
+        return gaps;
+    }
+    if reading.frames_synced() {
+        if opts.select && reading.details_feedback_ms.is_empty() {
+            gaps.push("the selection's feedback frame (no `perf_details_feedback`)");
+        }
+        if opts.select && opts.diff && reading.diff_feedback_ms.is_empty() {
+            gaps.push("the diff's feedback frame (no `perf_diff_feedback`)");
+        }
+        // Operation by operation, as said: an input is shown taken before
+        // it is answered, and the two are said the same number of times —
+        // read in step, one missing would pair the rest with the wrong
+        // operation.
+        let out_of_step = |shown: &[f64], answered: &[f64]| {
+            shown.len() != answered.len()
+                || shown
+                    .iter()
+                    .zip(answered)
+                    .any(|(shown, answered)| shown > answered)
+        };
+        if out_of_step(&reading.details_feedback_ms, &reading.details_frame_ms)
+            || out_of_step(&reading.diff_feedback_ms, &reading.diff_frame_ms)
+        {
+            gaps.push(
+                "one feedback frame before each completion's (one is missing, or came after)",
+            );
+        }
+    }
+    if reading.starts_idle() == opts.back_to_back {
+        gaps.push("the start the run asked for (`perf_method start=` says the other)");
+    }
+    if reading.starts_idle() && reading.idle_ms.is_none() {
+        gaps.push("the idle page the first operation starts on (no `perf_first_idle`)");
     }
     gaps
 }
@@ -360,13 +454,19 @@ pub(super) fn absorb(line: &str, found: &mut Reading) {
             found.graphics.push(said);
         }
     }
-    if let Some(v) = field(line, "first_chunk_ms=") {
+    if found.first_chunk_ms.is_none()
+        && let Some(v) = field(line, "first_chunk_ms=")
+    {
         found.first_chunk_ms = v.parse().ok();
     }
-    if graph_finished(line)
+    if found.total_ms.is_none()
+        && graph_finished(line)
         && let Some(v) = field(line, "elapsed_ms=")
     {
         found.total_ms = v.parse().ok();
+    }
+    if let Some(said) = line.split("perf_method ").nth(1) {
+        found.method = Some(said.trim().to_string());
     }
     interaction_marks(line, found);
     if line.contains("perf_selection") {
@@ -428,6 +528,8 @@ fn interaction_marks(line: &str, found: &mut Reading) {
         }
     }
     for (mark, into) in [
+        ("perf_details_feedback", &mut found.details_feedback_ms),
+        ("perf_diff_feedback", &mut found.diff_feedback_ms),
         ("perf_details_frame", &mut found.details_frame_ms),
         ("perf_diff_frame", &mut found.diff_frame_ms),
     ] {

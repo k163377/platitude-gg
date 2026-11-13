@@ -119,6 +119,11 @@ pub(crate) struct Knobs {
     pub perf_completion: String,
     #[cfg(feature = "automation")]
     pub perf_diff_scroll: bool,
+    /// `PGG_PERF_BACK_TO_BACK` — start each operation the frame after the
+    /// last one ended, whatever the page still owes. Off, every operation
+    /// starts on a page that owes nothing (`PagePerfDriver.owed`).
+    #[cfg(feature = "automation")]
+    pub perf_back_to_back: bool,
     /// `PGG_PERF_DIFF=0` — leave the diff out of the measurement. Negated
     /// so the idle, all-off record keeps the diff in.
     #[cfg(feature = "automation")]
@@ -190,6 +195,7 @@ fn read() -> Knobs {
         perf_cycles: text("PGG_PERF_CYCLES").parse().unwrap_or(1),
         perf_completion: text("PGG_PERF_COMPLETION"),
         perf_diff_scroll: on("PGG_PERF_DIFF_SCROLL"),
+        perf_back_to_back: on("PGG_PERF_BACK_TO_BACK"),
         perf_no_diff: text("PGG_PERF_DIFF") == "0",
         perf_trace_frames: on("PGG_PERF_TRACE_FRAMES"),
         perf_font_walk: on("PGG_PERF_FONT_WALK"),
@@ -224,6 +230,10 @@ mod tests {
         {
             assert!(knobs.perf_selection.is_empty() && knobs.perf_oid.is_empty());
             assert!(knobs.perf_file.is_empty() && !knobs.perf_trace_frames);
+            assert!(
+                !knobs.perf_back_to_back,
+                "an operation starts on an idle page until a run asks otherwise"
+            );
             assert!(
                 !knobs.perf_no_diff,
                 "the diff is in until a run asks for it out"

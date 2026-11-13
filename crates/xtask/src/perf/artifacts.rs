@@ -109,8 +109,9 @@ pub(super) fn prepare(
         .map_err(|e| format!("cannot reserve {}: {e}", directory.display()))?;
     let mut manifest =
         std::fs::File::create(directory.join("manifest.txt")).map_err(|e| e.to_string())?;
-    writeln!(manifest, "cache={}\ncold_prepare={}\ncycles={}\ncompletion={}\ndiff_scroll={}\nbaseline_platform={}\n",
-        opts.cache, opts.cold_prepare, opts.cycles, opts.completion, opts.diff_scroll, super::experiment::platform())
+    writeln!(manifest, "cache={}\ncold_prepare={}\ncycles={}\ncompletion={}\ndiff_scroll={}\nstart_asked={}\nbaseline_platform={}\n",
+        opts.cache, opts.cold_prepare, opts.cycles, opts.completion, opts.diff_scroll,
+        if opts.back_to_back { "back-to-back" } else { "idle" }, super::experiment::platform())
         .map_err(|e| e.to_string())?;
     std::fs::write(
         directory.join("cases.tsv"),
@@ -118,7 +119,7 @@ pub(super) fn prepare(
     )
     .map_err(|e| e.to_string())?;
     writeln!(manifest,
-        "protocol=8\nos={}\narch={}\nexe={}\nfeatures={}\nrepo={}\nselection={}\noid={}\nfile={}\ndiff={}\nscroll={}\nopen={}\nsettle_ms={}\nbreakdown={}\nattribute={}\ncalibrate={}\nruns={}\nsoftware={}\n",
+        "protocol=9\nos={}\narch={}\nexe={}\nfeatures={}\nrepo={}\nselection={}\noid={}\nfile={}\ndiff={}\nscroll={}\nopen={}\nsettle_ms={}\nbreakdown={}\nattribute={}\ncalibrate={}\nruns={}\nsoftware={}\n",
         std::env::consts::OS, std::env::consts::ARCH, exe.display(), opts.features(),
         opts.repo.display(), opts.selection, opts.oid, opts.file, opts.diff, opts.scroll,
         opts.open, opts.settle_ms, opts.breakdown, opts.attribute, opts.calibrate, opts.runs, opts.software).map_err(|e| e.to_string())?;
@@ -140,7 +141,7 @@ pub(super) fn prepare(
         screen.map_or(0, |s| s.hz),
     )
     .map_err(|e| e.to_string())?;
-    writeln!(manifest, "trace_frames={}\nframe_boundary=GUI-delivered-frameSwapped\ndisplay_modes=display-chosen.txt,display-before.txt,display-after.txt\nwindow_metadata=app.log perf_display\nhost_conditions=memory.csv\n", opts.trace_frames)
+    writeln!(manifest, "trace_frames={}\nframe_clock=GUI-delivered-frameSwapped\nframe_boundary=method.txt\ndisplay_modes=display-chosen.txt,display-before.txt,display-after.txt\nwindow_metadata=app.log perf_display\nhost_conditions=memory.csv\n", opts.trace_frames)
         .map_err(|e| e.to_string())?;
     std::fs::write(directory.join("display-chosen.txt"), modes).map_err(|e| e.to_string())?;
     capture(&directory, "git-version.txt", root, &["--version"])?;

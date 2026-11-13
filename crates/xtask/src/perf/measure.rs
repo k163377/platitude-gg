@@ -157,6 +157,10 @@ fn command(
             "PGG_PERF_DIFF_SCROLL",
             if opts.diff_scroll { "1" } else { "0" },
         )
+        .env(
+            "PGG_PERF_BACK_TO_BACK",
+            if opts.back_to_back { "1" } else { "0" },
+        )
         .env("PGG_PERF_DIFF", if opts.diff { "1" } else { "0" })
         .env(
             "PGG_PERF_TRACE_FRAMES",
@@ -299,6 +303,7 @@ pub(super) fn measure(
     reading.peak_working_set = series.peak_working_set;
     reading.os_peak_working_set = series.os_peak_working_set;
     reading.peak_private = series.peak_private;
+    reading.job_peak_commit = series.job_peak_commit;
     reading.settled_working_set = if done && opts.settle_ms > 0 {
         held.last.as_ref().map_or(0, |sample| sample.working_set)
     } else {
