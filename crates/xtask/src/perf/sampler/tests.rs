@@ -26,6 +26,7 @@ fn sample(ws: u64, fg: bool, tick: u64, app: u64, idle: u64) -> Sample {
         working_set: ws,
         os_peak_working_set: None,
         private: ws / 2,
+        job_peak_commit: None,
         display: "\\\\.\\DISPLAY2".into(),
         foreground: fg,
         interactive: true,
@@ -41,6 +42,22 @@ fn sample(ws: u64, fg: bool, tick: u64, app: u64, idle: u64) -> Sample {
         own: app,
         job: false,
     }
+}
+
+/// The job's mark only rises; a process in no job has none.
+#[test]
+fn the_most_the_process_and_its_children_held_is_kept() {
+    let said = |line: &str| parse_sample(line).expect("a line parses").job_peak_commit;
+    assert_eq!(said("ws=100 pv=50 job=1 jobpeak=700"), Some(700));
+    assert_eq!(said("ws=100 pv=50 job=0 jobpeak=-1"), None);
+    assert_eq!(said("ws=100 pv=50"), None);
+    let mut series = Series::default();
+    for (tick, peak) in [(1, Some(700)), (2, None), (3, Some(900)), (4, Some(900))] {
+        let mut sampled = sample(100, true, tick, 0, 0);
+        sampled.job_peak_commit = peak;
+        series.absorb(sampled, tick * 100_000);
+    }
+    assert_eq!(series.job_peak_commit, Some(900));
 }
 
 #[test]

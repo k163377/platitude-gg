@@ -163,6 +163,20 @@ const HOST_CLASS: &str = "public static class PerfHost {
   [DllImport(\"kernel32.dll\", SetLastError=true)] public static extern IntPtr CreateJobObject(IntPtr attrs, string name);
   [DllImport(\"kernel32.dll\", SetLastError=true)] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
   [DllImport(\"kernel32.dll\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool QueryInformationJobObject(IntPtr job, int cls, ref JOBACCT info, int size, IntPtr ret);
+  [StructLayout(LayoutKind.Sequential)] public struct JOBLIMIT { public long PerProcessUserTimeLimit; public long PerJobUserTimeLimit; public uint LimitFlags; public UIntPtr MinimumWorkingSetSize; public UIntPtr MaximumWorkingSetSize; public uint ActiveProcessLimit; public UIntPtr Affinity; public uint PriorityClass; public uint SchedulingClass; }
+  [StructLayout(LayoutKind.Sequential)] public struct IOCOUNTERS { public ulong ReadOps; public ulong WriteOps; public ulong OtherOps; public ulong ReadBytes; public ulong WriteBytes; public ulong OtherBytes; }
+  [StructLayout(LayoutKind.Sequential)] public struct JOBEXT { public JOBLIMIT Basic; public IOCOUNTERS Io; public UIntPtr ProcessMemoryLimit; public UIntPtr JobMemoryLimit; public UIntPtr PeakProcessMemoryUsed; public UIntPtr PeakJobMemoryUsed; }
+  [DllImport(\"kernel32.dll\", SetLastError=true)] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool SetInformationJobObject(IntPtr job, int cls, ref JOBEXT info, int size);
+  [DllImport(\"kernel32.dll\", EntryPoint=\"QueryInformationJobObject\")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool QueryJobLimits(IntPtr job, int cls, ref JOBEXT info, int size, IntPtr ret);
+  public static bool KillOnClose(IntPtr job) {
+    var info = new JOBEXT(); info.Basic.LimitFlags = 0x2000;
+    return SetInformationJobObject(job, 9, ref info, Marshal.SizeOf(typeof(JOBEXT)));
+  }
+  public static long JobPeak(IntPtr job) {
+    var info = new JOBEXT();
+    if (!QueryJobLimits(job, 9, ref info, Marshal.SizeOf(typeof(JOBEXT)), IntPtr.Zero)) return -1;
+    return (long)info.PeakJobMemoryUsed.ToUInt64();
+  }
   public static long JobTime(IntPtr job) {
     var info = new JOBACCT();
     if (!QueryInformationJobObject(job, 1, ref info, Marshal.SizeOf(typeof(JOBACCT)), IntPtr.Zero)) return -1;
@@ -225,7 +239,22 @@ const DISPLAY_CLASS: &str = "public class PerfDisplay : System.Windows.Forms.Nat
 ///   the job's accounting, which keeps the time of children that already
 ///   exited. A process the job will not take (`note:`) is resumed all the
 ///   same and counted alone. Jobs nest, so this holds when the shell that
-///   runs xtask is itself in a job (Claude Code's).
+///   runs xtask is itself in a job (Claude Code's);
+/// * ends whatever the process leaves behind: the job ends its processes
+///   when its last handle closes (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`),
+///   which is when this script ends. The parent kills the application the
+///   moment it has its last sample, and a git the application had created
+///   suspended and not yet resumed (`platitude_core::process::family`)
+///   would otherwise stand for ever with the application's stderr still
+///   open — the end of the log the parent waits for (`reading::read_app`).
+///   This way round only while the script outlasts the run it samples:
+///   its own window is the measured window and five seconds (`sampler::
+///   start`, `measure::command`), the parent's deadline the measured one,
+///   so a script that ends first — on its window, or on an error in the
+///   loop — takes the application it is measuring with it;
+/// * says the most the process and its children have had committed at once
+///   (`jobpeak=`, the job's `PeakJobMemoryUsed`): the git a read runs is the
+///   application's memory too, and the process's own counters never show it.
 ///
 /// Two phases, on one pipe each way: the script compiles, makes the job
 /// and says `ready`; the pid comes down stdin; `resumed` and then the
@@ -259,7 +288,7 @@ using System.Runtime.InteropServices;\n\
 {DISPLAY_CLASS}\n\
 '@ -ReferencedAssemblies System.Windows.Forms;\
          [PerfDisplay]::Start();\
-         $job=[PerfHost]::CreateJobObject([IntPtr]::Zero,$null);Write-Output 'ready';\
+         $job=[PerfHost]::CreateJobObject([IntPtr]::Zero,$null);$killok=[PerfHost]::KillOnClose($job);Write-Output 'ready';\
          $target=[int][Console]::In.ReadLine();$raise={raise};\
          [void][PerfHost]::SetThreadExecutionState([uint32]{awake});\
          try {{\
@@ -268,6 +297,7 @@ using System.Runtime.InteropServices;\n\
          if($p -ne $null){{\
            if([PerfHost]::AssignProcessToJobObject($job,$p.Handle)){{$jobok=1}}\
            else{{Write-Output \"note: the process did not join the job object (error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())) - its children are not counted\"}};\
+           if(-not $killok){{Write-Output \"note: the job object would not end its processes on close - a child the process leaves behind outlives it\"}};\
            foreach($th in $p.Threads){{ if([PerfHost]::Resume([uint32]$th.Id) -lt 0){{Write-Output \"note: thread $($th.Id) could not be resumed\"}} }};\
            Write-Output 'resumed';\
          }} else {{ Write-Output \"note: no process $target to watch - it ended before the sampler looked\" }};\
@@ -310,8 +340,9 @@ using System.Runtime.InteropServices;\n\
            [void][PerfHost]::GetSystemTimes([ref]$idle,[ref]$kernel,[ref]$user);\
            [void][PerfHost]::SetThreadExecutionState([uint32]{awake});\
            $own=$p.TotalProcessorTime.Ticks;$app=$own;\
-           if($jobok -eq 1){{$t=[PerfHost]::JobTime($job);if($t -ge 0){{$app=$t}}}};\
-           Write-Output \"ws=$($p.WorkingSet64) peakws=$($p.PeakWorkingSet64) pv=$($p.PrivateMemorySize64) display=$display win=$win fg=$fg int=$int min=$min k=$kernel u=$user i=$idle app=$app own=$own job=$jobok away=$([PerfHost]::IdleMs()) dark=$([PerfDisplay]::Dark())\";\
+           $jobpeak=-1;\
+           if($jobok -eq 1){{$t=[PerfHost]::JobTime($job);if($t -ge 0){{$app=$t}};$jobpeak=[PerfHost]::JobPeak($job)}};\
+           Write-Output \"ws=$($p.WorkingSet64) peakws=$($p.PeakWorkingSet64) pv=$($p.PrivateMemorySize64) display=$display win=$win fg=$fg int=$int min=$min k=$kernel u=$user i=$idle app=$app own=$own job=$jobok jobpeak=$jobpeak away=$([PerfHost]::IdleMs()) dark=$([PerfDisplay]::Dark())\";\
            }} catch {{ if($p.HasExited){{break}}; throw }};\
            Start-Sleep -Milliseconds {SAMPLE_MS};\
          }}\

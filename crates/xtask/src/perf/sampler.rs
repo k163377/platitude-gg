@@ -40,6 +40,12 @@ pub(super) struct Sample {
     pub(super) working_set: u64,
     pub(super) os_peak_working_set: Option<u64>,
     pub(super) private: u64,
+    /// The most the process and its children have had committed at once,
+    /// all told, since the run began — the job object's own high-water
+    /// mark, `None` where the process is in no job ([`Sample::job`]). The
+    /// git a read runs is the application's memory, and none of the
+    /// process's own counters shows it.
+    pub(super) job_peak_commit: Option<u64>,
     /// The OS device name of the screen the window was on, empty while
     /// there is no window yet — read off the process's `MainWindowHandle`,
     /// not Qt's `ScreenInfo.name`: on real hardware that is the friendly
@@ -389,6 +395,7 @@ pub(super) struct Series {
     pub(super) peak_working_set: u64,
     pub(super) os_peak_working_set: Option<u64>,
     pub(super) peak_private: u64,
+    pub(super) job_peak_commit: Option<u64>,
     pub(super) last: Option<Sample>,
     first: Option<Sample>,
     pub(super) conditions: Conditions,
@@ -408,6 +415,7 @@ impl Series {
         self.peak_working_set = self.peak_working_set.max(sample.working_set);
         self.os_peak_working_set = self.os_peak_working_set.max(sample.os_peak_working_set);
         self.peak_private = self.peak_private.max(sample.private);
+        self.job_peak_commit = self.job_peak_commit.max(sample.job_peak_commit);
         self.conditions.absorb(&sample, self.last.as_ref());
         if self.first.is_none() {
             self.first = Some(sample.clone());
@@ -436,6 +444,7 @@ impl Sampler {
             peak_working_set: held.peak_working_set,
             os_peak_working_set: held.os_peak_working_set,
             peak_private: held.peak_private,
+            job_peak_commit: held.job_peak_commit,
             last: held.last.clone(),
             first: held.first.clone(),
             conditions: held.conditions.clone(),
@@ -528,14 +537,15 @@ impl Armed {
                 csv,
                 "parent_elapsed_us,working_set_bytes,private_bytes,display_name,windowed,\
                  foreground,interactive,minimized,kernel_100ns,user_100ns,idle_100ns,\
-                 process_100ns,own_100ns,children_counted,display_off,os_peak_working_set_bytes"
+                 process_100ns,own_100ns,children_counted,display_off,os_peak_working_set_bytes,\
+                 job_peak_commit_bytes"
             )
             .map_err(|e| e.to_string())?;
             let mut record = |sample: Sample| -> Result<(), String> {
                 let at_us = u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX);
                 writeln!(
                     csv,
-                    "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+                    "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
                     at_us,
                     sample.working_set,
                     sample.private,
@@ -561,6 +571,10 @@ impl Armed {
                     },
                     sample
                         .os_peak_working_set
+                        .map(|v| v.to_string())
+                        .unwrap_or_default(),
+                    sample
+                        .job_peak_commit
                         .map(|v| v.to_string())
                         .unwrap_or_default(),
                 )
@@ -601,6 +615,9 @@ fn parse_sample(line: &str) -> Option<Sample> {
         working_set: number("ws=")?,
         os_peak_working_set: number("peakws="),
         private: number("pv=")?,
+        // `-1` where the process is in no job, or the job would not answer:
+        // no number, so none.
+        job_peak_commit: number("jobpeak="),
         display: if display == "-" {
             String::new()
         } else {
