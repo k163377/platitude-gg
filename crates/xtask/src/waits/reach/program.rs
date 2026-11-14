@@ -15,7 +15,7 @@ use super::builtins::{self, Made};
 use super::calls::function_body;
 use super::members::Holder;
 use super::origin::{Origin, Site, join_into};
-use super::parse::{Doc, UnitKind};
+use super::parse::{Doc, UnitKind, is_type};
 use super::product::{self, Product};
 use super::scan::{Facts, Head, Path, WriteKind};
 use super::{Context, Declared};
@@ -543,7 +543,7 @@ impl Program {
         if product::GLOBALS.contains(&name) || product::GLOBAL_FUNCTIONS.contains(&name) {
             return Value::Global(name.to_string());
         }
-        if name.chars().next().is_some_and(char::is_uppercase) {
+        if is_type(name) {
             // A singleton of the product's (`Tips`, `Theme`).
             return Value::Product(Some(name.to_string()));
         }
@@ -1050,7 +1050,7 @@ fn as_the_products(effects: &mut [(Effect, usize)]) {
 fn object_value(value: &Value) -> bool {
     match value {
         Value::Object(..) => true,
-        Value::Product(Some(ty)) => ty.chars().next().is_some_and(char::is_uppercase),
+        Value::Product(Some(ty)) => is_type(ty),
         _ => false,
     }
 }

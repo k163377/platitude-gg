@@ -25,6 +25,7 @@ use std::ops::Range;
 use super::builtins::{self, Answers, CONSTRUCTED, GlobalAnswers, Made};
 use super::calls::function_body;
 use super::members::{ANY, Assigned};
+use super::parse::is_type;
 use super::program::{Program, Value};
 use super::scan::{Head, Path, WriteKind};
 use crate::lex::{Token, is_name, matching_close, unparenthesized};
@@ -450,9 +451,7 @@ impl Program {
         match self.head(code, name, at) {
             Value::Object(d, o) => Origin::Object(Value::Object(d, o)),
             Value::Prop(d, o, p) => self.prop_origin(d, o, &p),
-            Value::Product(Some(ty)) if ty.chars().next().is_some_and(char::is_uppercase) => {
-                Origin::Object(Value::Product(Some(ty)))
-            }
+            Value::Product(Some(ty)) if is_type(&ty) => Origin::Object(Value::Product(Some(ty))),
             Value::Product(_) => Origin::Product,
             Value::Function(..) | Value::Global(_) => Origin::Plain,
             _ => Origin::Unknown,
@@ -466,7 +465,7 @@ impl Program {
             return Origin::Product;
         }
         match self.prop_type(d, o, p) {
-            Some(ty) if ty.chars().next().is_some_and(char::is_uppercase) => {
+            Some(ty) if is_type(&ty) => {
                 return Origin::Object(Value::Product(Some(ty)));
             }
             Some(_) => return Origin::Shared(d, o, p.to_string()),

@@ -111,7 +111,8 @@ pub(super) fn parse(path: &str, text: &str) -> Doc {
     doc
 }
 
-fn is_type(text: &str) -> bool {
+/// Whether a name is a type's: it opens on an upper-case letter.
+pub(super) fn is_type(text: &str) -> bool {
     text.chars().next().is_some_and(char::is_uppercase)
 }
 
