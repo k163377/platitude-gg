@@ -973,8 +973,8 @@ FocusScope {
             return
         renameCarryFlow.startAsk("branch", remote, from, name, remotesModel.oidOfName(remoteRef))
     }
-    /// Automation: the chooser inside it, which no injected click can open.
-    function openCarryChoices() { return renameCarryFlow.openChoices() }
+    /// Automation: a row of the chooser inside it, which no injected click can reach, picked; answers whether it was
+    /// (`RenameCarryFlow.pickChoice`).
     function pickCarryChoice(index) { return renameCarryFlow.pickChoice(index) }
 
     // ---- sending the branch to its remote ---------------------------
