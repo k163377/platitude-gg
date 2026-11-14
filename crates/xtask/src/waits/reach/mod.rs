@@ -42,6 +42,7 @@
 mod bindings;
 mod builtins;
 mod calls;
+mod effects;
 mod handed;
 mod members;
 mod origin;
