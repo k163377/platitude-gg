@@ -303,6 +303,9 @@ Item {
     }
 
     TestCase {
+        /// Where the hand rests on a row's words, in the list's coordinates: past the chip column and the lanes.
+        readonly property real wordsX: list.labelWidth + list.graphColWidth + 40
+
         name: "GraphHover"
         when: windowShown
 
@@ -367,6 +370,11 @@ Item {
             mouseMove(card, card.width / 2, card.height / 2)
             tryVerify(() => host.listPopup.pointerInside, undefined, "the hand is in the list")
         }
+        /// The hand walked just inside the card that is out.
+        function handIntoCard() {
+            mouseMove(root, host.hoverCard.x + Theme.spaceMd, host.hoverCard.y + Theme.spaceMd)
+            tryVerify(() => host.hoverCard.pointerInside, undefined, "the hand is in the card")
+        }
         /// HEAD's stand-in up, standing for the first commit, and its chip's list out.
         function standInListOut() {
             pane.headPin.standsFor = root.oid(0)
@@ -375,9 +383,16 @@ Item {
             host.pointChip(root.oid(0), 0, pinStack.records, pinStack)
             tryVerify(() => host.listPopup.opened && host.listOnStandIn, undefined, "the stand-in's list is out")
         }
+        /// HEAD's stand-in down again, as each case finds it: hidden, standing for nothing, its chip's names back.
+        function standInDown() {
+            pinStack.records = [Chips.chip("branch", "main"), Chips.chip("tag", "v0")]
+            pane.headPin.visible = false
+            pane.headPin.wanted = false
+            pane.headPin.standsFor = ""
+        }
         /// A hand come to rest on the words of row `index`, in the list's coordinates.
         function restOn(index) {
-            mouseMove(list, list.labelWidth + list.graphColWidth + 40, rowY(index))
+            mouseMove(list, wordsX, rowY(index))
             tryVerify(() => litIs([index]), undefined, "the row the hand walked to is lit: " + litRows())
             tryVerify(() => host.cardKey === "card:graph:" + root.oid(index), undefined,
                       "and its card is out after the rest")
@@ -391,9 +406,39 @@ Item {
             tryVerify(() => host.listPopup.opened, undefined, "the list itself stands")
             verify(!host.listPopup.pointerInside, "beside the hand, not under it")
         }
+        /// Escape on the row's menu, and the menu gone.
+        function escapeMenu() {
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !rowMenu.visible && root.menuArea === "", undefined, "Escape took the menu down")
+        }
+        /// The hand onto the middle of the choice's first row; answers the row.
+        function handOntoChosen() {
+            const chosen = chosenList.itemAtIndex(0)
+            verify(chosen !== null, "the choice's first row is built")
+            mouseMove(chosen, chosen.width / 2, chosen.height / 2)
+            return chosen
+        }
+        /// The live model holding commits `first` to `end - 1`, the list built on it afresh and its row `row` up
+        /// on its commit.
+        function liveRowsUp(first, end, row) {
+            liveRows.clear()
+            for (let n = first; n < end; n++)
+                liveRows.append(root.liveCommit(n))
+            list.reuseItems = false
+            root.liveModel = true
+            list.forceLayout()
+            tryVerify(() => list.itemAtIndex(row) !== null && list.itemAtIndex(row).oid_hex === root.oid(first + row),
+                      undefined, "the live rows are up")
+        }
+        /// The row's menu for row `index`'s commit raised on the graph at `at`, wherever the hand is.
+        function raiseRowMenu(index, at) {
+            root.menuKey = root.oid(index)
+            root.menuArea = "graph"
+            KeyMenu.ask(at, () => rowMenu.offer())
+        }
 
         function test_a_hand_that_walks_to_a_row_lights_it_and_opens_its_card_after_the_rest() {
-            mouseMove(list, list.labelWidth + list.graphColWidth + 40, rowY(2))
+            mouseMove(list, wordsX, rowY(2))
             tryVerify(() => litIs([2]), undefined, "lit the moment the hand is on it: " + litRows())
             verify(!host.hoverCard.visible, "the card waits for the rest")
             tryVerify(() => host.hoverCard.opened, undefined, "and comes out after it")
@@ -403,8 +448,7 @@ Item {
 
         /// The row now under where `restOn(2)` left the hand (the list at its top then), in the list's own numbering.
         function underStillHand() {
-            return list.indexAt(list.labelWidth + list.graphColWidth + 40,
-                                2 * Theme.graphRowHeight + Theme.graphRowHeight / 2 + list.contentY)
+            return list.indexAt(wordsX, 2 * Theme.graphRowHeight + Theme.graphRowHeight / 2 + list.contentY)
         }
         /// The row the pane's hand is over now, in the list's own numbering.
         function rowUnderHand() {
@@ -445,8 +489,7 @@ Item {
 
             // A tremor where it rested: the hand's own move, and the rest judges — the row's card comes after it
             // (デザイン規約 §hover のツールチップ「手が動いたかの見切り」).
-            mouseMove(list, list.labelWidth + list.graphColWidth + 42,
-                      2 * Theme.graphRowHeight + Theme.graphRowHeight / 2)
+            mouseMove(list, wordsX + 2, 2 * Theme.graphRowHeight + Theme.graphRowHeight / 2)
             tryVerify(() => host.cardKey === "card:graph:" + root.oid(5), undefined,
                       "the hand moving opens its card after the rest")
             verify(litIs([5]), "on the row it is on: " + litRows())
@@ -494,9 +537,7 @@ Item {
         /// row wears no band for it, and a leave from the graph row does not take it down.
         function test_the_same_commit_in_another_area_is_another_target() {
             restOn(2)
-            const chosen = chosenList.itemAtIndex(0)
-            verify(chosen !== null, "the choice's first row is built")
-            mouseMove(chosen, chosen.width / 2, chosen.height / 2)
+            const chosen = handOntoChosen()
             tryVerify(() => chosen.lit, undefined, "the choice's row is lit for the hand on it")
             tryVerify(() => host.cardKey === "card:chosen:" + root.oid(2), undefined,
                       "the chosen row's card takes the graph row's place after its own rest")
@@ -514,9 +555,8 @@ Item {
         /// row's menu on the graph. The menu gone with the hand still where it pressed, the card stays down — the
         /// reader dismissed it — until the hand moves, which with the rest is a hover of its own.
         function test_a_right_click_takes_the_card_down_and_a_move_of_the_hand_brings_it_back() {
-            const x = list.labelWidth + list.graphColWidth + 40
             restOn(2)
-            mouseClick(list, x, rowY(2), Qt.RightButton)
+            mouseClick(list, wordsX, rowY(2), Qt.RightButton)
             compare(root.menuArea, "graph", "the row asked for its menu")
             tryVerify(() => !host.hoverCard.opened, undefined, "the card went down at the press")
             compare(host.cardKey, "")
@@ -540,7 +580,7 @@ Item {
                                       "pointed": host.cardPointed }))
             compare(host.cardKey, "")
             // A tremor along the same row: the hand's own move, and the rest judges — a hover.
-            mouseMove(list, x + 2, rowY(2))
+            mouseMove(list, wordsX + 2, rowY(2))
             tryVerify(() => host.hoverCard.opened, undefined, "the card is asked for again and comes out: "
                       + JSON.stringify({ "known": paneHand.known, "still": paneHand.stillHeld,
                                          "at": [paneHand.at.x, paneHand.at.y], "pointed": host.cardPointed,
@@ -554,7 +594,6 @@ Item {
         /// band for the one it shows now, and nothing opens until the hand moves — any move, the rows having stayed
         /// where they were.
         function test_the_row_under_the_hand_rewritten_to_another_commit_lets_its_card_go() {
-            const x = list.labelWidth + list.graphColWidth + 40
             restOn(2)
             const row = list.itemAtIndex(2)
             root.gone = { [root.oid(2)]: true }
@@ -565,7 +604,7 @@ Item {
             wait(Metrics.tipDelayMs * 2)
             verify(litIs([]), "the row wears no band for the commit it was given: " + litRows())
             compare(host.cardKey, "")
-            mouseMove(list, x + 2, rowY(2))
+            mouseMove(list, wordsX + 2, rowY(2))
             tryVerify(() => litIs([2]), undefined, "the hand moving reads the row again: " + litRows())
             tryVerify(() => host.cardKey === "card:graph:" + root.oid(39), undefined,
                       "and its card is of the commit it shows now")
@@ -589,8 +628,7 @@ Item {
         /// `anchors.topMargin`): the rows move under a still hand all the same. The row the hand was resting on is
         /// not under it any more and opens nothing; what came under it lights, and opens nothing until the hand moves.
         function test_the_list_stepping_down_under_a_still_hand_opens_nothing() {
-            const x = list.labelWidth + list.graphColWidth + 40
-            mouseMove(list, x, rowY(2))
+            mouseMove(list, wordsX, rowY(2))
             tryVerify(() => litIs([2]), undefined, "the hand walked to row 2: " + litRows())
             list.y = Theme.graphRowHeight
             // waits(paced): a card that must **not** come; the rest it would take, twice over.
@@ -600,7 +638,7 @@ Item {
             verify(litIs([1]), "the row that came under the hand is lit: " + litRows())
             verify(paneHand.stillHeld, "the hand is held until it walks")
             // A row along: a walk. Row 1 is under the hand now, the list having stepped down a row.
-            mouseMove(list, x + Theme.graphRowHeight, rowY(1))
+            mouseMove(list, wordsX + Theme.graphRowHeight, rowY(1))
             tryVerify(() => litIs([1]), undefined, "the row under the walked hand is lit: " + litRows())
             tryVerify(() => host.cardKey === "card:graph:" + root.oid(1), undefined, "and its card is asked for")
         }
@@ -629,7 +667,7 @@ Item {
         /// Walked off the chip along the pane — onto the row's words — and back.
         function test_a_list_put_down_comes_back_with_the_hand_back_from_the_rows_words() {
             putDownOnBareStretch(3)
-            mouseMove(list, list.labelWidth + list.graphColWidth + 40, rowY(3))
+            mouseMove(list, wordsX, rowY(3))
             tryVerify(() => litIs([3]) && !host.listPointed, undefined, "the hand is on the row's words")
             backOnBareStretch(3, "the row's words")
         }
@@ -638,8 +676,7 @@ Item {
         /// rows never hear it go, and the leave they tell is the hand leaving the pane, with no menu standing.
         function test_a_list_put_down_comes_back_with_the_hand_back_from_the_pane_beside() {
             putDownOnBareStretch(3)
-            const chosen = chosenList.itemAtIndex(0)
-            mouseMove(chosen, chosen.width / 2, chosen.height / 2)
+            handOntoChosen()
             tryVerify(() => !paneHand.known && chosenHand.known, undefined, "the hand is on the pane beside")
             backOnBareStretch(3, "the pane beside")
         }
@@ -668,8 +705,7 @@ Item {
             tryVerify(() => rowMenu.visible && root.menuArea === "graph", undefined, "the row's menu stands")
             tryVerify(() => !host.listPopup.visible, undefined, "and took the list down")
             tryVerify(() => !paneHand.known, undefined, "the menu over the hand takes it off the pane")
-            keyClick(Qt.Key_Escape)
-            tryVerify(() => !rowMenu.visible && root.menuArea === "", undefined, "Escape took the menu down")
+            escapeMenu()
             tryVerify(() => paneHand.known, undefined, "the hand is heard again where it was")
             // waits(paced): a list that must **not** come back as the menu goes; the beat, twice over.
             wait(Metrics.hoverKeepMs * 2)
@@ -678,7 +714,7 @@ Item {
             // waits(paced): the same, for a move on the chip.
             wait(Metrics.hoverKeepMs * 2)
             verify(!host.listPopup.visible, "nor does a move on the chip bring it back")
-            mouseMove(list, list.labelWidth + list.graphColWidth + 40, rowY(3))
+            mouseMove(list, wordsX, rowY(3))
             tryVerify(() => !host.listPointed, undefined, "the hand walked off the chip")
             backOnBareStretch(3, "the row's words")
         }
@@ -688,16 +724,13 @@ Item {
         /// nowhere off the chip — has left: Escape, and back on the chip, the list comes out again.
         function test_a_list_a_menu_elsewhere_took_down_comes_back_with_the_hand_back_from_outside_the_window() {
             ontoBareStretch(3)
-            root.menuKey = root.oid(3)
-            root.menuArea = "graph"
-            KeyMenu.ask(root.listMenuAt, () => rowMenu.offer())
+            raiseRowMenu(3, root.listMenuAt)
             tryVerify(() => rowMenu.visible, undefined, "the row's menu stands")
             tryVerify(() => !host.listPopup.visible, undefined, "and took the list down")
             verify(paneHand.known && !rowMenu.pointerInside, "away from the hand, which the pane still hears")
             mouseMove(root, -10, rowY(3))
             tryVerify(() => !paneHand.known, undefined, "the hand is out of the window")
-            keyClick(Qt.Key_Escape)
-            tryVerify(() => !rowMenu.visible && root.menuArea === "", undefined, "Escape took the menu down")
+            escapeMenu()
             backOnBareStretch(3, "outside the window, the menu standing elsewhere")
         }
 
@@ -710,13 +743,11 @@ Item {
             tryVerify(() => rowMenu.visible && root.menuArea === "graph", undefined, "the row's menu stands")
             tryVerify(() => !host.listPopup.visible && !paneHand.known, undefined, "over the hand, the list down")
             verify(paneHand.hidden, "the hand is hidden under the menu")
-            const chosen = chosenList.itemAtIndex(0)
-            mouseMove(chosen, chosen.width / 2, chosen.height / 2)
+            handOntoChosen()
             tryVerify(() => chosenHand.known && !rowMenu.pointerInside, undefined,
                       "out of the menu, on the pane beside")
             verify(!paneHand.hidden, "the graph's hand left")
-            keyClick(Qt.Key_Escape)
-            tryVerify(() => !rowMenu.visible && root.menuArea === "", undefined, "Escape took the menu down")
+            escapeMenu()
             backOnBareStretch(3, "the pane beside, out of the menu")
         }
 
@@ -726,15 +757,12 @@ Item {
         /// (`test_a_list_the_rows_menu_took_down_stays_down_as_the_menu_goes`).
         function test_a_list_a_menu_took_down_comes_back_from_the_menus_part_past_the_pane() {
             ontoBareStretch(3)
-            root.menuKey = root.oid(3)
-            root.menuArea = "graph"
-            KeyMenu.ask(Qt.point(chosenPane.x - 40, chosenPane.y - Theme.spaceSm), () => rowMenu.offer())
+            raiseRowMenu(3, Qt.point(chosenPane.x - 40, chosenPane.y - Theme.spaceSm))
             tryVerify(() => rowMenu.visible && !host.listPopup.visible, undefined, "the menu took the list down")
             mouseMove(root, chosenPane.x + 20, chosenPane.y + Theme.spaceSm)
             tryVerify(() => rowMenu.pointerInside && !paneHand.known, undefined, "in the menu, over the pane beside")
             verify(paneHand.hidden, "hidden from the graph")
-            keyClick(Qt.Key_Escape)
-            tryVerify(() => !rowMenu.visible && root.menuArea === "", undefined, "Escape took the menu down")
+            escapeMenu()
             tryVerify(() => chosenHand.known && !rowMenu.pointerInside, undefined, "the pane beside has the hand")
             verify(!paneHand.hidden, "the graph never heard it: the hand left")
             backOnBareStretch(3, "the menu's part over the pane beside")
@@ -745,13 +773,10 @@ Item {
         /// stays down.
         function test_a_list_the_rows_menu_took_down_stays_down_as_it_goes_with_the_hand_on_its_row() {
             ontoBareStretch(3)
-            root.menuKey = root.oid(3)
-            root.menuArea = "graph"
-            KeyMenu.ask(Qt.point(0, rowY(3) - Theme.graphRowHeight / 2), () => rowMenu.offer())
+            raiseRowMenu(3, Qt.point(0, rowY(3) - Theme.graphRowHeight / 2))
             tryVerify(() => rowMenu.visible && !host.listPopup.visible, undefined, "the menu took the list down")
             tryVerify(() => rowMenu.itemAt(0).handOn && !paneHand.known, undefined, "the hand on the menu's row")
-            keyClick(Qt.Key_Escape)
-            tryVerify(() => !rowMenu.visible && root.menuArea === "", undefined, "Escape took the menu down")
+            escapeMenu()
             tryVerify(() => paneHand.known, undefined, "the hand is heard again where it was, on the chip")
             // waits(paced): a list that must **not** come back as the menu goes; the beat, twice over.
             wait(Metrics.hoverKeepMs * 2)
@@ -769,9 +794,7 @@ Item {
             verify(host.listPopup.opened, "a reread putting the view back moved nothing: the list stays")
             list.contentY = list.contentY + Theme.graphRowHeight
             tryVerify(() => !host.listPopup.opened, undefined, "the reader's move takes it down")
-            pane.headPin.visible = false
-            pane.headPin.wanted = false
-            pane.headPin.standsFor = ""
+            standInDown()
         }
         /// …but standing for another commit — one made on the branch elsewhere — its chip is another chip, and what the
         /// list said is gone: the list goes, the hand inside it or not (`RowHoverHost.rowGone`).
@@ -783,10 +806,7 @@ Item {
             pinStack.records = [Chips.chip("branch", "main")]
             host.rowGone(pane.headPin)
             tryVerify(() => !host.listPopup.opened, undefined, "the list goes with the commit it was of")
-            pinStack.records = [Chips.chip("branch", "main"), Chips.chip("tag", "v0")]
-            pane.headPin.visible = false
-            pane.headPin.wanted = false
-            pane.headPin.standsFor = ""
+            standInDown()
         }
         /// …and gone from its edge with the hand in the list — HEAD's names still on their way after a reread — it
         /// leaves the list where it stands: back for the same commit, the list stands on it again and says its names;
@@ -808,9 +828,7 @@ Item {
             pane.headPin.standsFor = root.oid(1)
             host.rowGone(pane.headPin)
             tryVerify(() => !host.listPopup.opened, undefined, "standing for another commit, the list goes")
-            pinStack.records = [Chips.chip("branch", "main"), Chips.chip("tag", "v0")]
-            pane.headPin.wanted = false
-            pane.headPin.standsFor = ""
+            standInDown()
         }
 
         /// A reread writes a commit in above the rows — every row rewritten in place, one more at the end
@@ -818,14 +836,7 @@ Item {
         /// in the same turn (`GraphRowWalk.shiftRows`): nothing moved under the hand, and the card it rested on stays,
         /// on the row that shows its commit now (デザイン規約 §hover のツールチップ「外乱では閉じない」).
         function test_a_reread_the_view_takes_back_keeps_the_card_on_its_commit() {
-            liveRows.clear()
-            for (let n = 0; n < 20; n++)
-                liveRows.append(root.liveCommit(n))
-            list.reuseItems = false
-            root.liveModel = true
-            list.forceLayout()
-            tryVerify(() => list.itemAtIndex(2) !== null && list.itemAtIndex(2).oid_hex === root.oid(2),
-                      undefined, "the live rows are up")
+            liveRowsUp(0, 20, 2)
             restOn(2)
             // Written from the last row up, so a row is told only once its commit stands one row down.
             liveRows.append(root.liveCommit(19))
@@ -848,8 +859,7 @@ Item {
         /// the hand is inside stays where it stands; the reader's own move takes it down, the hand inside it or not.
         function test_a_reread_the_view_cannot_take_back_leaves_the_card_the_hand_is_in() {
             restOn(2)
-            mouseMove(root, host.hoverCard.x + Theme.spaceMd, host.hoverCard.y + Theme.spaceMd)
-            tryVerify(() => host.hoverCard.pointerInside, undefined, "the hand is in the card")
+            handIntoCard()
             paneHand.rowsMoved(true)
             // waits(paced): a card that must **not** go: the beat a leave starts, twice over.
             wait(Metrics.hoverKeepMs * 2)
@@ -861,17 +871,9 @@ Item {
         /// asks): a history shorter than the view, every row rewritten in place and one more built at the end, laid out
         /// as the view weighs the shift — a row the reread put down, no reader's move. The card the hand is in stays.
         function test_a_reread_on_a_short_history_leaves_the_card_the_hand_is_in() {
-            liveRows.clear()
-            for (let n = 0; n < 5; n++)
-                liveRows.append(root.liveCommit(n))
-            list.reuseItems = false
-            root.liveModel = true
-            list.forceLayout()
-            tryVerify(() => list.itemAtIndex(2) !== null && list.itemAtIndex(2).oid_hex === root.oid(2),
-                      undefined, "the live rows are up")
+            liveRowsUp(0, 5, 2)
             restOn(2)
-            mouseMove(root, host.hoverCard.x + Theme.spaceMd, host.hoverCard.y + Theme.spaceMd)
-            tryVerify(() => host.hoverCard.pointerInside, undefined, "the hand is in the card")
+            handIntoCard()
             liveRows.append(root.liveCommit(4))
             for (let i = 4; i > 0; i--)
                 liveRows.set(i, root.liveCommit(i - 1))
@@ -889,13 +891,12 @@ Item {
         /// on a row further down, takes the menu down, and the hand is first heard there — off the chip. Back on the
         /// chip, the list comes out again.
         function test_a_list_the_rows_menu_took_down_comes_back_with_the_hand_heard_elsewhere_and_back() {
-            const words = list.labelWidth + list.graphColWidth + 40
             ontoBareStretch(3)
             mouseClick(list, Theme.spaceSm, rowY(3), Qt.RightButton)
             tryVerify(() => rowMenu.visible && !paneHand.known, undefined, "the menu stands over the hand")
-            mouseClick(list, words, rowY(7))
+            mouseClick(list, wordsX, rowY(7))
             tryVerify(() => !rowMenu.visible && root.menuArea === "", undefined, "the press outside took the menu down")
-            mouseMove(list, words + 1, rowY(7))
+            mouseMove(list, wordsX + 1, rowY(7))
             tryVerify(() => litIs([7]), undefined, "the hand is heard on row 7: " + litRows())
             backOnBareStretch(3, "row 7, where it was first heard")
         }
@@ -916,23 +917,15 @@ Item {
         /// A row taken out of the list leaves its delegate in the pool, `visible` where the row stood: it answers no
         /// hand there, and asks for nothing of the commit that went.
         function test_a_row_taken_out_of_the_list_answers_no_hand() {
-            liveRows.clear()
-            for (let n = 0; n < 6; n++)
-                liveRows.append(root.liveCommit(n))
-            list.reuseItems = false
-            root.liveModel = true
-            list.forceLayout()
+            liveRowsUp(0, 6, 5)
             // Reused from here: the row taken out goes to the pool.
             list.reuseItems = true
-            tryVerify(() => list.itemAtIndex(5) !== null && list.itemAtIndex(5).oid_hex === root.oid(5), undefined,
-                      "the live rows are up")
-            const x = list.labelWidth + list.graphColWidth + 40
-            mouseMove(list, x, rowY(5))
+            mouseMove(list, wordsX, rowY(5))
             tryVerify(() => host.cardKey === "card:graph:" + root.oid(5), undefined, "the last row's card is out")
             const gone = list.itemAtIndex(5)
             liveRows.remove(5)
             tryVerify(() => !host.hoverCard.visible, undefined, "the card went with its row")
-            mouseMove(list, x + 2, rowY(5))
+            mouseMove(list, wordsX + 2, rowY(5))
             // waits(paced): a card that must **not** come for the row that went; the rest it would take, twice over.
             wait(Metrics.tipDelayMs * 2)
             compare(host.cardKey, "", "the delegate left in the pool asks for nothing: " + JSON.stringify({
@@ -964,24 +957,21 @@ Item {
         /// Escape on the row's menu: the menu goes, and the card the press dismissed stays down under the still hand
         /// until it walks.
         function test_escape_on_the_rows_menu_leaves_the_dismissed_card_down() {
-            const x = list.labelWidth + list.graphColWidth + 40
             restOn(2)
-            mouseClick(list, x, rowY(2), Qt.RightButton)
+            mouseClick(list, wordsX, rowY(2), Qt.RightButton)
             tryVerify(() => rowMenu.visible, undefined, "the row's menu stands")
-            keyClick(Qt.Key_Escape)
-            tryVerify(() => !rowMenu.visible && root.menuArea === "", undefined, "Escape took the menu down")
+            escapeMenu()
             // waits(paced): a card that must **not** come back on its own; the rest it would take, twice over.
             wait(Metrics.tipDelayMs * 2)
             verify(!host.hoverCard.visible, "the dismissed card stays down under the still hand")
-            mouseMove(list, x + Theme.graphRowHeight, rowY(2))
+            mouseMove(list, wordsX + Theme.graphRowHeight, rowY(2))
             tryVerify(() => host.hoverCard.opened, undefined, "a walk brings it back")
         }
 
         /// The menu's own row pressed: the menu goes having acted, and the card stays down the same.
         function test_the_menus_row_pressed_closes_it_and_the_card_stays_down() {
-            const x = list.labelWidth + list.graphColWidth + 40
             restOn(2)
-            mouseClick(list, x, rowY(2), Qt.RightButton)
+            mouseClick(list, wordsX, rowY(2), Qt.RightButton)
             tryVerify(() => rowMenu.visible, undefined, "the row's menu stands")
             const item = rowMenu.itemAt(0)
             mouseClick(item, item.width / 2, item.height / 2)
@@ -995,14 +985,13 @@ Item {
         /// A press outside the menu, on another row: the menu goes, and the hand is on that row by a walk — it lights
         /// and its card is asked for.
         function test_a_press_outside_the_menu_is_a_walk_to_where_it_pressed() {
-            const x = list.labelWidth + list.graphColWidth + 40
             restOn(2)
-            mouseClick(list, x, rowY(2), Qt.RightButton)
+            mouseClick(list, wordsX, rowY(2), Qt.RightButton)
             tryVerify(() => rowMenu.visible, undefined, "the row's menu stands")
-            mouseClick(list, x, rowY(5))
+            mouseClick(list, wordsX, rowY(5))
             tryVerify(() => !rowMenu.visible && root.menuArea === "", undefined, "the press outside took the menu down")
             // The hand is where it pressed; its next move is heard there (the menu heard the press, not the rows).
-            mouseMove(list, x + 1, rowY(5))
+            mouseMove(list, wordsX + 1, rowY(5))
             tryVerify(() => litIs([5]), undefined, "the row pressed is lit: " + litRows())
             tryVerify(() => host.cardKey === "card:graph:" + root.oid(5), undefined, "and its card is asked for")
         }
@@ -1010,25 +999,16 @@ Item {
         /// Rows moving below the list's box — the ones it keeps built past its edge, the current row among them, which
         /// a reread moves as the selection follows its commit — move nothing under the hand: the card it is in stays.
         function test_rows_moving_below_the_view_take_nothing_down() {
-            liveRows.clear()
-            for (let n = 6; n < 18; n++)
-                liveRows.append(root.liveCommit(n))
-            list.reuseItems = false
-            root.liveModel = true
-            list.forceLayout()
-            tryVerify(() => list.itemAtIndex(2) !== null && list.itemAtIndex(2).oid_hex === root.oid(8),
-                      undefined, "the live rows are up")
+            liveRowsUp(6, 18, 2)
             // The selection moves without the view, as `GraphPane.setCurrentRow` moves it.
             list.currentIndex = 11
             list.contentY = 0
             list.forceLayout()
             tryVerify(() => list.contentY === 0 && list.currentItem !== null && list.currentItem.y >= list.height,
                       undefined, "the current row is built below the view")
-            const x = list.labelWidth + list.graphColWidth + 40
-            mouseMove(list, x, rowY(2))
+            mouseMove(list, wordsX, rowY(2))
             tryVerify(() => host.cardKey === "card:graph:" + root.oid(8), undefined, "row 2's card is out")
-            mouseMove(root, host.hoverCard.x + Theme.spaceMd, host.hoverCard.y + Theme.spaceMd)
-            tryVerify(() => host.hoverCard.pointerInside, undefined, "the hand is in the card")
+            handIntoCard()
             const was = list.currentItem.y
             liveRows.insert(10, root.liveCommit(31))
             tryVerify(() => list.currentItem.y !== was, undefined, "the current row moved, below the view")
@@ -1040,8 +1020,7 @@ Item {
         /// The choice's rows scrolling under a still hand: the card goes, and the row that came under the hand lights
         /// but opens nothing until the hand walks.
         function test_the_choices_rows_moving_under_a_still_hand_open_nothing() {
-            const chosen = chosenList.itemAtIndex(0)
-            mouseMove(chosen, chosen.width / 2, chosen.height / 2)
+            handOntoChosen()
             tryVerify(() => host.cardKey === "card:chosen:" + root.oid(2), undefined, "the row's card is out")
             chosenList.contentY = Theme.graphRowHeight
             tryVerify(() => !host.hoverCard.opened, undefined, "the card went with the move")
@@ -1061,8 +1040,7 @@ Item {
         /// a commit that is no more, and goes as the owner's close — the hand inside it or not.
         function test_the_row_rewritten_with_the_hand_in_its_card_takes_the_card_down() {
             restOn(2)
-            mouseMove(root, host.hoverCard.x + Theme.spaceMd, host.hoverCard.y + Theme.spaceMd)
-            tryVerify(() => host.hoverCard.pointerInside, undefined, "the hand is in the card")
+            handIntoCard()
             const row = list.itemAtIndex(2)
             root.gone = { [root.oid(2)]: true }
             row.oid_hex = root.oid(36)
@@ -1074,8 +1052,7 @@ Item {
         /// over it: the card the hand is in stays where it stands (デザイン規約 §hover のツールチップ「外乱では閉じない」).
         function test_the_row_rewritten_with_its_commit_still_in_the_graph_keeps_the_card_the_hand_is_in() {
             restOn(2)
-            mouseMove(root, host.hoverCard.x + Theme.spaceMd, host.hoverCard.y + Theme.spaceMd)
-            tryVerify(() => host.hoverCard.pointerInside, undefined, "the hand is in the card")
+            handIntoCard()
             const row = list.itemAtIndex(2)
             row.oid_hex = root.oid(36)
             // waits(paced): a card that must **not** go: the beat a leave starts, twice over.
@@ -1180,8 +1157,7 @@ Item {
 
         /// A choice's row inserted above the one the hand is on moves it: told as a move, as the graph's rows are.
         function test_a_choices_row_inserted_above_the_hand_moves_the_rows_under_it() {
-            const chosen = chosenList.itemAtIndex(0)
-            mouseMove(chosen, chosen.width / 2, chosen.height / 2)
+            handOntoChosen()
             tryVerify(() => host.cardKey === "card:chosen:" + root.oid(2), undefined, "the row's card is out")
             chosenRows.insert(0, root.chosenRecord(9))
             tryVerify(() => !host.hoverCard.opened, undefined, "the card went with the move")
