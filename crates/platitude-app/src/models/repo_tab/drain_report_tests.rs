@@ -2,7 +2,7 @@
 //! saying — the kind the page picks its two lines from, and the names
 //! the first of them is written from (`drain::settle_write`).
 
-use super::drain_inputs::{no_answer, settle};
+use super::drain_inputs::{no_answer, reported, settle};
 use super::*;
 use platitude_core::OperationKind as K;
 use platitude_core::RemoteWhy;
@@ -334,15 +334,12 @@ fn the_worktree_a_menu_asked_for_is_answered_by_name_with_its_report() {
     tab.worktree_out.asked(Some(7));
     tab.worktree_answer_path = "C:/work/repo.worktrees/hotfix-patch".into();
     let refused = platitude_core::WriteReport::about(ReportKind::WorktreeNotAdded, "hotfix-patch");
-    tab.absorb(vec![TabMsg::WriteState {
-        id: 7,
-        kind: K::Worktree,
-        running: false,
-        error: "git worktree add exited with code 255".into(),
-        report: Some(refused),
-        head_seq: 0,
-        reads_from: 0,
-    }]);
+    tab.absorb(vec![reported(
+        7,
+        K::Worktree,
+        "git worktree add exited with code 255",
+        Some(refused),
+    )]);
     let answer = tab
         .write_answer_at(tab.worktree_answer)
         .expect("its own answer");
@@ -370,15 +367,12 @@ fn a_renamed_worktree_is_answered_by_name() {
     let mut tab = RepoTab::default();
     tab.worktree_move_out.asked(Some(9));
     let refused = platitude_core::WriteReport::about(ReportKind::WorktreeNotRenamed, "loose");
-    tab.absorb(vec![TabMsg::WriteState {
-        id: 9,
-        kind: K::Worktree,
-        running: false,
-        error: "git worktree move exited with code 128".into(),
-        report: Some(refused),
-        head_seq: 0,
-        reads_from: 0,
-    }]);
+    tab.absorb(vec![reported(
+        9,
+        K::Worktree,
+        "git worktree move exited with code 128",
+        Some(refused),
+    )]);
     let answer = tab
         .write_answer_at(tab.worktree_move_answer)
         .expect("its own answer");

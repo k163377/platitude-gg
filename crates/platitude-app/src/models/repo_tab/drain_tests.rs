@@ -1,7 +1,7 @@
 //! What one answer out of the feed leaves the properties QML reads
 //! saying (`drain::settle_write`).
 
-use super::drain_inputs::{no_answer, settle, started};
+use super::drain_inputs::{no_answer, reported, settle, started};
 use super::*;
 use platitude_core::OperationKind as K;
 
@@ -423,19 +423,6 @@ fn a_refusal_with_a_report_turns_no_row() {
         .write_answer_at(tab.branch_delete_answer)
         .expect("the plain delete's own answer");
     assert_eq!(answer.report_kind, "delete-refused");
-}
-
-/// One answer as the bridge carries it.
-fn reported(id: u64, kind: K, error: &str, report: Option<platitude_core::WriteReport>) -> TabMsg {
-    TabMsg::WriteState {
-        id,
-        kind,
-        running: false,
-        error: error.into(),
-        report,
-        head_seq: 0,
-        reads_from: 0,
-    }
 }
 
 fn answered(id: u64, kind: K, error: &str) -> TabMsg {

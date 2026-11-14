@@ -4,6 +4,24 @@
 use super::*;
 use platitude_core::OperationKind as K;
 
+/// One answer as the bridge carries it.
+pub(super) fn reported(
+    id: u64,
+    kind: K,
+    error: &str,
+    report: Option<platitude_core::WriteReport>,
+) -> TabMsg {
+    TabMsg::WriteState {
+        id,
+        kind,
+        running: false,
+        error: error.into(),
+        report,
+        head_seq: 0,
+        reads_from: 0,
+    }
+}
+
 /// The write starting — none of its three boundaries (`session::write`).
 pub(super) fn started(id: u64, kind: K) -> TabMsg {
     TabMsg::WriteState {
