@@ -7,6 +7,8 @@ use super::drain_inputs::{OURS, SOMEBODY_ELSE, answered, no_answer, reported, se
 use super::*;
 use platitude_core::OperationKind as K;
 
+// ---- the group: what the last answer nobody named says ---------------
+
 fn settled(kind: K, error: &str) -> RepoTab {
     let mut tab = RepoTab::default();
     settle(&mut tab, kind, error, None);
@@ -190,6 +192,8 @@ fn the_push_answer_is_this_notifys_own() {
     );
 }
 
+// ---- the group: a fetch, a move of HEAD, a reword --------------------
+
 /// The refused half is the one the page reads: a failed fetch has already
 /// raised its panel, which stays the fetch's to take down
 /// (`CommandsOwner`); a refused push is other news in the same panel.
@@ -239,6 +243,8 @@ fn every_answer_rewrites_the_whole_group() {
     assert!(tab.write_refused);
     assert_eq!(tab.write_seq, 2);
 }
+
+// ---- the notify's list of answers ------------------------------------
 
 /// A run's answer and the fetch the freeze left running, in one drain
 /// (`take_feed` drains the queue whole and notifies once).
@@ -317,6 +323,8 @@ fn a_drain_with_no_write_answer_publishes_none() {
     tab.absorb(vec![no_answer()]);
     assert!(tab.write_answers.is_empty());
 }
+
+// ---- the plain branch delete a menu stays up for ---------------------
 
 /// A plain `branch --delete` out, its menu standing for the answer
 /// (`ops_delete::branch_delete`).
@@ -410,6 +418,8 @@ fn a_refusal_with_a_report_turns_no_row() {
         .expect("the plain delete's own answer");
     assert_eq!(answer.report_kind, "delete-refused");
 }
+
+// ---- the list, searched by a press's id ------------------------------
 
 fn stash_answered(id: u64, error: &str) -> TabMsg {
     answered(id, K::Stash, error)
@@ -725,6 +735,8 @@ fn a_landing_owed_in_the_drain_that_refuses_somebody_elses_write() {
     );
 }
 
+// ---- the commit that emptied the tree --------------------------------
+
 // The landing that follows reads HEAD at or after the fence, never the
 // report in hand — an amend of nothing leaves the counts as they were, and
 // the HEAD in hand is the one it replaced.
@@ -768,7 +780,7 @@ fn a_commit_that_left_files_or_was_refused_claims_no_tree() {
     );
 }
 
-// ---- the pushes a ref row sends ---------------------------------------
+// ---- the pushes a ref row sends --------------------------------------
 
 fn ref_push_pressed() -> RepoTab {
     let mut tab = RepoTab::default();
