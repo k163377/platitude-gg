@@ -14,8 +14,8 @@ ColumnLayout {
 
     signal choicePicked(int index)
 
-    /// Automation only: no injected click opens a popup on the offscreen platform, so a run goes in at the field's
-    /// own door (`AppCombo.pressField`).
+    /// Automation only: no injected click opens a popup on the offscreen platform, so a run takes a row through the
+    /// field's own report of one taken (`RenameCarryFlow.pickChoice`).
     property alias pick: pick
 
     AppCombo {

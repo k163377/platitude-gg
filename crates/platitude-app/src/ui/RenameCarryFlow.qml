@@ -214,16 +214,8 @@ Item {
             : qsTr("%1 to replace. %2 goes up first, then %3 comes off — so a push the far side turns down leaves the old name where it is. Anything built from it stays with the name that goes.")
               .arg(Words.pressCount(Metrics.holdPressesWarned)).arg(comes).arg(goes)
     }
-    /// Automation: the chooser's list, which no injected click can reach — the same door a press uses
-    /// (`AppCombo.pressField`), so what answers is the wiring.
-    function openChoices() {
-        const form = carryFlow.graphPane.askForm
-        if (!form || !form.pick)
-            return false
-        form.pick.pressField()
-        return true
-    }
-    /// Automation: pick one, through the field's own report of a row having been taken.
+    /// Automation: a row of the chooser picked, through the field's own report of a row having been taken; answers
+    /// whether one was.
     function pickChoice(index) {
         const form = carryFlow.graphPane.askForm
         if (!form || !form.pick || index < 0 || index >= carryFlow.choices.length)
