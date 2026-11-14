@@ -59,15 +59,19 @@ HoverToolButton {
     property bool code: false
     /// The word over the mark rather than beside it — the operation panel's shape, two lines deep. The height does not
     /// move: narrowing, a stacked button gives up its word and the mark grows into the room the word was in
-    /// (`stackSeat.step`).
+    /// (`stackSeat.step`). Only the shape drawn is built (`shape`): a change rebuilds the content.
     property bool stacked: false
     /// The mark's step under its word in such a button: the mark is what it is read by, so it takes a lone band mark's
     /// step (規約 §寸法).
     readonly property int stackStep: Theme.iconLg
+    /// The line box of the word over the mark (`ActionButtonLabel.lineBox`), which is that word's whole depth.
+    readonly property int stackLine: Theme.fontSmLine
     /// How deep the word over the mark is, the word given up or not: the word's line and the seat at the step it has
     /// under a word. Whoever holds the button to a depth of its own keeps it at least this (`TopBar.actionDepth`) —
-    /// in a shallower frame the word stands on the frame's top line.
-    readonly property real stackDepth: stackLabel.implicitHeight + stackSeat.depthAt(actionBtn.stackStep)
+    /// in a shallower frame the word stands on the frame's top line. Answered in either shape: the depth rule is the
+    /// seat's (`ActionButtonSeat.depthAt`), asked of whichever seat is built — the line alone while none is.
+    readonly property real stackDepth:
+        actionBtn.stackLine + (shape.item ? shape.item.shownSeat.depthAt(actionBtn.stackStep) : 0)
     property int wordWeight: Font.Normal
     /// The label is a phrase with a command at each end — a chip, `text` between them, and a second chip in a colour
     /// of its own (`ActionButtonLabel.phraseHead`). Empty is the ordinary single-wording button.
@@ -95,7 +99,8 @@ HoverToolButton {
     property string phraseSignatureTip: ""
     /// Stands in for the pointer on that tick, so its one line can be photographed — hover cannot be injected.
     property bool phraseSignaturePointedAt: false
-    readonly property bool phraseSignatureTipShown: btnLabel.phraseSignatureTipShown
+    readonly property bool phraseSignatureTipShown: actionBtn.lineWord !== null
+                                                    && actionBtn.lineWord.phraseSignatureTipShown
     /// The icon is a mark beside the word: drawn to its letters (`ActionButtonSeat.wordSize`, デザイン規約 §アイコンの席
     /// の文頭記号) in an `iconSm` box rather than `iconMd`, and the seat shrinks to the icon — the wide seat holds the
     /// icon and the hold mark side by side, a pairing a click-only button cannot have (デザイン規約 §回数押し). The
@@ -112,12 +117,32 @@ HoverToolButton {
     /// is short of room yet (`TopBar.actionsFolded` / `findFolded`). The button also gives up on its own when the cell
     /// it was handed cannot hold its word whole.
     property bool foldRequested: false
+    /// The word on the line every width below is measured off: the one-line shape's drawn word, and in a stacked
+    /// button a ruler — the same word at the button's own step (`font.pixelSize`), measured and never drawn: the
+    /// panel lays its stacked cells out as that line (`TopBar.actionCap`), not as the word over the mark. Null only
+    /// while the shape is being built.
+    readonly property ActionButtonLabel lineWord: shape.item ? shape.item.lineWord : null
+    /// The seat beside that word. None stacked: the mark stands under the word and takes no room on the line.
+    readonly property ActionButtonSeat lineSeat: shape.item ? shape.item.lineSeat : null
+    /// The step between the seat and the word on that line.
+    readonly property int lineStep: Theme.spaceXs
+    /// The seat's share of the line: its own width, which a seat out of sight answers as 0.
+    readonly property real lineSeatWidth: actionBtn.lineSeat ? actionBtn.lineSeat.implicitWidth : 0
+    /// The shared box the word sits in (`ActionButtonLabel.box`).
+    readonly property real wordBox: actionBtn.lineWord ? actionBtn.lineWord.box : 0
+    /// The line's own width, before any slack: the drawn row's. Stacked, the step and the word: the mark under the word
+    /// takes no room on the line but keeps its step before the word (a stacked button always has a mark — it is the
+    /// word over its mark), and the stack centres itself, so `centred` adds no spacers there.
+    readonly property real lineWidth:
+        !shape.item ? 0
+        : actionBtn.stacked ? actionBtn.lineStep + (actionBtn.lineWord ? actionBtn.lineWord.implicitWidth : 0)
+        : shape.item.implicitWidth
     /// The room the word gets in this cell once the marks and the air either side are paid for. Read off the style's
     /// fixed `padding`: `leftPadding` / `rightPadding` are answered from here (through `slack`), and reading them back
     /// would close a loop.
     readonly property real wordRoom:
-        !actionBtn.laidByBand ? btnLabel.box
-        : Math.max(0, actionBtn.width - 2 * actionBtn.padding - seat.implicitWidth - btnRow.spacing)
+        !actionBtn.laidByBand ? actionBtn.wordBox
+        : Math.max(0, actionBtn.width - 2 * actionBtn.padding - actionBtn.lineSeatWidth - actionBtn.lineStep)
     /// Down to the icon: the word no longer fits whole — it is never cut to a `…`, which takes the room and still
     /// cannot be read (user decision — ask before changing) — or the panel has said so. Nothing said is lost: each of
     /// the panel's buttons says what it does in its tooltip (規約 §hover のツールチップ). The warning stays whole folded —
@@ -125,20 +150,20 @@ HoverToolButton {
     /// (`ActionButtonSeat.cornerAlert`). The mark grows into the word's line, centred in the cell — a hold's fraction
     /// does not grow (§回数押し) — and the wash fills the whole cell.
     readonly property bool folded: actionBtn.laidByBand
-        && (actionBtn.foldRequested || actionBtn.wordRoom < btnLabel.wantWidth)
+        && (actionBtn.foldRequested || actionBtn.wordRoom < actionBtn.wordWant)
     /// The widest this button is ever drawn, and the narrowest it is drawn with its word on it. Neither moves with
     /// whether the word is shown — the row lays the cell out from these, so giving the word up cannot change the width
     /// that decides whether to give it up (`TopBar`).
     readonly property real naturalWidth:
-        2 * actionBtn.padding + seat.implicitWidth + btnRow.spacing + btnLabel.box
+        2 * actionBtn.padding + actionBtn.lineSeatWidth + actionBtn.lineStep + actionBtn.wordBox
     /// The wording this state says, whole, with the air around it. The set folds on the widest of the three
     /// (`TopBar.actionFold`).
     readonly property real foldWidth:
-        2 * actionBtn.padding + seat.implicitWidth + btnRow.spacing + btnLabel.wantWidth
+        2 * actionBtn.padding + actionBtn.lineSeatWidth + actionBtn.lineStep + actionBtn.wordWant
     /// Automation: the ink the word takes (`PGG_AUTO_ACT=band-actions`).
-    readonly property real wordInk: btnLabel.inkWidth
+    readonly property real wordInk: actionBtn.lineWord ? actionBtn.lineWord.inkWidth : 0
     /// …and the width this state's wording wants, whole: what the set folds against (`foldWidth`).
-    readonly property real wordWant: btnLabel.wantWidth
+    readonly property real wordWant: actionBtn.lineWord ? actionBtn.lineWord.wantWidth : 0
     /// Icon and word centred as a pair, for a button told to fill a pane's width — packed from the left, the word
     /// would sit adrift from its icon.
     property bool centred: false
@@ -150,7 +175,7 @@ HoverToolButton {
     /// *wanted* width: the painted width is what this arithmetic produces.
     readonly property real slack:
         actionBtn.folded ? 0
-        : Math.max(0, Math.min(btnLabel.box, actionBtn.wordRoom) - btnLabel.wantWidth, actionBtn.floorSlack)
+        : Math.max(0, Math.min(actionBtn.wordBox, actionBtn.wordRoom) - actionBtn.wordWant, actionBtn.floorSlack)
     /// What a framed button is short of `Theme.buttonMinWidth`, taken as slack like any other — a short word in a
     /// frame reads as a chip, not a button.
     ///
@@ -159,8 +184,8 @@ HoverToolButton {
     /// `buttonMinWidth` out of the room the phrase elides into. Not once folded: a box round a mark takes the mark's
     /// size (規約 §寸法 の `buttonMinWidth`) — floored, a 36px cell would come out 80px.
     readonly property real floorSlack:
-        actionBtn.framed && !btnLabel.phrased && !actionBtn.folded
-        ? Theme.buttonMinWidth - btnRow.implicitWidth - 2 * actionBtn.padding : 0
+        actionBtn.framed && !(actionBtn.lineWord && actionBtn.lineWord.phrased) && !actionBtn.folded
+        ? Theme.buttonMinWidth - actionBtn.lineWidth - 2 * actionBtn.padding : 0
     /// The air each end already holds (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」): a lone mark
     /// centred in the two-mark seat, a chip reaching half a gap past its last letter. Taken off before the halves are
     /// cut, so the ink comes out even.
@@ -169,10 +194,11 @@ HoverToolButton {
     /// so that air is split between the ends too (Windows headless, the plan's `Discard`: frame to mark 8.6, word to
     /// frame 8.0). **On a hold seat it is negative** (the seat is narrower than the mark's box) and cancels against
     /// `tailInk`, which does not count the air right of the last letter: replace one with a measured value and the
-    /// other must follow. The seat's paired fraction (`seat.paired`) is drawn nowhere yet (only the panel's two-line
-    /// push has a hold and a mark both); a caller that draws it re-measures the split — that box is a pixel wider
-    /// than the seat at each end.
-    readonly property real headInk: seat.visible ? (seat.implicitWidth - seat.step) / 2 : 0
+    /// other must follow. The seat's paired fraction (`ActionButtonSeat.paired`) is drawn on no line yet (only the
+    /// panel's two-line push has a hold and a mark both); a caller that draws it re-measures the split — that box is a
+    /// pixel wider than the seat at each end.
+    readonly property real headInk: actionBtn.lineSeat && actionBtn.lineSeat.visible
+                                    ? (actionBtn.lineSeat.implicitWidth - actionBtn.lineSeat.step) / 2 : 0
     readonly property real tailInk: actionBtn.code ? Theme.spaceXs / 2 : 0
     /// The last press landed, raised at once: the answer is decided here, and the work starts under the full fill.
     signal held()
@@ -207,7 +233,7 @@ HoverToolButton {
     /// Automation: where the word's baseline stands, in `item`'s y. Buttons side by side are read as one line of words,
     /// and two of different builds (one with the hold mark) are different depths (`DiffRowDelegate`'s hunk tools).
     function wordBase(item) {
-        return (actionBtn.stacked ? stackLabel : btnLabel).wordBase(item)
+        return shape.item ? shape.item.shownWord.wordBase(item) : 0
     }
 
     /// Automation: every press at once without a hand, gated the way a hand's press is (`onDownChanged`). Answers
@@ -365,7 +391,7 @@ HoverToolButton {
     // content that would move every button in the app.
     readonly property real headAir:
         actionBtn.folded ? 0
-        : (btnLabel.box > 0 || actionBtn.floorSlack > 0)
+        : (actionBtn.wordBox > 0 || actionBtn.floorSlack > 0)
           ? Math.floor((actionBtn.slack - actionBtn.headInk - actionBtn.tailInk) / 2)
           : 0
     // Folded, no padding: the mark is centred in an end-cell-wide cell like the ☰'s (`TopBar`'s header: the band's
@@ -392,144 +418,192 @@ HoverToolButton {
     }
 
     contentItem: Item {
-        implicitWidth: actionBtn.stacked ? stackCol.implicitWidth : btnRow.implicitWidth
-        implicitHeight: actionBtn.stacked ? stackCol.implicitHeight : btnRow.implicitHeight
+        implicitWidth: shape.item ? shape.item.implicitWidth : 0
+        implicitHeight: shape.item ? shape.item.implicitHeight : 0
 
-        RowLayout {
-            id: btnRow
+        // Only the shape drawn is built: built both, every button would hold the other's word and seat unseen. Each
+        // answers the same four: `lineWord` / `lineSeat`, the line the widths are measured off, and `shownWord` /
+        // `shownSeat`, what is drawn.
+        Loader {
+            id: shape
             anchors.fill: parent
-            visible: !actionBtn.stacked
-            spacing: Theme.spaceXs
-            Item {
-                Layout.fillWidth: true
-                // Hidden for a phrase, which fills the row and centres itself — spacers would split the slack three
-                // ways and set it off-centre. Shown when folded, so the lone mark centres like its neighbours'.
-                visible: (actionBtn.centred || actionBtn.folded) && !btnLabel.phrased
-            }
-            ActionButtonSeat {
-                id: seat
-                kind: actionBtn.kind
-                // A phrase carries the hold's mark itself (`ActionButtonLabel.phraseHoldPresses`): this seat sits at
-                // the row's left edge, apart from the centred phrase. A plain held button keeps it here
-                // (`discard-hunk-go`; the panel's stacked push keeps it in `stackSeat`, `force-push-hold`).
-                holdPresses: btnLabel.phrased ? 0 : actionBtn.armedPresses
-                besideWord: actionBtn.besideWord
-                holdProgress: actionBtn.holdProgress
-                busy: actionBtn.ringing
-                tint: actionBtn.markFg
-                holdTint: actionBtn.holdInk
-                holdOff: actionBtn.holdOff
-                // Folded, the `!` comes to the mark's corner: the warning survives the fold
-                // (規約 §回数押し「警告の色は枠と印が持つ」).
-                cornerAlert: actionBtn.folded && actionBtn.alert
-                cornerAlertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
-                // Beside its word, the head of it (デザイン規約 §アイコンの席 の文頭記号); folded, it stands alone.
-                wordSize: actionBtn.folded || btnLabel.phrased || btnLabel.head === "" ? 0 : btnLabel.fontSize
-                wordBase: btnLabel.y + btnLabel.headBase - seat.y
-                wordHang: btnLabel.code ? Theme.spaceXs / 2 : 0
-                wordStep: btnRow.spacing
-                Layout.alignment: Qt.AlignVCenter
-            }
-            ActionButtonLabel {
-                id: btnLabel
-                // Out of the row once folded: a zero-width child still takes `spacing` on both sides and pulls the
-                // mark half a gap off centre. Its bindings keep answering while hidden.
-                //
-                // This cannot unfold the button: the fold is decided by `wordRoom`, which never reads this row — a
-                // fold read off the row would hand the word its room back by hiding it. To measure the centring, give
-                // every cell a throwaway frame (the frame colour `folded ? borderStrong`): a frameless cell shows no
-                // edge, and its mark alone gives no centre to count from.
-                visible: !actionBtn.folded
-                text: actionBtn.text
-                code: actionBtn.code
-                wordWeight: actionBtn.wordWeight
-                widestText: actionBtn.widestText
-                widestCode: actionBtn.widestCode
-                folded: actionBtn.folded
-                tint: actionBtn.fg
-                alert: actionBtn.alert
-                // A step down while busy, like every mark (デザイン規約 §進行中・回数押しの定数).
-                alertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
-                alertCeiling: actionBtn.alertTopEdge - actionBtn.topPadding - btnRow.y - btnLabel.y
-                alertWall: actionBtn.alertRightEdge - actionBtn.leftPadding - btnRow.x - btnLabel.x
-                fontSize: actionBtn.font.pixelSize
-                phraseHead: actionBtn.phraseHead
-                phraseHoldPresses: actionBtn.armedPresses
-                phraseHoldProgress: actionBtn.holdProgress
-                phraseHoldTint: actionBtn.holdResting ? actionBtn.holdHue : actionBtn.fg
-                phraseHoldOff: actionBtn.holdOff
-                phraseCount: actionBtn.phraseCount
-                phraseTail: actionBtn.phraseTail
-                phraseTailTint: actionBtn.phraseTailTint
-                phraseTailMark: actionBtn.phraseTailMark
-                phraseNote: actionBtn.phraseNote
-                phraseNoteTint: actionBtn.phraseNoteInk
-                phraseFace: actionBtn.phraseFace
-                phraseFaceUrl: actionBtn.phraseFaceUrl
-                phraseMates: actionBtn.phraseMates
-                phraseSignature: actionBtn.phraseSignature
-                phraseSignatureTip: actionBtn.phraseSignatureTip
-                phraseSignaturePointedAt: actionBtn.phraseSignaturePointedAt
-            }
-            Item {
-                Layout.fillWidth: true
-                visible: (actionBtn.centred || actionBtn.folded) && !btnLabel.phrased
+            sourceComponent: actionBtn.stacked ? stackShape : lineShape
+        }
+
+        Component {
+            id: lineShape
+            RowLayout {
+                id: btnRow
+
+                readonly property ActionButtonLabel lineWord: btnLabel
+                readonly property ActionButtonSeat lineSeat: seat
+                readonly property ActionButtonLabel shownWord: btnLabel
+                readonly property ActionButtonSeat shownSeat: seat
+
+                spacing: actionBtn.lineStep
+                Item {
+                    Layout.fillWidth: true
+                    // Hidden for a phrase, which fills the row and centres itself — spacers would split the slack
+                    // three ways and set it off-centre. Shown when folded, so the lone mark centres like its
+                    // neighbours'.
+                    visible: (actionBtn.centred || actionBtn.folded) && !btnLabel.phrased
+                }
+                ActionButtonSeat {
+                    id: seat
+                    kind: actionBtn.kind
+                    // A phrase carries the hold's mark itself (`ActionButtonLabel.phraseHoldPresses`): this seat sits
+                    // at the row's left edge, apart from the centred phrase. A plain held button keeps it here
+                    // (`discard-hunk-go`; the panel's stacked push keeps it in `stackSeat`, `force-push-hold`).
+                    holdPresses: btnLabel.phrased ? 0 : actionBtn.armedPresses
+                    besideWord: actionBtn.besideWord
+                    holdProgress: actionBtn.holdProgress
+                    busy: actionBtn.ringing
+                    tint: actionBtn.markFg
+                    holdTint: actionBtn.holdInk
+                    holdOff: actionBtn.holdOff
+                    // Folded, the `!` comes to the mark's corner: the warning survives the fold
+                    // (規約 §回数押し「警告の色は枠と印が持つ」).
+                    cornerAlert: actionBtn.folded && actionBtn.alert
+                    cornerAlertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
+                    // Beside its word, the head of it (デザイン規約 §アイコンの席 の文頭記号); folded, it stands alone.
+                    wordSize: actionBtn.folded || btnLabel.phrased || btnLabel.head === "" ? 0 : btnLabel.fontSize
+                    wordBase: btnLabel.y + btnLabel.headBase - seat.y
+                    wordHang: btnLabel.code ? Theme.spaceXs / 2 : 0
+                    wordStep: btnRow.spacing
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                ActionButtonLabel {
+                    id: btnLabel
+                    // Out of the row once folded: a zero-width child still takes `spacing` on both sides and pulls
+                    // the mark half a gap off centre. Its bindings keep answering while hidden.
+                    //
+                    // This cannot unfold the button: the fold is decided by `wordRoom`, which never reads this row —
+                    // a fold read off the row would hand the word its room back by hiding it. To measure the
+                    // centring, give every cell a throwaway frame (the frame colour `folded ? borderStrong`): a
+                    // frameless cell shows no edge, and its mark alone gives no centre to count from.
+                    visible: !actionBtn.folded
+                    text: actionBtn.text
+                    code: actionBtn.code
+                    wordWeight: actionBtn.wordWeight
+                    widestText: actionBtn.widestText
+                    widestCode: actionBtn.widestCode
+                    folded: actionBtn.folded
+                    tint: actionBtn.fg
+                    alert: actionBtn.alert
+                    // A step down while busy, like every mark (デザイン規約 §進行中・回数押しの定数).
+                    alertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
+                    alertCeiling: actionBtn.alertTopEdge - actionBtn.topPadding - shape.y - btnRow.y - btnLabel.y
+                    alertWall: actionBtn.alertRightEdge - actionBtn.leftPadding - shape.x - btnRow.x - btnLabel.x
+                    fontSize: actionBtn.font.pixelSize
+                    phraseHead: actionBtn.phraseHead
+                    phraseHoldPresses: actionBtn.armedPresses
+                    phraseHoldProgress: actionBtn.holdProgress
+                    phraseHoldTint: actionBtn.holdResting ? actionBtn.holdHue : actionBtn.fg
+                    phraseHoldOff: actionBtn.holdOff
+                    phraseCount: actionBtn.phraseCount
+                    phraseTail: actionBtn.phraseTail
+                    phraseTailTint: actionBtn.phraseTailTint
+                    phraseTailMark: actionBtn.phraseTailMark
+                    phraseNote: actionBtn.phraseNote
+                    phraseNoteTint: actionBtn.phraseNoteInk
+                    phraseFace: actionBtn.phraseFace
+                    phraseFaceUrl: actionBtn.phraseFaceUrl
+                    phraseMates: actionBtn.phraseMates
+                    phraseSignature: actionBtn.phraseSignature
+                    phraseSignatureTip: actionBtn.phraseSignatureTip
+                    phraseSignaturePointedAt: actionBtn.phraseSignaturePointedAt
+                }
+                Item {
+                    Layout.fillWidth: true
+                    visible: (actionBtn.centred || actionBtn.folded) && !btnLabel.phrased
+                }
             }
         }
 
         // The word over the mark (`stacked`), as its own pair: a `RowLayout` cannot be turned, and the layout that can
         // took the window's floor down with it.
-        ColumnLayout {
-            id: stackCol
-            visible: actionBtn.stacked
-            // Centred, not filling the cell: a layout shares extra room out between its cells, and each button would
-            // draw its mark at a height of its own.
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.verticalCenter: parent.verticalCenter
-            // No spacing: the word's descent and the seat's step over its ink are already air between the lines, and
-            // more puts the mark further from the word than the word is from the frame — the three airs (frame to
-            // word, word to mark, mark to frame) are kept even.
-            spacing: 0
+        Component {
+            id: stackShape
+            Item {
+                id: stackPane
 
-            ActionButtonLabel {
-                id: stackLabel
-                Layout.alignment: Qt.AlignHCenter | Qt.AlignBottom
-                visible: !actionBtn.folded
-                text: actionBtn.text
-                code: actionBtn.code
-                // The step's line, not the family's, so the marks under the words stand on one row
-                // (`ActionButtonLabel.lineBox`).
-                lineBox: Theme.fontSmLine
-                wordWeight: actionBtn.wordWeight
-                widestText: actionBtn.widestText
-                widestCode: actionBtn.widestCode
-                folded: actionBtn.folded
-                tint: actionBtn.fg
-                alert: actionBtn.alert
-                alertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
-                alertCeiling: actionBtn.alertTopEdge - actionBtn.topPadding - stackCol.y - stackLabel.y
-                alertWall: actionBtn.alertRightEdge - actionBtn.leftPadding - stackCol.x - stackLabel.x
-                // A step under the band's: two lines in a two-line row, and the word is the half a reader already
-                // knows.
-                fontSize: Theme.fontSm
-            }
-            ActionButtonSeat {
-                id: stackSeat
-                // Folded, on the button's middle: held to the top it would sit in the upper half of a two-line box.
-                Layout.alignment: actionBtn.folded ? Qt.AlignHCenter | Qt.AlignVCenter
-                                                   : Qt.AlignHCenter | Qt.AlignTop
-                kind: actionBtn.kind
-                holdPresses: actionBtn.armedPresses
-                // Folded, the mark grows into the word's room.
-                step: actionBtn.folded ? Theme.iconXl : actionBtn.stackStep
-                besideWord: false
-                holdProgress: actionBtn.holdProgress
-                busy: actionBtn.ringing
-                tint: actionBtn.markFg
-                holdTint: actionBtn.holdInk
-                holdOff: actionBtn.holdOff
-                cornerAlert: actionBtn.folded && actionBtn.alert
-                cornerAlertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
+                readonly property ActionButtonLabel lineWord: lineRuler
+                readonly property ActionButtonSeat lineSeat: null
+                readonly property ActionButtonLabel shownWord: stackLabel
+                readonly property ActionButtonSeat shownSeat: stackSeat
+
+                implicitWidth: stackCol.implicitWidth
+                implicitHeight: stackCol.implicitHeight
+
+                // The line the panel measures this cell as (`lineWord`): the word at the button's own step, in the
+                // drawn word's settings, never drawn. A stacked button says no phrase — the word over the mark is the
+                // plain wording.
+                ActionButtonLabel {
+                    id: lineRuler
+                    visible: false
+                    text: actionBtn.text
+                    code: actionBtn.code
+                    wordWeight: actionBtn.wordWeight
+                    widestText: actionBtn.widestText
+                    widestCode: actionBtn.widestCode
+                    folded: actionBtn.folded
+                    fontSize: actionBtn.font.pixelSize
+                }
+                ColumnLayout {
+                    id: stackCol
+                    // Centred, not filling the cell: a layout shares extra room out between its cells, and each
+                    // button would draw its mark at a height of its own.
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.verticalCenter: parent.verticalCenter
+                    // No spacing: the word's descent and the seat's step over its ink are already air between the
+                    // lines, and more puts the mark further from the word than the word is from the frame — the three
+                    // airs (frame to word, word to mark, mark to frame) are kept even.
+                    spacing: 0
+
+                    ActionButtonLabel {
+                        id: stackLabel
+                        Layout.alignment: Qt.AlignHCenter | Qt.AlignBottom
+                        visible: !actionBtn.folded
+                        text: actionBtn.text
+                        code: actionBtn.code
+                        // The step's line, not the family's, so the marks under the words stand on one row
+                        // (`ActionButtonLabel.lineBox`).
+                        lineBox: actionBtn.stackLine
+                        wordWeight: actionBtn.wordWeight
+                        widestText: actionBtn.widestText
+                        widestCode: actionBtn.widestCode
+                        folded: actionBtn.folded
+                        tint: actionBtn.fg
+                        alert: actionBtn.alert
+                        alertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
+                        alertCeiling: actionBtn.alertTopEdge - actionBtn.topPadding - shape.y - stackCol.y
+                                      - stackLabel.y
+                        alertWall: actionBtn.alertRightEdge - actionBtn.leftPadding - shape.x - stackCol.x
+                                   - stackLabel.x
+                        // A step under the band's: two lines in a two-line row, and the word is the half a reader
+                        // already knows.
+                        fontSize: Theme.fontSm
+                    }
+                    ActionButtonSeat {
+                        id: stackSeat
+                        // Folded, on the button's middle: held to the top it would sit in the upper half of a
+                        // two-line box.
+                        Layout.alignment: actionBtn.folded ? Qt.AlignHCenter | Qt.AlignVCenter
+                                                           : Qt.AlignHCenter | Qt.AlignTop
+                        kind: actionBtn.kind
+                        holdPresses: actionBtn.armedPresses
+                        // Folded, the mark grows into the word's room.
+                        step: actionBtn.folded ? Theme.iconXl : actionBtn.stackStep
+                        besideWord: false
+                        holdProgress: actionBtn.holdProgress
+                        busy: actionBtn.ringing
+                        tint: actionBtn.markFg
+                        holdTint: actionBtn.holdInk
+                        holdOff: actionBtn.holdOff
+                        cornerAlert: actionBtn.folded && actionBtn.alert
+                        cornerAlertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
+                    }
+                }
             }
         }
     }

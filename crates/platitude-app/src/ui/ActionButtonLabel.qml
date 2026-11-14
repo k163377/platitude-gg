@@ -158,10 +158,9 @@ Item {
         font.family: Theme.uiFamily
         font.pixelSize: btnLabel.fontSize
     }
-    // The phrase, built only for a label that says one: its chips, face and marks outweigh the rest of a label, few
-    // buttons say a phrase, and every button builds two labels (`ActionButton`'s row and its stack) — built always,
-    // each would hold a phrase's parts unseen. Centred here: `centred`'s spacers cannot centre a cell that fills the
-    // row; the loader takes the row's own size.
+    // The phrase, built only for a label that says one: its chips, face and marks outweigh the rest of a label, and
+    // few buttons say a phrase — built always, every label would hold a phrase's parts unseen. Centred here:
+    // `centred`'s spacers cannot centre a cell that fills the row; the loader takes the row's own size.
     Loader {
         id: phraseSeat
         active: btnLabel.phrased

@@ -2,7 +2,9 @@ import QtQuick
 import platitude.ui
 
 // The seat a toolbar action's icon sits in; no icon, no width. A button that swaps icon and hold mark keeps the wider
-// seat in every state, so the toolbar holds still under a resting pointer; one that only wears the mark fits it.
+// seat in every state, so the toolbar holds still under a resting pointer; one that only wears the mark fits it. The
+// seat's size is its own arithmetic, never its marks': the icon is built for a seat that has one, the other marks only
+// while worn.
 Item {
     id: seat
 
@@ -45,7 +47,10 @@ Item {
     /// Where the hold mark alone heading the word stands: in the seat of the word's letters, the button's side given
     /// back — the button's padding already parts the mark from its edge (`MarkSeat.leadX`, デザイン規約 §余白
     /// 「枠の中の先頭に立つ印」).
-    readonly property real holdX: seat.leads ? MarkSeat.leadX(seat.wordSize, loneHold.width) : 0
+    readonly property real holdX: seat.leads ? MarkSeat.leadX(seat.wordSize, seat.holdWidth) : 0
+    /// That mark's width, read off the mark while it is built (`loneHold`) — whenever the seat can be seen without an
+    /// icon, so wherever this places anything.
+    readonly property real holdWidth: loneHold.item ? loneHold.item.width : 0
     /// Where the word's capitals' middle stands, in the seat's y — the capitals as the face draws them
     /// (`WordFace.drawnCapitalMiddle`): what a round mark (the hold mark, the ring) centres on.
     readonly property real capitalsMiddle: seat.wordBase - WordFace.drawnCapitalMiddle(seat.wordSize)
@@ -92,113 +97,135 @@ Item {
                      : seat.leads ? MarkSeat.leadWidth(seat.wordSize, seat.wordStep, seat.wordHang)
                      : Theme.iconSm
     implicitHeight: seat.depthAt(seat.step)
-    // Heading a word, its box runs a gap past the seat either way: the word's capitals stand where they stand, and the
-    // canvas draws only inside its box.
-    NavIcon {
-        width: seat.step
-        height: seat.leads ? seat.height + 2 * Theme.spaceXs : seat.step
-        x: Math.round((seat.width - width) / 2)
-        y: seat.leads ? -Theme.spaceXs : Math.round((seat.height - height) / 2)
-        kind: seat.kind
-        set: seat.leads ? "lead" : ""
-        size: seat.wordSize
-        wordBase: seat.wordBase + Theme.spaceXs
-        tint: seat.tint
-        // Whole at `iconMd`, and the grid ratio under it.
-        stroke: Metrics.iconStroke * seat.step / 16
-        visible: seat.holdPresses <= 0 && !seat.busy
+    // Each mark is behind a loader of its own. A mark places itself in the seat's coordinates — its loader stands at
+    // the seat's corner and takes the mark's size — except the centred fraction, whose loader is what is centred. Paint
+    // order is the loaders' order.
+    //
+    // The icon is built whenever the seat has one, hidden under the ring and the hold mark: it is the seat's resting
+    // mark, which every wait and every hold gives back. The others are built only while worn. Heading a word, the
+    // icon's box runs a gap past the seat either way: the word's capitals stand where they stand, and the canvas draws
+    // only inside its box.
+    Loader {
+        active: seat.kind !== ""
+        sourceComponent: NavIcon {
+            width: seat.step
+            height: seat.leads ? seat.height + 2 * Theme.spaceXs : seat.step
+            x: Math.round((seat.width - width) / 2)
+            y: seat.leads ? -Theme.spaceXs : Math.round((seat.height - height) / 2)
+            kind: seat.kind
+            set: seat.leads ? "lead" : ""
+            size: seat.wordSize
+            wordBase: seat.wordBase + Theme.spaceXs
+            tint: seat.tint
+            // Whole at `iconMd`, and the grid ratio under it.
+            stroke: Metrics.iconStroke * seat.step / 16
+            visible: seat.holdPresses <= 0 && !seat.busy
+        }
     }
     // At the seat's step so the width holds, swapping with the hold mark
     // (デザイン規約 §進行中・回数押しの定数「回るリングと回数押しの印は同じ席で入れ替わる」). Its own item: an animator
-    // leaves the angle where it stopped, and the icon has to come back upright — so it turns about its own middle, which
-    // stands on the word's capitals' middle.
-    SpinnerIcon {
-        box: seat.step
-        wordSize: seat.leads ? seat.wordSize : 0
-        x: seat.leads && seat.kind === "" ? seat.holdX + Math.round((loneHold.width - width) / 2)
-                                          : Math.round((seat.width - width) / 2)
-        y: seat.leads ? Math.round(seat.capitalsMiddle - height / 2) : Math.round((seat.height - height) / 2)
-        tint: seat.tint
-        spinning: seat.busy
+    // leaves the angle where it stopped, and the icon has to come back upright — so it turns about its own middle,
+    // which stands on the word's capitals' middle.
+    Loader {
+        active: seat.busy
+        sourceComponent: SpinnerIcon {
+            box: seat.step
+            wordSize: seat.leads ? seat.wordSize : 0
+            x: seat.leads && seat.kind === "" ? seat.holdX + Math.round((seat.holdWidth - width) / 2)
+                                              : Math.round((seat.width - width) / 2)
+            y: seat.leads ? Math.round(seat.capitalsMiddle - height / 2) : Math.round((seat.height - height) / 2)
+            tint: seat.tint
+            spinning: seat.busy
+        }
     }
     // Over the seat, so the icon under it keeps the step and centre it had with the word. On the fraction's box while
     // that is drawn: the folded seat is deeper than the pair, and on the seat's corner the mark floats clear of it.
-    NavIcon {
-        visible: seat.cornerAlert
-        kind: "bang"
-        tint: seat.cornerAlertTone
-        width: Theme.iconSm
-        height: Theme.iconSm
-        x: (pair.visible ? pair.x + pair.width : parent.width) - width + Theme.spaceXs / 2
-        y: (pair.visible ? pair.y : 0) - Theme.spaceXs
-    }
-    // A held button with no icon wears only the hold mark, at the row's start (デザイン規約 §回数押し) — heading a word,
-    // as tall as its capitals and on their middle, in the middle of its seat (`holdX`).
-    HoldIcon {
-        id: loneHold
-        x: seat.leads ? seat.holdX : 0
-        y: seat.leads ? Math.round(seat.capitalsMiddle - loneHold.height / 2)
-                      : Math.round((seat.height - loneHold.height) / 2)
-        size: seat.wordSize
-        progress: seat.holdProgress
-        presses: seat.holdPresses
-        tint: seat.holdTint
-        off: seat.holdOff
-        visible: seat.holdPresses > 0 && !seat.paired && !seat.busy
-    }
-    // A held button with an icon wears both as a fraction across a slash: the hold mark alone would cost `push -f` the
-    // icon that says it is a push (デザイン規約 §回数押し).
-    // Centred at its own size whatever the step: the folded seat is deeper, and the halves keep their distance in it.
-    // The pair's ink is even about its box, so the box is centred in the seat with no lift.
-    Item {
-        id: pair
-        width: Theme.iconSm + seat.pairAlong
-        height: Theme.iconSm + seat.pairDown
-        anchors.centerIn: parent
-        visible: seat.paired && !seat.busy
-        NavIcon {
-            kind: seat.kind
-            tint: seat.tint
+    Loader {
+        active: seat.cornerAlert
+        sourceComponent: NavIcon {
+            readonly property bool overPair: pairSeat.item !== null && pairSeat.item.visible
+            kind: "bang"
+            tint: seat.cornerAlertTone
             width: Theme.iconSm
             height: Theme.iconSm
-            x: 0
-            y: 0
+            x: (overPair ? pairSeat.x + pairSeat.width : seat.width) - width + Theme.spaceXs / 2
+            y: (overPair ? pairSeat.y : 0) - Theme.spaceXs
         }
-        // Drawn, not a glyph: square to the line between the halves' centres and through its middle, so it parts the
-        // two evenly whatever `pairAlong` and `pairDown` are — a font's `/` keeps its own slant and sits on its
-        // baseline.
-        InkCanvas {
-            id: slash
-
-            property color tint: seat.tint
-
-            anchors.fill: parent
-            onTintChanged: slash.requestPaint()
-            onPaint: {
-                const ctx = getContext("2d")
-                const run = Math.hypot(seat.pairAlong, seat.pairDown)
-                const half = seat.slashReach / 2
-                const dx = half * seat.pairDown / run
-                const dy = half * seat.pairAlong / run
-                ctx.clearRect(0, 0, width, height)
-                ctx.strokeStyle = slash.tint
-                ctx.lineWidth = seat.slashStroke
-                ctx.lineCap = "round"
-                ctx.beginPath()
-                ctx.moveTo(width / 2 - dx, height / 2 + dy)
-                ctx.lineTo(width / 2 + dx, height / 2 - dy)
-                ctx.stroke()
-            }
-        }
-        HoldIcon {
+    }
+    // A held button with no icon wears only the hold mark, at the row's start (デザイン規約 §回数押し) — heading a word,
+    // as tall as its capitals and on their middle, in the middle of its seat (`holdX`). Built while waiting too: the
+    // ring takes its place (`holdWidth`).
+    Loader {
+        id: loneHold
+        active: seat.holdPresses > 0 && !seat.paired
+        sourceComponent: HoldIcon {
+            x: seat.leads ? seat.holdX : 0
+            y: seat.leads ? Math.round(seat.capitalsMiddle - height / 2) : Math.round((seat.height - height) / 2)
+            size: seat.wordSize
             progress: seat.holdProgress
             presses: seat.holdPresses
             tint: seat.holdTint
             off: seat.holdOff
-            width: Theme.iconSm
-            height: Theme.iconSm
-            x: seat.pairAlong
-            y: seat.pairDown
+            visible: !seat.busy
+        }
+    }
+    // A held button with an icon wears both as a fraction across a slash: the hold mark alone would cost `push -f` the
+    // icon that says it is a push (デザイン規約 §回数押し).
+    // Centred at its own size whatever the step: the folded seat is deeper, and the halves keep their distance in it.
+    // The pair's ink is even about its box, so the box is centred in the seat with no lift — the loader is what is
+    // centred, at the pair's size.
+    Loader {
+        id: pairSeat
+        anchors.centerIn: parent
+        active: seat.paired
+        sourceComponent: Item {
+            width: Theme.iconSm + seat.pairAlong
+            height: Theme.iconSm + seat.pairDown
+            visible: !seat.busy
+            NavIcon {
+                kind: seat.kind
+                tint: seat.tint
+                width: Theme.iconSm
+                height: Theme.iconSm
+                x: 0
+                y: 0
+            }
+            // Drawn, not a glyph: square to the line between the halves' centres and through its middle, so it parts
+            // the two evenly whatever `pairAlong` and `pairDown` are — a font's `/` keeps its own slant and sits on its
+            // baseline.
+            InkCanvas {
+                id: slash
+
+                property color tint: seat.tint
+
+                anchors.fill: parent
+                onTintChanged: slash.requestPaint()
+                onPaint: {
+                    const ctx = getContext("2d")
+                    const run = Math.hypot(seat.pairAlong, seat.pairDown)
+                    const half = seat.slashReach / 2
+                    const dx = half * seat.pairDown / run
+                    const dy = half * seat.pairAlong / run
+                    ctx.clearRect(0, 0, width, height)
+                    ctx.strokeStyle = slash.tint
+                    ctx.lineWidth = seat.slashStroke
+                    ctx.lineCap = "round"
+                    ctx.beginPath()
+                    ctx.moveTo(width / 2 - dx, height / 2 + dy)
+                    ctx.lineTo(width / 2 + dx, height / 2 - dy)
+                    ctx.stroke()
+                }
+            }
+            HoldIcon {
+                progress: seat.holdProgress
+                presses: seat.holdPresses
+                tint: seat.holdTint
+                off: seat.holdOff
+                width: Theme.iconSm
+                height: Theme.iconSm
+                x: seat.pairAlong
+                y: seat.pairDown
+            }
         }
     }
 }

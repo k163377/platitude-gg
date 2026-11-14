@@ -508,12 +508,14 @@ Item {
         /// 立つ印」), its odd pixel to the seat's head; the row's step goes back, the seat's air parting it from the word.
         function test_a_hold_mark_heading_its_words_stands_in_the_seat_less_the_frames_air() {
             const seat = createTemporaryObject(holdSeatOf, root)
-            const hold = seat.children.find(child => child.presses !== undefined && child.visible)
+            // Under the seat's loader for it: a mark is built only while the seat wears it.
+            const hold = Painted.itemUnder(seat, child => child.presses !== undefined && child.visible)
+            verify(hold !== null, "the seat wears its hold mark")
             const cell = MarkSeat.cell(root.px)
             const air = MarkSeat.airAt(root.px)
             verify(air > 0, "the seat's air at the words' size: " + air)
             compare(seat.implicitWidth, cell - air - Theme.spaceXs, "the seat less the frame's air and the row's step")
-            const middle = hold.x + hold.width / 2
+            const middle = hold.mapToItem(seat, 0, 0).x + hold.width / 2
             verify(middle <= cell / 2 - air && middle >= cell / 2 - air - 0.5,
                    "in the middle of the seat less the frame's air, an odd pixel to its head: " + middle)
         }
