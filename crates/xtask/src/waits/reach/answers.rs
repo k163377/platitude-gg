@@ -1,3 +1,12 @@
+//! What a call answers, as the origin of the value it hands back: a
+//! function or method of the language's by its contract (`super::builtins`)
+//! — a new container made where the call is spelled, holding what the
+//! contract says —, a harness or product function by what its own code
+//! returns, read as the caller's, and a method of something of the
+//! product's the product's. What a function handed to a call answers is
+//! read the same way (`callback_answers`). A call nothing here answers for
+//! answers a value of no known origin.
+
 use std::ops::Range;
 
 use super::builtins::{self, Answers, GlobalAnswers, Made};

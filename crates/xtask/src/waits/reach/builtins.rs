@@ -1,10 +1,10 @@
 //! What the language's own functions answer, what they put inside the
 //! values they are handed, and which functions they call back — each a
 //! contract for a shape of call, by the number of its arguments, that the
-//! origin rule reads (`super::origin`). A call the tables do not hold in
-//! that shape — another number of arguments, a spread where the count
-//! matters — answers a value of no known origin, and a change through that
-//! value is not passed as safe.
+//! origin rule reads (`super::answers`, `super::origin`). A call the tables
+//! do not hold in that shape — another number of arguments, a spread where
+//! the count matters — answers a value of no known origin, and a change
+//! through that value is not passed as safe.
 
 /// How many arguments a contract holds for: at least, and at most.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

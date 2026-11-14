@@ -1,12 +1,14 @@
 //! The harness read as one program: each name resolved to what it stands
-//! for, each call to what it calls, and each stretch of code to what it
-//! does ([`Effect`]) — a function's effects being its caller's, the
-//! harness's and the product's alike, a function of the machinery's
-//! answering by the reach it declares (`// reach(…)`), and the product's
-//! Rust and the language's own by their tables (`super::product`,
-//! `super::builtins`). What differs between the two sides is whose a value
-//! is: a change to the product's is an input, a change to the harness's its
-//! state, wherever the code that makes it stands.
+//! for, each call to what it calls (`super::calls`), and each stretch of
+//! code to what it does ([`Effect`], `super::effects`) — a function's
+//! effects being its caller's, the harness's and the product's alike, a
+//! function of the machinery's answering by the reach it declares
+//! (`// reach(…)`), and the product's Rust and the language's own by their
+//! tables (`super::product`, `super::builtins`). What differs between the
+//! two sides is whose a value is: a change to the product's is an input, a
+//! change to the harness's its state, wherever the code that makes it
+//! stands. Here: the types the program is read into, the readings run until
+//! one learns nothing new ([`Program::again`]), and the names.
 
 use std::collections::{BTreeSet, HashMap};
 use std::ops::Range;

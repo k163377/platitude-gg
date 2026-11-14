@@ -12,11 +12,12 @@
 //! put — a literal's elements, `x[i] = v`, `x.f = v`, `push`, `Object.assign`
 //! — wherever it is spelled. A local, an argument and a returned value name
 //! the same sites, so what a callee puts inside a container its caller made
-//! is inside it for the caller too. The language's own functions answer and
-//! put by their contracts (`super::builtins`); a call no contract or code
-//! answers for is of no known origin, the inside of a container nothing was
-//! put in is nothing yet (`Program::inside_of`), and a change through either
-//! is not passed as safe.
+//! is inside it for the caller too. The language's own functions put by
+//! their contracts (`super::builtins`); what a call answers, by a contract
+//! or by the code it calls, is read in `super::answers`. A call no contract
+//! or code answers for is of no known origin, the inside of a container
+//! nothing was put in is nothing yet (`Program::inside_of`), and a change
+//! through either is not passed as safe.
 
 use std::collections::{BTreeSet, HashMap};
 use std::hash::Hash;

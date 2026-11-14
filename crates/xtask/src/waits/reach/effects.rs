@@ -1,3 +1,10 @@
+//! What a stretch of code does ([`Effect`]), read off its facts: each call
+//! followed to what it calls (`super::calls`), each argument a call runs in
+//! a context of its own carved out as a code of its own, and each write
+//! judged by what it changes — a name's own, or the value whose origin says
+//! whose it is (`super::origin`). What the product's own code does that
+//! cannot be followed is an input.
+
 use std::ops::Range;
 
 use super::Context;
@@ -8,8 +15,6 @@ use super::program::{ArgContext, Effect, Program, Root, Value};
 use super::scan::{Head, Path, WriteKind};
 
 impl Program {
-    // ---- Effects ----
-
     /// Fills in what `code` does: its own facts, those of the arguments
     /// carved out of it left to their own codes.
     pub(super) fn read(&mut self, code: usize) {
