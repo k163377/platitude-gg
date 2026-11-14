@@ -112,6 +112,11 @@ Item {
         }
         return -1
     }
+    /// That row's delegate, laid out — null while the graph holds none of it or the view has not built the row.
+    function carriedItem(name) {
+        const row = driver.rowOfWorktree(name)
+        return row < 0 ? null : graphPane.view.itemAtIndex(row)
+    }
     /// How many rows draw themselves chosen, counted to a little past `last` (the last row pressed or stood on) so a
     /// row lit that should not be is counted too.
     function litRowsTo(last) {

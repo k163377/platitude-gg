@@ -39,6 +39,19 @@ Item {
             ? (!page.wipShown && page.selectedOid === worktree.headOid)
             : page.wipShown)
     }
+    /// Whether the graph has finished a pass over a loaded worktree: before that no other worktree's row is looked for.
+    function graphRead() {
+        return graphModel.finishCount !== 0 && worktree.loaded
+    }
+    /// Presses the uncommitted row of the worktree the run's argument names, through the row itself, so the row's own
+    /// decision is the one taken (verify-ui §壊れない動詞の実装と反復). False while the row is not laid out.
+    function pressCarriedRow() {
+        const item = driver.carriedItem(Harness.autoActArg)
+        if (item === null)
+            return false
+        item.leftClick(Qt.NoModifier)
+        return true
+    }
 
     /// Runs `act` if it is this family's and says whether it was; each verb belongs to one family (`AutoActDriver`).
     function run(act, arg) {
@@ -467,18 +480,10 @@ Item {
         }
         onTriggered: {
             const op = carriedReadTimer
-            if (!Awaited.all("carried_read_ready", { "ready": !(graphModel.finishCount === 0 || !worktree.loaded) }))
+            if (!Awaited.all("carried_read_ready", { "ready": acts.graphRead() }))
                 return
             if (op.at("start")) {
-                // Through the row itself, so the row's own decision is the one taken (verify-ui §壊れない動詞の実装と反復).
-                op.input("asked", () => {
-                    const row = driver.rowOfWorktree(Harness.autoActArg)
-                    const item = row < 0 ? null : graphPane.view.itemAtIndex(row)
-                    if (item === null)
-                        return false
-                    item.leftClick(Qt.NoModifier)
-                    return true
-                })
+                op.input("asked", () => acts.pressCarriedRow())
                 return
             }
             // Until the worktree's own files arrive the lists hold this window's.
@@ -571,18 +576,10 @@ Item {
                    + " room=" + Math.round(gitCorner.roomLeft)
         }
         onTriggered: {
-            if (!Awaited.all("carried_stand_ready", { "ready": !(graphModel.finishCount === 0 || !worktree.loaded) }))
+            if (!Awaited.all("carried_stand_ready", { "ready": acts.graphRead() }))
                 return
             if (carriedStandTimer.at("start")) {
-                // The same road in as `carried-read`.
-                carriedStandTimer.input("asked", () => {
-                    const row = driver.rowOfWorktree(Harness.autoActArg)
-                    const item = row < 0 ? null : graphPane.view.itemAtIndex(row)
-                    if (item === null)
-                        return false
-                    item.leftClick(Qt.NoModifier)
-                    return true
-                })
+                carriedStandTimer.input("asked", () => acts.pressCarriedRow())
                 return
             }
             // The worktree's own files arrived and their rows built: until then nothing is lit or bare.
@@ -647,14 +644,13 @@ Item {
         }
         onTriggered: {
             const op = carriedMenuTimer
-            if (!Awaited.all("carried_menu_graph", { "graph": !(graphModel.finishCount === 0 || !worktree.loaded) }))
+            if (!Awaited.all("carried_menu_graph", { "graph": acts.graphRead() }))
                 return
             if (!op.at("pressed")) {
                 // Asked again every beat until it stands: the row can arrive, or be rebuilt, after the first ask.
                 if (op.at("start") && !op.input("up", () => {
                         if (!driver.carriedMenu.visible) {
-                            const row = driver.rowOfWorktree(Harness.autoActArg)
-                            const item = row < 0 ? null : graphPane.view.itemAtIndex(row)
+                            const item = driver.carriedItem(Harness.autoActArg)
                             // Through the menu key's door (`GraphRowWalk.menuFromKeys`), which stands the menu at the
                             // row: a run has no pointer, and `popup()` would put it in the window's corner.
                             if (item !== null)

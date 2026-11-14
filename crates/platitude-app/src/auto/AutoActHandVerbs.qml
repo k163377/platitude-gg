@@ -112,7 +112,7 @@ Item {
             return "HEAD's row"
         if (ask === "kept" && page.commandsPane === null)
             return "the log's panel"
-        if (ask === "stood" && !acts.carriedItem())
+        if (ask === "stood" && !driver.carriedItem("here"))
             return "the worktree's row"
         if (ask === "planned" && acts.planFrom() === "")
             return "the row the plan opens from"
@@ -277,16 +277,11 @@ Item {
         readsTimer.start()
         return true
     }
-    /// The graph row of another worktree, laid out — null while it is not.
-    function carriedItem() {
-        const row = driver.rowOfWorktree("here")
-        return row >= 0 ? graphPane.view.itemAtIndex(row) : null
-    }
     /// Another worktree's files, opened by pressing its graph row (as `carried-read` does); preset `carried-many`
     /// overfills the pane.
     function standCarried() {
         if (page.carriedPath === "") {
-            const item = acts.carriedItem()
+            const item = driver.carriedItem("here")
             if (!item)
                 return false
             item.leftClick(Qt.NoModifier)
