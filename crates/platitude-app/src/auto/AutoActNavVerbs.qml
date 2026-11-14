@@ -870,6 +870,18 @@ Item {
                                 + " tags=" + tagsModel.total })
         }
     }
+    /// The argument of `nav-jump` and the reclicks, `<section>[:<row>]`, the row 0 by default — a section folding names
+    /// into folders has no row to rename at its top (on `basic`, BRANCHES takes `branch:1` = `feature/topic-a`).
+    readonly property string argKind: {
+        const arg = Harness.autoActArg
+        const cut = arg.indexOf(":")
+        return cut < 0 ? arg : arg.substring(0, cut)
+    }
+    readonly property int argRow: {
+        const arg = Harness.autoActArg
+        const cut = arg.indexOf(":")
+        return cut < 0 ? 0 : Number(arg.substring(cut + 1))
+    }
     // PGG_AUTO_ACT=nav-jump: the claim is read off the graph's row for the commit, lit and laid out
     // (`GraphRowDelegate.selected`) — the page's selection is the click's own bookkeeping, true of the opening
     // selection even with the wiring dead. So the rows pictured are ones whose commit is not the one the window opened
@@ -882,17 +894,6 @@ Item {
         id: jumpTimer
         name: "nav_jump"
         order: ["clicked"]
-        /// The argument `<section>[:<row>]`, the row 0 by default.
-        readonly property string kind: {
-            const arg = Harness.autoActArg
-            const cut = arg.indexOf(":")
-            return cut < 0 ? arg : arg.substring(0, cut)
-        }
-        readonly property int row: {
-            const arg = Harness.autoActArg
-            const cut = arg.indexOf(":")
-            return cut < 0 ? 0 : Number(arg.substring(cut + 1))
-        }
         /// The landing, on the commit the row named when pressed (`want`, witnessed before the click: a recycled
         /// delegate asked afterwards can show another row's name). A commit the walk never reached is an answer: the
         /// page had settled before the click (`PageSettled`), so the row will not arrive, and waiting for it would end
@@ -902,22 +903,23 @@ Item {
         function landed() {
             const want = jumpTimer.witnessed("want")
             const landing = graphModel.rowOf(want)
-            return { "list": !!navProbe.listOf(jumpTimer.kind),
+            return { "list": !!navProbe.listOf(acts.argKind),
                      "selected": page.selectedOid === want,
                      "card": driver.cardSettled,
-                     "row": landing >= 0 || jumpTimer.kind !== "worktree",
+                     "row": landing >= 0 || acts.argKind !== "worktree",
                      "laid": landing < 0 || !!graphPane.view.itemAtIndex(landing) }
         }
         onTriggered: {
             const op = jumpTimer
-            const list = navProbe.listOf(op.kind)
+            const list = navProbe.listOf(acts.argKind)
             if (op.at("start")) {
                 // A row not laid out yet, or naming no commit, is not a press (`NavList.rowOidAt`).
-                if (!Awaited.all("nav_jump_row", { "list": !!list, "row": !!list && list.rowOidAt(op.row) !== "" }))
+                if (!Awaited.all("nav_jump_row", { "list": !!list,
+                                                   "row": !!list && list.rowOidAt(acts.argRow) !== "" }))
                     return
                 op.input("clicked", () => {
-                    const oid = list.rowOidAt(op.row)
-                    if (!list.clickRow(op.row))
+                    const oid = list.rowOidAt(acts.argRow)
+                    if (!list.clickRow(acts.argRow))
                         return false
                     op.witness("want", oid)
                 })
@@ -930,8 +932,8 @@ Item {
                     const want = op.witnessed("want")
                     const at = graphModel.rowOf(want)
                     const row = at >= 0 ? graphPane.view.itemAtIndex(at) : null
-                    return "nav_jump section=" + op.kind
-                           + " row=" + op.row
+                    return "nav_jump section=" + acts.argKind
+                           + " row=" + acts.argRow
                            // `same=` makes `lit=` about this jump.
                            + " same=" + (!!row && row.oid_hex === want)
                            + " lit=" + (!!row && row.selected)
@@ -940,7 +942,7 @@ Item {
                            // A jump puts the history up whatever was being read (`RepoPage.jumpToRef`).
                            + " wip=" + page.wipShown
                            + " at=" + at
-                           + " name=" + navProbe.listOf(op.kind).rowNameAt(op.row)
+                           + " name=" + navProbe.listOf(acts.argKind).rowNameAt(acts.argRow)
                 } })
         }
     }
@@ -953,18 +955,6 @@ Item {
     PageStage {
         id: reclickTimer
         name: "nav_reclick"
-        /// The argument `<section>[:<row>]`, the row 0 by default — a section folding names into folders has no
-        /// row to rename at its top (on `basic`, BRANCHES takes `branch:1` = `feature/topic-a`).
-        readonly property string kind: {
-            const arg = Harness.autoActArg
-            const cut = arg.indexOf(":")
-            return cut < 0 ? arg : arg.substring(0, cut)
-        }
-        readonly property int row: {
-            const arg = Harness.autoActArg
-            const cut = arg.indexOf(":")
-            return cut < 0 ? 0 : Number(arg.substring(cut + 1))
-        }
         /// Whether the pointer leaves the section between the two clicks.
         property bool away: false
         /// The press that peeks the section: a section with no rows yet opens nothing (NavRail.enterAt), so the
@@ -972,7 +962,7 @@ Item {
         function peek() {
             if (sidebarPane.peekKind !== "")
                 return true
-            navProbe.peekAt(reclickTimer.kind)
+            navProbe.peekAt(acts.argKind)
             return false
         }
         onTriggered: {
@@ -981,14 +971,14 @@ Item {
             if (op.at("start") && !op.input("peeked", () => op.peek()))
                 return
             if (op.at("peeked")) {
-                op.input("first_click", () => section.clickRow(op.row))
+                op.input("first_click", () => section.clickRow(acts.argRow))
                 return
             }
             if (op.away && op.at("first_click")) {
                 if (!Awaited.all("nav_reclick_away", { "peek": sidebarPane.peekKind !== "" }))
                     return
                 op.input("walked_off", () => {
-                    navProbe.peekAway(op.kind)
+                    navProbe.peekAway(acts.argKind)
                 })
                 return
             }
@@ -1004,15 +994,15 @@ Item {
             if (op.at("first_click") || op.at("peeked_again")) {
                 // Inside the double-click window a second click would be half a double-click.
                 const peeked = sidebarPane.peekKind !== ""
-                const open = peeked && !section.rowGuarded(op.row)
+                const open = peeked && !section.rowGuarded(acts.argRow)
                 if (!Awaited.all("nav_reclick_second", { "peeked": peeked, "window": open }))
                     return
                 // Whether the second click armed the rename, read at that click: the wait is short and turns into
                 // the box.
                 op.input("second_click", () => {
-                    if (!section.clickRow(op.row))
+                    if (!section.clickRow(acts.argRow))
                         return false
-                    op.witness("armed", section.rowArmed(op.row))
+                    op.witness("armed", section.rowArmed(acts.argRow))
                 })
                 return
             }
@@ -1023,14 +1013,14 @@ Item {
                 "when": () => ({
                     "box": !op.witnessed("armed") || sidebarPane.editKey !== "",
                     "page": PageSettled.settled(page) }),
-                "report": () => "nav_reclick section=" + op.kind
-                                + " row=" + op.row
+                "report": () => "nav_reclick section=" + acts.argKind
+                                + " row=" + acts.argRow
                                 + " marked=" + sidebarPane.activeKey
                                 + " away=" + op.away
                                 + " armed=" + op.witnessed("armed")
                                 + " collapsed=" + page.sidebarCollapsed
                                 + " box=" + (sidebarPane.editKey !== "")
-                                + " focused=" + sidebarPane.peekSection.rowFocused(op.row)
+                                + " focused=" + sidebarPane.peekSection.rowFocused(acts.argRow)
                                 + " peek=" + sidebarPane.peekKind
                                 + " editing=" + sidebarPane.editKey })
         }
@@ -1043,28 +1033,17 @@ Item {
         name: "nav_reclick_elsewhere"
         order: ["first_press", "first_release", "pane_press", "back_press", "back_release", "next_press",
                 "next_release"]
-        /// The argument `<section>[:<row>]`, the row 0 by default.
-        readonly property string kind: {
-            const arg = Harness.autoActArg
-            const cut = arg.indexOf(":")
-            return cut < 0 ? arg : arg.substring(0, cut)
-        }
-        readonly property int row: {
-            const arg = Harness.autoActArg
-            const cut = arg.indexOf(":")
-            return cut < 0 ? 0 : Number(arg.substring(cut + 1))
-        }
         /// The press half on the row; false while the row is not built.
         function press(list) {
-            const at = list.rowPoint(elsewhereTimer.row)
+            const at = list.rowPoint(acts.argRow)
             if (at === null)
                 return false
             page.Window.window.caretHand.pressedAt(at)
-            return list.pressRow(elsewhereTimer.row)
+            return list.pressRow(acts.argRow)
         }
         onTriggered: {
             const op = elsewhereTimer
-            const list = navProbe.listOf(op.kind)
+            const list = navProbe.listOf(acts.argKind)
             if (!Awaited.all("elsewhere_ready", { "ready": list }))
                 return
             if (op.at("next_release")) {
@@ -1075,8 +1054,8 @@ Item {
                     "when": () => ({
                         "box": !op.witnessed("armed") || sidebarPane.editKey !== "",
                         "page": PageSettled.settled(page) }),
-                    "report": () => "nav_reclick_elsewhere section=" + op.kind
-                                    + " row=" + op.row
+                    "report": () => "nav_reclick_elsewhere section=" + acts.argKind
+                                    + " row=" + acts.argRow
                                     + " marked=" + sidebarPane.activeKey
                                     + " pane=" + op.witnessed("pane")
                                     + " armed=" + op.witnessed("armed")
@@ -1089,13 +1068,13 @@ Item {
                            : op.at("back_release") ? "next_press" : ""
             if (pressing !== "") {
                 // Spaced from the click before: inside its window this would be half a double-click.
-                if (!Awaited.all("elsewhere_press/" + pressing, { "window": !list.rowGuarded(op.row) }))
+                if (!Awaited.all("elsewhere_press/" + pressing, { "window": !list.rowGuarded(acts.argRow) }))
                     return
                 op.input(pressing, () => op.press(list))
                 return
             }
             if (op.at("first_release")) {
-                if (!Awaited.all("elsewhere_window", { "window": !list.rowGuarded(op.row) }))
+                if (!Awaited.all("elsewhere_window", { "window": !list.rowGuarded(acts.argRow) }))
                     return
                 op.input("pane_press", () => {
                     page.Window.window.caretHand.pressedAt(
@@ -1108,12 +1087,12 @@ Item {
             const releasing = op.at("first_press") ? "first_release"
                             : op.at("back_press") ? "back_release" : "next_release"
             op.input(releasing, () => {
-                if (!list.releaseRow(op.row))
+                if (!list.releaseRow(acts.argRow))
                     return false
                 if (releasing === "back_release")
-                    op.witness("pane", list.rowArmed(op.row))
+                    op.witness("pane", list.rowArmed(acts.argRow))
                 if (releasing === "next_release")
-                    op.witness("armed", list.rowArmed(op.row))
+                    op.witness("armed", list.rowArmed(acts.argRow))
             })
         }
     }
