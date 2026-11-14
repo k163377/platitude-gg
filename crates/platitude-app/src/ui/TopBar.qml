@@ -121,46 +121,66 @@ Rectangle {
     /// nothing, which reads as a name that cannot be pressed twice. Each card is assembled as it opens
     /// (`NavSectionModel.worktreeCard` / `OpsBranchMenu.offerFrom`); each says whether it opened a card.
     function pressRepoName() {
-        if (standMenu.opened) {
-            standMenu.close()
+        if (topBar.standMenuOpen) {
+            standMenuSeat.item.close()
             return false
         }
-        worktreeSub.rows = topBar.curPage === null ? [] : topBar.curPage.pageWorktrees.worktreeCard()
-        return standMenu.offerHere()
+        const card = topBar.standCard()
+        card.worktrees.rows = topBar.curPage === null ? [] : topBar.curPage.pageWorktrees.worktreeCard()
+        return card.offerHere()
     }
     function pressBranchName() {
-        if (branchMenu.opened) {
-            branchMenu.close()
+        if (topBar.branchMenuOpen) {
+            branchMenuSeat.item.close()
             return false
         }
-        return branchMenu.offerFrom()
+        return topBar.branchCard().offerFrom()
+    }
+    /// The band's two cards stand built from the start — written only by the harness (`WindowHarness`), as
+    /// `RepoPage.keepBuilt`; the ☰'s card with them (`AppMenuButton.keepBuilt`). Otherwise each is built the first time
+    /// its name is pressed: every door builds the card, then calls in synchronously (`standCard` / `branchCard`).
+    property bool keepBuilt: false
+    function standCard() {
+        standMenuSeat.active = true
+        return standMenuSeat.item
+    }
+    function branchCard() {
+        branchMenuSeat.active = true
+        return branchMenuSeat.item
     }
     /// Automation: the panel's two doors, opened at the press's own handler (a press cannot be injected). Each says
     /// whether the card came up: a picture cannot tell no card from one opened off screen.
     function openStandMenu() { return topBar.pressRepoName() }
-    function openStandRepos() { return standMenu.openSub(repoSub) }
-    function openStandWorktrees() { return standMenu.openSub(worktreeSub) }
+    function openStandRepos() {
+        const card = topBar.standCard()
+        return card.openSub(card.repos)
+    }
+    function openStandWorktrees() {
+        const card = topBar.standCard()
+        return card.openSub(card.worktrees)
+    }
     function openBranchMenu() { return topBar.pressBranchName() }
     /// …and a folder of the branch card, opened the way resting on its row opens it (`OpsBranchMenu.openFolder`).
-    function openBranchFolder(path) { return branchMenu.openFolder(path) }
+    function openBranchFolder(path) { return topBar.branchCard().openFolder(path) }
     /// …and what each of them came out holding. A card is assembled from a listing that may not have landed yet, so
-    /// a run that photographed an empty one has to be able to say so (`AppMenu.offeredRows`).
-    readonly property bool standMenuOpen: standMenu.opened
-    readonly property bool branchMenuOpen: branchMenu.opened
+    /// a run that photographed an empty one has to be able to say so (`AppMenu.offeredRows`). A card never built
+    /// answers as one that never opened.
+    readonly property bool standMenuOpen: standMenuSeat.item !== null && standMenuSeat.item.opened
+    readonly property bool branchMenuOpen: branchMenuSeat.item !== null && branchMenuSeat.item.opened
     /// **Which card is standing** — the one thing neither the counts nor the picture answers: a tier asked for and
     /// not opened leaves the card above it on screen, and a run that judged only that something was open would go
     /// green on a card it was never about.
     readonly property string standDoor:
-        branchMenu.folderStanding !== "" ? "folder"
-        : branchMenu.opened ? "branch"
-        : repoSub.opened ? "repos"
-        : worktreeSub.opened ? "worktrees"
-        : standMenu.opened ? "stand" : "none"
-    readonly property int standRepoRows: repoSub.offeredRows
-    readonly property int standWorktreeRows: worktreeSub.offeredRows
-    readonly property int branchMenuRows: branchMenu.offeredRows
+        topBar.branchFolderOpen !== "" ? "folder"
+        : topBar.branchMenuOpen ? "branch"
+        : standMenuSeat.item !== null && standMenuSeat.item.repos.opened ? "repos"
+        : standMenuSeat.item !== null && standMenuSeat.item.worktrees.opened ? "worktrees"
+        : topBar.standMenuOpen ? "stand" : "none"
+    readonly property int standRepoRows: standMenuSeat.item !== null ? standMenuSeat.item.repos.offeredRows : 0
+    readonly property int standWorktreeRows: standMenuSeat.item !== null ? standMenuSeat.item.worktrees.offeredRows : 0
+    readonly property int branchMenuRows: branchMenuSeat.item !== null ? branchMenuSeat.item.offeredRows : 0
     /// Which folder of the branch card is standing, by its path (`OpsBranchMenu.folderStanding`).
-    readonly property string branchFolderOpen: branchMenu.folderStanding
+    readonly property string branchFolderOpen: branchMenuSeat.item !== null ? branchMenuSeat.item.folderStanding : ""
     /// Automation: what the two names are washed in and which way their chevrons point, read on **the output side**
     /// (the wash's colour, the mark's turn): a lit name and a name under a pointer are the same picture
     /// (`HoverToolButton.washColor`).
@@ -174,18 +194,22 @@ Rectangle {
     /// after it is the wiring a hand goes through (`AppMenuButton.clickCloneRow`). Each answers whether it found an
     /// offered row: the listing may not have landed, and a press at nothing is not one to wait on.
     function pickBranchRow(name) {
+        // A card never built holds no rows.
+        if (branchMenuSeat.item === null)
+            return false
         // Through the card's own lookup: a folder's rows are made as its card opens (`OpsBranchMenu.rowFor`).
-        const row = branchMenu.rowFor(name)
+        const row = branchMenuSeat.item.rowFor(name)
         if (row === null || !row.offered)
             return false
         row.triggered()
         return true
     }
     function pickWorktreeRow(leaf) {
-        return topBar.pickIn(worktreeSub, row => GitFacts.pathLeaf(row.full) === leaf)
+        return standMenuSeat.item !== null
+               && topBar.pickIn(standMenuSeat.item.worktrees, row => GitFacts.pathLeaf(row.full) === leaf)
     }
     function pickRepoRow(index) {
-        return topBar.pickIn(repoSub, row => row.index === index)
+        return standMenuSeat.item !== null && topBar.pickIn(standMenuSeat.item.repos, row => row.index === index)
     }
     /// The row `matches` names, looked for down every card this one folds.
     function pickIn(menu, matches) {
@@ -532,6 +556,7 @@ Rectangle {
         TabStrip {
             id: tabStrip
             tabsModel: topBar.tabsModel
+            keepBuilt: topBar.keepBuilt
             // A tab that is not in front paints no ground of its own, so this is what its name is read against and
             // fades into under its mark.
             bandColor: topBar.color
@@ -735,7 +760,7 @@ Rectangle {
                 // worktrees with it.
                 trail: topBar.worktreeName
                 given: topBar.opsRepoCut
-                opened: standMenu.opened
+                opened: topBar.standMenuOpen
                 Layout.fillHeight: true
                 Layout.preferredWidth: repoPick.drawnWidth
                 Accessible.name: qsTr("Repository")
@@ -749,7 +774,7 @@ Rectangle {
                 ahead: topBar.curPage === null ? 0 : topBar.curPage.pageWorktree.ahead
                 behind: topBar.curPage === null ? 0 : topBar.curPage.pageWorktree.behind
                 given: topBar.opsBranchCut
-                opened: branchMenu.opened
+                opened: topBar.branchMenuOpen
                 // `Loading…` while the page in front is still reading its HEAD (a tab come to the front reads git
                 // again, `Hub::release_tab`): `No branch` meanwhile would say something untrue about the repository
                 // (user decision). Both in the nameless `textMuted`. `No branch` with no page to read (no tab, a
@@ -793,126 +818,142 @@ Rectangle {
 
         // Where this window is standing, at two grains: which repository, and which of its worktrees — one row apiece,
         // each folding its choices under it (規約 §メニュー).
-        AppMenu {
-            id: standMenu
-            // **Dropped from the name it opens**, like the ☰'s card (`AppMenuButton`; header).
-            //
-            // **Hung off the name itself**, so "outside" is measured from it: under the default policy a press on the
-            // name shuts the card and the click that follows opens it again — a name that never closes its card
-            // (pinned by `tests/qml/tst_opspicker.qml`).
-            parent: repoPick
-            x: 0
-            y: repoPick.height
-            closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
-            // No row here is held, so none needs the floor a hold does: each card fits its rows (`AppMenu.widthFloor`).
-            widthFloor: 0
-            // Only one heading wears a mark (the WORKTREES section's): the other holds its step, so the two words begin
-            // on one x (`AppMenu.alignsHeadings`; user decision).
-            alignsHeadings: true
-            // **The word git uses**, singular like `RefBranchMenu`'s `BRANCH` and `RefTagMenu`'s `TAG`: it names the
-            // one about to be chosen.
-            AppMenu {
-                id: repoSub
-                title: qsTr("REPOSITORY")
-                widthFloor: 0
-                // **The repositories this window already has open**, less the one it is standing in — no history of
-                // past ones. The row moves the window to that tab where it stands, so a tab in a linked worktree says
-                // so here too. Their names stay words, not code (unlike the WORKTREE card's).
-                Instantiator {
-                    model: topBar.tabsModel
-                    delegate: AppMenuItem {
-                        id: repoRow
-                        required property int index
-                        required property string title
-                        required property string worktree_name
-                        text: repoRow.title
-                        textNames: true
-                        trail: repoRow.worktree_name
-                        offered: repoRow.index !== topBar.tabsModel.currentIndex
-                        onTriggered: topBar.tabsModel.setCurrentIndex(repoRow.index)
-                    }
-                    onObjectAdded: (at, object) => repoSub.insertItem(at, object)
-                    onObjectRemoved: (at, object) => repoSub.removeItem(object)
-                }
-            }
-            // **The mark is on the title row and nowhere else**, as on the left menu's section, in the WORKTREES
-            // section's `success` (`NavSections`).
-            AppMenu {
-                id: worktreeSub
-                /// The worktrees the card was built from as the stand card last opened (`pressRepoName`).
-                property var rows: []
-                title: qsTr("WORKTREE")
-                titleKind: "tree"
-                titleTint: Theme.success
-                // Every row keeps the section's seat, so a worktree wearing the padlock and one wearing nothing begin
-                // their names on one x (`NameCell`).
-                keepsSeat: true
-                widthFloor: 0
-                // **Every worktree the left menu's WORKTREES section lists, whatever it is filtering to**
-                // (`NavSectionModel.worktreeCard`), less the one this tab stands in, down that section's road
-                // (`openRepositoryPathRequested`). Copied into `rows` at the press (`pressRepoName`), **never the
-                // section's model handed to the Instantiator**: that model's rows are what the left menu shows
-                // (`qmodel.rs` `row_count`, after the filter), so a filter would empty the card too — and the feed has
-                // one receiver per section (`attach.rs`), so a second model cannot be attached to escape it.
+        // Built the first time the name is pressed (`standCard`), or up front for a harness (`keepBuilt`).
+        Loader {
+            id: standMenuSeat
+            active: topBar.keepBuilt
+            sourceComponent: AppMenu {
+                id: standMenu
+                /// Its two tiers, for the doors and the readings above (`openStandRepos` / `standDoor` …), which
+                /// cannot see into the seat.
+                readonly property AppMenu repos: repoSub
+                readonly property AppMenu worktrees: worktreeSub
+                // **Dropped from the name it opens**, like the ☰'s card (`AppMenuButton`; header).
                 //
-                // **Never left empty** (user decision — ask before changing): a heading that comes and goes with the
-                // number of worktrees reads as a door this repository does not have. The repository's own worktree,
-                // where it is the only one, stays on as a row a reader cannot choose, dressed as ever (house, branch
-                // name; hover `You are in this worktree`) — less the tab's own, the card has no row, and
-                // `AppMenu.delegate` drops a card with `offeredRows === 0` title row and all. `blockedReason` greys
-                // it and the row's `rowPress` swallows the press. Headless: `ops-stand-worktrees`.
-                Instantiator {
-                    model: worktreeSub.rows
-                    delegate: AppMenuItem {
-                        id: worktreeRow
-                        required property var modelData
-                        /// Where the worktree is, as git lists it — what the row is pressed for.
-                        readonly property string full: worktreeRow.modelData.full
-                        readonly property string branch: worktreeRow.modelData.branch
-                        readonly property string change: worktreeRow.modelData.change
-                        /// Where this tab is standing. Compared the way the listing's own `current` is
-                        /// (`nav::drain`): git prints one separator and Windows the other, and a path is not a name.
-                        readonly property bool here:
-                            topBar.curPage !== null
-                            && GitFacts.samePath(worktreeRow.full, topBar.curPage.pageTab.repoPath)
-                        readonly property bool homeWorktree: worktreeRow.change === "MAIN"
-                        // **Named the way the left menu names it** (`NavRowBody.name`): the repository's own worktree
-                        // by the branch it has out — its folder is already the tab's name — every other by its folder.
-                        // As code with no mark of its own (user decision): the card's title wears the tree. Ground and
-                        // face as a name in a sentence (デザイン規約 §ref の種別), cut in the middle past the ceiling.
-                        codeName: worktreeRow.homeWorktree && worktreeRow.branch !== "" ? worktreeRow.branch
-                                                                                        : worktreeRow.modelData.name
-                        textNames: true
-                        // …wearing that row's own mark and colours (`NavRowBody.seatMark` / `seatTint`). A mark about
-                        // the row is not a heading.
-                        headed: false
-                        markKind: worktreeRow.change === "LOCKED" ? "lock"
-                                : worktreeRow.change === "PRUNABLE" ? "bang"
-                                : worktreeRow.homeWorktree ? "home" : ""
-                        markTint: worktreeRow.change === "PRUNABLE" ? Theme.warning : Theme.textSecondary
-                        // The branch that worktree has out, **in the column the left menu keeps it in**
-                        // (`NavRowBody.branchSeat`). The main worktree's row is named by it already.
-                        sideName: worktreeRow.homeWorktree ? "" : worktreeRow.branch
-                        offered: !worktreeRow.here || worktreeSub.rows.length === 1
-                        blockedReason: worktreeRow.here ? qsTr("You are in this worktree") : ""
-                        onTriggered: topBar.curPage.openRepositoryPathRequested(worktreeRow.full)
+                // **Hung off the name itself**, so "outside" is measured from it: under the default policy a press on
+                // the name shuts the card and the click that follows opens it again — a name that never closes its card
+                // (pinned by `tests/qml/tst_opspicker.qml`).
+                parent: repoPick
+                x: 0
+                y: repoPick.height
+                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+                // No row here is held, so none needs the floor a hold does: each card fits its rows
+                // (`AppMenu.widthFloor`).
+                widthFloor: 0
+                // Only one heading wears a mark (the WORKTREES section's): the other holds its step, so the two words
+                // begin on one x (`AppMenu.alignsHeadings`; user decision).
+                alignsHeadings: true
+                // **The word git uses**, singular like `RefBranchMenu`'s `BRANCH` and `RefTagMenu`'s `TAG`: it names
+                // the one about to be chosen.
+                AppMenu {
+                    id: repoSub
+                    title: qsTr("REPOSITORY")
+                    widthFloor: 0
+                    // **The repositories this window already has open**, less the one it is standing in — no history of
+                    // past ones. The row moves the window to that tab where it stands, so a tab in a linked worktree
+                    // says so here too. Their names stay words, not code (unlike the WORKTREE card's).
+                    Instantiator {
+                        model: topBar.tabsModel
+                        delegate: AppMenuItem {
+                            id: repoRow
+                            required property int index
+                            required property string title
+                            required property string worktree_name
+                            text: repoRow.title
+                            textNames: true
+                            trail: repoRow.worktree_name
+                            offered: repoRow.index !== topBar.tabsModel.currentIndex
+                            onTriggered: topBar.tabsModel.setCurrentIndex(repoRow.index)
+                        }
+                        onObjectAdded: (at, object) => repoSub.insertItem(at, object)
+                        onObjectRemoved: (at, object) => repoSub.removeItem(object)
                     }
-                    onObjectAdded: (at, object) => worktreeSub.insertItem(at, object)
-                    onObjectRemoved: (at, object) => worktreeSub.removeItem(object)
+                }
+                // **The mark is on the title row and nowhere else**, as on the left menu's section, in the WORKTREES
+                // section's `success` (`NavSections`).
+                AppMenu {
+                    id: worktreeSub
+                    /// The worktrees the card was built from as the stand card last opened (`pressRepoName`).
+                    property var rows: []
+                    title: qsTr("WORKTREE")
+                    titleKind: "tree"
+                    titleTint: Theme.success
+                    // Every row keeps the section's seat, so a worktree wearing the padlock and one wearing nothing
+                    // begin their names on one x (`NameCell`).
+                    keepsSeat: true
+                    widthFloor: 0
+                    // **Every worktree the left menu's WORKTREES section lists, whatever it is filtering to**
+                    // (`NavSectionModel.worktreeCard`), less the one this tab stands in, down that section's road
+                    // (`openRepositoryPathRequested`). Copied into `rows` at the press (`pressRepoName`), **never the
+                    // section's model handed to the Instantiator**: that model's rows are what the left menu shows
+                    // (`qmodel.rs` `row_count`, after the filter), so a filter would empty the card too — and the feed
+                    // has one receiver per section (`attach.rs`), so a second model cannot be attached to escape it.
+                    //
+                    // **Never left empty** (user decision — ask before changing): a heading that comes and goes with
+                    // the number of worktrees reads as a door this repository does not have. The repository's own
+                    // worktree, where it is the only one, stays on as a row a reader cannot choose, dressed as ever
+                    // (house, branch name; hover `You are in this worktree`) — less the tab's own, the card has no row,
+                    // and `AppMenu.delegate` drops a card with `offeredRows === 0` title row and all. `blockedReason`
+                    // greys it and the row's `rowPress` swallows the press. Headless: `ops-stand-worktrees`.
+                    Instantiator {
+                        model: worktreeSub.rows
+                        delegate: AppMenuItem {
+                            id: worktreeRow
+                            required property var modelData
+                            /// Where the worktree is, as git lists it — what the row is pressed for.
+                            readonly property string full: worktreeRow.modelData.full
+                            readonly property string branch: worktreeRow.modelData.branch
+                            readonly property string change: worktreeRow.modelData.change
+                            /// Where this tab is standing. Compared the way the listing's own `current` is
+                            /// (`nav::drain`): git prints one separator and Windows the other, and a path is not a
+                            /// name.
+                            readonly property bool here:
+                                topBar.curPage !== null
+                                && GitFacts.samePath(worktreeRow.full, topBar.curPage.pageTab.repoPath)
+                            readonly property bool homeWorktree: worktreeRow.change === "MAIN"
+                            // **Named the way the left menu names it** (`NavRowBody.name`): the repository's own
+                            // worktree by the branch it has out — its folder is already the tab's name — every other by
+                            // its folder. As code with no mark of its own (user decision): the card's title wears the
+                            // tree. Ground and face as a name in a sentence (デザイン規約 §ref の種別), cut in the middle past
+                            // the ceiling.
+                            codeName: worktreeRow.homeWorktree && worktreeRow.branch !== "" ? worktreeRow.branch
+                                                                                            : worktreeRow.modelData.name
+                            textNames: true
+                            // …wearing that row's own mark and colours (`NavRowBody.seatMark` / `seatTint`). A mark
+                            // about the row is not a heading.
+                            headed: false
+                            markKind: worktreeRow.change === "LOCKED" ? "lock"
+                                    : worktreeRow.change === "PRUNABLE" ? "bang"
+                                    : worktreeRow.homeWorktree ? "home" : ""
+                            markTint: worktreeRow.change === "PRUNABLE" ? Theme.warning : Theme.textSecondary
+                            // The branch that worktree has out, **in the column the left menu keeps it in**
+                            // (`NavRowBody.branchSeat`). The main worktree's row is named by it already.
+                            sideName: worktreeRow.homeWorktree ? "" : worktreeRow.branch
+                            offered: !worktreeRow.here || worktreeSub.rows.length === 1
+                            blockedReason: worktreeRow.here ? qsTr("You are in this worktree") : ""
+                            onTriggered: topBar.curPage.openRepositoryPathRequested(worktreeRow.full)
+                        }
+                        onObjectAdded: (at, object) => worktreeSub.insertItem(at, object)
+                        onObjectRemoved: (at, object) => worktreeSub.removeItem(object)
+                    }
                 }
             }
         }
 
         // The branches, less the one the window stands on — **the left menu's BRANCHES section, filed its way**
         // (`OpsBranchMenu`), down its road (`RepoPage.switchToRef`; header). Hung off the name as the stand card is.
-        OpsBranchMenu {
-            id: branchMenu
-            page: topBar.curPage
-            parent: branchPick
-            x: 0
-            y: branchPick.height
-            closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
-            onBranchPicked: name => topBar.curPage.switchToRef("branch", name)
+        Loader {
+            id: branchMenuSeat
+            active: topBar.keepBuilt
+            sourceComponent: OpsBranchMenu {
+                id: branchMenu
+                page: topBar.curPage
+                parent: branchPick
+                x: 0
+                y: branchPick.height
+                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+                onBranchPicked: name => topBar.curPage.switchToRef("branch", name)
+            }
         }
 
         // ---- the three actions -----------------------------------------

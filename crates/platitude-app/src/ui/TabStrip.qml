@@ -58,6 +58,8 @@ Item {
     readonly property Item grabRunItem: grabArea
     /// Whether the ☰'s card is open (`TopBar.appMenuOpen`).
     readonly property bool appMenuOpen: menuButton.menuOpen
+    /// The ☰'s card stands built from the start (`AppMenuButton.keepBuilt`), handed down from `TopBar.keepBuilt`.
+    property bool keepBuilt: false
 
     /// Automation (`tab-pin` / `tab-pin-go`): the stand-in's state, which a picture of a scrolled strip cannot tell
     /// apart. Read off the stand-in itself, so a broken binding answers with what is drawn.
@@ -402,6 +404,7 @@ Item {
         id: menuButton
         height: tabStrip.height
         curPage: tabStrip.curPage
+        keepBuilt: tabStrip.keepBuilt
         onOpenRepositoryRequested: tabStrip.openRepositoryRequested()
         onCloneRepositoryRequested: tabStrip.cloneRepositoryRequested()
         onSettingsRequested: tabStrip.settingsRequested()

@@ -49,6 +49,9 @@ Item {
     Component.onCompleted: {
         // Only for a verb or the identity hook, which read a screen before opening it (`WindowDialogSeat`).
         harness.dialogSeat.keepBuilt = Harness.autoAct !== "" || Harness.autoIdentity !== ""
+        // The band's cards too, as the page's menus are (`PageHarness`): a verb's window has every card built, whatever
+        // it opens first. Their readings answer for a card never built as well (`TopBar.standDoor` …).
+        harness.topBar.keepBuilt = Harness.autoAct !== ""
         // The offscreen platform reports an 800x800 screen, which would cut every picture down to fit.
         harness.windowShape.keepSavedSize = Harness.automated
         // A run has no hand, yet the offscreen cursor rests on the window's top-left cell and cannot be taken back
