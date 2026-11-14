@@ -1,7 +1,10 @@
 //! The pane's diff reads against each other: a click stops the git of the
 //! read it passes, a re-read never passes a click made while it read, and
 //! re-reads asked while one is out share the one after it
-//! (`session::diff_reads`).
+//! (`session::diff_reads`). And what a re-read sends: nothing for a file
+//! nobody touched, the file again when it was typed over outside, nothing
+//! for the older of two reads, and another worktree's file of the same name
+//! as a file of its own.
 
 use std::collections::HashMap;
 
@@ -42,16 +45,9 @@ fn unstaged(path: &str) -> DiffTarget {
 }
 
 /// Waits until a diff of `path` has gone out `count` times.
-async fn diffs_of(sink: &CaptureSink, path: &str, count: usize) {
+async fn diffs_reach(sink: &CaptureSink, path: &str, count: usize) {
     sink.wait_for("the diff", |events| {
-        let sent = events
-            .iter()
-            .filter(|e| {
-                matches!(e, SessionEvent::DiffLoaded { target: DiffTarget::Unstaged { path: seen }, .. }
-                    if seen == path)
-            })
-            .count();
-        (sent >= count).then_some(())
+        (fingerprints_in(events, path).len() >= count).then_some(())
     })
     .await;
 }
@@ -85,7 +81,7 @@ async fn a_click_stops_the_git_of_the_read_it_passes() {
         bounded("the read the reader left", first).await,
         DiffReadOutcome::Overtaken
     );
-    diffs_of(&sink, "src/b.rs", 1).await;
+    diffs_reach(&sink, "src/b.rs", 1).await;
 
     let ran: Vec<(String, Option<CommandEnd>)> = commands(&sink)
         .into_iter()
@@ -113,7 +109,7 @@ async fn a_re_read_does_not_pass_a_click_made_while_it_read() {
     let (sink, session) = opened(&repo).await;
     sink.opening_settled(&session).await;
     session.load_diff(unstaged("a.txt"));
-    diffs_of(&sink, "a.txt", 1).await;
+    diffs_reach(&sink, "a.txt", 1).await;
 
     // Moved since the pane read it, so the re-read has something to send.
     repo.write_file("a.txt", "a3\n");
@@ -148,7 +144,7 @@ async fn asks_while_a_re_read_is_out_share_the_one_after_it() {
     let (sink, session) = opened(&repo).await;
     sink.opening_settled(&session).await;
     session.load_diff(unstaged("f.txt"));
-    diffs_of(&sink, "f.txt", 1).await;
+    diffs_reach(&sink, "f.txt", 1).await;
 
     repo.write_file("f.txt", "3\n");
     session.set_recording(Recording::WithBackground);
@@ -191,7 +187,7 @@ async fn a_re_read_dropped_unread_holds_nothing_up() {
     let (sink, session) = opened(&repo).await;
     sink.opening_settled(&session).await;
     session.load_diff(unstaged("f.txt"));
-    diffs_of(&sink, "f.txt", 1).await;
+    diffs_reach(&sink, "f.txt", 1).await;
 
     drop(session.refresh_diff_tracked(unstaged("f.txt")));
     assert_eq!(
@@ -266,13 +262,6 @@ fn fingerprints_of(sink: &CaptureSink, path: &str) -> Vec<u64> {
     fingerprints_in(&sink.events.lock().unwrap(), path)
 }
 
-async fn diffs_reach(sink: &CaptureSink, path: &str, count: usize) {
-    sink.wait_for("the diff", |events| {
-        (fingerprints_in(events, path).len() >= count).then_some(())
-    })
-    .await;
-}
-
 /// The diff tick runs on every poll, so for an untouched file it has to say
 /// nothing: republished rows would swap the list, and the reader's place.
 #[tokio::test(flavor = "multi_thread")]
@@ -283,16 +272,14 @@ async fn a_re_read_of_a_file_nobody_touched_says_nothing() {
     let (sink, session) = opened(&repo).await;
     sink.opening_settled(&session).await;
 
-    let target = DiffTarget::Unstaged {
-        path: "f.txt".to_string(),
-    };
+    let target = unstaged("f.txt");
     session.load_diff(target.clone());
     diffs_reach(&sink, "f.txt", 1).await;
     let published = fingerprints_of(&sink, "f.txt");
 
     // Once the outcome has answered, nothing from this read is on its way.
     assert_eq!(
-        crate::support::wait::bounded(
+        bounded(
             "the tracked diff refresh",
             session.refresh_diff_tracked(target)
         )
@@ -317,9 +304,7 @@ async fn a_file_typed_over_outside_the_window_is_re_read() {
     let (sink, session) = opened(&repo).await;
     sink.opening_settled(&session).await;
 
-    let target = DiffTarget::Unstaged {
-        path: "f.txt".to_string(),
-    };
+    let target = unstaged("f.txt");
     session.load_diff(target.clone());
     diffs_reach(&sink, "f.txt", 1).await;
     let published = fingerprints_of(&sink, "f.txt");
@@ -333,7 +318,7 @@ async fn a_file_typed_over_outside_the_window_is_re_read() {
     );
 
     assert_eq!(
-        crate::support::wait::bounded(
+        bounded(
             "the tracked diff refresh",
             session.refresh_diff_tracked(target)
         )
@@ -373,9 +358,7 @@ async fn the_older_of_two_reads_of_one_file_publishes_nothing() {
     let (sink, session) = opened(&repo).await;
     sink.opening_settled(&session).await;
 
-    let target = DiffTarget::Unstaged {
-        path: "notes.txt".to_string(),
-    };
+    let target = unstaged("notes.txt");
     session.load_diff(target.clone());
     diffs_reach(&sink, "notes.txt", 1).await;
     let held = fingerprints_of(&sink, "notes.txt")[0];
@@ -383,7 +366,7 @@ async fn the_older_of_two_reads_of_one_file_publishes_nothing() {
     // The older read, polled to where it waits inside its git and left there.
     let mut older = Box::pin(session.read_diff(target.clone()));
     assert!(
-        crate::support::wait::poll_once(&mut older).is_pending(),
+        poll_once(&mut older).is_pending(),
         "the older read is waiting inside its own git"
     );
 
@@ -411,7 +394,7 @@ async fn the_older_of_two_reads_of_one_file_publishes_nothing() {
 
     // Only now does the older one carry on: it finds itself passed and ends.
     assert_eq!(
-        crate::support::wait::bounded("the older read", older).await,
+        bounded("the older read", older).await,
         DiffReadOutcome::Overtaken
     );
     assert_eq!(
@@ -447,9 +430,7 @@ async fn a_worktrees_file_is_not_the_same_file_as_ours_of_that_name() {
 
     let (sink, session) = opened(&repo).await;
     sink.opening_settled(&session).await;
-    let target = DiffTarget::Unstaged {
-        path: "f.txt".to_string(),
-    };
+    let target = unstaged("f.txt");
 
     // Ours, then the worktree's: a reader stepping onto another worktree's row.
     session.load_diff(target.clone());
@@ -467,7 +448,7 @@ async fn a_worktrees_file_is_not_the_same_file_as_ours_of_that_name() {
     // unmoved, leaving the worktree's rows on the pane.
     repo.write_file("f.txt", "theirs\n");
     assert_eq!(
-        crate::support::wait::bounded(
+        bounded(
             "the tracked diff refresh",
             session.refresh_diff_tracked(target)
         )
