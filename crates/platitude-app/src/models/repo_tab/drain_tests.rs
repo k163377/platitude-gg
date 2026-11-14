@@ -1,5 +1,7 @@
-//! What one answer out of the feed leaves the properties QML reads
-//! saying (`drain::settle_write`).
+//! What a write's answer out of the feed leaves the properties QML reads
+//! saying (`drain::settle_write`): the group of the last answer nobody
+//! waits for by name, the notify's list of answers, and the answer handed
+//! back to the press that sent it.
 
 use super::drain_inputs::{OURS, SOMEBODY_ELSE, answered, no_answer, reported, settle, started};
 use super::*;

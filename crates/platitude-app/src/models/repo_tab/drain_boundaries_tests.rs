@@ -1,3 +1,8 @@
+//! How a write's boundaries out of the feed — its start, its answer, its
+//! settle — reach the run's watch (`write_watch`) and the tab's settling
+//! (`unsettle`, `TabMsg::ReadsDrained`), and which settled ids the tab
+//! keeps for the log's receipts.
+
 use super::drain_inputs::{OURS, SOMEBODY_ELSE, answered, started};
 use super::*;
 use platitude_core::OperationKind as K;
