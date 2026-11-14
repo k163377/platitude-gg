@@ -636,6 +636,16 @@ Item {
     function wroteAndSettled() {
         return driver.wroteAndSettled() && !page.diffSettling
     }
+    /// Answers `went`, a write's press answer (`AutoActDriver.pressWrite`), keeping `facts` (`{ name: value }`) as
+    /// `op`'s witnesses only where it is true. The write itself stays spelled at the press: `pressWrite` reads its
+    /// argument as press code only where it is a function written there (`cargo xtask waits`).
+    function keptIfWent(op, went, facts) {
+        if (went) {
+            for (const name in facts)
+                op.witness(name, facts[name])
+        }
+        return went
+    }
     /// Where the view stands now, against `readY` and the room it has.
     function placeLine() {
         return "diff_place at=" + Math.round(diffPane.view.contentY)
@@ -664,9 +674,7 @@ Item {
                         diffPane.stageLine(0, line)
                         return true
                     })
-                    if (went)
-                        op.witness("rows0", rows)
-                    return went
+                    return acts.keptIfWent(op, went, { "rows0": rows })
                 })
                 return
             }
@@ -680,11 +688,7 @@ Item {
                         repoTab.unstagePath(page.diffPath)
                         return true
                     })
-                    if (went) {
-                        op.witness("rows1", rows)
-                        op.witness("shrank", rows < op.witnessed("rows0"))
-                    }
-                    return went
+                    return acts.keptIfWent(op, went, { "rows1": rows, "shrank": rows < op.witnessed("rows0") })
                 })
                 return
             }
@@ -697,9 +701,7 @@ Item {
                         repoTab.stagePath(page.diffPath)
                         return true
                     })
-                    if (went)
-                        op.witness("back", rows === op.witnessed("rows0"))
-                    return went
+                    return acts.keptIfWent(op, went, { "back": rows === op.witnessed("rows0") })
                 })
                 return
             }
@@ -808,11 +810,7 @@ Item {
                             repoTab.stagePath(page.diffPath)
                         return true
                     })
-                    if (went) {
-                        op.witness("was", was)
-                        op.witness("alone", alone)
-                    }
-                    return went
+                    return acts.keptIfWent(op, went, { "was": was, "alone": alone })
                 })
                 return
             }
@@ -1060,9 +1058,7 @@ Item {
                         diffPane.stageLine(0, op.changedLine)
                         return true
                     })
-                    if (went)
-                        op.witness("before", before)
-                    return went
+                    return acts.keptIfWent(op, went, { "before": before })
                 })
                 return
             }
@@ -1230,9 +1226,7 @@ Item {
                         page.stageSelection(0, op.changedLine)
                         return true
                     })
-                    if (went)
-                        op.witness("readsAtWrite", reads)
-                    return went
+                    return acts.keptIfWent(op, went, { "readsAtWrite": reads })
                 })
                 return
             }
