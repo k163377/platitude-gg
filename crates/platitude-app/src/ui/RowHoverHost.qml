@@ -64,9 +64,12 @@ Item {
     /// …and whether the list's seat keeps an ask (a chip asked for behind a hold).
     readonly property bool listAskKept: listSeat.pending !== null
     /// Automation-only handles (`row-card` / `ref-list-card`), the same exposure as `GraphPane.view`
-    /// (rules-refs/app-ui.md).
-    readonly property alias listPopup: refList
-    readonly property alias hoverCard: rowCard
+    /// (rules-refs/app-ui.md): null until first opened, or up front with [`keepBuilt`].
+    readonly property var listPopup: refListSeat.item
+    readonly property var hoverCard: rowCardSeat.item
+    /// Both popups built up front, for a caller that reads them before they open (the harness, `RepoPage.keepBuilt`,
+    /// and `tst_graphhover`). False in every page a person opens: each is built by its first opening (`popups` below).
+    property bool keepBuilt: false
 
     /// A stacked row was double-clicked, clicked once, or right-clicked — the gestures of the graph row under it. The
     /// spaced second click has no signal: its wait is the graph's (`GraphPane.noteRowClick`), card and row being one
@@ -235,7 +238,7 @@ Item {
     /// unforced, the chip answers with its width for the names before.
     function refreshRefList() {
         const target = listSeat.target
-        if (JSON.stringify(target.anchor.records) === JSON.stringify(refList.records))
+        if (JSON.stringify(target.anchor.records) === JSON.stringify(host.builtRefList().records))
             return
         target.anchor.layOutNow()
         host.seatRefList(target)
@@ -253,7 +256,7 @@ Item {
     readonly property HoverSeat cardSeat: HoverSeat {
         id: cardSeat
         hand: host.hand
-        card: rowCard
+        card: rowCardSeat.item
         restMs: Metrics.tipDelayMs
         graceMs: Metrics.hoverKeepMs
         // Behind a menu nothing comes out; under the chip's list the card gives way (the list is the more particular
@@ -281,7 +284,7 @@ Item {
     readonly property HoverSeat listSeat: HoverSeat {
         id: listSeat
         hand: host.hand
-        card: refList
+        card: refListSeat.item
         // The list opens the moment the hand is on the chip: a hold lifts with the hand's move, a dismissal with the
         // hand leaving the chip and coming back. Only the card waits its rest (`cardSeat`, the supplement).
         expands: true
@@ -297,7 +300,7 @@ Item {
     readonly property HoverSeat chosenSeat: HoverSeat {
         id: chosenSeat
         hand: host.chosenHand
-        card: rowCard
+        card: rowCardSeat.item
         restMs: Metrics.tipDelayMs
         graceMs: Metrics.hoverKeepMs
         blockedBy: host.menuDoor !== null ? "menu" : ""
@@ -347,6 +350,7 @@ Item {
 
     // ---- opening ---------------------------------------------------------------------------------------------------
     function openRowCard(target) {
+        const rowCard = host.builtRowCard()
         const row = target.item
         rowCard.subject = row.subject
         rowCard.body = row.body
@@ -378,12 +382,13 @@ Item {
     /// length would open the same chip differently on different rows.
     function openRefList(target) {
         host.seatRefList(target)
-        refList.open()
+        host.builtRefList().open()
     }
     /// Seats the list on its chip as the chip stands now and measures it over the names the chip shows now — as it
     /// opens, and again as the names change under it (`refreshRefList`): the chip stands on its right edge, so fewer
     /// names move its left edge right, and a card left where it was would show the chip's end past its own.
     function seatRefList(target) {
+        const refList = host.builtRefList()
         const anchor = target.anchor
         // Seated on the stack as the reader saw it, every sheet drawn: `listKey`, already this chip's, has taken the
         // sheets down by now, and the stack stands on its right edge and rises by half its fan (`RefChipStack.lift`),
@@ -470,35 +475,54 @@ Item {
     }
 
     // ---- the popups ------------------------------------------------------------------------------------------------
-    RefListPopup {
-        id: refList
-        // A click here is answered by the graph row the card stands on (`RefListPopup.rowClicks`).
-        rowClicks: host.graphPane
-        rowOid: host.refListOid
-        // Unfolded from the current branch's stand-in, a press on the card is the pin's (`GraphPane.pinPressed`).
-        onStandIn: host.listAnchor !== null && host.listAnchor === host.graphPane.headPin.chipItem
-        onStandInPressed: modifiers => host.graphPane.pinPressed(host.refListRow, modifiers)
-        onPicked: (chip, oidHex) => host.recordActivated(chip, oidHex)
-        onChose: host.recordChosen(host.refListOid, host.refListRow)
-        // That row's menu, aimed at the pressed name (デザイン規約 §グラフ行の右クリック).
-        onMenuAsked: chip => host.recordMenuAsked(host.refListOid, chip)
-        // The rest of the gesture that pressed the line is not the rows' under it (`GraphPane.hushRowClicks`); the
-        // graph moving under the still hand is the hand's to notice (`HandWatch.rowsMoved`).
-        onFollowed: to => {
-            host.graphPane.hushRowClicks()
-            host.mateFollowed(to.oid)
+    // Each built by its first opening and kept (rules-refs/app-ui.md — the `WindowDialogSeat` line): the door
+    // builds, then writes and opens in the same turn — the build is synchronous. Each seat fills the host and is its
+    // popup's parent, so a card's `x` / `y` are the host's.
+    function builtRowCard() {
+        rowCardSeat.active = true
+        return rowCardSeat.item
+    }
+    function builtRefList() {
+        refListSeat.active = true
+        return refListSeat.item
+    }
+    Loader {
+        id: refListSeat
+        anchors.fill: parent
+        active: host.keepBuilt
+        sourceComponent: RefListPopup {
+            // A click here is answered by the graph row the card stands on (`RefListPopup.rowClicks`).
+            rowClicks: host.graphPane
+            rowOid: host.refListOid
+            // Unfolded from the current branch's stand-in, a press on the card is the pin's (`GraphPane.pinPressed`).
+            onStandIn: host.listAnchor !== null && host.listAnchor === host.graphPane.headPin.chipItem
+            onStandInPressed: modifiers => host.graphPane.pinPressed(host.refListRow, modifiers)
+            onPicked: (chip, oidHex) => host.recordActivated(chip, oidHex)
+            onChose: host.recordChosen(host.refListOid, host.refListRow)
+            // That row's menu, aimed at the pressed name (デザイン規約 §グラフ行の右クリック).
+            onMenuAsked: chip => host.recordMenuAsked(host.refListOid, chip)
+            // The rest of the gesture that pressed the line is not the rows' under it (`GraphPane.hushRowClicks`); the
+            // graph moving under the still hand is the hand's to notice (`HandWatch.rowsMoved`).
+            onFollowed: to => {
+                host.graphPane.hushRowClicks()
+                host.mateFollowed(to.oid)
+            }
         }
     }
-    CommitHoverCard {
-        id: rowCard
-        textWidth: host.graphPane.width / 2
-        // The subject's and body's bounds are set in `openRowCard` — the two lists want different shares.
-        // Read before the close, which clears the pair. Down now: what the press leads to is behind this card.
-        onMessageAsked: {
-            const oidHex = host.cardOid
-            const atRow = cardSeat.target !== null && cardSeat.target.area === "graph" ? cardSeat.target.row : -1
-            host.closeRowCard()
-            host.messageAsked(oidHex, atRow)
+    Loader {
+        id: rowCardSeat
+        anchors.fill: parent
+        active: host.keepBuilt
+        sourceComponent: CommitHoverCard {
+            textWidth: host.graphPane.width / 2
+            // The subject's and body's bounds are set in `openRowCard` — the two lists want different shares.
+            // Read before the close, which clears the pair. Down now: what the press leads to is behind this card.
+            onMessageAsked: {
+                const oidHex = host.cardOid
+                const atRow = cardSeat.target !== null && cardSeat.target.area === "graph" ? cardSeat.target.row : -1
+                host.closeRowCard()
+                host.messageAsked(oidHex, atRow)
+            }
         }
     }
 }

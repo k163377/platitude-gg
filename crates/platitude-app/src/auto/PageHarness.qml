@@ -8,8 +8,10 @@ import platitude.ui
 /// act on is handed over here — a file of its own cannot see `RepoPage.qml`'s ids.
 ///
 /// The menus arrive whole (picking out the row a verb presses is harness wiring) and as their seats: the page builds
-/// a menu the first time it is raised, so this file asks for them up front (`RepoPage.keepBuilt`) — a verb reads a
-/// menu's rows before opening it, and a null there is a dead run.
+/// a menu, and the popups and strips its parts open, the first time each is raised, so this file asks for them up
+/// front (`RepoPage.keepBuilt`) — a verb reads a menu's rows or a card's state before opening it, and a null there is
+/// a dead run. What the page shows off its state (the plan's face, another worktree's pane) comes as its seat, and
+/// the driver follows the seat's `item`.
 Item {
     id: harness
 
@@ -33,11 +35,11 @@ Item {
     required property var detailsPane
     required property var diffPane
     required property var wipPane
-    required property var carriedPane
     required property var gitCorner
-    /// The seat the plan's face is built in on demand: the plan verbs raise it the way a hand does, so the driver
-    /// follows the seat's `item`.
+    /// The seats the plan's face and another worktree's pane are built in on demand: the verbs raise them the way a
+    /// hand does, so the driver follows each seat's `item`.
     required property var planSeat
+    required property var carriedSeat
     required property var refMenuSeat
     required property var fileMenuSeat
     required property var diffMenuSeat
@@ -61,9 +63,10 @@ Item {
     readonly property var remoteRowMenu: harness.remoteMenuSeat.item
     readonly property var commitFileMenu: harness.commitFileMenuSeat.item
     readonly property var planPane: harness.planSeat.item
+    readonly property var carriedPane: harness.carriedSeat.item
 
     Component.onCompleted: {
-        // Only when a verb will want them: six menus held ready are working set a measured run would carry.
+        // Only when a verb will want them: the menus and popups held ready are working set a measured run would carry.
         harness.page.keepBuilt = Harness.autoAct !== ""
         harness.seatsUp = true
     }

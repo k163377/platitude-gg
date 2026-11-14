@@ -212,21 +212,31 @@ Rectangle {
 
     // ---- looking for a commit --------------------------------------
     /// The card itself — automation-only exposure, like `view`. A run types into its box, but the key that opens it
-    /// cannot be pressed from there.
-    readonly property alias findCard: findBar
+    /// cannot be pressed from there. Null until first raised, or up front with [`keepBuilt`].
+    readonly property var findCard: findSeat.item
+    /// The find card built up front, for a caller that reads it before it opens (the harness, `RepoPage.keepBuilt`).
+    /// False in every page a person opens: the card is built by its first raising and kept, query and all
+    /// (rules-refs/app-ui.md — the `WindowDialogSeat` line).
+    property bool keepBuilt: false
+    /// The one way to the card: built here, then called in the same turn — the build is synchronous.
+    function builtFind() {
+        findSeat.active = true
+        return findSeat.item
+    }
     /// How far the graph has stepped down out from under the card — the list's number, not the card's.
     readonly property real findShift: graphList.anchors.topMargin
     signal findLanded(string oidHex)
-    function startFind() { findBar.startFind() }
-    function findNext() { findBar.findNext() }
-    function findPrevious() { findBar.findPrevious() }
+    function startFind() { graphArea.builtFind().startFind() }
+    function findNext() { graphArea.builtFind().findNext() }
+    function findPrevious() { graphArea.builtFind().findPrevious() }
 
     // ---- a press that landed somewhere else -------------------------
     /// The find card and a row's name box go with a press that landed elsewhere (`RepoPage.releasePressedAway`,
     /// `scenePos` = where it landed) while empty; typing in one keeps it (規約 §コミットを探す). "Elsewhere" is each
     /// box's own question (`FindBar.holds`). Headless: `find-drop` / `name-box-drop`.
     function dropEmptyBoxes(scenePos) {
-        findBar.dropIfEmpty(scenePos)
+        if (findSeat.item !== null)
+            findSeat.item.dropIfEmpty(scenePos)
         // "Empty" is "nothing put in it": no text for a box that makes a name, the name it opened holding for a rename.
         if (graphList.namingOid !== "" && graphList.namingText === graphArea.namingOpenedWith)
             graphArea.stopNaming()
@@ -428,28 +438,33 @@ Rectangle {
     // Hangs from the top-right corner, over the list — declared here because a Flickable adopts what is declared in
     // it and scrolls it away. Only one of the two is ever up: a question already standing keeps the place, since it
     // is one gesture from being over.
-    GraphFind {
-        id: findBar
+    Loader {
+        id: findSeat
         anchors.top: parent.top
         anchors.right: parent.right
         anchors.rightMargin: Theme.spaceLg
         z: 4
-        graphModel: graphArea.graphModel
-        view: graphList
-        asking: askBar.open
-        // Grows with the query and stops `spaceXs` (about half a character) past where a subject starts — measured
-        // from the columns, so the cap follows the dividers when they are dragged. A query long enough to read back is
-        // worth the width, and the rows under it are covered from their end: with its head showing, a row still says
-        // which commit it is. Too narrow a window for the card's minimum: the minimum wins (`FindBar.implicitWidth`) —
-        // a tool that cannot be used is worse.
-        maxWidth: graphArea.width - graphArea.subjectTextX - Theme.spaceXs - anchors.rightMargin
-        // Closing hands the arrows back to the graph (規約 §矢印で履歴を辿る「閉じる所作が返している」).
-        onDismissed: {
-            findBar.runFind()
-            graphList.takeKeyboard()
+        active: graphArea.keepBuilt
+        sourceComponent: GraphFind {
+            id: findBar
+            graphModel: graphArea.graphModel
+            view: graphList
+            asking: askBar.open
+            // Grows with the query and stops `spaceXs` (about half a character) past where a subject starts — measured
+            // from the columns, so the cap follows the dividers when they are dragged. A query long enough to read back
+            // is worth the width, and the rows under it are covered from their end: with its head showing, a row still
+            // says which commit it is. Too narrow a window for the card's minimum: the minimum wins
+            // (`FindBar.implicitWidth`) — a tool that cannot be used is worse.
+            maxWidth: graphArea.width - graphArea.subjectTextX - Theme.spaceXs - findSeat.anchors.rightMargin
+            // Closing hands the arrows back to the graph (規約 §矢印で履歴を辿る「閉じる所作が返している」).
+            onDismissed: {
+                findBar.runFind()
+                graphList.takeKeyboard()
+            }
+            onLanded: oidHex => graphArea.findLanded(oidHex)
         }
-        onLanded: oidHex => graphArea.findLanded(oidHex)
     }
+
     GraphList {
         id: graphList
         anchors.left: parent.left
@@ -459,7 +474,7 @@ Rectangle {
         // When the newest commit is itself a match, the graph steps down by the card's height so the search does not
         // cover it, and back once the top row stops matching (`GraphFind.findClears`), at the pace the question bar
         // pushes the list down.
-        anchors.topMargin: findBar.findClears ? findBar.height : 0
+        anchors.topMargin: findSeat.item !== null && findSeat.item.findClears ? findSeat.item.height : 0
         Behavior on anchors.topMargin {
             NumberAnimation { duration: 200 }
         }
@@ -468,7 +483,7 @@ Rectangle {
         askTone: askBar.tone
         columns: metrics
         dividers: columnDividers
-        findOn: findBar.findOn
+        findOn: findSeat.item !== null && findSeat.item.findOn
         chosenOids: graphArea.chosenOids
         chosenCount: graphArea.chosenCount
         listKey: graphArea.listKey

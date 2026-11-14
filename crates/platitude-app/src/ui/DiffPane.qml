@@ -112,26 +112,35 @@ Rectangle {
     }
 
     // ---- the find bar (`DiffFindBar`) ---------------------------------------------------------------------------
-    /// Automation: the strip itself.
-    readonly property alias findBar: findBar
+    /// Automation: the strip itself — null until first raised, or up front with [`keepBuilt`].
+    readonly property var findBar: findSeat.item
+    /// The strip built up front, for a caller that reads it before it opens (the harness, `RepoPage.keepBuilt`).
+    /// False in every page a person opens: the strip is built by its first raising and kept, query and options and
+    /// all (rules-refs/app-ui.md — the `WindowDialogSeat` line).
+    property bool keepBuilt: false
+    /// Whether the strip is up — false while it has never been built.
+    readonly property bool findOpen: findSeat.item !== null && findSeat.item.open
     /// Ctrl+F while the diff is up (`RepoPage.startFind`): the strip comes up with the caret in it, the lines under
-    /// the hand's selection in the box where there is one.
+    /// the hand's selection in the box where there is one. Built here, then raised in the same turn — the build is
+    /// synchronous.
     function startFind() {
-        findBar.raise(diffPane.diffModel.selActive ? diffPane.diffModel.selectionText() : "")
+        findSeat.active = true
+        findSeat.item.raise(diffPane.diffModel.selActive ? diffPane.diffModel.selectionText() : "")
     }
     /// A press landed elsewhere (`RepoPage.releasePressedAway`) at `scenePos`: an empty strip goes, one with a line
     /// stays (the graph's rule, §コミットを探す). "Empty" is the model's answer: no query stands (`findSearching`)
     /// and none was refused (`findError`) — a refused line is a typed one.
     function dropEmptyFind(scenePos) {
-        if (!findBar.open || diffPane.diffModel.findSearching || diffPane.diffModel.findError !== ""
-                || findBar.holds(scenePos))
+        if (!diffPane.findOpen || diffPane.diffModel.findSearching || diffPane.diffModel.findError !== ""
+                || findSeat.item.holds(scenePos))
             return
-        findBar.dropAway()
+        findSeat.item.dropAway()
     }
     /// Searches again — the strip coming or going, every keystroke, every option — and goes to where it lands: the
     /// first hit from the top of the view, the view moving only where that hit is off screen. Every keystroke walks
     /// the rows in memory, no git.
     function runFind() {
+        const findBar = findSeat.item
         diffPane.diffModel.setFind(findBar.open ? findBar.query : "",
                                    findBar.matchCase, findBar.wholeWord, findBar.regex)
         diffPane.goToHit(diffPane.diffModel.findFrom(diffList.firstVisibleRow()))
@@ -158,14 +167,14 @@ Rectangle {
         // that stayed the pane puts back under the hand (`rowKeep`).
         if (!rowKeep.busy)
             diffHand.rowsMoved()
-        if (findBar.open)
+        if (diffPane.findOpen)
             diffPane.diffModel.findFrom(diffList.firstVisibleRow())
     }
     // The pane went (the diff closed under the strip): the strip goes with it, and so do the marks. Qt keeps active
     // focus on an invisible box otherwise.
     onVisibleChanged: {
-        if (!diffPane.visible)
-            findBar.dropAway()
+        if (!diffPane.visible && findSeat.item !== null)
+            findSeat.item.dropAway()
     }
     /// Where the pointer is. **The pane works out which row it is over, not the rows** — right after a rebuild a row's
     /// hover is not to be trusted (rules-refs/app-ui.md「行を作り直した直後は、行の hover を当てにしない」), and every
@@ -509,24 +518,31 @@ Rectangle {
             onSplitChosen: split => diffPane.splitChosen(split)
         }
         // Under the band, over everything the pane says about the file: the rows step down for it.
-        DiffFindBar {
-            id: findBar
+        // Shown with the strip: closed, the strip is hidden and the column gives it no room, which a seat holding a
+        // closed strip at its height would take.
+        Loader {
+            id: findSeat
             Layout.fillWidth: true
-            searching: diffPane.diffModel.findSearching
-            matches: diffPane.diffModel.findCount
-            atMatch: diffPane.diffModel.findAt
-            loaded: diffList.count
-            error: diffPane.diffModel.findError
-            // The model searches what the strip holds: its lines while it is up, nothing once it is down (the marks
-            // come off with it).
-            onOpenChanged: diffPane.runFind()
-            onQueryChanged: diffPane.runFind()
-            onOptionsChanged: diffPane.runFind()
-            onNextRequested: diffPane.findNext()
-            onPreviousRequested: diffPane.findPrevious()
-            // Closed by its `✕` or Escape: the keyboard goes back to the rows (the graph's rule, §矢印で履歴を辿る
-            // 「閉じる所作が返している」).
-            onDismissed: rowWalk.handArrived()
+            visible: diffPane.findOpen
+            active: diffPane.keepBuilt
+            sourceComponent: DiffFindBar {
+                id: findBar
+                searching: diffPane.diffModel.findSearching
+                matches: diffPane.diffModel.findCount
+                atMatch: diffPane.diffModel.findAt
+                loaded: diffList.count
+                error: diffPane.diffModel.findError
+                // The model searches what the strip holds: its lines while it is up, nothing once it is down (the marks
+                // come off with it).
+                onOpenChanged: diffPane.runFind()
+                onQueryChanged: diffPane.runFind()
+                onOptionsChanged: diffPane.runFind()
+                onNextRequested: diffPane.findNext()
+                onPreviousRequested: diffPane.findPrevious()
+                // Closed by its `✕` or Escape: the keyboard goes back to the rows (the graph's rule, §矢印で履歴を辿る
+                // 「閉じる所作が返している」).
+                onDismissed: rowWalk.handArrived()
+            }
         }
         // What the pane says about the file itself, and the picture that stands in for one no rows can show.
         DiffFileNotices {

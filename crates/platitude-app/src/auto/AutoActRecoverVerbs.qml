@@ -27,8 +27,9 @@ Item {
     readonly property bool ours: Harness.autoAct === "recover" || Harness.autoAct === "recover-open"
     readonly property bool opens: Harness.autoAct === "recover-open"
     /// The run's argument, a comma list of looks: `fold` folds the left menu, `lit` lights the seat and holds it lit
-    /// for the picture, `blink` blinks it as a discard does and frames it once the blink is over, `filter:<words>`
-    /// types into the list's filter (no comma: it splits the looks); for `recover-open` a number picks that entry, by
+    /// for the picture, `blink` blinks it as a discard does and frames it once the blink is over; for `recover-open`
+    /// (the list is built by its first standing, `SidebarPane.recoverLog`, so `recover` has none to read)
+    /// `filter:<words>` types into the list's filter (no comma: it splits the looks), a number picks that entry, by
     /// its place in the whole list (0 when none is named), `none` picks none, `card` rests a hand on the first entry
     /// the list shows, none picked (the card is in overlay.png), and `restore` / `part:<n>` press the band's `Restore`
     /// for the whole entry / its part n once it is on the graph — a refused press frames the band still standing.
@@ -120,8 +121,8 @@ Item {
     /// `Not loaded on the graph yet`) — never, on a graph that holds them, whatever walks under it.
     property int notLoaded: 0
     /// The window at its floor, and how many rows down this run scrolls the list (-1 for none).
-    readonly property bool shortWanted: acts.looks.indexOf("short") >= 0
-    readonly property var scrolls: acts.looks.filter(look => look.startsWith("scroll:"))
+    readonly property bool shortWanted: acts.opens && acts.looks.indexOf("short") >= 0
+    readonly property var scrolls: acts.opens ? acts.looks.filter(look => look.startsWith("scroll:")) : []
     readonly property int scrollRows: acts.scrolls.length > 0 ? Number(acts.scrolls[0].substring("scroll:".length)) : -1
 
     /// Runs `act` if it is this family's and says whether it was; `AutoActDriver` asks each family in turn.
@@ -136,13 +137,15 @@ Item {
         page.recoverLit = acts.looks.indexOf("lit") >= 0
         if (acts.blinkWanted)
             page.blinkRecover()
-        const filters = acts.looks.filter(look => look.startsWith("filter:"))
-        if (filters.length > 0)
-            sidebarPane.autoRecover.filterText = filters[0].substring("filter:".length)
         if (acts.foldWanted)
             page.foldByHand(true)
         if (act === "recover-open" && !page.recoverOpen)
             page.toggleRecover()
+        // Typed once the log stands, as a reader types into its field: the log is built by its first standing
+        // (`SidebarPane.recoverLog`), which the open above is.
+        const filters = acts.opens ? acts.looks.filter(look => look.startsWith("filter:")) : []
+        if (filters.length > 0)
+            sidebarPane.autoRecover.filterText = filters[0].substring("filter:".length)
         if (acts.shortWanted)
             page.Window.window.height = Math.ceil(page.Window.window.floorHeight)
         // The pick, the hand's rest, the band's press and the scroll are each the stage the frame waits behind.
@@ -159,15 +162,17 @@ Item {
     function frameLine() {
         const graph = page.pageGraph
         const view = acts.driver.graphPane.view
+        // A log never opened was never built (`SidebarPane.recoverLog`): it lists nothing and has nothing out.
+        const log = sidebarPane.autoRecover
         return "recover open=" + page.recoverOpen
                + " entries=" + page.recoverEntries.length
                // What the filter left, and whether an entry's card is out.
-               + " listed=" + sidebarPane.autoRecover.shownEntries.count
+               + " listed=" + (log !== null ? log.shownEntries.count : 0)
                // Whether the view went to the picked entry: all of its tip's row on screen.
                + " tipShown=" + (graph.provisionalTipRow >= 0 && view.rowOnScreen(graph.provisionalTipRow))
                // Where the picked entry's stand-in stands: its own seat, an edge, or none with its row on screen.
-               + " pin=" + sidebarPane.autoRecover.pinPlace
-               + " card=" + sidebarPane.autoRecover.cardOpen
+               + " pin=" + (log !== null ? log.pinPlace : "none")
+               + " card=" + (log !== null && log.cardOpen)
                + " pick=" + page.recoverPick
                // The picked entry drawn on the graph for now.
                + " shown=" + graph.provisionalOn
@@ -223,10 +228,13 @@ Item {
             const past = graph.provisionalWalked && graph.provisionalTipRow < 0
             return { "shown": graph.provisionalOn, "drawn_or_past": drawn || past, "walked": graph.provisionalWalked }
         }
-        /// The list laid out at the floor the run asked for: its rows overflow it.
+        /// The list laid out at the floor the run asked for (`shortWanted`, a look of the open log): its rows
+        /// overflow it.
         function listShort() {
+            if (!acts.shortWanted)
+                return ({})
             const list = sidebarPane.autoRecover.entryList
-            return acts.shortWanted ? { "overflows": list.contentHeight > list.height } : ({})
+            return { "overflows": list.contentHeight > list.height }
         }
         onTriggered: {
             const op = recoverTimer

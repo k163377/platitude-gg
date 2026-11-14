@@ -95,6 +95,8 @@ ColumnLayout {
     property int pointedTipRow: -1
     /// A right-click menu of the page's stands over this pane (デザイン規約 §メニュー).
     property bool menuStanding: false
+    /// The author row's cards built up front (`DetailsAuthorCards.keepBuilt`, `RepoPage.keepBuilt`).
+    property bool keepBuilt: false
     /// Which changed file the middle pane is reading, so its row can say so (`FileRowDelegate`, `FileRowWalk`).
     /// Empty while the graph is in the middle.
     property string readPath: ""
@@ -155,6 +157,7 @@ ColumnLayout {
         details: detailsPane.details
         hand: paneHand
         menuStanding: detailsPane.menuStanding
+        keepBuilt: detailsPane.keepBuilt
         onParentPicked: oidHex => detailsPane.parentClicked(oidHex)
     }
 

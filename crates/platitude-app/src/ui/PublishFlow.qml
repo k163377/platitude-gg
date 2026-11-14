@@ -23,8 +23,17 @@ Item {
     /// naming `refName` in its own colour `refTint`.
     signal askRequested(string oidHex, string label, var run, var form, string code, string refName, color refTint)
 
-    /// The add-remote dialog, which the automation types into.
-    readonly property alias dialog: remoteDialog
+    /// The add-remote dialog, which the automation types into: null until first opened, or up front with
+    /// [`keepBuilt`].
+    readonly property var dialog: remoteSeat.item
+    /// The dialog built up front, for a caller that reads it before it opens (the harness, `RepoPage.keepBuilt`).
+    /// False in every page a person opens (rules-refs/app-ui.md — the `WindowDialogSeat` line).
+    property bool keepBuilt: false
+    /// The one way to the dialog: built here, then called in the same turn — the build is synchronous.
+    function builtDialog() {
+        remoteSeat.active = true
+        return remoteSeat.item
+    }
 
     anchors.fill: parent
 
@@ -193,13 +202,13 @@ Item {
     /// The `+` on the left menu's REMOTES band: the chooser's own dialog, with no question behind it
     /// (規約 §リモートを書き留める).
     function startAddRemote() {
-        remoteDialog.start("", "", publishFlow.publishRemotes, false, true)
+        publishFlow.builtDialog().start("", "", publishFlow.publishRemotes, false, true)
     }
     /// The same form filled in for an existing remote (its URL, whether it is origin), from its row on the left menu.
     function startEditRemote(name) {
-        remoteDialog.start(name, publishFlow.repoTab.remoteUrl(name), publishFlow.publishRemotes,
-                           name === publishFlow.repoTab.markedOrigin,
-                           publishFlow.repoTab.pushDefaultLocal)
+        publishFlow.builtDialog().start(name, publishFlow.repoTab.remoteUrl(name), publishFlow.publishRemotes,
+                                        name === publishFlow.repoTab.markedOrigin,
+                                        publishFlow.repoTab.pushDefaultLocal)
     }
     function choosePublishRemote(index) {
         if (index >= publishFlow.publishRemotes.length) {
@@ -435,7 +444,7 @@ Item {
     function startPublishAddRemote(spec) {
         const parts = spec === "" ? [] : spec.split("|")
         publishFlow.choosePublishRemote(publishFlow.publishRemotes.length)
-        remoteDialog.setFields(parts.length > 0 ? parts[0] : "", parts.length > 1 ? parts[1] : "")
+        publishFlow.builtDialog().setFields(parts.length > 0 ? parts[0] : "", parts.length > 1 ? parts[1] : "")
     }
     /// Automation: the chooser's list, which no injected click can reach.
     function openPublishRemotes() {
@@ -476,20 +485,26 @@ Item {
                                           publishFlow.publishLease)
     }
 
-    RemoteDialog {
-        id: remoteDialog
-        onSubmitted: (name, url) => {
-            if (remoteDialog.editing === "")
-                publishFlow.repoTab.addRemote(name, url)
-            else
-                publishFlow.repoTab.setRemoteUrl(name, url)
-            if (publishFlow.publishAsking) {
-                publishFlow.publishRemote = name
-                publishFlow.refreshPublishCheck()
+    // Filling the flow, which fills the page: the dialog centres itself in its parent.
+    Loader {
+        id: remoteSeat
+        anchors.fill: parent
+        active: publishFlow.keepBuilt
+        sourceComponent: RemoteDialog {
+            id: remoteDialog
+            onSubmitted: (name, url) => {
+                if (remoteDialog.editing === "")
+                    publishFlow.repoTab.addRemote(name, url)
+                else
+                    publishFlow.repoTab.setRemoteUrl(name, url)
+                if (publishFlow.publishAsking) {
+                    publishFlow.publishRemote = name
+                    publishFlow.refreshPublishCheck()
+                }
             }
+            // Clearing is the same slot with no name; it reaches this repository's config only.
+            onMarkChanged: (name, marked) => publishFlow.repoTab.markOrigin(marked ? name : "")
         }
-        // Clearing is the same slot with no name; it reaches this repository's config only.
-        onMarkChanged: (name, marked) => publishFlow.repoTab.markOrigin(marked ? name : "")
     }
 
     Component {

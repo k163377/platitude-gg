@@ -32,15 +32,38 @@ QtObject {
     /// hover は引っ込む」); an ask made meanwhile is kept for it going.
     property bool menuStanding: false
     readonly property string blocker: cards.menuStanding ? "menu" : ""
+    /// The three cards built up front, for a caller that reads them before they open (the harness,
+    /// `RepoPage.keepBuilt`). False in every pane a person opens: each card is built by its first opening and kept
+    /// (rules-refs/app-ui.md — the `WindowDialogSeat` line), the door then writing and opening it in the same turn —
+    /// the way `tst_authorcards` opens them. Made off a `Component` rather than through a `Loader`: the pane is a `ColumnLayout`, where a seat
+    /// would be a row; the cards' parent is the pane they open in.
+    property bool keepBuilt: false
+    onKeepBuiltChanged: if (cards.keepBuilt) cards.buildAll()
+    function buildAll() {
+        cards.built("mateCard")
+        cards.built("parentCard")
+        cards.built("authorCard")
+    }
 
+    /// The cards, null until built.
+    property CoAuthorCard mateCard: null
+    property ParentListCard parentCard: null
+    property AuthorCard authorCard: null
     /// Whether each card is on screen — the output side, since the input side would read true with the binding cut.
-    readonly property bool matesCardOpen: mateCard.opened
-    readonly property bool authorCardOpen: authorCard.opened
+    readonly property bool matesCardOpen: cards.mateCard !== null && cards.mateCard.opened
+    readonly property bool authorCardOpen: cards.authorCard !== null && cards.authorCard.opened
     /// Whether the pointer is on a card — the row asks, because the two together are one hover.
-    readonly property bool matesPointerInside: mateCard.pointerInside
-    readonly property bool authorPointerInside: authorCard.pointerInside
-    readonly property bool parentCardOpen: parentCard.opened
-    readonly property bool parentsPointerInside: parentCard.pointerInside
+    readonly property bool matesPointerInside: cards.mateCard !== null && cards.mateCard.pointerInside
+    readonly property bool authorPointerInside: cards.authorCard !== null && cards.authorCard.pointerInside
+    readonly property bool parentCardOpen: cards.parentCard !== null && cards.parentCard.opened
+    readonly property bool parentsPointerInside: cards.parentCard !== null && cards.parentCard.pointerInside
+    /// The door each opening goes through: the card named built if it is not yet, then handed back. Never from this
+    /// object's own completion: `host` may not be bound yet there, and a card made over no parent cannot open.
+    function built(name) {
+        if (cards[name] === null)
+            cards[name] = cards.makers[name].createObject(cards.host)
+        return cards[name]
+    }
 
     /// A row of the parents' card was pressed: the pane goes there, as the parent line's own links do.
     signal parentPicked(string oidHex)
@@ -89,6 +112,7 @@ QtObject {
             return
         }
         const at = row.mapToItem(cards.host, Qt.point(line.x + line.width, line.y))
+        const parentCard = cards.built("parentCard")
         parentCard.parents = row.plate.parents
         parentCard.x = Math.round(at.x - parentCard.hashWidth - parentCard.hashInset)
         parentCard.y = Math.round(at.y + line.height / 2 - parentCard.firstMiddle)
@@ -110,6 +134,7 @@ QtObject {
             return
         }
         const p = cards.block.valueRow.mapToItem(cards.host, at)
+        const mateCard = cards.built("mateCard")
         mateCard.records = records
         cards.takeRoom()
         mateCard.maxWidth = cards.rightStop - cards.leftStop
@@ -124,6 +149,7 @@ QtObject {
             return
         }
         const p = cards.block.valueRow.mapToItem(cards.host, at)
+        const authorCard = cards.built("authorCard")
         cards.takeRoom()
         authorCard.maxWidth = cards.rightStop - cards.leftStop
         cards.authorAnchorX = p.x
@@ -160,15 +186,19 @@ QtObject {
         authorKeep.unpoint(authorKeep.keyOf(target => target.kind === "author"))
     }
 
-    readonly property CoAuthorCard mateCard: CoAuthorCard {
-        id: mateCard
-        parent: cards.host
-        x: cards.seatX(cards.mateAnchorX, mateCard.width)
+    /// What each card is made of (`built`), by its name.
+    readonly property var makers: ({ "mateCard": cards.mateMaker, "parentCard": cards.parentMaker,
+                                     "authorCard": cards.authorMaker })
+    readonly property Component mateMaker: Component {
+        CoAuthorCard {
+            id: card
+            x: cards.seatX(cards.mateAnchorX, card.width)
+        }
     }
     readonly property HoverSeat mateKeep: HoverSeat {
         id: mateKeep
         hand: cards.hand
-        card: mateCard
+        card: cards.mateCard
         // The three cards open the moment the hand is on their line: a hold lifts with the hand's move, a dismissal
         // with the hand leaving the line and coming back.
         expands: true
@@ -179,15 +209,15 @@ QtObject {
         }
     }
 
-    readonly property ParentListCard parentCard: ParentListCard {
-        id: parentCard
-        parent: cards.host
-        onPicked: oidHex => cards.parentPicked(oidHex)
+    readonly property Component parentMaker: Component {
+        ParentListCard {
+            onPicked: oidHex => cards.parentPicked(oidHex)
+        }
     }
     readonly property HoverSeat parentKeep: HoverSeat {
         id: parentKeep
         hand: cards.hand
-        card: parentCard
+        card: cards.parentCard
         expands: true
         blockedBy: cards.blocker
         onOpenAsked: target => {
@@ -196,27 +226,28 @@ QtObject {
         }
     }
 
-    readonly property AuthorCard authorCard: AuthorCard {
-        id: authorCard
-        parent: cards.host
-        x: cards.seatX(cards.authorAnchorX, authorCard.width)
-        authorName: cards.details.authorName
-        authorEmail: cards.details.authorEmail
-        authorFace: cards.details.avatar
-        authorFaceUrl: cards.details.avatarUrl
-        authoredAt: cards.details.authorTime
-        committerName: cards.details.committerName
-        committerEmail: cards.details.committerEmail
-        committerFace: cards.details.committerAvatar
-        committerFaceUrl: cards.details.committerAvatarUrl
-        committedAt: cards.details.committerTime
-        committerDiffers: cards.details.committerDiffers
-        timeDiffers: cards.details.commitTimeDiffers
+    readonly property Component authorMaker: Component {
+        AuthorCard {
+            id: card
+            x: cards.seatX(cards.authorAnchorX, card.width)
+            authorName: cards.details.authorName
+            authorEmail: cards.details.authorEmail
+            authorFace: cards.details.avatar
+            authorFaceUrl: cards.details.avatarUrl
+            authoredAt: cards.details.authorTime
+            committerName: cards.details.committerName
+            committerEmail: cards.details.committerEmail
+            committerFace: cards.details.committerAvatar
+            committerFaceUrl: cards.details.committerAvatarUrl
+            committedAt: cards.details.committerTime
+            committerDiffers: cards.details.committerDiffers
+            timeDiffers: cards.details.commitTimeDiffers
+        }
     }
     readonly property HoverSeat authorKeep: HoverSeat {
         id: authorKeep
         hand: cards.hand
-        card: authorCard
+        card: cards.authorCard
         expands: true
         blockedBy: cards.blocker
         onOpenAsked: target => {

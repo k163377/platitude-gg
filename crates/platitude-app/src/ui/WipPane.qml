@@ -414,7 +414,7 @@ ColumnLayout {
         if (!eolKeep.shown || target === null || target.kind !== "file")
             return
         wipPane.modelOf(target.bucket).pointEol(target.path)
-        eolCard.notice = wipPane.pointedEolText
+        wipPane.builtEolCard().notice = wipPane.pointedEolText
     }
     /// The card is out, or resting, for a row of `bucket`.
     function eolCardIn(bucket) {
@@ -434,6 +434,7 @@ ColumnLayout {
         wipPane.pointedEolBucket = bucket
         wipPane.modelOf(bucket).pointEol(path)
         const at = row.mapToItem(wipPane, Qt.point(0, row.height))
+        const eolCard = wipPane.builtEolCard()
         eolCard.path = path
         eolCard.notice = wipPane.pointedEolText
         eolCard.x = at.x + Theme.spaceMd
@@ -519,6 +520,7 @@ ColumnLayout {
     function openCommitCard() {
         // The button speaks for the whole index, so the words hold for all four cases at once: **"problems"**, since
         // only one case is a change, and **`may`**, since two are guesses from a sample (デザイン規約 §改行コードの警告).
+        const eolCard = wipPane.builtEolCard()
         eolCard.path = ""
         eolCard.notice = wipPane.worktree.eolStagedCount === 1
             ? qsTr("1 staged file may have line-ending problems")
@@ -531,20 +533,34 @@ ColumnLayout {
         eolCard.open()
     }
     // The one card both hovers open (one pointer, one card). Owned here: a row is recycled the moment it scrolls off.
-    EolHoverCard {
-        id: eolCard
-        /// What the card hangs off, in pane coordinates, and which side of it the card is on.
-        property real anchorY: 0
-        property bool above: false
-        /// **Bound** — the popup is not at its final height on the frame it is handed its words, so an assigned `y`
-        /// opens a card-height too low. **Flush on either side**: the hand has to walk in to read and copy (規約 §hover
-        /// のツールチップ).
-        y: eolCard.above ? eolCard.anchorY - eolCard.height : eolCard.anchorY
-        // What put the card out is forgotten only when the card itself goes: the row's mark stays lit while the card
-        // stands, and the card's sentence is read off the pointed row.
-        onClosed: {
-            eolCard.path = ""
-            wipPane.modelOf(wipPane.pointedEolBucket).pointEol("")
+    // Built by its first opening and kept (rules-refs/app-ui.md — the `WindowDialogSeat` line), off a `Component`:
+    // this pane is a `ColumnLayout`, where a `Loader` would be a row. Its parent is the pane, and the door writes and
+    // opens it in the same turn.
+    /// Built up front, for a caller that reads it before it opens (the harness, `RepoPage.keepBuilt`).
+    property bool keepBuilt: false
+    onKeepBuiltChanged: if (wipPane.keepBuilt) wipPane.builtEolCard()
+    function builtEolCard() {
+        if (wipPane.eolHoverCard === null)
+            wipPane.eolHoverCard = eolCardMaker.createObject(wipPane)
+        return wipPane.eolHoverCard
+    }
+    Component {
+        id: eolCardMaker
+        EolHoverCard {
+            id: eolCard
+            /// What the card hangs off, in pane coordinates, and which side of it the card is on.
+            property real anchorY: 0
+            property bool above: false
+            /// **Bound** — the popup is not at its final height on the frame it is handed its words, so an assigned `y`
+            /// opens a card-height too low. **Flush on either side**: the hand has to walk in to read and copy (規約
+            /// §hover のツールチップ).
+            y: eolCard.above ? eolCard.anchorY - eolCard.height : eolCard.anchorY
+            // What put the card out is forgotten only when the card itself goes: the row's mark stays lit while the
+            // card stands, and the card's sentence is read off the pointed row.
+            onClosed: {
+                eolCard.path = ""
+                wipPane.modelOf(wipPane.pointedEolBucket).pointEol("")
+            }
         }
     }
     // The one seat both askers go through, on the pane's hand: the card goes only when the hand is out of the mark
@@ -558,7 +574,7 @@ ColumnLayout {
     readonly property HoverSeat eolKeep: HoverSeat {
         id: eolKeep
         hand: paneHand
-        card: eolCard
+        card: wipPane.eolHoverCard
         blockedBy: wipPane.menuStanding ? "menu" : ""
         onOpenAsked: target => {
             if (target.kind === "button")
@@ -576,10 +592,10 @@ ColumnLayout {
     }
     /// The card itself is up. Read by the headless runs — reporting what asked for it would go green with the wiring
     /// cut.
-    readonly property bool eolCardOpen: eolCard.opened
-    /// Automation only: the card and the hand, for a run that puts the hand in the card or moves it (`eol-gone`,
-    /// `eol-walk`).
-    readonly property alias eolHoverCard: eolCard
+    readonly property bool eolCardOpen: wipPane.eolHoverCard !== null && wipPane.eolHoverCard.opened
+    /// The card, null until built (`builtEolCard`). The runs that put the hand in the card or move it read it and the
+    /// hand (`eol-gone`, `eol-walk`).
+    property EolHoverCard eolHoverCard: null
     readonly property alias hand: paneHand
     /// The bucket whose model the card's row is named in (`openEolCard`), and what that row is saying — for the
     /// headless report; each bucket's rows read their own model's pointed path (`WipBucketPane`).

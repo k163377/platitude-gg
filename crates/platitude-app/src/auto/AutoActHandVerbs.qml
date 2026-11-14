@@ -330,7 +330,7 @@ Item {
         if (name === "commands")
             return acts.commandsSeat()
         if (name === "carried")
-            return acts.listSeat(carriedPane.view)
+            return carriedPane !== null ? acts.listSeat(carriedPane.view) : acts.waiting("the other worktree's pane")
         if (name === "plan")
             return page.planActive ? acts.listSeat(planPane.view) : acts.waiting("the plan's rows")
         return acts.waiting("a surface this verb knows")

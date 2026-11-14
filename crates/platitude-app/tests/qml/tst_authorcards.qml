@@ -96,6 +96,12 @@ Item {
         name: "AuthorCards"
         when: windowShown
 
+        /// Whether `card` stands on screen: a card not built yet does not. Each card is built by its first opening, as
+        /// in a pane a person opens (`DetailsAuthorCards.built`), so the cases read the cards before they are built.
+        function standing(card) {
+            return card !== null && card.visible
+        }
+
         function init() {
             mouseMove(root, root.width - 1, root.height - 1)
             cards.parentKeep.takeDown("init", false)
@@ -107,7 +113,7 @@ Item {
             commit.coAuthors = []
             commit.land("3c1b3390aaaabbbbccccddddeeeeffff00001111", root.parentsOf("1", 24))
             tryVerify(() => row.plate.moreStands, undefined, "the count stands: more parents than the line holds")
-            tryVerify(() => !cards.parentCard.visible && !cards.mateCard.visible, undefined,
+            tryVerify(() => !standing(cards.parentCard) && !standing(cards.mateCard), undefined,
                       "each case starts with nothing out")
             // The landing above held the hand where the last case left it (in a card, as it may be): a fresh hand.
             hand.stillHeld = false
@@ -128,8 +134,8 @@ Item {
                 "latched": cards.parentKeep.latchedKey, "seatStill": cards.parentKeep.stillHeld,
                 "handStill": hand.stillHeld, "known": hand.known, "at": [hand.at.x, hand.at.y],
                 "heldAt": [hand.heldAt.x, hand.heldAt.y], "covered": hand.covered,
-                "parents": row.plate.parents.length, "visible": cards.parentCard.visible,
-                "opened": cards.parentCard.opened, "holds": Object.keys(cards.parentKeep.holds) }))
+                "parents": row.plate.parents.length, "visible": standing(cards.parentCard),
+                "opened": cards.parentCardOpen, "holds": Object.keys(cards.parentKeep.holds) }))
         }
 
         function test_the_count_unfolds_every_parent_and_the_hand_inside_holds_the_card() {

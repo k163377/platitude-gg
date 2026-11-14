@@ -190,8 +190,11 @@ Item {
                 })
             }
             if (op.at("opened")) {
+                // The log is built by its first standing (`SidebarPane.recoverLog`): null in the turn that opened it,
+                // read again on the beat after.
                 if (!Awaited.all("recover_reread_rows", { "answered": acts.page.recoverAnswered,
-                                                          "row": pane.entryList.itemAtIndex(2) !== null }))
+                                                          "row": pane !== null
+                                                                 && pane.entryList.itemAtIndex(2) !== null }))
                     return
                 op.input("pointed", () => {
                     acts.sidebar.hand.stir(Qt.point(-1, -1))

@@ -116,8 +116,9 @@ Flickable {
     function focusDescription() { msgEditor.focusDescription() }
     function growDescription(dy) { msgEditor.growDescription(dy) }
     function pullDescriptionPast(down) { msgEditor.pullDescriptionPast(down) }
-    function completeOpExit(code) { return opExitCard.completeOpExit(code) }
-    function offersOpExit(code) { return opExitCard.offersOpExit(code) }
+    // The card stands only while an operation is stopped (`opExitSeat`); with none there is nothing to offer or run.
+    function completeOpExit(code) { return opExitSeat.item !== null && opExitSeat.item.completeOpExit(code) }
+    function offersOpExit(code) { return opExitSeat.item !== null && opExitSeat.item.offersOpExit(code) }
     /// Moves the block by a wheel a box on it could not use — the boxes cover most of the block, which would
     /// otherwise never scroll by wheel.
     function rollBlock(pixels) {
@@ -344,14 +345,20 @@ Flickable {
                     acceptedButtons: Qt.NoButton
                 }
             }
-            // The way out of a stopped operation (`OpExitCard`), under the button that finishes things.
-            OpExitCard {
-                id: opExitCard
+            // The way out of a stopped operation (`OpExitCard`), under the button that finishes things. Built from the
+            // stop on and taken down with it (rules-refs/app-ui.md — the `WindowDialogSeat` line): all it shows is the
+            // worktree's. The seat is hidden with it, so the column keeps no step for a card that is not there.
+            Loader {
+                id: opExitSeat
                 // No margin of its own: the column's step apart from the commit button, the block's margin under the
                 // list's edge when the button is hidden — the one gap every piece of the block keeps.
                 Layout.fillWidth: true
-                repoTab: block.repoTab
-                worktree: block.worktree
+                active: block.worktree.opText !== ""
+                visible: opExitSeat.active
+                sourceComponent: OpExitCard {
+                    repoTab: block.repoTab
+                    worktree: block.worktree
+                }
             }
         }
     }

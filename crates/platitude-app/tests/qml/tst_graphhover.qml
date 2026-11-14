@@ -294,6 +294,8 @@ Item {
         tagAgainst: "origin"
         menuDoor: root.menuArea === "" ? null : { "area": root.menuArea, "key": root.menuKey }
         chosenHand: chosenHand
+        // The cases read both popups before either opens, as the harness does (`RowHoverHost.keepBuilt`).
+        keepBuilt: true
         // A right-click on a row of the list raises the row's menu on the list (`RepoPage.openRowMenu`) — at a place of
         // its own here (`listMenuAt`; `offer` would raise it at the platform's cursor, which a test does not move).
         onRecordMenuAsked: (oidHex, chip) => {

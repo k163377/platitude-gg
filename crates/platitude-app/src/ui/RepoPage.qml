@@ -254,6 +254,9 @@ FocusScope {
     property string appliedName: ""
     /// Whether the pane may write what it shows — the one property every write control reads (デザイン規約 §無効).
     readonly property bool wipWritable: page.carriedPath === ""
+    /// Another worktree's pane is the right pane's face (`carriedSeat`), which its first standing builds.
+    readonly property bool carriedShown: page.wipShown && !page.wipWritable
+    onCarriedShownChanged: if (page.carriedShown) carriedSeat.active = true
     /// The list the right pane shows: our unstaged run, or another worktree's one folded list (`CarriedPane`). Every
     /// question about the files on screen goes here; both answer alike, being built from one whole status
     /// (`models::nav::Source::files`).
@@ -373,8 +376,9 @@ FocusScope {
     // A tab whose repository would not open: the screen takes the panes' seat, so the log stays reachable. Not raised
     // — the failed command is a background read, and the panel would come up empty.
     readonly property bool openFailed: !page.blank && repoTab.state === "error"
-    /// Automation (`PGG_AUTO_ACT=open-fail-sweep`): that screen's hand, which its three lines are dragged over from.
-    readonly property alias openFailedHand: failedScreen.pad
+    /// Automation (`PGG_AUTO_ACT=open-fail-sweep`): that screen's hand, which its three lines are dragged over from;
+    /// null while the screen is not up (`failedSeat`).
+    readonly property var openFailedHand: failedSeat.item !== null ? failedSeat.item.pad : null
 
     property int seenHeadCommitSeq: 0
     property bool wantHeadMessage: false
@@ -832,6 +836,8 @@ FocusScope {
             // plan's *own* selection is already there: set from here it would fire the model's one `changed()` inside
             // the binding delivering it (`RebasePlanModel::take`).
             page.activateRow(planModel.expectHead)
+            // The run bar the first plan builds (`planRunSeat`).
+            planRunSeat.active = true
         } else {
             // However the plan went, a `reword` left in the boxes has no row to carry it, and the commit on screen did
             // not move (`DetailsPane.syncMessage` would keep the text for the plain amend) — its own message goes back.
@@ -981,6 +987,7 @@ FocusScope {
         worktree: worktree
         remotesModel: remotesModel
         graphPane: graphPane
+        keepBuilt: page.keepBuilt
         // The first push asks where the branch goes, in the one question bar.
         onAskRequested: (oidHex, label, run, form, code, refName, refTint) =>
             page.startRowAsk(oidHex, label, "", false, "", run, false, "", form, code, refName, refTint, "branch")
@@ -1033,8 +1040,12 @@ FocusScope {
         return seat.item !== null && seat.item.showing
     }
 
-    /// The six menu seats stand built from the start — written only by the harness (`PageHarness`), so its verbs can
-    /// read a menu's rows. The plan's face and the command log are not in this: their verbs raise them as a hand does.
+    /// The six menu seats, and the popups and strips the parts build on their first opening (the add-remote dialog,
+    /// the row's card and the chip's list, the author row's cards, the line-ending card, the two find strips), stand
+    /// built from the start — written only by the harness (`PageHarness`), so its verbs can read them before they
+    /// open. What a page shows off its state is not in this — the plan's face, the command log, the failure screen,
+    /// the exit card, the plan's run bar, the discard log and band, another worktree's pane: their verbs raise them as
+    /// a hand does.
     property bool keepBuilt: false
 
     // ---- context menu on a sidebar row ------------------------------
@@ -1902,6 +1913,7 @@ FocusScope {
         tagAgainst: repoTab.defaultRemote
         menuDoor: page.menuDoor
         chosenHand: detailsPane.hand
+        keepBuilt: page.keepBuilt
         // As the row's own double-click answers (`GraphRowDelegate.doubleClick`): while the discard log's entry is on the
         // graph no name is moved to, a commit it draws is offered a new one, and the rows it leaves answer nothing.
         onRecordActivated: (chip, oidHex) => {
@@ -2031,7 +2043,7 @@ FocusScope {
             detailsPane: detailsPane,
             diffPane: diffPane,
             wipPane: wipPane,
-            carriedPane: carriedPane,
+            carriedSeat: carriedSeat,
             planSeat: planSeat,
             gitCorner: gitCorner,
             refMenuSeat: refMenuSeat,
@@ -2715,7 +2727,9 @@ FocusScope {
             return
         page.recoverPick = page.recoverPick === index ? -1 : index
         if (page.recoverPick >= 0) {
-            graphPane.findCard.dismiss()
+            // A card never raised has no search to end (`GraphPane.findCard`).
+            if (graphPane.findCard !== null)
+                graphPane.findCard.dismiss()
             graphPane.stopNaming()
         }
         page.showRecoverPick()
@@ -3778,17 +3792,23 @@ FocusScope {
             }
 
             // ---- open failed ------------------------------------------
-            OpenFailedScreen {
-                id: failedScreen
+            // Built while the tab's open has failed and taken down with it (rules-refs/app-ui.md — the
+            // `WindowDialogSeat` line): all it shows is the tab's. The seat is what stands in the split, so the split's
+            // own properties are its.
+            Loader {
+                id: failedSeat
                 visible: page.openFailed
+                active: page.openFailed
                 SplitView.fillHeight: true
                 SplitView.minimumHeight: pageLayout.panesMinHeight
-                kind: repoTab.errorKind
-                path: repoTab.errorPath
-                message: repoTab.error
-                pageWidth: page.width
-                commandsPage: page
-                onCloseRequested: page.closeTabRequested()
+                sourceComponent: OpenFailedScreen {
+                    kind: repoTab.errorKind
+                    path: repoTab.errorPath
+                    message: repoTab.error
+                    pageWidth: page.width
+                    commandsPage: page
+                    onCloseRequested: page.closeTabRequested()
+                }
             }
 
             // ---- three-pane layout --------------------------------------
@@ -3908,6 +3928,7 @@ FocusScope {
 
                         GraphPane {
                             id: graphPane
+                            keepBuilt: page.keepBuilt
                             askRoom: centreColumn.height - pageLayout.graphKeptHeight
                                         - (noticeBar.open ? noticeBar.leastHeight : 0)
                                         - (recoverBand.visible ? recoverBand.leastHeight : 0)
@@ -3959,6 +3980,7 @@ FocusScope {
 
                         DiffPane {
                             id: diffPane
+                            keepBuilt: page.keepBuilt
                             diffModel: diffModel
                             fromWorktree: page.diffFromWorktree
                             staged: page.diffStaged
@@ -4035,7 +4057,8 @@ FocusScope {
                         // the commit button's), so read through it a reader of another worktree would get no version
                         // at all.
                         roomLeft: !page.wipShown ? detailsPane.bottomRoom
-                                : page.wipWritable ? wipPane.bottomRoom : carriedPane.bottomRoom
+                                : page.wipWritable ? wipPane.bottomRoom
+                                : carriedSeat.item !== null ? carriedSeat.item.bottomRoom : 0
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
                         anchors.rightMargin: Theme.spaceXs
@@ -4045,19 +4068,24 @@ FocusScope {
                     }
 
                     // Another worktree's changes are a pane of their own (デザイン規約 §別の worktree を読む): they
-                    // can only be read, which is what the commit pane is shaped for.
-                    CarriedPane {
-                        id: carriedPane
+                    // can only be read, which is what the commit pane is shaped for. Built the first time it stands and
+                    // kept from then on (rules-refs/app-ui.md — the `WindowDialogSeat` line): most pages read no other
+                    // worktree, and one read again finds its list where it left it.
+                    Loader {
+                        id: carriedSeat
                         anchors.fill: parent
-                        visible: page.wipShown && !page.wipWritable
-                        worktreeName: page.carriedName
-                        worktreeHome: page.carriedHome
-                        files: carriedModel
-                        readBucket: page.diffFromWorktree ? page.diffKind : ""
-                        readPath: page.diffFromWorktree ? page.diffPath : ""
-                        onTreeViewChosen: tree => page.setWipTreeView(tree)
-                        onFileActivated: (bucket, path, origPath) => page.toggleDiff(bucket, path, origPath)
-                        onFileWalked: (bucket, path, origPath) => page.openDiff(bucket, path, origPath)
+                        visible: page.carriedShown
+                        active: false
+                        sourceComponent: CarriedPane {
+                            worktreeName: page.carriedName
+                            worktreeHome: page.carriedHome
+                            files: carriedModel
+                            readBucket: page.diffFromWorktree ? page.diffKind : ""
+                            readPath: page.diffFromWorktree ? page.diffPath : ""
+                            onTreeViewChosen: tree => page.setWipTreeView(tree)
+                            onFileActivated: (bucket, path, origPath) => page.toggleDiff(bucket, path, origPath)
+                            onFileWalked: (bucket, path, origPath) => page.openDiff(bucket, path, origPath)
+                        }
                     }
 
                     WipPane {
@@ -4073,6 +4101,7 @@ FocusScope {
                         amending: page.amending
                         headPublished: page.headPublished
                         menuStanding: page.menuStanding
+                        keepBuilt: page.keepBuilt
                         onAmendToggled: on => page.amendToggled(on)
                         onCommitClicked: page.commitNow()
                         readBucket: page.diffFromWorktree ? page.diffKind : ""
@@ -4088,7 +4117,7 @@ FocusScope {
                         // The run button's seat is carved off the pane's foot while a plan stands — the pane's own
                         // press-things-here edge moves up with it (デザイン規約 §コミットメッセージの 2 つの枠
                         // 「押す物はペインの底」).
-                        anchors.bottomMargin: planRunBar.visible ? planRunBar.height : 0
+                        anchors.bottomMargin: planRunSeat.visible ? planRunSeat.height : 0
                         visible: !page.wipShown
                         details: detailsModel
                         chosenCommits: page.chosenRecords
@@ -4099,6 +4128,7 @@ FocusScope {
                         onCommitShowRequested: oidHex => page.showChosen(oidHex)
                         stashRef: page.selectedStashRef
                         menuStanding: page.menuStanding
+                        keepBuilt: page.keepBuilt
                         // The one commit an amend reaches, and the line the box gives when this is not it
                         // (`page.messageEdit`; the rule is core's). `not-head` is silent — the reader can see the row
                         // is not the top. While a plan row carries `reword` the same boxes are its plan input (one
@@ -4158,8 +4188,11 @@ FocusScope {
                         onPopStashRequested: selector => page.popStash(selector)
                     }
 
-                    RebasePlanRunBar {
-                        id: planRunBar
+                    // Built the first time a plan stands (`onPlanActiveChanged`) and kept from then on
+                    // (rules-refs/app-ui.md — the `WindowDialogSeat` line): a held run's press lands after the plan it
+                    // ran has gone (`RebasePlanRunBar.runTicket`), so the bar outlives each plan.
+                    Loader {
+                        id: planRunSeat
                         // The plan holds the details face up (`onPlanActiveChanged`); the WIP guard is the belt —
                         // were that face ever up, this bar would sit over the commit button.
                         visible: page.planActive && !page.wipShown
@@ -4168,10 +4201,13 @@ FocusScope {
                         anchors.bottom: parent.bottom
                         anchors.leftMargin: Theme.spaceMd
                         anchors.rightMargin: Theme.spaceMd
-                        plan: planModel
-                        pushedCount: page.planPushed
-                        tipHeldElsewhere: worktree.headReachedElsewhere
-                        busy: repoTab.busyCount > 0
+                        active: false
+                        sourceComponent: RebasePlanRunBar {
+                            plan: planModel
+                            pushedCount: page.planPushed
+                            tipHeldElsewhere: worktree.headReachedElsewhere
+                            busy: repoTab.busyCount > 0
+                        }
                     }
                 }
             }

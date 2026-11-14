@@ -409,19 +409,29 @@ Rectangle {
     }
 
     // ---- the discard log, over the sections while it is up ----------
-    // Laid on top of the menu rather than in its place, so the sections keep their scroll and fold underneath.
-    RecoverPane {
-        id: recoverPane
+    // Laid on top of the menu rather than in its place, so the sections keep their scroll and fold underneath. Built
+    // the first time it stands and kept from then on (rules-refs/app-ui.md — the `WindowDialogSeat` line): most pages
+    // never open it, and one opened again finds its filter and its place as it left them.
+    readonly property bool recoverShown: sidebar.recoverPage !== null && sidebar.recoverPage.recoverOpen
+                                         && !sidebar.collapsed
+    onRecoverShownChanged: if (sidebar.recoverShown) recoverLog.active = true
+    Loader {
+        id: recoverLog
         anchors.fill: parent
         anchors.bottomMargin: sidebar.commandsRoom
-        visible: sidebar.recoverPage !== null && sidebar.recoverPage.recoverOpen && !sidebar.collapsed
-        curPage: sidebar.recoverPage
+        visible: sidebar.recoverShown
+        active: false
+        sourceComponent: RecoverPane {
+            curPage: sidebar.recoverPage
+        }
     }
-    /// Automation: the discard log, whose filter a run types into (PGG_AUTO_ACT=recover-open `filter:`).
-    readonly property alias autoRecover: recoverPane
+    /// Automation: the discard log, whose filter a run types into (PGG_AUTO_ACT=recover-open `filter:`); null until
+    /// it first stands.
+    readonly property var autoRecover: recoverLog.item
     /// The keyboard comes to the discard log (`RepoPage.escapePressed`).
     function takeRecoverKeyboard() {
-        recoverPane.takeKeyboard()
+        if (recoverLog.item !== null)
+            recoverLog.item.takeKeyboard()
     }
 
     SectionPeekPopup {

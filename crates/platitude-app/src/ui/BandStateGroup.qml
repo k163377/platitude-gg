@@ -141,10 +141,10 @@ Item {
     readonly property color stateMarkColor: stateGroup.tint
     readonly property int stateCapW: stateGroup.cap === Number.MAX_VALUE ? -1 : Math.round(stateGroup.cap)
     readonly property int stateGroupW: Math.round(stateGroup.width)
-    readonly property bool stateCardOpen: stateCard.opened
-    readonly property string stateCardRows: stateCard.rowsLaidOut()
-    readonly property string stateCardSize: stateCard.laidOutSize
-    readonly property bool stateCardLaidOut: stateCard.laidOut
+    readonly property bool stateCardOpen: stateCardSeat.item !== null && stateCardSeat.item.opened
+    readonly property string stateCardRows: stateCardSeat.item !== null ? stateCardSeat.item.rowsLaidOut() : ""
+    readonly property string stateCardSize: stateCardSeat.item !== null ? stateCardSeat.item.laidOutSize : ""
+    readonly property bool stateCardLaidOut: stateCardSeat.item !== null && stateCardSeat.item.laidOut
 
     /// The folded mark's colour — the heaviest state's: `danger` when a conflict or a stale graph is among them, else
     /// `warning` (規約 §状態). The mark says nothing but its colour, so its name is `Accessible.name`.
@@ -213,7 +213,7 @@ Item {
     signal identityEditRequested()
 
     /// Automation: `BandStateCard.wordsOffLevel`, for the band to hand on.
-    function stateCardWordsOff() { return stateCard.wordsOffLevel() }
+    function stateCardWordsOff() { return stateCardSeat.item !== null ? stateCardSeat.item.wordsOffLevel() : 0 }
 
     /// The same max-min share the tab names are settled with (`TabStrip.settleTitleCap`), settled by hand for the same
     /// reason.
@@ -269,7 +269,7 @@ Item {
 
     readonly property HoverSeat stateKeep: HoverSeat {
         id: stateKeep
-        card: stateCard
+        card: stateCardSeat.item
         // The card opens the moment the hand is on the marks — once the hand has moved, when the marks came under it
         // (`movedUnderHand`). A card the reader dismissed comes back with the hand leaving the group and coming back,
         // or, folded, a press on the `…` (`stateMouse`, `HoverSeat.expands`).
@@ -278,7 +278,10 @@ Item {
         // Behind any menu in the window — a page's right-click, the ☰ beside it — the card goes the moment it stands
         // and nothing opens while it does (デザイン規約 §メニュー「メニューが立っている間、その裏の hover は引っ込む」).
         blockedBy: OutsidePress.standsOver(stateGroup) ? "menu" : ""
-        onOpenAsked: stateCard.open()
+        onOpenAsked: {
+            stateCardSeat.active = true
+            stateCardSeat.item.open()
+        }
     }
 
     BandStateMetrics {
@@ -494,31 +497,38 @@ Item {
         }
     }
 
-    BandStateCard {
-        id: stateCard
-        // Flush under the group's right edge: centred, it would open past the window; a gap would be a band the
-        // pointer crosses touching neither card nor mark (規約 §hover のツールチップ).
-        x: stateGroup.width - width
-        y: stateGroup.height
-        box: badgeMetrics
-        opText: stateGroup.stateWorktree !== null ? stateGroup.stateWorktree.opText : ""
-        opAlso: stateGroup.stateWorktree !== null ? stateGroup.stateWorktree.opAlso : ""
-        opStep: stateGroup.stateWorktree !== null ? stateGroup.stateWorktree.opStep : 0
-        opSteps: stateGroup.stateWorktree !== null ? stateGroup.stateWorktree.opSteps : 0
-        conflictCount: stateGroup.stateWorktree !== null ? stateGroup.stateWorktree.conflictCount : 0
-        identityUnsaved: AppBackend.identityUnsaved
-        gitVersion: AppBackend.gitVersion
-        minimumGit: AppBackend.minimumGit
-        opShown: stateGroup.opBadgeShown
-        conflictShown: stateGroup.conflictBadgeShown
-        identityShown: stateGroup.identityBadgeShown
-        oldGitShown: stateGroup.oldGitBadgeShown
-        staleShown: stateGroup.staleBadgeShown
-        lfsShown: stateGroup.lfsBadgeShown
-        lfsNeeded: stateGroup.stateWorktree !== null ? stateGroup.stateWorktree.lfsNeeded : 0
-        staleStopped: stateGroup.curPage !== null && stateGroup.curPage.pageGraph.failed
-        staleSilent: stateGroup.curPage !== null && stateGroup.curPage.pageGraph.silent
-        staleWhy: stateGroup.curPage !== null ? stateGroup.curPage.pageGraph.error : ""
-        onIdentityRequested: stateGroup.identityEditRequested()
+    // Built by its first opening and kept (rules-refs/app-ui.md — the `WindowDialogSeat` line): most windows never
+    // rest on a mark. The seat fills the group, so the card opens in the group's coordinates; the seat opens it in
+    // the turn it builds it (`stateKeep`).
+    Loader {
+        id: stateCardSeat
+        anchors.fill: parent
+        active: false
+        sourceComponent: BandStateCard {
+            // Flush under the group's right edge: centred, it would open past the window; a gap would be a band the
+            // pointer crosses touching neither card nor mark (規約 §hover のツールチップ).
+            x: stateGroup.width - width
+            y: stateGroup.height
+            box: badgeMetrics
+            opText: stateGroup.stateWorktree !== null ? stateGroup.stateWorktree.opText : ""
+            opAlso: stateGroup.stateWorktree !== null ? stateGroup.stateWorktree.opAlso : ""
+            opStep: stateGroup.stateWorktree !== null ? stateGroup.stateWorktree.opStep : 0
+            opSteps: stateGroup.stateWorktree !== null ? stateGroup.stateWorktree.opSteps : 0
+            conflictCount: stateGroup.stateWorktree !== null ? stateGroup.stateWorktree.conflictCount : 0
+            identityUnsaved: AppBackend.identityUnsaved
+            gitVersion: AppBackend.gitVersion
+            minimumGit: AppBackend.minimumGit
+            opShown: stateGroup.opBadgeShown
+            conflictShown: stateGroup.conflictBadgeShown
+            identityShown: stateGroup.identityBadgeShown
+            oldGitShown: stateGroup.oldGitBadgeShown
+            staleShown: stateGroup.staleBadgeShown
+            lfsShown: stateGroup.lfsBadgeShown
+            lfsNeeded: stateGroup.stateWorktree !== null ? stateGroup.stateWorktree.lfsNeeded : 0
+            staleStopped: stateGroup.curPage !== null && stateGroup.curPage.pageGraph.failed
+            staleSilent: stateGroup.curPage !== null && stateGroup.curPage.pageGraph.silent
+            staleWhy: stateGroup.curPage !== null ? stateGroup.curPage.pageGraph.error : ""
+            onIdentityRequested: stateGroup.identityEditRequested()
+        }
     }
 }

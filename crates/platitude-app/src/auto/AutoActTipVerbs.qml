@@ -195,7 +195,9 @@ Item {
                     if (!Awaited.all("path_tip_carried", { "path": page.carriedPath !== "",
                                                            "files": files.carriedAt === page.carriedPath,
                                                            "total": files.total !== 0,
-                                                           "rows": carriedPane.view.count > op.row }))
+                                                           // Null until the pane first stands (`carriedSeat`).
+                                                           "rows": carriedPane !== null
+                                                                   && carriedPane.view.count > op.row }))
                         return
                     op.input("pointed", () => {
                         carriedPane.pointedTipRow = op.row
