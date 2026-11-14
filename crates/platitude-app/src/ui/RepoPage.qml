@@ -14,19 +14,20 @@ import platitude.ui
 // `Main` sets to `curPage`). Headless: `diff-escape`'s `hand=true kept=true`.
 //
 // **Not split further** — past the length backstop, exempt on the ledger (rules-refs/structure.md §分割しない判断).
-// Out are `PageLayout`, `CommitMenuState`, the question flows (`LeaveFlow` / `UpstreamFlow` / `RenameCarryFlow` /
-// `PublishFlow`), `RowHoverHost`, `SplitBarWatch`, `CommandsOwner`, `GitHubLinks`, `RecoverEntries` and the harness
-// (`PageHarness`). Two pure moves are still open: the graph name box's verdicts (`graphNameRefusedWhy` and the
-// bindings above it — read by `GraphPane` and the harness alone, the twin of `SidebarRowGestures`' `edit*`) and the
-// command log's automation pass-throughs (`clearCommandLog` … `copyCommandText`, read by the harness alone). Past
-// them is one tab's state machine: following the selection, opening and closing the diff, settling write results and
-// owning the models, meshed through `selectedOid` / `repoTab`. That is the unit to split, and it moves only with the
-// redesign in which only the page writes page state (a child writes the page only as `PageLayout` does). The redesign
-// goes one operation at a time (the shape is in `ops/mod.rs`). Answered by their own id already: the commit, the stash
-// that empties the tree, the pop, a worktree's add and move, the pushes, the branch's plain delete (`absorb*Answer`),
-// with what a delete or a stage shows ahead of git held in core (`ops::StandIn` / `StageAhead`). Left: following the
-// selection and the diff's open and close, which have no owner of their own, and the writes nobody waits for by name
-// (`absorbLeftoverAnswer`; P3-確認事項, the write group). When it is done, take this file off the ledger and pin it in
+// Out are `PageLayout`, `CommitMenuState`, `GraphNameVerdict`, the question flows (`LeaveFlow` / `UpstreamFlow` /
+// `RenameCarryFlow` / `PublishFlow`), `RowHoverHost`, `SplitBarWatch`, `CommandsOwner`, `GitHubLinks`, `RecoverEntries`
+// and the harness (`PageHarness`). Next out is the discard log (`recover*`, `DiscardModel`): a part handed the page as
+// `PageLayout` is, but an `Item` (its timer, blink and `Connections` go with it), once the page's writes into its state
+// are calls into it — `absorbWriteResult` clears `recoverAwaits`, `leaveWorktree` puts the pick and its walk down —
+// and what `RecoverPane` reads off `curPage` (`menuStanding` with it) is the part's to hand on. Past it is one tab's
+// state machine: following the selection, opening and closing the diff, settling write results and owning the models,
+// meshed through `selectedOid` / `repoTab`, which moves only with the redesign in which only the page writes page
+// state (a child writes the page only as `PageLayout` does). The redesign goes one operation at a time (the shape is in
+// `ops/mod.rs`). Answered by their own id already: the commit, the stash that empties the tree, the pop, a worktree's
+// add and move, the pushes, the branch's plain delete (the page's `absorb*` for each), with what a delete or a stage
+// shows ahead of git held in core (`ops::StandIn` / `StageAhead`). Left: following the selection and the diff's open
+// and close, which have no owner of their own, and the writes nobody waits for by name (`absorbLeftoverAnswer`;
+// P3-確認事項, the write group). When it is done, take this file off the ledger and pin it in
 // `crates/xtask/structure-baseline.txt`.
 FocusScope {
     id: page
