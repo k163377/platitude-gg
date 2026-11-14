@@ -215,9 +215,8 @@ impl RepoTab {
     // (`ops::TreeOut`). Its other wait — the tree itself — is asked for
     // (`takeCommitLanding`).
     qproperty!("commitAnswer", Member = commit_answer, Notify = changed);
-    // …and where the stash press that took the worktree away
-    // answered. Its other wait — the tree itself — is asked for
-    // (`takeStashLanding`).
+    // …and where the stash press that took the worktree away answered, its
+    // tree asked for the same way (`takeStashLanding`).
     qproperty!("stashAnswer", Member = stash_answer, Notify = changed);
     // …and where a branch's push answered — the toolbar's or the branch
     // row's — with the branch it was sent for: refusals are remembered per
@@ -232,8 +231,8 @@ impl RepoTab {
     // same word (`ops::PushOut`).
     qproperty!("refPushAnswer", Member = ref_push_answer, Notify = changed);
     qproperty!("refPushTarget", Member = ref_push_target, Notify = changed);
-    // …and where the worktree a menu asked for answered, with the
-    // folder it was to be made in (`ops::Press`).
+    // …and where the worktree a menu asked for answered, with the folder
+    // it was to be made in (`ops::Press`).
     qproperty!("worktreeAnswer", Member = worktree_answer, Notify = changed);
     qproperty!(
         "worktreeAnswerPath",
@@ -333,8 +332,7 @@ impl RepoTab {
 
     /// `commitWaits` moved. Its own, for `settling`'s reason: a write
     /// counts out from the slot that asks for it (`ask_session`) and a press
-    /// stands from the slot that pressed (`pressed_ahead`), and `changed`
-    /// there would run every reader of this tab before the slot is done.
+    /// stands from the slot that pressed (`pressed_ahead`).
     #[qsignal]
     pub(super) fn commit_waits_changed(&mut self);
 
@@ -369,9 +367,8 @@ impl RepoTab {
         }
     }
 
-    /// How many write answers this notify carried
-    /// (`RepoTab::write_answers`), read one field at a time by the slots
-    /// below (rules/app-ui.md「QML は表示とインタラクションだけ」).
+    /// How many write answers this notify carried (`RepoTab::write_answers`),
+    /// read one field at a time by the slots below.
     #[qslot]
     fn write_answer_count(&self) -> i32 {
         i32::try_from(self.write_answers.len()).unwrap_or(i32::MAX)
@@ -440,23 +437,16 @@ impl RepoTab {
         self.write_watch.arm(&what).unwrap_or_default()
     }
 
-    /// The run's input has gone in; from here the run is waiting on that
-    /// write, however it waits.
     #[qslot]
     pub(crate) fn write_input_went(&mut self) {
         self.write_watch.input_went();
     }
 
-    /// The run moves on from the write it pressed for without waiting it
-    /// out — a composite must say so, or it reads as forgetting to wait
-    /// (`write_watch`).
     #[qslot]
     pub(crate) fn let_write_go(&mut self) {
         self.write_watch.let_go();
     }
 
-    /// A breach the run saw and this side could not. Ends the run the same
-    /// way one raised here does.
     #[qslot]
     pub(crate) fn break_write_contract(&mut self, breach: String) {
         self.write_watch.broke(&breach);
@@ -510,8 +500,7 @@ impl RepoTab {
         self.settled.iter().map(|id| bridge_id(*id)).collect()
     }
 
-    /// git stopped part-way through that one and left the operation
-    /// standing.
+    /// git stopped part-way through that one and left the operation standing.
     #[qslot]
     fn write_answer_stopped(&self, index: i32) -> bool {
         self.write_answer_at(index).is_some_and(|a| a.stopped)
@@ -538,10 +527,10 @@ impl RepoTab {
         self.write_answer_at(index).is_some_and(|a| a.at_tip)
     }
 
-    /// Which report an outside refusal made (a protected branch, a
-    /// repository rule, a hook): `delete` / `update` / `outdated` /
-    /// `commit` …, read with the three below. Empty is git's plain
-    /// refusal, the command log's news (デザイン規約 §答えの要らない報せ).
+    /// Which report that refusal made (`drain::report_word`: `delete-rule` /
+    /// `outdated` / `commit-hook` / `stale-stage` …), read with the three
+    /// below. Empty is git's plain refusal, the command log's news
+    /// (デザイン規約 §答えの要らない報せ).
     ///
     /// Read off the answer, or a drain with two refusals gives the earlier
     /// press the later one's words.
@@ -598,9 +587,9 @@ impl RepoTab {
         Hub::with(|hub| hub.release_tab(id));
     }
 
-    /// The tab is standing in another worktree of the repository it
-    /// is showing (`Hub::restand_tab`), and the page is staying. What goes
-    /// and what stays is `forget_the_worktree`'s.
+    /// The tab is standing in another worktree of the repository it is
+    /// showing (`Hub::restand_tab`), and the page is staying. What goes and
+    /// what stays is `forget_the_worktree`'s.
     #[qslot]
     fn restand(&mut self) {
         let was_settling = self.settling;
@@ -648,7 +637,6 @@ impl RepoTab {
         Hub::with(|hub| hub.hold_draft(id, draft));
     }
 
-    // Read back one field at a time, like the write answers.
     #[qslot]
     fn draft_subject(&self) -> String {
         Hub::with(|hub| hub.draft(self.tab_id).subject).unwrap_or_default()
@@ -680,7 +668,7 @@ impl RepoTab {
     /// Whether the page is on screen to be read for: this tree and the
     /// other worktrees are then read on the session's pace
     /// (`RepoSession::set_paced`), and each read that ends says so
-    /// (`pacedRead`).
+    /// (`pacedSeq` / `pacedWorktrees`).
     #[qslot]
     fn set_paced(&mut self, paced: bool) {
         self.with_session(|s| s.set_paced(paced));
@@ -736,11 +724,7 @@ impl RepoTab {
 
     // --- write operations -----------------------------------------------
     //
-    // The session serializes these and reports progress through
-    // `busyCount`. Paths arrive one per call (see `pending_paths`).
-
-    // Whole files staged or unstaged move their rows at the press
-    // (`ops_stage::move_paths`); the notify is what has the page draw them.
+    // The session serializes these and reports progress through `busyCount`.
 
     #[qslot]
     fn stage_path(&mut self, path: String) {
@@ -827,8 +811,7 @@ impl RepoTab {
     /// Stages part of one file's diff — or unstages it, for a `staged`
     /// `kind` — addressed by the clicked row. `kind` is the diff-key prefix
     /// (`unstaged` / `staged` / `untracked`); a negative `line` takes the
-    /// whole hunk. Answers whether a write went out
-    /// (see [`Self::stage_chosen`]); the caller's wait is armed by it.
+    /// whole hunk. Answers whether a write went out ([`Self::stage_chosen`]).
     #[qslot]
     fn stage_selection(
         &mut self,
@@ -948,8 +931,7 @@ impl RepoTab {
 
     /// Deletes a local branch, and takes its row off the screen behind the
     /// press (`ops_delete`). Without `force`, git refuses an unmerged one
-    /// — and that answer is the menu's to catch, so the plain form is
-    /// written down first (`branch_delete`).
+    /// — and that answer is the menu's to catch (`branch_delete`).
     #[qslot]
     fn delete_branch(&mut self, name: String, force: bool) {
         self.branch_delete(name, force)
@@ -1012,10 +994,8 @@ impl RepoTab {
         self.remote_tag_replace(old, to, expect);
     }
 
-    /// The remote's copy of a tag. `rowGoes` is whether the sidebar's row
-    /// leaves with it — true where only the remote had the name
-    /// (`ops_delete::remote_tag_delete`). `expect` is the commit the row
-    /// showed the tag on, which the delete is leased to.
+    /// The remote's copy of a tag; what `rowGoes` and `expect` say is
+    /// `ops_delete::remote_tag_delete`'s.
     #[qslot]
     fn delete_remote_tag(&mut self, remote: String, tag: String, row_goes: bool, expect: String) {
         self.remote_tag_delete(RemoteTag { remote, tag }, row_goes, expect);
@@ -1034,7 +1014,6 @@ impl RepoTab {
         self.ask_session(|s| s.rename_tag(from, to));
     }
 
-    /// Deletes a tag: only the name goes.
     #[qslot]
     fn delete_tag(&mut self, name: String) {
         self.tag_delete(name);
@@ -1049,10 +1028,8 @@ impl RepoTab {
         self.ask_session(|s| s.rename_stash(selector, oid, message));
     }
 
-    /// `git stash push -u` over the whole worktree, straight off the
-    /// press (デザイン規約 §変更を退避する).
-    ///
-    /// `message` is the commit box's text; empty lets git name the entry.
+    /// `git stash push -u` over the whole worktree, straight off the press
+    /// (デザイン規約 §変更を退避する).
     #[qslot]
     fn push_stash(&mut self, message: String) {
         self.stash_push(message)
@@ -1118,22 +1095,20 @@ impl RepoTab {
 
     /// `git worktree move`: the worktree at `from` takes the folder `to`,
     /// beside it — a name box's rename of a worktree on no branch. `name` is
-    /// its folder now, for a refusal's heading. The answer is the page's to
-    /// wait for (`worktreeMoveAnswer`); a tab standing in it stands anew after.
-    /// Says whether the write was taken — there is no answer to wait for
-    /// otherwise.
+    /// its folder now, for a refusal's heading. Says whether the write was
+    /// taken; only then is there an answer for the page to wait for
+    /// (`worktreeMoveAnswer`).
     #[qslot]
     fn move_worktree(&mut self, from: String, to: String, name: String) -> bool {
         self.worktree_move(from, to, name)
     }
 
-    /// `git worktree remove` (destructive): the worktree's row goes at the
-    /// press, with the chip and the branch mark it wears on the graph and the
-    /// branches list. `name` is the row's own word for it, for a refusal's
-    /// heading and the chip of one on no branch; `branch` the branch it has
-    /// out, empty for none. No page waits for it by name: a refusal
-    /// (`worktree-kept` / `worktree-half`) lands in the report branch of
-    /// `RepoPage.absorbLeftoverAnswer`, so the bar says it and the log does
+    /// `git worktree remove` (destructive): its rows go at the press
+    /// (`ops_delete::worktree_remove`). `name` is the row's own word for it,
+    /// for a refusal's heading and the chip of one on no branch; `branch` the
+    /// branch it has out, empty for none. No page waits for it by name: a
+    /// refusal (`worktree-kept` / `worktree-half`) lands in the report branch
+    /// of `RepoPage.absorbLeftoverAnswer`, so the bar says it and the log does
     /// not come up.
     #[qslot]
     fn remove_worktree(&mut self, path: String, name: String, branch: String) {
@@ -1148,11 +1123,9 @@ impl RepoTab {
         self.note_listing_drawn();
     }
 
-    /// A status has been applied beside HEAD report `seen`, leaving the
-    /// worktree empty or not (`RepoTab::tree_was_read`).
-    ///
-    /// `seen` is the counts' own number (`WorktreeModel.statusSeq`), not
-    /// `headSeq`: a HEAD report also arrives on its own, carrying no counts.
+    /// A status put on screen (`RepoTab::tree_was_read`). `seen` is the
+    /// counts' own number (`WorktreeModel.statusSeq`), not `headSeq`: a HEAD
+    /// report also arrives on its own, carrying no counts.
     #[qslot]
     fn note_tree_read(&mut self, seen: i32, emptied: bool) {
         let Ok(seen) = u64::try_from(seen) else {
@@ -1161,14 +1134,12 @@ impl RepoTab {
         self.tree_was_read(seen, emptied);
     }
 
-    /// The page is acting on the worktree it has: answers whether
-    /// this window's own stash is what emptied it, and settles that press
+    /// The page is acting on the worktree it has: answers whether this
+    /// window's own stash is what emptied it, and settles that press
     /// (`ops::TreeOut`). Asked from both halves of the pair (a status
     /// landing, a write answering) — the first gets nothing — and asking
     /// spends it, so there is nothing for a binding to follow. The answer
-    /// is the write's fence — the first report of HEAD after it
-    /// (`WorktreeModel.headSeq` at or above it looked after the write) —
-    /// or 0 for no.
+    /// is the write's fence, as `writeAnswerHeadSeq` gives it, or 0 for no.
     #[qslot]
     fn take_stash_landing(&mut self) -> i32 {
         self.stash_landing_taken().map_or(0, bridge_id)
@@ -1232,8 +1203,7 @@ impl RepoTab {
 
     /// The first push of `branch` — the one the question named, checked
     /// out or not — to the remote and name the question just took. Records
-    /// the answer as the upstream, so the branch never asks again. Written
-    /// down the way `pushCurrent` writes its own.
+    /// the answer as the upstream, so the branch never asks again.
     #[qslot]
     fn publish_branch(
         &mut self,
@@ -1424,8 +1394,8 @@ impl RepoTab {
         self.ask_session(|s| s.revert(vec![rev]));
     }
 
-    /// Continues / aborts / skips whatever is in progress. `how` is
-    /// `"continue"` / `"abort"` / `"skip"` / `"quit"`.
+    /// The way out of whatever is in progress: `how` is `"continue"` /
+    /// `"abort"` / `"skip"` / `"quit"`.
     #[qslot]
     fn resolve_operation(&mut self, how: String) {
         self.settle_operation(how)

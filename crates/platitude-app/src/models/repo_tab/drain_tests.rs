@@ -96,8 +96,7 @@ fn a_tag_answer_says_so_whichever_way_it_went() {
     assert!(settled(K::Tag, "fatal: tag 'v1.0' already exists").write_tag_op);
     assert!(settled(K::DeleteTagEverywhere, "").write_tag_op);
     assert!(!settled(K::Branch, "").write_tag_op);
-    // A rename's question sends a push, so its own answer must not
-    // re-raise it.
+    // A rename's question sends a push, so its own answer must not re-raise it.
     assert!(!settled(K::Push, "").write_tag_op);
 }
 
@@ -158,8 +157,7 @@ fn a_push_refused_with_a_report_hands_the_report_to_the_press() {
     assert_eq!(tab.write_report_kind, "");
 }
 
-// The reader switched branches and pushed again before the first came
-// back.
+// The reader switched branches and pushed again before the first came back.
 #[test]
 fn two_pushes_in_a_row_are_answered_by_id_and_neither_twice() {
     let mut tab = push_pressed();
@@ -445,8 +443,7 @@ fn a_branch_answer_nobody_stayed_up_for_names_nothing() {
     );
 }
 
-// The name stands (the card reads it as an edge and may not be drawn
-// yet); where it answered is the notify's own.
+// The name stands: the card reads it as an edge and may not be drawn yet.
 #[test]
 fn the_delete_answer_stands_but_says_which_notify_carried_it() {
     let mut tab = menu_standing();
@@ -585,13 +582,11 @@ fn a_notify_that_carried_no_answer_says_so() {
 
 // ---- the editor's commit, found by the id its press was given --------
 
-/// The id the queue gave the press under test, and one it gave somebody
-/// else.
+/// The id the queue gave the press under test, and one it gave somebody else.
 const OURS: u64 = 7;
 const SOMEBODY_ELSE: u64 = 8;
 
-/// The editor sent a commit and waits for it
-/// (`state::commit_from_fields`).
+/// The editor sent a commit and waits for it (`state::commit_from_fields`).
 fn editor_pressed() -> RepoTab {
     let mut tab = RepoTab::default();
     tab.commit_out.asked(Some(OURS));
@@ -746,8 +741,8 @@ fn the_stash_that_emptied_the_tree_is_ours_over_the_fetch_behind_it() {
     );
 }
 
-// It stands past the drains in between: the status that finds the tree
-// empty is a feed of its own and arrives long after.
+// The status that finds the tree empty is a feed of its own and arrives
+// long after.
 #[test]
 fn the_landing_stands_until_the_tree_is_read() {
     let mut tab = tree_stashed();
@@ -770,8 +765,6 @@ fn the_landing_stands_until_the_tree_is_read() {
     );
 }
 
-// A refused stash took no tree away, but its words are still the press's
-// to say.
 #[test]
 fn a_refused_stash_claims_no_tree_and_keeps_its_words() {
     let mut tab = tree_stashed();
@@ -859,10 +852,9 @@ fn tree_committed() -> RepoTab {
     tab
 }
 
-// The commit's own landing names the write's fence in either order of
-// answer and status: the landing that follows reads HEAD at or after it,
-// never the report in hand — an amend of nothing leaves the counts as they
-// were, and the HEAD in hand is the one it replaced.
+// The landing that follows reads HEAD at or after the fence, never the
+// report in hand — an amend of nothing leaves the counts as they were, and
+// the HEAD in hand is the one it replaced.
 #[test]
 fn the_commit_that_emptied_the_tree_lands_on_its_fence_whichever_half_comes_first() {
     let mut tab = tree_committed();
@@ -886,8 +878,7 @@ fn the_commit_that_emptied_the_tree_lands_on_its_fence_whichever_half_comes_firs
     assert_eq!(tab.commit_landing_taken(), Some(FENCE));
 }
 
-// A commit that left files took no tree, and a refused one took nothing —
-// while the editor still hears the refusal.
+// The editor still hears the refusal.
 #[test]
 fn a_commit_that_left_files_or_was_refused_claims_no_tree() {
     let mut tab = tree_committed();
