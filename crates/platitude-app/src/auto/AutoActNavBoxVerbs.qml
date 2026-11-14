@@ -382,10 +382,7 @@ Item {
             tagRemoteRenameTimer.order = ["renamed"].concat(tagRemoteRenameTimer.choice !== "" ? ["picked"] : [],
                                                             points ? ["pointed"] : [],
                                                             holds ? ["said", "answered"] : [])
-            driver.pressWrite("fetch", () => {
-                repoTab.fetch("")
-                return true
-            })
+            driver.pressFetch()
             tagRemoteRenameTimer.start()
         }
         /// What the bar says. `here=` is the wait for the new name's row said out loud; `mark=` weighs the commit the
@@ -1021,10 +1018,7 @@ Item {
             navOpenTagTimer.order = ["opened"].concat(menuLine >= 0 ? ["rested", "card"]
                                                       : navOpenTagTimer.rest !== "" ? ["rested"] : [])
             // Waited on by its ask's id (`rename-tag-remote` の同じ待ち).
-            driver.pressWrite("fetch", () => {
-                repoTab.fetch("")
-                return true
-            })
+            driver.pressFetch()
             navOpenTagTimer.start()
         }
         /// Whether what this run waits on has arrived, asked of the lookups the lines are drawn from

@@ -191,10 +191,7 @@ Item {
             const at = arg.split("@")
             tagChipTimer.tag = at[0]
             tagChipTimer.row = at.length > 1 ? Number(at[1]) : 0
-            driver.pressWrite("fetch", () => {
-                repoTab.fetch("")
-                return true
-            })
+            driver.pressFetch()
             tagChipTimer.start()
         } else if (act === "chip-menu") {
             // The chip raises the row's menu aimed at its name (デザイン規約 §グラフ行の右クリック). The branch is
@@ -551,10 +548,7 @@ Item {
             // `read` waits for every remote's reading, so it waits on its own fetch by its id (`nav-open-tag`'s wait):
             // a name several remotes carry frames as one only one of them does while the others are still unread.
             if (tagMenuTimer.wants === "read")
-                driver.pressWrite("fetch", () => {
-                    repoTab.fetch("")
-                    return true
-                })
+                driver.pressFetch()
             else if (tagMenuTimer.wants !== "")
                 repoTab.fetch("")
             tagMenuTimer.start()

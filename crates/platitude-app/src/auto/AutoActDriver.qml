@@ -450,6 +450,14 @@ Item {
             return true
         })
     }
+    /// A fetch of every remote pressed as this run's write (`fetch`), so the run can wait on it by its ask's id.
+    /// Answers as `pressWrite` does.
+    function pressFetch() {
+        return driver.pressWrite("fetch", () => {
+            repoTab.fetch("")
+            return true
+        })
+    }
 
     /// **A write whose input takes time** — a hold to run out, a dialog to answer, a row to appear. Arms; the ask the
     /// input produces is caught whenever it comes. Answers whether the arm took: arming over a pressed write not yet

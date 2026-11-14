@@ -103,10 +103,7 @@ Item {
     /// not be through yet (`tagMenuTimer`'s `read`): on a tag, a fetch of its own goes out. Says whether one did.
     function fetchForTag(onTag) {
         if (onTag)
-            driver.pressWrite("fetch", () => {
-                driver.repoTab.fetch("")
-                return true
-            })
+            driver.pressFetch()
         return onTag
     }
     /// Presses the graph's `row` with `modifiers` once its delegate is built. A row far down has none until the view
