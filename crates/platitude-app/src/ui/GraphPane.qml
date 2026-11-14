@@ -199,8 +199,8 @@ Rectangle {
     /// boxes that make a name.
     property string namingId: ""
     readonly property alias namingOpenedWith: graphList.namingOpenedWith
-    /// What the box is standing on, for the page to decide whether what is typed can be accepted at all — the models
-    /// that answer that are the page's (`RepoPage.graphNameRefusedWhy`).
+    /// What the box is standing on, for `GraphNameVerdict` to decide whether what is typed can be accepted at all —
+    /// the models that answer that are the page's (`GraphNameVerdict.graphNameRefusedWhy`).
     readonly property alias namingMode: graphList.namingMode
     readonly property alias namingKind: graphList.namingKind
     readonly property alias namingOid: graphList.namingOid

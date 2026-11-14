@@ -1790,95 +1790,18 @@ FocusScope {
         if (row >= 0)
             graphPane.showRowSoon(row)
     }
-    /// Whether the graph's name box can be accepted, and the line that says why not (the pane only draws it). A rename
-    /// is refused even rubbed out, a new name only once one is typed — a box opened empty would come up turning down
-    /// the reader's arrival (§可否・警告の出し場所, `SidebarRowGestures`).
-    readonly property string graphRenameRemote: graphPane.namingKind !== "remote" ? ""
-        : GitFacts.remoteOfRef(graphPane.namingId, repoTab.remoteNames)
-    readonly property bool graphNameTaken: graphPane.namingMode === "rename" && page.graphRenameRemote !== ""
-        && graphPane.namingText.trim() !== ""
-        && remotesModel.hasRemoteBranch(page.graphRenameRemote, graphPane.namingText.trim())
-    /// Where the worktree named in the graph's box would go (`NavSectionModel.newWorktreeFor`), asked per keystroke;
-    /// undefined for every other box.
-    readonly property var graphWorktreePlace: graphPane.namingMode === "worktree"
-        ? worktreesModel.newWorktreeFor(graphPane.namingText.trim()) : undefined
-    /// Where a worktree's folder would go renamed to what is typed in the graph's box
-    /// (`NavSectionModel.renamedWorktreeFor`); undefined for every other box.
-    readonly property var graphFolderPlace:
-        graphPane.namingMode === "rename" && graphPane.namingKind === "worktreeFolder"
-        ? worktreesModel.renamedWorktreeFor(graphPane.namingId, graphPane.namingText.trim()) : undefined
-    /// A local branch being renamed that a rebase or bisect stopped in some worktree holds — this one's too: git
-    /// renames none such (`NavSectionModel.heldByOperation`, as `SidebarRowGestures.editHeld`).
-    readonly property var graphNameHeld: graphPane.namingMode === "rename" && graphPane.namingKind === "branch"
-        ? worktreesModel.heldByOperation(graphPane.namingId) : undefined
-    readonly property string graphNameHeldWhy: page.graphNameHeld === undefined ? ""
-        : Words.heldByOperation(page.graphNameHeld.by, page.graphNameHeld.here,
-                                worktreesModel.worktreeCalled(page.graphNameHeld.path))
-    /// The folder the box's tip stands the tree mark in front of, where the refusal names one
-    /// (`Words.worktreeNameMark` / `worktreeRenameMark`).
-    readonly property string graphNameRefusedMark: graphPane.namingKind === "worktreeFolder"
-        ? Words.worktreeRenameMark(page.graphNameRefusedWhy, page.graphFolderPlace)
-        : page.graphNameHeldWhy !== "" && page.graphNameRefusedWhy === page.graphNameHeldWhy
-          && !page.graphNameHeld.here
-        ? worktreesModel.worktreeCalled(page.graphNameHeld.path)
-        : Words.worktreeNameMark(page.graphNameRefusedWhy, page.graphWorktreePlace)
-    /// The branch, tag or remote that refusal names, behind its mark (`Words.refusalMarks`) — asked again of the clash
-    /// the line was written from.
-    readonly property var graphNameRefusedMarks: {
-        // Nothing refused, nothing to seat — and no clash asked of the model for it.
-        if (page.graphNameRefusedWhy === "")
-            return []
-        const tag = graphPane.namingMode === "tag"
-                    || (graphPane.namingMode === "rename" && graphPane.namingKind === "tag")
-        const clash = (tag ? tagsModel : branchesModel).nameClash(
-            graphPane.namingText.trim(), graphPane.namingMode === "rename" ? graphPane.namingId : "")
-        return Words.refusalMarks(page.graphNameRefusedWhy, clash, tag,
-                                  page.graphNameTaken ? page.graphRenameRemote : "")
+    /// What the graph's name box may accept, and why not (`GraphNameVerdict`).
+    readonly property GraphNameVerdict graphNameVerdict: GraphNameVerdict {
+        id: graphNameVerdict
+        graphPane: graphPane
+        repoTab: repoTab
+        remotesModel: remotesModel
+        worktreesModel: worktreesModel
+        branchesModel: branchesModel
+        tagsModel: tagsModel
     }
-    readonly property string graphNameRefusedWhy: {
-        if (graphPane.namingOid === "")
-            return ""
-        // A worktree's folder follows the disk's rules, not git's, and nothing git said goes into its box
-        // (`SidebarRowGestures.editFolderWhy`).
-        if (graphPane.namingMode === "rename" && graphPane.namingKind === "worktreeFolder")
-            return Words.worktreeRenameRefused(graphPane.namingText, page.graphFolderPlace)
-        // A new worktree is warned of what stands in its way before the press — that is the box's whole answer.
-        if (graphPane.namingMode === "worktree")
-            return Words.worktreeNameRefused(graphPane.namingText,
-                                         branchesModel.nameClash(graphPane.namingText.trim(), ""),
-                                         page.graphWorktreePlace)
-        const name = graphPane.namingText.trim()
-        // A new branch or tag: git's rules, then the names already there. Empty is not refused — the box answers for
-        // what was typed (デザイン規約 §可否・警告の出し場所).
-        if (graphPane.namingMode === "branch" || graphPane.namingMode === "tag") {
-            const tag = graphPane.namingMode === "tag"
-            if (name === "")
-                return ""
-            if (!(tag ? GitFacts.validTagName(name) : GitFacts.validBranchName(name)))
-                return Words.notAName
-            return Words.nameClashed((tag ? tagsModel : branchesModel).nameClash(name, ""), tag)
-        }
-        if (graphPane.namingMode !== "rename")
-            return ""
-        if (name === "")
-            return Words.nameNeeded
-        if (page.graphNameHeldWhy !== "")
-            return page.graphNameHeldWhy
-        // As `SidebarRowGestures.editCaseOnly`: a tag renamed to its own name in other case loses both names on a
-        // case-insensitive disk.
-        const tag = graphPane.namingKind === "tag"
-        if (tag && name !== graphPane.namingId && name.toLowerCase() === graphPane.namingId.toLowerCase())
-            return qsTr("Only the letter case differs — on this disk that deletes both names")
-        if (page.graphNameTaken)
-            return Words.remoteHasBranch(page.graphRenameRemote)
-        if (!(tag ? GitFacts.validTagName(name) : GitFacts.validBranchName(name)))
-            return Words.notAName
-        // A remote branch's rename asks the remote's names (`graphNameTaken`); a local ref's, the ones here, its own
-        // out of its own way.
-        if (graphPane.namingKind === "remote")
-            return ""
-        return Words.nameClashed((tag ? tagsModel : branchesModel).nameClash(name, graphPane.namingId), tag)
-    }
+    /// The line, kept readable off the page for the harness (`AutoActWorktreeVerbs`).
+    readonly property alias graphNameRefusedWhy: graphNameVerdict.graphNameRefusedWhy
 
     // ---- double-click on a graph row -------------------------------
     // A row with no chip is offered one.
@@ -3902,10 +3825,10 @@ FocusScope {
                             onCarriedMenuRequested: (path, name) => page.openCarriedMenu(path, name)
                             onRowRenameRequested: (oidHex, chip) => page.startRename(oidHex, chip)
                             onRenameSubmitted: (kind, id, oid, name) => page.renameRow(kind, id, oid, name)
-                            namingRefused: page.graphNameRefusedWhy !== ""
-                            namingRefusedWhy: page.graphNameRefusedWhy
-                            namingRefusedMark: page.graphNameRefusedMark
-                            namingRefusedMarks: page.graphNameRefusedMarks
+                            namingRefused: graphNameVerdict.graphNameRefusedWhy !== ""
+                            namingRefusedWhy: graphNameVerdict.graphNameRefusedWhy
+                            namingRefusedMark: graphNameVerdict.graphNameRefusedMark
+                            namingRefusedMarks: graphNameVerdict.graphNameRefusedMarks
                             onChipExpandRequested: (oidHex, atRow, records, anchor) =>
                                 rowHost.pointChip(oidHex, atRow, records, anchor)
                             onChipCollapseRequested: (oidHex, anchor) => rowHost.unpointChip(oidHex, anchor)

@@ -34,12 +34,13 @@ Item {
     required property string withheldWhy
     /// The worktree's folder in that line, behind the tree mark (デザイン規約 §ref の種別「名前の印」).
     required property string withheldMark
-    /// Whether what is typed can be accepted, and why not — the page's answer (デザイン規約 §可否・警告の出し場所).
+    /// Whether what is typed can be accepted, and why not (`GraphNameVerdict.graphNameRefusedWhy`, デザイン規約
+    /// §可否・警告の出し場所).
     required property bool namingRefused
     required property string namingRefusedWhy
-    /// A worktree's folder in that line, empty for none (`RepoPage.graphNameRefusedMark`).
+    /// A worktree's folder in that line, empty for none (`GraphNameVerdict.graphNameRefusedMark`).
     required property string namingRefusedMark
-    /// The branch, tag or remote in that line, behind their marks (`RepoPage.graphNameRefusedMarks`).
+    /// The branch, tag or remote in that line, behind their marks (`GraphNameVerdict.graphNameRefusedMarks`).
     required property var namingRefusedMarks
 
     /// The chip's card is standing on it (`GraphRowDelegate.listOnThisChip`): the sheets unstack so none peeks out
