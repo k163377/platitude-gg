@@ -11,8 +11,9 @@ import platitude.ui
 // 「手が動いていない所へ来た行は開かない」, which the graph's rows keep too — `GraphList.hand`): the search sending the
 // view to a match (`GraphFind.goToMatch`), a wheel notch, the arrows — every move of the rows hands Qt's hover to
 // whatever arrives under the still pointer (`tst_hoverunderstillhand.qml`), and the row must not take that for a hand
-// that walked to it. And what holds the list over a hand it is drawn over, what a menu does to a card, what a second
-// surface showing the same commit is, and what a leave from elsewhere is not.
+// that walked to it. And what holds the list over a hand it is drawn over, what a menu does to a card or a list, what
+// a second surface showing the same commit is, what a leave from elsewhere is not, and what a reread keeps under the
+// hand and lets go: rows rewritten in place, their names told again, HEAD's stand-in standing for another commit.
 Item {
     id: root
     width: 600
@@ -296,8 +297,8 @@ Item {
         chosenHand: chosenHand
         // The cases read both popups before either opens, as the harness does (`RowHoverHost.keepBuilt`).
         keepBuilt: true
-        // A right-click on a row of the list raises the row's menu on the list (`RepoPage.openRowMenu`) — at a place of
-        // its own here (`listMenuAt`; `offer` would raise it at the platform's cursor, which a test does not move).
+        // A right-click on a row of the list raises the row's menu on the list (`RepoPage.openRowMenu`), at
+        // `listMenuAt`: `offer` alone takes the platform's cursor, which a test does not move.
         onRecordMenuAsked: (oidHex, chip) => {
             root.menuKey = oidHex
             root.menuArea = "refList"
@@ -404,7 +405,7 @@ Item {
             compare(root.asks.indexOf("2:in") >= 0, true, "the row asked once the hand arrived")
         }
 
-        /// The row under a hand that has not moved since the rows did, in the list's own numbering.
+        /// The row now under where `restOn(2)` left the hand (the list at its top then), in the list's own numbering.
         function underStillHand() {
             return list.indexAt(list.labelWidth + list.graphColWidth + 40,
                                 2 * Theme.graphRowHeight + Theme.graphRowHeight / 2 + list.contentY)
@@ -523,12 +524,12 @@ Item {
             compare(root.menuArea, "graph", "the row asked for its menu")
             tryVerify(() => !host.hoverCard.opened, undefined, "the card went down at the press")
             compare(host.cardKey, "")
-            // The menu let go: the hand is still where it pressed.
             const asksUnderMenu = JSON.stringify(root.asks)
             const underMenu = JSON.stringify({ "known": paneHand.known, "at": [paneHand.at.x, paneHand.at.y],
                                                "covered": paneHand.covered, "menu": rowMenu.visible,
                                                "seat": host.cardSeatState, "latched": host.cardLatched,
                                                "kept": host.cardAskKept })
+            // The menu let go: the hand is still where it pressed.
             rowMenu.dismiss()
             tryVerify(() => root.menuArea === "", undefined, "the menu went")
             const atOnce = JSON.stringify({ "visible": host.hoverCard.visible, "seat": host.cardSeatState,
@@ -647,7 +648,6 @@ Item {
             backOnBareStretch(3, "the pane beside")
         }
 
-        /// Gone out of the window, and back.
         function test_a_list_put_down_comes_back_with_the_hand_back_from_outside_the_window() {
             putDownOnBareStretch(3)
             mouseMove(root, root.width + 10, rowY(3))
@@ -831,8 +831,7 @@ Item {
             tryVerify(() => list.itemAtIndex(2) !== null && list.itemAtIndex(2).oid_hex === root.oid(2),
                       undefined, "the live rows are up")
             restOn(2)
-            // Written from the last row up, so a row is told only once its commit stands one row down — as the
-            // splice writes them all before it tells any.
+            // Written from the last row up, so a row is told only once its commit stands one row down.
             liveRows.append(root.liveCommit(19))
             for (let i = 19; i > 0; i--)
                 liveRows.set(i, root.liveCommit(i - 1))
@@ -1104,7 +1103,6 @@ Item {
             compare(host.listKey, "")
             row.oid_hex = root.oid(3)
         }
-        /// …but its own still in the graph: the list the hand is in stays.
         function test_the_row_rewritten_with_its_commit_still_in_the_graph_keeps_the_list_the_hand_is_in() {
             ontoBareStretch(3)
             handIntoList()

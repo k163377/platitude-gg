@@ -1,4 +1,5 @@
-//! Reads that reuse what a read already landed.
+//! The session's reads against a real repository: what a read reuses from
+//! one already landed, what sends it back to git, and what it answers.
 //!
 //! Not a second copy of a unit: what these hold is how the reads go in a
 //! real session — one at a time, in order, and cancelled.
@@ -56,9 +57,8 @@ async fn a_request_made_while_a_read_runs_gets_a_read_of_its_own() {
     })
     .await;
 
-    // The tree turns dirty behind the parked read and somebody asks again.
-    // Dropping that ask as a duplicate is the defect: the only read that
-    // could answer it has already looked.
+    // The tree turns dirty behind the parked read, which has already looked,
+    // and somebody asks again.
     repo.write_file("f.txt", "dirty\n");
     session.refresh_status();
     release.send(()).expect("let the read finish");
@@ -326,7 +326,7 @@ async fn an_unmoved_repository_republishes_the_snapshot_it_already_built() {
         "the same snapshot, not an equal one"
     );
 
-    // A ref really moving still rebuilds, and the sidebar is told.
+    // A ref moving still rebuilds, and the sidebar is told.
     repo.git(&["branch", "-D", "side"]);
     let before = sink.count(|e| matches!(e, SessionEvent::RefsLoaded { .. }));
     session.refresh_refs();
@@ -871,8 +871,7 @@ async fn an_ask_about_a_delete_is_answered_even_where_the_read_fails() {
     session.close_and_wait().await;
 }
 
-/// The answer to one `check_branch_delete`, waited for by the name it
-/// echoes.
+/// The answer to one `check_branch_delete`, waited for by the name it echoes.
 async fn branch_delete_answer(sink: &CaptureSink, branch: &str) -> Option<bool> {
     sink.wait_for("BranchDeleteChecked", |evs| {
         evs.iter().find_map(|e| match e {
