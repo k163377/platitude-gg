@@ -1012,7 +1012,9 @@ impl Program {
         }
     }
 
-    fn is_local(&mut self, code: usize, name: &str, at: usize) -> bool {
+    /// Whether `name` seen at `at` is a local of `code`, or a parameter of
+    /// its unit where `code` is the unit's top code.
+    pub(super) fn is_local(&mut self, code: usize, name: &str, at: usize) -> bool {
         let (d, u, range, parent) = {
             let c = &self.codes[code];
             (c.doc, c.unit, c.range.clone(), c.parent)

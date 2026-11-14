@@ -433,20 +433,10 @@ impl Program {
     fn name_origin(&mut self, code: usize, name: &str, at: usize) -> Origin {
         let mut current = Some(code);
         while let Some(c) = current {
-            let (d, u, range, parent) = {
-                let c = &self.codes[c];
-                (c.doc, c.unit, c.range.clone(), c.parent)
-            };
-            if self.facts_of(d, u).within(&range).local(name, at).is_some()
-                || (parent.is_none()
-                    && self.docs[d].units[u]
-                        .bound
-                        .iter()
-                        .any(|(_, b)| b.name == name))
-            {
+            if self.is_local(c, name, at) {
                 return self.local_origin(c, name, at);
             }
-            current = parent;
+            current = self.codes[c].parent;
         }
         match self.head(code, name, at) {
             Value::Object(d, o) => Origin::Object(Value::Object(d, o)),
