@@ -21,6 +21,8 @@
 //! the waits check names the place, so no code hides behind it — which is
 //! why the reading is handed over as it is, not as one lenient view.
 
+use std::ops::Range;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Lang {
     Rust,
@@ -634,10 +636,24 @@ pub(crate) fn matching_close(
     None
 }
 
+/// `range` of `tokens` with the parentheses that enclose the whole of it
+/// taken off, as many pairs as there are.
+pub(crate) fn unparenthesized(tokens: &[Token], range: Range<usize>) -> Range<usize> {
+    let mut range = range;
+    while range.len() >= 2
+        && tokens[range.start].text == "("
+        && matching_close(tokens, range.start, "(", ")") == Some(range.end - 1)
+    {
+        range = range.start + 1..range.end - 1;
+    }
+    range
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         Kind, Lang, Unread, lexemes, normalized, opens_a_statement, opens_a_value, tokens,
+        unparenthesized,
     };
 
     fn kinds(text: &str, lang: Lang) -> (Vec<(Kind, String)>, Option<Unread>) {
@@ -890,5 +906,17 @@ mod tests {
             ["a", "=", "1"],
             "the stretch the stop is in is no token"
         );
+    }
+
+    /// Only parentheses around the whole stretch go: two groups side by side
+    /// stay, and so does a `(` closed past the stretch's end or never.
+    #[test]
+    fn unparenthesized_takes_off_only_the_parentheses_around_the_whole() {
+        let t = tokens("x = ((a + b)) ; (a)(b) ; (a + b", Lang::Qml);
+        assert_eq!(unparenthesized(&t, 2..9), 4..7);
+        assert_eq!(unparenthesized(&t, 10..16), 10..16);
+        assert_eq!(unparenthesized(&t, 2..8), 2..8);
+        assert_eq!(unparenthesized(&t, 17..21), 17..21);
+        assert_eq!(unparenthesized(&t, 17..17), 17..17);
     }
 }

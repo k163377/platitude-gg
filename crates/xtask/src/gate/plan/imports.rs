@@ -34,7 +34,7 @@ use std::path::Path;
 
 use super::under;
 use super::urls::{file_of, string_value, url_path};
-use crate::lex::{Lang, Token, blanked, matching_close, tokens};
+use crate::lex::{Lang, Token, blanked, matching_close, tokens, unparenthesized};
 
 /// What the QML and JS under a directory load off the tree.
 #[derive(Debug, Default)]
@@ -611,10 +611,7 @@ fn spelled(tokens: &[Token]) -> String {
 /// anything else — a name, a call, a template that fills one in — whose
 /// value nothing here works out, and for joinings past 64 strings.
 fn values(t: &[Token]) -> Option<Vec<String>> {
-    let mut t = t;
-    while t.len() >= 2 && t[0].text == "(" && matching_close(t, 0, "(", ")") == Some(t.len() - 1) {
-        t = &t[1..t.len() - 1];
-    }
+    let t = &t[unparenthesized(t, 0..t.len())];
     if let Some((question, colon)) = conditional(t) {
         let mut either = values(&t[question + 1..colon])?;
         either.extend(values(&t[colon + 1..])?);

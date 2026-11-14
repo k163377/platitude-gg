@@ -18,7 +18,7 @@ use super::builtins::{self, CONSTRUCTED, Made};
 use super::origin::{Origin, Site, literal};
 use super::program::{Program, Value};
 use super::scan::{Head, Path, WriteKind};
-use crate::lex::matching_close;
+use crate::lex::unparenthesized;
 
 /// What holds members of its own: a container, by the site that made it; a
 /// harness property's value; the plain values (a function given a member).
@@ -161,13 +161,7 @@ impl Program {
     /// array, a literal, nothing, a language constructor's value, another
     /// harness property's that is.
     fn spelled_by_language(&mut self, d: usize, o: usize, range: Range<usize>, name: &str) -> bool {
-        let mut range = range;
-        while range.len() >= 2
-            && self.docs[d].tokens[range.start].text == "("
-            && matching_close(&self.docs[d].tokens, range.start, "(", ")") == Some(range.end - 1)
-        {
-            range = range.start + 1..range.end - 1;
-        }
+        let range = unparenthesized(&self.docs[d].tokens, range);
         let tokens = &self.docs[d].tokens[range.clone()];
         match tokens.first().map(|t| t.text.as_str()) {
             Some("[") => true,

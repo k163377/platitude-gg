@@ -27,7 +27,7 @@ use super::members::{ANY, Assigned};
 use super::parse::is_name;
 use super::program::{Program, Value};
 use super::scan::{Head, Path, WriteKind};
-use crate::lex::{Token, matching_close};
+use crate::lex::{Token, matching_close, unparenthesized};
 
 /// Where a container was made: its file and the token that makes it.
 pub(super) type Site = (usize, usize);
@@ -246,15 +246,9 @@ impl Program {
     /// Where the expression `tokens` came from, its first token at index
     /// `base` of its file.
     fn origin_in(&mut self, code: usize, tokens: &[Token], base: usize) -> Origin {
-        let mut t = tokens;
-        let mut base = base;
-        while t.len() >= 2
-            && t[0].text == "("
-            && matching_close(t, 0, "(", ")") == Some(t.len() - 1)
-        {
-            t = &t[1..t.len() - 1];
-            base += 1;
-        }
+        let inner = unparenthesized(tokens, 0..tokens.len());
+        let base = base + inner.start;
+        let t = &tokens[inner];
         let Some(first) = t.first() else {
             return Origin::Plain;
         };
@@ -511,13 +505,7 @@ impl Program {
     /// `d`: a container or a plain value the file writes out, or what a path
     /// names.
     fn object_value_origin(&mut self, d: usize, o: usize, range: Range<usize>) -> Origin {
-        let mut range = range;
-        while range.len() >= 2
-            && self.docs[d].tokens[range.start].text == "("
-            && matching_close(&self.docs[d].tokens, range.start, "(", ")") == Some(range.end - 1)
-        {
-            range = range.start + 1..range.end - 1;
-        }
+        let range = unparenthesized(&self.docs[d].tokens, range);
         let tokens = &self.docs[d].tokens[range.clone()];
         let Some(first) = tokens.first() else {
             return Origin::Unset;
