@@ -41,14 +41,14 @@ QtObject {
         probe.rail.tapAt(kind)
     }
     /// PGG_AUTO_ACT=nav-peek-into / nav-peek-out: the pointer walked off the cell down into the open section, and then
-    /// out of it the other way. They write the `peekEntered` the popup's own hover writes: a run that cannot say
+    /// out of it the other way. They write the `contentPointed` the popup's own hover writes: a run that cannot say
     /// "inside" cannot tell the exit that closes the peek from the one that keeps it open.
     function peekInto(kind) {
         probe.rail.leaveAt(kind)
-        probe.sidebar.peekEntered = true
+        probe.peek.contentPointed = true
     }
     function peekOut() {
-        probe.sidebar.peekEntered = false
+        probe.peek.contentPointed = false
     }
 
     /// PGG_AUTO_ACT=nav-close: close one section at the header band's own click (`NavHeader.tap`) — setting

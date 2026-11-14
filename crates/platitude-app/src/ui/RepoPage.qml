@@ -1041,11 +1041,11 @@ FocusScope {
     }
 
     /// The six menu seats, and the popups and strips the parts build on their first opening (the add-remote dialog,
-    /// the row's card and the chip's list, the author row's cards, the line-ending card, the two find strips), stand
-    /// built from the start — written only by the harness (`PageHarness`), so its verbs can read them before they
-    /// open. What a page shows off its state is not in this — the plan's face, the command log, the failure screen,
-    /// the exit card, the plan's run bar, the discard log and band, another worktree's pane: their verbs raise them as
-    /// a hand does.
+    /// the row's card and the chip's list, the author row's cards, the line-ending card, the two find strips, the
+    /// folded rail's open section), stand built from the start — written only by the harness (`PageHarness`), so its
+    /// verbs can read them before they open. What a page shows off its state is not in this — the plan's face, the
+    /// command log, the failure screen, the exit card, the plan's run bar, the discard log and band, the report's and
+    /// the question's words, another worktree's pane: their verbs raise them as a hand does.
     property bool keepBuilt: false
 
     // ---- context menu on a sidebar row ------------------------------
@@ -3823,6 +3823,7 @@ FocusScope {
 
                 SidebarPane {
                     id: sidebarPane
+                    keepBuilt: page.keepBuilt
                     // The plan's freeze takes the pane whole (the mode's own restriction); a replay behind the screen
                     // holds only the doors — a switch, a delete, a name box, the `+` — and reading goes on
                     // (`SidebarPane.frozen` / `doorsHeld`).

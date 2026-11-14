@@ -91,7 +91,7 @@ Rectangle {
     // and counts as it (`alsoOver`).
     HandWatch {
         id: paneHand
-        alsoOver: peek.hover
+        alsoOver: sidebar.peekSection !== null ? sidebar.peekSection.hover : null
     }
     readonly property alias hand: paneHand
     /// The row under the panel's hand, kept where it was through a read (`RowKeep`): a branch written in above it, the
@@ -101,7 +101,8 @@ Rectangle {
         id: rowKeep
         hand: paneHand
         views: [sections.listOf("branch"), sections.listOf("remote"), sections.listOf("worktree"),
-                sections.listOf("stash"), sections.listOf("tag"), peek.list]
+                sections.listOf("stash"), sections.listOf("tag"),
+                sidebar.peekSection !== null ? sidebar.peekSection.list : null]
         layout: sections
     }
     // Every section's reads, whichever moved the rows (`NavSectionModel.rowsArriving` … `rowsArrived`).
@@ -198,7 +199,7 @@ Rectangle {
     /// from these.
     readonly property alias autoRail: rail
     readonly property alias autoSections: sections
-    readonly property alias autoPeek: peek
+    readonly property var autoPeek: peekSeat.item
 
     /// The pointer is on the current branch's sticky stand-in (`HeadPinRow`). The pane's own, because its bindings
     /// read it: a headless run writes the one property a real hover writes.
@@ -312,7 +313,7 @@ Rectangle {
     readonly property bool rowFactsOpen: sidebar.openKey !== ""
     function rowFactsWords() {
         const said = sections.openWords()
-        return said !== "" ? said : peek.openWords()
+        return said !== "" || sidebar.peekSection === null ? said : sidebar.peekSection.openWords()
     }
     /// Where the open row and its lines landed, so a run reads the list having made room rather than the layout's
     /// word for it (PGG_AUTO_ACT=nav-open).
@@ -321,12 +322,13 @@ Rectangle {
     }
     /// Whether the open row shows whole, its lines included (PGG_AUTO_ACT=nav-open-foot).
     function rowFactsShown() {
-        return sections.openFactsItem() !== null ? sections.openShown() : peek.openShown()
+        return sections.openFactsItem() !== null ? sections.openShown()
+             : sidebar.peekSection !== null && sidebar.peekSection.openShown()
     }
     /// For the runs that read what the hand did next (PGG_AUTO_ACT=nav-open-then).
     function openFactsItem() {
         const lines = sections.openFactsItem()
-        return lines !== null ? lines : peek.openFactsItem()
+        return lines !== null || sidebar.peekSection === null ? lines : sidebar.peekSection.openFactsItem()
     }
 
     // ---- the open list ----------------------------------------------
@@ -376,7 +378,7 @@ Rectangle {
         stashesModel: sidebar.stashesModel
         tagsModel: sidebar.tagsModel
         tagsShown: sidebar.repoTab.tagsShown
-        openKind: peek.visible ? sidebar.peekKind : ""
+        openKind: sidebar.peekSection !== null && sidebar.peekSection.visible ? sidebar.peekKind : ""
         onPeekRequested: (kind, top) => sidebar.openPeek(kind, top)
         onPeekLeft: kind => sidebar.leavePeek(kind)
         onPeekToggled: (kind, top) => sidebar.togglePeek(kind, top)
@@ -385,27 +387,37 @@ Rectangle {
     }
 
     // ---- the folded list's one open section --------------------------
-    // The pane keeps the names the rail, the fold and the smoke hooks call it by.
-    property alias peekKind: peek.kind
-    property alias peekTop: peek.top
-    property alias peekEntered: peek.contentPointed
-    /// For the smoke hooks alone (like `GraphPane.view`): PGG_AUTO_ACT=nav-reclick clicks a row in here.
-    readonly property var peekSection: peek
+    // The pane keeps the names the rail, the fold and the smoke hooks call it by. Built by its first opening and kept
+    // (rules-refs/app-ui.md — the `WindowDialogSeat` line): a pane never folded opens none. Read before then, it is
+    // closed and of no section.
+    readonly property string peekKind: sidebar.peekSection !== null ? sidebar.peekSection.kind : ""
+    readonly property real peekTop: sidebar.peekSection !== null ? sidebar.peekSection.top : 0
+    /// For the smoke hooks alone (like `GraphPane.view`): PGG_AUTO_ACT=nav-reclick clicks a row in here. Null until
+    /// built, or up front with [`keepBuilt`].
+    readonly property var peekSection: peekSeat.item
+    /// The open section built up front, for a caller that reads it before it opens (the harness,
+    /// `RepoPage.keepBuilt`).
+    property bool keepBuilt: false
 
     // Opens under a standing menu too — the hand is on the rail, and a menu raised elsewhere does not hold what it opens
     // (user decision — ask before changing; `SectionPeekPopup`). Only the menu's standing up closes it
     // (`onMenuAreaChanged`). Headless: `menu-peek`, against `nav-peek`.
     function openPeek(kind, top) {
-        peek.openAt(kind, top)
+        peekSeat.active = true
+        peekSeat.item.openAt(kind, top)
     }
     function togglePeek(kind, top) {
-        peek.toggleAt(kind, top)
+        peekSeat.active = true
+        peekSeat.item.toggleAt(kind, top)
     }
+    // Neither has anything to do before the first opening.
     function leavePeek(kind) {
-        peek.leaveAt(kind)
+        if (peekSeat.item !== null)
+            peekSeat.item.leaveAt(kind)
     }
     function closePeek() {
-        peek.shut()
+        if (peekSeat.item !== null)
+            peekSeat.item.shut()
     }
 
     // ---- the discard log, over the sections while it is up ----------
@@ -434,28 +446,36 @@ Rectangle {
             recoverLog.item.takeKeyboard()
     }
 
-    SectionPeekPopup {
-        id: peek
-        parent: sidebar
-        addHeld: sidebar.doorsHeld
-        repoTab: sidebar.repoTab
-        worktree: sidebar.worktree
-        rail: rail
-        gestures: rowGestures
-        paneHand: paneHand
-        paneW: sidebar.width
-        paneH: sidebar.height
-        listW: sidebar.openWidth
-        // A menu raised on its rows holds it — this section's (the page keys the menu's row by its section), not one
-        // a rest brought in under that menu; so does a box open on one of them: a name half typed into a list the
-        // pointer walked away from is a name lost.
-        pinned: (sidebar.menuDoor !== null && sidebar.menuDoor.area === "peek"
-                 && sidebar.menuDoor.key.startsWith(peek.kind + ":"))
-                || sidebar.editKey !== ""
-        onRefActivated: oidHex => sidebar.refActivated(oidHex)
-        onRefMenuRequested: (kind, name, full, oidHex, aim) =>
-            sidebar.refMenuRequested(kind, name, full, oidHex, aim, "peek")
-        onRemoteMenuRequested: name => sidebar.remoteMenuRequested(name, "peek")
-        onAddRemoteRequested: sidebar.askAddRemote()
+    // Filling the pane, so the section opens in the pane's coordinates and size. Inside the section a
+    // bare `rail` or `paneHand` is the section's own property, not this file's item, so both are handed over by name.
+    Loader {
+        id: peekSeat
+        /// The rail the section opens from (`rail` here).
+        readonly property var railHere: rail
+        anchors.fill: parent
+        active: sidebar.keepBuilt
+        sourceComponent: SectionPeekPopup {
+            id: peek
+            addHeld: sidebar.doorsHeld
+            repoTab: sidebar.repoTab
+            worktree: sidebar.worktree
+            rail: peekSeat.railHere
+            gestures: rowGestures
+            paneHand: sidebar.hand
+            paneW: sidebar.width
+            paneH: sidebar.height
+            listW: sidebar.openWidth
+            // A menu raised on its rows holds it — this section's (the page keys the menu's row by its section), not
+            // one a rest brought in under that menu; so does a box open on one of them: a name half typed into a list
+            // the pointer walked away from is a name lost.
+            pinned: (sidebar.menuDoor !== null && sidebar.menuDoor.area === "peek"
+                     && sidebar.menuDoor.key.startsWith(peek.kind + ":"))
+                    || sidebar.editKey !== ""
+            onRefActivated: oidHex => sidebar.refActivated(oidHex)
+            onRefMenuRequested: (kind, name, full, oidHex, aim) =>
+                sidebar.refMenuRequested(kind, name, full, oidHex, aim, "peek")
+            onRemoteMenuRequested: name => sidebar.remoteMenuRequested(name, "peek")
+            onAddRemoteRequested: sidebar.askAddRemote()
+        }
     }
 }
