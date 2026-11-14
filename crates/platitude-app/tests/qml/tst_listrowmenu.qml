@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import "chips.js" as Chips
 
 // A right-click on a row of the card a chip unfolds into asks for the graph row's menu aimed at that row
 // (デザイン規約 §グラフ行の右クリック「行のどこを押しても同じ 1 枚が出る」). Every row asks, the ones that lead
@@ -15,12 +16,6 @@ Item {
 
     property var asked: []
 
-    /// A record of `kind`, every field spelled out as `encode::chips_of` hands it.
-    function record(kind, name, held) {
-        return { "kind": kind, "name": name, "isHead": false, "hasRemote": false, "hasPr": false, "here": true,
-                 "held": held, "locked": false, "remote": "", "key": kind + ":" + name }
-    }
-
     RefListPopup {
         id: card
         chipRoom: 300
@@ -32,8 +27,8 @@ Item {
         when: windowShown
 
         function test_every_row_asks_for_the_menu() {
-            card.records = [root.record("branch", "main", false), root.record("worktree", "feature-worktree", false),
-                            root.record("branch", "topic", true), root.record("head", "HEAD", false)]
+            card.records = [Chips.chip("branch", "main"), Chips.chip("worktree", "feature-worktree"),
+                            Chips.chip("branch", "topic", { "held": true }), Chips.chip("head", "HEAD")]
             card.listRoom = root.height
             card.layOutRows()
             card.open()

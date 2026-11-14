@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import "chips.js" as Chips
 
 // A double-click on a row of the card a chip unfolds into goes where that row leads (デザイン規約 §グラフ行のダブルクリック
 // 「カードの行も、行の上と同じ所作で答える」): a branch another worktree holds goes to that worktree, as the graph row's
@@ -14,12 +15,6 @@ Item {
     height: 300
 
     property var picked: []
-
-    /// A record of `kind`, every field spelled out as `encode::chips_of` hands it.
-    function record(kind, name, held, head) {
-        return { "kind": kind, "name": name, "isHead": head === true, "hasRemote": false, "hasPr": false,
-                 "here": true, "held": held, "locked": false, "remote": "", "key": kind + ":" + name }
-    }
 
     RefListPopup {
         id: card
@@ -42,9 +37,10 @@ Item {
         }
 
         function test_each_row_goes_where_it_leads() {
-            card.records = [root.record("branch", "main", false, true), root.record("branch", "topic", true),
-                            root.record("worktree", "topic-twin", false), root.record("branch", "side", false),
-                            root.record("tag", "v1.0", false), root.record("head", "HEAD", false, true)]
+            card.records = [Chips.chip("branch", "main", { "isHead": true }),
+                            Chips.chip("branch", "topic", { "held": true }), Chips.chip("worktree", "topic-twin"),
+                            Chips.chip("branch", "side"), Chips.chip("tag", "v1.0"),
+                            Chips.chip("head", "HEAD", { "isHead": true })]
             for (let i = 0; i < card.records.length; i++)
                 doubleClickRow(i)
             compare(root.picked, ["branch:topic", "branch:side"])

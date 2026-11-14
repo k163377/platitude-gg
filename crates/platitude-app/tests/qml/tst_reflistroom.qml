@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import "chips.js" as Chips
 
 // The card a chip unfolds into is measured before it opens (`RowHoverHost.openRefList`), while nothing inside a closed
 // popup is visible. A row's room read off `visible` came to nothing there, and the room it took back once the card was
@@ -12,10 +13,8 @@ Item {
     width: 400
     height: 300
 
-    /// A tag only mirror has on this commit, as `encode::chips_of` hands it (every field spelled out).
-    readonly property var mirrors: ({ "kind": "tag", "name": "v3.2-split", "isHead": false, "hasRemote": false,
-                                      "hasPr": false, "here": false, "held": false, "locked": false,
-                                      "remote": "mirror", "key": "tag:v3.2-split" })
+    /// A tag only mirror has on this commit.
+    readonly property var mirrors: Chips.chip("tag", "v3.2-split", { "here": false, "remote": "mirror" })
 
     RefListPopup {
         id: card

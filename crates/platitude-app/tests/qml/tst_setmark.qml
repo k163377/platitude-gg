@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import platitude.ui
+import "chips.js" as Chips
 import "painted.js" as Painted
 
 // Where a mark set beside words lands against the letters of their face (デザイン規約 §アイコンの席), read off the
@@ -169,8 +170,7 @@ Item {
             x: 8
             y: 8
             maxWidth: 380
-            records: [{ "kind": "worktree", "name": "issue", "isHead": false, "hasRemote": false, "hasPr": false,
-                        "here": true, "held": false, "locked": false, "remote": "", "key": "worktree:issue" }]
+            records: [Chips.chip("worktree", "issue")]
         }
     }
     Component {

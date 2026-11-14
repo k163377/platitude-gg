@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import "chips.js" as Chips
 
 // The name a chip draws under itself in the card it unfolds into (`RefChip.mate`), and where a press on it goes
 // (`RefChip.mateGoes`): to the place it names, never to the row the chip stands in, whose own
@@ -17,9 +18,7 @@ Item {
     property int rowPresses: 0
 
     /// A record the card draws, and the line under it: the branch reading this remote-tracking ref.
-    readonly property var record: ({ "kind": "remote", "name": "origin/main", "isHead": false, "hasRemote": false,
-                                     "hasPr": false, "here": false, "held": false, "locked": false, "remote": "",
-                                     "key": "remote:origin/main" })
+    readonly property var record: Chips.chip("remote", "origin/main", { "here": false })
     function mateGoing(to) {
         return { "mark": "branch", "markTint": Theme.accent, "text": "main", "tone": Theme.textSecondary,
                  "ahead": 0, "behind": 0, "note": "", "to": to }

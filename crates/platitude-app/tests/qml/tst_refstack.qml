@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import "chips.js" as Chips
 import "painted.js" as Painted
 
 // The sheets behind a chip's front card, and what the card spends on its count. Only the built stack can answer
@@ -14,30 +15,23 @@ Item {
     width: 400
     height: 200
 
-    /// Every mark down unless `marks` raises it; `here` by default, as `RefChip.noChip` reads.
-    function chip(kind, name, marks) {
-        return Object.assign({ "kind": kind, "name": name, "isHead": false, "hasRemote": false, "hasPr": false,
-                               "here": true, "held": false, "locked": false, "remote": "", "key": kind + ":" + name },
-                             marks === undefined ? {} : marks)
-    }
-
-    readonly property var head: root.chip("head", "HEAD", { "isHead": true })
-    readonly property var current: root.chip("branch", "main", { "isHead": true })
-    readonly property var local2: root.chip("branch", "hotfix")
-    readonly property var held: root.chip("branch", "spike", { "held": true })
-    readonly property var heldLocked: root.chip("branch", "spike", { "held": true, "locked": true })
-    readonly property var remote: root.chip("remote", "origin/preview", { "here": false })
+    readonly property var head: Chips.chip("head", "HEAD", { "isHead": true })
+    readonly property var current: Chips.chip("branch", "main", { "isHead": true })
+    readonly property var local2: Chips.chip("branch", "hotfix")
+    readonly property var held: Chips.chip("branch", "spike", { "held": true })
+    readonly property var heldLocked: Chips.chip("branch", "spike", { "held": true, "locked": true })
+    readonly property var remote: Chips.chip("remote", "origin/preview", { "here": false })
     /// A worktree on this commit with no branch out (デザイン規約 §ref の種別).
-    readonly property var worktree: root.chip("worktree", "rig")
-    readonly property var worktreeLocked: root.chip("worktree", "rig", { "locked": true })
-    readonly property var tagHere: root.chip("tag", "v1.0")
-    readonly property var tagHere2: root.chip("tag", "v1.1")
-    readonly property var tagAway: root.chip("tag", "v2.0", { "hasRemote": true, "here": false })
+    readonly property var worktree: Chips.chip("worktree", "rig")
+    readonly property var worktreeLocked: Chips.chip("worktree", "rig", { "locked": true })
+    readonly property var tagHere: Chips.chip("tag", "v1.0")
+    readonly property var tagHere2: Chips.chip("tag", "v1.1")
+    readonly property var tagAway: Chips.chip("tag", "v2.0", { "hasRemote": true, "here": false })
 
     /// Held by a locked worktree and on a remote: the worst-dressed card, both marks at once, which the column's floor
     /// is measured on.
-    readonly property var dressed: root.chip("branch", "feature/a-name-far-too-long-for-any-column",
-                                             { "hasRemote": true, "held": true, "locked": true })
+    readonly property var dressed: Chips.chip("branch", "feature/a-name-far-too-long-for-any-column",
+                                              { "hasRemote": true, "held": true, "locked": true })
 
     RefChipStack {
         id: stack
@@ -87,14 +81,14 @@ Item {
 
         // The commonest multi-ref row: one commit wearing several tags.
         function test_the_front_card_s_own_colour_is_the_one_that_may_come_twice() {
-            stack.records = [root.tagHere, root.tagHere2, root.chip("tag", "v1.2"), root.chip("tag", "v1.3")]
+            stack.records = [root.tagHere, root.tagHere2, Chips.chip("tag", "v1.2"), Chips.chip("tag", "v1.3")]
             compare(stack.sheets, ["tag"])
             // The repeat sits one step from the card, like every other sheet.
             compare(stack.layout[0].x, stack.step)
         }
 
         function test_a_colour_behind_the_card_is_one_sheet_however_many_wear_it() {
-            stack.records = [root.current, root.tagHere, root.tagHere2, root.chip("tag", "v1.2")]
+            stack.records = [root.current, root.tagHere, root.tagHere2, Chips.chip("tag", "v1.2")]
             compare(stack.sheets, ["tag"])
         }
 
@@ -253,7 +247,7 @@ Item {
         function tags(n) {
             const out = []
             for (let i = 0; i < n; ++i)
-                out.push(root.chip("tag", "v1." + i))
+                out.push(Chips.chip("tag", "v1." + i))
             return out
         }
 
@@ -357,7 +351,7 @@ Item {
         when: windowShown
 
         /// The name a graph column has to cut and a card has room to show whole.
-        readonly property var cutInTheColumn: root.chip("branch", "feature/a-name-far-too-long-for-any-column")
+        readonly property var cutInTheColumn: Chips.chip("branch", "feature/a-name-far-too-long-for-any-column")
 
         // The frame's contents are a positioner, which sums itself in the polish after its children moved: until asked
         // to lay out (`layOutNow`) the chip answers with its old width, and the card cuts the name inside its frame.

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import "chips.js" as Chips
 
 Item {
     id: root
@@ -17,11 +18,6 @@ Item {
         const until = Date.now() + 60
         while (Date.now() < until) {}
         return 1
-    }
-    /// A chip as `encode::chips_of` hands one to a row, every field spelled out.
-    function onRemote(name) {
-        return { "kind": "branch", "name": name, "isHead": false, "hasRemote": true, "hasPr": false, "here": true,
-                 "held": false, "locked": false, "remote": "", "key": "branch:" + name }
     }
 
     Component {
@@ -252,7 +248,7 @@ Item {
             const cloud = cloudOf(row)
             verify(cloud.wordCell > 0)
             compare(cloud.width, cloud.wordCell, "the cell a letter of the name takes")
-            row.records = [root.onRemote("sample")]
+            row.records = [Chips.chip("branch", "sample", { "hasRemote": true })]
             const atOnce = createTemporaryObject(chipAtOnce, root, { "records": row.records })
             tryVerify(() => marksOf(atOnce, []).filter(mark => mark.visible).every(mark => mark.inked))
             row.chip.layOutNow()

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import "chips.js" as Chips
 
 // The graph's rows under a real pointer, with what the page keeps for them: the pane's hand (`HandWatch`), the host
 // and its two seats (`RowHoverHost`), the chip's list and the commit's card. The real delegates, in a stand-in for the
@@ -28,11 +29,6 @@ Item {
     property string menuArea: ""
     property string menuKey: ""
 
-    /// A record of `kind`, every field spelled out as `encode::chips_of` hands it.
-    function record(kind, name) {
-        return { "kind": kind, "name": name, "isHead": false, "hasRemote": false, "hasPr": false, "here": true,
-                 "held": false, "locked": false, "remote": "", "key": kind + ":" + name }
-    }
     /// A commit row as the model hands one over, every role the delegate requires. Rows 3 and 5 carry a chip, and
     /// row 6 a chip whose names stack (two branches and a tag: the front card and a fan of two).
     function commit(n) {
@@ -40,9 +36,9 @@ Item {
             "oid_hex": "c" + n + "00000000000000000000000000000000000000", "author": "someone",
             "author_time": 1700000000 + n, "subject": "commit " + n, "body": "", "node_lane": 0, "node_color": 0,
             "avatar": 0, "avatar_url": "", "co_authors": [], "geometry": [],
-            "labels": n === 3 || n === 5 ? [root.record("branch", "topic-" + n)]
-                    : n === 6 ? [root.record("branch", "stack-a"), root.record("branch", "stack-b"),
-                                 root.record("tag", "v6")] : [],
+            "labels": n === 3 || n === 5 ? [Chips.chip("branch", "topic-" + n)]
+                    : n === 6 ? [Chips.chip("branch", "stack-a"), Chips.chip("branch", "stack-b"),
+                                 Chips.chip("tag", "v6")] : [],
             "stash_ref": "", "matched": false
         }
     }
@@ -112,7 +108,7 @@ Item {
             x: Metrics.labelColW - width - Theme.spaceXs
             y: Theme.spaceXs
             visible: pane.headPin.visible
-            records: [root.record("branch", "main"), root.record("tag", "v0")]
+            records: [Chips.chip("branch", "main"), Chips.chip("tag", "v0")]
         }
         function hushRowClicks() {}
         function pinPressed(row, modifiers) {}
@@ -784,10 +780,10 @@ Item {
             handIntoList()
             // As the stand-in tells it (`GraphHeadPin.rewritten`): another commit, its chip's names with it.
             pane.headPin.standsFor = root.oid(1)
-            pinStack.records = [root.record("branch", "main")]
+            pinStack.records = [Chips.chip("branch", "main")]
             host.rowGone(pane.headPin)
             tryVerify(() => !host.listPopup.opened, undefined, "the list goes with the commit it was of")
-            pinStack.records = [root.record("branch", "main"), root.record("tag", "v0")]
+            pinStack.records = [Chips.chip("branch", "main"), Chips.chip("tag", "v0")]
             pane.headPin.visible = false
             pane.headPin.wanted = false
             pane.headPin.standsFor = ""
@@ -801,7 +797,7 @@ Item {
             pane.headPin.visible = false
             host.rowGone(pane.headPin)
             verify(host.listPopup.opened, "the list stays where it stands")
-            pinStack.records = [root.record("branch", "main")]
+            pinStack.records = [Chips.chip("branch", "main")]
             pane.headPin.visible = true
             verify(host.listPopup.opened, "back for the same commit, it stays")
             compare(host.listKey, "chip:" + root.oid(0) + ":pin", "on the stand-in again")
@@ -812,7 +808,7 @@ Item {
             pane.headPin.standsFor = root.oid(1)
             host.rowGone(pane.headPin)
             tryVerify(() => !host.listPopup.opened, undefined, "standing for another commit, the list goes")
-            pinStack.records = [root.record("branch", "main"), root.record("tag", "v0")]
+            pinStack.records = [Chips.chip("branch", "main"), Chips.chip("tag", "v0")]
             pane.headPin.wanted = false
             pane.headPin.standsFor = ""
         }
@@ -1121,7 +1117,7 @@ Item {
             handIntoList()
             const row = list.itemAtIndex(3)
             const said = row.chipSays
-            row.labels = [root.record("branch", "topic-3")]
+            row.labels = [Chips.chip("branch", "topic-3")]
             compare(row.chipSays, said, "the same names, told again")
             // Told again, the names reach the host in the same call (`chipChanged` → `RowHoverHost.chipChanged`).
             verify(host.listPopup.opened, "the list stays with the hand in it")
@@ -1146,7 +1142,7 @@ Item {
             ontoBareStretch(3)
             handIntoList()
             const row = list.itemAtIndex(3)
-            row.labels = [root.record("branch", "topic-3"), root.record("tag", "v3")]
+            row.labels = [Chips.chip("branch", "topic-3"), Chips.chip("tag", "v3")]
             compare(host.listPopup.records.length, 2, "the list says the names as they are now")
             // waits(paced): a list that must **not** go: the beat a leave starts, twice over.
             wait(Metrics.hoverKeepMs * 2)
@@ -1173,7 +1169,7 @@ Item {
             handIntoList()
             const row = list.itemAtIndex(6)
             const wide = host.listPopup.width
-            row.labels = [root.record("tag", "v6")]
+            row.labels = [Chips.chip("tag", "v6")]
             compare(host.listPopup.records.length, 1, "the list says the one name")
             verify(host.listPopup.width < wide,
                    "narrower than the three names: " + host.listPopup.width + " of " + wide)
