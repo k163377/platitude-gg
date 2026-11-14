@@ -136,7 +136,10 @@ Rectangle {
         bar.travelling = true
         if (bar.open) {
             noticeBody.active = true
-            noticeBody.item.takeOpening()
+            // A bar built open hears this while it is still completing, its words not built yet: it takes the
+            // opening as it completes (`Component.onCompleted`).
+            if (noticeBody.item !== null)
+                noticeBody.item.takeOpening()
         }
     }
 
@@ -294,6 +297,14 @@ Rectangle {
         sequences: [StandardKey.Cancel]
         enabled: bar.open && !bar.yieldsEscape
         onActivated: bar.dismiss()
+    }
+    /// A bar built open heard `open` change before its words could be built: they stand once it completes, and it
+    /// takes the opening then (as `AskBar`; `tests/qml/tst_noticeopening.qml`).
+    Component.onCompleted: {
+        if (!bar.open)
+            return
+        noticeBody.active = true
+        noticeBody.item.takeOpening()
     }
     /// Automation: whether Escape is this bar's to take at this moment (`AskBar.escapes`, read the same way).
     readonly property alias escapes: escapeKey.enabled
