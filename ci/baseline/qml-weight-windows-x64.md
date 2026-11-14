@@ -4,13 +4,11 @@
 [perf-windows-x64.md](perf-windows-x64.md)(実窓・D3D)が正**で、ここは内訳を読むための値 —
 残る手は [P3-確認事項.md](../../internal-docs/P3-確認事項.md) §性能。
 
-**§個数 と §初回の生成 と §プロセスの量と起動 は `git rev-parse <commit>:crates/platitude-app/src/ui` が
-`b8573af3` の木**(製品の QML。2026-11-14、Qt 6.12.0、コーパスは [perf-windows-x64.md](perf-windows-x64.md) §計測条件 の
-token)。§1 個あたり の表は前の木で測った値 — `AppMenuItem` は `6631d4e5`、`DialogActions` / `ActionButton` /
-`NoticeButton` / `ActionButtonSeat` は `82201378`、残りは `1a7f3b1f` の木。今の木との違いは、契機まで出ない部品を席に
-置いた側のファイル(`6631d4e5` から)と、`AppMenuItem.qml` / `AppMenuButton.qml` / `TabStrip.qml` / `TopBar.qml`
-(`82201378` から。`1a7f3b1f` からはさらに `ActionButton.qml` と `ActionButtonSeat.qml`)で、どれもそれらの行の部品に
-入らない(`ActionButtonLabel.qml` はコメントだけ違う)。
+**§個数・§1 個あたり・§プロセスの量と起動・§import の代金 は `git rev-parse <commit>:crates/platitude-app/src/ui` が
+`2e474242` の木**(製品の QML。2026-11-14、Qt 6.12.0、コーパスは [perf-windows-x64.md](perf-windows-x64.md) §計測条件 の
+token)。**§初回の生成 と、§個数 のコミット行のメニューの数・§1 個あたり の形ごとの値は、その木になる前の形で測った値** —
+違いは、開いたまま建つ `AskBar` が開幕を取る順序・`RepoPage` の `Connections` 1 個・`SidebarPane` のプロパティ 1 本と
+コメントで、どれもそれらの数の部品に入らない。
 
 ## 測り方
 
@@ -56,14 +54,14 @@ token)。§1 個あたり の表は前の木で測った値 — `AppMenuItem` �
 
 | | タブの無い窓 | 開いて行選択と diff まで |
 |---|---|---|
-| 全部 | 2,860 | 8,312 |
-| うち `RepoPage`(空ページ / タブのページ) | 2,162 | 7,673 |
+| 全部 | 2,859 | 8,311 |
+| うち `RepoPage`(空ページ / タブのページ) | 2,161 | 7,672 |
 | `NavIcon` | 112 | 304 |
 | `PlainTextLabel` / `Label` | 165 / 71 | 620 / 239 |
 | `TextMetrics` / `FontMetrics` | 107 / 50 | 422 / 83 |
 | `TipAsk` | 75 | 185 |
 | `Loader` / `Repeater` | 137 / 48 | 1,357 / 262 |
-| `Connections` / `Timer` / `Binding` | 206 / 139 / 96 | 316 / 137 / 93 |
+| `Connections` / `Timer` / `Binding` | 205 / 139 / 96 | 315 / 137 / 93 |
 | `ActionButton` とその派生(`NoticeButton`・`Band*Button` 3) | 9(ラベル 13・席 9) | 8(12・8) |
 | `CardText` | 8 | 6 |
 | `AppMenu` / `AppMenuItem` | 0 / 0 | 0 / 0 |
@@ -89,11 +87,28 @@ token)。§1 個あたり の表は前の木で測った値 — `AppMenuItem` �
 `StartupGate`(124)は `begin` の時点では git の確認がまだ出ていて立っている — git が答えると壊れ、開いて diff までの
 数には居ない。
 
+ページの中のペインで、出る契機が来る前から建っている物(§個数 の数え方での、その下の個数。空ページは
+`verify-ui window-floor --restore` の絵の時点):
+
+| 部品 | 空ページ | 開いて行選択と diff まで | 出るのは |
+|---|---|---|---|
+| `DetailsPane` | 469 | 1,336(出ている — ファイルの行 852 込み) | コミットの行を選んでいる間(`!page.wipShown`) |
+| `WipPane` | 408 | 408 | 作業ツリーの行を選んでいる間(`page.wipShown`) |
+| `DiffPane` | 280 | 1,294(出ている — 行 1,005 込み) | ファイルを開いている間 |
+| `NavRail` | 70 | 70 | 左メニューを畳んでいる間 |
+| `GraphHeadPin` | 48 | 48 | HEAD の行が画面の外に在る間 |
+
+- **空ページ 2,161 個のうち、右ペインの出ていない側と diff のペインで 約 3 割**(`WipPane` 408 + `DiffPane` 280)—
+  リポジトリが無い間はどちらも出ない
+- **開いたページでは、右ペインの出ていない側(`WipPane` 408 か、`DetailsPane` の行を除いた 約 480)が常に 1 つ
+  建っている** — どちらも 1 回の選択で出る側になる
+
 ## 初回の生成
 
-契機が来て初めて建つ物の、建つまでの時間(ms、開いて diff までの run 3 本の絵の時点。§測り方)と、その下の個数
-(子と中身だけを辿った数 — 名前付きプロパティも辿る §個数 の数より少なく出る)。建てた後は持つ物(★)と、出ている間
-だけ建つ物がある:
+契機が来て初めて建つ物のうち下の表の分の、建つまでの時間(ms、開いて diff までの run 3 本の絵の時点。§測り方)と、
+その下の個数(子と中身だけを辿った数 — 名前付きプロパティも辿る §個数 の数より少なく出る)。建てた後は持つ物(★)と、
+出ている間だけ建つ物がある。メニューは §個数、設定と clone のダイアログ・`CommandsPane`・rebase の計画の面は
+測っていない:
 
 | 部品 | 個数 | ms | 部品 | 個数 | ms |
 |---|---|---|---|---|---|
@@ -116,40 +131,43 @@ token)。§1 個あたり の表は前の木で測った値 — `AppMenuItem` �
 
 ## 1 個あたり
 
-ヒープ(KB)/ 確保の個数 / private(KB)/ 1 個を建てる時間(µs、静かな台):
+ヒープ(KB)/ 確保の個数 / private(KB)/ 1 個を建てる時間(µs、静かな台)。1 本の run の値で、並べる順と前に建てた
+物で 1 割ほど揺れる — 比べるのは同じ一覧の run どうし:
 
 | 部品 | ヒープ | 確保 | private | 建てる時間 |
 |---|---|---|---|---|
-| `DialogActions`(ボタン 2 つ) | 423 | 2,609 | 548 | 1,045 |
-| `ActionButton` / `NoticeButton` | 208 / 209 | 1,279 / 1,288 | 247 / 272 | 532 / 558 |
-| `AppMenuItem`(語だけの行) | 162 | 1,014 | 181 | 626 |
-| `RefChipStack` / `RefChip` | 154 / 141 | 820 / 744 | 207 / 190 | 454 / 405 |
-| `AppListView` | 116 | 709 | 142 | 495 |
-| `NameCell` | 97 | 605 | 127 | 212 |
-| `LabeledField` / `HelpText` | 89 / 86 | 576 / 543 | 115 / 112 | 437 / 401 |
-| `AvatarButton` / `HeadTrack` | 87 / 86 | 513 / 467 | 132 / 117 | 226 / 165 |
-| `CardText` | 84 | 533 | 111 | 358 |
-| `ActionButtonLabel` | 81 | 345 | 118 | 245 |
-| `PaneScrollBar` / `AutoScrollBar` | 75 / 73 | 497 / 480 | 69 / 73 | 259 / 305 |
-| `NameRun` | 73 | 430 | 94 | 198 |
-| `CodeLine` / `AppMenu`(行なし) | 59 / 58 | 420 / 410 | 82 / 69 | 179 / 146 |
-| `LineText` / `CodeChip` | 52 / 51 | 311 / 269 | 63 / 68 | 200 / 106 |
-| `GoneBadge` / `CutName` | 44 / 36 | 199 / 251 | 67 / 50 | 86 / 71 |
-| `SpinnerIcon` / `ChangeIcon` | 21 / 20 | 103 / 97 | 32 / 33 | 39 / 44 |
-| `NavIcon` | 17 | 91 | 18 | 33 |
-| `ActionButtonSeat` | 16 | 105 | 21 | 24 |
-| `HoldDriver` / `HoldIcon` | 10 / 9 | 72 / 68 | 14 / 13 | 18 / 14 |
-| `PlainTextLabel` / `InkCanvas` | 5.6 / 4.6 | 43 / 32 | 9.2 / 7.2 | 9 / 5 |
-| 素の `Text` / `Canvas` | 1.5 | 6〜7 | 1.5 | 2 |
+| `DialogActions`(ボタン 2 つ) | 421 | 2,577 | 538 | 1,200 |
+| `ActionButton` / `NoticeButton` | 207 / 209 | 1,264 / 1,272 | 276 / 245 | 603 / 610 |
+| `AppMenuItem`(語だけの行) | 159 | 991 | 181 | 663 |
+| `NavHeader` | 155 | 875 | 218 | 808 |
+| `RefChipStack` / `RefChip` | 154 / 141 | 820 / 744 | 209 / 173 | 449 / 391 |
+| `AppListView` | 115 | 709 | 108 | 509 |
+| `NavFactLine` | 104 | 669 | 140 | 486 |
+| `NameCell` | 97 | 605 | 108 | 229 |
+| `ActionButtonLabel` | 92 | 550 | 120 | 232 |
+| `LabeledField` / `HelpText` | 90 / 85 | 576 / 543 | 121 / 115 | 560 / 376 |
+| `AvatarButton` / `HeadTrack` | 87 / 87 | 513 / 467 | 130 / 116 | 242 / 166 |
+| `CardText` | 84 | 533 | 97 | 422 |
+| `PaneScrollBar` / `AutoScrollBar` | 75 / 74 | 497 / 480 | 72 / 78 | 252 / 326 |
+| `CodeLine` / `AppMenu`(行なし) | 58 / 58 | 420 / 411 | 76 / 71 | 178 / 121 |
+| `LineText` / `CodeChip` | 52 / 51 | 311 / 269 | 56 / 71 | 232 / 152 |
+| `GoneBadge` / `CutName` | 44 / 36 | 200 / 251 | 61 / 32 | 91 / 75 |
+| `HoverToolButton` / `LineRuler` | 22 / 21 | 130 / 119 | 18 / 25 | 49 / 122 |
+| `ShoulderBadge` / `ChangeIcon` | 20 / 20 | 100 / 97 | 30 / 30 | 56 / 42 |
+| `NavIcon` / `MiddleAutoScroll` | 17 / 17 | 91 / 122 | 17 / 18 | 40 / 30 |
+| `ActionButtonSeat` | 16 | 105 | 20 | 24 |
+| `HoldDriver` / `HoldIcon` | 9 / 9 | 72 / 68 | 10 / 11 | 20 / 15 |
+| `PlainTextLabel` / `InkCanvas` | 6.1 / 4.1 | 43 / 32 | 5.1 / 5.6 | 9 / 8 |
+| 素の `Text` / `Canvas` | 1.5 | 6〜7 | 1〜1.5 | 2 |
 | 素の `Item` / `Rectangle` / `Loader` / `Timer` / `Connections` / `TextMetrics` | 0.5〜1 | 4〜5 | 0〜2 | 1〜2 |
 
-- **束ねた部品の重さは、中身とその部品自身の分の和** — `ActionButton` 1 個 208 のうち、描く形のラベルと席の 1 組が
-  ラベル 81 + 席 16 で、残りの半分余りはボタン自身(`HoverToolButton` 22・`HoldDriver` 10 と、`ActionButton` が
+- **束ねた部品の重さは、中身とその部品自身の分の和** — `ActionButton` 1 個 207 のうち、描く形のラベルと席の 1 組が
+  ラベル 92 + 席 16 で、残りの半分ほどはボタン自身(`HoverToolButton` 22・`HoldDriver` 9 と、`ActionButton` が
   自分に足したプロパティとハンドラ)。席はアイコンと、着ている印だけを建てる。和にぴったりは合わない
-  (`DialogActions` は `ActionButton` 2 個で 423)。
+  (`DialogActions` は `ActionButton` 2 個で 421)。
   形で変わる分は、bench をこの系に絞った同じ測り方の run で、印の無い形 208 / アイコン付き 242 / 2 段 305。
   2 段は、帯がセルを測る 1 段の語を描かない物差しのラベルとしてもう 1 つ持つ(`ActionButton.lineWord`)ので、
-  §個数 のラベル 23 = ボタン 19 + 帯の 2 段 4 つの物差し
+  §個数 のタブの無い窓のラベル 13 = ボタン 9 + 帯の 2 段 4 つの物差し
 - **`AppMenuItem` は行が着ている物だけを建てる** — 見出しと席の印・`!`・回数押しの印と塗りと状態機械・チップの地・
   先後の数・バッジはそれを持つ行にだけ、名前の文の物差しと印と地はその文を持つ行にだけ建つ。形で変わる分は、同じ
   測り方の run で、チップ付き 174 / 見出し 186 / `!` 184 / 回数押し 198 / 名前の文 248 / 枝のカードの行(先後の数・
@@ -164,16 +182,53 @@ MB(確保は個数)。開いて diff までとタブを待つ窓は 3 run、タ�
 
 | | タブの無い窓 | タブを待つ窓 | 開いて行選択と diff まで |
 |---|---|---|---|
-| WorkingSet | 129.8 | 84.4–84.7 | 344.8–348.0 |
-| private | 110.7 | 66.1–66.5 | 320.2–323.2 |
-| プロセスヒープ busy(確保) | 52.9(312.1K) | 30.4(152.3K) | 158.8(787.7–787.9K) |
+| WorkingSet | 130.5 | 84.4–84.7 | 345.5–346.3 |
+| private | 111.2 | 66.1–66.5 | 320.9–321.6 |
+| プロセスヒープ busy(確保) | 52.8(312.0K) | 30.4–30.5(152.3–152.8K) | 158.8(787.7K) |
 
-- **空ページ 1 枚は WorkingSet 45MB・private 44MB・ヒープ 22.5MB(確保 16.0 万個)** — 左 2 列の差
-- **起動(3 run)**: 起動から最初のオブジェクトまで 857–888ms — うち `qml_engine::load` の前は 15–16ms で、残りは QML の
-  型の読み込み。その後、帯・ダイアログ・ハーネスまで 140–145ms、タブのページを建ててグラフの最初のフレームまで
-  377–467ms
-- **コンパイル済みキャッシュを使う**(`QML_DISABLE_DISK_CACHE` を外す、キャッシュの温まった 2 run)と、最初の
-  オブジェクトまで 673–700ms — **型の読み込みのうちコンパイルが占めるのは約 2 割**で、残りが何かは割っていない。
-  開いて diff までの WorkingSet は 342.1–343.8、private は 310.9–312.5、ヒープ busy は 150.7 — **private とヒープは
-  8〜12MB 小さいが、予算が読む WorkingSet は数 MB しか動かない**
-  (rules-refs/app-ui.md「qmlcachegen はメモリ対策にならない」と同じ向き)
+- **空ページ 1 枚は WorkingSet 46MB・private 45MB・ヒープ 22.4MB(確保 16.0 万個)** — 左 2 列の差
+- **起動(3 run)**: 起動から最初のオブジェクトまで 880–903ms — うち `qml_engine::load` の前は 15–17ms で、残りは QML の
+  型の読み込み(§import の代金)。その後、帯・ダイアログ・ハーネスまで 142–149ms、タブのページを建ててグラフの最初の
+  フレームまで 375–394ms
+- **コンパイル済みキャッシュを使う**(`QML_DISABLE_DISK_CACHE` を外す、キャッシュの温まった 3 run)と、最初の
+  オブジェクトまで 697–713ms — **型の読み込みのうちコンパイルが占めるのは約 2 割**。開いて diff までの WorkingSet は
+  342.2–343.4、private は 310.9–312.1、ヒープ busy は 150.7 — **private とヒープは 8〜10MB 小さいが、予算が読む
+  WorkingSet は数 MB しか動かない**(rules-refs/app-ui.md「qmlcachegen はメモリ対策にならない」と同じ向き)
+
+## import の代金
+
+型の読み込みが、ファイル 1 枚ごとに何を払っているか。使い捨ての口が `Qt.createQmlObject` で中身 1 行の文書
+(`Item { property int probe: 1 }`)を 100 枚ずつ読ませ、1 枚あたりの時間を出す(µs、2 巡。パース・コンパイル・
+生成 1 個込み)。文書の置き場(URL)と import だけを変える:
+
+| 文書の置き場と import | 1 枚あたり |
+|---|---|
+| ハーネスのディレクトリ、`import QtQuick` だけ | 532–555 |
+| 同 + `QtQuick.Layouts` / `QtQuick.Window` / Rust の `platitude` | 516–545(足しても動かない) |
+| 同 + `QtQuick.Controls.Fusion` | 577–588 |
+| 同 + `platitude.ui` | 2,057–2,106 |
+| 製品のディレクトリ(`ui/`)、`import QtQuick` だけ | 1,607–1,626 |
+| 同 + `platitude.ui`(製品のファイルの書き方) | 1,823–1,838 |
+
+合成のモジュール(部品 N 個・singleton S 個の qmldir を `QML_IMPORT_PATH` で足したもの)を import した時:
+
+| N / S | 1 枚あたり | N / S | 1 枚あたり |
+|---|---|---|---|
+| 11 / 0 | 557–575 | 11 / 11 | 1,221–1,389 |
+| 267 / 0 | 843–845 | 267 / 11 | 1,488–1,608 |
+| 1,000 / 0 | 4,024–4,034 | 1,000 / 11 | 4,755–4,877 |
+| 267 / 1 | 940–974 | 11 / 40 | 2,779–3,716 |
+
+- **qmldir の singleton は、その qmldir が見える文書 1 枚ごとに 1 個 約 65µs** — 使っているかに依らない。製品の
+  qmldir は 14 個なので 1 枚 約 0.9ms
+- **部品の数にも乗る** — 267 個で 1 枚 約 0.25ms、1,000 個で 約 3.4ms(数の 2 乗に近い)
+- **製品のファイルは自分のディレクトリを暗黙に import する**ので、`import QtQuick` だけの文書でも `ui/` に在れば
+  約 1.1ms を払う。明示の `import platitude.ui` はその上に 約 0.2ms を足すだけ(同じ singleton を 2 度は解決しない)
+- **製品の 266 枚で 約 0.3 秒** — 型の読み込み(880–903ms からコンパイルの 約 2 割を引いた残り)の 4 割ほど。
+  singleton を名指すファイルは `Theme` 201・`Metrics` 72・`Words` 62・`WordFace` 39・`Hand` 13・`MarkSeat` 12・`Tips` 10・
+  `KeyMenu` 8・`OutsidePress` 7・`NavFacts` 5・`MiddleHand` 4・`Ink` / `Motion` / `Hovers` 各 1 で、266 枚 × 14 個 =
+  3,724 回の解決のうち、名指しに当たるのは 436 回
+- **ファイルを 1 枚足すと、その 1 枚の約 1.1ms に加えて、部品の数に乗る分が全部のファイルで増える**
+- **singleton 12 個を別のモジュールへ移した試作**(`keep/shared-singletons-prototype` — 製品の qmldir に残すのは
+  `Theme` / `Metrics`、他は使うファイル 139 枚だけが import する)では、起動から最初のオブジェクトまで 734–791ms
+  (3 run。同じ撃ち方の今の木は 880–903ms)
