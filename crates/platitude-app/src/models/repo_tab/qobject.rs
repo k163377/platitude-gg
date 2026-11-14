@@ -915,7 +915,7 @@ impl RepoTab {
     /// Creates a branch at `start_point` (HEAD when empty).
     #[qslot]
     fn create_branch(&mut self, name: String, start_point: String, switch_to: bool) {
-        let start = (!start_point.is_empty()).then_some(start_point);
+        let start = crate::encode::optional_text(start_point);
         self.ask_session(|s| s.create_branch(name, start, switch_to));
     }
 
@@ -1163,7 +1163,7 @@ impl RepoTab {
     /// `git fetch --prune`; an empty remote fetches all of them.
     #[qslot]
     fn fetch(&mut self, remote: String) {
-        let remote = (!remote.is_empty()).then_some(remote);
+        let remote = crate::encode::optional_text(remote);
         self.ask_session(|s| s.fetch(remote));
     }
 
@@ -1350,7 +1350,7 @@ impl RepoTab {
     #[qslot]
     fn rebase(&mut self, upstream: String, onto: String) {
         let options = platitude_core::integrate::RebaseOptions {
-            onto: (!onto.is_empty()).then_some(onto),
+            onto: crate::encode::optional_text(onto),
             ..Default::default()
         };
         self.ask_session(|s| s.rebase(upstream, options));
