@@ -71,17 +71,17 @@ Item {
         } else if (act === "nav-drag-open") {
             // A press on a closed row's line that starts to move: the lines come out at once and the drag carries on
             // into them (デザイン規約 §左メニューの所作).
-            const parts = ("" + arg).split(":")
-            dragOpenTimer.kind = parts[0] === "" ? "branch" : parts[0]
-            dragOpenTimer.row = parts.length > 1 ? Number(parts[1]) : 2
-            dragOpenTimer.held = parts.length > 2 ? parts[2] : ""
+            const spot = acts.rowArg(arg, "branch", 2)
+            dragOpenTimer.kind = spot.kind
+            dragOpenTimer.row = spot.row
+            dragOpenTimer.held = spot.filter
             dragOpenTimer.order = dragOpenTimer.held !== "" ? ["filtered", "dragged"] : ["dragged"]
             dragOpenTimer.start()
         } else if (act === "nav-open-tip") {
             // The rest that opens a row, held on: a rest later its supplement follows from the same unmoved hand.
-            const parts = ("" + arg).split(":")
-            openTipTimer.kind = parts[0] === "" ? "worktree" : parts[0]
-            openTipTimer.row = parts.length > 1 ? Number(parts[1]) : 3
+            const spot = acts.rowArg(arg, "worktree", 3)
+            openTipTimer.kind = spot.kind
+            openTipTimer.row = spot.row
             openTipTimer.start()
         } else if (act === "nav-open-held") {
             // The name box first, then a hand on a row: nothing may open — it would move the rows under the box.
@@ -183,6 +183,13 @@ Item {
             return false
         }
         return true
+    }
+    /// `<section>:<row>[:<filter>]` as `{ kind, row, filter }`, with the verb's own `kind` for an empty section and
+    /// its own `row` for none named.
+    function rowArg(arg, kind, row) {
+        const parts = ("" + arg).split(":")
+        return { "kind": parts[0] === "" ? kind : parts[0], "row": parts.length > 1 ? Number(parts[1]) : row,
+                 "filter": parts.length > 2 ? parts[2] : "" }
     }
     // Reported off the box's and the bar's own state: a box closed and one left open holding the name, and the bar's
     // place word, are a few pixels apart.
@@ -609,10 +616,10 @@ Item {
         // Witnessed: `rowName`, the row's name read as it opened; `line` and `to`, the first of the open lines that
         // goes somewhere and where, read as the hand aims at it once the lines stand still.
         function begin(arg, lit) {
-            const parts = ("" + arg).split(":")
-            followTimer.kind = parts[0] === "" ? "remote" : parts[0]
-            followTimer.row = parts.length > 1 ? Number(parts[1]) : 0
-            followTimer.filter = parts.length > 2 ? parts[2] : ""
+            const spot = acts.rowArg(arg, "remote", 0)
+            followTimer.kind = spot.kind
+            followTimer.row = spot.row
+            followTimer.filter = spot.filter
             followTimer.lit = lit
             followTimer.start()
         }
@@ -774,15 +781,15 @@ Item {
         function begin(arg) {
             const parts = ("" + arg).split(":")
             navTipTimer.head = parts[0] === "head"
-            navTipTimer.kind = navTipTimer.head || parts[0] === "" ? "branch" : parts[0]
+            const spot = acts.rowArg(arg, "branch", 0)
+            navTipTimer.kind = navTipTimer.head ? "branch" : spot.kind
             // The filter takes the stand-in's own row out of the list, or brings a leaf under a folded folder into it
             // (a filtered row stands under its full name — `SidebarFilterRow`). REMOTES keeps the remote's own row
             // (`origin`) as row 0 under a filter too, so its leaves count from 1.
-            navTipTimer.hide = navTipTimer.head ? (parts.length > 1 ? parts[1] : "")
-                             : (parts.length > 2 ? parts[2] : "")
+            navTipTimer.hide = navTipTimer.head ? (parts.length > 1 ? parts[1] : "") : spot.filter
             // `head:<filter>:<row>` — the folder to shut over the current branch; the filter is then usually empty.
             navTipTimer.fold = navTipTimer.head && parts.length > 2 ? Number(parts[2]) : -1
-            navTipTimer.row = !navTipTimer.head && parts.length > 1 ? Number(parts[1]) : 0
+            navTipTimer.row = navTipTimer.head ? 0 : spot.row
             // The control row first; then the fold or the scroll asked for; then the rest on the row; then, where one
             // is asked, the hand's move.
             navTipTimer.order = ["lit"].concat(navTipTimer.fold >= 0 ? ["folded"] : [],
