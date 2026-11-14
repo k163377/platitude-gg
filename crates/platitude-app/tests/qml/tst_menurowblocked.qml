@@ -10,6 +10,8 @@ Item {
     height: 120
 
     readonly property int presses: Metrics.holdPressesWarned
+    /// A driver to ask which keys stand in for a press (`HoldDriver.holdKey`): `plainRow` builds none of its own.
+    readonly property HoldDriver gatekeeper: HoldDriver {}
 
     AppMenuItem {
         id: row
@@ -18,6 +20,27 @@ Item {
         holdPresses: root.presses
     }
     Item { id: elsewhere }
+
+    // A row with no press count builds no `HoldDriver` to ask, so while blocked it names the keys it drops itself
+    // (`AppMenuItem`'s `Keys.onPressed`): held to the driver's own set here. A key it does not drop goes one of two
+    // ways — the `MenuItem` under it takes Space, Return and Enter as a press of its own, and anything else passes
+    // to the seat (`passed`).
+    FocusScope {
+        id: plainSeat
+        y: 60
+        width: 340
+        height: plainRow.height
+
+        property var passed: []
+
+        Keys.onPressed: event => plainSeat.passed.push(event.key)
+        AppMenuItem {
+            id: plainRow
+            width: 340
+            text: "Open"
+            blockedReason: "Git is busy"
+        }
+    }
 
     SignalSpy {
         id: holds
@@ -76,6 +99,25 @@ Item {
             compare(holds.count, 0, "the presses after it began a new count")
             keyClick(Qt.Key_Space)
             compare(holds.count, 1, "which the next press completes: the row is not left deaf")
+        }
+
+        /// The keys a blocked row drops are the keys that stand in for a press, no more and no fewer: one more would
+        /// eat a key the menu moves by, one fewer would run the row and close the menu.
+        function test_a_blocked_row_with_no_count_drops_the_keys_that_stand_in_for_a_press() {
+            compare(plainRow.holdDrive, null, "the row under test has no driver of its own")
+            const keys = [Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter, Qt.Key_A, Qt.Key_Escape, Qt.Key_Down, Qt.Key_F2]
+            let stoodIn = 0
+            for (const key of keys) {
+                plainRow.forceActiveFocus()
+                plainSeat.passed = []
+                keyPress(key)
+                const dropped = !plainRow.pressed && plainSeat.passed.indexOf(key) < 0
+                keyRelease(key)
+                compare(dropped, root.gatekeeper.holdKey(key), "key " + key)
+                if (dropped)
+                    stoodIn++
+            }
+            compare(stoodIn, 3, "Space, Return and Enter")
         }
 
         /// A row no hand can press takes no presses from automation either, and says so — the caller presses again
