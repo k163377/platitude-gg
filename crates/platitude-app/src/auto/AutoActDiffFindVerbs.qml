@@ -28,16 +28,13 @@ Item {
                 .indexOf(act) < 0)
             return false
         // `[<bucket>:]<path>`, opened as `diff-file` opens it (`AutoActDiffVerbs.run`).
-        const cut = arg.indexOf(":")
-        const head = cut > 0 ? arg.substring(0, cut) : ""
-        const named = head === "staged" || head === "unstaged" || head === "untracked" || head === "conflicts"
-        const filePath = named ? arg.substring(cut + 1) : arg
-        if (filePath === "") {
+        const file = driver.diffArg(arg)
+        if (file.path === "") {
             argRefused.start()
             return true
         }
         page.showWip()
-        page.toggleDiff(named ? head : "unstaged", filePath, unstagedModel.origOf(filePath))
+        page.toggleDiff(file.bucket, file.path, unstagedModel.origOf(file.path))
         rowsTimer.start()
         return true
     }

@@ -196,6 +196,15 @@ Item {
         return Math.round(diffPane.codeMeasured) + "," + Math.round(diffPane.codeDrawn)
                 + "," + diffPane.codeWidestRow
     }
+    /// A file argument, `<path>` or `<bucket>:<path>`, as `{ bucket, path }` — `unstaged` where it names no bucket.
+    /// Only the bucket names count as a prefix (`staged` / `unstaged` / `untracked` / `conflicts`), so a path with a
+    /// colon still opens.
+    function diffArg(arg) {
+        const cut = arg.indexOf(":")
+        const head = cut > 0 ? arg.substring(0, cut) : ""
+        const named = head === "staged" || head === "unstaged" || head === "untracked" || head === "conflicts"
+        return { "bucket": named ? head : "unstaged", "path": named ? arg.substring(cut + 1) : arg }
+    }
 
     /// The page starts this once its models are attached: a verb run before them would act on a repository nothing
     /// has read yet.

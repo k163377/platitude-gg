@@ -39,24 +39,20 @@ Item {
              "hunk-tools", "keep-place", "diff-tick", "code-send", "line-back", "code-grow", "code-shrink", "code-swap",
              "diff-select", "diff-copy", "diff-menu", "diff-copy-removed", "diff-sweep", "diff-band-sweep", "diff-bar",
              "diff-blank", "diff-follow", "line-run", "diff-escape"].indexOf(act) >= 0) {
-            // `<path>` or `<bucket>:<path>` (an untracked file has no unstaged diff; a conflict is read from
-            // `conflicts`). Only the bucket names count as a prefix, so a path with a colon still opens.
-            const cut = arg.indexOf(":")
-            const head = cut > 0 ? arg.substring(0, cut) : ""
-            const named = head === "staged" || head === "unstaged"
-                          || head === "untracked" || head === "conflicts"
+            // `<path>` or `<bucket>:<path>` (`AutoActDriver.diffArg`): an untracked file has no unstaged diff, and a
+            // conflict is read from `conflicts`.
+            const file = driver.diffArg(arg)
             page.showWip()
-            const filePath = named ? arg.substring(cut + 1) : arg
             // A missing path is the run's own mistake and must read as one: git takes an empty pathspec as the whole
             // tree, so the pane would fill with a plausible diff and the verb would report rows of no file.
-            if (filePath === "") {
+            if (file.path === "") {
                 argRefused.start()
                 // True even here — falsy reads as "not mine" to the dispatch chain.
                 return true
             }
             // A rename's source comes off the model, as a row click hands it over: named without it, git reads the diff
             // as a file appearing from nothing, and a pure rename's `No changes to show` could not be shot.
-            page.toggleDiff(named ? head : "unstaged", filePath, unstagedModel.origOf(filePath))
+            page.toggleDiff(file.bucket, file.path, unstagedModel.origOf(file.path))
             acts.beginRows(act)
         } else if (acts.previews.indexOf(act) >= 0) {
             // Completion is the pane settling (`stageRowTimer`). No path is said and completed at once (`argRefused`):

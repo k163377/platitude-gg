@@ -60,14 +60,11 @@ Item {
             // The argument is the file to start on — `<bucket>:<path>` for the worktree's list, where a file
             // changed on both sides has a row under each.
             if (act === "wip-step" || act === "wip-shut") {
-                const cut = arg.indexOf(":")
-                const head = cut > 0 ? arg.substring(0, cut) : ""
-                const named = head === "staged" || head === "unstaged"
-                              || head === "untracked" || head === "conflicts"
+                const file = driver.diffArg(arg)
                 page.showWip()
                 fileStepTimer.pane = "wip"
-                fileStepTimer.bucket = named ? head : "unstaged"
-                fileStepTimer.path = named ? arg.substring(cut + 1) : arg
+                fileStepTimer.bucket = file.bucket
+                fileStepTimer.path = file.path
             } else {
                 page.activateRow(worktree.branchOid !== "" ? worktree.branchOid : graphModel.oidAt(0))
                 fileStepTimer.pane = "changes"
