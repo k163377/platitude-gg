@@ -3,6 +3,7 @@
 //! green for the inputs they read.
 
 mod imports;
+mod loads;
 mod pins;
 mod steps;
 mod urls;
