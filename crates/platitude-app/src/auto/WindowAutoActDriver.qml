@@ -60,6 +60,11 @@ Item {
     /// starts itself off its own `running:`, and this has nothing to do.
     function begin() {
     }
+    /// The log header's `Clear` on `page`, pressed from outside the panel (`PGG_AUTO_ACT=commands-clear`).
+    function clearCommandLog(page) {
+        if (page.commandsPane !== null)
+            page.commandsPane.clearPanel()
+    }
 
     // PGG_AUTO_ACT=commands-clear. Answered at the band: the rows and the line both feed one mark, read on both sides
     // of the press (`was=` is the half the picture cannot hold). The standing panel is a precondition read only in
@@ -84,7 +89,7 @@ Item {
                     return
                 commandsClearActTimer.input("cleared", () => {
                     commandsClearActTimer.witness("was", driver.commandsWrongSeen)
-                    window.curPage.clearCommandLog()
+                    driver.clearCommandLog(window.curPage)
                 })
                 return
             }

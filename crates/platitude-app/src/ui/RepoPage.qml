@@ -2838,31 +2838,6 @@ FocusScope {
     readonly property bool commandsShown: page.commandsPane !== null && page.commandsPane.visible
     /// Automation reads the laid-out width before persisting a state round trip.
     readonly property real stateDetailsWidth: rightPane.width
-    /// Automation only: the header's `Clear`, pressed from outside the panel (`PGG_AUTO_ACT=commands-clear`).
-    function clearCommandLog() {
-        if (page.commandsPane !== null)
-            page.commandsPane.clearPanel()
-    }
-    /// Automation only: the hand that drags over the log, and the key that takes what it picked
-    /// (`PGG_AUTO_ACT=commands-select` / `commands-copy`).
-    function pickCommandText(fromRow, fromAt, toRow, toAt) {
-        if (page.commandsPane !== null)
-            page.commandsPane.pickText(fromRow, fromAt, toRow, toAt)
-    }
-    /// ...and the same hand started on the ground under the last row (`PGG_AUTO_ACT=commands-sweep`).
-    function sweepCommandGround(fx, fy) {
-        return page.commandsPane !== null && page.commandsPane.sweepGround(fx, fy)
-    }
-    /// Automation: how much of the log is actually wearing the wash the drag left (`CommandsPane.washTally`) — the
-    /// half of `commands-select` the picture cannot be judged on.
-    function commandWashTally() {
-        return page.commandsPane === null ? "worn=false rows=0 washed=0" : page.commandsPane.washTally()
-    }
-    readonly property bool commandsHasGround: page.commandsPane !== null && page.commandsPane.hasGround
-    readonly property real commandsGroundTop: page.commandsPane !== null ? page.commandsPane.groundTop : 0
-    function copyCommandText() {
-        return page.commandsPane !== null && page.commandsPane.copySelection()
-    }
 
     RepoTab {
         id: repoTab

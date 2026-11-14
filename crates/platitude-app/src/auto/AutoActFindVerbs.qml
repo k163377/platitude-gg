@@ -20,6 +20,9 @@ Item {
     readonly property var detailsModel: driver.detailsModel
     readonly property var graphPane: driver.graphPane
     readonly property var detailsPane: driver.detailsPane
+    // The command log's ground under its last row (`PGG_AUTO_ACT=commands-sweep`), read off the panel while it is up.
+    readonly property bool commandsHasGround: page.commandsPane !== null && page.commandsPane.hasGround
+    readonly property real commandsGroundTop: page.commandsPane !== null ? page.commandsPane.groundTop : 0
 
     /// Runs `act` if it is one of this family's, and says whether it was.
     function run(act, arg) {
@@ -163,6 +166,24 @@ Item {
             return false
         }
         return true
+    }
+    /// The hand that drags over the log, and the key that takes what it picked
+    /// (`PGG_AUTO_ACT=commands-select` / `commands-copy`).
+    function pickCommandText(fromRow, fromAt, toRow, toAt) {
+        if (page.commandsPane !== null)
+            page.commandsPane.pickText(fromRow, fromAt, toRow, toAt)
+    }
+    /// ...and the same hand started on the ground under the last row (`PGG_AUTO_ACT=commands-sweep`).
+    function sweepCommandGround(fx, fy) {
+        return page.commandsPane !== null && page.commandsPane.sweepGround(fx, fy)
+    }
+    /// How much of the log is actually wearing the wash the drag left (`CommandsPane.washTally`) — the half of
+    /// `commands-select` the picture cannot be judged on.
+    function commandWashTally() {
+        return page.commandsPane === null ? "worn=false rows=0 washed=0" : page.commandsPane.washTally()
+    }
+    function copyCommandText() {
+        return page.commandsPane !== null && page.commandsPane.copySelection()
     }
     // The hover mark goes on once the face it marks is there.
     PageStage {
@@ -571,18 +592,18 @@ Item {
             }
             op.input("picked", () => {
                 const rows = op.witness("rows", page.pageCommands.rowsHeld())
-                page.pickCommandText(0, 0, rows - 1, driver.pastLineEnd)
+                acts.pickCommandText(0, 0, rows - 1, driver.pastLineEnd)
             })
             if (Harness.autoAct === "commands-select") {
                 // `holds=` is the model's selection, `worn=` what the rows draw of it (`CommandsPane.washTally`) —
                 // either alone passes a broken run.
                 op.complete({ "when": () => ({}),
                               "report": () => "commands_pick holds=" + (page.pageCommands.selectionText() !== "")
-                                              + " " + page.commandWashTally() + " held=" + op.witnessed("rows") })
+                                              + " " + acts.commandWashTally() + " held=" + op.witnessed("rows") })
                 return
             }
             op.input("copied", () => {
-                page.copyCommandText()
+                acts.copyCommandText()
             })
             op.complete({
                 "when": () => ({}),
@@ -616,7 +637,7 @@ Item {
                 return
             // The layout has to be still: rows arrive a frame ahead of the view, and a sweep aimed at ground about
             // to be a row lands on neither.
-            const geom = Math.round(page.commandsGroundTop) + "," + page.pageCommands.rowsHeld()
+            const geom = Math.round(acts.commandsGroundTop) + "," + page.pageCommands.rowsHeld()
             if (!op.still("commands_sweep_geom", geom))
                 return
             op.input("swept", () => {
@@ -628,7 +649,7 @@ Item {
                     for (let j = 0; j < down.length; j++) {
                         tries++
                         page.pageCommands.clearSelect()
-                        if (page.sweepCommandGround(across[i], down[j])
+                        if (acts.sweepCommandGround(across[i], down[j])
                             && page.pageCommands.selectionText() !== "")
                             reach++
                     }
@@ -639,7 +660,7 @@ Item {
             // `ground=false`: the log fills the panel, and `reach=0/9` then says nothing.
             op.complete({ "when": () => ({}),
                           "report": () => "commands_sweep reach=" + op.witnessed("reach") + "/" + op.witnessed("tries")
-                                          + " ground=" + page.commandsHasGround
+                                          + " ground=" + acts.commandsHasGround
                                           + " rows=" + page.pageCommands.rowsHeld() })
         }
     }
