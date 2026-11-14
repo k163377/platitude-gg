@@ -210,10 +210,7 @@ Item {
                 halfDuringTimer.start()
             else
                 halfSettledTimer.start()
-            driver.pressWrite("commit", () => {
-                page.commitNow()
-                return true
-            })
+            driver.pressCommitNow("commit")
         } else if (act === "wip-message" || act === "wip-message-focus") {
             // A body is typed because an empty box has no text to take a colour. Read the pair: only the caret differs.
             page.showWip()
@@ -802,10 +799,7 @@ Item {
                 // A deferred run: nothing raises its barrier, so the commit is sent and waited out here — off HEAD as
                 // the commit finds it, read at the press itself (`resetAuthorLandedTimer`).
                 resetAuthorTimer.witness("headBefore", worktree.headOid)
-                driver.pressWrite("commit", () => {
-                    page.commitNow()
-                    return true
-                })
+                driver.pressCommitNow("commit")
             })
             if (!committed)
                 return

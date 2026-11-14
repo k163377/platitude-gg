@@ -533,10 +533,7 @@ Item {
             }
             page.showWip()
             wipPane.setMessage("chore: held by a sleeping hook", "")
-            return driver.pressWrite("commit", () => {
-                page.commitNow()
-                return true
-            })
+            return driver.pressCommitNow("commit")
         }
         onTriggered: {
             const op = menuWaitTimer

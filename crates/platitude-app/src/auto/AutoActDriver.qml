@@ -421,6 +421,14 @@ Item {
             return false
         return driver.inputWent(press())
     }
+    /// The editor's commit pressed through the page (`RepoPage.commitNow`) as the write `what` names (`commit`, or
+    /// `amend` with the box ticked). Answers as `pressWrite` does.
+    function pressCommitNow(what) {
+        return driver.pressWrite(what, () => {
+            page.commitNow()
+            return true
+        })
+    }
 
     /// **A write whose input takes time** — a hold to run out, a dialog to answer, a row to appear. Arms; the ask the
     /// input produces is caught whenever it comes. Answers whether the arm took: arming over a pressed write not yet

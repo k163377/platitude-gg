@@ -110,10 +110,7 @@ Item {
                 op.input("committed", () => {
                     page.showWip()
                     wipPane.setMessage("chore: commit under a silent walk", "")
-                    return driver.pressWrite("commit", () => {
-                        page.commitNow()
-                        return true
-                    })
+                    return driver.pressCommitNow("commit")
                 })
                 return
             }

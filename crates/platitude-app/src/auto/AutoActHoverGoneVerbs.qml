@@ -220,7 +220,7 @@ Item {
                 op.input("written", () => op.how === "commit"
                                           ? driver.pressWrite("commit", () => wipPane.pressCommit())
                                           : op.how === "amend"
-                                          ? driver.pressWrite("amend", () => { page.commitNow(); return true })
+                                          ? driver.pressCommitNow("amend")
                                           : op.pressBranch())
                 return
             }
