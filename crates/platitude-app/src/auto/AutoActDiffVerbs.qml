@@ -532,13 +532,10 @@ Item {
         let quiet = true
         let clamped = true
         let backwards = true
-        for (let i = 0; i < diffPane.view.count; i++) {
-            const at = acts.reachOf(i)
-            if (!at)
-                continue
+        for (const at of acts.reachable()) {
             rows++
             shortest = shortest === 0 ? at.ink : Math.min(shortest, at.ink)
-            const whole = acts.copyOfRow(i)
+            const whole = acts.copyOfRow(at.row)
 
             diffPane.diffModel.clearSelect()
             hand.takeAt(Qt.point(at.ends + 4, at.y), Qt.LeftButton)
@@ -577,12 +574,7 @@ Item {
     /// copied one by one — the multi-row join (removed lines left out) a single-row drag cannot test. Answers
     /// `rows=<n>` when fewer than two rows are reachable.
     function spanTakes() {
-        const reach = []
-        for (let i = 0; i < diffPane.view.count; i++) {
-            const at = acts.reachOf(i)
-            if (at)
-                reach.push(at)
-        }
+        const reach = acts.reachable()
         if (reach.length < 2)
             return "rows=" + reach.length
         const first = reach[0]
@@ -600,16 +592,12 @@ Item {
     /// A drag past the end of two rows, left standing for the shot.
     function standPastTheEnd() {
         const hand = diffPane.textHand
-        let stood = 0
         diffPane.diffModel.clearSelect()
-        for (let i = 0; i < diffPane.view.count && stood < 2; i++) {
-            const at = acts.reachOf(i)
-            if (!at)
-                continue
-            if (stood === 0)
-                hand.takeAt(Qt.point(0, at.y), Qt.LeftButton)
-            hand.followAt(at.blank)
-            stood++
+        const reach = acts.reachable()
+        for (let k = 0; k < Math.min(2, reach.length); k++) {
+            if (k === 0)
+                hand.takeAt(Qt.point(0, reach[k].y), Qt.LeftButton)
+            hand.followAt(reach[k].blank)
         }
         hand.releaseText()
     }
@@ -626,6 +614,16 @@ Item {
         if (ends < 1 || ends + 4 >= hand.width || y < 0 || y >= hand.height)
             return null
         return { row: i, ink: item.codeInk, ends: ends, y: y, blank: Qt.point(Math.min(hand.width - 1, ends + 200), y) }
+    }
+    /// The rows the drags reach (`reachOf`), top to bottom, as the view stands when asked.
+    function reachable() {
+        const reach = []
+        for (let i = 0; i < diffPane.view.count; i++) {
+            const at = acts.reachOf(i)
+            if (at)
+                reach.push(at)
+        }
+        return reach
     }
     /// Whether the list has laid its rows out, not merely received them: until then `contentHeight` is zero, so `maxY`
     /// and `codeMax` read as nothing.
