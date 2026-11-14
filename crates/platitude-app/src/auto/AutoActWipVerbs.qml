@@ -908,10 +908,8 @@ Item {
         id: eolHoverTimer
         name: "eol_hover"
         onTriggered: {
-            if (eolHoverTimer.at("start") && !eolHoverTimer.input("pointed", () => {
-                    wipPane.pointEol(Harness.autoActArg)
-                    return wipPane.eolCardOpen
-                }))
+            if (eolHoverTimer.at("start")
+                    && !eolHoverTimer.input("pointed", () => driver.pointEolCard(Harness.autoActArg)))
                 return
             eolHoverTimer.complete({
                 "name": "eol_hover_card",
@@ -965,10 +963,7 @@ Item {
                     return
                 }
                 // The row's form starts on the rows as they are: its card asked for each beat until it is up.
-                if (!op.input("pointed", () => {
-                        wipPane.pointEol("src/flipped.kt")
-                        return wipPane.eolCardOpen
-                    }))
+                if (!op.input("pointed", () => driver.pointEolCard("src/flipped.kt")))
                     return
             }
             if (op.at("staged") || op.at("pointed")) {
@@ -1067,10 +1062,7 @@ Item {
         onTriggered: {
             const op = eolWalkTimer
             // Asked again until the card is up: the marks arrive with the status read (`WipPane.pointEol`).
-            if (op.at("start") && !op.input("pointed", () => {
-                    wipPane.pointEol("src/flipped.kt")
-                    return wipPane.eolCardOpen
-                }))
+            if (op.at("start") && !op.input("pointed", () => driver.pointEolCard("src/flipped.kt")))
                 return
             if (op.at("pointed")) {
                 const row = op.slidRow()

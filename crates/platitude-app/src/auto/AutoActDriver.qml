@@ -136,6 +136,12 @@ Item {
             return false
         return tip.x + tip.width <= 0 || tip.x >= at.width
     }
+    /// Asks for the line-ending card of the file row `path` names (`[<bucket>:]<path>`) as a hand on its mark asks
+    /// (`WipPane.pointEol`), and answers whether the card is up.
+    function pointEolCard(path) {
+        wipPane.pointEol(path)
+        return wipPane.eolCardOpen
+    }
     /// Forces a menu row's tooltip through the property the real hover writes (`AppMenuItem.tipForced`), and says
     /// whether it stands where a hand's would: up, beside the row. One that came out before the menu stood where the
     /// hand would have raised it keeps the seat read off the row then (`TipSeat.targetAt`), so it is taken down
