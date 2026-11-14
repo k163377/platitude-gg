@@ -229,16 +229,10 @@ async fn chips_read_from_one_graph_do_not_land_on_another() {
     // travels as a diff.
     repo.git(&["tag", "v2", &root]);
 
-    let (release, held) = std::sync::mpsc::channel::<()>();
-    sink.hook_once(
-        |e| {
-            matches!(e, SessionEvent::RefsLoaded { snapshot, .. }
-                if snapshot.tags.iter().any(|t| t.short == "v2"))
-        },
-        move || {
-            held.recv().expect("the test releases the refs read");
-        },
-    );
+    let release = sink.park_once("the refs read", |e| {
+        matches!(e, SessionEvent::RefsLoaded { snapshot, .. }
+            if snapshot.tags.iter().any(|t| t.short == "v2"))
+    });
     session.refresh_refs();
     sink.wait_for("the read reached the window", |events| {
         events
@@ -314,12 +308,9 @@ async fn a_pass_nobody_asked_for_any_more_leaves_the_graph_alone() {
 
     // Park in the swap that adds the WIP row: it sends under the graph
     // lock, so everything else waits with the graph fully installed.
-    let (release, held) = std::sync::mpsc::channel::<()>();
-    sink.hook_once(
+    let release = sink.park_once(
+        "the graph swap",
         |e| matches!(e, SessionEvent::LogReplaced { rows, .. } if rows.len() == 4),
-        move || {
-            held.recv().expect("the test releases the graph swap");
-        },
     );
     repo.write_file("f.txt", "dirty\n");
     session.refresh_status();

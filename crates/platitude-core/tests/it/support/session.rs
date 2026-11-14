@@ -104,6 +104,22 @@ impl CaptureSink {
         *self.hook.lock().unwrap() = Some((Box::new(when), Box::new(run)));
     }
 
+    /// [`Self::hook_once`] that parks the delivery of the first event `when`
+    /// accepts — `what` names it — and answers the release: a `send` on it
+    /// lets the parked reader carry on.
+    pub fn park_once(
+        &self,
+        what: &'static str,
+        when: impl Fn(&SessionEvent) -> bool + Send + 'static,
+    ) -> std::sync::mpsc::Sender<()> {
+        let (release, held) = std::sync::mpsc::channel::<()>();
+        self.hook_once(when, move || {
+            held.recv()
+                .unwrap_or_else(|_| panic!("the test releases {what}"));
+        });
+        release
+    }
+
     /// The commands started from event `from` on, as the log shows them.
     pub fn commands_since(&self, from: usize) -> Vec<String> {
         self.events.lock().unwrap()[from..]

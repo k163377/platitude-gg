@@ -429,13 +429,9 @@ async fn a_focus_does_not_walk_a_stash_list_a_newer_one_replaced() {
     // The tree turns dirty, so the focus walks once it is let go.
     repo.write_file("a.txt", "dirty\n");
 
-    let (release, held) = std::sync::mpsc::channel::<()>();
-    sink.hook_once(
-        |e| matches!(e, SessionEvent::RefsLoaded { .. }),
-        move || {
-            held.recv().expect("the test releases the parked refs read");
-        },
-    );
+    let release = sink.park_once("the parked refs read", |e| {
+        matches!(e, SessionEvent::RefsLoaded { .. })
+    });
     session.refresh_refs();
     sink.wait_for("the refs read parked", |events| {
         events[from..]

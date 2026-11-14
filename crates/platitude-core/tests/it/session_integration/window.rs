@@ -294,12 +294,9 @@ async fn a_window_change_a_rebuild_overtakes_still_lands_the_new_window() {
 
     // Park in the swap that adds the WIP row: it sends under the graph
     // lock, so every pass asked for from here waits at that door.
-    let (release, held) = std::sync::mpsc::channel::<()>();
-    sink.hook_once(
+    let release = sink.park_once(
+        "the graph swap",
         |e| matches!(e, SessionEvent::LogReplaced { rows, .. } if rows.len() == 3),
-        move || {
-            held.recv().expect("the test releases the graph swap");
-        },
     );
     repo.write_file("f.txt", "wip\n");
     session.refresh_status();
@@ -357,12 +354,9 @@ async fn a_window_change_only_the_footer_notices_still_lands() {
 
     // Park in the swap that adds the WIP row (see the test above): from
     // here every pass waits at the graph lock.
-    let (release, held) = std::sync::mpsc::channel::<()>();
-    sink.hook_once(
+    let release = sink.park_once(
+        "the graph swap",
         |e| matches!(e, SessionEvent::LogReplaced { rows, .. } if rows.len() == 3),
-        move || {
-            held.recv().expect("the test releases the graph swap");
-        },
     );
     repo.write_file("f.txt", "wip\n");
     session.refresh_status();

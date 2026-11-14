@@ -487,10 +487,7 @@ async fn a_carry_whose_session_closes_half_way_still_puts_the_work_back() {
     repo.write_file("both.txt", "l1\nl2\nl3\nl4\nl5-MINE\n");
 
     let (sink, session) = opened(&repo).await;
-    let (release, held) = std::sync::mpsc::channel::<()>();
-    sink.hook_once(reached_the_stash, move || {
-        held.recv().expect("the test releases the carry");
-    });
+    let release = sink.park_once("the carry", reached_the_stash);
     session.checkout(platitude_core::branch::CheckoutTarget::Branch {
         name: "other".into(),
     });

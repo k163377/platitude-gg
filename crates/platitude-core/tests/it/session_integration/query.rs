@@ -35,14 +35,11 @@ async fn a_request_made_while_a_read_runs_gets_a_read_of_its_own() {
 
     // Park a read between seeing the repository and asking whether to go
     // round again; everything below happens inside that window.
-    let (release, held) = std::sync::mpsc::channel::<()>();
     let clean_reads = sink
         .count(|e| matches!(e, SessionEvent::StatusLoaded { status, .. } if !status.is_dirty()));
-    sink.hook_once(
+    let release = sink.park_once(
+        "the status read",
         |e| matches!(e, SessionEvent::StatusLoaded { status, .. } if !status.is_dirty()),
-        move || {
-            held.recv().expect("the test releases the status read");
-        },
     );
     session.refresh_status();
     sink.wait_for("the read reached the window", |events| {
@@ -110,10 +107,7 @@ async fn the_ways_in_to_a_status_read_never_run_two_at_once() {
 
     // Park a read at its spawn, while it owns the flight; everything below
     // is asked from inside that window.
-    let (release, held) = std::sync::mpsc::channel::<()>();
-    sink.hook_once(is_status_spawn, move || {
-        held.recv().expect("the test releases the parked read");
-    });
+    let release = sink.park_once("the parked read", is_status_spawn);
     let spawned = sink.count(is_status_spawn);
     session.refresh_status();
     sink.wait_for("the parked read reached its process", move |evs| {
@@ -175,10 +169,7 @@ async fn a_poll_let_through_by_a_replay_does_not_read_beside_it() {
 
     // Park a read at its spawn: everything asked below queues behind its
     // flight, the replay's own settling included.
-    let (release, held) = std::sync::mpsc::channel::<()>();
-    sink.hook_once(is_status_spawn, move || {
-        held.recv().expect("the test releases the parked read");
-    });
+    let release = sink.park_once("the parked read", is_status_spawn);
     let spawned = sink.count(is_status_spawn);
     session.refresh_status();
     sink.wait_for("the parked read reached its process", move |evs| {

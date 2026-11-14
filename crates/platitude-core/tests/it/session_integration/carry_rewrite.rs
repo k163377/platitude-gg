@@ -314,7 +314,7 @@ fn reached_the_stash(event: &SessionEvent) -> bool {
 ///
 /// The session is held inside the sink delivery that announces the stash
 /// while the test commits from its own thread
-/// ([`crate::support::session::CaptureSink::hook_once`]).
+/// ([`crate::support::session::CaptureSink::park_once`]).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_commit_landing_inside_the_carry_is_refused_rather_than_dropped() {
     install_todo_editor();
@@ -326,10 +326,7 @@ async fn a_commit_landing_inside_the_carry_is_refused_rather_than_dropped() {
     repo.write_file("a.txt", "uncommitted\n");
 
     let (sink, session) = opened(&repo).await;
-    let (release, held) = std::sync::mpsc::channel::<()>();
-    sink.hook_once(reached_the_stash, move || {
-        held.recv().expect("the test releases the carry");
-    });
+    let release = sink.park_once("the carry", reached_the_stash);
     session.rebase_interactive(
         base,
         vec![RebaseStep::pick(head.clone(), "the plan's only step")],
@@ -420,10 +417,7 @@ async fn a_commit_landing_after_a_one_commit_edits_todo_is_refused() {
     repo.commit_file("c.txt", "three\n", "after it");
 
     let (sink, session) = opened(&repo).await;
-    let (release, held) = std::sync::mpsc::channel::<()>();
-    sink.hook_once(reached_the_tip_check, move || {
-        held.recv().expect("the test releases the edit");
-    });
+    let release = sink.park_once("the edit", reached_the_tip_check);
     session.drop_commit(doomed.clone());
     sink.wait_for("the edit reaching its tip check", |events| {
         events.iter().any(reached_the_tip_check).then_some(())
@@ -494,10 +488,7 @@ async fn a_commit_landing_inside_a_one_commit_edits_carry_is_refused() {
     repo.write_file("c.txt", "unstaged edit\n");
 
     let (sink, session) = opened(&repo).await;
-    let (release, held) = std::sync::mpsc::channel::<()>();
-    sink.hook_once(reached_the_stash, move || {
-        held.recv().expect("the test releases the carry");
-    });
+    let release = sink.park_once("the carry", reached_the_stash);
     session.drop_commit(doomed.clone());
     sink.wait_for("the carry reaching its stash", |events| {
         events.iter().any(reached_the_stash).then_some(())
