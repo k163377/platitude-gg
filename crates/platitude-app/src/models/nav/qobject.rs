@@ -291,6 +291,13 @@ impl NavSectionModel {
         }
     }
 
+    /// Whether `remote` already has a branch called `name` — asked of the
+    /// remotes section by every door that would push a name there.
+    #[qslot]
+    pub(super) fn has_remote_branch(&self, remote: String, name: String) -> bool {
+        !self.oid_of_name(format!("{remote}/{name}")).is_empty()
+    }
+
     /// Why git would not take `name` for a new branch or tag beside the
     /// ones this section holds — taken, a folder of another or under one,
     /// another's in letter case only — `undefined` where nothing is in the

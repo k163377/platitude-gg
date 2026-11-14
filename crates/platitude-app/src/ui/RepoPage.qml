@@ -969,7 +969,7 @@ FocusScope {
         // Not where the remote already carries the new name: both answers would push, which fast-forwards the branch
         // over there and reports success — somebody else's branch would move. The box refuses it too; this catches
         // the way in that has no box.
-        if (name === from || remotesModel.oidOfName(remote + "/" + name) !== "")
+        if (name === from || remotesModel.hasRemoteBranch(remote, name))
             return
         renameCarryFlow.startAsk("branch", remote, from, name, remotesModel.oidOfName(remoteRef))
     }
@@ -1311,7 +1311,7 @@ FocusScope {
         const from = GitFacts.branchOfRef(remoteRef, repoTab.remoteNames)
         // And the same stop at a name already over there (`carryBranchRenameOver`), which the box turns down: a plain
         // push onto an existing name passes as a success wherever it fast-forwards.
-        if (name === from || remotesModel.oidOfName(remote + "/" + name) !== "")
+        if (name === from || remotesModel.hasRemoteBranch(remote, name))
             return
         // The commit the bar marks, taken as it is raised: the old name's delete is leased to it
         // (`remote::replace_remote_branch`), so a remote that moved while the question stood is refused.
@@ -1797,7 +1797,7 @@ FocusScope {
         : GitFacts.remoteOfRef(graphPane.namingId, repoTab.remoteNames)
     readonly property bool graphNameTaken: graphPane.namingMode === "rename" && page.graphRenameRemote !== ""
         && graphPane.namingText.trim() !== ""
-        && remotesModel.oidOfName(page.graphRenameRemote + "/" + graphPane.namingText.trim()) !== ""
+        && remotesModel.hasRemoteBranch(page.graphRenameRemote, graphPane.namingText.trim())
     /// Where the worktree named in the graph's box would go (`NavSectionModel.newWorktreeFor`), asked per keystroke;
     /// undefined for every other box.
     readonly property var graphWorktreePlace: graphPane.namingMode === "worktree"

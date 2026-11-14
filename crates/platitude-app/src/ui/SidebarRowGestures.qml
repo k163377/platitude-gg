@@ -98,7 +98,7 @@ QtObject {
     /// a local branch.
     readonly property bool editTaken: gestures.editMode === "rename" && gestures.editRemote !== ""
         && gestures.editText.trim() !== ""
-        && gestures.remotesModel.oidOfName(gestures.editRemote + "/" + gestures.editText.trim()) !== ""
+        && gestures.remotesModel.hasRemoteBranch(gestures.editRemote, gestures.editText.trim())
     /// A new branch / tag / worktree box still empty since it opened. Not refused: the frame answers for what was typed
     /// (デザイン規約 §可否・警告の出し場所), and nothing has been. A rename rubbed out to nothing is refused.
     readonly property bool editUnanswered:

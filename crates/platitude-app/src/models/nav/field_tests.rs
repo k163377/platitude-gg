@@ -577,6 +577,32 @@ fn a_branch_and_the_reading_it_names_answer_the_same_pair() {
     );
 }
 
+/// The remotes section answers whether a remote has a branch by the remote
+/// and the branch's own name — a folder of branches is not one, nor is the
+/// same name on another remote.
+#[test]
+fn a_remote_has_a_branch_by_its_own_name() {
+    let mut model = section(
+        "remotes",
+        Source::Remotes(snapshot(
+            vec![remote("origin/feature/one"), remote("origin/main")],
+            Vec::new(),
+        )),
+    );
+    model.arrange();
+
+    assert!(model.has_remote_branch("origin".to_string(), "main".to_string()));
+    assert!(model.has_remote_branch("origin".to_string(), "feature/one".to_string()));
+    assert!(
+        !model.has_remote_branch("origin".to_string(), "feature".to_string()),
+        "a folder of branches"
+    );
+    assert!(
+        !model.has_remote_branch("fork".to_string(), "main".to_string()),
+        "another remote's"
+    );
+}
+
 /// One field, one mark, whichever section the row is in (`item::HELD`).
 #[test]
 fn a_branch_another_worktree_holds_wears_the_state_in_the_shared_slot() {
