@@ -14,7 +14,7 @@ use std::ops::Range;
 use super::builtins::{self, Made};
 use super::calls::function_body;
 use super::members::Holder;
-use super::origin::{Origin, Site};
+use super::origin::{Origin, Site, join_into};
 use super::parse::{Doc, UnitKind};
 use super::product::{self, Product};
 use super::scan::{Facts, Head, Path, WriteKind};
@@ -819,12 +819,7 @@ impl Program {
         let handed = handed.clone().handed_from(code, callee);
         for i in 0..self.docs[cd].units[cu].params.len() {
             self.bind(cd, cu, i, None);
-            let joined = self
-                .origin_collected
-                .remove(&(cd, cu, i))
-                .unwrap_or(Origin::Unset)
-                .join(handed.clone());
-            self.origin_collected.insert((cd, cu, i), joined);
+            join_into(&mut self.origin_collected, (cd, cu, i), handed.clone());
         }
     }
 
@@ -839,12 +834,7 @@ impl Program {
             self.bind(cd, cu, i, value);
             // A value the caller made, handed down, is the callee's to build as the caller's own.
             let origin = self.origin_of(code, arg.clone()).handed_from(code, callee);
-            let joined = self
-                .origin_collected
-                .remove(&(cd, cu, i))
-                .unwrap_or(Origin::Unset)
-                .join(origin);
-            self.origin_collected.insert((cd, cu, i), joined);
+            join_into(&mut self.origin_collected, (cd, cu, i), origin);
         }
     }
 

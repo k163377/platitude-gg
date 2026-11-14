@@ -18,7 +18,8 @@
 //! put in is nothing yet (`Program::inside_of`), and a change through either
 //! is not passed as safe.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
+use std::hash::Hash;
 use std::ops::Range;
 
 use super::builtins::{self, Answers, CONSTRUCTED, GlobalAnswers, Made};
@@ -126,6 +127,13 @@ impl Origin {
     }
 }
 
+/// Joins `value` into what `map` holds at `key`, over nothing where it
+/// holds nothing yet.
+pub(super) fn join_into<K: Eq + Hash>(map: &mut HashMap<K, Origin>, key: K, value: Origin) {
+    let joined = map.remove(&key).unwrap_or(Origin::Unset).join(value);
+    map.insert(key, joined);
+}
+
 impl Program {
     /// Where the value of the expression `range` of `code` came from.
     pub(super) fn origin_of(&mut self, code: usize, range: Range<usize>) -> Origin {
@@ -158,12 +166,11 @@ impl Program {
     }
 
     fn store_at(&mut self, maker: usize, site: Site, value: Origin) {
-        let joined = self
-            .contents_collected
-            .remove(&site)
-            .unwrap_or(Origin::Unset)
-            .join(value.handed_from(maker, HELD));
-        self.contents_collected.insert(site, joined);
+        join_into(
+            &mut self.contents_collected,
+            site,
+            value.handed_from(maker, HELD),
+        );
     }
 
     /// What a call in `code` puts inside the containers it is handed, by
