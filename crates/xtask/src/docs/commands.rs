@@ -490,11 +490,12 @@ fn described(printed: &[(String, String)], catalogue: &[&'static Command]) -> Ve
 
 /// A header on the usage page: two spaces and a verb, at the start of a
 /// line or right after the opening quote of the const that holds the
-/// page.
+/// page — on the const's own line, or on the next where rustfmt moves an
+/// opening line too long to stay.
 fn header(line: &str) -> Option<&str> {
     let text = match line.split_once(": &str = \"") {
         Some((_, rest)) => rest,
-        None => line,
+        None => line.trim_start().strip_prefix('"').unwrap_or(line),
     };
     let rest = text.strip_prefix("  ")?;
     if rest.starts_with(' ') {
@@ -776,6 +777,8 @@ mod tests {
             header("const TAIL: &str = \"  shipped [--no-build]"),
             Some("shipped")
         );
+        assert_eq!(header("    \"  gate [--host-only]"), Some("gate"));
+        assert_eq!(header("      \"quoted\" words"), None);
         assert_eq!(header("      options:"), None);
         assert_eq!(header("  Not a verb"), None);
     }
