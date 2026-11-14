@@ -50,9 +50,9 @@ pub(super) struct Loaded {
 /// only names a file a load may read by any route. [`loaded_from`] follows
 /// both alike.
 #[derive(Debug, PartialEq, Eq)]
-struct Named {
-    path: String,
-    load: bool,
+pub(super) struct Named {
+    pub path: String,
+    pub load: bool,
 }
 
 /// The properties a QML type loads a file from.
@@ -196,7 +196,7 @@ enum Given {
 /// the tree, a component made from text, an `XMLHttpRequest` — or the text
 /// could not be read to its end, so that what stands past the stop is not
 /// known.
-fn loads(text: &str) -> Result<Vec<Named>, String> {
+pub(super) fn loads(text: &str) -> Result<Vec<Named>, String> {
     if blanked(text, Lang::Qml, true).1.is_some() {
         return Err("a text read short".to_string());
     }
