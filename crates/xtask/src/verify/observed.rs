@@ -30,17 +30,12 @@ impl Observed {
     /// Read off a run's lines: `None` for a run that never walked (ended
     /// before its picture).
     pub(crate) fn in_lines(lines: &[String]) -> Option<Observed> {
-        let names: BTreeSet<String> = lines
+        let parts = lines
             .iter()
             .rev()
             .filter(|line| !line.contains("census run="))
-            .find_map(|line| line.split("bench: census=").nth(1))?
-            .trim()
-            .split(',')
-            .map(str::trim)
-            .filter(|n| !n.is_empty())
-            .map(str::to_string)
-            .collect();
+            .find_map(|line| line.split("bench: census=").nth(1))?;
+        let names: BTreeSet<String> = super::contract::names(parts).into_iter().collect();
         let page = lines
             .iter()
             .rev()
