@@ -5,8 +5,7 @@
 //! along.
 
 use crate::support::TestRepo;
-use crate::support::session::{CaptureSink, TestSession, opened};
-use crate::support::wait::bounded;
+use crate::support::session::{CaptureSink, TestSession, opened, poll_landed};
 use platitude_core::session::SessionEvent;
 
 /// A session's first answer about the tip; the session is closed after.
@@ -43,8 +42,7 @@ async fn answered(sink: &CaptureSink, what: &str, held: bool) {
 /// reach is asked again, though the graph draws the same commits.
 async fn moved_a_ref_elsewhere(repo: &mut TestRepo, session: &TestSession) {
     repo.git(&["branch", "other", "HEAD~1"]);
-    let outcome = bounded("the tracked poll", session.refresh_poll_tracked().outcome()).await;
-    assert!(outcome.landed(), "the poll read the moved ref: {outcome:?}");
+    poll_landed(session).await;
 }
 
 /// The root and the tip, with `keep` on the tip beside `main`.
@@ -147,8 +145,7 @@ async fn a_known_setting_still_walks_when_the_refs_move() {
     sink.opening_settled(&session).await;
 
     repo.git(&["branch", "--delete", "--force", "ahead"]);
-    let outcome = bounded("the tracked poll", session.refresh_poll_tracked().outcome()).await;
-    assert!(outcome.landed(), "the poll read the moved ref: {outcome:?}");
+    poll_landed(&session).await;
     answered(&sink, "the branch further along gone", false).await;
     session.close_and_wait().await;
 }

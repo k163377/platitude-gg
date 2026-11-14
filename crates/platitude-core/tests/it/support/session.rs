@@ -410,6 +410,15 @@ pub async fn opened_at(path: &std::path::Path) -> (Arc<CaptureSink>, TestSession
     (sink, session)
 }
 
+/// One status tick asked for and waited out, failing the test unless it
+/// landed (`RefreshOutcome::landed`): a tick the session turned away —
+/// busy, or a write in front of it — read nothing, and what a test reads
+/// after it would prove nothing.
+pub async fn poll_landed(session: &Arc<RepoSession>) {
+    let outcome = bounded("the tracked poll", session.refresh_poll_tracked().outcome()).await;
+    assert!(outcome.landed(), "the poll ran: {outcome:?}");
+}
+
 /// `None` doors is how the application opens.
 fn start(
     path: &std::path::Path,

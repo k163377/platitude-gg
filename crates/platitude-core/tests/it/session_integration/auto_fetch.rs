@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use crate::support::TestRepo;
 use crate::support::remote::far;
-use crate::support::session::{CaptureSink, open_unawaited, opened, write_result};
+use crate::support::session::{CaptureSink, open_unawaited, opened, poll_landed, write_result};
 use platitude_core::OperationKind;
 use platitude_core::session::{AutoFetchTicker, OpenFetch, SessionEvent};
 
@@ -459,19 +459,7 @@ async fn a_remote_added_outside_the_app_is_picked_up_by_a_poll() {
     session.set_auto_fetch(Some(Duration::from_secs(3600)));
 
     only.git(&["remote", "add", "origin", &origin.file_url()]);
-    // A poll that was refused (busy, or a write in front of it) would
-    // prove nothing about what it reads.
-    let polled =
-        crate::support::wait::bounded("the tracked poll", session.refresh_poll_tracked().outcome())
-            .await;
-    assert!(
-        matches!(
-            polled,
-            platitude_core::session::RefreshOutcome::Changed
-                | platitude_core::session::RefreshOutcome::Unchanged
-        ),
-        "the poll ran: {polled:?}"
-    );
+    poll_landed(&session).await;
     sink.wait_for("the remote in the snapshot", |evs| {
         evs.iter()
             .any(|e| match e {

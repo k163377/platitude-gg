@@ -7,7 +7,7 @@ use crate::support::TestRepo;
 use crate::support::exec::env;
 use crate::support::integrate::conflicting_branches;
 use crate::support::remote::origin_and_clone;
-use crate::support::session::{open_unawaited, opened, write_result};
+use crate::support::session::{open_unawaited, opened, poll_landed, write_result};
 use crate::support::wait::bounded;
 use platitude_core::session::{RefreshOutcome, SessionEvent};
 use platitude_core::{OperationKind, commit};
@@ -201,8 +201,7 @@ async fn a_head_on_no_branch_names_the_branch_its_rebase_holds() {
     );
 
     repo.git(&["rebase", "--quit"]);
-    let outcome = bounded("the tracked poll", session.refresh_poll_tracked().outcome()).await;
-    assert!(outcome.landed(), "the poll read the tree: {outcome:?}");
+    poll_landed(&session).await;
     let after = sink
         .wait_for("HEAD reported holding nothing", |evs| {
             held(evs).filter(|(_, branch)| branch.is_none())

@@ -17,11 +17,11 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use platitude_core::GitError;
 use platitude_core::lfs;
-use platitude_core::session::{Recording, RefreshOutcome, RepoSession, SessionEvent};
+use platitude_core::session::{Recording, RepoSession, SessionEvent};
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
-use crate::support::session::{CaptureSink, opened};
+use crate::support::session::{CaptureSink, opened, poll_landed};
 
 const LFS_LINE: &str = "filter=lfs diff=lfs merge=lfs -text";
 
@@ -118,17 +118,6 @@ async fn counted(sink: &CaptureSink, what: &str, count: usize) {
         .await;
 }
 
-/// One status tick, awaited to its end.
-async fn poll(session: &Arc<RepoSession>) {
-    let polled =
-        crate::support::wait::bounded("the tracked poll", session.refresh_poll_tracked().outcome())
-            .await;
-    assert!(
-        matches!(polled, RefreshOutcome::Changed | RefreshOutcome::Unchanged),
-        "the poll ran: {polled:?}"
-    );
-}
-
 /// Writes a file the tree did not have and ticks until a status names it —
 /// a status only a tick that saw the tree move can send.
 async fn new_file_read(
@@ -138,7 +127,7 @@ async fn new_file_read(
     name: &str,
 ) {
     repo.write_file(name, "later\n");
-    poll(session).await;
+    poll_landed(session).await;
     sink.wait_for(&format!("the status with {name}"), |evs| {
         evs.iter()
             .rev()
@@ -307,7 +296,7 @@ async fn lfs_arriving_clears_the_count_on_the_next_tick() {
     assert!(before > 0, "the witness saw no counting tick at all");
 
     installed.store(true, Ordering::SeqCst);
-    poll(&session).await;
+    poll_landed(&session).await;
     counted(&sink, "the count cleared", 0).await;
     assert_eq!(counts_taken(&sink), before, "the tick counted again");
     session.close_and_wait().await;
@@ -346,10 +335,10 @@ async fn a_count_that_could_not_be_had_is_tried_on_the_next_tick() {
     );
     // A tick still failing, which takes whatever the opening left marked
     // stale: the tick under test is then one that only the retry counts on.
-    poll(&session).await;
+    poll_landed(&session).await;
 
     failing.store(false, Ordering::SeqCst);
-    poll(&session).await;
+    poll_landed(&session).await;
     counted(&sink, "the two files counted after all", 2).await;
     session.close_and_wait().await;
 }

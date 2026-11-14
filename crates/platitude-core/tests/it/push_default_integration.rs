@@ -20,12 +20,11 @@ use std::path::Path;
 use crate::support::TestRepo;
 use crate::support::exec::{env, logged_global};
 use crate::support::remote::far;
-use crate::support::session::{CaptureSink, opened, write_answer};
-use crate::support::wait::bounded;
+use crate::support::session::{CaptureSink, opened, poll_landed, write_answer};
 use platitude_core::GitError;
 use platitude_core::process::GitExecutor;
 use platitude_core::remote::{self, PushForce};
-use platitude_core::session::{Recording, RefreshOutcome, SessionEvent};
+use platitude_core::session::{Recording, SessionEvent};
 use tokio_util::sync::CancellationToken;
 
 /// A `file://` remote answers instantly; the budget just has to exist.
@@ -354,13 +353,6 @@ async fn the_status_carries_the_destinations_counts_only_where_the_push_goes_els
     repo.git(&["config", "--unset", "remote.pushDefault"]);
     let (sink, session) = opened(&repo).await;
     session.set_recording(Recording::WithBackground);
-    let poll = || async {
-        let polled = bounded("the tracked poll", session.refresh_poll_tracked().outcome()).await;
-        assert!(
-            matches!(polled, RefreshOutcome::Changed | RefreshOutcome::Unchanged),
-            "the poll ran: {polled:?}"
-        );
-    };
     let statuses = |sink: &CaptureSink| -> Vec<remote::PushTrack> {
         sink.events
             .lock()
@@ -401,14 +393,14 @@ async fn the_status_carries_the_destinations_counts_only_where_the_push_goes_els
         );
     };
 
-    poll().await;
+    poll_landed(&session).await;
     quiet(&sink, "nothing is marked");
     repo.git(&["config", "remote.pushDefault", "origin"]);
-    poll().await;
+    poll_landed(&session).await;
     quiet(&sink, "the mark is the upstream's own remote");
 
     repo.git(&["config", "remote.pushDefault", "fork"]);
-    poll().await;
+    poll_landed(&session).await;
     let track = sink
         .wait_for("a status with the fork's counts", |evs| {
             evs.iter().find_map(|e| match e {
@@ -611,11 +603,7 @@ async fn a_count_read_that_cannot_tell_repeats_the_last_answer() {
 
     // A ref moved: the snapshot is built again, and this read fails.
     repo.git(&["branch", "later"]);
-    let polled = bounded("the tracked poll", session.refresh_poll_tracked().outcome()).await;
-    assert!(
-        matches!(polled, RefreshOutcome::Changed | RefreshOutcome::Unchanged),
-        "the poll ran: {polled:?}"
-    );
+    poll_landed(&session).await;
     let facts = main_beside("later").await;
     let fork_tip = repo.git(&["rev-parse", "refs/remotes/fork/main"]);
     assert_eq!(
@@ -671,16 +659,9 @@ async fn the_refs_read_counts_only_the_branches_a_mark_sends_elsewhere() {
             })
         })
     };
-    let poll = || async {
-        let polled = bounded("the tracked poll", session.refresh_poll_tracked().outcome()).await;
-        assert!(
-            matches!(polled, RefreshOutcome::Changed | RefreshOutcome::Unchanged),
-            "the poll ran: {polled:?}"
-        );
-    };
 
     repo.git(&["config", "remote.pushDefault", "origin"]);
-    poll().await;
+    poll_landed(&session).await;
     assert_eq!(
         main_under("origin").await.standing,
         remote::PushStanding::Clean
@@ -692,7 +673,7 @@ async fn the_refs_read_counts_only_the_branches_a_mark_sends_elsewhere() {
     );
 
     repo.git(&["config", "remote.pushDefault", "fork"]);
-    poll().await;
+    poll_landed(&session).await;
     assert_eq!(
         main_under("fork").await.standing,
         remote::PushStanding::Elsewhere,

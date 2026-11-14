@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use crate::support::TestRepo;
-use crate::support::session::{CaptureSink, opened, opened_with, write_result};
+use crate::support::session::{CaptureSink, opened, opened_with, poll_landed, write_result};
 use platitude_core::OperationKind;
 use platitude_core::details::DiffTarget;
 use platitude_core::patch::HunkSelect;
@@ -445,18 +445,7 @@ async fn a_global_mark_moved_in_a_terminal_reaches_the_snapshot() {
 
     repo.git(&["config", "--global", "remote.pushDefault", "fork"]);
 
-    // A refused poll (busy, or a write in front) would prove nothing.
-    let polled =
-        crate::support::wait::bounded("the tracked poll", session.refresh_poll_tracked().outcome())
-            .await;
-    assert!(
-        matches!(
-            polled,
-            platitude_core::session::RefreshOutcome::Changed
-                | platitude_core::session::RefreshOutcome::Unchanged
-        ),
-        "the poll ran: {polled:?}"
-    );
+    poll_landed(&session).await;
     sink.wait_for("the global mark in the snapshot", |evs| {
         evs.iter()
             .any(|e| match e {
@@ -486,17 +475,7 @@ async fn a_global_mark_moved_in_a_terminal_reaches_the_snapshot() {
         "the global mark's move asked for one listing of the remotes: {:?}",
         sink.commands_since(0)
     );
-    let polled =
-        crate::support::wait::bounded("the tracked poll", session.refresh_poll_tracked().outcome())
-            .await;
-    assert!(
-        matches!(
-            polled,
-            platitude_core::session::RefreshOutcome::Changed
-                | platitude_core::session::RefreshOutcome::Unchanged
-        ),
-        "the second poll ran: {polled:?}"
-    );
+    poll_landed(&session).await;
     assert_eq!(
         listed(&sink),
         1,
@@ -638,17 +617,7 @@ async fn the_line_ending_setting_written_beside_the_session_reaches_the_notices(
     .await;
 
     repo.git(&["config", "--local", "core.autocrlf", "true"]);
-    let polled =
-        crate::support::wait::bounded("the tracked poll", session.refresh_poll_tracked().outcome())
-            .await;
-    assert!(
-        matches!(
-            polled,
-            platitude_core::session::RefreshOutcome::Changed
-                | platitude_core::session::RefreshOutcome::Unchanged
-        ),
-        "the poll ran: {polled:?}"
-    );
+    poll_landed(&session).await;
 
     sink.wait_for("the notice withdrawn", |evs| {
         (marked(evs) == Some(0)).then_some(())
@@ -694,27 +663,12 @@ async fn a_file_saved_over_in_place_is_marked_for_what_it_holds_now() {
         (said(evs) == lines(1)).then_some(())
     })
     .await;
-    let poll = || async {
-        let polled = crate::support::wait::bounded(
-            "the tracked poll",
-            session.refresh_poll_tracked().outcome(),
-        )
-        .await;
-        assert!(
-            matches!(
-                polled,
-                platitude_core::session::RefreshOutcome::Changed
-                    | platitude_core::session::RefreshOutcome::Unchanged
-            ),
-            "the poll ran: {polled:?}"
-        );
-    };
     // A poll over the tree as it was first: the opening's reads leave the
     // marks to be read again once (`forget_eol_derived`), and this is that
     // once — the next is weighed on what moved alone. Without it the
     // overwrite below would be read on that staleness and pass with no
     // stat in the status key.
-    poll().await;
+    poll_landed(&session).await;
     assert_eq!(
         said(&sink.events.lock().unwrap()),
         lines(1),
@@ -723,7 +677,7 @@ async fn a_file_saved_over_in_place_is_marked_for_what_it_holds_now() {
 
     // A second line with the other ending: git's status line is the same.
     std::fs::write(repo.path.join("f.txt"), "a\nb\r\nc\r\nd\ne\n").expect("two CRLF lines");
-    poll().await;
+    poll_landed(&session).await;
     sink.wait_for("two lines warned about", |evs| {
         (said(evs) == lines(2)).then_some(())
     })
