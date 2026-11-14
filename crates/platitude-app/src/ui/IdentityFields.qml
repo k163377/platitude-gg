@@ -67,9 +67,14 @@ ColumnLayout {
         function onEdited() { fields.touched = true }
     }
     // Untouched boxes follow git's late answers: without this, an answer arriving after the screen opened would read
-    // as an edit, and the way out would stay shut for good.
-    onHeldNameChanged: if (!fields.touched) fields.load()
-    onHeldEmailChanged: if (!fields.touched) fields.load()
+    // as an edit, and the way out would stay shut for good. **From the form's completion on**: an answer the form is
+    // built over arrives as its first value, inside the first evaluation of `differs` — a load there writes the box
+    // that evaluation is reading (`Binding loop detected for property "differs"`, a form built after git answered).
+    // Every owner loads the boxes as it opens them, so nothing is lost by waiting.
+    property bool completed: false
+    Component.onCompleted: fields.completed = true
+    onHeldNameChanged: if (fields.completed && !fields.touched) fields.load()
+    onHeldEmailChanged: if (fields.completed && !fields.touched) fields.load()
 
     /// Fills the boxes from git's answer: on open, and whenever it moves under untouched boxes.
     function load() {

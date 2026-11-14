@@ -9,8 +9,13 @@ import platitude.ui
 Item {
     id: identityGate
 
-    /// For the window's harness (`WindowAutoActDriver.identityDialog`).
-    readonly property alias dialog: identityDialog
+    /// For the window's harness (`WindowAutoActDriver.identityDialog`): null until the gate first stands, or up front
+    /// with [`keepBuilt`].
+    readonly property var dialog: dialogSeat.item
+    /// The dialog built up front, for a caller that reads it before it opens (the harness, `WindowHarness`). False in
+    /// every window a person opens: most never ask, so the card is built on the first want
+    /// (rules-refs/app-ui.md「窓が黙って実体化するダイアログは Loader の後ろに置く」).
+    property bool keepBuilt: false
 
     /// The settings screen is up. A half-landed save there would otherwise raise the gate over the screen making that
     /// write; the gate stands once the screen closes.
@@ -32,17 +37,24 @@ Item {
     }
 
     // Opened and closed by hand, not a `visible` binding: Escape's close would break the binding and the state could
-    // not reopen it. Every close answers the state (`dismissed`).
-    IdentityDialog {
-        id: identityDialog
-        onDismissed: identityGate.dismissIdentity()
-        Connections {
-            target: identityGate
-            function onIdentityWantedChanged() {
-                if (identityGate.identityWanted)
-                    identityDialog.open()
-                else
-                    identityDialog.close()
+    // not reopen it. Every close answers the state (`dismissed`). The want builds the seat, then opens in the same
+    // turn: the build is synchronous. The seat fills the gate, which the dialog sizes off.
+    Loader {
+        id: dialogSeat
+        anchors.fill: parent
+        active: identityGate.keepBuilt
+        sourceComponent: IdentityDialog {
+            onDismissed: identityGate.dismissIdentity()
+        }
+    }
+    Connections {
+        target: identityGate
+        function onIdentityWantedChanged() {
+            if (identityGate.identityWanted) {
+                dialogSeat.active = true
+                dialogSeat.item.open()
+            } else if (dialogSeat.item !== null) {
+                dialogSeat.item.close()
             }
         }
     }

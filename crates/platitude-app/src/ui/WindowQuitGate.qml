@@ -29,8 +29,13 @@ Item {
     /// Set by a finished headless run (`Main.finishAutoAct`): its shots are saved and `Hub::shutdown` waits the
     /// write out. Spent by the close it lets through, so a process that outlives its run gets its gate back.
     property bool yields: false
-    /// The harness's door to the dialog (`WindowAutoActDriver`).
-    readonly property QuitWaitDialog dialog: waitDialog
+    /// The harness's door to the dialog (`WindowAutoActDriver`): null until a close is first turned away, or up front
+    /// with [`keepBuilt`].
+    readonly property var dialog: dialogSeat.item
+    /// The dialog built up front, for a caller that reads it before a close (the harness, `WindowHarness`). False in
+    /// every window a person opens: a close that waits is rare, so the dialog is built by the first veto
+    /// (rules-refs/app-ui.md「窓が黙って実体化するダイアログは Loader の後ろに置く」).
+    property bool keepBuilt: false
 
     function yieldToRun() {
         gate.yields = true
@@ -46,12 +51,18 @@ Item {
         if (AppBackend.readyToQuit())
             return
         close.accepted = false
-        waitDialog.noteVeto()
-        waitDialog.open()
+        // The build is synchronous, so the dialog is there on the next line.
+        dialogSeat.active = true
+        dialogSeat.item.noteVeto()
+        dialogSeat.item.open()
     }
 
-    QuitWaitDialog {
-        id: waitDialog
-        onSettled: gate.window.close()
+    Loader {
+        id: dialogSeat
+        anchors.fill: parent
+        active: gate.keepBuilt
+        sourceComponent: QuitWaitDialog {
+            onSettled: gate.window.close()
+        }
     }
 }

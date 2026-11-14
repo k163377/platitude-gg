@@ -15,6 +15,7 @@ Item {
     required property TabsModel tabsModel
     required property Repeater pageRepeater
     required property TopBar topBar
+    /// The startup screen's seat, shown while the screen stands (`Main`'s `gate`); the screen itself is its `item`.
     required property Item gate
     required property OpenFailedDialog openFailedDialog
     required property IdentityDialog identityDialog
@@ -636,8 +637,9 @@ Item {
                 // `held=`: an empty gate has air and no fields. What the sweep came away with (`SweepPad.sweepAir`)
                 // is kept as it swept.
                 if (!gateSweepTimer.input("swept", () => {
+                        // The seat's screen: standing, since `gate` above is the seat shown with it.
                         gateSweepTimer.witness("swept",
-                                               gate.pad.sweepAir(7, "held=" + (AppBackend.heldElsewhere !== "")))
+                                               gate.item.pad.sweepAir(7, "held=" + (AppBackend.heldElsewhere !== "")))
                     }))
                     return
             }

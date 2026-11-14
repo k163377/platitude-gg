@@ -245,16 +245,9 @@ ApplicationWindow {
 
     TabsModel {
         id: tabsModel
+        // The picker's own failures (`WindowDialogSeat.showOpenFailed`).
         onOpenRejected: (path, kind, message, near) =>
-            openFailedDialog.show(path, kind, message, near)
-    }
-
-    // Only the picker's own failures come here, and the way on is the picker again. Every other failed open (a
-    // restored tab, a worktree row, PGG_AUTO_OPEN) keeps its tab and its failure screen — a modal on startup is
-    // answered before it can be read.
-    OpenFailedDialog {
-        id: openFailedDialog
-        onChooseAnother: near => root.openRepositoryPicker(near)
+            dialogSeat.showOpenFailed(path, kind, message, near)
     }
 
     WindowQuitGate {
@@ -288,12 +281,14 @@ ApplicationWindow {
         onAccepted: tabsModel.openRepositoryUrl(selectedFolder.toString())
     }
 
-    // The settings screen and the clone box — filling the window because it is the popups' parent.
+    // The settings screen, the clone box and the picker's failure — filling the window because it is the popups'
+    // parent.
     WindowDialogSeat {
         id: dialogSeat
         anchors.fill: parent
         curPage: root.curPage
         tabsModel: tabsModel
+        onChooseAnother: near => root.openRepositoryPicker(near)
     }
     function startClone() {
         dialogSeat.startClone()
@@ -334,13 +329,12 @@ ApplicationWindow {
             windowEdge: windowEdge,
             windowShape: windowShape,
             windowTip: windowTip,
-            openFailedDialog: openFailedDialog,
+            // The seats, not their dialogs: those are built on being asked for (`WindowDialogSeat.keepBuilt`,
+            // `IdentityGate.keepBuilt`, `WindowQuitGate.keepBuilt`).
             identityGate: identityGate,
-            identityDialog: identityGate.dialog,
-            // The seat, not its screens: they are built on being asked for (`WindowDialogSeat.keepBuilt`).
             dialogSeat: dialogSeat,
             folderDialog: folderDialog,
-            quitWaitDialog: quitGate.dialog
+            quitGate: quitGate
         })
     }
     // The tab in front is the one seat that moves under the harness.
@@ -409,13 +403,19 @@ ApplicationWindow {
             acts.begin()
     }
 
-    // No git to ask, or another process already has the files. The shot driver and the harness reach for the id by
-    // name (`AutoShotDriver.gate`): a sibling of the body, so the shot takes whichever stands — else a run that ended
-    // at the gate pictures the app that never came up. Headless: `solo` (`blocked=true`).
-    StartupGate {
+    // No git to ask, or another process already has the files. Built while it stands — from the first frame, while git
+    // is asked — and taken down once git answers (rules-refs/app-ui.md — the `WindowDialogSeat` line); the seat is
+    // shown with it. The shot driver and the harness reach for the seat by name (`AutoShotDriver.gate`): a sibling of
+    // the body, so the shot takes whichever stands — else a run that ended at the gate pictures the app that never came
+    // up. Headless: `solo` (`blocked=true`).
+    Loader {
         id: gate
         anchors.fill: parent
-        onCloseRequested: root.close()
+        active: AppBackend.gitState !== "ok" || AppBackend.alreadyRunning
+        visible: gate.active
+        sourceComponent: StartupGate {
+            onCloseRequested: root.close()
+        }
     }
 
     IdentityGate {

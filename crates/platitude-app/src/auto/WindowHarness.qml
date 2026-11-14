@@ -24,13 +24,11 @@ Item {
     required property var windowEdge
     required property var windowShape
     required property var windowTip
-    required property var openFailedDialog
-    required property var identityGate
-    required property var identityDialog
-    /// The seat the two biggest screens are built in, only once asked for — this file asks ([`screensUp`]).
-    required property var dialogSeat
     required property var folderDialog
-    required property var quitWaitDialog
+    /// The seats the window's dialogs are built in, only once asked for — this file asks ([`screensUp`]).
+    required property var identityGate
+    required property var dialogSeat
+    required property var quitGate
 
     /// The tab in front — the one seat that moves, so the window keeps writing it (`Main.qml`'s `Binding`).
     property var page: null
@@ -45,10 +43,16 @@ Item {
     readonly property var cloneModel: harness.dialogSeat.cloneModel
     readonly property var cloneDialog: harness.dialogSeat.cloneDialog
     readonly property var settingsDialog: harness.dialogSeat.settingsDialog
+    readonly property var openFailedDialog: harness.dialogSeat.openFailedDialog
+    readonly property var identityDialog: harness.identityGate.dialog
+    readonly property var quitWaitDialog: harness.quitGate.dialog
 
     Component.onCompleted: {
-        // Only for a verb or the identity hook, which read a screen before opening it (`WindowDialogSeat`).
-        harness.dialogSeat.keepBuilt = Harness.autoAct !== "" || Harness.autoIdentity !== ""
+        // Only for a verb or the identity hook, which read a dialog before it opens (`WindowDialogSeat`).
+        const readsFirst = Harness.autoAct !== "" || Harness.autoIdentity !== ""
+        harness.dialogSeat.keepBuilt = readsFirst
+        harness.identityGate.keepBuilt = readsFirst
+        harness.quitGate.keepBuilt = readsFirst
         // The band's cards too, as the page's menus are (`PageHarness`): a verb's window has every card built, whatever
         // it opens first. Their readings answer for a card never built as well (`TopBar.standDoor` …).
         harness.topBar.keepBuilt = Harness.autoAct !== ""

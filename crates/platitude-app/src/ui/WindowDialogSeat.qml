@@ -6,11 +6,11 @@ import QtQuick.Dialogs
 import platitude
 import platitude.ui
 
-// The settings screen and the clone box (with the clone's model and folder chooser), each built on its first opening
-// through the doors below (rules-refs/app-ui.md「窓が黙って実体化するダイアログは Loader の後ろに置く」). Built eagerly
-// under `Main`, they would weigh on the working set of a window that opens no repository, and its floor would rise as
-// the settings screen grows. Each door sets its loader `active` and then calls the item: the build is synchronous, so
-// the item is there on the next line.
+// The settings screen, the clone box (with the clone's model and folder chooser) and the picker's failure, each built
+// on its first opening through the doors below (rules-refs/app-ui.md「窓が黙って実体化するダイアログは Loader の後ろに置く」).
+// Built eagerly under `Main`, they would weigh on the working set of a window that opens no repository, and its floor
+// would rise as the settings screen grows. Each door sets its loader `active` and then calls the item: the build is
+// synchronous, so the item is there on the next line.
 //
 // The Loaders fill the seat: the dialogs size off their parent (`AppDialog.fills`), and an unsized loader opens them
 // as an empty strip.
@@ -21,7 +21,7 @@ Item {
     required property var curPage
     required property var tabsModel
 
-    /// Both screens built up front, for a caller that reads their properties before opening them (the harness).
+    /// Every screen built up front, for a caller that reads their properties before opening them (the harness).
     /// False in every window a person opens. `WindowHarness` raises it only on a run with a verb or the identity hook:
     /// the window's verbs read `opened` and the like before opening (`WindowDialogActs` / `WindowSettingsActs`), and a
     /// null there is a dead run.
@@ -31,8 +31,18 @@ Item {
     readonly property alias cloneModel: cloneModel
     readonly property var cloneDialog: cloneLoader.item
     readonly property var settingsDialog: settingsLoader.item
+    readonly property var openFailedDialog: openFailedLoader.item
     /// Whether the settings screen is up — the identity gate holds itself back behind it (`IdentityGate`).
     readonly property bool settingsOpened: settingsLoader.item !== null && settingsLoader.item.opened
+
+    /// The failure's `Choose again…`: the picker again, at `near` (`Main.openRepositoryPicker`).
+    signal chooseAnother(string near)
+
+    /// The folder the picker handed over could not be opened (`TabsModel.openRejected`; the words are the dialog's).
+    function showOpenFailed(path, kind, message, near) {
+        openFailedLoader.active = true
+        openFailedLoader.item.show(path, kind, message, near)
+    }
 
     /// Opens the clone box beside the open repository (`urlpath::picker_folder_url`, the one place the picker asks
     /// too), else the folder dialog's own folder: a second clone of a repository usually goes beside the first.
@@ -101,6 +111,18 @@ Item {
         sourceComponent: SettingsDialog {
             curPage: seat.curPage
             tabsModel: seat.tabsModel
+        }
+    }
+
+    // Only the picker's own failures come here, and the way on is the picker again. Every other failed open (a
+    // restored tab, a worktree row, PGG_AUTO_OPEN) keeps its tab and its failure screen — a modal on startup is
+    // answered before it can be read.
+    Loader {
+        id: openFailedLoader
+        anchors.fill: parent
+        active: seat.keepBuilt
+        sourceComponent: OpenFailedDialog {
+            onChooseAnother: near => seat.chooseAnother(near)
         }
     }
 }
