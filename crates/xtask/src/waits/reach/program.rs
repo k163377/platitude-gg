@@ -23,9 +23,10 @@ use super::{Context, Declared};
 /// What a name stands for.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Value {
-    /// A harness object: its file and its index there.
+    /// An object of a QML file read — the harness's or the product's: its
+    /// file and its index there.
     Object(usize, usize),
-    /// A property of a harness object whose value is no harness object.
+    /// A property of such an object whose value is no such object.
     Prop(usize, usize, String),
     /// A harness or product function: file and unit.
     Function(usize, usize),
@@ -36,7 +37,7 @@ pub(super) enum Value {
     /// A value of the stretch's own.
     Local,
     /// A local or parameter of a stretch this one was carved out of,
-    /// with the harness object it stands for where it is one.
+    /// with the object it stands for where it is one.
     Captured(String, Option<Box<Value>>),
     Unknown,
 }
@@ -51,7 +52,8 @@ pub(super) enum Effect {
         step: bool,
         config: bool,
     },
-    /// A local of the stretch it was carved from, written from inside.
+    /// A local of the stretch it was carved from, or a container that
+    /// stretch made, written from inside.
     Smuggle(String),
     /// The product written or pressed.
     Input(String),
@@ -127,12 +129,12 @@ pub(super) struct Program {
     /// What each container holds, by the site that made it, as the reading
     /// before found every put — read by this reading (`super::origin`).
     pub(super) contents: HashMap<Site, Origin>,
-    /// The same, as the reading under way puts it.
+    /// The same, joined with what the reading under way puts.
     pub(super) contents_collected: HashMap<Site, Origin>,
     /// The members each value is given of its own, by name, as the reading
     /// before found them — read by this reading (`super::members`).
     pub(super) members: HashMap<Holder, BTreeSet<String>>,
-    /// The same, as the reading under way gives them.
+    /// The same, with what the reading under way gives added.
     pub(super) members_collected: HashMap<Holder, BTreeSet<String>>,
     /// The harness properties whose values are being proven the language's
     /// (`super::members`), and each answer reached with none pending, by
@@ -144,8 +146,8 @@ pub(super) struct Program {
     pub(super) kinds: HashMap<Site, Made>,
 }
 
-/// The harness object each property holds, by `(doc, object, name)`, once
-/// read; `None` for one that holds none.
+/// The object each property holds, by `(doc, object, name)`, once read;
+/// `None` for one that holds none.
 type PropValues = HashMap<(usize, usize, String), Option<(usize, usize)>>;
 
 /// The operation's type, whose functions are the operations' API.
@@ -247,11 +249,12 @@ impl Program {
         code
     }
 
-    /// Reads the program again from nothing, keeping what the reading before
-    /// learned — what each call hands its parameters, what each container
-    /// was put and given (`bindings`, `contents`, `members`): a code read
-    /// before all its callers were seen is read with all of them now. Run
-    /// until a reading learns nothing new, or the rule gives up (`rules`).
+    /// Clears the reading for the next, which starts from nothing but what
+    /// this one learned — what each call hands its parameters, what each
+    /// container was put and given (`bindings`, `contents`, `members`): a
+    /// code read before all its callers were seen is read with all of them
+    /// next. Run until a reading learns nothing new, or the rule gives up
+    /// (`rules`).
     pub fn again(&mut self) {
         self.bindings = std::mem::take(&mut self.collected);
         self.origin_bindings = std::mem::take(&mut self.origin_collected);
@@ -271,9 +274,9 @@ impl Program {
         self.top.clear();
     }
 
-    /// Whether the reading just made bound a parameter, or put something
-    /// inside a container, otherwise than the one before it: then it is read
-    /// again.
+    /// Whether the reading just made bound a parameter, put something inside
+    /// a container or gave a value a member, otherwise than the one before
+    /// it: then it is read again.
     pub fn learned(&self) -> bool {
         self.collected != self.bindings
             || self.origin_collected != self.origin_bindings
@@ -340,8 +343,8 @@ impl Program {
 
     // ---- Names ----
 
-    /// Whether `object` is an operation: its type, or its type's type, is
-    /// the operation's.
+    /// Whether object `o` of file `d` is an operation: its type, or a type
+    /// its type is built on, is the operation's.
     pub fn is_operation(&self, d: usize, o: usize) -> bool {
         let mut ty = self.docs[d].objects[o].ty.clone();
         for _ in 0..8 {
@@ -429,8 +432,8 @@ impl Program {
         }
     }
 
-    /// The harness object a property holds, if it holds one: its value's
-    /// path, its type, or the value every instance binds it to.
+    /// The object a property holds, if it holds one: its value's path, its
+    /// type, or the value every instance binds it to.
     fn prop_value(&self, d: usize, o: usize, name: &str) -> Option<(usize, usize)> {
         let key = (d, o, name.to_string());
         if let Some(known) = self.prop_values.borrow().get(&key) {
@@ -473,7 +476,7 @@ impl Program {
         found
     }
 
-    /// The harness object a value's tokens name, where they are one path.
+    /// The object a value's tokens name, where they are one path.
     fn path_object(&self, d: usize, o: usize, range: Range<usize>) -> Option<(usize, usize)> {
         match self.path_value(d, o, range)? {
             Value::Object(vd, vo) => Some((vd, vo)),
@@ -504,8 +507,6 @@ impl Program {
         Some(value)
     }
 
-    /// A name as code of object `o` sees it, past its own locals: the
-    /// object's members, the file's ids, the root's members, the globals.
     /// `scope_name` for the origin's reading.
     pub(super) fn scope_value(&self, d: usize, o: usize, name: &str) -> Value {
         self.scope_name(d, o, name)
@@ -516,6 +517,9 @@ impl Program {
         self.path_value(d, o, range)
     }
 
+    /// A name as code of object `o` sees it, past its own locals: the file's
+    /// ids, the object's members, the root's members, the harness's
+    /// singletons, the globals, the product's singletons.
     fn scope_name(&self, d: usize, o: usize, name: &str) -> Value {
         // An id before the scope object's own names: `driver: driver` binds the id.
         if let Some(i) = self.docs[d]
@@ -577,7 +581,8 @@ impl Program {
         };
         match self.member(t, 0, name) {
             Some(Value::Prop(pd, po, p)) => Value::Product(self.prop_type(pd, po, &p)),
-            // A function of its own, or an object of its own an alias names (`filesWalk: fileWalk`).
+            // A function of its own, or an object of its own an alias names
+            // (`filesWalk: fileWalk`).
             Some(found @ (Value::Function(..) | Value::Object(..))) => found,
             _ => Value::Product(None),
         }
@@ -603,8 +608,8 @@ impl Program {
             let unit = &self.docs[d].units[u];
             let is_param =
                 parent.is_none() && unit.bound.iter().any(|(_, bound)| bound.name == name);
-            // A parameter every caller hands the same object stands for that object — one named whole, given no
-            // default, hidden by no local and never given another value.
+            // A parameter every caller hands the same object stands for that object — one named
+            // whole, given no default, hidden by no local and never given another value.
             let param = parent
                 .is_none()
                 .then(|| unit.params.iter().position(|p| p == name))
@@ -623,8 +628,9 @@ impl Program {
                 };
             }
             if is_param || local.is_some() {
-                // A local that names an object — the harness's or the product's — stands for it: what is read
-                // through it is read when it is read. One holding a value holds what was read before.
+                // A local that names an object — the harness's or the product's — stands for
+                // it: what is read through it is read when it is read. One holding a value
+                // holds what was read before.
                 let alias = local
                     .filter(|_| !reassigned)
                     .and_then(|l| l.init)
@@ -675,8 +681,9 @@ impl Program {
         let facts = self.facts_of(d, u).within(&range);
         let mut carved: Vec<Range<usize>> = Vec::new();
         let mut effects = Vec::new();
-        // Calls first: they say which arguments are stretches of their own — an arrow a local holds among them,
-        // which is carved where it is spelled, so its calls, met before, are the carved code's.
+        // Calls first: they say which arguments are stretches of their own — an arrow a local
+        // holds among them, which is carved where it is spelled, so its calls, met before, are
+        // the carved code's.
         let mut called = Vec::new();
         for call in &facts.calls {
             if carved.iter().any(|r| r.contains(&call.path.at)) {
@@ -692,7 +699,8 @@ impl Program {
             if let Some(called_back) = self.callback(code, &call.path, &call.args) {
                 called.push((called_back, call.line, call.path.at));
             }
-            // A global function that changes the value it is handed first (`Object.assign`) changes it in place.
+            // A global function that changes the value it is handed first (`Object.assign`)
+            // changes it in place.
             if let (Some(object), Some(method)) =
                 (self.global_of(code, &call.path), call.path.last())
                 && builtins::global_puts(&object, method).is_some()
@@ -959,7 +967,8 @@ impl Program {
                 _ => Some(Effect::Unread(path.spelled())),
             };
         }
-        // What is changed: the value itself, changed in place, or the one whose member is given a value.
+        // What is changed: the value itself, changed in place, or the one whose member is given
+        // a value.
         let (changed, member) = if in_place {
             (path.clone(), None)
         } else {
@@ -985,7 +994,6 @@ impl Program {
         starts: &[(Value, usize)],
     ) -> Option<Effect> {
         match origin {
-            // Holds nothing to change.
             Origin::Plain => None,
             // Made by this code: its own to build.
             Origin::Fresh { maker, .. } if maker == code => None,

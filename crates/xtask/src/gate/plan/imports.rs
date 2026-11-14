@@ -2,25 +2,25 @@
 //! text holds: an import statement's string — `import "dir"`,
 //! `import 'file.js' as X`, a JS file's `.import "file.js" as X`, a module's
 //! `import … from "./m.mjs"` —, a value written to a property the QML types
-//! load from (`source`: bound, assigned — inside parentheses or not, by a
-//! name or a computed key —, given as a field), and what a function that
-//! loads is handed (`Qt.createComponent`, `setSource`, `Qt.resolvedUrl`,
-//! `Qt.include`, `import(…)`). The text is read as the engine's lexer reads
-//! it (`crate::lex`), and a write is told from a local declared, a
-//! parameter, a pattern's binding or a conditional's branch by where it
-//! stands (`written`), so quoting, spacing, line breaks, comments and
-//! parentheses that change no meaning do not change what is read.
+//! load from (`LOADED_FROM`: bound, assigned, given as a field), and what a
+//! function that loads is handed (`Qt.createComponent`, `setSource`,
+//! `Qt.resolvedUrl`, `Qt.include`, `import(…)`, a `StackView`'s `push` /
+//! `replace`). The text is read as the engine's lexer reads it
+//! (`crate::lex`), and a write is told from a name that only names the
+//! property by where it stands (`written`), so quoting, spacing, line
+//! breaks, comments and parentheses that change no meaning do not change
+//! what is read.
 //!
 //! Where a load is is one question; what it loads is another: a load's
 //! value is worked out as far as it is written out — strings, joined by
 //! `+`, chosen by `?:`, `||` or `??`, handed through `Qt.resolvedUrl`
 //! (`values`) —, and the file that value names on disk is worked out as Qt
 //! works it out (`super::urls`: the string's escapes, the URL, its
-//! resolution, the file). A string naming a `.qml`, `.js`, `.mjs` or `.qsb` file
-//! loads it too, by whatever route. A directory's `qmldir` adds the files
-//! it names. A module import (`import QtQuick`, `import platitude.ui`)
-//! resolves on the import path instead — what a runner stages there is its
-//! own to name (`crate::qmltest`).
+//! resolution, the file). A string naming a `.qml`, `.js`, `.mjs` or
+//! `.qsb` file loads it too, by whatever route. A directory's `qmldir` adds
+//! the files it names. A module import (`import QtQuick`,
+//! `import platitude.ui`) resolves on the import path instead — what a
+//! runner stages there is its own to name (`crate::qmltest`).
 //!
 //! What cannot be followed is not dropped: a path the tree does not hold is
 //! kept as it is named, so that its appearing moves a key; a load whose
@@ -47,8 +47,8 @@ pub(super) struct Loaded {
 }
 
 /// A URL path a text names ([`url_path`]): by a load, or by a string that
-/// only names a file a load may read by any route — which names nothing
-/// where its file cannot be worked out.
+/// only names a file a load may read by any route. [`loaded_from`] follows
+/// both alike.
 #[derive(Debug, PartialEq, Eq)]
 struct Named {
     path: String,
@@ -128,10 +128,8 @@ fn unbounded(loaded: &mut Loaded, file: &str, why: String) {
     }
 }
 
-/// The files at `path` a load reads on: the file itself, or every QML and
-/// JS file under the directory and its `qmldir` (deeper than an import
-/// reads, which costs an input too many at most). None where the tree holds
-/// nothing at `path`: a path is keyed as absent by whoever names it.
+/// Queues the files a load of `path` reads on ([`sources`]), or notes why
+/// they cannot be listed.
 fn enqueue(dir: &Path, path: &str, queue: &mut Vec<String>, loaded: &mut Loaded) {
     match sources(dir, path) {
         Ok(files) => queue.extend(files),
@@ -139,7 +137,12 @@ fn enqueue(dir: &Path, path: &str, queue: &mut Vec<String>, loaded: &mut Loaded)
     }
 }
 
-/// Walk every source and qmldir, including nested module definitions. An unreadable tree is not an empty tree.
+/// The files at `path` a load reads on: the file itself where it is QML,
+/// JS or a `qmldir`, or every such file under the directory, nested
+/// modules' `qmldir`s included (deeper than an import reads, which costs an
+/// input too many at most). None where the tree holds nothing at `path`: a
+/// path is keyed as absent by whoever names it. `Err` for a symbolic link
+/// or a tree that cannot be read: an unreadable tree is not an empty tree.
 fn sources(dir: &Path, path: &str) -> Result<Vec<String>, String> {
     let full = dir.join(path);
     let metadata = match std::fs::symlink_metadata(&full) {
@@ -188,10 +191,11 @@ enum Given {
 }
 
 /// The URL paths a QML or JS text names, as written: what each load names,
-/// and each string naming a QML or JS file. `Err` where what a load names
-/// is not known — a value nothing here works out, a URL off the tree, a
-/// component made from text — or the text could not be read to its end, so
-/// that what stands past the stop is not known.
+/// and each string naming a QML, JS or compiled shader file. `Err` where
+/// what it names is not known — a value nothing here works out, a URL off
+/// the tree, a component made from text, an `XMLHttpRequest` — or the text
+/// could not be read to its end, so that what stands past the stop is not
+/// known.
 fn loads(text: &str) -> Result<Vec<Named>, String> {
     if blanked(text, Lang::Qml, true).1.is_some() {
         return Err("a text read short".to_string());
@@ -226,8 +230,6 @@ fn loads(text: &str) -> Result<Vec<Named>, String> {
                 ));
             }
             None => {
-                // A string naming a file of QML, JS or a compiled shader, which a load may
-                // read by any route.
                 if k >= past
                     && let Some(value) = string_value(&tokens[k].text)
                     && [".qml", ".js", ".mjs", ".qsb"]
@@ -344,11 +346,11 @@ fn property_name(tokens: &[Token], k: usize) -> Option<(String, usize)> {
 }
 
 /// What a property named at `k` (its name ending before `after`) is given,
-/// where it is written: assigned (`=`, inside parentheses or not, the
-/// target itself parenthesized), added to, bound or given as a field, or
-/// the target of a destructuring or a loop. `None` where the name is no
-/// property written: a local declared, a parameter or its type, a
-/// pattern's binding, a conditional's branch, a label, a read.
+/// where it is written: assigned (`=`, inside parentheses or not), added
+/// to, bound or given as a field, or the target of a destructuring or a
+/// loop. `None` where the name is no property written: a local declared, a
+/// parameter or its type, a pattern's binding, a conditional's branch, a
+/// label, a read.
 fn written(tokens: &[Token], k: usize, after: usize) -> Option<Given> {
     // A computed key stands inside its own brackets: where it stands is where they do.
     let keyed = after > k + 1;
@@ -464,17 +466,14 @@ fn is_pattern(tokens: &[Token], open: usize) -> bool {
     }
 }
 
-/// Whether `k` stands inside a binding pattern.
 fn in_pattern(tokens: &[Token], k: usize) -> bool {
     innermost_open(tokens, k).is_some_and(|open| is_pattern(tokens, open))
 }
 
-/// Whether `k` stands in a parameter list.
 fn in_parameters(tokens: &[Token], k: usize) -> bool {
     innermost_open(tokens, k).is_some_and(|open| is_parameter_list(tokens, open))
 }
 
-/// Whether `k` stands in a `for (…)` head.
 fn in_loop_head(tokens: &[Token], k: usize) -> bool {
     innermost_open(tokens, k).is_some_and(|open| {
         tokens[open].text == "(" && open.checked_sub(1).is_some_and(|b| tokens[b].text == "for")
@@ -523,7 +522,6 @@ fn in_conditional(tokens: &[Token], k: usize) -> bool {
     open > 0
 }
 
-/// Whether a token is a name.
 fn is_name(text: &str) -> bool {
     text.chars()
         .next()
@@ -533,7 +531,6 @@ fn is_name(text: &str) -> bool {
             .all(|c| c.is_alphanumeric() || c == '_' || c == '$')
 }
 
-/// Whether a token is a string literal.
 fn is_string(text: &str) -> bool {
     text.starts_with(['"', '\'', '`'])
 }
@@ -612,7 +609,7 @@ fn spelled(tokens: &[Token]) -> String {
 /// template with nothing to fill in, strings joined by `+`, either side of a
 /// `?:` or of `||` and `??`, what `Qt.resolvedUrl` is handed. `None` for
 /// anything else — a name, a call, a template that fills one in — whose
-/// value nothing here works out, and for more than a handful of joinings.
+/// value nothing here works out, and for joinings past 64 strings.
 fn values(t: &[Token]) -> Option<Vec<String>> {
     let mut t = t;
     while t.len() >= 2 && t[0].text == "(" && matching_close(t, 0, "(", ")") == Some(t.len() - 1) {

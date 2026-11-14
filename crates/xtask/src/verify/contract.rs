@@ -1,19 +1,15 @@
 //! The run's contract: the structured lines the harness says under the
 //! run's own id (`auto/Awaited.qml`, `auto/WindowCensus.qml`), read as the
 //! sequence of events they are. Each operation keeps its own chain of
-//! stages ([`super::stages`]) — the page's and the window's are not
-//! ordered against each other — and the run as a whole has one order: its
+//! stages ([`super::stages`]), and the run as a whole has one order: its
 //! stage lines numbered in turn, one completion, then its pictures, each
 //! saved after the completion, each walked, each claim read at it, and the
 //! census named right after its walk. A run passes on this as much as on
-//! its must-say line: a picture nobody claimed, a claim never read, a
-//! claim that did not hold, a stage moved against its operation's chain,
-//! a stage the harness refused, a part the row promised and the picture
-//! lacks, a completion or a picture on a page still arriving, a
-//! completion said twice, counting stages it did not have or from a
-//! generation that is over, a picture before the completion, a picture
-//! asked for and not saved or saved without being asked for — each is a
-//! breach, named (反映前テストの機械化 §検証時点). What a line says never
+//! its must-say line: a line out of that order or of another run, a stage
+//! the harness refused, a claim unread or fallen, a completion or a
+//! picture on a page still arriving, a picture asked for and not saved or
+//! saved unasked, a part the row promised and the picture lacks — each is
+//! a breach, named (反映前テストの機械化 §検証時点). What a line says never
 //! stands in place of what an earlier one said: the first completion
 //! stands, a second is a breach, and a breach found while reading is not
 //! taken back by a line that follows.
@@ -66,8 +62,7 @@ pub(super) struct Said {
     pub pictures: Vec<(String, bool)>,
     /// Lines carrying another run's id: a log read against the wrong run.
     pub of_another_run: usize,
-    /// The breaches of the sequence, found as the lines were read, in
-    /// the order found.
+    /// The breaches of the sequence, as the lines were read.
     pub sequence: Vec<String>,
 }
 
@@ -126,7 +121,7 @@ impl Said {
     }
 }
 
-/// The kinds of structured line, each named by the word before its `run=`.
+/// The kinds of structured line.
 const KINDS: [&str; 12] = [
     "measurement",
     "report",
@@ -173,7 +168,7 @@ pub(super) fn read(lines: &[String], run: &str) -> Said {
             said.saved.insert(artifact.to_string());
             continue;
         }
-        // The harness's own line (`WindowCensus.reportAt`): the ceiling's `shot state … census=settled` is not it.
+        // The harness's own line (`WindowCensus.reportAt`): `census=` as the first word after `bench:`, not a later word.
         if let Some(parts) = line.split("bench: census=").nth(1) {
             if !census_due {
                 said.sequence.push(
@@ -455,11 +450,11 @@ fn unexpected<'a>(said: &Said, terms: &'a [String]) -> Vec<&'a str> {
         .collect()
 }
 
-/// The pictures, each held to the run: the set asked for (`pictures … wanted=`) is the set saved (`picture …
-/// saved=true`), nothing more and nothing less, and a save that failed stands whatever came after; and each
-/// window's claim says the page at its picture, settled or arriving only in reads the verb named. The parts
-/// agreeing between the completion and a picture (`holds=`) does not stand in for the page settled: a read on
-/// its way at the picture is a state about to move, parts or no parts.
+/// The pictures, each held to the run: the set asked for (`pictures … wanted=`) is the set the run said it
+/// saved (`picture … saved=true`) and the set on disk, and a save that failed stands whatever came after; and
+/// each window's claim says the page at its picture, settled or arriving only in reads the verb named. The
+/// parts agreeing between the completion and a picture (`holds=`) does not stand in for the page settled: a
+/// read on its way at the picture is a state about to move, parts or no parts.
 fn picture_breaches(said: &Said) -> Vec<String> {
     let mut out = Vec::new();
     let said_saved: BTreeSet<&str> = said
@@ -604,7 +599,7 @@ INFO bench: pictured run=r1 artifact=overlay name=card_latch holds=true
 INFO bench: pictured run=r1 artifact=overlay name=window holds=true gained=none lost=none page=settled
 ";
 
-    /// The lines of `WELL` from its completion on: the pictures.
+    /// The lines of `WELL` after its completion: the pictures.
     fn pictures() -> String {
         WELL.split_once("INFO bench: complete ")
             .map(|(_, rest)| rest.split_once('\n').map_or("", |(_, after)| after))
@@ -738,9 +733,6 @@ INFO bench: pictured run=r1 artifact=overlay name=window holds=true gained=none 
         );
     }
 
-    /// The sequence, held: each event taken away, said again or moved
-    /// out of its place is a breach of its own, and a breach found is
-    /// not taken back by what follows.
     #[test]
     fn an_event_dropped_repeated_or_out_of_order_is_a_breach_that_stands() {
         let dropped = WELL.replace(
@@ -819,9 +811,8 @@ INFO bench: pictured run=r1 artifact=overlay name=window holds=true gained=none 
         );
     }
 
-    /// A line's kind is the word before its `run=`: a stage's move to
-    /// `complete` and a breach whose reason names one are never read as a
-    /// completion.
+    /// A stage's move to `complete` and a breach whose reason names one
+    /// are never read as a completion.
     #[test]
     fn a_word_later_in_a_line_never_decides_its_kind() {
         let said = read(&lines(WELL), "r1");

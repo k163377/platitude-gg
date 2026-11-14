@@ -2,8 +2,8 @@
 //! itself, or borrowed from state it does not own — so that a write
 //! through it is judged by what it changes, not by the name it is written
 //! through: a local that names a harness property's array changes that
-//! array when it is pushed to, a local the code made changes nothing
-//! outside the code.
+//! array when it is pushed to, a local holding an array the code made
+//! changes nothing outside the code.
 //!
 //! A container is told apart from what it holds. A value made by the code
 //! names the places that made it (its sites: an array or object literal, a
@@ -12,11 +12,11 @@
 //! put — a literal's elements, `x[i] = v`, `x.f = v`, `push`, `Object.assign`
 //! — wherever it is spelled. A local, an argument and a returned value name
 //! the same sites, so what a callee puts inside a container its caller made
-//! is inside it for the caller too, under any name. The language's own
-//! functions answer and put by their contracts (`super::builtins`); a call
-//! no contract or code answers for, and the inside of a container nothing
-//! was put in, are of no known origin, and a change through them is not
-//! passed as safe.
+//! is inside it for the caller too. The language's own functions answer and
+//! put by their contracts (`super::builtins`); a call no contract or code
+//! answers for is of no known origin, the inside of a container nothing was
+//! put in is nothing yet (`Program::inside_of`), and a change through either
+//! is not passed as safe.
 
 use std::collections::BTreeSet;
 use std::ops::Range;
@@ -67,6 +67,7 @@ impl Origin {
             other => other,
         }
     }
+
     /// The container made at `site` in `maker`.
     fn made(maker: usize, site: Site) -> Origin {
         Origin::Fresh {
@@ -237,13 +238,13 @@ impl Program {
             // A harness object read by an index: a member nothing names.
             Origin::Object(Value::Object(..)) => Origin::Unknown,
             Origin::Object(_) | Origin::Product => Origin::Product,
-            // Nothing yet holds nothing yet.
             Origin::Unset => Origin::Unset,
             Origin::Unknown => Origin::Unknown,
         }
     }
 
-    /// `tokens` an expression, its first at index `base` of its file.
+    /// Where the expression `tokens` came from, its first token at index
+    /// `base` of its file.
     fn origin_in(&mut self, code: usize, tokens: &[Token], base: usize) -> Origin {
         let mut t = tokens;
         let mut base = base;
@@ -480,7 +481,6 @@ impl Program {
         let origin = match given {
             // Given nothing by the harness: handed in by the product (`window`, `settingsDialog`).
             Origin::Unset => Origin::Product,
-            // What the harness's own code made is the harness's state.
             Origin::Fresh { .. } | Origin::Plain => Origin::Shared(d, o, p.to_string()),
             other => other,
         };
@@ -491,7 +491,6 @@ impl Program {
     /// What a harness property typed `var` is given, as the harness's
     /// own state where the harness made it (`Program::assigned_values`).
     fn given_origin(&mut self, d: usize, o: usize, p: &str) -> Origin {
-        // What the harness made and gave the property is the property's own state.
         let own = |origin: Origin| match origin {
             Origin::Fresh { .. } | Origin::Plain => Origin::Shared(d, o, p.to_string()),
             other => other,
@@ -545,7 +544,7 @@ impl Program {
             Some(Value::Prop(pd, po, pp)) => self.prop_origin(pd, po, &pp),
             Some(Value::Product(_)) => Origin::Product,
             Some(Value::Function(..) | Value::Global(_)) => Origin::Plain,
-            // A call or an expression the object's scope computes: of the product's when it reads the product.
+            // A call or another computed expression: the product's, whatever it reads.
             _ => Origin::Product,
         }
     }
@@ -566,7 +565,8 @@ impl Program {
                     Some(Value::Object(md, mo)) => Origin::Object(Value::Object(md, mo)),
                     Some(Value::Prop(pd, po, p)) => self.prop_origin(pd, po, &p),
                     Some(Value::Function(..)) => Origin::Unknown,
-                    // A property the harness object's type has of its own (`running`, `width`): its state.
+                    // A property the harness object's type has of its own (`running`, `width`):
+                    // its state.
                     _ => Origin::Shared(d, o, name.to_string()),
                 }
             }
@@ -577,7 +577,7 @@ impl Program {
         }
     }
 
-    /// The value before the `.` at `dot`: the call, index or literal the
+    /// The value before the `.` at `dot_at`: the call, index or literal the
     /// path reads off.
     fn value_head_origin(&mut self, code: usize, dot_at: usize) -> Origin {
         let d = self.codes[code].doc;
@@ -636,7 +636,8 @@ impl Program {
             };
         }
         match self.resolve(code, path) {
-            // The harness's function or the product's: what its own code returns, read as the caller's.
+            // The harness's function or the product's: what its own code returns, read as the
+            // caller's.
             Value::Function(fd, fu) => {
                 if self.declared.contains_key(&(fd, fu)) {
                     return Origin::Unknown;
@@ -792,6 +793,7 @@ impl Program {
     /// What a function handed to a call answers: a function spelled there
     /// answers its returned values, read as the code it is spelled in reads
     /// them — its parameters by what the call hands them (`param_origin`);
+    /// a plain global function named there (`Number`) answers a plain value;
     /// a harness or product function named there answers what its code
     /// returns; anything else answers a value of no known origin.
     pub(super) fn callback_answers(&mut self, code: usize, arg: Range<usize>) -> Origin {
