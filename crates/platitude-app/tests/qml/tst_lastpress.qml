@@ -197,6 +197,7 @@ Item {
         }
 
         function cleanup() {
+            remoteDeleteRow.holdPresses = Metrics.holdPressesWarned
             level.dismiss()
             bar.open = false
             elsewhere.forceActiveFocus()
@@ -263,6 +264,18 @@ Item {
             compare(root.asked, ["delete-remote origin/topic"], "sent at the last press")
             verify(level.opened, "the menu stays up under the full fill")
             verify(remoteDeleteRow.gesturing, "its row still completing")
+            tryVerify(() => !level.opened, undefined, "and goes once the floor has passed")
+        }
+
+        /// A row left with no presses on its floor still takes its menu down when the floor passes: the row builds its
+        /// press count only while it has presses, and keeps it until the closing it was asked for has run
+        /// (`AppMenuItem`'s `holdSeat`).
+        function test_a_row_whose_presses_go_on_its_floor_still_closes_its_menu() {
+            tc.openOn("topic")
+            tc.pressRow(remoteDeleteRow, Metrics.holdPressesWarned)
+            compare(root.asked, ["delete-remote origin/topic"], "sent at the last press")
+            verify(level.opened, "the menu stays up under the full fill")
+            remoteDeleteRow.holdPresses = 0
             tryVerify(() => !level.opened, undefined, "and goes once the floor has passed")
         }
 

@@ -39,11 +39,12 @@ Item {
             tryVerify(() => !menu.visible)
         }
 
-        /// The heading's mark: the head-set icon the row shows.
+        /// The heading's mark: the head-set icon the row shows, in the seat the row builds it in.
         function markOf(row) {
             for (const child of row.children) {
-                if (child.set === "head" && child.visible)
-                    return child
+                const mark = child instanceof Loader ? child.item : child
+                if (mark !== null && mark.set === "head" && mark.visible)
+                    return mark
             }
             return null
         }

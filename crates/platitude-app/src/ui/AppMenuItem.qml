@@ -105,8 +105,9 @@ MenuItem {
     /// up.
     readonly property real headingRoom: menuItem.titled ? menuItem.headSeat : 0
     /// How wide a heading's mark seat is: as wide as the tag's ink, its mitred corners included — the widest of the
-    /// cards' heading marks but GitHub's cloud, which runs past it — so the words start one step past the others.
-    readonly property real headSeat: Math.ceil(rowMark.inkAcrossOf("tag"))
+    /// cards' heading marks but GitHub's cloud, which runs past it — so the words start one step past the others. Read
+    /// off the row's own mark, so zero on a row that wears none (`headMarkSeat`) — the only rows that read it wear one.
+    readonly property real headSeat: headMarkSeat.item !== null ? Math.ceil(headMarkSeat.item.inkAcrossOf("tag")) : 0
     /// The step every heading on such a card starts its words at, marked or not; zero on any other card.
     readonly property real headingSeat:
         menuItem.subMenu !== null && menuItem.menu !== null && menuItem.menu.headingSeat !== undefined
@@ -244,15 +245,19 @@ MenuItem {
     /// Pressing this row raises a question: a `!` in the hold mark's seat (デザイン規約 §進行中の操作から出る). A row
     /// asks or holds, never both — a row that asks is confirmed on the bar it raises.
     property bool asks: false
+    /// The row's press count, built with its mark on a row that has presses or a gesture still under way
+    /// (`holdSeat`); null on any other — a card builds a row per branch.
+    readonly property HoldDriver holdDrive: holdSeat.item !== null ? holdSeat.item.holdDrive : null
     /// How far into the presses the row has got, 0 to 1.
-    readonly property alias holdProgress: holdDrive.progress
+    readonly property real holdProgress: menuItem.holdDrive !== null ? menuItem.holdDrive.progress : 0
     /// The count the gesture under way was given (`HoldDriver.armedPresses`; the live one between gestures). Anything
     /// the row dresses from the same answer reads this, so it cannot change between presses
     /// (rules-refs の「回数押しか否かは最初の押下で確定する」の行).
-    readonly property alias armedPresses: holdDrive.armedPresses
+    readonly property int armedPresses:
+        menuItem.holdDrive !== null ? menuItem.holdDrive.armedPresses : menuItem.holdPresses
     /// A gesture is under way, the fill's slide back included (`HoldDriver.gesturing`) — the latch for a row dressed
     /// from an answer other than the count (`BranchBothDeleteRow`, the delete table's `Delete both`).
-    readonly property alias gesturing: holdDrive.gesturing
+    readonly property bool gesturing: menuItem.holdDrive !== null && menuItem.holdDrive.gesturing
     /// What a confirmed row wears — word, chip, mark and fill. `warning`: what the row throws away is brought back from
     /// the discard record. **A row that cannot be brought back names `danger` itself**, and a plain delete
     /// `textPrimary` (デザイン規約 §回数押し の色の表) — so a new row never takes the stronger warning by leaving this out.
@@ -273,7 +278,7 @@ MenuItem {
     function closeMenu() {
         if (menuItem.menu === null)
             return
-        if (holdDrive.settling) {
+        if (menuItem.holdDrive !== null && menuItem.holdDrive.settling) {
             menuItem.closesAfterFloor = true
             return
         }
@@ -287,12 +292,13 @@ MenuItem {
     function completeHold() {
         if (!menuItem.present || menuItem.greyed)
             return false
-        holdDrive.runOut()
+        if (menuItem.holdDrive !== null)
+            menuItem.holdDrive.runOut()
         return true
     }
     // Blocked under a hand: the hold under way blanks rather than running out to fire, as a row blocked from the start
     // drops the press (`rowPress`).
-    onBlockedChanged: if (menuItem.blocked) holdDrive.blank()
+    onBlockedChanged: if (menuItem.blocked && menuItem.holdDrive !== null) menuItem.holdDrive.blank()
     readonly property bool holding: menuItem.holdProgress > 0
 
     /// The hold mark's seat, the same on every row of the menu (`AppMenu.holdIndent`).
@@ -310,9 +316,9 @@ MenuItem {
     /// the widest heading mark, the cloud, stands inside the row's wash (`tst_menuedge.qml`, which counts ink outside
     /// the row by pixel and waits for a Canvas mark's `inked` before taking it). A seat narrower than the box puts the
     /// cloud outside the row.
-    readonly property real markX: menuItem.holdIndent > 0
+    readonly property real markX: menuItem.holdIndent > 0 || headMarkSeat.item === null
                                   ? (menuItem.holdIndent - Theme.iconMd) / 2
-                                  : menuItem.padding - Math.round((Theme.iconMd - rowMark.inkAcross) / 2)
+                                  : menuItem.padding - Math.round((Theme.iconMd - headMarkSeat.item.inkAcross) / 2)
 
     // On a card that keeps the heading seat, every row's words start past it, marked or not (`NameCell`'s spacing).
     leftPadding: menuItem.headingSeat > 0 ? menuItem.padding + menuItem.headingSeat
@@ -337,7 +343,7 @@ MenuItem {
                     ? Math.min(menuItem.wordsWant,
                                // The sentence, not `refSeats`: those carry the names as cut, off this width.
                                (menuItem.refSentence.indexOf("%1") >= 0 || menuItem.refSentence.indexOf("%2") >= 0
-                                ? Math.ceil(refFixedRuler.advanceWidth) : 0)
+                                ? Math.ceil(menuItem.refFixedWidth) : 0)
                                + Metrics.labelColW)
                     : menuItem.textNames
                     ? Math.min(menuItem.wordsWant, Math.ceil(nameCapRuler.advanceWidth) + itemLabel.rightPadding)
@@ -363,8 +369,8 @@ MenuItem {
                    // name. Asked of what the row holds, not `visible`: a closed card's rows answer false, and the
                    // card is measured before it opens.
                    + (menuItem.sideName !== "" ? menuItem.sideWidth + Theme.spaceLg : 0)
-                   + (menuItem.ahead > 0 || menuItem.behind > 0 ? rowTrack.implicitWidth + Theme.spaceSm : 0)
-                   + (menuItem.badged ? Math.ceil(rowBadge.implicitWidth) + Theme.spaceXs : 0)
+                   + (menuItem.ahead > 0 || menuItem.behind > 0 ? trackSeat.implicitWidth + Theme.spaceSm : 0)
+                   + (menuItem.badged ? Math.ceil(badgeSeat.implicitWidth) + Theme.spaceXs : 0)
                    + (trailSeat.item !== null ? trailSeat.item.cappedWidth : 0)
                    + menuItem.leftPadding + menuItem.rightPadding
     font.pixelSize: Theme.fontMd
@@ -400,26 +406,34 @@ MenuItem {
     /// carry the names as cut.
     readonly property real wordsWant: menuItem.refSentence.indexOf("%1") >= 0 || menuItem.refSentence.indexOf("%2") >= 0
                                       ? menuItem.refWant + itemLabel.rightPadding : itemLabel.implicitWidth
-    readonly property real refWant: Math.ceil(refFixedRuler.advanceWidth
+    readonly property real refWant: Math.ceil(menuItem.refFixedWidth
                                               + (menuItem.refSentence.indexOf("%1") >= 0 ? menuItem.refHeld(1) : 0)
                                               + (menuItem.refSentence.indexOf("%2") >= 0 ? menuItem.refHeld(2) : 0))
                                     + 1
+    /// The sentence's rulers (`refInk`), built with its names' marks and grounds on a row whose words hold a name —
+    /// null on any other, and every reading below answers as for a sentence with no seats.
+    readonly property Item refRulers: refInk.item
+    /// The sentence without its names, rooms and all.
+    readonly property real refFixedWidth: menuItem.refRulers !== null ? menuItem.refRulers.fixed.advanceWidth : 0
     /// A name's width held under the name ceiling (`Theme.nameMaxChars`): a menu grows with its words, and its own
     /// ceiling (the window's edge) is far past where a name stops being read.
     function refHeld(which) {
-        return Math.min((which === 1 ? refName1Whole : refName2Whole).advanceWidth, codeCapRuler.advanceWidth)
+        if (menuItem.refRulers === null)
+            return 0
+        const whole = which === 1 ? menuItem.refRulers.whole1 : menuItem.refRulers.whole2
+        return Math.min(whole.advanceWidth, codeCapRuler.advanceWidth)
     }
     /// How wide each name is cut to (-1: whole): held under the ceiling, then, where the room is short, the longer
     /// gives way first, down to an even share.
     readonly property var refCuts: {
         const has1 = menuItem.refSentence.indexOf("%1") >= 0
         const has2 = menuItem.refSentence.indexOf("%2") >= 0
-        if (!has1 && !has2)
+        if ((!has1 && !has2) || menuItem.refRulers === null)
             return [-1, -1]
         let w1 = has1 ? menuItem.refHeld(1) : 0
         let w2 = has2 ? menuItem.refHeld(2) : 0
         const room = menuItem.refRoom < 0 ? Number.MAX_VALUE
-                   : Math.max(0, menuItem.refRoom - refFixedRuler.advanceWidth)
+                   : Math.max(0, menuItem.refRoom - menuItem.refFixedWidth)
         if (w1 + w2 > room) {
             const small = Math.min(w1, w2)
             if (!has1 || !has2) {
@@ -435,10 +449,13 @@ MenuItem {
                 w2 = room / 2
             }
         }
-        return [has1 && w1 < refName1Whole.advanceWidth ? w1 : -1, has2 && w2 < refName2Whole.advanceWidth ? w2 : -1]
+        return [has1 && w1 < menuItem.refRulers.whole1.advanceWidth ? w1 : -1,
+                has2 && w2 < menuItem.refRulers.whole2.advanceWidth ? w2 : -1]
     }
-    readonly property string refShown: menuItem.refCuts[0] < 0 ? menuItem.refName : refName1Ruler.elidedText
-    readonly property string refShown2: menuItem.refCuts[1] < 0 ? menuItem.refName2 : refName2Ruler.elidedText
+    readonly property string refShown: menuItem.refCuts[0] < 0 || menuItem.refRulers === null
+                                       ? menuItem.refName : menuItem.refRulers.cut1.elidedText
+    readonly property string refShown2: menuItem.refCuts[1] < 0 || menuItem.refRulers === null
+                                        ? menuItem.refName2 : menuItem.refRulers.cut2.elidedText
     /// A name was cut: the hover gives the whole line back.
     readonly property bool refCut: menuItem.refCuts[0] >= 0 || menuItem.refCuts[1] >= 0
     /// The sentence's name seats in its own order — a translation may put `%2` first: `{at, name, tint, room, key}`,
@@ -473,16 +490,19 @@ MenuItem {
         return out + menuItem.inked(menuItem.refSentence.substring(from))
     }
     /// Where each name begins in the label, its room before it: the words and rooms ahead of it in the row's face, a
-    /// name ahead of it in the code face — as the markup lays them (`refHead` / `refBetween`, `refShown1Code` /
-    /// `refShown2Code`). A name ahead measured in the row's face would set the second mark over that mono name.
+    /// name ahead of it in the code face — as the markup lays them (`refRulers`' `head` / `between`, `shown1` /
+    /// `shown2`). A name ahead measured in the row's face would set the second mark over that mono name.
     readonly property real refLead1: menuItem.leadOf(1)
     readonly property real refLead2: menuItem.leadOf(2)
     function leadOf(key) {
+        const rulers = menuItem.refRulers
+        if (rulers === null)
+            return 0
         const seats = menuItem.refSeats
         if (seats.length === 0 || seats[0].key === key)
-            return refHead.advanceWidth
-        const first = seats[0].key === 1 ? refShown1Code : refShown2Code
-        return seats.length > 1 ? refHead.advanceWidth + first.advanceWidth + refBetween.advanceWidth : 0
+            return rulers.head.advanceWidth
+        const first = seats[0].key === 1 ? rulers.shown1 : rulers.shown2
+        return seats.length > 1 ? rulers.head.advanceWidth + first.advanceWidth + rulers.between.advanceWidth : 0
     }
     function inked(words) {
         return words.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/ /g, "&nbsp;")
@@ -510,68 +530,100 @@ MenuItem {
         rowSide: "right"
     }
 
+    // The marks ahead of the words are built only on the rows that wear them (rules-refs の「行のデリゲートが見せない部品は
+    // 消す」): a card builds a row per branch, and a row is a heading, a held row, a row that asks or none of them. Each
+    // seat stands at the row's origin unsized, so its mark keeps the row's x and y.
+    //
     // The press mark, in the seat `holdIndent` leaves on every row (デザイン規約 §回数押し): the head of the row's words,
-    // as tall as their capitals and on their middle (デザイン規約 §アイコンの席 の文頭記号).
-    HoldIcon {
-        id: rowHold
-        // Centred on the seat, where the `!` and a heading's mark stand.
-        x: Math.round((menuItem.holdIndent - rowHold.width) / 2)
-        y: Math.round(menuItem.wordsTop + itemLabel.baselineOffset - WordFace.drawnCapitalMiddle(rowHold.size)
-                      - rowHold.height / 2)
-        size: itemLabel.font.pixelSize
-        progress: menuItem.holdProgress
-        presses: menuItem.armedPresses
-        tint: menuItem.holdInk
-        off: menuItem.holdOff
-        visible: menuItem.armedPresses > 0
+    // as tall as their capitals and on their middle (デザイン規約 §アイコンの席 の文頭記号). It carries the row's press
+    // count (`holdDrive`), so the seat stays while a gesture is under way and until the closing asked under the floor
+    // has run — a count gone to zero under a hand still has its release, its fill's slide back and the menu's going to
+    // answer (`HoldDriver.gesturing` ends at `settle()`, before `landed`): once the seat has gone, the handlers on what
+    // it loaded no longer run (`tst_lastpress`'s count gone on the floor).
+    Loader {
+        id: holdSeat
+        active: menuItem.holdPresses > 0 || menuItem.gesturing || menuItem.closesAfterFloor
+        sourceComponent: HoldIcon {
+            id: rowHold
+            // The row runs at the last press; only the menu's going waits out the floor (`closeMenu`).
+            readonly property HoldDriver holdDrive: HoldDriver {
+                id: holdDrive
+                holdPresses: menuItem.holdPresses
+                onFinished: menuItem.held()
+                onLanded: {
+                    if (!menuItem.closesAfterFloor)
+                        return
+                    // Taken before the flag goes, which may take the seat with it.
+                    const menu = menuItem.menu
+                    menuItem.closesAfterFloor = false
+                    menu.dismiss()
+                }
+            }
+            // Centred on the seat, where the `!` and a heading's mark stand.
+            x: Math.round((menuItem.holdIndent - rowHold.width) / 2)
+            y: Math.round(menuItem.wordsTop + itemLabel.baselineOffset - WordFace.drawnCapitalMiddle(rowHold.size)
+                          - rowHold.height / 2)
+            size: itemLabel.font.pixelSize
+            progress: menuItem.holdProgress
+            presses: menuItem.armedPresses
+            tint: menuItem.holdInk
+            off: menuItem.holdOff
+            visible: menuItem.armedPresses > 0
+        }
     }
     // The `!` of a row that asks, sharing the hold mark's seat — a row is one or the other (`asks`). Ahead of the words
     // it heads them (デザイン規約 §アイコンの席 の文頭記号): drawn to their letters and centred on their capitals'
     // middle, its box their line (`wordsTop`).
-    NavIcon {
-        x: 0
-        y: menuItem.wordsTop
-        kind: "bang"
-        set: "lead"
-        size: itemLabel.font.pixelSize
-        wordBase: itemLabel.baselineOffset
-        tint: Theme.warning
-        // The seat's width, so the `!` stands in its middle as the hold mark does — never sizeless while the menu has
-        // no seat yet: a canvas born without a size is never asked to paint once one arrives (`GoneBadge`).
-        width: Math.max(Theme.iconSm, menuItem.holdIndent)
-        height: itemLabel.height
-        // Only on a row that can be pressed; a blocked row says `blockedWhy` instead.
-        visible: menuItem.asks && menuItem.armedPresses <= 0 && !menuItem.blocked
+    Loader {
+        active: menuItem.asks
+        sourceComponent: NavIcon {
+            x: 0
+            y: menuItem.wordsTop
+            kind: "bang"
+            set: "lead"
+            size: itemLabel.font.pixelSize
+            wordBase: itemLabel.baselineOffset
+            tint: Theme.warning
+            // The seat's width, so the `!` stands in its middle as the hold mark does — never sizeless while the menu
+            // has no seat yet: a canvas born without a size is never asked to paint once one arrives (`GoneBadge`).
+            width: Math.max(Theme.iconSm, menuItem.holdIndent)
+            height: itemLabel.height
+            // Only on a row that can be pressed; a blocked row says `blockedWhy` instead.
+            visible: menuItem.armedPresses <= 0 && !menuItem.blocked
+        }
     }
     // A heading's mark, its box at `markX`: a step over the heading's capitals.
-    NavIcon {
-        id: rowMark
-        x: menuItem.markX
-        y: menuItem.wordsTop
-        set: "head"
-        size: itemLabel.font.pixelSize
-        wordBase: itemLabel.baselineOffset
-        width: Theme.iconMd
-        height: itemLabel.height
-        visible: menuItem.heads && (menuItem.titled || !menuItem.seated)
-        kind: menuItem.heads ? menuItem.markKind : "branch"
-        tint: menuItem.markTint
+    Loader {
+        id: headMarkSeat
+        active: menuItem.heads && (menuItem.titled || !menuItem.seated)
+        sourceComponent: NavIcon {
+            x: menuItem.markX
+            y: menuItem.wordsTop
+            set: "head"
+            size: itemLabel.font.pixelSize
+            wordBase: itemLabel.baselineOffset
+            width: Theme.iconMd
+            height: itemLabel.height
+            kind: menuItem.heads ? menuItem.markKind : "branch"
+            tint: menuItem.markTint
+        }
     }
     // A mark about the row (`headed: false`), in the left menu's seat and drawn the way that seat draws it
     // (`NameCell`), centred on the seat in an `iconSm` box, at the row words' scale on their capitals' middle
-    // (`set: "lead"`, 規約 §アイコンの席 の ①). A heading's mark is `rowMark`, not this one.
-    NavIcon {
-        id: seatMark
-        x: menuItem.seatX - (Theme.iconSm - Theme.iconXs) / 2
-        y: menuItem.wordsTop
-        set: "lead"
-        size: itemLabel.font.pixelSize
-        wordBase: itemLabel.baselineOffset
-        width: Theme.iconSm
-        height: itemLabel.height
-        visible: menuItem.heads && !menuItem.titled && menuItem.seated
-        kind: menuItem.heads ? menuItem.markKind : "branch"
-        tint: menuItem.greyed ? Theme.textMuted : menuItem.markTint
+    // (`set: "lead"`, 規約 §アイコンの席 の ①). A heading's mark is `headMarkSeat`'s, not this one.
+    Loader {
+        active: menuItem.heads && !menuItem.titled && menuItem.seated
+        sourceComponent: NavIcon {
+            x: menuItem.seatX - (Theme.iconSm - Theme.iconXs) / 2
+            y: menuItem.wordsTop
+            set: "lead"
+            size: itemLabel.font.pixelSize
+            wordBase: itemLabel.baselineOffset
+            width: Theme.iconSm
+            height: itemLabel.height
+            kind: menuItem.heads ? menuItem.markKind : "branch"
+            tint: menuItem.greyed ? Theme.textMuted : menuItem.markTint
+        }
     }
 
     contentItem: RowLayout {
@@ -593,18 +645,22 @@ MenuItem {
                 return col !== undefined ? Math.max(col, own) : own
             }
             implicitHeight: codeLabel.implicitHeight
-            // On the word's own width in every row: the column's spare stays bare.
-            CodeGround {
+            // On the word's own width in every row: the column's spare stays bare. Built on a row with a chip; the seat
+            // takes the ground's span and its top is the chip's, so the ground keeps the chip's coordinates.
+            Loader {
+                active: menuItem.code !== ""
                 anchors.left: codeLabel.left
                 anchors.right: codeLabel.right
-                // Height off the glyph size and place off the baseline, not the label: the mono line box differs per
-                // OS and stands taller than the UI-family sentence (デザイン規約 §git 用語のコード表記).
-                wordBaseline: codeLabel.y + codeLabel.baselineOffset
-                size: codeLabel.font.pixelSize
                 // Half a gap, no more: a chip after the hold mark would otherwise reach back against it and the two
                 // would read as one run of ink.
                 anchors.leftMargin: -Theme.spaceXs / 2
                 anchors.rightMargin: -Theme.spaceXs / 2
+                sourceComponent: CodeGround {
+                    // Height off the glyph size and place off the baseline, not the label: the mono line box differs
+                    // per OS and stands taller than the UI-family sentence (デザイン規約 §git 用語のコード表記).
+                    wordBaseline: codeLabel.y + codeLabel.baselineOffset
+                    size: codeLabel.font.pixelSize
+                }
             }
             PlainTextLabel {
                 id: codeLabel
@@ -644,21 +700,6 @@ MenuItem {
             // `textSecondary`.
             font.weight: menuItem.titled ? Theme.fontWeightStrong : menuItem.font.weight
             color: menuItem.wordColor
-            /// The markup ahead of the names in the row's face (`leadOf`): the words and room before the first, and the
-            /// words and room between it and the second.
-            TextMetrics {
-                id: refHead
-                font: itemLabel.font
-                text: menuItem.refSeats.length > 0
-                      ? menuItem.refSentence.substring(0, menuItem.refSeats[0].at) + menuItem.refSeats[0].room : ""
-            }
-            TextMetrics {
-                id: refBetween
-                font: itemLabel.font
-                text: menuItem.refSeats.length > 1
-                      ? menuItem.refSentence.substring(menuItem.refSeats[0].at + 2, menuItem.refSeats[1].at)
-                        + menuItem.refSeats[1].room : ""
-            }
             TextMetrics {
                 id: refSpace
                 font: itemLabel.font
@@ -671,74 +712,101 @@ MenuItem {
                 font: itemLabel.font
                 text: menuItem.textNames ? "n".repeat(Theme.nameMaxChars) : ""
             }
-            /// The code face at the row's size (`WordFace.groundEnd`).
-            FontMetrics {
-                id: codeFace
-                font.family: Theme.monoFamily
-                font.pixelSize: itemLabel.font.pixelSize
-            }
             TextMetrics {
                 id: codeCapRuler
                 font.family: Theme.monoFamily
                 font.pixelSize: itemLabel.font.pixelSize
                 text: menuItem.refSentence !== "" || menuItem.codesName ? "n".repeat(Theme.nameMaxChars) : ""
             }
-            // The names in the code face: whole, as cut (`refCuts`), and as drawn (`leadOf`, the grounds); and the
-            // sentence without them, rooms and all. **Whole and cut on two rulers**: a `TextMetrics` signals one change
-            // for all it answers, so a cut read back off the ruler it writes reads its own answer and loops.
-            TextMetrics {
-                id: refName1Whole
-                font.family: Theme.monoFamily
-                font.pixelSize: itemLabel.font.pixelSize
-                text: menuItem.refName
-            }
-            TextMetrics {
-                id: refName2Whole
-                font.family: Theme.monoFamily
-                font.pixelSize: itemLabel.font.pixelSize
-                text: menuItem.refName2
-            }
-            TextMetrics {
-                id: refName1Ruler
-                font.family: Theme.monoFamily
-                font.pixelSize: itemLabel.font.pixelSize
-                text: menuItem.refName
-                elide: menuItem.refMark === "remote" ? Text.ElideRight : Text.ElideMiddle
-                elideWidth: Math.max(0, menuItem.refCuts[0])
-            }
-            TextMetrics {
-                id: refName2Ruler
-                font.family: Theme.monoFamily
-                font.pixelSize: itemLabel.font.pixelSize
-                text: menuItem.refName2
-                elide: menuItem.refMark2 === "remote" ? Text.ElideRight : Text.ElideMiddle
-                elideWidth: Math.max(0, menuItem.refCuts[1])
-            }
-            TextMetrics {
-                id: refShown1Code
-                font.family: Theme.monoFamily
-                font.pixelSize: itemLabel.font.pixelSize
-                text: menuItem.refShown
-            }
-            TextMetrics {
-                id: refShown2Code
-                font.family: Theme.monoFamily
-                font.pixelSize: itemLabel.font.pixelSize
-                text: menuItem.refShown2
-            }
-            TextMetrics {
-                id: refFixedRuler
-                font: itemLabel.font
-                text: menuItem.refSentence.replace("%1", menuItem.refRoom1).replace("%2", menuItem.refRoom2)
-            }
-            // The names' marks and code grounds, built on a row whose words hold a name (`refSentence`). Under the
-            // words: a ground lies beneath the name it holds, and a mark stands in a room the words leave it.
+            // The names' rulers, marks and code grounds, built on a row whose words hold a name (`refSentence`). Under
+            // the words: a ground lies beneath the name it holds, and a mark stands in a room the words leave it.
             Loader {
                 id: refInk
                 anchors.fill: parent
                 z: -1
                 active: menuItem.refSentence !== ""
                 sourceComponent: Item {
+                    /// The rulers the row's readings take the sentence's measure with (`refRulers`).
+                    readonly property TextMetrics head: refHead
+                    readonly property TextMetrics between: refBetween
+                    readonly property TextMetrics whole1: refName1Whole
+                    readonly property TextMetrics whole2: refName2Whole
+                    readonly property TextMetrics cut1: refName1Ruler
+                    readonly property TextMetrics cut2: refName2Ruler
+                    readonly property TextMetrics shown1: refShown1Code
+                    readonly property TextMetrics shown2: refShown2Code
+                    readonly property TextMetrics fixed: refFixedRuler
+                    /// The markup ahead of the names in the row's face (`leadOf`): the words and room before the first,
+                    /// and the words and room between it and the second.
+                    TextMetrics {
+                        id: refHead
+                        font: itemLabel.font
+                        text: menuItem.refSeats.length > 0
+                              ? menuItem.refSentence.substring(0, menuItem.refSeats[0].at) + menuItem.refSeats[0].room
+                              : ""
+                    }
+                    TextMetrics {
+                        id: refBetween
+                        font: itemLabel.font
+                        text: menuItem.refSeats.length > 1
+                              ? menuItem.refSentence.substring(menuItem.refSeats[0].at + 2, menuItem.refSeats[1].at)
+                                + menuItem.refSeats[1].room : ""
+                    }
+                    /// The code face at the row's size (`WordFace.groundEnd`).
+                    FontMetrics {
+                        id: codeFace
+                        font.family: Theme.monoFamily
+                        font.pixelSize: itemLabel.font.pixelSize
+                    }
+                    // The names in the code face: whole, as cut (`refCuts`), and as drawn (`leadOf`, the grounds); and
+                    // the sentence without them, rooms and all. **Whole and cut on two rulers**: a `TextMetrics` signals
+                    // one change for all it answers, so a cut read back off the ruler it writes reads its own answer and
+                    // loops.
+                    TextMetrics {
+                        id: refName1Whole
+                        font.family: Theme.monoFamily
+                        font.pixelSize: itemLabel.font.pixelSize
+                        text: menuItem.refName
+                    }
+                    TextMetrics {
+                        id: refName2Whole
+                        font.family: Theme.monoFamily
+                        font.pixelSize: itemLabel.font.pixelSize
+                        text: menuItem.refName2
+                    }
+                    TextMetrics {
+                        id: refName1Ruler
+                        font.family: Theme.monoFamily
+                        font.pixelSize: itemLabel.font.pixelSize
+                        text: menuItem.refName
+                        elide: menuItem.refMark === "remote" ? Text.ElideRight : Text.ElideMiddle
+                        elideWidth: Math.max(0, menuItem.refCuts[0])
+                    }
+                    TextMetrics {
+                        id: refName2Ruler
+                        font.family: Theme.monoFamily
+                        font.pixelSize: itemLabel.font.pixelSize
+                        text: menuItem.refName2
+                        elide: menuItem.refMark2 === "remote" ? Text.ElideRight : Text.ElideMiddle
+                        elideWidth: Math.max(0, menuItem.refCuts[1])
+                    }
+                    TextMetrics {
+                        id: refShown1Code
+                        font.family: Theme.monoFamily
+                        font.pixelSize: itemLabel.font.pixelSize
+                        text: menuItem.refShown
+                    }
+                    TextMetrics {
+                        id: refShown2Code
+                        font.family: Theme.monoFamily
+                        font.pixelSize: itemLabel.font.pixelSize
+                        text: menuItem.refShown2
+                    }
+                    TextMetrics {
+                        id: refFixedRuler
+                        font: itemLabel.font
+                        text: menuItem.refSentence.replace("%1", menuItem.refRoom1).replace("%2", menuItem.refRoom2)
+                    }
                     // Each name's code ground: from the head of its mark's room, which holds the mark's air — or half a
                     // gap before the name, behind no mark — to half a gap past its end (`WordFace.groundStart` /
                     // `groundEnd`). Gone where the words are cut before the name.
@@ -864,26 +932,34 @@ MenuItem {
                 }
             }
         }
-        // Ahead / behind, in the left menu's seat and order (`NavRowBody`'s `trackSeat`).
-        HeadTrack {
-            id: rowTrack
+        // Ahead / behind, in the left menu's seat and order (`NavRowBody`'s `trackSeat`). Built on a row that has a
+        // count to say.
+        Loader {
+            id: trackSeat
+            active: menuItem.ahead > 0 || menuItem.behind > 0
             visible: menuItem.ahead > 0 || menuItem.behind > 0
             Layout.leftMargin: Theme.spaceSm
             Layout.alignment: Qt.AlignVCenter
-            ahead: menuItem.ahead
-            behind: menuItem.behind
+            sourceComponent: HeadTrack {
+                ahead: menuItem.ahead
+                behind: menuItem.behind
+            }
         }
-        // …and the badge after it, as the left menu's row ends (`NavRowBody`'s `remoteSeat`).
-        GoneBadge {
-            id: rowBadge
-            size: itemLabel.font.pixelSize
-            wordBase: itemLabel.y + itemLabel.baselineOffset - rowBadge.y
+        // …and the badge after it, as the left menu's row ends (`NavRowBody`'s `remoteSeat`). Built on a row that
+        // wears one.
+        Loader {
+            id: badgeSeat
+            active: menuItem.badged
             visible: menuItem.badged
             Layout.leftMargin: Theme.spaceXs
             Layout.alignment: Qt.AlignVCenter
             Layout.preferredHeight: Theme.iconSm
-            pullRequest: menuItem.badgePr
-            gone: menuItem.badgeGone
+            sourceComponent: GoneBadge {
+                size: itemLabel.font.pixelSize
+                wordBase: itemLabel.y + itemLabel.baselineOffset - badgeSeat.y
+                pullRequest: menuItem.badgePr
+                gone: menuItem.badgeGone
+            }
         }
         // `trail`: the tree mark and folder as one run, the tab's own (`TabTreeMark`) — the mark a sign on the
         // folder's name (デザイン規約 §アイコンの席 の修飾). Built on a row that has one.
@@ -946,12 +1022,19 @@ MenuItem {
         // Every row hovers to the same wash, held rows included (デザイン規約 §メニュー).
         color: menuItem.highlighted ? Theme.bgHover : "transparent"
         // Out over the card's side padding to its frame, so the mark at the row's edge has as much fill on its left as
-        // its word's step gives it on its right (デザイン規約 §回数押し).
-        HoldFill {
-            progress: menuItem.holdProgress
-            tone: menuItem.holdTone
-            dimmed: holdDrive.dimmed
-            bleed: menuItem.menu !== null ? menuItem.menu.leftPadding - Theme.borderWidth : 0
+        // its word's step gives it on its right (デザイン規約 §回数押し). Built with the press count (`holdSeat`), in an
+        // item the seat sizes to the row: the fill sizes itself off its parent, and a seat sizes what it loads.
+        Loader {
+            anchors.fill: parent
+            active: menuItem.holdDrive !== null
+            sourceComponent: Item {
+                HoldFill {
+                    progress: menuItem.holdProgress
+                    tone: menuItem.holdTone
+                    dimmed: menuItem.holdDrive !== null && menuItem.holdDrive.dimmed
+                    bleed: menuItem.menu !== null ? menuItem.menu.leftPadding - Theme.borderWidth : 0
+                }
+            }
         }
         // Under the hand, a heading is underlined in its mark's colour across the row, at its foot: the wash says
         // where the hand is, the line what is about to open. Headings only — a mark about the row names no card.
@@ -965,28 +1048,19 @@ MenuItem {
         }
     }
 
-    // The row runs at the last press; only the menu's going waits out the floor (`closeMenu`).
-    readonly property HoldDriver holdDrive: HoldDriver {
-        id: holdDrive
-        holdPresses: menuItem.holdPresses
-        onFinished: menuItem.held()
-        onLanded: {
-            if (!menuItem.closesAfterFloor)
-                return
-            menuItem.closesAfterFloor = false
-            menuItem.menu.dismiss()
-        }
-    }
+    // Every entry below reaches the press count only where the row has one (`holdDrive`): a row with no presses has
+    // no gesture to count, end or take back.
     Connections {
         target: menuItem.menu
         // Whoever closed the menu, the row's completion went with it.
         function onAboutToHide() {
             menuItem.closesAfterFloor = false
-            holdDrive.settle()
+            if (menuItem.holdDrive !== null)
+                menuItem.holdDrive.settle()
         }
     }
     // The hand left the row part way through its presses: back to zero (`HoldDriver.leave`).
-    onHoveredChanged: if (!menuItem.hovered) holdDrive.leave()
+    onHoveredChanged: if (!menuItem.hovered && menuItem.holdDrive !== null) menuItem.holdDrive.leave()
     // Takes the press before the MenuItem can emit `triggered`, which would run the row and close the menu on the
     // first press. It accepts no hover, so the row still highlights like any other.
     MouseArea {
@@ -994,26 +1068,31 @@ MenuItem {
         anchors.fill: parent
         // A blocked row takes the press and drops it, or the row underneath would run and close the menu.
         // `armedPresses`, not the live count: disabling the area mid-gesture would lose the release.
-        enabled: menuItem.blocked || (holdDrive.armedPresses > 0 && menuItem.enabled)
-        onPressed: if (!menuItem.blocked) holdDrive.begin()
-        onReleased: holdDrive.letUp()
-        onCanceled: holdDrive.letUp()
+        enabled: menuItem.blocked || (menuItem.armedPresses > 0 && menuItem.enabled)
+        onPressed: if (!menuItem.blocked && menuItem.holdDrive !== null) menuItem.holdDrive.begin()
+        onReleased: if (menuItem.holdDrive !== null) menuItem.holdDrive.letUp()
+        onCanceled: if (menuItem.holdDrive !== null) menuItem.holdDrive.letUp()
         // Dragged off the row: as the hand leaving it.
-        onPositionChanged: if (!containsMouse) holdDrive.leave()
+        onPositionChanged: if (!containsMouse && menuItem.holdDrive !== null) menuItem.holdDrive.leave()
     }
     // Keyboard: press Space or Enter on the row, as many times (デザイン規約 §回数押し). Accepting the key keeps the
     // menu from triggering the row outright.
     Keys.onPressed: event => {
-        // A blocked row takes the key that would run it and drops it.
+        // A blocked row takes the key that would run it and drops it — the keys that stand in for a press
+        // (`HoldDriver.holdKey`), asked here of a row with no press count too.
         if (menuItem.blocked) {
-            event.accepted = holdDrive.holdKey(event.key)
+            event.accepted = event.key === Qt.Key_Space || event.key === Qt.Key_Return || event.key === Qt.Key_Enter
             return
         }
-        holdDrive.pressKey(event)
+        if (menuItem.holdDrive !== null)
+            menuItem.holdDrive.pressKey(event)
     }
-    Keys.onReleased: event => holdDrive.releaseKey(event)
+    Keys.onReleased: event => {
+        if (menuItem.holdDrive !== null)
+            menuItem.holdDrive.releaseKey(event)
+    }
     // A key let go after the focus has moved is answered somewhere else (`HoldDriver.focusLost`).
-    onActiveFocusChanged: if (!menuItem.activeFocus) holdDrive.focusLost()
+    onActiveFocusChanged: if (!menuItem.activeFocus && menuItem.holdDrive !== null) menuItem.holdDrive.focusLost()
 
     HoverHandler {
         id: rowHand

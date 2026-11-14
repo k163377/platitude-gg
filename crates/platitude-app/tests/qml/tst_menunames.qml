@@ -195,15 +195,26 @@ Control {
             compare(bareRow.tip.words.substr(marks[0][0], marks[0][3]), root.farName)
         }
 
-        /// A row that says no name builds nothing that draws one: its own heading and seat marks, and no name's mark,
-        /// ground or chip (rules-refs/app-ui.md「行のデリゲートが見せない部品は消す」).
+        /// A row that says no name builds nothing that draws one: no name's mark, ground or chip — and, saying no
+        /// command either, no command's ground (rules-refs/app-ui.md「行のデリゲートが見せない部品は消す」).
         function test_a_row_with_no_name_builds_no_name_parts() {
             const names = ["branch", "remote", "tag", "tree", "home", "stash"]
             compare(root.count(plainRow, item => item.wordCell !== undefined && item.set === "sign"
                                                  && names.indexOf(item.kind) >= 0), 0, "no name's mark")
             compare(root.count(plainRow, item => item.wantWidth !== undefined), 0, "no chip")
-            compare(root.count(plainRow, item => item.radius !== undefined && item.size !== undefined), 1,
-                    "no name's ground: the one is the command's, the row's own slot (`code`)")
+            compare(root.count(plainRow, item => item.radius !== undefined && item.size !== undefined), 0,
+                    "no ground: no name's, and no command's (`code`)")
+        }
+
+        /// …nor anything else it does not wear: no mark at all (heading, seat, `!`), no press mark, fill or press
+        /// count, no counts and no badge (rules-refs/app-ui.md「行のデリゲートが見せない部品は消す」).
+        function test_a_plain_row_builds_nothing_it_does_not_wear() {
+            compare(root.count(plainRow, item => item.wordCell !== undefined), 0, "no mark")
+            compare(root.count(plainRow, item => item.presses !== undefined), 0, "no press mark")
+            compare(root.count(plainRow, item => item.bleed !== undefined), 0, "no fill")
+            compare(plainRow.holdDrive, null, "no press count")
+            compare(root.count(plainRow, item => item.behind !== undefined), 0, "no counts")
+            compare(root.count(plainRow, item => item.pullRequest !== undefined), 0, "no badge")
         }
 
         /// The hover's line seats every name it says behind its mark: the worktree's tree, the far column's branch.
