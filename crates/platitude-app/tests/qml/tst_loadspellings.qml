@@ -3,9 +3,10 @@ import QtTest
 
 // What Qt reads for each spelling of a load: every load here names one of
 // `tests/loads/`, and the reader of what the QML tests load
-// (`gate::plan::imports`, `gate::plan::urls`) names the same file for each
-// spelling (`each_spelling_of_the_spelling_test_names_the_file_qt_reads`), so
-// a change to it owes this run.
+// (`gate::plan::imports`, `gate::plan::loads`, `gate::plan::urls`) names the
+// same file for each spelling
+// (`each_spelling_of_the_spelling_test_names_the_file_qt_reads`), so a change
+// to it owes this run.
 Item {
     id: root
 
