@@ -827,7 +827,7 @@ async fn branch_delete_answer(sink: &CaptureSink, branch: &str) -> Option<bool> 
 /// The fingerprints of every published unstaged diff of `path`, in order.
 /// Over the events, not the sink: `wait_for` runs its predicate holding the
 /// lock, and taking it again would wedge the test.
-fn diffs_in(events: &[SessionEvent], path: &str) -> Vec<u64> {
+fn fingerprints_in(events: &[SessionEvent], path: &str) -> Vec<u64> {
     events
         .iter()
         .filter_map(|e| match e {
@@ -841,13 +841,13 @@ fn diffs_in(events: &[SessionEvent], path: &str) -> Vec<u64> {
         .collect()
 }
 
-fn diffs_of(sink: &CaptureSink, path: &str) -> Vec<u64> {
-    diffs_in(&sink.events.lock().unwrap(), path)
+fn fingerprints_of(sink: &CaptureSink, path: &str) -> Vec<u64> {
+    fingerprints_in(&sink.events.lock().unwrap(), path)
 }
 
 async fn diffs_reach(sink: &CaptureSink, path: &str, count: usize) {
     sink.wait_for("the diff", |events| {
-        (diffs_in(events, path).len() >= count).then_some(())
+        (fingerprints_in(events, path).len() >= count).then_some(())
     })
     .await;
 }
@@ -867,7 +867,7 @@ async fn a_re_read_of_a_file_nobody_touched_says_nothing() {
     };
     session.load_diff(target.clone());
     diffs_reach(&sink, "f.txt", 1).await;
-    let published = diffs_of(&sink, "f.txt");
+    let published = fingerprints_of(&sink, "f.txt");
 
     // Once the outcome has answered, nothing from this read is on its way.
     assert_eq!(
@@ -879,7 +879,7 @@ async fn a_re_read_of_a_file_nobody_touched_says_nothing() {
         DiffReadOutcome::Unchanged
     );
     assert_eq!(
-        diffs_of(&sink, "f.txt"),
+        fingerprints_of(&sink, "f.txt"),
         published,
         "the re-read published a diff of a file nobody had touched"
     );
@@ -901,7 +901,7 @@ async fn a_file_typed_over_outside_the_window_is_re_read() {
     };
     session.load_diff(target.clone());
     diffs_reach(&sink, "f.txt", 1).await;
-    let published = diffs_of(&sink, "f.txt");
+    let published = fingerprints_of(&sink, "f.txt");
 
     let before = repo.git(&["status", "--porcelain", "--", "f.txt"]);
     repo.write_file("f.txt", "settled\n");
@@ -921,7 +921,7 @@ async fn a_file_typed_over_outside_the_window_is_re_read() {
     );
     diffs_reach(&sink, "f.txt", published.len() + 1).await;
     assert_ne!(
-        diffs_of(&sink, "f.txt").last(),
+        fingerprints_of(&sink, "f.txt").last(),
         published.last(),
         "the file the pane is holding was read again as the file it now is"
     );
@@ -957,7 +957,7 @@ async fn the_older_of_two_reads_of_one_file_publishes_nothing() {
     };
     session.load_diff(target.clone());
     diffs_reach(&sink, "notes.txt", 1).await;
-    let held = diffs_of(&sink, "notes.txt")[0];
+    let held = fingerprints_of(&sink, "notes.txt")[0];
 
     // The older read, polled to where it waits inside its git and left there.
     let mut older = Box::pin(session.read_diff(target.clone()));
@@ -982,7 +982,7 @@ async fn the_older_of_two_reads_of_one_file_publishes_nothing() {
     .expect("the stage the two reads are about");
     session.load_diff(target.clone());
     diffs_reach(&sink, "notes.txt", 2).await;
-    let published = diffs_of(&sink, "notes.txt");
+    let published = fingerprints_of(&sink, "notes.txt");
     assert_ne!(
         published[0], published[1],
         "the stage moved the file between the two reads"
@@ -994,7 +994,7 @@ async fn the_older_of_two_reads_of_one_file_publishes_nothing() {
         DiffReadOutcome::Overtaken
     );
     assert_eq!(
-        diffs_of(&sink, "notes.txt"),
+        fingerprints_of(&sink, "notes.txt"),
         published,
         "the older read published rows of its own"
     );
@@ -1035,7 +1035,7 @@ async fn a_worktrees_file_is_not_the_same_file_as_ours_of_that_name() {
     diffs_reach(&sink, "f.txt", 1).await;
     session.load_carried_diff(other.to_string_lossy().to_string(), target.clone());
     diffs_reach(&sink, "f.txt", 2).await;
-    let published = diffs_of(&sink, "f.txt");
+    let published = fingerprints_of(&sink, "f.txt");
     assert_ne!(
         published[0], published[1],
         "the two worktrees hold different bytes under that name"
@@ -1055,7 +1055,7 @@ async fn a_worktrees_file_is_not_the_same_file_as_ours_of_that_name() {
         "the re-read of our file was answered against the worktree's fingerprint"
     );
     assert_eq!(
-        diffs_of(&sink, "f.txt").len(),
+        fingerprints_of(&sink, "f.txt").len(),
         3,
         "the re-read published nothing for the reader to be handed"
     );
