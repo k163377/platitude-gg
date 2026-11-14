@@ -1125,34 +1125,28 @@ FocusScope {
                                    : refMenuSeat.item.offerOn(kind, name, full, oidHex, undefined,
                                                               aim === undefined ? "" : aim)
     }
-    /// A new branch on a commit, asked for from a menu: the name box opens where that menu was raised. The sidebar's
-    /// half opens on the row that raised the menu, standing whenever that half is taken (only its door sets
-    /// `refMenuInSidebar`).
+    /// A name box on a commit, asked for from a menu, opens where that menu was raised. The sidebar's half
+    /// (`inSidebar`, handed the row's kind and id) opens on the row that raised the menu, standing whenever that half
+    /// is taken (only its door sets `refMenuInSidebar`); the graph's (`onGraph`) on the commit's row.
+    function openNameBoxAt(oidHex, inSidebar, onGraph) {
+        if (oidHex === "")
+            return
+        if (page.refMenuInSidebar)
+            inSidebar(page.refMenuRowKind, page.refMenuRowId, oidHex)
+        else
+            onGraph(oidHex)
+    }
+    /// A new branch on that commit.
     function startBranchAt(oidHex) {
-        if (oidHex === "")
-            return
-        if (page.refMenuInSidebar)
-            sidebarPane.beginBranchAt(page.refMenuRowKind, page.refMenuRowId, oidHex)
-        else
-            graphPane.startNaming(oidHex)
+        page.openNameBoxAt(oidHex, sidebarPane.beginBranchAt, graphPane.startNaming)
     }
-    /// And a tag on that commit, through the same two doors and on the same terms.
+    /// And a tag.
     function startTagAt(oidHex) {
-        if (oidHex === "")
-            return
-        if (page.refMenuInSidebar)
-            sidebarPane.beginTagAt(page.refMenuRowKind, page.refMenuRowId, oidHex)
-        else
-            graphPane.startTagging(oidHex)
+        page.openNameBoxAt(oidHex, sidebarPane.beginTagAt, graphPane.startTagging)
     }
-    /// And a branch on that commit out in a worktree of its own (`Create worktree here…`), the same way.
+    /// And a branch out in a worktree of its own (`Create worktree here…`).
     function startWorktreeAt(oidHex) {
-        if (oidHex === "")
-            return
-        if (page.refMenuInSidebar)
-            sidebarPane.beginWorktreeAt(page.refMenuRowKind, page.refMenuRowId, oidHex)
-        else
-            graphPane.startWorktreeNaming(oidHex)
+        page.openNameBoxAt(oidHex, sidebarPane.beginWorktreeAt, graphPane.startWorktreeNaming)
     }
     /// What either box sends once a name is typed: the branch made on `oidHex`, out in a worktree where
     /// `newWorktreeFor` puts it. The box has already turned down every name that cannot go there.
