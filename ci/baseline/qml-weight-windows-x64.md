@@ -4,8 +4,10 @@
 [perf-windows-x64.md](perf-windows-x64.md)(実窓・D3D)が正**で、ここは内訳を読むための値 —
 残る手は [P3-確認事項.md](../../internal-docs/P3-確認事項.md) §性能。
 
-**測った木は `git rev-parse <commit>:crates/platitude-app/src/ui` が `1a7f3b1f` の木**(製品の QML。2026-11-13、
-Qt 6.12.0、コーパスは [perf-windows-x64.md](perf-windows-x64.md) §計測条件 の token)。
+**測った木は `git rev-parse <commit>:crates/platitude-app/src/ui` が `82201378` の木**(製品の QML。2026-11-13、
+Qt 6.12.0、コーパスは [perf-windows-x64.md](perf-windows-x64.md) §計測条件 の token)。§1 個あたり の表のうち
+`DialogActions` / `ActionButton` / `NoticeButton` / `ActionButtonSeat` 以外の行は `1a7f3b1f` の木で測った値 —
+2 つの木の違いは `ActionButton.qml` と `ActionButtonSeat.qml`、`ActionButtonLabel.qml` のコメントだけ。
 
 ## 測り方
 
@@ -34,7 +36,8 @@ Qt 6.12.0、コーパスは [perf-windows-x64.md](perf-windows-x64.md) §計測�
 - **プロセスの量**: `harness/singleton.rs` の `report` に、`K32GetProcessMemoryInfo`(WorkingSet / `PrivateUsage`)と
   `GetProcessHeaps` + `HeapLock` + `HeapWalk`(busy のバイトと個数)を読んで行に添える口を足す
 - **1 個の重さ**: `WindowHarness.begin` で、部品を `Qt.createComponent("qrc:/qt/qml/platitude/ui/<名>.qml")` から
-  1 個建てて捨てた後、見えない親の下に 200 個建て、前後の上の値の差を 200 で割る。required property を持つ部品
+  1 個建てて捨てた後、見えない親の下に 200 個建て、前後の上の値の差を 200 で割る。既定のプロパティのまま建てる
+  (`ActionButton` は印の無い 1 段の形)ので、形を変えた値は `createObject` に初期値を渡して測る。required property を持つ部品
   (行のデリゲート)は建たない。**見えない Canvas は描かれない**(`InkCanvas.qml` の冒頭)ので、画面に出る印は
   これより重い側に立つ
 - **起動の段**: `tracing::info!` を `main.rs` の `qml_engine::load` の前と、`TabsModel::default`(最初のオブジェクト)に置く
@@ -43,15 +46,15 @@ Qt 6.12.0、コーパスは [perf-windows-x64.md](perf-windows-x64.md) §計測�
 
 | | タブの無い窓 | 開いて行選択と diff まで |
 |---|---|---|
-| 全部 | 5,989 | 11,691 |
-| うち `RepoPage`(空ページ / タブのページ) | 4,008 | 9,581 |
-| `NavIcon` | 342 | 542 |
-| `PlainTextLabel` / `Label` | 356 / 179 | 819 / 358 |
+| 全部 | 5,607 | 11,309 |
+| うち `RepoPage`(空ページ / タブのページ) | 3,779 | 9,352 |
+| `NavIcon` | 220 | 420 |
+| `PlainTextLabel` / `Label` | 296 / 164 | 759 / 343 |
 | `TextMetrics` / `FontMetrics` | 312 / 159 | 657 / 211 |
 | `TipAsk` | 170 | 291 |
-| `Loader` / `Repeater` | 186 / 171 | 1,427 / 404 |
-| `Connections` / `Timer` / `Binding` | 340 / 220 / 163 | 463 / 222 / 165 |
-| `ActionButton` とその派生(`NoticeButton` 3・`Band*Button` 3) | 19(ラベル 38・席 38) | 19(38・38) |
+| `Loader` / `Repeater` | 285 / 156 | 1,526 / 389 |
+| `Connections` / `Timer` / `Binding` | 340 / 220 / 163 | 462 / 222 / 165 |
+| `ActionButton` とその派生(`NoticeButton` 3・`Band*Button` 3) | 19(ラベル 23・席 19) | 19(23・19) |
 | `CardText` | 58 | 62 |
 | `AppMenu` / `AppMenuItem` | 4 / 10 | 4 / 11 |
 
@@ -65,16 +68,16 @@ Qt 6.12.0、コーパスは [perf-windows-x64.md](perf-windows-x64.md) §計測�
 
 | 部品 | 個数 | 部品 | 個数 |
 |---|---|---|---|
-| `IdentityDialog` | 253 | `RebasePlanRunBar` | 109 |
-| `OpExitCard` | 234 | `NoticeBar` | 90 |
-| `RemoteDialog`(`PublishFlow` の下) | 218 | `SectionPeekPopup` / `CommitHoverCard` | 89 / 89 |
-| `OpenFailedDialog` | 205 | `CarriedPane` | 77 |
-| `RecoverBand` | 201 | `DiffFindBar` | 71 |
-| `StartupGate` | 147 | `QuitWaitDialog` | 46 |
-| `RecoverPane` | 146 | `RecoverHoverCard` / `GraphFind` | 43 / 43 |
-| `OpenFailedScreen` × 2 | 142 | `ParentListCard` / `EolHoverCard` | 42 / 42 |
-| `AskBar` | 135 | `RefListPopup` | 41 |
-| `BandStateCard` / `AuthorCard` | 128 / 116 | 帯のメニュー 4 枚 | 611 |
+| `OpExitCard` | 211 | `NoticeBar` | 90 |
+| `IdentityDialog` | 208 | `SectionPeekPopup` / `CommitHoverCard` | 89 / 89 |
+| `RecoverBand` | 178 | `RebasePlanRunBar` | 86 |
+| `RemoteDialog`(`PublishFlow` の下) | 173 | `CarriedPane` | 77 |
+| `OpenFailedDialog` | 160 | `DiffFindBar` | 71 |
+| `RecoverPane` | 146 | `QuitWaitDialog` | 46 |
+| `AskBar` | 135 | `RecoverHoverCard` / `GraphFind` | 43 / 43 |
+| `BandStateCard` / `AuthorCard` | 128 / 116 | `ParentListCard` / `EolHoverCard` | 42 / 42 |
+| `StartupGate` | 124 | `RefListPopup` | 41 |
+| `OpenFailedScreen` × 2 | 119 | 帯のメニュー 4 枚 | 611 |
 
 ## 1 個あたり
 
@@ -82,11 +85,10 @@ Qt 6.12.0、コーパスは [perf-windows-x64.md](perf-windows-x64.md) §計測�
 
 | 部品 | ヒープ | 確保 | private | 建てる時間 |
 |---|---|---|---|---|
-| `DialogActions`(ボタン 2 つ) | 1,000 | 5,085 | 1,141 | 3,390 |
-| `ActionButton` / `NoticeButton` | 519 / 520 | 2,981 / 2,991 | 648 / 706 | 1,257 / 1,467 |
+| `DialogActions`(ボタン 2 つ) | 423 | 2,609 | 548 | 1,045 |
 | `AppMenuItem` | 390 | 2,196 | 409 | 1,315 |
+| `ActionButton` / `NoticeButton` | 208 / 209 | 1,279 / 1,288 | 247 / 272 | 532 / 558 |
 | `RefChipStack` / `RefChip` | 154 / 141 | 820 / 744 | 207 / 190 | 454 / 405 |
-| `ActionButtonSeat` | 116 | 631 | 167 | 287 |
 | `AppListView` | 116 | 709 | 142 | 495 |
 | `NameCell` | 97 | 605 | 127 | 212 |
 | `LabeledField` / `HelpText` | 89 / 86 | 576 / 543 | 115 / 112 | 437 / 401 |
@@ -100,14 +102,19 @@ Qt 6.12.0、コーパスは [perf-windows-x64.md](perf-windows-x64.md) §計測�
 | `GoneBadge` / `CutName` | 44 / 36 | 199 / 251 | 67 / 50 | 86 / 71 |
 | `SpinnerIcon` / `ChangeIcon` | 21 / 20 | 103 / 97 | 32 / 33 | 39 / 44 |
 | `NavIcon` | 17 | 91 | 18 | 33 |
+| `ActionButtonSeat` | 16 | 105 | 21 | 24 |
 | `HoldDriver` / `HoldIcon` | 10 / 9 | 72 / 68 | 14 / 13 | 18 / 14 |
 | `PlainTextLabel` / `InkCanvas` | 5.6 / 4.6 | 43 / 32 | 9.2 / 7.2 | 9 / 5 |
 | 素の `Text` / `Canvas` | 1.5 | 6〜7 | 1.5 | 2 |
 | 素の `Item` / `Rectangle` / `Loader` / `Timer` / `Connections` / `TextMetrics` | 0.5〜1 | 4〜5 | 0〜2 | 1〜2 |
 
-- **束ねた部品の重さは、ほぼ中身で決まる** — `ActionButton` 1 個は横並びと 2 段の両方のラベルと席を建て(ラベル
-  81 × 2 + 席 116 × 2 で 394)、席は印 3 つ・リング・回数押しの印 2 つ・分数の斜線を状態に依らず持つ。和に
-  ぴったりは合わない(`DialogActions` は `ActionButton` 2 個で 1,000)
+- **束ねた部品の重さは、中身とその部品自身の分の和** — `ActionButton` 1 個 208 のうち、描く形のラベルと席の 1 組が
+  ラベル 81 + 席 16 で、残りの半分余りはボタン自身(`HoverToolButton` 22・`HoldDriver` 10 と、`ActionButton` が
+  自分に足したプロパティとハンドラ)。席はアイコンと、着ている印だけを建てる。和にぴったりは合わない
+  (`DialogActions` は `ActionButton` 2 個で 423)。
+  形で変わる分は、bench をこの系に絞った同じ測り方の run で、印の無い形 208 / アイコン付き 242 / 2 段 305。
+  2 段は、帯がセルを測る 1 段の語を描かない物差しのラベルとしてもう 1 つ持つ(`ActionButton.lineWord`)ので、
+  §個数 のラベル 23 = ボタン 19 + 帯の 2 段 4 つの物差し
 - **`NavIcon` は素の `Canvas` の 11 倍余り** — 違いは `NavIcon` が自分に足した分(派生プロパティ 20 本余りとハンドラ 7 本)。
   束ねた部品の大半がこれを数個ずつ持つ
 - **素の部品はどれも 1KB 前後・確保 4〜7 個**
@@ -118,15 +125,15 @@ MB(確保は個数)。開いて diff までとタブを待つ窓は 3 run、タ�
 
 | | タブの無い窓 | タブを待つ窓 | 開いて行選択と diff まで |
 |---|---|---|---|
-| WorkingSet | 162.8 | 98.3–98.8 | 415.8–416.6 |
-| private | 143.0 | 79.2–79.7 | 390.9–391.4 |
-| プロセスヒープ busy(確保) | 75.2(440.4K) | 40.1–40.2(212.8K) | 180.4(858.0K) |
+| WorkingSet | 155.0 | 95.7–95.8 | 403.7–404.7 |
+| private | 135.0 | 76.5–76.6 | 378.5–379.4 |
+| プロセスヒープ busy(確保) | 70.0(425.0K) | 37.8(201.3K) | 172.1(803.8K) |
 
-- **空ページ 1 枚は WorkingSet 64MB・private 63〜64MB・ヒープ 35MB(確保 22.8 万個)** — 左 2 列の差
-- **起動(3 run)**: 起動から最初のオブジェクトまで 876–879ms — うち `qml_engine::load` の前は 16ms で、残りは QML の
-  型の読み込み。その後、帯・ダイアログ・ハーネスまで 230–235ms、タブのページを建ててグラフの最初のフレームまで
-  462–526ms
-- **コンパイル済みキャッシュを使う**(`QML_DISABLE_DISK_CACHE` を外す、3 run)と、最初のオブジェクトまで 684–709ms
+- **空ページ 1 枚は WorkingSet 59MB・private 58MB・ヒープ 32MB(確保 22.4 万個)** — 左 2 列の差
+- **起動(3 run)**: 起動から最初のオブジェクトまで 847–863ms — うち `qml_engine::load` の前は 15–16ms で、残りは QML の
+  型の読み込み。その後、帯・ダイアログ・ハーネスまで 194–200ms、タブのページを建ててグラフの最初のフレームまで
+  446–463ms
+- **コンパイル済みキャッシュを使う**(`QML_DISABLE_DISK_CACHE` を外す、3 run)と、最初のオブジェクトまで 670–673ms
   — **型の読み込みのうちコンパイルが占めるのは約 2 割**で、残りが何かは割っていない。開いて diff までの
-  WorkingSet は 411.6–412.6、private は 380.0–380.4、ヒープ busy は 172.1 — **private とヒープは 8〜11MB 小さいが、
+  WorkingSet は 400.1–401.0、private は 368.1–368.9、ヒープ busy は 163.8 — **private とヒープは 8〜11MB 小さいが、
   予算が読む WorkingSet は 5MB も動かない**(rules-refs/app-ui.md「qmlcachegen はメモリ対策にならない」と同じ向き)
