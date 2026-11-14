@@ -1270,6 +1270,12 @@ FocusScope {
         page.pendingRenameTagTo = ""
         page.pendingRenameTagOid = ""
     }
+    /// Both halves let go of — the branch's wait and the tag's: the rename they wait on will not land.
+    function forgetRenameCarry() {
+        page.pendingRenameRemote = ""
+        page.pendingRenameTo = ""
+        page.forgetRenameTagRemote()
+    }
 
     /// A rename's box stays open until git answers; these are the two words back to it. **Both boxes are told** and
     /// only the one that was waiting acts — the left menu's row and the graph's chip know nothing of each other
@@ -2175,9 +2181,7 @@ FocusScope {
                 if (!commandsModel.failed)
                     page.answeredFailures++
                 commandsModel.noteAnswered()
-                page.pendingRenameRemote = ""
-                page.pendingRenameTo = ""
-                page.forgetRenameTagRemote()
+                page.forgetRenameCarry()
                 page.writeReported(repoTab.writeReportKind,
                                    repoTab.writeReportRemote,
                                    repoTab.writeReportName)
@@ -2189,9 +2193,7 @@ FocusScope {
                 commandsOwner.newsTakes()
             page.commandsOpen = true
             // A rename that did not happen has nothing to carry over.
-            page.pendingRenameRemote = ""
-            page.pendingRenameTo = ""
-            page.forgetRenameTagRemote()
+            page.forgetRenameCarry()
             return
         }
         // The name went in, so its box comes down — only once the queue has drained: a fetch queued ahead answers
@@ -2943,9 +2945,7 @@ FocusScope {
         // counted from the start again, for its own. The landings go too: they are about the tree left.
         page.pendingPopLabel = ""
         page.pendingPopId = 0
-        page.pendingRenameRemote = ""
-        page.pendingRenameTo = ""
-        page.forgetRenameTagRemote()
+        page.forgetRenameCarry()
         page.diffAwaits = false
         page.recoverAwaits = false
         page.moveLanding = ""
