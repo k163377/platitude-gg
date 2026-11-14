@@ -7,7 +7,7 @@
 
 use std::ops::Range;
 
-use crate::lex::{Lang, Token, matching_close, tokens};
+use crate::lex::{Lang, Token, is_name, matching_close, tokens};
 
 /// One QML file.
 pub(super) struct Doc {
@@ -109,12 +109,6 @@ pub(super) fn parse(path: &str, text: &str) -> Doc {
         }
     }
     doc
-}
-
-pub(super) fn is_name(text: &str) -> bool {
-    text.chars()
-        .next()
-        .is_some_and(|c| c.is_alphabetic() || c == '_' || c == '$')
 }
 
 fn is_type(text: &str) -> bool {

@@ -2,6 +2,7 @@
 //! firings held against a number, read off the file's tokens ([`beats`]).
 
 use super::Candidate;
+use crate::lex::is_name;
 
 /// The beat counts of a harness file held against a number, as
 /// candidates: a wait of "so many beats from here", which is the
@@ -128,12 +129,6 @@ fn declared_in(body: &[crate::lex::Token]) -> Vec<String> {
         i += 1;
     }
     out
-}
-
-fn is_name(text: &str) -> bool {
-    text.chars()
-        .next()
-        .is_some_and(|c| c.is_alphabetic() || c == '_' || c == '$')
 }
 
 /// The `.`-joined name ending at `last`, if a name ends there.

@@ -15,10 +15,11 @@ use super::builtins::{self, Made};
 use super::calls::function_body;
 use super::members::Holder;
 use super::origin::{Origin, Site};
-use super::parse::{Doc, UnitKind, is_name};
+use super::parse::{Doc, UnitKind};
 use super::product::{self, Product};
 use super::scan::{Facts, Head, Path, WriteKind};
 use super::{Context, Declared};
+use crate::lex::is_name;
 
 /// What a name stands for.
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -6,9 +6,9 @@
 
 use std::ops::Range;
 
-use super::parse::{Bound, expression_end, is_name, pattern_names};
+use super::parse::{Bound, expression_end, pattern_names};
 use super::scope::{lexical_scope, parameter_scope};
-use crate::lex::{Token, matching_close};
+use crate::lex::{Token, is_name, matching_close};
 
 /// Where a path starts: a name, or the value of an expression before it
 /// (a call's answer, an index, a literal).

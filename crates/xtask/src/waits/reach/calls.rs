@@ -9,11 +9,11 @@ use std::ops::Range;
 
 use super::builtins::{self, CallsBack, Given};
 use super::origin::{Origin, literal};
-use super::parse::{UnitKind, is_name};
+use super::parse::UnitKind;
 use super::product::{self, Does};
 use super::program::{ArgContext, Effect, OPERATION, Program, Value};
 use super::scan::{self, Head, Path};
-use crate::lex::{Token, matching_close};
+use crate::lex::{Token, is_name, matching_close};
 
 /// What the product answers for a call: a table's word, or the code of each
 /// function so named.

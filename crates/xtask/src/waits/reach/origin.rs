@@ -24,10 +24,9 @@ use std::ops::Range;
 use super::builtins::{self, Answers, CONSTRUCTED, GlobalAnswers, Made};
 use super::calls::function_body;
 use super::members::{ANY, Assigned};
-use super::parse::is_name;
 use super::program::{Program, Value};
 use super::scan::{Head, Path, WriteKind};
-use crate::lex::{Token, matching_close, unparenthesized};
+use crate::lex::{Token, is_name, matching_close, unparenthesized};
 
 /// Where a container was made: its file and the token that makes it.
 pub(super) type Site = (usize, usize);

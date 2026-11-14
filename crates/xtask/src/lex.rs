@@ -615,6 +615,17 @@ fn cut_code(chars: &[char], line: &mut usize, out: &mut Vec<Token>) {
     }
 }
 
+/// Whether a token is a name: a word, a keyword among them, that is no
+/// number.
+pub(crate) fn is_name(text: &str) -> bool {
+    text.chars()
+        .next()
+        .is_some_and(|c| c.is_alphabetic() || c == '_' || c == '$')
+        && text
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '$')
+}
+
 /// The index of the `close` matching the `open` at `at`.
 pub(crate) fn matching_close(
     tokens: &[crate::lex::Token],
@@ -652,7 +663,7 @@ pub(crate) fn unparenthesized(tokens: &[Token], range: Range<usize>) -> Range<us
 #[cfg(test)]
 mod tests {
     use super::{
-        Kind, Lang, Unread, lexemes, normalized, opens_a_statement, opens_a_value, tokens,
+        Kind, Lang, Unread, is_name, lexemes, normalized, opens_a_statement, opens_a_value, tokens,
         unparenthesized,
     };
 
@@ -906,6 +917,18 @@ mod tests {
             ["a", "=", "1"],
             "the stretch the stop is in is no token"
         );
+    }
+
+    /// A name is a whole word not opening on a digit: a Rust literal that
+    /// opens on a letter (`r"…"`) is none.
+    #[test]
+    fn a_name_is_a_word_that_is_no_number_and_no_literal() {
+        for name in ["a", "_x", "$y", "if", "beats2"] {
+            assert!(is_name(name), "{name}");
+        }
+        for other in ["2a", "\"a\"", "r\"a\"", ".", ""] {
+            assert!(!is_name(other), "{other}");
+        }
     }
 
     /// Only parentheses around the whole stretch go: two groups side by side

@@ -34,7 +34,7 @@ use std::path::Path;
 
 use super::under;
 use super::urls::{file_of, string_value, url_path};
-use crate::lex::{Lang, Token, blanked, matching_close, tokens, unparenthesized};
+use crate::lex::{Lang, Token, blanked, is_name, matching_close, tokens, unparenthesized};
 
 /// What the QML and JS under a directory load off the tree.
 #[derive(Debug, Default)]
@@ -520,15 +520,6 @@ fn in_conditional(tokens: &[Token], k: usize) -> bool {
         }
     }
     open > 0
-}
-
-fn is_name(text: &str) -> bool {
-    text.chars()
-        .next()
-        .is_some_and(|c| c.is_alphabetic() || c == '_' || c == '$')
-        && text
-            .chars()
-            .all(|c| c.is_alphanumeric() || c == '_' || c == '$')
 }
 
 fn is_string(text: &str) -> bool {
