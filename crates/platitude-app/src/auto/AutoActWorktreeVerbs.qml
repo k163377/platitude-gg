@@ -9,7 +9,9 @@ import platitude.ui
 /// The verbs that make a worktree from a menu (デザイン規約 §worktree を作る): the WORKTREE card's two making rows
 /// — `Create worktree here…` and `worktree add` — raised from a left menu row or a graph row with the card opened as a
 /// hand opens it, the name box the first one opens, and the presses. A press that lands stands the tab in the new
-/// worktree, which is the window's to read (`WindowTabActs`): the page is stood elsewhere by it.
+/// worktree, which is the window's to read (`WindowTabActs`): the page is stood elsewhere by it. The card on a
+/// worktree's own row has two more, each with its own argument: renaming its folder (`renameTimer`) and removing it
+/// (`worktreeMenuTimer`, デザイン規約 §左メニューの所作 の削除の表).
 ///
 /// The argument is `<kind>:<ref>[=<name>][@graph]` — `kind` is `branch` / `remote` / `tag` / `worktree` (by its
 /// folder) or `commit` (`row:<n>` or an id, graph only); `name` what is typed into the box; `@graph` raises the graph
@@ -52,6 +54,31 @@ Item {
         }
         if (act === "worktree-rename-box" || act === "worktree-rename") {
             renameTimer.begin(arg, act === "worktree-rename")
+            return true
+        }
+        if (act === "worktree-menu" || act === "worktree-remove" || act === "worktree-remove-refused"
+            || act === "worktree-graph" || act === "worktree-held") {
+            // A worktree's WORKTREE card, raised where a hand raises it: its WORKTREES row's right-click (the row's
+            // own press), or the graph row its chip is on (`worktree-graph`, the row's own right-click door). The
+            // argument is the worktree's folder, `:go` on the graph one to press. The menu verb stands the card (a
+            // greyed row wears its tip); the others press `worktree remove` — landing, or refused by git into the
+            // report bar. `worktree-held` holds the in-between open: what the press took off the screen before
+            // anything was read again.
+            // The folder is the row's `name`, the repository's own worktree included: the screen draws that row
+            // with its branch, but `--preset worktrees` names it `repo`. That preset's rows: `topic` (on a branch,
+            // removable), `detached` (no branch), `hotfix` / `spike` (locked with / without a reason), `repo` (a card
+            // with no `worktree remove`), `gone` (its folder gone: removing it drops the record alone). The worktree
+            // this tab stands in (`This tab is showing this worktree`) takes no preset: open `topic` of
+            // `cargo xtask demo-repo worktrees` with `--repo` and run `worktree-menu topic`. `worktree-remove-refused`
+            // is `topic --preset carried` (uncommitted work), with `--allow-write-failure`.
+            const go = arg.endsWith(":go")
+            worktreeMenuTimer.worktree = go ? arg.slice(0, -3) : arg
+            worktreeMenuTimer.onGraph = act === "worktree-graph"
+            worktreeMenuTimer.press = act === "worktree-remove" || act === "worktree-remove-refused" || go
+                                      || act === "worktree-held"
+            worktreeMenuTimer.refused = act === "worktree-remove-refused"
+            worktreeMenuTimer.holding = act === "worktree-held"
+            worktreeMenuTimer.start()
             return true
         }
         if (modes[act] === undefined)
@@ -110,7 +137,7 @@ Item {
         function menu() {
             return worktreeTimer.onGraph ? acts.driver.commitMenu : acts.driver.refMenu
         }
-        /// Puts the menu just raised where a hand's right-click would have (as `AutoActNavVerbs.standMenuOn`).
+        /// Puts the menu just raised where a hand's right-click would have (as `acts.standMenuOn`).
         function standMenuOn(row) {
             const menu = worktreeTimer.menu()
             const p = row.mapToItem(menu.parent, Qt.point(row.width * 0.35, row.height * 0.6))
@@ -589,6 +616,220 @@ Item {
                            + " gone=" + landed.gone
                            + " box=" + landed.box
                 } })
+        }
+    }
+
+    // ---- a worktree's card (デザイン規約 §左メニューの所作 の削除の表) ----
+    readonly property var refMenu: driver.refMenu
+    readonly property var commitMenu: driver.commitMenu
+    /// The WORKTREES row showing the worktree called `name`, -1 while none does.
+    function worktreeRow(name) {
+        const list = navProbe.listOf("worktree")
+        if (!list)
+            return -1
+        for (let at = 0; at < list.count; at++) {
+            if (worktreesModel.nameAt(at) === name)
+                return at
+        }
+        return -1
+    }
+    /// Puts a menu a verb just raised where a hand's right-click would have: headless, the pointer never leaves the
+    /// screen's origin, and `popup()` opens there (rules-refs/app-ui.md「ヘッドレスの窓には手が乗っている」).
+    function standMenuOn(menu, row) {
+        const p = row.mapToItem(menu.parent, Qt.point(row.width * 0.35, row.height * 0.6))
+        menu.x = p.x
+        menu.y = p.y
+    }
+    // The menu and its card are asked for again each beat until they stand (`raised`, `carded`); the removal is pressed
+    // once.
+    PageStage {
+        id: worktreeMenuTimer
+        name: "worktree_menu"
+        property string worktree: ""
+        property bool onGraph: false
+        property bool press: false
+        property bool refused: false
+        property bool holding: false
+        readonly property var menu: worktreeMenuTimer.onGraph ? acts.commitMenu : acts.refMenu
+        readonly property var card: worktreeMenuTimer.onGraph ? driver.commitWorktreeCard : driver.refWorktreeCard
+        /// Raises the menu, through the row's own door. False while the row is not there yet.
+        function raise() {
+            const at = acts.worktreeRow(worktreeMenuTimer.worktree)
+            if (at < 0)
+                return false
+            if (!worktreeMenuTimer.onGraph) {
+                const list = navProbe.listOf("worktree")
+                if (!list.rightClickRow(at))
+                    return false
+                acts.standMenuOn(acts.refMenu, list.itemAtIndex(at))
+                return true
+            }
+            // The graph row the worktree stands on, pressed where its own right-click goes: the menu aimed at the row's
+            // first chip (`GraphRowDelegate.nameChip`).
+            const facts = worktreesModel.worktreeFacts(worktreesModel.fullAt(at))
+            const row = facts === undefined ? -1 : graphModel.rowOf(facts.head)
+            const item = row < 0 ? null : graphPane.view.itemAtIndex(row)
+            if (item === null)
+                return false
+            graphPane.view.rowMenuRequested(item.oid_hex, item.nameChip)
+            acts.standMenuOn(acts.commitMenu, item)
+            return true
+        }
+        /// Whether the menu stands on the branch the worktree has out, which brings the BRANCH card.
+        function branchCard() {
+            return worktreeMenuTimer.onGraph ? driver.commitBranchCard.applies : driver.refBranchCard.applies
+        }
+        /// The menu up, and not greyed: the row's gate is read as the menu opens (`RefWorktreeMenu.standOn`) —
+        /// opened while a write runs, every row greys until it ends (`AppMenu.runningWhy`).
+        function menuUp() {
+            return { "live": driver.menusLive(), "menu": worktreeMenuTimer.menu.opened }
+        }
+        function standing() {
+            return { "live": driver.menusLive(), "menu": worktreeMenuTimer.menu.opened,
+                     "card": worktreeMenuTimer.card.opened }
+        }
+        /// Whether the removal row wants its hover: a greyed row says why on its hover alone, and a cut folder comes
+        /// back whole on it. A row not on offer has no hover, and its folder no room to be cut in.
+        function wantsTip() {
+            const item = worktreeMenuTimer.card.removeWorktreeItem
+            return item.offered && (item.blocked || item.nameCut)
+        }
+        function menuLine() {
+            const row = worktreeMenuTimer.card.removeWorktreeItem
+            return "worktree_menu worktree=" + worktreeMenuTimer.worktree
+                   + " card=" + worktreeMenuTimer.card.opened
+                   + " offered=" + row.offered
+                   + " blocked=" + row.blocked
+                   + " tip=" + row.tip.shown
+                   + " code=" + row.code
+                   + " branch=" + worktreeMenuTimer.branchCard()
+                   + " presses=" + row.holdPresses
+                   // Whether the folder came out whole: the row bids for it, and a bid a fraction short elides it on
+                   // one OS only (`AppMenuItem.implicitWidth`).
+                   + " cut=" + row.nameCut
+                   // What the hover says. Last, because it is a sentence.
+                   + " says=" + (row.tip.shown ? row.tip.words : "")
+        }
+        onTriggered: {
+            const op = worktreeMenuTimer
+            const card = op.card
+            if (op.at("start")) {
+                if (!Awaited.all("worktree_menu_open", { "live": driver.menusLive() }))
+                    return
+                if (!op.input("raised", () => {
+                        if (!op.menu.opened)
+                            op.raise()
+                        return op.menu.opened
+                    }))
+                    return
+            }
+            // A row the card has nothing for (no place for a new worktree, nothing to take away): the menu is the
+            // whole answer. The repository's own worktree has a card — the rows that make a worktree — with no
+            // `worktree remove`.
+            if (!card.applies && !op.press) {
+                op.complete({
+                    "name": "worktree_menu_open",
+                    "when": () => op.menuUp(),
+                    "report": () => "worktree_menu worktree=" + op.worktree + " card=false"
+                                    + " branch=" + op.branchCard() })
+                return
+            }
+            // The card is one level in (デザイン規約 §メニュー の入れ子); opened so the picture shows its row.
+            if (op.at("raised")) {
+                if (!Awaited.all("worktree_menu_open", op.menuUp()))
+                    return
+                if (!op.input("carded", () => {
+                        if (!op.card.opened)
+                            op.menu.openSub(op.card)
+                        return op.card.opened
+                    }))
+                    return
+            }
+            const item = card.removeWorktreeItem
+            // The menu and its card still up as the next press goes in.
+            if (op.at("carded") && !Awaited.all("worktree_menu_card", op.standing()))
+                return
+            if (!op.press) {
+                if (op.at("carded")) {
+                    // Whether the folder is cut is the row's layout's to say (`AutoActDriver.cardLaidOut`).
+                    if (!Awaited.all("worktree_menu", { "card_laid_out": driver.cardLaidOut(op, card) }))
+                        return
+                    // The hover forced until it stands beside the row (`AutoActDriver.rowTipStood`).
+                    if (!op.input("tipped", () => driver.rowTipStood(op.card.removeWorktreeItem, op.wantsTip())))
+                        return
+                }
+                op.complete({
+                    "name": "worktree_menu",
+                    "when": () => {
+                        const up = op.standing()
+                        const row = op.card.removeWorktreeItem
+                        return { "live": up.live, "menu": up.menu, "card": up.card,
+                                 "tip_beside": !op.wantsTip() || (row.tip.shown && driver.tipAside(Tips.box)) }
+                    },
+                    "report": () => op.menuLine() })
+                return
+            }
+            // The presses, as a hand makes them: the row's handler folds the menus and asks for the removal. A row out
+            // of reach takes none (`AppMenuItem.completeHold`), and the sampler presses again on its next beat. The
+            // in-between is held before the press: a demo repository's listing would let it go before a picture could
+            // be grabbed (`RepoPage.holdGoneRows`).
+            if (!op.input("pressed", () => {
+                    if (op.holding)
+                        page.holdGoneRows = true
+                    return driver.pressWrite("worktree-remove", () => item.completeHold())
+                }))
+                return
+            op.stop()
+            // git keeps the worktree and says why: the bar is the answer, in the gesture's yellow, and the log stays
+            // shut (`write_notice log=`; user decision — ask before changing). `mark=` is the tree mark before the
+            // folder in the heading, worn only by a notice naming a worktree.
+            if (op.refused)
+                driver.barrierNotice.start()
+            else if (op.holding)
+                worktreeHeldTimer.start()
+            else
+                worktreeGoneTimer.start()
+        }
+    }
+    // What the press took off the screen, with git done and the listing that would let it go withheld: the row, and
+    // what the worktree marked — its chip on the graph (on no branch), or its branch's frame and the branches list's
+    // tree mark. The screen cannot tell a mark the window hides from one the refs no longer carry, so the claim is the
+    // gone set and the branch row's own word (`mark=`, empty where `HELD` was) — the press also takes the worktree out
+    // of core's holders, so the picture is the same either way. `chips=` is `GraphModel.goneChips`: `held:<branch>`
+    // for one on a branch (only the green frame and the lock come off), `worktree:<folder>` for one on none.
+    PageStage {
+        id: worktreeHeldTimer
+        name: "worktree_held"
+        onTriggered: {
+            worktreeHeldTimer.complete({
+                "name": "worktree_held_ready",
+                "when": () => ({ "ready": driver.wroteAndSettled(), "page": PageSettled.settled(page) }),
+                "report": () => {
+                    const branch = repoTab.goneWorktreeBranch
+                    const list = navProbe.listOf("branch")
+                    const at = branch === "" ? -1 : branchesModel.rowOfName(branch)
+                    const row = at < 0 || !list ? null : list.itemAtIndex(at)
+                    return "worktree_held row=" + acts.worktreeRow(worktreeMenuTimer.worktree)
+                           + " chips=" + graphModel.goneChips.join(",")
+                           + " branch=" + branch
+                           + " mark=" + (row === null ? "" : row.change)
+                           + " worktree=" + worktreeMenuTimer.worktree
+                } })
+        }
+    }
+    // A removed worktree, judged on the list it leaves: gone at the press and still gone once git's listing is in.
+    PageStage {
+        id: worktreeGoneTimer
+        name: "worktree_gone"
+        onTriggered: {
+            // The judged two first; the worktree and the count are the preset's.
+            worktreeGoneTimer.complete({
+                "name": "worktree_gone_ready",
+                "when": () => ({ "ready": !(!driver.wroteAndSettled() || repoTab.goneWorktree !== "") }),
+                "report": () => "worktree_gone row=" + acts.worktreeRow(worktreeMenuTimer.worktree)
+                                + " log=" + page.commandsOpen
+                                + " worktree=" + worktreeMenuTimer.worktree
+                                + " total=" + worktreesModel.total })
         }
     }
 }

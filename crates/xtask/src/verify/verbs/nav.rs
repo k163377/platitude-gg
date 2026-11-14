@@ -350,7 +350,7 @@ pub(super) const TABLE: &[Verb] = &[
             ),
         ],
         // No preset: a worktree of `demo-repo worktrees` opened with
-        // `--repo` is the one this tab stands in (`AutoActNavVerbs.qml`).
+        // `--repo` is the one this tab stands in (`AutoActWorktreeVerbs.qml`).
         plain: "card=true offered=true blocked=true tip=true code=worktree remove branch=true \
                 presses=2 cut=false says=This tab is showing this worktree",
     },
