@@ -436,7 +436,8 @@ impl<T: platitude_core::mem::Footprint> platitude_core::mem::Footprint for Optio
 // ---------------------------------------------------------------------------
 
 /// A `#[qslot]`'s text argument that its QML callers leave empty for none
-/// (a start point, the remote to fetch, a rebase's `onto`): empty is `None`.
+/// (a start point, the remote to fetch, a rebase's `onto`, a renamed file's
+/// old path): empty is `None`.
 pub(crate) fn optional_text(text: String) -> Option<String> {
     (!text.is_empty()).then_some(text)
 }

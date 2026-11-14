@@ -366,7 +366,7 @@ pub(super) fn bucket_target(bucket: &str, path: &str, orig_path: String) -> Diff
     match bucket {
         "staged" => DiffTarget::Staged {
             path: path.to_string(),
-            orig_path: (!orig_path.is_empty()).then_some(orig_path),
+            orig_path: crate::encode::optional_text(orig_path),
         },
         "untracked" => DiffTarget::Untracked {
             path: path.to_string(),

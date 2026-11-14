@@ -189,7 +189,7 @@ impl DiffModel {
             oid,
             parent,
             path: path.clone(),
-            orig_path: (!orig_path.is_empty()).then_some(orig_path),
+            orig_path: crate::encode::optional_text(orig_path),
         };
         self.begin_request(path, target);
     }
@@ -214,7 +214,7 @@ impl DiffModel {
             from,
             to,
             path: path.clone(),
-            orig_path: (!orig_path.is_empty()).then_some(orig_path),
+            orig_path: crate::encode::optional_text(orig_path),
         };
         self.begin_request(path, target);
     }
@@ -237,7 +237,7 @@ impl DiffModel {
         let target = DiffTarget::Choice {
             oids,
             path: path.clone(),
-            orig_path: (!orig_path.is_empty()).then_some(orig_path),
+            orig_path: crate::encode::optional_text(orig_path),
         };
         self.begin_request(path, target);
     }
