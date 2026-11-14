@@ -52,6 +52,10 @@ Item {
         item.leftClick(Qt.NoModifier)
         return true
     }
+    /// Whether HEAD has moved off `was` and the graph holds the commit it moved to.
+    function headLandedFrom(was) {
+        return worktree.headOid !== was && graphModel.rowOf(worktree.headOid) >= 0
+    }
     /// Ticks the amend box as a hand ticks it (`RepoPage.amendToggled`): HEAD's commit is asked for, to fill the box.
     function tickAmend() {
         wipPane.setAmendChecked(true)
@@ -772,8 +776,8 @@ Item {
         onTriggered: halfSettledTimer.complete({
             "name": "half_settled_ready",
             "when": () => ({
-                "ready": !(!driver.wroteAndSettled() || worktree.headOid === driver.act.witnessed("headBefore")
-                    || graphModel.rowOf(worktree.headOid) < 0 || !graphModel.wipRow) }),
+                "ready": driver.wroteAndSettled() && acts.headLandedFrom(driver.act.witnessed("headBefore"))
+                    && graphModel.wipRow }),
             "report": () => "wip_half stage=after busy=false"
                             + " moved=" + (worktree.headOid !== driver.act.witnessed("headBefore"))
                             + " wipRow=" + graphModel.wipRow
@@ -813,8 +817,8 @@ Item {
         onTriggered: resetAuthorLandedTimer.complete({
             "name": "reset_author_landed_ready",
             "when": () => ({
-                "ready": !(!driver.wroteAndSettled() || worktree.headOid === resetAuthorTimer.witnessed("headBefore")
-                    || graphModel.rowOf(worktree.headOid) < 0 || !driver.cardSettled) }),
+                "ready": driver.wroteAndSettled() && acts.headLandedFrom(resetAuthorTimer.witnessed("headBefore"))
+                    && driver.cardSettled }),
             "report": () => "reset_author was=" + resetAuthorTimer.witnessed("headBefore").substring(0, 8)
                             + " head=" + worktree.headOid.substring(0, 8)
                             + " shown=" + detailsModel.shaHex.substring(0, 8)
@@ -1138,9 +1142,8 @@ Item {
             // the write and each other, so the old tip would pass.
             if (!Awaited.all("merge_commit_ready", { "ready": driver.wroteAndSettled(),
                                                      "page": PageSettled.settled(page),
-                                                     "head": !(!worktree.headKnown || worktree.headOid === op.headWas
-                                                               || graphModel.rowOf(worktree.headOid) < 0
-                                                               || driver.graphTopKind() === "wip") }))
+                                                     "head": worktree.headKnown && acts.headLandedFrom(op.headWas)
+                                                             && driver.graphTopKind() !== "wip" }))
                 return
             if (op.at("start")) {
                 op.input("asked", () => {
