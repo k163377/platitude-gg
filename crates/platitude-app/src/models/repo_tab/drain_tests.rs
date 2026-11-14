@@ -1,12 +1,13 @@
 //! What one answer out of the feed leaves the properties QML reads
 //! saying (`drain::settle_write`).
 
+use super::drain_inputs::{no_answer, settle, started};
 use super::*;
 use platitude_core::OperationKind as K;
 
 fn settled(kind: K, error: &str) -> RepoTab {
     let mut tab = RepoTab::default();
-    tab.settle_write(1, kind, error.into(), None, 0, 0);
+    settle(&mut tab, kind, error, None);
     tab
 }
 
@@ -79,7 +80,7 @@ fn a_merge_that_stopped_does_not_claim_the_tip() {
         last_write_stopped: true,
         ..RepoTab::default()
     };
-    tab.settle_write(1, K::Merge, String::new(), None, 0, 0);
+    settle(&mut tab, K::Merge, "", None);
     assert!(!at_tip(&tab), "nothing landed at the tip to go to");
 }
 
@@ -195,10 +196,7 @@ fn the_push_answer_is_this_notifys_own() {
     let mut tab = push_pressed();
     tab.absorb(vec![answered(OURS, K::Push, "! [rejected]")]);
     assert_eq!(tab.push_answer, 0);
-    tab.absorb(vec![TabMsg::MergeTools {
-        names: Vec::new(),
-        settled: true,
-    }]);
+    tab.absorb(vec![no_answer()]);
     assert_eq!(tab.push_answer, -1);
     assert_eq!(
         tab.push_answer_branch, "topic",
@@ -218,13 +216,11 @@ fn a_fetch_answer_says_so_whichever_way_it_went() {
         fetch_log_raised: true,
         ..RepoTab::default()
     };
-    tab.settle_write(
-        1,
+    settle(
+        &mut tab,
         K::Fetch,
-        "fatal: Could not read from remote".into(),
+        "fatal: Could not read from remote",
         None,
-        0,
-        0,
     );
     assert!(tab.write_fetched);
     assert!(!settled(K::Push, "! [rejected]").write_fetched);
@@ -246,17 +242,10 @@ fn a_landed_reword_carries_the_saved_message() {
 #[test]
 fn every_answer_rewrites_the_whole_group() {
     let mut tab = RepoTab::default();
-    tab.settle_write(1, K::Reword, String::new(), None, 0, 0);
+    settle(&mut tab, K::Reword, "", None);
     assert!(tab.write_reworded);
     // A checkout, not a fetch: a failed fetch emits `fetch_first_failed`.
-    tab.settle_write(
-        1,
-        K::Checkout,
-        "fatal: invalid reference".into(),
-        None,
-        0,
-        0,
-    );
+    settle(&mut tab, K::Checkout, "fatal: invalid reference", None);
     assert!(
         !tab.write_reworded,
         "nothing armed survives the next answer"
@@ -270,33 +259,9 @@ fn every_answer_rewrites_the_whole_group() {
 fn a_run_and_the_fetch_behind_it() -> Vec<TabMsg> {
     vec![
         TabMsg::WriteStopped,
-        TabMsg::WriteState {
-            id: 1,
-            kind: K::Rebase,
-            running: false,
-            error: String::new(),
-            report: None,
-            head_seq: 0,
-            reads_from: 0,
-        },
-        TabMsg::WriteState {
-            id: 1,
-            kind: K::Fetch,
-            running: true,
-            error: String::new(),
-            report: None,
-            head_seq: 0,
-            reads_from: 0,
-        },
-        TabMsg::WriteState {
-            id: 1,
-            kind: K::Fetch,
-            running: false,
-            error: String::new(),
-            report: None,
-            head_seq: 0,
-            reads_from: 0,
-        },
+        answered(1, K::Rebase, ""),
+        started(1, K::Fetch),
+        answered(1, K::Fetch, ""),
     ]
 }
 
@@ -337,7 +302,7 @@ fn the_runs_answer_keeps_the_stop_that_was_its_own() {
 #[test]
 fn each_answer_carries_the_seq_it_was_counted_at() {
     let mut tab = RepoTab::default();
-    tab.settle_write(1, K::Push, String::new(), None, 0, 0);
+    settle(&mut tab, K::Push, "", None);
     let before = tab.write_seq;
     tab.absorb(a_run_and_the_fetch_behind_it());
     let seqs: Vec<i32> = tab.write_answers.iter().map(|a| a.seq).collect();
@@ -347,26 +312,7 @@ fn each_answer_carries_the_seq_it_was_counted_at() {
 #[test]
 fn a_landing_at_the_tip_is_found_in_the_list_a_fetch_answered_over() {
     let mut tab = RepoTab::default();
-    tab.absorb(vec![
-        TabMsg::WriteState {
-            id: 1,
-            kind: K::Merge,
-            running: false,
-            error: String::new(),
-            report: None,
-            head_seq: 0,
-            reads_from: 0,
-        },
-        TabMsg::WriteState {
-            id: 1,
-            kind: K::Fetch,
-            running: false,
-            error: String::new(),
-            report: None,
-            head_seq: 0,
-            reads_from: 0,
-        },
-    ]);
+    tab.absorb(vec![answered(1, K::Merge, ""), answered(1, K::Fetch, "")]);
     assert!(!at_tip(&tab), "the answer that came last is the fetch's");
     let landed: Vec<K> = tab
         .write_answers
@@ -382,10 +328,7 @@ fn a_drain_with_no_write_answer_publishes_none() {
     let mut tab = RepoTab::default();
     tab.absorb(a_run_and_the_fetch_behind_it());
     assert_eq!(tab.write_answers.len(), 2);
-    tab.absorb(vec![TabMsg::MergeTools {
-        names: Vec::new(),
-        settled: true,
-    }]);
+    tab.absorb(vec![no_answer()]);
     assert!(tab.write_answers.is_empty());
 }
 
@@ -499,21 +442,8 @@ fn answered(id: u64, kind: K, error: &str) -> TabMsg {
     reported(id, kind, error, None)
 }
 
-/// The write starting — none of its three boundaries (`session::write`).
-fn started(id: u64, kind: K) -> TabMsg {
-    TabMsg::WriteState {
-        id,
-        kind,
-        running: true,
-        error: String::new(),
-        report: None,
-        head_seq: 0,
-        reads_from: 0,
-    }
-}
-
 /// The last boundary. A settle carries only the id; `_kind` keeps the
-/// calls reading like the pair above.
+/// calls reading like `answered` and `started`.
 fn settle_msg(id: u64, _kind: K) -> TabMsg {
     TabMsg::WriteSettled { id }
 }
@@ -569,10 +499,7 @@ fn a_notify_that_carried_no_answer_says_so() {
     let mut tab = RepoTab::default();
     tab.absorb(vec![stash_answered(7, "")]);
     assert_eq!(tab.write_answer_index_of(7), Some(0));
-    tab.absorb(vec![TabMsg::MergeTools {
-        names: Vec::new(),
-        settled: true,
-    }]);
+    tab.absorb(vec![no_answer()]);
     assert_eq!(
         tab.write_answer_index_of(7),
         None,
@@ -586,7 +513,8 @@ fn a_notify_that_carried_no_answer_says_so() {
 const OURS: u64 = 7;
 const SOMEBODY_ELSE: u64 = 8;
 
-/// The editor sent a commit and waits for it (`state::commit_from_fields`).
+/// The editor sent a commit and waits for it — its answer, and the reading
+/// that finds the tree gone (`state::commit_from_fields`).
 fn editor_pressed() -> RepoTab {
     let mut tab = RepoTab::default();
     tab.commit_out.asked(Some(OURS));
@@ -637,10 +565,7 @@ fn the_editor_is_told_once() {
     assert!(for_the_editor(&tab).is_some());
     tab.absorb(vec![answered(SOMEBODY_ELSE, K::Fetch, "")]);
     assert_eq!(tab.commit_answer, -1, "this drain carried none of it");
-    tab.absorb(vec![TabMsg::MergeTools {
-        names: Vec::new(),
-        settled: true,
-    }]);
+    tab.absorb(vec![no_answer()]);
     assert_eq!(tab.commit_answer, -1);
 }
 
@@ -748,10 +673,7 @@ fn the_landing_stands_until_the_tree_is_read() {
     let mut tab = tree_stashed();
     tab.absorb(vec![fenced(OURS, K::Stash, "")]);
     tab.absorb(vec![answered(SOMEBODY_ELSE, K::Fetch, "")]);
-    tab.absorb(vec![TabMsg::MergeTools {
-        names: Vec::new(),
-        settled: true,
-    }]);
+    tab.absorb(vec![no_answer()]);
     assert!(tab.stash_out.ours(), "nothing in between answered for it");
     assert_eq!(
         tab.stash_answer, -1,
@@ -844,20 +766,12 @@ fn a_landing_owed_in_the_drain_that_refuses_somebody_elses_write() {
     );
 }
 
-/// The editor's commit, waiting for the reading that finds the tree gone
-/// (`state::commit_from_fields`).
-fn tree_committed() -> RepoTab {
-    let mut tab = RepoTab::default();
-    tab.commit_out.asked(Some(OURS));
-    tab
-}
-
 // The landing that follows reads HEAD at or after the fence, never the
 // report in hand — an amend of nothing leaves the counts as they were, and
 // the HEAD in hand is the one it replaced.
 #[test]
 fn the_commit_that_emptied_the_tree_lands_on_its_fence_whichever_half_comes_first() {
-    let mut tab = tree_committed();
+    let mut tab = editor_pressed();
     tab.absorb(vec![fenced(OURS, K::Commit, "")]);
     tab.tree_was_read(IN_FLIGHT, EMPTIED);
     assert!(
@@ -868,7 +782,7 @@ fn the_commit_that_emptied_the_tree_lands_on_its_fence_whichever_half_comes_firs
     assert_eq!(tab.commit_landing_taken(), Some(FENCE));
     assert!(tab.commit_landing_taken().is_none(), "paid once");
 
-    let mut tab = tree_committed();
+    let mut tab = editor_pressed();
     tab.tree_was_read(FENCE, EMPTIED);
     assert!(
         tab.commit_landing_taken().is_none(),
@@ -881,11 +795,11 @@ fn the_commit_that_emptied_the_tree_lands_on_its_fence_whichever_half_comes_firs
 // The editor still hears the refusal.
 #[test]
 fn a_commit_that_left_files_or_was_refused_claims_no_tree() {
-    let mut tab = tree_committed();
+    let mut tab = editor_pressed();
     tab.absorb(vec![fenced(OURS, K::Commit, "")]);
     tab.tree_was_read(FENCE, STILL_DIRTY);
     assert!(tab.commit_landing_taken().is_none());
-    let mut tab = tree_committed();
+    let mut tab = editor_pressed();
     tab.absorb(vec![fenced(OURS, K::Commit, "nothing to commit")]);
     tab.tree_was_read(FENCE, EMPTIED);
     assert!(tab.commit_landing_taken().is_none());

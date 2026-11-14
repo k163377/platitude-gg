@@ -8,6 +8,7 @@
 
 use std::collections::HashSet;
 
+use super::drain_inputs::started;
 use super::*;
 use crate::ops::{Reach, Reader, Side};
 use platitude_core::OperationKind as K;
@@ -70,18 +71,6 @@ fn stand_elsewhere(tab: &mut RepoTab) {
     tab.forget_the_worktree();
 }
 
-fn start(id: u64, kind: K) -> TabMsg {
-    TabMsg::WriteState {
-        id,
-        kind,
-        running: true,
-        error: String::new(),
-        report: None,
-        head_seq: 0,
-        reads_from: 0,
-    }
-}
-
 /// A stage press landed, its fence at `reads_from`.
 fn answer_at(id: u64, reads_from: u64) -> TabMsg {
     TabMsg::WriteState {
@@ -136,7 +125,7 @@ fn commit_waits_until_the_screen_has_caught_up_with_a_press() {
     press(&mut tab, STAGE, "a.txt");
     assert!(tab.staging_unseen);
     assert!(tab.commit_waits, "Commit waits on the press");
-    tab.absorb(vec![start(STAGE, K::Stage), answer(STAGE, K::Stage, "")]);
+    tab.absorb(vec![started(STAGE, K::Stage), answer(STAGE, K::Stage, "")]);
     assert!(
         tab.outstanding.is_empty(),
         "answered, the write is no longer out"
@@ -158,7 +147,7 @@ fn a_refused_press_lets_commit_go_at_its_answer() {
     let mut tab = tab();
     press(&mut tab, STAGE, "a.txt");
     tab.absorb(vec![
-        start(STAGE, K::Stage),
+        started(STAGE, K::Stage),
         answer(STAGE, K::Stage, LOCKED),
     ]);
     assert!(!tab.staging_unseen);
@@ -200,7 +189,7 @@ fn a_write_asked_by_another_model_counts_out_from_its_acceptance() {
 #[test]
 fn the_commit_button_waits_on_writes_out_beyond_the_stage_presses() {
     let mut tab = tab();
-    tab.absorb(vec![start(FETCH, K::Fetch)]);
+    tab.absorb(vec![started(FETCH, K::Fetch)]);
     assert!(tab.commit_waits, "a fetch");
     tab.absorb(vec![answer(FETCH, K::Fetch, "")]);
     assert!(!tab.commit_waits);

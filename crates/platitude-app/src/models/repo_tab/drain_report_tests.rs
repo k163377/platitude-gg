@@ -2,6 +2,7 @@
 //! saying — the kind the page picks its two lines from, and the names
 //! the first of them is written from (`drain::settle_write`).
 
+use super::drain_inputs::{no_answer, settle};
 use super::*;
 use platitude_core::OperationKind as K;
 use platitude_core::RemoteWhy;
@@ -11,17 +12,15 @@ use platitude_core::RemoteWhy;
 #[test]
 fn a_refusal_the_far_side_made_arrives_as_something_to_report() {
     let mut tab = RepoTab::default();
-    tab.settle_write(
-        1,
+    settle(
+        &mut tab,
         K::Push,
-        "`git push` exited with code 1: remote: error: Cannot delete a protected branch".into(),
+        "`git push` exited with code 1: remote: error: Cannot delete a protected branch",
         Some(platitude_core::WriteReport::on_remote(
             ReportKind::RemoteDelete(RemoteWhy::Rule),
             "origin",
             "main",
         )),
-        0,
-        0,
     );
     assert!(tab.write_refused, "nothing happened over there");
     assert_eq!(tab.write_report_kind, "delete-rule");
@@ -31,7 +30,7 @@ fn a_refusal_the_far_side_made_arrives_as_something_to_report() {
 
     // And it goes with its answer: a report left standing would come
     // back up under the next write.
-    tab.settle_write(1, K::Push, String::new(), None, 0, 0);
+    settle(&mut tab, K::Push, "", None);
     assert_eq!(tab.write_report_kind, "");
     assert_eq!(tab.write_report_fact, "");
 }
@@ -68,15 +67,13 @@ fn a_far_side_refusal_is_named_by_what_was_asked_and_what_for() {
             (ReportKind::RemoteDelete(why), "delete"),
         ] {
             let mut tab = RepoTab::default();
-            tab.settle_write(
-                1,
+            settle(
+                &mut tab,
                 K::Push,
-                "! [remote rejected]".into(),
+                "! [remote rejected]",
                 Some(platitude_core::WriteReport::on_remote(
                     kind, "origin", "main",
                 )),
-                0,
-                0,
             );
             assert_eq!(tab.write_report_kind, format!("{asked}-{}", why_word(why)));
         }
@@ -86,17 +83,15 @@ fn a_far_side_refusal_is_named_by_what_was_asked_and_what_for() {
 #[test]
 fn a_stale_push_and_a_refused_commit_name_themselves_too() {
     let mut tab = RepoTab::default();
-    tab.settle_write(
-        1,
+    settle(
+        &mut tab,
         K::Push,
-        "! [rejected] (fetch first)".into(),
+        "! [rejected] (fetch first)",
         Some(platitude_core::WriteReport::on_remote(
             ReportKind::Outdated,
             "origin",
             "main",
         )),
-        0,
-        0,
     );
     assert_eq!(tab.write_report_kind, "outdated");
     assert_eq!(tab.write_report_remote, "origin");
@@ -108,13 +103,11 @@ fn a_stale_push_and_a_refused_commit_name_themselves_too() {
         (ReportKind::CommitUnsigned, "commit-unsigned"),
         (ReportKind::CommitLocked, "commit-locked"),
     ] {
-        tab.settle_write(
-            1,
+        settle(
+            &mut tab,
             K::Commit,
-            "`git commit` exited with code 1".into(),
+            "`git commit` exited with code 1",
             Some(platitude_core::WriteReport::local(kind)),
-            0,
-            0,
         );
         assert_eq!(tab.write_report_kind, named);
         assert_eq!(
@@ -146,13 +139,11 @@ const LOCK: &str = "Unable to create 'C:/t/.git/index.lock': File exists.";
 fn reach_the_page(reports: Vec<(platitude_core::GitError, &str, &str)>) {
     for (refused, named, fact) in reports {
         let mut tab = RepoTab::default();
-        tab.settle_write(
-            1,
+        settle(
+            &mut tab,
             K::Stash,
             refused.to_string(),
             refused.report().cloned(),
-            0,
-            0,
         );
         assert_eq!(tab.write_report_kind, named);
         assert_eq!(tab.write_report_fact, fact, "{named}");
@@ -278,13 +269,11 @@ fn every_withheld_rewrite_reaches_the_page_under_its_own_name() {
     ];
     for (kind, withheld, named) in refused {
         let mut tab = RepoTab::default();
-        tab.settle_write(
-            1,
+        settle(
+            &mut tab,
             kind,
             withheld.to_string(),
             withheld.report().cloned(),
-            0,
-            0,
         );
         assert!(tab.write_refused, "{named}: nothing was rewritten");
         assert_eq!(tab.write_report_kind, named);
@@ -321,13 +310,11 @@ fn the_plan_door_names_the_same_refused_history_the_same_way() {
             PlanRefusal::UnfetchedBase => platitude_core::report::rewrite_unfetched_base(),
         };
         let mut tab = RepoTab::default();
-        tab.settle_write(
-            1,
+        settle(
+            &mut tab,
             K::Squash,
             withheld.to_string(),
             withheld.report().cloned(),
-            0,
-            0,
         );
         assert_eq!(
             crate::models::rebase_plan::refusal_kind(refusal),
@@ -371,10 +358,7 @@ fn the_worktree_a_menu_asked_for_is_answered_by_name_with_its_report() {
         "nobody else reads it off the group"
     );
 
-    tab.absorb(vec![TabMsg::MergeTools {
-        names: Vec::new(),
-        settled: true,
-    }]);
+    tab.absorb(vec![no_answer()]);
     assert_eq!(tab.worktree_answer, -1, "told once");
 }
 

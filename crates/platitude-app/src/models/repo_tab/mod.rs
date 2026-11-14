@@ -42,6 +42,8 @@ impl Record for RemoteBranchAsked {
 
 mod drain;
 #[cfg(test)]
+mod drain_inputs;
+#[cfg(test)]
 mod drain_remotes_tests;
 #[cfg(test)]
 mod drain_report_tests;
