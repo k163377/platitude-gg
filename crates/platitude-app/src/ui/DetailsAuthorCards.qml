@@ -35,8 +35,8 @@ QtObject {
     /// The three cards built up front, for a caller that reads them before they open (the harness,
     /// `RepoPage.keepBuilt`). False in every pane a person opens: each card is built by its first opening and kept
     /// (rules-refs/app-ui.md — the `WindowDialogSeat` line), the door then writing and opening it in the same turn —
-    /// the way `tst_authorcards` opens them. Made off a `Component` rather than through a `Loader`: the pane is a `ColumnLayout`, where a seat
-    /// would be a row; the cards' parent is the pane they open in.
+    /// the way `tst_authorcards` opens them. Made off a `Component` rather than through a `Loader`: the pane is a
+    /// `ColumnLayout`, where a seat would be a row; the cards' parent is the pane they open in.
     property bool keepBuilt: false
     onKeepBuiltChanged: if (cards.keepBuilt) cards.buildAll()
     function buildAll() {
