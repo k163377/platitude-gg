@@ -289,6 +289,13 @@ pub(super) fn facts(tokens: &[Token], range: Range<usize>) -> Facts {
     out
 }
 
+/// The path `range` of `tokens` is, where the whole of it is one path
+/// (`a`, `a.b.c`).
+pub(super) fn one_path(tokens: &[Token], range: Range<usize>) -> Option<Path> {
+    let (path, _) = facts(tokens, range.clone()).paths.into_iter().next()?;
+    (range.len() == 1 + 2 * path.members.len()).then_some(path)
+}
+
 /// The names declared at `k` — a `let` / `const` / `var`, a `catch`'s,
 /// a function's name and parameters, an arrow's parameters — and an
 /// object literal's key, which names nothing: where reading goes on, or

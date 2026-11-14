@@ -288,11 +288,7 @@ impl Program {
     /// What an argument's tokens stand for in `code`, where they are one
     /// path to an object.
     fn arg_value(&mut self, code: usize, d: usize, range: Range<usize>) -> Option<Value> {
-        let facts = super::scan::facts(&self.docs[d].tokens, range.clone());
-        let (path, _) = facts.paths.first()?.clone();
-        if range.len() != 1 + 2 * path.members.len() {
-            return None;
-        }
+        let path = super::scan::one_path(&self.docs[d].tokens, range)?;
         match self.resolve(code, &path) {
             Value::Captured(_, Some(alias)) => Some(*alias),
             value => Some(self.objectified(value)).filter(object_value),
@@ -792,13 +788,7 @@ impl Program {
         u: usize,
         range: Range<usize>,
     ) -> Option<(usize, Option<Range<usize>>)> {
-        let tokens = &self.docs[d].tokens[range.clone()];
-        let path = {
-            let facts = super::scan::facts(&self.docs[d].tokens, range.clone());
-            let (path, _) = facts.paths.first()?.clone();
-            let length = 1 + 2 * path.members.len();
-            (tokens.len() == length).then_some(path)?
-        };
+        let path = super::scan::one_path(&self.docs[d].tokens, range)?;
         if let (Head::Name(name), true) = (&path.head, path.members.is_empty()) {
             let within = self.codes[code].range.clone();
             let local = self

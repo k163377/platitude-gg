@@ -312,11 +312,7 @@ impl Program {
     /// What an argument names, where it is one path.
     fn named(&mut self, code: usize, arg: Range<usize>) -> Option<Value> {
         let d = self.codes[code].doc;
-        let facts = scan::facts(&self.docs[d].tokens, arg.clone());
-        let (path, _) = facts.paths.first()?.clone();
-        if arg.len() != 1 + 2 * path.members.len() {
-            return None;
-        }
+        let path = scan::one_path(&self.docs[d].tokens, arg)?;
         Some(self.resolve(code, &path))
     }
 
