@@ -170,7 +170,7 @@ impl Program {
                 .get(1)
                 .is_some_and(|t| CONSTRUCTED.contains(&t.text.as_str())),
             Some(first) if tokens.len() == 1 && literal(first) => true,
-            Some(_) => match self.path_value_at(d, o, range) {
+            Some(_) => match self.path_value(d, o, range) {
                 Some(Value::Prop(pd, po, pp)) => {
                     !self.given(&Holder::Shared(pd, po, pp.clone()), name)
                         && self.shared_by_language(pd, po, &pp, name)
@@ -220,7 +220,7 @@ impl Program {
                     let assigns = match (&path.head, path.members.as_slice()) {
                         (Head::Name(head), [member]) => {
                             member == p
-                                && self.scope_value(d2, unit_object, head) == Value::Object(d, o)
+                                && self.scope_name(d2, unit_object, head) == Value::Object(d, o)
                         }
                         (Head::Name(head), []) => {
                             head == p && d2 == d && (unit_object == o || o == 0)

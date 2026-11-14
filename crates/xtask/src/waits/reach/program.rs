@@ -115,7 +115,7 @@ pub(super) struct Program {
     /// Where what each caller hands a harness function's parameter came
     /// from, joined over the callers — read and used as `bindings` are.
     pub(super) origin_bindings: HashMap<(usize, usize, usize), Origin>,
-    origin_collected: HashMap<(usize, usize, usize), Origin>,
+    pub(super) origin_collected: HashMap<(usize, usize, usize), Origin>,
     /// Each local's and each function's return's origin, once read in this
     /// reading (`super::origin`).
     pub(super) local_origins: HashMap<(usize, usize), Origin>,
@@ -287,7 +287,12 @@ impl Program {
 
     /// What an argument's tokens stand for in `code`, where they are one
     /// path to an object.
-    fn arg_value(&mut self, code: usize, d: usize, range: Range<usize>) -> Option<Value> {
+    pub(super) fn arg_value(
+        &mut self,
+        code: usize,
+        d: usize,
+        range: Range<usize>,
+    ) -> Option<Value> {
         let path = super::scan::one_path(&self.docs[d].tokens, range)?;
         match self.resolve(code, &path) {
             Value::Captured(_, Some(alias)) => Some(*alias),
@@ -308,7 +313,7 @@ impl Program {
     }
 
     /// Records what a call hands parameter `i` of `(d, u)`.
-    fn bind(&mut self, d: usize, u: usize, i: usize, value: Option<Value>) {
+    pub(super) fn bind(&mut self, d: usize, u: usize, i: usize, value: Option<Value>) {
         match self.collected.get(&(d, u, i)) {
             None => {
                 self.collected.insert((d, u, i), value);
@@ -320,7 +325,7 @@ impl Program {
         }
     }
 
-    fn new_code(
+    pub(super) fn new_code(
         &mut self,
         d: usize,
         u: usize,
@@ -482,7 +487,7 @@ impl Program {
     }
 
     /// What a value's tokens stand for, where they are one path.
-    fn path_value(&self, d: usize, o: usize, range: Range<usize>) -> Option<Value> {
+    pub(super) fn path_value(&self, d: usize, o: usize, range: Range<usize>) -> Option<Value> {
         let tokens = &self.docs[d].tokens[range];
         let first = tokens.first()?;
         if !is_name(&first.text) {
@@ -504,20 +509,10 @@ impl Program {
         Some(value)
     }
 
-    /// `scope_name` for the origin's reading.
-    pub(super) fn scope_value(&self, d: usize, o: usize, name: &str) -> Value {
-        self.scope_name(d, o, name)
-    }
-
-    /// `path_value` for the origin's reading.
-    pub(super) fn path_value_at(&self, d: usize, o: usize, range: Range<usize>) -> Option<Value> {
-        self.path_value(d, o, range)
-    }
-
     /// A name as code of object `o` sees it, past its own locals: the file's
     /// ids, the object's members, the root's members, the harness's
     /// singletons, the globals, the product's singletons.
-    fn scope_name(&self, d: usize, o: usize, name: &str) -> Value {
+    pub(super) fn scope_name(&self, d: usize, o: usize, name: &str) -> Value {
         // An id before the scope object's own names: `driver: driver` binds the id.
         if let Some(i) = self.docs[d]
             .objects
@@ -670,7 +665,7 @@ impl Program {
 
     /// Fills in what `code` does: its own facts, those of the arguments
     /// carved out of it left to their own codes.
-    fn read(&mut self, code: usize) {
+    pub(super) fn read(&mut self, code: usize) {
         let (d, u, range) = {
             let c = &self.codes[code];
             (c.doc, c.unit, c.range.clone())

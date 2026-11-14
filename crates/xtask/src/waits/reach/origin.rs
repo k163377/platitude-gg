@@ -57,7 +57,7 @@ pub(super) enum Origin {
 
 /// The maker a container has as what another container holds: none of its
 /// own — it is whoever holds the outer container's (`Program::inside_of`).
-const HELD: usize = usize::MAX;
+pub(super) const HELD: usize = usize::MAX;
 
 impl Origin {
     /// Transfer only what the giving context owns. A borrowed container
@@ -70,7 +70,7 @@ impl Origin {
     }
 
     /// The container made at `site` in `maker`.
-    fn made(maker: usize, site: Site) -> Origin {
+    pub(super) fn made(maker: usize, site: Site) -> Origin {
         Origin::Fresh {
             maker,
             sites: BTreeSet::from([site]),
@@ -166,7 +166,7 @@ impl Program {
         }
     }
 
-    fn store_at(&mut self, maker: usize, site: Site, value: Origin) {
+    pub(super) fn store_at(&mut self, maker: usize, site: Site, value: Origin) {
         join_into(
             &mut self.contents_collected,
             site,
@@ -522,7 +522,7 @@ impl Program {
         {
             return Origin::Plain;
         }
-        match self.path_value_at(d, o, range) {
+        match self.path_value(d, o, range) {
             Some(Value::Object(vd, vo)) => Origin::Object(Value::Object(vd, vo)),
             Some(Value::Prop(pd, po, pp)) => self.prop_origin(pd, po, &pp),
             Some(Value::Product(_)) => Origin::Product,
@@ -602,7 +602,7 @@ impl Program {
     }
 
     /// What a call answers; `args` are the tokens between its parentheses.
-    fn call_origin(&mut self, code: usize, path: &Path, args: Range<usize>) -> Origin {
+    pub(super) fn call_origin(&mut self, code: usize, path: &Path, args: Range<usize>) -> Origin {
         let Some(method) = path.last().map(str::to_string) else {
             return Origin::Unknown;
         };
@@ -711,7 +711,7 @@ impl Program {
 
     /// What `method` called on a value of `receiver`'s origin answers, by
     /// its contract; `site` is where a new container it answers is made.
-    fn method_origin(
+    pub(super) fn method_origin(
         &mut self,
         code: usize,
         receiver: Origin,
@@ -921,7 +921,7 @@ impl Program {
 
     /// Where the value a function of the harness or the product returns came
     /// from, as its own code made or holds it.
-    fn return_origin(&mut self, d: usize, u: usize) -> Origin {
+    pub(super) fn return_origin(&mut self, d: usize, u: usize) -> Origin {
         if let Some(known) = self.return_origins.get(&(d, u)) {
             if *known == Origin::Unset {
                 self.provisional_reads += 1;
@@ -993,7 +993,7 @@ fn conditional(t: &[Token]) -> Option<(usize, usize)> {
 }
 
 /// The stretches of `t` between its top-level `separators`.
-fn split_top(t: &[Token], separators: &[&str]) -> Vec<(usize, usize)> {
+pub(super) fn split_top(t: &[Token], separators: &[&str]) -> Vec<(usize, usize)> {
     let mut out = Vec::new();
     let mut depth = 0i32;
     let mut from = 0;
