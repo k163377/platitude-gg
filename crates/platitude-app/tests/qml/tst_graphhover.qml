@@ -450,11 +450,6 @@ Item {
         function underStillHand() {
             return list.indexAt(wordsX, 2 * Theme.graphRowHeight + Theme.graphRowHeight / 2 + list.contentY)
         }
-        /// The row the pane's hand is over now, in the list's own numbering.
-        function rowUnderHand() {
-            const p = list.mapFromItem(null, paneHand.at)
-            return list.indexAt(p.x, p.y + list.contentY)
-        }
 
         /// The search sends the view to a match: the row that arrives under the still hand lights, as Qt hands it
         /// the hover, but opens nothing — its ask waits on the seat for the hand — and the row the hand was on, gone
