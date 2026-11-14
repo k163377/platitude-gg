@@ -120,14 +120,7 @@ Item {
             lineBackTimer.start()
         }
     }
-    /// A verb given no file says so and ends there: the line its row asks for is never said, and the run fails on it.
-    /// Its completion is its own — the verbs of this family defer theirs (`AutoActCompletion.defersCompletion`).
-    PageStage {
-        id: argRefused
-        name: "diff_arg"
-        onTriggered: argRefused.complete({ "when": () => ({}),
-                                           "report": () => "diff_arg act=" + Harness.autoAct + " named=false" })
-    }
+    DiffArgRefused { id: argRefused; name: "diff_arg" }
     /// The drag the four text verbs share (デザイン規約 §diff の中身をコピーする), entered through the functions the hand's
     /// own handlers call (`DiffTextSelect`) since hover and a real button cannot be injected. It runs from the head of
     /// the first line past the first removed one so the selection holds both sides — a one-sided drag passes on half

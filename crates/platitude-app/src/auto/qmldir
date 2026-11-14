@@ -37,6 +37,7 @@ AutoActSplitVerbs 1.0 AutoActSplitVerbs.qml
 AutoActColourVerbs 1.0 AutoActColourVerbs.qml
 AutoShotDriver 1.0 AutoShotDriver.qml
 CompletionRoute 1.0 CompletionRoute.qml
+DiffArgRefused 1.0 DiffArgRefused.qml
 singleton Awaited 1.0 Awaited.qml
 NavProbe 1.0 NavProbe.qml
 singleton PageSettled 1.0 PageSettled.qml

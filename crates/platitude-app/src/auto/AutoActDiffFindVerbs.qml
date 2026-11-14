@@ -39,14 +39,7 @@ Item {
         return true
     }
 
-    /// A verb given no file says so and ends there: the line its row asks for is never said, and the run fails on it.
-    /// Its completion is its own — the verbs of this family defer theirs (`AutoActCompletion.defersCompletion`).
-    PageStage {
-        id: argRefused
-        name: "diff_find_arg"
-        onTriggered: argRefused.complete({ "when": () => ({}),
-                                           "report": () => "diff_arg act=" + Harness.autoAct + " named=false" })
-    }
+    DiffArgRefused { id: argRefused; name: "diff_find_arg" }
 
     /// Ctrl+F's door (`RepoPage.startFind`), then the line typed: assigning the text runs the same search a keystroke
     /// runs. `raise` selects what stood in the box, so the assignment replaces it.

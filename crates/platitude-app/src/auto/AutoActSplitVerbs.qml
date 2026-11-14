@@ -40,14 +40,7 @@ Item {
         return true
     }
 
-    /// A verb given no file says so and ends there: the line its row asks for is never said, and the run fails on it.
-    /// Its completion is its own — the verbs of this family defer theirs (`AutoActCompletion.defersCompletion`).
-    PageStage {
-        id: argRefused
-        name: "split_arg"
-        onTriggered: argRefused.complete({ "when": () => ({}),
-                                           "report": () => "diff_arg act=" + Harness.autoAct + " named=false" })
-    }
+    DiffArgRefused { id: argRefused; name: "split_arg" }
 
     /// The rows in one column first, so the flip is the one a reader makes, not a model split from the start. Then the
     /// flip through `chosen(true)` — all a press on `DiffViewToggle` runs — and the wait for the new rows laid out with

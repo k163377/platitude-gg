@@ -563,6 +563,7 @@ fn embed_harness_qml() {
     qrc::embed!("auto/AutoShotDriver.qml");
     qrc::embed!("auto/Awaited.qml");
     qrc::embed!("auto/CompletionRoute.qml");
+    qrc::embed!("auto/DiffArgRefused.qml");
     qrc::embed!("auto/NavProbe.qml");
     qrc::embed!("auto/PageAutoStart.qml");
     qrc::embed!("auto/PageHarness.qml");
