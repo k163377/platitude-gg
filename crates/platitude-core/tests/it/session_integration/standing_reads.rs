@@ -10,17 +10,6 @@ use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, opened, opened_at};
 use crate::support::wait::bounded;
 
-/// The commands started from event `from` on, as the log shows them.
-fn commands_since(sink: &CaptureSink, from: usize) -> Vec<String> {
-    sink.events.lock().unwrap()[from..]
-        .iter()
-        .filter_map(|e| match e {
-            SessionEvent::CommandStarted { display, .. } => Some(display.clone()),
-            _ => None,
-        })
-        .collect()
-}
-
 /// What the newest status reading said about the stopped operation:
 /// merging, rebasing, the step count, the incoming side's name and the
 /// message waiting to be recorded.
@@ -65,7 +54,7 @@ async fn read_status(sink: &CaptureSink, session: &Arc<RepoSession>) -> Vec<Stri
     let from = sink.events.lock().unwrap().len();
     session.refresh_status();
     bounded("the status read", session.wait_for_snapshot_reads()).await;
-    let ran = commands_since(sink, from);
+    let ran = sink.commands_since(from);
     assert_eq!(
         ran.iter()
             .filter(|c| c.contains("status --porcelain"))

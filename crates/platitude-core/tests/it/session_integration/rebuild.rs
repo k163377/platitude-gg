@@ -451,13 +451,13 @@ async fn the_two_passes_of_one_ask_read_the_stashes_once() {
         ran("log -z"),
         2,
         "the ask ran both of its passes: {:?}",
-        commands(&sink)
+        sink.commands_since(0)
     );
     assert_eq!(
         ran("stash list"),
         1,
         "and read the stashes once between them: {:?}",
-        commands(&sink)
+        sink.commands_since(0)
     );
     session.close_and_wait().await;
 }
@@ -500,7 +500,7 @@ async fn a_rebuild_taken_over_before_it_started_never_walks() {
         walks(),
         1,
         "only the pass that still owned the stream walked: {:?}",
-        commands(&sink)
+        sink.commands_since(0)
     );
     session.close_and_wait().await;
 }
@@ -644,19 +644,6 @@ fn position_of(events: &[SessionEvent], kind: OperationKind) -> Option<usize> {
     events
         .iter()
         .position(|e| matches!(e, SessionEvent::WriteFinished { kind: got, .. } if *got == kind))
-}
-
-/// What the session spawned, for failure messages.
-fn commands(sink: &CaptureSink) -> Vec<String> {
-    sink.events
-        .lock()
-        .unwrap()
-        .iter()
-        .filter_map(|e| match e {
-            SessionEvent::CommandStarted { display, .. } => Some(display.clone()),
-            _ => None,
-        })
-        .collect()
 }
 
 fn log_starts(events: &[SessionEvent]) -> usize {

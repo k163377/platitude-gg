@@ -11,17 +11,6 @@ use crate::support::remote::{far, origin_and_clone};
 use crate::support::session::{CaptureSink, open_with_doors, opened, write_settled};
 use crate::support::wait::bounded;
 
-/// The commands started from event `from` on, as the log shows them.
-fn commands_since(sink: &CaptureSink, from: usize) -> Vec<String> {
-    sink.events.lock().unwrap()[from..]
-        .iter()
-        .filter_map(|e| match e {
-            SessionEvent::CommandStarted { display, .. } => Some(display.clone()),
-            _ => None,
-        })
-        .collect()
-}
-
 fn times(commands: &[String], needle: &str) -> usize {
     commands.iter().filter(|c| c.contains(needle)).count()
 }
@@ -122,7 +111,7 @@ async fn a_fetch_that_brings_nothing_down_reads_only_the_refs() {
 
     let id = session.fetch(None).expect("accepted");
     assert_eq!(write_settled(&sink, id).await, [], "every read landed");
-    let ran = commands_since(&sink, from);
+    let ran = sink.commands_since(from);
     for (needle, expected) in [
         ("for-each-ref", 1),
         ("log -z", 0),
@@ -138,7 +127,7 @@ async fn a_fetch_that_brings_nothing_down_reads_only_the_refs() {
     let from = sink.events.lock().unwrap().len();
     session.refresh_status();
     reads_over(&session).await;
-    let ran = commands_since(&sink, from);
+    let ran = sink.commands_since(from);
     assert_eq!(times(&ran, "status"), 1, "{ran:#?}");
     assert_eq!(times(&ran, "--eol"), 0, "{ran:#?}");
     session.close_and_wait().await;
@@ -168,7 +157,7 @@ async fn a_fetch_that_brings_nothing_down_walks_a_graph_left_behind() {
         [],
         "the walk behind it landed"
     );
-    let ran = commands_since(&sink, from);
+    let ran = sink.commands_since(from);
     assert_eq!(times(&ran, "log -z"), 1, "{ran:#?}");
     let stale = sink.events.lock().unwrap()[from..]
         .iter()
@@ -192,7 +181,7 @@ async fn a_fetch_that_brings_a_commit_down_walks_once() {
 
     let id = session.fetch(None).expect("accepted");
     assert_eq!(write_settled(&sink, id).await, []);
-    let ran = commands_since(&sink, from);
+    let ran = sink.commands_since(from);
     for (needle, expected) in [("log -z", 1), ("status", 1), ("stash list", 1)] {
         assert_eq!(times(&ran, needle), expected, "`{needle}`: {ran:#?}");
     }
@@ -211,7 +200,7 @@ async fn setting_an_upstream_walks_nothing() {
         .set_upstream("main".into(), far("origin", "main"))
         .expect("accepted");
     assert_eq!(write_settled(&sink, id).await, []);
-    let ran = commands_since(&sink, from);
+    let ran = sink.commands_since(from);
     for (needle, expected) in [
         ("for-each-ref", 1),
         ("status", 1),
@@ -239,7 +228,7 @@ async fn a_commit_lists_the_stashes_once() {
         .commit("second".into(), Default::default())
         .expect("accepted");
     assert_eq!(write_settled(&sink, id).await, []);
-    let ran = commands_since(&sink, from);
+    let ran = sink.commands_since(from);
     for (needle, expected) in [("log -z", 1), ("stash list", 1), ("worktree list", 1)] {
         assert_eq!(times(&ran, needle), expected, "`{needle}`: {ran:#?}");
     }
@@ -271,7 +260,7 @@ async fn removing_a_worktree_on_no_branch_walks_once() {
         .remove_worktree(worktree_arg.clone(), "loose".into())
         .expect("accepted");
     assert_eq!(write_settled(&sink, id).await, []);
-    let ran = commands_since(&sink, from);
+    let ran = sink.commands_since(from);
     assert_eq!(times(&ran, "log -z"), 1, "{ran:#?}");
     assert_eq!(
         times(&ran, "worktree list"),
@@ -296,7 +285,7 @@ async fn coming_back_to_a_commit_made_outside_reads_each_thing_once() {
     session.refresh_quick();
     reads_over(&session).await;
     bounded("the other worktrees", session.wait_for_carried_pass()).await;
-    let ran = commands_since(&sink, from);
+    let ran = sink.commands_since(from);
     for (needle, expected) in [
         ("for-each-ref", 1),
         ("status", 1),
@@ -319,7 +308,7 @@ async fn coming_back_to_nothing_new_walks_nothing() {
     session.refresh_quick();
     reads_over(&session).await;
     bounded("the other worktrees", session.wait_for_carried_pass()).await;
-    let ran = commands_since(&sink, from);
+    let ran = sink.commands_since(from);
     for (needle, expected) in [("stash list", 1), ("log -z", 0)] {
         assert_eq!(times(&ran, needle), expected, "`{needle}`: {ran:#?}");
     }
@@ -340,7 +329,7 @@ async fn a_stash_dropped_outside_is_walked_off_when_the_window_comes_back() {
     session.refresh_quick();
     reads_over(&session).await;
     bounded("the other worktrees", session.wait_for_carried_pass()).await;
-    let ran = commands_since(&sink, from);
+    let ran = sink.commands_since(from);
     assert_eq!(times(&ran, "log -z"), 1, "{ran:#?}");
     assert_eq!(
         drawn_stashes(&sink),
@@ -363,7 +352,7 @@ async fn the_paced_read_the_window_asks_for_reads_each_thing_once() {
     repo.git(&["commit", "-am", "made in a terminal"]);
 
     asked_paced_read(&sink, &session, from).await;
-    let ran = commands_since(&sink, from);
+    let ran = sink.commands_since(from);
     for (needle, expected) in [
         ("for-each-ref", 1),
         ("status", 1),
@@ -387,7 +376,7 @@ async fn a_stash_dropped_outside_is_walked_off_by_the_paced_read_the_window_asks
     repo.git(&["stash", "drop"]);
 
     asked_paced_read(&sink, &session, from).await;
-    let ran = commands_since(&sink, from);
+    let ran = sink.commands_since(from);
     assert_eq!(times(&ran, "log -z"), 1, "{ran:#?}");
     assert_eq!(
         drawn_stashes(&sink),
@@ -480,7 +469,7 @@ async fn a_focus_does_not_walk_a_stash_list_a_newer_one_replaced() {
     let released = sink.events.lock().unwrap().len();
     release.send(()).expect("let the parked refs read go");
     reads_over(&session).await;
-    let ran = commands_since(&sink, released);
+    let ran = sink.commands_since(released);
     assert_eq!(
         times(&ran, "log -z"),
         1,

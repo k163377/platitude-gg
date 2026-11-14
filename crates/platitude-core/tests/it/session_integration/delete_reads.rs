@@ -10,17 +10,6 @@ use crate::support::TestRepo;
 use crate::support::remote::{far, origin_and_clone};
 use crate::support::session::{CaptureSink, opened, scenario, write_settled};
 
-/// The commands started from event `from` on, as the log shows them.
-fn commands_since(sink: &CaptureSink, from: usize) -> Vec<String> {
-    sink.events.lock().unwrap()[from..]
-        .iter()
-        .filter_map(|e| match e {
-            SessionEvent::CommandStarted { display, .. } => Some(display.clone()),
-            _ => None,
-        })
-        .collect()
-}
-
 fn times(commands: &[String], needle: &str) -> usize {
     commands.iter().filter(|c| c.contains(needle)).count()
 }
@@ -64,7 +53,7 @@ async fn a_branch_delete_reads_the_refs_and_the_graph_and_nothing_else() {
             [],
             "every read behind the delete of {name} landed"
         );
-        let ran = commands_since(&sink, from);
+        let ran = sink.commands_since(from);
         for (needle, expected) in [
             // `status --branch` carries the word too.
             ("git branch ", 1),
@@ -111,7 +100,7 @@ async fn deleting_the_branch_head_is_measured_against_reads_the_status_again() {
         .expect("accepted");
     assert_eq!(write_settled(&sink, id).await, []);
 
-    let ran = commands_since(&sink, from);
+    let ran = sink.commands_since(from);
     assert_eq!(times(&ran, "status"), 1, "{ran:#?}");
     assert!(
         !last_status(&sink).upstream_tracked,
@@ -138,7 +127,7 @@ async fn a_remote_branch_delete_reads_the_status_only_for_heads_upstream() {
             .delete_remote_branch(far("origin", branch), shown)
             .expect("accepted");
         assert_eq!(write_settled(&sink, id).await, []);
-        let ran = commands_since(&sink, from);
+        let ran = sink.commands_since(from);
         assert_eq!(
             times(&ran, "status"),
             reads,

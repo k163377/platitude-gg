@@ -218,17 +218,6 @@ fn handed(sink: &CaptureSink, from: usize) -> Vec<(String, bool)> {
     handed_in(&sink.events.lock().unwrap()[from..])
 }
 
-/// The commands started from event `from` on.
-fn ran_since(sink: &CaptureSink, from: usize) -> Vec<String> {
-    sink.events.lock().unwrap()[from..]
-        .iter()
-        .filter_map(|e| match e {
-            SessionEvent::CommandStarted { display, .. } => Some(display.clone()),
-            _ => None,
-        })
-        .collect()
-}
-
 /// A worktree's path as `git worktree list` prints it — the spelling the app
 /// stands the pane on (`Carried::path`), which a temp path spelled by
 /// hand need not match (a short 8.3 name on Windows).
@@ -280,7 +269,7 @@ async fn a_pass_hands_the_pane_the_worktree_it_stands_on() {
         "the pass landed"
     );
     assert_eq!(handed(&sink, from), [("worktree".to_string(), true)]);
-    let ran = ran_since(&sink, from);
+    let ran = sink.commands_since(from);
     assert_eq!(
         ran.iter()
             .filter(|c| c.contains("status --porcelain"))

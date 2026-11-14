@@ -145,7 +145,7 @@ async fn the_ways_in_to_a_status_read_never_run_two_at_once() {
         status_reads_at_once(&sink),
         1,
         "two status reads overlapped: {:?}",
-        commands_of(&sink)
+        sink.commands_since(0)
     );
     session.close_and_wait().await;
 }
@@ -207,21 +207,9 @@ async fn a_poll_let_through_by_a_replay_does_not_read_beside_it() {
         status_reads_at_once(&sink),
         1,
         "the tick read status beside the replay's own: {:?}",
-        commands_of(&sink)
+        sink.commands_since(0)
     );
     session.close_and_wait().await;
-}
-
-fn commands_of(sink: &CaptureSink) -> Vec<String> {
-    sink.events
-        .lock()
-        .unwrap()
-        .iter()
-        .filter_map(|e| match e {
-            SessionEvent::CommandStarted { display, .. } => Some(display.clone()),
-            _ => None,
-        })
-        .collect()
 }
 
 /// The refs listing already marks the branch HEAD is on, so a refs read
@@ -246,7 +234,7 @@ async fn a_refs_read_takes_head_out_of_the_listing_it_already_has() {
             .then_some(())
     })
     .await;
-    let seen = commands_of(&sink);
+    let seen = sink.commands_since(0);
     assert!(
         !seen.iter().any(|c| c.contains("symbolic-ref")),
         "HEAD came out of the listing: {seen:?}"
@@ -362,7 +350,7 @@ async fn the_walk_reads_head_from_the_refs_read_that_already_landed() {
     session.refresh_refs();
     sink.settled_pass(2).await;
 
-    let seen = commands_of(&sink);
+    let seen = sink.commands_since(0);
     assert!(
         seen.iter().any(|c| c.contains("log -z")),
         "the walk did run: {seen:?}"
@@ -387,7 +375,7 @@ async fn the_remotes_are_read_once_until_something_could_have_changed_them() {
     session.set_recording(Recording::WithBackground);
 
     let reads = |sink: &CaptureSink| {
-        commands_of(sink)
+        sink.commands_since(0)
             .iter()
             .filter(|c| c.contains("remote\\..*\\.(url|pushurl)"))
             .count()
@@ -410,7 +398,7 @@ async fn the_remotes_are_read_once_until_something_could_have_changed_them() {
     let base = snapshots(&sink);
     session.refresh_refs();
     settle(base + 1).await;
-    assert_eq!(reads(&sink), 0, "{:?}", commands_of(&sink));
+    assert_eq!(reads(&sink), 0, "{:?}", sink.commands_since(0));
 
     // A write drops the answer; its post-write snapshot is the boundary
     // after the replacement read.
@@ -418,7 +406,7 @@ async fn the_remotes_are_read_once_until_something_could_have_changed_them() {
     session.create_branch("side".into(), None, false);
     write_result(&sink, OperationKind::Branch).await;
     settle(before_write + 1).await;
-    assert_eq!(reads(&sink), 1, "{:?}", commands_of(&sink));
+    assert_eq!(reads(&sink), 1, "{:?}", sink.commands_since(0));
 
     // Now nothing moves, and the listings that follow ask git nothing.
     let from = snapshots(&sink);
@@ -426,7 +414,12 @@ async fn the_remotes_are_read_once_until_something_could_have_changed_them() {
         session.refresh_refs();
         settle(from + n).await;
     }
-    assert_eq!(reads(&sink), 1, "still the one: {:?}", commands_of(&sink));
+    assert_eq!(
+        reads(&sink),
+        1,
+        "still the one: {:?}",
+        sink.commands_since(0)
+    );
     session.close_and_wait().await;
 }
 
@@ -444,7 +437,7 @@ async fn a_global_mark_moved_in_a_terminal_reaches_the_snapshot() {
     sink.opened_graph(&session, 1).await;
     session.set_recording(Recording::WithBackground);
     let listed = |sink: &CaptureSink| {
-        commands_of(sink)
+        sink.commands_since(0)
             .iter()
             .filter(|c| c.contains("remote\\..*\\.(url|pushurl)"))
             .count()
@@ -491,7 +484,7 @@ async fn a_global_mark_moved_in_a_terminal_reaches_the_snapshot() {
         listed(&sink),
         1,
         "the global mark's move asked for one listing of the remotes: {:?}",
-        commands_of(&sink)
+        sink.commands_since(0)
     );
     let polled =
         crate::support::wait::bounded("the tracked poll", session.refresh_poll_tracked().outcome())
@@ -508,7 +501,7 @@ async fn a_global_mark_moved_in_a_terminal_reaches_the_snapshot() {
         listed(&sink),
         1,
         "a settled mark is not re-read: {:?}",
-        commands_of(&sink)
+        sink.commands_since(0)
     );
     session.close_and_wait().await;
 }
@@ -785,11 +778,12 @@ async fn concurrent_diffs_share_the_line_ending_setting_read() {
     })
     .await;
 
-    let reads = commands_of(&sink)
+    let reads = sink
+        .commands_since(0)
         .iter()
         .filter(|c| c.contains("autocrlf"))
         .count();
-    assert_eq!(reads, 1, "{:?}", commands_of(&sink));
+    assert_eq!(reads, 1, "{:?}", sink.commands_since(0));
     session.close_and_wait().await;
 }
 

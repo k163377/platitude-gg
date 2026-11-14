@@ -11,7 +11,6 @@ use crate::support::session::{
 };
 use platitude_core::OperationKind;
 use platitude_core::sequencer::{RebaseStep, TodoAction};
-use platitude_core::session::SessionEvent;
 
 fn diverged() -> TestRepo {
     let mut repo = TestRepo::init();
@@ -37,14 +36,8 @@ fn standing_merge() -> TestRepo {
 
 /// Every writing git command the session spawned.
 fn wrote_anything(sink: &CaptureSink) -> Vec<String> {
-    sink.events
-        .lock()
-        .unwrap()
-        .iter()
-        .filter_map(|event| match event {
-            SessionEvent::CommandStarted { display, .. } => Some(display.clone()),
-            _ => None,
-        })
+    sink.commands_since(0)
+        .into_iter()
         .filter(|display| {
             [
                 "rebase",

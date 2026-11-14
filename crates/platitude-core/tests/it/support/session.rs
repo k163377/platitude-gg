@@ -104,6 +104,17 @@ impl CaptureSink {
         *self.hook.lock().unwrap() = Some((Box::new(when), Box::new(run)));
     }
 
+    /// The commands started from event `from` on, as the log shows them.
+    pub fn commands_since(&self, from: usize) -> Vec<String> {
+        self.events.lock().unwrap()[from..]
+            .iter()
+            .filter_map(|e| match e {
+                SessionEvent::CommandStarted { display, .. } => Some(display.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
     pub fn count(&self, pred: impl Fn(&SessionEvent) -> bool) -> usize {
         self.events
             .lock()
