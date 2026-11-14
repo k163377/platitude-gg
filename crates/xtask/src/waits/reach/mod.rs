@@ -38,6 +38,7 @@
 //! (`product`). A call none of these answers is `unread`: not passed as
 //! safe.
 
+mod answers;
 #[cfg(test)]
 mod bindings;
 mod builtins;
