@@ -20,10 +20,17 @@ const ROOTS: [&str; 5] = [
 const LOOSE: [&str; 2] = ["CLAUDE.md", "AGENTS.md"];
 
 /// The pages `cargo xtask` with no argument prints.
-const USAGE: [&str; 3] = [
+const USAGE: [&str; 10] = [
     "crates/xtask/src/usage.rs",
+    "crates/xtask/src/usage/pre_merge.rs",
     "crates/xtask/src/usage/demo_repo.rs",
     "crates/xtask/src/usage/verify_ui.rs",
+    "crates/xtask/src/usage/app_runs.rs",
+    "crates/xtask/src/usage/measurement.rs",
+    "crates/xtask/src/usage/container.rs",
+    "crates/xtask/src/usage/landing.rs",
+    "crates/xtask/src/usage/pictures.rs",
+    "crates/xtask/src/usage/sessions.rs",
 ];
 
 /// Where the verbs are dispatched, the other list that has to agree with
