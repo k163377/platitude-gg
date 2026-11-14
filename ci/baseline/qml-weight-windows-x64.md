@@ -4,10 +4,12 @@
 [perf-windows-x64.md](perf-windows-x64.md)(実窓・D3D)が正**で、ここは内訳を読むための値 —
 残る手は [P3-確認事項.md](../../internal-docs/P3-確認事項.md) §性能。
 
-**測った木は `git rev-parse <commit>:crates/platitude-app/src/ui` が `82201378` の木**(製品の QML。2026-11-13、
+**測った木は `git rev-parse <commit>:crates/platitude-app/src/ui` が `6631d4e5` の木**(製品の QML。2026-11-14、
 Qt 6.12.0、コーパスは [perf-windows-x64.md](perf-windows-x64.md) §計測条件 の token)。§1 個あたり の表のうち
-`DialogActions` / `ActionButton` / `NoticeButton` / `ActionButtonSeat` 以外の行は `1a7f3b1f` の木で測った値 —
-2 つの木の違いは `ActionButton.qml` と `ActionButtonSeat.qml`、`ActionButtonLabel.qml` のコメントだけ。
+`AppMenuItem` 以外の行は前の木で測った値 — `DialogActions` / `ActionButton` / `NoticeButton` / `ActionButtonSeat` は
+`82201378`、残りは `1a7f3b1f` の木。今の木との違いは `AppMenuItem.qml` / `AppMenuButton.qml` / `TabStrip.qml` /
+`TopBar.qml`(`1a7f3b1f` からはさらに `ActionButton.qml` と `ActionButtonSeat.qml`)で、どれもそれらの行の部品に入らない
+(`ActionButtonLabel.qml` はコメントだけ違う)。
 
 ## 測り方
 
@@ -31,8 +33,9 @@ Qt 6.12.0、コーパスは [perf-windows-x64.md](perf-windows-x64.md) §計測�
   QML で宣言した名前付きプロパティの値を辿り、`String(object)` の型名で数える関数を足して、上の 2 つの時点で
   `Harness.report` する。ハーネス自身(`WindowHarness` / `PageHarness`)の下は数えない。名前付きプロパティの値が
   別の親を持つ Item なら辿らない(参照を持ち主に数えない)。**辿り方に現れない物は数に入らない**
-- **メニューとダイアログの先建てを切る**: `PageHarness` / `WindowHarness` が動詞の run で立てる `keepBuilt` を
-  false にする(切らないと製品と違う数になる)
+- **メニューとダイアログの先建てを切る**: `PageHarness` / `WindowHarness` が動詞の run で立てる `keepBuilt`(ページの
+  メニュー・帯のカード・ダイアログ)を false にする(切らないと製品と違う数になる)。動詞は開く前にメニューを読むので、
+  メニューの動詞は約束の照合で赤くなるが、口の行は出る
 - **プロセスの量**: `harness/singleton.rs` の `report` に、`K32GetProcessMemoryInfo`(WorkingSet / `PrivateUsage`)と
   `GetProcessHeaps` + `HeapLock` + `HeapWalk`(busy のバイトと個数)を読んで行に添える口を足す
 - **1 個の重さ**: `WindowHarness.begin` で、部品を `Qt.createComponent("qrc:/qt/qml/platitude/ui/<名>.qml")` から
@@ -41,28 +44,31 @@ Qt 6.12.0、コーパスは [perf-windows-x64.md](perf-windows-x64.md) §計測�
   (行のデリゲート)は建たない。**見えない Canvas は描かれない**(`InkCanvas.qml` の冒頭)ので、画面に出る印は
   これより重い側に立つ
 - **起動の段**: `tracing::info!` を `main.rs` の `qml_engine::load` の前と、`TabsModel::default`(最初のオブジェクト)に置く
+- **メニューを初めて開く 1 回**: `RepoPage.openRowMenu` の、席を建てる行(`commitMenuSeat.active = true`)の前後と開き
+  終えた所で、`PerfProbe.clockMs()` の時刻と上のプロセスの量を報告する口を足し、`verify-ui commit-menu` を撃つ
 
 ## 個数
 
 | | タブの無い窓 | 開いて行選択と diff まで |
 |---|---|---|
-| 全部 | 5,607 | 11,309 |
+| 全部 | 5,013 | 10,651 |
 | うち `RepoPage`(空ページ / タブのページ) | 3,779 | 9,352 |
-| `NavIcon` | 220 | 420 |
-| `PlainTextLabel` / `Label` | 296 / 164 | 759 / 343 |
-| `TextMetrics` / `FontMetrics` | 312 / 159 | 657 / 211 |
-| `TipAsk` | 170 | 291 |
-| `Loader` / `Repeater` | 285 / 156 | 1,526 / 389 |
-| `Connections` / `Timer` / `Binding` | 340 / 220 / 163 | 462 / 222 / 165 |
+| `NavIcon` | 162 | 355 |
+| `PlainTextLabel` / `Label` | 264 / 156 | 723 / 334 |
+| `TextMetrics` / `FontMetrics` | 216 / 151 | 549 / 202 |
+| `TipAsk` | 162 | 282 |
+| `Loader` / `Repeater` | 248 / 156 | 1,484 / 389 |
+| `Connections` / `Timer` / `Binding` | 324 / 204 / 147 | 444 / 204 / 147 |
 | `ActionButton` とその派生(`NoticeButton` 3・`Band*Button` 3) | 19(ラベル 23・席 19) | 19(23・19) |
 | `CardText` | 58 | 62 |
-| `AppMenu` / `AppMenuItem` | 4 / 10 | 4 / 11 |
+| `AppMenu` / `AppMenuItem` | 0 / 0 | 0 / 0 |
 
-- **タブの無い窓の 3 分の 2 は空ページ** — タブのページと同じ `RepoPage` で、ペイン・帯・カードを全部持つ
+- **タブの無い窓の 4 分の 3 は空ページ** — タブのページと同じ `RepoPage` で、ペイン・帯・カードを全部持つ
 - **行は 1 行あたり** グラフ 50 個(41 行)/ 左メニュー 37 個(42 行)/ diff 21 個(47 行)/ ファイル一覧 22 個(38 行)
-- **ページのメニューは初めて開いた時に建つ**(`RepoPage.keepBuilt`)ので、上の `AppMenu` 4 / `AppMenuItem` 10 は帯の
-  メニュー(☰ と `TopBar` の 3 枚)だけ。全部を先に建てると `AppMenu` は 22・`AppMenuItem` は 97 になり、
-  コミット行のメニュー 1 枚で 2,822 個
+- **メニューはどれも初めて開いた時に建つ**(ページのメニューは `RepoPage.keepBuilt`、帯の ☰ と名前の 2 枚は
+  `TopBar.keepBuilt`)ので、上のどちらの窓にも `AppMenu` / `AppMenuItem` は無い。コミット行のメニューは 1 枚で
+  1,993 個、初めて開く 1 回は建てるのに 54–58ms・開くのに 22–23ms(3 run、他の席の verify が並ぶ台)、
+  ヒープ +9.6MB(確保 6.3 万個)・private +11.4–13.4MB
 
 タブの無い窓に、見せていないまま建っている物(その下の個数):
 
@@ -77,7 +83,7 @@ Qt 6.12.0、コーパスは [perf-windows-x64.md](perf-windows-x64.md) §計測�
 | `AskBar` | 135 | `RecoverHoverCard` / `GraphFind` | 43 / 43 |
 | `BandStateCard` / `AuthorCard` | 128 / 116 | `ParentListCard` / `EolHoverCard` | 42 / 42 |
 | `StartupGate` | 124 | `RefListPopup` | 41 |
-| `OpenFailedScreen` × 2 | 119 | 帯のメニュー 4 枚 | 611 |
+| `OpenFailedScreen` × 2 | 119 | | |
 
 ## 1 個あたり
 
@@ -86,8 +92,8 @@ Qt 6.12.0、コーパスは [perf-windows-x64.md](perf-windows-x64.md) §計測�
 | 部品 | ヒープ | 確保 | private | 建てる時間 |
 |---|---|---|---|---|
 | `DialogActions`(ボタン 2 つ) | 423 | 2,609 | 548 | 1,045 |
-| `AppMenuItem` | 390 | 2,196 | 409 | 1,315 |
 | `ActionButton` / `NoticeButton` | 208 / 209 | 1,279 / 1,288 | 247 / 272 | 532 / 558 |
+| `AppMenuItem`(語だけの行) | 162 | 1,014 | 181 | 626 |
 | `RefChipStack` / `RefChip` | 154 / 141 | 820 / 744 | 207 / 190 | 454 / 405 |
 | `AppListView` | 116 | 709 | 142 | 495 |
 | `NameCell` | 97 | 605 | 127 | 212 |
@@ -115,6 +121,10 @@ Qt 6.12.0、コーパスは [perf-windows-x64.md](perf-windows-x64.md) §計測�
   形で変わる分は、bench をこの系に絞った同じ測り方の run で、印の無い形 208 / アイコン付き 242 / 2 段 305。
   2 段は、帯がセルを測る 1 段の語を描かない物差しのラベルとしてもう 1 つ持つ(`ActionButton.lineWord`)ので、
   §個数 のラベル 23 = ボタン 19 + 帯の 2 段 4 つの物差し
+- **`AppMenuItem` は行が着ている物だけを建てる** — 見出しと席の印・`!`・回数押しの印と塗りと状態機械・チップの地・
+  先後の数・バッジはそれを持つ行にだけ、名前の文の物差しと印と地はその文を持つ行にだけ建つ。形で変わる分は、同じ
+  測り方の run で、チップ付き 174 / 見出し 186 / `!` 184 / 回数押し 198 / 名前の文 248 / 枝のカードの行(先後の数・
+  バッジ・席の印)300。この行の時間は他の席の verify が並ぶ台で撮った(同じ run の `NavIcon` は 33〜39µs)
 - **`NavIcon` は素の `Canvas` の 11 倍余り** — 違いは `NavIcon` が自分に足した分(派生プロパティ 20 本余りとハンドラ 7 本)。
   束ねた部品の大半がこれを数個ずつ持つ
 - **素の部品はどれも 1KB 前後・確保 4〜7 個**
@@ -125,15 +135,15 @@ MB(確保は個数)。開いて diff までとタブを待つ窓は 3 run、タ�
 
 | | タブの無い窓 | タブを待つ窓 | 開いて行選択と diff まで |
 |---|---|---|---|
-| WorkingSet | 155.0 | 95.7–95.8 | 403.7–404.7 |
-| private | 135.0 | 76.5–76.6 | 378.5–379.4 |
-| プロセスヒープ busy(確保) | 70.0(425.0K) | 37.8(201.3K) | 172.1(803.8K) |
+| WorkingSet | 148.3 | 89.2–89.7 | 395.8–396.4 |
+| private | 129.1 | 70.9–71.3 | 370.9–371.9 |
+| プロセスヒープ busy(確保) | 65.8(394.6K) | 34.1–34.2(179.0K) | 167.6(772.6K) |
 
-- **空ページ 1 枚は WorkingSet 59MB・private 58MB・ヒープ 32MB(確保 22.4 万個)** — 左 2 列の差
-- **起動(3 run)**: 起動から最初のオブジェクトまで 847–863ms — うち `qml_engine::load` の前は 15–16ms で、残りは QML の
-  型の読み込み。その後、帯・ダイアログ・ハーネスまで 194–200ms、タブのページを建ててグラフの最初のフレームまで
-  446–463ms
-- **コンパイル済みキャッシュを使う**(`QML_DISABLE_DISK_CACHE` を外す、3 run)と、最初のオブジェクトまで 670–673ms
+- **空ページ 1 枚は WorkingSet 59MB・private 58MB・ヒープ 32MB(確保 21.6 万個)** — 左 2 列の差
+- **起動(3 run)**: 起動から最初のオブジェクトまで 865–884ms — うち `qml_engine::load` の前は 16–17ms で、残りは QML の
+  型の読み込み。その後、帯・ダイアログ・ハーネスまで 168–170ms、タブのページを建ててグラフの最初のフレームまで
+  448–503ms
+- **コンパイル済みキャッシュを使う**(`QML_DISABLE_DISK_CACHE` を外す、3 run)と、最初のオブジェクトまで 694–714ms
   — **型の読み込みのうちコンパイルが占めるのは約 2 割**で、残りが何かは割っていない。開いて diff までの
-  WorkingSet は 400.1–401.0、private は 368.1–368.9、ヒープ busy は 163.8 — **private とヒープは 8〜11MB 小さいが、
-  予算が読む WorkingSet は 5MB も動かない**(rules-refs/app-ui.md「qmlcachegen はメモリ対策にならない」と同じ向き)
+  WorkingSet は 392.9–394.2、private は 361.8–363.0、ヒープ busy は 159.4 — **private とヒープは 8〜10MB 小さいが、
+  予算が読む WorkingSet は 4MB も動かない**(rules-refs/app-ui.md「qmlcachegen はメモリ対策にならない」と同じ向き)
