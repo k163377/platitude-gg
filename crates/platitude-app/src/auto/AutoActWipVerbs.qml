@@ -52,6 +52,11 @@ Item {
         item.leftClick(Qt.NoModifier)
         return true
     }
+    /// Ticks the amend box as a hand ticks it (`RepoPage.amendToggled`): HEAD's commit is asked for, to fill the box.
+    function tickAmend() {
+        wipPane.setAmendChecked(true)
+        page.amendToggled(true)
+    }
 
     /// Runs `act` if it is this family's and says whether it was; each verb belongs to one family (`AutoActDriver`).
     function run(act, arg) {
@@ -90,11 +95,9 @@ Item {
             page.showReport(arg, "origin", "main", "")
             driver.barrierNotice.start()
         } else if (act === "amend") {
-            // The message is supplied, so skip the prefill request that would otherwise land on top of it.
             // `--preset marker`: HEAD is an `--allow-empty` marker commit, the one tree where a message-only amend has
             // to land with `--allow-empty` too.
-            wipPane.setAmendChecked(true)
-            page.amending = true
+            driver.tickAmendQuietly()
             wipPane.setMessage(arg, "")
             acts.claimLanding()
             page.commitNow()
@@ -103,8 +106,7 @@ Item {
             // Only `--preset authorship` pictures the take-over — the one preset whose HEAD author differs from the
             // identity: `head_author differs=true name=Yuki Tanaka`, then `author=Demo User`. On `basic`, `shown=`
             // naming the commit from before the amend is right (one row more).
-            wipPane.setAmendChecked(true)
-            page.amendToggled(true)
+            acts.tickAmend()
             resetAuthorTimer.start()
         } else if (act === "stash" || act === "stash-lands") {
             // Through the band's button with the WIP pane left alone — the button does not need it
@@ -128,8 +130,7 @@ Item {
         } else if (act === "amend-author") {
             // The boxes are in the commit editor, on screen only while the uncommitted row is selected.
             page.showWip()
-            wipPane.setAmendChecked(true)
-            page.amendToggled(true)
+            acts.tickAmend()
             amendAuthorTimer.start()
         } else if (act === "stash-menu" || act === "delete-stash-row") {
             // The row menu on the first stash's row, left standing; the argument "go" (`delete-stash-row` only) holds
@@ -274,10 +275,8 @@ Item {
             page.showWip()
             repoTab.stageAll()
             // `amend` photographs the button's other wording.
-            if (arg === "amend") {
-                wipPane.setAmendChecked(true)
-                page.amending = true
-            }
+            if (arg === "amend")
+                driver.tickAmendQuietly()
             wipPane.setMessage(arg === "" || arg === "amend" ? "feat: something" : arg, "")
             // The pointer goes on before the tree settles, as a real hand's does; pointing after the warning would
             // leave that ordering untested.
@@ -291,8 +290,7 @@ Item {
             // (`WipCommitBlock.onAmendBarredChanged`).
             page.showWip()
             if (arg !== "") {
-                wipPane.setAmendChecked(true)
-                page.amendToggled(true)
+                acts.tickAmend()
                 amendRowTimer.merged = arg
                 repoTab.merge(arg, false, false, "")
             }
@@ -301,8 +299,7 @@ Item {
             // The commit button's refusal with the amend box ticked over a stage that takes back all HEAD changed
             // (`--preset undone`). Ticked as a hand ticks it, so HEAD's message is asked for too (`amendTipTimer`).
             page.showWip()
-            wipPane.setAmendChecked(true)
-            page.amendToggled(true)
+            acts.tickAmend()
             amendTipTimer.start()
         } else if (act === "commit-face") {
             // The signing tick's tip on the commit button's face; writes what a real pointer writes (`AvatarButton`).

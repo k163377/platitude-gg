@@ -142,6 +142,12 @@ Item {
         wipPane.pointEol(path)
         return wipPane.eolCardOpen
     }
+    /// Ticks the amend box without the request for HEAD's message a hand's tick makes (`RepoPage.amendToggled`): for a
+    /// run that supplies its own message, which HEAD's would land on top of.
+    function tickAmendQuietly() {
+        wipPane.setAmendChecked(true)
+        page.amending = true
+    }
     /// Forces a menu row's tooltip through the property the real hover writes (`AppMenuItem.tipForced`), and says
     /// whether it stands where a hand's would: up, beside the row. One that came out before the menu stood where the
     /// hand would have raised it keeps the seat read off the row then (`TipSeat.targetAt`), so it is taken down

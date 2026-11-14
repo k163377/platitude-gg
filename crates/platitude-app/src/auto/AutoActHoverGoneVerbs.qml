@@ -207,8 +207,7 @@ Item {
                     if (op.how === "commit") {
                         wipPane.setMessage("feat: something", "")
                     } else if (op.how === "amend") {
-                        wipPane.setAmendChecked(true)
-                        page.amending = true
+                        driver.tickAmendQuietly()
                         wipPane.setMessage("feat: said again", "")
                     }
                 })
