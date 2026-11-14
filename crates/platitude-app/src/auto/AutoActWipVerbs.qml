@@ -4,9 +4,10 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The worktree's own verbs: what a commit is made of and what it is called — the message boxes, the amend
-/// row, stashing, the line-ending card, and the seat a stopped merge is finished from. Built by `AutoActDriver`
-/// only when a verb was given.
+/// The worktree's own verbs: what a commit is made of and what it is called — the message boxes, the amend row,
+/// stashing, the line-ending card, the seat a stopped merge is finished from, the report bar a refused write brings
+/// down, and another worktree's uncommitted row read in this window. Built by `AutoActDriver` only when a verb was
+/// given.
 // An `Item` only because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
@@ -46,20 +47,18 @@ Item {
             repoTab.stageAll()
             wipPane.setMessage(arg === "" ? "chore: commit from the headless run" : arg, "")
             acts.claimLanding()
-            // Commit waits on the staging (`commitAfterStage`); the commit's answer completes the run, which defers
-            // its completion (`AutoActCompletion.defersCompletion`).
             commitAfterStage.start()
         } else if (act === "commit-refused" || act === "notice-over-diff") {
             // Against a `pre-commit` hook that says no (`--preset hooked`): its words come down as a report
-            // (デザイン規約 §答えの要らない報せ). `notice-over-diff` has a diff open in the middle, the one
-            // arrangement where a bar over the page differs from one inside the graph.
+            // (デザイン規約 §答えの要らない報せ). `notice-over-diff` has a diff open in the middle, the one arrangement
+            // where a bar over the page differs from one inside the graph.
             repoTab.stageAll()
             wipPane.setMessage("chore: something the hook will not have", "")
             if (act === "notice-over-diff")
                 page.openDiff("staged", arg, "")
             commitAfterStage.start()
         } else if (act === "stale-part") {
-            // A stale part: the diff marks' own press with a fingerprint the bytes cannot match, answered by a report
+            // The diff marks' own press with a fingerprint the bytes cannot match, answered by a report
             // (デザイン規約 §答えの要らない報せ). The argument is `<バケツ>:<パス>`. No git runs, yet the refused write is
             // logged as a failed write, so the run needs `--allow-write-failure`.
             const cut = arg.indexOf(":")
@@ -69,7 +68,7 @@ Item {
             stalePartTimer.start()
         } else if (act === "notice-link") {
             // The one report whose own line names the command log (`Words.reportPlace`), raised through the page's door
-            // as `report-tone` raises one, its place word pressed once the bar is down.
+            // as `report-tone` raises one.
             page.showReport("carried-refused", "", "topic", "")
             noticeLinkTimer.start()
         } else if (act === "report-tone") {
@@ -87,19 +86,19 @@ Item {
             acts.claimLanding()
             page.commitNow()
         } else if (act === "amend-reset-author") {
-            // The authorship offer needs HEAD read first, so amend is toggled and the timer waits. The argument is
-            // `amend`'s (empty = `--no-edit`). Only `--preset authorship` pictures the take-over — the one preset whose
-            // HEAD author differs from the identity: `head_author differs=true name=Yuki Tanaka`, then
-            // `author=Demo User`. On `basic`, `shown=` naming the commit from before the amend is right (one row more).
+            // Toggled, as the authorship offer needs HEAD read first. The argument is `amend`'s (empty = `--no-edit`).
+            // Only `--preset authorship` pictures the take-over — the one preset whose HEAD author differs from the
+            // identity: `head_author differs=true name=Yuki Tanaka`, then `author=Demo User`. On `basic`, `shown=`
+            // naming the commit from before the amend is right (one row more).
             wipPane.setAmendChecked(true)
             page.amendToggled(true)
             resetAuthorTimer.start()
         } else if (act === "stash" || act === "stash-lands") {
             // Through the band's button with the WIP pane left alone — the button does not need it
             // (デザイン規約 §変更を退避する). `stash-lands` opens it: where the reader stands is its subject, shot on
-            // `--preset conflict-staged` — a stopped merge, the one shape whose commit box git filled. The
-            // worktree row going is the rebuild's edge (`graphGoneOid`). `named` leaves a summary in the commit
-            // box to name the entry; the words are the driver's, as the argument cannot carry spaces.
+            // `--preset conflict-staged` — a stopped merge, the one shape whose commit box git filled. The worktree
+            // row going is the rebuild's edge (`graphGoneOid`). `named` leaves a summary in the commit box to name the
+            // entry; the words are the driver's, as the argument cannot carry spaces.
             if (arg === "named") {
                 driver.expectStashNamed("feat: write the summary")
                 wipPane.setMessage(driver.stashWanted, "")
@@ -170,7 +169,6 @@ Item {
             // The menu on that worktree's uncommitted row — the argument is the worktree, as above — and, for the
             // two that apply, its work brought here.
             carriedMenuTimer.applying = act !== "carried-menu"
-            // The apply arms its write and presses the row; the bare menu is read where it stands.
             carriedMenuTimer.order = carriedMenuTimer.applying ? ["up", "armed", "pressed"] : ["up"]
             carriedMenuTimer.start()
         } else if (act === "wip-tally") {
@@ -188,11 +186,11 @@ Item {
                                             + " rows=" + unstagedModel.total)
         } else if (act === "wip-commit-half") {
             // Commits the staged half of `--preset dirty`, so the uncommitted row survives and is redrawn above the
-            // new HEAD — staged as found, as staging everything would leave no row. `during` stops with the write out
-            // and the picture not yet moved.
+            // new HEAD — staged as found, as staging everything would leave no row.
             page.showWip()
             wipPane.setMessage("feat: record the staged half", "")
-            // HEAD as the write finds it: `during` stops with it unmoved, the far side waits for it to move.
+            // HEAD as the write finds it: `during` stops with the write out and HEAD unmoved, the far side waits for
+            // it to move.
             driver.act.witness("headBefore", worktree.headOid)
             // Started ahead of the press, so the latch (`halfWatch`) listens from the press on.
             if (halfWatch.duringOnly)
@@ -206,12 +204,10 @@ Item {
         } else if (act === "wip-message" || act === "wip-message-focus") {
             // A body is typed because an empty box has no text to take a colour. Read the pair: only the caret differs.
             page.showWip()
-            wipPane.setMessage("feat: write the summary",
-                               arg === "" ? "And the description under it." : arg)
+            wipPane.setMessage("feat: write the summary", arg === "" ? "And the description under it." : arg)
             if (act === "wip-message-focus")
                 wipPane.focusDescription()
-            driver.reportAtCompletion(() => "message_focus pane=wip focused="
-                                            + wipPane.descriptionFocused
+            driver.reportAtCompletion(() => "message_focus pane=wip focused=" + wipPane.descriptionFocused
                                             + " color=" + wipPane.descriptionColor)
         } else if (act === "merge-commit") {
             // Emptied first: the claim is that an empty box still records the merge's own message
@@ -231,9 +227,9 @@ Item {
             driver.reportAtCompletion(() => "merge_commit pressed=" + driver.act.witnessed("commitPressed"))
         } else if (act === "merge-standing") {
             // The boxes emptied under a stopped merge and left so: the message standing behind them shows as the
-            // placeholder (デザイン規約 §進行中の操作から出る). The picture is the claim — the words are the
-            // repository's and are drawn as written (`SummaryArea.placeholder`). `--preset conflict-staged`, or a
-            // `--repo` whose merge has stopped; nothing is written.
+            // placeholder (デザイン規約 §進行中の操作から出る). The picture is the claim — the words are the repository's
+            // and are drawn as written (`SummaryArea.placeholder`). `--preset conflict-staged`, or a `--repo` whose
+            // merge has stopped; nothing is written.
             page.showWip()
             wipPane.clearMessage()
             driver.reportAtCompletion(() => "merge_standing merging=" + worktree.opMerging
@@ -278,10 +274,11 @@ Item {
             wipPane.pointAtCommit = true
             eolCommitTimer.start()
         } else if (act === "amend-row") {
-            // Whether the amend row stands over this tree — a stopped merge takes it away (`WipCommitBlock.amendBarred`,
-            // `--preset conflict-staged`). With a branch for the argument (`--preset clashing`), the box is ticked as a
-            // hand ticks it and then that branch is merged, to stop on its conflict: the stop takes the tick away with
-            // the row, or the button would still send `--amend` (`WipCommitBlock.onAmendBarredChanged`).
+            // Whether the amend row stands over this tree — a stopped merge takes it away
+            // (`WipCommitBlock.amendBarred`, `--preset conflict-staged`). With a branch for the argument
+            // (`--preset clashing`), the box is ticked as a hand ticks it and then that branch is merged, to stop on
+            // its conflict: the stop takes the tick away with the row, or the button would still send `--amend`
+            // (`WipCommitBlock.onAmendBarredChanged`).
             page.showWip()
             if (arg !== "") {
                 wipPane.setAmendChecked(true)
@@ -292,8 +289,7 @@ Item {
             amendRowTimer.start()
         } else if (act === "amend-tip") {
             // The commit button's refusal with the amend box ticked over a stage that takes back all HEAD changed
-            // (`--preset undone`): the tip comes up once git has answered whether the amend would leave HEAD empty
-            // and HEAD's message has filled the box. Ticked as a hand ticks it, so the message is asked for too.
+            // (`--preset undone`). Ticked as a hand ticks it, so HEAD's message is asked for too (`amendTipTimer`).
             page.showWip()
             wipPane.setAmendChecked(true)
             page.amendToggled(true)
@@ -322,9 +318,6 @@ Item {
                 .concat(eolGoneTimer.inside ? ["held"] : ["away", "lifted"])
             eolGoneTimer.start()
         } else if (act === "eol-walk" || act === "eol-stay") {
-            // The rows moved under a still hand with the card out. `eol-walk` sends the list a whole row, so another
-            // row arrives under the hand; `eol-stay` sends it a pixel, so the hand stays on its row. The argument is
-            // the stage to stop at — `gone` / `back` (`back` when none).
             page.showWip()
             eolWalkTimer.stay = act === "eol-stay"
             eolWalkTimer.stopAt = arg === "" ? "back" : arg
@@ -336,10 +329,9 @@ Item {
         }
         return true
     }
-    /// The editor's own answer, latched off its edge (`RepoPage.commitAnswered`): the run's end is the commit's answer
-    /// and the status it asks for, which this barrier owes. `empty=` / `amend=` are read off the pane at the answer —
-    /// the boxes let go and the amend row with them — kept as witnesses of the write barrier this starts, and said by
-    /// the completion it makes. Heard once, on the run of a verb that presses the editor's commit.
+    /// The editor's own answer, latched off its edge (`RepoPage.commitAnswered`), ends `commit` and `amend`. `empty=` /
+    /// `amend=` are read off the pane at the answer — the boxes let go and the amend row with them — kept as witnesses
+    /// of the write barrier this starts, and said by the completion it makes.
     Connections {
         target: acts.page
         enabled: commitAnswer.armed
@@ -359,10 +351,10 @@ Item {
         }
     }
     // `commit` / `commit-refused` / `notice-over-diff`: the whole tree staged, then Commit pressed once it takes a
-    // press — Commit waits while a stage press stands, until the status after it is drawn (デザイン規約
-    // §バケツごとの一覧と、ペインの分け方), as a hand pressing it would. The staging is through by then, so the watch
-    // is armed again for the commit (`pressWrite`). The commit's answer completes `commit` (`commitAnswer`); the bar a
-    // refusal brings down completes the other two.
+    // press — Commit waits while a stage press stands, until the status after it is drawn
+    // (デザイン規約 §バケツごとの一覧と、ペインの分け方), as a hand pressing it would. The staging is through by then,
+    // so the watch is armed again for the commit (`pressWrite`). The commit's answer completes `commit`
+    // (`commitAnswer`); the bar a refusal brings down completes the other two.
     PageStage {
         id: commitAfterStage
         name: "commit_after_stage"
@@ -442,16 +434,15 @@ Item {
             driver.barrierNotice.start()
         }
     }
-    // Another worktree's uncommitted row read in this window, with every writing control down
-    // (`RepoPage.wipWritable`). Every field is read off the output side — built from `writable`,
-    // each would go green with the disabling unwired (app-ui.md §UI 自動化).
+    // Another worktree's uncommitted row read in this window, with every writing control down (`RepoPage.wipWritable`).
+    // Every field is read off the output side — built from `writable`, each would go green with the disabling unwired
+    // (app-ui.md §UI 自動化).
     PageStage {
         id: carriedReadTimer
         name: "carried_read"
         order: ["asked", "opened", "pointed", "walked"]
-        /// The run's line, read once the step has landed. What the pane showed before the step, which opens another
-        /// file — its lines, whether the first lit row is the file read, how many rows were lit — and whether the step
-        /// moved are the walk's witnesses; the rest is the pane as it stands.
+        /// The run's line, read once the step has landed: the walk's witnesses (what the pane showed before the step,
+        /// and whether it moved) beside the pane as it stands.
         function line() {
             const op = carriedReadTimer
             const files = page.wipUnstaged
@@ -620,8 +611,8 @@ Item {
             if (op.at("start")) {
                 if (!Awaited.all("notice_link_bar", { "bar": page.noticeCard.settled }))
                     return
-                // Whether the panel stood before the press — kept at the press, so `open=` is shown to be the press's
-                // doing — and whether the place word took it, the press's own answer.
+                // Kept at the press: whether the panel stood before it, and whether the place word took it (the press's
+                // own answer).
                 const pressed = op.input("pressed", () => {
                     op.witness("openBefore", page.commandsOpen)
                     op.witness("took", page.noticeCard.pressDetailLink())
@@ -752,8 +743,7 @@ Item {
     }
     // The write out and nothing moved: busy up and HEAD unmoved, as busy alone outlasts the write's answer. Read on
     // the tab's notify (rules-refs/app-ui.md「一瞬だけ立つ状態は signal で観測して latch する」): the whole window can
-    // pass within one turn of the loop, which a sampler beat would miss. Heard while `halfDuringTimer` runs: from
-    // before the press, which witnessed HEAD as the write found it, to the completion, whose report reads the latch.
+    // pass within one turn of the loop, which a sampler beat would miss.
     Connections {
         target: acts.repoTab
         enabled: halfWatch.duringOnly && !halfWatch.caught && halfDuringTimer.running
@@ -771,7 +761,6 @@ Item {
     PageStage {
         id: halfDuringTimer
         name: "half_during"
-        /// What the latch found; the page's numbers are the latched ones, not the settled page's.
         function line() {
             if (!halfWatch.caught)
                 return "wip_half_missed the commit landed before any notify carried a raised busy, so this run had no "
@@ -809,8 +798,7 @@ Item {
             if (!Awaited.all("reset_author_ready", { "ready": !(repoTab.headAuthorName === "") }))
                 return
             // HEAD's author as the commit below finds it.
-            resetAuthorTimer.say(() => "head_author differs="
-                                        + repoTab.headAuthorDiffers
+            resetAuthorTimer.say(() => "head_author differs=" + repoTab.headAuthorDiffers
                                         + " name=" + repoTab.headAuthorName)
             const committed = resetAuthorTimer.input("committed", () => {
                 wipPane.setResetAuthorChecked(true)
@@ -952,9 +940,7 @@ Item {
         name: "eol_gone"
         order: ["pointed", "away", "lifted"]
         property bool button: false
-        /// Stop with the card out and the hand in it, before the write that takes the warning away.
         property bool inside: false
-        /// Everything staged (`stage-all`) or unstaged (`unstage-all`), through the driver's door for a write.
         function pressAll(what) {
             return driver.pressWrite(what, () => {
                 if (what === "stage-all")
@@ -1042,14 +1028,13 @@ Item {
     // PGG_AUTO_ACT=eol-walk / eol-stay. The hand on the row's words as the pane hears it (`HandWatch.stir`), the card
     // out, then the unstaged list sent down under the still hand: the card goes and the hand is held. A whole row
     // (`eol-walk`): the light goes to the row that arrived under the hand at once, and its own card comes after a
-    // tremor and the rest (デザイン規約 §hover のツールチップ「手が動いたかの見切り」). A
-    // pixel (`eol-stay`): the row the hand stayed on keeps its light, and the tremor brings its card back after the
-    // rest (`HoverSeat.displace`). The report reads the state at the stage it stops at — `gone=` the card down,
-    // `slid_lit=` the first row's light, `under_lit=` the light of the row under the hand, `back=` the card up — but
-    // for the two read in the tremor's own turn: `tremor=` that row's light, `tremor_card=` the card put out
-    // (`visible`, up from the open call on, where `opened` waits out the enter transition). No stage stops at the
-    // tremor: the rest it starts runs on under the picture and the census, so what they show would be the machine's
-    // speed.
+    // tremor and the rest (デザイン規約 §hover のツールチップ「手が動いたかの見切り」). A pixel (`eol-stay`): the row
+    // the hand stayed on keeps its light, and the tremor brings its card back after the rest (`HoverSeat.displace`).
+    // The report reads the state at the stage it stops at — `gone=` the card down, `slid_lit=` the first row's light,
+    // `under_lit=` the light of the row under the hand, `back=` the card up — but for the two read in the tremor's own
+    // turn: `tremor=` that row's light, `tremor_card=` the card put out (`visible`, up from the open call on, where
+    // `opened` waits out the enter transition). No stage stops at the tremor: the rest it starts runs on under the
+    // picture and the census, so what they show would be the machine's speed.
     PageStage {
         id: eolWalkTimer
         name: "eol_walk"

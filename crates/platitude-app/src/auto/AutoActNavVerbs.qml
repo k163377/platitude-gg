@@ -4,8 +4,9 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The sidebar's own verbs: folding and peeking at a section, the second click on a row that is already lit,
-/// filtering, closing, and the rows that answer for a tag.
+/// The sidebar's own verbs: a row's click, double-click and second click, folding and peeking at a section (and the
+/// diff that folds the list), the current branch's stand-in, filtering, closing, the `+` that adds a remote, the tags'
+/// eye, the doors held under a replay, and a worktree's card with its removal.
 // `Item` because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
@@ -39,8 +40,7 @@ Item {
             const section = arg.substring(0, cut)
             const rowName = arg.substring(cut + 1)
             const model = section === "tag" ? tagsModel : section === "remote" ? remotesModel : branchesModel
-            sidebarPane.activateRow(section, rowName, rowName,
-                                    model.oidOfName(rowName))
+            sidebarPane.activateRow(section, rowName, rowName, model.oidOfName(rowName))
         } else if (act === "nav-fold" || act === "nav-peek"
                    || act === "nav-unfold" || act === "nav-peek-rename"
                    || act === "nav-peek-away" || act === "nav-peek-into"
@@ -82,8 +82,7 @@ Item {
                 // The box lands on the peeked row and holds the section open — the list is not put back for it
                 // (SidebarRowGestures.startEdit).
                 navProbe.peekAt("branch")
-                sidebarPane.beginRename("branch", worktree.branch,
-                                        worktree.branch)
+                sidebarPane.beginRename("branch", worktree.branch, worktree.branch)
             }
             navRailTimer.start()
         } else if (act === "nav-peek-again") {
@@ -101,7 +100,6 @@ Item {
             // it — the held section is not swapped: BRANCHES stays and TAGS never comes in.
             page.foldByHand(true)
             menuPeekTimer.how = arg === "" ? "behind" : arg
-            // The menu or the section first, as `how` names, then the other.
             menuPeekTimer.order = menuPeekTimer.how === "behind" ? ["menu_raised", "walked"]
                                 : menuPeekTimer.how === "under" ? ["peek_asked", "menu_raised"]
                                 : ["peek_asked", "walked"]
@@ -131,15 +129,13 @@ Item {
             // between, and a list that went and came back reads the second as a first click (デザイン規約 §左メニューの所作).
             page.foldByHand(true)
             reclickTimer.away = act === "nav-reclick-away"
-            // The section peeked before each click: again after the walk off for "-away".
             reclickTimer.order = reclickTimer.away
                 ? ["peeked", "first_click", "walked_off", "gone", "peeked_again", "second_click"]
                 : ["peeked", "first_click", "second_click"]
             reclickTimer.start()
         } else if (act === "nav-reclick-elsewhere") {
-            // The same gesture on the open list by the hand's own road — each click a press through the window's
-            // watcher, then the release the row answers at — with a press on the details pane after the first
-            // (`ReclickGesture`'s header).
+            // The same gesture on the open list by the hand's own road, with a press on the details pane after the
+            // first click (`ReclickGesture`'s header).
             elsewhereTimer.start()
         } else if (act === "nav-add-remote") {
             // The `+` of the REMOTES band, live even while the band is unavailable (`NavHeader.showAddRemote`), put
@@ -156,15 +152,14 @@ Item {
             navAddRemoteTimer.start()
         } else if (act === "doors-held") {
             // Every door onto the history (left pane and graph) while a replaying write runs; nothing freezes or dims
-            // (`SidebarPane.doorsHeld`). The rebase is real — the argument is the branch rebased onto and the menus'
-            // subject (`heldBranch`) — and its rise is latched below.
+            // (`SidebarPane.doorsHeld`). The rebase is real, onto `heldBranch`, and its rise is latched below.
             repoTab.rebase(arg, "")
             navHeldTimer.start()
         } else if (act === "nav-pin-edge") {
             // The current branch's stand-in riding the edge its row scrolled out of (`HeadPinRow`): the list is taken
             // to its end so the row leaves above. The other way the stand-in shows (`nav-open head:<filter>`) has no
-            // row to ride, so only the scroll reads this. No preset can make the lower edge: each checks out a
-            // name that sorts early.
+            // row to ride, so only the scroll reads this. No preset can make the lower edge: each checks out a name
+            // that sorts early.
             pinEdgeTimer.start()
         } else if (act === "nav-pin-seat") {
             // The stand-in in the seat a fold opened for it, with no hand on it (`nav-open head::<row>` has to light
@@ -185,10 +180,8 @@ Item {
         } else if (act === "nav-filter") {
             navProbe.typeFilter(arg)
             navFilterTimer.start()
-        } else if (act === "diff-fold" || act === "diff-unfold"
-                   || act === "diff-fold-by-hand"
-                   || act === "diff-fold-by-rename"
-                   || act === "diff-keep-folded") {
+        } else if (act === "diff-fold" || act === "diff-unfold" || act === "diff-fold-by-hand"
+                   || act === "diff-fold-by-rename" || act === "diff-keep-folded") {
             // "-by-hand" brings the list back and so takes the diff down; "-by-rename" opens a box in the peek, so
             // neither the fold nor the file goes; "-keep-folded" folds first, so closing the diff leaves it folded.
             page.showWip()
@@ -199,8 +192,7 @@ Item {
                 page.foldByHand(false)
             else if (act === "diff-fold-by-rename") {
                 navProbe.peekAt("branch")
-                sidebarPane.beginRename("branch", worktree.branch,
-                                        worktree.branch)
+                sidebarPane.beginRename("branch", worktree.branch, worktree.branch)
             } else if (act !== "diff-fold")
                 page.closeDiff()
             navRailTimer.start()
@@ -298,7 +290,6 @@ Item {
         function menuUp() {
             return { "live": driver.menusLive(), "menu": worktreeMenuTimer.menu.opened }
         }
-        /// The menu up and its card open beside it.
         function standing() {
             return { "live": driver.menusLive(), "menu": worktreeMenuTimer.menu.opened,
                      "card": worktreeMenuTimer.card.opened }
@@ -542,7 +533,7 @@ Item {
                                 + " says=" + branchesModel.headShownName
                                 // Unjudged, for a reader: `sat=` is the match itself, and a claim on `at=` / `gap=`
                                 // would go red whenever the row height token moves. `above=` is the seat off screen
-                                // riding the edge — false on every preset now, all of which fit.
+                                // riding the edge — false on every preset, all of which fit.
                                 + " at=" + Math.round(navProbe.headPinY)
                                 + " gap=" + Math.round(navProbe.headPinSeatY())
                                 + " above=" + navProbe.headPinAbove
@@ -553,7 +544,6 @@ Item {
         id: peekOpenTimer
         name: "nav_peek_open"
         property int want: 0
-        /// The peek's row there, and open.
         function opened() {
             return { "row": navProbe.peekNameAt(peekOpenTimer.want) !== "", "open": navProbe.rowFactsOpen }
         }
@@ -828,8 +818,8 @@ Item {
     // waits at the first stage until the watchdog).
     //
     // The graph is emptied before it is rebuilt, so the row is read only after `finishCount` moves. Tags back on
-    // lands twice, tag-less first (`RepoSession::restart_log`), and the row being back tells the second
-    // pass. The press waits for the row too, at the start alone: the page is current after the tag-less pass
+    // lands twice, tag-less first (`RepoSession::restart_log`), and the row being back tells the second pass. The
+    // press waits for the row too, at the start alone: the page is current after the tag-less pass
     // (rules-refs/app-ui.md「動詞の前提条件は入力を出す枝で読む」).
     PageStage {
         id: tagEyeTimer
@@ -906,9 +896,9 @@ Item {
         /// The landing, on the commit the row named when pressed (`want`, witnessed before the click: a recycled
         /// delegate asked afterwards can show another row's name). A commit the walk never reached is an answer: the
         /// page had settled before the click (`PageSettled`), so the row will not arrive, and waiting for it would end
-        /// at the watchdog with no picture left. Not so another worktree's
-        /// HEAD: the walk that draws it follows the worktrees' listing, which the settle does not wait for. A row the
-        /// model has but the view has not laid out yet is waited for.
+        /// at the watchdog with no picture left. Not so another worktree's HEAD: the walk that draws it follows the
+        /// worktrees' listing, which the settle does not wait for. A row the model has but the view has not laid out
+        /// yet is waited for.
         function landed() {
             const want = jumpTimer.witnessed("want")
             const landing = graphModel.rowOf(want)
@@ -995,7 +985,6 @@ Item {
                 return
             }
             if (op.away && op.at("first_click")) {
-                // The hand off the section it is on.
                 if (!Awaited.all("nav_reclick_away", { "peek": sidebarPane.peekKind !== "" }))
                     return
                 op.input("walked_off", () => {
@@ -1010,7 +999,6 @@ Item {
                 op.advance("gone")
                 return
             }
-            // Back on the section the walk took the hand off.
             if (op.at("gone") && !op.input("peeked_again", () => op.peek()))
                 return
             if (op.at("first_click") || op.at("peeked_again")) {
@@ -1040,8 +1028,6 @@ Item {
                                 + " marked=" + sidebarPane.activeKey
                                 + " away=" + op.away
                                 + " armed=" + op.witnessed("armed")
-                                // The fold stays for a box, the box is there, and it has the keyboard
-                                // (`SectionPeekPopup.pinned`).
                                 + " collapsed=" + page.sidebarCollapsed
                                 + " box=" + (sidebarPane.editKey !== "")
                                 + " focused=" + sidebarPane.peekSection.rowFocused(op.row)
@@ -1132,8 +1118,8 @@ Item {
         }
     }
     /// PGG_AUTO_ACT=nav-add-remote: the run stops with the real dialog on screen. `collapsed=` says which door it came
-    /// through, and that the folded one left the list folded (`NavRail.addableAt`) — putting it back would
-    /// close a diff being read. `name=` is `origin` only where there is no remote yet (`RemoteDialog`).
+    /// through, and that the folded one left the list folded (`NavRail.addableAt`) — putting it back would close a
+    /// diff being read. `name=` is `origin` only where there is no remote yet (`RemoteDialog`).
     PageStage {
         id: navAddRemoteTimer
         name: "nav_add_remote"
