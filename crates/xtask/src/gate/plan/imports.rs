@@ -1,26 +1,10 @@
-//! What QML loads off the tree by a relative path, read off each load the
-//! text holds: an import statement's string — `import "dir"`,
-//! `import 'file.js' as X`, a JS file's `.import "file.js" as X`, a module's
-//! `import … from "./m.mjs"` —, a value written to a property the QML types
-//! load from (`LOADED_FROM`: bound, assigned, given as a field), and what a
-//! function that loads is handed (`Qt.createComponent`, `setSource`,
-//! `Qt.resolvedUrl`, `Qt.include`, `import(…)`, a `StackView`'s `push` /
-//! `replace`). The text is read as the engine's lexer reads it
-//! (`crate::lex`), and a write is told from a name that only names the
-//! property by where it stands (`written`), so quoting, spacing, line
-//! breaks, comments and parentheses that change no meaning do not change
-//! what is read.
-//!
-//! Where a load is is one question; what it loads is another: a load's
-//! value is worked out as far as it is written out — strings, joined by
-//! `+`, chosen by `?:`, `||` or `??`, handed through `Qt.resolvedUrl`
-//! (`values`) —, and the file that value names on disk is worked out as Qt
-//! works it out (`super::urls`: the string's escapes, the URL, its
-//! resolution, the file). A string naming a `.qml`, `.js`, `.mjs` or
-//! `.qsb` file loads it too, by whatever route. A directory's `qmldir` adds
-//! the files it names. A module import (`import QtQuick`,
-//! `import platitude.ui`) resolves on the import path instead — what a
-//! runner stages there is its own to name (`crate::qmltest`).
+//! What QML loads off the tree by a relative path, and what that loads in
+//! turn: the URL paths each text's loads name (`super::loads`), the file
+//! each names on disk as Qt works it out (`super::urls`: its resolution,
+//! the file), a QML file's own directory, and the files a directory's
+//! `qmldir` names. A module import (`import QtQuick`, `import platitude.ui`)
+//! resolves on the import path instead — what a runner stages there is its
+//! own to name (`crate::qmltest`).
 //!
 //! What cannot be followed is not dropped: a path the tree does not hold is
 //! kept as it is named, so that its appearing moves a key; a load whose

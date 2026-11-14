@@ -1,11 +1,35 @@
+//! The URL paths a QML or JS text names, read off each load it holds: an
+//! import statement's string — `import "dir"`, `import 'file.js' as X`, a
+//! JS file's `.import "file.js" as X`, a module's `import … from "./m.mjs"`
+//! —, a value written to a property the QML types load from (`LOADED_FROM`:
+//! bound, assigned, given as a field), and what a function that loads is
+//! handed (`Qt.createComponent`, `setSource`, `Qt.resolvedUrl`,
+//! `Qt.include`, `import(…)`, a `StackView`'s `push` / `replace`). The text
+//! is read as the engine's lexer reads it (`crate::lex`), and a write is
+//! told from a name that only names the property by where it stands
+//! (`written`), so quoting, spacing, line breaks, comments and parentheses
+//! that change no meaning do not change what is read.
+//!
+//! Where a load is is one question; what it loads is another: a load's
+//! value is worked out as far as it is written out — strings, joined by
+//! `+`, chosen by `?:`, `||` or `??`, handed through `Qt.resolvedUrl`
+//! (`values`) —, and the URL path that value names is read as Qt reads the
+//! string (`super::urls`: its escapes, the URL). A string naming a `.qml`,
+//! `.js`, `.mjs` or `.qsb` file loads it too, by whatever route.
+//!
+//! `waits::reach` does the jobs of `conditional`, `top_level` and
+//! `value_end` with its own `conditional`, `split_top` and `expression_end`,
+//! which read optional chaining, an empty last stretch and a line's
+//! continuation otherwise, so the two are not one.
+
 use std::ops::Range;
 
 use super::urls::{string_value, url_path};
 use crate::lex::{Lang, Token, blanked, is_name, matching_close, tokens, unparenthesized};
 
 /// A URL path a text names ([`url_path`]): by a load, or by a string that
-/// only names a file a load may read by any route. [`loaded_from`] follows
-/// both alike.
+/// only names a file a load may read by any route. `imports::loaded_from`
+/// follows both alike.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct Named {
     pub path: String,
