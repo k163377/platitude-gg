@@ -1,4 +1,5 @@
-//! Wiring a tab to its feed, and the settings a tab holds.
+//! Wiring a tab to its feed, and the settings a tab holds or writes — a
+//! branch's upstream among them.
 
 use super::*;
 
@@ -66,5 +67,25 @@ impl RepoTab {
         self.tags_shown = shown;
         self.changed();
         self.with_session(|s| s.set_include_tags(shown));
+    }
+
+    /// Behind `setUpstream`; a name left empty asks nothing.
+    pub(super) fn upstream_set(&mut self, branch: String, remote: String, remote_branch: String) {
+        if branch.is_empty() || remote.is_empty() || remote_branch.is_empty() {
+            return;
+        }
+        let target = RemoteBranch {
+            remote,
+            branch: remote_branch,
+        };
+        self.ask_session(|s| s.set_upstream(branch, target));
+    }
+
+    /// Behind `unsetUpstream`; an empty name asks nothing.
+    pub(super) fn upstream_unset(&mut self, branch: String) {
+        if branch.is_empty() {
+            return;
+        }
+        self.ask_session(|s| s.unset_upstream(branch));
     }
 }

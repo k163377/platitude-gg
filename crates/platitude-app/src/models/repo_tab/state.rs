@@ -269,6 +269,20 @@ impl RepoTab {
         was_settled
     }
 
+    /// Behind `countWrite`: the id as the page holds it, counted out and
+    /// told; one that names no write (negative, or 0) counts nothing.
+    pub(super) fn count_write_told(&mut self, id: i32) {
+        let Ok(id) = u64::try_from(id) else {
+            return;
+        };
+        if id == 0 {
+            return;
+        }
+        self.telling_waits(|tab| {
+            tab.counted_out(id);
+        });
+    }
+
     /// Counts a write of this tab's out until what it left has been read
     /// again (`settling`). Says whether the tab was settled before.
     pub(super) fn unsettle(&mut self, id: u64) -> bool {
@@ -497,6 +511,34 @@ impl RepoTab {
             return;
         }
         self.ask_session(|s| s.reword(oid, message));
+    }
+
+    /// Behind `watchAmend`: says to the session whether an amend is in view,
+    /// taking the last answer down as the watch starts.
+    pub(super) fn amend_in_view(&mut self, on: bool) {
+        self.amend_watched = on;
+        if on && self.amend_empties {
+            self.amend_empties = false;
+            self.changed();
+        }
+        self.with_session(|s| s.watch_amend(on));
+    }
+
+    /// Behind `holdDraft`: hands the commit editor's words to the hub.
+    pub(super) fn keep_draft(&self, subject: String, body: String, amending: bool) {
+        let id = self.tab_id;
+        let draft = crate::hub::Draft {
+            subject,
+            body,
+            amending,
+        };
+        Hub::with(|hub| hub.hold_draft(id, draft));
+    }
+
+    /// The words the hub holds for this tab: empty where it holds none, or
+    /// where there is no hub.
+    pub(super) fn held_draft(&self) -> crate::hub::Draft {
+        Hub::with(|hub| hub.draft(self.tab_id)).unwrap_or_default()
     }
 
     /// The add slot's mode word, turned into what core stands the new worktree

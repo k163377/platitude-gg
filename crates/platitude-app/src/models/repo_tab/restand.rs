@@ -107,6 +107,15 @@ impl RepoTab {
         self.commit_waits = true;
         self.standing = true;
     }
+
+    /// Behind the `restand` slot: forgets the worktree being left, then tells
+    /// QML what moved.
+    pub(super) fn restand_told(&mut self) {
+        self.telling_waits(|tab| {
+            tab.forget_the_worktree();
+            tab.changed();
+        });
+    }
 }
 
 #[cfg(test)]

@@ -1,8 +1,46 @@
-//! A merge, rebase or cherry-pick that stopped on conflicts.
+//! Bringing work in — a merge, a rebase, a pull — and a merge, rebase or
+//! cherry-pick that stopped on conflicts.
 
 use super::*;
 
 impl RepoTab {
+    /// Behind `merge`: the slot's flags as core's options; a message of
+    /// blanks is none.
+    pub(super) fn merge_into_head(
+        &mut self,
+        rev: String,
+        no_ff: bool,
+        ff_only: bool,
+        message: String,
+    ) {
+        let options = platitude_core::integrate::MergeOptions {
+            no_ff,
+            ff_only,
+            squash: false,
+            message: (!message.trim().is_empty()).then_some(message),
+        };
+        self.ask_session(|s| s.merge(rev, options));
+    }
+
+    /// Behind `rebase`: onto `onto` where one is given.
+    pub(super) fn rebase_head(&mut self, upstream: String, onto: String) {
+        let options = platitude_core::integrate::RebaseOptions {
+            onto: crate::encode::optional_text(onto),
+            ..Default::default()
+        };
+        self.ask_session(|s| s.rebase(upstream, options));
+    }
+
+    /// Behind `pull`: the worktree's own branch where `branch` is empty, a
+    /// fast-forward of the branch named otherwise.
+    pub(super) fn pull_or_fast_forward(&mut self, branch: String) {
+        if branch.is_empty() {
+            self.ask_session(platitude_core::session::RepoSession::pull);
+        } else {
+            self.ask_session(|s| s.fast_forward(branch));
+        }
+    }
+
     /// `--continue` commits the index git holds: **not while a stage or
     /// unstage press stands** ([`Self::staging_turns_away`]). The ways out
     /// that take no index stay open.

@@ -6,15 +6,17 @@
 //! their doc — over bodies that shape their arguments and forward once,
 //! some raising the notify for what they moved. Every body that could be
 //! delegated has been: the feed's answers and the reads of one answer to
-//! `drain`, staging and discard to `ops_stage`, conflicts to
-//! `ops_conflict`, stash pushes, the remote and signature questions and
-//! every push that writes its id down to `ops_remote`, attaching the
-//! feed, config and the remote-name lookups to `ops_config`, deletes to
-//! `ops_delete`, standing in another worktree to `restand`, the write
-//! door, commit, checkout, reset, the worktree add and move and the header
-//! line (`lastError`) to `state`, the awaited write to `write_watch`. A
-//! slot whose rule reads nothing but its arguments belongs in `GitFacts`,
-//! not here.
+//! `drain`, staging and discard to `ops_stage`, merges, rebases, pulls and
+//! their conflicts to `ops_conflict`, stash pushes, the remote and
+//! signature questions and every push that writes its id down to
+//! `ops_remote`, attaching the feed, config (a branch's upstream too) and
+//! the remote-name lookups to `ops_config`, deletes to `ops_delete`,
+//! standing in another worktree to `restand`, the write door, a write
+//! counted out for another model, commit, the amend watch, the editor's
+//! draft, checkout, reset, the worktree add and move and the header line
+//! (`lastError`) to `state`, the awaited write to `write_watch`. A slot
+//! whose rule reads nothing but its arguments belongs in `GitFacts`, not
+//! here.
 //!
 //! The one step left is a redesign, in either of two directions: the
 //! write answers reach QML one field per slot (the fifteen
@@ -592,10 +594,7 @@ impl RepoTab {
     /// what stays is `forget_the_worktree`'s.
     #[qslot]
     fn restand(&mut self) {
-        self.telling_waits(|tab| {
-            tab.forget_the_worktree();
-            tab.changed();
-        });
+        self.restand_told();
     }
 
     /// A write the page had another model ask for in this same turn, counted
@@ -603,43 +602,29 @@ impl RepoTab {
     /// it would otherwise only count from its start.
     #[qslot]
     fn count_write(&mut self, id: i32) {
-        let Ok(id) = u64::try_from(id) else {
-            return;
-        };
-        if id == 0 {
-            return;
-        }
-        self.telling_waits(|tab| {
-            tab.counted_out(id);
-        });
+        self.count_write_told(id);
     }
 
     /// Hands the commit editor's unsent words to the hub, which is what
     /// holds them while this tab has no page (`hub::Draft`).
     #[qslot]
     fn hold_draft(&mut self, subject: String, body: String, amending: bool) {
-        let id = self.tab_id;
-        let draft = crate::hub::Draft {
-            subject,
-            body,
-            amending,
-        };
-        Hub::with(|hub| hub.hold_draft(id, draft));
+        self.keep_draft(subject, body, amending);
     }
 
     #[qslot]
     fn draft_subject(&self) -> String {
-        Hub::with(|hub| hub.draft(self.tab_id).subject).unwrap_or_default()
+        self.held_draft().subject
     }
 
     #[qslot]
     fn draft_body(&self) -> String {
-        Hub::with(|hub| hub.draft(self.tab_id).body).unwrap_or_default()
+        self.held_draft().body
     }
 
     #[qslot]
     fn draft_amending(&self) -> bool {
-        Hub::with(|hub| hub.draft(self.tab_id).amending).unwrap_or_default()
+        self.held_draft().amending
     }
 
     #[qslot]
@@ -861,12 +846,7 @@ impl RepoTab {
     /// one lands.
     #[qslot]
     fn watch_amend(&mut self, on: bool) {
-        self.amend_watched = on;
-        if on && self.amend_empties {
-            self.amend_empties = false;
-            self.changed();
-        }
-        self.with_session(|s| s.watch_amend(on));
+        self.amend_in_view(on);
     }
 
     // Every move is one job, whichever way it gets there: a failed half
@@ -937,24 +917,14 @@ impl RepoTab {
     /// records it is core's to decide (`branch::set_upstream`).
     #[qslot]
     fn set_upstream(&mut self, branch: String, remote: String, remote_branch: String) {
-        if branch.is_empty() || remote.is_empty() || remote_branch.is_empty() {
-            return;
-        }
-        let target = RemoteBranch {
-            remote,
-            branch: remote_branch,
-        };
-        self.ask_session(|s| s.set_upstream(branch, target));
+        self.upstream_set(branch, remote, remote_branch);
     }
 
     /// Leaves `branch` measured against nothing (`branch::unset_upstream`).
     /// Asked only where the listing shows it an upstream (`offers::ref_menu`).
     #[qslot]
     fn unset_upstream(&mut self, branch: String) {
-        if branch.is_empty() {
-            return;
-        }
-        self.ask_session(|s| s.unset_upstream(branch));
+        self.upstream_unset(branch);
     }
 
     /// Puts a lightweight tag on `commit` (HEAD when empty). Always
@@ -1174,11 +1144,7 @@ impl RepoTab {
     /// fast-forwarded to its upstream (`remote::fast_forward`).
     #[qslot]
     fn pull(&mut self, branch: String) {
-        if branch.is_empty() {
-            self.ask_session(platitude_core::session::RepoSession::pull);
-        } else {
-            self.ask_session(|s| s.fast_forward(branch));
-        }
+        self.pull_or_fast_forward(branch);
     }
 
     /// Pushes the checked-out branch to wherever it tracks, or to the
@@ -1333,13 +1299,7 @@ impl RepoTab {
     /// `git merge <rev>`.
     #[qslot]
     fn merge(&mut self, rev: String, no_ff: bool, ff_only: bool, message: String) {
-        let options = platitude_core::integrate::MergeOptions {
-            no_ff,
-            ff_only,
-            squash: false,
-            message: (!message.trim().is_empty()).then_some(message),
-        };
-        self.ask_session(|s| s.merge(rev, options));
+        self.merge_into_head(rev, no_ff, ff_only, message);
     }
 
     /// `git rebase <upstream>`; an empty `onto` uses `upstream` as the base.
@@ -1349,11 +1309,7 @@ impl RepoTab {
     /// (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
     #[qslot]
     fn rebase(&mut self, upstream: String, onto: String) {
-        let options = platitude_core::integrate::RebaseOptions {
-            onto: crate::encode::optional_text(onto),
-            ..Default::default()
-        };
-        self.ask_session(|s| s.rebase(upstream, options));
+        self.rebase_head(upstream, onto);
     }
 
     #[qslot]
