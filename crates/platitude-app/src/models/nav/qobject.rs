@@ -292,7 +292,8 @@ impl NavSectionModel {
     }
 
     /// Whether `remote` already has a branch called `name` — asked of the
-    /// remotes section by every door that would push a name there.
+    /// remotes section by every door that would push a name there, and by
+    /// the GitHub links, which point only at what the remote has.
     #[qslot]
     pub(super) fn has_remote_branch(&self, remote: String, name: String) -> bool {
         !self.oid_of_name(format!("{remote}/{name}")).is_empty()

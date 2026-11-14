@@ -79,7 +79,7 @@ QtObject {
             const holders = []
             for (let i = 0; i < hubs.length; i++) {
                 const there = GitFacts.githubBranchName(kind, name, upstream, hubs[i].remote, names)
-                if (there !== "" && links.remotesModel.oidOfName(hubs[i].remote + "/" + there) !== "")
+                if (there !== "" && links.remotesModel.hasRemoteBranch(hubs[i].remote, there))
                     holders.push({ "remote": hubs[i].remote, "url": GitFacts.githubBranchLink(hubs[i].repo, there),
                                    "name": there })
             }
