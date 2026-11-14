@@ -675,4 +675,20 @@ mod tests {
         tab.fetch_settled("", true);
         assert_eq!(tab.last_error, "fatal: bad revision");
     }
+
+    /// An operation that could not reach its remote names why beside git's
+    /// line, for the command log's header (`Words.unreachedWhy`).
+    #[test]
+    fn an_unreached_remote_names_why_beside_its_line() {
+        let mut tab = RepoTab::default();
+        tab.absorb(vec![TabMsg::OpError {
+            message:
+                "fatal: could not read Username for 'https://github.com': terminal prompts disabled"
+                    .into(),
+            why: "credentials".into(),
+        }]);
+        assert_eq!(tab.last_error_why, "credentials");
+        assert!(tab.last_error.starts_with("fatal: could not read Username"));
+        assert!(!tab.last_error_from_fetch);
+    }
 }
