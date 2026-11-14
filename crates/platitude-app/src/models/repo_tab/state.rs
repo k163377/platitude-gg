@@ -192,6 +192,22 @@ impl RepoTab {
         asked
     }
 
+    /// Runs `f`, then raises `settling_changed` and `commit_waits_changed`, in
+    /// that order, for whichever of the two `f` moved. Not around
+    /// [`Self::ask_session`], which raises them itself — wrapped, a write it
+    /// counts out on a settled tab raises `settling_changed` twice.
+    pub(super) fn telling_waits(&mut self, f: impl FnOnce(&mut Self)) {
+        let was_settling = self.settling;
+        let waiting = self.commit_waits;
+        f(self);
+        if self.settling != was_settling {
+            self.settling_changed();
+        }
+        if self.commit_waits != waiting {
+            self.commit_waits_changed();
+        }
+    }
+
     /// A write is out — accepted at this tab's door, or seen starting where it
     /// was asked elsewhere (`TabMsg::WriteState`) — until its answer
     /// (`write_answered`): the Commit button waits on it

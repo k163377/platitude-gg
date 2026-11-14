@@ -592,16 +592,10 @@ impl RepoTab {
     /// what stays is `forget_the_worktree`'s.
     #[qslot]
     fn restand(&mut self) {
-        let was_settling = self.settling;
-        let waiting = self.commit_waits;
-        self.forget_the_worktree();
-        self.changed();
-        if was_settling {
-            self.settling_changed();
-        }
-        if self.commit_waits != waiting {
-            self.commit_waits_changed();
-        }
+        self.telling_waits(|tab| {
+            tab.forget_the_worktree();
+            tab.changed();
+        });
     }
 
     /// A write the page had another model ask for in this same turn, counted
@@ -615,13 +609,9 @@ impl RepoTab {
         if id == 0 {
             return;
         }
-        let waiting = self.commit_waits;
-        if self.counted_out(id) {
-            self.settling_changed();
-        }
-        if self.commit_waits != waiting {
-            self.commit_waits_changed();
-        }
+        self.telling_waits(|tab| {
+            tab.counted_out(id);
+        });
     }
 
     /// Hands the commit editor's unsent words to the hub, which is what

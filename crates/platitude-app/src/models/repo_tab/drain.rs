@@ -9,16 +9,10 @@ impl RepoTab {
         let Some(feed) = self.feed.clone() else {
             return;
         };
-        let was_settling = self.settling;
-        let waiting = self.commit_waits;
-        self.absorb(feed.drain());
-        self.changed();
-        if self.settling != was_settling {
-            self.settling_changed();
-        }
-        if self.commit_waits != waiting {
-            self.commit_waits_changed();
-        }
+        self.telling_waits(|tab| {
+            tab.absorb(feed.drain());
+            tab.changed();
+        });
     }
 
     /// Everything the feed had waiting, folded into the properties QML
