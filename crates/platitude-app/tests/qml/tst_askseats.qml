@@ -28,13 +28,14 @@ Control {
         label: root.shortHeading
         accept: ""
     }
-    /// The ✕'s mark as the bar asks it for its air (`AskBar.askColumns.closeInk`).
+    /// The ✕'s mark as the bar asks it for its air (`AskBar.askColumns.closeInk`) — sized once the bar's words are built,
+    /// at its first opening (`AskBar.askBody`).
     NavIcon {
         id: closeInk
         visible: false
         kind: "close"
-        width: bar.closeButton.markSize
-        height: bar.closeButton.markSize
+        width: bar.closeButton !== null ? bar.closeButton.markSize : 0
+        height: bar.closeButton !== null ? bar.closeButton.markSize : 0
     }
     Component {
         id: publishForm
@@ -328,6 +329,8 @@ Control {
 
         /// The pill's tip opens under the pill: over it stand the heading and the ✕ (`TipAsk.under`).
         function test_the_pills_tip_opens_under_it() {
+            bar.open = true
+            tryVerify(() => bar.settled)
             verify(bar.pill.pillTip.under)
         }
 
