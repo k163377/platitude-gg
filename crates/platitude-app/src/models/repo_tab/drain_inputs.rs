@@ -4,6 +4,10 @@
 use super::*;
 use platitude_core::OperationKind as K;
 
+/// The id the queue gave the press under test, and one it gave somebody else.
+pub(super) const OURS: u64 = 7;
+pub(super) const SOMEBODY_ELSE: u64 = 8;
+
 /// One answer as the bridge carries it.
 pub(super) fn reported(
     id: u64,
@@ -20,6 +24,10 @@ pub(super) fn reported(
         head_seq: 0,
         reads_from: 0,
     }
+}
+
+pub(super) fn answered(id: u64, kind: K, error: &str) -> TabMsg {
+    reported(id, kind, error, None)
 }
 
 /// The write starting — none of its three boundaries (`session::write`).

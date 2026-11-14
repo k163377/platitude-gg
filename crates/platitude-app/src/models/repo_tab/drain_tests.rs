@@ -1,7 +1,7 @@
 //! What one answer out of the feed leaves the properties QML reads
 //! saying (`drain::settle_write`).
 
-use super::drain_inputs::{no_answer, reported, settle, started};
+use super::drain_inputs::{OURS, SOMEBODY_ELSE, answered, no_answer, reported, settle, started};
 use super::*;
 use platitude_core::OperationKind as K;
 
@@ -425,10 +425,6 @@ fn a_refusal_with_a_report_turns_no_row() {
     assert_eq!(answer.report_kind, "delete-refused");
 }
 
-fn answered(id: u64, kind: K, error: &str) -> TabMsg {
-    reported(id, kind, error, None)
-}
-
 /// The last boundary. A settle carries only the id; `_kind` keeps the
 /// calls reading like `answered` and `started`.
 fn settle_msg(id: u64, _kind: K) -> TabMsg {
@@ -495,10 +491,6 @@ fn a_notify_that_carried_no_answer_says_so() {
 }
 
 // ---- the editor's commit, found by the id its press was given --------
-
-/// The id the queue gave the press under test, and one it gave somebody else.
-const OURS: u64 = 7;
-const SOMEBODY_ELSE: u64 = 8;
 
 /// The editor sent a commit and waits for it — its answer, and the reading
 /// that finds the tree gone (`state::commit_from_fields`).
