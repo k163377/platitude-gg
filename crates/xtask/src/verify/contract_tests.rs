@@ -81,10 +81,14 @@ fn only_this_runs_completion_report_can_satisfy_a_judgment() {
     }
     for extra in [
         "INFO bench: card_latch was=true\n".to_string(),
-        "INFO bench: said run=r1 owner=page op=card_latch gen=1 stage=back: card_latch was=true\n".to_string(),
+        "INFO bench: said run=r1 owner=page op=card_latch gen=1 stage=back: card_latch was=true\n"
+            .to_string(),
         report.replace("run=r1", "run=other"),
     ] {
-        assert!(read(&lines(&at_report(&extra)), "r1").reports.is_empty(), "{extra}");
+        assert!(
+            read(&lines(&at_report(&extra)), "r1").reports.is_empty(),
+            "{extra}"
+        );
     }
     let late = read(&lines(&format!("{WELL}{report}")), "r1");
     assert!(late.reports.is_empty());
@@ -179,11 +183,9 @@ fn an_event_dropped_repeated_or_out_of_order_is_a_breach_that_stands() {
     );
     let found = read(&lines(&dropped), "r1").sequence;
     assert!(
-        found
-            .contains(&"the stage line `complete` came with seq=4 where 3 was due".to_string())
+        found.contains(&"the stage line `complete` came with seq=4 where 3 was due".to_string())
             && found.contains(
-                &"page/card_latch moved from back to complete where it stood at start"
-                    .to_string()
+                &"page/card_latch moved from back to complete where it stood at start".to_string()
             )
             && found.contains(
                 &"the completion counted 4 stage line(s) where 3 had been said".to_string()
@@ -343,8 +345,7 @@ fn a_completion_off_its_operations_chain_and_another_runs_lines_are_breaches() {
             .sequence
             .contains(&"the run was ended by a breach, not completed".to_string())
     );
-    let other =
-        format!("{WELL}INFO bench: pictured run=r0 artifact=app name=window holds=false\n");
+    let other = format!("{WELL}INFO bench: pictured run=r0 artifact=app name=window holds=false\n");
     let said = read(&lines(&other), "r1");
     assert_eq!(said.of_another_run, 1);
     assert!(breaches(&said, &[], None)[0].contains("another run"));
