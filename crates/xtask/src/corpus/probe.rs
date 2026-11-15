@@ -18,15 +18,19 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-/// What every application invocation carries (`process::executor`) less its
-/// `i18n.*Encoding` pins: spelled again here because xtask depends on std alone.
-const FIXED_ARGS: [&str; 9] = [
+/// What every application invocation carries (`process::executor`): spelled
+/// again here because xtask depends on std alone.
+const FIXED_ARGS: [&str; 13] = [
     "-c",
     "color.ui=false",
     "-c",
     "core.quotepath=false",
     "-c",
     "log.showSignature=false",
+    "-c",
+    "i18n.logOutputEncoding=utf-8",
+    "-c",
+    "i18n.commitEncoding=utf-8",
     "-c",
     "diff.autoRefreshIndex=false",
     "--no-optional-locks",
