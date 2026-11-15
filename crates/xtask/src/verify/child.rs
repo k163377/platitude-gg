@@ -13,12 +13,25 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use super::git_shim::{OTHER_GIT, SHIM_NO_LFS, SHIM_REAL, SHIM_SLOW, SHIM_VERSION};
-use super::options::Options;
+use super::options::{Options, Screen};
 use super::shim::{identity_answer, identity_seed, real_git};
 use crate::wait::{Budget, LOOK_AGAIN, Wait};
 
 /// Grace after the app-side watchdog before the parent reaps a wedged GUI.
 const GRACE_MS: u64 = 20_000;
+
+/// The offscreen platform's configuration `--screen` writes into the
+/// run's folder (`QOffscreenIntegration`'s `configfile`).
+const SCREEN_FILE: &str = "screen.json";
+
+/// The platform's own screen as it stands with no file — 96 dpi, one
+/// device pixel to a pixel — at the run's size.
+fn screen_config(screen: Screen) -> String {
+    format!(
+        r#"{{"screens":[{{"name":"verify","x":0,"y":0,"width":{},"height":{},"logicalDpi":96,"logicalBaseDpi":96,"dpr":1}}]}}"#,
+        screen.width, screen.height
+    )
+}
 
 /// Everything the run worked out before there was a process.
 pub(super) struct Start<'a> {
@@ -288,6 +301,17 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     crate::qt::offscreen_fonts(&mut cmd);
+    if let Some(screen) = opts.screen {
+        std::fs::write(shot_dir.join(SCREEN_FILE), screen_config(screen))
+            .map_err(|e| format!("writing {SCREEN_FILE} for --screen: {e}"))?;
+        // Named from the run's folder, where the app starts: the platform
+        // string is split at each `:`, so a Windows path would be cut at
+        // its drive.
+        cmd.env(
+            "QT_QPA_PLATFORM",
+            format!("offscreen:configfile={SCREEN_FILE}"),
+        );
+    }
     // Per build, so its runs share one compiled cache while a person's own
     // window and other seats' builds keep theirs (`platitude-app` qrc.rs).
     cmd.env("QML_DISK_CACHE_PATH", exe.with_file_name("qmlcache"));

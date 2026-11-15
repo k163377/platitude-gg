@@ -7,9 +7,21 @@ use super::{Arg, Verb};
 pub(super) const TABLE: &[Verb] = &[
     // Not judged: whether an edge lands off the screen is a question for a
     // real monitor, which the offscreen platform lacks.
+    //
+    // `log`: the log up in a maximised window, over a screen lower than
+    // the window's floor (`--screen`) — what a maximise on a small work
+    // area makes (デザイン規約 §窓の床). `under=true` is the window really
+    // below its floor, or the run asks nothing. `inside=` is the panes'
+    // and the log's edges read off the window: past the floor the split
+    // laid the log out under the window's bottom, and a log cut there
+    // frames like a short one. `order=` is which gave way: the panes under
+    // their floor only once the log is down to its least.
     Verb {
         name: "window-fill",
-        when: &[],
+        when: &[(
+            Arg::Is("log"),
+            "window_fill fills=true log=true under=true inside=true order=true",
+        )],
         plain: "window_fill fills=true",
     },
     // A window let past its floor frames like one held at it — the pane

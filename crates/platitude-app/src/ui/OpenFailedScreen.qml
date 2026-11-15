@@ -29,6 +29,10 @@ Item {
 
     /// Automation: the sweep hand, as a card's `<card>.background.pad`.
     property alias pad: failedHand
+    /// The least the seat may be laid out at in a window under its floor (`PageLayout.failedHeldHeight`): nothing here
+    /// scrolls, so the words and `Close tab` whole — and, with the log down, the toggle's row on either side of the
+    /// centred column.
+    readonly property real leastHeight: failedColumn.height + (commandsSeat.visible ? 2 * commandsSeat.height : 0)
 
     /// The "Close tab" button.
     signal closeRequested()

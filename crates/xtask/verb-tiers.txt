@@ -62,6 +62,7 @@ fonts	tab-pin	-	crushed= reads the tabs' measured widths
 fonts	tab-pin-go	-	crushed= reads the tabs' measured widths
 fonts	tab-widths	-	cut= reads the tabs' measured widths
 fonts	tab-widths short	-	cut= folded= read the tabs' measured widths
+fonts	window-fill log --screen 960x420	-	under= inside= order= read the log and the panes against the floor the fonts set
 fonts	wip-grow-squeeze	-	keeps= reads the description's laid-out height
 
 whole	author-card 0 --preset authorship	author-card-open 0 --preset authorship	other: Same name, same nameClipped read, same judgement on the same path; the -open run reaches a later point. Its value is the resting-name picture (verbs.md: 平常時).

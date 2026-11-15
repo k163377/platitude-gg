@@ -19,7 +19,10 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
       pane whose column runs off the right of the window frames exactly
       like one that fits, so the picture cannot answer it. So is
       `window-fill`: a maximised window fills the screen, leaving no
-      desktop beside it for an unpainted edge to show against. And so is
+      desktop beside it for an unpainted edge to show against. Its `log`
+      form opens the command log first, wants a `--screen` lower than
+      the window's floor, is photographed maximised, and is judged on
+      the panes and the log both standing inside the window. And so is
       `commands-clear`, where the panel the reader emptied goes down with
       the press and what is judged is what it left behind: a window with
       no panel in it, and a quiet mark in a corner of the band. Its
@@ -182,6 +185,10 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           place of --old-git and --no-lfs, and
                           the runs about it (settings-git-leave,
                           settings-git-path other) imply one.
+        --screen <W>x<H>  stand the offscreen platform's one screen at this
+                          size instead of its 800x800: a work area under
+                          the window's floor, which a maximise lays the
+                          window into (window-fill log --screen 960x420)
       The open-refused verbs (open-not-a-repo, open-bare, the -retry /
       -cancel ways out, and open-fail-tab for the road that keeps its
       tab) make their own folder when no argument names one: what they

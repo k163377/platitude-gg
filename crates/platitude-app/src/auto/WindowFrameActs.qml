@@ -24,15 +24,27 @@ Item {
     // maximises to 800×800, so the right line is `at=0,0 size=800x800` on both OSes (a FAIL still says
     // `screenshot saved=true`). Whether the window's edge lands off the screen is not headless's to judge: the edge
     // rule rests on pixels measured in a real window (rules-refs/app-ui.md).
+    //
+    // `log`: the log raised on the page first, and the window left maximised for the shot — the picture is the
+    // question. Over a `--screen` lower than the window's floor this is how a maximise on a small work area stands
+    // the window under its floor, which no size the app sets itself reaches (`WindowShape.holdFloor`); the line then
+    // reads the split off the window (`splitLine`).
     WindowStage {
         id: fillActTimer
         name: "window_fill"
-        order: ["maximized", "filled", "windowed"]
+        order: Harness.autoActArg === "log" ? ["maximized", "filled"] : ["maximized", "filled", "windowed"]
         running: Harness.autoAct === "window-fill"
         onTriggered: {
             const op = fillActTimer
+            const logs = Harness.autoActArg === "log"
             if (op.at("start")) {
+                // The log is the page's, so a run raising it waits for one.
+                if (logs && !Awaited.all("window_fill_page", {
+                        "page": window.curPage !== null && PageSettled.settledUnder(window) }))
+                    return
                 op.input("maximized", () => {
+                    if (logs)
+                        window.curPage.commandsOpen = true
                     window.visibility = Window.Maximized
                 })
                 return
@@ -40,21 +52,31 @@ Item {
             if (op.at("maximized")) {
                 if (!Awaited.all("window_fill_maximized", {
                         "maximized": window.visibility === Window.Maximized,
-                        "filled": mainUi.width === window.width && mainUi.height === window.height }))
+                        "filled": mainUi.width === window.width && mainUi.height === window.height,
+                        "log": !logs || window.curPage.commandsShown }))
                     return
                 op.advance("filled")
                 return
             }
             // Read back once the state and the layout inside the new size have both landed. In scene coordinates: a
             // margin that misses is what this looks for. The maximised window as it was read before it was put back
-            // (`fillLine`) is kept, and is the run's line.
+            // (`fillLine`) is kept, and is the run's line. The split lays out on polish, so its edges are read once
+            // they have stood across a polish pass.
             if (op.at("filled")) {
                 const at = mainUi.mapToItem(null, Qt.point(0, 0))
                 if (!Awaited.all("window_fill_report_ready", {
                         "placed": at.x === 0 && at.y === 0,
                         "filled": mainUi.width === window.width && mainUi.height === window.height,
-                        "page": PageSettled.windowSettled(window) }))
+                        "page": PageSettled.windowSettled(window),
+                        "laid": !logs || op.still("split_laid", JSON.stringify(acts.splitReading())) }))
                     return
+                if (logs) {
+                    op.complete({ "name": "window_fill_log",
+                                  "when": () => ({ "maximized": window.visibility === Window.Maximized,
+                                                   "log": window.curPage.commandsShown }),
+                                  "report": () => acts.fillLine() })
+                    return
+                }
                 if (!op.input("windowed", () => {
                         op.witness("filledLine", acts.fillLine())
                         window.visibility = Window.Windowed
@@ -71,10 +93,41 @@ Item {
         return "window_fill fills=" + (at.x === 0 && at.y === 0
                                        && mainUi.width === window.width
                                        && mainUi.height === window.height)
+            // The verdict's neighbours: `must_say` catches only one substring.
+            + (Harness.autoActArg === "log" ? acts.splitLine() : "")
             + " maximized=" + (window.visibility === Window.Maximized)
             + " at=" + at.x + "," + at.y
             + " size=" + mainUi.width + "x" + mainUi.height
             + " window=" + window.width + "x" + window.height
+    }
+    /// The page's vertical split read off the window: the three panes' row (the left menu stands its whole height)
+    /// and the log under it, in the body's coordinates.
+    function splitReading() {
+        const page = window.curPage
+        const panes = page.pageSidebar
+        const log = page.commandsPane
+        const pageTop = page.mapToItem(mainUi, 0, 0).y
+        const panesTop = panes.mapToItem(mainUi, 0, 0).y
+        const logTop = log !== null ? log.mapToItem(mainUi, 0, 0).y : 0
+        return { "pageEnd": pageTop + page.height, "panesEnd": panesTop + panes.height, "panesH": panes.height,
+                 "logTop": logTop, "logEnd": logTop + (log !== null ? log.height : 0),
+                 "logH": log !== null ? log.height : 0 }
+    }
+    /// `under=`: the window below its own floor. `inside=`: the panes end above the log, the log above the page's
+    /// foot and the page inside the window — past its floor the split lays its items out under its own bottom, where
+    /// nothing scrolls. `order=`: the panes stand under their floor only once the log is down to its least.
+    function splitLine() {
+        const page = window.curPage
+        const layout = page.pageLayout
+        const r = acts.splitReading()
+        return " log=" + page.commandsShown
+            + " under=" + (window.height < window.floorHeight)
+            + " inside=" + (r.panesEnd <= r.logTop && r.logEnd <= r.pageEnd && r.pageEnd <= mainUi.height)
+            + " order=" + (r.panesH >= layout.panesFloorHeight || r.logH <= layout.commandsLeastHeight)
+            + " floorH=" + Math.ceil(window.floorHeight)
+            + " panesH=" + r.panesH + " panesFloor=" + layout.panesFloorHeight
+            + " logH=" + r.logH + " logFloor=" + layout.commandsMinHeight + " logLeast=" + layout.commandsLeastHeight
+            + " logEnd=" + r.logEnd + " pageEnd=" + r.pageEnd
     }
 
     // _PGG_AUTO_ACT=window-floor [fold|log|wip|rail] (five forms, the bare one among them). With no argument the

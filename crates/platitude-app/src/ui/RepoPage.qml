@@ -2949,6 +2949,8 @@ FocusScope {
         sidebarPane: sidebarPane
         rightPane: rightPane
         commandsSeat: commandsSeat
+        pageSplit: pageSplit
+        failedSeat: failedSeat
         graphPane: graphPane
         noticeBar: noticeBar
         recoverBand: recoverBand
@@ -3653,7 +3655,9 @@ FocusScope {
         anchors.fill: parent
         spacing: 0
 
+        // The items' minimums come down with the room in a window under its floor (`PageLayout.panesHeldHeight`).
         SplitView {
+            id: pageSplit
             Layout.fillWidth: true
             Layout.fillHeight: true
             orientation: Qt.Vertical
@@ -3670,7 +3674,7 @@ FocusScope {
                 visible: page.openFailed
                 active: page.openFailed
                 SplitView.fillHeight: true
-                SplitView.minimumHeight: pageLayout.panesMinHeight
+                SplitView.minimumHeight: pageLayout.failedHeldHeight
                 sourceComponent: OpenFailedScreen {
                     kind: repoTab.errorKind
                     path: repoTab.errorPath
@@ -3685,7 +3689,7 @@ FocusScope {
             SplitView {
                 visible: !page.openFailed
                 SplitView.fillHeight: true
-                SplitView.minimumHeight: pageLayout.panesFloorHeight
+                SplitView.minimumHeight: pageLayout.panesHeldHeight
                 orientation: Qt.Horizontal
                 handle: SplitHandleBar {
                     onHandChanged: (which, held) => page.holdSplitBar(which, held)
@@ -4088,7 +4092,7 @@ FocusScope {
                 visible: page.commandsOpen
                 active: page.commandsOpen
                 SplitView.preferredHeight: 280
-                SplitView.minimumHeight: pageLayout.commandsMinHeight
+                SplitView.minimumHeight: pageLayout.commandsHeldHeight
                 sourceComponent: CommandsPane {
                     curPage: page
                     commandsModel: commandsModel

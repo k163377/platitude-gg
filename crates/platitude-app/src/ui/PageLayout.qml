@@ -21,6 +21,10 @@ QtObject {
     required property Item rightPane
     /// The log's seat in the vertical split. The height is the seat's even while the log is down.
     required property Item commandsSeat
+    /// The vertical split itself: its height is what the panes and the log share (`panesHeldHeight`).
+    required property Item pageSplit
+    /// The seat of the screen a tab that failed to open shows in the panes' place (`failedHeldHeight`).
+    required property Loader failedSeat
     required property GraphPane graphPane
     /// The two bars over the graph besides its question, whose least the middle column keeps (`panesMinHeight`).
     required property NoticeBar noticeBar
@@ -36,7 +40,7 @@ QtObject {
     required property DiffModel diffModel
 
     /// Applied once — from here on the splitters own these, and a binding would fight the drag
-    /// (rules-refs/app-ui.md「`SplitView` の min / max / preferred は代入で固定」). Whether the log is up is held in memory
+    /// (rules-refs/app-ui.md「`SplitView` の preferred は代入で固定」). Whether the log is up is held in memory
     /// only (`AppBackend::commands_shown`): a new launch finds it down.
     function applySavedLayout() {
         // The width before the fold: an unfolded list reads it through a binding, and the fold then pins the rail
@@ -88,6 +92,43 @@ QtObject {
     /// the foot that stands in for it is shorter.
     readonly property int commandsMinHeight:
         Theme.headerHeight + Theme.rowHeight + Theme.fontSmLine + 2 * Theme.spaceXs + Theme.spaceXs
+    /// The least the log gives way to in a window under its floor: the band and a record's first line, so the list
+    /// still shows a row and the rest of every record is reached by its scroll (デザイン規約 §窓の床).
+    readonly property int commandsLeastHeight: Theme.headerHeight + Theme.rowHeight
+
+    // ---- a window under its floor ----------------------------------------
+    // The floor is a hint to the window manager: Windows' and KWin's maximise, Wayland compositors and tiling window
+    // managers stand the window lower. Past the split's minimums `SplitView` lays its items out under its own bottom,
+    // where nothing scrolls, so the minimums come down with the room instead (user decision — ask before changing):
+    // **the log gives way first**, down to `commandsLeastHeight`, as it does just above the floor (the split holds its
+    // fill item, the panes, at their minimum and shortens the log down to its own); then the item over it, down to its
+    // least. Each pane takes what it is handed with the scroll it already has — the left menu's sections, the graph's
+    // rows, the commit block. Above the floor all of these are the floors themselves.
+    /// The least the panes give way to: the left menu whole (`SidebarPane.floorHeight` — the log never stands over its
+    /// last cell) and the bars standing over the graph — the report and the discard band each at its least, a
+    /// question at the least the floor keeps for any of its forms — so what gives way in the middle is the graph's
+    /// rows. Past it the split lays the log out under the window again.
+    readonly property real panesLeastHeight: Math.max(layout.sidebarPane.floorHeight,
+        (layout.noticeBar.open ? layout.noticeBar.leastHeight : 0)
+        + (layout.recoverBand.visible ? layout.recoverBand.leastHeight : 0)
+        + (layout.graphPane.asking ? layout.graphPane.askFloorHeight : 0))
+    /// The log's minimum: its floor while the split holds it under the item over it at that item's floor, else what
+    /// is left, down to its least.
+    readonly property real commandsHeldHeight: Math.max(layout.commandsLeastHeight, Math.min(
+        layout.commandsMinHeight,
+        layout.pageSplit.height - Theme.splitterWidth
+        - (layout.page.openFailed ? layout.panesMinHeight : layout.panesFloorHeight)))
+    /// What the split leaves the item over the log, the log at its minimum.
+    readonly property real roomOverLog:
+        layout.pageSplit.height - (layout.page.commandsOpen ? Theme.splitterWidth + layout.commandsHeldHeight : 0)
+    /// The panes' minimum (`panesFloorHeight` above the floor).
+    readonly property real panesHeldHeight:
+        Math.max(layout.panesLeastHeight, Math.min(layout.panesFloorHeight, layout.roomOverLog))
+    /// The same for the screen of a tab that failed to open: its floor (`panesMinHeight`) or the room, down to its
+    /// words and its way out whole (`OpenFailedScreen.leastHeight` — the screen does not scroll).
+    readonly property real failedHeldHeight: Math.max(
+        layout.failedSeat.item !== null ? layout.failedSeat.item.leastHeight : 0,
+        Math.min(layout.panesMinHeight, layout.roomOverLog))
     /// Whether the worktree pane scrolls past its bottom — its blocks keep their heights (`window-floor wip`).
     readonly property bool wipBlockScrolls: layout.wipPane.blockScrolls
     /// …and how far the commit-details pane runs past its bottom.

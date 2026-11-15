@@ -115,6 +115,36 @@ pub(super) struct Options {
     /// Keep this run off the board: for runs nobody asked to look at — a
     /// flakiness sweep, or the runs a suite drives (`verify::suite_words`).
     pub(super) no_board: bool,
+    /// The offscreen platform's one screen at a size of the run's own
+    /// (`--screen <W>x<H>`): a work area lower than the window's floor,
+    /// which a maximise lays the window into as Windows' and KWin's do
+    /// (デザイン規約 §窓の床) — the app holds every size it sets itself
+    /// to the floor, so no other road reaches it. `None`: the platform's
+    /// own 800x800.
+    pub(super) screen: Option<Screen>,
+}
+
+/// A screen's size as `--screen` spells it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct Screen {
+    pub(super) width: u32,
+    pub(super) height: u32,
+}
+
+impl Screen {
+    fn parse(raw: &str) -> Result<Self, String> {
+        let refused =
+            || format!("--screen takes <width>x<height> in pixels (960x420); got {raw:?}");
+        let (width, height) = raw.split_once('x').ok_or_else(refused)?;
+        Ok(Screen {
+            width: width.parse().map_err(|_| refused())?,
+            height: height.parse().map_err(|_| refused())?,
+        })
+    }
+
+    fn spelled(self) -> String {
+        format!("{}x{}", self.width, self.height)
+    }
 }
 
 impl Options {
@@ -171,6 +201,10 @@ impl Options {
         if !self.other_git.is_empty() {
             words.push("--other-git".to_string());
             words.push(self.other_git.clone());
+        }
+        if let Some(screen) = self.screen {
+            words.push("--screen".to_string());
+            words.push(screen.spelled());
         }
         Some(words.join(" "))
     }
@@ -234,6 +268,7 @@ impl Default for Options {
             other_git: String::new(),
             label: String::new(),
             no_board: false,
+            screen: None,
         }
     }
 }
@@ -331,6 +366,11 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             "--other-git" => {
                 opts.other_git = it.next().ok_or("--other-git needs a version")?.clone();
             }
+            "--screen" => {
+                opts.screen = Some(Screen::parse(
+                    it.next().ok_or("--screen needs <width>x<height>")?,
+                )?);
+            }
             // A misspelled flag stops the run here: riding on as a verb
             // argument, it would go out under conditions nobody asked for.
             other if other.starts_with("--") => {
@@ -368,6 +408,13 @@ fn name_the_verb(opts: &mut Options, positional: &[&str]) -> Result<(), String> 
     // passed without going red (rules-refs/app-ui.md「その kind だけが持つ側」).
     if opts.verb == "corner" && opts.arg.is_empty() {
         return Err("corner needs the pane it is about: wip, or the row to land on".into());
+    }
+    // Judged on the window standing under its floor (`under=true`), which
+    // the platform's own 800x800 never makes: the run could only go red.
+    if opts.verb == "window-fill" && opts.arg == "log" && opts.screen.is_none() {
+        return Err(
+            "window-fill log needs --screen <W>x<H> lower than the window's floor (960x420)".into(),
+        );
     }
     Ok(())
 }
@@ -609,6 +656,46 @@ mod tests {
         ])
         .expect("an absolute path");
         assert_eq!(kept.repo[0], std::path::Path::new(typed));
+    }
+
+    /// The screen is part of what the run shows, so it stays in the line
+    /// the table keys the run by; a size the platform could not be handed
+    /// refuses the run where it is typed.
+    #[test]
+    fn a_screen_of_the_runs_own_size_stays_in_its_line() {
+        let opts = parse(&[
+            "window-fill".to_string(),
+            "log".to_string(),
+            "--screen".to_string(),
+            "960x420".to_string(),
+        ])
+        .expect("a verb, its argument and a screen");
+        assert_eq!(
+            opts.screen,
+            Some(super::Screen {
+                width: 960,
+                height: 420
+            })
+        );
+        assert_eq!(
+            opts.typable_line().as_deref(),
+            Some("window-fill log --screen 960x420")
+        );
+        let Err(unscreened) = parse(&["window-fill".to_string(), "log".to_string()]) else {
+            panic!("the log form asks nothing on the platform's own screen");
+        };
+        assert!(unscreened.contains("--screen"), "{unscreened}");
+        for wrong in ["960", "960x", "x420", "960×420", "960x420.5"] {
+            let refused = parse(&[
+                "window-fill".to_string(),
+                "--screen".to_string(),
+                wrong.to_string(),
+            ]);
+            assert!(
+                refused.is_err_and(|why| why.contains("--screen takes")),
+                "{wrong}"
+            );
+        }
     }
 
     #[test]

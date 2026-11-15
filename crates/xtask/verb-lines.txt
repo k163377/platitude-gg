@@ -935,6 +935,7 @@ walk-silent landed --preset dirty	AppCardFace AppMenu AppMenuItem AppMenuSeparat
 walk-silent-card --preset dirty	AppCardFace BandStateCard ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 walk-silent-quit --preset dirty	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 window-fill	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
+window-fill log --screen 960x420	ChangeIcon CommandsPane CommandsTextSelect GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 window-floor	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 window-floor --preset rebase-conflict	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpExitCard OpExitRow OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 window-floor fold	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow

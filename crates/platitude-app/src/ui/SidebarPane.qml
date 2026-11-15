@@ -212,8 +212,8 @@ Rectangle {
     SplitView.minimumWidth: sidebar.minOpenWidth
     color: Theme.bgSurface
 
-    // Assigned, not bound: a drag writes the same attached `SplitView` properties, and a binding would be gone after
-    // the first one.
+    // Assigned, not bound: a drag writes the attached `preferredWidth`, and a binding there would be gone after the
+    // first one. The minimum and maximum move with it, in the one place the fold is written.
     onCollapsedChanged: sidebar.applyFold()
     function applyFold() {
         // Whichever way it goes, the rail's open section goes with the rail.
