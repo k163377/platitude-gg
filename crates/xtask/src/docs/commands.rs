@@ -32,6 +32,8 @@ const USAGE: [&str; 10] = [
     "crates/xtask/src/usage/pictures.rs",
     "crates/xtask/src/usage/sessions.rs",
 ];
+/// What a finding names when no page holds the entry it looked for.
+const USAGE_PAGES: &str = "crates/xtask/src/usage/";
 
 /// Where the verbs are dispatched, the other list that has to agree with
 /// the catalogue.
@@ -435,26 +437,38 @@ fn is_assignment(word: &str) -> bool {
 /// The usage page and the catalogue describe the same verbs, or one of
 /// them is out of date and a reader cannot tell which.
 fn usage(root: &Path, catalogue: &[&'static Command], held: &mut Held) -> Result<(), String> {
-    let mut printed: Vec<(String, String)> = Vec::new();
+    let mut printed: Vec<Entry> = Vec::new();
     for page in USAGE {
-        printed.extend(blocks(&read(&root.join(page))?));
+        printed.extend(blocks(page, &read(&root.join(page))?));
     }
     held.findings.extend(described(&printed, catalogue));
     Ok(())
 }
 
-fn blocks(text: &str) -> Vec<(String, String)> {
-    let mut printed: Vec<(String, String)> = Vec::new();
-    let mut current: Option<(String, String)> = None;
+/// One entry of the usage page: the verb its header names, its text, and
+/// the file it is written in — what a finding about it names.
+struct Entry {
+    page: &'static str,
+    verb: String,
+    text: String,
+}
+
+fn blocks(page: &'static str, text: &str) -> Vec<Entry> {
+    let mut printed: Vec<Entry> = Vec::new();
+    let mut current: Option<Entry> = None;
     for line in text.lines() {
         if let Some(header) = header(line) {
             if let Some(done) = current.take() {
                 printed.push(done);
             }
-            current = Some((header.to_string(), line.to_string()));
-        } else if let Some((_, block)) = current.as_mut() {
-            block.push('\n');
-            block.push_str(line);
+            current = Some(Entry {
+                page,
+                verb: header.to_string(),
+                text: line.to_string(),
+            });
+        } else if let Some(entry) = current.as_mut() {
+            entry.text.push('\n');
+            entry.text.push_str(line);
         }
     }
     printed.extend(current);
@@ -462,32 +476,32 @@ fn blocks(text: &str) -> Vec<(String, String)> {
 }
 
 /// What the page and the catalogue disagree about.
-fn described(printed: &[(String, String)], catalogue: &[&'static Command]) -> Vec<String> {
+fn described(printed: &[Entry], catalogue: &[&'static Command]) -> Vec<String> {
     let mut out = Vec::new();
-    for (verb, _) in printed {
-        if !catalogue.iter().any(|command| command.verb() == verb) {
+    for entry in printed {
+        if !catalogue.iter().any(|command| command.verb() == entry.verb) {
             out.push(format!(
-                "{}: the page describes `{verb}`, which no module declares — a verb a reader \
+                "{}: the page describes `{}`, which no module declares — a verb a reader \
                  is told about and the catalogue does not carry is a verb nothing holds",
-                USAGE[0]
+                entry.page, entry.verb
             ));
         }
     }
     for command in catalogue {
         let verb = command.verb();
-        let Some((_, block)) = printed.iter().find(|(named, _)| named == verb) else {
+        let Some(entry) = printed.iter().find(|entry| entry.verb == verb) else {
             out.push(format!(
-                "{}: nothing on the page describes `{verb}`, declared by {} — the page is \
-                 what `cargo xtask` with no argument hands a reader",
-                USAGE[0], command.id
+                "{USAGE_PAGES}: nothing on the page describes `{verb}`, declared by {} — the \
+                 page is what `cargo xtask` with no argument hands a reader",
+                command.id
             ));
             continue;
         };
         for option in command.options() {
-            if !block.contains(option) {
+            if !entry.text.contains(option) {
                 out.push(format!(
                     "{}: {} is run with {option} and the page's `{verb}` never names it",
-                    USAGE[0], command.id
+                    entry.page, command.id
                 ));
             }
         }
@@ -918,14 +932,23 @@ mod tests {
     #[test]
     fn the_page_answers_for_every_verb_and_every_option() {
         let page = "  land [<branch>]\n      Put a branch on main.\n\n  launch [--no-build]\n      A real window.\n";
-        assert!(described(&blocks(page), &catalogue()).is_empty());
+        assert!(described(&blocks("usage/a.rs", page), &catalogue()).is_empty());
 
         let silent = "  land [<branch>]\n      Put a branch on main.\n";
-        let found = described(&blocks(silent), &catalogue());
+        let found = described(&blocks("usage/a.rs", silent), &catalogue());
         assert_eq!(found.len(), 1, "{found:?}");
         assert!(
             found[0].contains("nothing on the page describes `launch`"),
             "{found:?}"
+        );
+
+        let mut pages = blocks("usage/a.rs", page);
+        pages.extend(blocks("usage/b.rs", "  sail\n      Not a command.\n"));
+        let found = described(&pages, &catalogue());
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(
+            found[0].starts_with("usage/b.rs: the page describes `sail`"),
+            "a finding names the file the entry is written in: {found:?}"
         );
     }
 
