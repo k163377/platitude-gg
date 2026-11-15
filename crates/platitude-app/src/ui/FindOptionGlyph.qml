@@ -49,7 +49,7 @@ HoverToolButton {
         }
         // The drawn marks, level with the letters and no wider than them: a dot and a star for a pattern, a corner
         // arrow for a new line.
-        Canvas {
+        InkCanvas {
             visible: glyph.mark === "regex" || glyph.mark === "newline"
             anchors.centerIn: parent
             width: Theme.iconMd
