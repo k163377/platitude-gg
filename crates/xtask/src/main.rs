@@ -48,6 +48,7 @@ mod versions;
 mod wait;
 mod waits;
 mod watched;
+mod wrap;
 mod yard;
 
 use std::process::ExitCode;
@@ -92,6 +93,7 @@ fn main() -> ExitCode {
             Some("launch") => gui::launch(&args[1..]),
             Some("awake") => awake::run(&args[1..]),
             Some("hook") => hook::run(&args[1..]),
+            Some("wrap") => wrap::run(&args[1..]),
             _ => {
                 usage::print();
                 return ExitCode::from(2);

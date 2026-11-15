@@ -22,8 +22,8 @@ pub(super) const ENTRIES: &str =
       moves no code: it owes its readers' tests and the registered lines,
       not clippy; taken out, it owes what still names it. A module one
       system alone compiles owes the other side nothing. The always-steps
-      (structure, waits, versions, docs, relied-messages check, verbs,
-      fmt) run every time and first; a build input that changed
+      (structure, waits, versions, docs, wrap, relied-messages check,
+      verbs, fmt) run every time and first; a build input that changed
       (Cargo.toml, Cargo.lock, the toolchain, cargo's configuration, a
       vendored crate) makes the reach the whole tree, the Dockerfile the
       container's side of it, clippy.toml every crate's clippy, and a TOML
@@ -186,8 +186,8 @@ pub(super) const ENTRIES: &str =
       opens on a bullet at any indent and is closed only by a block at
       column 0, which is what lets a table or a heading indented inside a
       list stay part of it; fenced code and YAML front matter are skipped
-      whole. Structure only: how wide a line runs and how a sentence is
-      built are the writer's. The Write hook says the same about the one
+      whole. Structure only: how wide a line runs is `wrap`'s, and how a
+      sentence is built the writer's. The Write hook says the same about the one
       file an edit just landed in, where a tear is cheapest to undo.
 
       It also holds the caps of the always-loaded documents (CLAUDE.md
@@ -202,6 +202,31 @@ pub(super) const ENTRIES: &str =
         --sync        write what is generated. Everything it writes is
                       also said, so the drift reaches the person who has
                       to decide which side was wrong
+
+  wrap [--fix] [<file>...]
+      The prose of every markdown file git tracks or would add filled to
+      120 columns, an East Asian wide character counted as two, and every
+      file ending on a line end. Left as they stand: vendor/ (the
+      patched-in crates' own documents) and a file with a carriage return
+      or a tab in an indent, whole; .claude/rules-refs and verify-ui's
+      verbs.md, line by line (one entry to a line, for the Grep that
+      returns it whole), which still end on a line end. Only paragraphs
+      are prose — blocks are read as CommonMark and GFM's tables read
+      them — and only their line ends move, where what is drawn stays the
+      same: the CSS drafts' segment break rule drops a line end between
+      two Japanese characters and draws any other as a space, judged by
+      the characters drawn either side of it. Where those cannot be told
+      (an emphasis delimiter that may be literal, a tag, a bracket) the
+      line end stays where it is. Code spans, tags, comments, links,
+      bracketed text and bare URLs are never split, and no line opens on
+      a block's marker. Code, display math, tables, headings, HTML, block
+      quotes, front matter and a paragraph that could hold a hard break
+      stay byte for byte. An always-step of `gate`; the Write hook says
+      the same about the file an edit just landed in. Without --fix it
+      names the paragraphs that are not filled and the files that do not
+      end on a line end, and fails; files named narrow it to them.
+      options:
+        --fix         write the filled paragraphs and the line ends
 
   qmltest [<tst_name>...] | qmltest --together
       The QtTest files under crates/platitude-app/tests/qml, run through

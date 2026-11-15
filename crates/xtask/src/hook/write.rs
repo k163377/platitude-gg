@@ -1,5 +1,6 @@
 //! The Write and Edit guards: where a write may land, and the notes an
-//! edit gets after (seat re-claim, QML registration and fonts, doc shape).
+//! edit gets after (seat re-claim, QML registration and fonts, doc shape,
+//! prose width).
 //!
 //! Not guarded, on purpose: an Edit that quotes more `old_string` than it
 //! needs. One deny costs an order of magnitude more than a tighter quote
@@ -61,6 +62,7 @@ pub(super) fn post_write(input: &str) -> Result<(), String> {
     notes.extend(seat::reclaim(input, &path));
     notes.extend(qml_notes(&path)?);
     notes.extend(doc_notes(&path));
+    notes.extend(crate::wrap::note(&path));
     if !notes.is_empty() {
         println!(
             "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PostToolUse\",\

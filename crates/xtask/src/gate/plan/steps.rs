@@ -219,6 +219,8 @@ fn always_steps() -> Vec<Step> {
             &[format!(".{}", "github"), DOCKERFILE.to_string()],
         ),
         step("docs", Side::Host, true, xtask(&["docs"]), &DOCS),
+        // Every markdown file git lists, wherever it stands.
+        step("wrap", Side::Host, true, xtask(&["wrap"]), &["."]),
         // A form the table adds or changes is read against git's
         // releases (`relied-messages audit`) before it stands.
         step(

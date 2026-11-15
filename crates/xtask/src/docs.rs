@@ -4,8 +4,8 @@
 //! `Kind::say`) in the documents read as rules ([`ROOTS`] and [`LOOSE`]).
 //! A tear keeps every word in order, so review does not see it.
 //!
-//! The count reads structure only: line width and sentence shape are the
-//! writer's.
+//! The count reads structure only: line width is `crate::wrap`'s, and
+//! sentence shape the writer's.
 
 mod commands;
 mod tokens;

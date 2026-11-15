@@ -56,11 +56,12 @@ fn primary_of(from: &Path) -> Option<PathBuf> {
 }
 
 /// The steps every gate runs regardless of the diff.
-pub const ALWAYS: [&str; 7] = [
+pub const ALWAYS: [&str; 8] = [
     "structure",
     "waits",
     "versions",
     "docs",
+    "wrap",
     "relied-messages",
     "verbs",
     "fmt",

@@ -69,3 +69,5 @@ verify.verbs
 verify.wedge
 versions.agree
 waits.audit
+wrap.check
+wrap.fix
