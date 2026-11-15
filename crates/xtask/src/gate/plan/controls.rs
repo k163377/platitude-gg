@@ -1,6 +1,9 @@
 //! Agent controls owe their tests without owing runs of the app.
 
-use super::{Ask, Composition, Lines, Reading, Tiers, graph, select};
+use super::steps::select;
+use super::{Ask, Lines, Reading, Tiers};
+use crate::gate::graph;
+use crate::gate::shown::Composition;
 
 #[test]
 fn agent_controls_owe_tests_but_no_app_runs() {
