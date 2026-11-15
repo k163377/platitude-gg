@@ -41,6 +41,20 @@ pub(crate) enum Tier {
     Host,
 }
 
+impl Tier {
+    const ALL: [Tier; 4] = [Tier::Fonts, Tier::Whole, Tier::Twin, Tier::Host];
+
+    /// The word a row of the table starts with.
+    fn word(self) -> &'static str {
+        match self {
+            Tier::Fonts => "fonts",
+            Tier::Whole => "whole",
+            Tier::Twin => "twin",
+            Tier::Host => "host",
+        }
+    }
+}
+
 /// What a whole row's reason starts with: the kind of thing that tells it
 /// from the pre-merge lines it leans on.
 const KINDS: [&str; 5] = ["git:", "picture:", "held:", "perf:", "other:"];
@@ -84,12 +98,13 @@ impl Tiers {
                 continue;
             }
             let fields: Vec<&str> = row.split('\t').collect();
-            let tier = match fields.first().copied() {
-                Some("fonts") => Tier::Fonts,
-                Some("whole") => Tier::Whole,
-                Some("twin") => Tier::Twin,
-                Some("host") => Tier::Host,
-                _ => {
+            let named = fields.first().copied();
+            let tier = match Tier::ALL
+                .into_iter()
+                .find(|tier| Some(tier.word()) == named)
+            {
+                Some(tier) => tier,
+                None => {
                     tiers
                         .unread
                         .push(format!("row {}: no tier in {row:?}", at + 1));
@@ -226,8 +241,9 @@ impl Tiers {
                 _ => {}
             }
             match entry.tier {
-                Tier::Fonts if !entry.leans.is_empty() => {
-                    out.push(format!("{line:?} is a fonts row and leans on nothing"));
+                Tier::Fonts | Tier::Host if !entry.leans.is_empty() => {
+                    let tier = entry.tier.word();
+                    out.push(format!("{line:?} is a {tier} row and leans on nothing"));
                 }
                 Tier::Whole => {
                     let kind = KINDS.iter().find(|kind| entry.why.starts_with(**kind));
@@ -311,7 +327,8 @@ mod tests {
     }
 
     /// A host row runs before a merge, so a whole row may lean on it; its
-    /// reason has to say which git the container lacks.
+    /// reason has to say which git the container lacks, and it leans on
+    /// nothing itself.
     #[test]
     fn a_host_row_is_a_witness_before_a_merge_and_names_the_git_it_needs() {
         let lines = registered(&[
@@ -333,6 +350,15 @@ mod tests {
             said.len() == 1 && said[0].contains("starts with `git:`"),
             "{said:?}"
         );
+        for tier in ["host", "fonts"] {
+            let leaning = format!("{TABLE}{tier}\tpush-lease-far\tpush-lease\tgit: the far side\n");
+            let said = Tiers::parse(&leaning).complaints(&lines);
+            assert!(
+                said.len() == 1
+                    && said[0].contains(&format!("is a {tier} row and leans on nothing")),
+                "{tier}: {said:?}"
+            );
+        }
     }
 
     #[test]
