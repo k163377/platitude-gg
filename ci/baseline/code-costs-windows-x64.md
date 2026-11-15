@@ -22,6 +22,7 @@
 | `repo::is_bare`(`rev-parse` 1 本) | 33ms |
 | `models::tabs` の folder 検査(`rev-parse` 1 本) | 30–36ms(リポジトリでもそうでなくても) |
 | `session::write` の replay(1 コミット) | 約 11ms(数百コミットの range で数秒) |
+| `session::write` の burst(列で一緒に待っていた Stage / Unstage / Discard は読み直しを挟まずに走り、後ろを 1 回だけ読む) | 合成コーパスの `--shared` の複製(tracked 109,652・fsmonitor 無し)で、きれいな木から別々のディレクトリの 5 ファイルを stage し、最初の押下から最後の書き込みの settled(Commit が待つ status)まで。release の `it`(`session_integration::write_burst::measured`)・6 回の中央値を 2 巡、他席が動いている機械: **5 本を続けて押すと 書き込みごとに読む 33.9–35.6s 対 1 回読む 8.7–8.8s**、0.3 秒おきに押すと 32.9–39.9s 対 16.7–18.8s(1 本目の後ろの読みの間に残り 4 本が並ぶので読みは 2 回)。**読み 1 回が 6–7s** で、`status` 0.9s の他は行末の読み — 素の git で `ls-files --eol --others` 2.1s・pending の `diff` 2 本 0.5s、残りは変更ファイルの(ディレクトリ, 拡張子)ごとの基準(`eol::baseline`) |
 | `session::build` の carry(refused → detect → stash) | 追加 3 spawn で 100–300ms |
 | `eol::attrs`(`check-attr` を 200 パスまとめて) | 1 batch 71ms 対 1 パス spawn 42ms |
 | `eol::sample`(index ではなく作業ツリーを読ませた場合) | 24.7s(106k ファイル)対 settled 数本の 42ms |
