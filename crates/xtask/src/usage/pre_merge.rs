@@ -126,7 +126,7 @@ pub(super) const ENTRIES: &str =
       not to grow; any other file that crosses the backstop fails. The
       other half of that § — fn 100 lines — is clippy's too_many_lines,
       raised to warn in the workspace lints, and an existing long function
-      carries #[expect(clippy::too_many_lines)] until it is cut up. Eight
+      carries #[expect(clippy::too_many_lines)] until it is cut up. Nine
       more checks of how the tree is divided run here too; the list heads
       crates/xtask/src/structure.rs.
 

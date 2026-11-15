@@ -346,7 +346,7 @@ fn verdict(lines: &[String], ending: &Ending) -> Result<String, String> {
         return Err(format!(
             "the shipped build could not load its QML — {failed_to_load} line(s) above. A type \
              in `platitude.ui` that only exists in `platitude.auto` is the usual cause \
-             (.claude/rules/app-ui.md「QML モジュールは 2 つ」)"
+             (.claude/rules/app-ui.md「QML モジュール」)"
         ));
     }
     if !lines.iter().any(|l| l.contains(STARTED)) {

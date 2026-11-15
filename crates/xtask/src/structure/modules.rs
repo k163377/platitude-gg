@@ -1,11 +1,13 @@
-//! The one boundary between the two QML modules, counted by machine
-//! (.claude/rules/app-ui.md「QML モジュールは 2 つ」).
+//! The boundary between the product's QML modules and the harness's,
+//! counted by machine (.claude/rules/app-ui.md「QML モジュール」). Who
+//! imports the product's own modules is `super::singletons`'.
 //!
 //! A shipped build carries no `platitude.auto`, and a static type
 //! reference resolves at load time, so a product line naming a harness
-//! type leaves the shipped build with no window. Every xtask builds the
-//! app with the feature (`crate::app_build::HARNESS_FEATURE`), so nothing else
-//! here notices.
+//! type leaves the shipped build with no window; a read off a harness
+//! singleton is no load failure but fails each time its line is
+//! evaluated. Every xtask builds the app with the feature
+//! (`crate::app_build::HARNESS_FEATURE`), so nothing else here notices.
 //!
 //! Naming a type is what QML resolves: an object declaration
 //! (`WindowHarness {`) and a typed property (`property TabProbe probe`),
@@ -15,9 +17,9 @@
 //!
 //! The Rust side's half: the singleton the feature registers
 //! (`harness::singleton::Harness`) is not in the qmldir, and the product
-//! may neither name it (an unresolvable singleton fails the document too)
-//! nor ask `AppBackend` for its members. Both are read out of the
-//! singleton's source, so a property added there is out of reach at once.
+//! may neither read it (a shipped build fails the line) nor ask
+//! `AppBackend` for its members. Both are read out of the singleton's
+//! source, so a property added there is out of reach at once.
 
 use std::path::Path;
 
@@ -51,8 +53,8 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
             if let Some(named) = types.iter().find(|ty| ty.named_by(line)) {
                 failures.push(format!(
                     "{PRODUCT}/{shown}:{} names the harness type {} — a shipped build has no \
-                     `platitude.auto` and would fail to load. Reach it through `HarnessSeat` \
-                     instead (.claude/rules/app-ui.md)",
+                     `platitude.auto`: the file would fail to load, or the line each time it \
+                     runs. Reach it through `HarnessSeat` instead (.claude/rules/app-ui.md)",
                     number + 1,
                     named.name
                 ));
@@ -60,9 +62,9 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
             if reads(line, SINGLETON, "") {
                 failures.push(format!(
                     "{PRODUCT}/{shown}:{} reads the harness singleton — a shipped build registers \
-                     no `{SINGLETON}`, and a document that names one the engine cannot resolve \
-                     does not load. The product asks its own properties and something else writes \
-                     them (.claude/rules/app-ui.md)",
+                     no `{SINGLETON}`, and a read off a singleton the engine cannot resolve fails \
+                     each time the line runs. The product asks its own properties and something \
+                     else writes them (.claude/rules/app-ui.md)",
                     number + 1
                 ));
             }
@@ -181,11 +183,11 @@ fn code_of(line: &str) -> String {
     code
 }
 
-/// One type `platitude.auto` exports.
+/// One type a qmldir exports.
 #[derive(Debug, PartialEq, Eq)]
-struct Exported {
-    name: String,
-    singleton: bool,
+pub(super) struct Exported {
+    pub(super) name: String,
+    pub(super) singleton: bool,
 }
 
 impl Exported {
@@ -217,7 +219,7 @@ fn harness_types(root: &Path) -> Result<Vec<Exported>, String> {
 /// script and a word starting `#` starts a comment. A QML type's name starts
 /// upper case, so a directive (`module`, `plugin` …) exports nothing, and
 /// neither does an `internal` line: that type is the module's own.
-fn exported(line: &str) -> Option<Exported> {
+pub(super) fn exported(line: &str) -> Option<Exported> {
     let words: Vec<&str> = line
         .split_whitespace()
         .take_while(|word| !word.starts_with('#'))

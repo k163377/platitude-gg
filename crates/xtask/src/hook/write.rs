@@ -96,8 +96,9 @@ fn doc_notes(path: &str) -> Vec<String> {
 }
 
 /// QML rules a change keeps missing: a file absent from qmldir or main.rs
-/// fails to resolve only at runtime, and a wrong font form renders fine on
-/// the machine that wrote it.
+/// fails to resolve only at runtime, so does a singleton read without its
+/// module's import, and a wrong font form renders fine on the machine that
+/// wrote it.
 fn qml_notes(path: &str) -> Result<Vec<String>, String> {
     // Every QML module — the product's (`platitude.ui`, and each in a
     // directory under it) and the harness's (`platitude.auto`) — has its own
@@ -143,6 +144,12 @@ fn qml_notes(path: &str) -> Result<Vec<String>, String> {
         ));
     }
     if let Ok(content) = std::fs::read_to_string(path) {
+        // The same reading `cargo xtask structure` makes of the imports.
+        notes.extend(crate::structure::singletons::notes(
+            std::path::Path::new(root),
+            shown,
+            &content,
+        ));
         notes.extend(qml_font_notes(&content));
         // Theme.qml is where the weight token picks its per-OS value.
         if file_name != "Theme.qml" {
@@ -281,7 +288,9 @@ mod tests {
     }
 
     /// A singleton's file stands a directory below the product's, its
-    /// registry beside it and main.rs two up.
+    /// registry beside it and main.rs two up; a file there that its qmldir
+    /// does not declare hears what the module holds, and a file reading a
+    /// singleton unimported hears so, as each is written.
     #[test]
     fn a_module_under_ui_is_judged_by_its_own_qmldir_and_main_rs() {
         let root = crate::yard::Yard::new("hook-write-modules");
@@ -302,14 +311,28 @@ mod tests {
         );
         write("ui/words/Words.qml", "pragma Singleton\nQtObject {}\n");
         write("ui/words/Stray.qml", "Item {}\n");
+        write("ui/Reader.qml", "Item {\n    width: Words.lead\n}\n");
         let at = |path: &str| format!("{}/{path}", app.to_string_lossy().replace('\\', "/"));
         let kept = qml_notes(&at("ui/words/Words.qml")).expect("notes");
         assert!(kept.is_empty(), "{kept:?}");
         let stray = qml_notes(&at("ui/words/Stray.qml")).expect("notes");
-        assert_eq!(stray.len(), 1, "{stray:?}");
+        assert_eq!(stray.len(), 2, "{stray:?}");
         assert!(
             stray[0].contains("src/ui/words/qmldir and main.rs"),
             "{stray:?}"
+        );
+        assert!(
+            stray[1].contains(
+                "ui/words/Stray.qml is not declared by the module's qmldir — a singleton is \
+                 declared there"
+            ),
+            "{stray:?}"
+        );
+        let reader = qml_notes(&at("ui/Reader.qml")).expect("notes");
+        assert!(
+            reader.iter().any(|note| note
+                .contains("ui/Reader.qml:2: reads Words without importing platitude.ui.words")),
+            "{reader:?}"
         );
     }
 }

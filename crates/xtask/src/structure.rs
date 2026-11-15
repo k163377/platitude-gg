@@ -18,8 +18,10 @@
 //!   the baseline follows it down; it may not grow.
 //! * **neither** — the backstop applies as written.
 //!
-//! Eight other questions of how the tree is divided are counted here too:
-//! the product's QML may not name a harness type ([`modules`]), the app's
+//! Nine other questions of how the tree is divided are counted here too:
+//! the product's QML may not name a harness type ([`modules`]), a
+//! singleton past the tokens stands in a module of its own that only its
+//! readers import ([`singletons`]), the app's
 //! Rust may not look a `_PGG_*` variable up outside the module that owns
 //! them ([`env`]), the product's QML closes no popup but its own
 //! ([`popups`]), QML asks the graph, not a row's id, which row is this
@@ -38,6 +40,7 @@ pub(crate) mod labels;
 mod modules;
 mod popups;
 mod relied_messages;
+pub(crate) mod singletons;
 mod textboxes;
 mod throwaway;
 mod wiprow;
@@ -71,6 +74,24 @@ const LEDGER: &str = ".claude/rules-refs/structure.md";
 const LEDGER_SECTION: &str = "## 分割しない判断";
 /// Where a failing count sends its reader.
 const RULES: &str = ".claude/rules/structure.md";
+
+/// What a red run says when every failure is of one kind ([`verdict`]),
+/// after their count.
+const SHIPPED_LACKS: &str =
+    "file(s) reaching for something a shipped build does not carry (.claude/rules/app-ui.md)";
+const IMPORTS_OUT_OF_STEP: &str = "singleton(s) out of their module, or file(s) reading one \
+    they do not import or importing one they do not read (.claude/rules/app-ui.md「QML \
+    モジュール」)";
+const CLOSING_FOR_OTHERS: &str = "line(s) closing a popup that is not theirs to close \
+    (.claude/rules-refs/app-ui.md「メニューを閉じるのは自分」)";
+const MESSAGES_STRAYED: &str = "line(s) matching git's words against a literal outside the \
+    table (internal-docs/gitの扱い.md §git の文言に依存する判定)";
+const MENUS_KEPT: &str = "line(s) a text box leaves to the style's menu or to nothing \
+    (.claude/rules-refs/app-ui.md「`FieldMenu` = 文字の欄の右クリック」)";
+const FORMATS_GUESSED: &str = "line(s) drawing input with a label that guesses its format, or \
+    naming a format outside the parts that draw markup";
+const TREES_UNSWEPT: &str = "spelling(s) standing a tree under the throwaway folder where no \
+    sweep reads it, or excusing one that is gone (`structure::throwaway`)";
 
 const BASELINE_HEADER: &str = "\
 # Baseline for `cargo xtask structure` — the files that were already past
@@ -124,6 +145,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let (pinned, over) = check_baseline(&root, &rest, counted.len())?;
     failures.extend(over);
     let (crossed, harness_types) = modules::check(&root)?;
+    let (out_of_step, imports_read) = singletons::check(&root)?;
     let (looked_up, app_files) = env::check(&root)?;
     let (closed_for, product_files) = popups::check(&root)?;
     let (asked_the_id, qml_files) = wiprow::check(&root)?;
@@ -131,13 +153,20 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let (guessed_formats, label_files) = labels::check(&root)?;
     let (stray_messages, word_readers) = relied_messages::check(&root)?;
     let (unswept, tooling_files) = throwaway::check(&root)?;
-    let boundary_broken = crossed.len() + looked_up.len();
-    let closing_for_others = closed_for.len();
-    let menus_kept = styled_boxes.len();
-    let formats_guessed = guessed_formats.len();
-    let messages_strayed = stray_messages.len();
-    let trees_unswept = unswept.len();
+    let kinds = [
+        (crossed.len() + looked_up.len(), SHIPPED_LACKS.to_string()),
+        (out_of_step.len(), IMPORTS_OUT_OF_STEP.to_string()),
+        (closed_for.len(), CLOSING_FOR_OTHERS.to_string()),
+        (stray_messages.len(), MESSAGES_STRAYED.to_string()),
+        (styled_boxes.len(), MENUS_KEPT.to_string()),
+        (
+            guessed_formats.len(),
+            format!("{FORMATS_GUESSED} ({})", labels::RULE),
+        ),
+        (unswept.len(), TREES_UNSWEPT.to_string()),
+    ];
     failures.extend(crossed);
+    failures.extend(out_of_step);
     failures.extend(looked_up);
     failures.extend(closed_for);
     failures.extend(asked_the_id);
@@ -156,6 +185,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
             "structure: {} files counted, {code} code lines in {physical} physical \
              ({}% comment and blank), {} on the ledger, {pinned} pinned by the baseline, \
              {harness_types} harness types out of the product's reach, \
+             {imports_read} QML files importing the singletons they read and no others, \
              {app_files} app files off the environment, \
              {product_files} product files closing nothing but their own, \
              {qml_files} QML files asking the graph which row is this window's, \
@@ -169,43 +199,18 @@ pub fn run(args: &[String]) -> Result<(), String> {
             ledgered.len()
         );
         Ok(())
-    } else if boundary_broken == failures.len() {
-        Err(format!(
-            "{boundary_broken} file(s) reaching for something a shipped build does not \
-             carry (.claude/rules/app-ui.md)"
-        ))
-    } else if closing_for_others == failures.len() {
-        Err(format!(
-            "{closing_for_others} line(s) closing a popup that is not theirs to close \
-             (.claude/rules-refs/app-ui.md「メニューを閉じるのは自分」)"
-        ))
-    } else if messages_strayed == failures.len() {
-        Err(format!(
-            "{messages_strayed} line(s) matching git's words against a literal outside the \
-             table (internal-docs/gitの扱い.md §git の文言に依存する判定)"
-        ))
-    } else if menus_kept == failures.len() {
-        Err(format!(
-            "{menus_kept} line(s) a text box leaves to the style's menu or to nothing \
-             (.claude/rules-refs/app-ui.md「`FieldMenu` = 文字の欄の右クリック」)"
-        ))
-    } else if formats_guessed == failures.len() {
-        Err(format!(
-            "{formats_guessed} line(s) drawing input with a label that guesses its format, or \
-             naming a format outside the parts that draw markup ({})",
-            labels::RULE
-        ))
-    } else if trees_unswept == failures.len() {
-        Err(format!(
-            "{trees_unswept} spelling(s) standing a tree under the throwaway folder where no \
-             sweep reads it, or excusing one that is gone (`structure::throwaway`)"
-        ))
     } else {
-        Err(format!(
-            "{} file(s) over the length they are held to ({RULES} §長さの閾値)",
-            failures.len()
-        ))
+        Err(verdict(&kinds, failures.len()))
     }
+}
+
+/// What a red run says of its `total` failures: a kind's own words when
+/// every one is of that kind, the length's otherwise.
+fn verdict(kinds: &[(usize, String)], total: usize) -> String {
+    kinds.iter().find(|(count, _)| *count == total).map_or_else(
+        || format!("{total} file(s) over the length they are held to ({RULES} §長さの閾値)"),
+        |(count, what)| format!("{count} {what}"),
+    )
 }
 
 /// The baseline ratchet over the files the ledger does not answer for:
