@@ -246,7 +246,7 @@ pub(super) fn opens_object(chars: &[char], at: usize) -> bool {
 
 /// The identifier (dots included) that ends just before `at`, whitespace
 /// between them allowed.
-fn identifier_before(chars: &[char], at: usize) -> Option<String> {
+pub(super) fn identifier_before(chars: &[char], at: usize) -> Option<String> {
     let mut end = at;
     while end > 0 && chars[end - 1].is_whitespace() {
         end -= 1;

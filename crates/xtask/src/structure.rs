@@ -18,7 +18,7 @@
 //!   the baseline follows it down; it may not grow.
 //! * **neither** — the backstop applies as written.
 //!
-//! Nine other questions of how the tree is divided are counted here too:
+//! Ten other questions of how the tree is divided are counted here too:
 //! the product's QML may not name a harness type ([`modules`]), a
 //! singleton past the tokens stands in a module of its own that only its
 //! readers import ([`singletons`]), the app's
@@ -27,7 +27,8 @@
 //! ([`popups`]), QML asks the graph, not a row's id, which row is this
 //! window's worktree ([`wiprow`]), every text box the product declares
 //! hands its right-click and its menu key to the product's menu
-//! ([`textboxes`]), the repository's words are drawn by `PlainTextLabel`
+//! ([`textboxes`]), every mark drawn by hand stands on `InkCanvas`
+//! ([`canvases`]), the repository's words are drawn by `PlainTextLabel`
 //! and never by a label guessing its format ([`labels`]), the core
 //! matches git's words only against the messages of its table
 //! ([`relied_messages`]), and the tooling stands its throwaway trees only
@@ -35,6 +36,7 @@
 //!
 //! The fn half of the same § is left to clippy's `too_many_lines`.
 
+mod canvases;
 mod env;
 pub(crate) mod labels;
 mod modules;
@@ -86,6 +88,7 @@ const CLOSING_FOR_OTHERS: &str = "line(s) closing a popup that is not theirs to 
     (.claude/rules-refs/app-ui.md「メニューを閉じるのは自分」)";
 const MESSAGES_STRAYED: &str = "line(s) matching git's words against a literal outside the \
     table (internal-docs/gitの扱い.md §git の文言に依存する判定)";
+const MARKS_UNCOUNTED: &str = "bare `Canvas`(es) that `Ink.owed` never counts";
 const MENUS_KEPT: &str = "line(s) a text box leaves to the style's menu or to nothing \
     (.claude/rules-refs/app-ui.md「`FieldMenu` = 文字の欄の右クリック」)";
 const FORMATS_GUESSED: &str = "line(s) drawing input with a label that guesses its format, or \
@@ -150,6 +153,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let (closed_for, product_files) = popups::check(&root)?;
     let (asked_the_id, qml_files) = wiprow::check(&root)?;
     let (styled_boxes, text_boxes) = textboxes::check(&root)?;
+    let (bare_canvases, canvas_files) = canvases::check(&root)?;
     let (guessed_formats, label_files) = labels::check(&root)?;
     let (stray_messages, word_readers) = relied_messages::check(&root)?;
     let (unswept, tooling_files) = throwaway::check(&root)?;
@@ -159,6 +163,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
         (closed_for.len(), CLOSING_FOR_OTHERS.to_string()),
         (stray_messages.len(), MESSAGES_STRAYED.to_string()),
         (styled_boxes.len(), MENUS_KEPT.to_string()),
+        (
+            bare_canvases.len(),
+            format!("{MARKS_UNCOUNTED} ({})", canvases::RULE),
+        ),
         (
             guessed_formats.len(),
             format!("{FORMATS_GUESSED} ({})", labels::RULE),
@@ -171,6 +179,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     failures.extend(closed_for);
     failures.extend(asked_the_id);
     failures.extend(styled_boxes);
+    failures.extend(bare_canvases);
     failures.extend(guessed_formats);
     failures.extend(stray_messages);
     failures.extend(unswept);
@@ -190,6 +199,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
              {product_files} product files closing nothing but their own, \
              {qml_files} QML files asking the graph which row is this window's, \
              {text_boxes} text boxes handing their menu and their key to the product's, \
+             {canvas_files} product files drawing their marks on InkCanvas alone, \
              {label_files} product files drawing input with PlainTextLabel alone, \
              {word_readers} core functions reading git's words through the table, \
              {tooling_files} tooling files standing their throwaway trees where a sweep reads \
