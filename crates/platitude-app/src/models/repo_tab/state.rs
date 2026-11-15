@@ -262,11 +262,10 @@ impl RepoTab {
     /// A write another model asked for in this same turn
     /// (`DiscardModel.restoreAt`), counted out from its acceptance as the
     /// tab's own are (`ask_session`): settling, and out for the Commit
-    /// button. Says whether the tab was settled before (`unsettle`).
-    pub(super) fn counted_out(&mut self, id: u64) -> bool {
-        let was_settled = self.unsettle(id);
+    /// button.
+    pub(super) fn counted_out(&mut self, id: u64) {
+        self.unsettle(id);
         self.write_out(id);
-        was_settled
     }
 
     /// Behind `countWrite`: the id as the page holds it, counted out and

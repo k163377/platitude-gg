@@ -176,7 +176,8 @@ fn commit_waits_on_every_press_standing() {
 #[test]
 fn a_write_asked_by_another_model_counts_out_from_its_acceptance() {
     let mut tab = tab();
-    assert!(tab.counted_out(NEXT), "it was settled before");
+    assert!(!tab.settling, "it was settled before");
+    tab.counted_out(NEXT);
     assert!(tab.settling);
     assert!(tab.commit_waits);
     tab.absorb(vec![answer(NEXT, K::Stage, "")]);
