@@ -5,7 +5,7 @@ paths:
 
 # platitude-app 規約(Qt Bridges・QML 配線・意匠の実装対応)
 
-UI の**値**の正本は `Theme.qml` / `Metrics.qml`(なぜその値かは値の隣)。**どこで何に使うか**と用語
+UI の**値**の正本は `Theme.qml` / `Metrics.qml`。**どこで何に使うか**と用語
 は [デザイン規約.md](../../internal-docs/デザイン規約.md)(触る § だけを読み、トークンを表から選ぶ。表の値の列
 は <!--cmd:docs.sync-->`cargo xtask docs --sync` が書く)。**トークンは 3 層**(基礎 / ベーシック / 個別 — 規約 §トークン
 の三層)。**個別の層は名指しした画面だけが読む** — 別の画面が同じ寸法を欲しがったら、同じ数でも自分のトークンを足す。
@@ -17,8 +17,8 @@ UI の**値**の正本は `Theme.qml` / `Metrics.qml`(なぜその値かは値�
 
 ## Qt Bridges・QML の不変条件
 
-- 全 QObject は `Rc<RefCell<_>>`(メインスレッド専有)。**QML からの呼び出し中に再入 borrow すると panic** — 借用は短く保
-  つ
+- 全 QObject は `Rc<RefCell<_>>`(メインスレッド専有)。**借用を持ったまま signal・通知を出すと二重借用で panic** — 聞いた
+  QML は同期で同じオブジェクトを呼び戻すので、出す前に借用を手放すか、聞く側が一手遅らせる(`Qt.callLater`)
 - バックグラウンド → UI は `QmlObject::get_qml_method_invoker()` の `QmlMethodInvoker` をスレッドへ移して
   `invoke_method*`(queued)。UI を触るのはこの経路だけ。invoker は Send・Clone 不可 — 渡す先の数だけ取る
 - モデルの proxy(`try_get_rust_proxy_ptr()`)は `&*proxy` の共有参照でだけ触る — Qt が通知の最中に同じ proxy へ再入す
@@ -35,16 +35,14 @@ UI の**値**の正本は `Theme.qml` / `Metrics.qml`(なぜその値かは値�
 - QML は `ui/` 直下フラットに 1 ファイル 1 コンポーネント(`platitude.ui`)。**新規 QML は qmldir と main.rs の
   `qrc::embed!` の両方へ登録**(列挙された型しか見えない。`include_bytes_qml!` は使わない — rules-refs の `qrc::embed!`
   の行)
-- **QML モジュールは 2 つ — 製品 `ui/`(`platitude.ui`)と検証ハーネス `auto/`(`platitude.auto`)**。後者は Cargo feature
-  `automation` でしか埋め込まれず(出荷ビルドには入らない)、**製品から `platitude.auto` の型は URL 越しだ
-  け**(`HarnessSeat` に `seats` を渡し `ask()` で取り出す)。**走らせ方は `Harness` singleton が答え、製品は中立な
-  property だけを持つ**。**Rust 側で `PGG_*` を読むのは `harness::knobs` だけ**(例外は `main.rs` の `PGG_LOG`)、core へ
-  は値で渡す。どれも**機械化済み: `cargo xtask structure`**
+- **QML モジュールは 2 つ — 製品 `ui/`(`platitude.ui`)と、Cargo feature `automation` でだけ埋め込む検証ハーネス
+  `auto/`(`platitude.auto`)**。製品はハーネスの型を URL 越し(`HarnessSeat`)でだけ参照し、置くのは中立な property だけ —
+  走らせ方は `auto/` と `Harness` singleton が決める。**Rust 側で `PGG_*` を読むのは `harness::knobs` だけ**(例外は
+  `main.rs` の `PGG_LOG`)、core へは値で渡す。どれも**機械化済み: `cargo xtask structure`**
 - **意匠の土台は既存の部品から選ぶ**(一覧は rules-refs の台座の行)。素の `Popup` / `ListView` / `RotationAnimator` /
   `elide` を新しく書かない — 台座に積んだ罠避けがまるごと落ちる。**3 箇所以上で言う同じ文・語は `Words`**
-- 配線: データは親→子へ property、操作・状態変更は子→親へ signal。タブのモデル群は `RepoPage` が所有しペインへ渡す(ペイ
-  ンはモデルの slot を呼んでよいが、ページ状態は signal で上げて page が変更する)。ウィンドウ横断(タブを開
-  く・settings・identity)は Main まで signal で上げる
+- 配線: データは親→子へ property、操作・状態変更は子→親へ signal(渡されたモデルの slot は呼んでよい)。ウィンドウ横断 (タ
+  ブを開く・settings・identity)は Main まで signal で上げる
 - **メニューは `AppMenu` 系で書く**: 行の可否は開く関数で 1 度だけ決めて `offered` に置き、`offer()` で開き、閉じるのは
   自分の `dismiss()` 1 発(素の `Menu` を書かない。1 関数で閉じるのは 1 つまで = 機械化済み。各論は rules-refs の
   `AppMenu` / `offered` の行)

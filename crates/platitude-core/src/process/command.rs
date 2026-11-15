@@ -382,8 +382,10 @@ impl GitOutput {
         String::from_utf8_lossy(&self.stderr)
     }
 
-    /// git's own explanation of a failure, unedited: stderr, else stdout
-    /// (rules/core.md §git サブプロセス規約).
+    /// git's own explanation of a failure, unedited: stderr, else stdout —
+    /// `git commit` with nothing to commit says so on stdout, exiting 1.
+    /// Whole in the command log; what the notice bar says is the app's own
+    /// sentence (デザイン規約 §答えの要らない報せ).
     pub fn failure_message(&self) -> String {
         let stderr = self.stderr_utf8().trim().to_string();
         if stderr.is_empty() {

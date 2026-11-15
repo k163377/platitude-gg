@@ -2764,7 +2764,7 @@ FocusScope {
     RepoTab {
         id: repoTab
         // A turn later: this arrives mid-drain filling this page, and standing the tab elsewhere takes the page down
-        // (rules/app-ui.md §Qt Bridges・QML の不変条件 — 再入 borrow). `Qt.callLater` also folds a repeat ask into one.
+        // (rules/app-ui.md §Qt Bridges・QML の不変条件 — 二重借用). `Qt.callLater` also folds a repeat ask into one.
         onStandHomeAsked: Qt.callLater(page.standHomeRequested)
     }
     CommandsModel {

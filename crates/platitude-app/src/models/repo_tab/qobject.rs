@@ -344,7 +344,7 @@ impl RepoTab {
     ///
     /// Whoever hears it answers a turn later (`RepoPage`): it is emitted
     /// mid-drain, and moving the tab takes this page down
-    /// (rules/app-ui.md §Qt Bridges・QML の不変条件 — 再入 borrow).
+    /// (rules/app-ui.md §Qt Bridges・QML の不変条件 — 二重借用).
     #[qsignal]
     pub(super) fn stand_home_asked(&mut self);
 

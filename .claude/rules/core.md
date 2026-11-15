@@ -13,11 +13,8 @@ paths:
 
 ## git サブプロセス規約
 
-- コマンドは**引数配列**で組み立て、パースは機械可読形式のみ(`--porcelain=v2` / `-z` / `--format=`)。環境は
-  `LC_ALL=C`・`GIT_TERMINAL_PROMPT=0`・`GIT_EDITOR=true`(rebase -i は `GIT_SEQUENCE_EDITOR` = 非対話
-  helper)・`GIT_OPTIONAL_LOCKS=0`(全コマンド。diff には効かない —— 読みが index を書かない釘の全体は `process::executor`
-  の `FIXED_ARGS` / `FIXED_ENV`)。Windows は `CREATE_NO_WINDOW`
-- 失敗メッセージは stderr 優先・空なら stdout(`git commit` の「nothing to commit」は stdout で exit 1)
+- **git は全部 `GitCommand` を `process::executor` で撃つ**(引数配列。全コマンドに付く引数・環境・Windows の窓無し・継い
+  だ環境の除去は executor が持つ)。パースは機械可読形式のみ(`--porcelain=v2` / `-z` / `--format=`)
 - git の実行も完了待ちも常に UI(Qt)スレッドの外
 - **複合操作は 1 手目が失敗したら止める**(`?`)。**失敗が `Ok` に化ける経路**(`switch` の
   `CheckoutOutcome::Blocked`・`stash pop` の非ゼロ終了)だけは明示的に判定し、戻せるものは戻
@@ -27,10 +24,8 @@ paths:
   ト + キャンセル、ローカル書き込みは完走まで待つ**(close も)。例外はグラフの walk: 殺さず、予算だけ黙ったら待ち手を放し
   て帯に出す(`walk_silence`)。分類点は `operation::OperationKind::lane` の exhaustive match 1 箇所。auto fetch は多重起
   動しない
-- **git プロセスは全部 1 組の実行枠 `process::Slots` を通る**(**枠 = 子プロセス 1 本**)。優先度(`Priority` = 誰が待つ
-  か)・ペース(`Pace` = 何が速さを決めるか)・ログ(`Kept`)・キャンセル・書き込み順序は別の概念。背景の読みと外部に paced
-  されるコマンドは `max(1, n/4)` 本まで = 枠 2 以上ならクリックはそれらに待たされない(設定を下げた直後は走っている分が終
-  わるまで除く。枠 1 は予約が無く全部が順番。各論は rules-refs の `Slots` 項)
+- **git プロセスは全部 1 組の実行枠 `process::Slots` を通る**(**枠 = 子プロセス 1 本**。クリックの予約と優先度・ペースは
+  `Slots` のコメント、各論は rules-refs の `Slots` 項)
 - **新しいオプションは最低 git バージョンで確認してから使う** — 手順と確認記録への参照先は
   [gitの扱い.md](../../internal-docs/gitの扱い.md)
 
@@ -40,7 +35,7 @@ paths:
   `crate::Name`(`compact_str`)1 つだけで、条件は app が `as_str` / `&str` 比較 / `to_string` でだけ読むこと。**core → UI
   の通知は core 定義の trait / チャネル**で、app がブリッジへ繋ぐ — ブリッジ差し替え(Qt Bridges → CXX-Qt)を可能に保つ条
   件
-- 書き込みは `RepoSession` のキュー経由で直列化し、成否どちらでも refresh する。失敗は git の文言のまま出す
+- 書き込みは `RepoSession` のキュー経由で直列化し、成否どちらでも refresh する
 - **コマンドログの分類はキューの分岐 1 箇所**(`session::write::run_write`)。**`Asked` は書き込みの中にしか無
   い**(`CommandStarted.operation` が常に `Some`)— app の「パネルを開けるのは操作の答えだけ」がこれに乗るので、外へ出すな
   ら app の配線も一緒に決め直す(observer と 3 つの `Kept` は rules-refs の同項)
