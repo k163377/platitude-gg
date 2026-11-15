@@ -1,20 +1,20 @@
 # git's words the product reads (crates/platitude-core/src/relied_messages.rs), as each tree
 # read writes them: `cargo xtask relied-messages audit` writes this file, `check` holds the table to it
 # and `watch` holds git's sources to it. Not edited by hand.
-read	upstream	v2.43.0 v2.43.1 v2.43.2 v2.43.3 v2.43.4 v2.43.5 v2.43.6 v2.43.7 v2.44.0 v2.44.1 v2.44.2 v2.44.3 v2.44.4 v2.45.0 v2.45.1 v2.45.2 v2.45.3 v2.45.4 v2.46.0 v2.46.1 v2.46.2 v2.46.3 v2.46.4 v2.47.0 v2.47.1 v2.47.2 v2.47.3 v2.48.0 v2.48.1 v2.48.2 v2.49.0 v2.49.1 v2.50.0 v2.50.1 v2.51.0 v2.51.1 v2.51.2 v2.52.0 v2.53.0 v2.54.0 v2.55.0 v2.56.0 master
-read	gfw	v2.43.0.windows.1 v2.43.4.windows.1 v2.44.0.windows.1 v2.44.1.windows.1 v2.45.0.windows.1 v2.45.1.windows.1 v2.45.2.windows.1 v2.45.2.windows.2 v2.46.0.windows.1 v2.46.1.windows.1 v2.46.2.windows.1 v2.46.2.windows.2 v2.47.0.windows.1 v2.47.0.windows.2 v2.47.1.windows.1 v2.47.1.windows.2 v2.47.3.windows.1 v2.47.3.windows.2 v2.48.1.windows.1 v2.49.0.windows.1 v2.49.1.windows.1 v2.50.0.windows.1 v2.50.0.windows.2 v2.50.1.windows.1 v2.51.0.windows.1 v2.51.0.windows.2 v2.51.1.windows.1 v2.51.2.windows.1 v2.51.2.windows.2 v2.52.0.windows.1 v2.52.0.windows.2 v2.53.0.windows.1 v2.53.0.windows.2 v2.53.0.windows.3 v2.53.0.windows.4 v2.54.0.windows.1 v2.54.0.windows.2 v2.54.0.windows.3 v2.55.0.windows.1 v2.55.0.windows.2 v2.55.0.windows.3 v2.55.0.windows.4 v2.55.0.windows.5 v2.56.0.windows.1 v2.56.0.windows.2 main
+read	upstream	v2.43.0 v2.43.1 v2.43.2 v2.43.3 v2.43.4 v2.43.5 v2.43.6 v2.43.7 v2.44.0 v2.44.1 v2.44.2 v2.44.3 v2.44.4 v2.45.0 v2.45.1 v2.45.2 v2.45.3 v2.45.4 v2.46.0 v2.46.1 v2.46.2 v2.46.3 v2.46.4 v2.47.0 v2.47.1 v2.47.2 v2.47.3 v2.48.0 v2.48.1 v2.48.2 v2.49.0 v2.49.1 v2.50.0 v2.50.1 v2.50.2 v2.51.0 v2.51.1 v2.51.2 v2.51.3 v2.52.0 v2.52.1 v2.53.0 v2.53.1 v2.54.0 v2.54.1 v2.55.0 v2.55.1 v2.56.0 v2.56.1 master
+read	gfw	v2.43.0.windows.1 v2.43.4.windows.1 v2.44.0.windows.1 v2.44.1.windows.1 v2.45.0.windows.1 v2.45.1.windows.1 v2.45.2.windows.1 v2.45.2.windows.2 v2.46.0.windows.1 v2.46.1.windows.1 v2.46.2.windows.1 v2.46.2.windows.2 v2.47.0.windows.1 v2.47.0.windows.2 v2.47.1.windows.1 v2.47.1.windows.2 v2.47.3.windows.1 v2.47.3.windows.2 v2.48.1.windows.1 v2.49.0.windows.1 v2.49.1.windows.1 v2.50.0.windows.1 v2.50.0.windows.2 v2.50.1.windows.1 v2.51.0.windows.1 v2.51.0.windows.2 v2.51.1.windows.1 v2.51.2.windows.1 v2.51.2.windows.2 v2.52.0.windows.1 v2.52.0.windows.2 v2.53.0.windows.1 v2.53.0.windows.2 v2.53.0.windows.3 v2.53.0.windows.4 v2.54.0.windows.1 v2.54.0.windows.2 v2.54.0.windows.3 v2.55.0.windows.1 v2.55.0.windows.2 v2.55.0.windows.3 v2.55.0.windows.4 v2.55.0.windows.5 v2.56.0.windows.1 v2.56.0.windows.2 v2.56.0.windows.3 v2.56.0.windows.4 v2.56.1.windows.1 main
 read	apple	Git-155
 read	ubuntu	noble-updates
-read	openssh	V_8_0_P1 V_8_1_P1 V_8_2_P1 V_8_3_P1 V_8_4_P1 V_8_5_P1 V_8_6_P1 V_8_7_P1 V_8_8_P1 V_8_9_P1 V_9_0_P1 V_9_1_P1 V_9_2_P1 V_9_3_P1 V_9_3_P2 V_9_4_P1 V_9_5_P1 V_9_6_P1 V_9_7_P1 V_9_8_P1 V_9_9_P1 V_9_9_P2 V_10_0_P1 V_10_0_P2 V_10_1_P1 V_10_2_P1 V_10_3_P1 V_10_4_P1 V_10_5_P1 V_10_6_P1 master
-head	upstream	master	6de20f6092dcf9bdb1c8efe03db4b70c82b423dd	
-head	gfw	main	cc4dbf752a05efdc0e04e71fd3e8110d11bdd35c	
+read	openssh	V_8_0_P1 V_8_1_P1 V_8_2_P1 V_8_3_P1 V_8_4_P1 V_8_5_P1 V_8_6_P1 V_8_7_P1 V_8_8_P1 V_8_9_P1 V_9_0_P1 V_9_1_P1 V_9_2_P1 V_9_3_P1 V_9_3_P2 V_9_4_P1 V_9_5_P1 V_9_6_P1 V_9_7_P1 V_9_8_P1 V_9_9_P1 V_9_9_P2 V_10_0_P1 V_10_0_P2 V_10_1_P1 V_10_2_P1 V_10_3_P1 V_10_4_P1 V_10_5_P1 V_10_6_P1 V_10_6_P2 master
+head	upstream	master	7fb6055e678f800320d8ab8cd8f201d9493d1ba0	
+head	gfw	main	e766978a9db5cdf196fdf3aaa63541e02ca513d6	
 head	apple	Git-155	6b2f9bfe72d6d4b5c9bcc1c2d0236c026d321cba	2.50.1
 head	ubuntu	noble-updates	d7a675729ee7b10bff2808df5fbc9f8693cae8a0	2.43.0-1ubuntu7.3
-head	openssh	master	773771be4ae241380e5f2b65059c441f7eef2da7	
+head	openssh	master	268bdcb0c80876d97abdc74a1ca8992a1fdf7652	
 
 form	LOCK_FILE_TAKEN	.lock': File exists
 source	git	lockfile.c	Unable to create '%s
-era	upstream v2.43.0..v2.53.0, gfw v2.43.0.windows.1..v2.53.0.windows.4, apple Git-155, ubuntu noble-updates
+era	upstream v2.43.0..v2.53.1, gfw v2.43.0.windows.1..v2.53.0.windows.4, apple Git-155, ubuntu noble-updates
 held	lockfile.c	strbuf_addf: "Unable to create '%s.lock': %s.\\n\\n"
 held	lockfile.c	strbuf_addf: "Unable to create '%s.lock': %s"
 era	upstream v2.54.0..master, gfw v2.54.0.windows.1..main
@@ -29,7 +29,7 @@ held	refs/reftable-backend.c	strbuf_addstr: "cannot lock references"
 
 form	LOCK_LEFT_BEHIND	which is no longer running
 source	git	lockfile.c	which is no longer running
-era	upstream v2.43.0..v2.53.0, gfw v2.43.0.windows.1..v2.53.0.windows.4, apple Git-155, ubuntu noble-updates
+era	upstream v2.43.0..v2.53.1, gfw v2.43.0.windows.1..v2.53.0.windows.4, apple Git-155, ubuntu noble-updates
 era	upstream v2.54.0..master, gfw v2.54.0.windows.1..main
 held	lockfile.c	"which is no longer running; the lock file "
 
@@ -74,9 +74,14 @@ form	INDEX_UNWRITTEN	could not write index
 source	git	builtin/stash.c	could not write index
 era	upstream v2.43.0..v2.43.1, gfw v2.43.0.windows.1, ubuntu noble-updates
 held	builtin/stash.c	error: "could not write index"
-era	upstream v2.43.2..master, gfw v2.43.4.windows.1..main, apple Git-155
+era	upstream v2.43.2..v2.56.1, gfw v2.43.4.windows.1..main, apple Git-155
 held	builtin/stash.c	die: "could not write index"
 held	builtin/stash.c	error: "could not write index"
+held	builtin/stash.c	error: "could not write index"
+held	builtin/stash.c	error: "could not write index"
+held	builtin/stash.c	error: "could not write index"
+era	upstream master
+held	builtin/stash.c	die: "could not write index"
 held	builtin/stash.c	error: "could not write index"
 held	builtin/stash.c	error: "could not write index"
 held	builtin/stash.c	error: "could not write index"
@@ -231,7 +236,7 @@ held	unpack-trees.c	"The following untracked working tree files would be overwri
 
 form	NOT_A_REPOSITORY	not a git repository
 source	git	setup.c	not a git repository
-era	upstream v2.43.0..v2.55.0, gfw v2.43.0.windows.1..v2.55.0.windows.5, apple Git-155, ubuntu noble-updates
+era	upstream v2.43.0..v2.55.1, gfw v2.43.0.windows.1..v2.55.0.windows.5, apple Git-155, ubuntu noble-updates
 held	setup.c	die: "not a git repository: %s"
 held	setup.c	die: "not a git repository: '%s'"
 held	setup.c	die: "not a git repository (or any of the parent directories): %s"
