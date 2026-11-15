@@ -1801,8 +1801,6 @@ FocusScope {
         branchesModel: branchesModel
         tagsModel: tagsModel
     }
-    /// The line, kept readable off the page for the harness (`AutoActWorktreeVerbs`).
-    readonly property alias graphNameRefusedWhy: graphNameVerdict.graphNameRefusedWhy
 
     // ---- double-click on a graph row -------------------------------
     // A row with no chip is offered one.

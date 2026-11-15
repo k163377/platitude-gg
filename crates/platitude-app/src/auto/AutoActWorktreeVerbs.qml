@@ -335,7 +335,8 @@ Item {
             return worktreeTimer.onGraph ? acts.graphPane.namingRefused : acts.sidebarPane.editRefused
         }
         function boxWhy() {
-            return worktreeTimer.onGraph ? acts.page.graphNameRefusedWhy : acts.sidebarPane.editRefusedWhy
+            return worktreeTimer.onGraph ? acts.page.graphNameVerdict.graphNameRefusedWhy
+                                         : acts.sidebarPane.editRefusedWhy
         }
         /// The graph row the box opens on, null while it is not laid out.
         function boxItem() {
@@ -537,7 +538,8 @@ Item {
         function boxWhy() {
             return renameTimer.withheld()
                    ? (renameTimer.onGraph ? acts.graphPane.view.withheldWhy : acts.sidebarPane.withheldWhy)
-                   : renameTimer.onGraph ? acts.page.graphNameRefusedWhy : acts.sidebarPane.editRefusedWhy
+                   : renameTimer.onGraph ? acts.page.graphNameVerdict.graphNameRefusedWhy
+                                         : acts.sidebarPane.editRefusedWhy
         }
         /// A reason comes up after the tip's delay, on the window's one tip.
         function tipStands() {
