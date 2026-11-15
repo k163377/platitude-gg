@@ -29,6 +29,7 @@ mod helper_binary;
 mod merge_tools;
 mod operations;
 mod paced;
+mod part_burst;
 mod pass_watch;
 mod pictures;
 mod published;

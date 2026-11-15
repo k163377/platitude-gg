@@ -292,12 +292,14 @@ impl OperationKind {
     /// restore, a worktree) — or, for the writes of a name or a config
     /// line, because nothing is saved by it: they do not come in rows.
     ///
-    /// **No write that takes rows off the screen at its press joins** — a
-    /// delete of a branch, a tag, a stash or a worktree. The application
-    /// stands those rows in under one write at a time and a refusal puts
-    /// every row back (`ops::StandIn` in the app), so a second delete
-    /// answering before the listing behind the first has been read would
-    /// draw the first one's row back.
+    /// **No delete of a name joins** — a branch, a tag, a stash or a
+    /// worktree. The application stands those rows in under one write at a
+    /// time and a refusal puts every row back (`ops::StandIn` in the app),
+    /// so a second delete answering before the listing behind the first has
+    /// been read would draw the first one's row back. The rows a stage, an
+    /// unstage or a discard moves at its press are held per write instead,
+    /// each let go by its own answer and the stamp of the status after it
+    /// (`ops::StageAhead` in the app), so those join.
     ///
     /// **The one place the set is written**, as with [`Self::lane`].
     #[must_use]
