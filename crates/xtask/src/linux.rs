@@ -376,7 +376,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
             ));
         }
         println!("already on Linux — running here, no container");
-        return here(&root, &command);
+        return here(&root, &crate::keepsakes::unasked(&command));
     }
 
     // Announced here as well (its own xtask is under the announcement);

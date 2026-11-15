@@ -43,7 +43,12 @@ pub(super) const ENTRIES: &str = "  linux [--rebuild] [--shell] [--stage core|ap
       Ubuntu and the toolchain, app adds Qt, a software GL stack and the
       fonts デザイン規約 names for Ubuntu. The build directory is a volume
       of the engine's, so this target/ is untouched, and a verify-ui run
-      is handed a host directory to leave its screenshot in.
+      is handed a host directory to leave its screenshot in. Its pictures
+      stay off the board unless the line says --board: the board shows
+      the Windows runs, and a Linux one when it was asked for. On Linux,
+      where the run is the host's own, it files them as any run there
+      does, and --board changes nothing.
+        cargo xtask linux verify-ui commit --preset basic --board
       options:
         --rebuild        build the image again even if one already matches
         --shell          open a shell in the container instead

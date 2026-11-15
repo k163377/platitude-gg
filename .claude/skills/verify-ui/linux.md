@@ -3,7 +3,8 @@
 ## Linux(コンテナ)での動確 — Done は両 OS
 
 **`cargo xtask linux verify-ui <動詞> [引数]`** が Ubuntu 側の同じ 1 コマンド。オプションも動詞も **verbs.md の表がその
-まま通る**。フォントスタックも Qt のビルドも別物で、**片方の PASS はもう片方を保証しない**。
+まま通る**。絵は board に載らない —— 載せるのはユーザーが Linux の絵を頼んだ時の `--board` だけ(SKILL.md)。フォントス
+タックも Qt のビルドも別物で、**片方の PASS はもう片方を保証しない**。
 
 - **反映前の gate がコンテナで回す動詞は `fonts` 行だけ**(段分け表)。gate の緑は、触った動詞が Linux で通ることを言わな
   い —— **UI を配線したら、その動詞は自分で `cargo xtask linux verify-ui` を撃つ**

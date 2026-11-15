@@ -4,6 +4,11 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
+/// The word on a typed line that puts the run's pictures on the board.
+/// The board shows the Windows runs; a Linux one goes up only when a
+/// person asked to see that side (user decision — ask before changing).
+const ASKED: &str = "--board";
+
 /// What one container run leaves on this side, for as long as it has it.
 pub(crate) struct Keepsake {
     /// Where the container's mount lands out here.
@@ -26,11 +31,24 @@ pub(crate) enum Landing<'a> {
     Leaf(&'a str),
 }
 
+/// The line without [`ASKED`]: the word is this side's, and the verify-ui
+/// run it starts knows no such option — in a container, and on a Linux
+/// host, where the run is the host's own and files its pictures as any
+/// host run does.
+pub(crate) fn unasked(command: &[String]) -> Vec<String> {
+    command
+        .iter()
+        .filter(|word| *word != ASKED)
+        .cloned()
+        .collect()
+}
+
 /// Adds the arguments that send a run's pictures out to where `landing`
 /// says, and answers where they land on this side. None when the command
 /// leaves nothing.
 ///
-/// `--no-board` rides along: the board is the host's (`onto_the_board`).
+/// `--no-board` rides along and [`ASKED`] is taken off: the board is the
+/// host's (`onto_the_board`), and the run inside knows no such word.
 ///
 /// The claim is taken on this side: `/out` is the same path in every
 /// container, and the claim the run inside makes lands in the container's
@@ -42,6 +60,7 @@ pub(crate) fn bridge(
     command: &mut Vec<String>,
     landing: Landing<'_>,
 ) -> Result<Option<Keepsake>, String> {
+    *command = unasked(command);
     let Some(dir) = keepsakes(command)? else {
         return Ok(None);
     };
@@ -74,10 +93,10 @@ pub(crate) fn keepsake_base() -> Result<PathBuf, String> {
 }
 
 /// Whatever the run left behind (`out` = what `bridge` answered), onto
-/// the host's board.
+/// the host's board, where the line asked for it ([`ASKED`]).
 ///
-/// Marked `— linux`: Done is both OSes photographed for the same verb
-/// (CLAUDE.md ビルド・テスト), so each picture has to say its side.
+/// Marked `— linux`: beside the Windows run of the same verb, each
+/// picture has to say its side.
 ///
 /// The command has to be the one that was typed — see [`boarding`].
 pub(crate) fn onto_the_board(out: Option<&Path>, command: &[String]) {
@@ -95,12 +114,13 @@ pub(crate) fn onto_the_board(out: Option<&Path>, command: &[String]) {
     }
 }
 
-/// Whether the run's pictures are filed on the board once it is over.
-/// Only the line as typed can answer: [`bridge`] adds `--no-board` to
-/// every line it hands the container. A suite's runs are typed with it
+/// Whether the run's pictures are filed on the board once it is over:
+/// asked for, and not turned off. Only the line as typed can answer:
+/// [`bridge`] takes [`ASKED`] off every line it hands the container and
+/// adds `--no-board`. A suite's runs are typed with `--no-board`
 /// (`verify::suite_words`).
 fn boarding(command: &[String]) -> bool {
-    !command.iter().any(|word| word == "--no-board")
+    command.iter().any(|word| word == ASKED) && !command.iter().any(|word| word == "--no-board")
 }
 
 /// What to call the run on the board, out of the command line it was.
@@ -140,7 +160,7 @@ pub(crate) fn keepsake_dir(kind: &str) -> Result<PathBuf, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Landing, boarding, bridge, keepsakes, naming};
+    use super::{Landing, boarding, bridge, keepsakes, naming, unasked};
 
     fn words(line: &str) -> Vec<String> {
         line.split_whitespace().map(String::from).collect()
@@ -167,17 +187,38 @@ mod tests {
         );
     }
 
-    /// `bridge` writes `--no-board` into every line it sends in, so a
-    /// caller that asked the mutated line would file nothing at all.
+    /// A Linux run stays off the board unless the line asks for it.
+    #[test]
+    fn a_container_run_goes_on_the_board_only_when_asked() {
+        // The ask never reaches a run: in a container or on a Linux host.
+        assert_eq!(
+            unasked(&words("verify-ui commit --board --preset basic")),
+            words("verify-ui commit --preset basic")
+        );
+        assert!(!boarding(&words("cargo xtask verify-ui commit")));
+        assert!(boarding(&words("cargo xtask verify-ui commit --board")));
+        assert!(!boarding(&words(
+            "cargo xtask verify-ui commit --board --no-board"
+        )));
+    }
+
+    /// `bridge` takes the ask off every line it sends in and writes
+    /// `--no-board`, so a caller that asked the mutated line would file
+    /// nothing at all, and the run inside is never handed a word it
+    /// does not know.
     #[test]
     fn what_the_container_was_told_cannot_answer_for_the_board() {
-        let typed = words("cargo xtask verify-ui commit");
+        let typed = words("cargo xtask verify-ui commit --board");
         assert!(boarding(&typed));
         let mut sent = typed.clone();
         let out = bridge(&mut sent, Landing::Whole("/out"))
             .expect("a bridged run")
             .expect("a directory to bring the pictures back to");
         assert!(!boarding(&sent), "bridge says it whether the caller did");
+        assert!(
+            !sent.iter().any(|word| word == "--board"),
+            "the run inside is not handed the ask: {sent:?}"
+        );
         assert!(
             sent.windows(2).any(|pair| pair == ["--shot-dir", "/out"]),
             "a container of the run's own mounts the directory at /out: {sent:?}"
