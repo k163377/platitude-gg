@@ -357,6 +357,7 @@ impl SessionSink for BridgeSink {
                 endings,
                 marks,
                 embedded,
+                ..
             } => {
                 // Every message kept: rows and colours are two messages of
                 // one diff, and diffs need not finish in the order asked.

@@ -110,7 +110,15 @@ impl RepoSession {
 
     /// Loads a unified diff for one file, and its colours behind it.
     pub fn load_diff(self: &Arc<Self>, target: DiffTarget) {
-        self.runtime.spawn(self.read_diff(target));
+        self.load_diff_asked(target, 0);
+    }
+
+    /// [`Self::load_diff`] under the reader's own number, which its answer
+    /// carries back (`SessionEvent::DiffLoaded::asked`): reads of one file need
+    /// not land in the order they were asked, so the order of arrival cannot
+    /// say which ask an answer is.
+    pub fn load_diff_asked(self: &Arc<Self>, target: DiffTarget, asked: u64) {
+        self.runtime.spawn(self.read_diff_asked(target, asked));
     }
 
     /// The same read aimed at another worktree: one of the files the
@@ -129,7 +137,8 @@ impl RepoSession {
         let workdir = PathBuf::from(at);
         let (epoch, read) = self.diff_epoch.claim(&self.root_cancel);
         self.runtime.spawn(async move {
-            s.publish_diff(workdir, target, None, epoch, read).await;
+            s.publish_diff(workdir, target, None, (epoch, 0), read)
+                .await;
         });
     }
 
@@ -140,6 +149,15 @@ impl RepoSession {
     pub fn read_diff(
         self: &Arc<Self>,
         target: DiffTarget,
+    ) -> impl Future<Output = DiffReadOutcome> + Send + 'static + use<> {
+        self.read_diff_asked(target, 0)
+    }
+
+    /// [`Self::read_diff`] under the reader's number ([`Self::load_diff_asked`]).
+    pub fn read_diff_asked(
+        self: &Arc<Self>,
+        target: DiffTarget,
+        asked: u64,
     ) -> impl Future<Output = DiffReadOutcome> + Send + 'static + use<> {
         // Claimed at the ask, so asking is what passes the read before —
         // and only with a working tree, so an unopened repository passes
@@ -152,7 +170,8 @@ impl RepoSession {
             match started {
                 None => DiffReadOutcome::Unavailable,
                 Some((workdir, (epoch, read))) => {
-                    s.publish_diff(workdir, target, None, epoch, read).await
+                    s.publish_diff(workdir, target, None, (epoch, asked), read)
+                        .await
                 }
             }
         }
@@ -168,13 +187,14 @@ impl RepoSession {
     /// pane a fingerprint of bytes no longer there, and the next partial
     /// stage is refused against it (`stage::refusal::verify_fingerprint`).
     /// Its git stops there too: `read` is the token the read that passes
-    /// it cancels ([`super::diff_reads::DiffEpoch`]).
+    /// it cancels ([`super::diff_reads::DiffEpoch`]). `asked` is the
+    /// reader's number for it, which the answer carries back.
     pub(super) async fn publish_diff(
         self: &Arc<Self>,
         workdir: PathBuf,
         target: DiffTarget,
         known: Option<Vec<u8>>,
-        epoch: u64,
+        (epoch, asked): (u64, u64),
         read: CancellationToken,
     ) -> DiffReadOutcome {
         let cancel = read;
@@ -263,6 +283,7 @@ impl RepoSession {
                 self.note_diff(&workdir, &target, fingerprint);
                 self.sink.event(SessionEvent::DiffLoaded {
                     target: target.clone(),
+                    asked,
                     patches: Arc::clone(&patches),
                     preview,
                     fingerprint,

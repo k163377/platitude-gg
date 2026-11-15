@@ -388,6 +388,11 @@ pub enum SessionEvent {
     },
     DiffLoaded {
         target: DiffTarget,
+        /// The number the reader asked under ([`RepoSession::load_diff_asked`]),
+        /// so it can tell which of its asks this answers — a read asked earlier
+        /// can land after one asked later. 0 for a read nobody numbered (a
+        /// poll's re-read, another worktree's file).
+        asked: u64,
         /// Shared with the colouring that follows, which reads the same
         /// lines.
         patches: Arc<Vec<FilePatch>>,
