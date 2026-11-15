@@ -1,16 +1,8 @@
-//! What `cargo xtask` prints when it is given no command it knows: the
-//! lead here, then the entries of each stage of the work from a file of
-//! its own, in the order printed.
+//! The usage page's lead, and the order its sections print in.
 
-mod app_runs;
-mod container;
-mod demo_repo;
-mod landing;
-mod measurement;
-mod pictures;
-mod pre_merge;
-mod sessions;
-mod verify_ui;
+use super::{
+    app_runs, container, demo_repo, landing, measurement, pictures, pre_merge, sessions, verify_ui,
+};
 
 pub(crate) fn print() {
     print!(

@@ -21,7 +21,7 @@ const LOOSE: [&str; 2] = ["CLAUDE.md", "AGENTS.md"];
 
 /// The pages `cargo xtask` with no argument prints.
 const USAGE: [&str; 10] = [
-    "crates/xtask/src/usage.rs",
+    "crates/xtask/src/usage/page.rs",
     "crates/xtask/src/usage/pre_merge.rs",
     "crates/xtask/src/usage/demo_repo.rs",
     "crates/xtask/src/usage/verify_ui.rs",
