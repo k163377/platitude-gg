@@ -97,6 +97,18 @@ pub(super) const ENTRIES: &str = "  land [<branch>]
       The user's next /land puts the seat back at the end; nothing else
       does.
 
+  land hold
+      One background task of this session kept running while it stands in
+      the line, started in the background at /land: the desktop app stops
+      a session it counts idle under memory pressure, and a session with
+      no background task left counts as idle in the first seconds of a
+      turn a notice starts. The session's own next tool call after it
+      stops standing ends the hold and waits for it, so the notice of its
+      end joins that call's result. It also ends when a newer hold of the
+      session starts, when the Claude process is gone, and when the
+      conversation went on under another session id. It steps out of the
+      build slot as a landing does.
+
   kill
       Reap this tree's app processes — the ones holding this tree's exe
       against the next link, or its store lock against the next window —

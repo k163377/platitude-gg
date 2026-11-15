@@ -443,6 +443,13 @@ fn permit_file(dir: &str, session: &str) -> Option<PathBuf> {
 /// landing in the seat reads what the prompt hook wrote wherever the
 /// session sat.
 pub(crate) fn kept_file(dir: &str, session: &str, kind: &str) -> Option<PathBuf> {
+    let common = crate::subprocess::common_git_dir(dir)?;
+    kept_file_in(Path::new(&common).parent()?, session, kind)
+}
+
+/// The same under a primary checkout already found — for a reader that
+/// runs on every tool call and asks git nothing (`land::hold`).
+pub(crate) fn kept_file_in(primary: &Path, session: &str, kind: &str) -> Option<PathBuf> {
     let session: String = session
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
@@ -450,9 +457,7 @@ pub(crate) fn kept_file(dir: &str, session: &str, kind: &str) -> Option<PathBuf>
     if session.is_empty() {
         return None;
     }
-    let common = crate::subprocess::common_git_dir(dir)?;
-    let root = Path::new(&common).parent()?;
-    Some(root.join(".permits").join(format!("{session}.{kind}")))
+    Some(primary.join(".permits").join(format!("{session}.{kind}")))
 }
 
 fn spend(path: &Path) {

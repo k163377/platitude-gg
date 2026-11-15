@@ -10,6 +10,7 @@
 use crate::command::{self, Permission, Where};
 
 mod approval;
+pub(crate) mod hold;
 mod leftovers;
 pub(crate) mod line;
 mod record;
@@ -73,4 +74,20 @@ pub(crate) static LEAVE: command::Command = command::Command {
     permission: Permission::Plain,
 };
 
-pub(crate) static COMMANDS: &[&command::Command] = &[&LAND, &LINE, &WAIT_NEXT, &WAIT_HEAD, &LEAVE];
+/// `cargo xtask land hold`: one background task kept running while this
+/// session stands in the line.
+pub(crate) static HOLD: command::Command = command::Command {
+    id: "land.hold",
+    call: "land hold",
+    purpose: "keep a background task of this session running while it stands in the line of \
+              landings, so the desktop app keeps the turns its notices start",
+    run_in: Where::Seat,
+    needs: &[
+        "the user's /land, which put this seat in the line",
+        "a Claude session (CLAUDE_PID)",
+    ],
+    permission: Permission::Plain,
+};
+
+pub(crate) static COMMANDS: &[&command::Command] =
+    &[&LAND, &LINE, &WAIT_NEXT, &WAIT_HEAD, &LEAVE, &HOLD];

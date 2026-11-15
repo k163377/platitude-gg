@@ -1,9 +1,25 @@
 //! Work a session leaves running in the background and is woken by when it
-//! ends: the wake has to arrive.
+//! ends: the wake has to arrive, and the turn it starts has to be kept.
 
 use super::git::xtask_verb;
 use super::payload::{bool_field, deny, own_string_field, string_field};
 use super::shell::shell_segments;
+
+/// PreToolUse and PostToolUse, of any tool the session calls itself: a
+/// landing's hold ends inside the call once the session no longer stands
+/// in the line (`land::hold`). A subagent's call is no turn of the
+/// session's: its session may be waiting with nothing running.
+pub(super) fn at_a_call(input: &str) {
+    if own_string_field(input, "agent_id").is_some() {
+        return;
+    }
+    if let (Some(session), Some(cwd)) = (
+        own_string_field(input, "session_id"),
+        own_string_field(input, "cwd"),
+    ) {
+        crate::land::hold::end_if_out(&cwd, &session);
+    }
+}
 
 /// The xtask runs the land skill starts in the background and waits on —
 /// its waits, gate and landing — and verify-ui, which sessions start the
@@ -51,7 +67,35 @@ fn waited_on(command: &str) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{pre_shell, waited_on};
+    use super::{at_a_call, pre_shell, waited_on};
+
+    #[test]
+    fn only_the_sessions_own_call_ends_its_hold() {
+        let yard = crate::yard::Yard::new("background-hold");
+        let root = yard.to_str().unwrap().replace('\\', "/");
+        assert!(crate::subprocess::git_query(&root, &["init"]).is_some());
+        let primary = crate::tree::primary_root(&root).unwrap();
+        let permit = super::super::permit::kept_file_in(&primary, "s", "land").unwrap();
+        std::fs::create_dir_all(permit.parent().unwrap()).unwrap();
+        // A landing that spent its permit, with its hold still on file.
+        std::fs::write(&permit, "spent\t1\t/land\n").unwrap();
+        crate::land::line::enter(&permit, &root, None, 1_000);
+        let hold = super::super::permit::kept_file_in(&primary, "s", "hold").unwrap();
+        std::fs::write(&hold, format!("{}\n", crate::subprocess::NO_SUCH_PID)).unwrap();
+        let call = |agent: &str| {
+            format!(
+                r#"{{"session_id":"s","cwd":"{root}",{agent}"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{{"file_path":"C:/x"}},"tool_use_id":"t"}}"#
+            )
+        };
+        at_a_call(&call(r#""agent_id":"a1","#));
+        assert!(
+            hold.is_file(),
+            "a subagent's call is no turn of the session's"
+        );
+        at_a_call(&call(""));
+        assert!(!hold.is_file(), "the session's own call ends it");
+        drop(yard);
+    }
 
     #[test]
     fn refuses_only_a_powershell_run_left_in_the_background() {

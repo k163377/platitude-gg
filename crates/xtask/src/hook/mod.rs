@@ -112,21 +112,25 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 }
 
-/// PreToolUse, of any tool: the guards on tools no matcher names — the land
-/// command carried to another session (`contact`), the board (`board`), the
-/// wrap-up box's language (`language`) and the chips. One decision per call.
+/// PreToolUse, of any tool: a landing's hold ended (`background`), then
+/// the guards on tools no matcher names — the land command carried to
+/// another session (`contact`), the board (`board`), the wrap-up box's
+/// language (`language`) and the chips. One decision per call.
 fn pre_tool(input: &str) -> Result<(), String> {
+    background::at_a_call(input);
     if contact::pre_tool(input) || board::pre_tool(input) || language::pre_tool(input) {
         return Ok(());
     }
     chips::pre_spawn(input)
 }
 
-/// PostToolUse and PostToolUseFailure, of any tool: the chips' notes and
-/// the language's, and a side session's detach paid (`contact`). Two JSON
-/// objects on stdout are read as plain text, so every note rides in one,
-/// named for the event that asked.
+/// PostToolUse and PostToolUseFailure, of any tool: a landing's hold
+/// ended (`background`), the chips' notes and the language's, and a side
+/// session's detach paid (`contact`). Two JSON objects on stdout are read
+/// as plain text, so every note rides in one, named for the event that
+/// asked.
 fn post_tool(input: &str) -> Result<(), String> {
+    background::at_a_call(input);
     contact::post_tool(input);
     let mut notes = chips::post_chip(input)?;
     notes.extend(language::post_tool(input).map(str::to_string));

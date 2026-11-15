@@ -171,6 +171,18 @@ pub(crate) fn leave(dir: &str, session: &str, why: &str) -> bool {
     true
 }
 
+/// Whether the entry beside `permit` is written and has not left — off
+/// the file alone, for a reader that runs on every tool call
+/// (`land::hold`); the line's own reading also places the seat.
+pub(crate) fn written_beside(permit: &Path) -> bool {
+    load(&beside(permit)).is_some_and(|entry| entry.left.is_empty())
+}
+
+/// Whether an entry is beside `permit` at all, left or not.
+pub(crate) fn entry_beside(permit: &Path) -> bool {
+    beside(permit).is_file()
+}
+
 /// Where a session's entry stands, as the Stop hook tells it; None when
 /// the session has none.
 pub(crate) fn standing_for(dir: &str, session: &str) -> Option<String> {

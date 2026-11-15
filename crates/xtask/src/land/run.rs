@@ -9,14 +9,13 @@ use crate::seats::{
 use crate::subprocess::git_query;
 
 use super::record::Phases;
-use super::{approval, leftovers, line, tags};
+use super::{approval, hold, leftovers, line, tags};
 
 pub fn run(args: &[String]) -> Result<(), String> {
-    if matches!(
-        args.first().map(String::as_str),
-        Some("line" | "wait" | "leave")
-    ) {
-        return line::run(args);
+    match args.first().map(String::as_str) {
+        Some("line" | "wait" | "leave") => return line::run(args),
+        Some("hold") => return hold::run(args),
+        _ => {}
     }
     let mut phases = Phases::start();
     let result = land(args, &mut phases);
@@ -316,8 +315,9 @@ const DEPS: &str = "deps";
 /// stops the gate's link step at the other (`LNK1104`), after the rebase.
 ///
 /// What cannot be moved waits for the next landing's sweep. Silent when
-/// this binary is in nobody's way; a move that fails says so.
-fn step_out_of_the_build_slot(trees: &[&str]) -> Option<String> {
+/// this binary is in nobody's way; a move that fails says so. The hold
+/// (`hold`) steps out the same way, for as long as it runs.
+pub(super) fn step_out_of_the_build_slot(trees: &[&str]) -> Option<String> {
     let exe = std::env::current_exe().ok()?;
     let mine = build_slot_tree(&exe)?;
     if !trees.iter().any(|tree| same_tree(tree, &mine)) {
@@ -342,8 +342,8 @@ fn step_out_of_the_build_slot(trees: &[&str]) -> Option<String> {
         ));
     }
     Some(format!(
-        "stepped out of {} — the landing rebuilds the task runner there, and a running image \
-         cannot be replaced.",
+        "stepped out of {} — the gate and the landing rebuild the task runner there, and a \
+         running image cannot be replaced.",
         freed.join(", ")
     ))
 }

@@ -299,14 +299,15 @@ impl Offence {
 }
 
 /// Whether every `land` the line invokes only tends the line of landings
-/// — `land line`, `land wait …`, `land leave …` move nothing
-/// (`land::line`). One landing among them is a landing.
+/// — `land line`, `land wait …`, `land leave …` and `land hold` move
+/// nothing (`land::line`, `land::hold`). One landing among them is a
+/// landing.
 fn only_tends_the_line(lands: &[Option<&str>]) -> bool {
     !lands.is_empty()
         && lands.iter().all(|next| {
             matches!(
                 next.map(|word| word.trim_end_matches(';')),
-                Some("line" | "wait" | "leave")
+                Some("line" | "wait" | "leave" | "hold")
             )
         })
 }
@@ -651,6 +652,7 @@ mod tests {
             "cargo xtask land wait next",
             "cargo run --quiet -p xtask -- land wait head",
             "cargo xtask land leave the review found a design question",
+            "cargo xtask land hold",
             "cargo test -p xtask land",
             "cargo test -p xtask -- land",
             "git commit -m \"xtask land notes\"",
