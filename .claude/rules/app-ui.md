@@ -32,10 +32,10 @@ UI の**値**の正本は `Theme.qml` / `Metrics.qml`。**どこで何に使う�
   `GitFacts` singleton の stateless slot**(引数だけを読む = 次項の例外条件)。状態から導く派生値は drain で計算する
   qproperty
 - **QML バインディングはプロパティにしか反応しない** — `#[qslot]` は呼び出し用。値の変化を追わせる物は `qproperty!`
-- QML は `ui/` 直下フラットに 1 ファイル 1 コンポーネント(`platitude.ui`)。**新規 QML は qmldir と main.rs の
-  `qrc::embed!` の両方へ登録**(列挙された型しか見えない。`include_bytes_qml!` は使わない — rules-refs の `qrc::embed!`
-  の行)
-- **QML モジュールは 2 つ — 製品 `ui/`(`platitude.ui`)と、Cargo feature `automation` でだけ埋め込む検証ハーネス
+- QML は 1 ファイル 1 コンポーネント。**新規 QML は qmldir と main.rs の `qrc::embed!` の両方へ登
+  録**(`include_bytes_qml!` は使わない — rules-refs の `qrc::embed!` の行)
+- **QML モジュール — 製品の部品は `ui/` 直下(`platitude.ui`)、singleton は `Theme` / `Metrics` の他は `ui/<責務>/` のモ
+  ジュールに置いて読むファイルだけが import(rules-refs の同項)、feature `automation` でだけ埋め込む検証ハーネスは
   `auto/`(`platitude.auto`)**。製品はハーネスの型を URL 越し(`HarnessSeat`)でだけ参照し、置くのは中立な property だけ —
   走らせ方は `auto/` と `Harness` singleton が決める。**Rust 側で knob(`_PGG_*`)を読むのは `harness::knobs` だけ**、core
   へは値で渡す。どれも**機械化済み: `cargo xtask structure`**

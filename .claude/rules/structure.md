@@ -46,8 +46,8 @@ paths:
   `cargo xtask gate`(`gate::graph::complaints` — 走らせる前に拒む)と `cargo test -p xtask`(同じ関数)** — 置き場は責務名
   のモジュール(`tree` / `subprocess`、core は `model`)
 - QML: **1 ファイル = 1 コンポーネント**(Qt の指針。ファイル名がそのまま型名で、粒度は qmldir と型システムが決める)。子
-  コンポーネント切り出し(ui/ フラット・登録 2 箇所は app-ui.md)。inline `component` は 2 ファイル目が使う時か親が閾値を
-  超えた時に独立ファイル化
+  コンポーネント切り出し(部品は ui/ 直下・singleton は責務ごとのモジュール・登録 2 箇所は app-ui.md)。inline `component`
+  は 2 ファイル目が使う時か親が閾値を超えた時に独立ファイル化
 - Qt: `#[qobject]` ブロック(`qproperty!` / `#[qsignal]` / `#[qslot]`)は QMetaInfo の一貫性で **1 型 1 ファイルから動かせ
   ない** — スロット本体を素の `impl` へ委譲して痩せさせる(委譲化は移動と別コミット)。それでも割れない分は §長さの閾値 の
   「分割不能と決めたファイルは理由をそのファイルの冒頭コメントに書く」へ
