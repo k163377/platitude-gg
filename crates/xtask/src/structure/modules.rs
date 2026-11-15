@@ -8,8 +8,10 @@
 //! here notices.
 //!
 //! Naming a type is what QML resolves: an object declaration
-//! (`WindowHarness {`) and a typed property (`property TabProbe probe`);
-//! a name in a comment is a reference.
+//! (`WindowHarness {`) and a typed property (`property TabProbe probe`),
+//! and for a singleton, which is never declared, a read off it
+//! (`PageSettled.settled(page)`); a name in a comment or a string is a
+//! reference.
 //!
 //! The Rust side's half: the singleton the feature registers
 //! (`harness::singleton::Harness`) is not in the qmldir, and the product
@@ -32,7 +34,7 @@ const BACKEND: &str = "AppBackend";
 /// One failure per product line that reaches for the harness, and how many
 /// names were looked for.
 pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
-    let names = harness_types(root)?;
+    let types = harness_types(root)?;
     let members = singleton_members(root)?;
     let mut failures = Vec::new();
     let product = root.join(PRODUCT);
@@ -56,12 +58,13 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
         for (number, line) in text.lines().enumerate() {
-            if let Some(named) = names.iter().find(|name| names_type(line, name)) {
+            if let Some(named) = types.iter().find(|ty| ty.named_by(line)) {
                 failures.push(format!(
-                    "{PRODUCT}/{shown}:{} names the harness type {named} — a shipped build has no \
+                    "{PRODUCT}/{shown}:{} names the harness type {} — a shipped build has no \
                      `platitude.auto` and would fail to load. Reach it through `HarnessSeat` \
                      instead (.claude/rules/app-ui.md)",
-                    number + 1
+                    number + 1,
+                    named.name
                 ));
             }
             if reads(line, SINGLETON, "") {
@@ -83,7 +86,7 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
             }
         }
     }
-    Ok((failures, names.len() + members.len()))
+    Ok((failures, types.len() + members.len()))
 }
 
 /// Everything `Harness` puts in front of QML: the `qproperty!` names as
@@ -134,15 +137,12 @@ fn camel(snake: &str) -> String {
     out
 }
 
-/// Whether one line of QML, not a comment, reads `<object>.<member>` — or,
-/// with an empty member, anything off `object`. Both ends of the name must
-/// end: `WindowHarness.qml` is not `Harness.`, and
-/// `AppBackend.autoFetchMinutes` is not `AppBackend.autoAct`.
+/// Whether the code of one line of QML ([`code_of`]) reads
+/// `<object>.<member>` — or, with an empty member, anything off `object`.
+/// Both ends of the name must end: `WindowHarness.qml` is not `Harness.`,
+/// and `AppBackend.autoFetchMinutes` is not `AppBackend.autoAct`.
 fn reads(line: &str, object: &str, member: &str) -> bool {
-    let code = line.trim_start();
-    if code.starts_with("//") {
-        return false;
-    }
+    let code = code_of(line);
     let looked_for = if member.is_empty() {
         format!("{object}.")
     } else {
@@ -163,20 +163,88 @@ fn reads(line: &str, object: &str, member: &str) -> bool {
     false
 }
 
-/// The type names `platitude.auto` exports, off its own qmldir.
-fn harness_types(root: &Path) -> Result<Vec<String>, String> {
+/// One line of QML with its string literals emptied and a `//` comment cut
+/// off, so a name either holds (`"PageSettled.qml"`, `// as PageSettled.settled
+/// says`) is a reference. The quotes stay, as the ends of the words beside them.
+fn code_of(line: &str) -> String {
+    let mut code = String::with_capacity(line.len());
+    let mut quote = None;
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        match quote {
+            Some(open) => {
+                if c == '\\' {
+                    chars.next();
+                } else if c == open {
+                    quote = None;
+                    code.push(c);
+                }
+            }
+            None if matches!(c, '"' | '\'' | '`') => {
+                quote = Some(c);
+                code.push(c);
+            }
+            None if c == '/' && chars.peek() == Some(&'/') => break,
+            None => code.push(c),
+        }
+    }
+    code
+}
+
+/// One type `platitude.auto` exports.
+#[derive(Debug, PartialEq, Eq)]
+struct Exported {
+    name: String,
+    singleton: bool,
+}
+
+impl Exported {
+    /// Whether one line of QML names this type the way the engine resolves
+    /// it: a singleton by a read off it, any other by [`names_type`].
+    fn named_by(&self, line: &str) -> bool {
+        if self.singleton {
+            reads(line, &self.name, "")
+        } else {
+            names_type(line, &self.name)
+        }
+    }
+}
+
+/// The types `platitude.auto` exports, off its own qmldir.
+fn harness_types(root: &Path) -> Result<Vec<Exported>, String> {
     let path = root.join(HARNESS_QMLDIR);
     let text = std::fs::read_to_string(&path)
         .map_err(|e| format!("could not read {}: {e}", path.display()))?;
-    let names: Vec<String> = text
-        .lines()
-        .filter(|line| !line.starts_with("module ") && !line.trim().is_empty())
-        .filter_map(|line| line.split_whitespace().next().map(str::to_string))
-        .collect();
-    if names.is_empty() {
+    let types: Vec<Exported> = text.lines().filter_map(exported).collect();
+    if types.is_empty() {
         return Err(format!("{HARNESS_QMLDIR} lists no types"));
     }
-    Ok(names)
+    Ok(types)
+}
+
+/// The type a qmldir line exports, by Qt's grammar (`QQmlDirParser::parse`):
+/// `[singleton] <Type> [<version>] <file>`, where a `.js` / `.mjs` file is a
+/// script and a word starting `#` starts a comment. A QML type's name starts
+/// upper case, so a directive (`module`, `plugin` …) exports nothing, and
+/// neither does an `internal` line: that type is the module's own.
+fn exported(line: &str) -> Option<Exported> {
+    let words: Vec<&str> = line
+        .split_whitespace()
+        .take_while(|word| !word.starts_with('#'))
+        .collect();
+    let (singleton, rest) = match words.as_slice() {
+        ["singleton", rest @ ..] => (true, rest),
+        rest => (false, rest),
+    };
+    let (name, file) = match rest {
+        [name, file] | [name, _, file] => (*name, *file),
+        _ => return None,
+    };
+    let script = file.ends_with(".js") || file.ends_with(".mjs");
+    (name.starts_with(|c: char| c.is_ascii_uppercase()) && !script).then(|| Exported {
+        name: name.to_string(),
+        singleton,
+    })
 }
 
 /// Whether one line of QML names `type` the way the engine resolves —
@@ -270,6 +338,23 @@ mod tests {
     }
 
     #[test]
+    fn a_name_in_a_string_or_a_trailing_comment_is_not_read() {
+        assert!(!reads(
+            "    shown: seat.ready // as Harness.autoAct says",
+            "Harness",
+            ""
+        ));
+        assert!(!reads("    part: 'Harness.qml'", "Harness", ""));
+        // An escaped quote does not end the string, and the code after it counts.
+        assert!(reads(
+            "    text: \"say \\\"Harness.\\\"\" + Harness.autoAct",
+            "Harness",
+            ""
+        ));
+        assert_eq!(code_of("    a: \"x // y\" // z"), "    a: \"\" ");
+    }
+
+    #[test]
     fn a_slot_is_looked_for_under_the_name_qt_registers_it_by() {
         assert_eq!(camel("open_session_count"), "openSessionCount");
         assert_eq!(camel("report"), "report");
@@ -283,6 +368,82 @@ mod tests {
         assert!(
             !members.iter().any(|name| name == "default"),
             "the file's own `Default` is a `fn` QML has never heard of"
+        );
+    }
+
+    #[test]
+    fn a_qmldir_line_exports_its_type_and_says_whether_it_is_a_singleton() {
+        let singleton = |name: &str| Exported {
+            name: name.to_string(),
+            singleton: true,
+        };
+        let plain = |name: &str| Exported {
+            name: name.to_string(),
+            singleton: false,
+        };
+        for (line, wanted) in [
+            (
+                "singleton PageSettled 1.0 PageSettled.qml",
+                singleton("PageSettled"),
+            ),
+            ("singleton Awaited Awaited.qml", singleton("Awaited")),
+            ("TabProbe 1.0 TabProbe.qml", plain("TabProbe")),
+            ("TabProbe TabProbe.qml", plain("TabProbe")),
+            (
+                "TabProbe 1.0 TabProbe.qml # the tab's probe",
+                plain("TabProbe"),
+            ),
+        ] {
+            assert_eq!(exported(line), Some(wanted), "{line}");
+        }
+        for line in [
+            "module platitude.auto",
+            "internal Seat Seat.qml",
+            "internal Seat 1.0 Seat.qml",
+            "# Note 1.0 Note.qml",
+            "plugin auto",
+            "Tools 1.0 tools.js",
+            "Tools 1.0 tools.mjs",
+            "",
+        ] {
+            assert_eq!(exported(line), None, "{line}");
+        }
+        let names = harness_types(&crate::tree::workspace_root()).expect("read the qmldir");
+        for name in ["Awaited", "PageSettled"] {
+            assert!(names.contains(&singleton(name)), "{names:#?}");
+        }
+    }
+
+    /// A singleton is never declared: a product line reaches one by reading
+    /// off it, and its qmldir line puts `singleton` in front of its name.
+    #[test]
+    fn a_read_off_a_harness_singleton_is_caught() {
+        let root = crate::yard::Yard::new("structure-harness-singleton");
+        let write = |path: &str, text: &str| {
+            let file = root.join(path);
+            std::fs::create_dir_all(file.parent().expect("a parent")).expect("the fixture's dirs");
+            std::fs::write(file, text).expect("the fixture");
+        };
+        write(
+            HARNESS_QMLDIR,
+            "module platitude.auto\nTabProbe 1.0 TabProbe.qml\n\
+             singleton PageSettled 1.0 PageSettled.qml\n",
+        );
+        write(HARNESS_SINGLETON, "    qproperty!(\"autoAct\", String),\n");
+        // Only line 3 reads it: the others mention it in a comment or a string.
+        write(
+            &format!("{PRODUCT}/RepoPage.qml"),
+            "Item {\n    /// PageSettled.settled(page) waits on it\n    \
+             readonly property bool ready: PageSettled.settled(page)\n    \
+             readonly property bool shown: seat.ready // as PageSettled.settled says\n    \
+             readonly property string part: \"PageSettled.qml\"\n}\n",
+        );
+        let (failures, names) = check(&root).expect("scan the fixture");
+        assert_eq!(names, 3, "two types and the singleton's one member");
+        assert_eq!(failures.len(), 1, "{failures:#?}");
+        assert!(
+            failures[0].contains("RepoPage.qml:3 names the harness type PageSettled"),
+            "{failures:#?}"
         );
     }
 
