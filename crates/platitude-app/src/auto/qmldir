@@ -20,6 +20,7 @@ AutoActHandVerbs 1.0 AutoActHandVerbs.qml
 AutoActHistoryVerbs 1.0 AutoActHistoryVerbs.qml
 AutoActLandings 1.0 AutoActLandings.qml
 AutoActNavBoxVerbs 1.0 AutoActNavBoxVerbs.qml
+AutoActNavOpenVerbs 1.0 AutoActNavOpenVerbs.qml
 AutoActNavVerbs 1.0 AutoActNavVerbs.qml
 AutoActPaneVerbs 1.0 AutoActPaneVerbs.qml
 AutoActPlanVerbs 1.0 AutoActPlanVerbs.qml

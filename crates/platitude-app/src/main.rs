@@ -545,6 +545,7 @@ fn embed_harness_qml() {
     qrc::embed!("auto/AutoActHistoryVerbs.qml");
     qrc::embed!("auto/AutoActLandings.qml");
     qrc::embed!("auto/AutoActNavBoxVerbs.qml");
+    qrc::embed!("auto/AutoActNavOpenVerbs.qml");
     qrc::embed!("auto/AutoActNavVerbs.qml");
     qrc::embed!("auto/AutoActPaneVerbs.qml");
     qrc::embed!("auto/AutoActPlanVerbs.qml");

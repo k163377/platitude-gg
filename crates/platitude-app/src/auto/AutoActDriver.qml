@@ -864,6 +864,7 @@ Item {
 
     AutoActNavVerbs { id: navVerbs; driver: driver }
     AutoActNavBoxVerbs { id: navBoxVerbs; driver: driver }
+    AutoActNavOpenVerbs { id: navOpenVerbs; driver: driver }
     AutoActRefVerbs { id: refVerbs; driver: driver }
     AutoActSwitchVerbs { id: switchVerbs; driver: driver }
     AutoActPublishVerbs { id: publishVerbs; driver: driver }
@@ -912,6 +913,7 @@ Item {
             || fileRowVerbs.run(act, arg)
             || navVerbs.run(act, arg)
             || navBoxVerbs.run(act, arg)
+            || navOpenVerbs.run(act, arg)
             || refVerbs.run(act, arg)
             || switchVerbs.run(act, arg)
             || publishVerbs.run(act, arg)

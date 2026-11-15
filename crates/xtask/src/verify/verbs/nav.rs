@@ -841,7 +841,7 @@ pub(super) const TABLE: &[Verb] = &[
     // shows which lines are marked, never what they were weighed against
     // (the default remote, not the copy here). The empty list means
     // something only because the run fetches and waits for the reading
-    // first (`AutoActNavBoxVerbs.navOpenTagTimer`).
+    // first (`AutoActNavOpenVerbs.navOpenTagTimer`).
     Verb {
         name: "nav-open-tag",
         // `says=` carrying the name is the row having opened; `open=` is

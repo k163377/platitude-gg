@@ -65,20 +65,20 @@
 - `nav-branch-box` / `nav-rename-box`(引数 `<section>:<ref>[:<幅>][:away]`。`:away` は `--preset manytags` の TAGS): 左メニューの行の名前の箱を開いたまま止める(対で読む)— 詳細は `AutoActNavBoxVerbs.qml`
 - `nav-rename-drop fold|away`: 空の箱のまま立ち去る 2 通り(規約 §左メニューの所作「Escape と他所のクリックで取り消す」)— 詳細は `AutoActNavBoxVerbs.qml`
 - `nav-filter <文字列>`: 左メニュー上端の入力欄で 5 セクションを一斉に絞り込む — 詳細は `AutoActNavVerbs.qml`
-- `nav-tip <section>:<row>[:<filter>]`(登録は `remote:0` / `branch:0`(意匠の 1 枚)/ `branch:2 --preset nested`): 開かない行の hover のツールチップ(開く行は `nav-open`)— 詳細は `AutoActNavBoxVerbs.qml` と `verify/verbs/nav.rs`
+- `nav-tip <section>:<row>[:<filter>]`(登録は `remote:0` / `branch:0`(意匠の 1 枚)/ `branch:2 --preset nested`): 開かない行の hover のツールチップ(開く行は `nav-open`)— 詳細は `AutoActNavOpenVerbs.qml` と `verify/verbs/nav.rs`
 
-- `nav-open`(**左メニューの行が下へ開いて段で答える側** — 引数 `branch:<row>[:<filter>]` / `remote:<row>[:<filter>]` / `worktree:<row>` / `head[:<filter>][:<畳む行>]`(現在ブランチの張り付き行 `HeadPinRow`)。引数ごとの preset は登録表の行 — 詳細は `AutoActNavBoxVerbs.qml` の `navTipTimer`、引数ごとの判定は `verify/verbs/nav.rs`)
-- `nav-open-foot`(引数なし / `away` / `bar`、**`--preset stack` 必須**。末尾までスクロールした一覧の最後の行が開く側 — 詳細は `AutoActNavBoxVerbs.qml` の `navTipTimer`)
-- `nav-open-then`(引数 `away` / `edit` / `menu` / `filter` / `rightclick` / `rightclick-name` / `sweep` / `tap`(行は `branch:2` 固定)。行が開いた後に手が次にやること — 詳細は `AutoActNavBoxVerbs.qml`)
-- `nav-drag-open`(引数 `<section>:<row>[:<filter>]`(既定 `branch:2`)。閉じた行を待たずに掴む = 行がその場で開き、押下が行の席のフルネームの選択になる(規約 §左メニューの所作)— 詳細は `AutoActNavBoxVerbs.qml` の `dragOpenTimer`)
-- `nav-open-tip`(引数 `<section>:<row>`(既定 `worktree:3`)、`--preset worktrees`。開いた行に手を置き続けた時の補足 = WORKTREES の行のパス全体 — 詳細は `AutoActNavBoxVerbs.qml` の `openTipTimer`)
-- `nav-open-tag`(引数 `<タグ名>[:remote|:drift][:tip|:name]`、`--preset tagremotes`。TAGS の行がその名前を持つリモート 1 本 1 段で開く側 — 詳細は `AutoActNavBoxVerbs.qml` の `navOpenTagTimer`)
-- `tag-line-menu`(引数 `<タグ名>:<段番号>`、`--preset tagremotes`。開いた TAGS の行の段を右クリックし、その段のリモートを名指した TAG カードまで開く — 詳細は `AutoActNavBoxVerbs.qml`)
+- `nav-open`(**左メニューの行が下へ開いて段で答える側** — 引数 `branch:<row>[:<filter>]` / `remote:<row>[:<filter>]` / `worktree:<row>` / `head[:<filter>][:<畳む行>]`(現在ブランチの張り付き行 `HeadPinRow`)。引数ごとの preset は登録表の行 — 詳細は `AutoActNavOpenVerbs.qml` の `navTipTimer`、引数ごとの判定は `verify/verbs/nav.rs`)
+- `nav-open-foot`(引数なし / `away` / `bar`、**`--preset stack` 必須**。末尾までスクロールした一覧の最後の行が開く側 — 詳細は `AutoActNavOpenVerbs.qml` の `navTipTimer`)
+- `nav-open-then`(引数 `away` / `edit` / `menu` / `filter` / `rightclick` / `rightclick-name` / `sweep` / `tap`(行は `branch:2` 固定)。行が開いた後に手が次にやること — 詳細は `AutoActNavOpenVerbs.qml`)
+- `nav-drag-open`(引数 `<section>:<row>[:<filter>]`(既定 `branch:2`)。閉じた行を待たずに掴む = 行がその場で開き、押下が行の席のフルネームの選択になる(規約 §左メニューの所作)— 詳細は `AutoActNavOpenVerbs.qml` の `dragOpenTimer`)
+- `nav-open-tip`(引数 `<section>:<row>`(既定 `worktree:3`)、`--preset worktrees`。開いた行に手を置き続けた時の補足 = WORKTREES の行のパス全体 — 詳細は `AutoActNavOpenVerbs.qml` の `openTipTimer`)
+- `nav-open-tag`(引数 `<タグ名>[:remote|:drift][:tip|:name]`、`--preset tagremotes`。TAGS の行がその名前を持つリモート 1 本 1 段で開く側 — 詳細は `AutoActNavOpenVerbs.qml` の `navOpenTagTimer`)
+- `tag-line-menu`(引数 `<タグ名>:<段番号>`、`--preset tagremotes`。開いた TAGS の行の段を右クリックし、その段のリモートを名指した TAG カードまで開く — 詳細は `AutoActNavOpenVerbs.qml`)
 - `tag-chip-menu`(引数 `<タグ名>@<グラフの行番号>`、`--preset tagremotes`。グラフ行のそのタグのチップを的にしたメニューから TAG カードまで開く — 詳細は `AutoActRefVerbs.qml` の `tagChipTimer`)
-- `nav-open-held`(引数なし。名前の箱が開いている状態で行に手を置き、どの行も開かないこと — 詳細は `AutoActNavBoxVerbs.qml` の `openHeldTimer`)
+- `nav-open-held`(引数なし。名前の箱が開いている状態で行に手を置き、どの行も開かないこと — 詳細は `AutoActNavOpenVerbs.qml` の `openHeldTimer`)
 - `nav-peek-open`(引数は行番号(既定 0)。畳んだレールの覗きの中で行が開く側 — 詳細は `AutoActNavVerbs.qml` の `peekOpenTimer`)
 - `nav-pin-edge`(引数なし、**`--preset stack` 必須**。現在ブランチの張り付き行が、自分の行がスクロールで出て行った上の縁に乗る側 — 詳細は `AutoActNavVerbs.qml` の `pinEdgeTimer`)
-- `nav-follow` / `nav-follow-lit`(引数 `<section>:<row>[:<filter>]`(**必須**)、登録表の行は `--preset tracked-elsewhere`。開いた段の名前を押す / その名前に手を置く(規約 §左メニューの所作)— 詳細は `AutoActNavBoxVerbs.qml` の `followTimer`)
+- `nav-follow` / `nav-follow-lit`(引数 `<section>:<row>[:<filter>]`(**必須**)、登録表の行は `--preset tracked-elsewhere`。開いた段の名前を押す / その名前に手を置く(規約 §左メニューの所作)— 詳細は `AutoActNavOpenVerbs.qml` の `followTimer`)
 - `nav-pin-seat`(引数 `<畳む行>[:<手を置く行>]`、`--preset nested`(1 段だけの形は `0 --preset unpublished`)。畳みで席を取った張り付き行を、手を置かずに撮る側 — 詳細は `AutoActNavVerbs.qml` の `pinSeatTimer`)
 - `nav-fold`(引数なし / `no-tags`。畳んだレールの数字が印の下に立つか(`counts=`)— 詳細は `AutoActNavVerbs.qml` の `navRailTimer` と `NavProbe.countsInk`)
 - `tags-eye`(引数 `<タグ名>` / `<タグ名>:back`、**`--preset tagonly` の `v1.1-kept`**。TAGS 帯末尾の目でグラフからタグを外す・押し戻す — 詳細は `AutoActNavVerbs.qml` の `tagEyeTimer`)
