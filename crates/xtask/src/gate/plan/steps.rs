@@ -510,9 +510,10 @@ fn shot_check() -> String {
 /// from the check to what it reads (the pictures' decoding, the spawn):
 /// the check's static closure (`Graph::inputs`). Across the process
 /// boundary the check spawns, `verify-ui` in this same binary, the
-/// harness's Rust half every verb reads ([`harness`]), which no `use` of
-/// the check's reaches: the fault's option and its carriage into the
-/// app's environment, the run's judgment and contract. Across the
+/// harness's Rust half every verb reads ([`harness`]), whole — the spawn
+/// runs all of it, whatever the check's own `use`s reach: the fault's
+/// option and its carriage into the app's environment, the run's judgment
+/// and contract. Across the
 /// boundary to the app it drives, the product unit every verb reads
 /// ([`cargo_inputs`] over the app and core): the knob read off the
 /// environment and published to QML — the Rust/QML boundary, which the

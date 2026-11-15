@@ -279,12 +279,15 @@ fn drive(me: &Path, case: &Case, build: bool) -> Result<String, String> {
     Ok(said)
 }
 
-/// Where the run put its pictures, off the window's own line
-/// (`screenshot saved=… path=<dir>/app.png`).
+/// Where the run put its pictures, off the window's own capture line
+/// (`screenshot saved=… path=<dir>/app.png`): one the verdict echoed
+/// ([`super::outcome::ECHOED`]), read at its start as the contract reads it.
 fn shot_dir(said: &str) -> Option<PathBuf> {
     said.lines()
-        .find(|line| line.contains("screenshot saved="))
-        .and_then(|line| line.split(" path=").nth(1))
+        .filter_map(|line| line.strip_prefix(super::outcome::ECHOED))
+        .filter_map(super::contract::capture_text)
+        .find(|text| text.starts_with("screenshot saved="))
+        .and_then(|text| text.split(" path=").nth(1))
         .map(|path| PathBuf::from(path.trim()))
         .and_then(|path| path.parent().map(Path::to_path_buf))
 }
@@ -439,6 +442,17 @@ mod tests {
             Some(std::path::Path::new("C:/t/r1"))
         );
         assert_eq!(shot_dir("nothing"), None);
+        // A line quoting the capture line, and the verdict's own, say nothing of where.
+        let quoted = concat!(
+            "  | INFO bench: said run=r1 owner=page op=commit_menu gen=1 stage=open: \
+             screenshot saved=true ink=0 path=C:/elsewhere/app.png\n",
+            "  | qml: screenshot saved=true ink=0 path=C:/t/r1/app.png\n",
+            "PASS: commit-menu in 3.0s (exit 0, screenshot saved=true, write-failures 0)\n",
+        );
+        assert_eq!(
+            shot_dir(quoted).as_deref(),
+            Some(std::path::Path::new("C:/t/r1"))
+        );
     }
 
     #[test]

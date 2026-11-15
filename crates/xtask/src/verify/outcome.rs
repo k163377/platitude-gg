@@ -83,6 +83,10 @@ impl Outcome {
     }
 }
 
+/// What the verdict puts in front of each line the run said, so a reader of
+/// the verdict (`super::shot_check`) tells the run's lines from its own.
+pub(super) const ECHOED: &str = "  | ";
+
 /// What the run's own lines make of it — and, for the runs that have one,
 /// what the witness on disk says (`config` is the run's gitconfig,
 /// `config_dir` its settings directory). `run` is the run's id, which its
@@ -200,7 +204,7 @@ pub(super) fn announce(
     );
 
     for line in err_lines.iter().chain(out_lines.iter()) {
-        println!("  | {line}");
+        println!("{ECHOED}{line}");
     }
     let shots = filed_shots(opts, shot_dir);
 
@@ -467,7 +471,8 @@ mod tests {
         assert!(saved("screenshot saved=true ink=0 path=x/app.png"));
         assert!(saved("qml: screenshot saved=true ink=0 path=x/app.png"));
         assert!(!saved(
-            "INFO bench: said run=r1 note=screenshot saved=true ink=0 path=x/app.png"
+            "INFO bench: said run=r1 owner=page op=wip gen=1 stage=start: \
+             screenshot saved=true ink=0 path=x/app.png"
         ));
         assert!(!saved("screenshot saved=false ink=0 path=x/app.png"));
     }
