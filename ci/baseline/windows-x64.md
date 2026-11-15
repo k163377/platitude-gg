@@ -1,6 +1,7 @@
 # ネットワーク非通信 baseline 実測（Windows x64）— Phase 0
 
-実装計画 §11.2 の前提(既定ビルドの Qt では配布物に通信の経路が残る)の根拠。P0 スパイク（`spike/`）の windeployqt 配布物を実測したもの。
+実装計画 §11.2 の前提(既定ビルドの Qt では配布物に通信の経路が残る)の根拠。P0 スパイク（`spike/`）の windeployqt 配布物
+を実測したもの。
 
 - 計測対象: `pgg_spike.exe`（qtbridge 0.2.0 / Qt 6.10.3 msvc2022_64 / rustc 1.97.1, release）
 - deploy コマンド: `windeployqt --release --compiler-runtime --no-translations --qmldir spike/src <exe>`
@@ -17,8 +18,8 @@ Qt6Core.dll  Qt6Gui.dll  Qt6Qml.dll
 VCRUNTIME140.dll  api-ms-win-crt-{runtime,heap,math,stdio,locale}-l1-1-0.dll
 ```
 
-**assert（アプリ自身の主張）**: exe の import table に
-`Qt6Network.dll` / `WS2_32.dll` / `winhttp.dll` / `wininet.dll` は**含まれない**。
+**assert（アプリ自身の主張）**: exe の import table に `Qt6Network.dll` / `WS2_32.dll` / `winhttp.dll` / `wininet.dll`
+は**含まれない**。
 
 ## 2. 同梱 Qt DLL の推移的依存（要点）
 
@@ -32,8 +33,8 @@ VCRUNTIME140.dll  api-ms-win-crt-{runtime,heap,math,stdio,locale}-l1-1-0.dll
 ### 帰結
 
 「**Qt6Network を同梱しない**」は既定ビルドの Qt の Qt Quick 構成では**成立しない**
-（Qt6Qml/Qt6Quick がロード時に要求するため、DLL を除くと起動不能になる）。
-外すのは Qt のカスタムビルド — 実装計画 §11.2。
+（Qt6Qml/Qt6Quick がロード時に要求するため、DLL を除くと起動不能になる）。外すのは Qt のカスタムビルド — 実装計画
+§11.2。
 
 ## 3. 同梱 DLL / プラグイン一覧（P5 allowlist の種）
 

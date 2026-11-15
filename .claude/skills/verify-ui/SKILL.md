@@ -5,21 +5,56 @@ description: platitude-gg の UI 動作確認・スクリーンショット検�
 
 # UI 動作確認(ヘッドレス検証)
 
-**クラウドセッション(`CLAUDE_CODE_REMOTE=true`)ではここの何も撃たない** — 触った動詞は報告で「未実行の検証」として名指すだけ(internal-docs/クラウドセッション.md)。
+**クラウドセッション(`CLAUDE_CODE_REMOTE=true`)ではここの何も撃たない** — 触った動詞は報告で「未実行の検証」として名指す
+だけ(internal-docs/クラウドセッション.md)。
 
-**ヘッドレス動確は `cargo xtask verify-ui <動詞> [引数]`** — release ビルド → `screenshot saved=true` 判定と PNG 保存まで 1 コマンド。`--no-build` で連続実行、`--preset` / `--repo` で対象指定、素材だけ欲しければ <!--cmd:demo.repo-->`cargo xtask demo-repo <preset>`。
+**ヘッドレス動確は `cargo xtask verify-ui <動詞> [引数]`** — release ビルド → `screenshot saved=true` 判定と PNG 保存ま
+で 1 コマンド。`--no-build` で連続実行、`--preset` / `--repo` で対象指定、素材だけ欲しけれ
+ば <!--cmd:demo.repo-->`cargo xtask demo-repo <preset>`。
 
 presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正。
 
-**gate が回す動詞は登録表 `crates/xtask/verb-lines.txt` の行**(行は人が登録し、約束は run から作る。1 行 = `<verify-ui の行> TAB <その run の絵が `*` 行の外で見せると約束する部品、無ければ ->`。約束は契約: 絵に無ければ FAIL。正本と読み方は 反映前テストの機械化.md §選択の正本)。**動詞を足したら行を登録し、段を決める**(rules-refs/app-ui.md)— 登録の無い動詞・判定行は `cargo xtask verbs`(gate の常時ステップ)が赤で止める。**登録表のどの行も示さない部品(新規の popup・Loader の中身)は gate が名指しで止まる** — それを立てる行に部品を書く(`gate --verb` は登録済みの行だけ)。**run は木に何も書かない**: 会った部品は絵の隣の `census.txt` に残り、登録行との差を `shown:` の 1 行で言う(会ったのに書いていない物 = 行を広げる候補)。反復(揺れの計測・絵を見るだけ)は何も動かさないので、そのまま撃つ。
+**gate が回す動詞は登録表 `crates/xtask/verb-lines.txt` の行**(行は人が登録し、約束は run から作る。1 行 =
+`<verify-ui の行> TAB <その run の絵が `*` 行の外で見せると約束する部品、無ければ ->`。約束は契約: 絵に無ければ FAIL。正
+本と読み方は 反映前テストの機械化.md §選択の正本)。**動詞を足したら行を登録し、段を決める**(rules-refs/app-ui.md)— 登録
+の無い動詞・判定行は `cargo xtask verbs`(gate の常時ステップ)が赤で止める。**登録表のどの行も示さない部品(新規の
+popup・Loader の中身)は gate が名指しで止まる** — それを立てる行に部品を書く(`gate --verb` は登録済みの行だけ)。**run は
+木に何も書かない**: 会った部品は絵の隣の `census.txt` に残り、登録行との差を `shown:` の 1 行で言う(会ったのに書いていな
+い物 = 行を広げる候補)。反復(揺れの計測・絵を見るだけ)は何も動かさないので、そのまま撃つ。
 
-**目視は等倍以上で、判定する所を切り出して見る。** 何枚も並べて縮小した一覧は「どの絵が撮れたか」の確認**だけ**に使う — 縮小の補間は上に載った数 px を消す。文字・枠・重なりを判定する時は、その行を 3 倍以上・**NEAREST**(補間なし)で切り出す —— **`cargo xtask shots crop <png> --at <x>:<y>:<幅>:<高さ> [--scale <n>]`**(既定 3 倍。整数倍のみ)。切り出しは元の絵の隣に置かれる(`app.png` → `app-crop-24-96-220x44.png`)ので、そのまま Read で読む —— **切り出しの道具はこれだけ**。空白・崩れに見えた絵は、直す前に保存ファイルの画素(crop / SHA-256)で確かめる。**前後の画素の差は `cargo xtask shots diff <前.png> <後.png>`**(同じ大きさに切ってから。後を灰に落とし、明るくなった画素を緑・暗くなった画素を赤・変わった所を黄の枠で描いて、後の隣に `-diff.png` で置く)—— 1〜2px の動きは横並びでは見えないので、board には前・後・差分の 3 枚を `add --part` で 1 run に載せる。
+**目視は等倍以上で、判定する所を切り出して見る。** 何枚も並べて縮小した一覧は「どの絵が撮れたか」の確認**だけ**に使う —
+縮小の補間は上に載った数 px を消す。文字・枠・重なりを判定する時は、その行を 3 倍以上・**NEAREST**(補間なし)で切り出す
+—— **`cargo xtask shots crop <png> --at <x>:<y>:<幅>:<高さ> [--scale <n>]`**(既定 3 倍。整数倍のみ)。切り出しは元の絵の
+隣に置かれる(`app.png` → `app-crop-24-96-220x44.png`)ので、そのまま Read で読む —— **切り出しの道具はこれだけ**。空
+白・崩れに見えた絵は、直す前に保存ファイルの画素(crop / SHA-256)で確かめる。**前後の画素の差は
+`cargo xtask shots diff <前.png> <後.png>`**(同じ大きさに切ってから。後を灰に落とし、明るくなった画素を緑・暗くなった画
+素を赤・変わった所を黄の枠で描いて、後の隣に `-diff.png` で置く)—— 1〜2px の動きは横並びでは見えないので、board には
+前・後・差分の 3 枚を `add --part` で 1 run に載せる。
 
-**ユーザーに見せる絵は board へ出す**(チャットのペインは画像を縮めるうえ拡大できない)。**明示的に撃った** `verify-ui` は撮った PNG を自動で board に載せる。**`gate` が回す verify の run は載らない**。**board に載せるのは「ユーザーが求めた絵」と「その指示に直接関係する絵」だけ**(ユーザー決定)。**`/land` の後に自分の確かめだけで撃つ run は `--no-board`** — `/land` の後に board へ載せた絵は、下げてもユーザーの次の発言まで反映を止める(CLAUDE.md §Git 運用)。
+**ユーザーに見せる絵は board へ出す**(チャットのペインは画像を縮めるうえ拡大できない)。**明示的に撃った** `verify-ui` は
+撮った PNG を自動で board に載せる。**`gate` が回す verify の run は載らない**。**board に載せるのは「ユーザーが求めた
+絵」と「その指示に直接関係する絵」だけ**(ユーザー決定)。**`/land` の後に自分の確かめだけで撃つ run は `--no-board`** —
+`/land` の後に board へ載せた絵は、下げてもユーザーの次の発言まで反映を止める(CLAUDE.md §Git 運用)。
 
-手で作った切り出し・比較シートは `cargo xtask shots add --label "<この絵で何を見るか>" [--verb <動詞>] <png>...`(**`--label` は必須**)。**ラベルは日本語で書く**(日本語の字を 1 つも含まないラベルは拒まれる)。識別子・動詞・ファイル名はその綴りのまま名前の中へ入れてよい(`"AskBar.settled を待った絵"`)。**`--label` は `verify-ui` 側にもある** — 見せるために撮る run には付ける(規則も拒み方も `shots add` と同じ)。**before / after は必ず 1 つの run に横並びで載せ、両側を出す** — `cargo xtask shots add --label "<何が変わったか>" [--verb <動詞>] --before <png> --after <png>`(ユーザー決定)。flaky 掃引のように同じ絵が何十枚も出る run は `verify-ui --no-board` で撃つ。
+手で作った切り出し・比較シートは
+`cargo xtask shots add --label "<この絵で何を見るか>" [--verb <動詞>] <png>...`(**`--label` は必須**)。**ラベルは日本語
+で書く**(日本語の字を 1 つも含まないラベルは拒まれる)。識別子・動詞・ファイル名はその綴りのまま名前の中へ入れてよ
+い(`"AskBar.settled を待った絵"`)。**`--label` は `verify-ui` 側にもある** — 見せるために撮る run には付ける(規則も拒み
+方も `shots add` と同じ)。**before / after は必ず 1 つの run に横並びで載せ、両側を出す** —
+`cargo xtask shots add --label "<何が変わったか>" [--verb <動詞>] --before <png> --after <png>`(ユーザー決定)。flaky 掃
+引のように同じ絵が何十枚も出る run は `verify-ui --no-board` で撃つ。
 
-**絵を撮るには席が要る** — board に載せられるのは**この会話が claim を持つ**席 a〜f からだけで、**本体 checkout(と roster 外の worktree)・claim の無い席・他人の席からは拒否される**(`shots add` はエラー、`verify-ui` は `board: not updated (…)` と言って判定自体は続く)。**スクショを頼まれたら `cargo xtask seat` で席を取り、その席のビルドで撮る**。**絵は claim を戻さない — land の後に絵を載せ直さない**(land で claim が外れた席からは載らない。載せ直しで席を握り続けると他セッションが使えない)。**ユーザーの承諾が要る絵は land の前に載せ、承諾を得てから反映する** — `/land` より後に載せた絵が席に残っていると `land` は何も動かさずに止まる(CLAUDE.md §Git 運用)。同じ席で同じラベルを撮り直すと**前の run は置き換わる** — **残したい比較は別ラベルか 1 run 複数枚で撮る**(`— linux` は別ラベルなので両 OS のペアは残る)。**run が落ちるのは席の仕事が終わった時だけ** — `land` した時と、その席が次の仕事のために配られた時(`cargo xtask seat`)。見せ終わった絵は <!--cmd:shots.prune-->`cargo xtask shots prune`(引数なしで**自席だけ**。隣の席の絵を触るのは `--seat <letter>` / `--seat all` で指名した時だけ)、**捨てた案は `cargo xtask shots prune --label "<その run の名前>"`**。
+**絵を撮るには席が要る** — board に載せられるのは**この会話が claim を持つ**席 a〜f からだけで、**本体 checkout(と
+roster 外の worktree)・claim の無い席・他人の席からは拒否される**(`shots add` はエラー、`verify-ui` は
+`board: not updated (…)` と言って判定自体は続く)。**スクショを頼まれたら `cargo xtask seat` で席を取り、その席のビルドで
+撮る**。**絵は claim を戻さない — land の後に絵を載せ直さない**(land で claim が外れた席からは載らない。載せ直しで席を握
+り続けると他セッションが使えない)。**ユーザーの承諾が要る絵は land の前に載せ、承諾を得てから反映する** — `/land` より後
+に載せた絵が席に残っていると `land` は何も動かさずに止まる(CLAUDE.md §Git 運用)。同じ席で同じラベルを撮り直すと**前の
+run は置き換わる** — **残したい比較は別ラベルか 1 run 複数枚で撮る**(`— linux` は別ラベルなので両 OS のペアは残
+る)。**run が落ちるのは席の仕事が終わった時だけ** — `land` した時と、その席が次の仕事のために配られた
+時(`cargo xtask seat`)。見せ終わった絵は <!--cmd:shots.prune-->`cargo xtask shots prune`(引数なしで**自席だけ**。隣の席
+の絵を触るのは `--seat <letter>` / `--seat all` で指名した時だけ)、**捨てた案は
+`cargo xtask shots prune --label "<その run の名前>"`**。
 
 **board は上から下へ、載せた順に読む**。**載せる順は次の優先順で決める**(ユーザー決定):
 
@@ -27,44 +62,81 @@ presets / options の一覧は `cargo xtask` の USAGE(引数なし実行)が正
 2. **動かしているマシン順** — 今動かしているマシンで撮った絵が先、他環境は後
 3. **説明における順** — 説明が 1〜3 なら 1 → 2 → 3
 
-両 OS を見せる時は **Windows の 1 → 2 → 3 を全部載せてから、Linux の 1 → 2 → 3**。見せると決めた絵は上の順で `verify-ui --no-build` / `shots add` を順に撃って載せる。
+両 OS を見せる時は **Windows の 1 → 2 → 3 を全部載せてから、Linux の 1 → 2 → 3**。見せると決めた絵は上の順で
+`verify-ui --no-build` / `shots add` を順に撃って載せる。
 
-**動詞はまとめて撮る(1 ターンに複数)** — 同じビルドで撮れる動詞は 1 個の複合コマンドに並べて 1 ターンで実行し(2 発目以降は `--no-build`)、PNG の目視も 1 ターンに複数枚まとめて読む。段 2 と重なる時は、commit してから `cargo xtask gate --verb '<動詞と引数>' --verb …` で 1 本にまとめるのが最速(名指した行は段分け表に関わらず両側で回る)。1 動詞ずつ「撮る→見る→直す」を回してよいのは、直前の絵が次の編集を決める時だけ。
+**動詞はまとめて撮る(1 ターンに複数)** — 同じビルドで撮れる動詞は 1 個の複合コマンドに並べて 1 ターンで実行し(2 発目以降
+は `--no-build`)、PNG の目視も 1 ターンに複数枚まとめて読む。段 2 と重なる時は、commit してから
+`cargo xtask gate --verb '<動詞と引数>' --verb …` で 1 本にまとめるのが最速(名指した行は段分け表に関わらず両側で回る)。1
+動詞ずつ「撮る→見る→直す」を回してよいのは、直前の絵が次の編集を決める時だけ。
 
-**判定には書き込みの失敗も入る** — `write failed` が 1 行でもあれば FAIL(撮れた PNG は「届かなかった状態」のもの)。**`--allow-write-failure` を付けてよいのは「その拒否がこの動詞の見せ物である」時だけ**(対象動詞の全列挙は `cargo xtask` の USAGE が正)。引数の渡し忘れも同じ行に出る(`delete-branch-refused` を引数なしで撃つと `git branch --delete -- ''` が拒まれ、`not merged` の絵は撮れていない)。**QML のループの警告も判定に入る** — `Binding loop detected` / `possible QQuickItem::polish() loop` が run の行に出れば FAIL(qmltest も同じ。正本は 反映前テストの機械化.md §QML のループ)。
+**判定には書き込みの失敗も入る** — `write failed` が 1 行でもあれば FAIL(撮れた PNG は「届かなかった状態」のも
+の)。**`--allow-write-failure` を付けてよいのは「その拒否がこの動詞の見せ物である」時だけ**(対象動詞の全列挙は
+`cargo xtask` の USAGE が正)。引数の渡し忘れも同じ行に出る(`delete-branch-refused` を引数なしで撃つと
+`git branch --delete -- ''` が拒まれ、`not merged` の絵は撮れていない)。**QML のループの警告も判定に入る** —
+`Binding loop detected` / `possible QQuickItem::polish() loop` が run の行に出れば FAIL(qmltest も同じ。正本は 反映前テ
+ストの機械化.md §QML のループ)。
 
 ## 起動 fast path(「rebase して起動」等、起動だけの要求)
 
-ユーザーが待っているのは**窓が出ること**。前提は「rebase が通り、release exe がビルドできる」ことだけ(fmt / clippy / test / verify-ui / linux 系は段 2 で)。
+ユーザーが待っているのは**窓が出ること**。前提は「rebase が通り、release exe がビルドできる」ことだけ(fmt / clippy /
+test / verify-ui / linux 系は段 2 で)。
 
-1. **停止 → rebase → ビルド → 起動 → 生存確認まで 1 個の複合コマンド**(escape を両方付ける)。**素のまま撃つ**(パイプ・コマンド置換は下記の罠、hook が deny):
+1. **停止 → rebase → ビルド → 起動 → 生存確認まで 1 個の複合コマンド**(escape を両方付ける)。**素のまま撃つ**(パイプ・コ
+   マンド置換は下記の罠、hook が deny):
 
    ```bash
    PGG_ALLOW_REBASE=1 git rebase main && PGG_ALLOW_GUI=1 cargo xtask launch
    ```
 
-   `launch` が自ツリーの居残りプロセス回収(`cargo xtask kill` 相当)→ release ビルド → 切り離し起動 → 生存確認まで行い、Qt の PATH も自分で解決する。rebase 不要の要求なら <!--cmd:app.launch-->`PGG_ALLOW_GUI=1 cargo xtask launch` だけ。冷えたツリーの release ビルドは既定の 2 分を超えうるので、**前景のまま timeout を上げる**(理由は下の 3)。**落とすのは自ツリーの居残りだけ** — `kill` / `launch` がそれだけを落とす(画像名 kill は hook が deny)。
-2. **`launch` の行が最後のツール呼び出し**。窓が出たら報告してターンを終える。起動を待たせてよいのは rebase の衝突と build エラーだけ(衝突を解決したら、この fast path の続きで起動まで行く)。
-3. **起動の報告がターンの終わり** — **ターンが終わらない間ユーザーの次の指示はキューに載ったまま届かない**。以下はどれもターンを延ばす:
-   - 起動そのものを run_in_background で撃つ(hook が deny)/ 報告と同じターンで `gate` 等を run_in_background で始める(完了通知がエージェントを起こし直す)
+   `launch` が自ツリーの居残りプロセス回収(`cargo xtask kill` 相当)→ release ビルド → 切り離し起動 → 生存確認まで行
+   い、Qt の PATH も自分で解決する。rebase 不要の要求なら <!--cmd:app.launch-->`PGG_ALLOW_GUI=1 cargo xtask launch` だ
+   け。冷えたツリーの release ビルドは既定の 2 分を超えうるので、**前景のまま timeout を上げる**(理由は下の 3)。**落とす
+   のは自ツリーの居残りだけ** — `kill` / `launch` がそれだけを落とす(画像名 kill は hook が deny)。
+2. **`launch` の行が最後のツール呼び出し**。窓が出たら報告してターンを終える。起動を待たせてよいのは rebase の衝突と
+   build エラーだけ(衝突を解決したら、この fast path の続きで起動まで行く)。
+3. **起動の報告がターンの終わり** — **ターンが終わらない間ユーザーの次の指示はキューに載ったまま届かない**。以下はどれも
+   ターンを延ばす:
+   - 起動そのものを run_in_background で撃つ(hook が deny)/ 報告と同じターンで `gate` 等を run_in_background で始める(完
+     了通知がエージェントを起こし直す)
    - `Get-Process` / `xtask seats` / ログの tail で生存や pid を確かめ直す(生存確認は `launch` が済ませている)
    - 窓が閉じるのを待つ・ユーザーの操作を待つ・撃ち直す・スクショを撮る
 
    起動の報告には**段 2 が未実行であることを 1 行添える**。**その段 2 は窓を立てたまま回してよい**(窓は複製から立つ)。
 
-**`cargo xtask launch` をパイプ・コマンド置換に通すと、ターンが窓の寿命だけ返らない** — 切り離した窓がシェルの作ったパイプの書き込み端を掴んだまま生き続け、読み手が EOF を見ない(`Stdio::null()` も `DETACHED_PROCESS` も `cmd /c start` も外れない)。**パイプを書かなければ掴まれない**(`2>&1` だけ・ファイルへの `>` は読み手が居ないので無害)。
+**`cargo xtask launch` をパイプ・コマンド置換に通すと、ターンが窓の寿命だけ返らない** — 切り離した窓がシェルの作ったパイ
+プの書き込み端を掴んだまま生き続け、読み手が EOF を見ない(`Stdio::null()` も `DETACHED_PROCESS` も `cmd /c start` も外れ
+ない)。**パイプを書かなければ掴まれない**(`2>&1` だけ・ファイルへの `>` は読み手が居ないので無害)。
 
 ## PGG_AUTO_ACT 動詞表
 
-**[verbs.md](verbs.md) は索引**(1 動詞 1 行 = 名前・引数 / preset・何を見せるか)— 動確の前に、使う動詞を動詞名で Grep して必ず読む(引数・preset を省くと何も撮れない動詞がある)。**報告行の読み方・待ち・罠は各動詞のドライバのコメントが正本** — `crates/platitude-app/src/auto/*.qml` の `act === "<動詞>"` の隣と、判定は `crates/xtask/src/verify/verbs/*.rs` の `Verb` 行。どちらも動詞名を `"<動詞>"` の綴りで Grep する。**動詞を足したら verbs.md に索引の 1 行を足し、説明はドライバのコメントに書く**。足す・消す・改名は登録表 `crates/xtask/verb-lines.txt` の行も揃える(verbs.md 冒頭)。**報告行で判定するなら `verify/verbs/*.rs` の表にも行を足す** — 表に行が無い動詞は**絵だけで判定される**ので、壊れた run が緑で通る。
+**[verbs.md](verbs.md) は索引**(1 動詞 1 行 = 名前・引数 / preset・何を見せるか)— 動確の前に、使う動詞を動詞名で Grep し
+て必ず読む(引数・preset を省くと何も撮れない動詞がある)。**報告行の読み方・待ち・罠は各動詞のドライバのコメントが正本**
+— `crates/platitude-app/src/auto/*.qml` の `act === "<動詞>"` の隣と、判定は `crates/xtask/src/verify/verbs/*.rs` の
+`Verb` 行。どちらも動詞名を `"<動詞>"` の綴りで Grep する。**動詞を足したら verbs.md に索引の 1 行を足し、説明はドライバ
+のコメントに書く**。足す・消す・改名は登録表 `crates/xtask/verb-lines.txt` の行も揃える(verbs.md 冒頭)。**報告行で判定す
+るなら `verify/verbs/*.rs` の表にも行を足す** — 表に行が無い動詞は**絵だけで判定される**ので、壊れた run が緑で通る。
 
-**ダイアログ・メニューの見た目は headless で撮れる**: `WindowShotMirrors.qml` のオーバーレイミラー(`ShaderEffectSource`)が **overlay.png** を app.png と並べて保存する(ロック状態と無関係)。オーバーレイ自体の grabToImage は "no QML engine" で不可、ミラーが唯一の経路。
+**ダイアログ・メニューの見た目は headless で撮れる**: `WindowShotMirrors.qml` のオーバーレイミ
+ラー(`ShaderEffectSource`)が **overlay.png** を app.png と並べて保存する(ロック状態と無関係)。オーバーレイ自体の
+grabToImage は "no QML engine" で不可、ミラーが唯一の経路。
 
-**白紙の overlay.png は「その時点で何も開いていなかった」の意味**。報告行 `overlay saved=<bool> popups=<n> yield=<bool>` の **`popups=` がオーバーレイ自身が抱えていた数**(メニュー 1 / サブメニューを開けば 2 / モーダルは dimmer を伴って 2 以上)、`yield=` が窓の枠を場面へ返していたか(外の press で閉じるメニュー・リストが立っていたか)。`commit-menu` / `reset-menu` はこの行が must_say — **overlay が主題の動詞には同じ 1 行を足せる**(`verify/verbs/*.rs` —— `commit-menu` の行は `verify/verbs/graph.rs`)。「閉じたか」は `Popup.opened` の報告行で読む。
+**白紙の overlay.png は「その時点で何も開いていなかった」の意味**。報告行 `overlay saved=<bool> popups=<n> yield=<bool>`
+の **`popups=` がオーバーレイ自身が抱えていた数**(メニュー 1 / サブメニューを開けば 2 / モーダルは dimmer を伴って 2 以
+上)、`yield=` が窓の枠を場面へ返していたか(外の press で閉じるメニュー・リストが立っていたか)。`commit-menu` /
+`reset-menu` はこの行が must_say — **overlay が主題の動詞には同じ 1 行を足せる**(`verify/verbs/*.rs` —— `commit-menu` の
+行は `verify/verbs/graph.rs`)。「閉じたか」は `Popup.opened` の報告行で読む。
 
-**絵は試行の単位で撮る** — page の成立 → 元の更新 → grab → 答えの確認を 1 試行とし、待機(ambient の読み・インク)で止まった試行は捨てて page から撮り直す。行は `picture run= artifact= attempt=<n> waiting= / held= / ink= / saved=`(読み方は `AutoShotDriver.qml` の `Attempt`)。
+**絵は試行の単位で撮る** — page の成立 → 元の更新 → grab → 答えの確認を 1 試行とし、待機(ambient の読み・インク)で止まっ
+た試行は捨てて page から撮り直す。行は `picture run= artifact= attempt=<n> waiting= / held= / ink= / saved=`(読み方は
+`AutoShotDriver.qml` の `Attempt`)。
 
-**overlay が空でない run は 3 枚目 `scene.png` を出す** —— app.png と overlay.png を**描かれた座標のまま重ねた 1 枚**で、**窓の縁(Windows の窓モードの 1px)が写るのはこの 1 枚だけ**(app.png は本体だけ = Windows では窓より 2px 狭い)。「開いたものは、それを開けたものに対して**どこに**立っているか」(hover の席・カードの密着・メニューの掛かり方)はこれでしか読めない。報告行は `scene saved=<bool>`。**hover の席を見せる時はこの 1 枚を board に出す**。**撮る絵は run が頭で名乗り**(`pictures run= wanted=…`)、**1 枚ごとに `picture run= artifact= attempt= saved=<bool>`** — 頼んだ絵が全部 `saved=true` でなければ契約違反(保存の失敗は後の絵で取り消せない)。
+**overlay が空でない run は 3 枚目 `scene.png` を出す** —— app.png と overlay.png を**描かれた座標のまま重ねた 1
+枚**で、**窓の縁(Windows の窓モードの 1px)が写るのはこの 1 枚だけ**(app.png は本体だけ = Windows では窓より 2px 狭い)。
+「開いたものは、それを開けたものに対して**どこに**立っているか」(hover の席・カードの密着・メニューの掛かり方)はこれでし
+か読めない。報告行は `scene saved=<bool>`。**hover の席を見せる時はこの 1 枚を board に出す**。**撮る絵は run が頭で名乗
+り**(`pictures run= wanted=…`)、**1 枚ごとに `picture run= artifact= attempt= saved=<bool>`** — 頼んだ絵が全部
+`saved=true` でなければ契約違反(保存の失敗は後の絵で取り消せない)。
 
 ## 場面ごとの各論(このディレクトリ。その場面に入る前に読む)
 

@@ -2,18 +2,17 @@
 
 ソースのコメントから引き上げた値の置き場(.claude/rules/code.md)。
 
-- 台: Ryzen 9 9900X(12C/24T)/ 32GB / Windows 11 build 26200 / git 2.55.0 /
-  Qt 6.10.3。画面 3 枚(100 / 180 / 100Hz)・GPU 3 系統
-  ([perf-windows-x64.md](perf-windows-x64.md) §計測条件 と同じ台。**他の仕事が載る台**)
+- 台: Ryzen 9 9900X(12C/24T)/ 32GB / Windows 11 build 26200 / git 2.55.0 / Qt 6.10.3。画面 3 枚(100 / 180 / 100Hz)・GPU
+  3 系統 ([perf-windows-x64.md](perf-windows-x64.md) §計測条件 と同じ台。**他の仕事が載る台**)
 - **1 度ずつ読んだ値で、撃ち直しの手順を持たない** — ここの行から読めるのは**順序と桁**だけ
 - **数字が要る判断をするなら、その時に自分が使う量を測り直す**
-- 参照リポジトリは `JetBrains/kotlin`(clone した時期で refs も tip も動く)、
-  合成コーパスは `cargo xtask corpus`(token は perf 記録が持つ)
+- 参照リポジトリは `JetBrains/kotlin`(clone した時期で refs も tip も動く)、合成コーパスは `cargo xtask corpus`(token は
+  perf 記録が持つ)
 
 ## git のプロセス代
 
-100ms の操作応答(internal-docs/性能.md §予算)に対して、**Windows ではプロセスの起動が
-コマンドの代金の大半**という 1 点がこの表の全部。
+100ms の操作応答(internal-docs/性能.md §予算)に対して、**Windows ではプロセスの起動がコマンドの代金の大半**という 1 点が
+この表の全部。
 
 | 場所 | 読み |
 |---|---|
@@ -44,8 +43,7 @@
 
 ## メモリの形
 
-300MB(internal-docs/性能.md §予算)に対する読み。**どれも「同じ答えを持つ 2 つの形」の差**で、
-形を選んだ理由がこの列。
+300MB(internal-docs/性能.md §予算)に対する読み。**どれも「同じ答えを持つ 2 つの形」の差**で、形を選んだ理由がこの列。
 
 | 場所 | 読み |
 |---|---|
@@ -63,14 +61,13 @@
 
 ## 橋の値の組み立て(`encode::wire`)
 
-QML が行を読むたびに組む値と、QML から読み戻す値(§メモリの形 の `encode::wire`)の代金。
-release・Qt 6.12.0・qtbridge 0.3.0(同梱版)・rustc 1.98.1。製品の変換をそのまま回す計測
-(グラフ行の 15 role を `QModelItem::get_role` で読む / `GitFacts.chipsShown` の往復)を、
-順序を入れ替えた 6 プロセスで撃った 1 操作あたりの中央値。6 プロセスの中央値の範囲が重なる差は
-「判定できない」と書く(等しいとは読まない)。**どれもこの版の上で、形 2 つを比べた結果**
-(`key_of` は `perf(app): a record's field names are made once per thread…` の前後、読み戻しは
-同じ版の上の読み方 2 つ)。依存の更新そのもの(更新前の Qt 6.10.3・qtbridge 0.2 との差)の性能は
-ここからは読めない — それは P3-確認事項 §依存更新(qtbridge 0.3 / Qt 6.12)の点灯後に要る検証 の比較が答える。
+QML が行を読むたびに組む値と、QML から読み戻す値(§メモリの形 の `encode::wire`)の代金。 release・Qt 6.12.0・qtbridge
+0.3.0(同梱版)・rustc 1.98.1。製品の変換をそのまま回す計測 (グラフ行の 15 role を `QModelItem::get_role` で読む /
+`GitFacts.chipsShown` の往復)を、順序を入れ替えた 6 プロセスで撃った 1 操作あたりの中央値。6 プロセスの中央値の範囲が重
+なる差は「判定できない」と書く(等しいとは読まない)。**どれもこの版の上で、形 2 つを比べた結果** (`key_of` は
+`perf(app): a record's field names are made once per thread…` の前後、読み戻しは同じ版の上の読み方 2 つ)。依存の更新その
+もの(更新前の Qt 6.10.3・qtbridge 0.2 との差)の性能はここからは読めない — それは P3-確認事項 §依存更新(qtbridge 0.3 / Qt
+6.12)の点灯後に要る検証 の比較が答える。
 
 | 場所 | 読み |
 |---|---|
@@ -96,7 +93,8 @@ release・Qt 6.12.0・qtbridge 0.3.0(同梱版)・rustc 1.98.1。製品の変換
 
 ## todo の突き合わせ(`sequencer::merge_todo`)
 
-プランの行数 = 書き換える範囲の長さなので、履歴全部を `rebase -i` に載せた時が上限(release、短縮 9 桁・10 行に 1 本の `update-ref`)。
+プランの行数 = 書き換える範囲の長さなので、履歴全部を `rebase -i` に載せた時が上限(release、短縮 9 桁・10 行に 1 本の
+`update-ref`)。
 
 | 行数 | 並び | 走査 + `Vec::remove` | oid 索引 |
 |---|---|---|---|
@@ -148,7 +146,8 @@ release・Qt 6.12.0・qtbridge 0.3.0(同梱版)・rustc 1.98.1。製品の変換
 
 ## build directory の世代(`xtask::sweep`)
 
-cargo が置き換えた成果物を消さないことの代金。**1 世代 = 席 1 つが正規集合を建てた時の量**で、そこから先は `Cargo.lock` / rustc / profile が動くたびに同じだけ積む。
+cargo が置き換えた成果物を消さないことの代金。**1 世代 = 席 1 つが正規集合を建てた時の量**で、そこから先は `Cargo.lock`
+/ rustc / profile が動くたびに同じだけ積む。
 
 | 対象 | 読み |
 |---|---|
@@ -162,8 +161,8 @@ cargo が置き換えた成果物を消さないことの代金。**1 世代 = �
 
 ## コンテナのイメージと build cache(`xtask::linux`)
 
-イメージの tag は入力(Dockerfile / rust-toolchain.toml / `.qt-version`)の指紋なので、それが動くたびに
-**1 世代まるごと**積む。**何が何を掴んでいるかを決めるのは tag で、cache の上限ではない**。
+イメージの tag は入力(Dockerfile / rust-toolchain.toml / `.qt-version`)の指紋なので、それが動くたびに **1 世代まるご
+と**積む。**何が何を掴んでいるかを決めるのは tag で、cache の上限ではない**。
 
 | 対象 | 読み |
 |---|---|

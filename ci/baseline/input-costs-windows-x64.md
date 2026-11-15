@@ -1,23 +1,23 @@
 # メッセージ・パッチの渡し方の実測(Windows x64)
 
-commit のメッセージ・部分ステージと部分破棄のパッチ・破棄記録の復元のパッチを、一時ファイル
-(作成・書き込み・`sync_all`・削除)で渡す形と、stdin(`process::Input`)で渡す形の
-前後比較。**読むのは前後の差**で、予算行との絶対値は [perf-windows-x64.md](perf-windows-x64.md) §判定 が正。
-Linux(コンテナ)の同じ比較と、不採用・保留の全体は [input-costs-linux-x64.md](input-costs-linux-x64.md)。
+commit のメッセージ・部分ステージと部分破棄のパッチ・破棄記録の復元のパッチを、一時ファイル (作成・書き込
+み・`sync_all`・削除)で渡す形と、stdin(`process::Input`)で渡す形の前後比較。**読むのは前後の差**で、予算行との絶対値は
+[perf-windows-x64.md](perf-windows-x64.md) §判定 が正。 Linux(コンテナ)の同じ比較と、不採用・保留の全体は
+[input-costs-linux-x64.md](input-costs-linux-x64.md)。
 
 ## 採否
 
-- **採用**: 4 つの用途とも stdin。Windows の送り方に OS 固有の手当ては無い(git がパイプから読む時間は、パスで
-  渡す時と差が幅の内 — 下の §git だけの切り分け)
+- **採用**: 4 つの用途とも stdin。Windows の送り方に OS 固有の手当ては無い(git がパイプから読む時間は、パスで渡す時と差
+  が幅の内 — 下の §git だけの切り分け)
 
 ## 条件
 
 - 前・後の木と §git だけの切り分け の木は Linux の記録と同じ(§条件)。計測のテスト
-  (`crates/platitude-core/tests/it/input_costs.rs`)は前後とも同じ物で、差は渡し方だけ。プローブは製品と同じ
-  git の本体(Git for Windows のランチャーではない)を最初に 1 度だけ探し、時計はコマンドを組み立てた後から始める
-- 撃ち方: 前後それぞれの木で次を撃って exe を別の場所へ写し、**1 操作 1 プロセス**で前・後・後・前の
-  ABBA を 5 ブロック(1 変種 10 run)。release に debug_assertions だけを立てるのは、統合テストの mry の
-  モックが debug_assertions でしか組まれないため(release のままでは `it` が組めない)
+  (`crates/platitude-core/tests/it/input_costs.rs`)は前後とも同じ物で、差は渡し方だけ。プローブは製品と同じ git の本
+  体(Git for Windows のランチャーではない)を最初に 1 度だけ探し、時計はコマンドを組み立てた後から始める
+- 撃ち方: 前後それぞれの木で次を撃って exe を別の場所へ写し、**1 操作 1 プロセス**で前・後・後・前の ABBA を 5 ブロッ
+  ク(1 変種 10 run)。release に debug_assertions だけを立てるのは、統合テストの mry のモックが debug_assertions でしか組
+  まれないため(release のままでは `it` が組めない)
 
   ```
   CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true cargo test --release -p platitude-core --test it --no-run
@@ -25,25 +25,24 @@ Linux(コンテナ)の同じ比較と、不採用・保留の全体は [input-co
   <exe> --ignored --exact --nocapture input_ways::ways_in
   ```
 
-  ABBA の台本(リポジトリには置かない)は各 run の前に機械の CPU(1 秒)と cargo・rustc・link・wslc・WSL の VM の
-  プロセス数を、run の前後で機械全体の `Win32_PerfRawData_PerfDisk_PhysicalDisk`(`_Total`)の書き込みバイトを読む
-- 1 run の中身: commit = 1 ファイルを書き換えて add(計らない)→ `commit::commit` を 30 回(メッセージ
-  341 バイト)/ 部分ステージ(小)= 1,000 行のうち 20 行おきに変えたファイルの先頭の hunk を
-  `stage::apply_partial` で 30 回 / 部分ステージ(大)・部分破棄(大)= 約 80 バイト × 200,000 行(約 16MB)の
-  全行を書き換えたファイルの 1 つの hunk 全部を `apply_partial` / `discard_partial` で 10 回 / 復元(小)・
-  復元(大)= 同じ 2 つの変更の写しを `discards::restore` で 30 回・10 回(`--check` と本適用で 2 度読ませる)。
-  選択の元の diff の読み直し・`reset`・書き戻しは計らない
-- 計る物: 1 回ずつの時間の run 内中央値 / 自プロセスの `PeakWorkingSet` / **自プロセスと git を合わせた峰**
-  (仕込みの後に自プロセスを新しい job に入れ、以後の git も同じ job で数えた `PeakJobMemoryUsed` = 同時に
-  コミットしていた量の峰。`PeakProcessMemoryUsed` = 1 プロセスの峰と、自プロセスのコミットの峰
-  (`PeakPagefileUsage`)も読む。どれもコミット量で working set ではない。job の窓には、計らない間の diff の
-  読み直し・`reset`・書き戻しの git も入る)/ 自プロセスの I/O counter(`GetProcessIoCounters`。計る呼び出しの
-  間だけ。パイプもファイルも数える)/ 機械全体のディスク書き込み(**他の仕事も入る**)
-- **静かさ**: ABBA の 120 run の CPU は平均 10.4%・最大 23.3%、プロセス数は常に利用者自身の `cargo run` の
-  2 本だけ。§git だけの切り分け の間(12.6 秒)は 5 秒ごとに CPU と誰かの gate・land・verify-ui・perf の数を
-  記録した: CPU 10.1–11.5%(3 回)、他の作業 0
-- 機械: Ryzen 9 9900X(12C/24T)/ 32GB / Windows 11 build 26300 / git 2.55.0.windows.3。
-  リポジトリは `target/tmp` の下 = Defender の走査から除外された場所。git の fsync は出荷のまま
+  ABBA の台本(リポジトリには置かない)は各 run の前に機械の CPU(1 秒)と cargo・rustc・link・wslc・WSL の VM のプロセス数
+  を、run の前後で機械全体の `Win32_PerfRawData_PerfDisk_PhysicalDisk`(`_Total`)の書き込みバイトを読む
+- 1 run の中身: commit = 1 ファイルを書き換えて add(計らない)→ `commit::commit` を 30 回(メッセージ 341 バイト)/ 部分ス
+  テージ(小)= 1,000 行のうち 20 行おきに変えたファイルの先頭の hunk を `stage::apply_partial` で 30 回 / 部分ステー
+  ジ(大)・部分破棄(大)= 約 80 バイト × 200,000 行(約 16MB)の全行を書き換えたファイルの 1 つの hunk 全部を
+  `apply_partial` / `discard_partial` で 10 回 / 復元(小)・復元(大)= 同じ 2 つの変更の写しを `discards::restore` で 30
+  回・10 回(`--check` と本適用で 2 度読ませる)。選択の元の diff の読み直し・`reset`・書き戻しは計らない
+- 計る物: 1 回ずつの時間の run 内中央値 / 自プロセスの `PeakWorkingSet` / **自プロセスと git を合わせた峰** (仕込みの後
+  に自プロセスを新しい job に入れ、以後の git も同じ job で数えた `PeakJobMemoryUsed` = 同時にコミットしていた量の
+  峰。`PeakProcessMemoryUsed` = 1 プロセスの峰と、自プロセスのコミットの峰 (`PeakPagefileUsage`)も読む。どれもコミット量
+  で working set ではない。job の窓には、計らない間の diff の読み直し・`reset`・書き戻しの git も入る)/ 自プロセスの I/O
+  counter(`GetProcessIoCounters`。計る呼び出しの間だけ。パイプもファイルも数える)/ 機械全体のディスク書き込み(**他の仕事
+  も入る**)
+- **静かさ**: ABBA の 120 run の CPU は平均 10.4%・最大 23.3%、プロセス数は常に利用者自身の `cargo run` の 2 本だ
+  け。§git だけの切り分け の間(12.6 秒)は 5 秒ごとに CPU と誰かの gate・land・verify-ui・perf の数を記録した: CPU
+  10.1–11.5%(3 回)、他の作業 0
+- 機械: Ryzen 9 9900X(12C/24T)/ 32GB / Windows 11 build 26300 / git 2.55.0.windows.3。リポジトリは `target/tmp` の下 =
+  Defender の走査から除外された場所。git の fsync は出荷のまま
 
 ## 採用した実装の値(1 変種 10 run の中央値。幅は run 中央値の最小–最大)
 
@@ -69,9 +68,9 @@ Linux(コンテナ)の同じ比較と、不採用・保留の全体は [input-co
 
 ## git だけの切り分け
 
-同じ機械で、約 31.8MB のパッチを読ませる時間(`tests/it/input_ways.rs`。読ませ方を 1 周に 1 回ずつ 40 周、
-周ごとの順は固定の種から並べ替える。一時ファイルはその後で 40 回)。git の峰は時間の後の別の 1 回で、終わった
-git のハンドルから読んだ値。
+同じ機械で、約 31.8MB のパッチを読ませる時間(`tests/it/input_ways.rs`。読ませ方を 1 周に 1 回ずつ 40 周、周ごとの順は固
+定の種から並べ替える。一時ファイルはその後で 40 回)。git の峰は時間の後の別の 1 回で、終わった git のハンドルから読んだ
+値。
 
 | 読ませ方 | p10 – 中央値 – p90 | git の峰(コミット / working set) |
 |---|---|---|
@@ -85,29 +84,29 @@ git のハンドルから読んだ値。
 
 - 6 つの操作とも後が速い(3.3–32.4ms)。run の幅は 5 つが重ならず、復元(小)は 0.5ms 重なる
 - 自プロセスと git を合わせた峰は前後で 6 MiB 以内(部分破棄(大)−5.8、復元(大)+2.3、ほかは 0.3 以内)
-- 1 プロセスの峰は、部分ステージ・部分破棄(大)で自プロセスのコミットの峰と同じ値、復元(大)で git だけの表の
-  git のコミットの峰と同じ値(161.0 MiB)
+- 1 プロセスの峰は、部分ステージ・部分破棄(大)で自プロセスのコミットの峰と同じ値、復元(大)で git だけの表の git のコミッ
+  トの峰と同じ値(161.0 MiB)
 - 機械のディスク書き込みは、大きな入力の 3 つで 1 run あたり約 290–310 MiB 減る。小さな入力でも減る
-- 自プロセスの書き込みの量は、1 回読ませる操作で前後同じ、2 回読ませる復元で後が倍。回数は大きな入力で
-  1 回あたり 1 → 16(復元(大)は 1 → 32)。読み込みは前後同じ、その他の I/O は後が少ない
-- git だけ: パイプから読ませても「パスで渡す」と中央値で 1.4ms の違いで、p10–p90 は重なる。git 自身の峰は
-  3 つの読ませ方で同じ。git 無しの転送は 14.5ms
+- 自プロセスの書き込みの量は、1 回読ませる操作で前後同じ、2 回読ませる復元で後が倍。回数は大きな入力で 1 回あたり 1 →
+  16(復元(大)は 1 → 32)。読み込みは前後同じ、その他の I/O は後が少ない
+- git だけ: パイプから読ませても「パスで渡す」と中央値で 1.4ms の違いで、p10–p90 は重なる。git 自身の峰は 3 つの読ませ方
+  で同じ。git 無しの転送は 14.5ms
 
 ## 推論(確かめていない)
 
-- 短縮の支配項は一時ファイルの作成・書き込み・`FlushFileBuffers`・削除(大きな入力で約 15ms — 上の表)。
-  復元は加えて、パッチの置き場を訊く `rev-parse --absolute-git-dir` 1 本が消えた(git のプロセス 1 本 —
+- 短縮の支配項は一時ファイルの作成・書き込み・`FlushFileBuffers`・削除(大きな入力で約 15ms — 上の表)。復元は加えて、パッ
+  チの置き場を訊く `rev-parse --absolute-git-dir` 1 本が消えた(git のプロセス 1 本 —
   [code-costs](code-costs-windows-x64.md) §git のプロセス代)。小さな復元の −22ms の大半はこちらと読む
 - 機械のディスク書き込みの減りは、1 回にパッチ 1 本分の一時ファイル(10 回で約 303 MiB)が無くなった分
-- 部分ステージ・部分破棄(大)の 1 プロセスの峰は自プロセスの物、復元(大)の 161.0 MiB は git の物(値が一致する
-  ことからの読み)
+- 部分ステージ・部分破棄(大)の 1 プロセスの峰は自プロセスの物、復元(大)の 161.0 MiB は git の物(値が一致することからの読
+  み)
 - 書き込みの回数が 1 回あたり 16 になるのは、tokio の blocking の書き込みが 2 MiB ずつ(`io::blocking` の
-  `DEFAULT_MAX_BUF_SIZE`)スレッドへ渡すため(31.8MB ÷ 2 MiB の切り上げ)。復元の量が倍なのは `--check` と
-  本適用へ同じパッチを 2 回送るため
+  `DEFAULT_MAX_BUF_SIZE`)スレッドへ渡すため(31.8MB ÷ 2 MiB の切り上げ)。復元の量が倍なのは `--check` と本適用へ同じパッ
+  チを 2 回送るため
 - git 無しの転送(14.5ms)が git の読みにほとんど上乗せされないのは、送りと git の読みが並んで進むため
-- 合わせた峰に大きな差が出ないのは、パッチを前後とも 1 本の `Vec` で持ち(前は書く元、後は `Input` が同じ確保を
-  抱える)、git も前後とも全部を読んでから解釈する(git の峰が読ませ方によらない)ため。ファイルの page cache は
-  job の数に入らない
+- 合わせた峰に大きな差が出ないのは、パッチを前後とも 1 本の `Vec` で持ち(前は書く元、後は `Input` が同じ確保を抱え
+  る)、git も前後とも全部を読んでから解釈する(git の峰が読ませ方によらない)ため。ファイルの page cache は job の数に入ら
+  ない
 
 ## 計っていないもの
 

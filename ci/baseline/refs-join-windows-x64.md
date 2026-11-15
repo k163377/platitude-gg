@@ -2,12 +2,11 @@
 
 `publish_refs` が 1 回で払う **git 実行以外**のコスト。
 
-- 対象: `JetBrains/kotlin` full clone(refs 54,268 本 = タグ 46,377 /
-  リモートブランチ 7,890 / ローカル 1)
-- リモートのタグは **fetch 済みの定常状態**を置く(`ls-remote --tags` が
-  手元のタグを全部返した状態 = `origin` が 46,377 件を名乗る)
-- 再現: `PGG_PERF_REPO=<repo> cargo test -p platitude-core --release
-  refs_join_at_scale -- --ignored --nocapture`(`session::join_tests`)
+- 対象: `JetBrains/kotlin` full clone(refs 54,268 本 = タグ 46,377 / リモートブランチ 7,890 / ローカル 1)
+- リモートのタグは **fetch 済みの定常状態**を置く(`ls-remote --tags` が手元のタグを全部返した状態 = `origin` が 46,377
+  件を名乗る)
+- 再現:
+  `PGG_PERF_REPO=<repo> cargo test -p platitude-core --release refs_join_at_scale -- --ignored --nocapture`(`session::join_tests`)
 - release ビルド、ウォームキャッシュ、3 回の範囲
 
 | 処理 | 1 join |
@@ -20,11 +19,8 @@
 
 テストが出すのは合計だけなので、**内訳の 2 行は計器を挿した別の run**。
 
-`RefJoins`(`session/joins.rs`)の索引 1 本を使わない形は 1 join が **2512 ms**
-— **ループの中の走査**が 2 か所(リモートタグ 1 件ごとに `refs` 全体を
-`find` = 45,782 × 53,614 / 構築中の `snapshot.tags` を `any` で走査 =
-45,782 × 45,782)。`refs::RemoteBranches::spoken_for` も同型の索引で
-6.8 ms → 1.5 ms(ローカル 201 本)。
+`RefJoins`(`session/joins.rs`)の索引 1 本を使わない形は 1 join が **2512 ms** — **ループの中の走査**が 2 か所(リモートタ
+グ 1 件ごとに `refs` 全体を `find` = 45,782 × 53,614 / 構築中の `snapshot.tags` を `any` で走査 = 45,782 ×
+45,782)。`refs::RemoteBranches::spoken_for` も同型の索引で 6.8 ms → 1.5 ms(ローカル 201 本)。
 
-**この数字は git のコストには入っていない**(1 tick の git 側は
-[poll-cost-windows-x64.md](poll-cost-windows-x64.md))。
+**この数字は git のコストには入っていない**(1 tick の git 側は [poll-cost-windows-x64.md](poll-cost-windows-x64.md))。

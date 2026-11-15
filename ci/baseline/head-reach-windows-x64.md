@@ -1,25 +1,23 @@
 # ブランチ先端を他が掴んでいるかの実測(Windows x64)
 
-drop 行を回数押しにするかクリックにするかの判定
-(`reachable::reached_without`)が払う git のコスト。**refs が動いた
-refresh と書き込み 1 件ごとに最大 1 回**走る(refs の一覧だけで答えが出る時は
-走らない)。設定画面を閉じた時も、`rebase.updateRefs` が答えを決める形なら 1 回。
+drop 行を回数押しにするかクリックにするかの判定 (`reachable::reached_without`)が払う git のコスト。**refs が動いた
+refresh と書き込み 1 件ごとに最大 1 回**走る(refs の一覧だけで答えが出る時は走らない)。設定画面を閉じた時
+も、`rebase.updateRefs` が答えを決める形なら 1 回。
 
-- 対象: `JetBrains/kotlin` full clone(refs 53,672 本 = タグ 45,846 /
-  リモートブランチ 7,824 / ローカル 1、コミット 138,915)
+- 対象: `JetBrains/kotlin` full clone(refs 53,672 本 = タグ 45,846 / リモートブランチ 7,824 / ローカル 1、コミット
+  138,915)
 - commit-graph chain あり、ウォームキャッシュ、5 回の平均と最良
-- 「掴まれている」= HEAD の先端(`origin/master` が届く)/「掴まれていない」=
-  同じ先端の上に `commit-tree` で 1 つ載せた参照なしコミット
+- 「掴まれている」= HEAD の先端(`origin/master` が届く)/「掴まれていない」= 同じ先端の上に `commit-tree` で 1 つ載せた参
+  照なしコミット
 
 | walk に入れる ref | 掴まれている | 掴まれていない |
 |---|---|---|
 | `--branches --remotes --glob=refs/stash*` | **85 ms**(最良 83) | **86 ms**(最良 82) |
 | 同 + `--tags` | 501 ms | 501 ms(最良 498) |
 
-**タグを walk から外したのはこの 6 倍差**。内訳を分けて測ると
-`--tags` だけで 478 ms、`--remotes` だけなら 83 ms — コストは
-**タグの本数に比例**する(性能予算「refs の本数から
-独立」)。
+**タグを walk から外したのはこの 6 倍差**。内訳を分けて測ると `--tags` だけで 478 ms、`--remotes` だけなら 83 ms — コス
+トは
+**タグの本数に比例**する(性能予算「refs の本数から独立」)。
 
 ## 他に測った形(不採用)
 
@@ -28,5 +26,5 @@ refresh と書き込み 1 件ごとに最大 1 回**走る(refs の一覧だけ�
 | `for-each-ref --contains=<tip> --count=2` | 148 ms | 706 ms |
 | `for-each-ref --contains=<tip>`(件数制限なし) | 980 ms | — |
 
-`for-each-ref --contains` は refs/stash を見るが**古い stash
-(`refs/stash` の reflog)は見えず**、掴まれていない側で 8 倍遅い。
+`for-each-ref --contains` は refs/stash を見るが**古い stash (`refs/stash` の reflog)は見えず**、掴まれていない側で 8 倍
+遅い。
