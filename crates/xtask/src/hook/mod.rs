@@ -1,9 +1,11 @@
 //! Harness hook handlers (`cargo xtask hook <event>`). Claude's settings
 //! wire the git, launches, kills, seats, chips and board window a session
 //! touches only when the user asks, a side session's detach and the land
-//! command kept out of what reaches another session (`contact`), and the
-//! language of what the user reads (`language`). Main moves on the
-//! permit the user's own `/land` opens (`permit`), and on that alone.
+//! command kept out of what reaches another session (`contact`), the
+//! language of what the user reads (`language`), and background runs in a
+//! wrapper whose end wakes the session (`background`).
+//! Main moves on the permit the user's own `/land` opens (`permit`), and on
+//! that alone.
 //! Codex's hooks share activity and landing prompts (`codex`), and refuse
 //! the git that writes main by hand or takes the gate off (`codex_git`).
 //!
@@ -25,6 +27,7 @@ use std::io::Read;
 pub(crate) mod approval;
 mod attribution;
 mod awake;
+mod background;
 pub(crate) mod board;
 mod chips;
 mod codex;
@@ -214,6 +217,7 @@ fn pre_shell(input: &str) -> Result<(), String> {
         || launch::pre_launch(input)?
         || python::pre_shell(input)?
         || dump::pre_shell(input)?
+        || background::pre_shell(input)
         || repeat::pre_shell(input)?;
     Ok(())
 }
