@@ -66,6 +66,16 @@ pub struct RefsSnapshot {
     /// HEAD is on, counted by the status tick. Only those with such a ref
     /// here; read only where some branch goes elsewhere.
     pub push_tracks: Vec<(String, crate::remote::PushTrack)>,
+    /// Local branches renamed while the window stood — `git branch -m`,
+    /// outside or the window's own — as `(old, new)` by short name: a rename
+    /// told apart from a branch deleted and
+    /// another made on its commit by the new name's reflog
+    /// ([`crate::branch::renamed_from`]) — and a rename of a rename folded to
+    /// the last name. What a menu standing on the old name follows
+    /// ([`Self::renamed_to`]). Only names that still answer: an old name made
+    /// again is a branch of its own, and a new name gone takes its entry
+    /// with it (`session::renames`).
+    pub renamed: Vec<(crate::Name, crate::Name)>,
 }
 
 /// What a menu's `push` row on one local branch stands on
@@ -92,6 +102,15 @@ impl RefsSnapshot {
     /// list.
     pub fn local_named(&self, short: &str) -> Option<&BranchItem> {
         Self::branch_named(&self.locals, short)
+    }
+
+    /// The name the local branch once called `old` answers to now, renamed
+    /// while the window stood ([`Self::renamed`]); `None` where it was not.
+    pub fn renamed_to(&self, old: &str) -> Option<&str> {
+        self.renamed
+            .iter()
+            .find(|(from, _)| from.as_str() == old)
+            .map(|(_, to)| to.as_str())
     }
 
     /// The remote-tracking branch shown as `short` (`origin/main`).

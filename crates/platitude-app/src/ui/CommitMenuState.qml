@@ -343,6 +343,15 @@ QtObject {
             return
         }
         const wasStash = menuState.menuStashRef !== ""
+        // The branch the menu was aimed at renamed outside with the menu up answers to its new name, as on the left
+        // menu (`RefRowMenu.standAgain`): the chip on the row says it now.
+        if (menu.targetKind === "branch" && menuState.branchesModel.oidOfName(menu.targetName) === "") {
+            const to = menuState.branchesModel.renamedTo(menu.targetName)
+            if (to !== "") {
+                menu.branchCard.renamed(menu.targetName, to)
+                menu.targetName = to
+            }
+        }
         const aimAt = menuState.aimedAt()
         if (menuState.graphModel.rowOf(menuState.menuOid) < 0 || aimAt === ""
                 || (menuState.graphModel.stashRefOf(menuState.menuOid) !== "") !== wasStash) {

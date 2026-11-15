@@ -169,6 +169,9 @@ Item {
     signal publishRequested(string branch, string upstream)
     /// A link on its way to the clipboard (`GitHubMenu`); the page owns the clipboard.
     signal copyRequested(string text)
+    /// The branch the menu stands on was renamed with the menu up and the menu went with it (`standAgain`): the page's
+    /// door and the row the name boxes open on answer to the new name (`RepoPage.followRenamedDoor`).
+    signal renameFollowed(string from, string to)
 
     anchors.fill: parent
 
@@ -333,6 +336,19 @@ Item {
     function standAgain(again) {
         if (!refRowMenu.showing)
             return
+        // A branch renamed outside with the menu up answers to its new name (`NavSectionModel.renamedTo`): the menu
+        // follows it there, as it follows the branch to another commit, and the BRANCH card with its leases
+        // (`RefBranchMenu.renamed`). Gone without a rename, the name below finds nothing and the menu closes.
+        if (refRowMenu.kind === "branch" && refRowMenu.branchesModel.oidOfName(refRowMenu.refId) === "") {
+            const to = refRowMenu.branchesModel.renamedTo(refRowMenu.refId)
+            if (to !== "") {
+                const from = refRowMenu.refId
+                branchMenu.renamed(from, to)
+                refRowMenu.refId = to
+                refRowMenu.refName = to
+                refRowMenu.renameFollowed(from, to)
+            }
+        }
         // A stash answers to its place in the list, which the command may have moved; the rest to their names. Looked
         // up in the stash list, not the graph: the graph's walk may not reach an old stash.
         const full = refRowMenu.kind === "stash" ? refRowMenu.stashesModel.fullOfOid(refRowMenu.refOid)

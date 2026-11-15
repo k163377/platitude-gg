@@ -129,6 +129,7 @@ pub(super) fn carried(
         checkout_default: None,
         branch_push_remotes: Vec::new(),
         push_tracks: Vec::new(),
+        renamed: Vec::new(),
     };
     // The index the name lookups go through, the way the joins build it.
     snapshot.index_tags();

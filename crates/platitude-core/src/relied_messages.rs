@@ -358,6 +358,22 @@ pub(crate) const SWITCH_IN_THE_WAY: Relied = Relied::any_case(&[
     SWITCH_OVER_CHANGES,
 ]);
 
+// ---- A branch renamed outside (`branch::renamed_from`, read in either case)
+
+/// The reflog line `branch -m` writes on the branch it renamed, ahead of the
+/// two refs: what tells a rename from a branch deleted and another made on
+/// its commit. libgit2 writes the same words without the capital.
+///
+/// - git: `builtin/branch.c` `Branch: renamed %s to %s`
+/// - witness: `session_integration::branch_renames::a_branch_renamed_outside_answers_to_its_new_name`
+pub(crate) const BRANCH_RENAMED: Words = Words("Branch: renamed ");
+
+/// Between the two refs on that line.
+///
+/// - git: `builtin/branch.c` `Branch: renamed %s to %s`
+/// - witness: `session_integration::branch_renames::a_branch_renamed_outside_answers_to_its_new_name`
+pub(crate) const BRANCH_RENAMED_TO: Words = Words(" to ");
+
 // ---- Opening a folder (`repo::open`)
 
 /// A folder in no repository, whichever way git looked — and a `.git` git

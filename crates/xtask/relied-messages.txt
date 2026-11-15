@@ -234,6 +234,16 @@ held	unpack-trees.c	"Your local changes to the following files would be overwrit
 held	unpack-trees.c	"The following untracked working tree files would be overwritten by checkout:\\n%%s"
 held	unpack-trees.c	"The following untracked working tree files would be overwritten by checkout:\\n%%s"
 
+form	BRANCH_RENAMED	Branch: renamed 
+source	git	builtin/branch.c	Branch: renamed %s to %s
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	builtin/branch.c	strbuf_addf: "Branch: renamed %s to %s"
+
+form	BRANCH_RENAMED_TO	 to 
+source	git	builtin/branch.c	Branch: renamed %s to %s
+era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
+held	builtin/branch.c	strbuf_addf: "Branch: renamed %s to %s"
+
 form	NOT_A_REPOSITORY	not a git repository
 source	git	setup.c	not a git repository
 era	upstream v2.43.0..v2.55.1, gfw v2.43.0.windows.1..v2.55.0.windows.5, apple Git-155, ubuntu noble-updates

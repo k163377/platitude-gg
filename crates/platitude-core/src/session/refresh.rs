@@ -4,6 +4,7 @@
 //! and walk [`super::head_reach`].
 
 use super::joins::{RefJoins, build_label_map, build_snapshot, join_key, refs_keys};
+use super::renames;
 use super::*;
 
 impl RepoSession {
@@ -131,6 +132,13 @@ impl RepoSession {
                 } else {
                     None
                 };
+                // What a menu on a branch renamed outside follows: asked, as
+                // the counts are, only where the snapshot looks to be rebuilt.
+                let renamed = if unmoved.is_none() {
+                    self.read_renames(&workdir, &refs, &cancel).await
+                } else {
+                    Vec::new()
+                };
                 // Fenced by a write that ended after this looked
                 // (`Standing::current`): read again.
                 if !self.standing.current(looked) {
@@ -167,28 +175,7 @@ impl RepoSession {
                 let held = self.worktree_holders();
                 let joins = RefJoins::new(&refs, &held);
                 let mut snapshot = build_snapshot(&refs, &head, &remote_tags, &joins);
-                (snapshot.remote_names, snapshot.remote_urls) = remotes
-                    .list
-                    .into_iter()
-                    .map(|r| (r.name, r.fetch_url))
-                    .unzip();
-                snapshot.push_default = remotes.push_default;
-                snapshot.checkout_default = remotes.checkout_default;
-                // Not the one HEAD is on: the status tick reads and keeps its
-                // mark (`StatusLoaded::push_remote`).
-                snapshot.branch_push_remotes = remotes
-                    .branch_push_remotes
-                    .into_iter()
-                    .filter(|mark| head.branch.as_deref() != Some(mark.branch.as_str()))
-                    .collect();
-                // A read that could not tell repeats the last answer, as the
-                // status tick's does (`Standing::push_track_of`): a diverged
-                // row falling to the plain push would lose its overwrite.
-                snapshot.push_tracks = push_tracks.unwrap_or_else(|| {
-                    self.published_snapshot()
-                        .map(|held| held.push_tracks.clone())
-                        .unwrap_or_default()
-                });
+                self.finish_snapshot(&mut snapshot, &head, remotes, push_tracks, renamed);
                 let label_map = build_label_map(&refs, &head, &remote_tags, &joins);
                 self.sink.event(SessionEvent::RefsLoaded {
                     snapshot: self.share_snapshot(snapshot),
@@ -223,6 +210,70 @@ impl RepoSession {
                 Reread::Failed
             }
         }
+    }
+
+    /// The local branches renamed outside since the held snapshot, by old
+    /// and new short name: each name this listing gained on a commit a name
+    /// it lost stood on asks its own reflog once ([`branch::renamed_from`]),
+    /// and nothing is asked where no branch went. A read that fails tells no
+    /// rename: the old name is gone, as a deleted branch's is.
+    async fn read_renames(
+        &self,
+        workdir: &Path,
+        refs: &[RefEntry],
+        cancel: &CancellationToken,
+    ) -> Vec<(crate::Name, crate::Name)> {
+        let Some(held) = self.published_snapshot() else {
+            return Vec::new();
+        };
+        let mut found = Vec::new();
+        for (new, olds) in renames::candidates(&held.locals, refs) {
+            if let Ok(Some(old)) = branch::renamed_from(&self.executor, workdir, new, cancel).await
+                && olds.contains(&old.as_str())
+            {
+                found.push((crate::Name::from(old.as_str()), crate::Name::from(new)));
+            }
+        }
+        found
+    }
+
+    /// What the listing alone does not give a rebuilt snapshot: the
+    /// remotes' names, URLs and marks, the push counts and the renames —
+    /// the ones `renamed` this read found, folded into the held ones
+    /// (`session::renames`).
+    fn finish_snapshot(
+        &self,
+        snapshot: &mut RefsSnapshot,
+        head: &HeadState,
+        remotes: remote::Remotes,
+        push_tracks: Option<Vec<(String, remote::PushTrack)>>,
+        renamed: Vec<(crate::Name, crate::Name)>,
+    ) {
+        (snapshot.remote_names, snapshot.remote_urls) = remotes
+            .list
+            .into_iter()
+            .map(|r| (r.name, r.fetch_url))
+            .unzip();
+        snapshot.push_default = remotes.push_default;
+        snapshot.checkout_default = remotes.checkout_default;
+        // Not the one HEAD is on: the status tick reads and keeps its mark
+        // (`StatusLoaded::push_remote`).
+        snapshot.branch_push_remotes = remotes
+            .branch_push_remotes
+            .into_iter()
+            .filter(|mark| head.branch.as_deref() != Some(mark.branch.as_str()))
+            .collect();
+        let held = self.published_snapshot();
+        // A read that could not tell repeats the last answer, as the status
+        // tick's does (`Standing::push_track_of`): a diverged row falling to
+        // the plain push would lose its overwrite.
+        snapshot.push_tracks = push_tracks.unwrap_or_else(|| {
+            held.as_ref()
+                .map(|held| held.push_tracks.clone())
+                .unwrap_or_default()
+        });
+        let held_renames = held.map(|held| held.renamed.clone()).unwrap_or_default();
+        snapshot.renamed = renames::folded(&held_renames, renamed, snapshot);
     }
 
     /// The counts of the branches a mark sends away from their upstream's

@@ -1142,6 +1142,7 @@ FocusScope {
                 page.startUpstreamAsk(branch, counterpart, unsettable)
             onPublishRequested: (branch, upstream) => page.startPublishAskFor(branch, upstream)
             onRemoveWorktreeRequested: (path, name, holds) => repoTab.removeWorktree(path, name, holds)
+            onRenameFollowed: (from, to) => page.followRenamedDoor(from, to)
         }
     }
     Loader {
@@ -1185,6 +1186,15 @@ FocusScope {
         return kind === "worktree" ? refMenuSeat.item.offerOn(kind, name, full, oidHex, full)
                                    : refMenuSeat.item.offerOn(kind, name, full, oidHex, undefined,
                                                               aim === undefined ? "" : aim)
+    }
+    /// The left menu's branch renamed with the menu up, the menu gone with it (`RefRowMenu.renameFollowed`): the row
+    /// that raised it answers to the new name now (`NavList.keyOf`), so the name boxes its rows open stand on it and
+    /// the door names it. A WORKTREES row's key is the worktree's, which a rename leaves as it is.
+    function followRenamedDoor(from, to) {
+        if (page.refMenuRowKind === "branch" && page.refMenuRowId === from)
+            page.refMenuRowId = to
+        if (page.menuDoorKey === "branch:" + from)
+            page.menuDoorKey = "branch:" + to
     }
     /// A name box on a commit, asked for from a menu, opens where that menu was raised. The sidebar's half
     /// (`inSidebar`, handed the row's kind and id) opens on the row that raised the menu, standing whenever that half

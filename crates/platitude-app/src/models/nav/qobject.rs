@@ -291,6 +291,17 @@ impl NavSectionModel {
         }
     }
 
+    /// The name the local branch once called `name` answers to now, renamed
+    /// while the window stood (`RefsSnapshot::renamed_to`) — what a menu standing on the old
+    /// name follows; empty where it was not. Asked of the branches section.
+    #[qslot]
+    pub(super) fn renamed_to(&self, name: String) -> String {
+        match &self.all {
+            Source::Locals(snapshot) => snapshot.renamed_to(&name).unwrap_or_default().to_string(),
+            _ => String::new(),
+        }
+    }
+
     /// Whether `remote` already has a branch called `name` — asked of the
     /// remotes section by every door that would push a name there, and by
     /// the GitHub links, which point only at what the remote has.

@@ -555,6 +555,38 @@ Item {
             verify(deleteRow.offered)
         }
 
+        /// The branch renamed with the menu up (`renamed`): the card goes on standing on it under the new name as the
+        /// same branch — the lease over there kept, and git's answers about the plain delete holding, the commits being
+        /// the same: the early check's under the name it was asked by, not asked again, so the row keeps its `-D`.
+        function test_a_branch_renamed_with_the_menu_up_keeps_its_leases_under_the_new_name() {
+            root.standOn({ merged: "" })
+            branchCard.checkedBranch = "feature/topic-a"
+            branchCard.checkedMerged = "no"
+            compare(deleteRow.code, "branch -D", "git said the plain delete would be refused")
+            level.holdShape()
+            branchCard.renamed("feature/topic-a", "feature/topic-b")
+            root.standOn({ name: "feature/topic-b", full: "feature/topic-b", merged: "",
+                           remoteCounterpartOid: "999fed" }, "follow")
+            compare(branchCard.refId, "feature/topic-b")
+            compare(branchCard.state.remoteCounterpartOid, "def456", "the lease over there is kept")
+            verify(remoteDeleteRow.withdrawn, "and that reading moved since, so the remote delete greys")
+            compare(root.asked, "", "the merged check is not asked again")
+            compare(deleteRow.code, "branch -D", "and its answer still stands under the new name")
+
+            level.releaseShape()
+            root.standOn({ merged: "" })
+            root.refuse("feature/topic-a")
+            branchCard.renamed("feature/topic-a", "feature/topic-b")
+            compare(branchCard.forceDeleteBranch, "feature/topic-b", "git's refusal goes with the branch")
+        }
+
+        /// A rename names the branch the card stands on, or does nothing.
+        function test_a_rename_of_another_branch_leaves_the_card_alone() {
+            root.standOn({})
+            branchCard.renamed("feature/other", "feature/else")
+            compare(branchCard.refId, "feature/topic-a")
+        }
+
         /// A command the menu waited for ends with what the rows reach over there moved — a fetch brought the remote
         /// branch, the reading or the far side somewhere else: the rows keep the leases the menu went up with and grey,
         /// as when that moves outside (デザイン規約 §メニュー「表示も押下も開いた時」). git's answer to the plain delete

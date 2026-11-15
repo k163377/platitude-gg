@@ -383,9 +383,85 @@ pub async fn is_merged_into(
     }
 }
 
+/// The name the local branch `branch` was renamed from, read off the newest
+/// line of its reflog: `git branch -m` writes `Branch: renamed
+/// refs/heads/<old> to refs/heads/<new>` there (libgit2 writes `branch:`), a
+/// branch made on a commit only `branch: Created from …`. `None` where that
+/// line says anything else, and where the branch keeps no reflog
+/// (`core.logAllRefUpdates` off, a bare repository's default) or has gone
+/// since the listing (`--ignore-missing`). One process per branch asked:
+/// the caller asks only the names a rename could have left
+/// (`session::renames`).
+pub async fn renamed_from(
+    executor: &GitExecutor,
+    workdir: &Path,
+    branch: &str,
+    cancel: &CancellationToken,
+) -> Result<Option<String>, GitError> {
+    let reference = format!("refs/heads/{branch}");
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args([
+            "log",
+            "--walk-reflogs",
+            "-1",
+            "--ignore-missing",
+            "--format=%gs",
+        ])
+        .arg(&reference)
+        .arg("--");
+    let out = executor.run(cmd, cancel).await?;
+    Ok(renamed_in(out.stdout_utf8().trim_end(), &reference))
+}
+
+/// The old name the reflog line `said` says `reference` was renamed from.
+/// Names hold no space (git-check-ref-format), so the words between the two
+/// refs cut the line.
+fn renamed_in(said: &str, reference: &str) -> Option<String> {
+    let lead = crate::relied_messages::BRANCH_RENAMED.text();
+    // libgit2 writes the line without the capital.
+    if !said.get(..lead.len())?.eq_ignore_ascii_case(lead) {
+        return None;
+    }
+    let (old, to) = said
+        .get(lead.len()..)?
+        .split_once(crate::relied_messages::BRANCH_RENAMED_TO.text())?;
+    // not git's words: the ref namespace both branches are named in
+    let old = old.strip_prefix("refs/heads/")?;
+    (to == reference).then(|| old.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_rename_line_names_the_old_branch_in_either_spelling() {
+        let git = "Branch: renamed refs/heads/topic to refs/heads/feature/topic";
+        let libgit2 = "branch: renamed refs/heads/topic to refs/heads/feature/topic";
+        assert_eq!(
+            renamed_in(git, "refs/heads/feature/topic").as_deref(),
+            Some("topic")
+        );
+        assert_eq!(
+            renamed_in(libgit2, "refs/heads/feature/topic").as_deref(),
+            Some("topic")
+        );
+    }
+
+    #[test]
+    fn any_other_line_is_no_rename() {
+        let to = "refs/heads/topic";
+        for note in [
+            "branch: Created from HEAD",
+            "Branch: copied refs/heads/main to refs/heads/topic",
+            "commit: renamed refs/heads/main to refs/heads/topic",
+            "Branch: renamed refs/heads/main to refs/heads/other",
+            "",
+        ] {
+            assert_eq!(renamed_in(note, to), None, "{note}");
+        }
+    }
 
     // Messages git prints under LC_ALL=C (the integration tests prove the
     // installed git still says them).

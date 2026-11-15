@@ -9,6 +9,7 @@
 
 mod amend_watch;
 mod auto_fetch;
+mod branch_renames;
 mod carried;
 mod carried_moved;
 mod carry_integrate;

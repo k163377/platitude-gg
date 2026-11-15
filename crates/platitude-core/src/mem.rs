@@ -279,6 +279,7 @@ impl Footprint for crate::session::RefsSnapshot {
             + self.checkout_default.heap_bytes()
             + self.branch_push_remotes.heap_bytes()
             + self.push_tracks.heap_bytes()
+            + self.renamed.heap_bytes()
     }
 }
 

@@ -102,6 +102,7 @@ mod relay;
 mod relay_tests;
 mod remote_tags;
 mod removals;
+mod renames;
 mod repo_session;
 mod rows;
 mod shown_discard;

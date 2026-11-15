@@ -72,7 +72,8 @@ AppMenu {
         state.kind === "branch"
         && (branchCard.forceDeleteBranch === state.refId
             || (state.deleteAnswered ? !state.deleteMerged
-                : (branchCard.checkedBranch === state.refId && branchCard.checkedMerged === "no")))
+                : (state.askedAs !== "" && branchCard.checkedBranch === state.askedAs
+                   && branchCard.checkedMerged === "no")))
 
     /// The plain delete, for the page; git's answer comes back by name (`refusedDelete` / `landedDelete`). The row
     /// leaves the list ahead of that answer out of the same slot as the write, so the card writes no page state
@@ -148,6 +149,9 @@ AppMenu {
         property bool deleteAnswered: false
         property bool deleteMerged: true
         property bool deleteAsked: false
+        /// The name git's early check was asked under (`checkDeleteRequested`), which its answer comes back by
+        /// (`checkedBranch`): a rename with the menu up leaves it, the commits being the same (`renamed`).
+        property string askedAs: ""
         /// The push row's standing — the toolbar's words (`PublishFlow.pushState`) —, where it goes, the commit an
         /// overwrite is leased to, and the upstream the first push's question opens on. `pushState` is empty where
         /// the row has no seat.
@@ -282,8 +286,23 @@ AppMenu {
         state.deleteMerged = drawn ? facts.merged === "yes" : keeps ? state.deleteMerged : true
         state.deleteAnswered = drawn || (keeps && state.deleteAnswered)
         state.deleteAsked = asks
+        state.askedAs = keeps ? state.askedAs : asks && !drawn ? full : ""
         if (asks && !drawn && !keeps)
             branchCard.checkDeleteRequested(full)
+    }
+
+    /// The branch the card stands on renamed with the menu up (`NavSectionModel.renamedTo`): the card goes on standing
+    /// on it under the new name, and the stand that follows treats it as the same branch — what reaches over there
+    /// keeps its lease, and git's answers about the plain delete hold as they would on the same commit (`standOn`),
+    /// the early check's under the name it was asked by (`askedAs`). Presses under way on the rows that name the branch
+    /// count for nothing (`AppMenuItem.premise`).
+    function renamed(from, to) {
+        if (state.kind !== "branch" || state.refId !== from)
+            return
+        state.refId = to
+        state.refName = to
+        if (branchCard.forceDeleteBranch === from)
+            branchCard.forceDeleteBranch = to
     }
 
     /// Whether an answer that names a branch is about the one this card stands on.
