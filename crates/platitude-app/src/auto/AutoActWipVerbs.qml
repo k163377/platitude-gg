@@ -4,10 +4,10 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The worktree's own verbs: what a commit is made of and what it is called — the message boxes, the amend row,
-/// stashing, the line-ending card, the seat a stopped merge is finished from, the report bar a refused write brings
-/// down, and another worktree's uncommitted row read in this window. Built by `AutoActDriver` only when a verb was
-/// given.
+/// The worktree's own verbs: what a commit is made of and what it is called — the message boxes, the amend row, the
+/// commit button's face, stashing, the seat a stopped merge is finished from, the report bar a refused write brings
+/// down, the graph's uncommitted row, and another worktree's read in this window. The line-ending card is
+/// `AutoActEolVerbs`'. Built by `AutoActDriver` only when a verb was given.
 // An `Item` only because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
