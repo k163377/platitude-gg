@@ -272,7 +272,23 @@ impl Cache {
         depth: bool,
     ) -> Result<(), String> {
         println!("fetching {what}…");
-        let mut args = vec!["fetch", "--quiet", "--no-tags", "--prune"];
+        // The maintenance a fetch starts ends before the fetch returns.
+        // Detached, its repack rewrites a shallow repository's `shallow`
+        // under the next fetch into it, which dies on that ("shallow file
+        // has changed since we read it", or on `shallow.lock`). Run, not
+        // turned off: the cache stays from run to run on a desk, and git's
+        // upkeep keeps its packs few. git before `maintenance.autoDetach`
+        // detaches its `gc --auto` by `gc.autoDetach`.
+        let mut args = vec![
+            "-c",
+            "maintenance.autoDetach=false",
+            "-c",
+            "gc.autoDetach=false",
+            "fetch",
+            "--quiet",
+            "--no-tags",
+            "--prune",
+        ];
         if depth {
             args.push("--depth=1");
         }
