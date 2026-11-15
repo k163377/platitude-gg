@@ -4,8 +4,11 @@
 //! feature, so a shipped window reads no knob; a stray lookup shows
 //! nothing at run time, where the variable is simply not set.
 //!
-//! The product's own variables spell `PGG_` (`main.rs` reads `PGG_LOG`
-//! before there is a harness to ask), so the prefix alone tells a knob.
+//! The prefix alone tells a reader (.claude/rules/code.md): the product's
+//! own variables spell `PGG_` (`main.rs` reads `PGG_LOG` before there is a
+//! harness to ask), and xtask's and the hooks' spell `PGGDEV_`, which no
+//! file of the app reads — they reach its environment, since a run clears
+//! only the knobs it inherits.
 //!
 //! The core's `settings::Env` reads the knobs without a `_PGG_` literal
 //! (`Env::system().automated()`), so it is held to the same module.
@@ -20,9 +23,13 @@ const APP: &str = "crates/platitude-app/src";
 const READER: &str = "harness/knobs.rs";
 /// The core's own reader over the same variables, held to the same module.
 const READER_TYPE: &str = "settings::Env";
+/// A harness knob's prefix.
+const KNOB: &str = "_PGG_";
+/// The prefix of xtask's and the hooks' own variables.
+const TOOLING: &str = "PGGDEV_";
 
-/// One failure per file naming a `_PGG_*` variable it may not, and how
-/// many files were read for them.
+/// One failure per line naming a variable its file may not, and how many
+/// files were read for them.
 pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
     let app = root.join(APP);
     let mut files = Vec::new();
@@ -32,12 +39,10 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
     let mut failures = Vec::new();
     for path in &files {
         let shown = super::relative(&app, path);
-        if shown == READER {
-            continue;
-        }
+        let reader = shown == READER;
         let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
         for (number, line) in text.lines().enumerate() {
-            if uses_reader(line) {
+            if !reader && uses_reader(line) {
                 failures.push(format!(
                     "{APP}/{shown}:{}: uses `{READER_TYPE}` — it reads the same variables without \
                      spelling one, so the only place in this crate that may hold it is `{READER}`. \
@@ -46,11 +51,24 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
                     number + 1
                 ));
             }
-            for name in named(line) {
+            let knobs = if reader {
+                Vec::new()
+            } else {
+                named(line, KNOB)
+            };
+            for name in knobs {
                 failures.push(format!(
                     "{APP}/{shown}:{}: names {name} — the only place in this crate that looks \
-                     a `_PGG_*` knob up is `{READER}`. Put the knob on `Knobs`, so a build \
+                     a `{KNOB}*` knob up is `{READER}`. Put the knob on `Knobs`, so a build \
                      without the harness reads no knob at all (.claude/rules/app-ui.md)",
+                    number + 1
+                ));
+            }
+            for name in named(line, TOOLING) {
+                failures.push(format!(
+                    "{APP}/{shown}:{}: names {name} — `{TOOLING}*` is what xtask and the hooks \
+                     read for themselves, and nothing in the app reads one. A knob for the \
+                     harness spells `{KNOB}` and lives on `Knobs` (.claude/rules/code.md)",
                     number + 1
                 ));
             }
@@ -59,17 +77,19 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
     Ok((failures, files.len()))
 }
 
-/// The `_PGG_*` knobs one line of Rust names as a string literal; none on
-/// a comment line, where a name is a reference and not a lookup. Holds
-/// while nothing in the crate pastes a name together from halves.
-fn named(line: &str) -> Vec<&str> {
+/// The variables starting with `prefix` that one line of Rust names as a
+/// string literal; none on a comment line, where a name is a reference and
+/// not a lookup. Holds while nothing in the crate pastes a name together
+/// from halves.
+fn named<'a>(line: &'a str, prefix: &str) -> Vec<&'a str> {
     let code = line.trim_start();
     if code.starts_with("//") {
         return Vec::new();
     }
+    let quoted = format!("\"{prefix}");
     let mut found = Vec::new();
     let mut rest = code;
-    while let Some(at) = rest.find("\"_PGG_") {
+    while let Some(at) = rest.find(&quoted) {
         rest = &rest[at + 1..];
         let end = rest.find('"').unwrap_or(rest.len());
         found.push(&rest[..end]);
@@ -104,20 +124,31 @@ mod tests {
     #[test]
     fn a_literal_is_a_lookup_and_a_comment_is_a_reference() {
         assert_eq!(
-            named("    act: text(\"_PGG_AUTO_ACT\"),"),
+            named("    act: text(\"_PGG_AUTO_ACT\"),", KNOB),
             ["_PGG_AUTO_ACT"]
         );
         assert_eq!(
-            named("        .env(\"_PGG_PERF_OID\", \"_PGG_PERF_FILE\")"),
+            named("        .env(\"_PGG_PERF_OID\", \"_PGG_PERF_FILE\")", KNOB),
             ["_PGG_PERF_OID", "_PGG_PERF_FILE"]
         );
-        assert!(named("    /// `_PGG_MEM_REPORT=1`: the window drives it").is_empty());
-        assert!(named("    // _PGG_AUTO_ACT is read in knobs.rs").is_empty());
-        assert!(named("    let on = knobs().mem_report;").is_empty());
+        assert!(named("    /// `_PGG_MEM_REPORT=1`: the window drives it", KNOB).is_empty());
+        assert!(named("    // _PGG_AUTO_ACT is read in knobs.rs", KNOB).is_empty());
+        assert!(named("    let on = knobs().mem_report;", KNOB).is_empty());
         assert!(
-            named("    std::env::var(\"PGG_LOG\")").is_empty(),
+            named("    std::env::var(\"PGG_LOG\")", KNOB).is_empty(),
             "the product's own variable is not a knob"
         );
+    }
+
+    #[test]
+    fn a_tooling_variable_is_told_by_its_prefix_alone() {
+        assert_eq!(
+            named("    std::env::var(\"PGGDEV_STEP\")", TOOLING),
+            ["PGGDEV_STEP"]
+        );
+        assert!(named("    std::env::var(\"_PGG_AUTO_ACT\")", TOOLING).is_empty());
+        assert!(named("    std::env::var(\"PGG_LOG\")", TOOLING).is_empty());
+        assert!(named("    // PGGDEV_STEP rides through to git", TOOLING).is_empty());
     }
 
     /// The rule the count is for: the tree it runs on passes it.
