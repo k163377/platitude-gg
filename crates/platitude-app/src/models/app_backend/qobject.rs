@@ -460,6 +460,18 @@ impl AppBackend {
     }
 
     #[qslot]
+    fn start_list_held_open(&self) -> bool {
+        self.list_held_open
+    }
+
+    /// Reported beside the layout's flags, which take as many arguments as
+    /// a slot does.
+    #[qslot]
+    fn save_list_held_open(&mut self, held: bool) {
+        self.list_held_open = held;
+    }
+
+    #[qslot]
     fn start_tags_shown(&self) -> bool {
         with_flag(|l| l.tags_shown)
     }

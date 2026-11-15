@@ -29,22 +29,46 @@ Item {
     // question. Over a `--screen` lower than the window's floor this is how a maximise on a small work area stands
     // the window under its floor, which no size the app sets itself reaches (`WindowShape.holdFloor`); the line then
     // reads the split off the window (`splitLine`).
+    //
+    // `narrow`, `narrow-open`, `narrow-back`: the same over a `--screen` narrower than the window's floor, where the
+    // list folds to its rail for the room (`PageLayout.listCrowded`), the reader's own fold untouched. `narrow` is
+    // photographed maximised and reads the three panes across the window (`widthLine`); `narrow-open` then asks the
+    // list open as the rail's block does, which holds it open with the middle giving way. `narrow-back` first stands
+    // the window just over its floor, where the split squeezes the list under the reader's width, then maximises it,
+    // puts it back and widens it: the list has to come back at the reader's width, not the squeezed one (`backLine`).
     WindowStage {
         id: fillActTimer
         name: "window_fill"
-        order: Harness.autoActArg === "log" ? ["maximized", "filled"] : ["maximized", "filled", "windowed"]
+        order: Harness.autoActArg === "log" || Harness.autoActArg === "narrow" ? ["maximized", "filled"]
+             : Harness.autoActArg === "narrow-open" ? ["maximized", "filled", "opened"]
+             : Harness.autoActArg === "narrow-back" ? ["squeezed", "maximized", "filled", "windowed", "widened"]
+             : ["maximized", "filled", "windowed"]
         running: Harness.autoAct === "window-fill"
         onTriggered: {
             const op = fillActTimer
-            const logs = Harness.autoActArg === "log"
-            if (op.at("start")) {
+            const arg = Harness.autoActArg
+            const logs = arg === "log"
+            // The forms that read the page's split, so wait for a page.
+            const reads = logs || arg.startsWith("narrow")
+            if (op.at("start") || op.at("squeezed")) {
                 // The log is the page's, so a run raising it waits for one.
-                if (logs && !Awaited.all("window_fill_page", {
+                if (reads && !Awaited.all("window_fill_page", {
                         "page": window.curPage !== null && PageSettled.settledUnder(window) }))
+                    return
+                if (arg === "narrow-back" && op.at("start")) {
+                    op.input("squeezed", () => {
+                        window.width = Math.ceil(window.floorWidth) + 10
+                    })
+                    return
+                }
+                if (op.at("squeezed") && !Awaited.all("window_fill_squeezed", {
+                        "squeezed": window.curPage.pageSidebar.width < window.curPage.pageSidebar.openWidth - 1,
+                        "laid": op.still("squeeze_laid", acts.layoutKey()) }))
                     return
                 op.input("maximized", () => {
                     if (logs)
                         window.curPage.commandsOpen = true
+                    op.witness("readerWidth", reads ? window.curPage.pageSidebar.openWidth : 0)
                     window.visibility = Window.Maximized
                 })
                 return
@@ -68,24 +92,69 @@ Item {
                         "placed": at.x === 0 && at.y === 0,
                         "filled": mainUi.width === window.width && mainUi.height === window.height,
                         "page": PageSettled.windowSettled(window),
-                        "laid": !logs || op.still("split_laid", JSON.stringify(acts.splitReading())) }))
+                        "laid": !reads || op.still("split_laid", acts.layoutKey()) }))
                     return
-                if (logs) {
-                    op.complete({ "name": "window_fill_log",
+                if (logs || arg === "narrow") {
+                    op.complete({ "name": "window_fill_" + arg,
                                   "when": () => ({ "maximized": window.visibility === Window.Maximized,
-                                                   "log": window.curPage.commandsShown }),
+                                                   "log": Harness.autoActArg !== "log"
+                                                          || window.curPage.commandsShown }),
                                   "report": () => acts.fillLine() })
+                    return
+                }
+                if (arg === "narrow-open") {
+                    op.input("opened", () => {
+                        window.curPage.pageSidebar.foldRequested(false)
+                    })
                     return
                 }
                 if (!op.input("windowed", () => {
                         op.witness("filledLine", acts.fillLine())
+                        op.witness("narrowFolded", reads && window.curPage.pageSidebar.collapsed
+                                                   && !window.curPage.sidebarCollapsed)
                         window.visibility = Window.Windowed
                     }))
                     return
             }
+            if (op.at("opened")) {
+                if (!Awaited.all("window_fill_opened", {
+                        "open": !window.curPage.pageSidebar.collapsed,
+                        "laid": op.still("open_laid", acts.layoutKey()) }))
+                    return
+                op.complete({ "name": "window_fill_narrow_open",
+                              "when": () => ({ "maximized": window.visibility === Window.Maximized,
+                                               "open": !window.curPage.pageSidebar.collapsed }),
+                              "report": () => acts.fillLine() })
+                return
+            }
+            // Put back, the window comes back at the squeezed width it was maximised from: widened past it, the list has
+            // room for the reader's width again.
+            if (arg === "narrow-back" && op.at("windowed")) {
+                if (!Awaited.all("window_fill_windowed", { "windowed": window.visibility === Window.Windowed }))
+                    return
+                op.input("widened", () => {
+                    window.width = 1440
+                })
+                return
+            }
+            if (arg === "narrow-back") {
+                if (!Awaited.all("window_fill_back", {
+                        "wide": window.width === 1440,
+                        "open": !window.curPage.pageSidebar.collapsed,
+                        "laid": op.still("back_laid", acts.layoutKey()) }))
+                    return
+                op.complete({ "name": "window_fill_back",
+                              "when": () => ({ "open": !window.curPage.pageSidebar.collapsed }),
+                              "report": () => acts.backLine() })
+                return
+            }
             op.complete({ "name": "window_fill_windowed", "when": () => ({}),
                           "report": () => op.witnessed("filledLine") })
         }
+    }
+    /// What has to stand across a polish pass before a form reads its split.
+    function layoutKey() {
+        return JSON.stringify(Harness.autoActArg === "log" ? acts.splitReading() : acts.widthReading())
     }
     /// The maximised window: whether its contents reach the four edges, in scene coordinates.
     function fillLine() {
@@ -94,7 +163,8 @@ Item {
                                        && mainUi.width === window.width
                                        && mainUi.height === window.height)
             // The verdict's neighbours: `must_say` catches only one substring.
-            + (Harness.autoActArg === "log" ? acts.splitLine() : "")
+            + (Harness.autoActArg === "log" ? acts.splitLine()
+               : Harness.autoActArg.startsWith("narrow") ? acts.widthLine() : "")
             + " maximized=" + (window.visibility === Window.Maximized)
             + " at=" + at.x + "," + at.y
             + " size=" + mainUi.width + "x" + mainUi.height
@@ -128,6 +198,47 @@ Item {
             + " panesH=" + r.panesH + " panesFloor=" + layout.panesFloorHeight
             + " logH=" + r.logH + " logFloor=" + layout.commandsMinHeight + " logLeast=" + layout.commandsLeastHeight
             + " logEnd=" + r.logEnd + " pageEnd=" + r.pageEnd
+    }
+    /// The three panes read across the window: the left menu, the middle (the graph stands its width) and the right
+    /// pane (the worktree pane fills it whichever face shows), in the body's coordinates.
+    function widthReading() {
+        const page = window.curPage
+        const right = page.pageWip
+        return { "sideW": page.pageSidebar.width, "centreW": page.pageGraphPane.width, "rightW": right.width,
+                 "rightEnd": right.mapToItem(mainUi, 0, 0).x + right.width,
+                 "pageEnd": page.mapToItem(mainUi, 0, 0).x + page.width }
+    }
+    /// `under=`: the window narrower than its own floor. `inside=`: the right pane ends inside the page and the page
+    /// inside the window — past its floor the split lays its items out past its own right edge. `folded=` is the list
+    /// on its rail, `kept=` the reader's own fold untouched by it, `held=` the reader's unfold holding it open.
+    function widthLine() {
+        const page = window.curPage
+        const layout = page.pageLayout
+        const side = page.pageSidebar
+        const r = acts.widthReading()
+        return " narrow=true"
+            + " under=" + (window.width < window.floorWidth)
+            + " inside=" + (r.rightEnd <= r.pageEnd && r.pageEnd <= mainUi.width)
+            + " folded=" + side.collapsed
+            + " kept=" + !page.sidebarCollapsed
+            + " held=" + (page.listHeldOpen === true)
+            + " floorW=" + Math.ceil(window.floorWidth)
+            + " sideW=" + r.sideW + " centreW=" + r.centreW + " centreFloor=" + layout.centreMinWidth
+            + " rightW=" + r.rightW + " rightEnd=" + r.rightEnd + " pageEnd=" + r.pageEnd
+    }
+    /// `narrow-back`, read once the window is back: `folded=` is the list as it stood maximised, `open=` it back on
+    /// screen, `width=` at the width it had before the window went narrow, `kept=` the reader's fold untouched.
+    function backLine() {
+        const page = window.curPage
+        const side = page.pageSidebar
+        const before = fillActTimer.witnessed("readerWidth")
+        return "window_fill back=" + (window.visibility === Window.Windowed)
+            + " folded=" + fillActTimer.witnessed("narrowFolded")
+            + " open=" + !side.collapsed
+            + " width=" + (Math.abs(side.width - before) < 1)
+            + " kept=" + !page.sidebarCollapsed
+            + " sideW=" + side.width + " before=" + before
+            + " window=" + window.width + "x" + window.height
     }
 
     // _PGG_AUTO_ACT=window-floor [fold|log|wip|rail] (five forms, the bare one among them). With no argument the

@@ -58,7 +58,18 @@ FocusScope {
 
     property string selectedOid: ""
 
+    /// The reader's fold, which is remembered (and the diff's and the plan's, given back below). What stands on screen is
+    /// `listFolded`.
     property bool sidebarCollapsed: false
+    /// The list on its rail: folded by the reader, or for the room — open by the reader in a window with no room for
+    /// it (`PageLayout.listCrowded`), unless the reader asked it open there (`listHeldOpen`).
+    readonly property bool listFolded: page.sidebarCollapsed || (pageLayout.listCrowded && !page.listHeldOpen)
+    /// The reader unfolded the list in a window with no room for it (`foldByHand`): it stays open, the middle giving
+    /// way (`PageLayout.centreHeldWidth`), until the window has room for it again — across tabs too, handed over as the
+    /// log's flag is (`PageLayout.reportLayout` / `applySavedLayout`).
+    property bool listHeldOpen: false
+    readonly property bool listCrowded: pageLayout.listCrowded
+    onListCrowdedChanged: if (!page.listCrowded) page.listHeldOpen = false
     /// The fold the diff put on: closing the diff takes back only that; a fold by hand stays.
     property bool foldedByDiff: false
     function foldForDiff(open) {
@@ -260,6 +271,8 @@ FocusScope {
     }
     function foldByHand(collapse) {
         page.sidebarCollapsed = collapse
+        // Asked open in a window with no room for it, the list stays open until the window has room again.
+        page.listHeldOpen = !collapse && pageLayout.listCrowded
         page.foldedByDiff = false
         // Every way the list comes back (the band's block) arrives here, so "unfolding closes the diff" has no
         // exceptions elsewhere; a rail cell's peek and a rename box (`SidebarRowGestures.startEdit`) keep the fold.
@@ -2586,7 +2599,7 @@ FocusScope {
     readonly property bool recoverBlinking: recoverBlink.running
     readonly property int recoverTaken: repoTab.takenSeq
     onRecoverTakenChanged: {
-        if (!page.recoverOpen || page.sidebarCollapsed)
+        if (!page.recoverOpen || page.listFolded)
             page.blinkRecover()
     }
     /// What the log lists changed — a take, a restore, a name taken here (`RepoTab.discardSeq`): an open log reads
@@ -2645,9 +2658,9 @@ FocusScope {
         PropertyAction { target: page; property: "recoverLit"; value: false }
     }
     function toggleRecover() {
-        // Folded (a diff took the screen), an open list is not on it: the rail's press brings it back, as a section's
-        // way back does, rather than closing what cannot be seen.
-        if (page.recoverOpen && page.sidebarCollapsed) {
+        // Folded (a diff took the screen, or the window has no room for the list), an open list is not on it: the rail's
+        // press brings it back, as a section's way back does, rather than closing what cannot be seen.
+        if (page.recoverOpen && page.listFolded) {
             page.foldByHand(false)
             return
         }
@@ -2658,7 +2671,7 @@ FocusScope {
             page.recoverNow = Math.floor(Date.now() / 1000)
             page.readDiscards()
             // The list takes the menu's place, which the rail has no room for.
-            if (page.sidebarCollapsed)
+            if (page.listFolded)
                 page.foldByHand(false)
         } else if (page.recoverPick >= 0) {
             // The graph goes back to what the repository holds with the list.
@@ -3760,7 +3773,7 @@ FocusScope {
                     worktreesModel: worktreesModel
                     stashesModel: stashesModel
                     tagsModel: tagsModel
-                    collapsed: page.sidebarCollapsed
+                    collapsed: page.listFolded
                     // Null on the blank page: nothing has run there (the band's `>_` answered the same way up above).
                     commandsPage: page.blank ? null : page
                     recoverPage: page.blank ? null : page
@@ -3801,8 +3814,9 @@ FocusScope {
                     id: centreColumn
                     SplitView.fillWidth: true
                     // The graph's columns once both have given all they can, held up to a side pane's width so the
-                    // middle never reads as the thinnest of the three (`PageLayout.centreMinWidth`).
-                    SplitView.minimumWidth: pageLayout.centreMinWidth
+                    // middle never reads as the thinnest of the three (`PageLayout.centreMinWidth`) — in a window at
+                    // least as wide as its floor; narrower, the middle gives way (`PageLayout.centreHeldWidth`).
+                    SplitView.minimumWidth: pageLayout.centreHeldWidth
                     spacing: 0
 
                     NoticeBar {

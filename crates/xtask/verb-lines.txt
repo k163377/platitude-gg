@@ -55,7 +55,7 @@ band-actions --preset longnames	ChangeIcon FileRowDelegate GraphRowChips GraphRo
 band-actions-alert --preset longnames --allow-write-failure	CappedLines ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 band-actions-fold --preset longnames	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 band-actions-none --preset longnames	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
-band-actions-stopped --preset unreachable --allow-write-failure	ChangeIcon CommandRowDelegate CommandsPane CommandsTextSelect FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
+band-actions-stopped --preset unreachable --allow-write-failure	ChangeIcon CommandRowDelegate CommandsPane CommandsTextSelect FileRowDelegate GraphRowChips GraphRowDelegate NameCell OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 band-find	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 bar-arrow --preset long	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 bar-track --preset long	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
@@ -948,6 +948,9 @@ walk-silent-card --preset dirty	AppCardFace BandStateCard ChangeIcon GraphRowChi
 walk-silent-quit --preset dirty	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 window-fill	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 window-fill log --screen 960x420	ChangeIcon CommandsPane CommandsTextSelect GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
+window-fill narrow --screen 600x700	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody TabItemDelegate WipTallyRow
+window-fill narrow-back --screen 600x700	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody TabItemDelegate WipTallyRow
+window-fill narrow-open --screen 700x700	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody TabItemDelegate WipTallyRow
 window-floor	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 window-floor --preset rebase-conflict	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpExitCard OpExitRow OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 window-floor fold	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow

@@ -16,12 +16,37 @@ pub(super) const TABLE: &[Verb] = &[
     // laid the log out under the window's bottom, and a log cut there
     // frames like a short one. `order=` is which gave way: the panes under
     // their floor only once the log is down to its least.
+    //
+    // `narrow`: the same across a screen narrower than the floor. The
+    // list folds to its rail for the room (`folded=true`) while the
+    // reader's own fold stands (`kept=true`). `narrow-open`: the reader's
+    // unfold asked there holds the list open (`held=true`), the middle
+    // giving way. `narrow-back`: maximised from a window that squeezed the
+    // list, then put back and widened — the list open again at the
+    // reader's width (`width=true`), which a fold that kept the squeezed
+    // width would lose.
     Verb {
         name: "window-fill",
-        when: &[(
-            Arg::Is("log"),
-            "window_fill fills=true log=true under=true inside=true order=true",
-        )],
+        when: &[
+            (
+                Arg::Is("log"),
+                "window_fill fills=true log=true under=true inside=true order=true",
+            ),
+            (
+                Arg::Is("narrow"),
+                "window_fill fills=true narrow=true under=true inside=true folded=true kept=true \
+                 held=false",
+            ),
+            (
+                Arg::Is("narrow-open"),
+                "window_fill fills=true narrow=true under=true inside=true folded=false kept=true \
+                 held=true",
+            ),
+            (
+                Arg::Is("narrow-back"),
+                "window_fill back=true folded=true open=true width=true kept=true",
+            ),
+        ],
         plain: "window_fill fills=true",
     },
     // A window let past its floor frames like one held at it — the pane

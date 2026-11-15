@@ -205,7 +205,7 @@ Rectangle {
     /// read it: a headless run writes the one property a real hover writes.
     property bool headPinPointed: false
 
-    // The width the list goes back to, read off the pane as it folds (規約 §レイアウト初期値 is only where it starts).
+    // The width the list goes back to: the reader's, taken as it folds (規約 §レイアウト初期値 is only where it starts).
     property real openWidth: 260
     readonly property int minOpenWidth: 180
     SplitView.preferredWidth: sidebar.openWidth
@@ -222,10 +222,10 @@ Rectangle {
         // `SidebarRowGestures.startEdit` never moves the fold, so this never closes a box just opened.
         sidebar.stopEdit()
         if (sidebar.collapsed) {
-            // A page restored already folded has not been laid out and reports 0, which would lose the width the
-            // session was left at.
-            if (sidebar.width >= sidebar.minOpenWidth)
-                sidebar.openWidth = sidebar.width
+            // What a drag wrote into `preferredWidth` (or the width it started at), not the pane's width: a window
+            // narrower than its floor squeezes the list first and then folds it for the room (`RepoPage.listFolded`),
+            // and a page restored already folded has not been laid out and reports 0.
+            sidebar.openWidth = sidebar.SplitView.preferredWidth
             sidebar.SplitView.minimumWidth = Theme.railWidth
             sidebar.SplitView.maximumWidth = Theme.railWidth
             sidebar.SplitView.preferredWidth = Theme.railWidth

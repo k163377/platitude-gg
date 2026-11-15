@@ -40,13 +40,15 @@ QtObject {
     required property DiffModel diffModel
 
     /// Applied once — from here on the splitters own these, and a binding would fight the drag
-    /// (rules-refs/app-ui.md「`SplitView` の preferred は代入で固定」). Whether the log is up is held in memory
-    /// only (`AppBackend::commands_shown`): a new launch finds it down.
+    /// (rules-refs/app-ui.md「`SplitView` の preferred は代入で固定」). Whether the log is up, and whether the list is
+    /// held open in a window with no room for it, are held in memory only (`AppBackend::commands_shown` /
+    /// `list_held_open`): a new launch finds the log down and the list on the reader's own fold.
     function applySavedLayout() {
         // The width before the fold: an unfolded list reads it through a binding, and the fold then pins the rail
         // (`applyFold`, through the sidebar's own binding — calling it here too would run it twice).
         layout.sidebarPane.openWidth = AppBackend.startSidebarWidth()
         layout.page.sidebarCollapsed = AppBackend.startSidebarCollapsed()
+        layout.page.listHeldOpen = AppBackend.startListHeldOpen()
         layout.page.commandsOpen = AppBackend.startCommandsShown()
         layout.rightPane.SplitView.preferredWidth = AppBackend.startDetailsWidth()
         layout.commandsSeat.SplitView.preferredHeight = AppBackend.startCommandsHeight()
@@ -137,15 +139,37 @@ QtObject {
     /// The middle column's floor: the graph's own (`GraphPane.contentMinW`), and at least a side pane's, so three
     /// columns still read as three.
     readonly property real centreMinWidth: Math.max(layout.graphPane.contentMinW, layout.sidebarPane.minOpenWidth)
-    /// Folding the list lowers this to the rail's; a window standing at the old floor is grown by the new one (Main).
-    readonly property real floorWidth:
-        (layout.page.sidebarCollapsed ? Theme.railWidth : layout.sidebarPane.minOpenWidth)
-        + Theme.splitterWidth + layout.centreMinWidth + Theme.splitterWidth + layout.rightMinWidth
+    /// What the list stands beside at their floors: the middle, the right pane and the two splitters.
+    readonly property real besideListWidth:
+        Theme.splitterWidth + layout.centreMinWidth + Theme.splitterWidth + layout.rightMinWidth
+    /// Follows the reader's fold: folding the list lowers this to the rail's, and a window standing at the old floor is
+    /// grown by the new one (Main). The fold the window makes for itself (`listCrowded`) leaves it alone.
+    readonly property real floorWidth: layout.page.sidebarCollapsed ? layout.railFloorWidth : layout.openFloorWidth
     /// The same floor with the list open, whether or not it is — reported beside the floor by the panel's runs
     /// (`openW=`).
-    readonly property real openFloorWidth:
-        layout.sidebarPane.minOpenWidth
-        + Theme.splitterWidth + layout.centreMinWidth + Theme.splitterWidth + layout.rightMinWidth
+    readonly property real openFloorWidth: layout.sidebarPane.minOpenWidth + layout.besideListWidth
+    /// …and with it on its rail.
+    readonly property real railFloorWidth: Theme.railWidth + layout.besideListWidth
+
+    // ---- a window narrower than its floor ----------------------------------
+    // The same hint across: past the split's minimums the right pane is laid out past the window's right edge. The
+    // list gives way first (user decision — ask before changing): open by the reader with no room for it, it stands
+    // on its rail (`listCrowded`, `RepoPage.listFolded`), as WinUI's NavigationView and macOS sidebars fold for a
+    // narrow window, the reader's own fold untouched; it comes back once the window has room for it. Past the rail's
+    // floor, or with the list held open by the reader (`RepoPage.listHeldOpen`), the middle gives way, its message
+    // column first (`centreHeldWidth`). Past the middle's least the right pane goes past the window's edge again.
+    /// The list's open face has no room: the window is narrower than the floor with the list open. Not before the split
+    /// has a width: a page is built at 0, and a fold read there would stand before the restored one (`applySavedLayout`)
+    /// and swallow its `applyFold`.
+    readonly property bool listCrowded: layout.pageSplit.width > 0 && layout.pageSplit.width < layout.openFloorWidth
+    /// The middle's least: the chip column at its own width (`Metrics.labelColW`) and the lanes at their least, the
+    /// message column given up.
+    readonly property real centreLeastWidth: layout.graphPane.contentMinW - Metrics.messageMinW
+    /// The middle's minimum: its floor, or what the list's face and the right pane at their floors leave, down to its
+    /// least.
+    readonly property real centreHeldWidth: Math.max(layout.centreLeastWidth, layout.centreMinWidth
+        - Math.max(0, (layout.sidebarPane.collapsed ? layout.railFloorWidth : layout.openFloorWidth)
+                      - layout.pageSplit.width))
     /// The panes over the taller of the menu's two faces, and the log at its floor under them, whether or not it is up:
     /// neither the fold nor the log moves it, so opening either on a window at its floor leaves the window's size alone
     /// (デザイン規約 §窓の床). The foot the log takes the place of is shorter than the log, so a window with the log
@@ -174,11 +198,13 @@ QtObject {
     /// writing is where it settled. The saved layout is also how tabs hand it over: the leaving tab's page writes here
     /// and the coming one reads `applySavedLayout` (`RepoPageStack.onLeavingTab`), so a field taken out of
     /// `LayoutState` loses both the next launch and the carry between tabs (headless `tab-carry`: `folded=` / `log=`).
-    /// A value held for the run only goes on a plain field of `AppBackend` (`commands_shown`, the log up or down).
+    /// A value held for the run only goes on a plain field of `AppBackend` (`commands_shown`, the log up or down;
+    /// `list_held_open`).
     function reportLayout() {
         AppBackend.saveLayoutSizes(
-            // Folded, the width is the rail's; keep the one it goes back to.
-            layout.page.sidebarCollapsed ? layout.sidebarPane.openWidth : layout.sidebarPane.width,
+            // The reader's width: folded — by the reader or for the room — the one it goes back to; open, what a drag
+            // wrote (`preferredWidth`), not what a narrow window squeezed it to.
+            layout.sidebarPane.collapsed ? layout.sidebarPane.openWidth : layout.sidebarPane.SplitView.preferredWidth,
             layout.rightPane.width,
             // `preferredHeight`, not `height`: what a hand set, not what a short window squeezed it to.
             layout.commandsSeat.SplitView.preferredHeight,
@@ -192,6 +218,7 @@ QtObject {
                                    layout.unstagedModel.treeView,
                                    layout.detailsModel.treeView,
                                    layout.diffModel.split)
+        AppBackend.saveListHeldOpen(layout.page.listHeldOpen)
         AppBackend.saveSections(layout.sidebarPane.expBranches,
                                 layout.sidebarPane.expRemotes,
                                 layout.sidebarPane.expWorktree,

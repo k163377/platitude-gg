@@ -22,7 +22,11 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
       desktop beside it for an unpainted edge to show against. Its `log`
       form opens the command log first, wants a `--screen` lower than
       the window's floor, is photographed maximised, and is judged on
-      the panes and the log both standing inside the window. And so is
+      the panes and the log both standing inside the window. `narrow`
+      does the same across a `--screen` narrower than the floor, judged
+      on the list folding to its rail; `narrow-open` then asks the list
+      open, and `narrow-back` puts the window back and judges the list
+      open again at the width it had. And so is
       `commands-clear`, where the panel the reader emptied goes down with
       the press and what is judged is what it left behind: a window with
       no panel in it, and a quiet mark in a corner of the band. Its

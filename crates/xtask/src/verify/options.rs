@@ -116,8 +116,9 @@ pub(super) struct Options {
     /// flakiness sweep, or the runs a suite drives (`verify::suite_words`).
     pub(super) no_board: bool,
     /// The offscreen platform's one screen at a size of the run's own
-    /// (`--screen <W>x<H>`): a work area lower than the window's floor,
-    /// which a maximise lays the window into as Windows' and KWin's do
+    /// (`--screen <W>x<H>`): a work area lower or narrower than the
+    /// window's floor, which a maximise lays the window into as Windows'
+    /// and KWin's do
     /// (デザイン規約 §窓の床) — the app holds every size it sets itself
     /// to the floor, so no other road reaches it. `None`: the platform's
     /// own 800x800.
@@ -411,10 +412,15 @@ fn name_the_verb(opts: &mut Options, positional: &[&str]) -> Result<(), String> 
     }
     // Judged on the window standing under its floor (`under=true`), which
     // the platform's own 800x800 never makes: the run could only go red.
-    if opts.verb == "window-fill" && opts.arg == "log" && opts.screen.is_none() {
-        return Err(
-            "window-fill log needs --screen <W>x<H> lower than the window's floor (960x420)".into(),
-        );
+    if opts.verb == "window-fill"
+        && ["log", "narrow", "narrow-open", "narrow-back"].contains(&opts.arg.as_str())
+        && opts.screen.is_none()
+    {
+        return Err(format!(
+            "window-fill {} needs --screen <W>x<H> under the window's floor (960x420 for log, \
+             600x700 for narrow and narrow-back, 700x700 for narrow-open)",
+            opts.arg
+        ));
     }
     Ok(())
 }
@@ -681,10 +687,12 @@ mod tests {
             opts.typable_line().as_deref(),
             Some("window-fill log --screen 960x420")
         );
-        let Err(unscreened) = parse(&["window-fill".to_string(), "log".to_string()]) else {
-            panic!("the log form asks nothing on the platform's own screen");
-        };
-        assert!(unscreened.contains("--screen"), "{unscreened}");
+        for form in ["log", "narrow", "narrow-open", "narrow-back"] {
+            let Err(unscreened) = parse(&["window-fill".to_string(), form.to_string()]) else {
+                panic!("the {form} form asks nothing on the platform's own screen");
+            };
+            assert!(unscreened.contains("--screen"), "{unscreened}");
+        }
         for wrong in ["960", "960x", "x420", "960×420", "960x420.5"] {
             let refused = parse(&[
                 "window-fill".to_string(),

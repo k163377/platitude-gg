@@ -206,6 +206,11 @@ pub struct AppBackend {
     /// over like the pane widths (`PageLayout`), but a new launch comes up
     /// with the log down.
     commands_shown: bool,
+    /// The left list asked open by the reader in a window with no room for
+    /// it (`RepoPage.listHeldOpen`), handed over between tabs as the log's
+    /// flag is: the window is the same, so the next tab's list stays open
+    /// too until the window has room again.
+    list_held_open: bool,
     check_feed: Arc<Feed<AppMsg>>,
     stop_listener: Option<stop::Listener>,
 }
