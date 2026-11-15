@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import platitude.ui
+import platitude.ui.words
 
 // What the discard log says of an entry (`RecoverEntries`): what the operation did, what each
 // part took, and what the restore makes of it — and the time, the moment first.

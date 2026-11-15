@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import platitude.ui
+import platitude.ui.face
 import "chips.js" as Chips
 import "painted.js" as Painted
 

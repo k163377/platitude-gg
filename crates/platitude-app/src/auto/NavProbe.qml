@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.input
 
 /// What a headless run does to the sidebar, and what it reads back off it.
 ///

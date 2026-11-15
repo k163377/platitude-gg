@@ -2,7 +2,8 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import platitude
-import platitude.ui
+import platitude.ui.hover
+import platitude.ui.input
 
 /// What holds a hover display up and what keeps one from coming out, read stage by stage through the doors a reader
 /// uses — the folded rail's cells, a row's right-click and the menu key, the author row's lines: a section held by its

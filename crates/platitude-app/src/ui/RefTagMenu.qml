@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.words
 
 // Everything a tag's name answers for, behind the tag's mark: made here, sent, deleted on either side
 // (デザイン規約 §メニュー の入れ子). One card, two entrances like `RefBranchMenu`: the graph row's menu and the

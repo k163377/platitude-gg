@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import platitude.ui
+import platitude.ui.input
 
 // What hover does while a press holds the window, and after it (デザイン規約 §hover のツールチップ「押している間は何も
 // 開かない」): nothing it asks for opens from the press until the hand's own next move after the release, a drag takes

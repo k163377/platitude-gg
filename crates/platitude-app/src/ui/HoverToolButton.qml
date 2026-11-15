@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.input
 
 // ToolButton wearing the flat hover wash as its `background`, in place of Fusion's ButtonPanel (デザイン規約
 // §QML 実装ルール): Fusion's `ToolButton` puts the panel up on hover / down / checked, and `bgHover` laid over it is no

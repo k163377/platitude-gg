@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import platitude.ui
+import platitude.ui.face
 import "painted.js" as Painted
 
 // The left menu's row-end column (デザイン規約 §アイコンの席 の ②「行末の列」): the remote badge after the name takes the

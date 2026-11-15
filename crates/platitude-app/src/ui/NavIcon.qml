@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.face
 
 // Hand-drawn 16px-grid icons, scaled by the item size, or for a mark set beside words by their capitals (`set`),
 // in one stroke colour; `home` alone is filled.

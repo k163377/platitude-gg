@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import platitude
-import platitude.ui
+import platitude.ui.hover
 
 /// The push of a branch the worktree is not on, from its row's menu beside `pull` (デザイン規約 §リモートへ送る): the
 /// row's shape as the menu opens, its press, and the first push's question it raises. `[chip:]<branch>` — bare is the

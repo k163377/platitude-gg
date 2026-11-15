@@ -3,6 +3,7 @@ import QtQuick.Dialogs
 import QtQuick.Layouts
 import platitude
 import platitude.ui
+import platitude.ui.words
 
 // The settings screen's `Application` category: what Platitude GG keeps in its own settings file (規約 §設定の画面).
 // One file per category, since a category is one place values are stored.

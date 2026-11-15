@@ -4,6 +4,8 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.face
+import platitude.ui.words
 
 // The card under the author's name in the details pane, opened right under the name the moment the pointer is on it.
 // One block of face, name and address, shaped as a `CoAuthorCard` row (same ground, frame, row height and indent). The

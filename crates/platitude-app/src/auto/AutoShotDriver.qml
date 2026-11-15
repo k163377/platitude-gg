@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Layouts
 import platitude
 import platitude.ui
+import platitude.ui.still
 
 /// Owns one automated run from completion through its pictures; idle unless _PGG_AUTO_* was supplied.
 Item {

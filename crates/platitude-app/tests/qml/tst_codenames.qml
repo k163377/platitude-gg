@@ -2,6 +2,8 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import platitude.ui.face
+import platitude.ui.words
 
 // Names set as code (デザイン規約 §ref の種別「文の中の名前」): a chip's ground starts at its mark's seat, which holds
 // the mark's air — so chips start on one x whatever their mark — and ends half a gap past the name's last glyph as

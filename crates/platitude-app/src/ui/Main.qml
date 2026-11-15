@@ -12,6 +12,8 @@ import QtQuick.Dialogs
 import QtQuick.Window
 import platitude
 import platitude.ui
+import platitude.ui.input
+import platitude.ui.words
 
 ApplicationWindow {
     id: root

@@ -3,6 +3,8 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.nav
+import platitude.ui.words
 
 // What a row of the left panel opens under itself: one fact to a line, behind its mark (デザイン規約 §左メニューの所作).
 // This part draws what it is handed — which lines a section opens is one table for every section (`NavFacts`).

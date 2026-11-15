@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import platitude.ui.nav
 
 // What a row of the left panel says about the ref it names: the table (`NavFacts`) asked through the real row
 // (`NavItemDelegate.gatherFacts`), and the ink — the measure on the row's own line and the lines it opens — read off

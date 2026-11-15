@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import platitude.ui
+import platitude.ui.words
 
 // The markup that sets a name in a sentence as code (`CardText.namedMarkup`), held against the rich-text
 // engine that draws it. It owes two opposite things: a run of spaces survives rich text's HTML fold, and a single space

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import platitude.ui.input
 import "chips.js" as Chips
 
 // The graph's rows under a real pointer, with what the page keeps for them: the pane's hand (`HandWatch`), the host

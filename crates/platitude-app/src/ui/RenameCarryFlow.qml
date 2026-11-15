@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude
 import platitude.ui
+import platitude.ui.words
 
 // What happens on the remote after a name is changed here — a question, since which the reader wanted is not the
 // repository's to know (デザイン規約 §手元の改名の後のリモート). Draws nothing: the bar belongs to the graph.

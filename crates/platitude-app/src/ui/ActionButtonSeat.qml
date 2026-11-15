@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.face
 
 // The seat a toolbar action's icon sits in; no icon, no width. A button that swaps icon and hold mark keeps the wider
 // seat in every state, so the toolbar holds still under a resting pointer; one that only wears the mark fits it. The

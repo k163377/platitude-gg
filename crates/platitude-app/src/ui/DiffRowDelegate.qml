@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
+import platitude.ui.hover
 
 // One row of the diff: as one column, two numbers with the mark's seat between them and the line; side by side, each
 // side's number, seat and line either side of a hairline. A row that is not a line spans both: hunk headings, a

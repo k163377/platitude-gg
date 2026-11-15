@@ -5,6 +5,8 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui
+import platitude.ui.face
+import platitude.ui.words
 
 // One bucket's heading in the worktree file list: its name, its count, and the button that moves the whole
 // bucket. Pinned above its rows (`WipBucketPane`).

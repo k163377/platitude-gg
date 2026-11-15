@@ -3,6 +3,7 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import QtQuick.Window
 import platitude.ui
+import platitude.ui.face
 
 // One side (Before / After) of the diff pane's image preview; a side with no `sizeText` collapses. What a side is
 // shown from and what it costs: `platitude_core::preview` and the app's `preview_images`. Headless:

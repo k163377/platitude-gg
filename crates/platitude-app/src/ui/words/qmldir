@@ -1,0 +1,2 @@
+module platitude.ui.words
+singleton Words 1.0 Words.qml

@@ -1,4 +1,5 @@
 import QtQuick
+import platitude.ui.input
 
 /// Hands focus back to the window whenever a press lands outside the focused editor — QML never drops a text input's
 /// focus on its own. The window's one also tells `Hand` of every press it hears, for the hold a press puts on hover

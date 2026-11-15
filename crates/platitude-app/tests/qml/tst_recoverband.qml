@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import platitude.ui.words
 
 // The band over the graph (`RecoverBand`): it stands no taller than its ceiling however many parts an entry has, the
 // parts' lines scroll under a heading, a date and controls that stay put, and each press stands on the middle of the

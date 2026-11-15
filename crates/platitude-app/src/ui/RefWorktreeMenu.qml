@@ -1,6 +1,7 @@
 import QtQuick
 import platitude
 import platitude.ui
+import platitude.ui.words
 
 // Everything a worktree answers for, behind the worktree's mark: making one (デザイン規約 §worktree を作る — the two
 // making rows live in this nested card, a user decision: ask before changing) and taking it away (デザイン規約

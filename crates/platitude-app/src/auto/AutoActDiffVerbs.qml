@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude
 import platitude.ui
+import platitude.ui.words
 
 /// The diff pane's verbs. Each waits first for the pane on its file (`stageRowTimer`, by default a changed row of the
 /// first hunk), then ends there or hands the run to an operation of its own.

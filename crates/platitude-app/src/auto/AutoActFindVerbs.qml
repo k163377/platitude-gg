@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import platitude
-import platitude.ui
+import platitude.ui.hover
 
 /// The things that stand over a page: the find bar, the command log, the settings dialog and
 /// the avatar store.

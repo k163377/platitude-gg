@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.face
 
 // A branch's remote badge, which on git's `[gone]` keeps its shape and takes the state instead of disappearing — a
 // dropped badge reads as a branch that never tracked anything (デザイン規約 §ref の種別 / §グラフ行のダブルクリック の

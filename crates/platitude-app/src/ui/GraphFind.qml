@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude
 import platitude.ui
+import platitude.ui.words
 
 // The find card over the graph and what a query does to the view. Rows are marked in Rust (`GraphModel.setFind`,
 // matching rules in `platitude-core::find`); this end moves the viewport and reads the count back. The rules both find

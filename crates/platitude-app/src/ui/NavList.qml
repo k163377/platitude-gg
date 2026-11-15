@@ -5,6 +5,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.input
 
 // One sidebar section's scrolling list under its fixed NavHeader.
 AppListView {

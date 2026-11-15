@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import platitude.ui.input
 
 // The middle button's hand, pressed the way a hand presses it (デザイン規約 §中クリックの自動スクロール). The verbs go
 // in at `MiddleAutoScroll.press` (a run has no middle button), so whether a real press reaches the hand, and what the

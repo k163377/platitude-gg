@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude
 import platitude.ui
+import platitude.ui.hover
 
 /// The line-ending card (デザイン規約 §改行コードの警告): the `!` a file row or the commit button wears over a warned
 /// file and the card it opens under a hand — what the button carries over a warned index (`eol-commit`), a row's card

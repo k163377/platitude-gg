@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.face
 
 // The graph pane's column arithmetic: what each of the three columns may be and is, and how far the lanes are sent
 // sideways. Draws nothing; the pane, rows, dividers and find bar read their geometry here.

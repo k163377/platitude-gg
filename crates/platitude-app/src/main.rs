@@ -90,19 +90,28 @@ fn main() {
     // costs a desktop-file match.
     app.pin_mut()
         .set_application_name(&QString::from("platitude-gg"));
-    // Every file listed in ui/qmldir must be embedded here.
+    // Every file a product qmldir lists must be embedded here, with the qmldir.
     qrc::embed!("ui/qmldir");
     qrc::embed!("ui/Theme.qml");
     qrc::embed!("ui/Metrics.qml");
-    qrc::embed!("ui/Words.qml");
-    qrc::embed!("ui/Ink.qml");
-    qrc::embed!("ui/Motion.qml");
-    qrc::embed!("ui/WordFace.qml");
-    qrc::embed!("ui/MarkSeat.qml");
-    qrc::embed!("ui/Hand.qml");
-    qrc::embed!("ui/MiddleHand.qml");
-    qrc::embed!("ui/KeyMenu.qml");
-    qrc::embed!("ui/OutsidePress.qml");
+    qrc::embed!("ui/words/qmldir");
+    qrc::embed!("ui/words/Words.qml");
+    qrc::embed!("ui/face/qmldir");
+    qrc::embed!("ui/face/WordFace.qml");
+    qrc::embed!("ui/face/MarkSeat.qml");
+    qrc::embed!("ui/input/qmldir");
+    qrc::embed!("ui/input/Hand.qml");
+    qrc::embed!("ui/input/MiddleHand.qml");
+    qrc::embed!("ui/input/KeyMenu.qml");
+    qrc::embed!("ui/input/OutsidePress.qml");
+    qrc::embed!("ui/hover/qmldir");
+    qrc::embed!("ui/hover/Tips.qml");
+    qrc::embed!("ui/hover/Hovers.qml");
+    qrc::embed!("ui/still/qmldir");
+    qrc::embed!("ui/still/Ink.qml");
+    qrc::embed!("ui/still/Motion.qml");
+    qrc::embed!("ui/nav/qmldir");
+    qrc::embed!("ui/nav/NavFacts.qml");
     qrc::embed!("ui/ActionButton.qml");
     qrc::embed!("ui/ActionButtonLabel.qml");
     qrc::embed!("ui/ActionButtonSeat.qml");
@@ -242,9 +251,6 @@ fn main() {
     qrc::embed!("ui/NameCell.qml");
     qrc::embed!("ui/NameRun.qml");
     qrc::embed!("ui/NavFactLine.qml");
-    qrc::embed!("ui/NavFacts.qml");
-    qrc::embed!("ui/Tips.qml");
-    qrc::embed!("ui/Hovers.qml");
     qrc::embed!("ui/NavHeader.qml");
     qrc::embed!("ui/NavIcon.qml");
     qrc::embed!("ui/NavItemDelegate.qml");

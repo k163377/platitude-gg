@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.face
 
 // The dress a git command or a name wears wherever the UI says one as code (デザイン規約 §git 用語のコード表記、§ref
 // の種別「文の中の名前」): the spelling in mono, on a faint ground hanging half a gap off either end so the word keeps

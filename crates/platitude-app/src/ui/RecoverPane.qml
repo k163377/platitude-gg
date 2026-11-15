@@ -3,6 +3,8 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui
+import platitude.ui.face
+import platitude.ui.hover
 
 // The list the seat opens over the left menu's sections. The git commands' seat stays under it. One
 // entry is picked at a time, and what it would bring back is told over the graph (`RecoverBand`) — a picked row opens

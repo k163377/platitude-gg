@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import platitude.ui
+import platitude.ui.words
 
 // The run a tab draws after the repository's name while it stands in a linked worktree: the WORKTREES mark and
 // the worktree's folder name. Drawn wherever a name is followed by the worktree it stands in — the tab and its

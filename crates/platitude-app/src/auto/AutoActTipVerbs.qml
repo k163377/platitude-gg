@@ -4,7 +4,7 @@ import QtQuick
 // For the attached types alone (rules-refs/app-ui.md carries what an unimported one answers).
 import QtQuick.Controls.Fusion
 import platitude
-import platitude.ui
+import platitude.ui.hover
 
 /// The cards and tooltips put out under a pointer — signature, stash, path, author, co-authors. Hover cannot be
 /// injected, so each verb names its target. Built by `AutoActDriver` only when a verb was given.

@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import platitude
-import platitude.ui
+import platitude.ui.hover
 
 /// What a hover display does when what it stands for changes under it, read stage by stage through the paths the change
 /// comes in by — the app's own writes landing and the lists rebuilt from them: a chip's list over a row rewritten or a

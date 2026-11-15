@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.words
 
 // Everything between the two bands, scrolling when the pane is too short: past a file list at zero nothing else
 // gives, and the rest would run out of the pane's bottom (規約 §窓の床). The bands stay put — the pane's heading and

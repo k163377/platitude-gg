@@ -5,6 +5,9 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui
+import platitude.ui.face
+import platitude.ui.input
+import platitude.ui.words
 
 // Right pane, worktree (WIP) mode: the changed files, one list per bucket with stage/unstage affordances, over
 // the commit editor pinned to the pane's bottom.

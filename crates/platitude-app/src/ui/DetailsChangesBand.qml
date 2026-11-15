@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.face
 
 // The file list's CHANGES band with the tree ⇄ path toggle. The caller keeps the layout seat and the visibility.
 Rectangle {

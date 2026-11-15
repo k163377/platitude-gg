@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import platitude.ui
+import platitude.ui.words
 
 // The dress a report wears: the three answers `Words` gives for one kind, and what a real `NoticeBar` does with
 // them (デザイン規約 §答えの要らない報せ). Which report arrives is the page's and the headless verbs prove it; the

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import platitude.ui.input
 
 // The arrows at the two ends of an upright bar (デザイン規約 §スクロールバーの矢印): how much of the bar they take on a
 // box of any height, what a press, a hold and a slide off do, that a real press reaches them, that on a surface gliding

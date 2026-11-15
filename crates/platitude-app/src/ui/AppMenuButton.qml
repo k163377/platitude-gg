@@ -3,6 +3,8 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.input
+import platitude.ui.words
 
 // The ☰ app menu, sized as the head of the folded sidebar's column: `railWidth` wide, the rail cells' wash, the band's
 // full height (`NavRail.cellHeight`). Its mark is a step under the cells': it stands alone in a band (デザイン規約 §寸法).

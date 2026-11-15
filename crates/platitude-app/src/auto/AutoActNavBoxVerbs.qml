@@ -4,7 +4,7 @@ import QtQuick
 // For the attached types alone (rules-refs/app-ui.md carries what an unimported one answers).
 import QtQuick.Controls.Fusion
 import platitude
-import platitude.ui
+import platitude.ui.hover
 
 /// The name boxes: the left menu's — renaming a branch, a tag or a stash, replacing a remote branch, a new branch or
 /// tag on a row — and the graph row's (naming the top row, the ways out of its box), with what a rename's write brings

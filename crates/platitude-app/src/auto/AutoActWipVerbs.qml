@@ -3,6 +3,8 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude
 import platitude.ui
+import platitude.ui.hover
+import platitude.ui.input
 
 /// The worktree's own verbs: what a commit is made of and what it is called — the message boxes, the amend row, the
 /// commit button's face, stashing, the seat a stopped merge is finished from, the report bar a refused write brings

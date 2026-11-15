@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import platitude.ui.words
 
 // A heading's names past the name ceiling (`CardText.holdsNames`, デザイン規約 §寸法「名前の天井」): cut in the middle,
 // both ends kept, and the whole line put up by a hand on the cut name — not by one on the words round it. A name under

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import platitude.ui.input
 
 // The keyboard's way into the right-click menus (`KeyMenu`, デザイン規約 §メニュー のキーボード).
 // - A menu asked for through `KeyMenu.ask` stands at the place asked, not under the pointer, and the place is spent on

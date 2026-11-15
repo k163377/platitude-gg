@@ -6,6 +6,7 @@ import QtQuick.Window
 import QtTest
 import platitude
 import platitude.ui
+import platitude.ui.input
 
 // _PGG_AUTO_ACT=film, put into the tree by `cargo xtask film in` and never committed. Plays a scene with synthetic
 // input — QtTest's TestEvent, real mouse and key events through the window, so hover is Qt's own — and grabs the

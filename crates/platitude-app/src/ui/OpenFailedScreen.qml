@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.words
 
 // A tab whose repository would not open, said where the panes would be. The picker's failures go to
 // `OpenFailedDialog`; everything else — a restored tab, a worktree row, _PGG_AUTO_OPEN — comes here. Two components,

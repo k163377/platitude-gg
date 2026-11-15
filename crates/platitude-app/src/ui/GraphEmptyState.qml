@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
+import platitude.ui.words
 
 // What stands in the middle of the graph when there is no history to draw: the first load's spinner, the unborn
 // repository's screen, and the empty window's.

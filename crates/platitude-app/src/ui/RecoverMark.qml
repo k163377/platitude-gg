@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.face
 
 // The discard log's mark for an entry or a part (`RecoverEntries`): what kind of thing it took, in its section's
 // tint, and where (user decision — ask before changing):

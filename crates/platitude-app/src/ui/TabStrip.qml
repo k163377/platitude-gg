@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.words
 
 // The strip, placed by hand: the leftover is both what the tabs may grow into and where the window is taken hold of,
 // and the selected tab's underline lands exactly on the band's bottom edge.

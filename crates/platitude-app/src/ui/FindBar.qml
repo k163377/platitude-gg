@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.words
 
 // Ctrl+F over the graph: a card that hangs from the top-right corner of the list, over it (デザイン規約 §コミットを探す).
 // Headless: `find` / `find-next` / `find-prev`; the note under the card: `find-hint` / `find-hint-key`.

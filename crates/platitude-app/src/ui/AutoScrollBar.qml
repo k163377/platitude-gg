@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.input
 
 // A scroll bar pinned visible while its view overflows, the policy computed from content size: the style's AsNeeded
 // re-derives it from transient view state and has been seen dropping the bar around model swaps. The comparison has a

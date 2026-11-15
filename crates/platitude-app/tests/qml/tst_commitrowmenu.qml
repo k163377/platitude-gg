@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import platitude.ui.words
 
 // The graph row's real `CommitRowMenu`, standing on the answers its one door reads (`CommitMenuState`): which rows
 // are there, what each says, which kind the move is aimed with, and what a press asks for. What a state allows is

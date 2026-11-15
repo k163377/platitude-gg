@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.face
+import platitude.ui.words
 
 // The seat that opens the git commands this tab ran, at the foot of the left menu. One control in three seats — a
 // section band (`SidebarPane` open, `OpenFailedScreen`), the folded rail's end block (`SidebarPane` folded), the head

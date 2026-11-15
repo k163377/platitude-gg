@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import platitude.ui.nav
 import "chips.js" as Chips
 import "painted.js" as Painted
 

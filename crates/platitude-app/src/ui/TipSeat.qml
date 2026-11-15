@@ -1,6 +1,9 @@
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.hover
+import platitude.ui.input
+import platitude.ui.words
 
 /// The window's one tooltip and who it answers (規約 §hover のツールチップ). The targets ask through `TipAsk`; this
 /// decides what the box does — one `HoverSeat`, as every hover card has — and where it stands:

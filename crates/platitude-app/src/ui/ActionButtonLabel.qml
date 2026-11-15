@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.face
 
 // The word half of a toolbar action: the wording, a command's flag with drawn dashes, the command's chip, and the
 // failure mark. Measured into the widest wording the button ever says, so the toolbar holds still across states.

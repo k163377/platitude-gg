@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.face
 
 // A name behind its kind's mark as one code chip, cut in the middle to the width it is given (デザイン規約 §ref の種別
 // 「文の中の名前」): the run a band, a tab or a row draws where it names a worktree (`TabTreeMark`, `CarriedPane`,

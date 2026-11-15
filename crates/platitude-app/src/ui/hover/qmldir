@@ -1,0 +1,3 @@
+module platitude.ui.hover
+singleton Tips 1.0 Tips.qml
+singleton Hovers 1.0 Hovers.qml

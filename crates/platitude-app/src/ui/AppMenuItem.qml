@@ -2,6 +2,8 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.face
+import platitude.ui.words
 
 // One AppMenu row: as wide as its own words, eliding only where the menu has run out of window (デザイン規約 §メニュー).
 MenuItem {

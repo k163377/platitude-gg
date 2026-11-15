@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.face
 
 // Whoever a commit message credits alongside its author, in one of two forms (規約 §co-author の表示): "◯ Name +N"
 // in the details pane's date row, or "Name, Name, Name" (`plain`) in the graph row's hover card. Nobody credited,

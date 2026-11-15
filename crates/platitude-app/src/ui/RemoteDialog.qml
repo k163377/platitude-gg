@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.words
 
 // Where a remote is written down — a name and a URL — or its URL corrected (デザイン規約 §リモートを書き留める). A
 // dialog, because this is repository configuration (デザイン規約 §可否・警告の出し場所); a question that called it

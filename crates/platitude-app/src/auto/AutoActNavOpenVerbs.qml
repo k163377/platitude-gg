@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import platitude
-import platitude.ui
+import platitude.ui.hover
 
 /// The left menu's rows answering a hand: the tooltip a row puts out, the lines a row opens under itself, and
 /// where those lines lead.

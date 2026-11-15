@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.words
 
 // What the discard log's rows say: one operation that took something away, as the model reads it —
 // `{key, kind, name, remote, worktree, worktreePath, at, lost, parts, byPart}`, each part `{restore, name, with, look,

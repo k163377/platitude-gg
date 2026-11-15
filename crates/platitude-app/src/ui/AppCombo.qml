@@ -4,6 +4,8 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
+import platitude.ui.face
+import platitude.ui.input
 
 // A form field that also offers a list, only ever a shortcut past typing: what git accepts is wider than anything this
 // app can enumerate. Drawn from tokens: the built-in popup's ground is `palette.base` with no frame, lost on the pane.

@@ -1,6 +1,6 @@
 import QtQuick
 import QtTest
-import platitude.ui
+import platitude.ui.words
 
 // What a worktree's rename box says of the folder name typed into it (`Words.worktreeRenameRefused`), from the place
 // `NavSectionModel.renamedWorktreeFor` answered: what Windows keeps out of a name names the part it keeps, and a name

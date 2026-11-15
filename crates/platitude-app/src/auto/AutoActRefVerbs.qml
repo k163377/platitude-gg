@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude
 import platitude.ui
+import platitude.ui.hover
 
 /// What a ref's own menu offers: deleting a branch, a tag, a stash or a remote, making a tag here, and the
 /// refusals git answers those with.

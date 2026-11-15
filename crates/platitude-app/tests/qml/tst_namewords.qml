@@ -1,6 +1,6 @@
 import QtQuick
 import QtTest
-import platitude.ui
+import platitude.ui.words
 
 // What a name box says of a name that cannot stand beside the branches or tags already there
 // (`Words.nameClashed`, from what `NavSectionModel.nameClash` answered): each kind of clash is one sentence naming

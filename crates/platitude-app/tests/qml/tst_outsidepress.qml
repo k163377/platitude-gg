@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import platitude.ui.input
 
 // The popups that write themselves into `OutsidePress` while they stand — the menus and lists a press outside puts
 // down, not the hover cards — and the press the scene never hears closing them (`closeAll`): the platform takes the

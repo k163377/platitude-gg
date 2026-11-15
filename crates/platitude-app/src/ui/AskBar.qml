@@ -4,6 +4,8 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.face
+import platitude.ui.words
 
 // The shape every standing question takes (デザイン規約 §可否・警告の出し場所): a bar that comes down from the top of
 // the list the question is about and pushes its rows down, so what is being judged stays in sight. Only one question

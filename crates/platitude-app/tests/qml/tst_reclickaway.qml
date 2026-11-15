@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import platitude.ui.input
 
 // A name is asked by two clicks on one target in a row (`ReclickGesture`'s header): anything
 // between them — a press on the window or on a card standing over it, the history landing on another commit — makes

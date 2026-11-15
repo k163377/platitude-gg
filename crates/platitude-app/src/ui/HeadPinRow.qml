@@ -5,6 +5,7 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui
+import platitude.ui.nav
 
 // The current branch's sticky stand-in: while its row is scrolled off it rides the edge the row went out of, and it
 // steps aside once the row is on screen. A branch a filter or a folded folder hides has no row, so the stand-in takes a

@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.words
 
 // The git commands this tab ran, oldest first. Hidden until asked for; raised on its own when something the user asked
 // for fails. Its band is the left menu's last row carried across the window (デザイン規約 §git が言ったことを読む場所).

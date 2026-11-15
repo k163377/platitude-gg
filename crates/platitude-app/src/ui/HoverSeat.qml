@@ -2,6 +2,8 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Templates as T
 import platitude.ui
+import platitude.ui.hover
+import platitude.ui.input
 
 /// One thing hover puts out — a row's card, a chip's list, a row's open lines, the window's tooltip — as a state
 /// machine with one writer. The parts tell it what happened (the hand on a target, off it, inside what it opened; a

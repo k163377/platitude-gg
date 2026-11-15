@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import platitude
 import platitude.ui
+import platitude.ui.face
 
 // One assigned avatar in the settings list — picture, name, address, held Remove (`SettingsAppPane`'s AVATARS).
 //

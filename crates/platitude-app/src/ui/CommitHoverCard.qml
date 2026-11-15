@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.words
 
 // What a row says when the pointer rests on it: the message in full, and who wrote it, when, and whoever they
 // credited. Opened from the graph's rows and from the right pane's list under a multi-selection; how much body it

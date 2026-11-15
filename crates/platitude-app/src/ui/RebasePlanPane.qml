@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.face
 
 // The interactive-rebase plan in the graph's seat: the rows of `from^..HEAD` newest-first with their verbs, and the
 // base as the list's last row. Composing runs nothing — the run button at the right pane's foot is the one door to the

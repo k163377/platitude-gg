@@ -1,0 +1,3 @@
+module platitude.ui.face
+singleton WordFace 1.0 WordFace.qml
+singleton MarkSeat 1.0 MarkSeat.qml

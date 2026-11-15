@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.words
 
 // Toolbar action named twice over: an icon to find it by shape, the word to be sure of it.
 //

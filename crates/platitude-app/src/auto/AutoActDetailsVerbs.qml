@@ -5,6 +5,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
+import platitude.ui.face
 
 /// The commit-details pane: picking text out of it, the grip that grows its description, how it fits the room it
 /// is given, and the corner that steps aside for it.

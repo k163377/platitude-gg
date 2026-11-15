@@ -1,6 +1,6 @@
 pragma Singleton
 import QtQuick
-import platitude.ui
+import platitude.ui.hover
 
 /// Whether a page has stopped arriving — the one rule every sampler that waits for the whole of a page asks
 /// (the completion's hold, the badge verbs' arm, the page verbs' baseline). A copy that drops a term settles a run

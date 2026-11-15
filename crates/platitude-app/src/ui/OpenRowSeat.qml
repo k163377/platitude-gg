@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.hover
 
 /// The left panel's open row: which row has its facts open under it on hover (`NavRowFacts`), and its seat. One for
 /// the panel (`SidebarRowGestures.openRow`): delegates are recycled, only one row is ever open, and it may be in the

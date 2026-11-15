@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.input
 
 // The first click does what a click does; a second one on the same target, once a double-click is ruled out, asks
 // for the name (デザイン規約 §左メニューの所作「行き先はダブルクリック」) — **two clicks there in a row**: anything

@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.words
 
 // Which branch each of the two conflict colours is. The names swap during a rebase and the model has already sorted
 // that out (デザイン規約 §conflict の ours / theirs), so this shows whatever it is handed. The pane's first line, and

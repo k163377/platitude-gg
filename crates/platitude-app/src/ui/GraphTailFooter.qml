@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.face
 
 // Window cut: the lanes run on into the footer, fading out, and the message sits where subjects go. One row tall unless
 // the message wraps — it is the only thing explaining the cut. One row of fading lane is the least that reads as "it

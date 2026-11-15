@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.words
 
 // The folder the picker handed over cannot be opened. A window of its own: the folder never became a tab, so there is
 // nothing for a bar to stand over (デザイン規約 §可否・警告の出し場所). The picker's road alone comes here — where a

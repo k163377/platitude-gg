@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.words
 
 // The sidebar folded to its spine: one cell per section, its icon over its count — the mark says what, the number
 // under it how many. Nothing else in a cell: folding is for width, and no word fits in `railWidth`. Resting on a cell

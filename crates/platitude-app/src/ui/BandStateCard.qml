@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.words
 
 // The band's state badges, opened out (`BandStateGroup`): one row per badge, in its own shape — the badge's frame and
 // fill as in the band — beside it the one thing its label had no room for (規約 §hover のツールチップ): the operation's

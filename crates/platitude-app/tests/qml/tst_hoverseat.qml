@@ -2,6 +2,8 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import platitude.ui.hover
+import platitude.ui.input
 
 // The one state machine every hover card, list and the tooltip stand on (`HoverSeat`): what the rest, the beat, the
 // holds, a hand-over, a blocker, a held bar and a dismissal do to it, told by events alone — no pointer, so what is

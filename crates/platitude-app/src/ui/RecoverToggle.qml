@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.face
 
 // The seat that opens the list of what destructive operations took away, stacked on the git
 // commands' seat at the foot of the left menu and dressed as that seat, colours included: a section band while the

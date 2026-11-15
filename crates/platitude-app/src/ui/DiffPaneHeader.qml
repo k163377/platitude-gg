@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.words
 
 // The diff pane's header band: which file is open, the one word that stages the whole of it, and the way out.
 Rectangle {

@@ -5,6 +5,7 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui
+import platitude.ui.hover
 
 /// _PGG_AUTO_ACT runs one operation — a write, or a surface left standing for the overlay shot — through the code
 /// path a click takes, so the wiring can be proven headlessly. `PageHarness` builds this only when a verb was given.

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.words
 
 // Push, in whichever shape this branch's standing with its remote allows (デザイン規約 §リモートへ送る). The shared
 // width box stays the band's to assign.

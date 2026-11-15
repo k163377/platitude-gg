@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import platitude.ui
+import platitude.ui.words
 
 // The two writes that take the index whole and wait while a stage or unstage press stands, besides the commit button
 // and HEAD's amend (`stage-held` / `stage-held-amend`): the stopped operation's `--continue` (`OpExitCard`) and the

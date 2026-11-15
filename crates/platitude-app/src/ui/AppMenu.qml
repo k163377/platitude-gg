@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.input
 
 // Context-menu shell on the elevated card face (デザイン規約 §メニュー). The width comes from the rows, capped by the
 // window; a row that reaches it elides and says its whole line on hover (AppMenuItem).

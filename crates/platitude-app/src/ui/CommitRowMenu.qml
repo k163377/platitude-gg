@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import platitude.ui
+import platitude.ui.words
 
 // The right-click on a graph row: one menu for a commit, another for a stash, a third for another worktree's
 // uncommitted row (デザイン規約 §グラフ行の右クリック), a fourth inside a choice of two commits — this worktree's own

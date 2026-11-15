@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.words
 
 // What the diff pane says about the file itself, above the rows — one line each, in one seat (デザイン規約
 // §改行コードの警告): the mode in the rows' weight, the rest in the notes' — and the picture that stands in for a file

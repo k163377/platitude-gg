@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.hover
 
 // The commit's own hash over its parents', rows aligned right. Each hash is a control and a value: a press that lets go
 // where it landed is the control's (copy the hash / go to that parent), one that travels drags over the digits

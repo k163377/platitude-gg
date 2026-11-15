@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.hover
 
 // A changed-file row (commit file list): tree view shows indented, collapsible directory rows with leaf names;
 // path view shows flat full paths.

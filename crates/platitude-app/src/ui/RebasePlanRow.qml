@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.face
 
 // One row of the interactive-rebase plan: its verb, its commit, and the reorder under the hand. Verbs and moves go to
 // the plan model through the view's functions; the picked commit rides up to the page (rules/app-ui.md「配線」).

@@ -1,5 +1,7 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.face
+import platitude.ui.still
 
 // The one turning mark the window has: the drawn ring (規約 §進行中・回数押しの定数). Drawn exactly while it turns, so
 // callers write one condition.

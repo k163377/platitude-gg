@@ -2,6 +2,8 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.face
+import platitude.ui.words
 
 // Fixed sidebar section header: fold arrow, tinted icon, caption and count, plus the one control that section
 // carries at the end of the band — the tags-in-graph eye, or the `+` that writes a remote down. One at most: a

@@ -3,6 +3,7 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui
+import platitude.ui.input
 
 // Every setting this app can change, on one window-filling screen (user decision — ask before changing): a card sized
 // to its contents grows a scroll bar the moment one chapter grows, so the identity gate (`IdentityDialog`) is the one

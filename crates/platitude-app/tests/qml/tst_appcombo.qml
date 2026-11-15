@@ -3,6 +3,7 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import QtTest
 import platitude.ui
+import platitude.ui.face
 
 // Where a name too long for the box stops, and that it is short of the arrow.
 //

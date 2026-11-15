@@ -1,6 +1,7 @@
 import QtQuick
 import platitude
 import platitude.ui
+import platitude.ui.words
 
 // What the graph's name box may accept, and the line that says why not — decided here, for the page to hand to
 // `GraphPane` (`namingRefused*`), which only draws it. A rename is refused even rubbed out, a new name only once one

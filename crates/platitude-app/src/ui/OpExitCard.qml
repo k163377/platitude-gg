@@ -2,6 +2,8 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.face
+import platitude.ui.words
 
 // The way out of a stopped operation, in the worktree pane under the commit button (whose seat already means
 // "conclude this"); the file list moves down for it. Framed, and standing from the stop on: while the operation is

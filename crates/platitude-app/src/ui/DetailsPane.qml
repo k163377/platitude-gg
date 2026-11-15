@@ -4,6 +4,8 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.face
+import platitude.ui.input
 
 // Right pane, commit-details mode.
 ColumnLayout {

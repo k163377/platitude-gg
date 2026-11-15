@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.words
 
 // One line of words with its names set as code (デザイン規約 §ref の種別「文の中の名前」), never wrapped: the words and
 // the names side by side, each name behind its kind's mark where it has one. Where the column is too narrow it is cut

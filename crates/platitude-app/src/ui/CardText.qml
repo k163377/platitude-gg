@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.face
+import platitude.ui.words
 
 // A line a card puts out to be read, in a field the reader can select and copy
 // (規約 §hover のツールチップ「hover が出した字は選べて、コピーできる」).

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.face
 
 // A sidebar row's ink, left to right: the name cell, the seat an open name box takes, and the right-aligned columns
 // (a worktree's branch, a branch's ahead/behind, the remote/PR badge, the push mark). The row (`NavItemDelegate`)

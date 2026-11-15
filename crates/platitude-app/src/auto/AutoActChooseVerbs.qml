@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import platitude
-import platitude.ui
+import platitude.ui.words
 
 /// Several commits held at once (デザイン規約 §複数のコミットを選ぶ): the presses on the graph that build the choice,
 /// and what goes on from the list it puts up in the right pane.

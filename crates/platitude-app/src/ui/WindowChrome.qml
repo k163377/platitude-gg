@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Window
 import platitude
+import platitude.ui.input
 
 // What a title bar does, since the band is one: maximise, minimise, the grab-runs, and how the window is dressed.
 // An `Item` (rules-refs/structure.md「切り出した非表示のホストは `Item` にする」).

@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude
 import platitude.ui
+import platitude.ui.words
 
 // Everything between the toolbar's push button and git's answer: what the branch can do with its remote, the first
 // push's question, and what a refusal leaves behind (デザイン規約 §リモートへ送る). The band reads this through the

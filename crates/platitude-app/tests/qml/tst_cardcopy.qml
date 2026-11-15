@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import platitude.ui
+import platitude.ui.words
 
 // What a copy out of a card's line carries where a name wears its mark in a room the field opens (`CardText.marks`):
 // the words as the sentence reads them and nothing for the mark — not the spaces that make its room (デザイン規約

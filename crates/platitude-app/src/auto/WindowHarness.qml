@@ -2,7 +2,8 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import platitude
-import platitude.ui
+import platitude.ui.input
+import platitude.ui.still
 
 /// The whole of the window's harness in one part, loaded by name through `HarnessSeat`. Everything the verbs and the
 /// measurements act on is handed over here, since a file of its own cannot see `Main.qml`'s ids; the window's calls

@@ -1,6 +1,6 @@
 import QtQuick
 import QtTest
-import platitude.ui
+import platitude.ui.words
 
 // What a branch loses, said of the branch (`Words.losesCommits`): the line under `Move <branch> here?` and under the
 // first push that overwrites (デザイン規約 §長さ「失うもの 1 行」). One sentence for each count, and the name where the

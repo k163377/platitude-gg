@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
+import platitude.ui.words
 
 // Fetch, and everything the network has to say about fetching (デザイン規約 §リモートから取り込む): running, failed and
 // stopped are all said here and nowhere else — two places telling the same three states move the reader's eye twice

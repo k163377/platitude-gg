@@ -5,6 +5,9 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui
+import platitude.ui.hover
+import platitude.ui.nav
+import platitude.ui.words
 
 // One sidebar row: ref / file / folder, shared by every section and the WIP file list. What a click means is the
 // owner's business — the row only reports it.

@@ -1,6 +1,7 @@
 import QtQuick
 import platitude
 import platitude.ui
+import platitude.ui.words
 
 // The sidebar's row gestures: which row was clicked last, and which one has a name box open in it. Held beside the
 // lists: only one row at a time is either, in whichever section, and both outlive the delegates that show them

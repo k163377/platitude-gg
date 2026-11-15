@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.words
 
 // The delete table's third row: the branch and its remote reading together. Two commands, so words and no code
 // (§git 用語のコード表記). The local half runs first; its refusal stops the pair with nothing touched, and a refused

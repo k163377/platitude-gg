@@ -1,0 +1,5 @@
+module platitude.ui.input
+singleton Hand 1.0 Hand.qml
+singleton MiddleHand 1.0 MiddleHand.qml
+singleton KeyMenu 1.0 KeyMenu.qml
+singleton OutsidePress 1.0 OutsidePress.qml

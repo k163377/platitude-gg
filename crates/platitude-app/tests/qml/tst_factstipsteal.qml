@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import platitude.ui.hover
 
 // What the supplement a row opens does to the hand that asked for it (デザイン規約 §左メニューの所作): the lines a
 // WORKTREES row opens keep the path for a rest over them, and a tip that took the pointer would put the hover out —

@@ -1,0 +1,2 @@
+module platitude.ui.nav
+singleton NavFacts 1.0 NavFacts.qml

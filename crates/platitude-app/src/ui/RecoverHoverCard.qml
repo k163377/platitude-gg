@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.words
 
 // What an entry of the discard log says when the pointer rests on it, as a graph row's card does (`CommitHoverCard`):
 // the operation in full, what it took and where, and when — written as the band writes it, the moment first

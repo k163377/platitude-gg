@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude
 import platitude.ui
+import platitude.ui.words
 
 // The right-click on a ref wherever it is drawn — sidebar row, graph chip, a row of a chip's stacked list — so a
 // branch offers the same things everywhere. Decided as it opens and frozen while it stands, but for standing again

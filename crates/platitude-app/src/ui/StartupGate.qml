@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
+import platitude.ui.words
 
 // The window with nothing to show: no git to ask, or another process already has the files. An old git still answers,
 // so the app runs and wears the band's `OLD GIT` badge instead (規約 §ウィンドウの縁).

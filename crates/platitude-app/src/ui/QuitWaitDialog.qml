@@ -3,6 +3,7 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui
+import platitude.ui.face
 
 // The window was asked to close while git is still writing: the close waits for git to answer the local writes
 // (`RepoSession::close`; the reads behind them are not waited for — `WindowQuitGate`) and says so here. A dialog,

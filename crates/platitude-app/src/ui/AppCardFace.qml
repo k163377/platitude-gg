@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.input
 
 // The face every card, menu and dialog is drawn on: the elevated ground and its frame (規約 §メニュー), shared as a
 // `background:` because menus, dialogs and popups are separate components. `SectionPeekPopup` keeps `bgSurface`: it is

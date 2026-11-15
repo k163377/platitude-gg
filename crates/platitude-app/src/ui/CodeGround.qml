@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.face
 
 // The ground git's spelling stands on — a command's, a name's (デザイン規約 §git 用語のコード表記): faint, rounded, as tall
 // as the word's step and a gap — not its line box, which the code face makes different on every OS — and its middle on

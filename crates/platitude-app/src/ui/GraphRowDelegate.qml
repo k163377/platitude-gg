@@ -5,6 +5,7 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui
+import platitude.ui.words
 
 // Commit-graph row: [branch/tag chips][lanes + identicon node][subject] — fixed-width label and graph columns keep
 // subjects aligned.

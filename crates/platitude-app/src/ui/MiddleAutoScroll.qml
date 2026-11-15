@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import platitude.ui
+import platitude.ui.input
 
 // Middle-click autoscroll: the pointer's distance from the anchor sets the speed, and any click exits. What the drift
 // means — which list moves, and how far — is the surface's (`drifted`). Every surface that scrolls has one

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.face
 
 // The details pane's band while the selected row is a stash, standing in place of `COMMIT` and dressed like
 // `PaneHeader`: `STASH` with the stash mark at its left, and at its right the two things git can do with it from here

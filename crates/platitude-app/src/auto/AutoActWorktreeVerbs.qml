@@ -4,7 +4,7 @@ import QtQuick
 // For the attached types alone (rules-refs/app-ui.md carries what an unimported one answers).
 import QtQuick.Controls.Fusion
 import platitude
-import platitude.ui
+import platitude.ui.hover
 
 /// The verbs that make a worktree from a menu (デザイン規約 §worktree を作る): the WORKTREE card's two making rows
 /// — `Create worktree here…` and `worktree add` — raised from a left menu row or a graph row with the card opened as a

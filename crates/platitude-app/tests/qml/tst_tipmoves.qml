@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import platitude.ui.hover
 
 // The window's tooltip (`TipSeat`) over targets that move under a hand that does not, and under a standing menu, with
 // a real pointer and Qt's own hover — which a scroll hands to whatever row arrives under a still pointer

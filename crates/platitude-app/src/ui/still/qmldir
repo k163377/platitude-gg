@@ -1,0 +1,3 @@
+module platitude.ui.still
+singleton Ink 1.0 Ink.qml
+singleton Motion 1.0 Motion.qml

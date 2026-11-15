@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude
 import platitude.ui
+import platitude.ui.nav
 
 // The two popups a row opens under a resting pointer — its commit's card, and the refs one chip stacked — each on a
 // seat of its own (`HoverSeat`). The card serves the graph's rows and a choice's rows (デザイン規約 §複数のコミットを選ぶ),

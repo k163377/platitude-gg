@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.face
 
 // The word, then what the file weighs. The dot and the arrow are drawn, not glyphs (規約 §寸法「印は描いて出す」);
 // the one wording without a size keeps its dash, since that is a sentence.

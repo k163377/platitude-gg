@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.words
 
 // Everything uncommitted, set aside in one entry, on the press (`git stash push -u`; 規約 §変更を退避する for the words).
 //

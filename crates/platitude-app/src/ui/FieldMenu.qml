@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.input
 
 // The right-click menu of a box words are typed or read in: the rows of the style's own (`TextEditingContextMenu`), on
 // the product's card (デザイン規約 §メニュー の文字の欄). A fixed table: a row the box has no use for goes (a read-only

@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.input
 
 /// The hand over one surface — a pane's rows, the window — read where Qt's hover cannot say it: where it is, and
 /// whether it was the hand that moved or the rows under it (デザイン規約 §hover のツールチップ「手が動いていない所へ来た行は

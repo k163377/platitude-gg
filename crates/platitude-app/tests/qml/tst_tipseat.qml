@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import platitude.ui.input
 
 // The window's one tooltip (`TipSeat`) under a real pointer, as the targets ask for it (`TipAsk`)
 // (デザイン規約 §hover のツールチップ): every target waits its own rest and the neighbour's box goes first; the hand stepping

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.words
 
 // The details pane's author row: avatar + name/date on the left, own hash over the parents' on the right.
 //

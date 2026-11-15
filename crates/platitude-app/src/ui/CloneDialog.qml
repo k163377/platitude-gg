@@ -3,6 +3,7 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui
+import platitude.ui.words
 
 // Where a repository is cloned from: a URL, a folder to put it in, and the folder's name. A dialog, since there is no
 // repository yet for a question bar to stand over (規約 §可否・警告の出し場所); it stays up for the whole call, and

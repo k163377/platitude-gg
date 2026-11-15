@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.words
 
 // The BRANCH card: the branch's upstream set and taken off (デザイン規約 §メニュー の入れ子). The rows a branch is used
 // through often — sent to its remote (`BranchPushRow`, beside `pull`) and the delete table, local / remote / both

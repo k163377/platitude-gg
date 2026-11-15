@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.words
 
 // Right pane, another worktree's uncommitted work: whose it is and what it is holding. Built on the commit pane,
 // not the WIP pane — it can only be read (デザイン規約 §別の worktree を読む).

@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.face
+import platitude.ui.input
 
 // Slim single-line input shared by the toolbar search and the in-place name boxes: thin frame, compact height.
 TextField {

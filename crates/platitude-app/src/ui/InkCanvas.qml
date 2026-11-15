@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.still
 
 // The root of every hand-drawn mark: a `Canvas` that owes `Ink` until it first paints, only while it could paint
 // (rules-refs/app-ui.md「`Canvas` は生まれたフレームにインクを持たない」). `onPaint` is the caller's, so this hangs off

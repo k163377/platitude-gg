@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.hover
 
 /// A target's ask for the window's one tooltip (`TipSeat`): what to say, whether it is asked right now, and how the
 /// box stands against the target. Declared beside the target, naming it; the words may change while the box is up

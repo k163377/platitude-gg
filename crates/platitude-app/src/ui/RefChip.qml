@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.face
+import platitude.ui.nav
 
 // The front card of a commit's names: the first record drawn whole, and `+N` for the rest (the sheets behind it are
 // `RefChipStack`'s). One channel each (デザイン規約 §ref の種別): the frame carries the kind (`kindColourFor`), the

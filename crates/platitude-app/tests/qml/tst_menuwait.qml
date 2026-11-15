@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import platitude.ui
+import platitude.ui.words
 
 // What a menu's rows wait for (`AppMenu.rowsHeldWhy`): the rows that start git grey behind held doors and under a
 // command running as the menu opened; a row that only reads what is on screen (`Copy path`) stays live under both.

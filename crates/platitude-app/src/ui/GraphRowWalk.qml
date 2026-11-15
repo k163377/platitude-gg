@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude
 import platitude.ui
+import platitude.ui.input
 
 // The graph's selection and where the view stands to show it: the arrow keys (規約 §矢印で履歴を辿る), the page's
 // jumps, and keeping the reader's place across a background rebuild. Draws nothing.

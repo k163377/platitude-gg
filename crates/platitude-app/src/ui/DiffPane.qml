@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.input
 
 // Center pane, diff mode: one file's unified diff with per-file, per-hunk and per-line staging affordances, plus
 // image / binary previews.

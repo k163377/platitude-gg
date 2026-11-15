@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude
 import platitude.ui
+import platitude.ui.input
 
 /// The furniture around the panes: the bar between columns, the lane bar, the head pin, the tail footer, and the
 /// box a name is typed into.

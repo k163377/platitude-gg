@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.words
 
 // One line of the diff: the text, its two washes (what changed, what is selected) and the no-newline mark. One per
 // row in one column, one per side in two (`DiffRowDelegate`). The cell clips and the line travels sideways under it:

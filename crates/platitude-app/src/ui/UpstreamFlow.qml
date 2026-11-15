@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude
 import platitude.ui
+import platitude.ui.words
 
 // Which remote branch a local one is measured against, from the row that asks to git's write (デザイン規約
 // §ブランチが測られる相手を決める), asked in the one question bar (§立っている質問は 1 か所で聞く).

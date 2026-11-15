@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Layouts
 import platitude
 import platitude.ui
+import platitude.ui.hover
 
 /// The tab strip's half of the window's _PGG_AUTO_ACT harness: opening a path that is already open, closing a
 /// tab from the middle button, and every way a tab is carried along the strip or measured on it.

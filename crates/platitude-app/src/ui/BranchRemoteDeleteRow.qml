@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.words
 
 // The delete table's second row: the remote reading alone — on the current branch the only delete on offer
 // (デザイン規約 §左メニューの所作 の削除の表). On the first level's last group, standing on the BRANCH card's frozen

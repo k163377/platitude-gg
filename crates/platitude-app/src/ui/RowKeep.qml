@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.hover
 
 /// Keeps the row under a pane's hand where it was through a read (デザイン規約 §hover のツールチップ「外乱では閉じない」):
 /// rows a read wrote in or took out above it, and the list stepping down or up the pane with them, move it, and the

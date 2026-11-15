@@ -3,6 +3,8 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui
+import platitude.ui.input
+import platitude.ui.words
 
 // The state badges, giving way as the tab names do: whole words, narrowed together, one mark. The card the pointer
 // opens carries all of it at every step (`BandStateCard`). Which states the band says, and in which colour, is

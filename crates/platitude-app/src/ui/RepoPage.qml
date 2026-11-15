@@ -5,6 +5,8 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui
+import platitude.ui.input
+import platitude.ui.words
 
 // **A focus scope**, so Escape stays answerable: a pane swapped off the screen lets the keyboard go
 // (規約 §矢印で履歴を辿る), and in a plain item focus then falls out to the window's content item, off this page's key

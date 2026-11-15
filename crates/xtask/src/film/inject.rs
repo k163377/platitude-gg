@@ -107,7 +107,7 @@ const EDITS: &[Edit] = &[
         new: SLOTS,
     },
     Edit {
-        path: "crates/platitude-app/src/ui/KeyMenu.qml",
+        path: "crates/platitude-app/src/ui/input/KeyMenu.qml",
         old: "QtObject {\n    id: keyMenu\n",
         new: "QtObject {\n    id: keyMenu\n\n    property point filmHand: Qt.point(-1, -1)\n",
     },

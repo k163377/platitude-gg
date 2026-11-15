@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.face
 
 // The mark every confirmed control wears (デザイン規約 §回数押し), on NavIcon's 16px grid: a disc split into one sector
 // per press by gaps of one width from the centre out (two halves for a white delete, a Y for three), the sectors still

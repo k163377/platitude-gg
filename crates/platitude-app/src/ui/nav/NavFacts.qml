@@ -3,6 +3,7 @@ pragma Singleton
 import QtQuick
 import platitude
 import platitude.ui
+import platitude.ui.words
 
 /// What a row of the left panel opens under itself: every section that opens, as one table
 /// (デザイン規約 §左メニューの所作). What each section says is here, not in the shared list, row and lines

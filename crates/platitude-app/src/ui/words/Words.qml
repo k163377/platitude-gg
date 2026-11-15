@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import platitude
+import platitude.ui
 
 // Wording that more than one place has to say the same way — a second copy of a sentence drifts from the first.
 QtObject {

@@ -4,6 +4,8 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.face
+import platitude.ui.words
 
 // The band over the graph while an entry of the discard log is on it: what the operation was and when,
 // what each of its parts would bring back and as what, the press that brings it back, and the way out of the showing

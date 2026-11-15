@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
+import platitude.ui.face
 import "painted.js" as Painted
 
 // A menu row stands its words' capitals' middle on the row's middle, not their line box's (`AppMenuItem.capsLift`;

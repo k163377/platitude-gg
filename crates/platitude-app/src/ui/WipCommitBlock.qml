@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.words
 
 // Everything under the WIP pane's file list, pinned to the pane's bottom: the message pair, the amend row, the
 // commit button, and the way out of a stopped operation — which alone stands while a rebase, pick or revert is

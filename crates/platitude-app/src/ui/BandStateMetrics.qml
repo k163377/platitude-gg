@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.words
 
 /// What each of the band's state badges would like to be drawn at, measured off labels nothing lays out: the badge
 /// row stops being laid out when the group folds, and a width read from it then would never let the words back.

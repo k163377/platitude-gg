@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude
 import platitude.ui
+import platitude.ui.hover
 
 /// The file rows of the worktree: the menu a row opens, the whole-bucket moves, a row's own stage press ahead of git
 /// and what waits on it (`stageAheadTimer`), where the open diff lands as presses outrun git (`walkTimer`), and the

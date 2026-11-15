@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.face
 
 // Fixed header band at the top of a pane (COMMIT / DIFF / ...).
 Rectangle {
