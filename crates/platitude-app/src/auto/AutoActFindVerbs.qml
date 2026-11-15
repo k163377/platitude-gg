@@ -101,7 +101,10 @@ Item {
         } else if (act === "find-hint" || act === "find-hint-key") {
             // The note under the card waits for the typing to stop; `-key` holds the line's last character back and
             // presses it after the stop. `head:<n>` is the first n characters of HEAD's id — a fixture's ids differ
-            // between the two OSes.
+            // between the two OSes, and from one day to the next (its dates are counted back from the day it is
+            // built). What those letters happen to match is no part of a line's promise: held back to two, an id
+            // that starts `dd` finds every `add` among the subjects and the search takes the selection to one —
+            // the row then shows a commit's files (`FileRowDelegate`), on that day alone.
             const line = arg.startsWith("head:")
                          ? graphModel.oidAt(graphModel.headRow).substring(0, Number(arg.slice(5)))
                          : arg
