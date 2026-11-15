@@ -21,7 +21,8 @@ description: platitude-gg の確認(段 1〜3 の gate・Linux コンテナ・�
   スの QtTest(<!--call:qmltest.together-->`qmltest --together`)を両 OS で回す。それ以外で回すのはユーザーがテストを指示
   した時だけ)+ <!--call:linux.bare-->`linux bare --discover` + CI の Whole test + 性能実
   測([性能.md](../../../internal-docs/性能.md) §計測)。リリース前と依存・環境を触った時。**版(crate・toolchain・Qt・最低
-  git)を動かす差分は `gate` 自身が段 3 の計画へ上がる**、残りは手で
+  git)を動かす差分は `gate` 自身が段 3 の計画へ上がる**、残りは手で(出荷ビルドの版を動かした land の Whole test はその
+  land が push するタグで走る)
 
 段の中身と「いつ何が走るか」の表は 反映前テストの機械化.md §段 1 / 段 2 / 段 3。
 
