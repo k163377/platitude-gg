@@ -272,8 +272,9 @@ impl GitFacts {
     }
 
     /// What the right-click menu on a ref may offer, as the words
-    /// `RefRowMenu.offerOn` reads — asked once as the menu opens
-    /// (app-ui.md「メニューは `AppMenu` 系で書く」).
+    /// `RefRowMenu.offerOn` reads — asked as the menu opens and as it
+    /// stands again, never by a binding (app-ui.md「メニューは `AppMenu`
+    /// 系で書く」).
     ///
     /// `tree` is the model's own record handed on as it was read:
     /// `WorktreeModel.reading` as the menu stood on it — the model's, or the

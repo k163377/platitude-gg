@@ -119,17 +119,60 @@ FocusScope {
     readonly property string runningWhy:
         repoTab.busyCount > 0 || repoTab.settling || page.doorsHeldWhy !== "" ? Words.otherCommandRunning : ""
     /// The worktree as it stood when the command the menus wait for was asked: what a menu raised under it stands its
-    /// rows on (`CommitMenuState.tree`, `RefRowMenu.tree`, `FileRowMenu.tree`). A replay's poll reads straight through
-    /// the rewrite — a detached HEAD, `REBASING` partway — and rows standing on that are not the rows the menu has with
-    /// nothing running (デザイン規約 §メニュー). Null while nothing is out: a menu standing again reads the worktree.
-    /// The model's `reading` kept in a `var` property is what the property held then: kept in a JS variable, it would
-    /// read what the property holds now (`encode::wire_qml`).
+    /// rows on (`CommitMenuState.tree`, `RefRowMenu.tree`, `FileRowMenu.tree`), whatever the write. The poll reads
+    /// straight through the writes that replay — a rebase's detached HEAD and `REBASING` partway, the `MERGE_HEAD` /
+    /// `CHERRY_PICK_HEAD` a merge or a cherry-pick leaves while its commit is made — and rows standing on that are not
+    /// the rows the menu has with nothing running (デザイン規約 §メニュー). Null while nothing is out: a menu standing
+    /// reads the worktree, and one up as it goes null stands again on it (`CommitMenuState.follow`, …). The model's
+    /// `reading` kept in a `var` property is what the property held then: kept in a JS variable, it would read what the
+    /// property holds now (`encode::wire_qml`).
     property var treeAtAsk: null
     onRunningWhyChanged: {
         if (page.runningWhy === "")
             page.treeAtAsk = null
         else if (page.treeAtAsk === null)
             page.treeAtAsk = worktree.reading
+    }
+    /// Bumped each time something a menu's rows stand on has been read again and moved: what the menus read of the
+    /// worktree (`WorktreeModel.readingRevision`), a list's rows (`NavSectionModel.changed`, said as they move and as a
+    /// fold or the filter shows them otherwise — a stand that finds nothing moved writes nothing), a graph pass
+    /// (`GraphModel.finishCount`). A menu standing follows it while nothing runs — its rows stand again on
+    /// the tree as it is, keeping their shape (`CommitMenuState.follow`, `RefRowMenu.follow`, `FileRowMenu.follow`;
+    /// デザイン規約 §メニュー); under a command it waits on `treeAtAsk`, and follows as that goes.
+    property int menuReadRevision: 0
+    readonly property int menuReadingSeen: worktree.readingRevision
+    onMenuReadingSeenChanged: page.menuReadRevision++
+    readonly property int menuWalkSeen: graphModel.finishCount
+    onMenuWalkSeenChanged: page.menuReadRevision++
+    Connections {
+        target: branchesModel
+        function onChanged() {
+            page.menuReadRevision++
+        }
+    }
+    Connections {
+        target: worktreesModel
+        function onChanged() {
+            page.menuReadRevision++
+        }
+    }
+    Connections {
+        target: tagsModel
+        function onChanged() {
+            page.menuReadRevision++
+        }
+    }
+    Connections {
+        target: remotesModel
+        function onChanged() {
+            page.menuReadRevision++
+        }
+    }
+    Connections {
+        target: stashesModel
+        function onChanged() {
+            page.menuReadRevision++
+        }
     }
     /// A press landed away from whatever held the keyboard (Main's `FocusRelease`), at `scenePos` — `null` for a press
     /// with no place of its own (the headless run's door). The left menu's name box goes unasked
@@ -1065,6 +1108,7 @@ FocusScope {
             repoTab: repoTab
             worktree: worktree
             treeAtAsk: page.treeAtAsk
+            readRevision: page.menuReadRevision
             graphModel: graphModel
             branchesModel: branchesModel
             worktreesModel: worktreesModel
@@ -1094,6 +1138,7 @@ FocusScope {
         sourceComponent: RemoteRowMenu {
             heldReason: page.doorsHeldWhy
             runningWhy: page.runningWhy
+            treeAtAsk: page.treeAtAsk
             repoTab: repoTab
             githubLinks: githubLinks
             onUrlRequested: name => publishFlow.startEditRemote(name)
@@ -1478,6 +1523,7 @@ FocusScope {
             repoTab: repoTab
             worktree: worktree
             treeAtAsk: page.treeAtAsk
+            readRevision: page.menuReadRevision
             wipPane: wipPane
             onMergeToolWanted: page.gitSettingsRequested()
             onCopyRequested: text => clipboard.copy(text)
@@ -1631,6 +1677,7 @@ FocusScope {
         repoTab: repoTab
         worktree: worktree
         treeAtAsk: page.treeAtAsk
+        readRevision: page.menuReadRevision
         graphModel: graphModel
         worktreesModel: worktreesModel
         branchesModel: branchesModel
@@ -1659,7 +1706,7 @@ FocusScope {
             // switch would be.
             heldReason: page.doorsHeldWhy
             runningWhy: page.runningWhy
-            onWaitEnded: commitMenuState.standAgain()
+            onWaitEnded: commitMenuState.standAgain("wait")
             onCopyRequested: text => clipboard.copy(text)
             branch: worktree.heldBranch
             oid: commitMenuState.menuOid
@@ -1888,10 +1935,9 @@ FocusScope {
 
     // What the details pane's boxes do with the commit on screen, in core's word (`offers::message_edit`): `amend`
     // where typing lands (HEAD's own commit only, user decision), `stash` / `not-head` / `standing` where it does not,
-    // `""` with no message. A live binding, unlike a menu's frozen `offered`: a commit that stops being HEAD stops
-    // taking keys there and then. No `replays` word: the boxes run only the amend, so the save button's phrase is
-    // `commit --amend` alone (core's `RepoSession::reword` replays a commit under HEAD, but nothing in the UI hands
-    // it one).
+    // `""` with no message. A live binding: a commit that stops being HEAD stops taking keys there and then. No
+    // `replays` word: the boxes run only the amend, so the save button's phrase is `commit --amend` alone (core's
+    // `RepoSession::reword` replays a commit under HEAD, but nothing in the UI hands it one).
     readonly property string messageEdit: GitFacts.messageEdit(
         !page.blank && repoTab.state === "open", worktree.standing, detailsModel.shaHex, page.selectedStashRef)
 

@@ -16,8 +16,8 @@ import platitude.ui.words
 // making rows, GITHUB. What the mode can never do has no row; what stays greys as anywhere. A row it leaves dim and a
 // tip it draws as a stash or as uncommitted work have none (`GraphModel.provisionalMenuShutAt`, `RepoPage.openRowMenu`).
 //
-// Nothing here is looked up and nothing is run: answers arrive as plain values, held still from the moment the menu
-// opens until a command it waited for has ended (`CommitMenuState`, デザイン規約 §メニュー), and presses leave as
+// Nothing here is looked up and nothing is run: answers arrive as plain values, set as the menu opens and again as it
+// stands again on the tree as it is, its rows kept (`CommitMenuState`, デザイン規約 §メニュー), and presses leave as
 // signals for `RepoPage` — which is what lets `tst_commitrowmenu.qml` drive the real menu.
 //
 // An `Item` because a menu measures the window through the item it was declared under (`AppMenu.ownerItem`).
@@ -215,7 +215,8 @@ Item {
     }
 
     // Each menu closes itself (a row's `dismiss()`, or the delete row when its answer lands), so nothing here
-    // closes them — but for a row the command it waited for took away (`CommitMenuState.standAgain`).
+    // closes them — but for a row taken away while it stood, by the command it waited for or outside
+    // (`CommitMenuState.standAgain`).
     function offerStash() {
         stashMenu.offer()
     }
@@ -247,18 +248,20 @@ Item {
     }
     /// The cards' half of `offerCommit`, for the menu standing again on a newer reading as well — where the BRANCH
     /// card's branch may point elsewhere by then, `branchAt` (`CommitMenuState.aimedAt`); left out, the row's commit.
-    function standCards(facts, branchAt) {
+    /// `again`: why the menu stands again — `follow` or `wait` (`CommitMenuState.standAgain`, `RefBranchMenu.standOn`).
+    function standCards(facts, branchAt, again) {
         worktreeCommitMenu.standOn(facts.worktree, facts.worktreeHere, facts.making)
         const branchy = rowMenu.targetKind === "branch" || rowMenu.targetKind === "remote"
         const branchKind = branchy ? rowMenu.targetKind : ""
         const branchName = branchy ? rowMenu.targetName : ""
         branchCommitMenu.standOn(branchKind, branchName, branchName, branchAt === undefined ? rowMenu.oid : branchAt,
-                                 facts.branch)
+                                 facts.branch, again)
         const tagged = rowMenu.targetKind === "tag"
-        tagCommitMenu.standOn(tagged ? "tag" : "", tagged ? rowMenu.targetName : "", rowMenu.oid, facts.tag)
+        tagCommitMenu.standOn(tagged ? "tag" : "", tagged ? rowMenu.targetName : "", rowMenu.oid, facts.tag, again)
     }
-    /// The commit, the stash or the other worktree's work the menu stands on is gone with the command it waited for:
-    /// nothing left to act on. The pair's menu waits for nothing, so it is never withdrawn.
+    /// The commit, the stash or the other worktree's work the menu stands on is gone — with the command it waited for,
+    /// or outside while it stood: nothing left to act on. The pair's menu reads nothing of the tree, so it is never
+    /// withdrawn.
     function withdraw() {
         (stashMenu.visible ? stashMenu : carriedMenu.visible ? carriedMenu : commitMenu).dismiss()
     }
@@ -424,6 +427,9 @@ Item {
             offered: rowMenu.canEditHistory
             blockedReason: rowMenu.startWhy
             holdPresses: rowMenu.tipHeldElsewhere ? 0 : Metrics.holdPressesWarned
+            // The commit is the row's; the branch whose history it leaves is HEAD's, and the note is the reading's — a
+            // press made on another branch, or without the note, says nothing of it.
+            premise: rowMenu.branch + "\n" + dropCommitItem.note
             onTriggered: rowMenu.dropRequested(rowMenu.oid)
             onHeld: {
                 dropCommitItem.closeMenu()
@@ -517,6 +523,9 @@ Item {
                 // The commits come back from the branch's reflog and the uncommitted changes from the discard
                 // record's copy — unless a file in them is one the copy cannot take (デザイン規約 §回数押し の色の表).
                 holdTone: rowMenu.hardResetNotCopied ? Theme.danger : Theme.warning
+                // The branch it moves, and what the note and the tone say goes: presses begun on a tree with nothing
+                // uncommitted, or on one the copy takes whole, are not consent to more.
+                premise: [rowMenu.branch, hardResetItem.note, rowMenu.hardResetNotCopied].join("\n")
                 onHeld: {
                     // This card and the menu it hangs off go together (`AppMenuItem.closeMenu`).
                     hardResetItem.closeMenu()

@@ -256,6 +256,14 @@ pub struct WorktreeModel {
     /// The counts `tree_revision` last spoke for; `None` before the
     /// first status, which always counts as movement.
     seen_counts: Option<(i32, i32, i32, i32)>,
+    /// Bumped when what the menus read of the tree (`reading`) moves —
+    /// what a menu standing follows (`RepoPage.menuReadRevision`), so a
+    /// poll that moved nothing stands nothing again. Never reset: a
+    /// binding reads a change of value, and a count that restarted could
+    /// land on the value it held.
+    reading_revision: i32,
+    /// The reading `reading_revision` last spoke for.
+    seen_reading: Option<crate::encode::TreeReading>,
     /// The counts of the last status, kept for the answers derived from
     /// them and from HEAD together (`settle`): a HEAD report can land
     /// between two statuses, and the stash standing has to follow it. Drawn
@@ -383,10 +391,15 @@ impl WorktreeModel {
     // — built as it is read, from the fields, and behind a getter: a value
     // QML wrote would not reach Rust (`encode::wire_qml`). Kept in a `var`
     // property, a read is what the property held then
-    // (`RepoPage.treeAtAsk`). Read as a menu opens, never by a binding: it
-    // carries `notCopied`, as long as the pending files a discard cannot
-    // copy.
+    // (`RepoPage.treeAtAsk`). Read as a menu opens or stands again, never by
+    // a binding: it carries `notCopied`, as long as the pending files a
+    // discard cannot copy — a menu standing follows `readingRevision`.
     qproperty!("reading", Read = reading, Notify = changed);
+    qproperty!(
+        "readingRevision",
+        Member = reading_revision,
+        Notify = changed
+    );
 
     fn reading(&self) -> crate::encode::Reading {
         crate::encode::Reading::new(self.tree_reading())
@@ -563,6 +576,7 @@ impl WorktreeModel {
         self.tree_revision = 0;
         self.wip_row_stands = false;
         self.seen_counts = None;
+        self.seen_reading = None;
         self.counts = platitude_core::status::Counts::default();
         self.status = platitude_core::status::WorktreeStatus::default();
         self.status_marks = Arc::default();
@@ -595,6 +609,11 @@ impl WorktreeModel {
         }
         if arrived {
             self.settle();
+            let reading = self.tree_reading();
+            if self.seen_reading.as_ref() != Some(&reading) {
+                self.seen_reading = Some(reading);
+                self.reading_revision = self.reading_revision.wrapping_add(1);
+            }
         }
         arrived
     }

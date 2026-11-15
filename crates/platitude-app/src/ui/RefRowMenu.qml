@@ -6,8 +6,9 @@ import platitude.ui
 import platitude.ui.words
 
 // The right-click on a ref wherever it is drawn — sidebar row, graph chip, a row of a chip's stacked list — so a
-// branch offers the same things everywhere. Decided as it opens and frozen while it stands, but for standing again
-// when a command it waited for has ended (`standAgain`, デザイン規約 §メニュー).
+// branch offers the same things everywhere. Decided as it opens and stood again on the tree as it is while it stands,
+// its rows kept — when a command it waited for has ended (`standAgain`) and when what it reads moves (`follow`;
+// デザイン規約 §メニュー).
 //
 // It carries only what the row's gestures do not reach: a rename is a click or two away on the row itself, and a
 // commit's hash is copied in the details pane the row's click opens (`Copy full hash`). The menu's rows are kept for
@@ -20,12 +21,18 @@ Item {
     required property RepoTab repoTab
     required property WorktreeModel worktree
     /// The worktree as it stood when the command the menus wait for was asked (`RepoPage.treeAtAsk`); null while
-    /// nothing is out.
+    /// nothing is out. Back to null with the menu up, the rows stand on what the command left (`follow`), as
+    /// `CommitMenuState.treeAtAsk`.
     property var treeAtAsk: null
+    onTreeAtAskChanged: if (refRowMenu.treeAtAsk === null) refRowMenu.follow()
     /// What the rows are read off, set by the door that stands them: the worktree's `reading` — or, for a menu raised
     /// under a command, `treeAtAsk`. Handed to `GitFacts` as it is, never built here. Null before the first door, as
     /// `CommitMenuState.tree`.
     property var tree: null
+    /// Moves each time what the rows stand on has been read again and moved (`RepoPage.menuReadRevision`): a menu
+    /// standing follows it (`follow`).
+    property int readRevision: 0
+    onReadRevisionChanged: Qt.callLater(refRowMenu.follow)
     /// Answers the `rebase` row's note off the drawn rows (`rebasePublished`).
     required property GraphModel graphModel
     /// Both read for the branch card (`branchFacts`); `switch` also asks `worktreesModel` who holds the branch.
@@ -237,6 +244,7 @@ Item {
             "tagCarriers": menu.carriers,
             "tagOnlyThere": menu.rowGoes,
             "tagHere": sides === "here" || sides === "both",
+            "tagAt": refRowMenu.tagsModel.oidOfName(full),
             // Held back reads as drift to core: the rows reaching over there stay out (offers::ref_menu), so `ref_menu`
             // takes no argument of its own for it. `CommitMenuState.tagFacts` hands it the same way.
             "offers": GitFacts.refMenuOffers(
@@ -250,7 +258,7 @@ Item {
     /// What the WORKTREE card's two making rows stand on (`RefWorktreeMenu.standOn`'s `making`), asked of the row
     /// (`offers::worktree_rows`) — `held` the worktree holding its branch, as `offerOn` found it. A local branch, or a
     /// remote one with no local branch, goes out as it is to the folder `newWorktreeFor` names, greyed where the branch
-    /// is out already; the folder is looked at here, as the menu opens. The same answer
+    /// is out already; the folder is looked at here, as the menu opens and each time it stands again. The same answer
     /// `CommitMenuState.askWorktreeRows` gives the graph row's card.
     function askWorktreeRows(kind, full, oidHex, held) {
         const local = kind === "remote" ? refRowMenu.repoTab.localNameFor(full) : full
@@ -307,10 +315,22 @@ Item {
         return refMenu.offer()
     }
 
+    /// What the rows stand on moved with the menu up — outside while nothing runs, or with a command that has just
+    /// ended: the rows stand again on the tree as it is, as when a wait ends (`standAgain`; デザイン規約 §メニュー
+    /// 「今の内容」). Not while a command is out: the menu stands on the tree as that was asked until it ends
+    /// (`treeAtAsk`), whatever the write.
+    function follow() {
+        if (refRowMenu.treeAtAsk !== null)
+            return
+        refRowMenu.standAgain("follow")
+    }
+
     /// The command the menu waited for has ended with the menu up: what it left is read again and the rows stand on
     /// it, the menu keeping its shape (`AppMenu.holdShape`) — on the commit the ref points at now, a stash's row on the
-    /// selector it now answers to. A ref the command took away leaves the menu nothing to act on.
-    function standAgain() {
+    /// selector it now answers to. A ref the command took away leaves the menu nothing to act on. `again`: `wait` for
+    /// that, `follow` for what moved with the menu up (`follow`) — the cards' rows that reach over there keep their
+    /// leases either way, and git's answers about the branch only while following (`RefBranchMenu.standOn`).
+    function standAgain(again) {
         if (!refRowMenu.showing)
             return
         // A stash answers to its place in the list, which the command may have moved; the rest to their names. Looked
@@ -326,16 +346,17 @@ Item {
             refRowMenu.levels[i].holdShape()
         refRowMenu.tree = refRowMenu.worktree.reading
         refRowMenu.standOn(refRowMenu.kind, refRowMenu.refName, full, oidHex, refRowMenu.openedFor,
-                           refRowMenu.openedAim)
+                           refRowMenu.openedAim, again)
     }
     /// The commit the ref `full` of `kind` points at now; empty where it is gone. A stash's commit does not move. A
-    /// remote branch that moved counts as gone: its `push --delete` is leased to where it stood as the menu went up,
-    /// and stood again on the new tip it would take commits the menu never showed.
+    /// remote branch that moved stands where it is — moved by a fetch outside, or by the one the menu waited for
+    /// (デザイン規約 §hover「外乱で閉じない」) —, its `push --delete` still leased to where it stood as the menu went up
+    /// and greyed, since on the new tip it would take commits the menu never showed (`RefBranchMenu.standOn`).
     function oidNow(kind, full) {
         if (kind === "branch")
             return refRowMenu.branchesModel.oidOfName(full)
         if (kind === "remote")
-            return refRowMenu.remotesModel.oidOfName(full) === refRowMenu.refOid ? refRowMenu.refOid : ""
+            return refRowMenu.remotesModel.oidOfName(full)
         if (kind === "tag")
             return refRowMenu.tagsModel.oidOfName(full)
         if (kind === "worktree") {
@@ -345,16 +366,19 @@ Item {
         return refRowMenu.refOid
     }
 
-    /// Reads and freezes everything the rows stand on: `offerOn` without raising the menu.
-    function standOn(kind, name, full, oidHex, worktreePath, aim) {
+    /// Reads everything the rows stand on off `tree` and stands them on it: `offerOn` without raising the menu.
+    /// `again`: why the menu stands again (`standAgain`), which the BRANCH and TAG cards read
+    /// (`RefBranchMenu.standOn`); empty as it is raised.
+    function standOn(kind, name, full, oidHex, worktreePath, aim, again) {
         refRowMenu.kind = kind
         refRowMenu.refName = name
         refRowMenu.refId = full
         refRowMenu.refOid = oidHex
         refRowMenu.openedFor = worktreePath
         refRowMenu.openedAim = aim === undefined ? "" : aim
-        branchMenu.standOn(kind, name, full, oidHex, refRowMenu.branchFacts(kind, full, oidHex))
-        tagMenu.standOn(kind, full, oidHex, refRowMenu.tagFacts(kind, full, oidHex, aim === undefined ? "" : aim))
+        branchMenu.standOn(kind, name, full, oidHex, refRowMenu.branchFacts(kind, full, oidHex), again)
+        tagMenu.standOn(kind, full, oidHex, refRowMenu.tagFacts(kind, full, oidHex, aim === undefined ? "" : aim),
+                        again)
         // Whether another worktree has this row's branch out (through the same-named local branch for a remote
         // row): `switch` then opens that worktree instead (offers::SwitchAction::OpenHolder). A worktree with no
         // branch leads to itself, unless this tab already stands in it.
@@ -370,7 +394,7 @@ Item {
         worktreeMenu.standOn(worktreeAt === "" ? undefined : refRowMenu.worktreesModel.worktreeFacts(worktreeAt),
                          GitFacts.samePath(worktreeAt, refRowMenu.repoTab.repoPath),
                          refRowMenu.askWorktreeRows(kind, full, oidHex, held))
-        // Core's rule (offers::ref_menu), asked once so the answers stand while the menu does.
+        // Core's rule (offers::ref_menu), asked once per stand: the rows read the answers, not the models.
         const offers = GitFacts.refMenuOffers(
             kind, full, oidHex,
             refRowMenu.repoTab.state === "open",
@@ -404,7 +428,7 @@ Item {
         id: refMenu
         heldReason: refRowMenu.heldReason
         runningWhy: refRowMenu.runningWhy
-        onWaitEnded: refRowMenu.standAgain()
+        onWaitEnded: refRowMenu.standAgain("wait")
         // Nothing to clear at the close: a refused delete's `-D` is left standing, the card clears it as the menu
         // opens (`RefBranchMenu.standOn`), and nothing reads it while the menu is down.
 
@@ -537,7 +561,7 @@ Item {
             id: branchMenu
             heldReason: refRowMenu.heldReason
             runningWhy: refRowMenu.runningWhy
-            onWaitEnded: refRowMenu.standAgain()
+            onWaitEnded: refRowMenu.standAgain("wait")
             // git's two answers, live: the card turns the delete rows on them while the menu stands.
             refusedDelete: refRowMenu.repoTab.branchDeleteRefused
             landedDelete: refRowMenu.repoTab.branchDeleteLanded
@@ -562,7 +586,7 @@ Item {
             id: worktreeMenu
             heldReason: refRowMenu.heldReason
             runningWhy: refRowMenu.runningWhy
-            onWaitEnded: refRowMenu.standAgain()
+            onWaitEnded: refRowMenu.standAgain("wait")
             onWorktreeHereRequested: oidHex => refRowMenu.worktreeHereRequested(oidHex)
             onWorktreeAddRequested: (mode, branch, start, path, name) =>
                 refRowMenu.worktreeAddRequested(mode, branch, start, path, name)
@@ -574,7 +598,7 @@ Item {
             id: tagMenu
             heldReason: refRowMenu.heldReason
             runningWhy: refRowMenu.runningWhy
-            onWaitEnded: refRowMenu.standAgain()
+            onWaitEnded: refRowMenu.standAgain("wait")
             canBranchHere: refRowMenu.canBranchHere
             makeWhy: refRowMenu.startWhy
             onTagHereRequested: oidHex => refRowMenu.tagHereRequested(oidHex)

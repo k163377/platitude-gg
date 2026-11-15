@@ -103,6 +103,24 @@ Control {
         width: 400
         text: "Fetch"
     }
+    // A sentence whose name has gone: HEAD left every branch while the menu stood.
+    AppMenuItem {
+        id: nameGone
+        y: 180
+        width: 400
+        code: "merge"
+        refSentence: "into %1"
+        refName: ""
+        refMark: "branch"
+    }
+    // A card whose title names the branch that has gone.
+    AppMenu {
+        id: titleGone
+        titleCode: "reset"
+        titleSentence: "%1 here"
+        titleRef: ""
+        titleRefMark: "branch"
+    }
 
     /// How many items under `item` the test holds true of.
     function count(item, holds) {
@@ -215,6 +233,17 @@ Control {
             compare(plainRow.holdDrive, null, "no press count")
             compare(root.count(plainRow, item => item.behind !== undefined), 0, "no counts")
             compare(root.count(plainRow, item => item.pullRequest !== undefined), 0, "no badge")
+        }
+
+        /// A sentence whose name has gone says nothing true — `into` and a branch mark naming no branch —, so the row
+        /// keeps its chip alone, and a card's title row too (デザイン規約 §メニュー; HEAD left every branch with the
+        /// menu up).
+        function test_a_sentence_whose_name_has_gone_is_not_drawn() {
+            compare(nameGone.text, "", "no words")
+            compare(root.count(nameGone, item => item.wordCell !== undefined && item.set === "sign"
+                                                 && item.kind === "branch"), 0, "no branch mark")
+            compare(titleGone.title, "", "nor a title sentence")
+            compare(oneName.text, "into " + root.farName, "a sentence with its name is drawn whole")
         }
 
         /// The hover's line seats every name it says behind its mark: the worktree's tree, the far column's branch.

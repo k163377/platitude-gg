@@ -103,7 +103,8 @@ impl TagSides {
 }
 
 /// What the right-click menu on a ref may offer, decided as it opens and
-/// frozen while it stands (`RefRowMenu.offerOn`).
+/// as it stands again on the tree as it is (`RefRowMenu.offerOn` /
+/// `standAgain`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RefMenuOffers {
     /// `switch` lands somewhere else: a branch (local or remote) other than
@@ -283,7 +284,8 @@ pub fn ref_menu(
 }
 
 /// What the right-click menu on a commit row may offer, decided as it
-/// opens and frozen while it stands (`CommitMenuState.openRowMenu`).
+/// opens and as it stands again on the tree as it is
+/// (`CommitMenuState.openRowMenu` / `standAgain`).
 /// A stash opens its own menu and takes only [`Self::stash_write`]; every
 /// other flag is the commit menu's.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

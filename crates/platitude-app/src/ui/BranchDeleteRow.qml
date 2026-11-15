@@ -2,7 +2,7 @@ import QtQuick
 import platitude.ui
 
 // The delete table's first row — the branch itself, or a remote branch's reading (デザイン規約 §左メニューの所作 の
-// 削除の表). On the first level's last group, standing on the BRANCH card's frozen answers (`RefBranchMenu.state`),
+// 削除の表). On the first level's last group, standing on the BRANCH card's answers (`RefBranchMenu.state`),
 // which also turn this row into the held `-D` when git refuses while the menu stands (`RefBranchMenu.refused`).
 AppMenuItem {
     id: deleteRow
@@ -36,8 +36,10 @@ AppMenuItem {
     // On a branch the delete forms are a fixed table whose rows grey out rather than go (`RefBranchMenu`); a remote
     // branch's row stands where core offers its delete. A remote branch's delete is this row held, with no bar over
     // the graph: there is one target and the row names it, and the hold stands in for the refusal git does not make
-    // (`remote::delete_remote_branch`).
-    offered: deleteRow.branchRow || (deleteRow.heldRow && deleteRow.facts.canDelete)
+    // (`remote::delete_remote_branch`). Leased to the commit the row stood on as the menu went up: that remote branch
+    // moved since, the row stops applying and greys where it stands (`RefBranchMenu.state.remoteMoved`).
+    offered: deleteRow.branchRow
+             || (deleteRow.heldRow && deleteRow.facts.canDelete && !deleteRow.facts.remoteMoved)
     blockedReason: !deleteRow.branchRow || deleteRow.facts.canDelete ? ""
                  : deleteRow.facts.onCurrentBranch ? deleteRow.card.deleteBlockedOnCurrent
                  : deleteRow.card.blockedByWorktree
@@ -48,6 +50,8 @@ AppMenuItem {
     // — the second press only rules out a mistaken first —; something is lost only where git refuses, so only there,
     // or reaching past this machine, is it the warning's three.
     holdPresses: deleteRow.heldRow ? Metrics.holdPressesWarned : Metrics.holdPressesPlain
+    // The name it deletes and the commit that stands on: a branch here moved part way would take other commits.
+    premise: deleteRow.facts.kind + "\n" + deleteRow.facts.refId + "\n" + deleteRow.facts.refOid
     // `warning` both ways when held: a remote's name stands back up here, and a local branch's tip and upstream
     // come back from the discard record (デザイン規約 §回数押し の色の表). Off the latched count, as the words are.
     holdTone: deleteRow.armedPresses >= Metrics.holdPressesWarned ? Theme.warning : Theme.textPrimary

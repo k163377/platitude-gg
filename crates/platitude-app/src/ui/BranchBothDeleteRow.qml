@@ -5,7 +5,7 @@ import platitude.ui.words
 // The delete table's third row: the branch and its remote reading together. Two commands, so words and no code
 // (§git 用語のコード表記). The local half runs first; its refusal stops the pair with nothing touched, and a refused
 // lease on the remote half stops it with the local one done (`RepoSession::delete_branch_everywhere`). On the first
-// level's last group, standing on the BRANCH card's frozen answers (`RefBranchMenu.state`).
+// level's last group, standing on the BRANCH card's answers (`RefBranchMenu.state`).
 AppMenuItem {
     id: bothDeleteRow
 
@@ -27,7 +27,9 @@ AppMenuItem {
 
     text: qsTr("Delete both")
     note: bothDeleteRow.forces ? qsTr("not merged") : ""
+    // Its remote half is leased as the table's second row is, and stops applying with it (`remoteMoved`).
     offered: bothDeleteRow.facts.kind === "branch" && bothDeleteRow.facts.remoteCounterpart !== ""
+             && !bothDeleteRow.facts.remoteMoved
     // The local half's reasons first: it runs first.
     blockedReason: bothDeleteRow.facts.canDelete && bothDeleteRow.facts.canDeleteRemote ? ""
                  : bothDeleteRow.facts.onCurrentBranch ? bothDeleteRow.card.deleteBlockedOnCurrent
@@ -43,6 +45,9 @@ AppMenuItem {
     // `warning` whether the local half runs as `-d` or `-D`: the commits only it reached come back from the discard
     // record with the name (デザイン規約 §回数押し の色の表).
     holdTone: Theme.warning
+    // Both halves: the branch here and the commit it stands on, the reading over there and its lease.
+    premise: [bothDeleteRow.facts.refId, bothDeleteRow.facts.refOid, bothDeleteRow.facts.remoteCounterpart,
+              bothDeleteRow.facts.remoteCounterpartOid].join("\n")
     onHeld: {
         bothDeleteRow.closeMenu()
         // One write with one answer, so one thing to put back. `forces` is still the latched one.

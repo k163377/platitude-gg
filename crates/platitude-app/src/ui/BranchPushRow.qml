@@ -7,7 +7,7 @@ import platitude.ui
 // Out, in the first push's words, where the push would stay here: there is no remote to send it to. Out in its own
 // words where the far side has it all: nothing to send (§メニュー「「今できない」行は無効で残す」).
 //
-// On the first level beside `pull`, standing on the BRANCH card's frozen answers (`RefBranchMenu.state`): both
+// On the first level beside `pull`, standing on the BRANCH card's answers (`RefBranchMenu.state`): both
 // entrances carry the row and the card it reads, so the two cannot disagree. The branch the worktree is on gets no row
 // (`RefsSnapshot::branch_push` answers nothing for it): its push's one door is the toolbar
 // (規約 §メニュー「そこにしか入口が無いもの」). Nor does a remote branch's row: it is a reading of what is over there, with
@@ -51,12 +51,16 @@ AppMenuItem {
     refMark: "remote"
     //: Follows the `push` chip: "push to…", where the branch goes being asked first.
     text: pushRow.firstPushWords ? qsTr("to…") : pushRow.refSentence.arg(pushRow.refName)
-    offered: pushRow.facts.pushState !== "" || pushRow.facts.pushStaysHere
+    // Leased to the far side the menu went up on: moved since, the row stops applying and greys where it stands
+    // (`RefBranchMenu.state.pushMoved`).
+    offered: (pushRow.facts.pushState !== "" || pushRow.facts.pushStaysHere) && !pushRow.facts.pushMoved
     blockedReason: pushRow.facts.pushStaysHere ? pushRow.blockedStaysHere
                  : pushRow.facts.pushState === "clean" ? pushRow.blockedClean : ""
     holdPresses: pushRow.overwrites ? Metrics.holdPressesWarned : 0
     // Reaching past this machine is the warning tone (デザイン規約 §状態).
     holdTone: Theme.warning
+    // What goes, where to and the commit over there it is leased to: the branch here moved part way would send others.
+    premise: [pushRow.facts.refId, pushRow.facts.refOid, pushRow.facts.pushTarget, pushRow.facts.pushLease].join("\n")
     onTriggered: {
         if (pushRow.publishing)
             pushRow.card.publishRequested(pushRow.facts.refId, pushRow.facts.pushUpstream)

@@ -52,6 +52,15 @@ MenuItem {
     /// `into it`.
     property string refSentence: ""
     property string refName: ""
+    /// The sentence as the row draws it: `refSentence`, or nothing where a name it seats is empty — `into` and a
+    /// name's mark naming nothing say nothing true, so the row keeps its chip alone (a row greyed because HEAD left
+    /// every branch with the menu up: `withdrawn`; デザイン規約 §メニュー). The row reads this, never `refSentence`.
+    /// A row with no chip whose name can go with the menu up gives its words without the name in `text`, which the
+    /// row draws in the sentence's place — left to the sentence alone, it would draw nothing (`RefBranchMenu`'s
+    /// `Unset upstream`).
+    readonly property string sentence:
+        (menuItem.refSentence.indexOf("%1") >= 0 && menuItem.refName === "")
+        || (menuItem.refSentence.indexOf("%2") >= 0 && menuItem.refName2 === "") ? "" : menuItem.refSentence
     /// That name's own colour: `textLink` for the current branch, which is what these sentences mostly name
     /// (デザイン規約 §ref の種別「現在のブランチは、名前が出る場所すべてで `textLink`」); `textPrimary` for any other.
     property color refTint: Theme.textLink
@@ -60,7 +69,7 @@ MenuItem {
     property string refMark: ""
     /// The room the markup opens for that mark, the seat (`seatRoom`): the sentence's own space before the name stays
     /// the gap (as `CardText.marks`).
-    readonly property string refRoom1: menuItem.refMark === "" || menuItem.refSentence.indexOf("%1") < 0 ? ""
+    readonly property string refRoom1: menuItem.refMark === "" || menuItem.sentence.indexOf("%1") < 0 ? ""
                                        : menuItem.seatRoom
     /// The seat in the row's words: as many of the row's own spaces as hold the widest mark (`MarkSeat`). The size is
     /// the row's own, not read back off the ruler's font (`refSpace.font.pixelSize`): on Linux that read loops the
@@ -75,13 +84,13 @@ MenuItem {
     property string refName2: ""
     property color refTint2: Theme.textPrimary
     property string refMark2: ""
-    readonly property string refRoom2: menuItem.refMark2 === "" || menuItem.refSentence.indexOf("%2") < 0 ? ""
+    readonly property string refRoom2: menuItem.refMark2 === "" || menuItem.sentence.indexOf("%2") < 0 ? ""
                                        : menuItem.seatRoom
     readonly property int refMarkRoom2: menuItem.refRoom2.length
     // The plain sentence, whatever the label draws (`refWords`): the tooltip and the screen reader read this.
-    text: menuItem.refSentence === "" ? ""
-        : menuItem.refSentence.indexOf("%2") < 0 ? menuItem.refSentence.arg(menuItem.refName)
-        : menuItem.refSentence.arg(menuItem.refName).arg(menuItem.refName2)
+    text: menuItem.sentence === "" ? ""
+        : menuItem.sentence.indexOf("%2") < 0 ? menuItem.sentence.arg(menuItem.refName)
+        : menuItem.sentence.arg(menuItem.refName).arg(menuItem.refName2)
     /// The mark a row wears, and its colour. On a row that opens a card it is the `NavIcon` kind of what the card acts
     /// on (デザイン規約 §メニュー の入れ子), and the row becomes a heading: the sidebar's section heading brought into
     /// a menu — spelled as the sidebar's headings (capitals; §タイポグラフィ「帯の見出し」), the kind colour on the mark
@@ -171,7 +180,8 @@ MenuItem {
     /// Why this row cannot be chosen right now — and, by being non-empty, that it cannot. Greyed like a disabled row
     /// (§無効) but still hoverable, since the line is the point (デザイン規約 §メニュー の削除の表) — not `enabled: false`:
     /// a disabled `Control` takes no hover, so it could not show the reason's tooltip. Presses, holds and keys do
-    /// nothing. Frozen as the menu opens, like `offered`. Headless: `delete-blocked-tip`.
+    /// nothing. Read off what the opener stood the menu on, like `offered`, and stood again with it. Headless:
+    /// `delete-blocked-tip`.
     property string blockedReason: ""
     /// Whether pressing this row starts git — itself, or through the box or bar it opens — which is what the menu's
     /// held doors and a command already running hold back (`AppMenu.rowsHeldWhy`). A row that only reads what is on
@@ -182,8 +192,9 @@ MenuItem {
     readonly property string menuHeldReason:
         menuItem.subMenu || !menuItem.startsCommand ? ""
         : menuItem.menu !== null && menuItem.menu.rowsHeldWhy !== undefined ? menuItem.menu.rowsHeldWhy : ""
-    /// What a row that stopped applying while its menu stood says (`withdrawn`).
-    readonly property string withdrawnWhy: qsTr("The command that ran changed this — open the menu again")
+    /// What a row that stopped applying while its menu stood says (`withdrawn`) — under a command that ran, or a change
+    /// made outside.
+    readonly property string withdrawnWhy: qsTr("This changed while the menu was open — open it again")
     /// A row out of offer says only that; else the row's own reason wins over the menu's: it is about the ref the row
     /// names, the more particular line.
     readonly property string blockedWhy:
@@ -207,7 +218,7 @@ MenuItem {
     /// …and which mark (`TipAsk.markKindNow`).
     readonly property string tipMarkKind: menuItem.blocked ? menuItem.reasonMarkKind : ""
     /// The names the hover's whole line says (`tip.words`), each behind its mark, seated part by part as that line
-    /// joins them — the sentence's (`refSentence`), the code name, the worktree after the words, the far column's
+    /// joins them — the sentence's (`sentence`), the code name, the worktree after the words, the far column's
     /// branch (`TipAsk.marksNow` reads them off the row).
     readonly property var tipMarks: {
         if (menuItem.blocked)
@@ -244,6 +255,12 @@ MenuItem {
     /// Pressed this many times, for a row that would otherwise have to raise a question of its own (デザイン規約
     /// §回数押し). Zero is an ordinary row. Such a row reports no click (`rowPress`).
     property int holdPresses: 0
+    /// What the presses are aimed at besides their count (`HoldDriver.premise`): everything the press acts on, and
+    /// every answer the row's tone and note come from. The menu stands again on a newer reading with the card up
+    /// (`AppMenu.holdShape`), so a held row that one of those can move names it here — moved part way, the presses so
+    /// far count for nothing (rules-refs/app-ui.md「回数押しか否かは最初の押下で確定する」). Empty for a row nothing
+    /// re-points.
+    property string premise: ""
     /// Pressing this row raises a question: a `!` in the hold mark's seat (デザイン規約 §進行中の操作から出る). A row
     /// asks or holds, never both — a row that asks is confirmed on the bar it raises.
     property bool asks: false
@@ -344,7 +361,7 @@ MenuItem {
     implicitWidth: (!menuItem.growsForText
                     ? Math.min(menuItem.wordsWant,
                                // The sentence, not `refSeats`: those carry the names as cut, off this width.
-                               (menuItem.refSentence.indexOf("%1") >= 0 || menuItem.refSentence.indexOf("%2") >= 0
+                               (menuItem.sentence.indexOf("%1") >= 0 || menuItem.sentence.indexOf("%2") >= 0
                                 ? Math.ceil(menuItem.refFixedWidth) : 0)
                                + Metrics.labelColW)
                     : menuItem.textNames
@@ -406,11 +423,11 @@ MenuItem {
     /// What the sentence asks for whole, names uncut but for the name ceiling — what the row bids, so a cut never
     /// shrinks the menu that caused it. Whether there are seats is the sentence's to say, not `refSeats`', which
     /// carry the names as cut.
-    readonly property real wordsWant: menuItem.refSentence.indexOf("%1") >= 0 || menuItem.refSentence.indexOf("%2") >= 0
+    readonly property real wordsWant: menuItem.sentence.indexOf("%1") >= 0 || menuItem.sentence.indexOf("%2") >= 0
                                       ? menuItem.refWant + itemLabel.rightPadding : itemLabel.implicitWidth
     readonly property real refWant: Math.ceil(menuItem.refFixedWidth
-                                              + (menuItem.refSentence.indexOf("%1") >= 0 ? menuItem.refHeld(1) : 0)
-                                              + (menuItem.refSentence.indexOf("%2") >= 0 ? menuItem.refHeld(2) : 0))
+                                              + (menuItem.sentence.indexOf("%1") >= 0 ? menuItem.refHeld(1) : 0)
+                                              + (menuItem.sentence.indexOf("%2") >= 0 ? menuItem.refHeld(2) : 0))
                                     + 1
     /// The sentence's rulers (`refInk`), built with its names' marks and grounds on a row whose words hold a name —
     /// null on any other, and every reading below answers as for a sentence with no seats.
@@ -428,8 +445,8 @@ MenuItem {
     /// How wide each name is cut to (-1: whole): held under the ceiling, then, where the room is short, the longer
     /// gives way first, down to an even share.
     readonly property var refCuts: {
-        const has1 = menuItem.refSentence.indexOf("%1") >= 0
-        const has2 = menuItem.refSentence.indexOf("%2") >= 0
+        const has1 = menuItem.sentence.indexOf("%1") >= 0
+        const has2 = menuItem.sentence.indexOf("%2") >= 0
         if ((!has1 && !has2) || menuItem.refRulers === null)
             return [-1, -1]
         let w1 = has1 ? menuItem.refHeld(1) : 0
@@ -464,10 +481,10 @@ MenuItem {
     /// `room` the mark's (`refRoom1` / `refRoom2`).
     readonly property var refSeats: {
         const seats = []
-        const first = menuItem.refSentence.indexOf("%1")
+        const first = menuItem.sentence.indexOf("%1")
         if (first >= 0)
             seats.push({ at: first, name: menuItem.refShown, tint: menuItem.refColor, room: menuItem.refRoom1, key: 1 })
-        const second = menuItem.refSentence.indexOf("%2")
+        const second = menuItem.sentence.indexOf("%2")
         if (second >= 0)
             seats.push({ at: second, name: menuItem.refShown2, tint: menuItem.refColor2, room: menuItem.refRoom2,
                          key: 2 })
@@ -485,11 +502,11 @@ MenuItem {
         let out = ""
         let from = 0
         for (const seat of menuItem.refSeats) {
-            out += menuItem.inked(menuItem.refSentence.substring(from, seat.at)) + Words.inked(seat.room)
+            out += menuItem.inked(menuItem.sentence.substring(from, seat.at)) + Words.inked(seat.room)
                  + Words.codeMarkup(seat.name, seat.tint)
             from = seat.at + 2
         }
-        return out + menuItem.inked(menuItem.refSentence.substring(from))
+        return out + menuItem.inked(menuItem.sentence.substring(from))
     }
     /// Where each name begins in the label, its room before it: the words and rooms ahead of it in the row's face, a
     /// name ahead of it in the code face — as the markup lays them (`refRulers`' `head` / `between`, `shown1` /
@@ -551,6 +568,7 @@ MenuItem {
             readonly property HoldDriver holdDrive: HoldDriver {
                 id: holdDrive
                 holdPresses: menuItem.holdPresses
+                premise: menuItem.premise
                 onFinished: menuItem.held()
                 onLanded: {
                     if (!menuItem.closesAfterFloor)
@@ -718,15 +736,15 @@ MenuItem {
                 id: codeCapRuler
                 font.family: Theme.monoFamily
                 font.pixelSize: itemLabel.font.pixelSize
-                text: menuItem.refSentence !== "" || menuItem.codesName ? "n".repeat(Theme.nameMaxChars) : ""
+                text: menuItem.sentence !== "" || menuItem.codesName ? "n".repeat(Theme.nameMaxChars) : ""
             }
-            // The names' rulers, marks and code grounds, built on a row whose words hold a name (`refSentence`). Under
+            // The names' rulers, marks and code grounds, built on a row whose words hold a name (`sentence`). Under
             // the words: a ground lies beneath the name it holds, and a mark stands in a room the words leave it.
             Loader {
                 id: refInk
                 anchors.fill: parent
                 z: -1
-                active: menuItem.refSentence !== ""
+                active: menuItem.sentence !== ""
                 sourceComponent: Item {
                     /// The rulers the row's readings take the sentence's measure with (`refRulers`).
                     readonly property TextMetrics head: refHead
@@ -744,14 +762,14 @@ MenuItem {
                         id: refHead
                         font: itemLabel.font
                         text: menuItem.refSeats.length > 0
-                              ? menuItem.refSentence.substring(0, menuItem.refSeats[0].at) + menuItem.refSeats[0].room
+                              ? menuItem.sentence.substring(0, menuItem.refSeats[0].at) + menuItem.refSeats[0].room
                               : ""
                     }
                     TextMetrics {
                         id: refBetween
                         font: itemLabel.font
                         text: menuItem.refSeats.length > 1
-                              ? menuItem.refSentence.substring(menuItem.refSeats[0].at + 2, menuItem.refSeats[1].at)
+                              ? menuItem.sentence.substring(menuItem.refSeats[0].at + 2, menuItem.refSeats[1].at)
                                 + menuItem.refSeats[1].room : ""
                     }
                     /// The code face at the row's size (`WordFace.groundEnd`).
@@ -807,13 +825,13 @@ MenuItem {
                     TextMetrics {
                         id: refFixedRuler
                         font: itemLabel.font
-                        text: menuItem.refSentence.replace("%1", menuItem.refRoom1).replace("%2", menuItem.refRoom2)
+                        text: menuItem.sentence.replace("%1", menuItem.refRoom1).replace("%2", menuItem.refRoom2)
                     }
                     // Each name's code ground: from the head of its mark's room, which holds the mark's air — or half a
                     // gap before the name, behind no mark — to half a gap past its end (`WordFace.groundStart` /
                     // `groundEnd`). Gone where the words are cut before the name.
                     CodeGround {
-                        visible: menuItem.refSentence.indexOf("%1") >= 0 && menuItem.refShown !== ""
+                        visible: menuItem.sentence.indexOf("%1") >= 0 && menuItem.refShown !== ""
                                  && menuItem.refLead1 < itemLabel.width - itemLabel.rightPadding
                         x: menuItem.refMarkRoom > 0 ? menuItem.refLead1 - menuItem.refCell
                                                     : WordFace.groundStart(menuItem.refLead1)
@@ -825,7 +843,7 @@ MenuItem {
                         size: itemLabel.font.pixelSize
                     }
                     CodeGround {
-                        visible: menuItem.refSentence.indexOf("%2") >= 0 && menuItem.refShown2 !== ""
+                        visible: menuItem.sentence.indexOf("%2") >= 0 && menuItem.refShown2 !== ""
                                  && menuItem.refLead2 < itemLabel.width - itemLabel.rightPadding
                         x: menuItem.refMarkRoom2 > 0 ? menuItem.refLead2 - menuItem.refCell
                                                      : WordFace.groundStart(menuItem.refLead2)

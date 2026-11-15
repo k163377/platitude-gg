@@ -17,11 +17,17 @@ Item {
     required property RepoTab repoTab
     required property WorktreeModel worktree
     /// The worktree as it stood when the command the menus wait for was asked (`RepoPage.treeAtAsk`); null while
-    /// nothing is out.
+    /// nothing is out. Back to null with the menu up, the rows stand on what the command left (`follow`), as
+    /// `CommitMenuState.treeAtAsk`.
     property var treeAtAsk: null
+    onTreeAtAskChanged: if (fileRowMenu.treeAtAsk === null) fileRowMenu.follow()
     /// What the rows are read off, set by the door that stands them: the worktree's `reading` — or, for a menu raised
     /// under a command, `treeAtAsk`. Null before the first door, as `CommitMenuState.tree`.
     property var tree: null
+    /// Moves each time what the rows stand on has been read again and moved (`RepoPage.menuReadRevision`): a menu
+    /// standing follows it (`follow`).
+    property int readRevision: 0
+    onReadRevisionChanged: Qt.callLater(fileRowMenu.follow)
     /// Which rows are chosen (`chosenRows()` skips folder rows, which nothing here acts on).
     required property WipPane wipPane
 
@@ -29,7 +35,7 @@ Item {
     /// under one keeps its rows and greys them until it ends (`AppMenu.runningWhy`).
     property string runningWhy: ""
 
-    /// Decided as it opens and held while it stands (デザイン規約 §メニュー).
+    /// Decided as it opens (デザイン規約 §メニュー).
     property string bucket: ""
     property string path: ""
     /// Whether git could stash at all — **a question about the tree**: one unmerged path anywhere and git refuses the
@@ -64,21 +70,39 @@ Item {
         fileRowMenu.bucket = bucket
         fileRowMenu.path = path
         fileRowMenu.tree = fileRowMenu.treeAtAsk !== null ? fileRowMenu.treeAtAsk : fileRowMenu.worktree.reading
-        fileRowMenu.standOn()
+        fileRowMenu.standOn(false)
         fileMenu.offer()
         fileRowMenu.offered(bucket)
     }
-    /// Reads and freezes what the rows stand on, off the pane's choice as it is now.
-    function standOn() {
+    /// Reads what the rows stand on off `tree` and the pane's choice as it is now. `following`: on what moved while
+    /// the menu stood (`follow`), which leaves the discard's plan on the files the menu went up on — its press acts on
+    /// the files it showed (デザイン規約 §メニュー「表示も押下も開いた時」). Only whether what goes is copied to the
+    /// discard record is read again (`unrecorded`, the row's colour): that is the tree's at the press.
+    function standOn(following) {
         fileRowMenu.stashStanding = fileRowMenu.tree.stashStanding
-        fileRowMenu.plan = fileRowMenu.planDiscard()
+        if (following !== true)
+            fileRowMenu.plan = fileRowMenu.planDiscard()
+        else if (fileRowMenu.plan)
+            fileRowMenu.plan = Object.assign({}, fileRowMenu.plan, {
+                unrecorded: GitFacts.discardUnrecorded(fileRowMenu.tree.unborn, fileRowMenu.tree.notCopied,
+                                                       fileRowMenu.plan.paths)
+            })
         // Rows, not `chosenCount`: a folder in the choice is a chosen key no command here reaches.
         fileRowMenu.count = fileRowMenu.wipPane.chosenRows().length
     }
+    /// What the rows stand on moved with the menu up — outside while nothing runs, or with a command that has just
+    /// ended: the rows stand again on the tree as it is (デザイン規約 §メニュー「今の内容」). Not while a command is out:
+    /// the menu stands on the tree as that was asked until it ends (`treeAtAsk`), whatever the write.
+    function follow() {
+        if (fileRowMenu.treeAtAsk !== null)
+            return
+        fileRowMenu.standAgain("follow")
+    }
     /// The command the menu waited for has ended with the menu up: the rows stand on what it left, the menu keeping its
     /// shape (`AppMenu.holdShape`) — what a discard would now take, whether a stash could now be made. Files the
-    /// command took out of their place in the list leave the menu nothing to act on.
-    function standAgain() {
+    /// command took out of their place in the list leave the menu nothing to act on. `again`: `wait` for that,
+    /// `follow` for what moved with the menu up (`follow`), which keeps the discard on the files it showed (`standOn`).
+    function standAgain(again) {
         if (!fileRowMenu.showing)
             return
         if (fileRowMenu.wipPane.chosenRows().length === 0) {
@@ -87,7 +111,7 @@ Item {
         }
         fileMenu.holdShape()
         fileRowMenu.tree = fileRowMenu.worktree.reading
-        fileRowMenu.standOn()
+        fileRowMenu.standOn(again === "follow")
     }
 
     /// Automation: the card was asked for on a row of `bucket`.
@@ -110,6 +134,8 @@ Item {
         fileRowMenu.repoTab.planDiscard()
         return {
             keys: keys,
+            // The files those keys name, which whether they are copied is asked of (`standOn`).
+            paths: paths,
             count: fileRowMenu.repoTab.discardCount,
             only: fileRowMenu.repoTab.discardOnly,
             // Answered before the row is shown, as the colour has to be (デザイン規約 §回数押し).
@@ -175,7 +201,7 @@ Item {
     AppMenu {
         id: fileMenu
         runningWhy: fileRowMenu.runningWhy
-        onWaitEnded: fileRowMenu.standAgain()
+        onWaitEnded: fileRowMenu.standAgain("wait")
         // Named by branch — during a rebase `--ours` / `--theirs` swap over (デザイン規約 §conflict の ours / theirs).
         // Plain clicks: a conflicted file has no settled version to lose.
         // Each side's branch behind its mark (デザイン規約 §ref の種別「名前の印」), plain — the branch stood on in its
@@ -260,6 +286,8 @@ Item {
             offered: fileRowMenu.bucket !== "conflicts"
             holdPresses: Metrics.holdPressesWarned
             holdTone: fileRowMenu.plan && fileRowMenu.plan.unrecorded ? Theme.danger : Theme.warning
+            // The files it takes and whether the copy keeps them (the tone).
+            premise: fileRowMenu.plan ? fileRowMenu.plan.keys.join("\n") + "\n" + fileRowMenu.plan.unrecorded : ""
             onHeld: {
                 fileDiscardItem.closeMenu()
                 fileRowMenu.discardChosenNow(fileRowMenu.plan)

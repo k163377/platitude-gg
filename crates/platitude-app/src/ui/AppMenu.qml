@@ -13,12 +13,14 @@ Menu {
     /// A git term for this submenu's title row, drawn as a code chip; empty for a title of words.
     property string titleCode: ""
     /// A ref name in the title and the sentence with its `%1` seat, as a row takes them (`AppMenuItem.refSentence`);
-    /// the title is made from them. A title with no name sets `title` instead.
+    /// the title is made from them. A title with no name sets `title` instead. A name that has gone leaves the title
+    /// its chip alone, as a row (`AppMenuItem.sentence`).
     property string titleSentence: ""
     property string titleRef: ""
     /// The mark that name wears in front of it (`AppMenuItem.refMark`); empty for none.
     property string titleRefMark: ""
-    title: appMenu.titleSentence !== "" ? appMenu.titleSentence.arg(appMenu.titleRef) : ""
+    title: appMenu.titleSentence !== "" && (appMenu.titleSentence.indexOf("%1") < 0 || appMenu.titleRef !== "")
+           ? appMenu.titleSentence.arg(appMenu.titleRef) : ""
 
     /// The title row's mark instead of a chip, for a submenu of one ref kind: its `NavIcon` kind and colour (how the
     /// title row wears it: `AppMenuItem.markKind`).
@@ -100,8 +102,9 @@ Menu {
     /// Before the opener stands the rows on a newer reading with the menu up: the rows on show stay and no other comes
     /// (`AppMenuItem.shapeHeld`), so no row moves under the hand. A row that stops applying greys where it is; one that
     /// starts applying waits for the menu to be raised again. Holding a held shape again changes nothing. What is kept
-    /// is the rows' seats down the card: the words' x still moves as a hold mark or a `!` comes or goes (`holdIndent`)
-    /// — the right press count wins.
+    /// is which rows stand, down the card: what they say is the newer reading's, and the card settles as wide as a menu
+    /// raised on it with those rows (`widestRow`; デザイン規約 §メニュー「凍らせるのは行の出入りとチップ列の幅だけ」). The words' x moves
+    /// too as a hold mark or a `!` comes or goes (`holdIndent`) — the right press count wins.
     function holdShape() {
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)

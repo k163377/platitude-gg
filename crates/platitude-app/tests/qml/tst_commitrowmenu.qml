@@ -498,7 +498,7 @@ Item {
                             "remoteDrifted": false, "open": false, "merged": "", "offers": [] }
             // A tag standing here only, in core's words as `tst_tagcard.qml` spells them.
             const tagged = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "tagReach": "",
-                             "tagHeldBack": "", "tagCarriers": "", "tagHere": true,
+                             "tagHeldBack": "", "tagCarriers": "", "tagHere": true, "tagAt": "abc123",
                              "offers": ["branch-here", "integrate", "delete", "push-tag"] }
             const notag = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] }
             return [
@@ -626,6 +626,7 @@ Item {
                             "remoteDrifted": false, "open": false, "merged": "", "offers": [] }
             const drifted = { "pushRemote": "origin", "tagDriftOid": "deadbee", "tagOnlyThere": false,
                               "tagReach": "origin", "tagHeldBack": "drift", "tagCarriers": "origin", "tagHere": true,
+                              "tagAt": "abc123",
                               "offers": ["branch-here", "integrate", "delete", "push-tag"] }
             root.aimAt({ targetKind: "tag", targetName: "v1.0" })
             menu.offerCommit({ "branch": empty, "tag": drifted, "making": root.makingNothing })
@@ -633,7 +634,7 @@ Item {
             compare(root.asked, "push origin v1.0 deadbee")
 
             const both = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "tagReach": "origin",
-                           "tagHeldBack": "", "tagCarriers": "origin", "tagHere": true,
+                           "tagHeldBack": "", "tagCarriers": "origin", "tagHere": true, "tagAt": "abc123",
                            "offers": ["branch-here", "integrate", "delete", "push-tag", "delete-remote-tag"] }
             root.aimAt({ targetKind: "tag", targetName: "v1.0" })
             menu.offerCommit({ "branch": empty, "tag": both, "making": root.makingNothing })

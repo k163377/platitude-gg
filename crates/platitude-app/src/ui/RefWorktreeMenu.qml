@@ -28,7 +28,7 @@ import platitude.ui.words
 AppMenu {
     id: worktreeMenu
 
-    /// The worktree the card stands on, frozen by `standOn`: its path (what git removes), its folder (what the row
+    /// The worktree the card stands on, set by `standOn`: its path (what git removes), its folder (what the row
     /// says) and the branch it has out (empty for none) — the folder and the branch are what it marks on the graph and
     /// the branches list, which go with the press.
     readonly property alias path: state.path
@@ -168,6 +168,7 @@ AppMenu {
                        : state.out === "here" ? qsTr("This tab is showing this worktree") : ""
         holdPresses: Metrics.holdPressesPlain
         holdTone: Theme.textPrimary
+        premise: state.path + "\n" + state.holds
         onHeld: {
             refWorktreeRemoveItem.closeMenu()
             worktreeMenu.removeRequested(state.path, state.name, state.holds)

@@ -24,7 +24,7 @@ Item {
 
     /// The remote the menu stands on.
     property string remote: ""
-    /// Whether the mark row is on offer: decided as the menu opens and held while it stands (デザイン規約 §メニュー).
+    /// Whether the mark row is on offer: decided as the menu opens and as it stands again (デザイン規約 §メニュー).
     property bool canMark: false
 
     readonly property alias menu: menu
@@ -32,6 +32,14 @@ Item {
     readonly property alias opened: menu.opened
     /// Whether the menu is up, for the pane that holds still under it.
     readonly property bool showing: menu.opened
+    /// What the rows read off the tab: the menu standing follows it as it moves, outside too (`follow`;
+    /// デザイン規約 §メニュー「今の内容」).
+    readonly property string standsOn: remoteRowMenu.repoTab.markedOrigin + "\n"
+                                       + remoteRowMenu.repoTab.remoteNames.join("\n")
+    /// The worktree as the command the menus wait for was asked (`RepoPage.treeAtAsk`); null while nothing is out.
+    /// While it stands, the rows keep what they stood on, as every opener's (`CommitMenuState.follow`); back to null,
+    /// they stand on what the command left.
+    property var treeAtAsk: null
 
     /// The form for this remote's URL — the same dialog `Add remote…` opens, with the half that is already known
     /// filled in (デザイン規約 §リモートを書き留める).
@@ -52,8 +60,16 @@ Item {
         remoteRowMenu.canMark = remoteRowMenu.remote !== ""
                                 && remoteRowMenu.remote !== remoteRowMenu.repoTab.markedOrigin
     }
-    /// The command the menu waited for has ended with the menu up: the rows stand on what it left, the menu keeping
-    /// its shape (`AppMenu.holdShape`). A remote the command took away leaves the menu nothing to act on.
+    /// What the rows read moved with the menu up — outside while nothing runs, or with a command that has just ended.
+    /// Not while a command is out: a menu raised under it waits on it as it is (`AppMenu.runningWhy`).
+    function follow() {
+        if (remoteRowMenu.treeAtAsk !== null)
+            return
+        remoteRowMenu.standAgain()
+    }
+    /// The command the menu waited for has ended with the menu up, or what the rows read moved: the rows stand on what
+    /// is there now, the menu keeping its shape (`AppMenu.holdShape`). A remote taken away leaves the menu nothing to
+    /// act on.
     function standAgain() {
         if (!remoteRowMenu.showing)
             return
@@ -64,6 +80,9 @@ Item {
         menu.holdShape()
         remoteRowMenu.standOn()
     }
+
+    onStandsOnChanged: Qt.callLater(remoteRowMenu.follow)
+    onTreeAtAskChanged: if (remoteRowMenu.treeAtAsk === null) remoteRowMenu.follow()
 
     AppMenu {
         id: menu

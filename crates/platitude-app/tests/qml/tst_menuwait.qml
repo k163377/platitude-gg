@@ -15,6 +15,8 @@ Item {
     /// What the shaped menu's last two rows stand on.
     property bool goesOffered: true
     property bool comesOffered: false
+    /// What the shaped menu's first row says.
+    property string staysText: "Stays"
 
     AppMenu {
         id: menu
@@ -33,7 +35,7 @@ Item {
         id: shaped
         AppMenuItem {
             id: stays
-            text: "Stays"
+            text: root.staysText
         }
         AppMenuItem {
             id: goes
@@ -86,6 +88,7 @@ Item {
             shaped.releaseShape()
             root.goesOffered = true
             root.comesOffered = false
+            root.staysText = "Stays"
             ended.clear()
             remoteMenu.menu.dismiss()
             remoteMenu.runningWhy = ""
@@ -156,6 +159,38 @@ Item {
             verify(shaped.offer())
             verify(!goes.present, "raised again, the menu shows what applies then")
             verify(comes.present)
+        }
+
+        /// What the rows say is not held with the shape: a card whose row now says more settles as wide as one raised
+        /// on those words, and back again as they shrink (デザイン規約 §メニュー「凍らせるのは行の出入りとチップ列の幅だけ」).
+        function test_a_held_shape_lets_the_width_follow_the_words() {
+            verify(shaped.offer())
+            const opened = shaped.width
+            shaped.holdShape()
+            root.staysText = "Stays, and says a great deal more than it did as the menu opened"
+            verify(shaped.width > opened, "the card widens to the words")
+            const grown = shaped.width
+            shaped.dismiss()
+            tryVerify(() => !shaped.visible)
+            shaped.releaseShape()
+            verify(shaped.offer())
+            compare(shaped.width, grown, "as wide as a menu raised on those words")
+            shaped.holdShape()
+            root.staysText = "Stays"
+            compare(shaped.width, opened, "and narrow again with them")
+        }
+
+        /// A remote's menu raised with nothing running follows what its rows read as it moves outside: the mark row
+        /// made moot greys where it is; a remote taken away takes the menu down.
+        function test_a_remote_menu_follows_what_moves_outside() {
+            verify(remoteMenu.offerOn("fork"))
+            const mark = remoteMenu.menu.itemAt(1)
+            verify(!mark.withdrawn)
+            remoteTab.markedOrigin = "fork"
+            tryVerify(() => mark.withdrawn, undefined, "the mark it no longer needs greys where it is")
+            compare(remoteMenu.menu.offeredRows, 2, "and the menu keeps its rows")
+            remoteTab.remoteNames = ["origin"]
+            tryVerify(() => !remoteMenu.menu.visible, undefined, "a remote gone leaves the menu nothing to act on")
         }
 
         /// A remote's menu stands again the same way: the mark row the command made moot greys where it is; a remote

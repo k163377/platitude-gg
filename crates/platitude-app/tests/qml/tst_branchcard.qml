@@ -68,8 +68,9 @@ Item {
 
     /// `merged` is what the drawn rows already say (`yes` / `no`, empty when only git can answer). The row stands on
     /// `abc123` and its reading on `def456`, so a press says which commit it leased. `push` is the push row's answer
-    /// (`NavSectionModel.branchPush`), none by default.
-    function standOn(fields) {
+    /// (`NavSectionModel.branchPush`), none by default. `again`: why the menu stands again with the card up
+    /// (`RefBranchMenu.standOn`'s — `follow` / `wait`), none as it is raised; the row on `oid` (`abc123` unless named).
+    function standOn(fields, again, oid) {
         const all = { "kind": "branch", "name": "feature/topic-a", "full": "feature/topic-a",
                       "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "origin/feature/topic-a",
                       "upstream": "origin/feature/topic-a", "upstreamWhere": "remote",
@@ -78,7 +79,7 @@ Item {
         for (const key in fields)
             all[key] = fields[key]
         root.asked = ""
-        branchCard.standOn(all.kind, all.name, all.full, "abc123", {
+        branchCard.standOn(all.kind, all.name, all.full, oid === undefined ? "abc123" : oid, {
             "heldByWorktree": all.heldByWorktree,
             "holderLeaf": all.holderLeaf,
             "remoteCounterpart": all.remoteCounterpart,
@@ -90,7 +91,7 @@ Item {
             "merged": all.merged,
             "offers": all.offers,
             "push": all.push
-        })
+        }, again === undefined ? "" : again)
     }
     /// A push row's answer in `state`, going to `origin/feature/topic-a` and leased to `fed789` where it counts.
     function pushing(state) {
@@ -107,12 +108,21 @@ Item {
         branchCard.refusedDelete = name
     }
 
+    /// Every write of the push row's answer (`test_standing_again_writes_the_push_answer_once`).
+    SignalSpy {
+        id: pushSeen
+        target: branchCard.state
+        signalName: "pushStateChanged"
+    }
+
     TestCase {
         name: "BranchCard"
         when: windowShown
 
         /// A menu a test opened goes whatever the test said, so the next one finds its rows at rest.
         function cleanup() {
+            level.releaseShape()
+            branchCard.releaseShape()
             if (!level.visible)
                 return
             level.dismiss()
@@ -407,6 +417,207 @@ Item {
             // With no press under way, the chip and the note already say what the row now runs.
             compare(deleteRow.code, "branch -D")
             compare(deleteRow.note, "not merged")
+        }
+
+        /// The menu standing again on what moved while it stood (`again`: `follow`), on the same branch at the same
+        /// commit: git's refusal and its answer to the plain delete hold — asked again, the row would blank between the
+        /// ask and the answer —, while a menu raised afresh drops the one and asks the other again.
+        function test_standing_again_keeps_gits_answers_on_the_same_commit() {
+            root.standOn({ merged: "" })
+            compare(root.asked, "check feature/topic-a", "only git can answer")
+            root.refuse("feature/topic-a")
+            compare(deleteRow.code, "branch -D")
+
+            root.standOn({ merged: "" }, "follow")
+            compare(root.asked, "", "not asked again")
+            compare(branchCard.forceDeleteBranch, "feature/topic-a", "the refusal holds")
+            compare(deleteRow.code, "branch -D")
+
+            root.standOn({ merged: "" }, "follow", "abc999")
+            compare(root.asked, "check feature/topic-a", "the branch on another commit is asked again")
+            compare(branchCard.forceDeleteBranch, "", "and its refusal was about the commit it left")
+
+            root.refuse("feature/topic-a")
+            root.standOn({ merged: "" })
+            compare(branchCard.forceDeleteBranch, "", "a menu raised afresh asks again")
+            compare(root.asked, "check feature/topic-a")
+        }
+
+        /// Standing again, the remote rows stay leased to the commit the menu went up on; that remote branch moved
+        /// since, they grey where they stand asking for the menu to be raised again — a press would take commits it
+        /// never showed (デザイン規約 §メニュー「表示も押下も開いた時」).
+        function test_standing_again_holds_the_remote_lease_and_greys_a_moved_reading() {
+            root.standOn({})
+            level.holdShape()
+            root.standOn({}, "follow")
+            verify(!remoteDeleteRow.withdrawn, "the reading where it was")
+            verify(!bothDeleteRow.withdrawn)
+
+            root.standOn({ remoteCounterpartOid: "999fed" }, "follow")
+            compare(branchCard.state.remoteCounterpartOid, "def456", "the lease stays the commit the menu showed")
+            verify(remoteDeleteRow.withdrawn, "the remote delete greys where it stands")
+            compare(remoteDeleteRow.blockedWhy, remoteDeleteRow.withdrawnWhy)
+            verify(bothDeleteRow.withdrawn, "and so does the pair, whose remote half is the same lease")
+            verify(!deleteRow.withdrawn, "the branch here is untouched")
+            root.standOn({ remoteCounterpartOid: "def456" }, "follow")
+            verify(remoteDeleteRow.withdrawn, "moved once is moved for the menu that showed it")
+
+            level.releaseShape()
+            root.standOn({ remoteCounterpartOid: "999fed" })
+            compare(branchCard.state.remoteCounterpartOid, "999fed", "a menu raised afresh leases where it is now")
+            verify(remoteDeleteRow.offered)
+        }
+
+        /// Standing again writes each answer once: a push row read part-way with no answer would grey for a moment and
+        /// blank the presses under way (`AppMenuItem.onBlockedChanged`).
+        function test_standing_again_writes_the_push_answer_once() {
+            root.standOn({ push: root.pushing("diverged") })
+            verify(pushRow.offered)
+            pushSeen.clear()
+            root.standOn({ push: root.pushing("diverged") }, "follow")
+            compare(pushSeen.count, 0, "an answer that did not move is not written again")
+            verify(pushRow.offered)
+        }
+
+        /// The push stays leased to the far side as the menu went up (`BranchPushRow`): that moved since — a fetch
+        /// brought commits over there — the row keeps what it showed and greys asking for the menu to be raised again,
+        /// since a press would overwrite commits it never showed (デザイン規約 §メニュー「表示も押下も開いた時」). The
+        /// branch here moving is not the far side: the row stands on it.
+        function test_standing_again_holds_the_push_lease_and_greys_a_moved_far_side() {
+            const moved = root.pushing("diverged")
+            moved.lease = "fed999"
+            root.standOn({ push: root.pushing("diverged") })
+            level.holdShape()
+            root.standOn({ push: moved }, "follow")
+            compare(branchCard.state.pushLease, "fed789", "the lease stays the commit the menu showed")
+            verify(pushRow.withdrawn, "the push greys where it stands")
+            compare(pushRow.blockedWhy, pushRow.withdrawnWhy)
+            root.standOn({ push: root.pushing("diverged") }, "follow")
+            verify(pushRow.withdrawn, "moved once is moved for the menu that showed it")
+
+            level.releaseShape()
+            root.standOn({ push: root.pushing("ready") })
+            level.holdShape()
+            root.standOn({ push: moved }, "follow")
+            verify(pushRow.withdrawn, "a plain push that would now overwrite is the far side moving too")
+            compare(branchCard.state.pushState, "ready", "and the row keeps what it showed")
+
+            level.releaseShape()
+            root.standOn({ push: root.pushing("clean") })
+            level.holdShape()
+            root.standOn({ push: root.pushing("ready") }, "follow", "abc999")
+            verify(!pushRow.withdrawn, "a commit made here leaves the far side where it was")
+            compare(branchCard.state.pushState, "ready")
+
+            level.releaseShape()
+            root.standOn({ push: moved })
+            compare(branchCard.state.pushLease, "fed999", "a menu raised afresh leases where it is now")
+            verify(pushRow.offered)
+        }
+
+        /// The remote rows stay on the reading the menu went up with: the branch's upstream pointed elsewhere outside
+        /// (`git branch -u`, a remote renamed), they keep that name and lease and grey — a press would reach a remote
+        /// branch the rows never named. The upstream rows read the tree as it is.
+        function test_standing_again_holds_the_remote_rows_when_the_upstream_changes() {
+            root.standOn({})
+            level.holdShape()
+            root.standOn({ remoteCounterpart: "origin/feature/other", remoteCounterpartOid: "999fed",
+                           upstream: "origin/feature/other" }, "follow")
+            compare(branchCard.state.remoteCounterpart, "origin/feature/topic-a", "the name stays the one shown")
+            compare(branchCard.state.remoteCounterpartOid, "def456", "and so does the lease")
+            compare(remoteDeleteRow.codeName, "origin/feature/topic-a")
+            verify(remoteDeleteRow.withdrawn, "the remote delete greys where it stands")
+            verify(bothDeleteRow.withdrawn, "and so does the pair")
+            compare(branchCard.state.upstream, "origin/feature/other", "the upstream is the tree's")
+            root.asked = ""
+            branchCard.upstreamItem.triggered()
+            compare(root.asked, "upstream feature/topic-a origin/feature/other true",
+                    "and the upstream question starts from the reading as it is")
+        }
+
+        /// A remote branch's own delete is leased to the commit the row stood on as the menu went up: moved since, the
+        /// menu stays up (デザイン規約 §hover「外乱で閉じない」) and the row keeps that commit and greys.
+        function test_a_remote_branch_that_moved_keeps_its_delete_leased_and_greys_it() {
+            const remote = { kind: "remote", name: "origin/main", full: "origin/main",
+                             remoteCounterpart: "", remoteCounterpartOid: "", offers: ["delete"] }
+            root.standOn(remote)
+            level.holdShape()
+            root.standOn(remote, "follow", "abc999")
+            compare(branchCard.state.refOid, "abc123", "the lease stays the commit the row stood on")
+            verify(deleteRow.withdrawn, "the delete greys where it stands")
+            compare(deleteRow.blockedWhy, deleteRow.withdrawnWhy)
+            root.standOn(remote, "follow")
+            verify(deleteRow.withdrawn, "moved once is moved for the menu that showed it")
+
+            level.releaseShape()
+            root.standOn(remote, "", "abc999")
+            compare(branchCard.state.refOid, "abc999", "a menu raised afresh leases where it is now")
+            verify(deleteRow.offered)
+        }
+
+        /// A command the menu waited for ends with what the rows reach over there moved — a fetch brought the remote
+        /// branch, the reading or the far side somewhere else: the rows keep the leases the menu went up with and grey,
+        /// as when that moves outside (デザイン規約 §メニュー「表示も押下も開いた時」). git's answer to the plain delete
+        /// is asked again: the command may have merged the branch.
+        function test_a_wait_that_ends_holds_the_leases_and_asks_git_again() {
+            const remote = { kind: "remote", name: "origin/main", full: "origin/main",
+                             remoteCounterpart: "", remoteCounterpartOid: "", offers: ["delete"] }
+            root.standOn(remote)
+            level.holdShape()
+            root.standOn(remote, "wait", "abc999")
+            compare(branchCard.state.refOid, "abc123", "the remote branch's own delete keeps its lease")
+            verify(deleteRow.withdrawn, "and greys where it stands")
+
+            level.releaseShape()
+            root.standOn({ push: root.pushing("diverged") })
+            level.holdShape()
+            const moved = root.pushing("diverged")
+            moved.lease = "fed999"
+            root.standOn({ remoteCounterpartOid: "999fed", push: moved }, "wait")
+            compare(branchCard.state.remoteCounterpartOid, "def456", "the reading's lease holds")
+            verify(remoteDeleteRow.withdrawn, "the remote delete greys")
+            compare(branchCard.state.pushLease, "fed789", "the push's lease holds")
+            verify(pushRow.withdrawn, "the push greys")
+
+            level.releaseShape()
+            root.standOn({ merged: "" })
+            root.refuse("feature/topic-a")
+            level.holdShape()
+            root.standOn({ merged: "" }, "wait")
+            compare(root.asked, "check feature/topic-a", "git is asked again")
+            compare(branchCard.forceDeleteBranch, "", "and its refusal was about the tree before the command")
+        }
+
+        /// A row with no chip whose name has gone with the menu up — the upstream unset outside — keeps its words
+        /// without the name and its mark, greyed: the sentence goes with the name (`AppMenuItem.sentence`), and a row
+        /// with no chip would be left blank.
+        function test_a_row_with_no_chip_keeps_its_words_once_its_name_has_gone() {
+            root.standOn({})
+            branchCard.holdShape()
+            root.standOn({ remoteCounterpart: "", remoteCounterpartOid: "", upstream: "", upstreamWhere: "",
+                           offers: ["switch", "delete", "set-upstream"] }, "follow")
+            const unset = branchCard.unsetUpstreamItem
+            verify(unset.withdrawn, "greyed where it stands")
+            compare(unset.sentence, "", "the sentence names nothing now")
+            compare(unset.text, "Unset upstream", "the words stay")
+            branchCard.releaseShape()
+        }
+
+        /// Presses under way are aimed at what the row acts on (`AppMenuItem.premise`): the menu standing again part
+        /// way with that moved — the branch here went to another commit, so the pair would take commits the presses
+        /// were not made for — the presses so far count for nothing, and the ones left over fire nothing.
+        function test_presses_under_way_count_for_nothing_once_what_they_act_on_moves() {
+            root.standOn({})
+            level.holdShape()
+            bothDeleteRow.holdDrive.begin()
+            bothDeleteRow.holdDrive.letUp()
+            root.standOn({}, "follow", "abc999")
+            verify(bothDeleteRow.holdDrive.stale, "the presses were made for the branch where it was")
+            for (let i = 1; i < Metrics.holdPressesWarned; i++) {
+                bothDeleteRow.holdDrive.begin()
+                bothDeleteRow.holdDrive.letUp()
+            }
+            compare(root.asked, "", "so the presses left over fire nothing")
         }
 
         /// Where the drawn rows cannot answer, git is asked — by request, like any other.

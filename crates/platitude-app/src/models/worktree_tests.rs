@@ -174,6 +174,30 @@ fn the_held_branch_is_heads_own_or_the_one_an_operation_keeps() {
     assert_eq!(model.held_branch, "");
 }
 
+/// What a standing menu follows (`RepoPage.menuReadRevision`): it moves when
+/// what the menus read of the tree moves, and a read that moved none of it
+/// leaves it — so a poll answering what was there stands nothing again.
+#[test]
+fn the_reading_revision_moves_only_with_what_the_menus_read() {
+    let mut model = WorktreeModel::default();
+    model.absorb(vec![head(ROOT, 1)]);
+    let first = model.reading_revision;
+    model.absorb(vec![head(ROOT, 2)]);
+    assert_eq!(model.reading_revision, first, "the same HEAD read again");
+    model.absorb(vec![head_on("trunk", ROOT, 3)]);
+    assert_ne!(model.reading_revision, first, "the branch renamed outside");
+    let renamed = model.reading_revision;
+    model.absorb(vec![head_detached(ROOT, "", 4)]);
+    assert_ne!(model.reading_revision, renamed, "HEAD taken off its branch");
+    let detached = model.reading_revision;
+    model.forget_the_worktree();
+    model.absorb(vec![head_detached(ROOT, "", 1)]);
+    assert_ne!(
+        model.reading_revision, detached,
+        "a tab standing elsewhere reads its first tree as a move, however it compares"
+    );
+}
+
 #[test]
 fn the_published_answer_follows_the_commit_it_is_about() {
     let mut model = WorktreeModel::default();

@@ -4,7 +4,7 @@ import platitude.ui.words
 
 // Everything a tag's name answers for, behind the tag's mark: made here, sent, deleted on either side
 // (デザイン規約 §メニュー の入れ子). One card, two entrances like `RefBranchMenu`: the graph row's menu and the
-// sidebar's ref menu both carry it and freeze it with `standOn`.
+// sidebar's ref menu both carry it and stand it with `standOn`.
 //
 // Nested, not on the first level: sending and deleting a tag are rare (user decision — ask before changing).
 // `Create tag here…` lives here while `Create branch here…` stands on the first level (user decision): a branch is a
@@ -25,7 +25,7 @@ AppMenu {
     /// Why that name cannot be made right now (an operation standing), handed in with it; empty while it can.
     property string makeWhy: ""
 
-    /// The tag this card is about, frozen by `standOn`. `kind` is `tag` on a row that names one; anything else leaves
+    /// The tag this card is about, set by `standOn`. `kind` is `tag` on a row that names one; anything else leaves
     /// the card holding `Create tag here…` alone, and `stash` takes the card off the menu.
     readonly property alias kind: state.kind
     readonly property alias refId: state.refId
@@ -50,15 +50,25 @@ AppMenu {
     /// Where this card's deletes reach, for a run's report (`AutoActRefVerbs.reachWords`).
     readonly property alias reach: state.reach
 
-    /// Everything this card reads, worked out once as the menu opens and left alone while it stands.
+    /// Everything this card reads, worked out by `standOn` alone: as the menu opens, and as it stands again.
     readonly property QtObject state: QtObject {
         id: state
         property string kind: ""
         property string refId: ""
         property string refOid: ""
+        /// The commit the tag here points at now, the one a push sends: what the push row's presses lean on
+        /// (`premise`). Empty where only a remote has the name.
+        property string tagAt: ""
         property string pushRemote: ""
         /// Where the remote was last heard to have this name, when that is somewhere else. Empty for the plain push.
         property string tagDriftOid: ""
+        /// The push row stood as the menu went up: the remote and the reading it showed hold through every stand
+        /// after, one where it stopped applying for a while included (`standOn`).
+        property bool pushShown: false
+        /// The menu stood again on a reading where the push's remote or its reading of this name has moved from what
+        /// the row showed: the row keeps that and greys asking for the menu to be opened again (`standOn`'s
+        /// `again`).
+        property bool pushMoved: false
         /// The remote the rows deleting over there reach — empty where none can be named — and why they stand greyed:
         /// `drift` (that remote has the name elsewhere than here) / `unnamed` (several carry it, `tagCarriers`).
         property string reach: ""
@@ -84,22 +94,39 @@ AppMenu {
     /// Stands the card on that row, off answers already in hand. `oidHex` is the row's commit, where a name would be
     /// made, tag or not. `facts` is what the carrying menu read (`NavSectionModel.tagMenu`): `pushRemote` (where
     /// pushes go), `tagDriftOid` (where that remote last had this name, when elsewhere), `tagReach` / `tagHeldBack` /
-    /// `tagCarriers` (where the deletes reach and why they grey), `tagOnlyThere`, `tagHere`, and `offers`
+    /// `tagCarriers` (where the deletes reach and why they grey), `tagOnlyThere`, `tagHere`, `tagAt` (the commit the
+    /// tag here points at now), and `offers`
     /// (`GitFacts.refMenuOffers` — `offers::RefMenuOffers::words`). All of it is in hand before the card shows, so
-    /// the push row's shape is fixed.
-    function standOn(kind, full, oidHex, facts) {
+    /// the push row's shape is settled as it opens. `again`: why the menu stands again with the card up — `follow`, on
+    /// what moved while it stood (`RefRowMenu.follow`, `CommitMenuState.follow`), or `wait`, on what the command it
+    /// waited for left (`AppMenu.waitEnded`) —; empty as the menu is raised. Standing again, the push stays on the
+    /// remote and the reading the menu went up with (デザイン規約 §メニュー「表示も押下も開いた時」): moved since — a
+    /// fetch outside, or the one the menu waited for, brought another reading — the row keeps what it showed and greys
+    /// (`pushMoved`), since the held overwrite would replace a commit it never showed.
+    function standOn(kind, full, oidHex, facts, again) {
+        const tagged = kind === "tag"
+        const sameTag = (again === "follow" || again === "wait") && tagged && kind === state.kind
+                        && full === state.refId
+        // Latched as the menu went up, not read off the row as it is: a push that stopped applying for a while (the
+        // tag deleted here) and came back on another reading would otherwise take that reading as its lease.
+        const pushHeld = sameTag && state.pushShown
+        const drift = tagged ? facts.tagDriftOid : ""
+        const pushMoved = pushHeld
+                          && (state.pushMoved || facts.pushRemote !== state.pushRemote || drift !== state.tagDriftOid)
         state.kind = kind
         state.refId = full
         state.refOid = oidHex
-        state.pushRemote = facts.pushRemote
-        const tagged = kind === "tag"
-        state.tagDriftOid = tagged ? facts.tagDriftOid : ""
+        state.tagAt = tagged ? facts.tagAt : ""
+        state.pushMoved = pushMoved
+        state.pushRemote = pushMoved ? state.pushRemote : facts.pushRemote
+        state.tagDriftOid = pushMoved ? state.tagDriftOid : drift
         state.reach = tagged ? facts.tagReach : ""
         state.heldBack = tagged ? facts.tagHeldBack : ""
         state.tagCarriers = tagged ? facts.tagCarriers : ""
         state.tagHere = tagged && facts.tagHere
         if (!tagged) {
             state.canPushTag = false
+            state.pushShown = false
             state.canDelete = false
             state.canDeleteRemoteTag = false
             state.canDeleteTagEverywhere = false
@@ -110,6 +137,7 @@ AppMenu {
         // Which delete rows have a seat is core's answer (offers::ref_menu).
         const offers = facts.offers
         state.canPushTag = offers.includes("push-tag")
+        state.pushShown = sameTag ? state.pushShown : state.canPushTag
         state.canDelete = offers.includes("delete")
         state.canDeleteRemoteTag = offers.includes("delete-remote-tag")
         state.canDeleteTagEverywhere = offers.includes("delete-tag-everywhere")
@@ -133,8 +161,9 @@ AppMenu {
         blockedReason: tagMenu.makeWhy
         onTriggered: tagMenu.tagHereRequested(state.refOid)
     }
-    // Two forms, fixed as the menu opens (§メニュー): a name the remote has on another commit is the held, leased
-    // `push --force` (the flag long, as every menu row's), leased to the oid on screen (§相手の履歴を置き換える).
+    // Two forms, settled as the menu opens and kept while that reading holds (§メニュー; `state.pushMoved`): a name the
+    // remote has on another commit is the held, leased `push --force` (the flag long, as every menu row's), leased to
+    // the oid on screen (§相手の履歴を置き換える).
     // Weighed off the last `ls-remote --tags` reading; with no reading the plain `push` — a remote holding it on the
     // same commit only answers that there is nothing to send — and git's refusal stands. The plain push is an ordinary
     // row, plain ink and one click: it adds a name and takes nothing; the hold and the warning are the lease's alone.
@@ -153,10 +182,14 @@ AppMenu {
         // As the branch's push row: where it goes, behind its mark.
         refTint: Theme.textPrimary
         refMark: "remote"
-        offered: state.canPushTag
+        // Moved since the menu went up, the row stops applying and greys where it stands (`state.pushMoved`).
+        offered: state.canPushTag && !state.pushMoved
         holdPresses: state.tagDriftOid === "" ? 0 : Metrics.holdPressesWarned
         // Reaching past this machine is the warning tone (デザイン規約 §状態).
         holdTone: Theme.warning
+        // What it sends and where, leased to what: the tag moved here part way (`git tag -f`) is not the push the
+        // presses began.
+        premise: [state.pushRemote, state.refId, state.tagAt, state.tagDriftOid].join("\n")
         onTriggered: tagMenu.pushTagRequested(state.pushRemote, state.refId, "")
         onHeld: {
             refPushTagItem.closeMenu()
@@ -178,6 +211,7 @@ AppMenu {
         codeName: state.refId
         offered: state.kind === "tag" && state.canDelete
         holdPresses: Metrics.holdPressesWarned
+        premise: state.refId + "\n" + state.refOid
         onHeld: {
             refTagDeleteItem.closeMenu()
             tagMenu.deleteTagRequested(state.refId)
@@ -214,6 +248,7 @@ AppMenu {
         holdPresses: Metrics.holdPressesWarned
         // Warning: only a name goes, and the commit stays (デザイン規約 §タグを作る・送る).
         holdTone: Theme.warning
+        premise: [state.reach, state.refId, state.refOid, state.tagOnlyThere].join("\n")
         onHeld: {
             refRemoteTagDeleteItem.closeMenu()
             tagMenu.deleteRemoteTagRequested(state.reach, state.refId, state.tagOnlyThere, state.refOid)
@@ -229,6 +264,7 @@ AppMenu {
         holdPresses: Metrics.holdPressesWarned
         // Only names go — git keeps the object — so never the danger of the branch's `-D`.
         holdTone: Theme.warning
+        premise: [state.refId, state.reach, state.refOid].join("\n")
         onHeld: {
             refBothTagDeleteItem.closeMenu()
             tagMenu.deleteTagEverywhereRequested(state.refId, state.reach, state.refOid)

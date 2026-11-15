@@ -174,7 +174,7 @@ impl From<platitude_core::session::TagMenuFacts> for TagMenu {
 }
 
 /// What a menu's `push` row on one branch stands on, read as the menu opens
-/// (`RefsSnapshot::branch_push`).
+/// and as it stands again (`RefsSnapshot::branch_push`).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct BranchPush {
     /// `PushStanding`'s word (`publish` / `ready` / `behind` /

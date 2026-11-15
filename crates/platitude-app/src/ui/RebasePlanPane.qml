@@ -263,9 +263,9 @@ Rectangle {
         spinning: planPane.waiting
     }
 
-    // The todo file's six verbs, chips first (デザイン規約 §git 用語のコード表記). The row and whether a fold lands are
-    // frozen at open (デザイン規約 §メニュー「中身は開いた瞬間に決め、開いている間は凍らせる」); the landing question is
-    // the model's `canFold`, the same answer the demotion enforces.
+    // The todo file's six verbs, chips first (デザイン規約 §git 用語のコード表記). The row and whether a fold lands — the
+    // fold rows' seats — are frozen at open (デザイン規約 §メニュー「行の出入りは開いた瞬間に決め、開いている間は
+    // 凍らせる」); the landing question is the model's `canFold`, the same answer the demotion enforces.
     Item {
         anchors.fill: parent
         AppMenu {

@@ -36,8 +36,9 @@ Item {
     }
 
     /// The card on `offers`, the rest as `NavSectionModel.tagMenu` answers for a name `origin` carries: the deletes
-    /// reach it, and a drift holds them back. `over` replaces any of those answers.
-    function standOn(offers, drift, onlyThere, over) {
+    /// reach it, and a drift holds them back. `over` replaces any of those answers. `again`: why the menu stands again
+    /// with the card up (`RefTagMenu.standOn`'s — `follow` / `wait`), none as it is raised.
+    function standOn(offers, drift, onlyThere, over, again) {
         root.asked = ""
         const facts = {
             "pushRemote": "origin",
@@ -47,16 +48,22 @@ Item {
             "tagCarriers": "origin",
             "tagOnlyThere": onlyThere,
             "tagHere": offers.includes("delete"),
+            "tagAt": "abc123",
             "offers": offers
         }
         for (const key in (over || {}))
             facts[key] = over[key]
-        card.standOn("tag", "v1.0", "abc123", facts)
+        card.standOn("tag", "v1.0", "abc123", facts, again === undefined ? "" : again)
     }
 
     TestCase {
         name: "TagCard"
         when: windowShown
+
+        // A shape held by a case that failed part way would hold the next case's rows.
+        function cleanup() {
+            card.releaseShape()
+        }
 
         /// Read off `offered`: a card missing a row frames exactly like one that never offered it.
         function test_the_delete_rows_a_name_grows_data() {
@@ -177,6 +184,68 @@ Item {
             root.standOn(root.both, "", false)
             card.deleteTagBothItem.held()
             compare(root.asked, "delete-both v1.0 origin abc123")
+        }
+
+        /// The push stays pinned to the remote and the reading the menu went up with: the name over there moved since
+        /// — a fetch outside or the one the menu waited for brought another reading — the row keeps what it showed and
+        /// greys asking for the menu to be raised again, since the held overwrite would replace a commit it never
+        /// showed (デザイン規約 §メニュー「表示も押下も開いた時」).
+        function test_standing_again_holds_the_push_lease_and_greys_a_moved_reading() {
+            root.standOn(root.drifted, "deadbee", false)
+            card.holdShape()
+            root.standOn(root.drifted, "c0ffee", false, {}, "follow")
+            compare(card.pushTagItem.refName, "origin")
+            verify(card.pushTagItem.withdrawn, "the push greys where it stands")
+            compare(card.pushTagItem.blockedWhy, card.pushTagItem.withdrawnWhy)
+            card.pushTagItem.held()
+            compare(root.asked, "push origin v1.0 deadbee", "a press that got through would still be the one shown")
+
+            card.releaseShape()
+            root.standOn(root.here, "", false)
+            card.holdShape()
+            root.standOn(root.drifted, "c0ffee", false, {}, "follow")
+            verify(card.pushTagItem.withdrawn, "a plain push that would now overwrite is the reading moving too")
+            compare(card.pushTagItem.holdPresses, 0, "and the row keeps the form it showed")
+
+            card.releaseShape()
+            root.standOn(root.drifted, "deadbee", false)
+            card.holdShape()
+            root.standOn(root.drifted, "c0ffee", false, {}, "wait")
+            verify(card.pushTagItem.withdrawn, "and so when the command the menu waited for brought it")
+
+            card.releaseShape()
+            root.standOn(root.drifted, "c0ffee", false)
+            verify(card.pushTagItem.offered, "a menu raised afresh stands on the reading as it is")
+            card.pushTagItem.held()
+            compare(root.asked, "push origin v1.0 c0ffee")
+        }
+
+        /// A push that stopped applying for a while — the tag deleted here with the menu up — keeps the lease it
+        /// showed: made again on another reading, the row stays grey rather than offer an overwrite it never showed.
+        function test_a_push_that_stopped_applying_keeps_the_lease_it_showed() {
+            root.standOn(root.drifted, "deadbee", false)
+            card.holdShape()
+            root.standOn(root.overThere, "deadbee", true, {}, "follow")
+            verify(card.pushTagItem.withdrawn, "gone here, the push greys")
+            root.standOn(root.drifted, "c0ffee", false, {}, "follow")
+            verify(card.pushTagItem.withdrawn, "made again on another reading, it stays grey")
+            compare(card.state.tagDriftOid, "deadbee", "still on the lease it showed")
+        }
+
+        /// Presses under way on the push are made for the tag where it stood (`AppMenuItem.premise`): moved here part
+        /// way (`git tag -f`), the presses so far count for nothing, and the ones left over fire nothing.
+        function test_presses_under_way_count_for_nothing_once_the_tag_moves_here() {
+            root.standOn(root.drifted, "deadbee", false)
+            card.holdShape()
+            card.pushTagItem.holdDrive.begin()
+            card.pushTagItem.holdDrive.letUp()
+            root.standOn(root.drifted, "deadbee", false, { "tagAt": "abc999" }, "follow")
+            verify(card.pushTagItem.holdDrive.stale, "the presses were made for the tag where it was")
+            for (let i = 1; i < Metrics.holdPressesWarned; i++) {
+                card.pushTagItem.holdDrive.begin()
+                card.pushTagItem.holdDrive.letUp()
+            }
+            compare(root.asked, "", "so the presses left over fire nothing")
         }
 
         /// From a remote and a name the write cannot tell whether the sidebar row goes or only loses its badge, so

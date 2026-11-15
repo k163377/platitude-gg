@@ -5,7 +5,7 @@ import platitude.ui.words
 // The BRANCH card: the branch's upstream set and taken off (デザイン規約 §メニュー の入れ子). The rows a branch is used
 // through often — sent to its remote (`BranchPushRow`, beside `pull`) and the delete table, local / remote / both
 // (`BranchDeleteRow` / `BranchRemoteDeleteRow` / `BranchBothDeleteRow`, the last group) — stand on the level above,
-// reading this card's frozen answers (`state`) (規約 §メニュー「第 1 階層か入れ子かは、使う頻度で決める」). Every entrance
+// reading this card's answers (`state`) (規約 §メニュー「第 1 階層か入れ子かは、使う頻度で決める」). Every entrance
 // carries this card nested, so those answers are in hand as the menu opens, whether or not the card is ever opened.
 //
 // The delete table is a fixed table (user decision — ask before changing): a row that cannot be done right now stays,
@@ -16,13 +16,14 @@ import platitude.ui.words
 // row (user decision).
 //
 // **One card, two entrances** (`RefRowMenu` / `CommitMenuState`), so both offer the same thing, letter for letter (user
-// decision — ask before changing) — one part both menus carry, freezing its own answers, leaves no room to wire one
+// decision — ask before changing) — one part both menus carry, standing on its own answers, leaves no room to wire one
 // entrance and forget the other; the first-level push and delete rows are carried the same way. Only on a local
 // branch (`applies`): the sidebar row itself, or on a graph row the name its chip draws. A remote branch has no
 // upstream rows, so the card goes title row and all; its delete is a row of the first-level table. **It reads no model
-// and runs no write**: the entrance reads the facts (`branchFacts`), `standOn` freezes them as the menu opens, and
-// the card and the rows on it signal what was pressed (rules/app-ui.md の「配線」). Standing on plain values is what
-// lets `tests/qml/tst_branchcard.qml` drive the real card, the only place the sentences are checked (see `holderLeaf`).
+// and runs no write**: the entrance reads the facts (`branchFacts`), `standOn` stands the card on them as the menu
+// opens and as it stands again, and the card and the rows on it signal what was pressed (rules/app-ui.md の「配線」).
+// Standing on plain values is what lets `tests/qml/tst_branchcard.qml` drive the real card, the only place the
+// sentences are checked (see `holderLeaf`).
 AppMenu {
     id: branchCard
 
@@ -35,7 +36,7 @@ AppMenu {
     property string checkedBranch: ""
     property string checkedMerged: ""
 
-    /// The branch this card is about, frozen by `standOn`. `kind` is `branch` or `remote` — the delete table on the
+    /// The branch this card is about, set by `standOn`. `kind` is `branch` or `remote` — the delete table on the
     /// level above stands on either —, empty on a row that names no branch. Only a local branch has the card's own
     /// rows (`applies`).
     readonly property alias kind: state.kind
@@ -47,15 +48,16 @@ AppMenu {
     readonly property alias deleteAnswered: state.deleteAnswered
     readonly property alias deleteMerged: state.deleteMerged
     /// Whether the delete row has an answer coming at all (off the rows, or asked of git). False when the delete is
-    /// out (current branch, held by another worktree); frozen at open, so no answer comes later either.
-    /// Only the automation reads it, as "did the input land".
+    /// out (current branch, held by another worktree); set by `standOn`, so no answer comes for a stand that asked
+    /// none. Only the automation reads it, as "did the input land".
     readonly property alias deleteAsked: state.deleteAsked
     /// The folder the other worktree stands in, as the blocked row names it. The automation reads this as the
     /// witness that the worktree was looked up.
     readonly property alias holderLeaf: state.holderLeaf
 
     /// The branch git has just refused to delete while the menu stands, so the delete row turns into the held `-D`
-    /// where the hand already is (`BranchDeleteRow.onHeld`). Written off `refusedDelete`, cleared at the next open.
+    /// where the hand already is (`BranchDeleteRow.onHeld`). Written off `refusedDelete`, cleared as the card stands
+    /// on another branch, on another commit, afresh, or again once a command it waited for ends (`standOn`).
     /// The menu answers for itself — refused, the rows turn (`refused`); landed, the delete row closes every level
     /// (`BranchDeleteRow.landing`) — so neither entrance has to know which one raised it
     /// (rules-refs/app-ui.md「メニューを閉じるのは自分」). Each answer has its own line: the landing is
@@ -103,7 +105,8 @@ AppMenu {
     readonly property alias pushState: state.pushState
 
     /// Everything this card and the rows it lends the level above read (`BranchPushRow` / `BranchDeleteRow` /
-    /// `BranchRemoteDeleteRow` / `BranchBothDeleteRow`), set once by `standOn` and left alone while it stands.
+    /// `BranchRemoteDeleteRow` / `BranchBothDeleteRow`), set by `standOn` alone: as the menu opens, and as it stands
+    /// again.
     readonly property QtObject state: QtObject {
         id: state
         property string kind: ""
@@ -116,12 +119,20 @@ AppMenu {
         property string upstream: ""
         property string upstreamWhere: ""
         /// The commit that reading showed as the menu opened: the lease of every delete that reaches it
-        /// (`branchesModel.upstreamOidOf`, frozen here, so a fetch behind the open menu leaves the press on the tip
-        /// the reader saw). Headless: `delete-both-go side` / `delete-upstream-go next`, `--preset stack` — a lease
-        /// that misses fails the write.
+        /// (`branchesModel.upstreamOidOf`, kept through the menu standing again, so a fetch behind the open menu leaves
+        /// the press on the tip the reader saw — or greys it, `remoteMoved`). Headless: `delete-both-go side` /
+        /// `delete-upstream-go next`, `--preset stack` — a lease that misses fails the write.
         property string remoteCounterpartOid: ""
         /// That reading stands on another commit, so the two rows that reach it say why.
         property bool remoteDrifted: false
+        /// The reading as the tree has it now, which `Set upstream…` starts from: the delete rows keep the one the menu
+        /// went up with (`remoteCounterpart`), the upstream rows read the tree as it is.
+        property string readingNow: ""
+        /// The menu stood again on a reading where the remote branch the delete rows are leased to — the local
+        /// branch's reading, or a remote branch's own row — has moved from that commit or been pointed elsewhere:
+        /// they no longer say what a press would take, and grey asking for the menu to be opened again (`standOn`'s
+        /// `again`).
+        property bool remoteMoved: false
         property string heldByWorktree: ""
         /// The name that worktree goes by, read at the entrance (`RefRowMenu.heldLeaf`).
         property string holderLeaf: ""
@@ -147,9 +158,13 @@ AppMenu {
         /// The push would stay in this repository (`stays-here` — measured against another branch here and marked to no
         /// remote, or marked to `.` itself): the row stands out, and says why.
         property bool pushStaysHere: false
+        /// The menu stood again on a reading where the push's far side has moved from the commit the row is leased to
+        /// or names another place: the row keeps what it showed and greys asking for the menu to be opened again
+        /// (`standOn`'s `again`).
+        property bool pushMoved: false
     }
 
-    /// Freezes the card on that branch. `facts` is what the carrying menu read for it: `heldByWorktree` the other
+    /// Stands the card on that branch. `facts` is what the carrying menu read for it: `heldByWorktree` the other
     /// worktree holding this row's local branch, `holderLeaf` the name it goes by and `holderHome` whether it is the
     /// repository's own, `remoteCounterpart` the reading a
     /// local branch speaks for, `remoteCounterpartOid` its commit and `remoteDrifted` whether that stands on another
@@ -160,26 +175,37 @@ AppMenu {
     /// on (`NavSectionModel.branchPush`: `state`, `target`, `lease`, `upstream`). Every `facts` a branch card stands on
     /// carries `upstream` / `upstreamWhere`, a QML test's hand-built ones too: they are written below as they come, and
     /// the unset row stands on them.
-    function standOn(kind, name, full, oidHex, facts) {
-        branchCard.forceDeleteBranch = ""
-        state.kind = kind
-        state.refName = name
-        state.refId = full
-        state.refOid = oidHex
-        state.deleteAnswered = false
-        state.deleteMerged = true
-        state.deleteAsked = false
-        state.pushState = ""
-        state.pushTarget = ""
-        state.pushLease = ""
-        state.pushUpstream = ""
-        state.pushStaysHere = false
+    ///
+    /// `again`: why the menu stands again with the card up — `follow`, on what moved while it stood
+    /// (`RefRowMenu.follow`, `CommitMenuState.follow`), or `wait`, on what the command it waited for left
+    /// (`AppMenu.waitEnded`) —; empty as the menu is raised. Every value is worked out first and written once: a row
+    /// read part-way, its push or delete answer emptied for a moment, would grey and blank the presses under way
+    /// (`AppMenuItem.onBlockedChanged`). Following on the same branch at the same commit, a refusal git gave while the
+    /// menu stood holds, and so does git's answer to the plain delete — asked again on every move, it would blank
+    /// between the ask and the answer; after a wait both are asked again, since the command may have merged the branch.
+    /// What reaches over there stays on what the menu went up with either way (デザイン規約 §メニュー「表示も押下も開いた
+    /// 時」): the remote branch the delete rows are leased to (the reading, or a remote branch's own row) and the push's
+    /// far side. That moved or was pointed elsewhere since — a fetch outside, or the one the menu waited for — the rows
+    /// keep what they showed and grey asking for the menu to be opened again (`remoteMoved`, `pushMoved`): a press
+    /// would take or overwrite commits they never showed. The branch here moving is not that: the card stands on it
+    /// where it is.
+    function standOn(kind, name, full, oidHex, facts, again) {
+        const sameRef = (again === "follow" || again === "wait") && kind === state.kind && full === state.refId
+        const answersHold = again === "follow" && sameRef && oidHex === state.refOid
+        if (!answersHold || kind !== "branch")
+            branchCard.forceDeleteBranch = ""
         if (kind !== "branch" && kind !== "remote") {
+            state.kind = kind
+            state.refName = name
+            state.refId = full
+            state.refOid = oidHex
             state.remoteCounterpart = ""
             state.upstream = ""
             state.upstreamWhere = ""
             state.remoteCounterpartOid = ""
             state.remoteDrifted = false
+            state.readingNow = ""
+            state.remoteMoved = false
             state.heldByWorktree = ""
             state.holderLeaf = ""
             state.holderHome = false
@@ -188,48 +214,76 @@ AppMenu {
             state.canSetUpstream = false
             state.canUnsetUpstream = false
             state.onCurrentBranch = false
+            state.deleteAnswered = false
+            state.deleteMerged = true
+            state.deleteAsked = false
+            state.pushState = ""
+            state.pushTarget = ""
+            state.pushLease = ""
+            state.pushUpstream = ""
+            state.pushStaysHere = false
+            state.pushMoved = false
             return
         }
-        state.heldByWorktree = facts.heldByWorktree
-        state.holderLeaf = facts.holderLeaf
-        state.holderHome = facts.holderHome === true
-        state.remoteCounterpart = facts.remoteCounterpart
-        state.upstream = facts.upstream
-        state.upstreamWhere = facts.upstreamWhere
-        state.remoteCounterpartOid = facts.remoteCounterpartOid
-        state.remoteDrifted = facts.remoteDrifted
         // What the rows may offer is core's rule (`offers::ref_menu`).
         const offers = facts.offers
-        state.canDelete = offers.includes("delete")
-        state.canDeleteRemote = offers.includes("delete-remote")
-        state.canSetUpstream = offers.includes("set-upstream")
-        state.canUnsetUpstream = offers.includes("unset-upstream")
-        state.onCurrentBranch = offers.includes("current")
+        const canDelete = offers.includes("delete")
+        const onCurrentBranch = offers.includes("current")
+        // A remote branch's own delete is leased to the commit its row stood on (`BranchDeleteRow`); a local branch's
+        // remote rows to its reading as it was, name and commit (`BranchRemoteDeleteRow` / `BranchBothDeleteRow`).
+        const ownLease = sameRef && kind === "remote"
+        const readingHeld = sameRef && kind === "branch" && state.remoteCounterpart !== ""
+        const remoteMoved = ownLease ? state.remoteMoved || oidHex !== state.refOid
+                          : readingHeld && (state.remoteMoved || facts.remoteCounterpart !== state.remoteCounterpart
+                                            || facts.remoteCounterpartOid !== state.remoteCounterpartOid)
         // A local branch the worktree is not on — the one it is on has the toolbar's own button (デザイン規約 §メニュー
         // 「そこにしか入口が無いものだけ」) — and only where a push names somewhere: nothing to name is no row. Nothing to
         // send stands out (`clean`), and so does a push that would stay in this repository (デザイン規約 §メニュー
-        // 「「今できない」行は無効で残す」, §リモートへ送る).
+        // 「「今できない」行は無効で残す」, §リモートへ送る). Its far side is where it goes and the commit over there an
+        // overwrite is leased to (`branch_push`'s `lease`, counted against in every form).
         const push = facts.push
-        if (kind === "branch" && facts.open && !state.onCurrentBranch && push !== undefined) {
-            state.pushStaysHere = push.state === "stays-here"
-            if (["publish", "elsewhere", "ready", "clean", "behind", "diverged"].includes(push.state)) {
-                state.pushState = push.state
-                state.pushTarget = push.target
-                state.pushLease = push.lease
-                state.pushUpstream = push.upstream
-            }
-        }
+        const pushed = kind === "branch" && facts.open && !onCurrentBranch && push !== undefined
+        const pushSeated = pushed
+                           && ["publish", "elsewhere", "ready", "clean", "behind", "diverged"].includes(push.state)
+        const pushHeld = sameRef && kind === "branch" && (state.pushState !== "" || state.pushStaysHere)
+        const farSide = pushSeated ? push.target + "\n" + push.lease : ""
+        const farSideThen = state.pushState !== "" ? state.pushTarget + "\n" + state.pushLease : ""
+        const pushMoved = pushHeld && (state.pushMoved || farSide !== farSideThen)
         // Whether the plain delete would be refused, answered at open so the row wears `-D` from the start: the drawn
         // rows answer first (規約 §行が読む答えはどこから来るか), git only where they cannot (→ `checkedMerged`).
-        if (facts.open && kind === "branch" && state.canDelete) {
-            if (facts.merged !== "") {
-                state.deleteMerged = facts.merged === "yes"
-                state.deleteAnswered = true
-            } else {
-                branchCard.checkDeleteRequested(full)
-            }
-            state.deleteAsked = true
-        }
+        const asks = facts.open && kind === "branch" && canDelete
+        const drawn = asks && facts.merged !== ""
+        const keeps = asks && !drawn && answersHold && state.deleteAsked
+        state.kind = kind
+        state.refName = name
+        state.refId = full
+        state.refOid = ownLease ? state.refOid : oidHex
+        state.heldByWorktree = facts.heldByWorktree
+        state.holderLeaf = facts.holderLeaf
+        state.holderHome = facts.holderHome === true
+        state.upstream = facts.upstream
+        state.upstreamWhere = facts.upstreamWhere
+        state.remoteMoved = remoteMoved
+        state.remoteCounterpart = readingHeld ? state.remoteCounterpart : facts.remoteCounterpart
+        state.remoteCounterpartOid = readingHeld ? state.remoteCounterpartOid : facts.remoteCounterpartOid
+        state.remoteDrifted = readingHeld ? state.remoteDrifted : facts.remoteDrifted
+        state.readingNow = facts.remoteCounterpart
+        state.canDelete = canDelete
+        state.canDeleteRemote = offers.includes("delete-remote")
+        state.canSetUpstream = offers.includes("set-upstream")
+        state.canUnsetUpstream = offers.includes("unset-upstream")
+        state.onCurrentBranch = onCurrentBranch
+        state.pushMoved = pushMoved
+        state.pushStaysHere = pushMoved ? state.pushStaysHere : pushed && push.state === "stays-here"
+        state.pushState = pushMoved ? state.pushState : pushSeated ? push.state : ""
+        state.pushTarget = pushMoved ? state.pushTarget : pushSeated ? push.target : ""
+        state.pushLease = pushMoved ? state.pushLease : pushSeated ? push.lease : ""
+        state.pushUpstream = pushMoved ? state.pushUpstream : pushSeated ? push.upstream : ""
+        state.deleteMerged = drawn ? facts.merged === "yes" : keeps ? state.deleteMerged : true
+        state.deleteAnswered = drawn || (keeps && state.deleteAnswered)
+        state.deleteAsked = asks
+        if (asks && !drawn && !keeps)
+            branchCard.checkDeleteRequested(full)
     }
 
     /// Whether an answer that names a branch is about the one this card stands on.
@@ -262,7 +316,7 @@ AppMenu {
         id: refUpstreamItem
         text: qsTr("Set upstream…")
         offered: state.kind === "branch" && state.canSetUpstream
-        onTriggered: branchCard.upstreamRequested(state.refId, state.remoteCounterpart, state.canUnsetUpstream)
+        onTriggered: branchCard.upstreamRequested(state.refId, state.readingNow, state.canUnsetUpstream)
     }
     // The upstream taken off (デザイン規約 §ブランチが測られる相手を決める): the one word `Unset`, the pair of
     // `Set upstream…`, the same word as the emptied question's heading and pill (user decision — ask before
@@ -282,11 +336,17 @@ AppMenu {
         refName: state.upstream
         refTint: state.upstreamWhere === "current" ? Theme.textLink : Theme.textPrimary
         refMark: state.upstreamWhere === "current" || state.upstreamWhere === "local" ? "branch" : "remote"
+        // No chip to fall back on: with the upstream taken off while the menu stood, the sentence goes with its name
+        // (`AppMenuItem.sentence`) and the row keeps its words, greyed where it stands.
+        //: The same row once the branch has no upstream left to name, taken off with the menu up.
+        text: state.upstream !== "" ? refUnsetUpstreamItem.sentence.arg(state.upstream) : qsTr("Unset upstream")
         // The name is data: it does not widen the menu (`growsForText`).
         growsForText: false
         offered: state.kind === "branch" && state.canUnsetUpstream
         holdPresses: Metrics.holdPressesPlain
         holdTone: Theme.textPrimary
+        // The upstream it names: git takes off whatever the branch has by the last press.
+        premise: state.refId + "\n" + state.upstream
         onHeld: {
             refUnsetUpstreamItem.closeMenu()
             branchCard.unsetUpstreamRequested(state.refId)
