@@ -1,8 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-// For the attached types alone (rules-refs/app-ui.md carries what an unimported one answers).
-import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
 
