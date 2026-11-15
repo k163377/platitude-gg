@@ -120,6 +120,19 @@ fn a_codex_sessions_git_moves_main_only_onto_a_gated_commit() {
     assert_eq!(sb.main_sha(), tip);
 }
 
+/// A second install finds the hook it put there and changes nothing.
+#[test]
+fn a_second_install_changes_nothing() {
+    let sb = Sandbox::new("install-again");
+    let installed = sb.git_ok(&sb.repo, &["config", "--get", "core.hooksPath"]);
+    let (ok, text) = sb.gate(&sb.repo, &["install"], &[]);
+    assert!(ok && text.contains("installed"), "{text}");
+    assert_eq!(
+        sb.git_ok(&sb.repo, &["config", "--get", "core.hooksPath"]),
+        installed
+    );
+}
+
 #[test]
 fn install_leaves_somebody_elses_hooks_directory_alone() {
     let sb = Sandbox::new("foreign-hooks");

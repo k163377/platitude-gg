@@ -125,9 +125,12 @@ impl Sandbox {
         let gitconfig = root.join("gitconfig");
         std::fs::write(
             &gitconfig,
+            // No maintenance of git's own after a commit: a process more
+            // for each, packing refs when it likes (what a pack does to the
+            // hook's record is `hook.rs`'s to ask, by its own `pack-refs`).
             "[user]\n\tname = Gate Test\n\temail = gate@example.com\n\
              [init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n\
-             [core]\n\tautocrlf = false\n",
+             [core]\n\tautocrlf = false\n[maintenance]\n\tauto = false\n",
         )
         .expect("gitconfig");
         let sandbox = Self {
@@ -490,18 +493,38 @@ impl Sandbox {
 
     /// The hook on the primary checkout and the seat worktree beside it —
     /// the shape every test starts from.
+    ///
+    /// The seat is made past the hook: git runs it for every state of every
+    /// transaction the new worktree takes, each a shell of its own, and for
+    /// a branch a git with no session makes it writes nothing down — the
+    /// state every test starts from is the same either way, and through the
+    /// hook those shells are most of what a sandbox costs to stand up. What
+    /// the hook does when a branch is made is `hook.rs`'s to ask.
     fn install_and_seat(&self) {
         let (ok, text) = self.gate(&self.repo, &["install"], &[]);
         assert!(ok && text.contains("core.hooksPath ="), "install: {text}");
-        let (ok, text) = self.gate(&self.repo, &["install"], &[]);
-        assert!(
-            ok && text.contains("installed"),
-            "a second install changes nothing: {text}"
-        );
         let seat = self.seat.display().to_string().replace('\\', "/");
+        let unhooked = format!(
+            "core.hooksPath={}",
+            self.root
+                .join("no-hooks")
+                .display()
+                .to_string()
+                .replace('\\', "/")
+        );
         self.git_ok(
             &self.repo,
-            &["worktree", "add", "-q", "-b", "worktree-a", &seat, "main"],
+            &[
+                "-c",
+                &unhooked,
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "worktree-a",
+                &seat,
+                "main",
+            ],
         );
         let _ = self.ran();
     }

@@ -106,8 +106,9 @@ fn keys(sb: &Sandbox) -> BTreeMap<String, String> {
 /// steps that read it, and what it is to a run.
 type Boundary = (&'static str, String, &'static [&'static str], &'static str);
 
-fn boundaries() -> [Boundary; 12] {
-    [
+/// What the runner stages and hands `qmltestrunner`.
+fn handed() -> Vec<Boundary> {
+    vec![
         (
             TEST,
             census("        function test_it() { compare(Painted.ink(), 1) }\n"),
@@ -138,6 +139,12 @@ fn boundaries() -> [Boundary; 12] {
             BOTH,
             "a JS helper the tests import",
         ),
+    ]
+}
+
+/// The runner as built, and what it runs under.
+fn built_and_run_under() -> Vec<Boundary> {
+    vec![
         (
             "crates/xtask/src/qmltest.rs",
             "use crate::qt;\nconst TESTS: &str = \"crates/platitude-app/tests/qml\";\n\
@@ -173,6 +180,12 @@ fn boundaries() -> [Boundary; 12] {
             BOTH,
             "cargo's [env], which the runner's run inherits",
         ),
+    ]
+}
+
+/// The image, and what starts the run in it: the Linux side's alone.
+fn of_the_container() -> Vec<Boundary> {
+    vec![
         (
             "ci/linux/Dockerfile",
             "FROM ubuntu\nENV LANG=ja_JP.UTF-8\n".into(),
@@ -188,11 +201,14 @@ fn boundaries() -> [Boundary; 12] {
     ]
 }
 
-#[test]
-fn a_change_at_each_boundary_of_a_qml_test_run_owes_it_and_runs_it() {
-    let (sb, mut base) = with_the_qml_runner("qmltest-boundaries");
-    for (file, text, owed, why) in boundaries() {
-        let before = keys(&sb);
+/// One change at each of `boundaries` in turn, on a sandbox of their own:
+/// the steps that read the file are planned unstamped with a moved key and
+/// run, the others keep their key and their green. The keys before a
+/// change are the ones read after the change before it.
+fn each_owes_what_reads_it(name: &str, boundaries: Vec<Boundary>) {
+    let (sb, mut base) = with_the_qml_runner(name);
+    let mut before = keys(&sb);
+    for (file, text, owed, why) in boundaries {
         sb.write(&sb.seat, file, &text);
         let head = sb.commit_all(&sb.seat, &format!("feat: {file}"), &[]);
         let plan = sb.gate_ok(&sb.seat, &["--main", &base, "--dry-run"]);
@@ -220,7 +236,23 @@ fn a_change_at_each_boundary_of_a_qml_test_run_owes_it_and_runs_it() {
             );
         }
         base = head;
+        before = after;
     }
+}
+
+#[test]
+fn a_change_to_what_a_qml_test_run_is_handed_owes_it_and_runs_it() {
+    each_owes_what_reads_it("qmltest-handed", handed());
+}
+
+#[test]
+fn a_change_to_the_qml_runner_or_what_it_runs_under_owes_the_run_and_runs_it() {
+    each_owes_what_reads_it("qmltest-runner", built_and_run_under());
+}
+
+#[test]
+fn a_change_to_the_container_owes_the_linux_qml_tests_alone() {
+    each_owes_what_reads_it("qmltest-container", of_the_container());
 }
 
 /// A helper a test imports by a single-quoted path spelled across lines
@@ -393,37 +425,22 @@ fn an_implicitly_imported_sibling_moves_both_keys_and_selects_both_runs() {
     sb.ran().lacks(BOTH);
 }
 
-/// A component a test loads, however the load is written — a value joined,
-/// chosen, resolved, a template; a property bound, assigned inside
-/// parentheses or by a computed key — and however its path is spelled as a
-/// URL — escaped, with a query and a fragment, through `..` spelled as
-/// escapes —, is the file Qt reads: it is owed both runs when it changes,
-/// until they run again; then a run with nothing changed is their stamps'.
+/// A component a test loads is the file Qt reads: it is owed both runs
+/// when it changes, until they run again; then a run with nothing changed
+/// is their stamps'. Two loads stand for the two readings a target passes
+/// through — a value worked out (`plan::imports`) and a URL whose text is
+/// not the file's name (`plan::urls`); how each spelling of either is read
+/// is those modules' own tests'.
 #[test]
-fn a_component_loaded_by_any_spelling_of_its_path_owes_the_qml_tests() {
+fn a_component_a_test_loads_owes_the_qml_tests_until_they_run_again() {
     let (sb, _) = with_the_qml_runner("qmltest-loader");
     let card = "crates/platitude-app/shared/Card.qml";
     let spaced = "crates/platitude-app/shared/Card View.qml";
     for (n, (load, file)) in [
         ("Loader { source: \"../../shared/\" + \"Card.qml\" }", card),
-        ("Loader { source: Qt.resolvedUrl(`../../shared/Card.qml`) }", card),
         (
-            "Loader { source: true ? '../../shared/' + 'Card.qml' : \"../../shared/Card.qml\" }",
-            card,
-        ),
-        (
-            "Loader { id: card }\n        Component.onCompleted: { (card.source = \"../../shared/\" + \"Card.qml\") }",
-            card,
-        ),
-        (
-            "Loader { id: card }\n        Component.onCompleted: card[\"source\"] = (\"../../shared/Card.qml\")",
-            card,
-        ),
-        ("Loader { source: \"../../shared/Card%20View.qml\" }", spaced),
-        ("Loader { source: \"../../shared/Card\\u0020View.qml\" }", spaced),
-        (
-            "Loader { source: \"../../shared/x/%2E%2E/%43ard.qml?at=1#top\" }",
-            card,
+            "Loader { source: \"../../shared/Card%20View.qml\" }",
+            spaced,
         ),
     ]
     .into_iter()
@@ -464,20 +481,18 @@ fn a_component_loaded_by_any_spelling_of_its_path_owes_the_qml_tests() {
     }
 }
 
-/// A load whose target nothing here works out — a value read off a name,
-/// a property written by a destructuring or added to, a path Qt reads
-/// otherwise than as written (a backslash, an escaped separator) — names
-/// no input a key could answer for: both runs are owed on every gate,
-/// nothing changed or not, run, and stamp nothing to be reused; the plan
-/// says why.
+/// A load whose target nothing here works out names no input a key could
+/// answer for: both runs are owed on every gate, nothing changed or not,
+/// run, and stamp nothing to be reused; the plan says why. Two loads stand
+/// for the two ways a target goes unnamed — a value read off a name
+/// (`plan::imports`) and a path Qt reads otherwise than as written
+/// (`plan::urls`); which spellings fall under either is those modules' own
+/// tests'.
 #[test]
 fn a_load_nothing_works_out_runs_the_qml_tests_on_every_gate() {
     let (sb, _) = with_the_qml_runner("qmltest-unworked");
     for load in [
         "property string where: \"Card\"\n        Loader { source: \"../../shared/\" + where + \".qml\" }",
-        "Loader { id: card }\n        Component.onCompleted: [card.source] = [\"../../shared/Card.qml\"]",
-        "Loader { id: card; source: \"../../shared/Card\" }\n        Component.onCompleted: card.source += \".qml\"",
-        "Loader { source: \"..\\\\..\\\\shared\\\\Card.qml\" }",
         "Loader { source: \"../../shared%2FCard.qml\" }",
     ] {
         sb.write(&sb.seat, TEST, &census(&format!("        {load}\n")));
