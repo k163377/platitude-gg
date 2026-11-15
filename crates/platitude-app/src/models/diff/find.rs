@@ -71,7 +71,7 @@ impl DiffModel {
             Ok(None) => {}
             Ok(Some(query)) => {
                 self.find_searching = true;
-                if let Some(patches) = self.shown.as_deref() {
+                if let Some(patches) = self.laid_patches() {
                     self.find_hits = textfind::hits_in(&query, patches);
                 }
             }
@@ -132,7 +132,7 @@ impl DiffModel {
     /// filed under the id of the line each draws (`DiffLineItem::location`
     /// says which line, [`LineIds`] its id).
     fn places(&self) -> Places {
-        let Some(patches) = self.shown.as_deref() else {
+        let Some(patches) = self.laid_patches() else {
             return Places::new();
         };
         let ids = LineIds::of(patches);

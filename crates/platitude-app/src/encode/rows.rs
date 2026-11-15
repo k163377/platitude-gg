@@ -264,6 +264,36 @@ pub fn flatten_patches(
     colors: &DiffColors,
     marks: Option<&IntraMarks>,
 ) -> Vec<DiffRow> {
+    flatten_from(patches, binary_note, colors, marks, &|at| {
+        Some(platitude_core::parts::Origin { at, turned: false })
+    })
+}
+
+/// [`flatten_patches`] for a diff laid out with parts pressed on it
+/// (`platitude_core::parts::after`): the rows are its own — their places
+/// are where a press on them lands — and each line's colours and in-line
+/// marks are the line's in the read it came from. A line a part turned into
+/// context has no in-line mark: there is nothing beside it to differ from.
+pub fn flatten_after(
+    after: &platitude_core::parts::After,
+    binary_note: bool,
+    colors: &DiffColors,
+    marks: Option<&IntraMarks>,
+) -> Vec<DiffRow> {
+    flatten_from(&after.patches, binary_note, colors, marks, &|at| {
+        after.origin(at)
+    })
+}
+
+/// The flattening, with each line's colours and marks read where `origin`
+/// says the line came from.
+fn flatten_from(
+    patches: &[FilePatch],
+    binary_note: bool,
+    colors: &DiffColors,
+    marks: Option<&IntraMarks>,
+    origin: &dyn Fn(DiffLineLocation) -> Option<platitude_core::parts::Origin>,
+) -> Vec<DiffRow> {
     let mut rows = Vec::new();
     for (patch_index, patch) in patches.iter().enumerate() {
         // Each of several commits' patches of one file names its commit
@@ -293,18 +323,13 @@ pub fn flatten_patches(
             continue;
         }
         for (hunk_index, hunk) in patch.hunks.iter().enumerate() {
-            let heading = if hunk.heading.is_empty() {
-                String::new()
-            } else {
-                format!(" {}", hunk.heading)
-            };
             let hunk_no = i32::try_from(hunk_index).unwrap_or(-1);
             let patch_no = i32::try_from(patch_index).unwrap_or(-1);
             rows.push(DiffRow {
                 kind: "hunk",
                 old_no: -1,
                 new_no: -1,
-                text: styled(&hunk_header(hunk, &heading), &[]),
+                text: hunk_header_markup(hunk),
                 emph: Runs::default(),
                 fence: false,
                 no_newline: false,
@@ -336,7 +361,9 @@ pub fn flatten_patches(
                     hunk: hunk_index,
                     line: line_index,
                 };
-                let read = colors.line(location);
+                let from = origin(location);
+                let at = from.map_or(location, |from| from.at);
+                let read = colors.line(at);
                 let markup = styled(&line.text, &read.spans);
 
                 rows.push(DiffRow {
@@ -345,9 +372,12 @@ pub fn flatten_patches(
                     new_no: line.new_no.map_or(-1, |n| n as i32),
                     text: markup,
 
-                    emph: marks.map_or_else(Runs::default, |marks| {
-                        spelled_ranges(&line.text, marks.line(location))
-                    }),
+                    emph: match marks {
+                        Some(marks) if !from.is_some_and(|from| from.turned) => {
+                            spelled_ranges(&line.text, marks.line(at))
+                        }
+                        _ => Runs::default(),
+                    },
                     fence: read.fence,
                     no_newline: false,
                     hunk: hunk_no,
@@ -432,6 +462,17 @@ fn right_only(add: DiffRow) -> SplitRow {
         },
         right: Some(add),
     }
+}
+
+/// A hunk's header row's text as [`flatten_patches`] lays it — its numbers
+/// and its heading; the lines are not read.
+fn hunk_header_markup(hunk: &platitude_core::parse::diff::DiffHunk) -> String {
+    let heading = if hunk.heading.is_empty() {
+        String::new()
+    } else {
+        format!(" {}", hunk.heading)
+    };
+    styled(&hunk_header(hunk, &heading), &[])
 }
 
 /// The `@@` line as git writes it: one range per old side, and a run of

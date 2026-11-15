@@ -14,7 +14,14 @@ impl DiffModel {
             return;
         };
         // No marks: only the text is kept.
-        let painted = line_items(&patches, !self.shown_has_preview, colors, None, self.split);
+        let painted = line_items(
+            &patches,
+            !self.shown_has_preview,
+            colors,
+            None,
+            self.split,
+            self.laid.as_deref(),
+        );
         if painted.len() != self.lines.len() {
             // Cannot happen (same patches), but rewriting by position is
             // only safe while it holds.
@@ -74,6 +81,77 @@ impl DiffModel {
         self.lay_out(&Default::default(), Some(before));
     }
 
+    /// The keys of the rows on screen (`row_keys`), as laid out — the parts
+    /// in them too.
+    pub(super) fn keys_on_screen(&self) -> Option<Vec<u64>> {
+        (!self.lines.is_empty())
+            .then_some(self.shown.as_ref())
+            .flatten()
+            .map(|shown| {
+                row_keys(
+                    shown,
+                    !self.shown_has_preview,
+                    self.split,
+                    self.laid.as_deref(),
+                )
+            })
+    }
+
+    /// The patches the rows on screen were laid out of: the read with the
+    /// parts pressed on it in it, or the read itself. What a row's place
+    /// (`hunk` / `line` / `patch`) is a place in.
+    pub(super) fn laid_patches(&self) -> Option<&[FilePatch]> {
+        match &self.laid {
+            Some(laid) => Some(&laid.patches),
+            None => self.shown.as_deref().map(Vec::as_slice),
+        }
+    }
+
+    /// Takes `parts` as the ones drawn over the read, laying it out with
+    /// them (`ahead::laid`).
+    pub(super) fn take_parts(&mut self, parts: Vec<crate::ops::DiffPart>) {
+        self.laid = self
+            .shown
+            .as_deref()
+            .and_then(|read| super::ahead::laid(read, &parts))
+            .map(Arc::new);
+        self.shown_parts = parts;
+    }
+
+    /// The parts pressed on the diff on screen, as they stand now
+    /// (`ops::StageAhead::diff_parts`): none over another worktree's file,
+    /// which nothing here writes.
+    pub(super) fn parts_now(&self) -> Vec<crate::ops::DiffPart> {
+        match self.shown_print {
+            Some(print) if self.current_at.is_empty() => {
+                crate::hub::diff_parts(self.tab_id, &self.current_key, print)
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// Draws the rows again where the parts over them moved — pressed, put
+    /// back by a refusal (`restage`). The colours stay: the read is the same.
+    /// Answers whether the rows moved.
+    pub(super) fn restage_rows(&mut self) -> bool {
+        let parts = self.parts_now();
+        // Landing moves no row: the layout is the parts' places.
+        let placed = |parts: &[crate::ops::DiffPart]| -> Vec<(u64, platitude_core::parts::Part)> {
+            parts.iter().map(|p| (p.id, p.part)).collect()
+        };
+        let moved = placed(&parts) != placed(&self.shown_parts);
+        let Some(before) = self.keys_on_screen().filter(|_| moved) else {
+            self.take_parts(parts);
+            return false;
+        };
+        self.take_parts(parts);
+        self.rows_arriving();
+        let colors = std::mem::take(&mut self.shown_colors);
+        self.lay_out(&colors, Some(&before));
+        self.shown_colors = colors;
+        true
+    }
+
     fn lay_out(&mut self, colors: &platitude_core::highlight::DiffColors, before: Option<&[u64]>) {
         let Some(patches) = self.shown.clone() else {
             return;
@@ -90,6 +168,7 @@ impl DiffModel {
             colors,
             Some(&self.shown_marks),
             self.split,
+            self.laid.as_deref(),
         );
         // Both sides: the two columns share one gutter width.
         self.widest_no = rows
@@ -106,7 +185,12 @@ impl DiffModel {
             Some(before) => {
                 let edit = edit_between(
                     before,
-                    &row_keys(&patches, !self.shown_has_preview, self.split),
+                    &row_keys(
+                        &patches,
+                        !self.shown_has_preview,
+                        self.split,
+                        self.laid.as_deref(),
+                    ),
                 );
                 self.edit_notified(&edit, rows);
             }
@@ -150,6 +234,13 @@ impl DiffModel {
         // keeps the rows until the new ones arrive — emptying would flash
         // the pane and drop the view to the top.
         let same_file = key == self.current_key && at == self.current_at;
+        if !same_file {
+            // Nothing of the file left is drawn, parts included.
+            self.shown_print = None;
+            self.shown_parts = Vec::new();
+            self.laid = None;
+            crate::hub::diff_drawn(self.tab_id, None, None, 0);
+        }
         self.requested_at = Some(std::time::Instant::now());
         self.current_key = key;
         self.current_at = at.clone();
@@ -181,7 +272,14 @@ impl DiffModel {
         }
         self.changed();
         match at.is_empty() {
-            true => crate::hub::with_session(self.tab_id, |s| s.load_diff(target)),
+            // Numbered, so the read that answers it is told from one asked
+            // before (`ops::StageAhead::diff_asked`).
+            true => {
+                self.asks += 1;
+                let asked = self.asks;
+                crate::hub::diff_asked(self.tab_id, asked);
+                crate::hub::with_session(self.tab_id, |s| s.load_diff_asked(target, asked));
+            }
             false => crate::hub::with_session(self.tab_id, |s| s.load_carried_diff(at, target)),
         }
     }
@@ -282,8 +380,12 @@ pub(super) fn line_items(
     colors: &platitude_core::highlight::DiffColors,
     marks: Option<&platitude_core::intraline::IntraMarks>,
     split: bool,
+    laid: Option<&platitude_core::parts::After>,
 ) -> Vec<DiffLineItem> {
-    let rows = flatten_patches(patches, binary_note, colors, marks);
+    let rows = match laid {
+        Some(laid) => crate::encode::flatten_after(laid, binary_note, colors, marks),
+        None => flatten_patches(patches, binary_note, colors, marks),
+    };
     if split {
         pair_rows(rows).into_iter().map(split_item).collect()
     } else {
@@ -296,7 +398,12 @@ pub(super) fn line_items(
 /// its line as git printed it, and for a hunk's header its heading alone, the
 /// numbers moving with every line above. The colours and the marks laid
 /// over a line come and go on their own.
-pub(super) fn row_keys(patches: &[FilePatch], binary_note: bool, split: bool) -> Vec<u64> {
+pub(super) fn row_keys(
+    patches: &[FilePatch],
+    binary_note: bool,
+    split: bool,
+    laid: Option<&platitude_core::parts::After>,
+) -> Vec<u64> {
     fn said(row: &DiffRow) -> (&'static str, &str) {
         let text = if row.kind == "hunk" {
             row.text.splitn(3, "@@").nth(2).unwrap_or("")
@@ -311,7 +418,10 @@ pub(super) fn row_keys(patches: &[FilePatch], binary_note: bool, split: bool) ->
         parts.hash(&mut key);
         key.finish()
     }
-    let rows = flatten_patches(patches, binary_note, &Default::default(), None);
+    let rows = match laid {
+        Some(laid) => crate::encode::flatten_after(laid, binary_note, &Default::default(), None),
+        None => flatten_patches(patches, binary_note, &Default::default(), None),
+    };
     if split {
         pair_rows(rows)
             .iter()
@@ -416,9 +526,38 @@ mod tests {
         assert!(!model.unread);
     }
 
+    /// A part of a shape not drawn ahead leaves its hunk as read: the rows are
+    /// not the parts' exact layout, and the marks wait for the read after it
+    /// (`laid_exact`).
+    #[test]
+    fn a_part_left_as_read_is_no_exact_layout() {
+        let split = "--- a/x.txt\n+++ b/x.txt\n@@ -1,12 +1,15 @@\n a\n b\n c\n+X\n d\n e\n f\n+Y\n g\n h\n i\n+Z\n j\n k\n l\n";
+        let read = parse_patch(split.as_bytes());
+        let line = |line| platitude_core::parts::Part {
+            hunk: 0,
+            line: Some(line),
+            moves: platitude_core::parts::Moves::Old,
+        };
+        let mut model = DiffModel::default();
+        assert!(model.laid_exact(), "nothing laid over the read");
+        model.laid = Some(std::sync::Arc::new(platitude_core::parts::after(
+            &read,
+            &[line(3)],
+        )));
+        assert!(model.laid_exact());
+        model.laid = Some(std::sync::Arc::new(platitude_core::parts::after(
+            &read,
+            &[line(7)],
+        )));
+        assert!(
+            !model.laid_exact(),
+            "seven lines of context between the changes left"
+        );
+    }
+
     /// How a re-read moved the rows, by the keys the model keeps them by.
     fn edit(before: &str, after: &str, split: bool) -> crate::models::notify::Edit {
-        let keys = |patch: &str| row_keys(&parse_patch(patch.as_bytes()), true, split);
+        let keys = |patch: &str| row_keys(&parse_patch(patch.as_bytes()), true, split, None);
         edit_between(&keys(before), &keys(after))
     }
 
@@ -512,18 +651,19 @@ mod tests {
             for (before, after) in pairs {
                 let was = parse_patch(before.as_bytes());
                 let mut model = DiffModel {
-                    lines: line_items(&was, true, &Default::default(), None, split),
+                    lines: line_items(&was, true, &Default::default(), None, split, None),
                     split,
                     ..DiffModel::default()
                 };
                 model.shown = Some(std::sync::Arc::new(parse_patch(after.as_bytes())));
-                model.lay_out_kept(&row_keys(&was, true, split));
+                model.lay_out_kept(&row_keys(&was, true, split, None));
                 let fresh = line_items(
                     &parse_patch(after.as_bytes()),
                     true,
                     &Default::default(),
                     None,
                     split,
+                    None,
                 );
                 assert_eq!(
                     said(&model.lines),

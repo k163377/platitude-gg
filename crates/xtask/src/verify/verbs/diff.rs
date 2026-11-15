@@ -706,7 +706,7 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "stage_held pressed_staged=true pressed_unstaged=false pressed_out=true \
                 pressed_mark_open=false pressed_commit_open=false held_mark_button=false \
                 held_mark_muted=true held_mark_tip=false \
-                stash_live=false stash_tip=true commit_open=false why=Wait for staging to finish",
+                stash_live=false stash_tip=true commit_open=false why=Wait for the file list to update",
     },
     // …and HEAD's message edited in the details pane after the press: its
     // Save (`commit --amend`) waits the same way, in the same words.
@@ -717,7 +717,7 @@ pub(super) const TABLE: &[Verb] = &[
                 pressed_mark_open=false pressed_commit_open=false held_mark_button=false \
                 held_mark_muted=true held_mark_tip=false \
                 stash_live=false stash_tip=true save_enabled=false save_tip=true \
-                why=Wait for staging to finish",
+                why=Wait for the file list to update",
     },
     // …and refused by another git's lock, Commit pressed on the press's own
     // turn: it takes no press — the other rows' marks stay live — and once

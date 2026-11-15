@@ -582,6 +582,30 @@ pub fn status_drawn(tab_id: i32, reader: crate::ops::Reader, looked: u64) {
     stage_ahead_drawing(tab_id, |ahead| ahead.drawn(reader, looked));
 }
 
+/// The open diff draws `seen` — its key and fingerprint — read as `read`
+/// for the ask numbered `asked`, or a diff of none of this window's files
+/// (`ops::StageAhead::diff_drawn`).
+pub fn diff_drawn(
+    tab_id: i32,
+    seen: Option<(String, u64)>,
+    read: Option<crate::ops::DiffRead>,
+    asked: u64,
+) {
+    stage_ahead_drawing(tab_id, |ahead| ahead.diff_drawn(seen, read, asked));
+}
+
+/// The open diff asked for a read under its number `asked`
+/// (`ops::StageAhead::diff_asked`).
+pub fn diff_asked(tab_id: i32, asked: u64) {
+    stage_ahead(tab_id, |ahead| ahead.diff_asked(asked));
+}
+
+/// The parts drawn over the diff `key` read with `fingerprint`
+/// (`ops::StageAhead::diff_parts`).
+pub fn diff_parts(tab_id: i32, key: &str, fingerprint: u64) -> Vec<crate::ops::DiffPart> {
+    stage_ahead(tab_id, |ahead| ahead.diff_parts(key, fingerprint))
+}
+
 /// A status a reader holds, drawn with the stage presses still out over it
 /// (`ops::StageAhead::picture`); `None` where they move nothing in it.
 ///

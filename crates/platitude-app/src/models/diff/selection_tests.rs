@@ -44,7 +44,7 @@ pub(super) fn model(patch: &str, coloured: bool) -> DiffModel {
         Default::default()
     };
     DiffModel {
-        lines: super::rows::line_items(&patches, true, &colors, None, false),
+        lines: super::rows::line_items(&patches, true, &colors, None, false, None),
         shown: Some(Arc::new(patches)),
         ..DiffModel::default()
     }
@@ -369,7 +369,7 @@ pub(super) fn split_model(patch: &str) -> DiffModel {
     let colors = platitude_core::highlight::colors(&patches, None);
     DiffModel {
         split: true,
-        lines: super::rows::line_items(&patches, true, &colors, None, true),
+        lines: super::rows::line_items(&patches, true, &colors, None, true, None),
         shown: Some(Arc::new(patches)),
         ..DiffModel::default()
     }

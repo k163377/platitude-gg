@@ -33,7 +33,7 @@ pub use markup::{
 };
 pub use mates::{Mates, mates_of};
 pub use rows::{
-    DiffRow, LineMarks, Marks, SplitRow, flatten_patches, is_combined, is_new_file,
+    DiffRow, LineMarks, Marks, SplitRow, flatten_after, flatten_patches, is_combined, is_new_file,
     is_unmerged_only, mode_change, pair_rows, whole_only_why,
 };
 pub use select::{diff_key, hunk_selection, worktree_target};

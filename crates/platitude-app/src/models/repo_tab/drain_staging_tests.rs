@@ -9,6 +9,7 @@
 use std::collections::HashSet;
 
 use super::drain_inputs::started;
+use super::ops_stage::Spot;
 use super::*;
 use crate::ops::{Reach, Reader, Side};
 use platitude_core::OperationKind as K;
@@ -266,4 +267,72 @@ fn standing_elsewhere_lets_a_press_go() {
     tab.stood();
     assert!(!tab.staging_unseen);
     assert!(!tab.commit_waits);
+}
+
+/// A part of the open diff as the pane addresses it.
+fn spot(kind: &str, path: &str, hunk: i32) -> Spot {
+    Spot {
+        kind: kind.into(),
+        path: path.into(),
+        orig_path: String::new(),
+        hunk,
+        line: -1,
+        fingerprint: "aaaa".into(),
+        whole: false,
+    }
+}
+
+/// A hunk of the open diff through the door: written down under the door's
+/// id, for the rows and for the diff (`ops::StageAhead::asked_part`) — the
+/// row's marks wait, Commit waits on the index git is writing, and the page
+/// draws again on the press's turn.
+#[test]
+fn a_hunk_through_the_door_moves_at_the_press() {
+    let mut tab = tab();
+    crate::hub::testkit::open_installed_tab(tab.tab_id);
+    let seq = tab.staging_seq;
+    let (went, moved) = tab.stage_chosen(spot("unstaged", "a.txt", 1));
+    assert!(went && moved);
+    assert_ne!(tab.staging_seq, seq, "the page draws the part");
+    assert_eq!(tab.staging_moving, ["a.txt"]);
+    assert!(tab.staging_unseen && tab.ahead_unseen && tab.commit_waits);
+    let parts = crate::hub::diff_parts(tab.tab_id, "unstaged:a.txt", 0xaaaa);
+    assert_eq!(parts.len(), 1, "the open diff draws the hunk taken out");
+    assert_eq!((parts[0].part.hunk, parts[0].part.line), (1, None));
+}
+
+/// A part of an untracked file's diff is marked intent-to-add first: its row
+/// and its diff are git's to say, and nothing is drawn ahead.
+#[test]
+fn a_part_of_an_untracked_file_is_left_to_git() {
+    let mut tab = tab();
+    crate::hub::testkit::open_installed_tab(tab.tab_id);
+    let (went, _) = tab.stage_chosen(spot("untracked", "new.txt", 0));
+    assert!(went);
+    assert!(!tab.ahead_unseen && !tab.staging_unseen);
+}
+
+/// Chosen rows discarded go at the press; one of the disk alone holds
+/// nothing Commit takes, a staged one does.
+#[test]
+fn a_discard_through_the_door_moves_at_the_press_and_holds_commit_only_for_the_index() {
+    let mut tab = tab();
+    crate::hub::testkit::open_installed_tab(tab.tab_id);
+    tab.pending_paths = vec!["unstaged:a.txt".into()];
+    assert!(tab.discard_chosen_rows(), "the rows QML reads moved");
+    assert!(
+        tab.ahead_unseen,
+        "the row is the press's word until the status"
+    );
+    assert!(
+        !tab.staging_unseen,
+        "the disk alone: Commit, the stash, Save and `--continue` take no part of it"
+    );
+    assert!(crate::hub::stage_ahead(tab.tab_id, |ahead| {
+        ahead.reaches("unstaged", "a.txt")
+    }));
+
+    tab.pending_paths = vec!["staged:b.txt".into()];
+    assert!(tab.discard_chosen_rows());
+    assert!(tab.staging_unseen, "back to HEAD: git writes the index");
 }

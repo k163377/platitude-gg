@@ -400,7 +400,7 @@ Item {
                 return
             const pressed = stalePartTimer.input("pressed", () => {
                 driver.pressWrite("stage-selection", () => {
-                    repoTab.stageSelection(stalePartTimer.bucket, stalePartTimer.path, "", 0, -1, 1)
+                    repoTab.stageSelection(stalePartTimer.bucket, stalePartTimer.path, "", 0, -1, 1, false)
                     return true
                 })
             })

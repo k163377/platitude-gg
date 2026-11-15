@@ -43,7 +43,7 @@ impl DiffModel {
     /// draws.
     pub(super) fn source_line(&self, side: i32, row: usize) -> Option<&str> {
         let location = self.lines.get(row)?.location(side)?;
-        Some(&location.line_in(self.shown.as_ref()?)?.text)
+        Some(&location.line_in(self.laid_patches()?)?.text)
     }
 
     /// The kind of the line one side of a row holds — `""` for nothing

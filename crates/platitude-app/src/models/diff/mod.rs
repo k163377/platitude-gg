@@ -24,6 +24,9 @@ use super::{
     qml_register,
 };
 
+mod ahead;
+#[cfg(test)]
+mod ahead_tests;
 mod find;
 #[cfg(test)]
 mod find_tests;
@@ -33,9 +36,10 @@ mod selection;
 #[cfg(test)]
 mod selection_tests;
 
+use ahead::takes_all;
+use rows::bucket_target;
 /// Re-exported for `models::diff_tests` (`rows` is private).
 pub(super) use rows::wanted;
-use rows::{bucket_target, row_keys};
 
 /// One row of the pane. As one column, a row is one line of the diff and
 /// the `pair_*` roles are empty; side by side (`split`), the old side's
@@ -336,6 +340,21 @@ pub struct DiffModel {
     /// Whether a picture stands in for the diff on screen — the other half
     /// of what `flatten_patches` is told.
     shown_has_preview: bool,
+    /// The fingerprint `shown` was read with, kept past the next ask (which
+    /// empties `fingerprint`): the parts pressed on it are looked up by it.
+    shown_print: Option<u64>,
+    /// The parts pressed on `shown` the rows on screen were laid out with
+    /// (`ahead`, `ops::StageAhead::diff_parts`) — the hunk staged, unstaged or
+    /// discarded taken out at the press, ahead of git.
+    shown_parts: Vec<crate::ops::DiffPart>,
+    /// `shown` laid out with `shown_parts` in it — what the rows are, and
+    /// what a row's place is a place in (`laid_patches`); `None` with no
+    /// part standing.
+    laid: Option<Arc<platitude_core::parts::After>>,
+    /// How many reads of this window's tree the pane has asked for — each
+    /// numbered, so the answer to one is told from an earlier one landing
+    /// late (`ops::StageAhead::diff_asked`).
+    asks: u64,
     /// The selection's two ends, none while nothing is selected.
     sel_ends: Option<SelectionEnds>,
     /// The word a double-click took (`selection::take_word`), which the

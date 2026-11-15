@@ -27,6 +27,7 @@
 //! slots the QML callers name (`RepoPage`, `PublishFlow` and the harness
 //! verbs among them), so ask before starting either.
 
+use super::ops_stage::Spot;
 use super::*;
 
 #[qobject(ConvertToCamelCase, NoQmlElement)]
@@ -142,9 +143,15 @@ impl RepoTab {
         Member = commit_waits,
         Notify = commit_waits_changed
     );
-    // A stage or unstage press the screen has not caught up with — Commit
-    // waits on it (`ops::StageAhead::unseen`).
+    // A press that writes the index the screen has not caught up with —
+    // Commit waits on it (`ops::StageAhead::index_unseen`).
     qproperty!("stagingUnseen", Member = staging_unseen, Notify = changed);
+    // Anything on screen still a press's word, a discard's too
+    // (`ops::StageAhead::ahead_unseen`).
+    qproperty!("aheadUnseen", Member = ahead_unseen, Notify = changed);
+    // A write out that the open diff's drawing does not have in it — the
+    // diff's marks wait on it (`RepoPage.diffSettling`).
+    qproperty!("diffWritesOut", Member = diff_writes_out, Notify = changed);
     qproperty!("authorName", Member = author_name, Notify = changed);
     qproperty!("authorEmail", Member = author_email, Notify = changed);
     qproperty!("authorAvatar", Member = author_avatar, Notify = changed);
@@ -751,9 +758,12 @@ impl RepoTab {
     /// Unstaged edits, untracked files and staged changes each go by
     /// their own command, and a staged rename takes the name it came
     /// from with it (`RepoSession::discard_chosen`).
+    ///
+    /// The rows go at the press, ahead of git (デザイン規約 §消す操作は先に
+    /// 画面から消す, `ops::StageAhead`).
     #[qslot]
     fn discard_rows(&mut self) {
-        self.discard_chosen_rows()
+        self.press_told(Self::discard_chosen_rows);
     }
 
     #[qslot]
@@ -786,8 +796,19 @@ impl RepoTab {
     /// Stages part of one file's diff — or unstages it, for a `staged`
     /// `kind` — addressed by the clicked row. `kind` is the diff-key prefix
     /// (`unstaged` / `staged` / `untracked`); a negative `line` takes the
-    /// whole hunk. Answers whether a write went out ([`Self::stage_chosen`]).
+    /// whole hunk; `whole` says the press takes every change the diff shows
+    /// (`DiffModel.takesAll`). The part moves at the press, ahead of git
+    /// (`ops::StageAhead::asked_part`). Answers whether a write went out
+    /// ([`Self::stage_chosen`]).
+    ///
+    /// Seven arguments: a QML caller left at another arity dies on a
+    /// TypeError part-way through its handler — change every caller with the
+    /// signature.
     #[qslot]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one slot, the row's address as QML holds it"
+    )]
     fn stage_selection(
         &mut self,
         kind: String,
@@ -796,8 +817,24 @@ impl RepoTab {
         hunk: i32,
         line: i32,
         fingerprint: String,
+        whole: bool,
     ) -> bool {
-        self.stage_chosen(kind, path, orig_path, hunk, line, fingerprint)
+        let spot = Spot {
+            kind,
+            path,
+            orig_path,
+            hunk,
+            line,
+            fingerprint,
+            whole,
+        };
+        let mut went = false;
+        self.press_told(|tab| {
+            let (out, moved) = tab.stage_chosen(spot);
+            went = out;
+            moved
+        });
+        went
     }
 
     /// Throws away part of one file's unstaged diff, addressed the same way
@@ -805,6 +842,10 @@ impl RepoTab {
     /// piece to throw away: what is staged is unstaged first, by the
     /// affordance beside this one.
     #[qslot]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one slot, the row's address as QML holds it"
+    )]
     fn discard_selection(
         &mut self,
         kind: String,
@@ -813,8 +854,24 @@ impl RepoTab {
         hunk: i32,
         line: i32,
         fingerprint: String,
+        whole: bool,
     ) -> bool {
-        self.discard_chosen(kind, path, orig_path, hunk, line, fingerprint)
+        let spot = Spot {
+            kind,
+            path,
+            orig_path,
+            hunk,
+            line,
+            fingerprint,
+            whole,
+        };
+        let mut went = false;
+        self.press_told(|tab| {
+            let (out, moved) = tab.discard_chosen(spot);
+            went = out;
+            moved
+        });
+        went
     }
 
     /// Commits the index from the editor's two fields. Both empty is only

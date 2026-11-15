@@ -28,6 +28,14 @@ impl DiffModel {
     qproperty!("embedded", Member = embedded, Notify = changed);
     qproperty!("embeddedSha8", Member = embedded_sha8, Notify = changed);
     qproperty!("loading", Member = loading, Notify = changed);
+    // Whether the rows are the parts' exact layout, or the read with none
+    // over it: a press on them is placed where it stands
+    // (`stage::PressedOn`). A part laid as read (`parts::After::exact`)
+    // holds the marks until the read after its answer.
+    qproperty!("laidExact", Read = laid_exact, Notify = changed);
+    pub(super) fn laid_exact(&self) -> bool {
+        self.laid.as_ref().is_none_or(|laid| laid.exact)
+    }
     qproperty!("unread", Member = unread, Notify = changed);
     qproperty!("carriedAt", Member = current_at, Notify = changed);
     qproperty!("coloured", Member = coloured, Notify = changed);
@@ -300,6 +308,25 @@ impl DiffModel {
         crate::hub::from_session(self.tab_id, |s| s.refresh_diff(target)).is_some()
     }
 
+    /// Draws the rows again with the parts pressed on them as they stand —
+    /// a press took a hunk out, a refusal put it back (`RepoPage.restage`).
+    #[qslot]
+    fn restage(&mut self) {
+        if self.restage_rows() {
+            self.changed();
+            self.rows_arrived();
+        }
+    }
+
+    /// Whether a press of `hunk` (or of its `line`; negative for the whole
+    /// hunk) takes every change the rows on screen show, in a diff a part can
+    /// empty — the file row then leaves its side (`ops::Part::whole`).
+    #[qslot]
+    fn takes_all(&self, hunk: i32, line: i32) -> bool {
+        self.laid_patches()
+            .is_some_and(|patches| takes_all(patches, hunk, line))
+    }
+
     /// How many lines are marked `side` (`ours` / `theirs`), for
     /// `conflict-sides` — a picture cannot say every band is there.
     #[qslot]
@@ -445,6 +472,10 @@ impl DiffModel {
         // Kept past here, a closed pane holds the whole diff's heap.
         self.shown = None;
         self.shown_has_preview = false;
+        self.shown_print = None;
+        self.shown_parts = Vec::new();
+        self.laid = None;
+        crate::hub::diff_drawn(self.tab_id, None, None, 0);
         self.shown_marks = Default::default();
         self.shown_colors = Default::default();
         self.apply_endings(None);
@@ -484,6 +515,7 @@ impl DiffModel {
                     endings,
                     marks,
                     embedded,
+                    asked: answers,
                     ..
                 } => {
                     self.loading = false;
@@ -511,12 +543,22 @@ impl DiffModel {
                     self.apply_preview(preview.as_deref());
                     // The rows on screen, keyed off what they were laid out
                     // from, before that is replaced.
-                    let before = (!self.lines.is_empty())
-                        .then_some(self.shown.as_ref())
-                        .flatten()
-                        .map(|shown| row_keys(shown, !self.shown_has_preview, self.split));
+                    let before = self.keys_on_screen();
                     self.shown_has_preview = preview.is_some();
-                    self.shown = Some(patches);
+                    self.shown = Some(Arc::clone(&patches));
+                    self.shown_print = Some(fingerprint);
+                    // git's word first: the parts it speaks for go, the
+                    // others are moved onto it where they still stand
+                    // (`ops::StageAhead::diff_drawn`) — then drawn over it.
+                    let mine = self.current_at.is_empty();
+                    crate::hub::diff_drawn(
+                        self.tab_id,
+                        mine.then(|| (self.current_key.clone(), fingerprint)),
+                        mine.then_some(patches),
+                        answers,
+                    );
+                    let parts = self.parts_now();
+                    self.take_parts(parts);
                     self.shown_marks = marks;
                     self.shown_colors = Default::default();
                     self.coloured = false;

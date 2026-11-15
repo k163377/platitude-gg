@@ -6,7 +6,10 @@
 use std::collections::{HashMap, HashSet};
 
 use platitude_core::session::EolMark;
+use platitude_core::stage::DiscardSide;
 use platitude_core::status::{StatusItem, WorktreeStatus};
+
+use super::stage_parts::{DiffSpot, Discard, Moves, Next, Part, PartVerb};
 
 /// Which way a press moves rows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,12 +96,120 @@ pub struct Picture {
     pub marks: Vec<EolMark>,
 }
 
+/// What one press does to the rows it reaches.
+#[derive(Debug)]
+enum Act {
+    /// Whole files staged or unstaged ([`moved`]).
+    Whole { side: Side, reach: Reach },
+    /// Part of one file's diff ([`Part::next`]).
+    Part(Part),
+    /// Chosen rows discarded ([`Discard::next`]).
+    Discard(Discard),
+}
+
+impl Act {
+    /// Whether the press names `path`'s row.
+    fn reaches(&self, path: &str) -> bool {
+        match self {
+            Self::Whole { reach, .. } => reach.reaches(path),
+            Self::Part(part) => part.path == path,
+            Self::Discard(discard) => discard.reaches(path),
+        }
+    }
+
+    /// The paths the press names; `None` for a whole bucket's.
+    fn paths(&self) -> Option<Vec<String>> {
+        match self {
+            Self::Whole {
+                reach: Reach::Paths(paths),
+                ..
+            } => Some(paths.iter().cloned().collect()),
+            Self::Whole {
+                reach: Reach::All, ..
+            } => None,
+            Self::Part(part) => Some(vec![part.path.clone()]),
+            Self::Discard(discard) => Some(discard.paths().cloned().collect()),
+        }
+    }
+
+    /// Whether git is to write the index — what Commit, the stash, HEAD's
+    /// Save and `--continue` take whole ([`StageAhead::index_unseen`]). A
+    /// discard of the disk alone leaves the index as it was.
+    fn moves_index(&self) -> bool {
+        match self {
+            Self::Whole { .. } => true,
+            Self::Part(part) => part.verb != PartVerb::Discard,
+            Self::Discard(discard) => discard.moves_index(),
+        }
+    }
+
+    /// Whether `path`'s row in `bucket` leaves its side with the status
+    /// after the press ([`StageAhead::reaches`]).
+    fn leaves(&self, bucket: &str, path: &str) -> bool {
+        match self {
+            Self::Whole { side, reach } => side.takes_from(bucket) && reach.reaches(path),
+            Self::Part(part) => part.leaves(bucket, path),
+            Self::Discard(discard) => discard.leaves(bucket, path),
+        }
+    }
+
+    /// The row `item` becomes; `None` leaves it to the status. A whole
+    /// bucket's press asks the disk nothing (see [`picture_of`]).
+    fn next(&self, item: &StatusItem, dir: &mut dyn FnMut(&str) -> bool) -> Option<Next> {
+        match self {
+            Self::Whole {
+                side,
+                reach: Reach::All,
+            } => moved(*side, item, &mut |_| false).map(Next::Row),
+            Self::Whole { side, .. } => moved(*side, item, dir).map(Next::Row),
+            Self::Part(part) => part.next(item),
+            Self::Discard(discard) => discard.next(item, dir),
+        }
+    }
+
+    /// Which side a row a whole file's press moved ended on — its
+    /// line-ending marks go with it; `None` for the other two, which leave
+    /// the marks where they were or take them with the row.
+    fn ends_staged(&self) -> Option<bool> {
+        match self {
+            Self::Whole { side, .. } => Some(*side == Side::Stage),
+            Self::Part(_) | Self::Discard(_) => None,
+        }
+    }
+}
+
+/// A part's press as the open diff draws it ([`StageAhead::diff_parts`]):
+/// where it stands in the drawing it was pressed on, the side it moves, and
+/// whether git has done it. `id` tells one press from another, so a reader
+/// can tell whether what it draws has moved.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiffPart {
+    pub id: u64,
+    pub part: platitude_core::parts::Part,
+    pub landed: bool,
+}
+
+/// A part's press as the pane draws it, from the press to the first read the
+/// pane asked for after git answered it. `spot` is where it stands in the
+/// read the pane draws now — moved onto each newer read it stays placeable
+/// in ([`StageAhead::diff_drawn`]).
+#[derive(Debug)]
+struct DiffPress {
+    id: u64,
+    spot: DiffSpot,
+    moves: Moves,
+    landed: bool,
+    /// The pane's first ask after git answered it
+    /// ([`StageAhead::diff_asked`]): a read asked at or after this is git's
+    /// word on it.
+    truth_from: Option<u64>,
+}
+
 /// One press, from the queue's acceptance to the status that shows it.
 #[derive(Debug)]
 struct StagePress {
     id: u64,
-    side: Side,
-    reach: Reach,
+    act: Act,
     /// git answered and did it.
     landed: bool,
     /// The smallest stamp a status that looked after this write can carry
@@ -146,15 +257,27 @@ impl StagePress {
 /// **Only a row whose next state the row alone decides moves**; the rest wait
 /// for the status (the list and why: [`moved`]).
 ///
-/// **Commit waits while any press stands** ([`Self::unseen`]), until every
-/// reader has drawn the status after it: before that, what the rows show is
-/// the press's word, not git's — a row left to the status, a file `git add
-/// --all` takes that no status listed, a file changed outside between the
-/// press and git. Once Commit can be pressed again, the screen is git's.
+/// **Commit waits while any press that writes the index stands**
+/// ([`Self::index_unseen`]), until every reader has drawn the status after
+/// it: before that, what the rows show is the press's word, not git's — a
+/// row left to the status, a file `git add --all` takes that no status
+/// listed, a file changed outside between the press and git. Once Commit can
+/// be pressed again, the screen is git's. A discard of the disk alone leaves
+/// the index — what Commit, the stash's staged half, HEAD's Save and
+/// `--continue` take — where it was, and holds none of them.
+///
+/// **Three kinds of press, one life** ([`Act`]): whole files staged or
+/// unstaged, part of one file's diff ([`Self::asked_part`]) and chosen rows
+/// discarded ([`Self::asked_discard`]). A part is drawn by a fifth reader
+/// too, the open diff ([`Self::diff_parts`]), which lets it go on an order
+/// of its own: **the pane's asks**. A read the pane asked once git had
+/// answered the part is git's word on it; one asked before can land after
+/// the answer still holding the pressed hunk, and the part stays drawn over
+/// it ([`Self::diff_asked`], [`Self::diff_drawn`]).
 ///
 /// Held by the hub per tab (`hub::stage_ahead`), not on the page: the four
-/// readers are models of their own, each drawing in its own drain, and each
-/// asks here as it draws. Reset with the session (`Hub::release_tab` /
+/// status readers and the open diff are models of their own, each drawing
+/// in its own drain, and each asks here as it draws. Reset with the session (`Hub::release_tab` /
 /// `Hub::restand_tab`): the next session's status is the truth, and its
 /// stamps count from the start.
 #[derive(Debug, Default)]
@@ -169,34 +292,85 @@ pub struct StageAhead {
     /// Whether each path asked is a directory on disk — a gitlink, in a
     /// tracked row — asked once per path while presses are out (`moved`).
     dirs: HashMap<String, bool>,
-    /// A press was let go while a reader drew — Commit can be pressed again
-    /// where it was the last — and the tab has not been told
-    /// ([`Self::take_notice`]).
+    /// A reader's drawing moved the presses — a press let go, so Commit can
+    /// be pressed again where it was the last, or the open diff's parts moved
+    /// with its read — and the tab has not been told ([`Self::take_notice`]).
     notice: bool,
+    /// The parts as the open diff draws them, in the order they were
+    /// pressed; each goes with its answer where refused, and once landed
+    /// when the diff drawn is not the one it was made on.
+    diff_presses: Vec<DiffPress>,
+    /// The diff the pane drew last — its key and fingerprint — `None` where
+    /// it holds none of this window's tree ([`Self::diff_drawn`]).
+    diff_seen: Option<(String, u64)>,
+    /// That diff as the pane was handed it: what a part pressed on it while
+    /// others are in front is placed by (`stage::PressedOn`).
+    diff_read: Option<DiffRead>,
 }
+
+/// A diff as the pane was handed it.
+pub type DiffRead = std::sync::Arc<Vec<platitude_core::parse::diff::FilePatch>>;
 
 impl StageAhead {
     /// A press went to the queue under `accepted`; says whether it was taken
     /// — whether the readers draw it from now on. `None` (the session is
     /// closed) is not taken: no answer is coming to put its rows back.
     pub fn asked(&mut self, side: Side, reach: Reach, accepted: Option<u64>) -> bool {
-        let Some(id) = accepted.filter(|id| *id != 0) else {
-            tracing::debug!("stage the queue took nothing for moves no row");
-            return false;
-        };
         if let Reach::Paths(paths) = &reach
             && paths.is_empty()
         {
             return false;
         }
+        self.push(Act::Whole { side, reach }, accepted).is_some()
+    }
+
+    /// The same for part of one file's diff: its row moves where the row
+    /// and the diff decide it ([`Part::next`]), and the open diff draws the
+    /// part taken out of it ([`Self::diff_parts`]).
+    pub fn asked_part(&mut self, part: Part, accepted: Option<u64>) -> bool {
+        let spot = part.spot.clone();
+        let moves = part.verb.moves();
+        let Some(id) = self.push(Act::Part(part), accepted) else {
+            return false;
+        };
+        self.diff_presses.push(DiffPress {
+            id,
+            spot,
+            moves,
+            landed: false,
+            truth_from: None,
+        });
+        true
+    }
+
+    /// The same for a discard of chosen rows (`<path>` and the side each was
+    /// chosen on): the rows go at the press ([`Discard::next`]).
+    pub fn asked_discard(
+        &mut self,
+        chosen: &[(String, DiscardSide)],
+        accepted: Option<u64>,
+    ) -> bool {
+        let discard = Discard::new(chosen);
+        if discard.is_empty() {
+            return false;
+        }
+        self.push(Act::Discard(discard), accepted).is_some()
+    }
+
+    /// Writes a press down under the id the queue took it under; `None`
+    /// where it took nothing.
+    fn push(&mut self, act: Act, accepted: Option<u64>) -> Option<u64> {
+        let Some(id) = accepted.filter(|id| *id != 0) else {
+            tracing::debug!("stage the queue took nothing for moves no row");
+            return None;
+        };
         self.presses.push(StagePress {
             id,
-            side,
-            reach,
+            act,
             landed: false,
             reads_from: 0,
         });
-        true
+        Some(id)
     }
 
     /// git answered a write; only a press's own answer moves anything. Says
@@ -208,14 +382,197 @@ impl StageAhead {
         };
         if failed {
             self.presses.remove(at);
+            self.refused_part(id);
             self.forget_dirs_when_idle();
             return true;
         }
         let press = &mut self.presses[at];
         press.landed = true;
         press.reads_from = reads_from;
+        for part in self.diff_presses.iter_mut().filter(|p| p.id == id) {
+            part.landed = true;
+        }
+        // Landed off the drawing — the pane closed or moved to another file
+        // while it ran: no read of the pane's will speak for it.
+        let seen = self.diff_seen.as_ref();
+        self.diff_presses.retain(|p| {
+            !p.landed
+                || seen
+                    .is_some_and(|(key, print)| p.spot.key == *key && p.spot.fingerprint == *print)
+        });
         self.let_go();
         true
+    }
+
+    /// The pane asked for a read under its number `asked`: every part git
+    /// has answered is spoken for by this read and any asked after it —
+    /// asked once the write was done, they look at what it left.
+    pub fn diff_asked(&mut self, asked: u64) {
+        for part in self.diff_presses.iter_mut().filter(|p| p.landed) {
+            part.truth_from.get_or_insert(asked);
+        }
+    }
+
+    /// The pane draws `seen` — its key and fingerprint — read as `read`,
+    /// answering the ask numbered `asked`; `None`, a diff of none of this
+    /// window's files, which no part is drawn over.
+    ///
+    /// **What the pane holds of its own is the parts; a read is git's word.**
+    /// A part this read speaks for — its write answered before the read was
+    /// asked ([`Self::diff_asked`]) — goes, whatever the read holds: git did
+    /// it, or somebody put the file back since, and the read says which. The
+    /// others are moved onto the read: a read asked before their answers
+    /// holds the bytes they were pressed on, or the bytes some of them left
+    /// — git runs them in the order pressed — and where it is exactly the
+    /// diff the first of them leave (`parts::after`), the rest stand on it
+    /// where they stood. Where it is none of those, the file moved under
+    /// them: they leave the drawing, and git turns them down as moved.
+    ///
+    /// **By the order of asking, not of arrival**: a read asked before an
+    /// answer can land after it holding the bytes from before the write —
+    /// one asked as a status came in mid-write, or one asked at the answer of
+    /// the part in front while the next one ran — and drawn as the word on
+    /// that write, it would put the part back under the hand.
+    pub fn diff_drawn(&mut self, seen: Option<(String, u64)>, read: Option<DiffRead>, asked: u64) {
+        let before = self.diff_presses.len();
+        let was = self.diff_seen.take();
+        let held = self.diff_read.take();
+        match (&seen, &read) {
+            (Some((key, print)), Some(now)) => {
+                let on_held = was
+                    .as_ref()
+                    .filter(|(at, _)| at == key)
+                    .map(|(_, print)| *print);
+                self.move_parts(
+                    key,
+                    on_held,
+                    held.as_deref().map(Vec::as_slice),
+                    now,
+                    *print,
+                    asked,
+                );
+            }
+            // Nothing of the file is drawn: a part git has answered has
+            // nothing left to draw it over.
+            _ => self.diff_presses.retain(|p| !p.landed),
+        }
+        let moved = was != seen || self.diff_presses.len() != before;
+        self.diff_seen = seen;
+        self.diff_read = read;
+        if moved {
+            self.notice = true;
+        }
+    }
+
+    /// The parts on file `key` — pressed on the read `held` drew as `print`
+    /// — moved onto `now` (fingerprint `now_print`, answering ask `asked`):
+    /// see [`Self::diff_drawn`].
+    fn move_parts(
+        &mut self,
+        key: &str,
+        print: Option<u64>,
+        held: Option<&[platitude_core::parse::diff::FilePatch]>,
+        now: &[platitude_core::parse::diff::FilePatch],
+        now_print: u64,
+        asked: u64,
+    ) {
+        let on = |p: &DiffPress| p.spot.key == key && Some(p.spot.fingerprint) == print;
+        let parts: Vec<platitude_core::parts::Part> = self
+            .diff_presses
+            .iter()
+            .filter(|p| on(p))
+            .map(|p| platitude_core::parts::Part {
+                hunk: p.spot.hunk,
+                line: p.spot.line,
+                moves: p.moves,
+            })
+            .collect();
+        let spoken = self
+            .diff_presses
+            .iter()
+            .filter(|p| on(p))
+            .take_while(|p| p.truth_from.is_some_and(|from| from <= asked))
+            .count();
+        let done = held.and_then(|held| {
+            (spoken..=parts.len()).rev().find(|done| {
+                let laid = platitude_core::parts::after(held, &parts[..*done]);
+                laid.exact && platitude_core::parts::same_lines(&laid.patches, now)
+            })
+        });
+        let mut index = 0;
+        self.diff_presses.retain_mut(|p| {
+            if !on(p) {
+                // Pressed on other bytes or another file: nothing here to
+                // draw it over.
+                return !p.landed;
+            }
+            let at = index;
+            index += 1;
+            match done {
+                Some(done) if at >= done => {
+                    p.spot.fingerprint = now_print;
+                    true
+                }
+                _ => false,
+            }
+        });
+    }
+
+    /// The parts drawn over the diff named `key` as read with `fingerprint`,
+    /// in the order they were pressed: those made on these very bytes,
+    /// landed or not — and none over other bytes, which their places do not
+    /// address.
+    #[must_use]
+    pub fn diff_parts(&self, key: &str, fingerprint: u64) -> Vec<DiffPart> {
+        self.diff_presses
+            .iter()
+            .filter(|p| p.spot.key == key && p.spot.fingerprint == fingerprint)
+            .map(|p| DiffPart {
+                id: p.id,
+                part: platitude_core::parts::Part {
+                    hunk: p.spot.hunk,
+                    line: p.spot.line,
+                    moves: p.moves,
+                },
+                landed: p.landed,
+            })
+            .collect()
+    }
+
+    /// What a part pressed now on the diff `key` read with `fingerprint` is
+    /// placed by: those bytes as read, and the parts pressed on them still
+    /// standing, in order (`stage::PressedOn`). `None` where the pane draws
+    /// other bytes.
+    #[must_use]
+    pub fn pressed_on(
+        &self,
+        key: &str,
+        fingerprint: u64,
+    ) -> Option<(DiffRead, Vec<platitude_core::parts::Part>)> {
+        let (seen_key, seen_print) = self.diff_seen.as_ref()?;
+        if seen_key != key || *seen_print != fingerprint {
+            return None;
+        }
+        let read = self.diff_read.clone()?;
+        let ahead = self
+            .diff_parts(key, fingerprint)
+            .into_iter()
+            .map(|p| p.part)
+            .collect();
+        Some((read, ahead))
+    }
+
+    /// Whether write `id` is a part on the diff the pane draws — one the
+    /// drawing has in it already, which leaves the other parts of it
+    /// pressable (`RepoTab.diffWritesOut`).
+    #[must_use]
+    pub fn part_on_drawn(&self, id: u64) -> bool {
+        let Some((key, print)) = self.diff_seen.as_ref() else {
+            return false;
+        };
+        self.diff_presses
+            .iter()
+            .any(|p| p.id == id && p.spot.key == *key && p.spot.fingerprint == *print)
     }
 
     /// `reader` has drawn a status that looked at `looked`.
@@ -264,10 +621,7 @@ impl StageAhead {
             .presses
             .iter()
             .filter(|p| !p.landed)
-            .filter_map(|p| match &p.reach {
-                Reach::Paths(paths) => Some(paths.iter().cloned()),
-                Reach::All => None,
-            })
+            .filter_map(|p| p.act.paths())
             .flatten()
             .collect();
         out.sort();
@@ -281,7 +635,7 @@ impl StageAhead {
     pub fn all_out(&self) -> bool {
         self.presses
             .iter()
-            .any(|p| !p.landed && p.reach == Reach::All)
+            .any(|p| !p.landed && p.act.paths().is_none())
     }
 
     /// Whether a press standing — answered or not — reaches `path`'s row in
@@ -298,15 +652,12 @@ impl StageAhead {
     #[must_use]
     pub fn reaches(&self, bucket: &str, path: &str) -> bool {
         self.dirs.get(path) != Some(&true)
-            && self
-                .presses
-                .iter()
-                .any(|p| p.side.takes_from(bucket) && p.reach.reaches(path))
+            && self.presses.iter().any(|p| p.act.leaves(bucket, path))
     }
 
-    /// Whether a press stands the screen has not caught up with — any, until
-    /// every reader has drawn the status after it: Commit waits meanwhile, and
-    /// so does the open diff's landing on its file's own new side
+    /// Whether a press stands the status readers have not caught up with —
+    /// any, until every reader has drawn the status after it: the open
+    /// diff's landing on its file's own new side waits meanwhile
     /// (`RepoPage.followEmptySide`). Without one nothing is out, landed or
     /// not, and a status is drawn as it is.
     #[must_use]
@@ -314,8 +665,24 @@ impl StageAhead {
         !self.presses.is_empty()
     }
 
-    /// Whether a press was let go while a reader drew, and spends the news:
-    /// the tab is the one to read it (`TabMsg::PressLetGo`).
+    /// [`Self::unseen`] for the presses that write the index — what Commit,
+    /// the stash, HEAD's Save and `--continue` wait on ([`Act::moves_index`]).
+    #[must_use]
+    pub fn index_unseen(&self) -> bool {
+        self.presses.iter().any(|p| p.act.moves_index())
+    }
+
+    /// Whether anything on screen is still a press's word: a press the
+    /// status readers have not caught up with, or a part the open diff has
+    /// not drawn past.
+    #[must_use]
+    pub fn ahead_unseen(&self) -> bool {
+        !self.presses.is_empty() || !self.diff_presses.is_empty()
+    }
+
+    /// Whether what a reader drew moved the presses — one let go, or the open
+    /// diff's parts moved onto its read or gone with it — and spends the
+    /// news: the tab is the one to read it (`TabMsg::PressLetGo`).
     pub fn take_notice(&mut self) -> bool {
         std::mem::take(&mut self.notice)
     }
@@ -335,6 +702,26 @@ impl StageAhead {
         self.presses.retain(|p| !(p.landed && low >= p.reads_from));
         self.forget_dirs_when_idle();
         self.presses.len() != before
+    }
+
+    /// git refused write `id`: where it was a part, it leaves the drawing,
+    /// and so does every part pressed after it on the same bytes — each was
+    /// placed in a drawing with this one in it, which git now does not print
+    /// (core refuses them the same way, `stage::PressedOn`). Their rows wait
+    /// on their own answers.
+    fn refused_part(&mut self, id: u64) {
+        let Some(at) = self.diff_presses.iter().position(|p| p.id == id) else {
+            return;
+        };
+        let refused = self.diff_presses.remove(at);
+        let mut index = 0;
+        self.diff_presses.retain(|p| {
+            let behind = index >= at
+                && p.spot.key == refused.spot.key
+                && p.spot.fingerprint == refused.spot.fingerprint;
+            index += 1;
+            !behind
+        });
     }
 
     /// What was found on disk is about this run of presses: a folder can be
@@ -362,42 +749,50 @@ fn picture_of(
         .map(StatusItem::path)
         .filter(|path| !seen.insert(path))
         .collect();
-    let mut items = base.items.clone();
-    // Which side each moved path ended on: its marks go with it.
-    let mut ends: HashMap<String, bool> = HashMap::new();
+    let mut items: Vec<Option<StatusItem>> = base.items.iter().cloned().map(Some).collect();
+    // Which side each moved path ended on — its marks go with it — or
+    // `None` where the row left the list, and its marks with it.
+    let mut ends: HashMap<String, Option<bool>> = HashMap::new();
     for press in presses {
-        for item in &mut items {
-            if !press.reach.reaches(item.path()) {
+        for slot in &mut items {
+            let Some(item) = slot else {
+                continue;
+            };
+            // A whole bucket's press asks no disk on the press's turn: a
+            // bucket can be thousands of rows. A gitlink is drawn moved
+            // like any row until the status lands — Commit waits on that
+            // status for a whole bucket's press anyway (`index_unseen`).
+            if !press.act.reaches(item.path()) || twice.contains(item.path()) {
                 continue;
             }
-            let next = if twice.contains(item.path()) {
-                None
-            } else if press.reach == Reach::All {
-                // Not one look at the disk per row on the press's turn: a
-                // whole bucket can be thousands. A gitlink is drawn moved
-                // like any row until the status lands — Commit waits on that
-                // status for a whole bucket's press anyway (`unseen`).
-                moved(press.side, item, &mut |_| false)
-            } else {
-                moved(press.side, item, dir)
-            };
-            if let Some(next) = next {
-                ends.insert(item.path().to_string(), press.side == Side::Stage);
-                *item = next;
+            match press.act.next(item, dir) {
+                Some(Next::Row(next)) => {
+                    if let Some(staged) = press.act.ends_staged() {
+                        ends.insert(item.path().to_string(), Some(staged));
+                    }
+                    *item = next;
+                }
+                Some(Next::Gone) => {
+                    ends.insert(item.path().to_string(), None);
+                    *slot = None;
+                }
+                None => {}
             }
         }
     }
+    let items: Vec<StatusItem> = items.into_iter().flatten().collect();
     if items == base.items {
         return None;
     }
     let marks = marks
         .iter()
-        .map(|mark| match ends.get(&mark.path) {
-            Some(&staged) => EolMark {
-                staged,
+        .filter_map(|mark| match ends.get(&mark.path) {
+            Some(Some(staged)) => Some(EolMark {
+                staged: *staged,
                 ..mark.clone()
-            },
-            None => mark.clone(),
+            }),
+            Some(None) => None,
+            None => Some(mark.clone()),
         })
         .collect();
     let picture = Picture {

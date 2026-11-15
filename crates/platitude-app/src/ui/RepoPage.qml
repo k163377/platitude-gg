@@ -1486,8 +1486,10 @@ FocusScope {
     // **A stage moves its rows at the press** (デザイン規約 §バケツごとの一覧と、ペインの分け方): the rows, the buckets' counts and the Commit
     // button's file count move on the press's turn, and git runs behind it. **Which rows, and for how long, is
     // `ops::StageAhead`'s** (per tab in the hub); each move of what it holds moves `RepoTab.stagingSeq`, and the three
-    // lists and the counts draw the statuses they hold again on that turn. The diff open on a moved file follows on
-    // that turn, or once the status after the presses is drawn where it lands on what git writes (`followEmptySide`).
+    // lists, the counts and the open diff (a hunk or a line pressed, デザイン規約 §diff の中のステージ) draw what they
+    // hold again on that turn. So do a discard's rows (§消す操作は先に画面から消す). The diff open on a moved file
+    // follows on that turn, or once the status after the presses is drawn where it lands on what git writes
+    // (`followEmptySide`).
     readonly property int stagingSeq: repoTab.stagingSeq
     onStagingSeqChanged: page.restage()
     function restage() {
@@ -1495,6 +1497,7 @@ FocusScope {
         unstagedModel.restage()
         stagedModel.restage()
         worktree.restage()
+        diffModel.restage()
         // A press that moved no row moves no list: the neighbour is noted here too (`noteDiffNeighbour`).
         page.noteDiffNeighbour()
         page.followEmptySide()
@@ -2329,18 +2332,19 @@ FocusScope {
         if (!page.wipWritable)
             return
         // The fingerprint rides along: the write refuses to apply indices to drifted bytes. `diffAwaits` is set from
-        // the slot's answer (`diffSettling`).
+        // the slot's answer (`diffSettling`). The part leaves the rows at the press (`restage`), and the file row
+        // with it where it took every change (`takesAll`).
         page.diffAwaits = repoTab.stageSelection(page.diffKind, page.diffPath, page.diffOrigPath, hunk, line,
-                                                 diffModel.fingerprint)
+                                                 diffModel.fingerprint, diffModel.takesAll(hunk, line))
     }
     /// Discards one hunk, unasked: the hold on its own heading's button is the consent (`DiffRowDelegate`'s
     /// `Discard hunk`).
     function discardHunkNow(hunk) {
         if (!page.wipWritable)
             return
-        // Armed by the answer (`diffSettling`).
+        // Armed by the answer (`diffSettling`); the hunk leaves at the press, as a staged one does.
         page.diffAwaits = repoTab.discardSelection(page.diffKind, page.diffPath, page.diffOrigPath, hunk, -1,
-                                                   diffModel.fingerprint)
+                                                   diffModel.fingerprint, diffModel.takesAll(hunk, -1))
     }
 
     // ---- what the reader lands on when a side runs out ---------------
@@ -2409,16 +2413,26 @@ FocusScope {
         }
         page.closeDiff()
     }
-    /// Whether the diff on screen is still catching up with a write: the pane's marks stay disabled meanwhile
-    /// (`DiffPane.busy`), since core refuses (`Rejected`) a press made on rows that have since moved. **Every part ends
-    /// by itself** — holding on "the tree has not been read yet" instead wedges for good on a write that moves no row
-    /// (the second line of a file on both sides). `busyCount` alone is not enough: it rises when the queue starts the
-    /// write, not at the press. `diffAwaits` rises on the press's own answer that it was queued (`stageSelection`; set
-    /// before it, a press turned away at the door would wedge the same way) and falls on the write's answer
-    /// (`absorbWriteResult`).
+    /// Whether the diff on screen is still catching up with a write — a press out, the queue busy, a read out, or
+    /// the pane waiting on a file a press took off its side: the paced re-read holds off meanwhile (`pollDiff`), and
+    /// automation reads the pane as unsettled. **Every part ends by itself** — holding on "the tree has not been read
+    /// yet" instead wedges for good on a write that moves no row (the second line of a file on both sides).
+    /// `busyCount` alone is not enough: it rises when the queue starts the write, not at the press. `diffAwaits` rises
+    /// on the press's own answer that it was queued (`stageSelection`; set before it, a press turned away at the door
+    /// would wedge the same way) and falls on the write's answer (`absorbWriteResult`). The marks wait on less
+    /// (`diffPressable`).
     property bool diffAwaits: false
     readonly property bool diffSettling:
         page.diffAwaits || repoTab.busyCount > 0 || diffModel.loading || page.diffMoving
+    /// Whether the pane's marks take a press (`DiffPane.busy`) — core refuses (`Rejected`) a press made on rows that
+    /// have since moved. **A part pressed here is already in the drawing** (`RepoTab.diffWritesOut` leaves it out),
+    /// and a press on the rows it left is placed in that drawing (`StageAhead::pressed_on`), so the next hunk or line
+    /// takes a press while the one before is still queued or running — and joins its burst, one read behind them all
+    /// (デザイン規約 §diff の中のステージ). What the drawing does not hold still holds them: any other write out (it
+    /// moves rows the drawing does not know of), and a part of a shape not drawn ahead (`DiffModel.laidExact` — core
+    /// places nothing behind it).
+    readonly property bool diffPressable:
+        !repoTab.diffWritesOut && !diffModel.loading && diffModel.laidExact && !page.diffMoving
     /// The open file has left the side it was read on at a stage press (`stillHere`) and the pane has not moved off it:
     /// it waits there for the status after that press, to land on the file's own new side (`followEmptySide`). Its
     /// rows are of a side the press has emptied, so its marks wait until the pane lands — past git's answer, where the
@@ -3942,7 +3956,7 @@ FocusScope {
                             sideTheirsCurrent: page.wipWritable && worktree.sideTheirsCurrent
                             sideColorOurs: page.sideColorOurs
                             sideColorTheirs: page.sideColorTheirs
-                            busy: page.diffSettling
+                            busy: !page.diffPressable
                             discardUnrecorded: GitFacts.discardUnrecorded(worktree.unborn, worktree.notCopied,
                                                                           [page.diffPath])
                             menuStanding: page.menuStanding

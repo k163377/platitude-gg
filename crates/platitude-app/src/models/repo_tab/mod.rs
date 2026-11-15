@@ -213,9 +213,25 @@ pub struct RepoTab {
     /// bindings: a property is read where a slot would be asked once per row.
     staging_all_out: bool,
     staging_moving: Vec<String>,
-    /// A copy of `StageAhead::unseen`: a stage or unstage press stands that
-    /// the screen has not caught up with — Commit waits, and says why.
+    /// A copy of `StageAhead::index_unseen`: a press that writes the index
+    /// (a stage or unstage of files or of a part, a discard of a staged
+    /// row) stands that the screen has not caught up with — Commit waits,
+    /// and says why.
     staging_unseen: bool,
+    /// A copy of `StageAhead::unseen`, the same for any press — a discard of
+    /// the disk alone too — read for the follow of the open diff
+    /// (`read_writes_out`).
+    staging_rows_unseen: bool,
+    /// A copy of `StageAhead::ahead_unseen`: anything on screen — a row, a
+    /// part of the open diff — is still a press's word. What automation
+    /// waits on before it takes a picture (`PageSettled`'s `staging`).
+    ahead_unseen: bool,
+    /// A write is out that the open diff's drawing does not have in it —
+    /// anything but a part pressed on the bytes it draws
+    /// (`StageAhead::part_on_drawn`): the diff's marks wait on it, as a
+    /// press on rows that write moves would be refused. Its own parts leave
+    /// them pressable, so hunk after hunk joins one burst.
+    diff_writes_out: bool,
     /// The writes this tab knows to be out, by id — accepted at its own door
     /// (`ask_session`) or at another model's in the same turn (`counted_out`,
     /// a restore off the discard record), or seen starting where nobody here
@@ -224,10 +240,10 @@ pub struct RepoTab {
     outstanding: Vec<u64>,
     /// Whether the Commit button waits: on a write out (`outstanding` — one
     /// queued would be committed with its work in it, which no row on screen
-    /// showed), on a stage or unstage press the screen has not caught up
-    /// with (`StageAhead::unseen` — until then the rows are the press's
-    /// word, not git's, landed or not), and on a tab still standing in
-    /// another worktree.
+    /// showed), on a press that writes the index the screen has not caught
+    /// up with (`StageAhead::index_unseen` — until then the rows are the
+    /// press's word, not git's, landed or not), and on a tab still standing
+    /// in another worktree.
     commit_waits: bool,
     /// The commit the standing `checkSignature` is about — the question,
     /// where `signature_oid` and its three are the answer.

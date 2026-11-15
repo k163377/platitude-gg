@@ -192,12 +192,13 @@ QtObject {
     /// on its chip, and `running` is what tells the two apart.
     readonly property string otherCommandRunning: qsTr("Wait for the running command")
     /// Why a write that takes the index whole — the commit button, the details pane's amend of HEAD, the stopped
-    /// operation's `--continue`, the toolbar's `stash` — waits while a stage or unstage press stands
-    /// (`RepoTab.stagingUnseen`; user decision — ask before changing): the rows show the press's word, not git's, until
-    /// the status after it is drawn (デザイン規約 §バケツごとの一覧と、ペインの分け方). Said for that whole stretch, the
-    /// `git add` running included: staging is the press and the screen catching up with it, so it is the reason even
-    /// where a running command would otherwise be (`otherCommandRunning`).
-    readonly property string stagingWait: qsTr("Wait for staging to finish")
+    /// operation's `--continue`, the toolbar's `stash` — waits while a press that writes the index stands (a stage or
+    /// an unstage of files or of a part, a discard of a staged row — `RepoTab.stagingUnseen`; user decision — ask
+    /// before changing): the file list shows the press's word, not git's, until the status after it is drawn
+    /// (デザイン規約 §バケツごとの一覧と、ペインの分け方). Said for that whole stretch, git running included: the press
+    /// and the list catching up with it are the reason even where a running command would otherwise be
+    /// (`otherCommandRunning`). Not "staging": a discard waits the same way.
+    readonly property string stagingWait: qsTr("Wait for the file list to update")
 
     /// Why every holder of a tag wears the warning when the remotes carry it on different commits and the remote this
     /// window acts on is not among them: no reading is the right one (`differsFrom` has nobody to name). Said where

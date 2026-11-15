@@ -18,6 +18,7 @@ fn target(path: &str) -> DiffTarget {
 fn rows(path: &str, fingerprint: u64) -> DiffMsg {
     DiffMsg::Loaded {
         target: target(path),
+        asked: 0,
         patches: Arc::new(Vec::new()),
         preview: None,
         fingerprint,

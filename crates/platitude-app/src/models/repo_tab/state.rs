@@ -54,6 +54,9 @@ impl Default for RepoTab {
             staging_all_out: false,
             staging_moving: Vec::new(),
             staging_unseen: false,
+            staging_rows_unseen: false,
+            ahead_unseen: false,
+            diff_writes_out: false,
             outstanding: Vec::new(),
             commit_waits: false,
             signature_wanted: String::new(),
@@ -237,25 +240,40 @@ impl RepoTab {
     /// read, moving `staging_seq` where `moved` says the rows did, where a
     /// press no longer out lets its rows' marks go, or where the screen has
     /// caught up with the last press standing (`unseen` — the open diff
-    /// follows then, `RepoPage.followEmptySide`); and whether the Commit
-    /// button waits — on a write out, a press standing or the stand
-    /// (`commit_waits`). Answers whether anything QML reads moved.
+    /// follows then, `RepoPage.followEmptySide`), or a part of the open diff
+    /// went (`ahead_unseen` — the diff draws again); and whether the Commit
+    /// button waits — on a write out, a press writing the index or the
+    /// stand (`commit_waits`). Answers whether anything QML reads moved.
     pub(super) fn read_writes_out(&mut self, moved: bool) -> bool {
-        let (all_out, moving, unseen) = crate::hub::stage_ahead(self.tab_id, |ahead| {
-            (ahead.all_out(), ahead.moving_paths(), ahead.unseen())
-        });
-        let waits = !self.outstanding.is_empty() || unseen || self.standing;
+        let (all_out, moving, unseen, index_unseen, ahead_unseen, diff_writes_out) =
+            crate::hub::stage_ahead(self.tab_id, |ahead| {
+                (
+                    ahead.all_out(),
+                    ahead.moving_paths(),
+                    ahead.unseen(),
+                    ahead.index_unseen(),
+                    ahead.ahead_unseen(),
+                    self.outstanding.iter().any(|id| !ahead.part_on_drawn(*id)),
+                )
+            });
+        let waits = !self.outstanding.is_empty() || index_unseen || self.standing;
         let staged = moved
             || all_out != self.staging_all_out
             || moving != self.staging_moving
-            || unseen != self.staging_unseen;
+            || unseen != self.staging_rows_unseen
+            || index_unseen != self.staging_unseen
+            || ahead_unseen != self.ahead_unseen
+            || diff_writes_out != self.diff_writes_out;
         let shifted = staged || waits != self.commit_waits;
         if staged {
             self.staging_seq = self.staging_seq.wrapping_add(1);
         }
         self.staging_all_out = all_out;
         self.staging_moving = moving;
-        self.staging_unseen = unseen;
+        self.staging_rows_unseen = unseen;
+        self.staging_unseen = index_unseen;
+        self.ahead_unseen = ahead_unseen;
+        self.diff_writes_out = diff_writes_out;
         self.commit_waits = waits;
         shifted
     }
@@ -448,13 +466,13 @@ impl RepoTab {
 
     /// Whether a write that takes the index whole — a commit, the details
     /// pane's amend of HEAD, a stash, the stopped operation's `--continue` —
-    /// is turned away here: a stage or unstage press stands
-    /// (`StageAhead::unseen`), so the rows on screen are the press's word
-    /// until the status after it is drawn, and git would take its own index.
-    /// Their buttons wait then (`stagingUnseen`, `Words.stagingWait`); this
-    /// is the belt under them.
+    /// is turned away here: a press that writes the index stands
+    /// (`StageAhead::index_unseen`), so the rows on screen are the press's
+    /// word until the status after it is drawn, and git would take its own
+    /// index. Their buttons wait then (`stagingUnseen`, `Words.stagingWait`);
+    /// this is the belt under them.
     pub(super) fn staging_turns_away(&self, what: &str) -> bool {
-        let stands = crate::hub::stage_ahead(self.tab_id, |ahead| ahead.unseen());
+        let stands = crate::hub::stage_ahead(self.tab_id, |ahead| ahead.index_unseen());
         if stands {
             tracing::info!(what, "turned away: a stage press is still standing");
         }

@@ -14,8 +14,9 @@
 //! `hub::stand_in`), because a page is taken down behind the tab in front
 //! (`Main.qml`) while the rows stay gone. They end with the session
 //! ([`StandIn::session_gone`]), not the operation, since what a session
-//! numbered goes with it. The file rows a stage moved are the hub's too
-//! ([`StageAhead`] — `hub::stage_ahead`), for another reason: four models
+//! numbered goes with it. The file rows a stage or a discard moved, and the
+//! parts of the open diff, are the hub's too
+//! ([`StageAhead`] — `hub::stage_ahead`), for another reason: five models
 //! draw them, each asking as it draws in a drain of its own. What one page's
 //! own boxes wait on is that page's ([`Press`], [`TreeOut`], kept on the tab
 //! model the boxes belong to): a page that went away has nothing left to
@@ -48,6 +49,11 @@ mod push_out_tests;
 mod stage_ahead;
 #[cfg(test)]
 mod stage_ahead_tests;
+#[cfg(test)]
+mod stage_diff_tests;
+mod stage_parts;
+#[cfg(test)]
+mod stage_parts_tests;
 mod stand_in;
 #[cfg(test)]
 mod stand_in_tests;
@@ -59,6 +65,7 @@ pub use branch_delete_out::BranchDeleteOut;
 pub use diff_reread::DiffReread;
 pub use press::Press;
 pub use push_out::PushOut;
-pub use stage_ahead::{Picture, Reach, Reader, Side, StageAhead};
+pub use stage_ahead::{DiffPart, DiffRead, Picture, Reach, Reader, Side, StageAhead};
+pub use stage_parts::{DiffSpot, Part, PartVerb};
 pub use stand_in::{Row, Rows, StandIn};
 pub use tree_out::TreeOut;

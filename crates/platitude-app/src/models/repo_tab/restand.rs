@@ -101,6 +101,9 @@ impl RepoTab {
         self.staging_all_out = false;
         self.staging_moving = Vec::new();
         self.staging_unseen = false;
+        self.staging_rows_unseen = false;
+        self.ahead_unseen = false;
+        self.diff_writes_out = false;
         // Last, the one thing this leaves standing: one command in flight
         // until the new session says where it is (`RepoTab::standing`).
         self.busy_count = 1;

@@ -351,19 +351,20 @@ impl SessionSink for BridgeSink {
             ),
             SessionEvent::DiffLoaded {
                 target,
+                asked,
                 patches,
                 preview,
                 fingerprint,
                 endings,
                 marks,
                 embedded,
-                ..
             } => {
                 // Every message kept: rows and colours are two messages of
                 // one diff, and diffs need not finish in the order asked.
                 // `drain` picks by key and drops the rest.
                 self.feeds.diff.push(DiffMsg::Loaded {
                     target,
+                    asked,
                     patches,
                     preview: preview.map(Box::new),
                     fingerprint,

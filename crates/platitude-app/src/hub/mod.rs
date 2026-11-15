@@ -47,8 +47,8 @@ pub use msg::{
 };
 pub use prefs::AvatarUrls;
 pub use tabs::{
-    from_session, listing_applied, stage_ahead, stand_in, status_drawn, status_picture,
-    with_session,
+    diff_asked, diff_drawn, diff_parts, from_session, listing_applied, stage_ahead, stand_in,
+    status_drawn, status_picture, with_session,
 };
 
 /// The commit message typed into a tab and not committed yet — the one

@@ -352,12 +352,13 @@ Item {
             verify(Automation.PageSettled.settled(page))
         }
 
-        // A stage press's rows are its word until every list has drawn a status taken after git answered.
+        // A stage or discard press's rows are its word until every list has drawn a status taken after git answered
+        // (`RepoTab.aheadUnseen` — a discard of the disk alone too, which holds no Commit).
         function test_a_stage_press_owes_the_status_after_it() {
             verify(Automation.PageSettled.settled(page))
-            page.pageTab.stagingUnseen = true
+            page.pageTab.aheadUnseen = true
             compare(Automation.PageSettled.missing(page), ["staging"])
-            page.pageTab.stagingUnseen = false
+            page.pageTab.aheadUnseen = false
             verify(Automation.PageSettled.settled(page))
         }
 

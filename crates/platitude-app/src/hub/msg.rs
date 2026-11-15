@@ -528,6 +528,9 @@ pub enum PlanMsg {
 pub enum DiffMsg {
     Loaded {
         target: DiffTarget,
+        /// The pane's number for the ask this answers
+        /// (`SessionEvent::DiffLoaded::asked`).
+        asked: u64,
         patches: Arc<Vec<FilePatch>>,
         /// Boxed: it is most of this message, and unboxed every message on
         /// the feed — colours included — would pay its size.
