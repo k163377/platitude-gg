@@ -18,8 +18,8 @@ pub(crate) fn pr_set() -> &'static std::collections::HashSet<String> {
 /// the ref is), and the marks around it. A record QML reads by field
 /// name: a field added here goes into both halves of the `Record` impl
 /// (`to_map` and `from_map`, which the round-trip test pins together),
-/// the QML that reads it, and `tst_refstack.qml`'s `chip()`, which spells
-/// every field but `home`.
+/// the QML that reads it, and `chip()` in the QML tests' `chips.js`, which
+/// spells every field.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Chip {
     pub kind: LabelKind,
