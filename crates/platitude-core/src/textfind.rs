@@ -145,11 +145,12 @@ pub fn search(query: &Query, lines: &[SideLine<'_>]) -> Vec<Hit> {
 }
 
 /// Whether a hit on `text[bytes]` stands as a word: where it begins on a
-/// word character the one before is not one, where it ends on one the one
-/// after is not one. A hit beginning or ending on punctuation asks nothing
-/// of that side (`clone(` is found before `clone(x)`).
+/// word character (`word::is_word_char`) the one before is not one, where
+/// it ends on one the one after is not one. A hit beginning or ending on
+/// punctuation asks nothing of that side (`clone(` is found before
+/// `clone(x)`).
 fn word_bounded(text: &str, bytes: Range<usize>) -> bool {
-    let is_word = |c: char| c.is_alphanumeric() || c == '_';
+    let is_word = crate::word::is_word_char;
     let before = text[..bytes.start].chars().next_back();
     let after = text[bytes.end..].chars().next();
     let hit = &text[bytes];

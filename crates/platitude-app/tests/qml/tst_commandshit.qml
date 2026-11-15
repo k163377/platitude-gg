@@ -101,6 +101,33 @@ Item {
                 compare(ruler.placeAt(data.text, false, x), reference.positionAt(x, 0), "x " + x)
         }
 
+        function test_a_point_names_the_character_it_is_over_data() { return columns() }
+
+        /// What a double-click asks (`CommandsTextSelect.wordAt`): at every pixel of the ink, a unit of the character
+        /// whose box holds the point — between the two places a press can stop at around it — and past the ink, the
+        /// column's end.
+        function test_a_point_names_the_character_it_is_over(data) {
+            shown(data.text)
+            const ink = drawn.implicitWidth
+            // The places a press can stop at, read off the layout: a combining sequence or an astral glyph has none
+            // inside it.
+            const stops = [0, data.text.length]
+            for (let x = 0; x <= ink; x++)
+                stops.push(ruler.placeAt(data.text, false, x))
+            const sorted = Array.from(new Set(stops)).sort((a, b) => a - b)
+            for (let x = 0; x < ink; x++) {
+                const unit = ruler.unitAt(data.text, false, x)
+                verify(unit < data.text.length, "x " + x + " named the column's end")
+                const from = sorted.filter(at => at <= unit).pop()
+                const to = sorted.find(at => at > unit)
+                verify(ruler.xOf(from) <= x && x < ruler.xOf(to),
+                       "x " + x + " named unit " + unit + ", whose character runs " + ruler.xOf(from)
+                       + " to " + ruler.xOf(to))
+            }
+            for (const past of [0, 1, 40, 4000])
+                compare(ruler.unitAt(data.text, false, ink + past), data.text.length, past + "px past the column")
+        }
+
         function test_the_blank_right_of_the_column_is_its_own_end_data() { return columns() }
 
         /// However far past: a walk of columns counts characters never drawn, and a drag out to the right of the

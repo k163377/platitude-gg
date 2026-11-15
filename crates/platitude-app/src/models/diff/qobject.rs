@@ -354,6 +354,20 @@ impl DiffModel {
         }
     }
 
+    /// A double-click: the word under the pointer becomes the selection
+    /// (`take_word`). `at` is the place of the character the pointer is
+    /// over (`LineRuler.unitAt`), not a byte — which character a place
+    /// spells is this side's to say.
+    #[qslot]
+    fn select_word(&mut self, side: i32, row: i32, at: i32) {
+        let Some(position) = LayoutPosition::new(row, at) else {
+            return;
+        };
+        if self.take_word(side, position) {
+            self.changed();
+        }
+    }
+
     /// One whole row becomes the selection — a right-click outside
     /// whatever was selected (デザイン規約 §diff の中身をコピーする).
     #[qslot]

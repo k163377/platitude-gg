@@ -39,6 +39,15 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "commands_sweep reach=9/9 ground=true",
     },
+    // A double-click takes a word of a column, stops at the clock's `:`,
+    // takes nothing on a gap, and a drag behind it grows word by word
+    // across rows — each held against the rows' own columns. Entered with
+    // pixels: a double-click names a character, which only a point can.
+    Verb {
+        name: "commands-word",
+        when: &[],
+        plain: "commands_word word=true hour=true gap=true run=true",
+    },
     // The panel taken down without being emptied — the only way the
     // mark's red is on screen with nothing over it. `wrong=true` fails a
     // refusal that never landed, `open=false` a press that never came;

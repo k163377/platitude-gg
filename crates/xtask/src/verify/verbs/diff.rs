@@ -424,6 +424,16 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "diff_blank quiet=true clamped=true backwards=true across=true sent=true",
     },
+    // A double-click takes the word under the pointer, a drag behind it
+    // grows word by word, and the blank past a line takes nothing — each
+    // held against the words of the fixture's first added line, read off
+    // the pad. Entered with pixels as `diff-blank` is, so a point is read
+    // as the character it is over, not the nearest boundary.
+    Verb {
+        name: "diff-word",
+        when: &[],
+        plain: "diff_word word=true blank=true run=true",
+    },
     // The diff read side by side (the app's `DiffRowDelegate`). `saved=` is
     // the choice read back off the store after the page reported its
     // layout; the tally after these two is the fixture's own shape.

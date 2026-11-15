@@ -46,7 +46,7 @@ QtObject {
                 "stage-refused", "diff-walk",
                 "push", "push-outdated", "tag-refused", "push-branch-go", "unset-upstream-go",
                 "force-push", "push-retry", "fetch", "fetch-ref-list",
-                "commands", "commands-select", "commands-copy", "commands-sweep",
+                "commands", "commands-select", "commands-copy", "commands-sweep", "commands-word",
                 "commands-fail", "commands-clear",
                 "fetch-recover", "fetch-recover-held",
                 "fetch-fail", "fetch-resume"].indexOf(act) >= 0
@@ -93,7 +93,7 @@ QtObject {
                 "edit-message-refused",
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
                 "diff-file", "conflict-sides", "diff-tick", "line-tools", "hunk-tools",
-                "diff-select", "diff-copy", "diff-menu", "diff-copy-removed", "diff-sweep",
+                "diff-select", "diff-copy", "diff-menu", "diff-copy-removed", "diff-word", "diff-sweep",
                 "diff-band-sweep", "diff-bar", "diff-blank", "diff-escape",
                 "diff-split", "split-tools", "split-copy",
                 "diff-find", "diff-find-step", "diff-find-lines", "diff-find-options", "diff-find-split",
@@ -281,7 +281,7 @@ QtObject {
                 // The bar comes down before its place word can be pressed, and the panel it raises is built after.
                 "notice-link",
                 "divider-refuse", "commands-fail-shut", "commands-escape",
-                "commands-select", "commands-copy", "commands-sweep",
+                "commands-select", "commands-copy", "commands-sweep", "commands-word",
                 "cherry-pick", "merge-branch", "revert-commit", "reword", "edit-message",
                 // Pressed off the card once nothing else runs; the tip it lands on is waited out behind the write
                 // barrier. `pull-ahead` is answered without moving anything — it waits for the panel it opens to

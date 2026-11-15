@@ -431,3 +431,112 @@ fn a_selection_whose_head_went_over_the_edge_is_let_go() {
     assert_eq!(model.sel_ends, None, "let go, not left holding nothing");
     assert_eq!(model.copied(), "");
 }
+
+// ---- a double-click takes a word (`take_word`) ---------------------------
+
+/// `12:03:17\tgit switch -- 3.2\t29 ms` over
+/// `12:03:17\tgit push origin main\texit 128 1.2 s`, which failed.
+fn two_commands() -> CommandsModel {
+    log(vec![
+        row("switch -- 3.2", "ok", "", "29 ms", ""),
+        row(
+            "push origin main",
+            "failed",
+            "exit 128",
+            "1.2 s",
+            "fatal: no",
+        ),
+    ])
+}
+
+/// What a double-click on place `place` of column `at` of row `row` copies.
+fn word_at(model: &mut CommandsModel, row: i32, at: i32, place: i32) -> String {
+    model.take_word(at, layout(row, place));
+    model.copied()
+}
+
+#[test]
+fn a_double_click_takes_the_word_under_the_pointer_in_its_column() {
+    let mut model = two_commands();
+    assert_eq!(word_at(&mut model, 0, AT_CMD, 5), "switch");
+    assert_eq!(
+        said(&model.rows[0].sel),
+        wash("", "4:6", "", false),
+        "washed over the word alone"
+    );
+    assert_eq!(word_at(&mut model, 0, AT_CMD, 11), "-", "a dash alone");
+    assert_eq!(
+        word_at(&mut model, 0, AT_CLOCK, 1),
+        "12",
+        "the clock's hour"
+    );
+    assert_eq!(word_at(&mut model, 0, AT_OUT, 0), "29", "the time taken");
+    assert_eq!(
+        word_at(&mut model, 1, AT_OUT, 2),
+        "exit",
+        "a failure's line, without git's words"
+    );
+}
+
+#[test]
+fn a_double_click_on_a_gap_below_the_line_or_past_its_end_takes_nothing() {
+    let mut model = two_commands();
+    let text = model.line_at(0).unwrap().text();
+    // Each with the byte its second press lands on (`hit`).
+    for (at, place, pressed, said) in [
+        (AT_GAP_CMD, 0, 8, "the gap before the command"),
+        (AT_GAP_OUT, 0, 26, "the gap after it"),
+        (9, 0, text.len(), "git's words below the line"),
+        (AT_OUT, 5, text.len(), "past the end of `29 ms`"),
+    ] {
+        model.take_word(AT_CMD, layout(0, 5));
+        model.start_select(source(0, i32::try_from(pressed).unwrap()));
+        assert!(
+            !model.take_word(at, layout(0, place)),
+            "{said}: nothing moved"
+        );
+        assert_eq!(model.copied(), "", "{said}");
+        assert_eq!(model.sel_word, None, "{said}");
+        // A drag behind it goes place by place from the press.
+        model.drag_select(source(0, 12));
+        assert_eq!(
+            model.copied(),
+            text[pressed.min(12)..pressed.max(12)],
+            "{said}: the drag behind it"
+        );
+    }
+}
+
+#[test]
+fn a_drag_behind_a_double_click_grows_word_by_word_across_rows() {
+    let mut model = two_commands();
+    model.take_word(AT_CMD, layout(0, 5));
+    // Into `push` on the next row: byte 9 is where its command starts.
+    model.drag_select(source(1, 9 + 5));
+    assert_eq!(model.copied(), "switch -- 3.2\t29 ms\n12:03:17\tgit push");
+    // Back into `git` on the first row.
+    model.drag_select(source(0, 9 + 1));
+    assert_eq!(model.copied(), "git switch");
+    // A plain press after it drags place by place again.
+    model.start_select(source(0, 9 + 5));
+    model.drag_select(source(0, 9 + 7));
+    assert_eq!(model.copied(), "wi");
+}
+
+#[test]
+fn a_double_clicked_word_moves_with_its_row_or_goes_with_it() {
+    let mut model = two_commands();
+    model.take_word(AT_CMD, layout(1, 5));
+    model.shift_selection(1);
+    assert_eq!(model.sel_word, Some(SelectionEnds::word(0, 13..17)));
+    model.take_word(AT_CMD, layout(0, 5));
+    model.shift_selection(1);
+    assert_eq!(model.sel_word, None, "its row fell off");
+    // The word's row stays, but the drag behind it reached the row that
+    // fell off: the selection goes, and the word with it.
+    model.take_word(AT_CMD, layout(1, 5));
+    model.drag_select(source(0, 9 + 5));
+    model.shift_selection(1);
+    assert_eq!(model.sel_ends, None);
+    assert_eq!(model.sel_word, None, "no word stands beside no selection");
+}

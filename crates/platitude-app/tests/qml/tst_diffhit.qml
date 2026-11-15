@@ -149,6 +149,34 @@ Item {
                 compare(ruler.placeAt(markup, false, x), reference.positionAt(x, 0), "x " + x)
         }
 
+        function test_a_point_names_the_character_it_is_over_data() { return lines() }
+
+        /// What a double-click asks (`DiffTextSelect.wordAt`): at every pixel of the ink, a unit of the character whose
+        /// box holds the point — between the two places a press can stop at around it, whichever of them is nearer —
+        /// and past the ink, the line's end.
+        function test_a_point_names_the_character_it_is_over(data) {
+            const spelled = shown(data.line)
+            const markup = root.markupOf(data.line)
+            const ink = drawn.implicitWidth
+            // The places a press can stop at, read off the layout: a combining sequence or an astral glyph has none
+            // inside it.
+            const stops = [0, spelled.length]
+            for (let x = 0; x <= ink; x++)
+                stops.push(ruler.placeAt(markup, false, x))
+            const sorted = Array.from(new Set(stops)).sort((a, b) => a - b)
+            for (let x = 0; x < ink; x++) {
+                const unit = ruler.unitAt(markup, false, x)
+                verify(unit < spelled.length, "x " + x + " named the line's end")
+                const from = sorted.filter(at => at <= unit).pop()
+                const to = sorted.find(at => at > unit)
+                verify(ruler.xOf(from) <= x && x < ruler.xOf(to),
+                       "x " + x + " named unit " + unit + ", whose character runs " + ruler.xOf(from)
+                       + " to " + ruler.xOf(to))
+            }
+            for (const past of [0, 1, 40, 4000])
+                compare(ruler.unitAt(markup, false, ink + past), spelled.length, past + "px past the line")
+        }
+
         function test_the_blank_right_of_the_line_is_the_line_s_own_end_data() { return lines() }
 
         /// However far past: a walk of columns counts characters never drawn, and would answer mid-line far right of

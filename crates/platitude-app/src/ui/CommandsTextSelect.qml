@@ -3,8 +3,9 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude.ui
 
-// The hand that picks the log's text out of its rows: a drag selects, a plain click puts the selection down — with
-// Ctrl+C, the log's only way to copy (`CommandsPane`).
+// The hand that picks the log's text out of its rows: a drag selects, a double-click takes a word and the drag behind
+// it goes word by word (`wordAt`), a plain click puts the selection down — with Ctrl+C, the log's only way to copy
+// (`CommandsPane`).
 //
 // Laid over the list, not inside the rows: a `Flickable` takes the grab from its children once a drag passes the
 // threshold, and `reuseItems` rebuilds a scrolled-away row, so a drag held by a row loses its grip.
@@ -88,6 +89,22 @@ Item {
         if (row !== pick.fromRow || at !== pick.fromAt)
             pick.selecting = true
     }
+    /// A double-click at a point (own coordinates): the word under it becomes the selection, and the drag behind it
+    /// grows word by word (`CommandsModel::take_word`). It lands after the second press, which `takeAt` has already
+    /// taken (`tst_textdoubleclick`). A gap, the words below a failure's line and the blank past its end take nothing:
+    /// the model names no character there.
+    function wordAt(position) {
+        const row = pick.rowAt(position.y)
+        const item = pick.view.itemAtIndex(row)
+        if (!item)
+            return
+        const at = pick.columnAt(item, position)
+        const drawn = at === pick.atClock || at === pick.atCmd || at === pick.atOut
+        const place = drawn ? pick.ruler.unitAt(pick.commandsModel.columnText(row, at), false,
+                                                position.x - pick.columnX(item, at))
+                            : 0
+        pick.commandsModel.selectWord(row, at, place)
+    }
     /// An empty selection is cleared, so a plain click takes down the previous drag's wash.
     function releaseText() {
         pick.dragging = false
@@ -119,17 +136,30 @@ Item {
         if (!item)
             return 0
         const x = position.x
+        const at = pick.columnAt(item, position)
+        if (at === pick.atBelow)
+            return pick.commandsModel.hitAt(row, at, 0)
+        if (at === pick.atGapCmd)
+            return pick.commandsModel.hitAt(row, at, pick.sideOf(x, item.clockEnd, item.cmdX))
+        if (at === pick.atGapOut)
+            return pick.commandsModel.hitAt(row, at, pick.sideOf(x, item.cmdEnd, item.outX))
+        return pick.hit(row, at, x - pick.columnX(item, at))
+    }
+    /// Which of a row's columns a point is over: the three it draws, the gaps between them, or the words a failure
+    /// carries below its line — the one split a press and a double-click both read.
+    function columnAt(item, position) {
+        const x = position.x
         if (position.y - (item.y - pick.view.contentY) >= item.lineHeight)
-            return pick.commandsModel.hitAt(row, pick.atBelow, 0)
-        if (x < item.clockEnd)
-            return pick.hit(row, pick.atClock, x - item.clockX)
-        if (x < item.cmdX)
-            return pick.commandsModel.hitAt(row, pick.atGapCmd, pick.sideOf(x, item.clockEnd, item.cmdX))
-        if (x < item.cmdEnd)
-            return pick.hit(row, pick.atCmd, x - item.cmdX)
-        if (x < item.outX)
-            return pick.commandsModel.hitAt(row, pick.atGapOut, pick.sideOf(x, item.cmdEnd, item.outX))
-        return pick.hit(row, pick.atOut, x - item.outX)
+            return pick.atBelow
+        return x < item.clockEnd ? pick.atClock
+             : x < item.cmdX ? pick.atGapCmd
+             : x < item.cmdEnd ? pick.atCmd
+             : x < item.outX ? pick.atGapOut
+             : pick.atOut
+    }
+    /// Where one of the three drawn columns starts, in this item's coordinates.
+    function columnX(item, at) {
+        return at === pick.atClock ? item.clockX : at === pick.atCmd ? item.cmdX : item.outX
     }
     /// One column: pixels to place by the column's layout (`LineRuler`), place to byte by the model. Both are
     /// lookups — treating a column as a width lands mid-line when the drag runs past its end.
@@ -173,6 +203,7 @@ Item {
         onPositionChanged: mouse => pick.followAt(Qt.point(mouse.x, mouse.y))
         onReleased: pick.releaseText()
         onCanceled: pick.releaseText()
+        onDoubleClicked: mouse => pick.wordAt(Qt.point(mouse.x, mouse.y))
     }
 
     // ---- the edge ----------------------------------------------------------------------------------------------

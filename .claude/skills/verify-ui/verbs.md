@@ -48,6 +48,7 @@
 - `commands-escape`(引数なし。**`--allow-write-failure` が要る**): 同じパネルを Esc で下ろす(`RepoPage.escapePressed`)— 詳細は `AutoActFindVerbs.qml`
 - `commands-select` / `commands-copy`: ログのドラッグ選択と Ctrl+C(`CommandsPane.qml` / `models/commands/selection.rs`)— 詳細は `AutoActFindVerbs.qml`
 - `commands-sweep`: ログを最終行の下の地から掴めること — 詳細は `AutoActFindVerbs.qml`
+- `commands-word`: ログのダブルクリックで単語を選ぶ・その後のドラッグは単語ずつ行をまたいで伸びる・列の間は何も選ばない(ピクセルで入る)— 詳細は `AutoActFindVerbs.qml` の `commandWordTally`
 - `commands-clear`(**`--allow-write-failure` が要る**): ヘッダの `Clear` が行とヘッダの 1 行を空にする — 詳細は `WindowAutoActDriver.qml`
 - `fetch-fail <回数> --preset unreachable --allow-write-failure`(1〜2 で警告の形、3 で止まった形): 連続した fetch の失敗 — 詳細は `AutoActPublishVerbs.qml`
 - `fetch-busy`: 通信中のボタン(枠が turn していない側の待ち)— 詳細は `WindowBandActs.qml`
@@ -136,9 +137,10 @@
 - **書き込む側(`*-go` / `take-side-*` / `open-mergetool`)は着地まで待って撮る** — 書き込み境界は断られた write にも来るので、`AutoActDriver.treeBarrier` が名指した行がそのバケツから消えたのを確かめてから撮る(報告行 `tree_settled …`)。**書き込みが git に拒まれた run は行が残るので watchdog が診断**する
 - `diff-file` / `line-tools` / `hunk-tools`(引数は `<パス>` か `<bucket>:<パス>`。**この 3 つと `stage-hunk` / `stage-line` / `keep-place` / `code-send` / `code-grow` / `code-shrink` / `code-swap` / `line-back` / `discard-hunk` 系は行が届いてから撃つ** — 全員が `diff_row act=` を報告し、**パスを渡し忘れると `diff_arg act=<動詞> named=false` の 1 行だけで終わる**。`line-tools` は行の `+`、`hunk-tools` は hunk 見出しの 2 語を手の下の形で撮る)— 詳細は `AutoActDiffVerbs.qml`
 - `diff-select` / `diff-copy` / `diff-menu` / `diff-copy-removed`(**diff の本文の選択とコピー**(規約 §diff の中身をコピーする)。**4 つとも `notes.txt --preset manyhunks`**、同じ 1 本のドラッグ)— 詳細は `AutoActDiffVerbs.qml`
+- `diff-word`(**ダブルクリックで単語を選ぶ・その後のドラッグは単語ずつ伸びる・行末より右は何も選ばない**。**`notes.txt --preset manyhunks` 専用**(最初の追加行の語で判定)。ピクセルで入る)— 詳細は `AutoActDiffVerbs.qml` の `wordTally`
 - `diff-find` / `diff-find-step` / `diff-find-lines` / `diff-find-options` / `diff-find-split` / `diff-find-drop` / `diff-find-keep` / `diff-find-close` / `diff-find-seed` / `diff-find-long`(**diff の中を探す**(規約 §diff の中を探す)。**10 とも `notes.txt --preset manyhunks`**)— 詳細は `AutoActDiffFindVerbs.qml`
 - `diff-split` / `split-tools` / `split-copy`(**diff を 2 列で読む**(`DiffRowDelegate.qml`)。**3 つとも `notes.txt --preset manyhunks`**、`diff-split` は `src/steps.rs --preset coloured` でも撃つ)— 詳細は `AutoActSplitVerbs.qml`
-- `diff-blank`(**`marks.txt --preset widechars` 専用**。行末より右の空白はその行の末尾 — ピクセルで入る唯一の動詞)— 詳細は `AutoActDiffVerbs.qml`
+- `diff-blank`(**`marks.txt --preset widechars` 専用**。行末より右の空白はその行の末尾 — ピクセルで入る)— 詳細は `AutoActDiffVerbs.qml`
 - `diff-sweep`(**`b.txt --preset dirty` で撃つ**。diff の本文を最終行の下の地から掴めること)— 詳細は `AutoActDiffVerbs.qml`
 - `diff-bar`(**`notes.txt --preset manyhunks` で撃つ**。diff の縦バーが掴めること。絵は証人にならない)— 詳細は `AutoActDiffVerbs.qml`
 - `keep-place`(**`notes.txt --preset manyhunks` 専用**。読み進めた位置で partial stage し、読み直しの後も位置が残るか)— 詳細は `AutoActDiffVerbs.qml`

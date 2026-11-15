@@ -115,6 +115,7 @@ commands-fail-shut --allow-write-failure	ChangeIcon GraphRowChips GraphRowDelega
 commands-fail-shut fold --allow-write-failure	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 commands-select	ChangeIcon CommandRowDelegate CommandsPane CommandsTextSelect FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 commands-sweep	ChangeIcon CommandRowDelegate CommandsPane CommandsTextSelect GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
+commands-word	ChangeIcon CommandRowDelegate CommandsPane CommandsTextSelect GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 commit	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 commit-face --preset signed	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 commit-menu	AppCardFace AppMenu AppMenuItem AppMenuSeparator BranchBothDeleteRow BranchDeleteRow BranchPushRow BranchRemoteDeleteRow ChangeIcon GitHubMenu GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefBranchMenu RefRowMenu RefTagMenu RefWorktreeMenu RemoteRowMenu TabItemDelegate WipTallyRow
@@ -217,6 +218,7 @@ diff-sweep b.txt --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate DiffStag
 diff-tick conflicts:shared.txt --preset conflict-typed	ChangeIcon DiffLineCell DiffRowDelegate NameCell NavItemDelegate NavRowBody OpExitCard OpExitRow OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 diff-walk apart --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 diff-walk together --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
+diff-word notes.txt --preset manyhunks	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 discard-file-go b.txt --preset dirty	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 discard-hunk-go b.txt --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 discard-many c.txt --preset dirty	AppCardFace AppMenu AppMenuItem AppMenuSeparator ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow

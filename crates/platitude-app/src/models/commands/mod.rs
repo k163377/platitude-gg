@@ -7,7 +7,7 @@ use platitude_core::session::Recording;
 
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
-use crate::encode::{Fields, Optional, Record, Runs, field, plain_byte, plain_ranges};
+use crate::encode::{Fields, Optional, Record, Runs, field, plain_byte, plain_char, plain_ranges};
 use crate::hub::{CommandMsg, Feed};
 
 use super::text_position::{LayoutPosition, SelectionEnds, SourcePosition};
@@ -127,6 +127,10 @@ pub struct CommandsModel {
     /// column names a byte past the line (the tab before it is not there
     /// yet), which `SelectionEnds::bytes_on` cuts where a row is read.
     sel_ends: Option<SelectionEnds>,
+    /// The word a double-click took (`selection::take_word`), which the
+    /// drag behind it grows word by word; none for a selection a plain
+    /// press started.
+    sel_word: Option<SelectionEnds>,
     feed: Option<Arc<Feed<CommandMsg>>>,
     held: crate::harness::HeldRecords,
     tab_id: i32,
@@ -298,6 +302,19 @@ impl CommandsModel {
             return;
         };
         if self.drag_select(position) {
+            self.changed();
+        }
+    }
+
+    /// A double-click: the word under the pointer becomes the selection
+    /// (`take_word`). `place` is the place in column `at` of the character
+    /// the pointer is over (`LineRuler.unitAt`), not a boundary.
+    #[qslot]
+    fn select_word(&mut self, row: i32, at: i32, place: i32) {
+        let Some(position) = LayoutPosition::new(row, place) else {
+            return;
+        };
+        if self.take_word(at, position) {
             self.changed();
         }
     }

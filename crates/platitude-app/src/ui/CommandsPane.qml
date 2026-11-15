@@ -104,6 +104,9 @@ Rectangle {
     function sweepGround(fx, fy) {
         return textPick.sweepFromGround(fx, fy)
     }
+    /// Automation: the hand itself, for runs that go in by pixel — a double-click names a character, which only a
+    /// point can (`_PGG_AUTO_ACT=commands-word`).
+    readonly property alias textHand: textPick
     /// Whether there is ground to sweep from (a full log has none), and where it begins.
     readonly property bool hasGround: textPick.hasGround
     readonly property real groundTop: textPick.groundTop

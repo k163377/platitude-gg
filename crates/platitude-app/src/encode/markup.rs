@@ -219,6 +219,35 @@ pub fn source_byte(text: &str, at: usize) -> usize {
     byte_of(text, at, spelled_units)
 }
 
+/// Which character of the source line the unit at `at` of the spelled
+/// line (the place from `at` to `at + 1`) is spelled in: the byte that
+/// character starts at. Unlike [`source_byte`] it names a character, not a
+/// boundary — every one of a tab's spaces and both of an astral glyph's
+/// units answer their one character. None past the end of the line.
+pub fn source_char(text: &str, at: usize) -> Option<usize> {
+    char_of(text, at, spelled_units)
+}
+
+/// [`source_char`] for a row drawn as the characters themselves
+/// (`CommandsModel::take_word`); the tab is the difference
+/// ([`plain_units`]).
+pub fn plain_char(text: &str, at: usize) -> Option<usize> {
+    char_of(text, at, plain_units)
+}
+
+fn char_of(text: &str, at: usize, units: fn(char, usize) -> usize) -> Option<usize> {
+    let mut here = 0usize;
+    let mut col = 0usize;
+    for (byte, ch) in text.char_indices() {
+        here += units(ch, col);
+        if at < here {
+            return Some(byte);
+        }
+        col += step_of(ch, col);
+    }
+    None
+}
+
 /// [`source_byte`] for a row drawn as the characters themselves
 /// (`CommandsModel::hit`); the tab is the difference ([`plain_units`]).
 pub fn plain_byte(text: &str, at: usize) -> usize {
@@ -376,6 +405,28 @@ mod tests {
         assert_eq!(source_byte(text, 2), 1);
         assert_eq!(source_byte(text, 3), 1);
         assert_eq!(source_byte(text, 4), 1);
+    }
+
+    #[test]
+    fn a_unit_names_the_character_it_is_spelled_in() {
+        // `a` is place 0, the tab places 1..4 (to the stop at 4), the
+        // astral glyph places 4..6.
+        let text = "a\t\u{1f600}b";
+        assert_eq!(source_char(text, 0), Some(0));
+        for at in 1..4 {
+            assert_eq!(source_char(text, at), Some(1), "the tab's space {at}");
+        }
+        assert_eq!(source_char(text, 4), Some(2), "the glyph's first unit");
+        assert_eq!(source_char(text, 5), Some(2), "and its second");
+        assert_eq!(source_char(text, 6), Some(6));
+        assert_eq!(source_char(text, 7), None, "past the end");
+        assert_eq!(source_char("", 0), None, "an empty line");
+        // Drawn as itself, the tab is one place.
+        assert_eq!(plain_char(text, 1), Some(1), "the tab");
+        assert_eq!(plain_char(text, 2), Some(2), "the glyph's first unit");
+        assert_eq!(plain_char(text, 3), Some(2), "and its second");
+        assert_eq!(plain_char(text, 4), Some(6));
+        assert_eq!(plain_char(text, 5), None, "past the end");
     }
 
     #[test]

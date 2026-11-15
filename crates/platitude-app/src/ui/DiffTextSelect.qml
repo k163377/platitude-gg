@@ -3,8 +3,9 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude.ui
 
-// The hand that picks the diff's text out of its rows: a drag selects, a right-click asks for the menu, a plain click
-// puts the selection down (デザイン規約 §diff の中身をコピーする).
+// The hand that picks the diff's text out of its rows: a drag selects, a double-click takes a word and the drag behind
+// it goes word by word (`wordAt`), a right-click asks for the menu, a plain click puts the selection down
+// (デザイン規約 §diff の中身をコピーする).
 //
 // A drag starts anywhere in the code column that no press belongs to — the ground under a short file's last row too,
 // a sweep from there running on as the last row: nowhere in the frame does a press do nothing. Two exceptions only: a
@@ -27,8 +28,8 @@ import platitude.ui
 //
 // Where a press landed in the file is the model's to say (`DiffModel::selection`); this knows pixels.
 //
-// Headless: `diff-select` / `diff-copy` / `diff-menu` / `diff-copy-removed`; the clipboard is read back through
-// `ClipboardHelper.lastCopied` (the clipboard itself does not answer).
+// Headless: `diff-select` / `diff-copy` / `diff-menu` / `diff-copy-removed` / `diff-word`; the clipboard is read back
+// through `ClipboardHelper.lastCopied` (the clipboard itself does not answer).
 Item {
     id: pick
 
@@ -110,6 +111,22 @@ Item {
         const row = pick.rowAt(position.y)
         if (row >= 0)
             pick.dragText(row, pick.byteAt(pick.side, row, position.x - pick.codeStart(pick.side)))
+    }
+    /// A double-click at a point of this item: the word under it becomes the selection, and the drag behind it grows
+    /// word by word (`DiffModel::take_word`). It lands after the second press, which `takeAt` has already taken, and
+    /// never where that press was turned down — the area is handed no double-click on a press it refused
+    /// (`tst_textdoubleclick`), so a gutter and a heading keep theirs. The ground under the last row is that row's, as
+    /// for a drag (`rowAt`); the blank past a line's end takes nothing, as a drag out there takes nothing.
+    function wordAt(position) {
+        const row = pick.rowAt(position.y)
+        const item = pick.view.itemAtIndex(row)
+        // A band has no place to land on (`byteAt`).
+        if (!item || item.banded)
+            return
+        const side = pick.sideAt(position.x)
+        const x = pick.codeX + position.x - pick.codeStart(side)
+        pick.side = side
+        pick.diffModel.selectWord(side, row, pick.ruler.unitAt(item.textOf(side), item.boldOf(side), x))
     }
     /// A right-click that has been let go of, at a point of this item.
     function answerAt(position) {
@@ -280,13 +297,25 @@ Item {
     MouseArea {
         id: hand
         anchors.fill: parent
-        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        acceptedButtons: Qt.LeftButton
         cursorShape: Qt.IBeamCursor
         onPressed: mouse => { mouse.accepted = pick.takeAt(Qt.point(mouse.x, mouse.y), mouse.button) }
         onPositionChanged: mouse => pick.followAt(Qt.point(mouse.x, mouse.y))
         onReleased: pick.releaseText()
         onCanceled: pick.releaseText()
-        onClicked: mouse => { if (mouse.button === Qt.RightButton) pick.answerAt(Qt.point(mouse.x, mouse.y)) }
+        onDoubleClicked: mouse => pick.wordAt(Qt.point(mouse.x, mouse.y))
+    }
+    // The right button on an area of its own: an area with a double-click connected sends no `clicked` after the
+    // second press of any double, so a quick second right-click on the left's area would raise no menu
+    // (`tst_textdoubleclick`).
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.RightButton
+        cursorShape: Qt.IBeamCursor
+        onPressed: mouse => { mouse.accepted = pick.takeAt(Qt.point(mouse.x, mouse.y), mouse.button) }
+        onReleased: pick.releaseText()
+        onCanceled: pick.releaseText()
+        onClicked: mouse => pick.answerAt(Qt.point(mouse.x, mouse.y))
     }
     // The second column's gutter keeps the arrow: a press there is the row's (`takeAt`), and a beam over the `+` reads
     // as selectable text. No button and no hover, so presses and hover go through. Built only side by side.

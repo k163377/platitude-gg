@@ -13,8 +13,8 @@ use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, QmlObject,
 use crate::encode::{
     Candidates, DiffRow, Ended, Fields, LineMarks, Marks, One, Optional, Record, Runs, SplitRow,
     TextEnd, diff_key, field, flatten_patches, human_size, is_combined, is_new_file,
-    is_unmerged_only, mode_change, pair_rows, source_byte, spelled_place, spelled_ranges,
-    whole_only_why, widest_lines,
+    is_unmerged_only, mode_change, pair_rows, source_byte, source_char, spelled_place,
+    spelled_ranges, whole_only_why, widest_lines,
 };
 use crate::hub::{DiffMsg, Feed};
 
@@ -338,6 +338,10 @@ pub struct DiffModel {
     shown_has_preview: bool,
     /// The selection's two ends, none while nothing is selected.
     sel_ends: Option<SelectionEnds>,
+    /// The word a double-click took (`selection::take_word`), which the
+    /// drag behind it grows word by word; none for a selection a plain
+    /// press started.
+    sel_word: Option<SelectionEnds>,
     /// Which column the selection is of (`selection`).
     sel_side: i32,
     /// What the selection holds, so the menu can leave out a row that

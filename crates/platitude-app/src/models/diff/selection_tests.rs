@@ -762,3 +762,122 @@ fn removed_lines_alone_link_the_old_files_first_to_last() {
     model.drag_select(0, source(3, 99));
     assert_eq!(model.line_span(), span(false, 11, 12));
 }
+
+// ---- a double-click takes a word (`take_word`) ---------------------------
+
+/// What a double-click on place `at` of row `row` copies.
+fn word_at(model: &mut DiffModel, side: i32, row: i32, at: i32) -> String {
+    model.take_word(side, layout(row, at));
+    model.copied_new()
+}
+
+#[test]
+fn a_double_click_takes_the_word_under_the_pointer() {
+    // Row 1 is `fn main() {`, row 3 `    let a = 2;`.
+    let mut model = one_change();
+    assert_eq!(word_at(&mut model, 0, 1, 3), "main", "its head");
+    assert_eq!(word_at(&mut model, 0, 1, 6), "main", "its last character");
+    assert_eq!(word_at(&mut model, 0, 1, 7), "(", "a bracket alone");
+    assert_eq!(word_at(&mut model, 0, 3, 1), "    ", "the indent whole");
+    assert_eq!(word_at(&mut model, 0, 3, 12), "2");
+    assert_eq!(
+        said(&model.lines[3].sel),
+        "12:1",
+        "washed over the word alone"
+    );
+}
+
+#[test]
+fn a_double_click_past_the_line_s_end_takes_nothing() {
+    let mut model = one_change();
+    model.take_word(0, layout(1, 4));
+    // The second press past the end of `fn main() {` (11 bytes), and the
+    // double behind it.
+    model.start_select(0, source(1, 11));
+    assert!(!model.take_word(0, layout(1, 11)), "nothing moved");
+    assert_eq!(model.copied_new(), "");
+    assert_eq!(model.sel_word, None);
+    // A drag behind it goes place by place from the press.
+    model.drag_select(0, source(1, 3));
+    assert_eq!(model.copied_new(), "main() {");
+}
+
+#[test]
+fn a_word_names_its_character_through_the_row_s_spelling() {
+    // Row 1 is `{TAB}日本😀x`: the tab spells places 0..4 and the glyph
+    // 6..8, so its second unit names it too.
+    let mut model = tab_kanji_astral();
+    assert_eq!(word_at(&mut model, 0, 1, 2), TAB, "inside the tab");
+    assert_eq!(
+        word_at(&mut model, 0, 1, 4),
+        "日本",
+        "letters of any script"
+    );
+    assert_eq!(
+        word_at(&mut model, 0, 1, 7),
+        "😀",
+        "the glyph's second unit"
+    );
+}
+
+#[test]
+fn a_drag_behind_a_double_click_grows_word_by_word() {
+    let mut model = one_change();
+    model.take_word(0, layout(1, 4));
+    // Into `let` on row 3, past the removed row 2.
+    model.drag_select(0, source(3, 5));
+    assert_eq!(
+        model.copied_new(),
+        "main() {\n    let",
+        "on to the end of `let`"
+    );
+    // Back over the word and up into `fn`.
+    model.drag_select(0, source(1, 1));
+    assert_eq!(model.copied_new(), "fn main", "back to the start of `fn`");
+    // Inside the word it was started on.
+    model.drag_select(0, source(1, 5));
+    assert_eq!(model.copied_new(), "main", "the word itself");
+}
+
+#[test]
+fn a_drag_behind_a_double_click_stands_on_a_boundary_between_words() {
+    let mut model = one_change();
+    model.take_word(0, layout(3, 8));
+    // Between `=` and the space after it: no word to snap out to.
+    model.drag_select(0, source(3, 11));
+    assert_eq!(model.copied_new(), "a =");
+    // Up to the start of `main`, the double-clicked `a` kept whole.
+    model.drag_select(0, source(1, 3));
+    assert_eq!(model.copied_new(), "main() {\n    let a");
+}
+
+#[test]
+fn a_press_after_a_double_click_drags_place_by_place_again() {
+    let mut model = one_change();
+    model.take_word(0, layout(1, 4));
+    model.start_select(0, source(1, 4));
+    model.drag_select(0, source(1, 6));
+    assert_eq!(model.copied_new(), "ai");
+    // A right-click's row is no word either.
+    model.take_word(0, layout(1, 4));
+    model.select_whole_row(0, 3);
+    model.drag_select(0, source(3, 5));
+    assert_eq!(model.copied_new(), "    l");
+}
+
+#[test]
+fn a_double_click_on_the_old_column_takes_a_word_of_the_removed_line() {
+    // Row 2 reads `    let a = 1;` on the left and `    let a = 2;` on the
+    // right.
+    let mut model = one_change_split();
+    assert_eq!(word_at(&mut model, 0, 2, 12), "1", "the old file's");
+    assert_eq!(
+        word_at(&mut model, super::RIGHT, 2, 12),
+        "2",
+        "the new file's"
+    );
+    assert_eq!(
+        washes(&model),
+        sides(&["", "", "", ""], &["", "", "12:1", ""])
+    );
+}

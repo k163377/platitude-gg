@@ -1,6 +1,7 @@
 //! The reader's own selection of the log's text: where it runs, what each
-//! row draws of it, and what it hands the clipboard — through a drag and
-//! Ctrl+C alone, as in a terminal (`CommandsPane.qml`).
+//! row draws of it, and what it hands the clipboard — through a drag (a
+//! double-click takes a word) and Ctrl+C alone, as in a terminal
+//! (`CommandsPane.qml`).
 //!
 //! A row is one line: its columns joined by tabs
 //! (`12:03:17\tgit switch -- 3.2\t29 ms`), so a paste keeps the columns.
@@ -27,6 +28,8 @@
 //!   failure cannot be pointed into (デザイン規約 §diff の中身をコピーする).
 
 use std::ops::RangeInclusive;
+
+use platitude_core::word;
 
 use super::*;
 
@@ -168,6 +171,7 @@ impl CommandsModel {
 
     pub(super) fn start_select(&mut self, position: SourcePosition) -> bool {
         let was = self.span();
+        self.sel_word = None;
         self.sel_ends = Some(SelectionEnds {
             anchor: position,
             focus: position,
@@ -175,15 +179,55 @@ impl CommandsModel {
         self.respell(was)
     }
 
-    pub(super) fn drag_select(&mut self, position: SourcePosition) -> bool {
-        let Some(ends) = self.sel_ends.filter(|ends| ends.focus != position) else {
+    /// A double-click: the word the character under the pointer stands in
+    /// (`platitude_core::word`, read across the whole line, so a word ends
+    /// at a column's tab) becomes the selection, and the drag behind it
+    /// grows word by word (`SelectionEnds::grown_by_word`). `position`
+    /// names a character of column `column`. Nothing is taken on a gap —
+    /// the wash runs from one column's characters to another's, so a tab
+    /// alone would be taken with no ground on it — below the line, where
+    /// git's words come only with the line, or past the column's end. There
+    /// the empty selection the second press laid stays (`start_select`), so
+    /// a drag behind it goes place by place, as from a plain press.
+    pub(super) fn take_word(&mut self, column: i32, position: LayoutPosition) -> bool {
+        let run = self.line_at(position.row).and_then(|line| {
+            let (base, text) = match column {
+                AT_CLOCK => (0, &line.clock),
+                AT_CMD => (line.at_cmd(), &line.cmd),
+                AT_OUT => (line.at_out(), &line.out),
+                _ => return None,
+            };
+            word::run_at(&line.text(), base + plain_char(text, position.utf16)?)
+        });
+        let Some(run) = run else {
+            self.sel_word = None;
             return false;
         };
         let was = self.span();
-        self.sel_ends = Some(SelectionEnds {
-            focus: position,
-            ..ends
-        });
+        let ends = SelectionEnds::word(position.row, run);
+        self.sel_ends = Some(ends);
+        self.sel_word = Some(ends);
+        self.respell(was)
+    }
+
+    pub(super) fn drag_select(&mut self, position: SourcePosition) -> bool {
+        let Some(ends) = self.sel_ends else {
+            return false;
+        };
+        let next = match self.sel_word {
+            Some(clicked) => clicked.grown_by_word(position, || {
+                word::run_across(&self.line_at(position.row)?.text(), position.byte)
+            }),
+            None => SelectionEnds {
+                focus: position,
+                ..ends
+            },
+        };
+        if next == ends {
+            return false;
+        }
+        let was = self.span();
+        self.sel_ends = Some(next);
         self.respell(was)
     }
 
@@ -198,12 +242,20 @@ impl CommandsModel {
 
     pub(super) fn forget_selection(&mut self) {
         self.sel_ends = None;
+        self.sel_word = None;
     }
 
     /// Moves the ends (row numbers) up past the `gone` oldest rows that fell
-    /// off; a selection with an end over the edge is dropped.
+    /// off; a selection with an end over the edge is dropped. A
+    /// double-clicked word stands only beside a selection: it goes with
+    /// the selection, even where its own row stays (a drag behind it
+    /// carried the far end up over the edge).
     pub(super) fn shift_selection(&mut self, gone: usize) {
         self.sel_ends = self.sel_ends.and_then(|ends| ends.shifted_up(gone));
+        self.sel_word = self
+            .sel_ends
+            .and(self.sel_word)
+            .and_then(|clicked| clicked.shifted_up(gone));
     }
 
     // ---- what each row draws of it -----------------------------------

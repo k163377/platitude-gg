@@ -145,7 +145,7 @@ Item {
             page.releasePressedAway(null)
             findDropSettled.restart()
         } else if (act === "commands" || act === "commands-select" || act === "commands-copy"
-                   || act === "commands-sweep") {
+                   || act === "commands-sweep" || act === "commands-word") {
             // Stage and unstage so the log has something in it (`commandsFillTimer`).
             page.showWip()
             page.toggleCommands()
@@ -184,6 +184,59 @@ Item {
     }
     function copyCommandText() {
         return page.commandsPane !== null && page.commandsPane.copySelection()
+    }
+    /// `commands-word` (規約 §右のペインの字は掴める): double-clicks on the log's newest two rows, by pixel through the
+    /// calls the hand's handlers make, in the order Qt hands them over (`tst_textdoubleclick`): a press and its
+    /// release, the second press (`takeAt`), the double behind it (`wordAt`), a drag (`followAt`), the release
+    /// (`releaseText`). Each is read off the model's selection:
+    ///
+    ///  - `word=` one three quarters into the `t` of the older row's `git` takes `git`: a point on a character's right
+    ///    half is still that character's (`LineRuler.unitAt`), where the nearest boundary would name the space after it.
+    ///  - `hour=` one three quarters into the clock's second digit takes the two: a word stops at `:`, which the
+    ///    nearest boundary would name.
+    ///  - `gap=` one on the gap between the clock and the command takes nothing — its tab wears no wash.
+    ///  - `run=` one on that `git` dragged into the newer row's `git` takes the older row from `git` on and the newer
+    ///    up to its `git`, held against the rows' own columns joined as a copy joins them.
+    ///
+    /// The run is left standing for the picture.
+    function commandWordTally() {
+        const hand = page.commandsPane.textHand
+        const model = page.pageCommands
+        const older = model.rowsHeld() - 2
+        const first = hand.view.itemAtIndex(older)
+        const second = hand.view.itemAtIndex(older + 1)
+        if (!first || !second)
+            return "commands_word rows=" + model.rowsHeld()
+        const middle = item => item.y - hand.view.contentY + item.lineHeight / 2
+        // Three quarters across the character at `place` of column `at` of row `row`.
+        const into = (row, item, at, place) => {
+            hand.ruler.hold(model.columnText(row, at), false)
+            return Qt.point(hand.columnX(item, at) + (hand.ruler.xOf(place) + 3 * hand.ruler.xOf(place + 1)) / 4,
+                            middle(item))
+        }
+        const doubled = (point, dragTo) => {
+            hand.takeAt(point)
+            hand.releaseText()
+            hand.takeAt(point)
+            hand.wordAt(point)
+            if (dragTo)
+                hand.followAt(dragTo)
+            hand.releaseText()
+            return model.selectionText()
+        }
+        const clock = model.columnText(older, hand.atClock)
+        const out = model.columnText(older, hand.atOut)
+        const want = model.columnText(older, hand.atCmd) + (out === "" ? "" : "\t" + out)
+                     + "\n" + model.columnText(older + 1, hand.atClock) + "\tgit"
+        const word = doubled(into(older, first, hand.atCmd, 2), null)
+        const hour = doubled(into(older, first, hand.atClock, 1), null)
+        const gap = doubled(Qt.point((first.clockEnd + first.cmdX) / 2, middle(first)), null)
+        const run = doubled(into(older, first, hand.atCmd, 1), into(older + 1, second, hand.atCmd, 1))
+        return "commands_word word=" + (word === "git")
+               + " hour=" + (hour.length === 2 && hour === clock.slice(0, 2))
+               + " gap=" + (gap === "")
+               + " run=" + (run === want)
+               + " rows=" + model.rowsHeld() + " took=" + JSON.stringify(run)
     }
     // The hover mark goes on once the face it marks is there.
     PageStage {
@@ -516,7 +569,8 @@ Item {
                                 + " mark=" + page.commandsMarkColor })
         }
     }
-    // _PGG_AUTO_ACT=commands / commands-select / commands-copy / commands-sweep: the log filled as a hand fills it —
+    // _PGG_AUTO_ACT=commands / commands-select / commands-copy / commands-sweep / commands-word: the log filled as a
+    // hand fills it —
     // the unstaged heading's `Stage all`, then, once that press is through and the status after it drawn, the staged
     // heading's `Unstage all` (`WipPane.moveBucket`, the bands themselves: one a standing press holds down takes no
     // press). `commands` is pictured once both are in.
@@ -548,6 +602,10 @@ Item {
             op.stop()
             if (act === "commands-sweep") {
                 commandsSweepTimer.start()
+                return
+            }
+            if (act === "commands-word") {
+                commandsWordTimer.start()
                 return
             }
             commandsPickTimer.order = act === "commands-copy" ? ["stashed", "picked", "copied"] : ["stashed", "picked"]
@@ -662,6 +720,30 @@ Item {
                           "report": () => "commands_sweep reach=" + op.witnessed("reach") + "/" + op.witnessed("tries")
                                           + " ground=" + acts.commandsHasGround
                                           + " rows=" + page.pageCommands.rowsHeld() })
+        }
+    }
+    // _PGG_AUTO_ACT=commands-word: double-clicks on the log's newest two rows (`commandWordTally`), set up as
+    // `commands-sweep` is. The picture is the run left standing: the wash from the older row's `git` to the newer's.
+    PageStage {
+        id: commandsWordTimer
+        name: "commands_word"
+        order: ["doubled"]
+        onTriggered: {
+            const op = commandsWordTimer
+            if (!Awaited.all("commands_word_ready", { "ready": driver.wroteAndSettled(),
+                                                      "page": PageSettled.settled(page),
+                                                      "shown": page.commandsShown,
+                                                      "idle": !page.pageCommands.running,
+                                                      "rows": page.pageCommands.rowsHeld() >= 2 }))
+                return
+            // The rows have to be laid out and still: they arrive a frame ahead of the view.
+            const geom = page.pageCommands.rowsHeld() + "," + Math.round(acts.commandsGroundTop)
+            if (!op.still("commands_word_geom", geom))
+                return
+            op.input("doubled", () => {
+                op.witness("doubled", acts.commandWordTally())
+            })
+            op.complete({ "when": () => ({}), "report": () => op.witnessed("doubled") })
         }
     }
 }

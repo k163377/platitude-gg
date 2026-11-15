@@ -39,8 +39,8 @@ Item {
     function run(act, arg) {
         if (["stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go", "diff-file", "conflict-sides", "line-tools",
              "hunk-tools", "keep-place", "diff-tick", "code-send", "line-back", "code-grow", "code-shrink", "code-swap",
-             "diff-select", "diff-copy", "diff-menu", "diff-copy-removed", "diff-sweep", "diff-band-sweep", "diff-bar",
-             "diff-blank", "diff-follow", "line-run", "diff-escape"].indexOf(act) >= 0) {
+             "diff-select", "diff-copy", "diff-menu", "diff-copy-removed", "diff-word", "diff-sweep", "diff-band-sweep",
+             "diff-bar", "diff-blank", "diff-follow", "line-run", "diff-escape"].indexOf(act) >= 0) {
             // `<path>` or `<bucket>:<path>` (`AutoActDriver.diffArg`): an untracked file has no unstaged diff, and a
             // conflict is read from `conflicts`.
             const file = driver.diffArg(arg)
@@ -90,7 +90,7 @@ Item {
             return ["rows"]
         const once = { "diff-band-sweep": "swept", "diff-tick": "ticked", "preview-close": "closed",
                        "line-tools": "tools", "diff-select": "picked", "diff-copy": "picked", "diff-menu": "picked",
-                       "diff-copy-removed": "picked" }
+                       "diff-copy-removed": "picked", "diff-word": "picked" }
         return once[act] === undefined ? [] : [once[act]]
     }
     /// Hands the run to the operation of `act` (one of `samplerActs`), with the first changed line the rows landed
@@ -157,6 +157,54 @@ Item {
         const removed = diffPane.diffModel.removedText()
         return name + " holdsRemoved=" + (removed !== "" && text.indexOf(removed) >= 0)
                + " lines=" + (text === "" ? 0 : text.split("\n").length)
+    }
+    /// `diff-word` (デザイン規約 §diff の中身をコピーする): double-clicks on the first added line of
+    /// `notes.txt --preset manyhunks` (`008: reworded while reading down the file`), by pixel through the calls the
+    /// hand's handlers make, in the order Qt hands them over (`tst_textdoubleclick`): a press and its release, the
+    /// second press (`takeAt`), the double behind it (`wordAt`), a drag (`followAt`), the release (`releaseText`). Each
+    /// is read off the pad:
+    ///
+    ///  - `word=` a double-click three quarters into `reworded`'s last letter takes `reworded`: a point on a
+    ///    character's right half is still that character's (`LineRuler.unitAt`), where the nearest boundary would name
+    ///    the space after it.
+    ///  - `blank=` one on the blank past the line's end takes nothing.
+    ///  - `run=` one on its `w` dragged into `down` takes the words between whole, both ends snapped out.
+    ///
+    /// The run is left standing for the picture: its ground ends at the end of `down` — a few pixels, judged on a crop.
+    function wordTally() {
+        const hand = diffPane.textHand
+        let row = -1
+        for (let i = 0; i < diffPane.view.count && row < 0; i++) {
+            const item = diffPane.view.itemAtIndex(i)
+            if (item && item.kind === "add")
+                row = i
+        }
+        const item = diffPane.view.itemAtIndex(row)
+        if (!item)
+            return "diff_word row=-1"
+        const y = item.y - diffPane.view.contentY + item.height / 2
+        // Three quarters across the character at `place`, in the hand's coordinates.
+        const into = place => {
+            hand.ruler.hold(item.textOf(0), item.boldOf(0))
+            return Qt.point((hand.ruler.xOf(place) + 3 * hand.ruler.xOf(place + 1)) / 4 - diffPane.codeAt, y)
+        }
+        const doubled = (point, dragTo) => {
+            hand.takeAt(point, Qt.LeftButton)
+            hand.releaseText()
+            hand.takeAt(point, Qt.LeftButton)
+            hand.wordAt(point)
+            if (dragTo)
+                hand.followAt(dragTo)
+            hand.releaseText()
+            return diffPane.copySelection() ? driver.clipboard.lastCopied : ""
+        }
+        const word = doubled(into(12), null)
+        const blank = doubled(Qt.point(Math.min(hand.width - 1, item.codeInk - diffPane.codeAt + 40), y), null)
+        const run = doubled(into(7), into(29))
+        return "diff_word word=" + (word === "reworded")
+               + " blank=" + (blank === "")
+               + " run=" + (run === "reworded while reading down")
+               + " row=" + row + " took=" + JSON.stringify(word) + " ran=" + JSON.stringify(run)
     }
     /// The offered menu as it stands at completion, not the diagnostic emitted by its opening signal (`PageReports`):
     /// that line is history, never the claim — a completion report of `diff_row` / `diff_pick` alone judges red even
@@ -318,6 +366,13 @@ Item {
                     diffPane.showLineTools(0, line)
                 })
                 op.complete({ "when": () => ({}), "report": () => op.rowLine() })
+                return
+            }
+            if (act === "diff-word") {
+                op.input("picked", () => {
+                    op.witness("picked", acts.wordTally())
+                })
+                op.complete({ "when": () => ({}), "report": () => [op.rowLine(), op.witnessed("picked")] })
                 return
             }
             if (act === "diff-select" || act === "diff-copy" || act === "diff-menu" || act === "diff-copy-removed") {

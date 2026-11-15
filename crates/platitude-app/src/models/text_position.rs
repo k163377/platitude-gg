@@ -4,7 +4,8 @@
 //! ([`SourcePosition`]). Which conversion turns one into the other is the
 //! model's own (`encode::markup::source_byte` for the diff,
 //! `encode::markup::plain_byte` per column for the log). A selection is
-//! two of the latter ([`SelectionEnds`]).
+//! two of the latter ([`SelectionEnds`]), and a double-click's word grows
+//! by the same rule in both ([`SelectionEnds::grown_by_word`]).
 //!
 //! Unsigned. The slots hand signed values, and `new` reads them once:
 //! one that is negative makes no position. A position says nothing of
@@ -52,7 +53,9 @@ impl SourcePosition {
 }
 
 /// The two ends of a selection as the hand made them: `anchor` where the
-/// press went down, `focus` where the drag has carried the other end. Kept
+/// press went down (or the double-clicked word's far edge,
+/// [`SelectionEnds::grown_by_word`]), `focus` where the drag has carried
+/// the other end. Kept
 /// in that order — a drag made upwards has its focus first in reading
 /// order — and sorted only where reading order is asked for. Two ends on
 /// one position are a selection holding nothing, not no selection.
@@ -63,6 +66,46 @@ pub(super) struct SelectionEnds {
 }
 
 impl SelectionEnds {
+    /// The word over `bytes` of row `row` — what a double-click selects —
+    /// anchored at its start.
+    pub(super) fn word(row: usize, bytes: Range<usize>) -> Self {
+        Self {
+            anchor: SourcePosition {
+                row,
+                byte: bytes.start,
+            },
+            focus: SourcePosition {
+                row,
+                byte: bytes.end,
+            },
+        }
+    }
+
+    /// The ends a drag reaching `position` gives the double-clicked word
+    /// `self`, as an editor grows one: the word stays whole, and the far
+    /// end snaps out to the edge of the word it lands in — that word's
+    /// start going back, its end going on — or stands where it is, on a
+    /// boundary between two. `across` answers the word `position` cuts in
+    /// two on its row's line (`platitude_core::word::run_across`).
+    pub(super) fn grown_by_word(
+        self,
+        position: SourcePosition,
+        across: impl FnOnce() -> Option<Range<usize>>,
+    ) -> Self {
+        let (first, last) = self.ordered().into_inner();
+        let (anchor, byte) = if position >= last {
+            (first, across().map_or(position.byte, |run| run.end))
+        } else if position < first {
+            (last, across().map_or(position.byte, |run| run.start))
+        } else {
+            return self;
+        };
+        Self {
+            anchor,
+            focus: SourcePosition { byte, ..position },
+        }
+    }
+
     /// The ends in reading order, first to last, and the positions between
     /// them. Not the bytes a copy takes, whose last end is not taken
     /// (`bytes_on`).
@@ -217,6 +260,34 @@ mod tests {
         assert_eq!(ends(at(1, 3), at(3, 2)).bytes_on(1, 2), Some(2..2));
         assert_eq!(ends(at(2, 3), at(2, 99)).bytes_on(2, 5), Some(3..5));
         assert_eq!(ends(at(2, 99), at(2, 3)).bytes_on(2, 5), Some(3..5));
+    }
+
+    #[test]
+    fn a_word_grows_out_to_the_edges_of_the_words_a_drag_reaches() {
+        let word = SelectionEnds::word(2, 4..8);
+        assert_eq!(word, ends(at(2, 4), at(2, 8)), "anchored at its start");
+        // Into a word on a later row, which runs 3..9 there.
+        assert_eq!(
+            word.grown_by_word(at(3, 5), || Some(3..9)),
+            ends(at(2, 4), at(3, 9)),
+            "on to that word's end"
+        );
+        // Back into one before it, running 0..3.
+        assert_eq!(
+            word.grown_by_word(at(2, 1), || Some(0..3)),
+            ends(at(2, 8), at(2, 0)),
+            "back to its start, the word kept whole"
+        );
+        assert_eq!(
+            word.grown_by_word(at(2, 10), || None),
+            ends(at(2, 4), at(2, 10)),
+            "a boundary between two words is where it stands"
+        );
+        assert_eq!(
+            word.grown_by_word(at(2, 6), || panic!("not asked inside the word")),
+            word,
+            "inside the word itself"
+        );
     }
 
     #[test]

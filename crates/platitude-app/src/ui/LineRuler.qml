@@ -35,6 +35,17 @@ TextEdit {
         ruler.hold(line, bold)
         return ruler.positionAt(x, 0)
     }
+    /// The place whose character `x` is over — the unit after it, where `placeAt` names the boundary nearest `x`: a
+    /// point on a character's right half is still that character's. A unit inside one character's spelling (a tab's
+    /// spaces, the second of an astral glyph) is the model's to read back as that character
+    /// (`encode::markup::source_char`). Past the last character, the line's end, which names none. **Known limits**:
+    /// inside a run drawn right to left the character before the boundary is drawn right of it, so a point there names
+    /// its neighbour; and the right half of a character carrying a combining mark names the mark, which the model
+    /// reads as a character of its own (`platitude_core::word`).
+    function unitAt(line, bold, x) {
+        const at = ruler.placeAt(line, bold, x)
+        return at > 0 && x < ruler.xOf(at) ? at - 1 : at
+    }
     /// The rectangles the runs (`[{ from, len }, …]`) cover, in the line's own coordinates — `[{ x, w }, …]`, and
     /// empty for nothing (`encode::markup::spelled_ranges` / `plain_ranges`).
     ///

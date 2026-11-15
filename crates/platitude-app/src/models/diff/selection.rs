@@ -21,6 +21,8 @@
 
 use std::ops::{Range, RangeInclusive};
 
+use platitude_core::word;
+
 use super::*;
 
 /// One row's share of the selection before it is spelled out — so the rows
@@ -111,11 +113,34 @@ impl DiffModel {
     }
 
     pub(super) fn start_select(&mut self, side: i32, position: SourcePosition) -> bool {
+        self.sel_word = None;
         let ends = SelectionEnds {
             anchor: position,
             focus: position,
         };
         self.move_ends(side, Some(ends))
+    }
+
+    /// A double-click: the word the character under the pointer stands in
+    /// (`platitude_core::word`) becomes the selection, and the drag behind
+    /// it grows word by word (`SelectionEnds::grown_by_word`). `position`
+    /// names the character, not a boundary (`source_char`). Past the
+    /// line's end there is no character, and nothing is taken: the blank
+    /// there takes nothing, as a drag out there takes nothing. The empty
+    /// selection the second press laid stays (`start_select`), so a drag
+    /// behind it goes place by place, as from a plain press.
+    pub(super) fn take_word(&mut self, side: i32, position: LayoutPosition) -> bool {
+        let run = self
+            .source_line(side, position.row)
+            .and_then(|text| word::run_at(text, source_char(text, position.utf16)?));
+        let Some(run) = run else {
+            self.sel_word = None;
+            return false;
+        };
+        let ends = SelectionEnds::word(position.row, run);
+        let moved = self.move_ends(side, Some(ends));
+        self.sel_word = Some(ends);
+        moved
     }
 
     /// The far end follows the pointer; the pressed end and its column
@@ -124,14 +149,23 @@ impl DiffModel {
         let Some(ends) = self.sel_ends else {
             return self.start_select(side, position);
         };
-        let ends = SelectionEnds {
-            focus: position,
-            ..ends
+        let ends = match self.sel_word {
+            Some(clicked) => clicked.grown_by_word(position, || {
+                word::run_across(
+                    self.source_line(self.sel_side, position.row)?,
+                    position.byte,
+                )
+            }),
+            None => SelectionEnds {
+                focus: position,
+                ..ends
+            },
         };
         self.move_ends(self.sel_side, Some(ends))
     }
 
     pub(super) fn select_whole_row(&mut self, side: i32, row: usize) -> bool {
+        self.sel_word = None;
         let end = self.source_line(side, row).map_or(0, str::len);
         let ends = SelectionEnds {
             anchor: SourcePosition { row, byte: 0 },
@@ -142,12 +176,14 @@ impl DiffModel {
 
     /// Nothing is selected any more (a plain click, or a press on nothing).
     pub(super) fn drop_selection(&mut self) -> bool {
+        self.sel_word = None;
         self.move_ends(0, None)
     }
 
     /// The same while the rows themselves go: no wash is written back.
     pub(super) fn forget_selection(&mut self) {
         self.sel_ends = None;
+        self.sel_word = None;
         self.sel_side = 0;
         self.sel_has_new = false;
         self.sel_removed = 0;
