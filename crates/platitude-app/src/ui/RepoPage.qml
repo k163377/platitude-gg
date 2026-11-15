@@ -1029,6 +1029,8 @@ FocusScope {
     readonly property string menuKey: page.menuDoor !== null ? page.menuDoor.key : ""
     property string menuDoorArea: ""
     property string menuDoorKey: ""
+    /// Where a menu is being raised and on what (`menuDoor`). Each door then raises its own seat by the seat's id: a
+    /// seat handed in as an argument is past what `cargo xtask waits` follows (its reach stops at the menu's calls).
     function noteMenuDoor(area, key) {
         page.menuDoorArea = area
         page.menuDoorKey = key
