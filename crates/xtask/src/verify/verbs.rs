@@ -304,7 +304,7 @@ mod tests {
         );
         assert_eq!(
             must_say("stash", "anything else", &[]),
-            Some("graph_settled gone=true top=stash named=false")
+            Some("graph_settled gone=true top=stash")
         );
         assert_eq!(
             must_say("stash", "", &[]),

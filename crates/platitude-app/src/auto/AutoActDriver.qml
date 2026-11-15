@@ -304,10 +304,11 @@ Item {
     /// when the graph settles can frame a sidebar still counting the old entries.
     property int stashTotalBefore: -1
     /// The summary this run put in the commit box before the write, or "" — what the entry the write makes has to
-    /// carry when the list settles (`named=`).
+    /// carry when the list settles (`named=`, said only by a run that typed one).
     property string stashWanted: ""
     /// The name the entry this run pops was carrying, or "" — what the commit box has to be holding once the pop has
-    /// landed (`back=`). Read before the press, because the entry is gone by the time the answer is.
+    /// landed (`back=`, said only by a run that read one). Read before the press, because the entry is gone by the
+    /// time the answer is.
     property string popWanted: ""
 
     // What a verb hands the barriers that finish its run — each the condition a barrier starts on, named once
@@ -752,10 +753,12 @@ Item {
     PageStage {
         id: graphBarrier
         name: "graph_barrier"
+        /// `named=` and `back=` only where this run set up what they read (`stashWanted`, `popWanted`): unset, each
+        /// says `false` whatever the write did, a claim no run could fail.
         function settledLine() {
             return "graph_settled gone=true top=" + driver.graphTopKind()
-                   + " named=" + driver.stashNamed()
-                   + " back=" + driver.stashCameBack()
+                   + (driver.stashWanted === "" ? "" : " named=" + driver.stashNamed())
+                   + (driver.popWanted === "" ? "" : " back=" + driver.stashCameBack())
                    + " rows=" + graphModel.rowTotal
                    + " stashes=" + stashesModel.total
         }

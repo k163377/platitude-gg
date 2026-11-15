@@ -16,15 +16,15 @@ pub(super) const TABLE: &[Verb] = &[
     //
     // `named=` is the new entry's reflog subject, read off the sidebar's
     // model, held against the summary `stash named` typed first. Only the
-    // `named` run reads it: the bare run types nothing, so it says `false`
-    // whatever the entry is called.
+    // `named` run says it: the bare run types nothing
+    // (`AutoActDriver.settledLine`).
     Verb {
         name: "stash",
         when: &[(
             Arg::Is("named"),
             "graph_settled gone=true top=stash named=true",
         )],
-        plain: "graph_settled gone=true top=stash named=false",
+        plain: "graph_settled gone=true top=stash",
     },
     // The same press from the working tree's own row with its pane open,
     // so the row taken away is the one the reader stands on; where they
@@ -69,11 +69,11 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "write_barrier mine=true",
     },
     // `back=`: the popped entry's name is back in the commit box, read off
-    // the box.
+    // the box. No `named=`: the pop types no summary.
     Verb {
         name: "stash-pop-row",
         when: &[],
-        plain: "graph_settled gone=true top=wip named=false back=true",
+        plain: "graph_settled gone=true top=wip back=true",
     },
     // The band's Stash button on each of the four states a working tree
     // can be in, read as a set: one alone passes a band that answers the
