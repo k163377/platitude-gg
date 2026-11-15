@@ -5,6 +5,8 @@
 
 mod child;
 mod contract;
+#[cfg(test)]
+mod contract_tests;
 mod coverage;
 mod faults;
 pub(crate) mod git_shim;
