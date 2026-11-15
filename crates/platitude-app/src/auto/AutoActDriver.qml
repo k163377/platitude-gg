@@ -856,7 +856,7 @@ Item {
     /// cannot take the name of an id.
     AutoActWipVerbs { id: wipVerbs; driver: driver }
     AutoActFileRowVerbs { id: fileRowVerbs; driver: driver }
-    /// One for the two nav families, so a peek one of them opened is the peek the other reads.
+    /// One for the nav families, so a peek one of them opened is the peek the others read.
     readonly property NavProbe navProbe: NavProbe {
         id: navProbe
         sidebar: driver.sidebarPane

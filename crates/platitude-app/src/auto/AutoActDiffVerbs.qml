@@ -9,8 +9,9 @@ import platitude.ui
 ///
 /// **One file on purpose**: every operation but `argRefused` is started by id from `stageRowTimer`'s tail
 /// (rules-refs/structure.md「dispatcher が id で start する切片は独立ファイルにできない」). A split needs each family to
-/// own its entry first (the open and the first-hunk wait), as `AutoActSplitVerbs` and `AutoActColourVerbs` do; the
-/// reader's place and reach they share are the driver's (`readY`, `diffReach`).
+/// own its entry first — the open (`AutoActDriver.diffArg`, `DiffArgRefused`) and the first-hunk wait — as
+/// `AutoActSplitVerbs` and `AutoActColourVerbs` do; the reader's place and reach they share are the driver's (`readY`,
+/// `diffReach`).
 // An `Item` only because `QtObject` has no default property to hold the timers.
 Item {
     id: acts

@@ -6,8 +6,9 @@ import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
 
-/// The sidebar's row verbs: the name boxes a row opens (renaming a branch, a tag or a stash, replacing a remote
-/// branch), the tooltip a row puts out, and the lines a row opens under itself.
+/// The name boxes: the left menu's — renaming a branch, a tag or a stash, replacing a remote branch, a new branch or
+/// tag on a row — and the graph row's (naming the top row, the ways out of its box), with what a rename's write brings
+/// back. The rows' tooltips and the lines they open are `AutoActNavOpenVerbs`'.
 // An `Item` only because `QtObject` has no default property to hold the timers below.
 Item {
     id: acts
