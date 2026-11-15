@@ -67,7 +67,7 @@ gate が何に時間を払っているかの実測。**出典は gate 自身の�
 |---|---|---|
 | host の動詞 398 行・コンテナの動詞 25 行(反映前テストの機械化.md §段ごとに何を回すか)・`test gate` 無し | 177s / 181s | 2.73s / 2.74s |
 
-- **段分け表の現在**(`cargo xtask verbs`): 反映前に host で回る行 **556**、うちコンテナでも回る `fonts` 41、段 3 だけの `whole` 275、twin 49(census 840 行)。表の 1 行は壁時計 0.49s の傾き(反映前テストの機械化.md §1 行を消すと何が減るのか)
+- **段分け表の現在**(`cargo xtask verbs`): 反映前に host で回る行 **674**、うちコンテナでも回る `fonts` 42・host だけの 3、段 3 だけの `whole` 335、twin 52(登録 1009 行)。表の 1 行は壁時計 0.49s の傾き(反映前テストの機械化.md §1 行を消すと何が減るのか)
 - **反映前の gate の 2 本の律速**(席 6 つの台帳 150 本、2026-10-10〜10-18、他席と同居した run を含む。host 613 行・`qmltest` が鎖の先頭だった時): 壁時計 6〜8 分。**host の動詞**は 366〜485s に終わり、**checks 群の鎖**(`qmltest` 中央値 89.5s / p90 114s → clippy → test → `shipped`)は xtask / app を触った差分で 264〜330s、`test it` が入る差分と負荷下で 559〜619s に伸びて動詞を越える。動詞の行を減らして届く床は鎖の終わり(`qmltest` の中身は code-costs §テストとハーネス)
 - **`qmltest` を鎖の外の群へ**(`plan::Step::beside`)**の A/B** —— runner 2 本・同じ木・同じ commit(Main.qml のコメント 1 行 + xtask の差分 = 動詞 597・`test xtask` / `test gate` / `shipped` 入り)・他席の gate と同居しない窓、before → after → before → after:
 
@@ -81,6 +81,18 @@ gate が何に時間を払っているかの実測。**出典は gate 自身の�
 - `test gate` は gate 自身の道具に触れた時だけ選ばれる(反映前テストの機械化.md `graph::Carried`)。1 本は静かな機械で
   34〜36s、重なった gate を含む台帳(重い gate 120 本)では中央値 131s で、走っている間 host の動詞 1 本が中央値で
   1.89 倍になる
+- **host 730 行の時の内訳**(席 6 つの台帳、2026-11-12〜11-14、同居の無い 6 本): 壁時計 7m58s〜9m01s。host の動詞は
+  457〜520s に終わり(1 本の中央値 4.0s・うちアプリ 3.4s、所要の和 3290s)、`qmltest`(1 ファイル 1 プロセスを 1 本ずつ)は
+  両側 270〜290s、`test gate (all)` は中央値 240s、`test it (all)` 160s。**動詞が選ばれない差分の gate の床は `qmltest`**:
+  QtTest か xtask だけを触った gate が 3m23s〜6m42s
+- **`qmltest` の runner を 4 本並べ、gate の結合テストの土台を直した後**(席 e、2026-11-15): `qmltest` は gate の中で host
+  78〜87s・Linux 76〜91s、`test gate (all)` 126〜137s。QtTest だけに届く差分の gate は 1m47s、`test gate` が入る差分は
+  3m30s〜3m42s。**host 730 → 674 行の壁時計の差は、同居と他の負荷の無い窓で測れていない**(見当は 1 行 0.49s の傾きから約 27s)。
+  **runner を並べた `qmltest` が他席の gate と重なった時の赤の回数も数えていない**(負荷でだけ赤になる既知の 1 本は
+  P3-確認事項 §開発環境(QtTest の run))
+- **`qmltest` を COMPILE の重みで数えた 1 本**(動詞 669 行): 両側の `qmltest` が予算 24 のうち 8 を持つ間、その gate 自身の
+  host の 36 単位が計 3m22s 予算を待ち、最初の 2 分に始まった動詞は 64 本(LIGHT で数えた同じ窓は 103 本)。runner は
+  タイマー待ちなので重みは LIGHT(`budget::unit::weight_of`)
 
 ## 割り込みを妨げる単位
 
