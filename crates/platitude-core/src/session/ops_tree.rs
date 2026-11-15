@@ -121,6 +121,46 @@ impl RepoSession {
         )
     }
 
+    /// [`Self::discard_partial`] for a part pressed while others on the same
+    /// diff are in front of it (`stage::PressedOn`).
+    pub fn discard_partial_on(
+        self: &Arc<Self>,
+        target: DiffTarget,
+        selects: Vec<HunkSelect>,
+        on: stage::PressedOn,
+    ) -> Option<OperationId> {
+        let s = Arc::clone(self);
+        self.write(
+            OperationKind::Discard,
+            AfterWrite::Tree,
+            move |exec, repo, cancel| async move {
+                let copied = copy_of_partial(&exec, &repo, &target, &selects, &cancel).await?;
+                let done =
+                    stage::discard_partial_on(&exec, &repo, &target, &selects, &on, &cancel).await;
+                s.record_copied(&exec, &repo, copied, done, &cancel).await
+            },
+        )
+    }
+
+    /// [`Self::apply_partial`] for a part pressed while others on the same
+    /// diff are in front of it in the queue (`stage::PressedOn`): what lets a
+    /// reader press hunk after hunk without waiting for each one's write and
+    /// read, so they join one burst (`session::write`).
+    pub fn apply_partial_on(
+        self: &Arc<Self>,
+        target: DiffTarget,
+        selects: Vec<HunkSelect>,
+        on: stage::PressedOn,
+    ) -> Option<OperationId> {
+        self.write(
+            OperationKind::Stage,
+            AfterWrite::Tree,
+            move |exec, repo, cancel| async move {
+                stage::apply_partial_on(&exec, &repo, &target, &selects, &on, &cancel).await
+            },
+        )
+    }
+
     /// Stages or unstages part of one file's diff (hunk / line level).
     /// `seen` is the fingerprint the selection's diff arrived with
     /// ([`SessionEvent::DiffLoaded`]).

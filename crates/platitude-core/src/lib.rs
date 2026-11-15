@@ -28,6 +28,9 @@ pub mod oid;
 pub mod operation;
 pub mod opstate;
 pub mod parse;
+pub mod parts;
+#[cfg(test)]
+mod parts_tests;
 pub mod patch;
 #[cfg(test)]
 mod patch_tests;

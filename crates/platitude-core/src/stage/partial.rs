@@ -107,10 +107,99 @@ pub async fn apply_partial(
 /// What the diff read for the patch is checked against: the fingerprint the
 /// selection was made on, or — for an untracked file, whose fingerprint was
 /// checked on the `--no-index` read before the intent-to-add mark — that
-/// read's hunks.
+/// read's hunks, or the diff the parts queued in front of it leave
+/// ([`PressedOn`]).
 enum Verify {
     Print(u64),
     Hunks(Vec<u8>),
+    After(Vec<crate::parse::diff::FilePatch>),
+}
+
+/// The diff a part was pressed on, where parts pressed on the same bytes are
+/// still in front of it in the queue: the bytes as read (`seen`, and
+/// `read` — their parse, as the reader was handed it), and those parts in
+/// the order they were pressed. The part's own places are in the diff those
+/// leave ([`crate::parts::after`]) — what the reader saw drawn — so it lands
+/// only where git now prints exactly that, and is refused as moved
+/// otherwise: a part in front that git refused, or a file changed since.
+/// With none in front it is the selection's own fingerprint check.
+#[derive(Debug, Clone)]
+pub struct PressedOn {
+    pub seen: u64,
+    pub read: std::sync::Arc<Vec<crate::parse::diff::FilePatch>>,
+    pub ahead: Vec<crate::parts::Part>,
+}
+
+impl PressedOn {
+    /// What the diff is checked against; `None` where the parts in front
+    /// leave a diff that is not laid out exactly (`parts::After::exact`),
+    /// which no place can be read in.
+    fn verify(&self) -> Option<Verify> {
+        if self.ahead.is_empty() {
+            return Some(Verify::Print(self.seen));
+        }
+        let after = crate::parts::after(&self.read, &self.ahead);
+        after.exact.then_some(Verify::After(after.patches))
+    }
+}
+
+/// [`apply_partial`] for a part pressed while others on the same diff are
+/// in front of it ([`PressedOn`]). Not an untracked file's: its first part
+/// marks it intent-to-add, and the diff after it is another command's.
+pub async fn apply_partial_on(
+    executor: &GitExecutor,
+    repo: &RepoInfo,
+    target: &DiffTarget,
+    selects: &[HunkSelect],
+    on: &PressedOn,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let side = match target {
+        DiffTarget::Unstaged { .. } => PatchSide::Forward,
+        DiffTarget::Staged { .. } => PatchSide::Reverse,
+        _ => return apply_partial(executor, repo, target, selects, on.seen, cancel).await,
+    };
+    if selects.is_empty() {
+        return Ok(());
+    }
+    let Some(verify) = on.verify() else {
+        return Err(stale(taking(side)));
+    };
+    apply_prepared(executor, repo, target, selects, side, verify, cancel).await
+}
+
+/// [`discard_partial`] for a part pressed while others on the same diff are
+/// in front of it ([`PressedOn`]).
+pub async fn discard_partial_on(
+    executor: &GitExecutor,
+    repo: &RepoInfo,
+    target: &DiffTarget,
+    selects: &[HunkSelect],
+    on: &PressedOn,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    let Some(verify) = on.verify() else {
+        return Err(stale(ReportKind::StaleDiscard));
+    };
+    discard_verified(executor, repo, target, selects, verify, cancel).await
+}
+
+/// Checks the diff read for the patch against what the selection was made
+/// on, refusing as `kind` where it moved.
+fn verified(raw: &[u8], verify: &Verify, kind: ReportKind) -> Result<(), GitError> {
+    match verify {
+        Verify::Print(seen) => verify_fingerprint(raw, *seen, kind),
+        Verify::Hunks(checked) if hunks_of(checked) != hunks_of(raw) => Err(stale(kind)),
+        Verify::Hunks(_) => Ok(()),
+        Verify::After(expected) => {
+            let now = crate::parse::diff::parse_patch(raw);
+            if crate::parts::same_lines(expected, &now) {
+                Ok(())
+            } else {
+                Err(stale(kind))
+            }
+        }
+    }
 }
 
 /// The staging half of [`apply_partial`].
@@ -125,13 +214,7 @@ async fn apply_prepared(
 ) -> Result<(), GitError> {
     let workdir = repo.workdir.as_path();
     let raw = details::file_diff_raw(executor, workdir, target, cancel).await?;
-    match &verify {
-        Verify::Print(seen) => verify_fingerprint(&raw, *seen, taking(side))?,
-        Verify::Hunks(checked) if hunks_of(checked) != hunks_of(&raw) => {
-            return Err(stale(taking(side)));
-        }
-        Verify::Hunks(_) => {}
-    }
+    verified(&raw, &verify, taking(side))?;
     refuse_combined(&raw)?;
     let Some(built) = patch::build_partial(&raw, selects, side) else {
         // The file changed under the open diff.
@@ -227,6 +310,18 @@ pub async fn discard_partial(
     seen: u64,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
+    discard_verified(executor, repo, target, selects, Verify::Print(seen), cancel).await
+}
+
+/// The discarding half of [`discard_partial`] / [`discard_partial_on`].
+async fn discard_verified(
+    executor: &GitExecutor,
+    repo: &RepoInfo,
+    target: &DiffTarget,
+    selects: &[HunkSelect],
+    verify: Verify,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
     if selects.is_empty() {
         return Ok(());
     }
@@ -240,7 +335,7 @@ pub async fn discard_partial(
     let raw = details::file_diff_raw(executor, workdir, target, cancel).await?;
     // Destructive and index-addressed: bytes that drifted since the
     // selection was made would throw away the wrong lines.
-    verify_fingerprint(&raw, seen, ReportKind::StaleDiscard)?;
+    verified(&raw, &verify, ReportKind::StaleDiscard)?;
     refuse_combined(&raw)?;
     let Some(built) = patch::build_partial(&raw, selects, PatchSide::Reverse) else {
         return Err(stale(ReportKind::StaleDiscard));
