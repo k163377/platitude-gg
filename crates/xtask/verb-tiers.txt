@@ -437,8 +437,6 @@ twin	ref-list-lit 1:1 --preset tags	ref-list-lit 0:1 --preset tags	Rests on v1.0
 twin	rename-branch main-renamed	rename-local-upstream main-renamed	Same input and page path; this one only stops earlier (write barrier, with the carry bar still arriving) and judges nothing.
 twin	rename-taken --allow-write-failure	rename-taken held --preset reflock --allow-write-failure	Arg-less run sends nothing: the box refuses an emptied rename, and the verb submits only past that gate, as NavNameBox.qml does — the run is silent until the watchdog.
 twin	replace-remote origin/main:main-2	replace-remote origin/main:renamed	The two plain lines differ only in the new name and take the same askReplaceRemote branch (no ref-specific logic).
-twin	row-card	row-card 7 --preset edges	Arg "" is row 0 = basic's worktree row. The product never opens a card there (GraphRowDelegate.qml partAt answers "" for isWip)
-twin	row-card 5 --preset carried --scroll-to top	row-card 7 --preset edges	A card the product never opens (another worktree's row, P3-確認事項.md), and run-dependently a real commit's card instead; the judgement passes either way.
 twin	stage-all	stage-all b.txt --preset dirty	Same slot and completion; the plain line's must_say opens the b.txt one's, which also says what moved ahead, what waited and where the open diff lands.
 twin	stage-all --preset dirty	stage-all b.txt --preset dirty	The same bucket press on the same preset, read on the same turns; the b.txt one opens that file's diff first and says where it lands besides (diff=).
 twin	stash-pop-row	stash-pop-row --preset stashes	On basic the worktree row already leads before the pop, so top=wip does not discriminate
