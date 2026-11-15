@@ -88,9 +88,12 @@ pub(super) fn dirty(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["add", "--", "c.txt"])?;
     repo.write("c.txt", "c v1\nstaged\nand unstaged on top\n")?;
     repo.git(&["mv", "renamed-from.txt", "renamed-to.txt"])?;
-    // Long enough that its all-additions diff reads as a file, and runs past
-    // the diff pane of a window on its floor — which holds the log's floor
-    // too, open or not (`diff-step`).
+    // Long enough that its all-additions diff reads as a file, and runs
+    // several rows past the diff pane of a window on its floor — which holds
+    // the log's floor too, open or not (`diff-step`). The floor is read off
+    // the face each platform draws in, so the rows past it differ between
+    // systems: one step must stop short of the bottom on every one, and
+    // `diff-step-edge`'s 20 must reach it.
     repo.write(
         "untracked.txt",
         "Notes for the next release\n\
@@ -107,6 +110,12 @@ pub(super) fn dirty(repo: &mut DemoRepo) -> Result<(), String> {
          - time a fetch over a slow link\n\
          - see what the log says when git is missing\n\
          - sort the release notes by area\n\
+         - note which settings need a restart\n\
+         - check the window comes back where it was left\n\
+         - run the tests once on each system\n\
+         - write down what changed in the menus\n\
+         - keep the screenshots for the store page\n\
+         - look at the memory after a long session\n\
          \n\
          Nothing here is recorded yet.\n",
     )?;

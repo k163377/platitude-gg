@@ -33,9 +33,10 @@ pub(super) fn config(
 
     // A window under every floor — what a file written before there was a
     // floor looks like, which the way in has to lift (`window-floor`). The
-    // stepping verbs ride it for the height: no demo graph or diff is
-    // taller than a default window, and a pane with nothing to scroll
-    // answers every step the way a broken one would.
+    // stepping verbs ride it for the height: the graph and the diff they
+    // walk (`spread`, `dirty`'s `untracked.txt`) fit a default window, and
+    // a pane with nothing to scroll answers every step the way a broken one
+    // would.
     if verb == "window-floor"
         || verb == "graph-step-edge"
         || verb == "graph-step-far"

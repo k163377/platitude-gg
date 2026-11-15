@@ -87,11 +87,11 @@ Item {
             changesFoldTimer.order = changesFoldTimer.reopen ? ["shut", "reopened"] : ["shut"]
             changesFoldTimer.start()
         } else if (act === "diff-step" || act === "diff-step-edge") {
-            // Moves the view (`DiffRowWalk`). Needs the 320x240 seed: no demo diff outgrows a default window,
+            // Moves the view (`DiffRowWalk`). Needs the 320x240 seed: the file it walks fits a default window,
             // and in the seed — lifted to the floor the folded rail holds — rows lie below the fold, so the plain walk
-            // is one row. The argument is the path: `--preset dirty`'s `untracked.txt` (16 rows) is the only diff long
-            // enough to leave travel in the seed, and only a few rows of it — more steps on the plain walk reach the
-            // bottom and lose `atEnd=false`. `-edge` asks for 20, past the bottom, and stops there (no wrap). The top's
+            // is one row. The argument is the path: `--preset dirty`'s `untracked.txt` (22 rows) is the only diff long
+            // enough to leave travel in the seed — several rows on every platform's floor (`demo::basic`), so one step
+            // stops short of the bottom. `-edge` asks for 20, past the bottom, and stops there (no wrap). The top's
             // stop is the same `clampY` expression and has no verb. The picture is the weakest witness; the line is the
             // verdict.
             page.showWip()
