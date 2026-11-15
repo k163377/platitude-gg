@@ -56,7 +56,7 @@ pub(crate) struct Step {
     /// everything under it): the cache key is their object ids.
     pub inputs: BTreeSet<String>,
     /// Which id of each input the key takes, for a step that neither
-    /// builds nor reads the app ([`owed`] keys those on the code).
+    /// builds nor reads the app ([`make::owed`] keys those on the code).
     pub keyed: Keyed,
     /// What the step is held to beyond its inputs, in the key too: a
     /// verify-ui line's promised parts and judgment (`steps::binary_steps`),
@@ -69,7 +69,7 @@ pub(crate) struct Step {
     pub unkeyed: Option<String>,
 }
 
-/// Which id of an input a step's key takes ([`TreeIds`]).
+/// Which id of an input a step's key takes ([`make::TreeIds`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Keyed {
     /// Every byte: a tool that reads the sources sees them all.

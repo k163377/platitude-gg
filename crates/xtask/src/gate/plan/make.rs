@@ -1,3 +1,10 @@
+//! The plan worked out (`make`) — where the branch stands against main,
+//! what its change reaches on each side, the steps that selects and the
+//! key and stamp of each — and printed (`describe`), with the tree's paths
+//! the steps read (`CARGO`, `IMAGE`, `qml_dirs`, …). The `super::lines`,
+//! `super::tiers` and other `gate` modules the bodies name are `mod.rs`'s
+//! imports of them.
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 

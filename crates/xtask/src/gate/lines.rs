@@ -117,7 +117,7 @@ impl Lines {
 
     /// Every part some registered line promises to show: what a green
     /// line is evidence of. A component outside it is verified by no run
-    /// (`plan::uncovered`).
+    /// (`plan::make::uncovered`).
     pub(crate) fn promised(&self) -> BTreeSet<String> {
         self.defaults
             .iter()

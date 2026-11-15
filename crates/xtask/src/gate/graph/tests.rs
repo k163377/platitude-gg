@@ -65,7 +65,7 @@ fn a_byte_string_is_bytes_and_not_a_path() {
 fn a_literal_naming_an_ancestor_directory_or_the_lines_is_no_edge() {
     let root = crate::tree::workspace_root();
     let named = |file: &str, literal: &str| literal_paths(&root, file, &[literal.to_string()]);
-    let plan = "crates/xtask/src/gate/plan.rs";
+    let plan = "crates/xtask/src/gate/plan/make.rs";
     assert!(named(plan, "crates/").is_empty());
     assert!(named(plan, "../").is_empty());
     assert!(named("crates/xtask/src/hook/seat.rs", "crates/xtask").is_empty());

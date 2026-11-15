@@ -7,9 +7,9 @@
 //! line end the code may hang a statement on are the key's, since beyond
 //! the lexical layer nothing is read for meaning. The steps keyed on it
 //! are the ones that build or run the app, which no comment reaches
-//! (`plan::owed`); a tool that reads the sources keys on the bytes, and a
-//! run of a Rust program over sources it reads as text (`qmltest`) on the
-//! Rust files' code and every other file's bytes.
+//! (`plan::make::owed`); a tool that reads the sources keys on the bytes,
+//! and a run of a Rust program over sources it reads as text (`qmltest`)
+//! on the Rust files' code and every other file's bytes.
 
 use std::collections::BTreeMap;
 use std::io::Write;
