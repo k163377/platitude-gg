@@ -560,6 +560,7 @@ fn embed_harness_qml() {
     qrc::embed!("auto/AutoActRefVerbs.qml");
     qrc::embed!("auto/AutoActRowMenuVerbs.qml");
     qrc::embed!("auto/AutoActSilenceVerbs.qml");
+    qrc::embed!("auto/AutoActMenuFollowVerbs.qml");
     qrc::embed!("auto/AutoActStepVerbs.qml");
     qrc::embed!("auto/AutoActKeyMenuVerbs.qml");
     qrc::embed!("auto/AutoActSplitVerbs.qml");

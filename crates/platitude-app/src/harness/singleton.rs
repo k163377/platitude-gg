@@ -176,5 +176,32 @@ impl Harness {
             Err(e) => format!("{path}: {e}"),
         }
     }
+
+    /// Runs git in the run's repository `repo`, its arguments one per
+    /// line — a terminal changing the repository under the window, which
+    /// the app hears only by reading the tree again (`menu-follow`). Git
+    /// only, and run to its end on the caller's thread: a run asks for one
+    /// short command at a moment it chose. Says the exit code, then git's
+    /// output: `0 …` is git's yes.
+    #[qslot]
+    fn run_git(&self, repo: String, args: String) -> String {
+        let mut command = std::process::Command::new("git");
+        command.arg("-C").arg(&repo).args(args.lines());
+        // No console of its own, as the product's git (`process::family`).
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x0800_0000);
+        }
+        match command.output() {
+            Ok(out) => format!(
+                "{} {}{}",
+                out.status.code().unwrap_or(-1),
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            ),
+            Err(e) => format!("-1 git: {e}"),
+        }
+    }
 }
 qml_register!(Harness, "Harness", singleton = true);

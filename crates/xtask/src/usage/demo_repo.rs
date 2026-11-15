@@ -184,6 +184,9 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   (publish)
         slowhook  a pre-commit hook that takes its time, over something
                   staged — a write provably in flight (quit-waits, quit-locked)
+        slowmerge  main and side each a commit ahead, and a
+                  prepare-commit-msg hook that holds the merge commit with
+                  MERGE_HEAD standing (menu-wait merge)
         noremote  commits and no remote at all: the first push writes one down
         unreachable  a tracked origin whose URL names a directory that was
                   never made: the only shape a fetch fails in offline, so

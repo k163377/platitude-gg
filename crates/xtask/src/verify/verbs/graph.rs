@@ -137,9 +137,28 @@ pub(super) const TABLE: &[Verb] = &[
     // a worktree's conflicted file while the merge editor has it
     // (`conflict`), the conflict rows name the merge's two sides in the
     // colours they wear with nothing running — `main` the branch stood on.
+    // Raised while a merge's commit is held by a hook (`merge`), MERGE_HEAD
+    // standing and the tree read as MERGING, the rows still wait for the
+    // command running: `why=wait`, not an operation stopped. Raised on
+    // `origin/main` — its graph row's chip (`fetch`) or its left menu row
+    // (`fetch-ref`) — as this window's fetch is asked, and that fetch moves
+    // it, the menu stays up on where it is now (§hover「外乱で閉じない」),
+    // its `push --delete` still leased to where it stood and greyed.
     Verb {
         name: "menu-wait",
         when: &[
+            (
+                Arg::Is("fetch"),
+                "menu_wait stage=after same=true held=1/9 open=true waited=true moved=true withdrawn=push--delete",
+            ),
+            (
+                Arg::Is("fetch-ref"),
+                "menu_wait stage=after same=true held=1/6 open=true waited=true moved=true withdrawn=push--delete",
+            ),
+            (
+                Arg::Is("merge"),
+                "menu_wait stage=during same=true held=all open=true why=wait",
+            ),
             (
                 Arg::Is("conflict"),
                 "menu_wait stage=during same=true held=all open=true ours=main theirs=feature/clash lit=ours",
@@ -166,6 +185,62 @@ pub(super) const TABLE: &[Verb] = &[
             ),
         ],
         plain: "menu_wait stage=during same=true held=all open=true",
+    },
+    // A menu raised with nothing running, and the repository changed under
+    // it from outside (デザイン規約 §メニュー「今の内容」): the menu stays up
+    // and stands on the tree as it is, keeping the rows it went up with
+    // (`same=true`). The branch renamed, its rows say the new name; HEAD
+    // taken off its branch, the rows that name it grey where they stand and
+    // say to open the menu again; a tracked file written, the `--hard` row's
+    // note says it and the card grows to hold it whole, as one opened on
+    // that tree stands. The rename made by the window's own write instead
+    // (`written`), the menu stands on what it left once it has ended. What
+    // reaches over there stays on what the menu went up with: a remote
+    // branch moved (`remote-moved`, `far-moved`) or the upstream pointed
+    // elsewhere (`upstream-moved`), the menu stays up and those rows grey,
+    // naming the reading they showed (`kept=`). The upstream taken off
+    // (`upstream-unset`), the BRANCH card's `Unset upstream` row — no chip
+    // to fall back on — greys and keeps its words without the name.
+    Verb {
+        name: "menu-follow",
+        when: &[
+            (
+                Arg::Is("detach"),
+                "menu_follow form=detach open=true same=true \
+                 withdrawn=squash,drop,rebase--interactive,merge,rebase,reset named= tip=again",
+            ),
+            (
+                Arg::Is("detach-ref"),
+                "menu_follow form=detach-ref open=true same=true withdrawn=merge,rebase named= tip=again",
+            ),
+            (
+                Arg::Is("dirty"),
+                "menu_follow form=dirty open=true same=true withdrawn=none named=main note=true width=grew",
+            ),
+            (
+                Arg::Is("written"),
+                "menu_follow form=written open=true same=true withdrawn=none named=trunk",
+            ),
+            (
+                Arg::Is("remote-moved"),
+                "menu_follow form=remote-moved open=true same=true withdrawn=push--delete named=main tip=again",
+            ),
+            (
+                Arg::Is("far-moved"),
+                "menu_follow form=far-moved open=true same=true withdrawn=push,push--delete,Deleteboth \
+                 named=main tip=again kept=origin/feature/mine",
+            ),
+            (
+                Arg::Is("upstream-moved"),
+                "menu_follow form=upstream-moved open=true same=true withdrawn=push,push--delete,Deleteboth \
+                 named=main tip=again kept=origin/feature/mine",
+            ),
+            (
+                Arg::Is("upstream-unset"),
+                "menu_follow form=upstream-unset open=true same=true withdrawn=Unsetupstream named=main tip=again",
+            ),
+        ],
+        plain: "menu_follow form=rename open=true same=true withdrawn=none named=trunk",
     },
     // A commit whose graph walk git says nothing in. Inside the silence
     // budget the menu still waits on the reading behind the commit

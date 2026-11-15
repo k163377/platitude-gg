@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude
 import platitude.ui
+import platitude.ui.words
 
 /// Rewriting what is already committed: squash, reword, drop, cherry-pick, revert, merge, rebase and reset —
 /// and the menus that offer them. Built by `AutoActDriver`.
@@ -20,6 +21,7 @@ Item {
     readonly property var branchesModel: driver.branchesModel
     readonly property var tagsModel: driver.tagsModel
     readonly property var stashesModel: driver.stashesModel
+    readonly property var remotesModel: driver.remotesModel
     readonly property var refRebaseItem: driver.refRebaseItem
     readonly property var refPullItem: driver.refPullItem
     readonly property var refMenu: driver.refMenu
@@ -106,9 +108,14 @@ Item {
             }
         } else if (act === "menu-wait") {
             menuWaitTimer.mode = arg
+            // The left menu's REMOTES row is in its remote's fold, which starts closed: opened once here, not in the
+            // press that raises the menu, which is sent again until it takes.
+            if (arg === "fetch-ref")
+                remotesModel.toggleFolder(GitFacts.remoteOfRef(menuWaitTimer.fetched, repoTab.remoteNames))
             // The stash forms put their one input in and wait for the menu to stand again. The others can meet the
             // write landed first, and end on saying so from whichever stage it caught.
-            menuWaitTimer.order = arg === "stash" || arg === "stash-ref" ? ["popped"] : []
+            menuWaitTimer.order = arg === "stash" || arg === "stash-ref" ? ["popped"]
+                                : arg === "fetch" || arg === "fetch-ref" ? ["rewound", "fetched"] : []
             menuWaitTimer.start()
         } else if (act === "commit-menu" || act === "reset-menu"
                    || act === "branch-card" || act === "tag-card") {
@@ -389,13 +396,45 @@ Item {
     // two conflict rows draw and `lit=` the one tinted as the branch stood on (`WorktreeModel.sideOurs` /
     // `sideOursCurrent`; `refTint`, which the wait's greyed rows ink muted): the same words and tints as the menu has
     // with nothing running.
+    // `menu-wait merge`, over `--preset slowmerge`: `side`'s graph row menu raised while `merge side` is out and its
+    // commit held by a hook — `MERGE_HEAD` standing, the tree read as `MERGING` (`worktree.opText`). `why=` is what the
+    // `cherry-pick` row's tooltip, forced, says: `wait` for the command running, `stopped` for an operation standing.
+    // `menu-wait fetch`, over `--preset behind`: the graph row menu aimed at `origin/main`'s chip, raised in the turn
+    // this window's fetch is asked, and that fetch moves `origin/main` — the page's own opening fetch answered first
+    // and `origin/main` put back where `main` stands outside, so the fetch the form presses is the one that moves it
+    // (`rewind`). The menu stays up and stands on where the remote branch is now (デザイン規約 §hover「外乱で閉じな
+    // い」), its `push --delete` still leased to where it stood and greyed: `waited=` says the menu went up waiting for
+    // the fetch, `moved=` that the fetch moved the branch, `withdrawn=` the rows that greyed where they stand.
+    // `menu-wait fetch-ref` is the same over the left menu's REMOTES row (`RefRowMenu.standAgain`).
     PageStage {
         id: menuWaitTimer
         name: "menu_wait"
-        /// `""`, `after`, `stash`, `stash-ref`, `replay`, `replay-stop`, `replay-stop-ref` or `conflict`, as above.
+        /// `""`, `after`, `stash`, `stash-ref`, `replay`, `replay-stop`, `replay-stop-ref`, `conflict`, `merge`,
+        /// `fetch` or `fetch-ref`, as above.
         property string mode: ""
+        /// The forms whose write is a fetch, and the remote branch it moves.
+        readonly property bool fetches: menuWaitTimer.mode === "fetch" || menuWaitTimer.mode === "fetch-ref"
+        readonly property string fetched: "origin/main"
         /// A form that puts the rebase out rather than the commit.
         readonly property bool replays: menuWaitTimer.mode.startsWith("replay")
+        /// The form that puts a merge out, held with `MERGE_HEAD` standing.
+        readonly property bool merges: menuWaitTimer.mode === "merge"
+        /// The merge form's `cherry-pick` row; null while the menu has none.
+        function cherryPickRow() {
+            for (let i = 0; i < acts.commitMenu.count; i++) {
+                const row = acts.commitMenu.itemAt(i)
+                if (row && row.present && row.code === "cherry-pick")
+                    return row
+            }
+            return null
+        }
+        /// What that row's tooltip says it waits for.
+        function why() {
+            const row = menuWaitTimer.cherryPickRow()
+            return row === null || !row.tip.shown ? "none"
+                 : row.blockedWhy === Words.otherCommandRunning ? "wait"
+                 : row.blockedWhy === Words.finishStoppedFirst ? "stopped" : "other"
+        }
         /// The worktree row the conflict form raises its menu on, and hands to the merge editor.
         readonly property string conflicted: "both.txt"
         // Witnessed by the press that puts the write in: `row`, the row the menu is raised on — a commit's oid, or the
@@ -405,6 +444,7 @@ Item {
         /// file's row another.
         readonly property var level: menuWaitTimer.mode === "stash" ? acts.stashMenu
                                    : menuWaitTimer.mode === "stash-ref" || menuWaitTimer.mode === "replay-stop-ref"
+                                     || menuWaitTimer.mode === "fetch-ref"
                                      ? refMenu : menuWaitTimer.mode === "conflict" ? fileMenu : commitMenu
         /// The selector the stash's menu acts on.
         readonly property string selector: menuWaitTimer.mode === "stash-ref" ? refRowMenu.refId
@@ -426,6 +466,12 @@ Item {
         function raise(row) {
             if (menuWaitTimer.mode === "stash-ref")
                 return page.openRefMenu("stash", stashesModel.nameAt(1), stashesModel.fullAt(1), row, true)
+            if (menuWaitTimer.mode === "fetch-ref")
+                return page.openRefMenu("remote", menuWaitTimer.fetched, menuWaitTimer.fetched, row, true)
+            if (menuWaitTimer.mode === "fetch") {
+                page.openRowMenu(row, { "kind": "remote", "name": menuWaitTimer.fetched })
+                return menuWaitTimer.level.visible
+            }
             if (menuWaitTimer.mode === "replay-stop-ref")
                 return page.openRefMenu("branch", "base", "base", branchesModel.oidOfName("base"))
             if (menuWaitTimer.mode === "conflict") {
@@ -461,6 +507,17 @@ Item {
             }
             return greyed === rows ? "all" : greyed === 0 ? "none" : greyed + "/" + rows
         }
+        /// The chips of the rows on show that greyed where they stand, as `menu-follow` says them.
+        function withdrawn() {
+            const level = menuWaitTimer.level
+            const chips = []
+            for (let i = 0; i < level.count; i++) {
+                const row = level.itemAt(i)
+                if (row && row.present && row.withdrawn === true)
+                    chips.push((row.code !== "" ? row.code : row.text).replace(/ /g, ""))
+            }
+            return chips.length === 0 ? "none" : chips.join(",")
+        }
         function line(stage) {
             const level = menuWaitTimer.level
             const stash = menuWaitTimer.mode === "stash" || menuWaitTimer.mode === "stash-ref"
@@ -472,6 +529,12 @@ Item {
                    + (was !== "" ? " was=" + was + " selector=" + menuWaitTimer.selector : "")
                    + (menuWaitTimer.replays ? " named=" + menuWaitTimer.named() : "")
                    + (menuWaitTimer.mode === "conflict" ? menuWaitTimer.sides() : "")
+                   + (menuWaitTimer.merges ? " why=" + menuWaitTimer.why() : "")
+                   + (menuWaitTimer.fetches
+                      ? " waited=" + menuWaitTimer.witnessed("waited")
+                        + " moved=" + (remotesModel.oidOfName(menuWaitTimer.fetched) !== menuWaitTimer.witnessed("row"))
+                        + " withdrawn=" + menuWaitTimer.withdrawn()
+                      : "")
                    + " rows=" + level.offeredRows + " busy=" + repoTab.busyCount
         }
         /// A write that landed before `what` left no moment to photograph, and says so rather than wait out the
@@ -499,6 +562,37 @@ Item {
             menuWaitTimer.witness("raisedOn", menuWaitTimer.selector)
             return true
         }
+        /// The fetch the page makes on its own at the opening has answered, and nothing runs: landing later, it would
+        /// move `origin/main` itself, ahead of the fetch the forms press (`WindowBandActs.fetchSettled`).
+        function openingFetchIn() {
+            if (repoTab.busyCount !== 0 || repoTab.autoFetchRunning)
+                return false
+            return repoTab.remoteNames.length === 0 || repoTab.autoFetchSuspended || repoTab.autoFetchSeq > 0
+        }
+        /// `origin/main` put back where `main` stands, as a terminal would (`git update-ref`): the far side is ahead of
+        /// it again, so the fetch the forms press moves it. Says whether it was put.
+        function rewind() {
+            const args = ["update-ref", "refs/remotes/" + menuWaitTimer.fetched, "refs/heads/main"]
+            return Harness.runGit(repoTab.repoPath, args.join("\n")).startsWith("0 ")
+        }
+        /// The remote branch's menu counted with nothing running and put down; then this window's fetch asked and the
+        /// menu raised again in the same turn, so it waits for that fetch. False while the branch is not listed.
+        function fetchUnder() {
+            const oid = remotesModel.oidOfName(menuWaitTimer.fetched)
+            if (oid === "")
+                return false
+            if (!menuWaitTimer.raise(oid))
+                return false
+            menuWaitTimer.witness("row", oid)
+            menuWaitTimer.witness("idleRows", menuWaitTimer.level.offeredRows)
+            menuWaitTimer.level.dismiss()
+            driver.pressFetch()
+            menuWaitTimer.raise(oid)
+            // Raised with the fetch out, the menu waits for it: what the forms are about, and what a fetch landed
+            // before the raise would leave untried.
+            menuWaitTimer.witness("waited", menuWaitTimer.level.waiting === true)
+            return true
+        }
         /// The row's menu counted with nothing running and put down, then the write pressed under it: the replay
         /// forms' rebase, the conflict form's merge editor on the file the menu chose, or the commit. False while the
         /// row has no delegate to answer.
@@ -514,6 +608,18 @@ Item {
                     const handed = fileRowMenu.chosenConflicts().length
                     fileRowMenu.openInMergeTool()
                     return handed > 0
+                })
+            }
+            if (menuWaitTimer.merges) {
+                const side = branchesModel.oidOfName("side")
+                if (side === "" || !menuWaitTimer.raise(side))
+                    return false
+                menuWaitTimer.witness("row", side)
+                menuWaitTimer.witness("idleRows", menuWaitTimer.level.offeredRows)
+                menuWaitTimer.level.dismiss()
+                return driver.pressWrite("merge", () => {
+                    repoTab.merge("side", false, false, "")
+                    return true
                 })
             }
             // The row under HEAD's where there is one, as `commit-menu` takes; HEAD's own over a single commit.
@@ -540,12 +646,24 @@ Item {
             if (op.at("start")) {
                 if (!Awaited.all("menu_wait_idle", { "open": repoTab.state === "open",
                                                      "idle": repoTab.busyCount === 0,
-                                                     "page": PageSettled.settled(page) }))
+                                                     "page": PageSettled.settled(page),
+                                                     "opening": !op.fetches || op.openingFetchIn() }))
                     return
                 if (op.mode === "stash" || op.mode === "stash-ref")
                     op.input("popped", () => op.popUnder())
+                else if (op.fetches)
+                    op.input("rewound", () => op.rewind())
                 else
                     op.input("pressed", () => op.pressUnder())
+                return
+            }
+            if (op.at("rewound")) {
+                // The window has read the far side's branch back where `main` stands.
+                if (!Awaited.all("menu_wait_rewound", {
+                    "rewound": remotesModel.oidOfName(op.fetched) === branchesModel.oidOfName("main"),
+                    "page": PageSettled.settled(page) }))
+                    return
+                op.input("fetched", () => op.fetchUnder())
                 return
             }
             // Read first at every stage under the write: a write that has landed ends the run on saying so. Each
@@ -565,7 +683,7 @@ Item {
                 if (!Awaited.all("menu_wait_out", {
                     "out": repoTab.busyCount !== 0,
                     "down": !op.level.visible,
-                    "rewriting": !op.replays || worktree.opText !== "" }))
+                    "rewriting": !(op.replays || op.merges) || worktree.opText !== "" }))
                     return
                 op.input("raised", () => op.raise(op.witnessed("row")))
                 return
@@ -584,6 +702,26 @@ Item {
                     "when": () => ({ "menu": op.level.visible, "details": page.pageDetailsSettled,
                                      "rows": PageSettled.rowsBuilt(page) }),
                     "report": () => op.line("during"), "arriving": ["*"] })
+                return
+            }
+            if (op.merges) {
+                // The menu over the merge still held by its hook, `MERGE_HEAD` standing: the cherry-pick row's
+                // tooltip, forced (verify-ui §hover の絵の撮り方), says what the row waits for.
+                if (landed) {
+                    op.complete({ "name": "menu_wait_tip", "when": () => ({ "landed": driver.wroteAndSettled() }),
+                                  "report": () => op.missed("its row's tooltip could be read"), "arriving": ["*"] })
+                    return
+                }
+                if (op.at("raised") && !op.input("tipped", () => {
+                    const row = op.cherryPickRow()
+                    if (row === null)
+                        return false
+                    row.tipForced = true
+                    return true
+                }))
+                    return
+                op.complete({ "name": "menu_wait_tip", "when": () => ({ "tip": op.why() !== "none" }),
+                              "report": () => op.line("during"), "arriving": ["*"] })
                 return
             }
             if (op.mode === "replay") {

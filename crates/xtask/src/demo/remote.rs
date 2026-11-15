@@ -22,6 +22,7 @@ pub(super) fn build(preset: &str, repo: &mut DemoRepo) -> Option<Result<(), Stri
         "outrun" => outrun(repo),
         "hooked" => hooked(repo),
         "slowhook" => slowhook(repo),
+        "slowmerge" => slowmerge(repo),
         "unreachable" => unreachable(repo),
         "github" => github(repo),
         _ => return None,
@@ -346,6 +347,26 @@ pub(super) fn slowhook(repo: &mut DemoRepo) -> Result<(), String> {
         &repo.work.join(".git").join("hooks"),
         "pre-commit",
         "#!/bin/sh\nsleep 2\n",
+    )
+}
+
+/// A merge still running with `MERGE_HEAD` standing: `side` and `main`
+/// each carry a commit of their own, so `merge side` writes a merge commit,
+/// and a `prepare-commit-msg` hook holds that commit — git writes
+/// `MERGE_HEAD` before the hooks run and takes it away after the commit
+/// (git 2.55 measured), so the tree reads as `MERGING` while the write is
+/// out (`menu-wait merge`). Eight seconds outlasts the poll that has to
+/// read it and the menu raised after it.
+pub(super) fn slowmerge(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.git(&["switch", "-q", "-c", "side"])?;
+    repo.commit("side.txt", "the side's own\n", "feat: the side's own")?;
+    repo.git(&["switch", "-q", "main"])?;
+    repo.commit("main.txt", "main's own\n", "feat: main's own")?;
+    install_hook(
+        &repo.work.join(".git").join("hooks"),
+        "prepare-commit-msg",
+        "#!/bin/sh\nsleep 8\n",
     )
 }
 

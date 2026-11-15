@@ -108,6 +108,8 @@ QtObject {
                 "menu-wait",
                 // Framed with git's answer in and the reading behind it held by a silent walk.
                 "walk-silent",
+                // Framed once the change made outside has been read and the menu up stands on it.
+                "menu-follow",
                 // The menu goes up once the answer that dresses its drop row is in (`AutoActHistoryVerbs.dropTimer`):
                 // the bare one ends on it, the pressing one behind the write barrier it starts after the press.
                 "drop-commit", "drop-commit-go",

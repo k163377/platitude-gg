@@ -29,6 +29,7 @@ AutoActRecoverVerbs 1.0 AutoActRecoverVerbs.qml
 AutoActRefVerbs 1.0 AutoActRefVerbs.qml
 AutoActRowMenuVerbs 1.0 AutoActRowMenuVerbs.qml
 AutoActSilenceVerbs 1.0 AutoActSilenceVerbs.qml
+AutoActMenuFollowVerbs 1.0 AutoActMenuFollowVerbs.qml
 AutoActStepVerbs 1.0 AutoActStepVerbs.qml
 AutoActKeyMenuVerbs 1.0 AutoActKeyMenuVerbs.qml
 AutoActSwitchVerbs 1.0 AutoActSwitchVerbs.qml

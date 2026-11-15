@@ -595,7 +595,7 @@ Item {
         driver.reportAtCompletion(() => fileRowsTimer.witnessed("lines").concat(
             Harness.autoAct.startsWith("file-menu") ? [acts.menuLine()] : []))
     }
-    /// The file menu's frozen offer, read with the completion's current state.
+    /// The file menu's offer as it stands, read with the completion's current state.
     function menuLine() {
         return "file_menu bucket=" + fileRowMenu.bucket + " rows=" + fileMenu.offeredRows
                + " stash=" + fileRowMenu.stashItem.offered + " stashWhy=" + fileRowMenu.stashItem.blockedReason
