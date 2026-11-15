@@ -785,6 +785,13 @@ impl RepoTab {
         crate::hub::stage_ahead(self.tab_id, |ahead| ahead.reaches(&bucket, &path))
     }
 
+    /// Whether a press that takes that row off its side still waits for
+    /// git's answer (`StageAhead::leaving_out`).
+    #[qslot]
+    fn press_out(&self, bucket: String, path: String) -> bool {
+        crate::hub::stage_ahead(self.tab_id, |ahead| ahead.leaving_out(&bucket, &path))
+    }
+
     /// `git add` over every conflicted path — the conflicted bucket's
     /// whole-bucket affordance. The set is read under the write lock, so
     /// no paths are gathered here.

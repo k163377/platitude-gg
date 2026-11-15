@@ -831,10 +831,12 @@ Item {
     // (`alone=false landed=unstaged:c.txt`), `notes.txt --preset manyhunks` (`alone=true landed=staged:notes.txt`),
     // `staged:a.txt --preset dirty` (`landed=staged:c.txt`), and `untracked:untracked.txt --preset dirty`
     // (`landed=unstaged:c.txt`) — staged whole, its diff is not empty: the trigger is the list no longer holding the
-    // file on that side.
+    // file on that side. `conflicts:shared.txt --preset conflict`, the one conflict marked resolved: no side shows it
+    // until the status after the press, so the pane waits blank where it was (`pressed=conflicts:shared.txt/waiting`,
+    // `RepoPage.landAhead`) and lands on the staged side once that status is drawn.
     //
     // Witnessed as the move went in: `was`, the key the pane stood on; `alone`, whether the file stood alone on its
-    // side.
+    // side; `pressed`, where the press's own turn left the pane, drawing rows or waiting blank.
     PageStage {
         id: followTimer
         name: "diff_follow"
@@ -856,7 +858,9 @@ Item {
                             repoTab.stagePath(page.diffPath)
                         return true
                     })
-                    return acts.keptIfWent(op, went, { "was": was, "alone": alone })
+                    // Where the press's own turn left the pane, and whether it drew rows there or waits blank.
+                    const pressed = page.diffKey + "/" + (diffPane.diffModel.loading ? "waiting" : "drawn")
+                    return acts.keptIfWent(op, went, { "was": was, "alone": alone, "pressed": pressed })
                 })
                 return
             }
@@ -871,6 +875,7 @@ Item {
                 "report": () => "diff_follow shown=" + page.diffShown
                                 + " alone=" + op.witnessed("alone")
                                 + " was=" + op.witnessed("was")
+                                + " pressed=" + op.witnessed("pressed")
                                 + " landed=" + page.diffKey })
         }
     }

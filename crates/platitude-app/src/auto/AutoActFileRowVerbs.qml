@@ -68,10 +68,13 @@ Item {
     // `RepoTab.stagingAllOut`). A conflict's resolve moves nothing ahead of git (`pressed_unseen=false`). The bands are
     // read again at the end (`bands=`): the emptied one down for having nothing to move, the other live.
     //
-    // `<verb> <path>` opens that file's diff on the bucket's own side first. `stage-all b.txt` (`--preset dirty`): the
-    // pane stays on `b.txt` until the status after the press is drawn (`RepoPage.followEmptySide`): its neighbour
-    // `c.txt` is left to the status, and the press still reaches it. At that status `c.txt` has gone from the side
-    // too, and the pane lands on `b.txt`'s staged side (`diff=`), as one status emptying the side takes it.
+    // `<verb> <path>` opens that file's diff on the bucket's own side first. `stage-all b.txt` (`--preset dirty`): its
+    // neighbour `c.txt` is left to the status, and the press reaches it, so on the press's turn the pane is on
+    // `b.txt`'s staged side (`pressed_diff=`, `RepoPage.landAhead`) with the rows it read — a change on one side alone
+    // — and waits for no read (`pressed_waiting=`), where one status emptying the side takes it, and stays there
+    // (`diff=`). `resolve-all both.txt` (`--preset conflict-kinds`): a conflict marked resolved shows on no side until
+    // the status after it, so the pane waits blank on its own side (`pressed_diff=conflicts:both.txt`,
+    // `pressed_waiting=true`) and lands on the staged side once that status is drawn.
     PageStage {
         id: bucketAllTimer
         name: "bucket_all"
@@ -113,7 +116,10 @@ Item {
                                                       + " pressed_unseen=" + repoTab.stagingUnseen
                                                       + " pressed_bands=" + acts.bandsLine()
                                                       + " pressed_marks_open="
-                                                      + (first === null ? "none" : first.stageOpen))
+                                                      + (first === null ? "none" : first.stageOpen)
+                                                      + (path === "" ? "" : " pressed_diff=" + page.diffKey
+                                                                            + " pressed_waiting="
+                                                                            + diffPane.diffModel.loading))
                     return went
                 }))
                 return
@@ -280,17 +286,17 @@ Item {
             })
         }
     }
-    // `diff-walk apart|together` (`--preset dirty`): where the open diff lands when stage presses outrun git — the same
-    // file it would land on moving at every status (`RepoPage.followEmptySide`; デザイン規約 §バケツごとの一覧と、
-    // ペインの分け方). `b.txt`'s unstaged diff is opened first, then the presses go in as one input, so no answer can be
-    // drained between them (`Feed::wake` posts the drain): every one of them is out at once (`out=`). `apart`: the
-    // row of the file the pane is on pressed three times over — `b.txt`, then `c.txt` (on both sides: left to the
-    // status, and counted gone while the press reaches it), then `untracked.txt` — and the pane after each press
-    // (`walk=`) has walked on to the next file, then waits for its own new side (`landed=staged:untracked.txt`).
-    // `together`: `b.txt` and its neighbour `c.txt` chosen and pressed as one, so the pane waits on `b.txt`
-    // (`walk=unstaged:b.txt`) and lands on its staged side once the status is drawn (`landed=staged:b.txt`). Each
-    // press after the first moves on from the one before without waiting it out, said out loud
-    // (`AutoActDriver.letWriteGo`); the run ends on the last one's status.
+    // `diff-walk apart|together` (`--preset dirty`): where the open diff lands when stage presses outrun git — on each
+    // press's own turn, the file the status after it will have it on (`RepoPage.followEmptySide`; デザイン規約
+    // §バケツごとの一覧と、ペインの分け方). `b.txt`'s unstaged diff is opened first, then the presses go in as one input,
+    // so no answer can be drained between them (`Feed::wake` posts the drain): every one of them is out at once
+    // (`out=`). `apart`: the row of the file the pane is on pressed three times over — `b.txt`, then `c.txt` (on both
+    // sides: left to the status, and counted gone while the press reaches it), then `untracked.txt` — and the pane
+    // after each press (`walk=`) has walked on to the next file, and after the last to that file's own new side
+    // (`RepoPage.landAhead`), where it stays (`landed=staged:untracked.txt`). `together`: `b.txt` and its neighbour
+    // `c.txt` chosen and pressed as one, so the pane goes to `b.txt`'s staged side at the press
+    // (`walk=staged:b.txt`) and stays there (`landed=`). Each press after the first moves on from the one before
+    // without waiting it out, said out loud (`AutoActDriver.letWriteGo`); the run ends on the last one's status.
     PageStage {
         id: walkTimer
         name: "diff_walk"

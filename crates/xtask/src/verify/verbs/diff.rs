@@ -590,10 +590,17 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "line_back back=true shrank=true followed=staged:notes.txt",
     },
     // Where the pane lands when the file under it is moved whole:
-    // `shown=true` fails when the pane closes on the reader.
+    // `shown=true` fails when the pane closes on the reader. The one
+    // conflict marked resolved shows on no side until the status after the
+    // press: the pane waits blank where it was, then lands on the staged
+    // side.
     Verb {
         name: "diff-follow",
-        when: &[],
+        when: &[(
+            Arg::IsOn("conflicts:shared.txt", "conflict"),
+            "diff_follow shown=true alone=true was=conflicts:shared.txt \
+             pressed=conflicts:shared.txt/waiting landed=staged:shared.txt",
+        )],
         plain: "diff_follow shown=true",
     },
     // Three lines staged one after another, each the moment the pane will
@@ -602,6 +609,30 @@ pub(super) const TABLE: &[Verb] = &[
         name: "line-run",
         when: &[],
         plain: "line_run staged=3 want=3",
+    },
+    // Hunk after hunk staged until the file's side is empty, with no
+    // neighbour to walk to: on the last press's own turn the pane is on the
+    // file's staged side, never on the emptied side's `No changes to show`
+    // — with the rows it had where the read on screen was the whole change
+    // (`together`), blank and waiting where it holds the last hunk alone
+    // (`apart`) — and the run ends on that side's own read, marks live.
+    Verb {
+        name: "hunk-run",
+        when: &[
+            (
+                Arg::IsOn("together", "manyhunks"),
+                "hunk_run form=together pressed_diff=staged:notes.txt pressed_same=true \
+                 pressed_blank=false pressed_waiting=false pressed_nothing=false pressed_open=false \
+                 landed=staged:notes.txt same=true open=true",
+            ),
+            (
+                Arg::IsOn("apart", "manyhunks"),
+                "hunk_run form=apart pressed_diff=staged:notes.txt pressed_same=false \
+                 pressed_blank=true pressed_waiting=true pressed_nothing=false pressed_open=false \
+                 landed=staged:notes.txt same=true open=true",
+            ),
+        ],
+        plain: "hunk_run form=",
     },
     // A bucket emptied from its own heading keeps that heading, both ways
     // round, so both headings are read back whichever way was pressed. On
@@ -613,10 +644,10 @@ pub(super) const TABLE: &[Verb] = &[
     // the end, and while the press is out both bands are down and silent
     // and every row's mark waits (`pressed_bands`, `pressed_marks_open`);
     // at the end the emptied band is down for having nothing to move, the
-    // other live (`bands=`). With `b.txt`'s diff open, the pane stays on it
-    // until that status is drawn — its neighbour `c.txt` is left to that
-    // status — then lands where one status emptying the side takes it:
-    // `b.txt`'s staged side, `c.txt` gone from its own too.
+    // other live (`bands=`). With `b.txt`'s diff open, the pane goes on the
+    // press's turn to where one status emptying the side takes it — its
+    // neighbour `c.txt` is left to that status, and the press reaches it —
+    // `b.txt`'s staged side, and stays there.
     Verb {
         name: "stage-all",
         when: &[
@@ -625,8 +656,9 @@ pub(super) const TABLE: &[Verb] = &[
                 "wip_heads from=unstaged unstaged=true staged=true conflicts=false pressed_left=1 \
                  pressed_rows=1 pressed_unseen=true \
                  pressed_bands=unstaged:false/false,staged:false/false pressed_marks_open=false \
-                 unseen=false bands=unstaged:false/false,staged:true/true unstaged_count=0 \
-                 staged_count=5 conflict_count=0 diff=staged:b.txt",
+                 pressed_diff=staged:b.txt pressed_waiting=false unseen=false \
+                 bands=unstaged:false/false,staged:true/true \
+                 unstaged_count=0 staged_count=5 conflict_count=0 diff=staged:b.txt",
             ),
             (
                 Arg::WithPreset("dirty"),
@@ -672,25 +704,34 @@ pub(super) const TABLE: &[Verb] = &[
                 shot_unstaged=false shot_out=false shot_mark_open=true shot_commit_open=true \
                 shot_mark_button=true",
     },
-    // Stage presses outrunning git land the open diff where moving at every
-    // status would (`RepoPage.followEmptySide`). Every press is out at once
-    // (`out=`: pressed on one turn, before any answer). Pressed one by one,
-    // the pane walks on at each press — past `c.txt`, on both sides and left
-    // to the status — to the last file's staged side; `b.txt` and its
-    // neighbour pressed as one, it waits on `b.txt` and lands on its staged
-    // side.
+    // Stage presses outrunning git land the open diff on each press's own
+    // turn where the status after it will have it (`RepoPage.followEmptySide`,
+    // `landAhead`). Every press is out at once (`out=`: pressed on one turn,
+    // before any answer). Pressed one by one, the pane walks on at each press
+    // — past `c.txt`, on both sides and left to the status — and the last
+    // file's press takes it to that file's staged side; `b.txt` and its
+    // neighbour pressed as one take it to `b.txt`'s staged side at the press.
+    // Over another git's index lock (`--preset stage-lock`) every press is
+    // refused: the rows come back, and the pane with the last one's, from
+    // the staged side it went to back to the side it left (`followLanding`).
     Verb {
         name: "diff-walk",
         when: &[
             (
                 Arg::IsOn("apart", "dirty"),
                 "diff_walk form=apart out=3 \
-                 walk=unstaged:c.txt>untracked:untracked.txt>untracked:untracked.txt \
+                 walk=unstaged:c.txt>untracked:untracked.txt>staged:untracked.txt \
                  landed=staged:untracked.txt",
             ),
             (
+                Arg::IsOn("apart", "stage-lock"),
+                "diff_walk form=apart out=3 \
+                 walk=unstaged:c.txt>untracked:untracked.txt>staged:untracked.txt \
+                 landed=untracked:untracked.txt",
+            ),
+            (
                 Arg::IsOn("together", "dirty"),
-                "diff_walk form=together out=2 walk=unstaged:b.txt landed=staged:b.txt",
+                "diff_walk form=together out=2 walk=staged:b.txt landed=staged:b.txt",
             ),
         ],
         plain: "diff_walk form=",

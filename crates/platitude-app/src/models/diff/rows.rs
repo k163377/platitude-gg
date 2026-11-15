@@ -152,7 +152,11 @@ impl DiffModel {
         true
     }
 
-    fn lay_out(&mut self, colors: &platitude_core::highlight::DiffColors, before: Option<&[u64]>) {
+    pub(super) fn lay_out(
+        &mut self,
+        colors: &platitude_core::highlight::DiffColors,
+        before: Option<&[u64]>,
+    ) {
         let Some(patches) = self.shown.clone() else {
             return;
         };
@@ -211,11 +215,75 @@ impl DiffModel {
     }
 
     /// The read failed (`DiffMsg::Unread`): the pane stops waiting and says
-    /// so, keeping the rows a re-read had shown.
+    /// so, keeping the rows a re-read had shown — but not rows relabelled
+    /// from the other side (`relabel_to`), which this side's read was to
+    /// replace.
     pub(super) fn went_unread(&mut self) {
+        if self.relabelled {
+            let key = std::mem::take(&mut self.current_key);
+            let title = std::mem::take(&mut self.title);
+            self.blank();
+            self.current_key = key;
+            self.title = title;
+        }
         self.loading = false;
         self.unread = true;
         self.requested_at = None;
+    }
+
+    /// Nothing of a file left in the pane, nothing waited for.
+    pub(super) fn blank(&mut self) {
+        self.current_key = String::new();
+        self.widest_no = 0;
+        self.widest_lines = Candidates::default();
+        self.title = String::new();
+        self.is_binary = false;
+        self.is_new_file = false;
+        self.whole_why = String::new();
+        self.mode_from = String::new();
+        self.mode_to = String::new();
+        self.is_combined = false;
+        self.unmerged = false;
+        self.embedded = false;
+        self.embedded_sha8 = String::new();
+        self.loading = false;
+        self.relabelled = false;
+        self.unread = false;
+        self.fingerprint = String::new();
+        self.coloured = false;
+        // Kept past here, a closed pane holds the whole diff's heap.
+        self.shown = None;
+        self.shown_has_preview = false;
+        self.shown_print = None;
+        self.shown_asked = 0;
+        self.drawn_from = 0;
+        self.shown_parts = Vec::new();
+        self.laid = None;
+        crate::hub::diff_drawn(self.tab_id, None, None, 0);
+        self.shown_marks = Default::default();
+        self.shown_colors = Default::default();
+        self.apply_endings(None);
+        // Lets go of the pictures held for it: no next read is coming.
+        self.apply_preview(None);
+        self.forget_selection();
+        self.reset();
+    }
+
+    /// Whether the rows on screen are this window's read of the file and the
+    /// last one asked — nothing out, none asked since: what a press may
+    /// carry to the file's other side as they are (`relabel_to`).
+    pub(super) fn holds_latest_read(&self) -> bool {
+        self.shown_print.is_some()
+            && self.current_at.is_empty()
+            && !self.loading
+            && self.asks > 0
+            && self.shown_asked == self.asks
+    }
+
+    /// Whether the answer to ask `asked` stands under a wait
+    /// (`drawn_from`): not drawn.
+    pub(super) fn waits_over(&self, asked: u64) -> bool {
+        asked < self.drawn_from
     }
 
     pub(super) fn begin_request(&mut self, title: String, target: DiffTarget) {
@@ -524,6 +592,77 @@ mod tests {
         model.waiting();
         assert!(model.loading);
         assert!(!model.unread);
+    }
+
+    /// A press carries the rows on screen to the file's other side only where
+    /// they are the file's last read asked: not another file's left from
+    /// before the open, not with a read out or asked since, not another
+    /// worktree's (`relabel_to`).
+    #[test]
+    fn only_the_last_read_asked_is_carried_to_the_other_side() {
+        let mut model = DiffModel {
+            asks: 2,
+            shown_asked: 2,
+            shown_print: Some(7),
+            ..DiffModel::default()
+        };
+        assert!(model.holds_latest_read());
+        model.loading = true;
+        assert!(!model.holds_latest_read(), "a read is out");
+        model.loading = false;
+        model.shown_asked = 1;
+        assert!(
+            !model.holds_latest_read(),
+            "the last one asked has not landed"
+        );
+        model.shown_asked = 0;
+        assert!(
+            !model.holds_latest_read(),
+            "a tick's re-read, numbered by nobody"
+        );
+        model.shown_asked = 2;
+        model.shown_print = None;
+        assert!(!model.holds_latest_read(), "another file's rows");
+        model.shown_print = Some(7);
+        model.current_at = "elsewhere".to_string();
+        assert!(!model.holds_latest_read(), "another worktree's file");
+    }
+
+    /// A wait draws no read asked before it — that read shows the side as it
+    /// was before the press (`wait_for`); the next one asked is drawn.
+    #[test]
+    fn a_wait_draws_no_read_asked_before_it() {
+        let model = DiffModel {
+            asks: 3,
+            drawn_from: 4,
+            ..DiffModel::default()
+        };
+        assert!(model.waits_over(3));
+        assert!(model.waits_over(0), "a tick's re-read");
+        assert!(!model.waits_over(4));
+        assert!(!DiffModel::default().waits_over(0), "no wait stands");
+    }
+
+    /// The read of the side rows were relabelled as failing: none of them
+    /// stays, as they were never that side's — the pane says the read failed
+    /// over nothing, and stops waiting.
+    #[test]
+    fn a_failed_read_takes_the_relabelled_rows_away() {
+        let mut model = DiffModel {
+            relabelled: true,
+            loading: true,
+            current_key: "staged:notes.txt".to_string(),
+            title: "notes.txt".to_string(),
+            shown: Some(std::sync::Arc::new(parse_patch(BEFORE.as_bytes()))),
+            shown_print: Some(7),
+            ..DiffModel::default()
+        };
+        model.went_unread();
+        assert!(!model.relabelled);
+        assert!(model.unread && !model.loading);
+        assert!(model.shown.is_none());
+        assert_eq!(model.current_key, "staged:notes.txt");
+        assert_eq!(model.title, "notes.txt");
     }
 
     /// A part of a shape not drawn ahead leaves its hunk as read: the rows are

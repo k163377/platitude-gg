@@ -41,7 +41,7 @@ QtObject {
                 "rebase-plan-run", "rebase-edit-stop", "rebase-edit-stop-out",
                 "rebase-onto", "revert-commit", "op-exit-go", "op-exit-lands", "stage-hunk",
                 "stage-line", "keep-place", "code-shrink", "discard-hunk-go", "line-back", "diff-follow",
-                "line-run",
+                "line-run", "hunk-run",
                 "stage-all", "unstage-all", "resolve-all", "stage-ahead", "stage-held", "stage-held-amend",
                 "stage-refused", "diff-walk",
                 "push", "push-outdated", "tag-refused", "push-branch-go", "unset-upstream-go",
@@ -114,7 +114,7 @@ QtObject {
                 // the bare one ends on it, the pressing one behind the write barrier it starts after the press.
                 "drop-commit", "drop-commit-go",
                 "code-send", "code-grow", "code-shrink", "code-swap",
-                "line-back", "diff-follow", "line-run",
+                "line-back", "diff-follow", "line-run", "hunk-run",
                 "stage-all", "unstage-all", "resolve-all",
                 // Pictured once the status after the press is drawn, with the press held and the tip up, or behind
                 // the bar the refusal brings down (`AutoActFileRowVerbs.stageAheadTimer`).

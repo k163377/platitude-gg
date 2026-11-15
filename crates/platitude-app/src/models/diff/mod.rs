@@ -271,6 +271,11 @@ pub struct DiffModel {
     /// repository has no commit yet (the case `git add` refuses).
     embedded_sha8: String,
     loading: bool,
+    /// The rows on screen are the other side's read, relabelled as this
+    /// side's at a press that moved the file here (`relabel_to`): the marks
+    /// wait until this side's own read lands, as their places are in the
+    /// other side's diff.
+    relabelled: bool,
     /// The last read of this file failed (`DiffMsg::Unread`): the pane says
     /// so instead of `No changes to show`. Down again at the next ask.
     unread: bool,
@@ -355,6 +360,13 @@ pub struct DiffModel {
     /// numbered, so the answer to one is told from an earlier one landing
     /// late (`ops::StageAhead::diff_asked`).
     asks: u64,
+    /// The ask `shown` answers; 0 for a read nobody numbered (a tick's
+    /// re-read, another worktree's file).
+    shown_asked: u64,
+    /// Answers to asks below this are not drawn: a wait stands over them
+    /// (`wait_for`), and a read asked before it shows the side as it was.
+    /// 0 once a read is drawn again.
+    drawn_from: u64,
     /// The selection's two ends, none while nothing is selected.
     sel_ends: Option<SelectionEnds>,
     /// The word a double-click took (`selection::take_word`), which the

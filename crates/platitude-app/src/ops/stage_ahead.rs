@@ -655,10 +655,21 @@ impl StageAhead {
             && self.presses.iter().any(|p| p.act.leaves(bucket, path))
     }
 
+    /// Whether a press that takes `path`'s row off `bucket` still waits for
+    /// git's answer. The open diff landed on the file's new side at the press
+    /// reads there only after it (`RepoPage.diffHeld`): read before, that
+    /// side shows itself as it was before the write.
+    #[must_use]
+    pub fn leaving_out(&self, bucket: &str, path: &str) -> bool {
+        self.presses
+            .iter()
+            .any(|p| !p.landed && p.act.leaves(bucket, path))
+    }
+
     /// Whether a press stands the status readers have not caught up with —
-    /// any, until every reader has drawn the status after it: the open
-    /// diff's landing on its file's own new side waits meanwhile
-    /// (`RepoPage.followEmptySide`). Without one nothing is out, landed or
+    /// any, until every reader has drawn the status after it: an open diff
+    /// waiting in place for where its file went waits meanwhile
+    /// (`RepoPage.followLanding`). Without one nothing is out, landed or
     /// not, and a status is drawn as it is.
     #[must_use]
     pub fn unseen(&self) -> bool {

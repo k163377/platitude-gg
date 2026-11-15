@@ -540,6 +540,7 @@ fn embed_harness_qml() {
     qrc::embed!("auto/AutoActChooseVerbs.qml");
     qrc::embed!("auto/AutoActDetailsVerbs.qml");
     qrc::embed!("auto/AutoActDiffFindVerbs.qml");
+    qrc::embed!("auto/AutoActDiffRunVerbs.qml");
     qrc::embed!("auto/AutoActDiffVerbs.qml");
     qrc::embed!("auto/AutoActDriver.qml");
     qrc::embed!("auto/AutoActFileRowVerbs.qml");

@@ -202,6 +202,7 @@ diff-find-step notes.txt --preset manyhunks	ChangeIcon DiffLineCell DiffRowDeleg
 diff-fold-by-hand b.txt --preset dirty	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 diff-fold-by-rename b.txt --preset dirty	AppCardFace ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavNameBox NavRowBody OpsPicker RefRowMenu RemoteRowMenu SectionPeekPopup TabItemDelegate
 diff-follow b.txt --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
+diff-follow conflicts:shared.txt --preset conflict	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpExitCard OpExitRow OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 diff-follow staged:a.txt --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 diff-follow untracked:untracked.txt --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 diff-github 1:src/login.txt --preset github	AppCardFace AppMenu AppMenuItem AppMenuSeparator ChangeIcon DiffLineCell DiffRowDelegate FileRowDelegate GitHubMenu NameCell OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
@@ -217,6 +218,7 @@ diff-step-edge untracked.txt --preset dirty	ChangeIcon DiffLineCell DiffRowDeleg
 diff-sweep b.txt --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 diff-tick conflicts:shared.txt --preset conflict-typed	ChangeIcon DiffLineCell DiffRowDelegate NameCell NavItemDelegate NavRowBody OpExitCard OpExitRow OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 diff-walk apart --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
+diff-walk apart --preset stage-lock --allow-write-failure	CappedLines ChangeIcon DiffLineCell DiffRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 diff-walk together --preset dirty	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 diff-word notes.txt --preset manyhunks	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 discard-file-go b.txt --preset dirty	ChangeIcon GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
@@ -361,6 +363,8 @@ graph-tail --preset deep	GraphRowChips GraphRowDelegate NameCell NavItemDelegate
 graph-tail-more --preset deep	GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 hash-tip --preset authorship	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 hash-tip-counting --preset authorship	ChangeIcon FileRowDelegate GraphRowChips GraphRowDelegate NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
+hunk-run apart --preset manyhunks	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
+hunk-run together --preset manyhunks	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 hunk-tools notes.txt --preset manyhunks	ChangeIcon DiffLineCell DiffRowDelegate DiffStageMark NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate
 identity	AppCardFace ChangeIcon DialogActions FormField GraphRowChips GraphRowDelegate HelpText IdentityDialog IdentityFields LabeledField NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow
 identity-half	AppCardFace ChangeIcon DialogActions FormField GraphRowChips GraphRowDelegate HelpText IdentityDialog IdentityFields LabeledField NameCell NavItemDelegate NavRowBody OpsPicker RefRowMenu RemoteRowMenu TabItemDelegate WipTallyRow

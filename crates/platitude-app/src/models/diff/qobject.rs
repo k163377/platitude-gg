@@ -28,6 +28,7 @@ impl DiffModel {
     qproperty!("embedded", Member = embedded, Notify = changed);
     qproperty!("embeddedSha8", Member = embedded_sha8, Notify = changed);
     qproperty!("loading", Member = loading, Notify = changed);
+    qproperty!("relabelled", Member = relabelled, Notify = changed);
     // Whether the rows are the parts' exact layout, or the read with none
     // over it: a press on them is placed where it stands
     // (`stage::PressedOn`). A part laid as read (`parts::After::exact`)
@@ -318,6 +319,55 @@ impl DiffModel {
         }
     }
 
+    /// Moves the pane to `bucket`'s side of the file on screen with the rows
+    /// it holds, asking nothing (`RepoPage.landAhead`): a press moved a file
+    /// changed on one side only to the other, whose diff is the one read here
+    /// line for line — the read as git printed it, without the parts drawn
+    /// over it, which all went to that side. Its marks wait for that side's
+    /// own read (`relabelled`). Where the rows are not the last read asked of
+    /// the file (`holds_latest_read`: another file's, or one out still) it
+    /// waits as [`Self::wait_for`] does.
+    #[qslot]
+    fn relabel_to(&mut self, bucket: String, path: String, orig_path: String) {
+        if !self.holds_latest_read() {
+            self.wait_for(bucket, path, orig_path);
+            return;
+        }
+        let before = self.keys_on_screen();
+        self.current_key = diff_key(&bucket_target(&bucket, &path, orig_path));
+        self.title = path;
+        // Nothing of the other side's is drawn over these rows.
+        self.shown_print = None;
+        self.shown_parts = Vec::new();
+        self.laid = None;
+        crate::hub::diff_drawn(self.tab_id, None, None, 0);
+        self.fingerprint = String::new();
+        // A read out for the other side is nobody's now (`wanted`).
+        self.loading = false;
+        self.relabelled = true;
+        self.rows_arriving();
+        let colors = std::mem::take(&mut self.shown_colors);
+        self.lay_out(&colors, before.as_deref());
+        self.shown_colors = colors;
+        self.changed();
+        self.rows_arrived();
+    }
+
+    /// Stands the pane on `bucket`'s side of `path` with nothing drawn,
+    /// waiting, and asks nothing (`RepoPage.landAhead`): what that side holds
+    /// after the press is git's to say, and a read asked before git answers
+    /// shows it as it was — one out already is not drawn either
+    /// (`drawn_from`).
+    #[qslot]
+    fn wait_for(&mut self, bucket: String, path: String, orig_path: String) {
+        self.blank();
+        self.current_key = diff_key(&bucket_target(&bucket, &path, orig_path));
+        self.title = path;
+        self.drawn_from = self.asks + 1;
+        self.waiting();
+        self.changed();
+    }
+
     /// Whether a press of `hunk` (or of its `line`; negative for the whole
     /// hunk) takes every change the rows on screen show, in a diff a part can
     /// empty — the file row then leaves its side (`ops::Part::whole`).
@@ -452,37 +502,7 @@ impl DiffModel {
 
     #[qslot]
     fn clear(&mut self) {
-        self.current_key = String::new();
-        self.widest_no = 0;
-        self.widest_lines = Candidates::default();
-        self.title = String::new();
-        self.is_binary = false;
-        self.is_new_file = false;
-        self.whole_why = String::new();
-        self.mode_from = String::new();
-        self.mode_to = String::new();
-        self.is_combined = false;
-        self.unmerged = false;
-        self.embedded = false;
-        self.embedded_sha8 = String::new();
-        self.loading = false;
-        self.unread = false;
-        self.fingerprint = String::new();
-        self.coloured = false;
-        // Kept past here, a closed pane holds the whole diff's heap.
-        self.shown = None;
-        self.shown_has_preview = false;
-        self.shown_print = None;
-        self.shown_parts = Vec::new();
-        self.laid = None;
-        crate::hub::diff_drawn(self.tab_id, None, None, 0);
-        self.shown_marks = Default::default();
-        self.shown_colors = Default::default();
-        self.apply_endings(None);
-        // Lets go of the pictures held for it: no next read is coming.
-        self.apply_preview(None);
-        self.forget_selection();
-        self.reset();
+        self.blank();
         self.changed();
     }
 
@@ -491,7 +511,10 @@ impl DiffModel {
         let Some(feed) = self.feed.clone() else {
             return;
         };
-        let mine = wanted(feed.drain(), &self.current_key);
+        let mine: Vec<DiffMsg> = wanted(feed.drain(), &self.current_key)
+            .into_iter()
+            .filter(|msg| !matches!(msg, DiffMsg::Loaded { asked, .. } if self.waits_over(*asked)))
+            .collect();
         if mine.is_empty() {
             return;
         }
@@ -519,6 +542,7 @@ impl DiffModel {
                     ..
                 } => {
                     self.loading = false;
+                    self.relabelled = false;
                     self.unread = false;
                     if let Some(t0) = &asked {
                         tracing::info!(
@@ -547,6 +571,8 @@ impl DiffModel {
                     self.shown_has_preview = preview.is_some();
                     self.shown = Some(Arc::clone(&patches));
                     self.shown_print = Some(fingerprint);
+                    self.shown_asked = answers;
+                    self.drawn_from = 0;
                     // git's word first: the parts it speaks for go, the
                     // others are moved onto it where they still stand
                     // (`ops::StageAhead::diff_drawn`) — then drawn over it.

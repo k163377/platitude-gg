@@ -239,11 +239,12 @@ impl RepoTab {
     /// Copies what the stage presses hold into the plain members bindings
     /// read, moving `staging_seq` where `moved` says the rows did, where a
     /// press no longer out lets its rows' marks go, or where the screen has
-    /// caught up with the last press standing (`unseen` — the open diff
-    /// follows then, `RepoPage.followEmptySide`), or a part of the open diff
-    /// went (`ahead_unseen` — the diff draws again); and whether the Commit
-    /// button waits — on a write out, a press writing the index or the
-    /// stand (`commit_waits`). Answers whether anything QML reads moved.
+    /// caught up with the last press standing (`unseen` — an open diff
+    /// waiting in place lands then, `RepoPage.followLanding`), or a part of
+    /// the open diff went (`ahead_unseen` — the diff draws again); and
+    /// whether the Commit button waits — on a write out, a press writing the
+    /// index or the stand (`commit_waits`). Answers whether anything QML
+    /// reads moved.
     pub(super) fn read_writes_out(&mut self, moved: bool) -> bool {
         let (all_out, moving, unseen, index_unseen, ahead_unseen, diff_writes_out) =
             crate::hub::stage_ahead(self.tab_id, |ahead| {

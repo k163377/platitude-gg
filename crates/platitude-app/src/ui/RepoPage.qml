@@ -1488,8 +1488,8 @@ FocusScope {
     // `ops::StageAhead`'s** (per tab in the hub); each move of what it holds moves `RepoTab.stagingSeq`, and the three
     // lists, the counts and the open diff (a hunk or a line pressed, デザイン規約 §diff の中のステージ) draw what they
     // hold again on that turn. So do a discard's rows (§消す操作は先に画面から消す). The diff open on a moved file
-    // follows on that turn, or once the status after the presses is drawn where it lands on what git writes
-    // (`followEmptySide`).
+    // follows on that turn, where the status after the presses will have it (`followEmptySide`), and waits in place
+    // for that status only where the list does not show where the file goes yet (`followLanding`).
     readonly property int stagingSeq: repoTab.stagingSeq
     onStagingSeqChanged: page.restage()
     function restage() {
@@ -2291,6 +2291,25 @@ FocusScope {
             return
         // A held scroll is the last file's: another file starts at the top and the left edge (`DiffCodeScroll.file`).
         diffPane.dropScroll()
+        page.standDiff(kind, path, origPath)
+        if (kind === "commit") {
+            page.askCommitDiff(path, origPath)
+        } else if (page.carriedPath !== "") {
+            // Read-only, aimed at the worktree the rows came from (`RepoSession::load_carried_diff`).
+            diffModel.requestCarried(page.carriedPath, kind, path, origPath)
+        } else {
+            page.noteDiffAlone()
+            diffModel.requestWorktree(kind, path, origPath)
+        }
+        page.diffShown = true
+        page.diffNeighbour = ""
+        page.noteDiffNeighbour()
+    }
+    /// Names the file the pane stands on, and lights its row; what the pane draws of it is the caller's — a read
+    /// (`openDiff`), or the rows a press moved there or a wait (`landAhead`). Any file stood on anew is no
+    /// landing ahead of git (`diffLeftFrom`).
+    function standDiff(kind, path, origPath) {
+        page.diffLeftFrom = ""
         page.diffKey = kind + ":" + path
         page.diffKind = kind
         page.diffPath = path
@@ -2301,16 +2320,6 @@ FocusScope {
         // path picked here would aim this tree's presses at it (`WipPane.readOne`).
         if (kind !== "commit" && page.wipWritable)
             wipPane.readOne(kind, path)
-        if (kind === "commit")
-            page.askCommitDiff(path, origPath)
-        else if (page.carriedPath !== "")
-            // Read-only, aimed at the worktree the rows came from (`RepoSession::load_carried_diff`).
-            diffModel.requestCarried(page.carriedPath, kind, path, origPath)
-        else
-            diffModel.requestWorktree(kind, path, origPath)
-        page.diffShown = true
-        page.diffNeighbour = ""
-        page.noteDiffNeighbour()
     }
     /// The patch behind a commit-list row, in the list's three shapes (デザイン規約 §複数のコミットを選ぶ): one commit's
     /// change, the difference between exactly two, or each chosen commit's own block in turn — a diff of the two ends
@@ -2359,6 +2368,26 @@ FocusScope {
             return
         page.diffNeighbour = page.wipUnstaged.besidePath(page.diffKind, page.diffPath)
     }
+    /// Whether the open file's change was on its own side alone — no other bucket listed it — as the list stood when
+    /// the read on screen was asked for: that read then holds the whole of the file's change, and where presses move
+    /// the file to another side, that side's diff is this read line for line (`landAhead`). Noted per read, not per
+    /// change of the list: a part pressed on the read puts the file on the other side of the list too, ahead of git,
+    /// while the read stays the whole change — and a read asked after git did the part holds what is left of it.
+    property bool diffAlone: false
+    function noteDiffAlone() {
+        page.diffAlone = !page.diffSides.some(side => side !== page.diffKind
+                                              && page.wipUnstaged.holdsPath(side, page.diffPath))
+    }
+    /// The buckets a worktree file's row can stand in, in the order a landing looks through them (`sideBesides`).
+    readonly property var diffSides: ["staged", "unstaged", "untracked", "conflicts"]
+    /// The side other than `from` that holds `path` for the pane's purposes (`stillHere`), or `""`.
+    function sideBesides(from, path) {
+        for (const side of page.diffSides) {
+            if (side !== from && page.stillHere(side, path))
+                return side
+        }
+        return ""
+    }
     /// Whether `bucket` still holds `path` for the pane's purposes: on the list, and reached by no stage press standing
     /// — a row the press could not move ahead of git (`ops::stage_ahead`'s `moved`: a file on both sides, a staged
     /// rename, a conflict, the rows `Stage all` leaves to the status) leaves its side with the status after it, so
@@ -2383,17 +2412,17 @@ FocusScope {
     /// whole, a picture). A file empty from the start stays in the list, so opening it closes nothing.
     /// Headless: `diff-follow`.
     ///
-    /// **A stage press takes the file off its side at the press** (デザイン規約 §バケツごとの一覧と、ペインの分け方),
-    /// ahead of git — moved there, or reached and left to the status (`stillHere`) — and the pane follows on that
-    /// turn where what it lands on is git's already: the neighbour, which no press reaches. The file's own new side
-    /// holds nothing of it until git has run, so landing there waits for the status after the press that reaches the
-    /// file (`pressReaches`; `stagingSeq` moves as that press is let go, `restage`) — that press only: a file taken by
-    /// an outside change while another file's press stands lands at once. So the pane lands where moving at every
-    /// status does: the file and its neighbour gone in one status (`Stage all`, chosen rows) take it to the file's own
-    /// new side, and files pressed one by one walk it on to the last one's. A press git refuses puts the rows back and
-    /// leaves the pane on the neighbour it moved to. Headless: `diff-walk`, `stage-ahead`.
+    /// **A press takes the file off its side at the press** (デザイン規約 §バケツごとの一覧と、ペインの分け方), ahead
+    /// of git — moved there, or reached and left to the status (`stillHere`) — and the pane lands on that turn where
+    /// the status after the press will have it: the neighbour, which no press reaches, else the file's own new side
+    /// (`landAhead`), else closed. A press git refuses puts the rows back: on the neighbour the pane stays, from its
+    /// own new side it goes back with them (`followLanding`). Headless: `diff-walk`, `stage-ahead`.
     function followEmptySide() {
-        if (!page.diffShown || page.diffKind === "commit" || page.stillHere(page.diffKind, page.diffPath))
+        if (!page.diffShown || page.diffKind === "commit")
+            return
+        if (page.diffLeftFrom !== "" && page.followLanding())
+            return
+        if (page.stillHere(page.diffKind, page.diffPath))
             return
         const cut = page.diffNeighbour.indexOf(":")
         if (cut > 0) {
@@ -2404,8 +2433,10 @@ FocusScope {
                 return
             }
         }
-        if (page.wipWritable && repoTab.pressReaches(page.diffKind, page.diffPath))
+        if (page.wipWritable && repoTab.pressReaches(page.diffKind, page.diffPath)) {
+            page.landAhead()
             return
+        }
         const moved = page.wipUnstaged.bucketOf(page.diffPath)
         if (moved !== "") {
             page.openDiff(moved, page.diffPath, page.wipUnstaged.origOf(page.diffPath))
@@ -2413,31 +2444,97 @@ FocusScope {
         }
         page.closeDiff()
     }
-    /// Whether the diff on screen is still catching up with a write — a press out, the queue busy, a read out, or
-    /// the pane waiting on a file a press took off its side: the paced re-read holds off meanwhile (`pollDiff`), and
-    /// automation reads the pane as unsettled. **Every part ends by itself** — holding on "the tree has not been read
-    /// yet" instead wedges for good on a write that moves no row (the second line of a file on both sides).
-    /// `busyCount` alone is not enough: it rises when the queue starts the write, not at the press. `diffAwaits` rises
-    /// on the press's own answer that it was queued (`stageSelection`; set before it, a press turned away at the door
-    /// would wedge the same way) and falls on the write's answer (`absorbWriteResult`). The marks wait on less
-    /// (`diffPressable`).
+    /// The side the open file was taken off at a press with no neighbour to walk to, while the pane stands where that
+    /// press lands it ahead of git (`landAhead`); `""` otherwise.
+    property string diffLeftFrom: ""
+    /// The press took the open file off its side and no neighbour is left: the pane lands on the press's turn where
+    /// the status after it will have the file (user decision — ask before changing), never on the side it left, which
+    /// now draws empty. On the side the file went to, which the list already shows it on: a change that was on one
+    /// side alone (`diffAlone`) is that side's diff line for line — the stage before is the unstage after — so its
+    /// rows go there as they are (`DiffModel.relabelTo`); a file on both sides holds there what git's comparison of
+    /// contents says, so the pane waits blank (`DiffModel.waitFor`). Nowhere, the file gone from the list (a discard),
+    /// it closes. A file the list leaves to the status, with no side shown yet (a conflict marked resolved, a staged
+    /// rename unstaged), waits blank in place for that status. Either wait reads nothing meanwhile (`diffHeld`).
+    function landAhead() {
+        const from = page.diffKind
+        const path = page.diffPath
+        const to = page.sideBesides(from, path)
+        if (to === "" && !page.wipUnstaged.holdsPath(from, path)) {
+            page.closeDiff()
+            return
+        }
+        const alone = page.diffAlone
+        if (to === "") {
+            diffModel.waitFor(from, path, page.diffOrigPath)
+            page.diffLeftFrom = from
+            return
+        }
+        const orig = page.wipUnstaged.origOf(path)
+        // The same rows stay where the reader had them; a wait starts a file of its own at the top.
+        if (!alone)
+            diffPane.dropScroll()
+        page.standDiff(to, path, orig)
+        page.diffLeftFrom = from
+        if (alone)
+            diffModel.relabelTo(to, path, orig)
+        else
+            diffModel.waitFor(to, path, orig)
+        page.diffNeighbour = ""
+        page.noteDiffNeighbour()
+    }
+    /// The presses moved while the pane stands where one landed it (`landAhead`). The rows back on the side it left —
+    /// git refused, or the file changed there since — take it back there. The status after the presses, drawn, hands
+    /// the pane to git: in place, it then lands where that status put the file (`followEmptySide`). Answers whether
+    /// the pane stays where it is.
+    function followLanding() {
+        const from = page.diffLeftFrom
+        const path = page.diffPath
+        if (page.stillHere(from, path)) {
+            page.openDiff(from, path, page.wipUnstaged.origOf(path))
+            return true
+        }
+        if (repoTab.pressReaches(from, path))
+            return page.diffKind === from
+        page.diffLeftFrom = ""
+        return false
+    }
+    /// Whether the pane, landed ahead of git (`landAhead`), holds off reading: on the file's new side until git has
+    /// answered the presses that took it there — read before, the side shows itself as it was before the write — and
+    /// in place until the status after them is drawn, which says where the file went. A read once the rows are back
+    /// on the side it left is that side's, where the pane goes too (`followLanding`).
+    function diffHeld() {
+        const from = page.diffLeftFrom
+        if (from === "" || page.stillHere(from, page.diffPath))
+            return false
+        if (page.diffKind === from)
+            return repoTab.pressReaches(from, page.diffPath)
+        return repoTab.pressOut(from, page.diffPath)
+    }
+    /// Whether the diff on screen is still catching up with a write — a press out, the queue busy, a read out, rows
+    /// relabelled from the other side, or the pane waiting for where its file went: the paced re-read holds off
+    /// meanwhile (`pollDiff`), and automation reads the pane as unsettled. **Every part ends by itself** — holding on
+    /// "the tree has not been read yet" instead wedges for good on a write that moves no row (the second line of a
+    /// file on both sides). `busyCount` alone is not enough: it rises when the queue starts the write, not at the
+    /// press. `diffAwaits` rises on the press's own answer that it was queued (`stageSelection`; set before it, a press
+    /// turned away at the door would wedge the same way) and falls on the write's answer (`absorbWriteResult`). The
+    /// marks wait on less (`diffPressable`).
     property bool diffAwaits: false
     readonly property bool diffSettling:
-        page.diffAwaits || repoTab.busyCount > 0 || diffModel.loading || page.diffMoving
+        page.diffAwaits || repoTab.busyCount > 0 || diffModel.loading || diffModel.relabelled || page.diffMoving
     /// Whether the pane's marks take a press (`DiffPane.busy`) — core refuses (`Rejected`) a press made on rows that
     /// have since moved. **A part pressed here is already in the drawing** (`RepoTab.diffWritesOut` leaves it out),
     /// and a press on the rows it left is placed in that drawing (`StageAhead::pressed_on`), so the next hunk or line
     /// takes a press while the one before is still queued or running — and joins its burst, one read behind them all
     /// (デザイン規約 §diff の中のステージ). What the drawing does not hold still holds them: any other write out (it
-    /// moves rows the drawing does not know of), and a part of a shape not drawn ahead (`DiffModel.laidExact` — core
-    /// places nothing behind it).
+    /// moves rows the drawing does not know of), a part of a shape not drawn ahead (`DiffModel.laidExact` — core
+    /// places nothing behind it), and rows relabelled as the file's new side at a press (`landAhead`), whose places are
+    /// in the other side's diff.
     readonly property bool diffPressable:
-        !repoTab.diffWritesOut && !diffModel.loading && diffModel.laidExact && !page.diffMoving
+        !repoTab.diffWritesOut && !diffModel.loading && diffModel.laidExact && !diffModel.relabelled
+        && !page.diffMoving
     /// The open file has left the side it was read on at a stage press (`stillHere`) and the pane has not moved off it:
-    /// it waits there for the status after that press, to land on the file's own new side (`followEmptySide`). Its
-    /// rows are of a side the press has emptied, so its marks wait until the pane lands — past git's answer, where the
-    /// row's own mark takes a press again (`WipPane.stageOpen`). Read again as the presses move (`stagingSeq`): the
-    /// models' answers raise no notify.
+    /// it waits there blank for the status after that press, which says where the file went (`landAhead`). Read again
+    /// as the presses move (`stagingSeq`): the models' answers raise no notify.
     readonly property bool diffMoving:
         page.stagingSeq >= 0 && page.diffShown && page.diffKind !== "commit" && page.wipWritable
         && !page.stillHere(page.diffKind, page.diffPath)
@@ -2448,8 +2545,9 @@ FocusScope {
     function reloadDiff() {
         // Nothing this window writes moves another worktree's file; that worktree's own paced reads keep it current
         // (`pollCarried`).
-        if (!page.diffShown || page.diffKind === "commit" || !page.wipWritable)
+        if (!page.diffShown || page.diffKind === "commit" || !page.wipWritable || page.diffHeld())
             return
+        page.noteDiffAlone()
         diffModel.requestWorktree(page.diffKind, page.diffPath, page.diffOrigPath)
     }
     /// Asks, after each paced read of this tree, whether the file on screen still reads the same: the counts and the
@@ -2491,6 +2589,7 @@ FocusScope {
 
     function closeDiff() {
         page.diffShown = false
+        page.diffLeftFrom = ""
         page.diffKey = ""
         page.diffKind = ""
         page.diffPath = ""

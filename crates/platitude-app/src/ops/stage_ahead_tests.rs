@@ -615,3 +615,24 @@ fn a_refused_press_is_seen_at_once() {
     ahead.answered(OURS, true, FENCE);
     assert!(!ahead.unseen());
 }
+
+/// The diff landed on a file's new side reads there once git has answered
+/// the press that took the file off its old one — not before (the side as it
+/// was), and not only once the status after it is drawn: still reached then,
+/// the row is no longer out.
+#[test]
+fn a_press_taking_a_row_off_its_side_is_out_until_its_answer() {
+    let (mut ahead, _) = staged_a();
+    assert!(ahead.leaving_out("unstaged", "a.txt"));
+    assert!(
+        !ahead.leaving_out("staged", "a.txt"),
+        "a stage takes nothing off the staged side"
+    );
+    assert!(!ahead.leaving_out("unstaged", "b.txt"));
+    ahead.answered(OURS, false, FENCE);
+    assert!(!ahead.leaving_out("unstaged", "a.txt"));
+    assert!(
+        ahead.reaches("unstaged", "a.txt"),
+        "its status not yet drawn"
+    );
+}

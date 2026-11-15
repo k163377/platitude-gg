@@ -118,8 +118,8 @@ fn a_press_through_the_door_is_written_down_under_its_id() {
 
 /// Commit waits from the press until every reader has drawn the status after
 /// it — landed is not enough: until then the rows are the press's word — and
-/// the page draws again as it opens (the diff open on a moved file follows
-/// then, `RepoPage.followEmptySide`).
+/// the page draws again as it opens (a diff waiting in place for its moved
+/// file lands then, `RepoPage.followLanding`).
 #[test]
 fn commit_waits_until_the_screen_has_caught_up_with_a_press() {
     let mut tab = tab();
