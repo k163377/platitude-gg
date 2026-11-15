@@ -35,15 +35,10 @@ pub(super) struct Options {
     pub(super) preset: Vec<String>,
     pub(super) build: bool,
     pub(super) select: bool,
-    /// Park the view at one end once the page has stopped arriving
-    /// (`_PGG_SCROLL_TO`: `top` / `bottom` / `nav-bottom`); empty leaves it
-    /// where the run puts it. A flag because `app_env` clears the parent
-    /// shell's `_PGG_*`, so the variable alone never reaches the app.
-    pub(super) scroll_to: String,
     /// Ask for the window shape of the two platforms that cannot fold the
     /// band into the title bar (`_PGG_SYSTEM_TITLE_BAR`), to photograph it
-    /// from a machine that merges. A flag for the same reason as
-    /// [`Options::scroll_to`].
+    /// from a machine that merges. A flag because `app_env` clears the
+    /// parent shell's `_PGG_*`, so the variable alone never reaches the app.
     pub(super) system_title_bar: bool,
     /// Diagnostic ceiling for a run whose causal completion never arrives
     /// ([`WATCHDOG_MS`]).
@@ -160,10 +155,6 @@ impl Options {
         if self.select {
             words.push("--select".to_string());
         }
-        if !self.scroll_to.is_empty() {
-            words.push("--scroll-to".to_string());
-            words.push(self.scroll_to.clone());
-        }
         if self.system_title_bar {
             words.push("--system-title-bar".to_string());
         }
@@ -223,7 +214,6 @@ impl Default for Options {
             preset: Vec::new(),
             build: true,
             select: false,
-            scroll_to: String::new(),
             system_title_bar: false,
             watchdog_ms: WATCHDOG_MS,
             app_env: Vec::new(),
@@ -271,15 +261,6 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
                 .push(it.next().ok_or("--preset needs a name")?.clone()),
             "--no-build" => opts.build = false,
             "--select" => opts.select = true,
-            "--scroll-to" => {
-                let where_to = it.next().ok_or("--scroll-to needs top/bottom/nav-bottom")?;
-                if !matches!(where_to.as_str(), "top" | "bottom" | "nav-bottom") {
-                    return Err(format!(
-                        "--scroll-to takes top, bottom or nav-bottom; got {where_to:?}"
-                    ));
-                }
-                opts.scroll_to = where_to.clone();
-            }
             "--system-title-bar" => opts.system_title_bar = true,
             "--label" => opts.label = typed_label(it.next())?,
             "--no-board" => opts.no_board = true,

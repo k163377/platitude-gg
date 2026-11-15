@@ -334,9 +334,6 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
     if opts.select {
         cmd.env("_PGG_AUTO_SELECT", "1");
     }
-    if !opts.scroll_to.is_empty() {
-        cmd.env("_PGG_SCROLL_TO", &opts.scroll_to);
-    }
     if opts.system_title_bar {
         cmd.env("_PGG_SYSTEM_TITLE_BAR", "1");
     }
