@@ -366,7 +366,7 @@ QtObject {
         }
     }
 
-    /// Why a picture was not filed against an address, from the kind core answered with (`avatar::AvatarRefusal`).
+    /// Why an avatar was not filed against an address, from the kind core answered with (`avatar::AvatarRefusal`).
     /// `facts` carries the numbers the sentence takes, in order; `said` is the operating system's own line for
     /// `read` / `write`, carried untouched under a frame written here, and empty for the rest
     /// (rules-refs/app-ui.md「Rust に文言を置かない」).
@@ -383,13 +383,13 @@ QtObject {
             return qsTr("This file is %1, past the %2 megapixels this can take.")
                      .arg(facts[0]).arg(facts[1])
         case "unstorable":
-            return qsTr("The picture could not be stored.")
+            return qsTr("The avatar could not be stored.")
         case "no-store":
             return qsTr("There is nowhere to keep avatars on this machine.")
         case "read":
             return qsTr("This file could not be read.") + (said === "" ? "" : "\n" + said)
         case "write":
-            return qsTr("The picture could not be written.") + (said === "" ? "" : "\n" + said)
+            return qsTr("The avatar could not be written.") + (said === "" ? "" : "\n" + said)
         default: return ""
         }
     }
