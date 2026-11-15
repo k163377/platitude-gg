@@ -107,10 +107,8 @@ pub(super) fn judge(
     let said = super::contract::read(&every_line, run);
     Outcome {
         exit_ok: status.as_ref().is_some_and(|s| s.success()),
-        saved: err_lines
-            .iter()
-            .chain(out_lines.iter())
-            .any(|l| l.contains("screenshot saved=true")),
+        // The contract's reading of the capture line, so a line quoting it saves nothing.
+        saved: said.saved.contains("app"),
         timed_out,
         watchdog_expired: err_lines
             .iter()
@@ -451,6 +449,27 @@ mod tests {
         };
         let outcome = super::judge(&opts, &held, &dir, &dir, "r1", None);
         assert!(outcome.contract.is_empty(), "{outcome:?}");
+    }
+
+    /// The app's picture is saved by the capture line itself, read at the
+    /// line's start as the contract reads it: a line quoting it is not one.
+    #[test]
+    fn only_the_capture_line_itself_says_the_picture_was_saved() {
+        let opts = super::super::options::parse(&["wip".to_string()]).expect("a line");
+        let dir = crate::yard::Yard::new("verify-saved");
+        let saved = |line: &str| {
+            let said = super::super::child::Ran {
+                err_lines: vec![line.to_string()],
+                ..ran(false, Some(0))
+            };
+            super::judge(&opts, &said, &dir, &dir, "r1", None).saved
+        };
+        assert!(saved("screenshot saved=true ink=0 path=x/app.png"));
+        assert!(saved("qml: screenshot saved=true ink=0 path=x/app.png"));
+        assert!(!saved(
+            "INFO bench: said run=r1 note=screenshot saved=true ink=0 path=x/app.png"
+        ));
+        assert!(!saved("screenshot saved=false ink=0 path=x/app.png"));
     }
 
     #[test]
