@@ -12,12 +12,13 @@
 //! bound — is on the runner's stderr alone, which is read off a pipe and
 //! kept beside the log ([`runner`]).
 //!
-//! Two roads: each file in a `qmltestrunner` of its own (the daily and the
-//! pre-merge gates — a process shares Qt's type registration and plugin
-//! bookkeeping with nothing), or every file in one process (`--together`,
-//! the whole gate's alone). A red of the second that the first does not
-//! show says the files are not independent of each other, and names where
-//! the one-process run first broke ([`together_verdict`]).
+//! Two roads: each file in a `qmltestrunner` of its own, several of them
+//! standing side by side ([`at_once`]) — the daily and the pre-merge gates:
+//! a process shares Qt's type registration and plugin bookkeeping with
+//! nothing —, or every file in one process (`--together`, the whole gate's
+//! alone). A red of the second that the first does not show says the files
+//! are not independent of each other, and names where the one-process run
+//! first broke ([`together_verdict`]).
 //!
 //! A run that is not green keeps its staging directory — the import tree
 //! as staged, every runner's log, and a manifest of what the runners were
@@ -28,6 +29,8 @@ use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::command::{self, Permission, Where};
@@ -39,7 +42,7 @@ mod tests;
 pub(crate) static QMLTEST: command::Command = command::Command {
     id: "qmltest.run",
     call: "qmltest",
-    purpose: "the QtTest files, run by Qt's own runner, one process each",
+    purpose: "the QtTest files, run by Qt's own runner, one process each and several side by side",
     run_in: Where::Seat,
     needs: &[],
     permission: Permission::Plain,
@@ -85,6 +88,21 @@ const STUBS: &str = "crates/platitude-app/tests/qml/stubs";
 
 /// Silence is a failure bound, never a success condition. Activity in a file's log renews it.
 const QUIET: Duration = Duration::from_secs(120);
+
+/// The most runners that stand side by side ([`at_once`]). The gate's
+/// budget weighs the step as light whatever this is
+/// (`budget::unit::weight_of`).
+const SIDE_BY_SIDE: usize = 4;
+
+/// How many files' runners stand at once: a file's cost is its own waits on
+/// the product's timers, not the processor, so runners side by side divide
+/// the wall clock by nearly their number (ci/baseline/code-costs §テストと
+/// ハーネス). A quarter of the processors, so the gate's verbs beside them
+/// keep theirs.
+fn at_once() -> usize {
+    let cpus = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+    (cpus / 4).clamp(1, SIDE_BY_SIDE)
+}
 
 /// The whole of one run: the backstop for one that keeps writing and never
 /// ends. Under the gate step's own silence ceiling
@@ -182,13 +200,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
         path: &path,
         exe: &exe,
     };
-    let mut runs = Vec::new();
+    let runs = Mutex::new(Vec::new());
     let verdict = if together {
-        all_together(&setup, &tests, &mut runs)
+        all_together(&setup, &tests, &runs)
     } else {
         // Each file owns a process: engines do not own Qt's type registration or plugin globals.
-        run_each(&tests, |test| run_one(&setup, test, &mut runs))
+        run_each(&tests, at_once(), |test| run_one(&setup, test, &runs))
     };
+    let runs = runs.into_inner().unwrap_or_else(PoisonError::into_inner);
     // Which of [`FAILED`]'s groups a red run is kept in: the whole suite, a selection, or the one-process run.
     let group = if together {
         "together"
@@ -221,7 +240,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
 /// process-wide type registration and plugin bookkeeping. The red names
 /// where the run first broke; its cause is the record's to pursue
 /// (internal-docs/P3-確認事項.md §開発環境(QtTest の run)).
-fn all_together(setup: &Setup, tests: &[String], runs: &mut Vec<Ran>) -> Result<(), String> {
+fn all_together(setup: &Setup, tests: &[String], runs: &Mutex<Vec<Ran>>) -> Result<(), String> {
     let said = match runner(setup, TESTS, TOGETHER_LOG, runs) {
         // A run that stopped part-way leaves the rest unmentioned, which a
         // count of failures reads as a pass ([`unfinished_in`]).
@@ -293,18 +312,38 @@ fn short_of(root: &Path, tests: &[String], text: &str) -> Result<(), String> {
     ))
 }
 
-/// Visit every selected file exactly once, including those after a failure. No retry replaces a red.
+/// Visit every selected file exactly once, including those after a failure,
+/// `at_once` of them side by side. No retry replaces a red. The failures
+/// come back in the files' own order, whichever runner ended first.
 fn run_each(
     tests: &[String],
-    mut run: impl FnMut(&str) -> Result<(), String>,
+    at_once: usize,
+    run: impl Fn(&str) -> Result<(), String> + Sync,
 ) -> Result<(), String> {
-    let mut failures = Vec::new();
-    for test in tests {
-        if let Err(why) = run(test) {
-            println!("qmltest: FAIL {test}\n{why}");
-            failures.push(format!("{test}: {why}"));
+    let next = AtomicUsize::new(0);
+    let failed = Mutex::new(Vec::new());
+    std::thread::scope(|scope| {
+        for _ in 0..at_once.clamp(1, tests.len().max(1)) {
+            scope.spawn(|| {
+                loop {
+                    let at = next.fetch_add(1, Ordering::Relaxed);
+                    let Some(test) = tests.get(at) else {
+                        break;
+                    };
+                    if let Err(why) = run(test) {
+                        println!("qmltest: FAIL {test}\n{why}");
+                        failed
+                            .lock()
+                            .unwrap_or_else(PoisonError::into_inner)
+                            .push((at, format!("{test}: {why}")));
+                    }
+                }
+            });
         }
-    }
+    });
+    let mut failed = failed.into_inner().unwrap_or_else(PoisonError::into_inner);
+    failed.sort_by_key(|(at, _)| *at);
+    let failures: Vec<String> = failed.into_iter().map(|(_, why)| why).collect();
     if failures.is_empty() {
         println!(
             "qmltest: PASS ({} file(s), separate processes)",
@@ -594,7 +633,7 @@ fn stubs_in(root: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(found)
 }
 
-fn run_one(setup: &Setup, test: &str, runs: &mut Vec<Ran>) -> Result<(), String> {
+fn run_one(setup: &Setup, test: &str, runs: &Mutex<Vec<Ran>>) -> Result<(), String> {
     let text = runner(setup, test, &log_of(test), runs)?;
     // A file whose case never became true runs nothing and exits green.
     short_of(setup.root, std::slice::from_ref(&test.to_string()), &text)?;
@@ -651,7 +690,12 @@ fn given(cmd: &mut Command, setup: &Setup) {
 /// be written leaves a green exit with nothing behind it — and the binding
 /// and polish loops either holds ([`judged`]). Whatever it comes to goes
 /// into `runs`.
-fn runner(setup: &Setup, input: &str, log: &str, runs: &mut Vec<Ran>) -> Result<String, String> {
+fn runner(setup: &Setup, input: &str, log: &str, runs: &Mutex<Vec<Ran>>) -> Result<String, String> {
+    let ended = |ran: Ran| {
+        runs.lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(ran)
+    };
     let at = format!("{}/{log}", setup.work);
     let _ = std::fs::remove_file(setup.root.join(&at));
     // Relative paths from the workspace root: `-o <file>,txt` splits its
@@ -679,7 +723,7 @@ fn runner(setup: &Setup, input: &str, log: &str, runs: &mut Vec<Ran>) -> Result<
         Ok(child) => child,
         Err(e) => {
             ran.ended = format!("never started: {e}");
-            runs.push(ran);
+            ended(ran);
             return Err(format!(
                 "failed to run {} (it ships in Qt's bin): {e}",
                 setup.exe.display()
@@ -716,7 +760,7 @@ fn runner(setup: &Setup, input: &str, log: &str, runs: &mut Vec<Ran>) -> Result<
             let _ = child.wait();
             let err = said();
             ran.ended = format!("killed — {expired}");
-            runs.push(ran);
+            ended(ran);
             return Err(format!(
                 "killed — {expired} (a TestCase whose `when` never came true waits forever){}",
                 tail_of(&err)
@@ -725,7 +769,7 @@ fn runner(setup: &Setup, input: &str, log: &str, runs: &mut Vec<Ran>) -> Result<
     };
     let err = said();
     ran.ended = status.to_string();
-    runs.push(ran);
+    ended(ran);
     let text = std::fs::read_to_string(setup.root.join(&at)).unwrap_or_default();
     judged(input, status, text, &err, &at, &err_at)
 }
@@ -891,7 +935,7 @@ struct Manifest {
     /// One line per variable ([`environment`]).
     env: Vec<String>,
     files: Vec<(String, Came)>,
-    /// One line per runner, in the order they ran.
+    /// One line per runner, in the files' order.
     runs: Vec<String>,
 }
 
@@ -957,11 +1001,20 @@ fn gather(setup: &Setup, tests: &[String], runs: &[Ran], run: &str) -> Manifest 
         reported: logs.iter().find_map(|text| reported_paths(text)),
         env: environment(inherited, set),
         files,
-        runs: runs
-            .iter()
+        runs: in_the_files_order(tests, runs)
+            .into_iter()
             .map(|ran| format!("{} -> {}: {}", ran.input, ran.log, ran.ended))
             .collect(),
     }
+}
+
+/// `runs` as `tests` lists their inputs: side by side they end in any
+/// order, and two runs' manifests are read against each other. A run of no
+/// listed file — the one runner over the whole directory — comes first.
+fn in_the_files_order<'a>(tests: &[String], runs: &'a [Ran]) -> Vec<&'a Ran> {
+    let mut ordered: Vec<&Ran> = runs.iter().collect();
+    ordered.sort_by_key(|ran| tests.iter().position(|test| *test == ran.input));
+    ordered
 }
 
 /// The manifest's text.
@@ -1002,7 +1055,7 @@ fn manifest(m: &Manifest) -> String {
     for (file, came) in &m.files {
         out.push_str(&format!("  {file}  {}\n", came.said()));
     }
-    out.push_str("\nrunners, in the order they ran (input -> log beside this file: exit):\n");
+    out.push_str("\nrunners, in the files' order (input -> log beside this file: exit):\n");
     for run in &m.runs {
         out.push_str(&format!("  {run}\n"));
     }

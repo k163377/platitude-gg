@@ -32,7 +32,10 @@ pub(crate) fn demand(jobs: usize) -> u32 {
 
 /// A step's weight, read off its words: the runner's reading verbs,
 /// `cargo fmt` and a verb — or a check driving verbs — told `--no-build`
-/// start no compiler; everything else starts one.
+/// start no compiler; everything else starts one. `qmltest` stands several
+/// runners at once and is light all the same: what they do is wait on the
+/// product's timers, and weighed as a compile the two sides' runs keep the
+/// gate's own verbs waiting for room while they stand.
 pub(crate) fn weight_of(command: &[String], no_build: bool) -> u32 {
     let mut words = command.iter().map(String::as_str);
     let first = words.next().unwrap_or_default();

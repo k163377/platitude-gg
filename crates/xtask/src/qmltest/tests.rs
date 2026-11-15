@@ -2,12 +2,15 @@
 
 use super::{
     Came, FAILED, KEPT, LITTER_AGE, MANIFEST, Manifest, Ran, Setup, TESTS, beyond_the_newest,
-    case_names, environment, failed_root, first_break, judged, keep, litter, manifest, outcomes,
-    reported_paths, run_each, short_of, sweep, tests_in, together_verdict, unfinished_in,
+    case_names, environment, failed_root, first_break, in_the_files_order, judged, keep, litter,
+    manifest, outcomes, reported_paths, run_each, short_of, sweep, tests_in, together_verdict,
+    unfinished_in,
 };
 use crate::yard::Yard;
 use std::ffi::OsString;
 use std::path::Path;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 /// A red run's staging directory goes under [`FAILED`] whole, its log
@@ -183,9 +186,9 @@ fn the_first_break_is_the_first_file_not_green_and_the_one_before_it() {
 #[test]
 fn every_file_runs_once_and_all_failures_remain_red() {
     let tests: Vec<String> = ["a", "b", "c"].map(String::from).into();
-    let mut visited = Vec::new();
-    let why = run_each(&tests, |test| {
-        visited.push(test.to_string());
+    let visited = Mutex::new(Vec::new());
+    let why = run_each(&tests, 1, |test| {
+        visited.lock().unwrap().push(test.to_string());
         if test == "b" {
             Ok(())
         } else {
@@ -193,10 +196,76 @@ fn every_file_runs_once_and_all_failures_remain_red() {
         }
     })
     .unwrap_err();
-    assert_eq!(visited, tests);
+    assert_eq!(visited.into_inner().unwrap(), tests);
     assert!(why.contains("a: failure of a"), "{why}");
     assert!(why.contains("c: failure of c"), "{why}");
-    assert!(run_each(&tests, |_| Ok(())).is_ok());
+    assert!(run_each(&tests, 1, |_| Ok(())).is_ok());
+}
+
+/// Side by side, a file is still handed to one runner only, as many stand
+/// at once as were asked for, and the red reads in the files' order however
+/// the runners ended.
+#[test]
+fn files_side_by_side_run_once_each_and_fail_in_their_own_order() {
+    let tests: Vec<String> = (0..12).map(|at| format!("f{at:02}")).collect();
+    let visited = Mutex::new(Vec::new());
+    let (standing, most) = (AtomicUsize::new(0), AtomicUsize::new(0));
+    let why = run_each(&tests, 3, |test| {
+        most.fetch_max(
+            standing.fetch_add(1, Ordering::SeqCst) + 1,
+            Ordering::SeqCst,
+        );
+        if matches!(test, "f00" | "f01" | "f02") {
+            // The first wave leaves once three have stood at once: a pool
+            // narrower than asked never gets there, and the wait says so.
+            crate::wait::until(
+                "three runners to stand at once",
+                || most.load(Ordering::SeqCst),
+                |most| *most >= 3,
+            );
+        }
+        visited.lock().unwrap().push(test.to_string());
+        standing.fetch_sub(1, Ordering::SeqCst);
+        Err(format!("failure of {test}"))
+    })
+    .unwrap_err();
+    let mut seen = visited.into_inner().unwrap();
+    seen.sort();
+    assert_eq!(seen, tests, "each file once");
+    assert_eq!(
+        most.load(Ordering::SeqCst),
+        3,
+        "the width asked for, no wider"
+    );
+    let order: Vec<usize> = tests
+        .iter()
+        .map(|test| {
+            why.find(&format!("{test}: failure of {test}"))
+                .expect("its failure")
+        })
+        .collect();
+    assert!(order.is_sorted(), "the failures in the files' order: {why}");
+    // No more runners than files, and none for no files.
+    assert!(run_each(&tests[..1], 8, |_| Ok(())).is_ok());
+    assert!(run_each(&[], 8, |_| Err("nothing to run".to_string())).is_ok());
+}
+
+/// Runners that ended in any order are listed as the files are; the one
+/// runner over the whole directory, which is no listed file, comes first.
+#[test]
+fn a_manifests_runners_are_listed_in_the_files_order() {
+    let tests: Vec<String> = ["a", "b", "c"].map(String::from).into();
+    let ran = |input: &str| Ran {
+        input: input.to_string(),
+        log: format!("{input}.txt"),
+        ended: String::new(),
+    };
+    let runs = [ran("c"), ran("a"), ran(TESTS), ran("b")];
+    let listed: Vec<&str> = in_the_files_order(&tests, &runs)
+        .into_iter()
+        .map(|ran| ran.input.as_str())
+        .collect();
+    assert_eq!(listed, [TESTS, "a", "b", "c"]);
 }
 
 /// A log as one runner over several files writes it: two files finish, the third
