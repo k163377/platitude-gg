@@ -96,6 +96,7 @@ const ACTS: &[(&str, Option<usize>)] = &[
     ("git", None),
     ("rt", None),
     ("pg", None),
+    ("ws", Some(2)),
 ];
 
 /// Whether a caption is the setup's: frames under it are cut, and each

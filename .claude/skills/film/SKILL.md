@@ -85,6 +85,7 @@ w:9000
 | `lc:<修飾>,x,y` | 修飾(ctrl shift alt)を押したまま左クリック(行を足して点灯する等) |
 | `d:x,y` / `u:x,y` | 左ボタンを押す / 離す(間の `m` / `g` はボタンを運ぶ = ドラッグ。押している間の手は橙) |
 | `wh:n` / `wr:d` | ホイールを n 段 / 角度 d |
+| `ws:w,h` | 窓をその大きさに置く —— 窓の管理側(タイル型・小さい画面での最大化)が置く形で、床を読まない。`view` は一番大きい窓を覆うように取る |
 | `k:<キー>` / `kc:<修飾>,<キー>` | キー(esc menu enter up down left right tab f f2 f10 space delete backspace home end pageup pagedown)/ 修飾付き(ctrl shift alt) |
 | `t:<文字>` | 文字を打つ |
 | `fw:<path>\|<中身>` / `cp:<元>\|<先>` | repo のファイルを外から書く(`\n` で改行)/ 別のファイルで上書きする(エディタの保存) |

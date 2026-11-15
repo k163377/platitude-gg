@@ -230,6 +230,12 @@ Item {
             if (seats !== null)
                 seats.repoTab[parts[0]](...args)
             acts.shootSoon()
+        } else if (verb === "ws") {
+            // The window stood at a size by its manager — a tiling one, or a maximise on a small screen — which reads no
+            // floor: every size the application sets itself goes through `WindowShape.holdFloor`, and this one does not.
+            acts.window.width = n[0]
+            acts.window.height = n[1]
+            acts.shootSoon()
         } else if (verb === "pg") {
             // A page function, as the page would call it on a read of its own (`readDiscards`).
             const page = acts.window.curPage
