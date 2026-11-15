@@ -40,10 +40,11 @@
 - **宣言は実装モジュールの中**(`crates/xtask/src/command.rs` の `Command` を `pub(crate) static` で置き、そのモジュールの `COMMANDS` に並べる)。`crates/xtask/src/commands.rs` は所有者の索引だけ — 1 コマンドの構文・用途・実行場所・前提条件・許可の参照先が 1 箇所
 - **許可は参照** — `Permission::Escape` は hook の const(`hook::approval::APPROVAL_FLAGS`)をそのまま持ち、`Permission::Permit` は `hook::permit` の判断を指すだけ。走ってよいかは常に hook がその場で判断する
 - **id は操作の名前** — verb の改名・モジュール移動・用途の書き換えを越えて同じ。1 id は 1 操作。台帳は `crates/xtask/command-ids.txt`(`--sync` が書く。id が消えれば diff の削除行 + 赤)
-- **文書側の記法は 3 段**: 実行形(escape 付き・verb の後に語がある)は `` `<!--cmd:<id>-->` `` を直前に置き、続く inline code を `--sync` が書く / **`cargo xtask` を省く節**(gate スキルの冒頭のように、省略を宣言した節)は `` `<!--call:<id>-->` `` で call だけを書かせる — **escape 付きのコマンドに省略形は無い**(flag が落ちると許可が見えなくなるので拒む)/ 単なる名指し(`cargo xtask <verb>` だけ)は素のまま — verb が実在するかだけ見る。**id には実行方法が必ず並ぶ**
+- **文書側の記法は 3 段**: 実行形(escape 付き・verb の後に語がある)は `` `<!--cmd:<id>-->` `` を直前に置き、続く inline code を `--sync` が書く / **`cargo xtask` を省いて書く所**は `` `<!--call:<id>-->` `` で call だけを書かせる(印があれば改名に `--sync` が付いて行く。印が無い時に見る範囲は下の限界)— **escape 付きのコマンドに省略形は無い**(flag が落ちると許可が見えなくなるので拒む)/ 単なる名指し(`cargo xtask <verb>` だけ)は素のまま — verb が実在するかだけ見る。**id には実行方法が必ず並ぶ**
 - **Rust 側は型付きの参照**(`crate::gui::KILL.line()` / `.instruction()`)。deny 文・エラー文も同じ参照で綴る
 - **どのファイルを読むかは `docs/commands.rs` の `ROOTS` / `LOOSE` / `USAGE` / `DISPATCH` が持つ** — ソースのコメント行・テスト(`#[cfg(test)]` 以降と `crates/xtask/tests/`)・`ci/baseline`・`ci` / `packaging` のシェルは読まない(理由はそこのコメント)
-- **限界**(明示): 宣言に無い option の組み合わせは「例」として verb しか見ない・前置き無しの 1 語は常に対象外(英語と区別できない)・fence の中は書き換えない(複合シェル行に marker は置けない)
+- **限界**(明示): 宣言に無い option の組み合わせは「例」として verb しか見ない・印の無い省略形は、escape の無い 2 語以上の call と同じ綴りの時だけ印を求める(1 語は英語と区別できない。escape 付き
+  の call は省略形を持たないので見ない)・fence の中は書き換えない(複合シェル行に marker は置けない)
 - **追加**: モジュールに `static` を足して `COMMANDS` に並べ、<!--cmd:docs.sync-->`cargo xtask docs --sync` で台帳を書き、usage ページにその verb の節を書く(option は節の中で名前を出す — 出ていなければ `docs` が赤くなる)
 - **改名・廃止**: 専用の変更として、文書・スキル・ソース・`.claude/settings.json`・hook の全参照を動かしてから `--sync`。過去の記録(ci/baseline・確認事項の履歴)はそのまま
 

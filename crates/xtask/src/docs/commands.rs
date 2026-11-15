@@ -73,7 +73,7 @@ const MARK_CLOSE: &str = "-->";
 enum Shape {
     /// The whole line, escape and runner included.
     Line,
-    /// The call alone, for a section that has said it abbreviates.
+    /// The call alone, where `cargo xtask` is left out.
     Call,
 }
 
