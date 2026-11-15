@@ -42,16 +42,16 @@ pub(super) const ENTRIES: &str = "  land [<branch>]
       moved it clears what the session running it made: the branches its
       git created (the reference-transaction hook writes each one's maker
       down), the branch of the tree the app made for the session to start
-      in (written down as the session starts), and the trees, seats aside,
-      that have one of them out — each when main, or the branch as it
-      stood before its rebase, holds all it holds. A tree with uncommitted
-      files, a lock, work of its own or a process in it stays, and is
-      named with every branch of the session's that stays. A tree the
-      session started in that a process still works in is left behind —
-      the terminal tab the app opens there outlasts the session's work —
-      and any later landing judges it the same way and takes it once it
-      can. Nothing else another session, the app or the user made is
-      judged or named.
+      in (written down as the session starts, or else found in its
+      transcript), and the trees, seats aside, that have one of them out —
+      each when main, or the branch as it stood before its rebase, holds
+      all it holds. A tree with uncommitted files, a lock, work of its own
+      or a process in it stays, and is named with every branch of the
+      session's that stays. A tree the session started in that a process
+      still works in is left behind — the terminal tab the app opens there
+      outlasts the session's work — and any later landing judges it the
+      same way and takes it once it can. Nothing else another session, the
+      app or the user made is judged or named.
       The seat's claim goes back to the roster with it, whoever's it was:
       the tree is empty at main's tip, so the letter is free for whoever
       asks next (`seat`). A lock written by hand stays.

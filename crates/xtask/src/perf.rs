@@ -1,6 +1,6 @@
 //! `cargo xtask perf` — the memory / startup / fps measurement, repeated
 //! the same way every time. What each flag does is on the usage page
-//! (`usage.rs`).
+//! (`usage/measurement.rs`).
 //!
 //! The record in `ci/baseline/perf-windows-x64.md` is only worth anything
 //! if the run behind it can be repeated exactly, so the conditions live

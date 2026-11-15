@@ -72,11 +72,14 @@ pub(super) const ENTRIES: &str =
                                  core.hooksPath there; every session start
                                  and every land does this
       gate deps [--file <p>]... [--why <p>]... [--history <n>] [--show]
+                [--main <ref>]
                                  the graph itself: what a change reaches,
                                  how a file got there (--why), what the
                                  last n commits would have owed
                                  (--history); --show adds each file's
-                                 readers and reads
+                                 readers and reads; --main is the ref the
+                                 branch's change is read against
+                                 (default main)
 
   sweep [--dry-run | --if-the-generation-moved]
       Takes away every build product in target/ but the generation the
