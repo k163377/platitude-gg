@@ -9,9 +9,9 @@ import platitude.ui
 /// The verbs that make a worktree from a menu (デザイン規約 §worktree を作る): the WORKTREE card's two making rows
 /// — `Create worktree here…` and `worktree add` — raised from a left menu row or a graph row with the card opened as a
 /// hand opens it, the name box the first one opens, and the presses. A press that lands stands the tab in the new
-/// worktree, which is the window's to read (`WindowTabActs`): the page is stood elsewhere by it. The card on a
-/// worktree's own row has two more, each with its own argument: renaming its folder (`renameTimer`) and removing it
-/// (`worktreeMenuTimer`, デザイン規約 §左メニューの所作 の削除の表).
+/// worktree, which is the window's to read (`WindowTabActs`): the page is stood elsewhere by it. A worktree's own row
+/// has two more, each with its own argument: renaming its folder by the spaced second click (`renameTimer`), and the
+/// card's removal row (`worktreeMenuTimer`, デザイン規約 §左メニューの所作 の削除の表).
 ///
 /// The argument is `<kind>:<ref>[=<name>][@graph]` — `kind` is `branch` / `remote` / `tag` / `worktree` (by its
 /// folder) or `commit` (`row:<n>` or an id, graph only); `name` what is typed into the box; `@graph` raises the graph
@@ -116,6 +116,27 @@ Item {
         }
         return acts.modelOf(kind).oidOfName(ref)
     }
+    /// The menu a row's right-click raises: the graph row's, or the left menu row's.
+    function menuOn(onGraph) {
+        return onGraph ? acts.driver.commitMenu : acts.driver.refMenu
+    }
+    /// The WORKTREE card on that menu.
+    function worktreeCardOn(onGraph) {
+        return onGraph ? acts.driver.commitWorktreeCard : acts.driver.refWorktreeCard
+    }
+    /// Puts a menu a verb just raised where a hand's right-click would have: headless, the pointer never leaves the
+    /// screen's origin, and `popup()` opens there (rules-refs/app-ui.md「ヘッドレスの窓には手が乗っている」).
+    function standMenuOn(menu, row) {
+        const p = row.mapToItem(menu.parent, Qt.point(row.width * 0.35, row.height * 0.6))
+        menu.x = p.x
+        menu.y = p.y
+    }
+    /// Opens `card` on `menu` as a hand opens a menu's card, and answers whether it stands.
+    function openCardOn(menu, card) {
+        if (!card.opened)
+            menu.openSub(card)
+        return card.opened
+    }
 
     // The menu raised, its WORKTREE card opened, and the mode's one thing done on the card's rows. Only the menu's run
     // has an `order`: the add and the box end at `carded` where their row is not offered. The commit the ref stood on
@@ -135,17 +156,10 @@ Item {
         // The menu, its WORKTREE card and the card's two rows are asked for, not held: the census follows what a timer
         // holds by name, and would count a row held here as shown in every run (`WindowCensus.visit`).
         function menu() {
-            return worktreeTimer.onGraph ? acts.driver.commitMenu : acts.driver.refMenu
-        }
-        /// Puts the menu just raised where a hand's right-click would have (as `acts.standMenuOn`).
-        function standMenuOn(row) {
-            const menu = worktreeTimer.menu()
-            const p = row.mapToItem(menu.parent, Qt.point(row.width * 0.35, row.height * 0.6))
-            menu.x = p.x
-            menu.y = p.y
+            return acts.menuOn(worktreeTimer.onGraph)
         }
         function card() {
-            return worktreeTimer.onGraph ? acts.driver.commitWorktreeCard : acts.driver.refWorktreeCard
+            return acts.worktreeCardOn(worktreeTimer.onGraph)
         }
         function hereItem() {
             return worktreeTimer.onGraph ? acts.driver.commitWorktreeHereItem : acts.driver.refWorktreeHereItem
@@ -198,7 +212,7 @@ Item {
                 const list = acts.navProbe.listOf(worktreeTimer.kind)
                 if (at < 0 || !list || !list.rightClickRow(at))
                     return false
-                worktreeTimer.standMenuOn(list.itemAtIndex(at))
+                acts.standMenuOn(worktreeTimer.menu(), list.itemAtIndex(at))
                 worktreeTimer.witness("oid", oid)
                 return true
             }
@@ -212,7 +226,7 @@ Item {
                        : worktreeTimer.kind === "worktree" ? item.nameChip
                        : { "kind": worktreeTimer.kind, "name": worktreeTimer.ref }
             acts.graphPane.view.rowMenuRequested(oid, chip)
-            worktreeTimer.standMenuOn(item)
+            acts.standMenuOn(worktreeTimer.menu(), item)
             worktreeTimer.witness("oid", oid)
             return true
         }
@@ -220,9 +234,7 @@ Item {
         /// them — asked each beat until the card stands.
         function openCard() {
             const card = worktreeTimer.card()
-            if (card.applies && !card.opened)
-                worktreeTimer.menu().openSub(card)
-            return !card.applies || card.opened
+            return !card.applies || acts.openCardOn(worktreeTimer.menu(), card)
         }
         onTriggered: {
             const op = worktreeTimer
@@ -620,26 +632,6 @@ Item {
     }
 
     // ---- a worktree's card (デザイン規約 §左メニューの所作 の削除の表) ----
-    readonly property var refMenu: driver.refMenu
-    readonly property var commitMenu: driver.commitMenu
-    /// The WORKTREES row showing the worktree called `name`, -1 while none does.
-    function worktreeRow(name) {
-        const list = navProbe.listOf("worktree")
-        if (!list)
-            return -1
-        for (let at = 0; at < list.count; at++) {
-            if (worktreesModel.nameAt(at) === name)
-                return at
-        }
-        return -1
-    }
-    /// Puts a menu a verb just raised where a hand's right-click would have: headless, the pointer never leaves the
-    /// screen's origin, and `popup()` opens there (rules-refs/app-ui.md「ヘッドレスの窓には手が乗っている」).
-    function standMenuOn(menu, row) {
-        const p = row.mapToItem(menu.parent, Qt.point(row.width * 0.35, row.height * 0.6))
-        menu.x = p.x
-        menu.y = p.y
-    }
     // The menu and its card are asked for again each beat until they stand (`raised`, `carded`); the removal is pressed
     // once.
     PageStage {
@@ -650,18 +642,18 @@ Item {
         property bool press: false
         property bool refused: false
         property bool holding: false
-        readonly property var menu: worktreeMenuTimer.onGraph ? acts.commitMenu : acts.refMenu
-        readonly property var card: worktreeMenuTimer.onGraph ? driver.commitWorktreeCard : driver.refWorktreeCard
+        readonly property var menu: acts.menuOn(worktreeMenuTimer.onGraph)
+        readonly property var card: acts.worktreeCardOn(worktreeMenuTimer.onGraph)
         /// Raises the menu, through the row's own door. False while the row is not there yet.
         function raise() {
-            const at = acts.worktreeRow(worktreeMenuTimer.worktree)
+            const at = acts.rowOf("worktree", worktreeMenuTimer.worktree)
             if (at < 0)
                 return false
             if (!worktreeMenuTimer.onGraph) {
                 const list = navProbe.listOf("worktree")
                 if (!list.rightClickRow(at))
                     return false
-                acts.standMenuOn(acts.refMenu, list.itemAtIndex(at))
+                acts.standMenuOn(worktreeMenuTimer.menu, list.itemAtIndex(at))
                 return true
             }
             // The graph row the worktree stands on, pressed where its own right-click goes: the menu aimed at the row's
@@ -672,7 +664,7 @@ Item {
             if (item === null)
                 return false
             graphPane.view.rowMenuRequested(item.oid_hex, item.nameChip)
-            acts.standMenuOn(acts.commitMenu, item)
+            acts.standMenuOn(worktreeMenuTimer.menu, item)
             return true
         }
         /// Whether the menu stands on the branch the worktree has out, which brings the BRANCH card.
@@ -738,11 +730,7 @@ Item {
             if (op.at("raised")) {
                 if (!Awaited.all("worktree_menu_open", op.menuUp()))
                     return
-                if (!op.input("carded", () => {
-                        if (!op.card.opened)
-                            op.menu.openSub(op.card)
-                        return op.card.opened
-                    }))
+                if (!op.input("carded", () => acts.openCardOn(op.menu, op.card)))
                     return
             }
             const item = card.removeWorktreeItem
@@ -809,7 +797,7 @@ Item {
                     const list = navProbe.listOf("branch")
                     const at = branch === "" ? -1 : branchesModel.rowOfName(branch)
                     const row = at < 0 || !list ? null : list.itemAtIndex(at)
-                    return "worktree_held row=" + acts.worktreeRow(worktreeMenuTimer.worktree)
+                    return "worktree_held row=" + acts.rowOf("worktree", worktreeMenuTimer.worktree)
                            + " chips=" + graphModel.goneChips.join(",")
                            + " branch=" + branch
                            + " mark=" + (row === null ? "" : row.change)
@@ -826,7 +814,7 @@ Item {
             worktreeGoneTimer.complete({
                 "name": "worktree_gone_ready",
                 "when": () => ({ "ready": !(!driver.wroteAndSettled() || repoTab.goneWorktree !== "") }),
-                "report": () => "worktree_gone row=" + acts.worktreeRow(worktreeMenuTimer.worktree)
+                "report": () => "worktree_gone row=" + acts.rowOf("worktree", worktreeMenuTimer.worktree)
                                 + " log=" + page.commandsOpen
                                 + " worktree=" + worktreeMenuTimer.worktree
                                 + " total=" + worktreesModel.total })
