@@ -143,10 +143,10 @@
 - `diff-bar`(**`notes.txt --preset manyhunks` で撃つ**。diff の縦バーが掴めること。絵は証人にならない)— 詳細は `AutoActDiffVerbs.qml`
 - `keep-place`(**`notes.txt --preset manyhunks` 専用**。読み進めた位置で partial stage し、読み直しの後も位置が残るか)— 詳細は `AutoActDiffVerbs.qml`
 - `colour-place`(**`src/steps.rs --preset coloured` が本番**。後から届く色が、読んでいた位置と横の行き先のどちらも奪わないか)— 詳細は `AutoActColourVerbs.qml`
-- `eol-hover`(引数はパスか `<バケツ>:<パス>`、`--preset eol`。WIP のファイル行の改行コード警告 `!` のカードを開く。overlay.png に写る)— 詳細は `AutoActWipVerbs.qml`
-- `eol-gone`(引数なし / `button` / `inside` / `button:inside`、`--preset eol`。手をカードの中に置いたまま警告を 1 回の書き込みで消し、カードが下りるか)— 詳細は `AutoActWipVerbs.qml`
-- `eol-walk [<段>]`(段は `gone` / `back`、`--preset eol`。手の下で一覧を 1 行送り、光が来た行へ移って rest の後にその行のカードが出るか)— 詳細は `AutoActWipVerbs.qml`
-- `eol-stay [<段>]`(同じ仕込みで一覧を 1px 送る = 手は同じ行に留まり、rest の後にカードが戻るか)— 詳細は `AutoActWipVerbs.qml`
+- `eol-hover`(引数はパスか `<バケツ>:<パス>`、`--preset eol`。WIP のファイル行の改行コード警告 `!` のカードを開く。overlay.png に写る)— 詳細は `AutoActEolVerbs.qml`
+- `eol-gone`(引数なし / `button` / `inside` / `button:inside`、`--preset eol`。手をカードの中に置いたまま警告を 1 回の書き込みで消し、カードが下りるか)— 詳細は `AutoActEolVerbs.qml`
+- `eol-walk [<段>]`(段は `gone` / `back`、`--preset eol`。手の下で一覧を 1 行送り、光が来た行へ移って rest の後にその行のカードが出るか)— 詳細は `AutoActEolVerbs.qml`
+- `eol-stay [<段>]`(同じ仕込みで一覧を 1px 送る = 手は同じ行に留まり、rest の後にカードが戻るか)— 詳細は `AutoActEolVerbs.qml`
 - `peek-hold`(引数 `<how>[:released]`、how は `none` / `menu`(既定)/ `rename`。**畳んだレールのセクションの保持**(`SectionPeekPopup.qml`))— 詳細は `AutoActHoverHoldVerbs.qml`
 
 - `menu-block`(引数 `<owner>[:<stage>]`、owner ごとの preset は登録表の行。**メニューの裏の hover**(規約 §メニュー)— 段と owner は `AutoActHoverHoldVerbs.qml` の `menuBlockTimer`、判定は `verify/verbs/panes.rs`)
@@ -161,7 +161,7 @@
 - `card-latch [<段>]`(段は `card` / `menu` / `dismissed` / `back`(省略は `back`)。HEAD 行のカードをメニューの blocker が下ろして latch し、2px の揺れで解けて rest の後に戻る — 詳細は `AutoActCardFlowVerbs.qml` の `cardLatchTimer`)
 - `card-rewrite [<段>]`(段は `inside` / `rewritten`(省略は `rewritten`)、`--preset dirty`。手が中にあるカードは、HEAD の行が commit で書き換わっても残る — 詳細は `AutoActCardFlowVerbs.qml` の `cardRewriteTimer`)
 - `commit-face`(**`--preset signed`**。commit ボタンの顔の右上の署名チェックのツールチップ — 詳細は `AutoActWipVerbs.qml` の `commitFaceTimer`)
-- `eol-commit`(引数 `amend` 可、**`--preset eol`**。警告が index に乗った木でコミットボタンにポインタを置く(何もコミットしない)— 詳細は `AutoActWipVerbs.qml` の `eol-commit` の枝と `eolCommitTimer`)
+- `eol-commit`(引数 `amend` 可、**`--preset eol`**。警告が index に乗った木でコミットボタンにポインタを置く(何もコミットしない)— 詳細は `AutoActEolVerbs.qml` の `eol-commit` の枝と `eolCommitTimer`)
 - `code-send`(**`wide.txt --preset widelines`** と 2 本目の `columns.txt --preset widechars`。**diff を横へ送る手 2 つと、下端のバー**(規約 §diff を横へ送る)— 詳細は `AutoActDiffVerbs.qml` の `codeSendTimer`)
 - `code-grow late.txt` / `code-shrink top.txt` / `code-swap late.txt`(3 つとも **`--preset widelate`** 専用で、**絵は証人にならない**ので判定は報告行。**横の行き先がどこから来て、何に属しているか** — 後から組まれた行が幅を決める / 同じパスが短くなっても横位置を保って幅だけ縮む / 別ファイルへ切り替えると幅も位置も捨てる。詳細は `AutoActDiffVerbs.qml` の `codeGrowTimer` / `codeShrinkTimer` / `codeSwapTimer`)
 - `line-run <パス>`(**`notes.txt --preset manyhunks` 専用**。**行を続けて 3 本ステージできること** — 詳細は `AutoActDiffVerbs.qml` の `lineRunTimer`)

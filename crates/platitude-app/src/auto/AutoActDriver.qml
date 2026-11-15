@@ -855,6 +855,7 @@ Item {
     /// id is published under another name and read back under its own (`barrierWrite` → `writeBarrier`): an alias
     /// cannot take the name of an id.
     AutoActWipVerbs { id: wipVerbs; driver: driver }
+    AutoActEolVerbs { id: eolVerbs; driver: driver }
     AutoActFileRowVerbs { id: fileRowVerbs; driver: driver }
     /// One for the nav families, so a peek one of them opened is the peek the others read.
     readonly property NavProbe navProbe: NavProbe {
@@ -910,6 +911,7 @@ Item {
         // After adding a family, add it to this chain: nothing checks that it is asked.
         const known =
             wipVerbs.run(act, arg)
+            || eolVerbs.run(act, arg)
             || fileRowVerbs.run(act, arg)
             || navVerbs.run(act, arg)
             || navBoxVerbs.run(act, arg)

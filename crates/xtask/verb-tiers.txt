@@ -414,7 +414,7 @@ twin	diff-unfold b.txt --preset dirty	diff-escape b.txt --preset dirty	'Closing 
 twin	discard-file b.txt --preset dirty	file-menu b.txt --preset dirty	Identical run to file-menu b.txt: same bucket, arg, preset, calls, report and rendered-barrier completion.
 twin	discard-hunk b.txt --preset dirty	discard-hunk-go b.txt --preset dirty	The driver only opens the diff and waits for the heading's Discard hunk, the same ready discard-hunk-go waits for before it holds it (DiffRowDelegate.qml).
 twin	discard-staged a.txt --preset dirty	file-menu-staged a.txt --preset dirty	Identical run to file-menu-staged a.txt: same bucket, arg, preset, calls, report and completion.
-twin	eol-walk --preset eol	eol-walk back --preset eol	Exact duplicate: an empty arg is back (AutoActWipVerbs.qml), same preset, same row (verbs/diff.rs). Not even the picture differs.
+twin	eol-walk --preset eol	eol-walk back --preset eol	Exact duplicate: an empty arg is back (AutoActEolVerbs.qml), same preset, same row (verbs/diff.rs). Not even the picture differs.
 twin	fetch-fail 1 --preset unreachable --allow-write-failure	fetch-hover 1 --preset unreachable --allow-write-failure	Judged claim is a subset of fetch-hover 1 on the identical fetch loop; its picture (warning shape at rest) is the one fetch-resume ends on.
 twin	graph-reclick --preset tags	graph-rename 0:topic-new --preset tags	Dominated twice on the identical path; verify/verbs/graph.rs's graph-rename row says graph-rename was made to ask for the two claims the plain form asks for.
 twin	graph-step 3	graph-step-dirty	Judgement identical to graph-step-dirty on the same path: 3 steps over a clean tree here, 2 over a draft there.

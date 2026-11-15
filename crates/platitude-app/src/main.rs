@@ -561,6 +561,7 @@ fn embed_harness_qml() {
     qrc::embed!("auto/AutoActSwitchVerbs.qml");
     qrc::embed!("auto/AutoActTipVerbs.qml");
     qrc::embed!("auto/AutoActWipVerbs.qml");
+    qrc::embed!("auto/AutoActEolVerbs.qml");
     qrc::embed!("auto/AutoShotDriver.qml");
     qrc::embed!("auto/Awaited.qml");
     qrc::embed!("auto/CompletionRoute.qml");

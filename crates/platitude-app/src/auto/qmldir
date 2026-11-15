@@ -34,6 +34,7 @@ AutoActKeyMenuVerbs 1.0 AutoActKeyMenuVerbs.qml
 AutoActSwitchVerbs 1.0 AutoActSwitchVerbs.qml
 AutoActTipVerbs 1.0 AutoActTipVerbs.qml
 AutoActWipVerbs 1.0 AutoActWipVerbs.qml
+AutoActEolVerbs 1.0 AutoActEolVerbs.qml
 AutoActSplitVerbs 1.0 AutoActSplitVerbs.qml
 AutoActColourVerbs 1.0 AutoActColourVerbs.qml
 AutoShotDriver 1.0 AutoShotDriver.qml
