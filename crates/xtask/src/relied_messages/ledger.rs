@@ -382,12 +382,7 @@ impl Change {
             self.form,
             self.tree.label()
         )];
-        for line in self.before.iter().filter(|line| !self.after.contains(line)) {
-            rows.push(format!("  - {}: {}", line.0, line.1));
-        }
-        for line in self.after.iter().filter(|line| !self.before.contains(line)) {
-            rows.push(format!("  + {}: {}", line.0, line.1));
-        }
+        rows.extend(changed_rows(&self.before, &self.after));
         let carrying: Vec<(Line, String)> = read
             .iter()
             .filter(|at| at.held[self.index] == self.after)
@@ -417,6 +412,49 @@ impl Change {
         ));
         rows.join("\n")
     }
+}
+
+/// What a change did to a form's lines: each line gone and each come, or,
+/// where none went or came, the lines in their new order — the ledger
+/// keeps the order git reads them in, so a function moved within its file
+/// is a change too.
+fn changed_rows(before: &Held, after: &Held) -> Vec<String> {
+    let mut rows: Vec<String> = beyond(before, after)
+        .iter()
+        .map(|line| format!("  - {}: {}", line.0, line.1))
+        .collect();
+    rows.extend(
+        beyond(after, before)
+            .iter()
+            .map(|line| format!("  + {}: {}", line.0, line.1)),
+    );
+    if rows.is_empty() && before != after {
+        rows.push("  the same lines, in another order:".to_string());
+        rows.extend(
+            after
+                .iter()
+                .map(|line| format!("    {}: {}", line.0, line.1)),
+        );
+    }
+    rows
+}
+
+/// The lines `side` holds beyond `other`, in `side`'s order: each line as
+/// many times as `side` holds it more often. The ledger holds repeats, so
+/// one of several lines of the same words gone is a change with a line to
+/// name, which the lines' mere presence would hide.
+fn beyond(side: &Held, other: &Held) -> Held {
+    let mut unmatched: Vec<&(String, String)> = other.iter().collect();
+    side.iter()
+        .filter(|line| match unmatched.iter().position(|o| o == line) {
+            Some(at) => {
+                unmatched.swap_remove(at);
+                false
+            }
+            None => true,
+        })
+        .cloned()
+        .collect()
 }
 
 /// The trees grouped by the lines they hold for one form, in the order
@@ -548,7 +586,7 @@ fn unescape(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Era, Head, Held, Ledger, Line, Read, Tree, parse};
+    use super::{Era, Head, Held, Ledger, Line, Read, Tree, beyond, changed_rows, parse};
     use crate::relied_messages::table::{Form, Source, Supplier};
 
     fn source() -> Source {
@@ -670,6 +708,51 @@ mod tests {
                 .len(),
             1,
             "a head whose lines went"
+        );
+    }
+
+    /// A change says each line one side holds more of: a reworded line is
+    /// one gone and one come, and one of several lines of the same words
+    /// gone is that line once.
+    #[test]
+    fn a_change_names_each_line_as_often_as_it_went_or_came() {
+        let line = |text: &str| ("builtin/stash.c".to_string(), text.to_string());
+        let die = line("die: \"could not write index\"");
+        let error = line("error: \"could not write index\"");
+        let before: Held = vec![die.clone(), error.clone(), error.clone(), error.clone()];
+        let one_fewer: Held = vec![die.clone(), error.clone(), error.clone()];
+        assert_eq!(beyond(&before, &one_fewer), std::slice::from_ref(&error));
+        assert_eq!(beyond(&one_fewer, &before), Held::new());
+        let reworded: Held = vec![line("die: \"could not write the index\""), error.clone()];
+        assert_eq!(
+            beyond(&before, &reworded),
+            [die.clone(), error.clone(), error.clone()]
+        );
+        assert_eq!(
+            beyond(&reworded, &before),
+            [line("die: \"could not write the index\"")]
+        );
+    }
+
+    /// The ledger keeps a tree's lines in the order git reads them, so the
+    /// same lines in another order — a function moved within its file — are
+    /// a change, and its report has rows under it all the same.
+    #[test]
+    fn the_same_lines_in_another_order_are_reported_as_such() {
+        let line = |text: &str| ("builtin/stash.c".to_string(), text.to_string());
+        let before: Held = vec![line("die: \"a\""), line("error: \"b\"")];
+        let after: Held = vec![line("error: \"b\""), line("die: \"a\"")];
+        assert_eq!(
+            changed_rows(&before, &after),
+            [
+                "  the same lines, in another order:",
+                "    builtin/stash.c: error: \"b\"",
+                "    builtin/stash.c: die: \"a\"",
+            ]
+        );
+        assert_eq!(
+            changed_rows(&before, &after[..1].to_vec()),
+            ["  - builtin/stash.c: die: \"a\""]
         );
     }
 }
