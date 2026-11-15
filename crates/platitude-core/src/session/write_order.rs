@@ -215,9 +215,11 @@ impl WriteOrder {
 }
 
 /// A write's place in its worktree's order, held from acceptance
-/// until the write and the reads behind it are done. Given back by
-/// dropping it, whichever way the write ended, so a place can never be
-/// left blocking the tree.
+/// until the write and the reads behind it are done — or until the same
+/// session's next write, standing right behind it, starts with those reads
+/// still to be made ([`Self::next_behind`]). Given back by dropping it,
+/// whichever way the write ended, so a place can never be left blocking the
+/// tree.
 pub(super) struct Place {
     order: Arc<WriteOrder>,
     place: u64,
@@ -227,6 +229,20 @@ impl Place {
     /// The order this is a place in.
     pub(super) fn order(&self) -> Arc<WriteOrder> {
         Arc::clone(&self.order)
+    }
+
+    /// Whether this place's turn comes the moment `held` are given back:
+    /// nothing else stands in front of it. Places are only ever taken at
+    /// the back, so a yes stays a yes.
+    pub(super) fn next_behind(&self, held: &[&Place]) -> bool {
+        relock(&self.order.held)
+            .waiting
+            .iter()
+            .take_while(|waiting| **waiting != self.place)
+            .all(|ahead| {
+                held.iter()
+                    .any(|held| Arc::ptr_eq(&held.order, &self.order) && held.place == *ahead)
+            })
     }
 
     /// Waits until this is the write the tree is running, and says what
@@ -287,6 +303,35 @@ mod tests {
             !there.is_front(there_after.place),
             "and what was accepted there after waits behind it"
         );
+    }
+
+    /// What the queue asks before it starts a write unread behind the one
+    /// it has just run (`write::Burst::takes`).
+    #[test]
+    fn a_place_is_next_only_with_nothing_else_in_front_of_it() {
+        let (here, there) = (Arc::new(WriteOrder::new()), Arc::new(WriteOrder::new()));
+        let running = place_in(&here);
+        let behind = place_in(&here);
+        assert!(behind.next_behind(&[&running]));
+        assert!(running.next_behind(&[]), "the front waits for nobody");
+        assert!(
+            !behind.next_behind(&[]),
+            "the place in front is not one being given back"
+        );
+
+        let another_sessions = place_in(&here);
+        let last = place_in(&here);
+        assert!(
+            !last.next_behind(&[&running, &behind]),
+            "a place taken in between is in front"
+        );
+        drop(another_sessions);
+        assert!(last.next_behind(&[&running, &behind]));
+
+        // The same number in another order is another place.
+        let elsewhere = place_in(&there);
+        assert_eq!(elsewhere.place, running.place);
+        assert!(!behind.next_behind(&[&elsewhere]));
     }
 
     #[tokio::test]

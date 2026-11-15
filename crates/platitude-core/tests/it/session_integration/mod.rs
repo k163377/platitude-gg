@@ -40,5 +40,6 @@ mod standing_op;
 mod standing_reads;
 mod stream;
 mod window;
+mod write_burst;
 mod write_order;
 mod write_queue;

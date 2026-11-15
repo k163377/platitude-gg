@@ -1,6 +1,7 @@
 //! Writes go through the session's queue: one at a time, a stop answered
-//! as a landing, and a close that waits the queue out. The periodic part
-//! walks single writes whose remaining claim is git's.
+//! as a landing, and a close that waits the queue out. The reads behind
+//! them are `write_burst`'s. The periodic part walks single writes whose
+//! remaining claim is git's.
 
 use crate::support::session::{opened, write_answer, write_result};
 use crate::support::wait::bounded;
@@ -9,12 +10,12 @@ use platitude_core::OperationKind;
 use platitude_core::commit::CommitOptions;
 use platitude_core::session::SessionEvent;
 
-/// Writes are serialized per session: a burst of concurrent stage requests
+/// Writes are serialized per session: stage requests asked for at once
 /// must all land. Without the lock they race on `.git/index.lock` and some
 /// silently fail.
 ///
-/// Six, not more: two already race the lock, and each write runs a status
-/// read behind it, so the cost grows linearly with the count.
+/// Six, not more: two already race the lock. How many reads are made behind
+/// them is `write_burst`'s.
 #[tokio::test(flavor = "multi_thread")]
 async fn concurrent_writes_are_serialized() {
     let mut repo = TestRepo::init();
@@ -372,7 +373,7 @@ async fn each_ask_is_answered_under_the_id_it_was_given() {
 }
 
 /// An unasked fetch waiting in the queue yields to a write somebody asked
-/// for that queued behind it (`session::write::next_request`). The commit
+/// for that queued behind it (`session::write`'s `Line::next`). The commit
 /// held inside git by its hook keeps both waiting until they are in line.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_waiting_unasked_fetch_yields_to_an_asked_write_behind_it() {
@@ -455,7 +456,7 @@ mod periodic {
     /// The full local round trip through the session: stage, commit, branch,
     /// in that order — any other order produces a different repository.
     #[tokio::test(flavor = "multi_thread")]
-    #[ignore = "duplicates operations::each_write_is_settled_before_the_next_one_starts: not worth the pre-merge run"]
+    #[ignore = "duplicates operations::a_write_that_joins_no_burst_starts_once_the_one_in_front_is_settled: not worth the pre-merge run"]
     async fn stage_commit_and_branch_through_the_session() {
         let mut repo = TestRepo::init();
         repo.commit_file("root.txt", "0\n", "root");

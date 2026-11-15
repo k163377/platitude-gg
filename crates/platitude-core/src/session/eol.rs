@@ -95,7 +95,7 @@ impl RepoSession {
     /// the repository's own config (`--git-path config`, the common one
     /// for a linked worktree); a global write is seen on the next write that
     /// drops what is derived (one reaching the tree or the history —
-    /// `session::write::settle_after`) or ref move, except the push mark
+    /// `session::write::run_write`) or ref move, except the push mark
     /// ([`RepoSession::note_push_default`]).
     pub(super) fn forget_what_the_config_decides(&self) {
         let Some(path) = self.config_path() else {
@@ -186,9 +186,9 @@ impl RepoSession {
         fresh
     }
 
-    /// Drops everything read once and kept, before a write's refresh: a
-    /// write can bring a new `.gitattributes`, change the neighbours or add
-    /// a remote.
+    /// Drops everything read once and kept, at a write's answer: a write
+    /// can bring a new `.gitattributes`, change the neighbours or add a
+    /// remote.
     pub(super) fn forget_derived(&self) {
         self.forget_eol_derived();
         self.remotes.forget();

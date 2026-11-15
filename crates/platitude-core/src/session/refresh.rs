@@ -35,6 +35,27 @@ impl RepoSession {
         });
     }
 
+    /// The refs read again for a pass a write fenced off
+    /// (`Standing::current`), asked from inside that pass — unless the reads
+    /// the queue has still to make behind the write take the refs anyway
+    /// (`RepoSession::unread_refs`): an index-only write reads none behind
+    /// itself. Stamped inside the pass, so a reader already waiting on the
+    /// gate answers it.
+    fn read_refs_again(self: &Arc<Self>) {
+        if !self.unread_refs.load(Ordering::SeqCst) {
+            self.read_refs_from(self.refs_read.stamp());
+        }
+    }
+
+    /// [`Self::read_refs_again`] for the status pass: a write reads the
+    /// tree behind itself only where it has to (a fetch that brought
+    /// nothing would leave a fenced status to the next tick).
+    pub(super) fn read_status_again(self: &Arc<Self>) {
+        if !self.unread_tree.load(Ordering::SeqCst) {
+            self.read_status_from(self.status_read.stamp());
+        }
+    }
+
     /// [`RepoSession::publish_refs`] behind the refs readers' single
     /// flight ([`ReadFlight`]) — the way in for all of them, the tick and
     /// a write's own settling included.
@@ -111,12 +132,9 @@ impl RepoSession {
                     None
                 };
                 // Fenced by a write that ended after this looked
-                // (`Standing::current`): read again, since an index-only
-                // write reads no refs behind itself. Stamped inside this
-                // pass, so a read the write already has waiting on the gate
-                // answers it.
+                // (`Standing::current`): read again.
                 if !self.standing.current(looked) {
-                    self.read_refs_from(self.refs_read.stamp());
+                    self.read_refs_again();
                     return Reread::Same;
                 }
                 // Before the joins: the walk asks git for HEAD only while

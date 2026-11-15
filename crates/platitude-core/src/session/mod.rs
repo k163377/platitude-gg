@@ -4,9 +4,9 @@
 //! to the UI through a [`SessionSink`].
 //!
 //! Reads run concurrently; writes go through one queue, since order is
-//! part of the contract (実装計画 §2). Every write refreshes afterwards —
-//! a failed one too, since a command that stops halfway (a conflicted
-//! merge) has still changed the repository.
+//! part of the contract (実装計画 §2). What a write invalidated is read
+//! again behind it — behind a failed one too, since a command that stops
+//! halfway (a conflicted merge) has still changed the repository.
 //!
 //! One repository can have more than one session at a time — a tab closed
 //! mid-write outlives its page, and the tab reopened over it is a second
@@ -167,6 +167,11 @@ use state::{
 pub use walk::mock_walk_silence;
 pub use walk::walk_silence;
 use walk::{Building, WalkInputs};
+/// The integration tests' mock of [`unread_ceiling`], as
+/// [`mock_walk_silence`] is.
+#[cfg(debug_assertions)]
+pub use write::mock_unread_ceiling;
+pub use write::unread_ceiling;
 use write_order::WriteOrder;
 
 use crate::operation::{Lane, OperationId, OperationKind};

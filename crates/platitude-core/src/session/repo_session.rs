@@ -49,8 +49,9 @@ pub struct RepoSession {
     /// range a remote has (`ask_rebase_plan`, `check_plan_published`).
     pub(super) plan: super::ops_integrate::PlanReads,
     /// The write the queue is serving, from before git runs it until the
-    /// reads it invalidated have published; `None` between requests. Read
-    /// by the poll, which stays out mid-operation unless the write replays
+    /// reads behind its burst have published — the next write of the burst
+    /// taking its place with no gap; `None` between bursts (`session::write`).
+    /// Read by the poll, which stays out mid-operation unless the write replays
     /// ([`OperationKind::replays_history`]), and by a task under the queue
     /// that has to say which write it is (`note_landing`).
     pub(super) write_running: Mutex<Option<Operation>>,
@@ -234,6 +235,20 @@ pub struct RepoSession {
     /// first ([`RepoSession::write`] says what disagreeing would cost).
     /// Nothing else about a write is under it.
     pub(super) accepting: Mutex<()>,
+    /// Whether the reads the queue has still to make behind the writes git
+    /// has answered take the tree, and the refs, whatever else they find
+    /// (`write::ReadsOwed`). A read one of those writes fenced off leaves
+    /// the reading again to them ([`RepoSession::read_status_again`]): read
+    /// again for itself, it would go into the tree under the next write of
+    /// the burst and be fenced off by that one's end in turn, one read after
+    /// another for as long as the burst lasts.
+    ///
+    /// Set ahead of the write's fence and taken down behind the queue's
+    /// reads, so no fenced read sees it down too early or up too late: a
+    /// fenced read holds its flight until it has asked, and the queue's
+    /// read of that kind waits on the same flight (`write::settle`).
+    pub(super) unread_tree: std::sync::atomic::AtomicBool,
+    pub(super) unread_refs: std::sync::atomic::AtomicBool,
     /// The deletes out now, whose commits the graph stands in for
     /// (`session::leaving`). The session's own, not the graph's record: a
     /// record handed to the next session (`DrawnGraph`) must not carry

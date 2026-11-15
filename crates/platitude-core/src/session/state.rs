@@ -197,9 +197,11 @@ pub(super) struct WorktreeRead {
 /// order, and what to run.
 pub(super) struct WriteRequest {
     pub(super) operation: Operation,
-    /// Taken at acceptance and held until the request is done — `None`
-    /// for the kinds that take no place (`OperationKind::writes_here`). A request
-    /// the queue turns away gives it back by being dropped.
+    /// Taken at acceptance and held until the reads behind the write are
+    /// done, or the next write of its burst takes the tree's turn
+    /// (`session::write`) — `None` for the kinds that take no place
+    /// (`OperationKind::writes_here`). A request the queue turns away gives
+    /// it back by being dropped.
     pub(super) place: Option<super::write_order::Place>,
     /// Places in the orders of the other worktrees the write puts
     /// work into (a restore of work thrown away there), taken with `place`
@@ -288,7 +290,7 @@ impl Shared {
 ///
 /// Each is a single answer about the whole repository (does git normalise
 /// line endings here, what remotes are configured). Invalidation stays in
-/// the event boundaries that own it: before a write's refresh, and after
+/// the event boundaries that own it: at a write's answer, and after
 /// an external ref move — which has already read the current remote
 /// answer, so it drops line-ending context at once and remotes only for
 /// the following read (see [`RepoSession::forget_derived`]); the settings

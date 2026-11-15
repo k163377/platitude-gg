@@ -118,7 +118,7 @@ async fn the_ways_in_to_a_status_read_never_run_two_at_once() {
     repo.write_file("f.txt", "dirty\n");
     session.stage_paths(vec!["f.txt".to_string()]);
     // git's answer comes before the reads that settle behind the write, so
-    // the burst is out before the parked read is let go.
+    // all three asks are out before the parked read is let go.
     write_result(&sink, OperationKind::Stage).await;
     release.send(()).expect("let the parked read finish");
 
@@ -148,7 +148,7 @@ async fn the_ways_in_to_a_status_read_never_run_two_at_once() {
 ///
 /// The tick is asked on git's answer to the write, which arrives before
 /// the write's refreshes and inside the flags the tick reads
-/// (`session::write::serve`) — so it always meets the replay.
+/// (`RepoSession::running_write`) — so it always meets the replay.
 // `worker_threads = 2`: the hook below parks a worker (`CaptureSink::hook_once`).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_poll_let_through_by_a_replay_does_not_read_beside_it() {

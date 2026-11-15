@@ -206,6 +206,8 @@ impl RepoSession {
             write_tx,
             write_order: Mutex::new(None),
             accepting: Mutex::new(()),
+            unread_tree: std::sync::atomic::AtomicBool::new(false),
+            unread_refs: std::sync::atomic::AtomicBool::new(false),
             leaving: Mutex::new(Vec::new()),
             walk_landed: std::sync::atomic::AtomicU64::new(0),
             released: std::sync::atomic::AtomicBool::new(false),

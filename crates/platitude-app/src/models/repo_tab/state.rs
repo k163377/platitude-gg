@@ -179,7 +179,8 @@ impl RepoTab {
         self.write_watch.asked(asked);
         if let Some(id) = asked {
             // From here, not from its start: a write queued behind another
-            // starts only once that one has settled.
+            // starts only once that one has answered, and where its kind
+            // joins no burst, once it has settled (`session::write`).
             if self.unsettle(id) {
                 self.settling_changed();
             }

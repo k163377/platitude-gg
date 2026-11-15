@@ -502,21 +502,29 @@ pub enum SessionEvent {
         head_seq: u64,
         reads_from: u64,
     },
-    /// The reads the write invalidated have been made — the last of its
-    /// three boundaries: nothing more is said under this id, and the
-    /// queue takes the next request. Read by now: the tree and refs as the
+    /// The reads the write invalidated have been made, every one of them
+    /// having looked after it — the last of its three boundaries: nothing
+    /// more is said under this id. Read by now: the tree and refs as the
     /// write's [`AfterWrite`] asks, the graph where either moved, the
     /// stash and worktree listings and the reads they asked for, and the
     /// author configuration after an identity write. Not the reachability
     /// walk (`settle_head_reach`), which answers when it can.
     ///
-    /// `failed` names the reads that did not put the write's result on
-    /// screen. Each also went out as [`OpFailed`](SessionEvent::OpFailed),
-    /// which carries no id; this ties it to the write. A graph rebuild a
-    /// newer request took over is answered by that request's pass.
+    /// The reads are made once behind a burst of writes (`session::write`):
+    /// the writes of a burst settle one after another behind the same reads,
+    /// so a write may settle after writes accepted behind it have answered
+    /// — and those reads cover what each of the burst asks, which can be
+    /// more than this write's own.
     ///
-    /// Sent after a cancelled write too, with nothing read or failed, so
-    /// the boundaries balance while the session closes.
+    /// `failed` names the reads that did not put the write's result on
+    /// screen, the same under every write of the burst. Each also went out as
+    /// [`OpFailed`](SessionEvent::OpFailed), which carries no id; this ties
+    /// it to the write. A graph rebuild a newer request took over is
+    /// answered by that request's pass.
+    ///
+    /// Sent where nothing is read behind the write too, with nothing
+    /// failed, so the boundaries balance while the session closes: a write
+    /// cancelled with the session, and one that answered after it closed.
     WriteSettled {
         id: OperationId,
         kind: OperationKind,

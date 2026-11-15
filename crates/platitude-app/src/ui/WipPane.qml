@@ -652,8 +652,7 @@ ColumnLayout {
     /// Whether a row's `+` / `−` takes a press now. **A row moves at the press, ahead of git** (デザイン規約
     /// §バケツごとの一覧と、ペインの分け方), and **waits there until git has answered for it**
     /// (`RepoTab.stagingMovingPaths`, every row while a whole bucket's press is out — `stagingAllOut`): a press back
-    /// meanwhile would queue a second write behind the first for every click, and the queue runs a status read between
-    /// each two.
+    /// meanwhile would queue a second write behind the first for every click.
     function stageOpen(path) {
         return !wipPane.repoTab.stagingAllOut && wipPane.movingPaths[path] !== true
     }

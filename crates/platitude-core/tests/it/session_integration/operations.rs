@@ -97,9 +97,10 @@ async fn a_pop_behind_an_apply_answers_under_its_own_id() {
 
 /// Under each id: start, git's answer, then the settling of the reads it
 /// invalidated (the stash listing included) — and the queue takes the next
-/// write only once the one in front is settled.
+/// write only once the one in front is settled, a stash being a write that
+/// joins no burst (`OperationKind::joins_a_burst`).
 #[tokio::test(flavor = "multi_thread")]
-async fn each_write_is_settled_before_the_next_one_starts() {
+async fn a_write_that_joins_no_burst_starts_once_the_one_in_front_is_settled() {
     let repo = holding_one_stash();
     let (sink, session) = opened(&repo).await;
 
@@ -135,7 +136,7 @@ async fn each_write_is_settled_before_the_next_one_starts() {
         );
         assert!(
             apply_settled < pop_started,
-            "the queue is serial across the settled boundary"
+            "a stash waits for the settled boundary of the write in front"
         );
 
         let pop_finished = index_of(
@@ -456,9 +457,10 @@ async fn a_write_waits_for_the_rebuild_that_took_its_own_over() {
 }
 
 /// The request behind the write does not start until the rebuild that took
-/// the write's own over has landed. Parked and released as above.
+/// the write's own over has landed — a branch, which joins no burst
+/// (`OperationKind::joins_a_burst`). Parked and released as above.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn the_queue_holds_the_next_write_until_the_replacement_has_landed() {
+async fn the_queue_holds_a_write_that_joins_no_burst_until_the_replacement_has_landed() {
     let (_repo, sink, session, doors) = staged_with_doors().await;
     let (reached, at_the_door) = tokio::sync::oneshot::channel();
     let (release, held) = std::sync::mpsc::channel::<()>();
@@ -482,7 +484,9 @@ async fn the_queue_holds_the_next_write_until_the_replacement_has_landed() {
         .expect("the session is open");
     // Queued behind the commit, before anything of the commit's has
     // settled: what the queue has to hold.
-    let behind = session.stage_all().expect("the session is open");
+    let behind = session
+        .create_branch("behind".into(), None, false)
+        .expect("the session is open");
     assert_eq!(
         write_answer(&sink, id).await,
         None,

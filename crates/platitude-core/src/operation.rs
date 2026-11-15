@@ -266,6 +266,74 @@ impl OperationKind {
                 | Self::Resolve
         )
     }
+
+    /// Whether the queue starts a write of this kind straight behind the
+    /// write in front of it, with the reads that one invalidated still
+    /// unmade — they are made once behind both (`session::write`).
+    ///
+    /// The queue makes its reads between writes, never under one, so what
+    /// the write in front left stays off the screen for as long as this one
+    /// stands. Hence only the writes a reader makes several of in a row.
+    /// Each writes the index and comes back, in a handful of git processes:
+    /// `git add --all` scans the tree for it, and a discard writes the
+    /// files it names behind a copy of them (`discards::copy`). What can
+    /// stretch one is the repository's own: the filters of the files it
+    /// takes (a clean on the way in; a smudge on the way back, where Git
+    /// LFS fetches what it no longer holds) and its hooks —
+    /// `post-index-change` on every index write, `post-checkout` behind a
+    /// `git restore`, which an unstage and a discard run.
+    ///
+    /// Every other kind has the reads made first, because one write of it
+    /// can stand long by what it is — on the far end (the remote lanes), a
+    /// commit at a time ([`Self::replays_history`]), on a commit's hooks or
+    /// a signing prompt (a commit, a tag), on a program the reader works
+    /// in (the merge tool), on a tree written whole or a folder deleted (a
+    /// checkout, a branch made and switched to, a reset, a stash, a
+    /// restore, a worktree) — or, for the writes of a name or a config
+    /// line, because nothing is saved by it: they do not come in rows.
+    ///
+    /// **No write that takes rows off the screen at its press joins** — a
+    /// delete of a branch, a tag, a stash or a worktree. The application
+    /// stands those rows in under one write at a time and a refusal puts
+    /// every row back (`ops::StandIn` in the app), so a second delete
+    /// answering before the listing behind the first has been read would
+    /// draw the first one's row back.
+    ///
+    /// **The one place the set is written**, as with [`Self::lane`].
+    #[must_use]
+    pub fn joins_a_burst(self) -> bool {
+        match self {
+            Self::Stage | Self::Unstage | Self::Discard => true,
+            Self::Commit
+            | Self::Checkout
+            | Self::Reset
+            | Self::Stash
+            | Self::Branch
+            | Self::Tag
+            | Self::Push
+            | Self::Fetch
+            | Self::Pull
+            | Self::FastForward
+            | Self::Remote
+            | Self::Merge
+            | Self::Rebase
+            | Self::Squash
+            | Self::Drop
+            | Self::Reword
+            | Self::CherryPick
+            | Self::Revert
+            | Self::Resolve
+            | Self::Mergetool
+            | Self::Config
+            | Self::Identity
+            | Self::Worktree
+            | Self::Restore
+            | Self::DeleteBranchEverywhere
+            | Self::DeleteTagEverywhere
+            | Self::AutoFetch
+            | Self::OpenFetch => false,
+        }
+    }
 }
 
 /// How the queue supervises a write: which executor runs it, what budget
@@ -343,6 +411,57 @@ mod tests {
             assert!(
                 !kind.replays_history(),
                 "{kind:?} is one pass, not a replay"
+            );
+        }
+    }
+
+    /// The writes pressed in a row; a kind that can stand long by what it
+    /// is, or that takes rows off the screen at its press, is not among
+    /// them, whatever its lane.
+    #[test]
+    fn only_the_writes_pressed_in_a_row_join_a_burst() {
+        for kind in [
+            OperationKind::Stage,
+            OperationKind::Unstage,
+            OperationKind::Discard,
+        ] {
+            assert!(kind.joins_a_burst(), "{kind:?} is pressed in a row");
+            assert_eq!(kind.lane(), Lane::Local);
+            assert!(!kind.replays_history());
+        }
+        for kind in [
+            OperationKind::Commit,
+            OperationKind::Checkout,
+            OperationKind::Reset,
+            OperationKind::Stash,
+            OperationKind::Branch,
+            OperationKind::Tag,
+            OperationKind::Push,
+            OperationKind::Fetch,
+            OperationKind::Pull,
+            OperationKind::FastForward,
+            OperationKind::Remote,
+            OperationKind::Merge,
+            OperationKind::Rebase,
+            OperationKind::Squash,
+            OperationKind::Drop,
+            OperationKind::Reword,
+            OperationKind::CherryPick,
+            OperationKind::Revert,
+            OperationKind::Resolve,
+            OperationKind::Mergetool,
+            OperationKind::Config,
+            OperationKind::Identity,
+            OperationKind::Worktree,
+            OperationKind::Restore,
+            OperationKind::DeleteBranchEverywhere,
+            OperationKind::DeleteTagEverywhere,
+            OperationKind::AutoFetch,
+            OperationKind::OpenFetch,
+        ] {
+            assert!(
+                !kind.joins_a_burst(),
+                "{kind:?} has the reads made in front of it"
             );
         }
     }

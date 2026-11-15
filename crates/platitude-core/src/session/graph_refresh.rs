@@ -547,7 +547,7 @@ impl RepoSession {
 
     /// Takes the read owed, if one is — called wherever the reason it was
     /// refused has just gone: a poll handing the slot back, and this
-    /// session's write ending (`write::serve`).
+    /// session's burst of writes ending (`write::settle`).
     ///
     /// Both, because either can be last: the poll's retry is refused too
     /// if a write of this session started meanwhile, and a write's landing
@@ -555,7 +555,7 @@ impl RepoSession {
     ///
     /// A closed session owes nothing: its parked write (the app's
     /// `Hub::park_writes_of`) ends after the close, and a read then is
-    /// paid for a page that is gone (`write::run_write`).
+    /// paid for a page that is gone (`write::settle`).
     pub(super) fn take_the_read_owed(self: &Arc<Self>) {
         if self.poll_gate.owed() && self.keeps_what_it_reads() {
             drop(self.start_refresh_poll());

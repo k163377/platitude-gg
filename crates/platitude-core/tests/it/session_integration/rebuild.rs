@@ -25,48 +25,36 @@ async fn a_write_rebuilds_the_graph_once() {
     sink.opened_graph(&session, 2).await;
 
     session.stage_all();
-    session.commit(
-        "add new file".into(),
-        platitude_core::commit::CommitOptions::default(),
-    );
-    // A no-op write behind the commit is a queue barrier: its `WriteStarted`
-    // comes only after the commit's refresh has completed.
-    session.stage_all();
-
-    let barrier_at = sink
-        .wait_for("the write behind the commit", |evs| {
-            let commit_at = position_of(evs, OperationKind::Commit)?;
-            evs[commit_at..]
-                .iter()
-                .position(|e| {
-                    matches!(
-                        e,
-                        SessionEvent::WriteStarted {
-                            kind: OperationKind::Stage,
-                            ..
-                        }
-                    )
-                })
-                .map(|after| commit_at + after)
-        })
-        .await;
+    let commit = session
+        .commit(
+            "add new file".into(),
+            platitude_core::commit::CommitOptions::default(),
+        )
+        .expect("the commit was accepted");
+    // Settled is the end of the commit's refresh: the reads behind it, the
+    // rebuild included, have published.
+    assert_eq!(write_settled(&sink, commit).await, [], "every read landed");
 
     {
         let events = sink.events.lock().unwrap();
         let stage_at = position_of(&events, OperationKind::Stage).expect("stage finished");
         let commit_at = position_of(&events, OperationKind::Commit).expect("commit finished");
+        let settled_at = events
+            .iter()
+            .position(|e| matches!(e, SessionEvent::WriteSettled { id, .. } if *id == commit))
+            .expect("the commit settled");
         assert_eq!(
             log_starts(&events[stage_at..commit_at]),
             0,
             "staging left the tree dirty, so the graph did not change"
         );
         assert_eq!(
-            log_starts(&events[commit_at..barrier_at]),
+            log_starts(&events[commit_at..settled_at]),
             0,
             "the rebuild replaces atomically; it never resets and re-streams"
         );
         assert_eq!(
-            events[commit_at..barrier_at]
+            events[commit_at..settled_at]
                 .iter()
                 .filter(|e| matches!(e, SessionEvent::LogReplaced { .. }))
                 .count(),
@@ -74,23 +62,6 @@ async fn a_write_rebuilds_the_graph_once() {
             "the commit replaced the rebuilt graph exactly once"
         );
     }
-    sink.wait_for("the barrier write to finish", |events| {
-        (events
-            .iter()
-            .filter(|event| {
-                matches!(
-                    event,
-                    SessionEvent::WriteFinished {
-                        kind: OperationKind::Stage,
-                        ..
-                    }
-                )
-            })
-            .count()
-            == 2)
-            .then_some(())
-    })
-    .await;
     session.close_and_wait().await;
 }
 

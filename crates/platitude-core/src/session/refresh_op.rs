@@ -217,11 +217,9 @@ impl RepoSession {
             Ok(mut status) => {
                 let op_state = opstate::detect_at(&git_dir);
                 // Fenced by a write that ended after this looked: read
-                // again, since the write re-reads the tree only where it
-                // moved refs (a fetch that brought nothing would leave this
-                // to the next tick).
+                // again.
                 if !self.standing.current(looked) {
-                    self.read_status_from(self.status_read.stamp());
+                    self.read_status_again();
                     return Reread::Same;
                 }
                 let StandingOp {
@@ -261,7 +259,7 @@ impl RepoSession {
                 let (push_remote, upstream_here, push_track) =
                     self.read_status_push(&workdir, &mut status, &cancel).await;
                 if !self.standing.current(looked) {
-                    self.read_status_from(self.status_read.stamp());
+                    self.read_status_again();
                     return Reread::Same;
                 }
                 // Into the HEAD record before anything below is sent, so the

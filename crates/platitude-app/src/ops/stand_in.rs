@@ -186,10 +186,11 @@ const CARRIED: u64 = u64::MAX;
 /// (why local first: `RepoSession::delete_branch_everywhere`). A
 /// tag's pair runs the remote half first, so there the put-back is right.
 ///
-/// Matching the id is enough: the write queue is serial through its
-/// refresh (`run_write` waits for the stash and worktree listings to be
-/// published before `WriteSettled` and the next request), so no later
-/// write answers in between.
+/// Matching the id is enough: another write's answer moves nothing here,
+/// and which listing answers is its stamp's to say, not its arrival's. A
+/// write queued behind this one can answer before any listing is read (the
+/// queue reads once behind a burst — `session::write`), and the listing read
+/// behind both looked after each.
 #[derive(Debug, Default)]
 pub struct StandIn {
     rows: Rows,
